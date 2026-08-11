@@ -126,7 +126,7 @@
   import ToolManageService from '@service/tool-manage';
   import MetaManageService from '@service/meta-manage';
 
-  import ToolDetailModel from '@model/tool/tool-detail';
+  import ToolInfoModel from '@model/tool/tool-info';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
@@ -142,6 +142,7 @@
 
   import ToolListTable from './components/tool-list-table.vue';
 
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   provideToolManageContext(createSceneToolManageContext());
@@ -179,6 +180,7 @@
     removePageParams,
   } = useRecordPage;
   const LIST_PAGE_KEY = 'sceneToolManege';
+  const SEARCH_STATE_KEY = 'scene-tool-manage-search-state';
   const isLoading = ref(true);
   // bk-search-select 搜索值
   const searchValue = ref<SearchKey[]>([]);
@@ -237,7 +239,7 @@
   // 策略列表（用于匹配策略名称）
   const strategyList = ref<Array<{ label: string; value: number }>>([]);
   // 全部工具数据（用于下钻时获取工具名称）
-  const allToolsData = ref<Array<ToolDetailModel>>([]);
+  const allToolsData = ref<Array<ToolInfoModel>>([]);
 
   // 状态筛选
   const statusFilter = ref('all');
@@ -247,6 +249,9 @@
     unpublished: 0,
   });
 
+  const shouldHidePlatformDisabledTool = (tool: any) => tool.visibility?.binding_type === 'platform_binding'
+    && tool.status !== 'published';
+
   // 确认操作弹窗相关（删除/启用/停用）
   const confirmActionType = ref<ActionType>('delete');
   const confirmTarget = ref<ToolItem | null>(null);
@@ -254,8 +259,41 @@
   // 预览抽屉相关
   const isPreviewShow = ref(false);
 
+  const saveSearchState = () => {
+    sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({
+      searchValue: searchValue.value,
+      statusFilter: statusFilter.value,
+    }));
+  };
+
+  const restoreSearchState = () => {
+    try {
+      const raw = sessionStorage.getItem(SEARCH_STATE_KEY);
+      if (!raw) return false;
+      const state = JSON.parse(raw) as {
+        searchValue?: SearchKey[];
+        statusFilter?: string;
+      };
+      if (state.statusFilter) {
+        statusFilter.value = state.statusFilter;
+      }
+      if (Array.isArray(state.searchValue)) {
+        searchValue.value = state.searchValue;
+      }
+      return Boolean((state.searchValue && state.searchValue.length)
+        || (state.statusFilter && state.statusFilter !== 'all'));
+    } catch {
+      return false;
+    }
+  };
+
+  const clearSearchState = () => {
+    sessionStorage.removeItem(SEARCH_STATE_KEY);
+  };
+
   // 新建工具
   const handleCreateReport = () => {
+    saveSearchState();
     recordPageParams(LIST_PAGE_KEY);
     router.push({ name: 'sceneToolCreate', query: {
       scene_id: route.query.scene_id,
@@ -266,6 +304,7 @@
 
   // 编辑工具
   const handleEdit = (row: ToolItem) => {
+    saveSearchState();
     recordPageParams(LIST_PAGE_KEY);
     router.push({
       name: 'sceneToolEdit',
@@ -430,9 +469,9 @@
     const publishedPromise = ToolManageService.fetchAllTools({ status: ['published'], ...scopeParams });
     const unpublishedPromise = ToolManageService.fetchAllTools({ status: ['unpublished'], ...scopeParams });
     Promise.all([allPromise, publishedPromise, unpublishedPromise]).then(([all, published, unpublished]) => {
-      statusCounts.all = all.length;
-      statusCounts.published = published.length;
-      statusCounts.unpublished = unpublished.length;
+      statusCounts.all = all.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
+      statusCounts.published = published.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
+      statusCounts.unpublished = unpublished.filter(tool => !shouldHidePlatformDisabledTool(tool)).length;
     });
   };
 
@@ -441,12 +480,9 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
+      // tagsEnums 保留全量（含虚拟标签）供展示名解析；搜索下拉只保留真实业务标签
       tagsEnums.value = data;
-      // 过滤掉内置的快捷筛选标签（-3全部工具、-4我创建的、-5最近使用、-6我的收藏），保留无标签等
-      const excludeIds = ['-3', '-4', '-5', '-6'];
-      const realTags = data.filter((tag: TagItem) => !excludeIds.includes(String(tag.tag_id)));
-      // 同步标签下拉选项
-      tagSelectOptions.value = realTags.map((tag: TagItem) => ({
+      tagSelectOptions.value = filterVirtualToolTags(data).map((tag: TagItem) => ({
         id: String(tag.tag_id),
         name: tag.tag_name,
       }));
@@ -496,7 +532,7 @@
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     onSuccess: (data) => {
-      allToolsData.value = data;
+      allToolsData.value = data.filter(tool => !shouldHidePlatformDisabledTool(tool)) as unknown as ToolInfoModel[];
     },
   });
 
@@ -522,9 +558,13 @@
     fetchAllToolsData(scopeParams);
     // 初始化时获取一次状态统计
     fetchStatusCounts();
-    // 仅「编辑返回」时恢复搜索，并消费掉缓存
-    const hasKey = setSearchKey();
+    // 编辑/新建返回时恢复搜索条件
+    let hasKey = restoreSearchState();
+    if (!hasKey) {
+      hasKey = setSearchKey();
+    }
     removePageParams(LIST_PAGE_KEY);
+    clearSearchState();
     if (hasKey) {
       handleSearch(searchValue.value);
     }

@@ -130,7 +130,8 @@ def render_sql_template(sql_template: str, params: dict) -> str:
 
     模板中可用:
     - has(key): 判断参数是否存在且非空
-    - bind(key, output_type=None): 参数转为裸字符串，output_type 为可选枚举
+    - bind(key, output_type=None): 通用参数渲染，列表按项拼接
+    - bind_in(key, output_type=None): IN 子句专用，空列表渲染为 NULL（空集语义）
     """
     env = jinja2_environment(autoescape=False, undefined=StrictUndefined)
 
@@ -142,9 +143,18 @@ def render_sql_template(sql_template: str, params: dict) -> str:
             raise SmartPageBindParamMissingError(key)
         return _render_bind_value(params[key], output_type=output_type)
 
+    def bind_in(key: str, output_type: Optional[str] = None) -> str:
+        """IN 子句专用渲染：空列表 → NULL（使 IN (NULL) 返回空集）。"""
+        if key not in params:
+            raise SmartPageBindParamMissingError(key)
+        value = params[key]
+        if isinstance(value, (list, tuple, set)) and len(value) == 0:
+            return "NULL"
+        return _render_bind_value(value, output_type=output_type)
+
     try:
         template = env.from_string(sql_template)
-        return template.render(has=has, bind=bind)
+        return template.render(has=has, bind=bind, bind_in=bind_in)
     except (SmartPageBindParamMissingError, SmartPageSqlTemplateRenderError):
         raise
     except Exception as e:

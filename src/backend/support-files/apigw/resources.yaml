@@ -2733,10 +2733,12 @@ paths:
     post:
       operationId: mcp_execute_tool
       description: >-
-        使用真实用户身份执行工具。风险下钻且 params.tool_variables 非空时，caller_resource_type=risk、
-        caller_resource_id、drill_field、event_start_time、event_end_time 必须同时传入；先调用 mcp_retrieve_risk，
-        使用返回的 event_time/event_end_time 填充时间范围，再按策略 drill_config 组装 params.tool_variables。
-        调用方风险权限或工具使用权限任一满足即可。
+        使用真实用户身份执行工具。默认直接执行：只传 params，不得传 caller_resource_type、
+        caller_resource_id、drill_field、event_start_time、event_end_time，后端按用户的工具使用权限鉴权。
+        仅当 path uid 来自当前风险 mcp_retrieve_risk_strategy_info 返回字段的 drill_config.tool.uid 时，才使用风险下钻模式：
+        必须同时传入 caller_resource_type=risk、caller_resource_id=当前风险ID、drill_field=该 drill_config 所属字段的 field_name、
+        event_start_time/event_end_time=同一风险 mcp_retrieve_risk 返回的 event_time/event_end_time，且按 drill_config.config
+        组装 params.tool_variables。仅 params.tool_variables 非空不代表风险下钻，不能据此传 caller 上下文。
       tags: []
       parameters:
         - in: path
@@ -2759,7 +2761,7 @@ paths:
             properties:
               params:
                 type: object
-                description: 工具执行参数。风险下钻时按 retrieve_risk_strategy_info 返回的 drill_config.config 组装 tool_variables。
+                description: 工具执行参数。普通执行按工具自身参数传入；风险下钻时按 retrieve_risk_strategy_info 返回的 drill_config.config 组装 tool_variables。仅 tool_variables 非空不代表风险下钻。
                 properties:
                   tool_variables:
                     type: array
@@ -2788,25 +2790,25 @@ paths:
                     default: 100
               caller_resource_type:
                 type: string
-                description: 调用方资源类型。风险下钻且 params.tool_variables 非空时必填，固定传 risk，用于声明本次工具执行来自风险上下文。
+                description: 风险下钻上下文。普通工具执行不得传；仅当 path uid 来自当前风险策略字段的 drill_config.tool.uid 时传 risk。
               caller_resource_id:
                 type: string
-                description: 调用方资源实例ID。风险下钻且 params.tool_variables 非空时必填，传风险ID，应与 retrieve_risk_strategy_info 的 id 一致。
+                description: 风险下钻上下文。普通工具执行不得传；风险下钻时传当前风险ID，应与 retrieve_risk_strategy_info 的 risk_id 一致。
               drill_field:
                 type: string
                 description: >-
-                  指定使用哪个策略字段的 drill_config 进行变量值校验。风险下钻且 params.tool_variables 非空时必填，传所选字段的 field_name，
+                  风险下钻上下文。普通工具执行不得传；风险下钻时传当前 uid 所在 drill_config 对应字段的 field_name，
                   后端仅使用该字段下与当前 uid 匹配的 config 校验 params.tool_variables。
               event_start_time:
                 type: string
                 description: >-
-                  风险事件开始时间，用于后端调用 list_event 获取事件数据。风险下钻且 params.tool_variables 非空时必填，
-                  使用 mcp_retrieve_risk 返回的 event_time，并与 drill_field、event_end_time 一起传入。
+                  风险下钻上下文。普通工具执行不得传；风险下钻时使用 mcp_retrieve_risk 返回的 event_time，
+                  用于后端读取风险事件数据并校验变量值。
               event_end_time:
                 type: string
                 description: >-
-                  风险事件结束时间，用于后端调用 list_event 获取事件数据。风险下钻且 params.tool_variables 非空时必填，
-                  使用 mcp_retrieve_risk 返回的 event_end_time，并与 drill_field、event_start_time 一起传入。
+                  风险下钻上下文。普通工具执行不得传；风险下钻时使用 mcp_retrieve_risk 返回的 event_end_time，
+                  用于后端读取风险事件数据并校验变量值。
       responses:
         "200":
           description: 执行成功

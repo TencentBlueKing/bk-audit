@@ -335,16 +335,26 @@
   });
 
   // 同步外部值的改动
-  watch(() => props.modelValue, (newVal) => {
+  watch(() => props.modelValue, async (newVal) => {
     selectedItems.value = newVal || [];
+    await nextTick();
+    if (!treeRef.value || !selectedItems.value.length) {
+      return;
+    }
+    selectedItems.value.forEach((item) => {
+      const node = findNodeById(localData.value, item.id);
+      if (node) {
+        treeRef.value.setChecked(node, true);
+      }
+    });
   }, {
     immediate: true,
   });
 
-  // 设置disabled
+  // 设置disabled，并在树数据就绪后回填勾选态
   watch(
     () => props.data,
-    (newVal) => {
+    async (newVal) => {
       const processedData = newVal.map(item => ({
         ...item,
         disabled: Object.keys(props.filedConfig).includes(item.id),
@@ -353,6 +363,16 @@
       localData.value = processedData;
       // 保存原始数据副本
       originalData.value = _.cloneDeep(processedData);
+      await nextTick();
+      if (!treeRef.value || !selectedItems.value.length) {
+        return;
+      }
+      selectedItems.value.forEach((item) => {
+        const node = findNodeById(localData.value, item.id);
+        if (node) {
+          treeRef.value.setChecked(node, true);
+        }
+      });
     },
   );
 </script>

@@ -217,6 +217,7 @@ export default {
     选择可见范围: 'Select Visibility Scope',
     覆盖参数默认值: 'Override Parameter Defaults',
     请选择需要覆盖的参数: 'Please select parameters to override',
+    请选择默认值: 'Please select default value',
     参数名: 'Parameter Name',
     审计场景: 'Audit Scene',
     接入系统: 'Access System',

@@ -19,8 +19,7 @@
     <auth-component
       action-id="edit_system"
       class="operation-btn"
-      :permission="permission"
-      :resource="data.bk_data_id">
+      :resource="route.params.id">
       <audit-popconfirm
         :confirm-handler="handleDelete"
         :content="t('删除后不可直接找回，需要重新接入')"
@@ -35,6 +34,7 @@
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import DataIdManageService from '@service/dataid-manage';
 
@@ -43,17 +43,15 @@
   import useRequest from '@hooks/use-request';
 
 
-  const props = withDefaults(defineProps<Props>(), {
-    permission: false,
-  });
+  const props = defineProps<Props>();
 
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const route = useRoute();
 
   interface Props {
     data: CollectorModel;
-    permission?: boolean;
   }
   interface Emits {
     (e: 'getCollectorLists'): void

@@ -55,7 +55,7 @@
   import systemIconUrl from '@images/system.svg';
 
   // 工具类型枚举
-  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision';
+  type ToolTypeKey = 'api' | 'data_search' | 'bk_vision' | 'smart_page';
 
   // 可见范围接口定义
   interface VisibilityInfo {
@@ -152,6 +152,7 @@
     api: t('API接口'),
     data_search: t('数据查询'),
     bk_vision: t('BKVision图表'),
+    smart_page: t('智能用户画像'),
   };
 
   const formatCellText = (value: unknown) => {
@@ -669,6 +670,7 @@
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPublished = row.status === 'published';
+        const isSmartPage = row.tool_type === 'smart_page';
 
         return (
           <div class="action-cell">
@@ -676,7 +678,11 @@
               text
               theme="primary"
               class="mr8"
-              onClick={() => emit('edit', row)}>
+              disabled={isSmartPage}
+              onClick={() => {
+                // 用户画像类型禁用“编辑”，避免触发平台创建/编辑流程
+                if (!isSmartPage) emit('edit', row);
+              }}>
               {t('编辑')}
             </bk-button>
             <bk-button

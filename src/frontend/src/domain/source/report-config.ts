@@ -16,9 +16,13 @@
 */
 
 
-import Request from '@utils/request';
+import Request, { type IRequestResponsePaginationData } from '@utils/request';
 
-import PanelModel from './../model/report-config/panel';
+import PanelModel, {
+  type PanelDefaultValueOverrides,
+  type PanelDetail,
+  type PanelVisibilityPayload,
+} from './../model/report-config/panel';
 import ModuleBase from './module-base';
 
 class PanelManage extends ModuleBase {
@@ -157,6 +161,100 @@ class PanelManage extends ModuleBase {
   deleteGroup(params: { id: number | string, scene_id: number | string}) {
     return Request.delete(`bkvision${this.module}/panel/scene/group/${params.id}/`, {
       params,
+    });
+  }
+  // 获取平台级报表列表
+  fetchPlatformPanels(params: {
+    enable_paginate?: boolean,
+    page?: number,
+    page_size?: number,
+    status?: 'published' | 'unpublished',
+    name?: string,
+    description?: string,
+    updated_by?: string,
+    vision_id?: string,
+    visibility_type?: string,
+    scene_ids?: string | number[],
+    system_ids?: string | string[],
+    scenario?: string,
+  }) {
+    return Request.get<IRequestResponsePaginationData<PanelModel>>(
+      `bkvision${this.module}/panel/platform/`,
+      {
+        params: {
+          enable_paginate: true,
+          ...params,
+        },
+      },
+    );
+  }
+  // 创建平台级报表
+  createPlatformPanel(params: {
+    vision_id?: string,
+    name: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
+  }) {
+    return Request.post(`bkvision${this.module}/panel/platform/`, {
+      params,
+    });
+  }
+  // 更新平台级报表
+  updatePlatformPanel(params: {
+    panel_id: string,
+    vision_id?: string,
+    name?: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
+  }) {
+    const { panel_id: panelId, ...rest } = params;
+    return Request.put(`bkvision${this.module}/panel/platform/${panelId}/`, {
+      params: {
+        panel_id: panelId,
+        ...rest,
+      },
+    });
+  }
+  // 删除平台级报表
+  deletePlatformPanel(params: { panel_id: string }) {
+    return Request.delete(`bkvision${this.module}/panel/platform/${params.panel_id}/`, {
+      params,
+    });
+  }
+  // 上架/下架平台级报表
+  publishPlatformPanel(params: {
+    panel_id: string,
+    status?: 'published' | 'unpublished',
+  }) {
+    return Request.post(`bkvision${this.module}/panel/platform/${params.panel_id}/publish/`, {
+      params,
+    });
+  }
+  /**
+   * 获取报表详情（按当前 scope 返回单份 default_value_override）
+   * GET /bkvision/api/v1/panel/{panel_id}/
+   * 默认 catchError：调用方自行兜底，避免未实现/无覆盖时弹全局错误
+   */
+  fetchPanelDetail(params: {
+    panel_id: string,
+    scope_type: string,
+    scope_id?: string,
+  }) {
+    const { panel_id: panelId, ...query } = params;
+    return Request.get<PanelDetail>(`bkvision${this.module}/panel/${panelId}/`, {
+      params: {
+        panel_id: panelId,
+        ...query,
+      },
+      payload: {
+        catchError: true,
+      },
     });
   }
 }

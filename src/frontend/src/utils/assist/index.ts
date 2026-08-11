@@ -19,6 +19,7 @@ export * from './dom';
 export * from './download-url';
 export * from './encode';
 export * from './exec-copy';
+export * from './filter-virtual-tags';
 export * from './make-map';
 export * from './permission-dialog';
 export * from './ping-agent';

@@ -59,7 +59,6 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, Syst
     )
 
     # 2. 获取日志上报信息
-    system_ids = ",".join(system_ids)
     tail_log_time_map = resource.databus.collector.bulk_system_collectors_status(
         namespace=namespace,
         system_ids=system_ids,

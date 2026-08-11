@@ -123,12 +123,14 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         self.assertNotIn(("query", "lite_mode"), detail_parameters)
 
     def test_mcp_execute_tool_describes_risk_drill_required_context(self):
-        """风险下钻的条件必填参数及时间来源必须暴露给 MCP Agent。"""
+        """MCP 必须区分普通直调和风险策略字段下钻。"""
         operations = self._get_operations()
         execute_operation = operations["mcp_execute_tool"]
         strategy_operation = operations["mcp_retrieve_risk_strategy_info"]
 
-        self.assertIn("params.tool_variables 非空", execute_operation["description"])
+        self.assertIn("默认直接执行", execute_operation["description"])
+        self.assertIn("drill_config.tool.uid", execute_operation["description"])
+        self.assertIn("仅 params.tool_variables 非空不代表风险下钻", execute_operation["description"])
         self.assertIn("必须同时传入", execute_operation["description"])
         self.assertIn("mcp_retrieve_risk", strategy_operation["description"])
         self.assertIn("event_time/event_end_time", strategy_operation["description"])
@@ -143,7 +145,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
             "event_start_time",
             "event_end_time",
         ):
-            self.assertIn("风险下钻且 params.tool_variables 非空时必填", body_schema["properties"][field_name]["description"])
+            self.assertIn("普通工具执行不得传", body_schema["properties"][field_name]["description"])
 
     def test_all_audit_report_servers_use_new_mcp_resources(self):
         definition = self._load_definition()

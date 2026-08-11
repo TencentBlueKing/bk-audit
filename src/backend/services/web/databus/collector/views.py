@@ -134,7 +134,7 @@ class CollectorsViewSet(ResourceViewSet):
             endpoint="system_collectors_status",
         ),
         ResourceRoute(
-            "GET",
+            "POST",
             resource.databus.collector.bulk_system_collectors_status,
             endpoint="bulk_system_collectors_status",
         ),

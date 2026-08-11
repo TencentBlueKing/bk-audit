@@ -142,7 +142,19 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
 
   // 统一错误处理逻辑
   interceptors.use(undefined, (error: RequestError) => {
+    // 调用方声明自行处理错误时，跳过全局 toast
+    if (error.response?.config?.payload?.catchError) {
+      return Promise.reject(error);
+    }
     const isSilent = Boolean(error.response?.config?.payload?.silent);
+    const responseData = error.response?.data;
+    const responseCode = responseData && typeof responseData === 'object'
+      ? (responseData as { code?: string | number }).code
+      : undefined;
+    const responseTraceId = responseData && typeof responseData === 'object'
+      ? (responseData as { trace_id?: string }).trace_id
+      : undefined;
+
     switch (error.code) {
       // 未登陆
       case 401:
@@ -170,12 +182,15 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
         if (isSilent) {
           break;
         }
-        if (error.response?.data?.code === '9900403') {
+        if (responseCode === '9900403') {
           handlePermission(error);
-        } else if (error.response?.data?.code === '2905003') {
+        } else if (responseCode === '2905003') {
           console.log('error', error);
         } else {
-          messageError(`${error.message} (${error.response?.data?.trace_id || ''})`);
+          const tip = responseTraceId
+            ? `${error.message} (${responseTraceId})`
+            : (error.message || '请求失败');
+          messageError(tip);
         }
     }
     return Promise.reject(error);

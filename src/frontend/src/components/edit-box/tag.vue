@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
+    10|  software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -19,40 +19,36 @@
     ref="rootRef"
     class="audit-edit-tag">
     <template v-if="initData && initData.length">
-      <bk-tag
-        v-for="(item) in renderData"
-        :key="item"
-        @click="handlerClick">
-        <tool-tip-text
-          :data="item"
-          span-width="10px"
-          style="
-          display: inline-block;
-          max-width: 100px;
-          overflow: hidden;
-          text-overflow: ellipsis ;
-          white-space: nowrap;
-          vertical-align: middle;
-          -webkit-box-orient: vertical;" />
-      </bk-tag>
-      <bk-tag
-        v-if="moreDataText"
-        key="more"
-        ref="moreRef">
-        +{{ initData.length - renderData.length }}
-      </bk-tag>
-      <div
-        v-if="showCopy"
-        v-bk-tooltips="t('复制所有')"
-        class="copy-btn"
-        @click.stop="handleCopy">
-        <audit-icon type="copy" />
+      <div class="audit-edit-tag__main">
+        <bk-tag
+          v-for="(item) in renderData"
+          :key="item"
+          class="audit-edit-tag__label"
+          @click="handlerClick">
+          {{ item }}
+        </bk-tag>
+        <bk-tag
+          v-if="moreDataText"
+          key="more"
+          ref="moreRef"
+          class="audit-edit-tag__more">
+          +{{ initData.length - renderData.length }}
+        </bk-tag>
       </div>
-      <span
-        v-if="$slots.suffix"
-        class="edit-tag-suffix">
-        <slot name="suffix" />
-      </span>
+      <div class="audit-edit-tag__actions">
+        <div
+          v-if="showCopy"
+          v-bk-tooltips="t('复制所有')"
+          class="copy-btn"
+          @click.stop="handleCopy">
+          <audit-icon type="copy" />
+        </div>
+        <span
+          v-if="$slots.suffix"
+          class="edit-tag-suffix">
+          <slot name="suffix" />
+        </span>
+      </div>
     </template>
     <template v-else>
       <span>--</span>
@@ -94,8 +90,6 @@
   import { useI18n } from 'vue-i18n';
 
   import { execCopy } from '@utils/assist';
-
-  import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   interface Props {
     data: Array<string> | string,
@@ -163,10 +157,15 @@
     requestAnimationFrame(() => {
       nextTick(() => {
         if (rootRef.value && tagElsRef.value && tagElsRef.value.length > 0) {
-          const { width: boxWidth } = rootRef.value.getBoundingClientRect();
+          // 用父容器可用宽度计算，避免组件自身尚未撑开时把可见标签算少
+          const parentWidth = rootRef.value.parentElement?.clientWidth || 0;
+          const boxWidth = parentWidth > 0
+            ? parentWidth
+            : rootRef.value.getBoundingClientRect().width;
           const numTagWidth = 50;
-          const copyBtnWidth = 20;
+          const copyBtnWidth = props.showCopy ? 20 : 0;
           let totalTagWidth = 0;
+          let fitted = 0;
 
           // 从0开始重新计算
           for (let i = 0; i < tagElsRef.value.length; i++) {
@@ -175,22 +174,21 @@
 
             // 检查是否还能放下当前标签和"+N"按钮
             const needNumBtn = i < tagElsRef.value.length - 1;
-            const trailingWidth = (props.showCopy ? copyBtnWidth : 0)
-              + (slots.suffix ? 22 : 0);
-            const requiredWidth = totalTagWidth + (needNumBtn ? numTagWidth : 0) + trailingWidth;
+            const trailingWidth = copyBtnWidth + (slots.suffix ? 22 : 0);
+            const requiredWidth = totalTagWidth
+              + (needNumBtn ? numTagWidth : 0)
+              + trailingWidth
+              + (i * 6);
 
             if (requiredWidth <= boxWidth) {
-              renderTagNum.value = i + 1;
+              fitted = i + 1;
             } else {
               break;
             }
           }
 
           // 确保至少显示一个标签
-          if (renderTagNum.value === 0 && tagElsRef.value.length > 0) {
-            renderTagNum.value = 1;
-          }
-
+          renderTagNum.value = fitted > 0 ? fitted : 1;
           isCalcRenderTagNum.value = false;
         } else {
           renderTagNum.value = 0;
@@ -242,47 +240,22 @@
   const handleCopy = () => {
     execCopy(initData.value.join('\n'), t('复制成功'));
   };
-  // 动态设置标签宽度
-  const dynamicCalcWidth = () => {
-    const root = rootRef.value; // 获取 DOM 根节点引用
-    if (!root) return; // 如果 rootRef 还没绑定或未找到，直接退出
 
-    const maxWidth = rootRef?.value.parentNode.clientWidth - 30;
-    const gapWidth = 6;
-    const copyTipWidth = 25;
-    const tags:Array<HTMLElement> = rootRef.value.getElementsByClassName('bk-tag');
-
-    let allWidth = 0;
-    Array.from(tags).forEach((t: HTMLElement) => {
-      allWidth = allWidth + t.clientWidth;
-    });
-    allWidth = allWidth + (tags.length - 1) * gapWidth + copyTipWidth;
-    let averageWidth;
-    if (allWidth > maxWidth) {
-      averageWidth = (maxWidth - (copyTipWidth + (tags.length - 1) * gapWidth)) / tags.length;
-      for (let i = 0; i < tags.length; i++) {
-        if (tags[i].clientWidth > averageWidth) {
-          tags[i].style.width =  `${Math.max(averageWidth, 35)}px`;
-        }
-      }
-    }
-  };
   let resizeObserver: any;
   onMounted(() => {
     calcRenderTagNum();
-    setTimeout(() => {
-      dynamicCalcWidth();
-    });
 
-    const resizeObserver = new ResizeObserver(throttle(() => {
+    resizeObserver = new ResizeObserver(throttle(() => {
       // 延迟执行，确保 DOM 更新完成
       setTimeout(() => {
-        renderTagNum.value = 0;
+        renderTagNum.value = Math.max(renderTagNum.value, 1);
         calcRenderTagNum();
-        dynamicCalcWidth(); // 同时处理动态宽度计算
       });
     }, 200));
     resizeObserver.observe(rootRef.value);
+    if (rootRef.value.parentElement) {
+      resizeObserver.observe(rootRef.value.parentElement);
+    }
   });
 
   onBeforeUnmount(() => {
@@ -297,14 +270,29 @@
 <style scoped lang="postcss">
   .audit-edit-tag {
     position: relative;
-    display: block;
-    word-break: keep-all;
-    white-space: nowrap;
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    vertical-align: middle;
 
-    .label-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .audit-edit-tag__main {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      align-items: center;
+    }
+
+    .audit-edit-tag__actions {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+    }
+
+    .audit-edit-tag__label {
+      flex-shrink: 0;
+    }
+
+    .audit-edit-tag__more {
+      flex-shrink: 0;
     }
 
     &:hover {
@@ -323,7 +311,8 @@
     }
 
     .copy-btn {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
       padding-left: 8px;
       cursor: pointer;
       opacity: 0%;
@@ -341,8 +330,11 @@
     }
   }
 
-  :deep(.bk-tag) {
+  :deep(.audit-edit-tag__label.bk-tag) {
     width: auto !important;
+    max-width: none !important;
     margin-right: 0;
+    overflow: visible;
+    vertical-align: middle;
   }
 </style>

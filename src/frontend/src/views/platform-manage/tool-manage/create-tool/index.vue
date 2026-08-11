@@ -83,7 +83,12 @@
         </div>
         <template #action>
           <bk-button
+            v-bk-tooltips="{
+              disabled: !isApiDoneDeBug,
+              content: t('请完成接口成功调试后再试')
+            }"
             class="w88"
+            :disabled="isApiDoneDeBug"
             theme="primary"
             @click="handleNextStep">
             {{ t('下一步') }}
@@ -123,10 +128,12 @@
               <!-- 各场景/系统参数配置：未选可见范围、全部可见、全部场景、全部系统时不展示 -->
               <scene-param-config
                 v-if="showParamOverrideConfig"
+                ref="sceneParamConfigRef"
                 :form-data="formData"
                 :input-variables="formData.config.input_variable"
                 :selected-scenes="selectedSceneItems"
                 :selected-systems="selectedSystemItems"
+                :tool-uid="formData.uid || ''"
                 @update:param-overrides="handleParamOverridesChange" />
             </template>
           </card-part-vue>
@@ -216,6 +223,7 @@
   import useMessage from '@/hooks/use-message';
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
+  import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 
   provideToolManageContext(createPlatformToolManageContext());
 
@@ -246,6 +254,8 @@
   const formRef = ref();
   const comRef = ref();
   const toolTypeSectionRef = ref();
+  // eslint-disable-next-line func-call-spacing
+  const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
 
   const { messageWarn } = useMessage();
   const loading = ref(false);
@@ -320,11 +330,11 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   // 等待工具类型子组件挂载后再回填配置（编辑时 tool_type 会从默认值切换为接口返回值）
-  const restoreToolComponentConfig = () => {
+  const restoreToolComponentConfig = (options?: { needsRedebug?: boolean }) => {
     nextTick(() => {
       nextTick(() => {
         if (comRef.value?.setConfigs && formData.value.config) {
-          comRef.value.setConfigs(_.cloneDeep(formData.value.config));
+          comRef.value.setConfigs(_.cloneDeep(formData.value.config), options);
         }
       });
     });
@@ -389,18 +399,13 @@
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
-      allTagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-2') {
-          res.push({
-            tag_id: item.tag_id,
-            tag_name: item.tag_name,
-          });
-        }
-        return res;
-      }, [] as Array<{
-        tag_id: string;
-        tag_name: string;
-      }>);
+      // 排除无标签(-2)与虚拟快捷标签（全部工具/我创建的/最近使用/我的收藏）
+      allTagData.value = filterVirtualToolTags(data)
+        .filter(item => item.tag_id !== '-2')
+        .map(item => ({
+          tag_id: item.tag_id,
+          tag_name: item.tag_name,
+        }));
       data.forEach((item) => {
         allTagMap.value[item.tag_id] = item.tag_name;
       });
@@ -442,14 +447,21 @@
       if (comRef.value && formData.value.tool_type !== 'api') {
         tastQueue.push(comRef.value.getValue());
       }
-      if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
-        const debugResult = comRef.value.getDebugResult();
-        if (!debugResult.isDoneDeBug) {
+      // 新建/编辑：参数名、传参方式等变更后均需重新调试成功才能进入下一步
+      if (formData.value.tool_type === 'api') {
+        // 步骤条异步切换时 comRef 可能已卸载，回退到父级调试态
+        if (comRef.value?.getDebugResult) {
+          const debugResult = comRef.value.getDebugResult();
+          if (!debugResult.isDoneDeBug) {
+            messageWarn(t('请先进行接口调试'));
+            return false;
+          }
+          if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+            messageWarn(t('接口调试失败'));
+            return false;
+          }
+        } else if (isApiDoneDeBug.value) {
           messageWarn(t('请先进行接口调试'));
-          return false;
-        }
-        if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
-          messageWarn(t('接口调试失败'));
           return false;
         }
       }
@@ -493,7 +505,7 @@
   };
 
   const syncApiDebugSubmitState = () => {
-    if (formData.value.tool_type === 'api' && !isEditMode) {
+    if (formData.value.tool_type === 'api') {
       const hasDebugSchema = !!formData.value.config?.output_config?.result_schema?.tree_data;
       isApiDoneDeBug.value = !hasDebugSchema;
     }
@@ -629,8 +641,12 @@
 
   // 提交
   const handleSubmit = async () => {
-    // 步骤2：formRef/comRef 已卸载，直接提交 formData
+    // 步骤2：formRef/comRef 已卸载，校验覆盖参数后提交 formData
     if (currentStep.value === 2) {
+      if (showParamOverrideConfig.value && sceneParamConfigRef.value
+        && !sceneParamConfigRef.value.validate()) {
+        return;
+      }
       doSubmit();
       return;
     }
@@ -644,6 +660,8 @@
   };
 
   const isApiDoneDeBug = ref(false);
+  /** 步骤条校验失败回退时，避免 remount 把「需重新调试」冲成调试成功 */
+  const pendingRestoreNeedsRedebug = ref(false);
   // api工具获取是否调试成功
   const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean, isSame: boolean) => {
     if (!isEditMode) {
@@ -688,8 +706,15 @@
     }
 
     if (val === 2 && oldVal === 1) {
+      // 异步校验前先记下调试态：校验失败回退 remount 时需保留「需重新调试」
+      const needsRedebugOnRollback = formData.value.tool_type === 'api' && isApiDoneDeBug.value;
+      // 子组件可能在 await 期间卸载，先同步当前配置，避免回退丢失参数修改
+      if (comRef.value?.getFields) {
+        syncStep1Config();
+      }
       const isValid = await validateStep1();
       if (!isValid) {
+        pendingRestoreNeedsRedebug.value = needsRedebugOnRollback;
         currentStep.value = 1;
         return;
       }
@@ -698,7 +723,12 @@
     }
 
     if (val === 1 && oldVal === 2 && formData.value.tool_type !== 'bk_vision') {
-      restoreToolComponentConfig();
+      const needsRedebug = pendingRestoreNeedsRedebug.value
+        || (formData.value.tool_type === 'api' && isApiDoneDeBug.value);
+      pendingRestoreNeedsRedebug.value = false;
+      restoreToolComponentConfig({
+        needsRedebug: needsRedebug && formData.value.tool_type === 'api',
+      });
     }
   });
 
@@ -761,18 +791,25 @@
   // 是否展示覆盖参数配置（全部可见、全部场景、全部系统、未选择可见范围时不展示）
   const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value);
 
-  // 选中的场景项列表（含名称）
+  // 按 scene_ids / system_ids（tag 展示顺序）映射，与可见范围 tag 顺序一致
   const selectedSceneItems = computed(() => {
     if (!formData.value.scene_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_scenes') return [];
-    return allSceneList.value.filter(s => formData.value.scene_ids.includes(s.id));
+    // 兼容 scene_id 数字/字符串不一致导致选中场景无法映射
+    const sceneMap = new Map(allSceneList.value.map(scene => [String(scene.id), scene]));
+    return formData.value.scene_ids
+      .map(sceneId => sceneMap.get(String(sceneId)))
+      .filter((scene): scene is { id: number; name: string } => Boolean(scene));
   });
 
   // 选中的系统项列表（含名称）
   const selectedSystemItems = computed(() => {
     if (!formData.value.system_ids || formData.value.visibility_type === 'all_visible') return [];
     if (formData.value.visibility_type === 'all_systems') return [];
-    return allSystemList.value.filter(s => formData.value.system_ids.includes(s.id));
+    const systemMap = new Map(allSystemList.value.map(system => [String(system.id), system]));
+    return formData.value.system_ids
+      .map(systemId => systemMap.get(String(systemId)))
+      .filter((system): system is { id: string; name: string } => Boolean(system));
   });
 
   onMounted(async () => {

@@ -31,7 +31,16 @@ export default function (props: Props, allText: string) {
 
   const modelValue = computed<Array<string>>(() => {
     const lastValue = props.model[props.name];
-    return lastValue && lastValue.length > 0 ? lastValue : [allText];
+    if (lastValue === undefined || lastValue === null || lastValue === '') {
+      return [allText];
+    }
+    // URL conditions 可能回填为字符串，多选组件统一转成数组
+    const values = Array.isArray(lastValue)
+      ? lastValue.map(item => String(item)).filter(item => item !== '')
+      : String(lastValue).split(',')
+        .map(item => item.trim())
+        .filter(item => item !== '');
+    return values.length > 0 ? values : [allText];
   });
 
   const selectedAll = computed(() => modelValue.value.includes(allText));

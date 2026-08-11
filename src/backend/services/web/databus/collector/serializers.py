@@ -144,21 +144,15 @@ class CollectorStatusResponseSerializer(CollectorStatusSerializer):
 
 class BulkSystemCollectorsStatusRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
-    system_ids = serializers.CharField(label=gettext_lazy("系统ID"))
-
-    def validate_system_ids(self, value: str):
-        if not value:
-            return []
-        return [system_id for system_id in value.split(",") if system_id]
+    system_ids = serializers.ListField(
+        child=serializers.CharField(label=gettext_lazy("系统ID")), label=gettext_lazy("系统ID列表")
+    )
 
 
 class BulkSystemSnapshotsStatusRequestSerializer(serializers.Serializer):
-    system_ids = serializers.CharField(label=gettext_lazy("系统ID"))
-
-    def validate_system_ids(self, value: str):
-        if not value:
-            return []
-        return [system_id for system_id in value.split(",") if system_id]
+    system_ids = serializers.ListField(
+        child=serializers.CharField(label=gettext_lazy("系统ID")), label=gettext_lazy("系统ID列表")
+    )
 
 
 class BulkSystemCollectorsStatusResponseSerializer(serializers.Serializer):

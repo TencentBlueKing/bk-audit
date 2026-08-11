@@ -19,6 +19,7 @@ import { inject, type InjectionKey, provide } from 'vue';
 import MetaManageService from '@service/meta-manage';
 import ToolManageService from '@service/tool-manage';
 
+import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
 import { getSceneSystemParams, getToolListScopeParams } from '@/utils/assist/scene-system-params';
 
 export type ToolManageScope = 'platform' | 'scene';
@@ -91,7 +92,7 @@ export function createPlatformToolManageContext(): ToolManageContext {
     editRouteName: 'platformToolEdit',
     fetchTools: params => ToolManageService.fetchToolsList(params as any),
     getToolsDefaultParams: () => ({ status: ['published'] }),
-    fetchTags: () => MetaManageService.fetchTags(),
+    fetchTags: () => MetaManageService.fetchTags().then(data => filterVirtualToolTags(data || [])),
     refreshToolsAfterTags: false,
     deleteTool: uid => ToolManageService.deletePlatformTool(uid),
     toggleToolStatus: ({ uid, enable }) => ToolManageService.publishPlatformToolStatus({
@@ -110,7 +111,8 @@ export function createSceneToolManageContext(): ToolManageContext {
     editRouteName: 'sceneToolEdit',
     fetchTools: params => ToolManageService.fetchAllTools(params as any),
     getToolsDefaultParams: () => getToolListScopeParams({ status: 'published' }),
-    fetchTags: params => ToolManageService.fetchToolTags(params as any),
+    fetchTags: params => ToolManageService.fetchToolTags(params as any)
+      .then(data => filterVirtualToolTags(data || [])),
     refreshToolsAfterTags: true,
     deleteTool: (uid) => {
       const scopeParams = getSceneSystemParams();

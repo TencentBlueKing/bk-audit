@@ -21,6 +21,8 @@ from typing import List, Optional, Tuple
 
 from django.db import models
 from django.db.models import QuerySet
+from django.db.models.expressions import RawSQL
+from django.db.models.functions import Substr
 from django.utils import timezone
 from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult
@@ -28,6 +30,7 @@ from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import IAMResourceProvider
+from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import ManualEvent, Risk, TicketNode, TicketPermission
 from services.web.risk.serializers import (
@@ -56,8 +59,55 @@ class RiskResourceProvider(IAMResourceProvider):
         "last_operate_time_timestamp",
     ]
 
+    # fetch_instance_list 反向拉取时需截断/置 NULL 的大字段
+    # - event_content（TextField）：截断（文本截断合法，不涉及检索）
+    # - event_data / event_evidence（实际是 dict/list 结构）：超阈值置 NULL（保证 JSON 合法性）
+    _TEXT_FIELDS_TO_TRUNCATE = ("event_content",)
+    _FIELDS_TO_NULLIFY = ("event_data", "event_evidence")
+
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
+
+    def _build_fetch_values_kwargs(self, limit_bytes: int):
+        """动态构建 queryset.values() 的字段列表与注解，避免硬编码遗漏模型新字段。
+
+        Django values() 不允许 annotation 名与 model 字段同名，因此截断/置 NULL 的字段
+        用别名注解（_truncated_<field>），在 values() 列表中引用别名，
+        fetch_instance_list 序列化前将别名 key 映射回原名。
+
+        用 RawSQL 生成 CASE WHEN，绕过 Django ORM 对 TextField/JSONField 的 __length lookup 限制：
+        - TextField（event_content）用 SUBSTR(field, 1, N) 截断
+        - JSONField/TextField dict/list（event_data/event_evidence）用
+          CASE WHEN LENGTH(COALESCE(field, '')) > N THEN NULL ELSE field END
+        """
+        values_fields = []
+        annotated = {}
+
+        for field in Risk._meta.fields:
+            if field.is_relation:
+                # FK 字段（strategy）跳过 annotation，但显式加入 values_fields
+                # values() 会自动取 strategy_id 列，serializer 用 strategy_id 读取
+                values_fields.append(field.attname)
+                continue
+            if field.name in self._TEXT_FIELDS_TO_TRUNCATE:
+                # TextField：Substr 截断（生成 SUBSTR(field, 1, N)，截断后合法字符串）
+                alias = f"_truncated_{field.name}"
+                annotated[alias] = Substr(field.name, 1, limit_bytes)
+                values_fields.append(alias)
+            elif field.name in self._FIELDS_TO_NULLIFY:
+                # JSONField / TextField dict/list：超阈值置 NULL（RawSQL 绕过 ORM lookup 限制）
+                alias = f"_truncated_{field.name}"
+                column = field.column
+                annotated[alias] = RawSQL(
+                    f"CASE WHEN LENGTH(COALESCE(`{column}`, '')) > %s THEN NULL ELSE `{column}` END",
+                    [limit_bytes],
+                    output_field=field.__class__(),
+                )
+                values_fields.append(alias)
+            else:
+                values_fields.append(field.name)
+
+        return values_fields, annotated
 
     @staticmethod
     def _get_strategy_ids_by_scene(scene_id: str) -> List[int]:
@@ -150,26 +200,47 @@ class RiskResourceProvider(IAMResourceProvider):
 
     def fetch_instance_list(self, filter, page, **options):
         # 注意：filter.start_time/end_time 为毫秒时间戳，这里保持毫秒精度，避免边界被截断
-        start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
-        end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        base_qs = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        # 使用 tz=timezone.utc 生成 aware datetime，避免 USE_TZ=True 下的 naive datetime 警告
+        start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000, tz=timezone.utc)
+        end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000, tz=timezone.utc)
+        # 使用 _objects（原始 manager）以包含已软删除记录，使 Doris 侧 is_deleted 值可靠同步。
+        # 参考 strategy_v2/provider.py 在 fetch_instance_list 返回 is_deleted 的先例。
+        base_qs = Risk._objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
 
         # 延迟关联优化：先在 updated_at 索引上做覆盖扫描定位主键，避免深分页时大量回表
         pk_list = list(
             base_qs.order_by("updated_at").values_list("risk_id", flat=True)[page.slice_from : page.slice_to]
         )
-        # 用主键精确回表，只回表 page_size 条记录
-        queryset = Risk.objects.filter(risk_id__in=pk_list).order_by("updated_at")
+        # 回表查询：用 values() 显式列出字段，大字段在 SQL 侧截断/置 NULL
+        # ⚠️ 不能用 defer()：defer 后 ModelSerializer 访问字段会触发 N+1 单条查询
+        #   （实测 1000 条 × 3 字段 = 3000 次查询，序列化 15.87s，JSON 790MB，进程 OOM）
+        # ⚠️ RiskProviderSerializer 可直接序列化 values() 返回的 dict（DRF 3.15+ Field.get_attribute
+        #   原生支持 Mapping），无需新建独立序列化器
+        values_fields, annotations = self._build_fetch_values_kwargs(
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        )
+        queryset = (
+            Risk._objects.filter(risk_id__in=pk_list).order_by("updated_at").values(*values_fields, **annotations)
+        )
+
+        # 截断/置 NULL 字段用别名 _truncated_<field>，需映射回原名供 RiskProviderSerializer 读取
+        alias_map = {
+            f"_truncated_{f}": f
+            for f in list(self._TEXT_FIELDS_TO_TRUNCATE) + list(self._FIELDS_TO_NULLIFY)
+        }
 
         results = [
             {
-                "id": item.risk_id,
-                "display_name": item.risk_id,
+                "id": item["risk_id"],
+                "display_name": item["risk_id"],
                 "creator": None,
                 "created_at": None,
                 "updater": None,
                 "updated_at": None,
-                "data": self.resource_provider_serializer(instance=item).data,
+                "data": self.resource_provider_serializer(
+                    {alias_map.get(k, k): v for k, v in item.items()}
+                ).data,
+                "is_deleted": item["is_deleted"],
             }
             for item in queryset
         ]

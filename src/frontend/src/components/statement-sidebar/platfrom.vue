@@ -18,6 +18,7 @@
   <div class="scene-sidebar">
     <!-- 场景管理 -->
     <audit-menu-item
+      class="top-level-menu-item"
       :class="{ active: currentRoute === 'platformSceneConfig' }"
       index="platformSceneConfig"
       @click="handleMenuClick('platformSceneConfig')">
@@ -27,7 +28,7 @@
       {{ t('场景管理') }}
     </audit-menu-item>
 
-    <!-- 资源管理 -->
+    <!-- 全局资源 -->
     <div class="side-group">
       <div
         class="side-group-header"
@@ -35,7 +36,7 @@
         <audit-icon
           class="side-group-icon"
           type="baobiao" />
-        <span class="side-group-name">{{ t('资源管理') }}</span>
+        <span class="side-group-name">{{ t('全局资源') }}</span>
         <audit-icon
           class="side-group-arrow"
           :class="{ expanded: expandedGroups.includes('resourceManage') }"
@@ -45,11 +46,18 @@
         v-show="expandedGroups.includes('resourceManage')"
         class="side-group-children">
         <audit-menu-item
+          :class="{ active: currentRoute === 'platformReportConfig' }"
+          index="platformReportConfig"
+          @click="handleMenuClick('platformReportConfig')">
+          <span class="side-child-dot" />
+          {{ t('全局报表') }}
+        </audit-menu-item>
+        <audit-menu-item
           :class="{ active: ['platformToolConfig', 'platformToolCreate', 'platformToolEdit'].includes(currentRoute) }"
           index="platformToolConfig"
           @click="handleMenuClick('platformToolConfig')">
           <span class="side-child-dot" />
-          {{ t('工具管理') }}
+          {{ t('全局工具') }}
         </audit-menu-item>
       </div>
     </div>
@@ -117,6 +125,7 @@
 
   // 路由与分组的映射关系
   const routeGroupMap: Record<string, string> = {
+    platformReportConfig: 'resourceManage',
     platformToolConfig: 'resourceManage',
     platformToolCreate: 'resourceManage',
     platformToolEdit: 'resourceManage',
@@ -139,8 +148,18 @@
   }
 
   .menu-item-icon {
+    display: inline-flex;
+    width: 16px;
     margin-right: 10px;
     font-size: 16px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  :deep(.top-level-menu-item) {
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
   }
 
   .side-group {
@@ -162,9 +181,13 @@
   }
 
   .side-group-icon {
+    display: inline-flex;
+    width: 16px;
     margin-right: 10px;
     font-size: 16px;
     color: #acb9d1;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .side-group-name {

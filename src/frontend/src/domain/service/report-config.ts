@@ -14,7 +14,11 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import PanelModel from '@model/report-config/panel';
+import PanelModel, {
+  type PanelDefaultValueOverrides,
+  type PanelDetail,
+  type PanelVisibilityPayload,
+} from '@model/report-config/panel';
 
 import PanelModelSource from '../source/report-config';
 
@@ -163,5 +167,86 @@ export default  {
    */
   deleteGroup(params: { id: number | string, scene_id: number | string}) {
     return PanelModelSource.deleteGroup(params);
+  },
+  /**
+   * @desc 获取平台级报表列表
+   */
+  fetchPlatformPanels(params: {
+    enable_paginate?: boolean,
+    page?: number,
+    page_size?: number,
+    status?: 'published' | 'unpublished',
+    name?: string,
+    description?: string,
+    updated_by?: string,
+    vision_id?: string,
+    visibility_type?: string,
+    scene_ids?: string | number[],
+    system_ids?: string | string[],
+    scenario?: string,
+  }) {
+    return PanelModelSource.fetchPlatformPanels(params)
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map((item: PanelModel) => new PanelModel(item)),
+      }));
+  },
+  /**
+   * @desc 创建平台级报表
+   */
+  createPlatformPanel(params: {
+    vision_id?: string,
+    name: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
+  }) {
+    return PanelModelSource.createPlatformPanel(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新平台级报表
+   */
+  updatePlatformPanel(params: {
+    panel_id: string,
+    vision_id?: string,
+    name?: string,
+    category?: string,
+    description?: string,
+    status?: 'published' | 'unpublished',
+    visibility?: PanelVisibilityPayload,
+    default_value_overrides?: PanelDefaultValueOverrides,
+  }) {
+    return PanelModelSource.updatePlatformPanel(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 删除平台级报表
+   */
+  deletePlatformPanel(params: { panel_id: string }) {
+    return PanelModelSource.deletePlatformPanel(params);
+  },
+  /**
+   * @desc 上架/下架平台级报表
+   */
+  publishPlatformPanel(params: {
+    panel_id: string,
+    status?: 'published' | 'unpublished',
+  }) {
+    return PanelModelSource.publishPlatformPanel(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取报表详情（按当前 scope 返回单份 default_value_override）
+   */
+  fetchPanelDetail(params: {
+    panel_id: string,
+    scope_type: string,
+    scope_id?: string,
+  }): Promise<PanelDetail> {
+    return PanelModelSource.fetchPanelDetail(params)
+      .then(({ data }) => data);
   },
 };

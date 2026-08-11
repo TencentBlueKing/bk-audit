@@ -26,9 +26,11 @@ export function buildDefaultValueOverrides(overrides?: Record<string, SceneParam
     const paramValues: Record<string, any> = {};
     item.override_param_keys.forEach((key) => {
       const value = item.param_default_values?.[key];
-      if (value !== undefined && value !== '') {
-        paramValues[key] = value;
+      // 空数组视为未覆盖（不限制数据范围）；正常路径由前端必填校验拦截空默认值
+      if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) {
+        return;
       }
+      paramValues[key] = value;
     });
 
     if (!Object.keys(paramValues).length) {
@@ -332,6 +334,29 @@ export function buildVisibilitySearchParams(selectedIds: string[]): VisibilitySc
     scene_ids: sceneIds,
     system_ids: systemIds,
   });
+}
+
+export function buildVisibilitySearchQuery(selectedIds: string[]): {
+  visibility_type?: string;
+  scene_ids?: string;
+  system_ids?: string;
+} {
+  const payload = buildVisibilitySearchParams(selectedIds);
+  if (!payload) return {};
+
+  const hasSceneIds = payload.scene_ids.length > 0;
+  const hasSystemIds = payload.system_ids.length > 0;
+
+  if (hasSceneIds || hasSystemIds) {
+    return {
+      scene_ids: hasSceneIds ? payload.scene_ids.join(',') : undefined,
+      system_ids: hasSystemIds ? payload.system_ids.join(',') : undefined,
+    };
+  }
+
+  return {
+    visibility_type: payload.visibility_type,
+  };
 }
 
 interface VisibilityLike {

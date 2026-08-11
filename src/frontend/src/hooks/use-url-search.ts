@@ -31,7 +31,7 @@ export default function () {
     });
     return params;
   };
-  const parseUrlParamValue = (value: string, escapedField: string, key: string) => {
+  const parseUrlParamValue = (value: string, wrapObjectAsArray = false) => {
     const trimmed = value.trim();
     // 仅解析 JSON 对象/数组，避免纯数字字符串（如超长 risk_id）被 JSON.parse 成 Number 后精度丢失
     if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
@@ -39,7 +39,8 @@ export default function () {
     }
     try {
       const parsed = JSON.parse(trimmed);
-      if (typeof parsed === 'object' && parsed !== null && escapedField !== key) {
+      // 单值且 URL 键为 foo[] 时，把对象包成数组，保证消费侧拿到数组形态
+      if (typeof parsed === 'object' && parsed !== null && wrapObjectAsArray) {
         return [parsed];
       }
       return parsed;
@@ -60,13 +61,26 @@ export default function () {
       // 获取该key的所有值
       const values = curSearchParams.getAll(key);
 
-      // 如果只有一个值，直接存储；如果有多个值，存储为数组
+      // 多值时 values 本身已是数组，不可再对每个 JSON 对象包一层，否则会得到 [[obj1],[obj2]]
+      // 仅「单值 + foo[] 键 + 目标字段」时才包成数组
+      const wrapObjectAsArray = values.length === 1
+        && key.endsWith('[]')
+        && processedKey === escapedField;
+
       if (values.length === 1) {
-        params[processedKey] = parseUrlParamValue(values[0], escapedField, key);
+        params[processedKey] = parseUrlParamValue(values[0], wrapObjectAsArray);
       } else {
-        params[processedKey] = values.map((value: string) => parseUrlParamValue(value, escapedField, key));
+        params[processedKey] = values.map((value: string) => parseUrlParamValue(value, false));
       }
     });
+
+    // 兼容历史错误解析产生的嵌套数组，统一拍平为目标字段的一维列表
+    if (Object.prototype.hasOwnProperty.call(params, escapedField)) {
+      const raw = params[escapedField];
+      if (Array.isArray(raw)) {
+        params[escapedField] = raw.flatMap((item: any) => (Array.isArray(item) ? item : [item]));
+      }
+    }
     return params;
   };
 

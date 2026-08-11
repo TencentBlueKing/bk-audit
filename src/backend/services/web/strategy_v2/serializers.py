@@ -307,6 +307,8 @@ class StrategySerializer(serializers.Serializer):
         """
         校验下钻配置中工具默认值校验
         """
+        from services.web.common.default_value_validator import DefaultValueValidator
+
         if scene_id is None:
             return
 
@@ -322,6 +324,8 @@ class StrategySerializer(serializers.Serializer):
 
         # 批量获取下钻工具的最新版本配置
         tools = {str(tool.uid): tool for tool in Tool.all_latest_tools().filter(uid__in=expected_uids)}
+
+        validator = DefaultValueValidator()
 
         for field_configs in (
             validated_request_data.get("event_basic_field_configs", []),
@@ -341,23 +345,11 @@ class StrategySerializer(serializers.Serializer):
 
                     config = tool_obj.config
                     input_variables = config.get("input_variable") or []
-                    # source_field 即工具变量的 raw_name，var_config 为对应的变量配置对象
                     var_config_map = {var.get("raw_name"): var for var in input_variables if var.get("raw_name")}
 
-                    # 收集当前用户有权限的场景/系统允许的默认值覆盖
-                    allowed_defaults: dict = {}
-                    default_value_overrides = config.get("default_value_overrides", {}) or {}
-                    for scene_id_key, overrides in (default_value_overrides.get("scenes", {}) or {}).items():
-                        if scene_id_key in user_allowed_scene_ids and isinstance(overrides, dict):
-                            for raw_name, default_value in overrides.items():
-                                if raw_name:
-                                    allowed_defaults.setdefault(raw_name, []).append(default_value)
-                    for system_id_key, overrides in (default_value_overrides.get("systems", {}) or {}).items():
-                        if system_id_key in user_allowed_system_ids and isinstance(overrides, dict):
-                            for raw_name, default_value in overrides.items():
-                                if raw_name:
-                                    allowed_defaults.setdefault(raw_name, []).append(default_value)
+                    # 构建 tool_variables 格式：[{"raw_name": "...", "value": "..."}]
 
+                    tool_variables = []
                     for item in drill.get("config") or []:
                         source_field = item.get("source_field")
                         if not source_field:
@@ -366,35 +358,29 @@ class StrategySerializer(serializers.Serializer):
                         if var_config is None:
                             continue
 
-                        # 校验用户不可见(is_show=False)
-                        if not var_config.get("is_show", True):
-                            # 豁免时间范围选择器的权限校验（支持相对时间表达式）
-                            if var_config.get("field_category") in ["time_range_select", "time-ranger"]:
-                                continue
-                            if item.get("target_value_type") != TargetValueTypeEnum.FIXED_VALUE.value:
-                                continue
-                            target_value = item.get("target_value")
-                            original_default = var_config.get("default_value")
-                            # source_field 即工具变量的 raw_name
-                            if source_field in allowed_defaults:
-                                if (
-                                    target_value not in allowed_defaults[source_field]
-                                    and target_value != original_default
-                                ):
-                                    raise serializers.ValidationError(
-                                        {
-                                            "tool": gettext("下钻工具 %(tool)s 的 %(field)s 只能使用默认值" "或当前用户有权限的场景/系统允许的覆盖值")
-                                            % {"tool": tool_uid, "field": source_field}
-                                        }
-                                    )
-                            else:
-                                if target_value != original_default:
-                                    raise serializers.ValidationError(
-                                        {
-                                            "tool": gettext("下钻工具 %(tool)s 的 %(field)s 不可见，只能使用默认值")
-                                            % {"tool": tool_uid, "field": source_field}
-                                        }
-                                    )
+                        # 只校验固定值（动态字段引用不需要校验）
+                        if item.get("target_value_type") != TargetValueTypeEnum.FIXED_VALUE.value:
+                            continue
+
+                        tool_variables.append(
+                            {
+                                "raw_name": source_field,
+                                "value": item.get("target_value"),
+                            }
+                        )
+
+                    # 如果没有需要校验的变量，跳过
+                    if not tool_variables:
+                        continue
+
+                    validator.validate_tool_default_values(
+                        tool_config=config,
+                        tool_variables=tool_variables,
+                        resource_type=ResourceVisibilityType.TOOL,
+                        resource_id=tool_uid,
+                        user_allowed_scene_ids=set(user_allowed_scene_ids),
+                        user_allowed_system_ids=set(user_allowed_system_ids),
+                    )
 
     def _validate_link_table(self, validated_request_data: dict, scene_id: int | None) -> None:
         if scene_id is None or validated_request_data.get("strategy_type") != StrategyType.RULE.value:

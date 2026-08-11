@@ -244,9 +244,14 @@
     isEditMode: boolean;
   }
 
+  interface SetConfigsOptions {
+    /** 步骤切换回填时保留「需重新调试」态，避免仅凭旧 schema 误恢复为调试成功 */
+    needsRedebug?: boolean;
+  }
+
   interface Exposes {
     getFields: () => void;
-    setConfigs: (data: any) => void;
+    setConfigs: (data: any, options?: SetConfigsOptions) => void;
     getDebugResult: () => void;
     validate: () => boolean;
   }
@@ -513,7 +518,10 @@
         groups: cachedOutputConfig.groups,
       }
       : null;
-    const prevPaginationConfig = (cachedOutputConfig.pagination_config && Array.isArray(cachedOutputConfig.pagination_config))
+    const prevPaginationConfig = (
+      cachedOutputConfig.pagination_config
+      && Array.isArray(cachedOutputConfig.pagination_config)
+    )
       ? {
         enable_pagination: !!cachedOutputConfig.enable_pagination,
         pagination_config: cachedOutputConfig.pagination_config,
@@ -567,6 +575,24 @@
     return true;
   };
 
+  /** 标记需重新调试：保留已缓存的 output_config，隐藏结果区并通知父级禁用下一步/提交 */
+  const applyNeedsRedebugState = () => {
+    hasInitPagination.value = false;
+    hasInitResultConfig.value = false;
+    isSuccess.value = false;
+    isDoneDeBug.value = false;
+    isSameInitApiConfig.value = false;
+    isSameInitParamsConfig.value = false;
+    editModeIseditInfo.value = true;
+    emits(
+      'getIsDoneDeBug',
+      false,
+      true,
+      false,
+      false,
+    );
+  };
+
   const restorePaginationConfig = (data: any) => {
     if (!data.output_config) {
       return;
@@ -602,18 +628,7 @@
 
     // 需重新调试时：缓存当前配置，但先隐藏分页/查询结果区块（等待成功后再展示并 diff）
     cacheCurrentOutputConfig();
-    hasInitPagination.value = false;
-    hasInitResultConfig.value = false;
-    isSuccess.value = false;
-    isDoneDeBug.value = false;
-    editModeIseditInfo.value = true;
-    emits(
-      'getIsDoneDeBug',
-      false,
-      editModeIseditInfo.value,
-      isSuccess.value,
-      isSameInitApiConfig.value && isSameInitParamsConfig.value,
-    );
+    applyNeedsRedebugState();
   };
 
   // 判断是否只是改变了headers的description字段
@@ -676,19 +691,7 @@
       // 仅在初始化完成后，api 配置发生实质变更才需要重置调试状态
       // 保留分页/查询结果配置，待重新调试成功后再按 schema diff
       cacheCurrentOutputConfig();
-      hasInitPagination.value = false;
-      hasInitResultConfig.value = false;
-      isSuccess.value = false;
-      isDoneDeBug.value = false;
-      isSameInitApiConfig.value = false;
-      editModeIseditInfo.value = true;
-      emits(
-        'getIsDoneDeBug',
-        false,
-        editModeIseditInfo.value,
-        isSuccess.value,
-        isSameInitApiConfig.value && isSameInitParamsConfig.value,
-      );
+      applyNeedsRedebugState();
     }
   }, {
     deep: true,
@@ -746,8 +749,9 @@
       };
       return formData.value;
     },
-    setConfigs(data: any) {
+    setConfigs(data: any, options?: SetConfigsOptions) {
       if (!data) return;
+      const needsRedebug = !!options?.needsRedebug;
       isParams.value = false;
       nextTick(() => {
         if (data.api_config) {
@@ -775,6 +779,17 @@
             config[fieldKey] = '';
           }
         });
+
+        // 需重新调试时：保留 output_config 供再次调试后 diff，但不恢复为调试成功
+        if (needsRedebug) {
+          hasCachedOutputConfig.value = !!data.output_config?.result_schema?.tree_data;
+          applyNeedsRedebugState();
+          setTimeout(() => {
+            initformData.value = JSON.parse(JSON.stringify(formData.value));
+            isSetConfigsSuccess.value = true;
+          }, 0);
+          return;
+        }
 
         // 新建/编辑：若已有调试结果 schema，恢复调试态与结果配置区块
         const hasRestoredDebug = restoreDebugStateFromConfig(data);

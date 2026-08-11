@@ -62,8 +62,8 @@ class CollectorManage extends ModuleBase {
     return Request.get<Array<BatchSubscriptionStatusModel>>(`${this.path}/collectors/batch_subscription_status/`, { params });
   }
   // 批量获取应用采集状态
-  getBatchSystemCollectorStatus(params: { system_ids: string }) {
-    return Request.get<{[key: string]: SystemCollectorStatusModel}>(`${this.path}/collectors/bulk_system_collectors_status/`, {
+  getBatchSystemCollectorStatus(params: { system_ids: string[] }) {
+    return Request.post<{[key: string]: SystemCollectorStatusModel}>(`${this.path}/collectors/bulk_system_collectors_status/`, {
       params,
     });
   }

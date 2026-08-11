@@ -283,6 +283,8 @@
     useGameDetailFetcher,
     useGameOverviewFetcher,
   } from './game-data-fetcher';
+  import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
   import {
     CHAT_DETAIL_FIELDS,
     COIN_DETAIL_FIELDS,
@@ -333,6 +335,11 @@
     gameData?: GameData;
     initialTab?: string;
     toolUid?: string;
+    /** 智能用户画像工具配置，用于透传数据范围参数（如 cc_ids） */
+    toolConfig?: {
+      input_variable?: Array<{ raw_name: string; default_value?: unknown }>;
+      [key: string]: any;
+    };
     gameNameResolving?: boolean;
   }
 
@@ -353,6 +360,7 @@
     }),
     initialTab: '',
     toolUid: '',
+    toolConfig: () => ({}),
     gameNameResolving: false,
   });
 
@@ -384,10 +392,16 @@
   };
 
   // ========== 数据加载（统一封装在 game-data-fetcher.ts） ==========
+  const getDataRangeParams = (): Record<string, number[]> => getDataRangeParamsFromToolConfig(
+    props.toolConfig,
+    getToolDetailScopeQuery(),
+  );
+
   const getCtx = () => ({
     toolUid: props.toolUid,
     gameid: props.gameData.gameid,
     openid: props.gameData.openid,
+    dataRangeParams: getDataRangeParams(),
   });
   const executeDataSource = createDataSourceExecutor(getCtx);
 

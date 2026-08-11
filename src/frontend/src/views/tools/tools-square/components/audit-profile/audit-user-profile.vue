@@ -193,6 +193,9 @@
     parseSmartPageGameDetailIntent,
     parseSmartPageUrlParams,
   } from '@/views/tools/tools-square/utils/tool-url-params';
+  import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import type { DataRangeToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
+  import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -201,7 +204,7 @@
 
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
-    toolConfig?: {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
+    toolConfig?: DataRangeToolConfig & {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
       property?: {
         scene_id?: number | string;
       };
@@ -497,6 +500,15 @@
   const isUserInfoEmpty = computed(() => !userInfo.value.wecom
     && !userInfo.value.username);
 
+  /**
+   * 从工具详情读取当前场景/系统的数据范围覆盖值（如 cc_ids）。
+   * 未覆盖或空值时不传，后端按全量数据返回。
+   */
+  const getDataRangeParams = (): Record<string, number[]> => getDataRangeParamsFromToolConfig(
+    props.toolConfig,
+    getToolDetailScopeQuery(),
+  );
+
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
     loading: userInfoLoading,
@@ -563,6 +575,7 @@
       params: {
         data_source_name: 'main_auditrisk_stat',
         params: {
+          ...getDataRangeParams(),
           one_year_ago_Ymd: getOneYearAgoYmd(),
           username,
         },
@@ -669,6 +682,7 @@
       params: {
         data_source_name: 'main_qqwechat_list',
         params: {
+          ...getDataRangeParams(),
           one_day_ago_Ymd: getOneDayAgoYmd(),
           username,
         },
@@ -778,20 +792,24 @@
       params: {
         data_source_name: 'main_user_info',
         params: {
+          ...getDataRangeParams(),
           username: ctx,
         },
       },
     });
   };
 
-  // 执行数据源查询
+  // 执行数据源查询（透传详情合并后的数据范围默认值，如 cc_ids）
   const executeDataSource = (dataSourceName: string, params: Record<string, any>, runner: typeof fetchUserInfo) => {
     if (!props.toolUid) return;
     runner({
       uid: props.toolUid,
       params: {
         data_source_name: dataSourceName,
-        params,
+        params: {
+          ...getDataRangeParams(),
+          ...params,
+        },
       },
     });
   };

@@ -52,7 +52,13 @@
           <!-- 溢出 +n -->
           <span
             v-if="overflowCount > 0"
-            v-bk-tooltips="{ content: overflowNames, theme: 'dark', placement: 'top-start' }"
+            v-bk-tooltips="{
+              content: overflowNames,
+              theme: 'dark',
+              placement: 'top-start',
+              extCls: 'visible-range-overflow-tips',
+              onShow: ensureOverflowTipsZIndex,
+            }"
             class="overflow-count">
             +{{ overflowCount }}
           </span>
@@ -112,127 +118,132 @@
         </div>
 
         <!-- 两列选择区（每列独立滚动） -->
-        <div class="range-columns">
-          <!-- 审计场景 -->
-          <div class="range-column">
-            <div class="column-title">
-              {{ t('审计场景') }}
-            </div>
-            <div class="column-list">
-              <div
-                v-show="showAllSceneOption"
-                class="checkbox-item"
-                :class="{
-                  'is-checked': isAllSceneChecked,
-                  'is-disabled': viaAllVisibleButton,
-                }"
-                @click.stop="!viaAllVisibleButton && handleToggleAllScenes()">
-                <img
-                  alt=""
-                  class="item-icon scene-icon"
-                  src="@images/scene.svg">
-                <span class="checkbox-label">{{ t('全部场景') }}</span>
-                <audit-icon
-                  v-if="isAllSceneChecked"
-                  class="check-icon"
-                  type="check-line" />
+        <bk-loading
+          class="range-columns-loading"
+          :loading="listLoading"
+          size="small">
+          <div class="range-columns">
+            <!-- 审计场景 -->
+            <div class="range-column">
+              <div class="column-title">
+                {{ t('审计场景') }}
               </div>
-              <div
-                v-for="scene in filteredSceneList"
-                :key="scene.id"
-                class="checkbox-item"
-                :class="{
-                  'is-checked': isSceneChecked(scene.id),
-                  'is-disabled': isAllSceneChecked || viaAllVisibleButton,
-                }"
-                @click.stop="
-                  !isAllSceneChecked
-                    && !viaAllVisibleButton
-                    && handleSceneToggle(scene.id)">
-                <img
-                  alt=""
-                  class="item-icon scene-icon"
-                  src="@images/scene.svg">
-                <!-- eslint-disable-next-line max-len -->
-                <span
-                  v-bk-tooltips="{
-                    content: scene.name,
-                    theme: 'dark',
-                    placement: 'top-start',
-                    disabled: !isLabelOverflowing('scene-' + scene.id),
+              <div class="column-list">
+                <div
+                  v-show="showAllSceneOption"
+                  class="checkbox-item"
+                  :class="{
+                    'is-checked': isAllSceneChecked,
+                    'is-disabled': viaAllVisibleButton,
                   }"
-                  class="checkbox-label"
-                  :data-scene-id="scene.id">
-                  {{ scene.name }}
-                </span>
-                <audit-icon
-                  v-if="isSceneChecked(scene.id)"
-                  class="check-icon"
-                  type="check-line" />
+                  @click.stop="!viaAllVisibleButton && handleToggleAllScenes()">
+                  <img
+                    alt=""
+                    class="item-icon scene-icon"
+                    src="@images/scene.svg">
+                  <span class="checkbox-label">{{ t('全部场景') }}</span>
+                  <audit-icon
+                    v-if="isAllSceneChecked"
+                    class="check-icon"
+                    type="check-line" />
+                </div>
+                <div
+                  v-for="scene in filteredSceneList"
+                  :key="scene.id"
+                  class="checkbox-item"
+                  :class="{
+                    'is-checked': isSceneChecked(scene.id),
+                    'is-disabled': isAllSceneChecked || viaAllVisibleButton,
+                  }"
+                  @click.stop="
+                    !isAllSceneChecked
+                      && !viaAllVisibleButton
+                      && handleSceneToggle(scene.id)">
+                  <img
+                    alt=""
+                    class="item-icon scene-icon"
+                    src="@images/scene.svg">
+                  <!-- eslint-disable-next-line max-len -->
+                  <span
+                    v-bk-tooltips="{
+                      content: scene.name,
+                      theme: 'dark',
+                      placement: 'top-start',
+                      disabled: !isLabelOverflowing('scene-' + scene.id),
+                    }"
+                    class="checkbox-label"
+                    :data-scene-id="scene.id">
+                    {{ scene.name }}
+                  </span>
+                  <audit-icon
+                    v-if="isSceneChecked(scene.id)"
+                    class="check-icon"
+                    type="check-line" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 接入系统 -->
-          <div class="range-column">
-            <div class="column-title">
-              {{ t('接入系统') }}
-            </div>
-            <div class="column-list">
-              <div
-                v-show="showAllSystemOption"
-                class="checkbox-item"
-                :class="{
-                  'is-checked': isAllSystemChecked,
-                  'is-disabled': viaAllVisibleButton,
-                }"
-                @click.stop="!viaAllVisibleButton && handleToggleAllSystems()">
-                <img
-                  alt=""
-                  class="item-icon system-icon"
-                  src="@images/system.svg">
-                <span class="checkbox-label">{{ t('全部系统') }}</span>
-                <audit-icon
-                  v-if="isAllSystemChecked"
-                  class="check-icon"
-                  type="check-line" />
+            <!-- 接入系统 -->
+            <div class="range-column">
+              <div class="column-title">
+                {{ t('接入系统') }}
               </div>
-              <div
-                v-for="system in filteredSystemList"
-                :key="system.id"
-                class="checkbox-item"
-                :class="{
-                  'is-checked': isSystemChecked(system.id),
-                  'is-disabled': isAllSystemChecked || viaAllVisibleButton,
-                }"
-                @click.stop="
-                  !isAllSystemChecked
-                    && !viaAllVisibleButton
-                    && handleSystemToggle(system.id)">
-                <img
-                  alt=""
-                  class="item-icon system-icon"
-                  src="@images/system.svg">
-                <!-- eslint-disable-next-line max-len -->
-                <span
-                  v-bk-tooltips="{
-                    content: system.name,
-                    theme: 'dark',
-                    placement: 'top-start',
-                    disabled: !isLabelOverflowing('system-' + system.id),
+              <div class="column-list">
+                <div
+                  v-show="showAllSystemOption"
+                  class="checkbox-item"
+                  :class="{
+                    'is-checked': isAllSystemChecked,
+                    'is-disabled': viaAllVisibleButton,
                   }"
-                  class="checkbox-label"
-                  :data-system-id="system.id">
-                  {{ system.name }}
-                </span>
-                <audit-icon
-                  v-if="isSystemChecked(system.id)"
-                  class="check-icon"
-                  type="check-line" />
+                  @click.stop="!viaAllVisibleButton && handleToggleAllSystems()">
+                  <img
+                    alt=""
+                    class="item-icon system-icon"
+                    src="@images/system.svg">
+                  <span class="checkbox-label">{{ t('全部系统') }}</span>
+                  <audit-icon
+                    v-if="isAllSystemChecked"
+                    class="check-icon"
+                    type="check-line" />
+                </div>
+                <div
+                  v-for="system in filteredSystemList"
+                  :key="system.id"
+                  class="checkbox-item"
+                  :class="{
+                    'is-checked': isSystemChecked(system.id),
+                    'is-disabled': isAllSystemChecked || viaAllVisibleButton,
+                  }"
+                  @click.stop="
+                    !isAllSystemChecked
+                      && !viaAllVisibleButton
+                      && handleSystemToggle(system.id)">
+                  <img
+                    alt=""
+                    class="item-icon system-icon"
+                    src="@images/system.svg">
+                  <!-- eslint-disable-next-line max-len -->
+                  <span
+                    v-bk-tooltips="{
+                      content: system.name,
+                      theme: 'dark',
+                      placement: 'top-start',
+                      disabled: !isLabelOverflowing('system-' + system.id),
+                    }"
+                    class="checkbox-label"
+                    :data-system-id="system.id">
+                    {{ system.name }}
+                  </span>
+                  <audit-icon
+                    v-if="isSystemChecked(system.id)"
+                    class="check-icon"
+                    type="check-line" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </bk-loading>
       </div>
     </teleport>
 
@@ -296,9 +307,12 @@
     popoverClass?: string;
     /** 下拉宽度是否跟随选择器（默认固定 640px） */
     matchSelectorWidth?: boolean;
+    /** 下拉面板 z-index（侧滑/弹层内需高于容器，如 sideslider 9999） */
+    popoverZIndex?: number;
   }>(), {
     popoverClass: '',
     matchSelectorWidth: false,
+    popoverZIndex: 2100,
   });
 
   const emit = defineEmits<{(e: 'update:formData', value: FormData): void}>();
@@ -315,6 +329,7 @@
     top: '0px',
     left: '0px',
     width: '',
+    zIndex: props.popoverZIndex as number | string,
   });
 
   // 动态计算可显示的 tag 数量
@@ -325,6 +340,8 @@
   const sceneList = ref<OptionItem[]>([]);
   const systemList = ref<SystemOptionItem[]>([]);
   const searchKeyword = ref('');
+  const listLoading = ref(true);
+  const optionsLoaded = ref(false);
 
   const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase());
 
@@ -392,6 +409,17 @@
       }));
     } catch {
       systemList.value = [];
+    }
+  };
+
+  const loadRangeOptions = async () => {
+    if (optionsLoaded.value) return;
+    listLoading.value = true;
+    try {
+      await Promise.all([loadSceneList(), loadSystemList()]);
+      optionsLoaded.value = true;
+    } finally {
+      listLoading.value = false;
     }
   };
 
@@ -500,6 +528,17 @@
   const overflowCount = computed(() => Math.max(0, allDisplayTags.value.length - visibleCount.value));
   const overflowNames = computed(() => allDisplayTags.value.slice(visibleCount.value).map(t => t.name)
     .join('、'));
+
+  // v-bk-tooltips 默认 z-index≈8000，侧滑/高层级弹层内需抬高，避免被遮挡
+  const ensureOverflowTipsZIndex = () => {
+    const targetZ = Number(props.popoverZIndex) + 10;
+    document.querySelectorAll<HTMLElement>('.visible-range-overflow-tips').forEach((el) => {
+      const tipEl = el;
+      if ((Number(tipEl.style.zIndex) || 0) < targetZ) {
+        tipEl.style.zIndex = String(targetZ);
+      }
+    });
+  };
 
   // 下拉选项 label 溢出检测（仅截断时显示 tooltip）
   const labelOverflowMap = reactive<Record<string, boolean>>({});
@@ -610,6 +649,7 @@
       popoverStyle.top = `${rect.bottom + 4}px`;
       popoverStyle.left = `${rect.left}px`;
       popoverStyle.width = props.matchSelectorWidth ? `${rect.width}px` : '';
+      popoverStyle.zIndex = props.popoverZIndex;
     });
   };
 
@@ -801,6 +841,10 @@
 
   watch(popoverVisible, (val) => {
     if (val) {
+      // 首次打开再请求场景/系统列表，保证能看到 loading
+      if (!optionsLoaded.value) {
+        loadRangeOptions();
+      }
       nextTick(() => updatePopoverPosition());
     } else {
       searchKeyword.value = '';
@@ -835,8 +879,8 @@
     document.addEventListener('click', handleClickOutside, true);
     window.addEventListener('scroll', handleScrollOrResize, true);
     window.addEventListener('resize', handleScrollOrResize);
-    loadSceneList();
-    loadSystemList();
+    // 挂载即拉取，供已选 tag 回显名称；首次打开弹层时若仍在请求则展示 loading
+    loadRangeOptions();
     nextTick(() => {
       calcVisibleCount();
       if (tagsWrapperRef.value) {
@@ -1085,6 +1129,10 @@
   .range-columns {
     display: flex;
     padding: 12px 0 12px 12px;
+  }
+
+  .range-columns-loading {
+    min-height: 120px;
   }
 
   .range-column {

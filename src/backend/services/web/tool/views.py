@@ -32,6 +32,13 @@ class ToolViewSet(ResourceViewSet):
                     UseToolPermission(),
                 )
             ]
+        if self.action == "input_variable_candidates":
+            return [
+                AnyOfPermissions(
+                    CallerContextPermission(),
+                    UseToolPermission(get_instance_id=self.get_tool_uid),
+                )
+            ]
         return []
 
     def get_tool_uid(self):
@@ -55,6 +62,11 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
         ResourceRoute("POST", resource.tool.tool_execute_debug, endpoint="tool_execute_debug"),
         ResourceRoute("PUT", resource.tool.favorite_tool, pk_field="uid", endpoint="favorite"),
+        ResourceRoute(
+            "POST",
+            resource.tool.get_tool_input_variable_candidates,
+            endpoint="input_variable_candidates",
+        ),
     ]
 
 

@@ -79,6 +79,7 @@
       :data="list"
       :delete-field-name="deleteFieldName"
       :filed-config="localFiledConfig"
+      :model-value="cascaderSelectedNodes"
       @select="handleCascaderSelect" />
     <!-- <div>
       <BkCheckbox>查询敏感数据</BkCheckbox>
@@ -245,9 +246,12 @@
     if (!urlPostParams.conditions) {
       return [];
     }
-    return _.isArray(urlPostParams.conditions)
+    const rawConditions = _.isArray(urlPostParams.conditions)
       ? urlPostParams.conditions
       : [urlPostParams.conditions];
+    return rawConditions.flatMap((item: UrlCondition | UrlCondition[]) => (
+      _.isArray(item) ? item : [item]
+    )).filter((condition: UrlCondition) => Boolean(condition?.field?.raw_name));
   };
   const pendingUrlConditions = ref<UrlCondition[]>(getPendingUrlConditions());
 
@@ -289,6 +293,8 @@
   };
 
   const list = ref<CascaderNode[]>([]);
+  // 链接回填的「添加其他条件」选中项，需与搜索项保持一致
+  const cascaderSelectedNodes = ref<CascaderNode[]>([]);
 
   // eslint-disable-next-line max-len
   const convertToCascaderList = (arr: any[], level = 1, parentIds: string[] = []): CascaderNode[] => (Array.isArray(arr) ? arr.map((item: any) => {
@@ -416,6 +422,21 @@
     return null;
   };
 
+  const findNodeById = (nodes: CascaderNode[], id: string): CascaderNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node;
+      }
+      if (node.children?.length) {
+        const found = findNodeById(node.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  };
+
   const getCustomFieldLabel = (key: string) => {
     const foundName = findNodeNameByKey(list.value, key);
     if (foundName) {
@@ -423,8 +444,11 @@
     }
     try {
       const parsedKey = JSON.parse(key);
-      if (Array.isArray(parsedKey)) {
-        return parsedKey.slice(1).join('/');
+      if (Array.isArray(parsedKey) && parsedKey.length > 0) {
+        const [rawName, ...keys] = parsedKey;
+        // 手写子字段不在配置树中时，用父字段中文名 + keys 拼出与手动添加一致的标签
+        const parentName = findNodeNameByKey(list.value, rawName) || rawName;
+        return keys.length ? `${parentName}/${keys.join('/')}` : parentName;
       }
     } catch (e) {
       // ignore
@@ -440,33 +464,87 @@
     return rawName;
   };
 
+  // 将链接中的手写子字段挂回级联树，保证下拉勾选态与手动添加一致
+  const ensureUrlCustomNodeInList = (key: string, label: string) => {
+    let parsedKey: string[];
+    try {
+      parsedKey = JSON.parse(key);
+    } catch {
+      return findNodeById(list.value, key);
+    }
+    if (!Array.isArray(parsedKey) || parsedKey.length < 2) {
+      return findNodeById(list.value, key);
+    }
+    const existed = findNodeById(list.value, key);
+    if (existed) {
+      return existed;
+    }
+    const parent = findNodeById(list.value, parsedKey[0]);
+    if (!parent) {
+      return null;
+    }
+    const newNode: CascaderNode = {
+      allow_operators: [],
+      children: [],
+      category: parent.category,
+      dynamic_content: false,
+      disabled: true,
+      id: key,
+      isJson: false,
+      level: (parent.level || 1) + 1,
+      name: label,
+      isEdit: false,
+      isOpen: false,
+    };
+    parent.children = parent.children || [];
+    parent.children.push(newNode);
+    parent.isOpen = true;
+    return newNode;
+  };
+
   const initCustomFieldsFromUrl = (conditions: UrlCondition[]) => {
     let hasCustomField = false;
+    const selectedNodes: CascaderNode[] = [];
     conditions.forEach((condition) => {
       if (!condition?.field?.raw_name) {
         return;
       }
       const key = getConditionFieldKey(condition);
-      if (defaultFieldKeys.has(key) || localFiledConfig.value[key]) {
+      if (defaultFieldKeys.has(key)) {
         return;
       }
-      hasCustomField = true;
-      localFiledConfig.value[key] = {
-        label: getCustomFieldLabel(key),
-        type: 'string',
-        required: false,
-        canClose: true,
-        customField: true,
-        operator: condition.operator || 'like',
-      };
+      const label = getCustomFieldLabel(key);
+      if (!localFiledConfig.value[key]) {
+        hasCustomField = true;
+        localFiledConfig.value[key] = {
+          label,
+          type: 'string',
+          required: false,
+          canClose: true,
+          customField: true,
+          operator: condition.operator || 'like',
+        };
+      } else if (localFiledConfig.value[key].customField) {
+        localFiledConfig.value[key].label = label;
+      }
+      const node = ensureUrlCustomNodeInList(key, localFiledConfig.value[key].label);
+      if (node && !selectedNodes.some(item => item.id === key)) {
+        selectedNodes.push(node);
+      }
     });
     if (hasCustomField) {
       isShowMore.value = true;
     }
+    // 触发级联树刷新，带上手写子节点；选中项按 id 重新取引用，避免 clone 后失效
+    list.value = _.cloneDeep(list.value);
+    cascaderSelectedNodes.value = selectedNodes
+      .map(item => findNodeById(list.value, item.id))
+      .filter((item): item is CascaderNode => Boolean(item));
   };
 
   // 处理级联选择器选中事件，添加搜索项
   const handleCascaderSelect = (selectArr: CascaderNode[]) => {
+    cascaderSelectedNodes.value = selectArr;
     // 先检查并删除不在 selectArr 中的自定义字段
     const selectIds = selectArr.map(item => item.id).filter(Boolean);
     Object.keys(localFiledConfig.value).forEach((key) => {
@@ -586,8 +664,10 @@
               return foundName || (() => {
                 try {
                   const parsedKey = JSON.parse(key);
-                  if (Array.isArray(parsedKey)) {
-                    return parsedKey.slice(1).join('/');
+                  if (Array.isArray(parsedKey) && parsedKey.length > 0) {
+                    const [rawName, ...keys] = parsedKey;
+                    const parentName = findNodeByKey(list.value, rawName) || rawName;
+                    return keys.length ? `${parentName}/${keys.join('/')}` : parentName;
                   }
                   return key;
                 } catch (e) {
@@ -665,6 +745,7 @@
     handleReset();
     resetFieldConfig();
     isShowMore.value = false;
+    cascaderSelectedNodes.value = [];
     emits('update:modelValue', localSearchModel.value);
     emits('submit');
   };

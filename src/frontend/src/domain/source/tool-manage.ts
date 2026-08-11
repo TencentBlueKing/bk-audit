@@ -219,6 +219,16 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.get(`bkvision${this.module}/share/share_detail/?share_uid=${params.share_uid}`);
   }
+  // 获取工具输入变量候选选项（如 cc_ids 业务列表）
+  getInputVariableCandidates(params: {
+    uid: string,
+    raw_name: string,
+  }) {
+    return Request.post<Array<{ id: number | string; name: string }>>(
+      `${this.path}/tool/input_variable_candidates/`,
+      { params },
+    );
+  }
 }
 
 export default new ToolManage();

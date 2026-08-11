@@ -16,14 +16,15 @@
 -->
 <template>
   <bk-loading :loading="pageLoading">
+    <!-- 有诊断报表时渲染面板 -->
     <div
-      v-if="status === 'normal' && !pageLoading"
-      style="width: 100%;height: 100%;">
-      <div
-        id="panel" />
+      v-if="showPanel"
+      class="system-diagnosis-panel-wrap">
+      <div id="panel" />
     </div>
+    <!-- 无报表时展示引导说明 -->
     <div
-      v-if="status !== 'normal' && !pageLoading"
+      v-else-if="!pageLoading"
       class="system-diagnosis-container">
       <div class="main-title">
         {{ t('系统诊断，向救火式风险修复说拜拜！') }}
@@ -228,7 +229,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -260,8 +261,9 @@
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
 
-  const status = computed(() => props.data.status || '');
-  const systemId = ref<string>(route.params.id as string);
+  const systemId = computed(() => (
+    (route.params.id as string) || props.data?.system_id || ''
+  ));
 
   const loadScript = (src: string) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -271,7 +273,6 @@
     document.head.appendChild(script);
   });
   let app: any;
-
 
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (err.data.code === '9900403') {
@@ -283,12 +284,27 @@
     }
   };
 
-  const init = async  () => {
+  const destroyApp = () => {
+    if (app) {
+      app.unmount?.();
+      app = null;
+    }
+  };
+
+  const init = async () => {
+    const panelId = menuData.value?.[0]?.id;
+    const panelEl = document.querySelector('#panel');
+    if (!panelId || !panelEl || !systemId.value) {
+      return;
+    }
     try {
-      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
-      app =  window.BkVisionSDK.init(
+      if (!window.BkVisionSDK) {
+        await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      }
+      destroyApp();
+      app = await window.BkVisionSDK.init(
         '#panel',
-        menuData.value[0].id,
+        panelId,
         {
           apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
           chartToolMenu: [
@@ -311,47 +327,71 @@
 
   const {
     data: menuData,
+    loading: menuLoading,
     run: fetchMenuList,
   } = useRequest(StatementManageService.fetchMenuList, {
     defaultValue: [],
-    onSuccess: () => {
-      nextTick(() => {
-        if (app) {
-          app.unmount();
-        }
-        init();
-      });
-    },
   });
 
   const {
     data: configData,
-    loading: configLoading,
     run: fetchConfig,
   } = useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
-    manual: true,
   });
 
-  const pageLoading = computed(() => !props.data?.system_id || configLoading.value);
+  /** 有系统 ID 且已拉到诊断报表时展示面板 */
+  const showPanel = computed(() => (
+    Boolean(systemId.value) && !menuLoading.value && (menuData.value?.length > 0)
+  ));
 
-  // 组件挂载时主动请求数据
-  onMounted(() => {
-    fetchConfig();
-  });
+  const pageLoading = computed(() => (
+    !systemId.value || menuLoading.value
+  ));
 
-  watch(() => status.value, (data) => {
-    if (data === 'normal') {
-      fetchMenuList({
-        scope_id: route.params.id,
-        scope_type: 'system',
-      });
+  const loadDiagnosisPanel = () => {
+    if (!systemId.value) return;
+    fetchMenuList({
+      scenario: 'per_app',
+      scope_id: systemId.value,
+      scope_type: 'system',
+    });
+  };
+
+  // 系统就绪后拉取诊断报表
+  watch(systemId, (id) => {
+    if (id) {
+      loadDiagnosisPanel();
     }
   }, {
     immediate: true,
   });
+
+  // 面板 DOM 就绪后再初始化 SDK，避免竞态导致空白
+  watch(showPanel, (visible) => {
+    if (!visible) {
+      destroyApp();
+      return;
+    }
+    nextTick(() => {
+      init();
+    });
+  });
+
+  onMounted(() => {
+    fetchConfig();
+  });
+
+  onUnmounted(() => {
+    destroyApp();
+  });
 </script>
 <style scoped lang="postcss">
+  .system-diagnosis-panel-wrap {
+    width: 100%;
+    min-height: calc(100vh - 280px);
+  }
+
   .system-diagnosis-container {
     padding: 24px;
     margin-top: 24px;

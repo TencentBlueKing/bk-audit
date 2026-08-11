@@ -45,11 +45,13 @@
 
           <scene-param-config
             v-if="showParamOverrideConfig"
+            ref="sceneParamConfigRef"
             :form-data="formData"
             :input-variables="formData.config.input_variable"
             override-select-full-width
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
+            :tool-uid="props.target?.uid || ''"
             @update:param-overrides="handleParamOverridesChange" />
         </div>
       </div>
@@ -149,6 +151,8 @@
   const { messageSuccess } = useMessage();
 
   const isShow = defineModel<boolean>('isShow', { default: false });
+  // eslint-disable-next-line func-call-spacing
+  const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
 
   const tagNameMap = computed(() => {
     const map: Record<string, string> = {};
@@ -211,6 +215,7 @@
     resetFormData(visibility || detail.visibility);
 
     toolConfigSnapshot.value = _.cloneDeep(detail.config || {});
+    formData.tool_type = detail.tool_type || '';
     formData.config.input_variable = detail.config?.input_variable || [];
     formData.scene_param_overrides = parseDefaultValueOverrides(
       detail.config?.default_value_overrides,
@@ -286,16 +291,24 @@
   const showParamOverrideConfig = computed(() => hasVisibleRangeSelection.value
     && (formData.config.input_variable?.length ?? 0) > 0);
 
+  // 按 scene_ids / system_ids（tag 展示顺序）映射，与可见范围 tag 顺序一致
   const selectedSceneItems = computed(() => {
     if (!formData.scene_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_scenes') return [];
-    return allSceneList.value.filter(scene => formData.scene_ids.includes(scene.id));
+    // 兼容 scene_id 数字/字符串不一致导致选中场景无法映射、覆盖表单区块为空
+    const sceneMap = new Map(allSceneList.value.map(scene => [String(scene.id), scene]));
+    return formData.scene_ids
+      .map(sceneId => sceneMap.get(String(sceneId)))
+      .filter((scene): scene is SceneOption => Boolean(scene));
   });
 
   const selectedSystemItems = computed(() => {
     if (!formData.system_ids || formData.visibility_type === 'all_visible') return [];
     if (formData.visibility_type === 'all_systems') return [];
-    return allSystemList.value.filter(system => formData.system_ids.includes(system.id));
+    const systemMap = new Map(allSystemList.value.map(system => [String(system.id), system]));
+    return formData.system_ids
+      .map(systemId => systemMap.get(String(systemId)))
+      .filter((system): system is { id: string; name: string } => Boolean(system));
   });
 
   const handleVisibleRangeChange = (val: FormData) => {
@@ -326,6 +339,11 @@
 
   const handleConfirm = () => {
     if (!props.target?.uid || !isDetailReady.value) return;
+
+    if (showParamOverrideConfig.value && sceneParamConfigRef.value
+      && !sceneParamConfigRef.value.validate()) {
+      return;
+    }
 
     const hasVisibilitySelection = shouldSubmitVisibilityPayload(formData);
     const visibility = hasVisibilitySelection

@@ -25,7 +25,12 @@ class Statement extends ModuleBase {
     this.module = '/';
   }
 
-  getMenuList(params: { scenario: 'perapp' | 'default', status?: string; scope_id?: string; scope_type?: string }, payload = {}) {
+  getMenuList(params: {
+    scenario: 'per_app' | 'default' | 'tool';
+    status?: string;
+    scope_id?: string;
+    scope_type?: string;
+  }, payload = {}) {
     return Request.get<Array<{
       id:string,
       name:string

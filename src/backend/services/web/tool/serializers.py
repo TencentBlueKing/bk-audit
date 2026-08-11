@@ -188,8 +188,6 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
 
         tool = Tool.last_version_tool(uid)
         tool_type = tool.tool_type
-        if tool_type == ToolTypeEnum.SMART_PAGE:
-            raise serializers.ValidationError({"uid": gettext_lazy("当前暂不支持智能页面工具更新")})
 
         if config:
             if tool_type == ToolTypeEnum.BK_VISION:
@@ -198,9 +196,19 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
             elif tool_type == ToolTypeEnum.API:
                 validated_config = ApiToolConfig.model_validate(config).model_dump()
+            elif tool_type == ToolTypeEnum.SMART_PAGE:
+                # smart_page 仅提取 default_value_overrides，忽略 data_sources 等敏感字段
+                validated_config = SmartPageToolConfig.model_validate(config)
+                attrs["_smart_page_overrides"] = validated_config.default_value_overrides.model_dump()
+                # 避免越权改写工具基础属性（name/description/namespace/status/tags/config 等）
+                allowed_keys = {"uid", "_smart_page_overrides", "visibility", "updated_time"}
+                for key in [k for k in list(attrs.keys()) if k not in allowed_keys]:
+                    attrs.pop(key)
             else:
                 raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
-            attrs["config"] = validated_config
+            # smart_page 分支已 pop config，此处仅对其他工具类型回写校验后的 config
+            if "config" in attrs:
+                attrs["config"] = validated_config
         if "name" in attrs:
             validate_latest_tool_name_unique(attrs["name"], exclude_uid=uid)
         return attrs
@@ -729,3 +737,10 @@ class MCPToolDetailResponseSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data["config"] = project_mcp_tool_config(instance.tool_type, instance.config or {})
         return data
+
+
+class GetToolInputVariableCandidatesRequestSerializer(serializers.Serializer):
+    """获取工具输入变量候选项请求序列化器"""
+
+    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
+    raw_name = serializers.CharField(label=gettext_lazy("输入变量名"))

@@ -14,6 +14,34 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+export type PanelVisibilityType = 'all_visible' | 'all_scenes' | 'all_systems'
+  | 'specific_scenes' | 'specific_systems' | 'scenes_and_systems';
+
+export interface PanelVisibilityPayload {
+  visibility_type: PanelVisibilityType;
+  scene_ids: number[];
+  system_ids: string[];
+}
+
+/** 平台报表默认值覆盖（创建/编辑提交 & 管理列表回显） */
+export interface PanelDefaultValueOverrides {
+  scenes?: Record<string, Record<string, any>>;
+  systems?: Record<string, Record<string, any>>;
+}
+
+/** 用户侧报表详情（按当前 scope 返回单份映射） */
+export interface PanelDetail {
+  id: string;
+  vision_id: string;
+  name: string;
+  status: string;
+  category: string;
+  description: string;
+  updated_by?: string;
+  updated_at?: string;
+  default_value_override?: Record<string, any>;
+}
+
 export default class PanelModel {
   id: string;
   name: string;
@@ -30,6 +58,10 @@ export default class PanelModel {
   category: string;
   status: 'published' | 'unpublished';
   is_enabled?: boolean;
+  visibility_type?: PanelVisibilityType;
+  scene_ids?: number[];
+  system_ids?: string[];
+  default_value_overrides?: PanelDefaultValueOverrides;
 
   constructor(payload: PanelModel) {
     this.id = payload.id;
@@ -47,5 +79,9 @@ export default class PanelModel {
     this.category = payload.category;
     this.status = payload.status;
     this.is_enabled = payload.is_enabled;
+    this.visibility_type = payload.visibility_type;
+    this.scene_ids = payload.scene_ids;
+    this.system_ids = payload.system_ids;
+    this.default_value_overrides = payload.default_value_overrides;
   }
 }

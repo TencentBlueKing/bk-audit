@@ -29,6 +29,7 @@ from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils.translation import gettext, gettext_lazy
+from pydantic import ValidationError
 from pypinyin import lazy_pinyin
 from rest_framework import serializers as drf_serializers
 
@@ -75,6 +76,7 @@ from services.web.strategy_v2.serializers import (
 from services.web.tool.constants import (
     ApiToolConfig,
     DataSearchConfigTypeEnum,
+    SmartPageToolConfig,
     SQLDataSearchConfig,
     TableFieldTypeConfig,
     ToolTagsEnum,
@@ -82,17 +84,25 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import (
     DataSearchTablePermission,
+    InputVariableDataSourceNotConfiguredError,
+    InputVariableNotFoundError,
+    SmartPageDataSourceNotFound,
     ToolDoesNotExist,
     ToolNotPublished,
     ToolTypeNotSupport,
 )
-from services.web.tool.executor.tool import ToolExecutorFactory
+from services.web.tool.executor.model import SmartPageExecuteParams
+from services.web.tool.executor.tool import (
+    SmartPageSqlTemplateExecutor,
+    ToolExecutorFactory,
+)
 from services.web.tool.models import Tool, ToolFavorite, ToolTag
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
     GetMCPToolDetailByNameRequestSerializer,
     GetToolDetailByNameAPIGWRequestSerializer,
+    GetToolInputVariableCandidatesRequestSerializer,
     ListRequestSerializer,
     ListToolAllRequestSerializer,
     ListToolTagsRequestSerializer,
@@ -818,6 +828,13 @@ class UpdateTool(ToolBase):
         updated_time = validated_request_data.pop("updated_time", None)
         if not tool:
             raise ToolDoesNotExist()
+
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            # smart_page 工具：仅更新 default_value_overrides，不走全量 config 更新逻辑
+            # serializer 已将校验后的 overrides 存入 _smart_page_overrides，并清除了 config
+            smart_page_overrides = validated_request_data.pop("_smart_page_overrides", None)
+            return self._update_smart_page_overrides(tool, smart_page_overrides, validated_request_data, updated_time)
+
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
             new_tool = self.create_tool_new_version(
@@ -839,6 +856,33 @@ class UpdateTool(ToolBase):
             relation_resource_field="tool_uid",
         )
         return tool
+
+    def _update_smart_page_overrides(self, tool, new_overrides, validated_request_data, updated_time=None):
+        """smart_page 工具仅更新 default_value_overrides。
+
+        - overrides 变更时创建新版本，保证历史可追溯
+        - overrides 未变更时（None 或与现有值相同）直接返回原工具
+        """
+        # new_overrides=None 表示本次请求未提交覆盖配置（仅修改了可见范围），无需更新
+        if new_overrides is None:
+            return tool
+
+        # 对比新旧覆盖配置，仅在实际变更时才创建新版本
+        current_overrides = tool.config.get("default_value_overrides", {})
+        if new_overrides == current_overrides:
+            return tool
+
+        config = tool.config if tool.config else {}
+        config['default_value_overrides'] = new_overrides
+        validated_request_data["config"] = config
+        # 防止客户端通过提交 tags 字段越权修改标签
+        tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
+        validated_request_data["tags"] = list(Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True))
+        return self.create_tool_new_version(
+            old_tool=tool,
+            validated_request_data=validated_request_data,
+            updated_time=updated_time,
+        )
 
 
 class ExecuteTool(ToolBase):
@@ -918,9 +962,7 @@ class ExecuteTool(ToolBase):
                 ],
                 "page": 1,
                 "page_size": 100
-            },
-            "caller_resource_type": "risk",
-            "caller_resource_id": "R123"
+            }
         }
         ```
         response:
@@ -976,9 +1018,7 @@ class ExecuteTool(ToolBase):
         ```json
         {
             "uid": "vision_tool_123",
-            "params": {},
-            "caller_resource_type": "risk",
-            "caller_resource_id": "R123"
+            "params": {}
         }
         ```
         response:
@@ -991,15 +1031,27 @@ class ExecuteTool(ToolBase):
         }
         ```
 
-    4. 权限上下文（可选）
-        - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
-            - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
-            - `caller_resource_id`：调用方资源实例 ID（如风险ID）
-            - `drill_field`：指定使用哪个字段的 drill_config 进行变量值校验
-            - `event_start_time`/`event_end_time`：事件时间范围（用于 list_event 获取事件数据）
-        - 行为说明：
-            - 命中且有权限：跳过原有工具权限校验，直接执行
-            - 命中但无权限：返回标准权限异常（包含可申请信息）
+    4. 风险下钻上下文（仅风险策略字段下钻时使用）
+        - 普通工具执行仅传 `uid` 和 `params`，不得传 `caller_resource_*`、`drill_field`、
+          `event_start_time`、`event_end_time`。
+        - 仅当 `uid` 来自当前风险的策略字段 `drill_config.tool.uid` 时，才传完整的风险下钻上下文：
+        ```json
+        {
+            "uid": "risk_drill_tool_123",
+            "params": {
+                "tool_variables": [
+                    {"raw_name": "username", "value": "admin"}
+                ]
+            },
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123",
+            "drill_field": "operator",
+            "event_start_time": "2026-07-28 00:00:00",
+            "event_end_time": "2026-07-29 00:00:00"
+        }
+        ```
+        - `drill_field` 使用该 `drill_config` 所属字段的 `field_name`；变量值按照对应 `drill_config.config`
+          组装，时间范围使用风险详情中的 `event_time`、`event_end_time`。
     """
 
     name = gettext_lazy("工具执行")
@@ -1020,10 +1072,13 @@ class ExecuteTool(ToolBase):
         """校验执行时默认值的权限
 
         校验规则：
-        1. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
+        1. 允许用户使用其权限范围内场景/系统。
+        2. 工具授权范围（ResourceBinding）与用户权限范围的交集。
+        3. 仅对 is_show=False（用户不可见）的参数做校验；is_show=True 的参数
            用户可自由修改，无需校验（用户可见场景）。
-        2. 允许用户使用其权限范围内场景/系统配置的默认值覆盖。
         """
+        from services.web.common.default_value_validator import DefaultValueValidator
+
         config = tool.config
         if not config:
             return
@@ -1032,74 +1087,18 @@ class ExecuteTool(ToolBase):
         if not default_value_overrides:
             return
 
-        # 获取用户有权限的场景/系统列表
+        # 获取用户有权限的场景和系统
         user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
 
-        # 获取工具的输入变量配置
-        input_variables_config = config.get("input_variable", [])
-
-        # 获取用户输入的变量值
-        tool_variables = params.get("tool_variables", [])
-
-        # 收集用户有权限的场景/系统允许的默认值
-        allowed_defaults = {}
-
-        # 场景级别的默认值
-        scenes_overrides = default_value_overrides.get("scenes", {})
-        for scene_id, overrides in scenes_overrides.items():
-            if scene_id in user_allowed_scene_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
-
-        # 系统级别的默认值
-        systems_overrides = default_value_overrides.get("systems", {})
-        for system_id, overrides in systems_overrides.items():
-            if system_id in user_allowed_system_ids and isinstance(overrides, dict):
-                for raw_name, default_value in overrides.items():
-                    if raw_name:
-                        allowed_defaults.setdefault(raw_name, []).append(default_value)
-
-        input_variable_map = {}
-        for var in tool_variables:
-            raw_name = var.get("raw_name")
-            if not raw_name:
-                continue
-            input_variable_map[raw_name] = var.get("value")
-        input_var_config_map = {}
-        for var in input_variables_config:
-            raw_name = var.get("raw_name")
-            if raw_name:
-                input_var_config_map[raw_name] = var
-
-        # 校验 is_show=False 的参数
-        for raw_name, value in input_variable_map.items():
-
-            input_var_config = input_var_config_map.get(raw_name, {})
-            # 仅校验 is_show=False 的参数
-            if not input_var_config.get("is_show", True):
-                # 豁免时间范围选择器的权限校验（支持相对时间表达式）
-                if input_var_config.get("field_category") in ["time_range_select", "time-ranger"]:
-                    continue
-
-                # 获取工具的原始默认值
-                original_default = input_var_config.get("default_value")
-
-                # 如果用户在允许的场景/系统下有默认值覆盖，则允许使用覆盖值
-                # 如果用户传入的值不在允许的范围内，则提示越权
-                if raw_name in allowed_defaults:
-                    if value not in allowed_defaults[raw_name] and value != original_default:
-                        raise PermissionException(
-                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                            permission=gettext("参数 %(var_name)s 的默认值不存在") % {"var_name": raw_name},
-                        )
-
-                else:
-                    if value != original_default:
-                        raise PermissionException(
-                            action_name=gettext_lazy("使用隐藏参数 %(var_name)s 的默认值") % {"var_name": raw_name},
-                            permission=gettext("参数 %(var_name)s 不可见，只能使用默认值") % {"var_name": raw_name},
-                        )
+        validator = DefaultValueValidator()
+        validator.validate_tool_default_values(
+            tool_config=config,
+            tool_variables=params.get("tool_variables", []),
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=tool.uid,
+            user_allowed_scene_ids=set(user_allowed_scene_ids),
+            user_allowed_system_ids=set(user_allowed_system_ids),
+        )
 
     def perform_request(self, validated_request_data):
         """
@@ -1120,8 +1119,25 @@ class ExecuteTool(ToolBase):
         check_request_data["current_object_id"] = uid
         check_request_data["tool_variables"] = params.get("tool_variables", [])
         should_skip_permission_from(check_request_data, get_request_username())
+
+        # smart_page 工具参数结构适配:
+        #   原始格式: {"data_source_name": "xxx", "params": {"game_ids": ["100","200"], "operator": "admin"}}
+        #   转换为:   {"tool_variables": [{"raw_name": "game_ids", "value": ["100","200"]}, ...]}
+        # 这样可以复用统一的 _validate_default_value_permissions 校验逻辑
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            smart_params = params.get("params", {})
+            # 只校验在 input_variable 中声明的参数，SQL 模板参数不需要校验
+            config = tool.config or {}
+            input_var_names = {v.get("raw_name") for v in config.get("input_variable", []) if v.get("raw_name")}
+            equivalent_tool_variables = [
+                {"raw_name": k, "value": v} for k, v in smart_params.items() if k in input_var_names
+            ]
+            params_for_validation = {"tool_variables": equivalent_tool_variables}
+        else:
+            params_for_validation = params
+
         # 校验默认值的权限
-        self._validate_default_value_permissions(tool, params, get_request_username())
+        self._validate_default_value_permissions(tool, params_for_validation, get_request_username())
 
         current_user = get_request_username()
         try:
@@ -1153,6 +1169,67 @@ class MCPExecuteTool(ExecuteTool):
             if isinstance(nested_result, dict):
                 nested_result.pop("rendered_sql", None)
         return response_data
+
+
+class GetToolInputVariableCandidates(ToolBase):
+    """获取工具输入变量的候选项
+
+    用户画像工具：根据 input_variable.data_source 引用的数据源（SQL 模板类型）查询 BkBase，
+    返回候选项列表。支持平台级和场景级 smart_page 工具，不限 binding_type
+    """
+
+    name = gettext_lazy("获取工具输入变量候选项")
+    RequestSerializer = GetToolInputVariableCandidatesRequestSerializer
+
+    def validate_response_data(self, response_data):
+        return response_data
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        raw_name = validated_request_data["raw_name"]
+
+        # 查找工具
+        tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+
+        # 仅对智能页面工具（用户画像工具）生效
+        if tool.tool_type != ToolTypeEnum.SMART_PAGE.value:
+            raise ToolDoesNotExist(message=gettext("工具 %s 非智能页面工具，不支持获取输入变量候选项") % uid)
+
+        # 解析工具配置
+        try:
+            config = SmartPageToolConfig.model_validate(tool.config or {})
+        except ValidationError as e:
+            errors = e.errors()
+            detail = "; ".join("{}: {}".format(".".join(str(loc) for loc in err["loc"]), err["msg"]) for err in errors)
+            raise ToolDoesNotExist(message=gettext("工具 %s 配置不合法: %s") % (uid, detail))
+
+        # 定位输入变量
+        var_config = next((v for v in config.input_variable if v.raw_name == raw_name), None)
+        if var_config is None:
+            raise InputVariableNotFoundError(raw_name)
+
+        if not var_config.data_source:
+            raise InputVariableDataSourceNotConfiguredError(raw_name)
+
+        # 定位该输入变量引用的数据源（同一工具下可有多个不同的 data_source）
+        data_source = next((ds for ds in config.data_sources if ds.name == var_config.data_source), None)
+        if not data_source:
+            raise SmartPageDataSourceNotFound(var_config.data_source)
+
+        # 通过 SmartPageSqlTemplateExecutor 执行 SQL 查询
+        execute_params = SmartPageExecuteParams(
+            data_source_name=data_source.name,
+            params={},
+        )
+        result = SmartPageSqlTemplateExecutor.execute(
+            executor=None,
+            data_source=data_source,
+            params=execute_params,
+        )
+
+        return result.result.results
 
 
 class ExecuteToolAPIGW(ExecuteTool):
