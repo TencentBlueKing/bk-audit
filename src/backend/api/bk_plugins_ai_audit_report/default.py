@@ -21,6 +21,7 @@ from django.utils.translation import gettext_lazy
 
 from api.bk_plugins_ai_agent.default import AIAgentBase
 from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
+from api.bk_plugins_ai_audit_report.agui import AuditReportFinalAnswerExtractor
 from api.domains import AI_AUDIT_REPORT_API_URL
 
 
@@ -41,6 +42,10 @@ class ChatCompletion(BaseChatCompletion):
 
     module_name = "bk_plugins_ai_audit_report"
     name = gettext_lazy("智能体对话")
+
+    def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
+        """审计报告优先返回完整 assistant 正文中的 <final_answer>。"""
+        return AuditReportFinalAnswerExtractor().extract(content)
 
     def build_url(self, validated_request_data):
         return AI_AUDIT_REPORT_API_URL.rstrip("/") + "/" + self.action.lstrip("/")

@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import json
 import sys
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest import mock
 
@@ -40,6 +41,97 @@ from tests.base import TestCase
 from .constants import CHAT_COMPLETION_PARAMS, CHAT_COMPLETION_RESPONSE
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+DESENSITIZED_FINAL_REPORT = "脱敏终态说明。\n\n# 脱敏风险报告\n\n最终正文。"
+
+
+def agui_sse_event(event: dict) -> str:
+    return "data: " + json.dumps(event, ensure_ascii=False)
+
+
+def build_desensitized_incident_sse() -> list[str]:
+    """复刻真实事故流结构与计数，所有业务内容均使用固定占位值。"""
+    events = [
+        {"type": "MESSAGES_SNAPSHOT", "messages": [{"role": "user", "content": "脱敏请求"}]},
+        {"type": "RUN_STARTED", "threadId": "thread-1", "runId": "run-1"},
+    ]
+    tool_arg_counts = (3, 3, 3, 3, 3, 3, 2, 2)
+    for step_index in range(33):
+        events.append({"type": "STEP_STARTED", "stepName": "model"})
+        if step_index < len(tool_arg_counts):
+            tool_call_id = f"tool-{step_index}"
+            events.append(
+                {
+                    "type": "TOOL_CALL_START",
+                    "toolCallId": tool_call_id,
+                    "toolCallName": "desensitized_tool",
+                    "parentMessageId": "process",
+                }
+            )
+            events.extend(
+                {"type": "TOOL_CALL_ARGS", "toolCallId": tool_call_id, "delta": "{}"}
+                for _ in range(tool_arg_counts[step_index])
+            )
+            events.extend(
+                [
+                    {"type": "TOOL_CALL_END", "toolCallId": tool_call_id},
+                    {
+                        "type": "TOOL_CALL_RESULT",
+                        "messageId": "process",
+                        "toolCallId": tool_call_id,
+                        "content": "脱敏工具结果",
+                        "role": "tool",
+                        "error": False,
+                    },
+                ]
+            )
+        events.extend(
+            [
+                {
+                    "type": "STATE_SNAPSHOT",
+                    "snapshot": {
+                        "messages": [
+                            {
+                                "type": "ai",
+                                "content": "过程消息",
+                                "tool_calls": [{"id": f"pending-{step_index}"}],
+                            }
+                        ]
+                    },
+                },
+                {"type": "STEP_FINISHED", "stepName": "model"},
+            ]
+        )
+    events.append({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"})
+    report_deltas = list(DESENSITIZED_FINAL_REPORT) + [""] * (571 - len(DESENSITIZED_FINAL_REPORT))
+    events.extend({"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": delta} for delta in report_deltas)
+    events.extend(
+        [
+            {"type": "TEXT_MESSAGE_END", "messageId": "report"},
+            {
+                "type": "STATE_SNAPSHOT",
+                "snapshot": {
+                    "messages": [
+                        {
+                            "type": "ai",
+                            "content": "工具执行完成，开始整理报告。",
+                            "tool_calls": [{"id": "pending-final"}],
+                        }
+                    ]
+                },
+            },
+            {
+                "type": "STATE_SNAPSHOT",
+                "snapshot": {
+                    "messages": [
+                        {"role": "user", "content": "脱敏请求"},
+                        {"type": "ai", "content": DESENSITIZED_FINAL_REPORT, "tool_calls": []},
+                    ]
+                },
+            },
+            {"type": "RUN_FINISHED", "threadId": "thread-1", "runId": "run-1"},
+        ]
+    )
+    return [agui_sse_event(event) for event in events]
 
 
 class TestAIAuditReport(TestCase):
@@ -201,6 +293,18 @@ class TestAIAuditAnalyseAuth(TestCase):
             AI_AUDIT_REPORT_SECRET_KEY="report_secret",
         ):
             self.assertEqual(self.resource.secret_key, "agent_secret")
+
+    def test_legacy_stream_keeps_text_done_fallback(self):
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            "data: " + json.dumps({"event": "text", "content": "最终", "cover": False}),
+            "data: " + json.dumps({"event": "done", "content": "最终回复", "cover": False}),
+            "data: [DONE]",
+        ]
+
+        self.assertEqual(self.resource._parse_stream_response(response), "最终")
 
 
 class TestAIAuditReportStream(TestCase):
@@ -513,19 +617,35 @@ class TestAIAuditReportStream(TestCase):
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_appends_ag_ui_text_message_content(self, mock_build_header, mock_build_url):
+    def test_stream_extracts_final_answer_from_last_complete_ag_ui_message(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
         mock_response.raise_for_status.return_value = None
         mock_response.headers = {"Content-Type": "text/event-stream"}
         mock_response.iter_lines.return_value = [
-            f"data: {json.dumps({'type': 'TEXT_MESSAGE_START', 'messageId': 'msg', 'role': 'assistant'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_START', 'messageId': 'process', 'role': 'assistant'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'process', 'delta': '先分析数据。'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_END', 'messageId': 'process'})}",
+            f"data: {json.dumps({'type': 'THINKING_START', 'messageId': 'thinking'})}",
+            agui_sse_event(
+                {
+                    "type": "THINKING_TEXT_MESSAGE_CONTENT",
+                    "messageId": "thinking",
+                    "delta": "不应返回的思考",
+                }
+            ),
+            f"data: {json.dumps({'type': 'THINKING_END', 'messageId': 'thinking'})}",
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_START', 'messageId': 'report', 'role': 'assistant'})}",
             "data: "
-            + json.dumps({"type": "THINKING_TEXT_MESSAGE_CONTENT", "messageId": "thinking", "delta": "ignore"}),
-            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'hello '})}",
-            f"data: {json.dumps({'type': 'TEXT_MESSAGE_CONTENT', 'messageId': 'msg', 'delta': 'world'})}",
-            f"data: {json.dumps({'type': 'TEXT_MESSAGE_END', 'messageId': 'msg'})}",
+            + json.dumps(
+                {
+                    "type": "TEXT_MESSAGE_CONTENT",
+                    "messageId": "report",
+                    "delta": "整理完成。<final_answer>\n# 风险报告\n\n最终正文\n</final_answer>",
+                }
+            ),
+            f"data: {json.dumps({'type': 'TEXT_MESSAGE_END', 'messageId': 'report'})}",
             f"data: {json.dumps({'type': 'RUN_FINISHED', 'threadId': 'thread', 'runId': 'run'})}",
         ]
         self.resource.session.request = mock.Mock(return_value=mock_response)
@@ -539,37 +659,51 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        self.assertEqual(result, "hello world")
+        self.assertEqual(result, "# 风险报告\n\n最终正文")
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_decodes_ag_ui_text_message_content_as_utf8(self, mock_build_header, mock_build_url):
-        text = "根据已获取的数据"
-        event = "data: " + json.dumps(
-            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "msg", "delta": text},
-            ensure_ascii=False,
-        )
-
+    def test_stream_rejects_ag_ui_without_complete_assistant_message(self, mock_build_header, mock_build_url):
         mock_response = mock.MagicMock()
         mock_response.__enter__.return_value = mock_response
         mock_response.__exit__.return_value = None
         mock_response.raise_for_status.return_value = None
         mock_response.headers = {"Content-Type": "text/event-stream"}
 
-        def iter_lines(decode_unicode=False):
-            if decode_unicode:
-                return [
-                    event.encode("utf-8").decode("latin1"),
-                    ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}))
-                    .encode("utf-8")
-                    .decode("latin1"),
-                ]
-            return [
-                event.encode("utf-8"),
-                ("data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"})).encode("utf-8"),
-            ]
+        mock_response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": "未结束正文"}),
+            agui_sse_event({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+        self.resource.session.request = mock.Mock(return_value=mock_response)
 
-        mock_response.iter_lines.side_effect = iter_lines
+        with self.assertRaises(APIRequestError) as context:
+            self.resource.perform_request(
+                {
+                    "user": "admin",
+                    "input": "test",
+                    "chat_history": [],
+                    "execute_kwargs": {"stream": True},
+                }
+            )
+        self.assertIn("完整的 assistant 文本消息", context.exception.data["message"])
+
+    @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
+    @mock.patch.object(ChatCompletion, "build_header", return_value={})
+    def test_stream_decodes_ag_ui_text_message_content_as_utf8(self, mock_build_header, mock_build_url):
+        text = "根据已获取的数据"
+        events = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": text}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "report"}),
+            agui_sse_event({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+        mock_response = mock.MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.__exit__.return_value = None
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {"Content-Type": "text/event-stream"}
+        mock_response.iter_lines.return_value = [event.encode("utf-8") for event in events]
         self.resource.session.request = mock.Mock(return_value=mock_response)
 
         result = self.resource.perform_request(
@@ -582,6 +716,111 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, text)
+
+    def test_stream_uses_last_complete_final_answer(self):
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+            agui_sse_event(
+                {
+                    "type": "TEXT_MESSAGE_CONTENT",
+                    "messageId": "report",
+                    "delta": "<final_answer>旧版本</final_answer><final_answer>最终版本</final_answer>",
+                }
+            ),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "report"}),
+            "data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+
+        self.assertEqual(self.resource._parse_stream_response(response), "最终版本")
+
+    def test_stream_returns_direct_terminal_body_for_desensitized_incident_without_final_answer(self):
+        stream_lines = build_desensitized_incident_sse()
+        event_counts = Counter(json.loads(line.removeprefix("data: "))["type"] for line in stream_lines)
+        self.assertEqual(
+            event_counts,
+            {
+                "MESSAGES_SNAPSHOT": 1,
+                "RUN_STARTED": 1,
+                "STEP_STARTED": 33,
+                "TOOL_CALL_START": 8,
+                "TOOL_CALL_ARGS": 22,
+                "TOOL_CALL_END": 8,
+                "TOOL_CALL_RESULT": 8,
+                "STATE_SNAPSHOT": 35,
+                "STEP_FINISHED": 33,
+                "TEXT_MESSAGE_START": 1,
+                "TEXT_MESSAGE_CONTENT": 571,
+                "TEXT_MESSAGE_END": 1,
+                "RUN_FINISHED": 1,
+            },
+        )
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = stream_lines
+
+        result = self.resource._parse_stream_response(response)
+
+        self.assertEqual(result, DESENSITIZED_FINAL_REPORT)
+        self.assertTrue(result.startswith("脱敏终态说明。"))
+
+    def test_stream_rejects_ag_ui_snapshot_without_run_finished(self):
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+            agui_sse_event(
+                {"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": "<final_answer>尚未确认</final_answer>"}
+            ),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "report"}),
+            "data: [DONE]",
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            self.resource._parse_stream_response(response)
+
+        self.assertIn("RUN_FINISHED", context.exception.data["message"])
+
+    def test_stream_rejects_terminal_ag_ui_message_without_complete_final_answer(self):
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": "<final_answer>未闭合正文"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "report"}),
+            "data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            self.resource._parse_stream_response(response)
+
+        self.assertIn("<final_answer>", context.exception.data["message"])
+
+    def test_stream_rejects_terminal_ag_ui_message_with_unpaired_final_answer_tags(self):
+        contents = (
+            "</final_answer><final_answer>完整正文</final_answer>",
+            "<final_answer>完整正文</final_answer><final_answer>未闭合",
+            "正文 </final_answer >",
+        )
+        for content in contents:
+            with self.subTest(content=content):
+                response = mock.MagicMock()
+                response.status_code = 200
+                response.headers = {"Content-Type": "text/event-stream"}
+                response.iter_lines.return_value = [
+                    agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"}),
+                    agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": content}),
+                    agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "report"}),
+                    "data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+                ]
+
+                with self.assertRaises(APIRequestError):
+                    self.resource._parse_stream_response(response)
 
     def test_before_request_sets_stream_flag(self):
         kwargs = {"json": {"execute_kwargs": {"stream": True}}}
@@ -671,6 +910,110 @@ class TestAIAuditReportStream(TestCase):
         )
 
         self.assertEqual(result, "hello world")
+
+
+class TestAIAgentStreamCompatibility(TestCase):
+    """测试通用 Agent 的 AG-UI 最终 assistant 消息解析。"""
+
+    def test_base_chat_completion_returns_last_complete_assistant_message(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "first", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "first", "delta": "过程消息"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "first"}),
+            agui_sse_event({"type": "THINKING_START", "messageId": "think"}),
+            agui_sse_event({"type": "THINKING_TEXT_MESSAGE_CONTENT", "messageId": "think", "delta": "思考内容"}),
+            agui_sse_event({"type": "THINKING_END", "messageId": "think"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "final", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "final", "delta": "hello "}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "final", "delta": "world"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "final"}),
+            "data: " + json.dumps({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+
+        self.assertEqual(resource._parse_stream_response(response), "hello world")
+
+    def test_base_chat_completion_rejects_early_snapshot_then_done(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "STATE_SNAPSHOT", "snapshot": {"messages": []}}),
+            "data: [DONE]",
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            resource._parse_stream_response(response)
+
+        self.assertIn("RUN_FINISHED", context.exception.data["message"])
+
+    def test_base_chat_completion_accepts_only_assistant_role(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "ai", "role": "ai"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "ai", "delta": "不应返回"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "ai"}),
+            agui_sse_event({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            resource._parse_stream_response(response)
+
+        self.assertIn("完整的 assistant 文本消息", context.exception.data["message"])
+
+    def test_base_chat_completion_ignores_events_after_run_finished(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "final", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "final", "delta": "最终正文"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "final"}),
+            agui_sse_event({"type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "late", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "late", "delta": "不应返回"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "late"}),
+        ]
+
+        self.assertEqual(resource._parse_stream_response(response), "最终正文")
+
+    def test_base_chat_completion_prioritizes_agui_lifecycle_in_mixed_event(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "TEXT_MESSAGE_START", "messageId": "final", "role": "assistant"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_CONTENT", "messageId": "final", "delta": "最终正文"}),
+            agui_sse_event({"type": "TEXT_MESSAGE_END", "messageId": "final"}),
+            agui_sse_event(
+                {"event": "done", "content": "旧协议正文", "type": "RUN_FINISHED", "threadId": "thread", "runId": "run"}
+            ),
+        ]
+
+        self.assertEqual(resource._parse_stream_response(response), "最终正文")
+
+    def test_base_chat_completion_raises_agui_run_error(self):
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            agui_sse_event({"type": "RUN_ERROR", "message": "上游执行失败"}),
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            resource._parse_stream_response(response)
+
+        self.assertIn("上游执行失败", context.exception.data["message"])
 
 
 class TestGetAgentBaseUrl(TestCase):
