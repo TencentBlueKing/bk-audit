@@ -792,13 +792,13 @@ class EventBasicField(TextChoices):
     label = 产品展示名（中文(英文字段名) 样式）；
     """
 
-    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID(raw_event_id)")
-    OPERATOR = "operator", gettext_lazy("责任人(operator)")
-    EVENT_TIME = "event_time", gettext_lazy("事件时间(event_time)")
-    EVENT_SOURCE = "event_source", gettext_lazy("事件来源(event_source)")
-    STRATEGY_ID = "strategy_id", gettext_lazy("策略ID(strategy_id)")
-    EVENT_CONTENT = "event_content", gettext_lazy("事件内容(event_content)")
-    EVENT_TYPE = "event_type", gettext_lazy("事件类型(event_type)")
+    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")
+    OPERATOR = "operator", gettext_lazy("责任人")
+    EVENT_TIME = "event_time", gettext_lazy("事件时间")
+    EVENT_SOURCE = "event_source", gettext_lazy("事件来源")
+    STRATEGY_ID = "strategy_id", gettext_lazy("策略ID")
+    EVENT_CONTENT = "event_content", gettext_lazy("事件内容")
+    EVENT_TYPE = "event_type", gettext_lazy("事件类型")
 
     @property
     def is_numeric(self) -> bool:

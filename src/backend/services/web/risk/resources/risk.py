@@ -483,10 +483,14 @@ class ListRisk(RiskMeta):
         if not event_filters:
             return queryset
 
-        # 基本信息字段（事件表顶层列）对每个策略均存在，不参与策略配置 gate；
-        # 仅 event_data.xxx（JSON 下钻）字段需要按策略声明的 event_data_field_configs 做校验。
+        # 顶层列字段（含 EVENT_BASIC_COLUMN_MAP 中声明的，以及未来扩展的同类型字段）对每个策略均存在，
+        # 不参与策略配置 gate；仅 event_data.xxx（JSON 下钻）字段需要按策略声明的 event_data_field_configs 做校验。
+        # 用 type 作为统一判据，兼容尚未录入 EVENT_BASIC_COLUMN_MAP 的扩展顶层列字段。
         data_filter_items = [
-            item for item in event_filters if (item.get("field") or "").strip() not in EVENT_BASIC_COLUMN_MAP
+            item
+            for item in event_filters
+            if item.get("type") != "basic_event_field"
+            and (item.get("field") or "").strip() not in EVENT_BASIC_COLUMN_MAP
         ]
         if not data_filter_items:
             return queryset
@@ -501,8 +505,6 @@ class ListRisk(RiskMeta):
         for item in data_filter_items:
             field = item.get("field") or ""
             display_name = item.get("display_name")
-            if field.startswith(BkBaseFieldResolver.EVENT_DATA_PREFIX):
-                field = field[len(BkBaseFieldResolver.EVENT_DATA_PREFIX) :].strip()
             strategy_queryset = strategy_queryset.filter(
                 event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
             )
