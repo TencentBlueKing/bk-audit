@@ -208,6 +208,7 @@
     display_name: item.display_name,
     operator: item.operator,
     value: _.isArray(item.value) ? item.value.join(',') : item.value,
+    ...(item.type === 'basic_event_field' ? { type: item.type } : {}),
   })));
 
   // 当前已选择的风险字段名列表（用于 add-condition 组件判断哪些已选中）
@@ -645,6 +646,7 @@
           display_name: ef.display_name,
           operator: ef.operator,
           value: normalizeEventFilterValue(ef.operator, ef.value),
+          ...(ef.type ? { type: ef.type } : {}),
         };
         const matchIndex = mergedEventFilters.findIndex(item => item.id === id);
         if (matchIndex > -1) {
@@ -1074,6 +1076,7 @@
         display_name: item.display_name,
         operator: item.operator,
         value: (item.operator === 'IN' || item.operator === 'NOT IN') ? item.value.split(',') : item.value,
+        ...(item.type ? { type: item.type } : {}),
       }));
       selectedItemListOperator.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         id: item.id ? item.id : `${item.field}:${item.display_name}`,

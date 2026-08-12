@@ -30,6 +30,7 @@ export interface RiskExportFilters extends Partial<Record<typeof RISK_LIST_FILTE
     display_name: string;
     operator: string;
     value: unknown;
+    type?: string;
   }>;
 }
 
