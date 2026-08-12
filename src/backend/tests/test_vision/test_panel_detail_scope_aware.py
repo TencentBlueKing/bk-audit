@@ -149,6 +149,185 @@ class TestPanelDetailScopeMatching(TestCase):
         self.assertEqual(resp["default_value_override"], {})
 
 
+class TestPanelDetailWithDefaultFallback(TestCase):
+    """测试详情接口在配置 default 时的回退行为"""
+
+    def setUp(self):
+        self.scene1 = Scene.objects.create(name="场景 A")
+        self.scene2 = Scene.objects.create(name="场景 B")
+        # 配置包含 default 和各 scope 配置
+        self.config = {
+            "default": {"time_filter": ["default_fallback"]},
+            "scenes": {
+                str(self.scene1.scene_id): {"time_filter": ["scene1_scope"]},
+                # scene2 未配置，应回退到 default
+            },
+            "systems": {
+                "bk_cmdb": {"time_filter": ["cmdb_scope"]},
+                # bk_monitor 未配置，应回退到 default
+            },
+        }
+        self.panel = VisionPanel.objects.create(
+            id="test_panel_with_default_001",
+            name="带 default 配置报表",
+            default_value_overrides=self.config,
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_scene_scope_hits_config(self, mock_check):
+        """scene 视角命中 scenes 配置"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene1.scene_id),
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["scene1_scope"]})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_scene_scope_not_matched_falls_back_to_default(self, mock_check):
+        """scene 视角未命中场景配置时回退到 default"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene2.scene_id),  # scene2 未配置
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_fallback"]})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_system_scope_hits_config(self, mock_check):
+        """system 视角命中 systems 配置"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SYSTEM,
+                "scope_id": "bk_cmdb",
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["cmdb_scope"]})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_system_scope_not_matched_falls_back_to_default(self, mock_check):
+        """system 视角未命中系统配置时回退到 default"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SYSTEM,
+                "scope_id": "bk_monitor",  # bk_monitor 未配置
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_fallback"]})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_cross_scene_returns_default(self, mock_check):
+        """cross_scene 返回 default 配置"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.CROSS_SCENE,
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_fallback"]})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_cross_system_returns_default(self, mock_check):
+        """cross_system 返回 default 配置"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.CROSS_SYSTEM,
+            }
+        )
+
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_fallback"]})
+
+
+class TestPanelDetailEmptyScopedConfig(TestCase):
+    """测试空对象配置屏蔽 default 的行为"""
+
+    def setUp(self):
+        self.scene1 = Scene.objects.create(name="场景 A")
+        # 配置：default 有值，但特定 scope 显式配置空对象
+        self.config = {
+            "default": {"time_filter": ["default_value"]},
+            "scenes": {
+                str(self.scene1.scene_id): {},  # 显式空对象，应屏蔽 default
+            },
+            "systems": {
+                "bk_cmdb": {},  # 显式空对象，应屏蔽 default
+            },
+        }
+        self.panel = VisionPanel.objects.create(
+            id="test_panel_empty_scoped_001",
+            name="空对象屏蔽测试报表",
+            default_value_overrides=self.config,
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(self.panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_scene_scope_empty_config_does_not_fall_back(self, mock_check):
+        """scene 视角空对象配置不回退到 default"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene1.scene_id),
+            }
+        )
+
+        # 应返回空对象，而非 default
+        self.assertEqual(resp["default_value_override"], {})
+
+    @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
+    def test_system_scope_empty_config_does_not_fall_back(self, mock_check):
+        """system 视角空对象配置不回退到 default"""
+        mock_check.return_value = True
+
+        resp = GetPanelDetail().request(
+            {
+                "panel_id": self.panel.id,
+                "scope_type": ScopeType.SYSTEM,
+                "scope_id": "bk_cmdb",
+            }
+        )
+
+        # 应返回空对象，而非 default
+        self.assertEqual(resp["default_value_override"], {})
+
+
 class TestPanelDetailResponseProtocol(TestCase):
     """测试详情响应协议"""
 
