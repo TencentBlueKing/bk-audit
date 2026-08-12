@@ -86,7 +86,6 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
-    EVENT_BASIC_COLUMN_MAP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
@@ -483,15 +482,9 @@ class ListRisk(RiskMeta):
         if not event_filters:
             return queryset
 
-        # 顶层列字段（含 EVENT_BASIC_COLUMN_MAP 中声明的，以及未来扩展的同类型字段）对每个策略均存在，
-        # 不参与策略配置 gate；仅 event_data.xxx（JSON 下钻）字段需要按策略声明的 event_data_field_configs 做校验。
-        # 用 type 作为统一判据，兼容尚未录入 EVENT_BASIC_COLUMN_MAP 的扩展顶层列字段。
-        data_filter_items = [
-            item
-            for item in event_filters
-            if item.get("type") != "basic_event_field"
-            and (item.get("field") or "").strip() not in EVENT_BASIC_COLUMN_MAP
-        ]
+        # type = "basic_event_field" 的字段不参与策略配置 gate；
+        data_filter_items = [item for item in event_filters if item.get("type") != "basic_event_field"]
+
         if not data_filter_items:
             return queryset
 
