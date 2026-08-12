@@ -242,6 +242,7 @@
       operator: item.operator,
       // 判断 item.value 是否是数组
       value: _.isArray(item.value) ? item.value.join(',') : item.value,
+      ...(item.type === 'basic_event_field' ? { type: item.type } : {}),
     }));
     return data;
   });
@@ -579,6 +580,7 @@
         display_name: item.display_name,
         operator: item.operator,
         value: (item.operator === 'IN' || item.operator === 'NOT IN') ? item.value.split(',') : item.value,
+        ...(item.type ? { type: item.type } : {}),
       }));
       selectedItemListOperator.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         id: item.id ? item.id :  `${item.field}:${item.display_name}`,
