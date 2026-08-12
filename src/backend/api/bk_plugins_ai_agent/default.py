@@ -26,6 +26,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
+from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
 from api.bk_plugins_ai_agent.constants import (
     AI_STREAM_PREVIEW_LIMIT,
     AI_THINKING_PLACEHOLDERS,
@@ -118,6 +119,10 @@ class ChatCompletion(AIAgentBase):
                 kwargs["stream"] = True
         return kwargs
 
+    def postprocess_agui_final_content(self, content: str) -> tuple[str, str]:
+        """允许子类处理已确认完整的 AG-UI assistant 正文。"""
+        return content, ""
+
     def _is_stream_response(self, response) -> bool:
         content_type = (response.headers.get("Content-Type") or response.headers.get("content-type") or "").lower()
         if "text/event-stream" in content_type:
@@ -152,6 +157,8 @@ class ChatCompletion(AIAgentBase):
         # text event 是前端增量渲染内容；done event 在部分 agent 实现中承载最终完整结果。
         done_content = None
         text_content = ""
+        agui_final_message_parser = None
+        ag_ui_event_seen = False
         line_count = 0
         data_line_count = 0
         invalid_json_count = 0
@@ -178,11 +185,17 @@ class ChatCompletion(AIAgentBase):
             except json.JSONDecodeError:
                 invalid_json_count += 1
                 continue
+            if not isinstance(event, dict):
+                invalid_json_count += 1
+                continue
             event_type = event.get("event")
             ag_ui_event_type = event.get("type")
+            event_type = event_type if isinstance(event_type, str) else ""
+            ag_ui_event_type = ag_ui_event_type if isinstance(ag_ui_event_type, str) else ""
             event_key = event_type or ag_ui_event_type or "unknown"
             event_counts[event_key] = event_counts.get(event_key, 0) + 1
             content = event.get("content", "")
+            content = content if isinstance(content, str) else ""
             cover = event.get("cover", False)
             if event_type == "error":
                 error_code = event.get("code", 500)
@@ -194,29 +207,49 @@ class ChatCompletion(AIAgentBase):
                     status_code=error_code,
                     result=error_message,
                 )
-            elif event_type == "done":
+            if ag_ui_event_type:
+                ag_ui_event_seen = True
+                if agui_final_message_parser is None:
+                    agui_final_message_parser = AGUIFinalMessageParser()
+                agui_final_message_parser.consume(event)
+                if ag_ui_event_type == "RUN_ERROR":
+                    error_message = event.get("message") or event.get("error") or content or "智能体流式响应异常"
+                    logger.error("AI AG-UI stream error event: message=%s", error_message)
+                    raise APIRequestError(
+                        module_name=self.module_name,
+                        url=self.action,
+                        status_code=500,
+                        result=error_message,
+                    )
+                if ag_ui_event_type == "RUN_FINISHED":
+                    ag_ui_finished = True
+                    break
+            if event_type == "done":
                 done_content = content
                 event_done = True
             elif event_type == "text":
                 text_content = content if cover else text_content + content
             elif ag_ui_event_type == "TEXT_MESSAGE_CONTENT":
-                text_content += event.get("delta", "")
-            elif ag_ui_event_type == "RUN_FINISHED":
-                ag_ui_finished = True
-            elif ag_ui_event_type == "RUN_ERROR":
-                error_message = event.get("message") or event.get("error") or content or "智能体流式响应异常"
-                logger.error("AI AG-UI stream error event: message=%s", error_message)
-                raise APIRequestError(
-                    module_name=self.module_name,
-                    url=self.action,
-                    status_code=500,
-                    result=error_message,
-                )
+                delta = event.get("delta", "")
+                text_content += delta if isinstance(delta, str) else ""
         terminal_seen = stream_done or event_done or ag_ui_finished
         clean_text_content = self._clean_final_content(text_content)
         clean_done_content = self._clean_final_content(done_content or "")
         final_content = clean_text_content or clean_done_content
         final_source = "text" if clean_text_content else "done" if clean_done_content else "empty"
+        agui_final_message_required = ag_ui_event_seen
+        agui_error_reason = ""
+        if agui_final_message_required:
+            if ag_ui_finished:
+                final_content = agui_final_message_parser.get_final_content()
+                agui_error_reason = agui_final_message_parser.error_reason
+                if final_content:
+                    final_content, agui_error_reason = self.postprocess_agui_final_content(final_content)
+                final_source = "agui_final_message" if final_content else "agui_final_message_invalid"
+            else:
+                final_content = ""
+                final_source = "agui_final_message_incomplete"
+                agui_error_reason = "未收到 RUN_FINISHED"
         logger.info(
             "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
             "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
@@ -266,18 +299,24 @@ class ChatCompletion(AIAgentBase):
                 result=error_message,
             )
         if not final_content.strip():
-            error_message = (
-                "智能体流式响应内容为空，请稍后重试；"
-                f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
-            )
+            if agui_final_message_required:
+                error_message = (
+                    "AI AG-UI 流未得到最终 assistant 响应，请稍后重试；" f"reason={agui_error_reason}, event_counts={event_counts}"
+                )
+            else:
+                error_message = (
+                    "智能体流式响应内容为空，请稍后重试；"
+                    f"event_counts={event_counts}, text_size={len(text_content)}, done_size={len(done_content or '')}"
+                )
             logger.error(
                 "AI stream parsed empty content: status_code=%s, headers=%s, event_counts=%s, "
-                "text_size=%s, done_size=%s",
+                "text_size=%s, done_size=%s, agui_final_message_required=%s",
                 getattr(response, "status_code", None),
                 dict(getattr(response, "headers", {}) or {}),
                 event_counts,
                 len(text_content),
                 len(done_content or ""),
+                agui_final_message_required,
             )
             raise APIRequestError(
                 module_name=self.module_name,
