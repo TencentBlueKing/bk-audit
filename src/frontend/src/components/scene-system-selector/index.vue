@@ -382,8 +382,16 @@
         showScene,
         showSystem,
       );
+      // 有使用权限、无管理权限（锁定）→ 用户引导页申请配置权限
+      if (targetItem && isSceneLocked(targetItem)) {
+        router.replace({
+          name: 'userLandingPage',
+          query: { scene_id: urlMatchId },
+        });
+        return;
+      }
+      // 列表中找不到：无使用/管理权限 → 权限申请页
       if (!targetItem) {
-        // URL中有scene_id但用户无权访问该场景 → 跳转到权限申请页
         router.replace({
           name: 'permissionsPage',
           query: { scene_id: urlMatchId },
@@ -402,7 +410,9 @@
             ...sceneItemsForMatch,
             ...systemItemsForMatch,
           ];
-          targetItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
+          const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
+          // 锁定场景不可恢复为当前选中
+          targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
         }
       } catch { /* ignore */ }
     }
@@ -415,10 +425,12 @@
       } else if (systemItems.length > 0) {
         [targetItem] = systemItems;
       }
-      // 仍找不到任何可选项 → 跳转到权限申请页
+      // 仍找不到任何可选项
       if (!targetItem) {
+        const hasLockedScene = sceneItems.some(item => isSceneLocked(item));
         router.replace({
-          name: 'permissionsPage',
+          // 仅有使用权限场景 → 引导页；完全无权限 → 权限申请页
+          name: props.viewSceneBlock && hasLockedScene ? 'userLandingPage' : 'permissionsPage',
           query: urlMatchId ? { scene_id: urlMatchId } : {},
         });
         return;
@@ -865,29 +877,46 @@
       .group-list {
         .dropdown-item {
           &:hover {
-            background-color: #1a2232;
+            background-color: #242d3f;
           }
 
           &.is-selected {
-            background-color: #1a2232;
+            background-color: rgba(58, 132, 255, .2);
 
+            .item-name,
             .item-name.is-highlight {
-              color: #699df4;
+              color: #fff;
             }
           }
 
           &.is-locked,
           &.is-locked.is-selected,
           &.is-locked:hover {
-            background-color: #2a3140;
+            cursor: not-allowed;
+            background-color: transparent;
 
             .item-name,
             .item-name.is-highlight {
-              color: #4f5566;
+              color: #5a5f71;
             }
 
             .type-tag {
-              opacity: .45;
+              opacity: 1;
+
+              &.type-aggregate {
+                color: rgb(255 255 255 / 45%);
+                background-color: rgb(186 105 244 / 25%);
+              }
+
+              &.type-scene {
+                color: rgb(255 255 255 / 45%);
+                background-color: rgb(105 157 244 / 25%);
+              }
+
+              &.type-system {
+                color: rgb(255 255 255 / 45%);
+                background-color: rgb(248 182 79 / 25%);
+              }
             }
           }
 
@@ -895,7 +924,7 @@
             color: #979ba5;
 
             &.is-highlight {
-              color: #c4c6cc;
+              color: #dcdee5;
             }
           }
 
@@ -953,11 +982,11 @@
 
         .type-tag {
           flex-shrink: 0;
-          height: 22px;
-          padding: 0 6px;
-          margin-right: 8px;
+          height: 26px;
+          padding: 0 8px;
+          margin-right: 16px;
           font-size: 12px;
-          line-height: 20px;
+          line-height: 24px;
           color: #fff;
           border: none;
           border-radius: 2px;
@@ -994,7 +1023,7 @@
         &.is-locked.is-selected,
         &.is-locked:hover {
           cursor: not-allowed;
-          background-color: #f0f1f5;
+          background-color: transparent;
 
           .item-name,
           .item-name.is-highlight {
@@ -1002,7 +1031,7 @@
           }
 
           .type-tag {
-            opacity: .5;
+            opacity: .4;
           }
         }
 
@@ -1010,7 +1039,7 @@
           position: absolute;
           inset: 0;
           z-index: 1;
-          cursor: none;
+          cursor: not-allowed;
         }
       }
     }

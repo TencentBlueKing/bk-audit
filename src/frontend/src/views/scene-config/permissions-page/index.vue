@@ -43,16 +43,24 @@
               class="scene-item">
               <div class="scene-info">
                 <div class="scene-name-row">
-                  <span class="scene-name">{{ item.name }}</span>
-                  <audit-icon
-                    v-if="item.managers?.length"
-                    class="admin-icon"
-                    type="user" />
-                  <span
-                    v-if="item.managers?.length"
-                    class="admin-name">
-                    {{ (item.managers || []).join('、') }}
-                  </span>
+                  <span class="scene-name">{{ item.name }}({{ item.scene_id }})</span>
+                  <template v-if="(item.managers || []).length > 0">
+                    <audit-icon
+                      class="admin-icon"
+                      type="user" />
+                    <span class="admin-name">
+                      {{ (item.managers || []).slice(0, 3).join(' , ') }}
+                    </span>
+                    <span
+                      v-if="(item.managers || []).length > 3"
+                      v-bk-tooltips="{
+                        content: (item.managers || []).slice(3).join(' , '),
+                        placement: 'top',
+                      }"
+                      class="admin-more">
+                      +{{ (item.managers || []).length - 3 }}
+                    </span>
+                  </template>
                 </div>
                 <div class="scene-desc">
                   {{ item.description || t('暂无描述') }}
@@ -95,11 +103,8 @@
                     <span class="status-text">{{ t('已拒绝') }}</span>
                   </span>
                   <template #content>
-                    <div class="reject-tip">
-                      <div class="reject-tip-title">
-                        {{ t('拒绝原因') }}
-                      </div>
-                      <div class="reject-tip-reason">
+                    <div class="status-tip">
+                      <div class="status-tip-reason">
                         {{ item.rejectReason || t('暂无') }}
                       </div>
                       <a
@@ -109,10 +114,10 @@
                         rel="noopener noreferrer"
                         target="_blank"
                         @click.stop>
+                        {{ t('查看 ITSM 单据') }}
                         <audit-icon
                           class="link-icon"
                           type="jump-link" />
-                        {{ t('查看 ITSM 单据') }}
                       </a>
                     </div>
                   </template>
@@ -122,6 +127,48 @@
                   class="apply-btn"
                   @click="handleReapply">
                   {{ t('重新申请') }}
+                </bk-button>
+              </div>
+              <div
+                v-else-if="item.applyStatus === 'passed'"
+                class="scene-action">
+                <bk-popover
+                  placement="top"
+                  theme="dark"
+                  trigger="hover">
+                  <span class="status-passed">
+                    <audit-icon
+                      class="status-icon"
+                      type="completed" />
+                    <span class="status-text">{{ t('已通过') }}</span>
+                  </span>
+                  <template #content>
+                    <div class="status-tip">
+                      <a
+                        v-if="item.ticketUrl"
+                        class="itsm-link"
+                        :href="item.ticketUrl"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                        @click.stop>
+                        {{ t('查看 ITSM 单据') }}
+                        <audit-icon
+                          class="link-icon"
+                          type="jump-link" />
+                      </a>
+                      <span
+                        v-else
+                        class="status-tip-reason">
+                        {{ t('暂无') }}
+                      </span>
+                    </div>
+                  </template>
+                </bk-popover>
+                <bk-button
+                  class="enter-btn"
+                  theme="primary"
+                  @click="handleEnterScene(item)">
+                  {{ t('进入场景配置') }}
                 </bk-button>
               </div>
             </div>
@@ -195,9 +242,9 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+  import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import ScenePermissionApplicationService from '@service/scene-permission-application';
 
@@ -206,7 +253,7 @@
 
   import landingImg from '@/images/landing.png';
 
-  type ApplyStatus = 'idle' | 'applying' | 'rejected';
+  type ApplyStatus = 'idle' | 'applying' | 'rejected' | 'passed';
 
   interface SceneItem {
     scene_id: number;
@@ -222,12 +269,17 @@
   const APPLYING_STATUS = ['pending', 'running', 'processing', 'approving', 'applying'];
   /** 已拒绝状态 */
   const REJECTED_STATUS = ['rejected', 'refused', 'failed'];
+  /** 已通过状态 */
+  const PASSED_STATUS = ['approved', 'passed', 'success', 'finished', 'granted', 'done', 'completed'];
+  /** 申请列表轮询间隔 */
+  const POLL_INTERVAL = 5000;
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
 
   const sceneList = ref<SceneItem[]>([]);
   const route = useRoute();
+  const router = useRouter();
   const selectedPerm = ref<'user' | 'manager'>('user');
   const isReapplying = ref(false);
   const applyFormRef = ref();
@@ -245,25 +297,32 @@
     ],
   };
 
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
   const currentScene = computed(() => sceneList.value[0] || null);
 
   const isApplyingStatus = computed(() => currentScene.value?.applyStatus === 'applying');
   const isRejectedStatus = computed(() => currentScene.value?.applyStatus === 'rejected');
+  const isPassedStatus = computed(() => currentScene.value?.applyStatus === 'passed');
 
   const showApplyForm = computed(() => {
-    if (isApplyingStatus.value) return false;
+    if (isApplyingStatus.value || isPassedStatus.value) return false;
     if (isRejectedStatus.value) return isReapplying.value;
     return true;
   });
 
   const permHintText = computed(() => {
     if (selectedPerm.value === 'user') {
-      return t('可查看场景下的报表与工具，并使用检索功能查询系统操作数据');
+      return t('可使用场景内的风险、报表及工具，并通过检索功能查询系统操作数据');
     }
     return t('在使用者权限基础上，额外可管理审计策略、新增报表、创建工具等配置能力');
   });
 
-  const mapApplyStatus = (status = '', statusDisplay = ''): ApplyStatus => {
+  const mapApplyStatus = (
+    status = '',
+    statusDisplay = '',
+    permission?: { view_scene?: boolean; manage_scene?: boolean },
+  ): ApplyStatus => {
     const normalized = status.toLowerCase();
     if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
       return 'applying';
@@ -271,7 +330,39 @@
     if (REJECTED_STATUS.includes(normalized) || statusDisplay.includes('拒绝')) {
       return 'rejected';
     }
+    if (
+      PASSED_STATUS.includes(normalized)
+      || statusDisplay.includes('通过')
+      || statusDisplay.includes('成功')
+      || permission?.view_scene
+      || permission?.manage_scene
+    ) {
+      return 'passed';
+    }
     return 'idle';
+  };
+
+  const getFetchParams = () => {
+    const sceneId = route.query.scene_id;
+    return {
+      page: 1,
+      page_size: 1000,
+      ...(sceneId ? { scene_id: sceneId as string } : {}),
+    };
+  };
+
+  const stopPolling = () => {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    pollTimer = setTimeout(() => {
+      fetchMineApplicationList(getFetchParams());
+    }, POLL_INTERVAL);
   };
 
   const {
@@ -284,17 +375,28 @@
       results: [],
     },
     onSuccess: (data) => {
-      sceneList.value = (data.results || []).map(item => ({
+      const results = data.results || [];
+      sceneList.value = results.map(item => ({
         scene_id: item.scene_id,
         name: item.scene_name,
         description: item.description,
         managers: item.scene_managers || [],
-        applyStatus: mapApplyStatus(item.application?.status, item.application?.status_display),
+        applyStatus: mapApplyStatus(
+          item.application?.status,
+          item.application?.status_display,
+          item.permission,
+        ),
         ticketUrl: item.application?.itsm_ticket_url,
         rejectReason: item.application?.reject_reason,
       }));
       if (sceneList.value[0]?.applyStatus !== 'rejected') {
         isReapplying.value = false;
+      }
+
+      if (sceneList.value.some(item => item.applyStatus === 'applying')) {
+        startPolling();
+      } else {
+        stopPolling();
       }
     },
   });
@@ -316,14 +418,7 @@
       nextTick(() => {
         applyFormRef.value?.clearValidate();
       });
-      const sceneId = route.query.scene_id;
-      if (sceneId) {
-        fetchMineApplicationList({
-          page: 1,
-          page_size: 1000,
-          scene_id: sceneId as string,
-        });
-      }
+      fetchMineApplicationList(getFetchParams());
     },
   });
 
@@ -333,6 +428,18 @@
     applyFormKey.value += 1;
     nextTick(() => {
       applyFormRef.value?.clearValidate();
+    });
+  };
+
+  const handleEnterScene = (item: SceneItem) => {
+    const sceneId = String(item.scene_id);
+    router.push({
+      name: 'sceneInfo',
+      query: {
+        scene_id: sceneId,
+        scope_id: sceneId,
+        scope_type: 'scene',
+      },
     });
   };
 
@@ -348,14 +455,13 @@
   };
 
   onMounted(() => {
-    const sceneId = route.query.scene_id;
-    if (sceneId) {
-      fetchMineApplicationList({
-        page: 1,
-        page_size: 1000,
-        scene_id: sceneId as string,
-      });
+    if (route.query.scene_id) {
+      fetchMineApplicationList(getFetchParams());
     }
+  });
+
+  onUnmounted(() => {
+    stopPolling();
   });
 
 </script>
@@ -487,6 +593,16 @@
     font-size: 12px;
     color: #979ba5;
   }
+
+  .admin-more {
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
 }
 
 .scene-desc {
@@ -503,18 +619,33 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .apply-btn {
   min-width: 64px;
+  height: 26px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 24px;
   color: #63656e;
   background: #fff;
   border-color: #c4c6cc;
+  border-radius: 2px;
+}
+
+.enter-btn {
+  min-width: 64px;
+  height: 26px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 24px;
+  border-radius: 2px;
 }
 
 .status-applying,
-.status-rejected {
+.status-rejected,
+.status-passed {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -553,6 +684,27 @@
   }
 }
 
+.status-passed {
+  color: #63656e;
+  cursor: pointer;
+
+  .status-icon {
+    color: #2dcb56;
+
+    :deep(svg),
+    :deep(svg path) {
+      fill: #2dcb56;
+    }
+  }
+
+  .status-text {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 3px;
+    text-decoration-color: #c4c6cc;
+  }
+}
+
 .itsm-link {
   display: inline-flex;
   align-items: center;
@@ -572,24 +724,20 @@
   }
 }
 
-.reject-tip {
+.status-tip {
   max-width: 240px;
   padding: 4px 0;
 
-  .reject-tip-title {
-    margin-bottom: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 20px;
-    color: #fff;
-  }
-
-  .reject-tip-reason {
+  .status-tip-reason {
     margin-bottom: 8px;
     font-size: 12px;
     line-height: 20px;
     color: #fff;
     word-break: break-all;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   .itsm-link {
