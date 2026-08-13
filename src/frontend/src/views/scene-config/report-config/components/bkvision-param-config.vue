@@ -298,6 +298,8 @@
 
   /** 侧滑 z-index=9999，用 id 限定弹出层作用域并抬升层级 */
   const TIME_RANGE_PICKER_ID = 'scene-report-param-config';
+  /** 点击「知道了」后不再重复展示「使用默认值」提示 */
+  const DEFAULT_VALUE_TIP_STORAGE_KEY = 'bkvision-param-config:default-value-tip-acked';
 
   const now = new Date();
   const isComExpanded = ref(true);
@@ -305,6 +307,7 @@
   const hoverDeleteKey = ref('');
   const defaultTipVisibleMap = ref<Record<string, boolean>>({});
   const localFields = ref<InputVariableItem[]>([]);
+  const isDefaultValueTipAcked = ref(localStorage.getItem(DEFAULT_VALUE_TIP_STORAGE_KEY) === '1');
 
   const cloneItem = (item: InputVariableItem): InputVariableItem => ({
     ...item,
@@ -468,16 +471,31 @@
     };
   };
 
-  const handleConfirmDefaultTip = (item: InputVariableItem) => {
-    hideDefaultTip(item.raw_name);
+  const applyDefaultValue = (item: InputVariableItem) => {
     updateField(item.raw_name, {
       is_default_value: true,
       default_value: item.raw_default_value ?? '',
     });
   };
 
+  const markDefaultValueTipAcked = () => {
+    isDefaultValueTipAcked.value = true;
+    localStorage.setItem(DEFAULT_VALUE_TIP_STORAGE_KEY, '1');
+  };
+
+  const handleConfirmDefaultTip = (item: InputVariableItem) => {
+    markDefaultValueTipAcked();
+    hideDefaultTip(item.raw_name);
+    applyDefaultValue(item);
+  };
+
   const handleDefaultValueToggle = (checked: boolean | string | number, item: InputVariableItem) => {
     if (checked === true) {
+      // 已点过「知道了」则直接启用默认值，不再弹出提示
+      if (isDefaultValueTipAcked.value) {
+        applyDefaultValue(item);
+        return;
+      }
       defaultTipVisibleMap.value = {
         ...defaultTipVisibleMap.value,
         [item.raw_name]: true,
