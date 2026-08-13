@@ -176,6 +176,8 @@
   });
   const searchKeyword = ref<SearchKey[]>([]);
   const highlightReportId = ref<string | null>(null);
+  /** 新建行临时置顶快照（内存；刷新后消失，不改动后端名称 ASCII 排序） */
+  const pinnedNewReport = ref<Record<string, any> | null>(null);
   const chartLists = ref<any[]>([]);
   const isChartListsReady = ref(false);
   const reportSidesliderVisible = ref(false);
@@ -566,7 +568,22 @@
           system_ids: panel.system_ids || [],
           default_value_overrides: panel.default_value_overrides,
         }));
-        const filteredResults = filterResultsByBkvisionReport(results, searchParams.bkvision_report);
+        let filteredResults = filterResultsByBkvisionReport(results, searchParams.bkvision_report);
+
+        // 新建报表：前端临时置顶（默认列表仍为名称 ASCII 排序；仅本次会话高亮期间前置）
+        if (highlightReportId.value) {
+          const highlightId = String(highlightReportId.value);
+          const list = [...filteredResults];
+          const idx = list.findIndex(item => String(item.id) === highlightId);
+          let pinnedRow = idx >= 0 ? list.splice(idx, 1)[0] : null;
+          if (!pinnedRow && pinnedNewReport.value && String(pinnedNewReport.value.id) === highlightId) {
+            pinnedRow = { ...pinnedNewReport.value };
+          }
+          if (pinnedRow) {
+            list.unshift(pinnedRow);
+            filteredResults = list;
+          }
+        }
 
         return {
           ...data,
@@ -900,11 +917,45 @@
     editReportData.value = null;
   };
 
-  const handleCreateSuccess = (panelId?: string) => {
+  const handleCreateSuccess = (payload?: string | {
+    id: string;
+    name: string;
+    description: string;
+    vision_id: string;
+    status: 'published' | 'unpublished';
+    visibility_type: string;
+    scene_ids: number[];
+    system_ids: string[];
+  }) => {
+    // 兼容旧回调只传 id，以及新建回传行快照用于「名称排序下临时置顶」
+    const panelId = typeof payload === 'string' ? payload : payload?.id;
     if (panelId) {
-      highlightReportId.value = panelId;
+      highlightReportId.value = String(panelId);
     }
-    refreshList();
+    if (payload && typeof payload !== 'string') {
+      const visionId = payload.vision_id || '';
+      pinnedNewReport.value = {
+        id: String(payload.id),
+        binding_type: 'platform_binding',
+        name: payload.name,
+        description: payload.description || '--',
+        vision_id: visionId,
+        bkvisionReportName: findVisionName(visionId),
+        bkvisionSpaceUid: findVisionSpaceUid(visionId),
+        status: payload.status || 'unpublished',
+        updated_by: '--',
+        updated_at: new Date().toISOString(),
+        visibility_type: payload.visibility_type,
+        scene_ids: payload.scene_ids || [],
+        system_ids: payload.system_ids || [],
+      };
+    } else {
+      pinnedNewReport.value = null;
+    }
+    // 回到第一页并临时置顶；刷新页面后高亮/置顶消失，恢复名称 ASCII 排序位置
+    nextTick(() => {
+      tableRef.value?.fetchData({ page: 1 });
+    });
     fetchStatusCounts();
   };
 

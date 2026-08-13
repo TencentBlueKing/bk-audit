@@ -124,10 +124,15 @@
     defaultValue: null,
   });
 
-  // 新建行高亮 - 响应式 rowClassName
+  // 新建行绿底高亮（与其它菜单一致使用 new-row；刷新后消失）
+  // TDesign rowClassName 入参为 { row, rowIndex }，需兼容直接传 row 的情况
   const rowClassName = computed(() => {
     const highlightId = props.highlightReportId;
-    return (row: Record<string, any>) => (row.id === highlightId ? 'is-new-created' : '');
+    return (params: Record<string, any>) => {
+      if (!highlightId) return '';
+      const rowData = params?.row || params;
+      return String(rowData?.id) === String(highlightId) ? 'new-row' : '';
+    };
   });
 
   // 状态 tag 主题映射
@@ -745,12 +750,4 @@
     overflow: hidden !important;
   }
 
-  /* 新建报表高亮 */
-  .report-config-list .t-table tbody tr.is-new-created td {
-    background-color: #e8fbf0 !important;
-  }
-
-  .report-config-list .t-table tbody tr.is-new-created:hover td {
-    background-color: #d4f3e1 !important;
-  }
 </style>
