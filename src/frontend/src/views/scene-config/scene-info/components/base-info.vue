@@ -51,8 +51,23 @@
                   v-model="editUserValue"
                   allow-create
                   auto-focus
-                  multiple
-                  @blur="handleUserSave(row.key)" />
+                  multiple />
+                <div class="edit-actions">
+                  <audit-icon
+                    v-bk-tooltips="{ content: t('确定'), placement: 'top' }"
+                    class="confirm-icon"
+                    svg
+                    type="check-line"
+                    @mousedown.prevent
+                    @click.stop="handleUserSave(row.key)" />
+                  <audit-icon
+                    v-bk-tooltips="{ content: t('取消'), placement: 'top' }"
+                    class="cancel-icon"
+                    svg
+                    type="close"
+                    @mousedown.prevent
+                    @click.stop="handleCancelEdit" />
+                </div>
               </div>
               <!-- 人员选择字段：查看态 -->
               <span
@@ -81,8 +96,23 @@
                 :ref="(el: any) => setInputRef(row.key, el)"
                 v-model="editValue"
                 class="inline-edit-input"
-                @blur="handleSave(row.key)"
                 @enter="handleSave(row.key)" />
+              <div class="edit-actions">
+                <audit-icon
+                  v-bk-tooltips="{ content: t('确定'), placement: 'top' }"
+                  class="confirm-icon"
+                  svg
+                  type="check-line"
+                  @mousedown.prevent
+                  @click.stop="handleSave(row.key)" />
+                <audit-icon
+                  v-bk-tooltips="{ content: t('取消'), placement: 'top' }"
+                  class="cancel-icon"
+                  svg
+                  type="close"
+                  @mousedown.prevent
+                  @click.stop="handleCancelEdit" />
+              </div>
             </div>
             <!-- 可编辑字段：查看态 -->
             <span
@@ -114,8 +144,6 @@
   import {
     computed,
     nextTick,
-    onBeforeUnmount,
-    onMounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -196,7 +224,7 @@
   const editUserValue = ref<string[]>([]);
   const inputRefs: Record<string, any> = {};
   const editorRefs: Record<string, HTMLElement | null> = {};
-  // 防止 blur 和 mousedown/enter 事件同时触发导致重复保存
+  // 防止重复点击确认导致重复保存
   let isSaving = false;
 
   const setInputRef = (key: string, el: any) => {
@@ -218,9 +246,16 @@
     });
   };
 
+  // 取消编辑，不保存
+  const handleCancelEdit = () => {
+    editingField.value = '';
+    editValue.value = '';
+    editUserValue.value = [];
+    isSaving = false;
+  };
+
   // 普通文本字段保存
   const handleSave = (key: string) => {
-    // 防止 blur + enter/mousedown 重复触发
     if (isSaving) return;
     isSaving = true;
     // 值未变化时不触发更新
@@ -250,7 +285,6 @@
 
   // 人员选择字段保存
   const handleUserSave = (key: string) => {
-    // 防止 blur + mousedown 重复触发
     if (isSaving) return;
     isSaving = true;
     // 值未变化时不触发更新
@@ -273,39 +307,6 @@
       isSaving = false;
     });
   };
-
-  // 判断点击位置是否在 bk-select 浮层内（人员选择器选项弹层挂在 body 上）
-  const isInSelectPopover = (target: Node) => {
-    const el = target as HTMLElement;
-    if (!el || !el.closest) return false;
-    return !!el.closest('.bk-select-popover, .bk-select-content, .bk-popover2, .bk-popover, .bk-pop2-content');
-  };
-
-  // 点击外部时保存并退出编辑态
-  const handleClickOutside = (e: MouseEvent) => {
-    const key = editingField.value;
-    if (!key) return;
-    const target = e.target as Node;
-    const editorEl = editorRefs[key];
-    // 点击在编辑器内部 或 在 bk-select 弹层内（选择项时），不退出
-    if (editorEl && editorEl.contains(target)) return;
-    if (isInSelectPopover(target)) return;
-    // 触发保存
-    const fieldType = infoRows.value.find(item => item.key === key)?.type;
-    if (fieldType === 'user-selector') {
-      handleUserSave(key);
-    } else {
-      handleSave(key);
-    }
-  };
-
-  onMounted(() => {
-    document.addEventListener('mousedown', handleClickOutside, true);
-  });
-
-  onBeforeUnmount(() => {
-    document.removeEventListener('mousedown', handleClickOutside, true);
-  });
 </script>
 
 <style lang="postcss" scoped>
@@ -359,12 +360,49 @@
   }
 
   .inline-edit-input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 
   .editor-wrapper {
-    width: 400px;
+    display: flex;
+    width: 480px;
     max-width: 100%;
+    gap: 8px;
+    align-items: center;
+
+    :deep(.audit-user-selector),
+    :deep(.bk-select) {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  .edit-actions {
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .confirm-icon {
+    font-size: 18px;
+    color: #2dcb56;
+    cursor: pointer;
+
+    &:hover {
+      color: #45e06f;
+    }
+  }
+
+  .cancel-icon {
+    font-size: 18px;
+    color: #ea3636;
+    cursor: pointer;
+
+    &:hover {
+      color: #ff5656;
+    }
   }
 
   /* 基础信息表格 */
