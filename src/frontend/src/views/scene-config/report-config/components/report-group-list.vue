@@ -160,7 +160,7 @@
                           v-bk-tooltips="t('点击查看审计报表')"
                           class="jump-link id-jump-link"
                           type="jump-link"
-                          @click.stop="handleGoAuditReport(report)" />
+                          @click.stop="handleGoAuditReport(report, group.id)" />
                       </div>
                       <div class="custom-table-cell desc-cell">
                         <tool-tip-text
@@ -521,14 +521,17 @@
     defaultValue: null,
   });
 
-  // 跳转到审计报表查看页
-  const handleGoAuditReport = (report: Report) => {
+  // 跳转到审计报表查看页（携带分组，便于报表菜单展开对应分组）
+  const handleGoAuditReport = (report: Report, groupId: number) => {
+    const scopeId = String(getSceneSystemParams().scope_id || '');
     const routeData = router.resolve({
       name: 'statementManageDetail',
       params: { id: report.id },
       query: {
-        scene_id: getSceneSystemParams().scope_id,
-        scene_type: 'scene',
+        scene_id: scopeId,
+        scope_id: scopeId,
+        scope_type: 'scene',
+        group_id: String(groupId),
       },
     });
     window.open(routeData.href, '_blank');
