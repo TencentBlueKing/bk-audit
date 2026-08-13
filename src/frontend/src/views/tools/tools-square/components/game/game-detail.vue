@@ -902,8 +902,8 @@
           [EXPORT_USER_FIELDS.COIN_BALANCE]: props.gameData.coinBalance,
           [EXPORT_USER_FIELDS.CURRENCY_EXCHANGE_RATIO]: (
             props.gameData.exchangeRate === ''
-              || props.gameData.exchangeRate === null
-              || props.gameData.exchangeRate === undefined
+            || props.gameData.exchangeRate === null
+            || props.gameData.exchangeRate === undefined
               ? t('未设代币兑换比例')
               : props.gameData.exchangeRate
           ),
