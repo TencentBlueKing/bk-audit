@@ -5,6 +5,7 @@ INSTALLED_APPS = (
     "services.web.databus",
     "services.web.entry",
     "services.web.query",
+    "services.web.ai_assistant",
     "services.web.log_subscription",
     "services.web.strategy_v2",
     "services.web.risk",
