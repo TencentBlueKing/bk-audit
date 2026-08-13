@@ -4,12 +4,26 @@ from django.utils.translation import gettext_lazy
 DEFAULT_CONVERSATION_TITLE = "新对话"
 
 
+class ExecutionMode(TextChoices):
+    """消息处理器固定的执行方式。"""
+
+    SYNC = "SYNC", gettext_lazy("同步")
+    ASYNC = "ASYNC", gettext_lazy("异步")
+
+
 class ExecutionStatus(TextChoices):
     """消息和附件的执行状态。"""
 
     PROCESSING = "PROCESSING", gettext_lazy("处理中")
     SUCCESS = "SUCCESS", gettext_lazy("成功")
     FAILED = "FAILED", gettext_lazy("失败")
+
+
+class MessageErrorCode(TextChoices):
+    """平台消息执行链路写入快照的稳定错误码。"""
+
+    TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("任务投递失败")
+    TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("任务执行失败")
 
 
 class MessageType(TextChoices):
