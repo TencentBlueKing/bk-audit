@@ -339,10 +339,23 @@
   };
 
   /**
+   * 判断场景 ID 是否来自前端记忆（与 localStorage 一致），而非外部复制的深链
+   */
+  const isRememberedSceneId = (sceneId: string) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      return Boolean(saved?.id && String(saved.id) === String(sceneId));
+    } catch {
+      return false;
+    }
+  };
+
+  /**
    * 基于角色的默认选中逻辑：
    * 1. 角色决定可见列表：scene_admin/scene_user→场景; system_admin→系统; saas_admin→两者
    * 2. URL有ID时优先匹配（深链临时切换），并回写 localStorage
    * 3. URL无ID时恢复 localStorage / 兜底选第一项
+   * 4. 记忆中的场景已无权限：不跳申请页，改选第一个有权限场景
    */
   const trySelectFromRoute = () => {
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
@@ -375,23 +388,29 @@
 
     // ── 阶段2：URL中有ID时尝试精确匹配（包括聚合项 allSystem/allSecen）──
     if (urlMatchId) {
-      targetItem = findItemById(
+      const matchedItem = findItemById(
         urlMatchId,
         sceneItemsForMatch,
         systemItemsForMatch,
         showScene,
         showSystem,
       );
-      // 有使用权限、无管理权限（锁定）→ 用户引导页申请配置权限
-      if (targetItem && isSceneLocked(targetItem)) {
+      const fromMemory = isRememberedSceneId(urlMatchId);
+
+      if (matchedItem && !isSceneLocked(matchedItem)) {
+        targetItem = matchedItem;
+      } else if (fromMemory) {
+        // 前端记忆的场景已无可用权限：不跳申请页，后续改选第一个有权限场景
+        targetItem = null;
+      } else if (matchedItem && isSceneLocked(matchedItem)) {
+        // 深链到仅有使用权限的场景 → 用户引导页
         router.replace({
           name: 'userLandingPage',
           query: { scene_id: urlMatchId },
         });
         return;
-      }
-      // 列表中找不到：无使用/管理权限 → 权限申请页
-      if (!targetItem) {
+      } else {
+        // 深链且列表中无此场景 → 权限申请页
         router.replace({
           name: 'permissionsPage',
           query: { scene_id: urlMatchId },
@@ -411,7 +430,7 @@
             ...systemItemsForMatch,
           ];
           const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
-          // 锁定场景不可恢复为当前选中
+          // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
           targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
         }
       } catch { /* ignore */ }
@@ -425,13 +444,13 @@
       } else if (systemItems.length > 0) {
         [targetItem] = systemItems;
       }
-      // 仍找不到任何可选项
+      // 仍找不到任何可选项（用户当前页面完全无可选资源）
       if (!targetItem) {
         const hasLockedScene = sceneItems.some(item => isSceneLocked(item));
         router.replace({
           // 仅有使用权限场景 → 引导页；完全无权限 → 权限申请页
           name: props.viewSceneBlock && hasLockedScene ? 'userLandingPage' : 'permissionsPage',
-          query: urlMatchId ? { scene_id: urlMatchId } : {},
+          query: {},
         });
         return;
       }
