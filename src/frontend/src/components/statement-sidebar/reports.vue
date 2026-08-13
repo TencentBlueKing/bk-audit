@@ -432,17 +432,20 @@
   // 点击子菜单项时，聚合模式下携带 sceneId 信息
   const handleChildClick = (panelId: string | number, sceneId: string | number) => {
     clickFavorite.value = false;
+    const query = { ...route.query } as Record<string, any>;
+    // 跳转入口带来的 group_id 仅用于首次定位，侧栏内切换时清除，避免误展开旧分组
+    delete query.group_id;
     if (isAggregateMode.value) {
       router.push({
         name: 'statementManageDetail',
         params: { id: String(panelId) },
-        query: { ...route.query, sceneId: String(sceneId) },
+        query: { ...query, sceneId: String(sceneId) },
       });
     } else {
       router.push({
         name: 'statementManageDetail',
         params: { id: String(panelId) },
-        query: route.query,
+        query,
       });
     }
   };
@@ -621,6 +624,53 @@
     }
   };
 
+  /**
+   * 从报表管理 / 全局报表跳转打开某报表时，确保其所属分组展开，便于侧栏定位上下文。
+   * 不写回偏好：仅保证当前打开态可见，不强行改用户历史收起习惯。
+   */
+  const ensureActiveReportGroupExpanded = () => {
+    const rawId = route.params.id;
+    const panelId = Array.isArray(rawId) ? rawId[0] : String(rawId || '');
+    if (!panelId) return;
+
+    const preferredGroupIdRaw = route.query.group_id;
+    const preferredGroupId = preferredGroupIdRaw !== undefined && preferredGroupIdRaw !== null
+      ? Number(Array.isArray(preferredGroupIdRaw) ? preferredGroupIdRaw[0] : preferredGroupIdRaw)
+      : NaN;
+    if (!Number.isNaN(preferredGroupId) && !expandedGroups.value.includes(preferredGroupId)) {
+      expandedGroups.value.push(preferredGroupId);
+    }
+
+    // 菜单数据里直接带有 group_ids，目录树尚未重建时也可先展开
+    const menuItem = props.menuData.find(item => String(item.id) === panelId)
+      || localMenuData.value.find(item => String(item.id) === panelId);
+    menuItem?.group_ids?.forEach((groupId) => {
+      if (!expandedGroups.value.includes(groupId)) {
+        expandedGroups.value.push(groupId);
+      }
+    });
+
+    const querySceneId = (route.query.sceneId || route.query.scene_id) as string | undefined;
+    const expandGroupIfMatch = (group: SideRouteItem, sceneId?: string | number) => {
+      if (querySceneId && sceneId !== undefined && String(sceneId) !== String(querySceneId) && isAggregateMode.value) {
+        return;
+      }
+      const matched = group.children?.some(child => String(child.id) === panelId);
+      if (matched && !expandedGroups.value.includes(group.id)) {
+        expandedGroups.value.push(group.id);
+      }
+    };
+
+    if (allSideRoutes.value.length > 0) {
+      allSideRoutes.value.forEach((scene) => {
+        (scene.children || []).forEach(group => expandGroupIfMatch(group, scene.id));
+      });
+      return;
+    }
+
+    sideRoutes.value.forEach(group => expandGroupIfMatch(group));
+  };
+
   /** 当前选中是否为系统空间（单系统 / 我的所有系统） */
   const isSystemScopeSelection = (item: SceneItem | null | undefined) => {
     if (!item) return false;
@@ -682,6 +732,7 @@
           expandedGroups.value.push(group.id);
         }
       });
+      ensureActiveReportGroupExpanded();
       if (options?.navigateToFirst && navigateToFirstChild()) {
         pendingSceneChangeNavigate = false;
       }
@@ -730,6 +781,7 @@
     }
 
     applyExpandedPreference();
+    ensureActiveReportGroupExpanded();
 
     // 菜单可能晚于分组到达：仅在真正跳转成功后清除标记
     if (options?.navigateToFirst && navigateToFirstChild()) {
@@ -785,11 +837,17 @@
   };
 
   // 路由变化时触发（正常切换）
-  watch(() => route.params.id, emitPanelScene, { immediate: true });
+  watch(() => route.params.id, () => {
+    emitPanelScene();
+    ensureActiveReportGroupExpanded();
+  }, { immediate: true });
   // allSideRoutes 数据加载完成时也触发（刷新恢复）
   watch(allSideRoutes, (newVal) => {
-    if (newVal.length > 0 && sceneChangeItem.value?.type === 'aggregate') {
-      emitPanelScene();
+    if (newVal.length > 0) {
+      ensureActiveReportGroupExpanded();
+      if (sceneChangeItem.value?.type === 'aggregate') {
+        emitPanelScene();
+      }
     }
   });
 
