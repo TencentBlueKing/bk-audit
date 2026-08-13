@@ -309,7 +309,17 @@
     (e: 'update:isShow', value: boolean): void;
     (e: 'submit', data: ReportFormData): void;
     (e: 'cancel'): void;
-    (e: 'success', panelId?: string): void;
+    /** 新建成功：回传 id + 列表行快照，供父级临时置顶绿底（不改后端名称排序） */
+    (e: 'success', payload?: string | {
+      id: string;
+      name: string;
+      description: string;
+      vision_id: string;
+      status: 'published' | 'unpublished';
+      visibility_type: PanelVisibilityType;
+      scene_ids: number[];
+      system_ids: string[];
+    }): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -1056,7 +1066,21 @@
     defaultValue: null,
     onSuccess: (res: any) => {
       messageSuccess(t('创建成功'));
-      emit('success', res?.id);
+      const panelId = res?.id ? String(res.id) : '';
+      if (panelId) {
+        emit('success', {
+          id: panelId,
+          name: formData.value.name,
+          description: formData.value.description || '--',
+          vision_id: formData.value.bkvisionReport,
+          status: formData.value.enabled ? 'published' : 'unpublished',
+          visibility_type: formData.value.visibility_type,
+          scene_ids: [...(formData.value.scene_ids || [])],
+          system_ids: [...(formData.value.system_ids || [])],
+        });
+      } else {
+        emit('success');
+      }
       handleClose();
     },
   });
