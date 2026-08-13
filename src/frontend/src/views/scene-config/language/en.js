@@ -142,8 +142,8 @@ export default {
   },
   userLanding: {
     '场景配置用于管理审计策略、报表、工具，处理规则等审计核心能力': 'Scene configuration manages audit strategies, reports, tools, rules and other core audit capabilities',
-    你已有: 'You have',
-    个场景的使用权限可为其申请配置权限: ' scene(s) with access permissions that you can apply to configure',
+    你可申请: 'You can apply for configuration permissions for',
+    个场景的配置权限: ' scene(s)',
     暂无已启用的场景: 'No enabled scenes available',
     暂无描述: 'No description',
     申请中: 'Pending approval',
