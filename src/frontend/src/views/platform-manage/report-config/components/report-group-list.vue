@@ -213,11 +213,16 @@
                             {{ t('编辑') }}
                           </bk-button>
                           <bk-button
+                            v-bk-tooltips="{
+                              content: t('平台绑定的报表不支持停用操作'),
+                              disabled: report.binding_type !== 'platform_binding',
+                            }"
                             class="mr8"
+                            :disabled="report.binding_type === 'platform_binding'"
                             text
                             theme="primary"
-                            @click="handleShowMoveToGroup(report, group.id)">
-                            {{ t('移动到分组') }}
+                            @click="handleConfirmToggleStatus(report)">
+                            {{ report.status === 'published' ? t('停用') : t('启用') }}
                           </bk-button>
                           <bk-dropdown
                             trigger="hover">
@@ -230,15 +235,9 @@
                               <bk-dropdown-menu>
                                 <bk-dropdown-item>
                                   <div
-                                    v-bk-tooltips="{
-                                      content: t('平台绑定的报表不支持停用操作'),
-                                      disabled: report.binding_type !== 'platform_binding',
-                                    }"
                                     class="action-item"
-                                    :class="{ disableddel: report.binding_type === 'platform_binding' }"
-                                    @click="report.binding_type !== 'platform_binding'
-                                      && handleConfirmToggleStatus(report)">
-                                    {{ report.status === 'published' ? t('停用') : t('启用') }}
+                                    @click="handleShowMoveToGroup(report, group.id)">
+                                    {{ t('移动到分组') }}
                                   </div>
                                 </bk-dropdown-item>
                                 <bk-dropdown-item>
