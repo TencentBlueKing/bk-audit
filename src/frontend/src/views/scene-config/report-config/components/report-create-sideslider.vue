@@ -298,7 +298,7 @@
     name: '',
     groupId: null,
     description: '',
-    enabled: false,
+    enabled: true,
   });
 
   // BKVision 参数（交互组件 + 变量）
@@ -685,7 +685,7 @@
       name: '',
       groupId: defaultGroupIdValue,
       description: '',
-      enabled: false,
+      enabled: true,
     };
     clearParamState();
   };
