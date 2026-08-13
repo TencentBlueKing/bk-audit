@@ -1246,7 +1246,6 @@ class GetPanelDetail(BKVision):
 
         elif scope.is_system_scope and scope.scope_id:
             # 系统视角：有系统配置返回系统，没有返回 default
-            # 按 key 是否存在判定，允许配置空对象 {} 来屏蔽 default
             systems_overrides = default_value_overrides.get("systems", {})
             system_id_str = str(scope.scope_id)
             if system_id_str in systems_overrides:
