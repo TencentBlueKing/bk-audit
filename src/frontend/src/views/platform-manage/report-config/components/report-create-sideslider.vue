@@ -343,7 +343,7 @@
     bkvisionReport: '',
     name: '',
     description: '',
-    enabled: false,
+    enabled: true,
     // 与工具管理一致：默认未选择，展示「请选择」占位
     visibility_type: 'scenes_and_systems',
     scene_ids: [],
@@ -858,7 +858,7 @@
       bkvisionReport: '',
       name: '',
       description: '',
-      enabled: false,
+      enabled: true,
       visibility_type: 'scenes_and_systems',
       scene_ids: [],
       system_ids: [],
