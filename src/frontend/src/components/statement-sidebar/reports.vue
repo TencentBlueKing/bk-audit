@@ -265,6 +265,8 @@
   const sceneSystemSelectorList = ref<SceneSystemSelectorLists>({} as SceneSystemSelectorLists);
   // useRequest.onSuccess 不回传 run 参数，用标记驱动切换后跳转
   let pendingSceneChangeNavigate = false;
+  // 区分首屏 URL 同步与用户主动切换场景，避免深链报表被覆盖为第一个
+  let hasCompletedInitialSceneSync = false;
 
   /** 从选中项直接解析 scope，避免 router.replace 未完成时读到旧 URL */
   const resolveScopeFromSceneItem = (item: SceneItem): ScopeParams => {
@@ -292,7 +294,11 @@
     sceneSystemSelectorList.value = sceneSystemSelectorRef.value.getLists();
     sceneChangeItem.value = val;
     searchKeyword.value = '';
-    pendingSceneChangeNavigate = true;
+    const rawId = route.params.id;
+    const deepLinkedId = Array.isArray(rawId) ? rawId[0] : rawId;
+    // 首屏按 URL 恢复场景且已带目标报表时，保留深链；用户主动切换时再跳到第一个
+    pendingSceneChangeNavigate = hasCompletedInitialSceneSync || !deepLinkedId;
+    hasCompletedInitialSceneSync = true;
     // 先清空旧目录，避免切换过程中仍展示上一场景树
     groups.value = [];
     sideRoutes.value = [];
@@ -304,8 +310,29 @@
     fetchPanelPreference();
   };
 
+  /** 当前路由报表是否已出现在侧栏目录中（深链打开时用于保留目标报表） */
+  const isPanelInSideRoutes = (panelId: string): boolean => {
+    if (!panelId) return false;
+    for (const scene of allSideRoutes.value) {
+      for (const group of scene.children || []) {
+        if (group.children?.some(child => String(child.id) === panelId)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // 场景切换后默认选中第一个子菜单项
+  // 深链（全局报表/报表管理跳转）已带目标 id 且该报表在当前目录中时，保留原报表，勿覆盖为第一个
   const navigateToFirstChild = (): boolean => {
+    const rawId = route.params.id;
+    const currentId = Array.isArray(rawId) ? rawId[0] : String(rawId || '');
+    // 目录尚未建好时返回 false，保留 pending，等菜单/分组就绪后再决策
+    if (currentId && allSideRoutes.value.length > 0 && isPanelInSideRoutes(currentId)) {
+      return true;
+    }
+
     const firstScene = allSideRoutes.value[0];
     if (firstScene?.children?.length > 0) {
       const firstGroup = firstScene.children[0];
