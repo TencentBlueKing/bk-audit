@@ -269,23 +269,23 @@ class TestPanelDetailWithDefaultFallback(TestCase):
 
 
 class TestPanelDetailEmptyScopedConfig(TestCase):
-    """测试空对象配置屏蔽 default 的行为"""
+    """测试空对象配置不影响 default 的行为"""
 
     def setUp(self):
         self.scene1 = Scene.objects.create(name="场景 A")
-        # 配置：default 有值，但特定 scope 显式配置空对象
+        # 配置：default 有值，特定 scope 显式配置空对象
         self.config = {
             "default": {"time_filter": ["default_value"]},
             "scenes": {
-                str(self.scene1.scene_id): {},  # 显式空对象，应屏蔽 default
+                str(self.scene1.scene_id): {},  # 空对象，不影响 default
             },
             "systems": {
-                "bk_cmdb": {},  # 显式空对象，应屏蔽 default
+                "bk_cmdb": {},  # 空对象，不影响 default
             },
         }
         self.panel = VisionPanel.objects.create(
             id="test_panel_empty_scoped_001",
-            name="空对象屏蔽测试报表",
+            name="空对象保留 default 测试报表",
             default_value_overrides=self.config,
         )
         ResourceBinding.objects.create(
@@ -296,8 +296,8 @@ class TestPanelDetailEmptyScopedConfig(TestCase):
         )
 
     @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
-    def test_scene_scope_empty_config_does_not_fall_back(self, mock_check):
-        """scene 视角空对象配置不回退到 default"""
+    def test_scene_scope_empty_config_keeps_default(self, mock_check):
+        """scene 视角空对象配置保留 default"""
         mock_check.return_value = True
 
         resp = GetPanelDetail().request(
@@ -308,12 +308,12 @@ class TestPanelDetailEmptyScopedConfig(TestCase):
             }
         )
 
-        # 应返回空对象，而非 default
-        self.assertEqual(resp["default_value_override"], {})
+        # 应返回 default（空对象不影响）
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_value"]})
 
     @patch("services.web.vision.resources.ScopePermission.check_resource_permission")
-    def test_system_scope_empty_config_does_not_fall_back(self, mock_check):
-        """system 视角空对象配置不回退到 default"""
+    def test_system_scope_empty_config_keeps_default(self, mock_check):
+        """system 视角空对象配置保留 default"""
         mock_check.return_value = True
 
         resp = GetPanelDetail().request(
@@ -324,8 +324,8 @@ class TestPanelDetailEmptyScopedConfig(TestCase):
             }
         )
 
-        # 应返回空对象，而非 default
-        self.assertEqual(resp["default_value_override"], {})
+        # 应返回 default（空对象不影响）
+        self.assertEqual(resp["default_value_override"], {"time_filter": ["default_value"]})
 
 
 class TestPanelDetailResponseProtocol(TestCase):

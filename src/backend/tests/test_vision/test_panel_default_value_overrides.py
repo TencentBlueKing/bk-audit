@@ -535,8 +535,8 @@ class TestEmptyScopedConfigOverride(TestCase):
             priority_index=1,
         )
 
-    def test_scene_scope_empty_config_overrides_default(self):
-        """场景 scope 下，显式配置空对象 {} 应屏蔽 default 配置"""
+    def test_scene_scope_empty_config_keeps_default(self):
+        """场景 scope 下，显式配置空对象 {} 不影响 default 配置"""
         from unittest.mock import patch
 
         from services.web.common.constants import ScopeType
@@ -545,16 +545,16 @@ class TestEmptyScopedConfigOverride(TestCase):
         from services.web.vision.models import VisionPanel
         from services.web.vision.resources import GetPanelDetail
 
-        # 配置：default 有值，但场景 1001 显式配置空对象
+        # 配置：default 有值，场景 1001 显式配置空对象
         config = {
             "default": {"time_filter": ["now-7d", "now"]},
             "scenes": {
-                "1001": {},  # 显式空对象，应屏蔽 default
+                "1001": {},  # 空对象，不影响 default
             },
         }
         panel = VisionPanel.objects.create(
             id="test_panel_empty_scene_001",
-            name="空配置屏蔽报表",
+            name="空配置保留 default 报表",
             default_value_overrides=config,
         )
         ResourceBinding.objects.create(
@@ -573,8 +573,8 @@ class TestEmptyScopedConfigOverride(TestCase):
                     "scope_id": "1001",
                 }
             )
-            # 应返回空对象，而非 default 配置
-            self.assertEqual(result["default_value_override"], {})
+            # 应返回 default 配置（空对象不影响）
+            self.assertEqual(result["default_value_override"], {"time_filter": ["now-7d", "now"]})
 
     def test_scene_scope_no_config_falls_back_to_default(self):
         """场景 scope 下，未配置该场景时应 fallback 到 default"""
@@ -618,8 +618,8 @@ class TestEmptyScopedConfigOverride(TestCase):
             # 应 fallback 到 default
             self.assertEqual(result["default_value_override"], {"time_filter": ["now-7d", "now"]})
 
-    def test_system_scope_empty_config_overrides_default(self):
-        """系统 scope 下，显式配置空对象 {} 应屏蔽 default 配置"""
+    def test_system_scope_empty_config_keeps_default(self):
+        """系统 scope 下，显式配置空对象 {} 不影响 default 配置"""
         from unittest.mock import patch
 
         from services.web.common.constants import ScopeType
@@ -628,16 +628,16 @@ class TestEmptyScopedConfigOverride(TestCase):
         from services.web.vision.models import VisionPanel
         from services.web.vision.resources import GetPanelDetail
 
-        # 配置：default 有值，但系统 bk_cmdb 显式配置空对象
+        # 配置：default 有值，系统 bk_cmdb 显式配置空对象
         config = {
             "default": {"time_filter": ["now-7d", "now"]},
             "systems": {
-                "bk_cmdb": {},  # 显式空对象，应屏蔽 default
+                "bk_cmdb": {},  # 空对象，不影响 default
             },
         }
         panel = VisionPanel.objects.create(
             id="test_panel_empty_system_001",
-            name="空配置屏蔽系统报表",
+            name="空配置保留 default 系统报表",
             default_value_overrides=config,
         )
         ResourceBinding.objects.create(
@@ -656,8 +656,8 @@ class TestEmptyScopedConfigOverride(TestCase):
                     "scope_id": "bk_cmdb",
                 }
             )
-            # 应返回空对象，而非 default 配置
-            self.assertEqual(result["default_value_override"], {})
+            # 应返回 default 配置（空对象不影响）
+            self.assertEqual(result["default_value_override"], {"time_filter": ["now-7d", "now"]})
 
     def test_system_scope_no_config_falls_back_to_default(self):
         """系统 scope 下，未配置该系统时应 fallback 到 default"""
@@ -700,3 +700,112 @@ class TestEmptyScopedConfigOverride(TestCase):
             )
             # 应 fallback 到 default
             self.assertEqual(result["default_value_override"], {"time_filter": ["now-7d", "now"]})
+
+    def test_scene_scope_partial_override_merges_with_default(self):
+        """场景 scope 下，部分参数覆盖应与 default 合并"""
+        from unittest.mock import patch
+
+        from services.web.common.constants import ScopeType
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+        from services.web.vision.models import VisionPanel
+        from services.web.vision.resources import GetPanelDetail
+
+        # 配置：default 有 3 个参数，场景 1001 只覆盖 1 个
+        config = {
+            "default": {
+                "param1": "default_value1",
+                "param2": "default_value2",
+                "param3": "default_value3",
+            },
+            "scenes": {
+                "1001": {
+                    "param1": "scene_value1",
+                },
+            },
+        }
+        panel = VisionPanel.objects.create(
+            id="test_panel_partial_merge_001",
+            name="部分参数合并测试报表",
+            default_value_overrides=config,
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+        # 以场景 1001 的视角获取详情
+        with patch("services.web.vision.resources.ScopePermission.check_resource_permission", return_value=True):
+            result = GetPanelDetail().request(
+                {
+                    "panel_id": panel.id,
+                    "scope_type": ScopeType.SCENE,
+                    "scope_id": "1001",
+                }
+            )
+            # 应合并：param1 使用 scenes，param2 和 param3 使用 default
+            self.assertEqual(
+                result["default_value_override"],
+                {
+                    "param1": "scene_value1",
+                    "param2": "default_value2",
+                    "param3": "default_value3",
+                },
+            )
+
+    def test_system_scope_partial_override_merges_with_default(self):
+        """系统 scope 下，部分参数覆盖应与 default 合并"""
+        from unittest.mock import patch
+
+        from services.web.common.constants import ScopeType
+        from services.web.scene.constants import BindingType, ResourceVisibilityType
+        from services.web.scene.models import ResourceBinding
+        from services.web.vision.models import VisionPanel
+        from services.web.vision.resources import GetPanelDetail
+
+        # 配置：default 有 3 个参数，系统 bk_cmdb 只覆盖 2 个
+        config = {
+            "default": {
+                "param1": "default_value1",
+                "param2": "default_value2",
+                "param3": "default_value3",
+            },
+            "systems": {
+                "bk_cmdb": {
+                    "param1": "system_value1",
+                    "param3": "system_value3",
+                },
+            },
+        }
+        panel = VisionPanel.objects.create(
+            id="test_panel_partial_merge_system_001",
+            name="部分参数合并测试系统报表",
+            default_value_overrides=config,
+        )
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.PANEL,
+            resource_id=str(panel.id),
+            binding_type=BindingType.PLATFORM_BINDING,
+            visibility_type=VisibilityScope.ALL_VISIBLE,
+        )
+
+        # 以系统 bk_cmdb 的视角获取详情
+        with patch("services.web.vision.resources.ScopePermission.check_resource_permission", return_value=True):
+            result = GetPanelDetail().request(
+                {
+                    "panel_id": panel.id,
+                    "scope_type": ScopeType.SYSTEM,
+                    "scope_id": "bk_cmdb",
+                }
+            )
+            # 应合并：param1 和 param3 使用 systems，param2 使用 default
+            self.assertEqual(
+                result["default_value_override"],
+                {
+                    "param1": "system_value1",
+                    "param2": "default_value2",
+                    "param3": "system_value3",
+                },
+            )
