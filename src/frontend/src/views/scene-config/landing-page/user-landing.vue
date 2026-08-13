@@ -44,9 +44,9 @@
         <div class="landing-content">
           <template v-if="sceneList.length > 0">
             <div class="section-header">
-              <span>{{ t('你有') }}</span>
+              <span>{{ t('你可申请') }}</span>
               <span class="scene-count">{{ sceneList.length }}</span>
-              <span>{{ t('个场景的使用权限，可为其申请配置权限') }}</span>
+              <span>{{ t('个场景的配置权限') }}</span>
             </div>
 
             <div class="scene-list">
@@ -56,7 +56,7 @@
                 class="scene-item">
                 <div class="scene-info">
                   <div class="scene-name-row">
-                    <span class="scene-name">{{ item.name }}</span>
+                    <span class="scene-name">{{ item.name }}({{ item.scene_id }})</span>
                     <template v-if="(item.managers || []).length > 0">
                       <audit-icon
                         class="admin-icon"
@@ -117,11 +117,8 @@
                         <span class="status-text">{{ t('已拒绝') }}</span>
                       </span>
                       <template #content>
-                        <div class="reject-tip">
-                          <div class="reject-tip-title">
-                            {{ t('拒绝原因') }}
-                          </div>
-                          <div class="reject-tip-reason">
+                        <div class="status-tip">
+                          <div class="status-tip-reason">
                             {{ getRejectReason(item.scene_id) }}
                           </div>
                           <a
@@ -131,10 +128,10 @@
                             rel="noopener noreferrer"
                             target="_blank"
                             @click.stop>
+                            {{ t('查看 ITSM 单据') }}
                             <audit-icon
                               class="link-icon"
                               type="jump-link" />
-                            {{ t('查看 ITSM 单据') }}
                           </a>
                         </div>
                       </template>
@@ -143,6 +140,48 @@
                       class="apply-btn"
                       @click="openApplyDialog(item)">
                       {{ t('重新申请') }}
+                    </bk-button>
+                  </template>
+
+                  <!-- 已通过 -->
+                  <template v-else-if="getApplyStatus(item.scene_id) === 'passed'">
+                    <bk-popover
+                      placement="top"
+                      theme="dark"
+                      trigger="hover">
+                      <span class="status-passed">
+                        <audit-icon
+                          class="status-icon"
+                          type="completed" />
+                        <span class="status-text">{{ t('已通过') }}</span>
+                      </span>
+                      <template #content>
+                        <div class="status-tip">
+                          <a
+                            v-if="getTicketUrl(item.scene_id)"
+                            class="itsm-link"
+                            :href="getTicketUrl(item.scene_id)"
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            @click.stop>
+                            {{ t('查看 ITSM 单据') }}
+                            <audit-icon
+                              class="link-icon"
+                              type="jump-link" />
+                          </a>
+                          <span
+                            v-else
+                            class="status-tip-reason">
+                            {{ t('暂无') }}
+                          </span>
+                        </div>
+                      </template>
+                    </bk-popover>
+                    <bk-button
+                      class="enter-btn"
+                      theme="primary"
+                      @click="handleEnterScene(item)">
+                      {{ t('进入场景配置') }}
                     </bk-button>
                   </template>
 
@@ -265,8 +304,9 @@
 </template>
 
 <script setup lang="ts">
-  import { nextTick, onMounted, reactive, ref } from 'vue';
+  import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
   import ScenePermissionApplicationService from '@service/scene-permission-application';
@@ -279,7 +319,7 @@
 
   import landingImg from '@/images/landing.png';
 
-  type ApplyStatus = 'idle' | 'applying' | 'rejected';
+  type ApplyStatus = 'idle' | 'applying' | 'rejected' | 'passed';
 
   interface SceneItem {
     scene_id: number;
@@ -298,9 +338,14 @@
   const APPLYING_STATUS = ['pending', 'running', 'processing', 'approving', 'applying'];
   /** 已拒绝状态 */
   const REJECTED_STATUS = ['rejected', 'refused', 'failed'];
+  /** 已通过状态 */
+  const PASSED_STATUS = ['approved', 'passed', 'success', 'finished', 'granted', 'done', 'completed'];
+  /** 申请列表轮询间隔 */
+  const POLL_INTERVAL = 5000;
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const router = useRouter();
 
   const sceneList = ref<SceneItem[]>([]);
   const applyStateMap = reactive<Record<number, ApplyState>>({});
@@ -321,6 +366,8 @@
   };
   const currentScene = ref<SceneItem | null>(null);
 
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
   const {
     data: configData,
   } = useRequest(RootManageService.config, {
@@ -328,7 +375,20 @@
     manual: true,
   });
 
-  const mapApplyStatus = (status = '', statusDisplay = ''): ApplyStatus => {
+  const isPassedApplication = (application?: ScenePermissionApplicationModel['application'] | null) => {
+    if (!application) return false;
+    const normalized = (application.status || '').toLowerCase();
+    const statusDisplay = application.status_display || '';
+    return PASSED_STATUS.includes(normalized)
+      || statusDisplay.includes('通过')
+      || statusDisplay.includes('成功');
+  };
+
+  const mapApplyStatus = (
+    status = '',
+    statusDisplay = '',
+    options?: { manageScene?: boolean; hasPassedApplication?: boolean },
+  ): ApplyStatus => {
     const normalized = status.toLowerCase();
     if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
       return 'applying';
@@ -336,14 +396,43 @@
     if (REJECTED_STATUS.includes(normalized) || statusDisplay.includes('拒绝')) {
       return 'rejected';
     }
+    if (
+      PASSED_STATUS.includes(normalized)
+      || statusDisplay.includes('通过')
+      || statusDisplay.includes('成功')
+      || options?.hasPassedApplication
+      || options?.manageScene
+    ) {
+      return 'passed';
+    }
     return 'idle';
   };
 
+  const stopPolling = () => {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    pollTimer = setTimeout(() => {
+      fetchMineApplicationList({
+        page: 1,
+        page_size: 1000,
+      });
+    }, POLL_INTERVAL);
+  };
+
   const applyApplicationList = (list: ScenePermissionApplicationModel[]) => {
-    // 仅展示有使用权限、无配置权限的场景
-    const filtered = list.filter(item => (
-      item.permission?.view_scene && !item.permission?.manage_scene
-    ));
+    // 有使用权限且无管理权限：需申请配置权限
+    // 刚审批通过（已有管理权限）：保留展示「已通过」
+    const filtered = list.filter((item) => {
+      if (!item.permission?.view_scene) return false;
+      if (!item.permission?.manage_scene) return true;
+      return isPassedApplication(item.application);
+    });
 
     sceneList.value = filtered.map(item => ({
       scene_id: item.scene_id,
@@ -357,13 +446,29 @@
     });
     filtered.forEach((item) => {
       const { application } = item;
-      if (!application) return;
       applyStateMap[item.scene_id] = {
-        status: mapApplyStatus(application.status, application.status_display),
-        rejectReason: application.reject_reason,
-        ticketUrl: application.itsm_ticket_url,
+        status: mapApplyStatus(
+          application?.status,
+          application?.status_display,
+          {
+            manageScene: Boolean(item.permission?.manage_scene),
+            hasPassedApplication: isPassedApplication(application),
+          },
+        ),
+        rejectReason: application?.reject_reason,
+        ticketUrl: application?.itsm_ticket_url,
       };
     });
+
+    const hasApplying = filtered.some((item) => {
+      const status = applyStateMap[item.scene_id]?.status;
+      return status === 'applying';
+    });
+    if (hasApplying) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
   };
 
   const {
@@ -441,11 +546,27 @@
     });
   };
 
+  const handleEnterScene = (item: SceneItem) => {
+    const sceneId = String(item.scene_id);
+    router.push({
+      name: 'sceneInfo',
+      query: {
+        scene_id: sceneId,
+        scope_id: sceneId,
+        scope_type: 'scene',
+      },
+    });
+  };
+
   onMounted(() => {
     fetchMineApplicationList({
       page: 1,
       page_size: 1000,
     });
+  });
+
+  onUnmounted(() => {
+    stopPolling();
   });
 
   const handleLearnMore = () => {
@@ -635,18 +756,33 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
 .apply-btn {
   min-width: 64px;
+  height: 26px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 24px;
   color: #63656e;
   background: #fff;
   border-color: #c4c6cc;
+  border-radius: 2px;
+}
+
+.enter-btn {
+  min-width: 64px;
+  height: 26px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 24px;
+  border-radius: 2px;
 }
 
 .status-applying,
-.status-rejected {
+.status-rejected,
+.status-passed {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -685,6 +821,27 @@
   }
 }
 
+.status-passed {
+  color: #63656e;
+  cursor: pointer;
+
+  .status-icon {
+    color: #2dcb56;
+
+    :deep(svg),
+    :deep(svg path) {
+      fill: #2dcb56;
+    }
+  }
+
+  .status-text {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-underline-offset: 3px;
+    text-decoration-color: #c4c6cc;
+  }
+}
+
 .itsm-link {
   display: inline-flex;
   align-items: center;
@@ -704,23 +861,20 @@
   }
 }
 
-.reject-tip {
+.status-tip {
   max-width: 240px;
   padding: 4px 0;
 
-  .reject-tip-title {
-    margin-bottom: 4px;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 20px;
-    color: #fff;
-  }
-
-  .reject-tip-reason {
+  .status-tip-reason {
     margin-bottom: 8px;
     font-size: 12px;
     line-height: 20px;
-    color: #c4c6cc;
+    color: #fff;
+    word-break: break-all;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   .itsm-link {
