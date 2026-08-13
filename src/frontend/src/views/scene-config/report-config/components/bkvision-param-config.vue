@@ -364,15 +364,6 @@
     'time_range_select',
     'time-range-select',
   ]);
-  const NON_TIME_CATEGORIES = new Set([
-    'selector',
-    'cascader',
-    'radios',
-    'button',
-    'multiselect',
-    'person_select',
-  ]);
-
   type DatePickerMode = 'date' | 'datetime';
 
   /** 优先取 panel.type，兼容 field_category；时间类别优先 */
@@ -384,20 +375,6 @@
         .toLowerCase());
     const timeHit = candidates.find(c => TIME_PICKER_CATEGORIES.has(c) || TIME_RANGER_CATEGORIES.has(c));
     return timeHit || candidates[0] || '';
-  };
-
-  const looksLikeTimeRanger = (item: InputVariableItem) => {
-    const text = `${item.raw_name || ''} ${item.display_name || ''}`.toLowerCase();
-    return /time[_-]?range|date[_-]?range|时间范围|日期范围/.test(text);
-  };
-
-  const looksLikeTimeField = (item: InputVariableItem) => {
-    const rawName = (item.raw_name || '').toLowerCase();
-    const displayName = item.display_name || '';
-    if (/(^|_)(date_?time|datetime|date|time)(_|$)/.test(rawName)) {
-      return true;
-    }
-    return /时间|日期/.test(displayName);
   };
 
   const looksLikeDateOnlyValue = (value: unknown) => {
@@ -451,15 +428,10 @@
     resolveDatePickerMode(item) === 'datetime' ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd'
   );
 
+  /** 严格按 BKVision panel.type / field_category 渲染，不做名称启发式（避免「数据时间」等 inputer 被误判为日期） */
   const isTimeRanger = (item: InputVariableItem) => {
     const cat = resolveFieldCategory(item);
-    if (TIME_RANGER_CATEGORIES.has(cat)) {
-      return true;
-    }
-    if (TIME_PICKER_CATEGORIES.has(cat) || NON_TIME_CATEGORIES.has(cat)) {
-      return false;
-    }
-    return looksLikeTimeRanger(item);
+    return TIME_RANGER_CATEGORIES.has(cat);
   };
 
   const isTimePicker = (item: InputVariableItem) => {
@@ -467,14 +439,7 @@
       return false;
     }
     const cat = resolveFieldCategory(item);
-    if (TIME_PICKER_CATEGORIES.has(cat)) {
-      return true;
-    }
-    if (NON_TIME_CATEGORIES.has(cat)) {
-      return false;
-    }
-    // inputer / variable / 空类型：按命名识别（如 数据时间 / date_time）
-    return looksLikeTimeField(item);
+    return TIME_PICKER_CATEGORIES.has(cat);
   };
 
   const findFieldIndex = (rawName: string) => localFields.value.findIndex(item => item.raw_name === rawName);
