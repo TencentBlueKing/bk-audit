@@ -324,9 +324,17 @@ class TestListRiskResource(TestCase):
         self.assertEqual(list(matched), [])
 
     def test_gate_basic_field_bypasses_strategy_config(self):
-        """基本字段（白名单命中）不参与策略配置 gate，直接放行"""
+        """基本字段（type=basic_event_field）不参与策略配置 gate，直接放行"""
         instance = ListRisk()
-        filters = [{"field": "operator", "display_name": "责任人", "operator": "CONTAINS", "value": "admin"}]
+        filters = [
+            {
+                "field": "operator",
+                "display_name": "责任人",
+                "operator": "CONTAINS",
+                "value": "admin",
+                "type": "basic_event_field",
+            }
+        ]
         matched = instance._filter_queryset_by_event_data_fields(Risk.objects.all(), filters)
         self.assertEqual(list(matched.values_list("risk_id", flat=True)), [self.risk.risk_id])
 
