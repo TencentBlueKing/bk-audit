@@ -130,6 +130,7 @@
                   @mouseenter="hoverDeleteKey = item.raw_name"
                   @mouseleave="hoverDeleteKey = ''">
                   <date-picker
+                    :id="TIME_RANGE_PICKER_ID"
                     :disabled="item.is_default_value"
                     :model-value="getRangeValue(item)"
                     style="width: 100%;"
@@ -236,6 +237,7 @@
                   @mouseenter="hoverDeleteKey = item.raw_name"
                   @mouseleave="hoverDeleteKey = ''">
                   <date-picker
+                    :id="TIME_RANGE_PICKER_ID"
                     :disabled="item.is_default_value"
                     :model-value="getRangeValue(item)"
                     style="width: 100%;"
@@ -293,6 +295,9 @@
     change: [value: InputVariableItem[]]
   }>();
   const { t } = useI18n();
+
+  /** 侧滑 z-index=9999，用 id 限定弹出层作用域并抬升层级 */
+  const TIME_RANGE_PICKER_ID = 'scene-report-param-config';
 
   const now = new Date();
   const isComExpanded = ref(true);
@@ -754,7 +759,7 @@
 }
 </style>
 
-<!-- 侧滑 z-index=9999，日期面板需挂到更高层才能点开 -->
+<!-- 侧滑 z-index=9999，日期 / 时间范围面板需挂到更高层才能点开 -->
 <style lang="postcss">
 .scene-report-date-picker-dropdown,
 .scene-report-date-picker-dropdown.bk-date-picker-dropdown,
@@ -764,6 +769,19 @@
 
 body > .scene-report-date-picker-dropdown,
 body > .bk-date-picker-dropdown.scene-report-date-picker-dropdown {
+  z-index: 10050 !important;
+}
+
+/* @blueking/date-picker 时间范围选择器弹出层 */
+.__bk-date-picker-popover__.__bk-date-picker-popover__scene-report-param-config {
+  z-index: 10050 !important;
+}
+
+/* 组件内置 hover tip，侧滑内需抬高层级 */
+.__date-tooltips__,
+.bk-popper:has(.__date-tooltips__),
+.bk-popover:has(.__date-tooltips__),
+.bk-pop2-content:has(.__date-tooltips__) {
   z-index: 10050 !important;
 }
 </style>
