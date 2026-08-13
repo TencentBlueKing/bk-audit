@@ -17,10 +17,12 @@
 import {
   createRouter,
   createWebHistory,
+  type RouteLocationNormalized,
   type RouteRecordRaw,
 } from 'vue-router';
 
 import IamManageService from '@service/iam-manage';
+import SceneManageService from '@service/scene-manage';
 
 import type ConfigModel from '@model/root/config';
 
@@ -49,6 +51,9 @@ import { changeConfirm } from '@utils/assist';
 
 
 let lastRouterHrefCache = '/';
+
+/** 场景配置引导页，不校验场景管理权限 */
+const SCENE_CONFIG_LANDING_NAMES = new Set(['landingPage', 'userLandingPage']);
 
 /** 单条访问限制规则 */
 interface AccessRule {
@@ -97,6 +102,69 @@ function checkAccessRedirect(
     if (matched && !excluded) return rule.redirect;
   }
   return null;
+}
+
+/**
+ * 判断是否进入场景配置业务页（不含引导页）
+ */
+function isSceneConfigBusinessRoute(to: RouteLocationNormalized) {
+  if (SCENE_CONFIG_LANDING_NAMES.has(String(to.name || ''))) {
+    return false;
+  }
+  return to.path.startsWith('/scene-config')
+    || to.matched.some(record => record.meta?.navName === 'sceneConfiguration');
+}
+
+/**
+ * 场景配置页进入前权限分流：
+ * - manage_scene=true：放行
+ * - manage_scene=false & view_scene=true：跳转 user-landing-page
+ * - manage_scene=false & view_scene=false：跳转 permissions-page
+ */
+async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
+  if (!isSceneConfigBusinessRoute(to)) {
+    return null;
+  }
+
+  let sceneId = (to.query.scene_id || to.query.scope_id) as string | undefined;
+  if (!sceneId || sceneId === 'allSecen') {
+    try {
+      const saved = JSON.parse(localStorage.getItem('scene-system-selector:selected') || 'null');
+      if (saved?.type === 'scene' && saved?.id && saved.id !== 'allSecen') {
+        sceneId = String(saved.id);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (!sceneId || sceneId === 'allSecen') {
+    return null;
+  }
+
+  const redirectQuery = { scene_id: String(sceneId) };
+
+  try {
+    const sceneList = await SceneManageService.fetchSceneAll({ status: 'enabled' });
+    const target = (sceneList || []).find(item => String(item.scene_id) === String(sceneId));
+    const permission = target?.permission || {};
+
+    if (permission.manage_scene === true) {
+      return null;
+    }
+    if (permission.view_scene === true) {
+      return {
+        name: 'userLandingPage',
+        query: redirectQuery,
+      };
+    }
+  } catch {
+    // 列表拉取失败时按无权限处理，避免页面先打业务接口弹出权限申请窗
+  }
+
+  return {
+    name: 'permissionsPage',
+    query: redirectQuery,
+  };
 }
 
 export default (config: ConfigModel) => {
@@ -200,6 +268,13 @@ export default (config: ConfigModel) => {
           next({ name: 'handleManage' });
           return;
         }
+      }
+
+      // 场景配置业务页：URL 场景不在选择器可选项中时，进入页面前跳转引导页
+      const sceneConfigRedirect = await resolveSceneConfigSceneAccess(to);
+      if (sceneConfigRedirect) {
+        next(sceneConfigRedirect);
+        return;
       }
 
       // 显示确认弹窗
