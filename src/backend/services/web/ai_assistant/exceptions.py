@@ -35,3 +35,45 @@ class StaleMessageTask(AIAssistantException):
 class MessageExecutionFailed(AIAssistantException):
     MESSAGE = gettext_lazy("消息执行失败，请稍后重试")
     ERROR_CODE = "005"
+
+
+class ConversationNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("会话不存在")
+    ERROR_CODE = "006"
+    STATUS_CODE = 404
+
+
+class ConversationGroupNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("会话分组不存在")
+    ERROR_CODE = "007"
+    STATUS_CODE = 404
+
+
+class SidebarNodeNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("侧栏节点不存在")
+    ERROR_CODE = "008"
+    STATUS_CODE = 404
+
+
+class InvalidSidebarContainer(AIAssistantException):
+    MESSAGE = gettext_lazy("侧栏目标容器无效")
+    ERROR_CODE = "009"
+    STATUS_CODE = 400
+
+
+class InvalidSidebarAnchor(AIAssistantException):
+    MESSAGE = gettext_lazy("侧栏移动锚点无效")
+    ERROR_CODE = "010"
+    STATUS_CODE = 400
+
+
+class SidebarNodeNotMovable(AIAssistantException):
+    MESSAGE = gettext_lazy("当前侧栏节点不可移动")
+    ERROR_CODE = "011"
+    STATUS_CODE = 400
+
+
+class SidebarNodeNotPinnable(AIAssistantException):
+    MESSAGE = gettext_lazy("当前侧栏节点不可置顶")
+    ERROR_CODE = "012"
+    STATUS_CODE = 400

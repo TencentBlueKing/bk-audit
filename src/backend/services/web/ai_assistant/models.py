@@ -101,7 +101,7 @@ class ConversationSidebarNode(OperateRecordModel):
         null=True,
         blank=True,
     )
-    # 同一容器内 position 越大越靠前，业务服务负责维护连续整数。
+    # 同一容器内 position 越大越靠前；只保证相对顺序，允许删除和移动后保留空洞。
     position = models.PositiveBigIntegerField(gettext_lazy("排序位置"), default=0)
     # 置顶是会话节点的独立展示维度，不改变节点所在容器及 position。
     pinned_at = models.DateTimeField(gettext_lazy("置顶时间"), null=True, blank=True)
