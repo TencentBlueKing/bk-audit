@@ -73,35 +73,38 @@ class BKResourceAutoSchema(AutoSchema):
         params = super().get_override_parameters()
         route = self._get_matched_route()
         if route:
-            # 如果是 GET 请求，且 Resource 定义了 RequestSerializer，将其字段作为查询参数
-            if route.method.upper() == "GET":
-                serializer_class = route.resource_class.RequestSerializer
-                if serializer_class:
-                    try:
-                        serializer = serializer_class()
-                        path_parameter_names = self._get_path_parameter_names()
-                        for field_name, field in serializer.fields.items():
-                            if field_name in path_parameter_names:
-                                continue
-                            # 映射 DRF 字段类型到 OpenAPI 类型
-                            field_type_map = {
-                                drf_serializers.IntegerField: int,
-                                drf_serializers.FloatField: float,
-                                drf_serializers.BooleanField: bool,
-                            }
-                            openapi_type = field_type_map.get(type(field), str)
+            serializer_class = route.resource_class.RequestSerializer
+            if serializer_class:
+                try:
+                    serializer = serializer_class()
+                    path_parameter_names = self._get_path_parameter_names()
+                    for field_name, field in serializer.fields.items():
+                        if field_name in path_parameter_names:
+                            location = OpenApiParameter.PATH
+                        elif route.method.upper() == "GET":
+                            location = OpenApiParameter.QUERY
+                        else:
+                            continue
 
-                            params.append(
-                                OpenApiParameter(
-                                    name=field_name,
-                                    type=openapi_type,
-                                    location=OpenApiParameter.QUERY,
-                                    description=str(field.label) if field.label else field_name,
-                                    required=field.required,
-                                )
+                        # UUID 路径参数显式声明格式；其余常用 DRF 字段映射为基础类型。
+                        field_type_map = {
+                            drf_serializers.UUIDField: OpenApiTypes.UUID,
+                            drf_serializers.IntegerField: int,
+                            drf_serializers.FloatField: float,
+                            drf_serializers.BooleanField: bool,
+                        }
+                        openapi_type = field_type_map.get(type(field), str)
+                        params.append(
+                            OpenApiParameter(
+                                name=field_name,
+                                type=openapi_type,
+                                location=location,
+                                description=str(field.help_text or field.label or field_name),
+                                required=True if location == OpenApiParameter.PATH else field.required,
                             )
-                    except Exception:
-                        pass
+                        )
+                except Exception:
+                    pass
             # 如果开启了分页，添加分页参数
             if route.enable_paginate:
                 params.extend(

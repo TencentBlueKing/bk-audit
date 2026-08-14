@@ -2,6 +2,12 @@ from django.db.models import TextChoices
 from django.utils.translation import gettext_lazy
 
 DEFAULT_CONVERSATION_TITLE = "新对话"
+# 限制 Django Collector 单次物化的侧栏 Node 数量，避免清空和删除大分组时占用无界内存。
+SIDEBAR_NODE_DELETE_BATCH_SIZE = 500
+# move 的范围更新仍可能被 MySQL 判定为死锁；最多额外重试两次完整事务。
+SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES = 2
+SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS = 0.05
+MYSQL_DEADLOCK_ERROR_CODE = 1213
 
 
 class ExecutionMode(TextChoices):
