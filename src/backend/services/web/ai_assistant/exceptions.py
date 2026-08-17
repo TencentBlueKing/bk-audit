@@ -77,3 +77,23 @@ class SidebarNodeNotPinnable(AIAssistantException):
     MESSAGE = gettext_lazy("当前侧栏节点不可置顶")
     ERROR_CODE = "012"
     STATUS_CODE = 400
+
+
+class InvalidInitialMessage(AIAssistantException):
+    """会话携带的初始化消息不满足平台约束。"""
+
+    MESSAGE = gettext_lazy("会话初始化消息无效")
+    ERROR_CODE = "013"
+    STATUS_CODE = 400
+
+
+class MessageNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("消息不存在")
+    ERROR_CODE = "014"
+    STATUS_CODE = 404
+
+
+class InvalidMessageAnchor(AIAssistantException):
+    MESSAGE = gettext_lazy("消息历史锚点无效")
+    ERROR_CODE = "015"
+    STATUS_CODE = 400

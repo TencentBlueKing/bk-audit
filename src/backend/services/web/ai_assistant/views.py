@@ -16,6 +16,11 @@ from services.web.ai_assistant.resources.conversation import (
     UpdateConversation,
     UpdateConversationGroup,
 )
+from services.web.ai_assistant.resources.message import (
+    CreateMessage,
+    GetMessage,
+    ListMessages,
+)
 from services.web.ai_assistant.serializers.conversation import (
     ConversationSearchResponseSerializer,
     SidebarNodeResponseSerializer,
@@ -52,7 +57,7 @@ class ConversationGroupsViewSet(ResourceViewSet):
 
 
 class ConversationsViewSet(ResourceViewSet):
-    """会话生命周期接口，初始化消息将在下一阶段扩展。"""
+    """会话生命周期接口。"""
 
     lookup_field = "conversation_uid"
     resource_routes = [
@@ -61,6 +66,17 @@ class ConversationsViewSet(ResourceViewSet):
         ResourceRoute("PATCH", UpdateConversation, pk_field="conversation_uid"),
         ResourceRoute("DELETE", DeleteConversation, pk_field="conversation_uid"),
         ResourceRoute("POST", ClearConversations, endpoint="clear"),
+    ]
+
+
+class MessagesViewSet(ResourceViewSet):
+    """消息创建、历史窗口和异步状态轮询接口。"""
+
+    lookup_field = "message_uid"
+    resource_routes = [
+        ResourceRoute("POST", CreateMessage),
+        ResourceRoute("GET", ListMessages),
+        ResourceRoute("GET", GetMessage, pk_field="message_uid"),
     ]
 
 

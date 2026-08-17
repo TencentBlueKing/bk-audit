@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
 from services.web.ai_assistant.constants import SidebarNodeType
+from services.web.ai_assistant.serializers.message import (
+    InitialMessageRequestSerializer,
+    MessageResponseSerializer,
+)
+
+DEFAULT_CONVERSATION_TITLE = "新对话"
 
 
 class ConversationGroupCreateRequestSerializer(serializers.Serializer):
@@ -30,7 +36,19 @@ class ConversationGroupUpdateRequestSerializer(ConversationGroupDetailRequestSer
 
 
 class ConversationCreateRequestSerializer(serializers.Serializer):
-    """阶段三只创建默认标题空会话，初始化消息由下一阶段扩展。"""
+    """创建空会话，或原子创建一条系统选择初始化消息。"""
+
+    title = serializers.CharField(
+        default=DEFAULT_CONVERSATION_TITLE,
+        max_length=255,
+        trim_whitespace=True,
+        allow_blank=False,
+        help_text="会话标题；不传时默认为“新对话”",
+    )
+    initial_message = InitialMessageRequestSerializer(
+        required=False,
+        help_text="可选系统选择初始化消息",
+    )
 
 
 class ConversationDetailRequestSerializer(serializers.Serializer):
@@ -158,6 +176,16 @@ class ConversationResponseSerializer(serializers.Serializer):
     title = serializers.CharField(help_text="会话标题")
     created_at = serializers.DateTimeField(help_text="会话创建时间")
     updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
+
+
+class ConversationCreateResponseSerializer(serializers.Serializer):
+    """会话创建结果，初始化消息和会话保证同时写入。"""
+
+    uid = serializers.UUIDField(help_text="会话对外 UUID")
+    title = serializers.CharField(help_text="会话标题")
+    created_at = serializers.DateTimeField(help_text="会话创建时间")
+    updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
+    initial_message = MessageResponseSerializer(allow_null=True, help_text="初始化消息；空会话为 null")
 
 
 class ConversationGroupSummarySerializer(serializers.Serializer):

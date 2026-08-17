@@ -24,6 +24,7 @@ from services.web.ai_assistant.serializers import (
     SidebarSearchRequestSerializer,
 )
 from services.web.ai_assistant.serializers.conversation import (
+    ConversationCreateResponseSerializer,
     ConversationGroupResponseSerializer,
     ConversationGroupSummarySerializer,
     ConversationResponseSerializer,
@@ -37,6 +38,7 @@ class ConversationRequestSerializerTest(TestCase):
     def test_all_api_fields_have_swagger_descriptions(self):
         serializer_classes = (
             ConversationCreateRequestSerializer,
+            ConversationCreateResponseSerializer,
             ConversationDetailRequestSerializer,
             ConversationGroupCreateRequestSerializer,
             ConversationGroupDetailRequestSerializer,

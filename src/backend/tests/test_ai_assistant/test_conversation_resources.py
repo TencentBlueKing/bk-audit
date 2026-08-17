@@ -8,9 +8,11 @@ from django.urls import resolve
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from services.web.ai_assistant.constants import (
-    DEFAULT_CONVERSATION_TITLE,
+    ExecutionStatus,
+    MessageType,
     SidebarNodeType,
 )
+from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Conversation, ConversationSidebarNode
 from services.web.ai_assistant.resources.conversation import (
     ClearConversations,
@@ -28,15 +30,35 @@ from services.web.ai_assistant.resources.conversation import (
     UpdateConversationGroup,
 )
 from services.web.ai_assistant.serializers.conversation import (
+    ConversationCreateRequestSerializer,
     ConversationSearchResponseSerializer,
     SidebarNodeResponseSerializer,
 )
 from tests.base import TestCase
+from tests.test_ai_assistant.handlers import EchoSyncHandler
 
 
 @patch("services.web.ai_assistant.resources.conversation.get_request_username", return_value="alice")
 class ConversationResourceTest(TestCase):
     """资源测试统一走 request()，覆盖请求和响应序列化链路。"""
+
+    def setUp(self):
+        message_handler_registry.register(EchoSyncHandler())
+
+    def tearDown(self):
+        message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
+
+    def test_non_create_resources_use_resource_default_empty_request_contract(self, _username):
+        """创建会话参数不得出现在清空和置顶列表接口中。"""
+
+        self.assertIsNone(ClearConversations.RequestSerializer)
+        self.assertIsNone(ListPinnedConversations.RequestSerializer)
+
+    def test_create_conversation_serializer_supplies_default_title(self, _username):
+        serializer = ConversationCreateRequestSerializer(data={})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["title"], "新对话")
 
     def test_group_crud_returns_external_fields(self, _username):
         created = CreateConversationGroup().request({"name": "  审计分组  "})
@@ -52,7 +74,8 @@ class ConversationResourceTest(TestCase):
     def test_conversation_crud_and_clear(self, _username):
         created = CreateConversation().request({})
 
-        self.assertEqual(created["title"], DEFAULT_CONVERSATION_TITLE)
+        self.assertEqual(created["title"], "新对话")
+        self.assertIsNone(created["initial_message"])
         self.assertNotIn("id", created)
         self.assertEqual(GetConversation().request({"conversation_uid": created["uid"]})["uid"], created["uid"])
 
@@ -64,6 +87,24 @@ class ConversationResourceTest(TestCase):
         CreateConversation().request({})
         self.assertIsNone(ClearConversations().request({}))
         self.assertEqual(Conversation.objects.filter(created_by="alice").count(), 0)
+
+        custom = CreateConversation().request({"title": "指定标题"})
+        self.assertEqual(custom["title"], "指定标题")
+
+    def test_conversation_can_atomically_create_system_selection_message(self, _username):
+        created = CreateConversation().request(
+            {
+                "initial_message": {
+                    "message_type": MessageType.SYSTEM_SELECTION,
+                    "input_data": {"text": "system-a"},
+                }
+            }
+        )
+
+        self.assertEqual(created["title"], "新对话")
+        self.assertEqual(created["initial_message"]["conversation_uid"], created["uid"])
+        self.assertEqual(created["initial_message"]["status"], ExecutionStatus.SUCCESS)
+        self.assertEqual(created["initial_message"]["output_data"], {"content": "system:system-a"})
 
     def test_sidebar_list_pin_move_and_search(self, _username):
         group = CreateConversationGroup().request({"name": "目标分组"})

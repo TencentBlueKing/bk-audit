@@ -1,12 +1,6 @@
 from django.db.models import TextChoices
 from django.utils.translation import gettext_lazy
 
-DEFAULT_CONVERSATION_TITLE = "新对话"
-# 限制 Django Collector 单次物化的侧栏 Node 数量，避免清空和删除大分组时占用无界内存。
-SIDEBAR_NODE_DELETE_BATCH_SIZE = 500
-# move 的范围更新仍可能被 MySQL 判定为死锁；最多额外重试两次完整事务。
-SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES = 2
-SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS = 0.05
 MYSQL_DEADLOCK_ERROR_CODE = 1213
 
 
@@ -38,6 +32,13 @@ class MessageType(TextChoices):
     SYSTEM_SELECTION = "SYSTEM_SELECTION", gettext_lazy("系统选择")
     NATURAL_LANGUAGE_SEARCH = "NATURAL_LANGUAGE_SEARCH", gettext_lazy("自然语言检索")
     LOG_SEARCH = "LOG_SEARCH", gettext_lazy("日志检索")
+
+
+class MessageHistoryDirection(TextChoices):
+    """消息历史相对锚点的滚动方向。"""
+
+    BEFORE = "BEFORE", gettext_lazy("锚点之前")
+    AFTER = "AFTER", gettext_lazy("锚点之后")
 
 
 class AttachmentType(TextChoices):
