@@ -71,9 +71,9 @@
 
 <script setup lang="tsx">
   import axios, { type CancelTokenSource } from 'axios';
-  import { computed, onMounted, onUnmounted, ref } from 'vue';
+  import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import RootManageService from '@service/root-manage';
@@ -98,15 +98,20 @@
 
   const { CancelToken } = axios;
   const router = useRouter();
+  const route = useRoute();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
-  const { on: onEvent, off } = useEventBus();
+  const { on: onEvent, off, emit } = useEventBus();
+
+  const SCENE_SELECTOR_STORAGE_KEY = 'scene-system-selector:selected';
 
   const sceneId = ref(getSceneSystemParams().scope_id);
   // 骨架屏 loading 状态（仅等待场景基础信息）
   const isSkeletonLoading = ref(true);
   // 基础信息字段保存 loading 状态
   const savingField = ref('');
+  // 去掉自己管理员后不再刷新当前场景，避免 403 弹出 IAM 权限申请窗
+  let skipRefreshAfterUpdate = false;
 
   // 是否有编辑权限：平台管理或场景管理权限
   const canEdit = computed(() => {
@@ -279,6 +284,9 @@
     defaultValue: new SceneModel(),
     onSuccess: () => {
       messageSuccess(t('保存成功'));
+      if (skipRefreshAfterUpdate) {
+        return;
+      }
       // 刷新场景信息
       fetchSceneInfo(sceneId.value as any);
     },
@@ -499,6 +507,79 @@
     );
   };
 
+  const includesUsername = (users: string[] = [], username = '') => {
+    if (!username) return false;
+    return users.some((item) => {
+      const value = String(item || '');
+      return value === username || value.split('(')[0] === username;
+    });
+  };
+
+  const persistSelectedScene = (scene: {
+    scene_id: string | number;
+    name: string;
+    permission?: Record<string, boolean>;
+  }) => {
+    localStorage.setItem(SCENE_SELECTOR_STORAGE_KEY, JSON.stringify({
+      id: String(scene.scene_id),
+      name: scene.name,
+      type: 'scene',
+      permission: scene.permission,
+    }));
+  };
+
+  const isPlatformAdmin = () => {
+    try {
+      const permission = JSON.parse(sessionStorage.getItem('userScenePermission') || '{}');
+      return Boolean(permission.manage_platform);
+    } catch {
+      return false;
+    }
+  };
+
+  // 去掉自己管理员后：切到第一个仍有管理权限的场景；一个都没有则进当前场景权限申请页
+  const redirectAfterRemovedSelf = async () => {
+    abortDetailFetches();
+    const currentId = String(sceneInfoData.value.scene_id || sceneId.value);
+    emit('scene-selector-lost-manage', currentId);
+    let sceneList: Array<{
+      scene_id: number;
+      name: string;
+      permission?: { manage_scene?: boolean; view_scene?: boolean };
+    }> = [];
+    try {
+      sceneList = await SceneManageService.fetchSceneAll({ status: 'enabled' }) || [];
+    } catch {
+      sceneList = [];
+    }
+
+    const firstManageable = sceneList.find(item => (
+      item.permission?.manage_scene === true
+      && String(item.scene_id) !== currentId
+    ));
+    if (firstManageable) {
+      persistSelectedScene(firstManageable);
+      const nextId = String(firstManageable.scene_id);
+      lastLoadedSceneId = undefined;
+      await router.replace({
+        name: 'sceneInfo',
+        query: {
+          scene_id: nextId,
+          scope_id: nextId,
+          scope_type: 'scene',
+        },
+      });
+      await handleSceneChange(nextId);
+      return;
+    }
+
+    localStorage.removeItem(SCENE_SELECTOR_STORAGE_KEY);
+    await router.replace({
+      name: 'userLandingPage',
+      query: { scene_id: currentId },
+    });
+  };
+
   // 更新场景数据（来自基础信息组件的行内编辑）
   const handleUpdateSceneData = (newData: any, changedKey = '') => {
     // 子组件直接传入正在编辑的字段 key，用于显示 loading 状态
@@ -521,8 +602,24 @@
     if (newData.description !== undefined) {
       updateParams.description = newData.description;
     }
+
+    const { username } = configData.value;
+    const removedSelf = changedKey === 'manager'
+      && !isPlatformAdmin()
+      && includesUsername(sceneInfoData.value.managers || [], username)
+      && Array.isArray(newData.manager)
+      && !includesUsername(newData.manager, username);
+    skipRefreshAfterUpdate = removedSelf;
+
     fetchUpdateSceneInfo(updateParams)
+      .then(() => {
+        if (removedSelf) {
+          return redirectAfterRemovedSelf();
+        }
+        return undefined;
+      })
       .finally(() => {
+        skipRefreshAfterUpdate = false;
         savingField.value = '';
       });
   };
@@ -553,13 +650,28 @@
   // 已加载过的 sceneId，用于去重（onMounted 主动加载 + 选择器初始化 emit 两个触发源可能重复）
   let lastLoadedSceneId: string | undefined;
 
-  const handleSceneChange = async () => {
+  const resolveSceneId = (payload?: unknown) => {
+    if (typeof payload === 'string' && payload && payload !== 'allSecen') {
+      return payload;
+    }
+    if (payload && typeof payload === 'object') {
+      const item = payload as { id?: string; type?: string };
+      if (item.type === 'scene' && item.id && item.id !== 'allSecen') {
+        return String(item.id);
+      }
+    }
     const params = getSceneSystemParams();
+    return params.scope_type === 'scene' ? params.scope_id : '';
+  };
+
+  const handleSceneChange = async (payload?: unknown) => {
     // 只处理 scene 类型，过滤掉从其他页面残留的 system / cross_xxx 类型旧值
-    const newSceneId = params.scope_type === 'scene' ? params.scope_id : '';
-    // 同场景重复触发，跳过
+    const newSceneId = resolveSceneId(payload);
+    // 同场景重复触发，跳过；请求尚未返回时不要提前关掉骨架屏
     if (newSceneId && newSceneId === lastLoadedSceneId) {
-      isSkeletonLoading.value = false;
+      if (String(sceneInfoData.value.scene_id) === String(newSceneId)) {
+        isSkeletonLoading.value = false;
+      }
       return;
     }
     // 切换场景前先中止上一轮未完成的详情遍历与进行中的 HTTP
@@ -600,14 +712,17 @@
 
 
   // 进入页面时主动加载一次，解决"同场景下切 tab 回来选择器不再 emit"的问题。
-  // 仅当 sessionStorage 里是有效的 scene 类型时才会真正发起请求；
-  // 否则（如从系统页面切过来，残留的是 system 类型）会跳过，等待选择器自动选场景后 emit 事件触发。
+  // 无 scene_id 时跳过，等选择器选中后通过 scene:change / 路由 query 再加载。
+  onEvent('scene:change', handleSceneChange);
+  watch(
+    () => String(route.query.scene_id || route.query.scope_id || ''),
+    (id) => {
+      if (!id || id === 'allSecen') return;
+      handleSceneChange(id);
+    },
+  );
   onMounted(() => {
     handleSceneChange();
-    setTimeout(() => {
-      // 监听场景变化（场景选择器切换 / 自动选中第一个场景时触发）
-      onEvent('scene:change', handleSceneChange);
-    }, 1000);
   });
 
   onUnmounted(() => {

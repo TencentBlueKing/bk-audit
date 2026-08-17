@@ -280,7 +280,7 @@
   const sceneList = ref<SceneItem[]>([]);
   const route = useRoute();
   const router = useRouter();
-  const selectedPerm = ref<'user' | 'manager'>('user');
+  const selectedPerm = ref<'user' | 'manager'>(route.query.role === 'manager' ? 'manager' : 'user');
   const isReapplying = ref(false);
   const applyFormRef = ref();
   const applyFormKey = ref(0);
