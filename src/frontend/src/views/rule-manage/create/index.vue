@@ -17,7 +17,8 @@
 <template>
   <bk-loading :loading="listLoading || applicationLoading">
     <smart-action
-      class="create-strategy-page">
+      class="create-strategy-page"
+      :offset-target="getSmartActionOffsetTarget">
       <div class="create-riskrule-main">
         <audit-form
           ref="formRef"
@@ -297,13 +298,12 @@
         <bk-button
           class="w88"
           :loading="createLoading || updateLoading"
-          style="margin-left: 80px;"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('保存') : t('提交') }}
         </bk-button>
         <bk-button
-          class="ml8"
+          class="ml8 w88"
           @click="handleCancel">
           {{ t('取消') }}
         </bk-button>
@@ -777,6 +777,7 @@
       name: 'ruleManageList',
     });
   };
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
   watch(
     () => formData.value, (val) => {
