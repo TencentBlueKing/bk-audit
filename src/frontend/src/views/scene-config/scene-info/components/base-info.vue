@@ -58,15 +58,15 @@
                     class="confirm-icon"
                     svg
                     type="check-line"
-                    @mousedown.prevent
-                    @click.stop="handleUserSave(row.key)" />
+                    @click.stop="handleUserSave(row.key)"
+                    @mousedown.prevent />
                   <audit-icon
                     v-bk-tooltips="{ content: t('取消'), placement: 'top' }"
                     class="cancel-icon"
                     svg
                     type="close"
-                    @mousedown.prevent
-                    @click.stop="handleCancelEdit" />
+                    @click.stop="handleCancelEdit"
+                    @mousedown.prevent />
                 </div>
               </div>
               <!-- 人员选择字段：查看态 -->
@@ -103,15 +103,15 @@
                   class="confirm-icon"
                   svg
                   type="check-line"
-                  @mousedown.prevent
-                  @click.stop="handleSave(row.key)" />
+                  @click.stop="handleSave(row.key)"
+                  @mousedown.prevent />
                 <audit-icon
                   v-bk-tooltips="{ content: t('取消'), placement: 'top' }"
                   class="cancel-icon"
                   svg
                   type="close"
-                  @mousedown.prevent
-                  @click.stop="handleCancelEdit" />
+                  @click.stop="handleCancelEdit"
+                  @mousedown.prevent />
               </div>
             </div>
             <!-- 可编辑字段：查看态 -->
@@ -148,6 +148,8 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useMessage from '@hooks/use-message';
+
   import EditTag from '@components/edit-box/tag.vue';
 
   interface SceneData {
@@ -171,6 +173,7 @@
   }>();
 
   const { t } = useI18n();
+  const { messageWarn } = useMessage();
   const infoRows = computed(() => [
     {
       key: 'id',
@@ -287,6 +290,13 @@
   const handleUserSave = (key: string) => {
     if (isSaving) return;
     isSaving = true;
+    if (key === 'manager' && editUserValue.value.length === 0) {
+      messageWarn(t('场景管理员至少保留一个'));
+      nextTick(() => {
+        isSaving = false;
+      });
+      return;
+    }
     // 值未变化时不触发更新
     const originalValue = (sceneData as any)[key] || [];
     const isSame = originalValue.length === editUserValue.value.length
@@ -369,12 +379,19 @@
     width: 480px;
     max-width: 100%;
     gap: 8px;
-    align-items: center;
+    align-items: flex-start;
 
     :deep(.audit-user-selector),
-    :deep(.bk-select) {
+    :deep(.bk-select),
+    :deep(.bk-user-selector) {
       flex: 1;
       min-width: 0;
+      height: auto !important;
+      min-height: 32px;
+    }
+
+    :deep(.bk-user-selector .tags-container) {
+      height: auto;
     }
   }
 
@@ -383,6 +400,7 @@
     flex-shrink: 0;
     gap: 4px;
     align-items: center;
+    height: 32px;
   }
 
   .confirm-icon {
@@ -426,6 +444,7 @@
       line-height: 20px;
       color: #4d4f56;
       text-align: right;
+      vertical-align: top;
       background-color: #fafbfd;
       border-right: 1px solid #dcdee5;
     }
@@ -435,6 +454,8 @@
       font-size: 12px;
       line-height: 20px;
       color: #313238;
+      vertical-align: top;
+      overflow: visible;
     }
   }
 
