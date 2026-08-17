@@ -512,6 +512,7 @@
   const isSearching = ref(false);
 
   let isReady = false;
+  let latestFetchSeq = 0;
   /** page 非法（NaN/≤0）时回退为 1，避免添加/编辑返回后出现 page=NaN */
   const normalizePage = (page: unknown, fallback = 1) => {
     const num = Number(page);
@@ -570,8 +571,13 @@
       return null;
     }
 
+    const memoWithoutScene = { ...paramsMemo };
+    delete memoWithoutScene.scene_id;
+    delete memoWithoutScene.scope_id;
+    delete memoWithoutScene.scope_type;
+
     const rawParams: Record<string, any> = {
-      ...paramsMemo,
+      ...memoWithoutScene,
       page: isUnload.value ? 1 : normalizePage(pagination.current),
       page_size: currentLimit < 10 ? 10 : currentLimit,
       ...(isNeedSceneParams ? sceneParams : {}),
@@ -787,6 +793,7 @@
   const fetchListData = () => {
     isReady = true;
     isLoading.value = true;
+    const fetchSeq = ++latestFetchSeq;
     Promise.resolve()
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
@@ -801,7 +808,9 @@
           cancel();
           isLoading.value = true;
           run(params);
-          replaceSearchParams(params);
+          if (fetchSeq === latestFetchSeq) {
+            replaceSearchParams(params);
+          }
         }
       });
   };

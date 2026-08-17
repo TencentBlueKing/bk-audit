@@ -16,6 +16,8 @@
 */
 import { buildURLParams } from '@utils/assist';
 
+import { getSceneContextQuery } from '@/utils/assist/scene-system-params';
+
 export default function () {
   const searchParams = new URLSearchParams(window.location.search);
   const notifyUrlChange = () => {
@@ -107,8 +109,25 @@ export default function () {
     notifyUrlChange();
   };
 
+  const SCENE_CONTEXT_KEYS = ['scene_id', 'scope_id', 'scope_type'];
+
   const replaceSearchParams = (params: Record<string, any>) => {
-    window.history.replaceState({}, '', `?${buildURLParams(params)}`);
+    const restParams = { ...params };
+    let sceneContext = getSceneContextQuery();
+    if (restParams.scene_id !== undefined && restParams.scene_id !== '') {
+      sceneContext = {
+        scene_id: String(restParams.scene_id),
+        scope_id: String(restParams.scope_id ?? restParams.scene_id),
+        scope_type: String(restParams.scope_type || 'scene'),
+      };
+    }
+    SCENE_CONTEXT_KEYS.forEach((key) => {
+      delete restParams[key];
+    });
+    window.history.replaceState({}, '', `?${buildURLParams({
+      ...sceneContext,
+      ...restParams,
+    })}`);
     notifyUrlChange();
   };
 

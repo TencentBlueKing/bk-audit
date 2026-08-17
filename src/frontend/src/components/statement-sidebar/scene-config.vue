@@ -165,6 +165,14 @@
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
+  import {
+    buildSceneContextQueryFromSelection,
+    getSceneContextQuery,
+    markSceneSelectorSwitched,
+    setActiveSceneSelection,
+    syncSceneContextToUrl,
+  } from '@/utils/assist/scene-system-params';
+
   interface SceneItem {
     id: string;
     name: string;
@@ -184,6 +192,13 @@
 
   // 场景切换
   const handleSceneChange = (value: SceneItem | null) => {
+    if (value?.id) {
+      setActiveSceneSelection(value);
+    }
+    markSceneSelectorSwitched();
+    if (value?.id) {
+      syncSceneContextToUrl(buildSceneContextQueryFromSelection(value));
+    }
     emit('scene:change', value);
   };
 
@@ -200,14 +215,12 @@
     }
   };
 
-  // 菜单点击处理：仅保留场景上下文参数，避免各列表页搜索条件互相污染
+  // 菜单点击：携带当前生效的场景上下文，而不是可能滞后的 route.query
   const handleMenuClick = (routeName: string) => {
-    const { scene_id: sceneId, scope_id: scopeId, scope_type: scopeType } = route.query;
-    const query: Record<string, string> = {};
-    if (sceneId) query.scene_id = String(sceneId);
-    if (scopeId) query.scope_id = String(scopeId);
-    if (scopeType) query.scope_type = String(scopeType);
-    router.push({ name: routeName, query });
+    router.push({
+      name: routeName,
+      query: getSceneContextQuery(),
+    });
   };
 
   // 监听路由变化，自动展开对应分组

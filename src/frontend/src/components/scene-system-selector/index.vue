@@ -160,6 +160,15 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import {
+    buildSceneContextQueryFromSelection,
+    getQueryFromLocation,
+    isRecentManualSceneSwitch,
+    markSceneSelectorSwitched,
+    SCENE_SELECTOR_STORAGE_KEY,
+    setActiveSceneSelection,
+    syncSceneContextToUrl,
+  } from '@/utils/assist/scene-system-params';
 
   interface SelectorItem {
     id: string;
@@ -287,7 +296,7 @@
   // 刚去掉管理员时 IAM 可能尚未同步，先本地覆盖再拉列表
   const lostManageSceneIds = new Set<string>();
 
-  const STORAGE_KEY = 'scene-system-selector:selected';
+  const STORAGE_KEY = SCENE_SELECTOR_STORAGE_KEY;
 
   /** 当前页是否属于场景配置模块（跳转申请页时默认选管理者） */
   const isSceneConfigRoute = () => (
@@ -314,9 +323,43 @@
     hasSystemAccess: userRole.includes('system_admin') || userRole.includes('saas_admin'),
   });
 
+  // 从地址栏读取实时 query（列表页会用 history.replaceState 写条件，route.query 可能过期）
+  const getCurrentQueryFromLocation = () => {
+    const params = new URLSearchParams(window.location.search);
+    const query: Record<string, string | string[]> = {};
+    Array.from(new Set(params.keys())).forEach((key) => {
+      const values = params.getAll(key);
+      query[key] = values.length <= 1 ? (values[0] ?? '') : values;
+    });
+    return query;
+  };
+
+  const getLiveRouteQuery = () => ({
+    ...route.query,
+    ...getCurrentQueryFromLocation(),
+  });
+
+  const buildSceneQuery = buildSceneContextQueryFromSelection;
+
+  const getSavedSelection = (): SelectorItem | null => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    } catch {
+      return null;
+    }
+  };
+
+  // 用户手动切换场景后，短暂忽略 route 守护，避免 stale URL 把选中项打回旧场景
+  let suppressRouteResyncUntil = 0;
+  const markUserSelection = () => {
+    markSceneSelectorSwitched();
+    suppressRouteResyncUntil = Date.now() + 800;
+  };
+  const shouldSuppressRouteResync = () => Date.now() < suppressRouteResyncUntil;
+
   /** 从当前路由或首屏缓存中读取场景 ID（深链优先） */
   const getUrlMatchId = () => {
-    const q = route.query;
+    const q = getLiveRouteQuery();
     const liveId = (q.scene_id || q.scope_id) as string | undefined;
     if (liveId) return liveId;
     // 仅首屏未初始化前，用首屏缓存抵御列表 replaceSearchParams 冲掉参数
@@ -357,6 +400,7 @@
   const applySelectedItem = (targetItem: SelectorItem, options?: { emitChange?: boolean }) => {
     const emitChange = options?.emitChange !== false;
     const isSame = selectedItem.value?.id === targetItem.id && selectedItem.value?.type === targetItem.type;
+    setActiveSceneSelection(targetItem);
     hasInitializedSelection = true;
     selectedItem.value = targetItem;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
@@ -393,6 +437,22 @@
     // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
     if (showScene && sceneItems.length === 0) return;
     if (showSystem && systemItems.length === 0) return;
+
+    // 用户刚切换场景：当前选中与 URL 不一致 → 以用户选择为准并回写 URL
+    if (
+      hasInitializedSelection
+      && selectedItem.value
+      && urlMatchId
+      && urlMatchId !== selectedItem.value.id
+      && (shouldSuppressRouteResync() || isRecentManualSceneSwitch())
+    ) {
+      syncSceneIdToRoute(selectedItem.value);
+      return;
+    }
+
+    if (shouldSuppressRouteResync()) {
+      return;
+    }
 
     // 已初始化且当前选中与 URL 一致 → 无需重复处理
     if (
@@ -435,19 +495,17 @@
 
     // ── 阶段2.5：恢复用户上次的选择（跨页面记忆，需在当前页面可见范围内）──
     if (!targetItem) {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        if (saved && saved.id) {
-          // 只在当前页面实际展示的列表中恢复（包括聚合项）
-          const availableItems = [
-            ...sceneItemsForMatch,
-            ...systemItemsForMatch,
-          ];
-          const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
-          // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
-          targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
-        }
-      } catch { /* ignore */ }
+      const saved = getSavedSelection();
+      if (saved && saved.id) {
+        // 只在当前页面实际展示的列表中恢复（包括聚合项）
+        const availableItems = [
+          ...sceneItemsForMatch,
+          ...systemItemsForMatch,
+        ];
+        const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
+        // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
+        targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
+      }
     }
 
     // ── 阶段3：URL无ID / 匹配失败 / 上次选择不可用时的兜底逻辑 ──
@@ -475,6 +533,8 @@
 
   // 选择项目
   const handleSelect = (item: SelectorItem) => {
+    setActiveSceneSelection(item);
+    markUserSelection();
     if (isSceneLocked(item)) {
       isPopoverShow.value = false;
       router.push({
@@ -496,95 +556,38 @@
         footerAlign: 'center',
         class: 'change-confirm-info-box',
         onConfirm() {
-          // 同步 scene_id 到路由参数
-          syncSceneIdToRoute(item);
+          hasInitializedSelection = true;
           selectedItem.value = item;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-
+          syncSceneIdToRoute(item);
           isPopoverShow.value = false;
-          setTimeout(() => {
-            emits('update:modelValue', item);
-            emits('change', item);
-          }, 10);
-          // 延迟跳转，等待 syncSceneIdToRoute 的 router.replace 及 route.query watcher 完成后再导航
-          setTimeout(() => {
-            router.push({
-              name: route.meta.ListPageName as string || 'strategyList',
-            });
-          }, 100);
+          emits('update:modelValue', item);
+          emits('change', item);
+          router.push({
+            name: route.meta.ListPageName as string || 'strategyList',
+            query: buildSceneQuery(item),
+          });
         },
         onClose() {
         },
       });
     } else {
-      // 同步 scene_id 到路由参数
-      syncSceneIdToRoute(item);
+      hasInitializedSelection = true;
       selectedItem.value = item;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-      setTimeout(() => {
-        emits('update:modelValue', item);
-        emits('change', item);
-      }, 10);
+      // 先同步改地址栏，再通知列表刷新，避免列表按旧 scene_id 请求并把旧 ID 写回 URL
+      syncSceneIdToRoute(item);
+      emits('update:modelValue', item);
+      emits('change', item);
       isPopoverShow.value = false;
     }
   };
 
-  // 从地址栏读取实时 query（列表页会用 history.replaceState 写条件，route.query 可能过期）
-  const getCurrentQueryFromLocation = () => {
-    const params = new URLSearchParams(window.location.search);
-    const query: Record<string, string | string[]> = {};
-    Array.from(new Set(params.keys())).forEach((key) => {
-      const values = params.getAll(key);
-      query[key] = values.length <= 1 ? (values[0] ?? '') : values;
-    });
-    return query;
-  };
-
-  // 同步场景参数到路由 query 参数
+  // 同步场景参数到地址栏（以 replaceState 为准，再让 vue-router 对齐地址栏，避免 route.query 旧值覆盖）
   const syncSceneIdToRoute = (item: SelectorItem | null) => {
-    const currentQuery = {
-      ...route.query,
-      ...getCurrentQueryFromLocation(),
-    };
-    if (!item || !item.id) {
-      // 清空所有场景相关参数
-      const newQuery = { ...currentQuery };
-      delete newQuery.scene_id;
-      delete newQuery.scope_id;
-      delete newQuery.scope_type;
-      router.replace({ query: newQuery });
-      return;
-    }
-    if (item.type === 'scene') {
-      // 具体场景 → scene_id=具体ID
-      if (currentQuery.scene_id !== item.id || currentQuery.scope_id !== item.id) {
-        router.replace({
-          query: { ...currentQuery, scene_id: item.id, scope_id: item.id, scope_type: 'scene' },
-        });
-      }
-    } else if (item.type === 'system') {
-      // 具体系统 → scene_id=具体ID
-      if (currentQuery.scene_id !== item.id || currentQuery.scope_id !== item.id) {
-        router.replace({
-          query: { ...currentQuery, scene_id: item.id, scope_id: item.id, scope_type: 'system' },
-        });
-      }
-    } else if (item.type === 'aggregate') {
-      // 聚合项
-      if (item.id === 'allSecen') {
-        if (currentQuery.scene_id !== 'allSecen' || currentQuery.scope_type !== 'cross_scene') {
-          router.replace({
-            query: { ...currentQuery, scene_id: 'allSecen', scope_id: '', scope_type: 'cross_scene' },
-          });
-        }
-      } else if (item.id === 'allSystem') {
-        if (currentQuery.scene_id !== 'allSystem' || currentQuery.scope_type !== 'cross_system') {
-          router.replace({
-            query: { ...currentQuery, scene_id: 'allSystem', scope_id: '', scope_type: 'cross_system' },
-          });
-        }
-      }
-    }
+    const nextQuery = buildSceneQuery(item);
+    syncSceneContextToUrl(nextQuery);
+    router.replace({ query: getQueryFromLocation() }).catch(() => {});
   };
 
   // 弹出层显示
@@ -662,28 +665,41 @@
   // 若 URL 已明确指向其他场景，不回写（优先走 URL 临时切换）
   watch(selectedItem, (newVal) => {
     if (!newVal || !newVal.id) return;
-    const checkAndFixUrl = () => {
-      const q = route.query;
-      const urlId = (q.scene_id || q.scope_id) as string | undefined;
-      if (urlId && urlId !== newVal.id) return;
-      const needsFix = (
-        (q.scene_id !== newVal.id)
-        || (newVal.type === 'aggregate' && newVal.id === 'allSecen' && q.scope_type !== 'cross_scene')
-        || (newVal.type === 'aggregate' && newVal.id === 'allSystem' && q.scope_type !== 'cross_system')
-      );
-      if (needsFix) {
-        syncSceneIdToRoute(newVal);
-      }
-    };
-    setTimeout(checkAndFixUrl, 100);
+    const q = getLiveRouteQuery();
+    const needsFix = (
+      q.scene_id !== newVal.id
+      || (newVal.type === 'scene' && q.scope_id !== newVal.id)
+      || (newVal.type === 'system' && q.scope_id !== newVal.id)
+      || (newVal.type === 'aggregate' && newVal.id === 'allSecen' && q.scope_type !== 'cross_scene')
+      || (newVal.type === 'aggregate' && newVal.id === 'allSystem' && q.scope_type !== 'cross_system')
+    );
+    if (needsFix) {
+      syncSceneIdToRoute(newVal);
+    }
   });
 
   // ⚡ 路由级守护：
   // - URL 有场景参数且与当前选中不一致 → 按 URL 临时切换（并回写 localStorage）
   // - URL 丢失场景参数 → 用当前选中项补回 query
   watch(() => route.query, () => {
-    const urlMatchId = (route.query.scene_id || route.query.scope_id) as string | undefined;
+    if (shouldSuppressRouteResync()) {
+      return;
+    }
+    const liveQuery = getLiveRouteQuery();
+    const urlMatchId = (liveQuery.scene_id || liveQuery.scope_id) as string | undefined;
     const item = selectedItem.value;
+
+    if (urlMatchId && item?.id && urlMatchId !== item.id) {
+      // 用户刚手动切换，URL 尚未跟上 → 回写 URL，不按旧 URL 改回选中项
+      if (isRecentManualSceneSwitch()) {
+        syncSceneIdToRoute(item);
+        return;
+      }
+      if (sceneList.value.length > 0 || systemList.value.length > 0) {
+        trySelectFromRoute();
+      }
+      return;
+    }
 
     if (urlMatchId) {
       if (item?.id === urlMatchId) return;
