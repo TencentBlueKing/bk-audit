@@ -20,6 +20,129 @@ type SceneSystemParams = {
   scope_type: string;
 };
 
+export const SCENE_SELECTOR_STORAGE_KEY = 'scene-system-selector:selected';
+const SCENE_SELECTOR_LAST_SWITCH_KEY = 'scene-system-selector:lastSwitchAt';
+
+/** 内存中的当前选中场景（同步写入，避免连续切换时 API 仍读上一次 URL/localStorage） */
+let activeSceneSelection: SceneSystemParams | null = null;
+
+const selectionToSceneParams = (item: {
+  id: string;
+  type: 'aggregate' | 'scene' | 'system';
+}): SceneSystemParams => {
+  if (item.id === 'allSecen') {
+    return { scope_id: '', scope_type: 'cross_scene' };
+  }
+  if (item.id === 'allSystem') {
+    return { scope_id: '', scope_type: 'cross_system' };
+  }
+  return {
+    scope_id: item.id,
+    scope_type: item.type === 'system' ? 'system' : 'scene',
+  };
+};
+
+/** 用户切换场景时立即写入，供 getSceneSystemParams 优先读取 */
+export const setActiveSceneSelection = (item: {
+  id: string;
+  type: 'aggregate' | 'scene' | 'system';
+} | null) => {
+  activeSceneSelection = item?.id ? selectionToSceneParams(item) : null;
+};
+
+export const clearActiveSceneSelection = () => {
+  activeSceneSelection = null;
+};
+
+/** 标记用户刚手动切换场景（10s 内优先 localStorage，避免 stale URL 覆盖） */
+export const markSceneSelectorSwitched = () => {
+  sessionStorage.setItem(SCENE_SELECTOR_LAST_SWITCH_KEY, String(Date.now()));
+};
+
+const isRecentSceneSwitch = () => {
+  const lastSwitch = Number(sessionStorage.getItem(SCENE_SELECTOR_LAST_SWITCH_KEY) || 0);
+  return Date.now() - lastSwitch < 10000;
+};
+
+/** 用户刚手动切换场景（10s 内优先选中项，避免 stale URL 覆盖） */
+export const isRecentManualSceneSwitch = isRecentSceneSwitch;
+
+const getSelectionSceneKey = (params: SceneSystemParams) => {
+  if (params.scope_type === 'cross_scene') return 'allSecen';
+  if (params.scope_type === 'cross_system') return 'allSystem';
+  return params.scope_id;
+};
+
+export const buildSceneContextQueryFromSelection = (item: {
+  id: string;
+  type: 'aggregate' | 'scene' | 'system';
+} | null): Record<string, string> => {
+  if (!item?.id) return {};
+  if (item.type === 'scene') {
+    return { scene_id: item.id, scope_id: item.id, scope_type: 'scene' };
+  }
+  if (item.type === 'system') {
+    return { scene_id: item.id, scope_id: item.id, scope_type: 'system' };
+  }
+  if (item.id === 'allSecen') {
+    return { scene_id: 'allSecen', scope_id: '', scope_type: 'cross_scene' };
+  }
+  if (item.id === 'allSystem') {
+    return { scene_id: 'allSystem', scope_id: '', scope_type: 'cross_system' };
+  }
+  return { scene_id: item.id, scope_id: item.id, scope_type: 'scene' };
+};
+
+/** 根据当前生效的场景上下文生成 URL query */
+export const getSceneContextQuery = (): Record<string, string> => {
+  const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
+  if (scopeType === 'cross_scene') {
+    return { scene_id: 'allSecen', scope_id: '', scope_type: 'cross_scene' };
+  }
+  if (scopeType === 'cross_system') {
+    return { scene_id: 'allSystem', scope_id: '', scope_type: 'cross_system' };
+  }
+  if (scopeId) {
+    return {
+      scene_id: scopeId,
+      scope_id: scopeId,
+      scope_type: scopeType || 'scene',
+    };
+  }
+  return {};
+};
+
+/** 同步场景上下文到地址栏（列表页 replaceSearchParams 依赖这里的实时 URL） */
+export const syncSceneContextToUrl = (queryOverride?: Record<string, string>) => {
+  const query = queryOverride || getSceneContextQuery();
+  if (!Object.keys(query).length) return;
+  const params = new URLSearchParams(window.location.search);
+  ['scene_id', 'scope_id', 'scope_type'].forEach((key) => {
+    if (!(key in query)) return;
+    const value = query[key];
+    if (value === '') {
+      params.delete(key);
+    } else {
+      params.set(key, value);
+    }
+  });
+  const search = params.toString();
+  const nextUrl = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash || ''}`;
+  window.history.replaceState(window.history.state, '', nextUrl);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
+/** 读取地址栏当前 query（不依赖可能滞后的 vue-router route.query） */
+export const getQueryFromLocation = (): Record<string, string> => {
+  const params = new URLSearchParams(window.location.search);
+  const query: Record<string, string> = {};
+  Array.from(new Set(params.keys())).forEach((key) => {
+    const values = params.getAll(key);
+    query[key] = values.length <= 1 ? (values[0] ?? '') : values.join(',');
+  });
+  return query;
+};
+
 /**
  * 从 URL query 解析场景/系统参数
  * 优先级：scene_id > scope_id + scope_type
@@ -80,7 +203,7 @@ const getParamsFromUrl = (): SceneSystemParams | null => {
  */
 const getParamsFromStorage = (): SceneSystemParams | null => {
   try {
-    const scopeInfo = JSON.parse(localStorage.getItem('scene-system-selector:selected') || '{}');
+    const scopeInfo = JSON.parse(localStorage.getItem(SCENE_SELECTOR_STORAGE_KEY) || '{}');
     if (!scopeInfo?.id) {
       return null;
     }
@@ -111,14 +234,29 @@ const getParamsFromStorage = (): SceneSystemParams | null => {
  * 深链进入时须以 URL 为准，才能正确临时切换场景（同时由选择器回写 localStorage）
  */
 export const getSceneSystemParams = (): SceneSystemParams => {
+  if (activeSceneSelection) {
+    return activeSceneSelection;
+  }
+
   const fromUrl = getParamsFromUrl();
+  const fromStorage = getParamsFromStorage();
+
+  // 用户刚切换场景时，localStorage 已更新但 URL 可能仍是旧值
+  if (fromUrl && fromStorage && isRecentSceneSwitch()) {
+    const urlKey = getSelectionSceneKey(fromUrl);
+    const storageKey = getSelectionSceneKey(fromStorage);
+    if (urlKey && storageKey && urlKey !== storageKey) {
+      return fromStorage;
+    }
+  }
+
   if (fromUrl) {
     return fromUrl;
   }
 
-  const fromStorage = getParamsFromStorage();
-  if (fromStorage) {
-    return fromStorage;
+  const fromStorageFallback = getParamsFromStorage();
+  if (fromStorageFallback) {
+    return fromStorageFallback;
   }
 
   return {

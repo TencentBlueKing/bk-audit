@@ -105,7 +105,6 @@
     useSlots,
     watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
@@ -117,7 +116,7 @@
   } from '@utils/assist';
   import type { IRequestResponsePaginationData } from '@utils/request';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getSceneContextQuery, getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
@@ -180,7 +179,6 @@
   // 切换场景重置排序时递增，强制表头按未排序态重新初始化
   const tableRenderKey = ref(0);
   const { t } = useI18n();
-  const route = useRoute();
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
@@ -195,6 +193,7 @@
   const isSearching = ref(false);
 
   let isReady = false;
+  let latestFetchSeq = 0;
   const isLoading = ref(false);
   // 新增：用户是否手动选择了分页大小的标志
   const isUserSelectedPageSize = ref(false);
@@ -275,6 +274,7 @@
 
   const fetchListData = () => {
     isReady = true;
+    const fetchSeq = ++latestFetchSeq;
     Promise.resolve()
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
@@ -286,33 +286,23 @@
             delete cleanedParams.order_field;
             delete cleanedParams.order_type;
           }
+          delete cleanedParams.scene_id;
+          delete cleanedParams.scope_id;
+          delete cleanedParams.scope_type;
+          if (props.sceneIdKey) {
+            delete cleanedParams[props.sceneIdKey];
+          }
           const pageSize = Math.max(pagination.limit, 10);
-          // 优先使用 URL query 中的场景参数，避免 sessionStorage 中 UUID 导致类型错误
+          // 以 getSceneSystemParams 为准（含内存选中 + 地址栏），不用可能滞后的 route.query
+          const sceneInfo = getSceneSystemParams();
           const sceneParams = isNeedSceneParams ? {
-            scope_id: (route.query.scope_id as string) || getSceneSystemParams().scope_id,
-            scope_type: (route.query.scope_type as string) || getSceneSystemParams().scope_type,
+            scope_id: sceneInfo.scope_id,
+            scope_type: sceneInfo.scope_type,
           } : {};
           const sceneIdParam = isNeedSceneId ? {
-            [props.sceneIdKey]: (route.query[props.sceneIdKey] as string)
-              || (route.query.scope_id as string)
-              || getSceneSystemParams().scope_id,
+            [props.sceneIdKey]: sceneInfo.scope_id,
           } : {};
-          // 无论是否透传场景参数给接口，写回 URL 时都保留场景上下文，避免切换场景重置筛选后丢失 scene_id
-          const sceneContextFromUrl = {
-            ...(route.query.scene_id ? { scene_id: String(route.query.scene_id) } : {}),
-            ...(route.query.scope_id ? { scope_id: String(route.query.scope_id) } : {}),
-            ...(route.query.scope_type ? { scope_type: String(route.query.scope_type) } : {}),
-          };
-          if (!sceneContextFromUrl.scene_id && !sceneContextFromUrl.scope_id) {
-            const sceneInfo = getSceneSystemParams();
-            if (sceneInfo.scope_id) {
-              sceneContextFromUrl.scene_id = sceneInfo.scope_id;
-              sceneContextFromUrl.scope_id = sceneInfo.scope_id;
-            }
-            if (sceneInfo.scope_type) {
-              sceneContextFromUrl.scope_type = sceneInfo.scope_type;
-            }
-          }
+          const sceneContext = getSceneContextQuery();
           const params = {
             ...cleanedParams,
             page: isUnload.value ? 1 : normalizePage(pagination.current),
@@ -325,10 +315,12 @@
           run(params).finally(() => {
             isLoading.value = false;
           });
-          replaceSearchParams({
-            ...params,
-            ...sceneContextFromUrl,
-          });
+          if (fetchSeq === latestFetchSeq) {
+            replaceSearchParams({
+              ...params,
+              ...sceneContext,
+            });
+          }
         }
       });
   };
