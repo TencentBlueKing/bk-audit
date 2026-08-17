@@ -92,15 +92,18 @@
                 {{ getTypeLabel(item.type) }}
               </bk-tag>
               <show-tooltips-text
+                v-if="!isSceneLocked(item)"
                 class="item-name"
                 :class="{ 'is-highlight': item.type !== 'aggregate' }"
-                :data="item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name"
+                :data="getItemDisplayName(item)"
                 placement="right" />
-              <div
-                v-if="isSceneLocked(item)"
+              <show-tooltips-text
+                v-else
                 v-cursor
-                class="lock-mask"
-                @click.stop="handleSelect(item)" />
+                class="item-name"
+                :class="{ 'is-highlight': item.type !== 'aggregate' }"
+                :data="getItemDisplayName(item)"
+                placement="right" />
             </div>
           </div>
         </div>
@@ -203,7 +206,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const { emit: sceneEmit } = useEventBus();
+  const { emit: sceneEmit, on: onSceneEvent, off: offSceneEvent } = useEventBus();
 
   const userRole = JSON.parse(sessionStorage.getItem('userRole') || '["scene_admin"]') as string[];
 
@@ -249,6 +252,10 @@
     return (id && type !== 'aggregate') ? `${name}(${id})` : name;
   });
 
+  const getItemDisplayName = (item: SelectorItem) => (
+    item.type !== 'aggregate' ? `${item.name}(${item.id})` : item.name
+  );
+
   // 获取类型标签文本
   const getTypeLabel = (type: string) => {
     const labelMap: Record<string, string> = {
@@ -272,7 +279,31 @@
     && item.permission?.manage_scene === false
   );
 
+  const checkPermission = (permission: Record<string, any> | undefined, permKey: string) => {
+    if (!permission) return false;
+    return permKey.split(',').some(key => permission[key.trim()] === true);
+  };
+
+  // 刚去掉管理员时 IAM 可能尚未同步，先本地覆盖再拉列表
+  const lostManageSceneIds = new Set<string>();
+
   const STORAGE_KEY = 'scene-system-selector:selected';
+
+  /** 当前页是否属于场景配置模块（跳转申请页时默认选管理者） */
+  const isSceneConfigRoute = () => (
+    route.path.startsWith('/scene-config')
+    || route.matched.some(record => record.meta?.navName === 'sceneConfiguration')
+  );
+
+  const buildPermissionsPageQuery = (sceneId?: string) => {
+    const query: Record<string, string> = {
+      role: isSceneConfigRoute() ? 'manager' : 'user',
+    };
+    if (sceneId) {
+      query.scene_id = sceneId;
+    }
+    return query;
+  };
 
   // 标记是否已执行过默认选中逻辑
   let hasInitializedSelection = false;
@@ -339,23 +370,11 @@
   };
 
   /**
-   * 判断场景 ID 是否来自前端记忆（与 localStorage 一致），而非外部复制的深链
-   */
-  const isRememberedSceneId = (sceneId: string) => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      return Boolean(saved?.id && String(saved.id) === String(sceneId));
-    } catch {
-      return false;
-    }
-  };
-
-  /**
    * 基于角色的默认选中逻辑：
    * 1. 角色决定可见列表：scene_admin/scene_user→场景; system_admin→系统; saas_admin→两者
    * 2. URL有ID时优先匹配（深链临时切换），并回写 localStorage
    * 3. URL无ID时恢复 localStorage / 兜底选第一项
-   * 4. 记忆中的场景已无权限：不跳申请页，改选第一个有权限场景
+   * 4. URL 指向无管理权限场景 → 跳转权限申请页（不自动改选第一个可管理场景）
    */
   const trySelectFromRoute = () => {
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
@@ -395,25 +414,20 @@
         showScene,
         showSystem,
       );
-      const fromMemory = isRememberedSceneId(urlMatchId);
-
       if (matchedItem && !isSceneLocked(matchedItem)) {
         targetItem = matchedItem;
-      } else if (fromMemory) {
-        // 前端记忆的场景已无可用权限：不跳申请页，后续改选第一个有权限场景
-        targetItem = null;
       } else if (matchedItem && isSceneLocked(matchedItem)) {
-        // 深链到仅有使用权限的场景 → 用户引导页
+        // 仅有使用权限的场景 → 用户引导页（申请管理权限）
         router.replace({
           name: 'userLandingPage',
           query: { scene_id: urlMatchId },
         });
         return;
       } else {
-        // 深链且列表中无此场景 → 权限申请页
+        // URL 指向无权限场景 → 权限申请页
         router.replace({
           name: 'permissionsPage',
-          query: { scene_id: urlMatchId },
+          query: buildPermissionsPageQuery(urlMatchId),
         });
         return;
       }
@@ -450,7 +464,7 @@
         router.replace({
           // 仅有使用权限场景 → 引导页；完全无权限 → 权限申请页
           name: props.viewSceneBlock && hasLockedScene ? 'userLandingPage' : 'permissionsPage',
-          query: {},
+          query: props.viewSceneBlock && hasLockedScene ? {} : buildPermissionsPageQuery(),
         });
         return;
       }
@@ -590,12 +604,6 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
-      // 根据权限字符串（支持单权限或多权限逗号分隔）过滤
-      const checkPermission = (permission: Record<string, any> | undefined, permKey: string) => {
-        if (!permission) return false;
-        const keys = permKey.split(',');
-        return keys.some(key => permission[key.trim()] === true);
-      };
       const list = data
         .filter(item => checkPermission(item.permission, props.systemPermission))
         .map(item => ({
@@ -614,20 +622,24 @@
   } = useRequest(sceneManageService.fetchSceneAll, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
-      // 根据权限字符串（支持单权限或多权限逗号分隔）过滤
-      const checkPermission = (permission: Record<string, any> | undefined, permKey: string) => {
-        if (!permission) return false;
-        const keys = permKey.split(',');
-        return keys.some(key => permission[key.trim()] === true);
-      };
       const list = data
-        .filter(item => checkPermission(item.permission, props.scenePermission))
-        .map(item => ({
-          id: String(item.scene_id),
-          name: item.name,
-          type: 'scene' as const,
-          permission: item.permission,
-        }));
+        .map((item) => {
+          const sceneId = String(item.scene_id);
+          const permission = { ...(item.permission || {}) };
+          if (lostManageSceneIds.has(sceneId)) {
+            permission.manage_scene = false;
+            if (item.permission?.manage_scene === false) {
+              lostManageSceneIds.delete(sceneId);
+            }
+          }
+          return {
+            id: sceneId,
+            name: item.name,
+            type: 'scene' as const,
+            permission,
+          };
+        })
+        .filter(item => checkPermission(item.permission, props.scenePermission));
       sceneList.value = props.isAllSecen ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...list] : list;
       // 存储纯场景列表（不含聚合项）供 layout.vue 聚合模式使用
       localStorage.setItem('scene-system-selector:sceneList', JSON.stringify(list));
@@ -709,6 +721,23 @@
     }, 0);
   };
 
+  const handleLostManage = (sceneId: unknown) => {
+    const id = String(sceneId || '');
+    if (!id) return;
+    lostManageSceneIds.add(id);
+    sceneList.value = sceneList.value
+      .map(item => (item.id === id
+        ? { ...item, permission: { ...item.permission, manage_scene: false } }
+        : item))
+      .filter(item => item.type === 'aggregate' || checkPermission(item.permission, props.scenePermission));
+    const plainList = sceneList.value.filter(item => item.type !== 'aggregate');
+    localStorage.setItem('scene-system-selector:sceneList', JSON.stringify(plainList));
+    sceneEmit('scene-list-ready', plainList);
+    fetchSceneAll({
+      status: 'enabled',
+    });
+  };
+
   // 获取场景和系统列表的方法（暴露给子组件/外部调用）
   const getLists = () => ({
     sceneList: sceneList.value,
@@ -736,10 +765,12 @@
 
   onMounted(() => {
     fetchData();
+    onSceneEvent('scene-selector-lost-manage', handleLostManage);
     document.addEventListener('click', handleClickOutside, true);
   });
 
   onUnmounted(() => {
+    offSceneEvent('scene-selector-lost-manage', handleLostManage);
     document.removeEventListener('click', handleClickOutside, true);
   });
 </script>
@@ -1024,6 +1055,8 @@
         }
 
         .item-name {
+          flex: 1;
+          min-width: 0;
           font-size: 12px;
           color: #63656e;
 
@@ -1052,13 +1085,6 @@
           .type-tag {
             opacity: .4;
           }
-        }
-
-        .lock-mask {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          cursor: not-allowed;
         }
       }
     }
