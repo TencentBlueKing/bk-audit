@@ -426,13 +426,10 @@
   };
 
   const applyApplicationList = (list: ScenePermissionApplicationModel[]) => {
-    // 有使用权限且无管理权限：需申请配置权限
-    // 刚审批通过（已有管理权限）：保留展示「已通过」
-    const filtered = list.filter((item) => {
-      if (!item.permission?.view_scene) return false;
-      if (!item.permission?.manage_scene) return true;
-      return isPassedApplication(item.application);
-    });
+    // 仅展示有使用权限、无管理权限的场景（已通过/已有配置权限的不展示）
+    const filtered = list.filter(item => (
+      item.permission?.view_scene && !item.permission?.manage_scene
+    ));
 
     sceneList.value = filtered.map(item => ({
       scene_id: item.scene_id,

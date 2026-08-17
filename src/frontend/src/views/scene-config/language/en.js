@@ -111,6 +111,7 @@ export default {
     场景名称: 'Scene Name',
     场景描述: 'Scene Description',
     场景管理员: 'Scene Manager',
+    场景管理员至少保留一个: 'At least one scene manager is required',
     场景使用者: 'Scene Users',
     '拥有场景的完整管理权限，包括策略配置、数据源管理、成员管理等': 'Full management permissions for the scene, including strategy configuration, data source management, member management, etc.',
     '拥有场景下资源的只读使用权限（检索、报表、工具），无法更改场景配置': 'Read-only access to scene resources (search, reports, tools), cannot modify scene configuration',
