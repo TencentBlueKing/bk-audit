@@ -141,6 +141,7 @@
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import CreateSceneSideslider from './components/create-scene-sideslider.vue';
+  import InlineUserField from './components/inline-user-field.vue';
   import SceneDetailSideslider from './components/scene-detail-sideslider.vue';
 
   interface SearchKey {
@@ -236,7 +237,55 @@
   const currentDetailSceneId = ref<string | number>('');
   const sceneDetailRef = ref<InstanceType<typeof SceneDetailSideslider>>();
 
-  // 状态统计
+  const editingCellKey = ref('');
+  const savingCellKey = ref('');
+
+  const getUserCellKey = (sceneId: string | number, field: 'managers' | 'users') => (
+    `${sceneId}-${field}`
+  );
+
+  const handleUserFieldEdit = (row: SceneModel, field: 'managers' | 'users') => {
+    editingCellKey.value = getUserCellKey(row.scene_id, field);
+  };
+
+  const handleUserFieldCancel = () => {
+    editingCellKey.value = '';
+  };
+
+  const handleUserFieldSave = (row: SceneModel, field: 'managers' | 'users', values: string[]) => {
+    const cellKey = getUserCellKey(row.scene_id, field);
+    const sceneId = row.scene_id;
+    savingCellKey.value = cellKey;
+    SceneManageService.updateSceneInfo({
+      sceneId,
+      [field]: values,
+    }).then(() => {
+      messageSuccess(t('更新成功'));
+      const targetRow = listRef.value?.getListData()?.find(item => item.scene_id === sceneId);
+      if (targetRow) {
+        targetRow[field] = values;
+      }
+      editingCellKey.value = '';
+    })
+      .finally(() => {
+        savingCellKey.value = '';
+      });
+  };
+
+  const renderUserFieldCell = (
+    row: SceneModel,
+    field: 'managers' | 'users',
+    minCount = 0,
+  ) => (
+    <InlineUserField
+      isEditing={editingCellKey.value === getUserCellKey(row.scene_id, field)}
+      minCount={minCount}
+      saving={savingCellKey.value === getUserCellKey(row.scene_id, field)}
+      users={row[field] || []}
+      onCancel={handleUserFieldCancel}
+      onEdit={() => handleUserFieldEdit(row, field)}
+      onSave={(values: string[]) => handleUserFieldSave(row, field, values)} />
+  );
   const statusCounts = reactive({
     all: 0,
     enabled: 0,
@@ -319,41 +368,13 @@
       title: t('场景管理员'),
       colKey: 'managers',
       minWidth: 360,
-      cell: (_: any, { row }: { row: SceneModel }) => (
-        row.managers.length > 0
-          ? <div class="tag-list">
-              {row.managers.slice(0, 2).map((manager: string) => <bk-tag class="mr8" key={manager}>{manager}</bk-tag>)}
-              {row.managers.length > 2 && (
-                <bk-popover placement="top" theme="dark">
-                  {{
-                    default: () => <bk-tag>+{row.managers.length - 2}</bk-tag>,
-                    content: () => <div class="tag-popover-content">{row.managers.join('、')}</div>,
-                  }}
-                </bk-popover>
-              )}
-            </div>
-          : '--'
-      ),
+      cell: (_: any, { row }: { row: SceneModel }) => renderUserFieldCell(row, 'managers', 1),
     },
     {
       title: t('场景使用者'),
       colKey: 'users',
-      minWidth: 140,
-      cell: (_: any, { row }: { row: SceneModel }) => (
-        row.users.length > 0
-          ? <div class="tag-list">
-              {row.users.slice(0, 2).map((user: string) => <bk-tag class="mr8" key={user}>{user}</bk-tag>)}
-              {row.users.length > 2 && (
-                <bk-popover placement="top" theme="dark">
-                  {{
-                    default: () => <bk-tag>+{row.users.length - 2}</bk-tag>,
-                    content: () => <div class="tag-popover-content">{row.users.join('、')}</div>,
-                  }}
-                </bk-popover>
-              )}
-            </div>
-          : '--'
-      ),
+      minWidth: 200,
+      cell: (_: any, { row }: { row: SceneModel }) => renderUserFieldCell(row, 'users'),
     },
     {
       title: t('策略数'),

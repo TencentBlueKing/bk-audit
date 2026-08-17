@@ -118,9 +118,8 @@ function isSceneConfigBusinessRoute(to: RouteLocationNormalized) {
 /**
  * 场景配置页进入前权限分流：
  * - manage_scene=true：放行
- * - 前端记忆的场景已无权限：切到第一个有管理权限的场景（不跳申请页）
- * - URL 深链 manage_scene=false & view_scene=true：跳转 user-landing-page
- * - URL 深链 manage_scene=false & view_scene=false：跳转 permissions-page
+ * - 无管理权限：跳转权限申请页（user-landing / permissions-page）
+ * - 仅 scene-info 去掉自己管理员时，由页面内逻辑切到第一个可管理场景
  */
 async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
   if (!isSceneConfigBusinessRoute(to)) {
@@ -143,15 +142,6 @@ async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
     return null;
   }
 
-  const isRememberedScene = (() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('scene-system-selector:selected') || 'null');
-      return Boolean(saved?.id && String(saved.id) === String(sceneId));
-    } catch {
-      return false;
-    }
-  })();
-
   const redirectQuery = { scene_id: String(sceneId) };
 
   try {
@@ -163,34 +153,6 @@ async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
       return null;
     }
 
-    // 记忆场景已失效：切到第一个有管理权限的场景，避免跳申请页
-    if (isRememberedScene) {
-      const firstManageable = (sceneList || []).find(item => item.permission?.manage_scene === true);
-      if (firstManageable) {
-        const nextId = String(firstManageable.scene_id);
-        return {
-          name: to.name as string,
-          query: {
-            ...to.query,
-            scene_id: nextId,
-            scope_id: nextId,
-            scope_type: 'scene',
-          },
-          params: to.params,
-          hash: to.hash,
-          replace: true,
-        };
-      }
-      const hasViewOnly = (sceneList || []).some(item => (
-        item.permission?.view_scene && !item.permission?.manage_scene
-      ));
-      return {
-        name: hasViewOnly ? 'userLandingPage' : 'permissionsPage',
-        query: {},
-      };
-    }
-
-    // 真正的 URL 深链
     if (permission.view_scene === true) {
       return {
         name: 'userLandingPage',
@@ -201,17 +163,12 @@ async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
     // 列表拉取失败时也拦截，避免页面先打业务接口弹出权限申请窗
   }
 
-  // 深链且无权限
-  if (isRememberedScene) {
-    return {
-      name: 'permissionsPage',
-      query: {},
-    };
-  }
-
   return {
     name: 'permissionsPage',
-    query: redirectQuery,
+    query: {
+      ...redirectQuery,
+      role: 'manager',
+    },
   };
 }
 
