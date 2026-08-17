@@ -1,5 +1,6 @@
 from services.web.ai_assistant.serializers.conversation import (
     ConversationCreateRequestSerializer,
+    ConversationCreateResponseSerializer,
     ConversationDetailRequestSerializer,
     ConversationGroupCreateRequestSerializer,
     ConversationGroupDetailRequestSerializer,
@@ -10,9 +11,18 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarPinRequestSerializer,
     SidebarSearchRequestSerializer,
 )
+from services.web.ai_assistant.serializers.message import (
+    InitialMessageRequestSerializer,
+    MessageCreateRequestSerializer,
+    MessageDetailRequestSerializer,
+    MessageListRequestSerializer,
+    MessageResponseSerializer,
+    MessageWindowResponseSerializer,
+)
 
 __all__ = [
     "ConversationCreateRequestSerializer",
+    "ConversationCreateResponseSerializer",
     "ConversationDetailRequestSerializer",
     "ConversationGroupCreateRequestSerializer",
     "ConversationGroupDetailRequestSerializer",
@@ -22,4 +32,10 @@ __all__ = [
     "SidebarNodeListRequestSerializer",
     "SidebarPinRequestSerializer",
     "SidebarSearchRequestSerializer",
+    "InitialMessageRequestSerializer",
+    "MessageCreateRequestSerializer",
+    "MessageDetailRequestSerializer",
+    "MessageListRequestSerializer",
+    "MessageResponseSerializer",
+    "MessageWindowResponseSerializer",
 ]

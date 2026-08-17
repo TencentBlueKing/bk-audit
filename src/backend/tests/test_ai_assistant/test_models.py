@@ -10,7 +10,6 @@ from django.utils import timezone
 from core.models import OperateRecordModel, SoftDeleteModel
 from services.web.ai_assistant import models as ai_models
 from services.web.ai_assistant.constants import (
-    DEFAULT_CONVERSATION_TITLE,
     AttachmentType,
     ExecutionStatus,
     FeedbackSourceType,
@@ -35,7 +34,6 @@ from services.web.query.models import LogExportTask
 class AIAssistantConstantsTest(SimpleTestCase):
     def test_app_and_model_constants(self):
         self.assertEqual(apps.get_app_config("ai_assistant").name, "services.web.ai_assistant")
-        self.assertEqual(DEFAULT_CONVERSATION_TITLE, "新对话")
         self.assertEqual(set(ExecutionStatus.values), {"PROCESSING", "SUCCESS", "FAILED"})
         self.assertEqual(
             set(MessageType.values),
@@ -126,9 +124,9 @@ class AbstractModelTest(TestCase):
 
 
 class ConversationModelTest(TestCase):
-    def test_conversation_uses_default_title_and_soft_delete(self):
+    def test_conversation_keeps_database_default_empty_and_supports_soft_delete(self):
         conversation = Conversation.objects.create(created_by="alice")
-        self.assertEqual(conversation.title, DEFAULT_CONVERSATION_TITLE)
+        self.assertEqual(conversation.title, "")
 
         conversation.delete()
 

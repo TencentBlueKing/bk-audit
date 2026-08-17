@@ -1,5 +1,6 @@
 import time
 
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import OperationalError, transaction
 from django.db.models import Count, F, Q, QuerySet
@@ -7,8 +8,6 @@ from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     MYSQL_DEADLOCK_ERROR_CODE,
-    SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES,
-    SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS,
     SidebarNodeType,
 )
 from services.web.ai_assistant.exceptions import (
@@ -197,7 +196,9 @@ class ConversationSidebarService:
            返回而不写入任何排序字段，避免无意义的行锁竞争和 binlog 膨胀。
         """
 
-        for retry_count in range(SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES + 1):
+        max_retries = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES
+        retry_interval = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS
+        for retry_count in range(max_retries + 1):
             try:
                 return self._move(
                     source_node_type=source_node_type,
@@ -209,9 +210,9 @@ class ConversationSidebarService:
                 )
             except OperationalError as error:
                 is_deadlock = bool(error.args) and error.args[0] == MYSQL_DEADLOCK_ERROR_CODE
-                if not is_deadlock or retry_count >= SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES:
+                if not is_deadlock or retry_count >= max_retries:
                     raise
-                time.sleep(SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS * (retry_count + 1))
+                time.sleep(retry_interval * (retry_count + 1))
         raise AssertionError("unreachable")
 
     @transaction.atomic

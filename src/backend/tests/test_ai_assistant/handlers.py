@@ -67,6 +67,12 @@ class EchoAsyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
         return MessagePreparation(parent_message=parent_message, context_data=EchoContext(prefix="async"))
 
 
+class SystemSelectionAsyncHandler(EchoAsyncHandler):
+    """验证初始化消息可复用平台异步创建链路。"""
+
+    message_type = MessageType.SYSTEM_SELECTION
+
+
 class EchoMessageExecutionTask(MessageExecutionTask):
     """测试消息 Task 基类，完整生命周期由生产基类统一提供。"""
 

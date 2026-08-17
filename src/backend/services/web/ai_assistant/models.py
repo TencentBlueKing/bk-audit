@@ -6,7 +6,6 @@ from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel
 from services.web.ai_assistant.constants import (
-    DEFAULT_CONVERSATION_TITLE,
     AttachmentType,
     ExecutionStatus,
     FeedbackSourceType,
@@ -59,7 +58,8 @@ class ConversationGroup(ExternalUIDModel, OperateRecordModel):
 class Conversation(ExternalUIDModel, SoftDeleteModel):
     """AI 助手会话，仅承担历史记录和消息容器职责。"""
 
-    title = models.CharField(gettext_lazy("会话标题"), max_length=255, default=DEFAULT_CONVERSATION_TITLE)
+    # 默认标题属于创建会话的业务策略，模型只保存最终值。
+    title = models.CharField(gettext_lazy("会话标题"), max_length=255, default="", blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("AI 助手会话")

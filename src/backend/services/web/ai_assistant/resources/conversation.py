@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy
 from core.models import get_request_username
 from services.web.ai_assistant.serializers.conversation import (
     ConversationCreateRequestSerializer,
+    ConversationCreateResponseSerializer,
     ConversationDetailRequestSerializer,
     ConversationGroupCreateRequestSerializer,
     ConversationGroupDetailRequestSerializer,
@@ -59,10 +60,16 @@ class DeleteConversationGroup(AIAssistantResource):
 class CreateConversation(AIAssistantResource):
     name = gettext_lazy("创建会话")
     RequestSerializer = ConversationCreateRequestSerializer
-    ResponseSerializer = ConversationResponseSerializer
+    ResponseSerializer = ConversationCreateResponseSerializer
 
     def perform_request(self, validated_request_data):
-        return ConversationService(user=get_request_username()).create_conversation()
+        creation = ConversationService(user=get_request_username()).create_conversation(
+            title=validated_request_data["title"],
+            initial_message=validated_request_data.get("initial_message"),
+        )
+        # 保持 Django Model 响应路径，使 bk_resource 使用实例序列化并保留 UUID 输出格式。
+        creation.conversation.initial_message = creation.initial_message
+        return creation.conversation
 
 
 class GetConversation(AIAssistantResource):
@@ -93,7 +100,6 @@ class DeleteConversation(AIAssistantResource):
 
 class ClearConversations(AIAssistantResource):
     name = gettext_lazy("清空会话")
-    RequestSerializer = ConversationCreateRequestSerializer
 
     def perform_request(self, validated_request_data):
         ConversationService(user=get_request_username()).clear_conversations()
@@ -101,7 +107,6 @@ class ClearConversations(AIAssistantResource):
 
 class ListPinnedConversations(AIAssistantResource):
     name = gettext_lazy("获取置顶会话")
-    RequestSerializer = ConversationCreateRequestSerializer
     ResponseSerializer = SidebarNodeResponseSerializer
     many_response_data = True
 

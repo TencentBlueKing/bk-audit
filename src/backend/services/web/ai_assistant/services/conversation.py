@@ -1,12 +1,14 @@
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
+
+from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import QuerySet, Subquery
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import (
-    SIDEBAR_NODE_DELETE_BATCH_SIZE,
-    SidebarNodeType,
-)
+from services.web.ai_assistant.constants import SidebarNodeType
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
@@ -15,8 +17,18 @@ from services.web.ai_assistant.models import (
     Conversation,
     ConversationGroup,
     ConversationSidebarNode,
+    Message,
 )
+from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.sidebar import ConversationSidebarService
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationCreation:
+    """会话创建的原子结果，初始化消息可为空。"""
+
+    conversation: Conversation
+    initial_message: Message | None
 
 
 class ConversationService:
@@ -27,6 +39,7 @@ class ConversationService:
 
         self.user = user
         self.sidebar_service = ConversationSidebarService(user=user)
+        self.message_service = MessageService(user=user)
 
     @transaction.atomic
     def create_group(self, *, name: str) -> ConversationGroup:
@@ -66,13 +79,40 @@ class ConversationService:
         # 此时 CASCADE Collector 只需处理分组和单个 Group Node；会话本体仅软删除。
         group.delete()
 
-    @transaction.atomic
-    def create_conversation(self) -> Conversation:
-        """创建默认标题会话并将其 Node 插入根列表最前。"""
+    def create_conversation(
+        self,
+        *,
+        title: str,
+        initial_message: Mapping[str, Any] | None = None,
+    ) -> ConversationCreation:
+        """创建会话、根 Node 和可选初始化消息，数据库写入保持原子性。"""
 
-        conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        self.sidebar_service.create_node(conversation=conversation)
-        return conversation
+        operation_time = timezone.now()
+        conversation = Conversation(
+            title=title,
+            created_by=self.user,
+            updated_by=self.user,
+            updated_at=operation_time,
+        )
+        prepared = None
+        if initial_message is not None:
+            # Handler 可能访问外部元数据，必须在数据库事务开始前完成。
+            prepared = self.message_service.prepare_initial(
+                conversation=conversation,
+                message_type=initial_message["message_type"],
+                input_data=initial_message["input_data"],
+            )
+
+        with transaction.atomic():
+            conversation.save(update_record=False, force_insert=True)
+            self.sidebar_service.create_node(conversation=conversation)
+            message = None
+            if prepared is not None:
+                message = self.message_service.create_prepared(
+                    conversation=conversation,
+                    prepared=prepared,
+                )
+        return ConversationCreation(conversation=conversation, initial_message=message)
 
     def get_conversation(self, *, conversation_uid: str) -> Conversation:
         """获取当前用户的未删除会话。"""
@@ -113,7 +153,8 @@ class ConversationService:
     def _delete_nodes_in_batches(queryset: QuerySet[ConversationSidebarNode]) -> None:
         """分批物理删除 Node，将 Django Collector 的单次内存占用限制在固定范围。"""
 
-        while node_ids := list(queryset.order_by("id").values_list("id", flat=True)[:SIDEBAR_NODE_DELETE_BATCH_SIZE]):
+        batch_size = settings.AI_ASSISTANT_SIDEBAR_NODE_DELETE_BATCH_SIZE
+        while node_ids := list(queryset.order_by("id").values_list("id", flat=True)[:batch_size]):
             ConversationSidebarNode.objects.filter(id__in=node_ids).delete()
 
     def _get_group(self, *, group_uid: str, for_update: bool = False) -> ConversationGroup:

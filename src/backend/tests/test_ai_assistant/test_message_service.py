@@ -9,6 +9,7 @@ from services.web.ai_assistant.constants import (
     MessageType,
 )
 from services.web.ai_assistant.exceptions import (
+    InvalidInitialMessage,
     InvalidParentMessage,
     MessageSnapshotValidationError,
 )
@@ -88,6 +89,7 @@ class RejectingParentHandler(EchoSyncHandler):
 class MessageServiceTest(TestCase):
     def setUp(self):
         self.user = "alice"
+        self.service = MessageService(user=self.user)
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         self.sync_handler = RecordingSyncHandler()
         message_handler_registry.register(self.sync_handler)
@@ -115,9 +117,79 @@ class MessageServiceTest(TestCase):
             updated_by=owner,
         )
 
+    def test_service_binds_user_context(self):
+        self.assertEqual(self.service.user, self.user)
+
+    def test_prepare_initial_executes_handler_without_persisting_message(self):
+        unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
+
+        prepared = self.service.prepare_initial(
+            conversation=unsaved_conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            input_data={"text": "hello"},
+        )
+
+        self.assertEqual(prepared.output_data, {"content": "alice:sync:hello"})
+        self.assertFalse(Message.objects.exists())
+        self.assertIsNone(unsaved_conversation.pk)
+
+    def test_create_prepared_does_not_execute_handler_again(self):
+        unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
+        prepared = self.service.prepare_initial(
+            conversation=unsaved_conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            input_data={"text": "hello"},
+        )
+        unsaved_conversation.save()
+
+        with mock.patch.object(self.sync_handler, "execute", side_effect=AssertionError("must not execute")):
+            message = self.service.create_prepared(
+                conversation=unsaved_conversation,
+                prepared=prepared,
+            )
+
+        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(message.output_data, {"content": "alice:sync:hello"})
+
+    def test_prepare_initial_only_accepts_owned_unsaved_system_selection(self):
+        parent = self.create_parent()
+        invalid_cases = []
+
+        self.register_async_handler()
+        invalid_cases.append(
+            (
+                Conversation(created_by=self.user, updated_by=self.user),
+                MessageType.NATURAL_LANGUAGE_SEARCH,
+            )
+        )
+        invalid_cases.extend(
+            [
+                (self.conversation, MessageType.SYSTEM_SELECTION),
+                (Conversation(created_by="bob", updated_by="bob"), MessageType.SYSTEM_SELECTION),
+            ]
+        )
+
+        for conversation, message_type in invalid_cases:
+            with self.subTest(message_type=message_type, user=conversation.created_by), self.assertRaises(
+                InvalidInitialMessage
+            ):
+                self.service.prepare_initial(
+                    conversation=conversation,
+                    message_type=message_type,
+                    input_data={"text": "hello"},
+                )
+
+        message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
+        message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
+        with self.assertRaises(InvalidInitialMessage):
+            self.service.prepare_initial(
+                conversation=Conversation(created_by=self.user, updated_by=self.user),
+                message_type=MessageType.SYSTEM_SELECTION,
+                input_data={"text": "hello"},
+            )
+
     def test_sync_create_validates_and_saves_all_snapshots(self):
-        message = MessageService.create(
-            user=self.user,
+        message = self.service.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "hello"},
@@ -137,8 +209,7 @@ class MessageServiceTest(TestCase):
         message_handler_registry.register(FailingSyncHandler())
 
         with self.assertRaises(RuntimeError):
-            MessageService.create(
-                user=self.user,
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -151,8 +222,7 @@ class MessageServiceTest(TestCase):
         message_handler_registry.register(InvalidOutputSyncHandler())
 
         with self.assertRaises(MessageSnapshotValidationError):
-            MessageService.create(
-                user=self.user,
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -163,8 +233,7 @@ class MessageServiceTest(TestCase):
     def test_explicit_parent_is_resolved_before_prepare(self):
         parent = self.create_parent()
 
-        message = MessageService.create(
-            user=self.user,
+        message = self.service.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "child"},
@@ -179,8 +248,7 @@ class MessageServiceTest(TestCase):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
 
-        message = MessageService.create(
-            user=self.user,
+        message = self.service.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "child"},
@@ -194,8 +262,7 @@ class MessageServiceTest(TestCase):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         message_handler_registry.register(RecordingSyncHandler(fallback_parent=foreign_parent))
 
-        message = MessageService.create(
-            user=self.user,
+        message = self.service.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "child"},
@@ -214,8 +281,7 @@ class MessageServiceTest(TestCase):
 
         for parent_uid in invalid_parent_uids:
             with self.subTest(parent_uid=parent_uid), self.assertRaises(InvalidParentMessage):
-                MessageService.create(
-                    user=self.user,
+                self.service.create(
                     conversation=self.conversation,
                     message_type=MessageType.SYSTEM_SELECTION,
                     input_data={"text": "child"},
@@ -224,8 +290,7 @@ class MessageServiceTest(TestCase):
 
     def test_malformed_parent_uid_is_normalized_to_business_error(self):
         with self.assertRaises(InvalidParentMessage):
-            MessageService.create(
-                user=self.user,
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "child"},
@@ -238,8 +303,7 @@ class MessageServiceTest(TestCase):
         message_handler_registry.register(RejectingParentHandler())
 
         with self.assertRaises(InvalidParentMessage) as context:
-            MessageService.create(
-                user=self.user,
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "child"},
@@ -254,8 +318,7 @@ class MessageServiceTest(TestCase):
 
         for conversation in (self.conversation, foreign_conversation):
             with self.subTest(conversation=conversation.uid), self.assertRaises(InvalidParentMessage):
-                MessageService.create(
-                    user=self.user,
+                self.service.create(
                     conversation=conversation,
                     message_type=MessageType.SYSTEM_SELECTION,
                     input_data={"text": "hello"},
@@ -265,8 +328,7 @@ class MessageServiceTest(TestCase):
         Conversation._objects.filter(id=self.conversation.id).update(is_deleted=True)
 
         with self.assertRaises(InvalidParentMessage):
-            MessageService.create(
-                user=self.user,
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -282,8 +344,7 @@ class MessageServiceTest(TestCase):
 
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with self.captureOnCommitCallbacks(execute=True):
-                message = MessageService.create(
-                    user=self.user,
+                message = self.service.create(
                     conversation=self.conversation,
                     message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
                     input_data={"text": "hello"},
@@ -305,8 +366,7 @@ class MessageServiceTest(TestCase):
 
         with mock.patch.object(handler.async_task, "apply_async", side_effect=RuntimeError("broker secret")):
             with self.captureOnCommitCallbacks(execute=True):
-                message = MessageService.create(
-                    user=self.user,
+                message = self.service.create(
                     conversation=self.conversation,
                     message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
                     input_data={"text": "hello"},
@@ -324,8 +384,7 @@ class MessageServiceTest(TestCase):
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with mock.patch.object(Message.objects, "create", side_effect=IntegrityError("write failed")):
                 with self.assertRaises(IntegrityError):
-                    MessageService.create(
-                        user=self.user,
+                    self.service.create(
                         conversation=self.conversation,
                         message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
                         input_data={"text": "hello"},
