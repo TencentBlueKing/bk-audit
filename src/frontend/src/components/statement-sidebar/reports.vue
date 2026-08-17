@@ -24,7 +24,7 @@
           ref="sceneSystemSelectorRef"
           v-model="selectedScene"
           dark
-          :list-scope="['scene']"
+          :list-scope="['scene', 'system']"
           :popover-width="250"
           scene-permission="view_scene"
           system-permission="view_system"
@@ -265,6 +265,8 @@
   const sceneSystemSelectorList = ref<SceneSystemSelectorLists>({} as SceneSystemSelectorLists);
   // useRequest.onSuccess 不回传 run 参数，用标记驱动切换后跳转
   let pendingSceneChangeNavigate = false;
+  // 区分首屏 URL 同步与用户主动切换场景，避免深链报表被覆盖为第一个
+  let hasCompletedInitialSceneSync = false;
 
   /** 从选中项直接解析 scope，避免 router.replace 未完成时读到旧 URL */
   const resolveScopeFromSceneItem = (item: SceneItem): ScopeParams => {
@@ -292,7 +294,11 @@
     sceneSystemSelectorList.value = sceneSystemSelectorRef.value.getLists();
     sceneChangeItem.value = val;
     searchKeyword.value = '';
-    pendingSceneChangeNavigate = true;
+    const rawId = route.params.id;
+    const deepLinkedId = Array.isArray(rawId) ? rawId[0] : rawId;
+    // 首屏按 URL 恢复场景且已带目标报表时，保留深链；用户主动切换时再跳到第一个
+    pendingSceneChangeNavigate = hasCompletedInitialSceneSync || !deepLinkedId;
+    hasCompletedInitialSceneSync = true;
     // 先清空旧目录，避免切换过程中仍展示上一场景树
     groups.value = [];
     sideRoutes.value = [];
@@ -304,8 +310,29 @@
     fetchPanelPreference();
   };
 
+  /** 当前路由报表是否已出现在侧栏目录中（深链打开时用于保留目标报表） */
+  const isPanelInSideRoutes = (panelId: string): boolean => {
+    if (!panelId) return false;
+    for (const scene of allSideRoutes.value) {
+      for (const group of scene.children || []) {
+        if (group.children?.some(child => String(child.id) === panelId)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // 场景切换后默认选中第一个子菜单项
+  // 深链（全局报表/报表管理跳转）已带目标 id 且该报表在当前目录中时，保留原报表，勿覆盖为第一个
   const navigateToFirstChild = (): boolean => {
+    const rawId = route.params.id;
+    const currentId = Array.isArray(rawId) ? rawId[0] : String(rawId || '');
+    // 目录尚未建好时返回 false，保留 pending，等菜单/分组就绪后再决策
+    if (currentId && allSideRoutes.value.length > 0 && isPanelInSideRoutes(currentId)) {
+      return true;
+    }
+
     const firstScene = allSideRoutes.value[0];
     if (firstScene?.children?.length > 0) {
       const firstGroup = firstScene.children[0];
@@ -432,17 +459,20 @@
   // 点击子菜单项时，聚合模式下携带 sceneId 信息
   const handleChildClick = (panelId: string | number, sceneId: string | number) => {
     clickFavorite.value = false;
+    const query = { ...route.query } as Record<string, any>;
+    // 跳转入口带来的 group_id 仅用于首次定位，侧栏内切换时清除，避免误展开旧分组
+    delete query.group_id;
     if (isAggregateMode.value) {
       router.push({
         name: 'statementManageDetail',
         params: { id: String(panelId) },
-        query: { ...route.query, sceneId: String(sceneId) },
+        query: { ...query, sceneId: String(sceneId) },
       });
     } else {
       router.push({
         name: 'statementManageDetail',
         params: { id: String(panelId) },
-        query: route.query,
+        query,
       });
     }
   };
@@ -621,10 +651,118 @@
     }
   };
 
+  /**
+   * 从报表管理 / 全局报表跳转打开某报表时，确保其所属分组展开，便于侧栏定位上下文。
+   * 不写回偏好：仅保证当前打开态可见，不强行改用户历史收起习惯。
+   */
+  const ensureActiveReportGroupExpanded = () => {
+    const rawId = route.params.id;
+    const panelId = Array.isArray(rawId) ? rawId[0] : String(rawId || '');
+    if (!panelId) return;
+
+    const preferredGroupIdRaw = route.query.group_id;
+    const preferredGroupId = preferredGroupIdRaw !== undefined && preferredGroupIdRaw !== null
+      ? Number(Array.isArray(preferredGroupIdRaw) ? preferredGroupIdRaw[0] : preferredGroupIdRaw)
+      : NaN;
+    if (!Number.isNaN(preferredGroupId) && !expandedGroups.value.includes(preferredGroupId)) {
+      expandedGroups.value.push(preferredGroupId);
+    }
+
+    // 菜单数据里直接带有 group_ids，目录树尚未重建时也可先展开
+    const menuItem = props.menuData.find(item => String(item.id) === panelId)
+      || localMenuData.value.find(item => String(item.id) === panelId);
+    menuItem?.group_ids?.forEach((groupId) => {
+      if (!expandedGroups.value.includes(groupId)) {
+        expandedGroups.value.push(groupId);
+      }
+    });
+
+    const querySceneId = (route.query.sceneId || route.query.scene_id) as string | undefined;
+    const expandGroupIfMatch = (group: SideRouteItem, sceneId?: string | number) => {
+      if (querySceneId && sceneId !== undefined && String(sceneId) !== String(querySceneId) && isAggregateMode.value) {
+        return;
+      }
+      const matched = group.children?.some(child => String(child.id) === panelId);
+      if (matched && !expandedGroups.value.includes(group.id)) {
+        expandedGroups.value.push(group.id);
+      }
+    };
+
+    if (allSideRoutes.value.length > 0) {
+      allSideRoutes.value.forEach((scene) => {
+        (scene.children || []).forEach(group => expandGroupIfMatch(group, scene.id));
+      });
+      return;
+    }
+
+    sideRoutes.value.forEach(group => expandGroupIfMatch(group));
+  };
+
+  /** 当前选中是否为系统空间（单系统 / 我的所有系统） */
+  const isSystemScopeSelection = (item: SceneItem | null | undefined) => {
+    if (!item) return false;
+    return item.type === 'system' || (item.type === 'aggregate' && item.id === 'allSystem');
+  };
+
+  /**
+   * 系统视角下分组接口固定返回空；用菜单数据组装默认分组，保证侧栏可展示报表
+   */
+  const buildSystemScopeSideRoutes = () => {
+    if (!sceneChangeItem.value) {
+      sideRoutes.value = [];
+      allSideRoutes.value = [];
+      return;
+    }
+    const children = [...props.menuData]
+      .map(menuItem => ({
+        ...menuItem,
+        priorityIndexForSort: menuItem.priority_index ?? 0,
+      }))
+      .sort((a, b) => (b.priorityIndexForSort ?? 0) - (a.priorityIndexForSort ?? 0));
+
+    if (children.length === 0) {
+      sideRoutes.value = [];
+      allSideRoutes.value = [];
+      return;
+    }
+
+    const defaultGroup: SideRouteItem = {
+      id: -1,
+      name: t('全部'),
+      priority_index: 0,
+      children,
+    };
+    sideRoutes.value = [defaultGroup];
+    allSideRoutes.value = [{
+      scene_id: sceneChangeItem.value.id,
+      id: sceneChangeItem.value.id,
+      name: sceneChangeItem.value.name,
+      type: sceneChangeItem.value.type,
+      children: [defaultGroup],
+    }];
+  };
+
   /** 用当前 groups + menuData 组装目录树（菜单异步到达后可再次调用） */
   const rebuildSideRoutes = (options?: { navigateToFirst?: boolean }) => {
     if (!sceneChangeItem.value) {
       allSideRoutes.value = [];
+      return;
+    }
+
+    // 系统空间无场景分组，直接按菜单扁平展示
+    if (isSystemScopeSelection(sceneChangeItem.value)) {
+      buildSystemScopeSideRoutes();
+      applyExpandedPreference();
+      // 系统默认分组不在历史偏好中时，默认展开
+      sideRoutes.value.forEach((group) => {
+        if (!expandedGroups.value.includes(group.id)) {
+          expandedGroups.value.push(group.id);
+        }
+      });
+      ensureActiveReportGroupExpanded();
+      if (options?.navigateToFirst && navigateToFirstChild()) {
+        pendingSceneChangeNavigate = false;
+      }
       return;
     }
 
@@ -648,9 +786,7 @@
       .filter(group => group.children.length > 0);
 
     if (sceneChangeItem.value.type === 'aggregate') {
-      const selectType = sceneChangeItem.value.id === 'allSecen'
-        ? sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen')
-        : sceneSystemSelectorList.value.systemList.filter(i => i.id !== 'allSystem');
+      const selectType = sceneSystemSelectorList.value.sceneList.filter(i => i.id !== 'allSecen');
       allSideRoutes.value = selectType.map((scene: SceneItem) => {
         const children = sideRoutes.value.filter(side => side.scene_id === Number(scene.id));
         return {
@@ -672,6 +808,7 @@
     }
 
     applyExpandedPreference();
+    ensureActiveReportGroupExpanded();
 
     // 菜单可能晚于分组到达：仅在真正跳转成功后清除标记
     if (options?.navigateToFirst && navigateToFirstChild()) {
@@ -690,8 +827,10 @@
   });
 
   // 菜单异步晚于分组到达时，用已有 groups 重建目录树
+  // 系统空间分组恒为空，仍需在菜单到达后重建
   watch(() => props.menuData, () => {
-    if (groups.value.length > 0 && sceneChangeItem.value) {
+    if (!sceneChangeItem.value) return;
+    if (groups.value.length > 0 || isSystemScopeSelection(sceneChangeItem.value)) {
       rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     }
   }, { deep: true });
@@ -725,11 +864,17 @@
   };
 
   // 路由变化时触发（正常切换）
-  watch(() => route.params.id, emitPanelScene, { immediate: true });
+  watch(() => route.params.id, () => {
+    emitPanelScene();
+    ensureActiveReportGroupExpanded();
+  }, { immediate: true });
   // allSideRoutes 数据加载完成时也触发（刷新恢复）
   watch(allSideRoutes, (newVal) => {
-    if (newVal.length > 0 && sceneChangeItem.value?.type === 'aggregate') {
-      emitPanelScene();
+    if (newVal.length > 0) {
+      ensureActiveReportGroupExpanded();
+      if (sceneChangeItem.value?.type === 'aggregate') {
+        emitPanelScene();
+      }
     }
   });
 

@@ -52,7 +52,12 @@ export interface FlatToolParamsOptions {
 
 export const getRouteQueryValue = (value: unknown): string => {
   if (Array.isArray(value)) {
-    return value[0] ? String(value[0]) : '';
+    // 对于时间范围/多值类参数，URL 可能以数组形式传入（如 filters[time_range]）。
+    // 之前只取第 0 项会丢失第二个值，导致刷新后与手动打开的数据结构不一致。
+    return value
+      .filter(v => v !== undefined && v !== null && v !== '')
+      .map(v => String(v))
+      .join(',');
   }
   if (value === undefined || value === null) {
     return '';
@@ -101,7 +106,8 @@ const parseUrlValueByFieldCategory = (
     return urlValue.split(',').map(item => item.trim())
       .filter(Boolean);
   }
-  if (fieldCategory === 'time_range_select') {
+  // time_range_select / time-ranger：URL 里通常是 `a,b` 两段表达式，需要解析成数组给日期选择器
+  if (fieldCategory === 'time_range_select' || fieldCategory === 'time-ranger') {
     const parts = urlValue.split(',').map(item => item.trim())
       .filter(Boolean);
     return parts.length >= 2 ? parts.slice(0, 2) : parts;
@@ -379,6 +385,8 @@ export interface GameDetailRouteData {
   totalRecharge: number;
   totalGift: number;
   totalIssue: number;
+  exchangeRate?: string | number;
+  accountNature?: string;
 }
 
 type ParsedGameDetailRoute = {
@@ -415,6 +423,12 @@ export const buildGameDetailRouteQuery = (
   if (gameData.totalIssue !== undefined && gameData.totalIssue !== null) {
     query.total_issue = String(gameData.totalIssue);
   }
+  if (gameData.exchangeRate !== undefined && gameData.exchangeRate !== null && gameData.exchangeRate !== '') {
+    query.exchange_rate = String(gameData.exchangeRate);
+  }
+  if (gameData.accountNature) {
+    query.account_nature = String(gameData.accountNature);
+  }
   return query;
 };
 
@@ -443,6 +457,8 @@ export const parseGameDetailFromRoute = (
       totalRecharge: toRouteNumber(getRouteQueryValue(routeQuery.total_recharge)),
       totalGift: 0,
       totalIssue: toRouteNumber(getRouteQueryValue(routeQuery.total_issue)),
+      exchangeRate: getRouteQueryValue(routeQuery.exchange_rate),
+      accountNature: getRouteQueryValue(routeQuery.account_nature),
     },
     toolUid,
     initialTab: getRouteQueryValue(routeQuery.initial_tab) || 'overview',

@@ -1236,17 +1236,23 @@ class GetPanelDetail(BKVision):
         )
 
         if scope.is_scene_scope and scope.scope_id:
-            # 场景视角：只返回该场景的覆盖
+            # 场景视角：以 default 为基础，用 scenes 配置覆盖对应参数
             scenes_overrides = default_value_overrides.get("scenes", {})
-            if str(scope.scope_id) in scenes_overrides:
-                default_value_override = scenes_overrides[str(scope.scope_id)] or {}
+            scene_id_str = str(scope.scope_id)
+            default_value_override = default_value_overrides.get("default", {}).copy()
+            if scene_id_str in scenes_overrides:
+                default_value_override.update(scenes_overrides[scene_id_str])
 
         elif scope.is_system_scope and scope.scope_id:
-            # 系统视角：只返回该系统的覆盖
+            # 系统视角：以 default 为基础，用 systems 配置覆盖对应参数
             systems_overrides = default_value_overrides.get("systems", {})
-            if str(scope.scope_id) in systems_overrides:
-                default_value_override = systems_overrides[str(scope.scope_id)] or {}
-        # cross_scene / cross_system 不命中覆盖，返回空对象
+            system_id_str = str(scope.scope_id)
+            default_value_override = default_value_overrides.get("default", {}).copy()
+            if system_id_str in systems_overrides:
+                default_value_override.update(systems_overrides[system_id_str])
+        else:
+            default_value_override = default_value_overrides.get("default", {})
+
         return {
             "id": panel.id,
             "vision_id": panel.vision_id,

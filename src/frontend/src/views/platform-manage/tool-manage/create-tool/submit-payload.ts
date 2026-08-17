@@ -409,7 +409,7 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
   data.namespace = data.namespace || data.source || 'default';
 
   if (!isEditMode) {
-    data.status = data.status || 'unpublished';
+    data.status = data.status || 'published';
     data.version = data.version || 1;
   }
 

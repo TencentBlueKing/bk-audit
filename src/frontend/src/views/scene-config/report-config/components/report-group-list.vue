@@ -160,7 +160,7 @@
                           v-bk-tooltips="t('点击查看审计报表')"
                           class="jump-link id-jump-link"
                           type="jump-link"
-                          @click.stop="handleGoAuditReport(report)" />
+                          @click.stop="handleGoAuditReport(report, group.id)" />
                       </div>
                       <div class="custom-table-cell desc-cell">
                         <tool-tip-text
@@ -213,11 +213,16 @@
                             {{ t('编辑') }}
                           </bk-button>
                           <bk-button
+                            v-bk-tooltips="{
+                              content: t('平台绑定的报表不支持停用操作'),
+                              disabled: report.binding_type !== 'platform_binding',
+                            }"
                             class="mr8"
+                            :disabled="report.binding_type === 'platform_binding'"
                             text
                             theme="primary"
-                            @click="handleShowMoveToGroup(report, group.id)">
-                            {{ t('移动到分组') }}
+                            @click="handleConfirmToggleStatus(report)">
+                            {{ report.status === 'published' ? t('停用') : t('启用') }}
                           </bk-button>
                           <bk-dropdown
                             trigger="hover">
@@ -230,15 +235,9 @@
                               <bk-dropdown-menu>
                                 <bk-dropdown-item>
                                   <div
-                                    v-bk-tooltips="{
-                                      content: t('平台绑定的报表不支持停用操作'),
-                                      disabled: report.binding_type !== 'platform_binding',
-                                    }"
                                     class="action-item"
-                                    :class="{ disableddel: report.binding_type === 'platform_binding' }"
-                                    @click="report.binding_type !== 'platform_binding'
-                                      && handleConfirmToggleStatus(report)">
-                                    {{ report.status === 'published' ? t('停用') : t('启用') }}
+                                    @click="handleShowMoveToGroup(report, group.id)">
+                                    {{ t('移动到分组') }}
                                   </div>
                                 </bk-dropdown-item>
                                 <bk-dropdown-item>
@@ -369,6 +368,17 @@
     status: 'published' | 'unpublished';
     updatedBy: string;
     updatedAt: string;
+    default_value_overrides?: {
+      default?: Record<string, any>;
+      scenes?: Record<string, Record<string, any>>;
+      systems?: Record<string, Record<string, any>>;
+      use_bkvision_default?: Record<string, boolean>;
+    };
+    /** 场景报表新协议列表字段 */
+    default_value_override?: {
+      default?: Record<string, any>;
+      use_bkvision_default?: Record<string, boolean>;
+    };
   }
 
   export interface ReportGroup {
@@ -511,14 +521,17 @@
     defaultValue: null,
   });
 
-  // 跳转到审计报表查看页
-  const handleGoAuditReport = (report: Report) => {
+  // 跳转到审计报表查看页（携带分组，便于报表菜单展开对应分组）
+  const handleGoAuditReport = (report: Report, groupId: number) => {
+    const scopeId = String(getSceneSystemParams().scope_id || '');
     const routeData = router.resolve({
       name: 'statementManageDetail',
       params: { id: report.id },
       query: {
-        scene_id: getSceneSystemParams().scope_id,
-        scene_type: 'scene',
+        scene_id: scopeId,
+        scope_id: scopeId,
+        scope_type: 'scene',
+        group_id: String(groupId),
       },
     });
     window.open(routeData.href, '_blank');

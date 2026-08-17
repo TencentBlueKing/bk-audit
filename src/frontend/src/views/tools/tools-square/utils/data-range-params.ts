@@ -44,14 +44,15 @@ export const normalizeDataRangeIds = (value: unknown): number[] => {
     .filter((item): item is number => Number.isFinite(item));
 };
 
-const pickFirstDataRangeParams = (source: Record<string, unknown> | undefined): Record<string, number[]> => {
+const collectDataRangeParams = (source: Record<string, unknown> | undefined): Record<string, number[]> => {
   if (!source || typeof source !== 'object') return {};
+  const result: Record<string, number[]> = {};
   for (const rawName of DATA_RANGE_RAW_NAMES) {
     if (!(rawName in source)) continue;
     const ids = normalizeDataRangeIds(source[rawName]);
-    if (ids.length) return { [rawName]: ids };
+    if (ids.length) result[rawName] = ids;
   }
-  return {};
+  return result;
 };
 
 /**
@@ -80,16 +81,16 @@ export const getDataRangeParamsFromToolConfig = (
     if (!scopeOverride || typeof scopeOverride !== 'object') {
       return {};
     }
-    return pickFirstDataRangeParams(scopeOverride);
+    return collectDataRangeParams(scopeOverride);
   }
 
   const inputVars = toolConfig.input_variable;
   if (!Array.isArray(inputVars)) return {};
+  const fromInputVars: Record<string, unknown> = {};
   for (const rawName of DATA_RANGE_RAW_NAMES) {
     const target = inputVars.find(item => item.raw_name === rawName);
     if (!target) continue;
-    const ids = normalizeDataRangeIds(target.default_value);
-    if (ids.length) return { [rawName]: ids };
+    fromInputVars[rawName] = target.default_value;
   }
-  return {};
+  return collectDataRangeParams(fromInputVars);
 };

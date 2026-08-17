@@ -58,12 +58,24 @@
           <span class="info-value"><span class="info-unit">¥</span> {{ gameData.coinBalance ?? '--' }}</span>
         </div>
         <div class="info-item">
+          <span class="info-label">{{ t('代币兑换比') }}</span>
+          <span
+            class="info-value"
+            :class="{ 'is-empty-rate': isEmptyExchangeRate }">
+            {{ displayExchangeRate }}
+          </span>
+        </div>
+        <div class="info-item">
           <span class="info-label">{{ t('累计充值') }}</span>
           <span class="info-value"><span class="info-unit">¥</span> {{ gameData.totalRecharge ?? '--' }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">{{ t('累计发放') }}</span>
           <span class="info-value"><span class="info-unit">¥</span> {{ gameData.totalIssue }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">{{ t('是否测试号') }}</span>
+          <span class="info-value">{{ displayIsTestAccount }}</span>
         </div>
         <!-- 累计赠送次数、累计发放次数：后端暂未返回，有数据后再展示 -->
         <!-- <div class="info-item">
@@ -289,6 +301,7 @@
     CHAT_DETAIL_FIELDS,
     COIN_DETAIL_FIELDS,
     EXPORT_USER_FIELDS,
+    getIsTestAccountText,
     GIFT_DETAIL_FIELDS,
     LOGIN_DETAIL_FIELDS,
     TRADE_DETAIL_FIELDS,
@@ -329,13 +342,15 @@
     totalRecharge: number;
     totalGift: number;
     totalIssue: number;
+    exchangeRate?: string | number;
+    accountNature?: string;
   }
 
   interface Props {
     gameData?: GameData;
     initialTab?: string;
     toolUid?: string;
-    /** 智能用户画像工具配置，用于透传数据范围参数（如 cc_ids） */
+    /** 智能用户画像工具配置，用于透传数据范围参数（如 cc_ids / game_ids） */
     toolConfig?: {
       input_variable?: Array<{ raw_name: string; default_value?: unknown }>;
       [key: string]: any;
@@ -357,6 +372,8 @@
       totalRecharge: 0,
       totalGift: 0,
       totalIssue: 0,
+      exchangeRate: '',
+      accountNature: '',
     }),
     initialTab: '',
     toolUid: '',
@@ -377,6 +394,19 @@
     if (name && name !== gameId) return name;
     return '--';
   });
+
+  const isEmptyExchangeRate = computed(() => {
+    const val = props.gameData.exchangeRate;
+    return val === '' || val === null || val === undefined;
+  });
+
+  const displayExchangeRate = computed(() => (
+    isEmptyExchangeRate.value ? t('未设代币兑换比例') : props.gameData.exchangeRate
+  ));
+
+  const displayIsTestAccount = computed(() => (
+    getIsTestAccountText(props.gameData.accountNature, t('是'), t('否'))
+  ));
 
   // 当 initialTab 变化时同步切换 tab（含外部再次指定同一 tab 的场景）
   watch(() => props.initialTab, (newTab) => {
@@ -870,17 +900,31 @@
             [EXPORT_USER_FIELDS.WECHAT]: props.gameData.platAccount || props.gameData.wechat || '',
           }),
           [EXPORT_USER_FIELDS.COIN_BALANCE]: props.gameData.coinBalance,
+          [EXPORT_USER_FIELDS.CURRENCY_EXCHANGE_RATIO]: (
+            props.gameData.exchangeRate === ''
+            || props.gameData.exchangeRate === null
+            || props.gameData.exchangeRate === undefined
+              ? t('未设代币兑换比例')
+              : props.gameData.exchangeRate
+          ),
           [EXPORT_USER_FIELDS.TOTAL_RECHARGE]: props.gameData.totalRecharge,
           [EXPORT_USER_FIELDS.TOTAL_GIFT]: props.gameData.totalGift,
           [EXPORT_USER_FIELDS.TOTAL_ISSUE]: props.gameData.totalIssue,
+          [EXPORT_USER_FIELDS.IS_TEST_ACCOUNT]: getIsTestAccountText(
+            props.gameData.accountNature,
+            t('是'),
+            t('否'),
+          ),
           gameid: Number(props.gameData.gameid),
         }];
         const userHeaders = [
           EXPORT_USER_FIELDS.GAME_NAME, EXPORT_USER_FIELDS.OPENID,
           // 根据platType动态显示QQ或微信表头
           ...(props.gameData.platType === 'qq' ? [EXPORT_USER_FIELDS.QQ] : [EXPORT_USER_FIELDS.WECHAT]),
-          EXPORT_USER_FIELDS.COIN_BALANCE, EXPORT_USER_FIELDS.TOTAL_RECHARGE,
+          EXPORT_USER_FIELDS.COIN_BALANCE, EXPORT_USER_FIELDS.CURRENCY_EXCHANGE_RATIO,
+          EXPORT_USER_FIELDS.TOTAL_RECHARGE,
           EXPORT_USER_FIELDS.TOTAL_GIFT, EXPORT_USER_FIELDS.TOTAL_ISSUE,
+          EXPORT_USER_FIELDS.IS_TEST_ACCOUNT,
           'gameid',
         ];
         useExportExcel.exportExcelSheet(wb, userInfoData, t('用户信息'), userHeaders, userHeaders);
@@ -1072,6 +1116,10 @@
       color: #313238;
       align-items: center;
       gap: 4px;
+
+      &.is-empty-rate {
+        color: #ea3636;
+      }
     }
 
     .info-unit {

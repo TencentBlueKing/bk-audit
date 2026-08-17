@@ -183,7 +183,7 @@ interface GameContextLike {
   toolUid: string;
   gameid: string | number;
   openid: string;
-  /** 场景数据范围过滤参数（如 cc_ids），来自工具详情 default_value */
+  /** 场景数据范围过滤参数（如 cc_ids / game_ids），来自工具详情 default_value */
   dataRangeParams?: Record<string, number[]>;
 }
 

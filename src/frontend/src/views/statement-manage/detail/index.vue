@@ -141,6 +141,7 @@
   );
 
   // 按当前 scope 拉取平台报表配置的默认值覆盖（失败不影响出图）
+  // 与工具详情一致：由接口按 scope 合并 default + scenes/systems 后返回单份 default_value_override
   const fetchPanelDetailWithOverride = async (scope: {
     scope_type: string,
     scope_id: string,

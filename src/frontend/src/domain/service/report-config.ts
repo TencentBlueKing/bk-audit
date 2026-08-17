@@ -18,6 +18,7 @@ import PanelModel, {
   type PanelDefaultValueOverrides,
   type PanelDetail,
   type PanelVisibilityPayload,
+  type ScenePanelDefaultValueOverride,
 } from '@model/report-config/panel';
 
 import PanelModelSource from '../source/report-config';
@@ -54,12 +55,14 @@ export default  {
   createPanel(params: {
     scene_id: string | number,
     vision_id: string,
-    group_id: string,
-    id: string,
+    group_id: string | number,
+    id?: string,
     name: string,
-    category: string,
+    category?: string,
     status?: 'published' | 'unpublished',
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.createPanel(params)
       .then(({ data }) => data);
@@ -72,10 +75,13 @@ export default  {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
+    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return PanelModelSource.updatePanel(params)
       .then(({ data }) => data);
@@ -229,7 +235,7 @@ export default  {
     return PanelModelSource.deletePlatformPanel(params);
   },
   /**
-   * @desc 上架/下架平台级报表
+   * @desc 启用/停用平台级报表
    */
   publishPlatformPanel(params: {
     panel_id: string,

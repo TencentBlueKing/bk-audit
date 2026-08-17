@@ -22,6 +22,7 @@ import PanelModel, {
   type PanelDefaultValueOverrides,
   type PanelDetail,
   type PanelVisibilityPayload,
+  type ScenePanelDefaultValueOverride,
 } from './../model/report-config/panel';
 import ModuleBase from './module-base';
 
@@ -56,13 +57,16 @@ class PanelManage extends ModuleBase {
   // 创建Panel
   createPanel(params: {
     scene_id: string | number,
-    group_id: string,
+    group_id: string | number,
     vision_id: string,
-    id: string,
+    id?: string,
     name: string,
-    category: string,
+    category?: string,
     status?: 'published' | 'unpublished',
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    /** 场景报表：{ default: { [raw_name]: value } } */
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     return Request.post(`bkvision${this.module}/panel/scene/`, {
       params,
@@ -74,10 +78,14 @@ class PanelManage extends ModuleBase {
     scene_id: number | string,
     group_id: number,
     panel_id: string,
+    vision_id?: string,
     name: string,
     status?: 'published' | 'unpublished',
     category?: string,
     description?: string,
+    input_variable?: Array<Record<string, any>>,
+    /** 场景报表：{ default: { [raw_name]: value } } */
+    default_value_overrides?: ScenePanelDefaultValueOverride,
   }) {
     const { id, ...rest } = params;
     return Request.put(`bkvision${this.module}/panel/scene/${id}/`, {
@@ -227,7 +235,7 @@ class PanelManage extends ModuleBase {
       params,
     });
   }
-  // 上架/下架平台级报表
+  // 启用/停用平台级报表
   publishPlatformPanel(params: {
     panel_id: string,
     status?: 'published' | 'unpublished',
