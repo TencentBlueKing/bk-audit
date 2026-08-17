@@ -248,7 +248,13 @@
   import RiskRuleDetail from './components/risk-rule-detail.vue';
   import ScopeRiskRuleDetail from './components/scope-rule-detail.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    buildSceneContextQueryFromSelection,
+    getQueryFromLocation,
+    getSceneSystemParams,
+    setActiveSceneSelection,
+    syncSceneContextToUrl,
+  } from '@/utils/assist/scene-system-params';
 
   interface SearchKey {
     id: string,
@@ -814,8 +820,27 @@
     listRef.value.fetchData(params);
   };
 
-  const handleSceneChange = () => {
-    fetchList();
+  const handleSceneChange = (value?: unknown) => {
+    const scene = value as { id?: string; type?: string } | null | undefined;
+    if (!scene?.id) {
+      fetchList();
+      return;
+    }
+    const selection = {
+      id: scene.id,
+      type: (scene.type || 'scene') as 'aggregate' | 'scene' | 'system',
+    };
+    setActiveSceneSelection(selection);
+    const sceneQuery = buildSceneContextQueryFromSelection(selection);
+    syncSceneContextToUrl(sceneQuery);
+    router.replace({ query: getQueryFromLocation() }).catch(() => {});
+    searchKey.value = [];
+    isSearching.value = false;
+    if (!isInit) return;
+    listRef.value.fetchData({
+      scene_id: scene.id,
+      ...sceneQuery,
+    }, { resetSearch: true });
   };
 
   onMounted(() => {
@@ -842,9 +867,8 @@
     } else {
       fetchList();
     }
-    setTimeout(() => {
-      onEvent('scene:change', handleSceneChange);
-    }, 1000);
+    // 立即注册，避免切换场景时漏接事件导致列表与 URL 不刷新
+    onEvent('scene:change', handleSceneChange);
   });
 
   onUnmounted(() => {

@@ -302,7 +302,12 @@
   import RenderLabel from './components/render-label.vue';
 
   import useEventBus from '@/hooks/use-event-bus';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getQueryFromLocation,
+    getSceneContextQuery,
+    getSceneSystemParams,
+    syncSceneContextToUrl,
+  } from '@/utils/assist/scene-system-params';
 
   enum FullEnum {
     FULL = 'full',
@@ -1612,6 +1617,8 @@
 
     // 真正切换场景：清空搜索/筛选/排序，避免旧场景参数带到新场景
     if (isSceneChanged) {
+      syncSceneContextToUrl(getSceneContextQuery());
+      router.replace({ query: getQueryFromLocation() }).catch(() => {});
       searchKey.value = [];
       renderLabelRef.value?.resetAllLabel();
       leftLabelFilterCondition.value = '';
