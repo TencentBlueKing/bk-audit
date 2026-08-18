@@ -477,12 +477,16 @@
       if (matchedItem && !isSceneLocked(matchedItem)) {
         targetItem = matchedItem;
       } else if (matchedItem && isSceneLocked(matchedItem)) {
-        // 仅有使用权限的场景 → 用户引导页（申请管理权限）
-        router.replace({
-          name: 'userLandingPage',
-          query: { scene_id: urlMatchId },
-        });
-        return;
+        // URL 指向仅使用权限场景：应用内进入时兜底第一个可管理场景（外链由路由守卫跳转申请页）
+        if (unlockedSceneItems.length > 0) {
+          [targetItem] = unlockedSceneItems;
+        } else {
+          router.replace({
+            name: 'userLandingPage',
+            query: { scene_id: urlMatchId },
+          });
+          return;
+        }
       } else {
         // URL 指向无权限场景 → 权限申请页
         router.replace({
