@@ -14,7 +14,6 @@ from services.web.scene.binding_validation import validate_platform_visibility_p
 from services.web.scene.constants import (
     SCENE_RISK_COUNT_ACTIVE_DISPLAY_STATUSES,
     SCENE_RISK_COUNT_DEFAULT_MONTHS,
-    ApplicationStatus,
     ResourceVisibilityType,
     SceneRole,
     SceneStatus,
@@ -492,13 +491,7 @@ class ApplicationDetailSerializer(serializers.Serializer):
 
 
 class SceneWithPermissionAndApplicationSerializer(serializers.ModelSerializer):
-    """无权限场景 + 权限状态 + 申请状态
-
-    `application` 字段取值需要结合当前用户对该场景的实际权限：
-    - 当权限已在 IAM 侧被撤销时，历史 approved 单视为已失效，不再展示。
-    - 由 ViewSet 上的 `insert_permission_field` 装饰器负责最终 `permission` 字段的写入，
-      本 Serializer 内为了给 `get_application` 提供判定依据，会额外调一次批量鉴权（与装饰器同源）。
-    """
+    """无权限场景 + 权限状态 + 申请状态"""
 
     scene_name = serializers.CharField(source="name", label=gettext_lazy("场景名称"))
     scene_managers = serializers.ListField(
@@ -519,45 +512,15 @@ class SceneWithPermissionAndApplicationSerializer(serializers.ModelSerializer):
             "application",
         ]
 
-    def _has_scene_permission(self, obj) -> bool:
-        """当前用户对该场景是否具备 view_scene 或 manage_scene 权限。"""
-        from bk_resource import resource as _resource
-
-        from apps.permission.handlers.actions import ActionEnum
-
-        permission_result = _resource.permission.batch_is_allowed(
-            action_ids=[ActionEnum.VIEW_SCENE.id, ActionEnum.MANAGE_SCENE.id],
-            resources=[str(obj.scene_id)],
-        ) or {}
-        perms = permission_result.get(str(obj.scene_id), {}) or {}
-        return bool(perms.get(ActionEnum.VIEW_SCENE.id) or perms.get(ActionEnum.MANAGE_SCENE.id))
-
     def get_permission(self, obj):
-        # 占位，最终会被 ViewSet 上的 `insert_permission_field` 装饰器覆盖。
+        # 后续由 insert_permission_field 装饰器覆盖为真实权限结果
         return {}
 
     def get_application(self, obj):
-        # 1) 有 PENDING 单：优先展示（让用户看到审批中状态）
-        pending_applications = getattr(obj, "latest_pending_applications", None) or []
-        if pending_applications:
-            return ApplicationDetailSerializer(pending_applications[0]).data
-
-        # 2) 无 PENDING：结合当前权限决定是否展示最近一条完结单
-        finished_applications = getattr(obj, "latest_finished_applications", None) or []
-        if not finished_applications:
+        applications = obj.latest_permission_applications
+        if not applications:
             return None
-        latest_finished = finished_applications[0]
-
-        if self._has_scene_permission(obj):
-            # 有权限：仅当最近完结单是 approved 时展示（表示当前权限来自该单）
-            if latest_finished.status == ApplicationStatus.APPROVED:
-                return ApplicationDetailSerializer(latest_finished).data
-            return None
-
-        # 无权限：忽略历史 approved（视为已失效），仅展示最近一次失败/终止/撤销
-        if latest_finished.status != ApplicationStatus.APPROVED:
-            return ApplicationDetailSerializer(latest_finished).data
-        return None
+        return ApplicationDetailSerializer(applications[0]).data
 
 
 class ScenePermissionCallbackResponseSerializer(serializers.Serializer):

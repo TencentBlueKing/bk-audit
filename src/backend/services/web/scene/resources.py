@@ -855,53 +855,29 @@ class ListMyScenePermissionApplications(SceneResource):
         applicant = get_request_username()
         scene_id = validated_request_data.get("scene_id")
 
-        # 1a. 子查询：每个 scene 对应最新 PENDING 申请单 ID（若存在）
-        latest_pending_application_id = (
-            ScenePermissionApplication.objects.filter(
-                applicant=applicant,
-                scene_id=OuterRef("scene_id"),
-                status=ApplicationStatus.PENDING,
-            )
-            .order_by("-id")
-            .values("id")[:1]
-        )
-        latest_pending_applications = ScenePermissionApplication.objects.filter(
-            applicant=applicant,
-            status=ApplicationStatus.PENDING,
-            id=Subquery(latest_pending_application_id),
-        )
-
-        # 1b. 子查询：每个 scene 对应最新已完结（非 PENDING）申请单 ID
-        latest_finished_application_id = (
+        # 1. 构造子查询：每个 scene 对应最新申请单 ID
+        latest_application_id = (
             ScenePermissionApplication.objects.filter(
                 applicant=applicant,
                 scene_id=OuterRef("scene_id"),
             )
-            .exclude(status=ApplicationStatus.PENDING)
             .order_by("-id")
             .values("id")[:1]
         )
-        latest_finished_applications = ScenePermissionApplication.objects.filter(
+
+        # 2. 实际需要 prefetch 的申请单
+        latest_applications = ScenePermissionApplication.objects.filter(
             applicant=applicant,
-            id=Subquery(latest_finished_application_id),
+            id=Subquery(latest_application_id),
         )
 
-        # 2. 查询启用的场景，并分别 prefetch PENDING / 非 PENDING 最新申请单。
-        # 注意：不在 Resource 层做权限批量查询，保持返回 QuerySet 让框架按当前页分页；
-        # 当前用户对当前页场景的权限，由 Serializer 层批量查询（见 SceneWithPermissionAndApplicationListSerializer）。
-        scenes = Scene.objects.filter(
-            is_deleted=False, status=SceneStatus.ENABLED,
-        ).prefetch_related(
+        # 3. 查询启用的场景，并 prefetch 最新申请单
+        scenes = Scene.objects.filter(is_deleted=False, status=SceneStatus.ENABLED,).prefetch_related(
             Prefetch(
                 "permission_applications",
-                queryset=latest_pending_applications,
-                to_attr="latest_pending_applications",
-            ),
-            Prefetch(
-                "permission_applications",
-                queryset=latest_finished_applications,
-                to_attr="latest_finished_applications",
-            ),
+                queryset=latest_applications,
+                to_attr="latest_permission_applications",
+            )
         )
 
         if scene_id:
