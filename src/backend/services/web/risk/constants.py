@@ -301,6 +301,9 @@ class RiskStatus(TextChoices):
     # 新
     NEW = "new", gettext_lazy("新")
 
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
+
     # 人工处理
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
     FOR_APPROVE = "for_approve", gettext_lazy("自动处理审批中")
@@ -362,6 +365,9 @@ class RiskDisplayStatus(TextChoices):
 
     # 新
     NEW = "new", gettext_lazy("新")
+
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
 
     # 待处理（仅 NEW → 未配置处理规则 时）
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
