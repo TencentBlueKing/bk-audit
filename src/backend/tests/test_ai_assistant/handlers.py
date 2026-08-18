@@ -1,5 +1,3 @@
-from blueapps.core.celery import celery_app
-
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionMode,
@@ -19,8 +17,8 @@ from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.services import AttachmentExecution, MessageExecution
 from services.web.ai_assistant.tasks import (
-    AttachmentExecutionTask,
-    MessageExecutionTask,
+    attachment_execution_task,
+    message_execution_task,
 )
 
 
@@ -43,10 +41,6 @@ class EchoSyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
     context_model = EchoContext
     output_model = EchoOutput
 
-    @property
-    def async_task(self) -> None:
-        return None
-
     def prepare(
         self,
         *,
@@ -61,16 +55,30 @@ class EchoSyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
         return EchoOutput(content=f"{context_data.prefix}:{input_data.text}")
 
 
+@message_execution_task(
+    name="tests.ai_assistant.echo_async_success",
+    queue="tests_ai_assistant",
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=1,
+    time_limit=30,
+)
+def execute_async_success(self, execution: MessageExecution[EchoInput, EchoContext]):
+    """模拟业务 Task 直接使用平台注入的消息实例和类型化快照。"""
+
+    execution.message.output_data = {"task_seen_message": True}
+    return EchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
 class EchoAsyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
+    """示例异步消息 Handler：在类体中直接绑定业务 Task。"""
+
     message_type = MessageType.NATURAL_LANGUAGE_SEARCH
     execution_mode = ExecutionMode.ASYNC
     input_model = EchoInput
     context_model = EchoContext
     output_model = EchoOutput
-
-    @property
-    def async_task(self) -> MessageExecutionTask:
-        return execute_async_success
+    async_task = execute_async_success
 
     def prepare(
         self,
@@ -89,32 +97,7 @@ class SystemSelectionAsyncHandler(EchoAsyncHandler):
     message_type = MessageType.SYSTEM_SELECTION
 
 
-class EchoMessageExecutionTask(MessageExecutionTask):
-    """测试消息 Task 基类，完整生命周期由生产基类统一提供。"""
-
-    abstract = True
-
-
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
-    name="tests.ai_assistant.echo_async_success",
-    queue="tests_ai_assistant",
-    acks_late=True,
-    max_retries=2,
-    default_retry_delay=1,
-    time_limit=30,
-)
-def execute_async_success(self, execution: MessageExecution[EchoInput, EchoContext]):
-    """模拟业务 Task 直接使用平台注入的消息实例和类型化快照。"""
-
-    execution.message.output_data = {"task_seen_message": True}
-    return EchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
-
-
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
+@message_execution_task(
     name="tests.ai_assistant.echo_async_failure",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -126,9 +109,7 @@ def execute_async_failure(self, execution: MessageExecution[EchoInput, EchoConte
     raise RuntimeError("private detail")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
+@message_execution_task(
     name="tests.ai_assistant.echo_async_retry",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -143,9 +124,7 @@ def execute_async_retry(self, execution: MessageExecution[EchoInput, EchoContext
     return EchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
+@message_execution_task(
     name="tests.ai_assistant.echo_async_retry_exhausted",
     queue="tests_ai_assistant",
     max_retries=2,
@@ -156,9 +135,7 @@ def execute_async_retry_exhausted(self, execution: MessageExecution[EchoInput, E
     raise self.retry(exc=RuntimeError("retry exhausted private detail"))
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
+@message_execution_task(
     name="tests.ai_assistant.echo_async_retry_without_exc",
     queue="tests_ai_assistant",
     max_retries=2,
@@ -173,9 +150,7 @@ class RetryableEchoError(RuntimeError):
     pass
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoMessageExecutionTask,
+@message_execution_task(
     name="tests.ai_assistant.echo_async_autoretry",
     queue="tests_ai_assistant",
     autoretry_for=(RetryableEchoError,),
@@ -207,10 +182,6 @@ class EditableAttachmentEchoHandler(
     input_model = AttachmentEchoInput
     context_model = AttachmentEchoContext
     output_model = AttachmentEchoOutput
-
-    @property
-    def async_task(self) -> None:
-        return None
 
     def prepare(
         self,
@@ -250,10 +221,6 @@ class EchoAttachmentSyncHandler(
     context_model = AttachmentEchoContext
     output_model = AttachmentEchoOutput
 
-    @property
-    def async_task(self) -> None:
-        return None
-
     def prepare(
         self,
         *,
@@ -274,36 +241,7 @@ class EchoAttachmentSyncHandler(
         return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
 
 
-class EchoAttachmentAsyncHandler(EchoAttachmentSyncHandler):
-    attachment_type = AttachmentType.AI_ANALYSIS
-    execution_mode = ExecutionMode.ASYNC
-
-    @property
-    def async_task(self) -> AttachmentExecutionTask:
-        return execute_attachment_async_success
-
-    def prepare(
-        self,
-        *,
-        user: str,
-        source_message: Message,
-        input_data: AttachmentEchoInput,
-    ) -> AttachmentPreparation[AttachmentEchoContext]:
-        return AttachmentPreparation(
-            title="AI 分析",
-            context_data=AttachmentEchoContext(prefix="async"),
-        )
-
-
-class EchoAttachmentExecutionTask(AttachmentExecutionTask):
-    """测试附件 Task 基类，完整生命周期由生产基类统一提供。"""
-
-    abstract = True
-
-
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_success",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -318,9 +256,27 @@ def execute_attachment_async_success(
     return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+class EchoAttachmentAsyncHandler(EchoAttachmentSyncHandler):
+    """示例异步附件 Handler：在类体中直接绑定业务 Task。"""
+
+    attachment_type = AttachmentType.AI_ANALYSIS
+    execution_mode = ExecutionMode.ASYNC
+    async_task = execute_attachment_async_success
+
+    def prepare(
+        self,
+        *,
+        user: str,
+        source_message: Message,
+        input_data: AttachmentEchoInput,
+    ) -> AttachmentPreparation[AttachmentEchoContext]:
+        return AttachmentPreparation(
+            title="AI 分析",
+            context_data=AttachmentEchoContext(prefix="async"),
+        )
+
+
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_failure",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -335,9 +291,7 @@ def execute_attachment_async_failure(
     raise RuntimeError("private detail")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_retry",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -354,9 +308,7 @@ def execute_attachment_async_retry(
     return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_retry_exhausted",
     queue="tests_ai_assistant",
     max_retries=2,
@@ -368,9 +320,7 @@ def execute_attachment_async_retry_exhausted(
     raise self.retry(exc=RuntimeError("retry exhausted private detail"))
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_retry_without_exc",
     queue="tests_ai_assistant",
     max_retries=2,
@@ -386,9 +336,7 @@ class RetryableAttachmentError(RuntimeError):
     pass
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_autoretry",
     queue="tests_ai_assistant",
     autoretry_for=(RetryableAttachmentError,),
@@ -401,9 +349,7 @@ def execute_attachment_async_autoretry(
     raise RetryableAttachmentError("autoretry private detail")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_update_title",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -420,9 +366,7 @@ def execute_attachment_async_update_title(
     return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_platform_error",
     queue="tests_ai_assistant",
     acks_late=True,
@@ -437,9 +381,7 @@ def execute_attachment_async_platform_error(
     raise InvalidAttachmentState(message="可公开的附件错误")
 
 
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
+@attachment_execution_task(
     name="tests.ai_assistant.echo_attachment_async_execution_failed",
     queue="tests_ai_assistant",
     acks_late=True,

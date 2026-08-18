@@ -20,7 +20,12 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Conversation, Message
-from services.web.ai_assistant.services import AttachmentExecutor
+from services.web.ai_assistant.services.attachment_execution import (
+    finish_attachment_failure,
+    finish_attachment_success,
+    load_attachment_execution,
+)
+from services.web.ai_assistant.tasks import AttachmentExecutionTask, BaseExecutionTask
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoContext,
@@ -74,6 +79,15 @@ class AttachmentTaskTest(TestCase):
             created_by=self.user,
             updated_by=self.user,
         )
+
+    def test_attachment_task_declares_execution_protocol(self):
+        self.assertTrue(issubclass(AttachmentExecutionTask, BaseExecutionTask))
+        self.assertEqual(AttachmentExecutionTask.id_argument, "attachment_id")
+        self.assertIs(AttachmentExecutionTask.stale_exception, StaleAttachmentTask)
+        self.assertEqual(AttachmentExecutionTask.object_label, "附件")
+        self.assertNotIn("executor", AttachmentExecutionTask.__dict__)
+        for method_name in ("_load_execution", "_finish_success", "_finish_failure"):
+            self.assertIn(method_name, AttachmentExecutionTask.__dict__)
 
     @staticmethod
     def invoke(task, *, attachment: Attachment, celery_task_id: str | None = None, retries: int = 0):
@@ -254,22 +268,22 @@ class AttachmentTaskTest(TestCase):
     def test_first_terminal_update_wins_when_workers_execute_concurrently(self):
         attachment = self.create_attachment()
 
-        first_execution = AttachmentExecutor.load_execution(
+        first_execution = load_attachment_execution(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             celery_task_id=attachment.task_id,
         )
-        AttachmentExecutor.load_execution(
+        load_attachment_execution(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             celery_task_id=attachment.task_id,
         )
-        AttachmentExecutor.mark_success(
+        finish_attachment_success(
             execution=first_execution,
             task_id=attachment.task_id,
             output_data={"content": "first"},
         )
-        updated = AttachmentExecutor.mark_failed(
+        updated = finish_attachment_failure(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             exception=RuntimeError("second worker failed"),
@@ -282,19 +296,19 @@ class AttachmentTaskTest(TestCase):
 
     def test_success_cannot_overwrite_failure_written_by_another_worker(self):
         attachment = self.create_attachment()
-        execution = AttachmentExecutor.load_execution(
+        execution = load_attachment_execution(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             celery_task_id=attachment.task_id,
         )
 
-        updated = AttachmentExecutor.mark_failed(
+        updated = finish_attachment_failure(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             exception=RuntimeError("first worker failed"),
         )
         with self.assertRaises(StaleAttachmentTask):
-            AttachmentExecutor.mark_success(
+            finish_attachment_success(
                 execution=execution,
                 task_id=attachment.task_id,
                 output_data={"content": "second"},
@@ -327,7 +341,7 @@ class AttachmentTaskTest(TestCase):
         attachment = self.create_attachment()
 
         with CaptureQueriesContext(connection) as captured:
-            execution = AttachmentExecutor.load_execution(
+            execution = load_attachment_execution(
                 attachment_id=attachment.id,
                 task_id=attachment.task_id,
                 celery_task_id=attachment.task_id,

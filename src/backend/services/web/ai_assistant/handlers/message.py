@@ -9,7 +9,7 @@ from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.schemas import MessageSchema
 
 if TYPE_CHECKING:
-    from services.web.ai_assistant.tasks import MessageExecutionTask
+    from services.web.ai_assistant.tasks import MessageAsyncTask
 
 InputT = TypeVar("InputT", bound=MessageSchema)
 ContextT = TypeVar("ContextT", bound=MessageSchema)
@@ -32,11 +32,8 @@ class MessageTypeHandler(Generic[InputT, ContextT, OutputT], ABC):
     input_model: type[InputT]
     context_model: type[ContextT]
     output_model: type[OutputT]
-
-    @property
-    @abstractmethod
-    def async_task(self) -> "MessageExecutionTask | None":
-        """返回该消息绑定的异步任务；同步消息必须显式返回 None。"""
+    # 同步 Handler 无需重复声明；异步 Handler 直接绑定平台装饰器生成的 Task。
+    async_task: "MessageAsyncTask[InputT, ContextT, OutputT] | None" = None
 
     @abstractmethod
     def prepare(

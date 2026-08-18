@@ -13,6 +13,7 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     ConversationNotFound,
     InvalidMessageAnchor,
+    InvalidMessageState,
     MessageNotFound,
     MessageSnapshotValidationError,
 )
@@ -22,6 +23,7 @@ from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
     ListMessages,
+    RetryMessage,
 )
 from services.web.ai_assistant.serializers.message import (
     AttachmentSummarySerializer,
@@ -33,7 +35,10 @@ from services.web.ai_assistant.serializers.message import (
     MessageWindowResponseSerializer,
     _message_schema_mapping,
 )
-from services.web.ai_assistant.services import MessageExecutor
+from services.web.ai_assistant.services.message_execution import (
+    finish_message_success,
+    load_message_execution,
+)
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
@@ -197,8 +202,13 @@ class MessageResourceTest(TestCase):
         self.assertIsNone(created["output_data"])
 
         message = Message.objects.get(uid=created["uid"])
-        MessageExecutor.mark_success(
+        execution = load_message_execution(
             message_id=message.id,
+            task_id=message.task_id,
+            celery_task_id=message.task_id,
+        )
+        finish_message_success(
+            execution=execution,
             task_id=message.task_id,
             output_data={"content": "async:search"},
         )
@@ -354,6 +364,60 @@ class MessageResourceTest(TestCase):
         with self.assertRaises(MessageSnapshotValidationError):
             GetMessage().request({"message_uid": str(message.uid)})
 
+    def create_failed_async_message(self, **overrides):
+        values = {
+            "conversation": self.conversation,
+            "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+            "status": ExecutionStatus.FAILED,
+            "task_id": "task-old",
+            "input_data": {"text": "search"},
+            "context_data": {"prefix": "async"},
+            "output_data": {"content": "old"},
+            "error_code": "OLD_ERROR",
+            "error_message": "旧错误",
+            "created_by": "alice",
+            "updated_by": "alice",
+        }
+        values.update(overrides)
+        return Message.objects.create(**values)
+
+    def test_retry_message_returns_original_uid_processing_dto(self, _username):
+        message = self.create_failed_async_message()
+
+        with mock.patch.object(self.async_handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = RetryMessage().request({"message_uid": str(message.uid)})
+
+        self.assertEqual(response["uid"], str(message.uid))
+        self.assertEqual(response["status"], ExecutionStatus.PROCESSING)
+        self.assertEqual(response["input_data"], {"text": "search"})
+        self.assertIsNone(response["output_data"])
+        self.assertNotIn("context_data", response)
+        self.assertNotIn("task_id", response)
+
+    def test_retry_message_rejects_invalid_state(self, _username):
+        message = self.create_failed_async_message(
+            status=ExecutionStatus.PROCESSING,
+            task_id="task-processing",
+        )
+
+        with self.assertRaises(InvalidMessageState):
+            RetryMessage().request({"message_uid": str(message.uid)})
+
+    def test_retry_message_hides_foreign_and_deleted_conversation(self, _username):
+        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign = self.create_failed_async_message(
+            conversation=foreign_conversation,
+            created_by="bob",
+            updated_by="bob",
+        )
+        deleted = self.create_failed_async_message(task_id="task-deleted")
+        self.conversation.delete()
+
+        for message in (foreign, deleted):
+            with self.subTest(message=message.uid), self.assertRaises(MessageNotFound):
+                RetryMessage().request({"message_uid": str(message.uid)})
+
 
 @override_settings(ROOT_URLCONF="services.web.urls")
 class MessageResourceRoutingTest(TestCase):
@@ -365,3 +429,5 @@ class MessageResourceRoutingTest(TestCase):
         self.assertEqual(nested_attachment_match.kwargs, {"message_uid": message_uid})
         detail_match = resolve(f"/api/v1/ai_assistant/messages/{message_uid}/")
         self.assertEqual(detail_match.kwargs, {"message_uid": message_uid})
+        retry_match = resolve(f"/api/v1/ai_assistant/messages/{message_uid}/retry/")
+        self.assertEqual(retry_match.kwargs, {"message_uid": message_uid})

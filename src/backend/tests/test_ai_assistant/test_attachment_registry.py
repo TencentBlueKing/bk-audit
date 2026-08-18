@@ -1,4 +1,3 @@
-from blueapps.core.celery import celery_app
 from celery import Task
 from django.core.exceptions import ImproperlyConfigured
 
@@ -13,7 +12,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentTypeHandler,
 )
 from services.web.ai_assistant.schemas import MessageSchema
-from services.web.ai_assistant.tasks import AttachmentExecutionTask
+from services.web.ai_assistant.tasks import attachment_execution_task
 from tests.base import TestCase
 
 
@@ -27,6 +26,18 @@ class AttachmentEchoContext(MessageSchema):
 
 class AttachmentEchoOutput(MessageSchema):
     content: str
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.echo_attachment_registry_success",
+    queue="tests_ai_assistant",
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=1,
+    time_limit=30,
+)
+def execute_attachment_async_success(self, execution):
+    raise NotImplementedError
 
 
 class AttachmentHandlerRegistryTest(TestCase):
@@ -134,10 +145,6 @@ class IncompleteAttachmentHandler(
     context_model = AttachmentEchoContext
     output_model = AttachmentEchoOutput
 
-    @property
-    def async_task(self):
-        return None
-
     def prepare(self, **kwargs):
         raise NotImplementedError
 
@@ -178,10 +185,6 @@ class EchoAttachmentSyncHandler(
     context_model = AttachmentEchoContext
     output_model = AttachmentEchoOutput
 
-    @property
-    def async_task(self):
-        return None
-
     def prepare(self, **kwargs):
         return AttachmentPreparation(
             title="字段统计",
@@ -193,9 +196,7 @@ class EchoAttachmentSyncHandler(
 
 
 class SyncAttachmentHandlerWithAsyncTask(EchoAttachmentSyncHandler):
-    @property
-    def async_task(self):
-        return execute_attachment_async_success
+    async_task = execute_attachment_async_success
 
 
 class SyncAttachmentHandlerWithoutExecute(
@@ -206,10 +207,6 @@ class SyncAttachmentHandlerWithoutExecute(
     input_model = AttachmentEchoInput
     context_model = AttachmentEchoContext
     output_model = AttachmentEchoOutput
-
-    @property
-    def async_task(self):
-        return None
 
     def prepare(self, **kwargs):
         return AttachmentPreparation(
@@ -225,22 +222,15 @@ class SyncAttachmentHandlerWithNonCallableExecute(SyncAttachmentHandlerWithoutEx
 class EchoAttachmentAsyncHandler(EchoAttachmentSyncHandler):
     attachment_type = AttachmentType.AI_ANALYSIS
     execution_mode = ExecutionMode.ASYNC
-
-    @property
-    def async_task(self):
-        return execute_attachment_async_success
+    async_task = execute_attachment_async_success
 
 
 class AsyncAttachmentHandlerWithoutTask(EchoAttachmentAsyncHandler):
-    @property
-    def async_task(self):
-        return None
+    async_task = None
 
 
 class AsyncAttachmentHandlerWithInvalidTask(EchoAttachmentAsyncHandler):
-    @property
-    def async_task(self):
-        return Task()
+    async_task = Task()
 
 
 class InvalidAttachmentExecutionModeHandler(EchoAttachmentSyncHandler):
@@ -248,9 +238,8 @@ class InvalidAttachmentExecutionModeHandler(EchoAttachmentSyncHandler):
 
 
 class InvalidAttachmentExecutionModeRegistryTest(TestCase):
-    def test_async_task_is_required_abstract_property(self):
-        with self.assertRaises(TypeError):
-            MissingAsyncTaskPropertyAttachmentHandler()
+    def test_sync_handler_defaults_async_task_to_none(self):
+        self.assertIsNone(MissingAsyncTaskPropertyAttachmentHandler().async_task)
 
     def test_invalid_execution_mode_is_rejected(self):
         with self.assertRaises(ImproperlyConfigured):
@@ -261,21 +250,3 @@ class InvalidAttachmentExecutionModeRegistryTest(TestCase):
             with self.subTest(handler=type(handler).__name__):
                 with self.assertRaises(ImproperlyConfigured):
                     AttachmentHandlerRegistry().register(handler)
-
-
-class EchoAttachmentExecutionTask(AttachmentExecutionTask):
-    abstract = True
-
-
-@celery_app.task(
-    bind=True,
-    base=EchoAttachmentExecutionTask,
-    name="tests.ai_assistant.echo_attachment_async_success",
-    queue="tests_ai_assistant",
-    acks_late=True,
-    max_retries=2,
-    default_retry_delay=1,
-    time_limit=30,
-)
-def execute_attachment_async_success(self, execution):
-    raise NotImplementedError

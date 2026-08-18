@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 from uuid import uuid4
 
 from django.conf import settings
@@ -18,15 +18,12 @@ from services.web.ai_assistant.constants import (
     MessageType,
 )
 from services.web.ai_assistant.exceptions import (
-    AIAssistantException,
     ConversationNotFound,
     InvalidInitialMessage,
     InvalidMessageAnchor,
+    InvalidMessageState,
     InvalidParentMessage,
-    MessageExecutionFailed,
     MessageNotFound,
-    MessageSnapshotValidationError,
-    StaleMessageTask,
 )
 from services.web.ai_assistant.handlers import (
     MessageTypeHandler,
@@ -35,10 +32,10 @@ from services.web.ai_assistant.handlers import (
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import (
     MessageSchema,
-    SnapshotInput,
     dump_snapshot,
     parse_snapshot,
 )
+from services.web.ai_assistant.services.message_execution import finish_message_failure
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +66,6 @@ class MessageWindow:
     has_before: bool
     has_after: bool
     include_content: bool
-
-
-@dataclass(frozen=True, slots=True)
-class MessageExecution(Generic[InputT, ContextT]):
-    """业务 Task 执行时读取到的消息和类型化快照。"""
-
-    message: Message
-    input_data: InputT
-    context_data: ContextT
 
 
 class MessageService:
@@ -252,6 +240,38 @@ class MessageService:
             include_content=include_content,
         )
 
+    def retry(self, *, message_uid: str) -> Message:
+        """复用失败异步消息的原快照，并以旧 task_id 原子抢占一次重试。"""
+
+        message = self.get(message_uid=message_uid)
+        handler = message_handler_registry.require(message.message_type)
+        if (
+            message.status != ExecutionStatus.FAILED
+            or handler.execution_mode != ExecutionMode.ASYNC
+            or not message.task_id
+        ):
+            raise InvalidMessageState()
+
+        old_task_id = message.task_id
+        new_task_id = str(uuid4())
+        now = timezone.now()
+        with transaction.atomic():
+            updated = Message.restart_failed(
+                instance_id=message.id,
+                old_task_id=old_task_id,
+                new_task_id=new_task_id,
+                extra_updates={
+                    "updated_by": self.user,
+                    "updated_at": now,
+                },
+            )
+            if not updated:
+                raise InvalidMessageState()
+            # 刷新后的同一实例既用于任务投递，也作为接口响应，避免暴露旧 task 状态。
+            message.refresh_from_db()
+            transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
+        return message
+
     def _get_conversation(self, *, conversation_uid: str) -> Conversation:
         """独立校验会话归属，使不存在与空消息列表保持不同语义。"""
 
@@ -417,7 +437,7 @@ class MessageService:
                     "task_id": message.task_id,
                 },
             )
-            MessageExecutor.mark_failed(
+            finish_message_failure(
                 message_id=message.id,
                 task_id=message.task_id,
                 exception=error,
@@ -425,111 +445,3 @@ class MessageService:
             )
             # 投递失败后刷新同一个实例，避免 create() 首次返回值仍停留在 PROCESSING。
             message.refresh_from_db()
-
-
-class MessageExecutor:
-    """提供异步消息 fencing、类型化快照加载和数据库终态幂等更新。"""
-
-    @staticmethod
-    def assert_executable(*, message_id: int, task_id: str, celery_task_id: str) -> None:
-        """外部调用前校验数据库任务与当前 Celery 投递完全一致。"""
-
-        if celery_task_id != task_id:
-            raise StaleMessageTask()
-        MessageExecutor._require_processing_message(message_id=message_id, task_id=task_id)
-
-    @classmethod
-    def load_processing_execution(
-        cls,
-        *,
-        message_id: int,
-        task_id: str,
-    ) -> MessageExecution[InputT, ContextT]:
-        """加载当前任务的消息，并按已注册 Handler Schema 解析执行快照。"""
-
-        message = cls._require_processing_message(message_id=message_id, task_id=task_id)
-        handler = message_handler_registry.require(message.message_type)
-        return MessageExecution(
-            message=message,
-            input_data=parse_snapshot(handler.input_model, message.input_data, field_name="input_data"),
-            context_data=parse_snapshot(handler.context_model, message.context_data, field_name="context_data"),
-        )
-
-    @staticmethod
-    def mark_success(*, message_id: int, task_id: str, output_data: SnapshotInput) -> dict[str, Any]:
-        """校验输出并原子写入成功终态；并发任务只有第一个更新成功。"""
-
-        message = MessageExecutor._require_processing_message(message_id=message_id, task_id=task_id)
-        handler = message_handler_registry.require(message.message_type)
-        try:
-            output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
-        except MessageSnapshotValidationError as error:
-            raise MessageExecutionFailed(message="任务执行结果格式错误") from error
-        processing_message = Message.objects.filter(
-            id=message_id,
-            task_id=task_id,
-            status=ExecutionStatus.PROCESSING,
-        )
-        # PROCESSING 是终态写入的 CAS 条件，防止并发 Worker 相互覆盖结果。
-        updated = processing_message.update(
-            output_data=output_snapshot,
-            status=ExecutionStatus.SUCCESS,
-            error_code="",
-            error_message="",
-            updated_by=message.created_by,
-            updated_at=timezone.now(),
-        )
-        if updated != 1:
-            raise StaleMessageTask()
-        return output_snapshot
-
-    @staticmethod
-    def mark_failed(
-        *,
-        message_id: int,
-        task_id: str,
-        exception: Exception,
-        error_code: str | MessageErrorCode = MessageErrorCode.TASK_EXECUTION_FAILED,
-    ) -> bool:
-        """提取可公开错误，并以相同 CAS 条件尝试写入失败终态。"""
-
-        message = Message.objects.filter(
-            id=message_id,
-            task_id=task_id,
-            status=ExecutionStatus.PROCESSING,
-        ).first()
-        if message is None:
-            return False
-        if error_code == MessageErrorCode.TASK_DISPATCH_FAILED:
-            public_message = "任务投递失败，请稍后重试"
-        elif isinstance(exception, MessageExecutionFailed):
-            public_message = exception.message
-        elif isinstance(exception, AIAssistantException):
-            public_message = exception.message
-            error_code = exception.code
-        else:
-            public_message = "消息执行失败，请稍后重试"
-        processing_message = Message.objects.filter(
-            id=message_id,
-            task_id=task_id,
-            status=ExecutionStatus.PROCESSING,
-        )
-        # 失败与成功竞争同一 PROCESSING 条件，首个终态写入者获胜。
-        updated = processing_message.update(
-            output_data=None,
-            status=ExecutionStatus.FAILED,
-            error_code=error_code,
-            error_message=public_message,
-            updated_by=message.created_by,
-            updated_at=timezone.now(),
-        )
-        return updated == 1
-
-    @staticmethod
-    def _require_processing_message(*, message_id: int, task_id: str) -> Message:
-        """要求消息仍绑定当前任务且处于 PROCESSING，否则视为陈旧任务。"""
-
-        message = Message.objects.filter(id=message_id).first()
-        if message is None or message.status != ExecutionStatus.PROCESSING or message.task_id != task_id:
-            raise StaleMessageTask()
-        return message

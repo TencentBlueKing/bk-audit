@@ -1,7 +1,6 @@
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any
 from uuid import uuid4
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -14,44 +13,24 @@ from services.web.ai_assistant.constants import (
     ExecutionStatus,
 )
 from services.web.ai_assistant.exceptions import (
-    AIAssistantException,
     AttachmentNotFound,
     AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
     InvalidAttachmentPreparation,
     InvalidAttachmentSource,
     InvalidAttachmentState,
-    StaleAttachmentTask,
 )
 from services.web.ai_assistant.handlers import (
     AttachmentExecutionContext,
     attachment_handler_registry,
 )
 from services.web.ai_assistant.models import Attachment, Message
-from services.web.ai_assistant.schemas import (
-    MessageSchema,
-    SnapshotInput,
-    dump_snapshot,
-    parse_snapshot,
+from services.web.ai_assistant.schemas import dump_snapshot, parse_snapshot
+from services.web.ai_assistant.services.attachment_execution import (
+    finish_attachment_failure,
 )
 
 logger = logging.getLogger(__name__)
-
-InputT = TypeVar("InputT", bound=MessageSchema)
-ContextT = TypeVar("ContextT", bound=MessageSchema)
-
-
-@dataclass(frozen=True, slots=True)
-class AttachmentExecution(Generic[InputT, ContextT]):
-    """业务 Task 执行时读取到的附件和类型化快照。"""
-
-    attachment: Attachment
-    input_data: InputT
-    context_data: ContextT
-
-    @property
-    def source_message(self) -> Message:
-        return self.attachment.source_message
 
 
 class AttachmentService:
@@ -282,23 +261,19 @@ class AttachmentService:
         now = timezone.now()
         with transaction.atomic():
             # 不加行锁；依赖 FAILED + old task_id 的 CAS 让并发重试只有一个成功。
-            updated = Attachment.objects.filter(
-                id=attachment.id,
-                status=ExecutionStatus.FAILED,
-                task_id=old_task_id,
-            ).update(
-                status=ExecutionStatus.PROCESSING,
-                task_id=new_task_id,
-                output_data=None,
-                error_code="",
-                error_message="",
-                stream_config={},
-                stream_archive=[],
-                content_updated_at=now,
-                updated_by=self.user,
-                updated_at=now,
+            updated = Attachment.restart_failed(
+                instance_id=attachment.id,
+                old_task_id=old_task_id,
+                new_task_id=new_task_id,
+                extra_updates={
+                    "stream_config": {},
+                    "stream_archive": [],
+                    "content_updated_at": now,
+                    "updated_by": self.user,
+                    "updated_at": now,
+                },
             )
-            if updated != 1:
+            if not updated:
                 raise InvalidAttachmentState()
             # CAS 使用 QuerySet 原子抢占；刷新实例供 on_commit 投递和接口返回共同使用。
             # 流式配置与事件均属于单次运行，任务启动前先清空，避免排队或投递失败时暴露旧数据。
@@ -391,129 +366,10 @@ class AttachmentService:
                     "task_id": attachment.task_id,
                 },
             )
-            if AttachmentExecutor.mark_failed(
+            if finish_attachment_failure(
                 attachment_id=attachment.id,
                 task_id=attachment.task_id,
                 exception=error,
                 error_code=AttachmentErrorCode.TASK_DISPATCH_FAILED,
             ):
                 attachment.refresh_from_db()
-
-
-class AttachmentExecutor:
-    """统一加载附件执行上下文，并以 CAS 条件收敛终态。"""
-
-    @classmethod
-    def load_execution(
-        cls,
-        *,
-        attachment_id: int,
-        task_id: str,
-        celery_task_id: str,
-    ) -> AttachmentExecution:
-        """单次加载 PROCESSING 附件，并解析类型化快照。"""
-
-        if celery_task_id != task_id:
-            raise StaleAttachmentTask()
-        attachment = (
-            Attachment.objects.select_related("source_message__conversation")
-            .filter(
-                id=attachment_id,
-                task_id=task_id,
-                status=ExecutionStatus.PROCESSING,
-            )
-            .first()
-        )
-        if attachment is None:
-            raise StaleAttachmentTask()
-        handler = attachment_handler_registry.require(attachment.attachment_type)
-        return AttachmentExecution(
-            attachment=attachment,
-            input_data=parse_snapshot(
-                handler.input_model,
-                attachment.input_data,
-                field_name="input_data",
-                error_type=AttachmentSnapshotValidationError,
-            ),
-            context_data=parse_snapshot(
-                handler.context_model,
-                attachment.context_data,
-                field_name="context_data",
-                error_type=AttachmentSnapshotValidationError,
-            ),
-        )
-
-    @staticmethod
-    def mark_success(
-        *,
-        execution: AttachmentExecution,
-        task_id: str,
-        output_data: SnapshotInput,
-    ) -> dict[str, Any]:
-        """校验输出并原子写入成功终态；并发任务只有首个终态写入者获胜。"""
-
-        handler = attachment_handler_registry.require(execution.attachment.attachment_type)
-        try:
-            output_snapshot = dump_snapshot(
-                handler.output_model,
-                output_data,
-                field_name="output_data",
-                error_type=AttachmentSnapshotValidationError,
-            )
-        except AttachmentSnapshotValidationError as error:
-            raise AttachmentOutputValidationError() from error
-        updated = Attachment.objects.filter(
-            id=execution.attachment.id,
-            task_id=task_id,
-            status=ExecutionStatus.PROCESSING,
-        ).update(
-            output_data=output_snapshot,
-            status=ExecutionStatus.SUCCESS,
-            error_code="",
-            error_message="",
-            content_updated_at=timezone.now(),
-            updated_by=execution.attachment.created_by,
-            updated_at=timezone.now(),
-        )
-        if updated != 1:
-            raise StaleAttachmentTask()
-        return output_snapshot
-
-    @staticmethod
-    def mark_failed(
-        *,
-        attachment_id: int,
-        task_id: str,
-        exception: Exception,
-        error_code: str | AttachmentErrorCode = AttachmentErrorCode.TASK_EXECUTION_FAILED,
-    ) -> bool:
-        """提取可公开错误，并以相同 CAS 条件尝试写入失败终态。"""
-
-        processing_attachment = Attachment.objects.filter(
-            id=attachment_id,
-            task_id=task_id,
-            status=ExecutionStatus.PROCESSING,
-        )
-        created_by = processing_attachment.values_list("created_by", flat=True).first()
-        if created_by is None:
-            return False
-
-        resolved_error_code = str(error_code)
-        if resolved_error_code == AttachmentErrorCode.TASK_DISPATCH_FAILED:
-            public_message = "附件任务投递失败，请稍后重试"
-        elif isinstance(exception, AIAssistantException):
-            public_message = exception.message
-            if resolved_error_code == AttachmentErrorCode.TASK_EXECUTION_FAILED:
-                resolved_error_code = exception.code
-        else:
-            public_message = "附件执行失败，请稍后重试"
-
-        updated = processing_attachment.update(
-            output_data=None,
-            status=ExecutionStatus.FAILED,
-            error_code=resolved_error_code,
-            error_message=public_message,
-            updated_by=created_by,
-            updated_at=timezone.now(),
-        )
-        return updated == 1

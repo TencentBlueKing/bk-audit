@@ -9,6 +9,7 @@ from services.web.ai_assistant.handlers.message import (
 )
 from services.web.ai_assistant.handlers.registry import (
     AttachmentHandlerRegistry,
+    HandlerRegistry,
     MessageHandlerRegistry,
     attachment_handler_registry,
     message_handler_registry,
@@ -19,6 +20,7 @@ __all__ = [
     "AttachmentHandlerRegistry",
     "AttachmentPreparation",
     "AttachmentTypeHandler",
+    "HandlerRegistry",
     "MessageHandlerRegistry",
     "MessagePreparation",
     "MessageTypeHandler",

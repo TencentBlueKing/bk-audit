@@ -115,10 +115,6 @@ class IncompleteHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
     context_model = EchoContext
     output_model = EchoOutput
 
-    @property
-    def async_task(self):
-        return None
-
     def prepare(self, **kwargs):
         raise NotImplementedError
 
@@ -149,9 +145,7 @@ class MissingAsyncTaskPropertyHandler(MessageTypeHandler[EchoInput, EchoContext,
 
 
 class SyncHandlerWithAsyncTask(EchoSyncHandler):
-    @property
-    def async_task(self):
-        return execute_async_success
+    async_task = execute_async_success
 
 
 class SyncHandlerWithoutExecute(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
@@ -160,10 +154,6 @@ class SyncHandlerWithoutExecute(MessageTypeHandler[EchoInput, EchoContext, EchoO
     input_model = EchoInput
     context_model = EchoContext
     output_model = EchoOutput
-
-    @property
-    def async_task(self):
-        return None
 
     def prepare(self, **kwargs):
         raise NotImplementedError
@@ -174,21 +164,16 @@ class SyncHandlerWithNonCallableExecute(SyncHandlerWithoutExecute):
 
 
 class AsyncHandlerWithoutTask(EchoAsyncHandler):
-    @property
-    def async_task(self):
-        return None
+    async_task = None
 
 
 class AsyncHandlerWithInvalidTask(EchoAsyncHandler):
-    @property
-    def async_task(self):
-        return Task()
+    async_task = Task()
 
 
 class InvalidExecutionModeRegistryTest(TestCase):
-    def test_async_task_is_required_abstract_property(self):
-        with self.assertRaises(TypeError):
-            MissingAsyncTaskPropertyHandler()
+    def test_sync_handler_defaults_async_task_to_none(self):
+        self.assertIsNone(MissingAsyncTaskPropertyHandler().async_task)
 
     def test_invalid_execution_mode_is_rejected(self):
         with self.assertRaises(ImproperlyConfigured):

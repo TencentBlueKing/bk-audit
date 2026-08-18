@@ -1,92 +1,57 @@
-import logging
-
-from celery import Task
-from celery.exceptions import Ignore, Retry
-from django.core.exceptions import ImproperlyConfigured
+from typing import Any
 
 from services.web.ai_assistant.exceptions import StaleMessageTask
-from services.web.ai_assistant.services import MessageExecutor
+from services.web.ai_assistant.schemas import SnapshotInput
+from services.web.ai_assistant.services.message_execution import (
+    MessageExecution,
+    finish_message_failure,
+    finish_message_success,
+    load_message_execution,
+)
+from services.web.ai_assistant.tasks.base import BaseExecutionTask
 
-logger = logging.getLogger(__name__)
 
-
-class MessageExecutionTask(Task):
-    """将队列中的消息 ID 转为执行上下文，并统一管理消息终态。
-
-    业务 Task 仍使用 Celery 原生配置。`max_retries` 只限制重试次数，
-    普通异常需配置 `autoretry_for` 或由业务使用 `raise self.retry(...)`
-    发起重试。Celery `Retry` 只表示已重投，平台保持 PROCESSING；重试
-    耗尽后的原异常或 MaxRetriesExceededError 才会写入 FAILED。调用 `retry()`
-    时不得覆盖 `args/kwargs`，否则会丢失平台投递的消息 ID；也不得使用
-    `throw=False`，否则当前调用可能正常返回并被误判为成功。
-    """
+class MessageExecutionTask(BaseExecutionTask[MessageExecution]):
+    """为业务消息 Task 注入 MessageExecution，并由平台收敛执行终态。"""
 
     abstract = True
-    # 业务 run() 接收 Worker 内构造的 MessageExecution，而生产端只投递 ID。
-    # 因此关闭 Celery 对 run() 签名的生产端校验，并由本基类校验 ID。
-    typing = False
+    id_argument = "message_id"
+    object_label = "消息"
+    stale_exception = StaleMessageTask
 
-    def __call__(self, *args, **kwargs):
-        """注入执行上下文；已终态或 task_id 不匹配的投递直接忽略。"""
+    def _load_execution(
+        self,
+        *,
+        instance_id: int,
+        task_id: str,
+        celery_task_id: str,
+    ) -> MessageExecution:
+        """将平台通用对象参数适配为消息领域加载函数。"""
 
-        message_id, task_id = self._extract_message_arguments(kwargs)
-        try:
-            return self._execute_message(message_id=message_id, task_id=task_id)
-        except StaleMessageTask as error:
-            logger.info(
-                "忽略已失效或重复投递的 AI 助手消息任务",
-                extra={"message_id": message_id, "task_id": task_id},
-            )
-            raise Ignore() from error
-
-    def _execute_message(self, *, message_id: int, task_id: str):
-        """加载类型化快照后执行业务，Retry 不收敛状态。"""
-
-        MessageExecutor.assert_executable(
-            message_id=message_id,
+        return load_message_execution(
+            message_id=instance_id,
             task_id=task_id,
-            celery_task_id=self.request.id,
+            celery_task_id=celery_task_id,
         )
-        try:
-            execution = MessageExecutor.load_processing_execution(
-                message_id=message_id,
-                task_id=task_id,
-            )
-            # 直接调用 run() 避免用 MessageExecution 覆盖 Celery request 中的原始 ID；
-            # self.retry() 因此仍会使用 message_id/task_id 生成下一次投递。
-            result = self.run(execution)
-        except (Retry, StaleMessageTask):
-            raise
-        except Exception as error:
-            logger.exception(
-                "AI 助手消息任务执行失败",
-                extra={"message_id": message_id, "task_id": task_id, "task_name": self.name},
-            )
-            MessageExecutor.mark_failed(message_id=message_id, task_id=task_id, exception=error)
-            raise
 
-        try:
-            return MessageExecutor.mark_success(
-                message_id=message_id,
-                task_id=task_id,
-                output_data=result,
-            )
-        except StaleMessageTask:
-            raise
-        except Exception as error:
-            logger.exception(
-                "AI 助手消息任务结果写入失败",
-                extra={"message_id": message_id, "task_id": task_id, "task_name": self.name},
-            )
-            MessageExecutor.mark_failed(message_id=message_id, task_id=task_id, exception=error)
-            raise
+    def _finish_success(
+        self,
+        *,
+        execution: MessageExecution,
+        task_id: str,
+        output_data: SnapshotInput,
+    ) -> dict[str, Any]:
+        """将消息业务输出交给消息领域函数校验并收敛。"""
 
-    @staticmethod
-    def _extract_message_arguments(kwargs) -> tuple[int, str]:
-        """提取平台必需参数，错误的 Task 定义在执行前直接暴露。"""
+        return finish_message_success(execution=execution, task_id=task_id, output_data=output_data)
 
-        message_id = kwargs.get("message_id")
-        task_id = kwargs.get("task_id")
-        if message_id is None or not task_id:
-            raise ImproperlyConfigured("消息 Task 必须提供 message_id 和 task_id")
-        return message_id, task_id
+    def _finish_failure(
+        self,
+        *,
+        instance_id: int,
+        task_id: str,
+        exception: Exception,
+    ) -> bool:
+        """将 Worker 异常交给消息领域函数映射为公开失败快照。"""
+
+        return finish_message_failure(message_id=instance_id, task_id=task_id, exception=exception)
