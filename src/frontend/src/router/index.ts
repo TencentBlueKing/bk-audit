@@ -49,6 +49,8 @@ import Tools from '@views/tools/routes'; // 工具广场
 
 import { changeConfirm } from '@utils/assist';
 
+import { setActiveSceneSelection } from '@/utils/assist/scene-system-params';
+
 
 let lastRouterHrefCache = '/';
 
@@ -115,13 +117,33 @@ function isSceneConfigBusinessRoute(to: RouteLocationNormalized) {
     || to.matched.some(record => record.meta?.navName === 'sceneConfiguration');
 }
 
+/** 分享链接 / 地址栏直开（SPA 首次导航，无上一页路由记录） */
+function isSharedLinkEntry(from: RouteLocationNormalized) {
+  return !from.name && from.matched.length === 0;
+}
+
+const buildSceneContextQuery = (sceneId: string) => ({
+  scene_id: sceneId,
+  scope_id: sceneId,
+  scope_type: 'scene',
+});
+
+const persistSceneSelection = (sceneId: string) => {
+  const selection = { id: sceneId, type: 'scene' as const };
+  setActiveSceneSelection(selection);
+  localStorage.setItem('scene-system-selector:selected', JSON.stringify(selection));
+};
+
 /**
  * 场景配置页进入前权限分流：
  * - manage_scene=true：放行
- * - 无管理权限：跳转权限申请页（user-landing / permissions-page）
- * - 仅 scene-info 去掉自己管理员时，由页面内逻辑切到第一个可管理场景
+ * - 仅 view_scene + 分享链接进入：跳转 user-landing-page 申请
+ * - 仅 view_scene + 应用内其他模块进入：改选第一个有管理权限的场景并放行
  */
-async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
+async function resolveSceneConfigSceneAccess(
+  to: RouteLocationNormalized,
+  from: RouteLocationNormalized,
+) {
   if (!isSceneConfigBusinessRoute(to)) {
     return null;
   }
@@ -142,7 +164,7 @@ async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
     return null;
   }
 
-  const redirectQuery = { scene_id: String(sceneId) };
+  const redirectQuery = buildSceneContextQuery(String(sceneId));
 
   try {
     const sceneList = await SceneManageService.fetchSceneAll({ status: 'enabled' });
@@ -150,10 +172,33 @@ async function resolveSceneConfigSceneAccess(to: RouteLocationNormalized) {
     const permission = target?.permission || {};
 
     if (permission.manage_scene === true) {
+      persistSceneSelection(String(sceneId));
       return null;
     }
 
     if (permission.view_scene === true) {
+      if (isSharedLinkEntry(from)) {
+        return {
+          name: 'userLandingPage',
+          query: redirectQuery,
+        };
+      }
+
+      const firstManageable = (sceneList || []).find(item => item.permission?.manage_scene === true);
+      if (firstManageable) {
+        const manageableSceneId = String(firstManageable.scene_id);
+        persistSceneSelection(manageableSceneId);
+        return {
+          path: to.path,
+          query: {
+            ...to.query,
+            ...buildSceneContextQuery(manageableSceneId),
+          },
+          hash: to.hash,
+          replace: true,
+        };
+      }
+
       return {
         name: 'userLandingPage',
         query: redirectQuery,
@@ -275,8 +320,8 @@ export default (config: ConfigModel) => {
         }
       }
 
-      // 场景配置业务页：URL 场景不在选择器可选项中时，进入页面前跳转引导页
-      const sceneConfigRedirect = await resolveSceneConfigSceneAccess(to);
+      // 场景配置业务页：URL 场景仅使用权限时，按进入方式分流
+      const sceneConfigRedirect = await resolveSceneConfigSceneAccess(to, from);
       if (sceneConfigRedirect) {
         next(sceneConfigRedirect);
         return;

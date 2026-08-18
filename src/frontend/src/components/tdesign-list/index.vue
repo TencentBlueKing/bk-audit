@@ -793,7 +793,8 @@
   const fetchListData = () => {
     isReady = true;
     isLoading.value = true;
-    const fetchSeq = ++latestFetchSeq;
+    latestFetchSeq += 1;
+    const fetchSeq = latestFetchSeq;
     Promise.resolve()
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
