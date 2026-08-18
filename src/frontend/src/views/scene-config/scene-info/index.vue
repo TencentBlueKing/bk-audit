@@ -94,7 +94,11 @@
   import SceneTable from './components/scene-table.vue';
   import StatCards from './components/stat-cards.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getQueryFromLocation,
+    getSceneSystemParams,
+    setActiveSceneSelection,
+  } from '@/utils/assist/scene-system-params';
 
   const { CancelToken } = axios;
   const router = useRouter();
@@ -105,7 +109,15 @@
 
   const SCENE_SELECTOR_STORAGE_KEY = 'scene-system-selector:selected';
 
-  const sceneId = ref(getSceneSystemParams().scope_id);
+  const getRouteSceneId = () => {
+    const locationQuery = getQueryFromLocation();
+    const id = locationQuery.scene_id
+      || locationQuery.scope_id
+      || String(route.query.scene_id || route.query.scope_id || '');
+    return id && id !== 'allSecen' ? id : '';
+  };
+
+  const sceneId = ref(getRouteSceneId() || getSceneSystemParams().scope_id);
   // 骨架屏 loading 状态（仅等待场景基础信息）
   const isSkeletonLoading = ref(true);
   // 基础信息字段保存 loading 状态
@@ -660,6 +672,10 @@
         return String(item.id);
       }
     }
+    const routeSceneId = getRouteSceneId();
+    if (routeSceneId) {
+      return routeSceneId;
+    }
     const params = getSceneSystemParams();
     return params.scope_type === 'scene' ? params.scope_id : '';
   };
@@ -690,6 +706,7 @@
     }
     const loadingSceneId = sceneId.value;
     lastLoadedSceneId = loadingSceneId;
+    setActiveSceneSelection({ id: loadingSceneId, type: 'scene' });
     try {
       // 先加载场景基础信息，完成后立即展示统计卡片与基础信息
       await fetchSceneInfo(loadingSceneId as any).catch(() => null);
@@ -715,14 +732,17 @@
   // 无 scene_id 时跳过，等选择器选中后通过 scene:change / 路由 query 再加载。
   onEvent('scene:change', handleSceneChange);
   watch(
-    () => String(route.query.scene_id || route.query.scope_id || ''),
+    () => getRouteSceneId(),
     (id) => {
-      if (!id || id === 'allSecen') return;
+      if (!id) return;
       handleSceneChange(id);
     },
   );
   onMounted(() => {
-    handleSceneChange();
+    const id = getRouteSceneId();
+    if (id) {
+      handleSceneChange(id);
+    }
   });
 
   onUnmounted(() => {
