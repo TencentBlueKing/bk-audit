@@ -26,6 +26,14 @@ class MessageErrorCode(TextChoices):
     TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("任务执行失败")
 
 
+class AttachmentErrorCode(TextChoices):
+    """平台附件执行链路写入快照的稳定错误码。"""
+
+    TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("附件任务投递失败")
+    TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("附件任务执行失败")
+    OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
+
+
 class MessageType(TextChoices):
     """平台首期支持的消息类型。"""
 

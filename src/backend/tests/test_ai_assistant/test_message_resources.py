@@ -361,5 +361,7 @@ class MessageResourceRoutingTest(TestCase):
         message_uid = str(uuid4())
 
         self.assertEqual(resolve("/api/v1/ai_assistant/messages/").url_name, "messages-list")
+        nested_attachment_match = resolve(f"/api/v1/ai_assistant/messages/{message_uid}/attachments/")
+        self.assertEqual(nested_attachment_match.kwargs, {"message_uid": message_uid})
         detail_match = resolve(f"/api/v1/ai_assistant/messages/{message_uid}/")
         self.assertEqual(detail_match.kwargs, {"message_uid": message_uid})

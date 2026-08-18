@@ -86,21 +86,14 @@ class BKResourceAutoSchema(AutoSchema):
                         else:
                             continue
 
-                        # UUID 路径参数显式声明格式；其余常用 DRF 字段映射为基础类型。
-                        field_type_map = {
-                            drf_serializers.UUIDField: OpenApiTypes.UUID,
-                            drf_serializers.IntegerField: int,
-                            drf_serializers.FloatField: float,
-                            drf_serializers.BooleanField: bool,
-                        }
-                        openapi_type = field_type_map.get(type(field), str)
+                        parameter_options = self._get_parameter_options(field)
                         params.append(
                             OpenApiParameter(
                                 name=field_name,
-                                type=openapi_type,
                                 location=location,
                                 description=str(field.help_text or field.label or field_name),
                                 required=True if location == OpenApiParameter.PATH else field.required,
+                                **parameter_options,
                             )
                         )
                 except Exception:
@@ -116,6 +109,33 @@ class BKResourceAutoSchema(AutoSchema):
                     ]
                 )
         return params
+
+    @staticmethod
+    def _get_parameter_options(field):
+        """将 DRF 字段转换为 OpenAPI 参数配置，并保留 ListField 子类语义。"""
+
+        is_list = isinstance(field, drf_serializers.ListField)
+        value_field = field.child if is_list else field
+
+        # 使用 isinstance 支持 FlexibleListField 等自定义子类，而非只匹配字段的精确类型。
+        field_type_map = (
+            (drf_serializers.UUIDField, OpenApiTypes.UUID),
+            (drf_serializers.IntegerField, int),
+            (drf_serializers.FloatField, float),
+            (drf_serializers.BooleanField, bool),
+        )
+        openapi_type = next(
+            (field_type for field_class, field_type in field_type_map if isinstance(value_field, field_class)),
+            str,
+        )
+        options = {"type": openapi_type}
+
+        if isinstance(value_field, drf_serializers.ChoiceField):
+            options["enum"] = list(value_field.choices)
+        if is_list:
+            # form + explode 同时兼容标准重复参数；CSV 兼容方式由字段 help_text 补充说明。
+            options.update(many=True, style="form", explode=True)
+        return options
 
     def get_tags(self):
         # 尝试从 Resource 类获取 tags

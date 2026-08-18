@@ -423,6 +423,8 @@ class MessageService:
                 exception=error,
                 error_code=MessageErrorCode.TASK_DISPATCH_FAILED,
             )
+            # 投递失败后刷新同一个实例，避免 create() 首次返回值仍停留在 PROCESSING。
+            message.refresh_from_db()
 
 
 class MessageExecutor:
