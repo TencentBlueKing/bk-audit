@@ -17,7 +17,12 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Conversation, Message
-from services.web.ai_assistant.services import MessageExecutor
+from services.web.ai_assistant.services.message_execution import (
+    finish_message_failure,
+    finish_message_success,
+    load_message_execution,
+)
+from services.web.ai_assistant.tasks import BaseExecutionTask, MessageExecutionTask
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
@@ -56,6 +61,15 @@ class MessageTaskTest(TestCase):
             created_by=self.user,
             updated_by=self.user,
         )
+
+    def test_message_task_declares_execution_protocol(self):
+        self.assertTrue(issubclass(MessageExecutionTask, BaseExecutionTask))
+        self.assertEqual(MessageExecutionTask.id_argument, "message_id")
+        self.assertIs(MessageExecutionTask.stale_exception, StaleMessageTask)
+        self.assertEqual(MessageExecutionTask.object_label, "消息")
+        self.assertNotIn("executor", MessageExecutionTask.__dict__)
+        for method_name in ("_load_execution", "_finish_success", "_finish_failure"):
+            self.assertIn(method_name, MessageExecutionTask.__dict__)
 
     @staticmethod
     def invoke(task, *, message: Message, celery_task_id: str | None = None, retries: int = 0):
@@ -128,7 +142,7 @@ class MessageTaskTest(TestCase):
         message = self.create_message()
         error = InvalidParentMessage(message="可公开的任务错误")
 
-        updated = MessageExecutor.mark_failed(message_id=message.id, task_id=message.task_id, exception=error)
+        updated = finish_message_failure(message_id=message.id, task_id=message.task_id, exception=error)
 
         message.refresh_from_db()
         self.assertTrue(updated)
@@ -139,7 +153,7 @@ class MessageTaskTest(TestCase):
         message = self.create_message()
         error = CoreValidationError(message="upstream private detail")
 
-        MessageExecutor.mark_failed(message_id=message.id, task_id=message.task_id, exception=error)
+        finish_message_failure(message_id=message.id, task_id=message.task_id, exception=error)
 
         message.refresh_from_db()
         self.assertEqual(message.error_code, MessageErrorCode.TASK_EXECUTION_FAILED)
@@ -225,23 +239,23 @@ class MessageTaskTest(TestCase):
     def test_first_terminal_update_wins_when_workers_execute_concurrently(self):
         message = self.create_message()
 
-        # 两个 Worker 可以同时通过执行前校验并完成各自的业务计算。
-        MessageExecutor.assert_executable(
+        # 两个 Worker 可以同时加载同一个 PROCESSING 快照并完成各自的业务计算。
+        first_execution = load_message_execution(
             message_id=message.id,
             task_id=message.task_id,
             celery_task_id=message.task_id,
         )
-        MessageExecutor.assert_executable(
+        load_message_execution(
             message_id=message.id,
             task_id=message.task_id,
             celery_task_id=message.task_id,
         )
-        MessageExecutor.mark_success(
-            message_id=message.id,
+        finish_message_success(
+            execution=first_execution,
             task_id=message.task_id,
             output_data={"content": "first"},
         )
-        updated = MessageExecutor.mark_failed(
+        updated = finish_message_failure(
             message_id=message.id,
             task_id=message.task_id,
             exception=RuntimeError("second worker failed"),
@@ -254,15 +268,20 @@ class MessageTaskTest(TestCase):
 
     def test_success_cannot_overwrite_failure_written_by_another_worker(self):
         message = self.create_message()
+        execution = load_message_execution(
+            message_id=message.id,
+            task_id=message.task_id,
+            celery_task_id=message.task_id,
+        )
 
-        updated = MessageExecutor.mark_failed(
+        updated = finish_message_failure(
             message_id=message.id,
             task_id=message.task_id,
             exception=RuntimeError("first worker failed"),
         )
         with self.assertRaises(StaleMessageTask):
-            MessageExecutor.mark_success(
-                message_id=message.id,
+            finish_message_success(
+                execution=execution,
                 task_id=message.task_id,
                 output_data={"content": "second"},
             )
@@ -276,13 +295,18 @@ class MessageTaskTest(TestCase):
         message = self.create_message(task_id="task-current")
 
         with self.assertRaises(StaleMessageTask):
-            MessageExecutor.mark_success(
+            load_message_execution(
                 message_id=message.id,
                 task_id="task-old",
-                output_data={"content": "old"},
+                celery_task_id="task-old",
             )
-        current_output = MessageExecutor.mark_success(
+        execution = load_message_execution(
             message_id=message.id,
+            task_id="task-current",
+            celery_task_id="task-current",
+        )
+        current_output = finish_message_success(
+            execution=execution,
             task_id="task-current",
             output_data={"content": "current"},
         )
@@ -300,12 +324,13 @@ class MessageTaskTest(TestCase):
         message.refresh_from_db()
         self.assertEqual(message.status, ExecutionStatus.SUCCESS)
 
-    def test_load_processing_execution_returns_concrete_snapshot_types(self):
+    def test_load_execution_returns_concrete_snapshot_types(self):
         message = self.create_message()
 
-        execution = MessageExecutor.load_processing_execution(
+        execution = load_message_execution(
             message_id=message.id,
             task_id=message.task_id,
+            celery_task_id=message.task_id,
         )
 
         self.assertIsInstance(execution.input_data, EchoInput)

@@ -34,8 +34,10 @@ from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentListItemSerializer,
 )
-from services.web.ai_assistant.services import AttachmentExecutor
 from services.web.ai_assistant.services.attachment import AttachmentService
+from services.web.ai_assistant.services.attachment_execution import (
+    finish_attachment_failure,
+)
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoContext,
@@ -728,7 +730,7 @@ class AttachmentServiceTest(TestCase):
             retried = self.service.retry(attachment_uid=str(attachment.uid))
         new_task_id = retried.task_id
 
-        updated = AttachmentExecutor.mark_failed(
+        updated = finish_attachment_failure(
             attachment_id=retried.id,
             task_id=old_task_id,
             exception=RuntimeError("old task"),

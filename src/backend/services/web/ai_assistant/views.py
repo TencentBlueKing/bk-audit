@@ -28,6 +28,7 @@ from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
     ListMessages,
+    RetryMessage,
 )
 from services.web.ai_assistant.serializers.conversation import (
     ConversationSearchResponseSerializer,
@@ -95,6 +96,7 @@ class MessagesViewSet(ResourceViewSet):
         ResourceRoute("POST", CreateMessage),
         ResourceRoute("GET", ListMessages),
         ResourceRoute("GET", GetMessage, pk_field="message_uid"),
+        ResourceRoute("POST", RetryMessage, endpoint="retry", pk_field="message_uid"),
         ResourceRoute("POST", CreateAttachment, endpoint="attachments", pk_field="message_uid"),
     ]
 

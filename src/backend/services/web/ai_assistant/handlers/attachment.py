@@ -10,7 +10,7 @@ from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import MessageSchema
 
 if TYPE_CHECKING:
-    from services.web.ai_assistant.tasks import AttachmentExecutionTask
+    from services.web.ai_assistant.tasks import AttachmentAsyncTask
 
 InputT = TypeVar("InputT", bound=MessageSchema)
 ContextT = TypeVar("ContextT", bound=MessageSchema)
@@ -42,11 +42,8 @@ class AttachmentTypeHandler(Generic[InputT, ContextT, OutputT], ABC):
     input_model: type[InputT]
     context_model: type[ContextT]
     output_model: type[OutputT]
-
-    @property
-    @abstractmethod
-    def async_task(self) -> "AttachmentExecutionTask | None":
-        """返回该附件绑定的异步任务；同步附件必须显式返回 None。"""
+    # 同步 Handler 无需重复声明；异步 Handler 直接绑定平台装饰器生成的 Task。
+    async_task: "AttachmentAsyncTask[InputT, ContextT, OutputT] | None" = None
 
     @abstractmethod
     def prepare(

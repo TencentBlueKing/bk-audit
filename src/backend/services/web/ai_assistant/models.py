@@ -1,4 +1,5 @@
 import uuid
+from typing import Any, Mapping
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -40,6 +41,76 @@ class ExecutionSnapshotModel(models.Model):
     output_data = models.JSONField(gettext_lazy("输出快照"), default=None, null=True, blank=True)
     error_code = models.CharField(gettext_lazy("错误码"), max_length=64, default="", blank=True)
     error_message = models.TextField(gettext_lazy("脱敏错误信息"), default="", blank=True)
+
+    @classmethod
+    def finish_processing(
+        cls,
+        *,
+        instance_id: int,
+        task_id: str,
+        status: str | ExecutionStatus,
+        output_data: Any,
+        error_code: str,
+        error_message: str,
+        extra_updates: Mapping[str, Any] | None = None,
+    ) -> bool:
+        """仅当指定任务仍处于处理中时，以单条 SQL 竞争写入执行终态。
+
+        ``QuerySet.update()`` 不触发 ``save()`` 和 ``auto_now``；调用方需要通过
+        ``extra_updates`` 显式传入审计时间及消息、附件各自的领域字段。
+        """
+
+        terminal_status = str(status)
+        if terminal_status not in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            raise ValueError("执行终态必须是 SUCCESS 或 FAILED")
+
+        updates = dict(extra_updates or {})
+        updates.update(
+            status=terminal_status,
+            output_data=output_data,
+            error_code=str(error_code),
+            error_message=str(error_message),
+        )
+        return (
+            cls.objects.filter(
+                id=instance_id,
+                status=ExecutionStatus.PROCESSING,
+                task_id=task_id,
+            ).update(**updates)
+            == 1
+        )
+
+    @classmethod
+    def restart_failed(
+        cls,
+        *,
+        instance_id: int,
+        old_task_id: str,
+        new_task_id: str,
+        extra_updates: Mapping[str, Any] | None = None,
+    ) -> bool:
+        """通过失败状态和旧任务 ID，原子抢占一次原对象重试。
+
+        ``QuerySet.update()`` 不触发 ``save()`` 和 ``auto_now``；调用方需要通过
+        ``extra_updates`` 显式传入审计时间及消息、附件各自的领域字段。
+        """
+
+        updates = dict(extra_updates or {})
+        updates.update(
+            status=ExecutionStatus.PROCESSING,
+            task_id=new_task_id,
+            output_data=None,
+            error_code="",
+            error_message="",
+        )
+        return (
+            cls.objects.filter(
+                id=instance_id,
+                status=ExecutionStatus.FAILED,
+                task_id=old_task_id,
+            ).update(**updates)
+            == 1
+        )
 
     class Meta:
         abstract = True

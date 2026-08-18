@@ -14,6 +14,8 @@ from services.web.ai_assistant.services.attachment import AttachmentService
 
 
 class CreateAttachment(AIAssistantResource):
+    """基于当前用户可见的成功消息创建类型化产物；同步返回 SUCCESS，异步返回 PROCESSING。"""
+
     name = gettext_lazy("创建附件")
     RequestSerializer = AttachmentCreateRequestSerializer
     ResponseSerializer = AttachmentResponseSerializer
@@ -27,6 +29,8 @@ class CreateAttachment(AIAssistantResource):
 
 
 class ListAttachments(AIAssistantResource):
+    """一次性返回附件摘要列表，支持按类型、状态、来源消息、会话和关键词筛选。"""
+
     name = gettext_lazy("获取附件列表")
     RequestSerializer = AttachmentListRequestSerializer
     ResponseSerializer = AttachmentListItemSerializer
@@ -48,6 +52,8 @@ class ListAttachments(AIAssistantResource):
 
 
 class GetAttachment(AIAssistantResource):
+    """返回附件完整类型化产物，不暴露任务 ID、内部上下文和流式事件归档。"""
+
     name = gettext_lazy("获取附件详情")
     RequestSerializer = AttachmentDetailRequestSerializer
     ResponseSerializer = AttachmentResponseSerializer
@@ -59,6 +65,8 @@ class GetAttachment(AIAssistantResource):
 
 
 class UpdateAttachment(AIAssistantResource):
+    """编辑附件元信息或产物；标题不受执行状态限制，产物仅允许成功且 Handler 开放编辑时修改。"""
+
     name = gettext_lazy("编辑附件")
     RequestSerializer = AttachmentUpdateRequestSerializer
     ResponseSerializer = AttachmentResponseSerializer
@@ -70,6 +78,8 @@ class UpdateAttachment(AIAssistantResource):
 
 
 class RetryAttachment(AIAssistantResource):
+    """重试 FAILED 异步附件；复用原对象和快照并切换新 task ID，不创建新附件。"""
+
     name = gettext_lazy("重试附件")
     RequestSerializer = AttachmentDetailRequestSerializer
     ResponseSerializer = AttachmentResponseSerializer

@@ -1,0 +1,148 @@
+import logging
+from typing import Any, Generic, TypeVar
+
+from celery import Task
+from celery.exceptions import Ignore, Retry
+from django.core.exceptions import ImproperlyConfigured
+
+from services.web.ai_assistant.schemas import SnapshotInput
+
+logger = logging.getLogger(__name__)
+ExecutionT = TypeVar("ExecutionT")
+
+
+class BaseExecutionTask(Task, Generic[ExecutionT]):
+    """为消息和附件 Task 注入类型化快照，并统一收敛执行终态。
+
+    业务 Task 继续使用 Celery 原生重试配置。调用 ``self.retry()`` 时不要覆盖
+    ``args/kwargs``，否则会丢失平台投递的对象 ID；也不要使用 ``throw=False``，
+    否则当前执行可能正常返回并被平台误判为成功。Celery ``Retry`` 仅表示任务
+    已重投，平台会保持 PROCESSING，直到后续执行成功或重试耗尽抛出最终异常。
+    """
+
+    abstract = True
+    # 业务 run() 接收 Worker 内构造的执行快照，生产端只投递对象 ID 和 task_id。
+    typing = False
+
+    # 两个领域 Task 声明自己的投递参数、陈旧任务异常和日志对象名称。
+    id_argument: str
+    object_label: str
+    stale_exception: type[Exception]
+
+    def _load_execution(
+        self,
+        *,
+        instance_id: int,
+        task_id: str,
+        celery_task_id: str,
+    ) -> ExecutionT:
+        """由领域 Task 加载类型化执行上下文。"""
+
+        raise NotImplementedError
+
+    def _finish_success(
+        self,
+        *,
+        execution: ExecutionT,
+        task_id: str,
+        output_data: SnapshotInput,
+    ) -> dict[str, Any]:
+        """由领域 Task 校验输出并写入成功终态。"""
+
+        raise NotImplementedError
+
+    def _finish_failure(
+        self,
+        *,
+        instance_id: int,
+        task_id: str,
+        exception: Exception,
+    ) -> bool:
+        """由领域 Task 映射异常并写入失败终态。"""
+
+        raise NotImplementedError
+
+    def __call__(self, *args, **kwargs):
+        """注入执行上下文；已终态或 task_id 不匹配的投递直接忽略。"""
+
+        instance_id, task_id = self._extract_arguments(kwargs)
+        try:
+            return self._execute(instance_id=instance_id, task_id=task_id)
+        except self.stale_exception as error:
+            logger.info(
+                "忽略已失效或重复投递的 AI 助手任务",
+                extra={
+                    "object_label": self.object_label,
+                    self.id_argument: instance_id,
+                    "task_id": task_id,
+                    "task_name": self.name,
+                },
+            )
+            raise Ignore() from error
+
+    def _execute(self, *, instance_id: int, task_id: str):
+        """执行业务 Task，并让领域 Hook 负责快照校验和终态写入。"""
+
+        try:
+            execution = self._load_execution(
+                instance_id=instance_id,
+                task_id=task_id,
+                celery_task_id=self.request.id,
+            )
+            # 保留 Celery request 的原始 kwargs，保证 self.retry() 能重投相同平台参数。
+            result = self.run(execution)
+        except (Retry, self.stale_exception):
+            raise
+        except Exception as error:
+            self._log_failure(
+                "AI 助手任务执行失败",
+                instance_id=instance_id,
+                task_id=task_id,
+            )
+            self._finish_failure(instance_id=instance_id, task_id=task_id, exception=error)
+            raise
+
+        try:
+            return self._finish_success(
+                execution=execution,
+                task_id=task_id,
+                output_data=result,
+            )
+        except self.stale_exception:
+            raise
+        except Exception as error:
+            self._log_failure(
+                "AI 助手任务结果写入失败",
+                instance_id=instance_id,
+                task_id=task_id,
+            )
+            self._finish_failure(instance_id=instance_id, task_id=task_id, exception=error)
+            raise
+
+    def _extract_arguments(self, kwargs) -> tuple[int, str]:
+        """提取平台必需参数，错误的 Task 声明或投递在业务执行前直接暴露。"""
+
+        instance_id = kwargs.get(self.id_argument)
+        task_id = kwargs.get("task_id")
+        if instance_id is None or not task_id:
+            raise ImproperlyConfigured(f"{self.object_label} Task 必须提供 {self.id_argument} 和 task_id")
+        return instance_id, task_id
+
+    def _log_failure(
+        self,
+        message: str,
+        *,
+        instance_id: int,
+        task_id: str,
+    ) -> None:
+        """记录可定位执行对象的结构化日志，不写入业务快照或异常正文。"""
+
+        logger.exception(
+            message,
+            extra={
+                "object_label": self.object_label,
+                self.id_argument: instance_id,
+                "task_id": task_id,
+                "task_name": self.name,
+            },
+        )

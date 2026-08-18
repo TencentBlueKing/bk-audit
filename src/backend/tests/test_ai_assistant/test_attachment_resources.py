@@ -42,7 +42,10 @@ from services.web.ai_assistant.serializers.attachment import (
     _attachment_schema_mapping,
     _editable_attachment_output_schema_mapping,
 )
-from services.web.ai_assistant.services import AttachmentExecutor
+from services.web.ai_assistant.services.attachment_execution import (
+    finish_attachment_success,
+    load_attachment_execution,
+)
 from services.web.ai_assistant.views import AttachmentsViewSet
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
@@ -435,12 +438,12 @@ class AttachmentResourceTest(TestCase):
         self.assertIsNone(created["output_data"])
 
         attachment = Attachment.objects.get(uid=created["uid"])
-        execution = AttachmentExecutor.load_execution(
+        execution = load_attachment_execution(
             attachment_id=attachment.id,
             task_id=attachment.task_id,
             celery_task_id=attachment.task_id,
         )
-        AttachmentExecutor.mark_success(
+        finish_attachment_success(
             execution=execution,
             task_id=attachment.task_id,
             output_data={"content": "async:search"},

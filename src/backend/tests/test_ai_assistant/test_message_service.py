@@ -1,7 +1,9 @@
+import threading
 from unittest import mock
 from uuid import uuid4
 
-from django.db import IntegrityError
+from django.db import IntegrityError, close_old_connections
+from django.test import TransactionTestCase
 
 from services.web.ai_assistant.constants import (
     ExecutionStatus,
@@ -10,8 +12,11 @@ from services.web.ai_assistant.constants import (
 )
 from services.web.ai_assistant.exceptions import (
     InvalidInitialMessage,
+    InvalidMessageState,
     InvalidParentMessage,
+    MessageNotFound,
     MessageSnapshotValidationError,
+    UnsupportedMessageType,
 )
 from services.web.ai_assistant.handlers import (
     MessagePreparation,
@@ -19,6 +24,7 @@ from services.web.ai_assistant.handlers import (
 )
 from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.services import MessageService
+from services.web.ai_assistant.services.message_execution import finish_message_failure
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
@@ -409,3 +415,201 @@ class MessageServiceTest(TestCase):
                     )
 
         apply_async.assert_not_called()
+
+    def create_failed_async_message(self, **overrides) -> Message:
+        values = {
+            "conversation": self.conversation,
+            "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+            "status": ExecutionStatus.FAILED,
+            "task_id": "task-old",
+            "input_data": {"text": "hello"},
+            "context_data": {"prefix": "async"},
+            "output_data": {"content": "old"},
+            "error_code": "OLD_ERROR",
+            "error_message": "旧错误",
+            "created_by": self.user,
+            "updated_by": self.user,
+        }
+        values.update(overrides)
+        return Message.objects.create(**values)
+
+    def test_retry_reuses_original_message_snapshot_without_prepare(self):
+        handler = self.register_async_handler()
+        parent = self.create_parent()
+        message = self.create_failed_async_message(parent_message=parent)
+        old_uid = message.uid
+        old_input = message.input_data
+        old_context = message.context_data
+
+        with mock.patch.object(handler, "prepare", side_effect=AssertionError("must not prepare")):
+            with mock.patch.object(handler.async_task, "apply_async") as apply_async:
+                with self.captureOnCommitCallbacks(execute=True):
+                    retried = self.service.retry(message_uid=str(message.uid))
+
+        self.assertEqual(retried.uid, old_uid)
+        self.assertEqual(retried.parent_message, parent)
+        self.assertEqual(retried.input_data, old_input)
+        self.assertEqual(retried.context_data, old_context)
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        self.assertNotEqual(retried.task_id, "task-old")
+        self.assertIsNone(retried.output_data)
+        self.assertEqual(retried.error_code, "")
+        self.assertEqual(retried.error_message, "")
+        apply_async.assert_called_once_with(
+            kwargs={"message_id": retried.id, "task_id": retried.task_id},
+            task_id=retried.task_id,
+        )
+
+    def test_retry_rejects_invalid_state_mode_task_and_unregistered_type(self):
+        self.register_async_handler()
+        invalid_messages = (
+            self.create_failed_async_message(status=ExecutionStatus.PROCESSING, task_id="task-processing"),
+            self.create_failed_async_message(status=ExecutionStatus.SUCCESS, task_id="task-success"),
+            self.create_failed_async_message(task_id=""),
+            self.create_failed_async_message(
+                message_type=MessageType.SYSTEM_SELECTION,
+                task_id="task-sync",
+            ),
+        )
+        for message in invalid_messages:
+            with self.subTest(status=message.status, message_type=message.message_type), self.assertRaises(
+                InvalidMessageState
+            ):
+                self.service.retry(message_uid=str(message.uid))
+
+        unregistered = self.create_failed_async_message(
+            message_type=MessageType.LOG_SEARCH,
+            task_id="task-unregistered",
+        )
+        with self.assertRaises(UnsupportedMessageType):
+            self.service.retry(message_uid=str(unregistered.uid))
+
+    def test_retry_hides_foreign_or_deleted_conversation_message(self):
+        self.register_async_handler()
+        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign = self.create_failed_async_message(
+            conversation=foreign_conversation,
+            created_by="bob",
+            updated_by="bob",
+        )
+        deleted = self.create_failed_async_message(task_id="task-deleted")
+        self.conversation.delete()
+
+        for message in (foreign, deleted):
+            with self.subTest(message=message.uid), self.assertRaises(MessageNotFound):
+                self.service.retry(message_uid=str(message.uid))
+
+    def test_old_task_id_cannot_overwrite_retried_message(self):
+        self.register_async_handler()
+        message = self.create_failed_async_message()
+        old_task_id = message.task_id
+
+        with mock.patch("services.web.ai_assistant.services.message.transaction.on_commit"):
+            retried = self.service.retry(message_uid=str(message.uid))
+        updated = finish_message_failure(
+            message_id=retried.id,
+            task_id=old_task_id,
+            exception=RuntimeError("old task"),
+        )
+
+        retried.refresh_from_db()
+        self.assertFalse(updated)
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        self.assertNotEqual(retried.task_id, old_task_id)
+
+    def test_retry_dispatch_failure_can_retry_same_message_again(self):
+        handler = self.register_async_handler()
+        message = self.create_failed_async_message()
+
+        with mock.patch.object(handler.async_task, "apply_async", side_effect=RuntimeError("broker secret")):
+            with self.captureOnCommitCallbacks(execute=True):
+                failed = self.service.retry(message_uid=str(message.uid))
+        self.assertEqual(failed.status, ExecutionStatus.FAILED)
+        self.assertEqual(failed.error_code, MessageErrorCode.TASK_DISPATCH_FAILED)
+        failed_task_id = failed.task_id
+
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = self.service.retry(message_uid=str(message.uid))
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        self.assertNotEqual(retried.task_id, failed_task_id)
+
+
+class MessageServiceConcurrencyTest(TransactionTestCase):
+    """使用独立数据库连接验证共享旧快照下只有一个重试 CAS 成功。"""
+
+    available_apps = ["services.web.ai_assistant"]
+    reset_sequences = True
+
+    def setUp(self):
+        self.user = "alice"
+        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        message_handler_registry.register(EchoAsyncHandler())
+        self.message = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            status=ExecutionStatus.FAILED,
+            task_id="task-old",
+            input_data={"text": "hello"},
+            context_data={"prefix": "async"},
+            output_data={"content": "old"},
+            error_code="OLD_ERROR",
+            error_message="旧错误",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def tearDown(self):
+        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+
+    @staticmethod
+    def run_threads(*targets):
+        results = []
+        errors = []
+
+        def run(target):
+            close_old_connections()
+            try:
+                results.append(target())
+            except Exception as error:  # noqa: BLE001 - 需要保留线程原始异常类型
+                errors.append(error)
+            finally:
+                close_old_connections()
+
+        threads = [threading.Thread(target=run, args=(target,)) for target in targets]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        return threads, results, errors
+
+    def test_retry_concurrent_requests_only_one_cas_wins(self):
+        barrier = threading.Barrier(2)
+        original_get = MessageService.get
+
+        def synchronized_get(service, *, message_uid):
+            loaded_message = original_get(service, message_uid=message_uid)
+            barrier.wait(timeout=5)
+            return loaded_message
+
+        def retry_once():
+            return MessageService(user=self.user).retry(message_uid=str(self.message.uid))
+
+        with mock.patch.object(
+            MessageService,
+            "get",
+            autospec=True,
+            side_effect=synchronized_get,
+        ), mock.patch.object(MessageService, "_dispatch") as dispatch:
+            threads, results, errors = self.run_threads(retry_once, retry_once)
+
+        self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], InvalidMessageState)
+        self.assertEqual(dispatch.call_count, 1)
+
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.status, ExecutionStatus.PROCESSING)
+        self.assertEqual(self.message.task_id, results[0].task_id)
+        self.assertNotEqual(self.message.task_id, "task-old")

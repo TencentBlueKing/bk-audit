@@ -154,3 +154,9 @@ class InvalidAttachmentPreparation(AIAssistantException):
     MESSAGE = gettext_lazy("附件准备结果无效")
     ERROR_CODE = "025"
     STATUS_CODE = 400
+
+
+class InvalidMessageState(AIAssistantException):
+    MESSAGE = gettext_lazy("消息状态无效")
+    ERROR_CODE = "026"
+    STATUS_CODE = 400
