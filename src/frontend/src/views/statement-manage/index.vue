@@ -96,6 +96,10 @@
     },
     defaultValue: [],
     onSuccess: (menuData) => {
+      // 已离开报表模块时，忽略迟到的菜单响应，避免把用户拉回报表页
+      if (route.name !== 'statementManage' && route.name !== 'statementManageDetail') {
+        return;
+      }
       currentMenuData.value = menuData;
       emit('statement-menuData', menuData);
       // 菜单为空时，清空路由参数并显示空状态

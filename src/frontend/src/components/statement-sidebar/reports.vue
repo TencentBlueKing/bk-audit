@@ -323,9 +323,16 @@
     return false;
   };
 
+  const isOnStatementRoute = () => (
+    route.name === 'statementManage' || route.name === 'statementManageDetail'
+  );
+
   // 场景切换后默认选中第一个子菜单项
   // 深链（全局报表/报表管理跳转）已带目标 id 且该报表在当前目录中时，保留原报表，勿覆盖为第一个
   const navigateToFirstChild = (): boolean => {
+    if (!isOnStatementRoute()) {
+      return false;
+    }
     const rawId = route.params.id;
     const currentId = Array.isArray(rawId) ? rawId[0] : String(rawId || '');
     // 目录尚未建好时返回 false，保留 pending，等菜单/分组就绪后再决策
@@ -821,6 +828,9 @@
   } = useRequest(PanelModelService.fetchGroups, {
     defaultValue: [],
     onSuccess: (data: Array<{ id: number; name: string; priority_index: number; scene_id?: number }>) => {
+      if (!isOnStatementRoute()) {
+        return;
+      }
       groups.value = data;
       rebuildSideRoutes({ navigateToFirst: pendingSceneChangeNavigate });
     },
