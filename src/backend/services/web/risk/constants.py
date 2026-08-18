@@ -301,6 +301,9 @@ class RiskStatus(TextChoices):
     # 新
     NEW = "new", gettext_lazy("新")
 
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
+
     # 人工处理
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
     FOR_APPROVE = "for_approve", gettext_lazy("自动处理审批中")
@@ -362,6 +365,9 @@ class RiskDisplayStatus(TextChoices):
 
     # 新
     NEW = "new", gettext_lazy("新")
+
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
 
     # 待处理（仅 NEW → 未配置处理规则 时）
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
@@ -944,6 +950,4 @@ class NL2RiskFilterLogStatus(TextChoices):
 # fetch_instance_list 反向拉取时，对非检索大字段的截断/置 NULL 阈值（bytes）。
 # 通过环境变量 FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES 覆盖，便于后续无需发版即可调整。
 # 实测：123 万行中仅 <0.1% 的记录超 100KB，99.9%+ 正常数据不受影响。
-FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES = int(
-    os.environ.get("FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES", 100*1024)
-)
+FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES = int(os.environ.get("FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES", 100 * 1024))

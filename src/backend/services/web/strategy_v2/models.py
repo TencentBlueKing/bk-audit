@@ -30,13 +30,33 @@ from apps.meta.models import Tag
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from services.web.analyze.constants import FlowDataSourceNodeType, FlowSQLNodeType
 from services.web.analyze.models import Control, ControlVersion
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import (
+    DispatchMode,
     RiskLevel,
     StrategyFieldSourceEnum,
     StrategySource,
     StrategyStatusChoices,
     StrategyType,
 )
+
+
+def _default_strategy_rule_conditions() -> dict:
+    """
+    StrategyRule.conditions 的默认值。
+
+    结构：{"where": None, "having": None}，明确表达"未配置"。
+    """
+    return {"where": None, "having": None}
+
+
+def _default_dispatch_rule_conditions() -> dict:
+    """
+    DispatchRule.conditions 的默认值。
+
+    结构同 StrategyRule 的 where 条件树；空 dict 表示默认兜底规则。
+    """
+    return {}
 
 
 class Strategy(SoftDeleteModel):
@@ -108,6 +128,18 @@ class Strategy(SoftDeleteModel):
         default=dict,
         blank=True,
         help_text=gettext_lazy("报告模板配置（template + ai_variables）"),
+    )
+    rule_order = models.JSONField(
+        gettext_lazy("Rule Order"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("发现规则匹配优先级列表 [rule_id, ...]"),
+    )
+    dispatch_rule_order = models.JSONField(
+        gettext_lazy("Dispatch Rule Order"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("分派规则优先级列表 [rule_id, ...]，仅全局策略有"),
     )
 
     class Meta:
@@ -350,3 +382,158 @@ class StrategyTool(OperateRecordModel):
         verbose_name_plural = verbose_name
         ordering = ["-id"]
         unique_together = [("strategy", "field_source", "field_name", "tool_uid")]  # 策略中的指定字段只能关联一个工具
+
+
+class StrategyRule(SoftDeleteModel):
+    """
+    发现规则
+    """
+
+    rule_id = models.BigAutoField(gettext_lazy("Rule ID"), primary_key=True)
+    strategy = models.ForeignKey(
+        Strategy,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        related_name="rules",
+        verbose_name=gettext_lazy("Strategy"),
+    )
+    rule_name = models.CharField(gettext_lazy("Rule Name"), max_length=64, help_text=gettext_lazy("规则名称"))
+    conditions = models.JSONField(
+        gettext_lazy("Conditions"),
+        default=_default_strategy_rule_conditions,
+        blank=True,
+        help_text=gettext_lazy('检测条件，结构：{"where": {...}, "having": {...}}；键值为 None 表示未配置'),
+    )
+    risk_title = models.CharField(
+        gettext_lazy("Risk Title"),
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险标题模板（Jinja2）"),
+    )
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        max_length=16,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险等级：HIGH/MIDDLE/LOW"),
+    )
+    risk_hazard = models.TextField(
+        gettext_lazy("Risk Hazard"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险危害描述"),
+    )
+    risk_guidance = models.TextField(
+        gettext_lazy("Risk Guidance"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("处理指引"),
+    )
+    processor = models.JSONField(
+        gettext_lazy("Processor"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("处理人通知组 ID 列表（场景策略使用）"),
+    )
+    follower = models.JSONField(
+        gettext_lazy("Follower"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("关注人通知组 ID 列表（场景策略使用）"),
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("Strategy Rule")
+        verbose_name_plural = verbose_name
+        ordering = ["strategy", "rule_id"]
+        indexes = [
+            models.Index(fields=["strategy", "is_deleted"], name="idx_srule_strategy_isdel"),
+        ]
+        unique_together = [["strategy", "rule_name"]]
+
+    def __str__(self):
+        # 使用 strategy_id 避免额外查询触发 N+1，Django Admin 会自行懒加载 strategy 对象
+        try:
+            strategy_name = self.strategy.strategy_name
+        except Exception:  # pylint: disable=broad-except
+            strategy_name = str(self.strategy_id)
+        return f"{strategy_name} - {self.rule_name}"
+
+
+class DispatchRule(SoftDeleteModel):
+    """
+    分派规则（仅全局策略使用）
+    """
+
+    rule_id = models.BigAutoField(gettext_lazy("Rule ID"), primary_key=True)
+    strategy = models.ForeignKey(
+        Strategy,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        related_name="dispatch_rules",
+        verbose_name=gettext_lazy("Strategy"),
+    )
+    rule_name = models.CharField(gettext_lazy("Rule Name"), max_length=64, help_text=gettext_lazy("规则名称"))
+    conditions = models.JSONField(
+        gettext_lazy("Conditions"),
+        default=_default_dispatch_rule_conditions,
+        blank=True,
+        null=True,
+        help_text=gettext_lazy("匹配条件树（WhereCondition 结构），空 dict = 默认兜底规则"),
+    )
+    target_scene = models.ForeignKey(
+        Scene,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        related_name="dispatch_rules",
+        db_column="target_scene_id",
+        verbose_name=gettext_lazy("Target Scene"),
+        help_text=gettext_lazy("目标场景"),
+    )
+    processor = models.JSONField(
+        gettext_lazy("Processor"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("处理人通知组 ID 列表"),
+    )
+    follower = models.JSONField(
+        gettext_lazy("Follower"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("关注人通知组 ID 列表"),
+    )
+    confirmer = models.JSONField(
+        gettext_lazy("Confirmer"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("确认人用户名列表"),
+    )
+    dispatch_mode = models.CharField(
+        gettext_lazy("Dispatch Mode"),
+        max_length=32,
+        choices=DispatchMode.choices,
+        default=DispatchMode.DIRECT,
+        help_text=gettext_lazy("分派方式：direct=直接分派，after_confirm=确认后分派"),
+    )
+    is_default = models.BooleanField(
+        gettext_lazy("Is Default"),
+        default=False,
+        help_text=gettext_lazy("是否为默认兜底规则"),
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("Dispatch Rule")
+        verbose_name_plural = verbose_name
+        ordering = ["strategy", "rule_id"]
+        indexes = [
+            models.Index(fields=["strategy", "is_deleted"], name="idx_drule_strategy_isdel"),
+        ]
+        unique_together = [["strategy", "rule_name"]]
+
+    def __str__(self):
+        try:
+            strategy_name = self.strategy.strategy_name
+        except Exception:  # pylint: disable=broad-except
+            strategy_name = str(self.strategy_id)
+        return f"{strategy_name} - {self.rule_name}"

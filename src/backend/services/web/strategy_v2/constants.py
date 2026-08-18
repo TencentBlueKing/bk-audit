@@ -198,6 +198,15 @@ class StrategyType(TextChoices):
     MODEL = "model", gettext_lazy("模型策略")
 
 
+class DispatchMode(TextChoices):
+    """
+    分派规则的分派方式（仅全局策略使用）
+    """
+
+    DIRECT = "direct", gettext_lazy("直接分派")
+    AFTER_CONFIRM = "after_confirm", gettext_lazy("确认后分派")
+
+
 class StrategySource(TextChoices):
     USER = "user", gettext_lazy("用户创建")
     SYSTEM = "system", gettext_lazy("系统创建")
