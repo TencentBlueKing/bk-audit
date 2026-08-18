@@ -378,6 +378,24 @@ class MessageServiceTest(TestCase):
         self.assertEqual(message.error_message, "任务投递失败，请稍后重试")
         self.assertNotIn("broker secret", message.error_message)
 
+    def test_async_dispatch_failure_updates_returned_message_instance(self):
+        handler = self.register_async_handler()
+
+        with mock.patch.object(handler.async_task, "apply_async", side_effect=RuntimeError("broker secret")):
+            with self.captureOnCommitCallbacks(execute=True):
+                message = self.service.create(
+                    conversation=self.conversation,
+                    message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+                    input_data={"text": "hello"},
+                )
+
+        self.assertEqual(message.status, ExecutionStatus.FAILED)
+        self.assertEqual(message.error_code, MessageErrorCode.TASK_DISPATCH_FAILED)
+        self.assertEqual(message.error_message, "任务投递失败，请稍后重试")
+        db_message = Message.objects.get(id=message.id)
+        self.assertEqual(db_message.status, ExecutionStatus.FAILED)
+        self.assertEqual(db_message.error_code, MessageErrorCode.TASK_DISPATCH_FAILED)
+
     def test_database_create_failure_does_not_dispatch(self):
         handler = self.register_async_handler()
 

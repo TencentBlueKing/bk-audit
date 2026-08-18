@@ -1,6 +1,14 @@
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from blueapps.contrib.drf.utils.pagination import CustomPageNumberPagination
 
+from core.utils.spectacular import BKResourceAutoSchema
+from services.web.ai_assistant.resources.attachment import (
+    CreateAttachment,
+    GetAttachment,
+    ListAttachments,
+    RetryAttachment,
+    UpdateAttachment,
+)
 from services.web.ai_assistant.resources.conversation import (
     ClearConversations,
     CreateConversation,
@@ -45,6 +53,16 @@ class AIAssistantPaginatedViewSet(ResourceViewSet):
         return serializer_class(page, many=True).data
 
 
+class AttachmentAutoSchema(BKResourceAutoSchema):
+    """修正附件列表的非分页数组响应 OpenAPI。"""
+
+    def _is_list_view(self, serializer=None):
+        route = self._get_matched_route()
+        if route and route.resource_class is ListAttachments:
+            return True
+        return super()._is_list_view(serializer)
+
+
 class ConversationGroupsViewSet(ResourceViewSet):
     """会话分组生命周期接口。"""
 
@@ -77,6 +95,21 @@ class MessagesViewSet(ResourceViewSet):
         ResourceRoute("POST", CreateMessage),
         ResourceRoute("GET", ListMessages),
         ResourceRoute("GET", GetMessage, pk_field="message_uid"),
+        ResourceRoute("POST", CreateAttachment, endpoint="attachments", pk_field="message_uid"),
+    ]
+
+
+class AttachmentsViewSet(ResourceViewSet):
+    """附件创建后的查询、编辑和重试接口。"""
+
+    schema = AttachmentAutoSchema()
+    pagination_class = None
+    lookup_field = "attachment_uid"
+    resource_routes = [
+        ResourceRoute("GET", ListAttachments),
+        ResourceRoute("GET", GetAttachment, pk_field="attachment_uid"),
+        ResourceRoute("PATCH", UpdateAttachment, pk_field="attachment_uid"),
+        ResourceRoute("POST", RetryAttachment, endpoint="retry", pk_field="attachment_uid"),
     ]
 
 

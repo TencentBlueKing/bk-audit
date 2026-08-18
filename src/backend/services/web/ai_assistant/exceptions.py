@@ -97,3 +97,60 @@ class InvalidMessageAnchor(AIAssistantException):
     MESSAGE = gettext_lazy("消息历史锚点无效")
     ERROR_CODE = "015"
     STATUS_CODE = 400
+
+
+class UnsupportedAttachmentType(AIAssistantException):
+    MESSAGE = gettext_lazy("不支持的附件类型")
+    ERROR_CODE = "016"
+    STATUS_CODE = 400
+
+
+class AttachmentSnapshotValidationError(AIAssistantException):
+    MESSAGE = gettext_lazy("附件数据格式错误")
+    ERROR_CODE = "017"
+    STATUS_CODE = 400
+
+
+class InvalidAttachmentSource(AIAssistantException):
+    MESSAGE = gettext_lazy("附件来源无效")
+    ERROR_CODE = "018"
+    STATUS_CODE = 400
+
+
+class AttachmentNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("附件不存在")
+    ERROR_CODE = "019"
+    STATUS_CODE = 404
+
+
+class StaleAttachmentTask(AIAssistantException):
+    MESSAGE = gettext_lazy("附件任务已失效")
+    ERROR_CODE = "020"
+
+
+class AttachmentExecutionFailed(AIAssistantException):
+    MESSAGE = gettext_lazy("附件执行失败，请稍后重试")
+    ERROR_CODE = "021"
+
+
+class AttachmentNotEditable(AIAssistantException):
+    MESSAGE = gettext_lazy("当前附件不可编辑")
+    ERROR_CODE = "022"
+    STATUS_CODE = 400
+
+
+class InvalidAttachmentState(AIAssistantException):
+    MESSAGE = gettext_lazy("附件状态无效")
+    ERROR_CODE = "023"
+    STATUS_CODE = 400
+
+
+class AttachmentOutputValidationError(AIAssistantException):
+    MESSAGE = gettext_lazy("附件产物格式错误")
+    ERROR_CODE = "024"
+
+
+class InvalidAttachmentPreparation(AIAssistantException):
+    MESSAGE = gettext_lazy("附件准备结果无效")
+    ERROR_CODE = "025"
+    STATUS_CODE = 400

@@ -4,7 +4,10 @@ from typing import Any, TypeAlias, TypeVar
 from drf_pydantic import BaseModel
 from pydantic import ConfigDict, ValidationError
 
-from services.web.ai_assistant.exceptions import MessageSnapshotValidationError
+from services.web.ai_assistant.exceptions import (
+    AIAssistantException,
+    MessageSnapshotValidationError,
+)
 
 
 class MessageSchema(BaseModel):
@@ -22,6 +25,7 @@ def parse_snapshot(
     data: SnapshotInput,
     *,
     field_name: str,
+    error_type: type[AIAssistantException] = MessageSnapshotValidationError,
 ) -> SchemaT:
     """使用具体 Schema 统一解析请求和数据库中的消息快照。"""
 
@@ -36,7 +40,7 @@ def parse_snapshot(
             for item in error.errors(include_input=False, include_url=False)
         ]
         # Pydantic 原始异常包含 input_value，禁止通过异常链进入任务日志。
-        raise MessageSnapshotValidationError(data={"field_name": field_name, "errors": errors}) from None
+        raise error_type(data={"field_name": field_name, "errors": errors}) from None
 
 
 def dump_snapshot(
@@ -44,7 +48,13 @@ def dump_snapshot(
     data: SnapshotInput,
     *,
     field_name: str,
+    error_type: type[AIAssistantException] = MessageSnapshotValidationError,
 ) -> dict[str, Any]:
     """校验消息快照并转换为 JSONField 可直接保存的标准数据。"""
 
-    return parse_snapshot(schema_type, data, field_name=field_name).model_dump(mode="json")
+    return parse_snapshot(
+        schema_type,
+        data,
+        field_name=field_name,
+        error_type=error_type,
+    ).model_dump(mode="json")

@@ -5,7 +5,10 @@ from uuid import UUID, uuid4
 from pydantic import ValidationError
 
 from services.web.ai_assistant.constants import ExecutionMode
-from services.web.ai_assistant.exceptions import MessageSnapshotValidationError
+from services.web.ai_assistant.exceptions import (
+    AttachmentSnapshotValidationError,
+    MessageSnapshotValidationError,
+)
 from services.web.ai_assistant.schemas import (
     MessageSchema,
     dump_snapshot,
@@ -89,3 +92,50 @@ class MessageSchemaTest(TestCase):
         formatted_exception = "".join(traceback.format_exception(error))
         self.assertNotIn("must-not-leak", formatted_exception)
         self.assertNotIn("errors.pydantic.dev", formatted_exception)
+
+    def test_parse_snapshot_uses_message_error_by_default(self):
+        with self.assertRaises(MessageSnapshotValidationError):
+            parse_snapshot(
+                ExampleInput,
+                {
+                    "requested_at": self.requested_at,
+                    "request_uid": self.request_uid,
+                },
+                field_name="input_data",
+            )
+
+    def test_parse_snapshot_accepts_custom_attachment_error_type(self):
+        with self.assertRaises(AttachmentSnapshotValidationError) as context:
+            parse_snapshot(
+                ExampleInput,
+                {
+                    "requested_at": self.requested_at,
+                    "request_uid": self.request_uid,
+                    "secret": "must-not-leak",
+                },
+                field_name="context_data",
+                error_type=AttachmentSnapshotValidationError,
+            )
+
+        error = context.exception
+        self.assertEqual(error.data["field_name"], "context_data")
+        self.assertTrue(error.data["errors"])
+        self.assertEqual(set(error.data["errors"][0]), {"type", "loc", "msg"})
+        self.assertNotIn("must-not-leak", str(error.data))
+        self.assertNotIn("input_value", str(error.data))
+
+    def test_dump_snapshot_accepts_custom_attachment_error_type(self):
+        with self.assertRaises(AttachmentSnapshotValidationError) as context:
+            dump_snapshot(
+                ExampleInput,
+                {
+                    "requested_at": self.requested_at,
+                    "request_uid": self.request_uid,
+                    "secret": "must-not-leak",
+                },
+                field_name="output_data",
+                error_type=AttachmentSnapshotValidationError,
+            )
+
+        self.assertEqual(context.exception.data["field_name"], "output_data")
+        self.assertNotIn("must-not-leak", str(context.exception.data))
