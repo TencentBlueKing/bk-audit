@@ -306,7 +306,7 @@
 <script setup lang="ts">
   import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { onBeforeRouteLeave, useRouter } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
   import ScenePermissionApplicationService from '@service/scene-permission-application';
@@ -338,10 +338,14 @@
   const APPLYING_STATUS = ['pending', 'running', 'processing', 'approving', 'applying'];
   /** 已拒绝状态 */
   const REJECTED_STATUS = ['rejected', 'refused', 'failed'];
-  /** 已通过状态 */
-  const PASSED_STATUS = ['approved', 'passed', 'success', 'finished', 'granted', 'done', 'completed'];
+  /** 已通过状态（不含 ITSM finished：结束单据可能是拒绝） */
+  const PASSED_STATUS = ['approved', 'passed', 'success', 'granted', 'done', 'completed', 'pass'];
   /** 申请列表轮询间隔 */
   const POLL_INTERVAL = 5000;
+  /** 当前停留会话标记（刷新保留，路由离开清除） */
+  const VISIT_ACTIVE_KEY = 'scene-config-user-landing:visit-active';
+  /** 本页提交申请并跟踪的场景（仅这些场景在轮询成功后展示「已通过」） */
+  const VISIT_TRACKED_SCENE_IDS_KEY = 'scene-config-user-landing:visit-tracked-scene-ids';
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -375,33 +379,56 @@
     manual: true,
   });
 
+  const matchStatus = (
+    values: string[],
+    status = '',
+    statusDisplay = '',
+    extraDisplays: string[] = [],
+  ) => {
+    const normalized = status.toLowerCase();
+    if (values.includes(normalized)) return true;
+    return extraDisplays.some(text => statusDisplay.includes(text));
+  };
+
   const isPassedApplication = (application?: ScenePermissionApplicationModel['application'] | null) => {
     if (!application) return false;
-    const normalized = (application.status || '').toLowerCase();
-    const statusDisplay = application.status_display || '';
-    return PASSED_STATUS.includes(normalized)
-      || statusDisplay.includes('通过')
-      || statusDisplay.includes('成功');
+    return matchStatus(
+      PASSED_STATUS,
+      application.grant_status || application.status,
+      application.grant_status_display || application.status_display,
+      ['通过', '成功', '授权'],
+    );
   };
 
   const mapApplyStatus = (
     status = '',
     statusDisplay = '',
-    options?: { manageScene?: boolean; hasPassedApplication?: boolean },
+    options?: {
+      manageScene?: boolean;
+      hasPassedApplication?: boolean;
+      grantStatus?: string;
+      grantStatusDisplay?: string;
+    },
   ): ApplyStatus => {
-    const normalized = status.toLowerCase();
-    if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
-      return 'applying';
-    }
-    if (REJECTED_STATUS.includes(normalized) || statusDisplay.includes('拒绝')) {
+    const grantStatus = options?.grantStatus || '';
+    const grantStatusDisplay = options?.grantStatusDisplay || '';
+    if (
+      matchStatus(REJECTED_STATUS, grantStatus, grantStatusDisplay, ['拒绝'])
+      || matchStatus(REJECTED_STATUS, status, statusDisplay, ['拒绝'])
+    ) {
       return 'rejected';
     }
     if (
-      PASSED_STATUS.includes(normalized)
-      || statusDisplay.includes('通过')
-      || statusDisplay.includes('成功')
+      matchStatus(APPLYING_STATUS, status, statusDisplay, ['申请中', '审批中'])
+      || matchStatus(APPLYING_STATUS, grantStatus, grantStatusDisplay, ['申请中', '审批中'])
+    ) {
+      return 'applying';
+    }
+    if (
+      options?.manageScene
       || options?.hasPassedApplication
-      || options?.manageScene
+      || matchStatus(PASSED_STATUS, grantStatus, grantStatusDisplay, ['通过', '成功', '授权'])
+      || matchStatus(PASSED_STATUS, status, statusDisplay, ['通过', '成功', '授权'])
     ) {
       return 'passed';
     }
@@ -425,11 +452,68 @@
     }, POLL_INTERVAL);
   };
 
+  const readIdSet = (key: string): Set<number> => {
+    try {
+      const raw = JSON.parse(sessionStorage.getItem(key) || '[]');
+      if (!Array.isArray(raw)) return new Set();
+      return new Set(raw.map(id => Number(id)).filter(id => Number.isFinite(id)));
+    } catch {
+      return new Set();
+    }
+  };
+
+  const persistIdSet = (key: string, ids: Set<number>) => {
+    sessionStorage.setItem(key, JSON.stringify([...ids]));
+  };
+
+  const readTrackedSceneIds = () => readIdSet(VISIT_TRACKED_SCENE_IDS_KEY);
+
+  const trackSceneId = (sceneId: number | string) => {
+    const id = Number(sceneId);
+    if (!Number.isFinite(id)) return;
+    const ids = readTrackedSceneIds();
+    ids.add(id);
+    persistIdSet(VISIT_TRACKED_SCENE_IDS_KEY, ids);
+  };
+
+  /** 路由进入（非刷新）时清空上一轮跟踪，避免直链进来展示历史已通过项 */
+  const initVisitSession = () => {
+    if (sessionStorage.getItem(VISIT_ACTIVE_KEY) === '1') return;
+    sessionStorage.removeItem(VISIT_TRACKED_SCENE_IDS_KEY);
+    sessionStorage.setItem(VISIT_ACTIVE_KEY, '1');
+  };
+
+  const clearVisitSession = () => {
+    sessionStorage.removeItem(VISIT_ACTIVE_KEY);
+    sessionStorage.removeItem(VISIT_TRACKED_SCENE_IDS_KEY);
+  };
+
+  const resolveItemStatus = (item: ScenePermissionApplicationModel): ApplyStatus => {
+    const { application } = item;
+    return mapApplyStatus(
+      application?.status,
+      application?.status_display,
+      {
+        manageScene: Boolean(item.permission?.manage_scene),
+        hasPassedApplication: isPassedApplication(application),
+        grantStatus: application?.grant_status,
+        grantStatusDisplay: application?.grant_status_display,
+      },
+    );
+  };
+
   const applyApplicationList = (list: ScenePermissionApplicationModel[]) => {
-    // 仅展示有使用权限、无管理权限的场景（已通过/已有配置权限的不展示）
-    const filtered = list.filter(item => (
-      item.permission?.view_scene && !item.permission?.manage_scene
-    ));
+    const trackedIds = readTrackedSceneIds();
+
+    // 已通过：仅本页提交申请后，轮询从「申请中」变为成功时展示
+    const filtered = list.filter((item) => {
+      const sceneId = Number(item.scene_id);
+      const status = resolveItemStatus(item);
+      if (status === 'passed') {
+        return trackedIds.has(sceneId);
+      }
+      return Boolean(item.permission?.view_scene && !item.permission?.manage_scene);
+    });
 
     sceneList.value = filtered.map(item => ({
       scene_id: item.scene_id,
@@ -444,14 +528,7 @@
     filtered.forEach((item) => {
       const { application } = item;
       applyStateMap[item.scene_id] = {
-        status: mapApplyStatus(
-          application?.status,
-          application?.status_display,
-          {
-            manageScene: Boolean(item.permission?.manage_scene),
-            hasPassedApplication: isPassedApplication(application),
-          },
-        ),
+        status: resolveItemStatus(item),
         rejectReason: application?.reject_reason,
         ticketUrl: application?.itsm_ticket_url,
       };
@@ -491,6 +568,7 @@
     onSuccess: () => {
       const scene = currentScene.value;
       if (scene) {
+        trackSceneId(scene.scene_id);
         messageSuccess(`${t('已发起')}「${scene.name}」${t('场景配置权限 ITSM 单据申请')}`);
       }
       showApplyDialog.value = false;
@@ -535,6 +613,7 @@
     if (!currentScene.value || isApplying.value) return;
     applyFormRef.value?.validate().then(() => {
       const scene = currentScene.value!;
+      trackSceneId(scene.scene_id);
       submitApply({
         scene_id: scene.scene_id,
         role: 'manager',
@@ -556,6 +635,7 @@
   };
 
   onMounted(() => {
+    initVisitSession();
     fetchMineApplicationList({
       page: 1,
       page_size: 1000,
@@ -564,6 +644,11 @@
 
   onUnmounted(() => {
     stopPolling();
+  });
+
+  onBeforeRouteLeave((to) => {
+    if (to.name === 'userLandingPage') return;
+    clearVisitSession();
   });
 
   const handleLearnMore = () => {
