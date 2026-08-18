@@ -16,16 +16,21 @@
 -->
 <template>
   <div style="width: 100%;height: 100%;">
-    <div id="panel" />
+    <div
+      id="panel"
+      ref="panelRef" />
   </div>
 </template>
 <script setup lang="ts">
   import {
     nextTick,
+    onDeactivated,
     onUnmounted,
+    ref,
     watch,
   } from 'vue';
   import {
+    onBeforeRouteLeave,
     useRoute,
   } from 'vue-router';
 
@@ -47,6 +52,7 @@
   const BKVISION_SCRIPT_SRC = 'https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js';
 
   const route = useRoute();
+  const panelRef = ref<HTMLElement | null>(null);
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
   let app: any;
@@ -76,7 +82,12 @@
     document.head.appendChild(script);
   });
 
+  const isActiveOnDetailRoute = () => (
+    route.name === 'statementManageDetail' && isValidId(route.params.id)
+  );
+
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
+    if (!isActiveOnDetailRoute()) return;
     if (err?.data?.code === '9900403') {
       const iamResult = new IamApplyDataModel(err.data.data || {});
       // 页面展示没权限提示
@@ -258,10 +269,16 @@
   };
 
   const clearPanelDom = () => {
-    const panelEl = document.querySelector('#panel');
+    const panelEl = panelRef.value || document.querySelector('#panel');
     if (panelEl) {
       panelEl.innerHTML = '';
     }
+  };
+
+  const abortInit = () => {
+    initSeq += 1;
+    lastInitKey = '';
+    destroyApp();
   };
 
   const destroyApp = () => {
@@ -286,7 +303,7 @@
   };
 
   const init = async () => {
-    if (!isValidId(route.params.id) || route.name !== 'statementManageDetail') {
+    if (!isActiveOnDetailRoute()) {
       return;
     }
 
@@ -323,7 +340,7 @@
 
       // 再次确保容器干净，避免上一次异步渲染残留
       clearPanelDom();
-      if (seq !== initSeq) return;
+      if (seq !== initSeq || !isActiveOnDetailRoute()) return;
 
       const instance = await window.BkVisionSDK.init(
         '#panel',
@@ -345,7 +362,7 @@
         },
       );
       pendingInstance = instance;
-      if (seq !== initSeq) {
+      if (seq !== initSeq || !isActiveOnDetailRoute()) {
         instance?.unmount?.();
         if (pendingInstance === instance) {
           pendingInstance = null;
@@ -375,6 +392,10 @@
     ],
     () => {
       nextTick(() => {
+        if (!isActiveOnDetailRoute()) {
+          abortInit();
+          return;
+        }
         init();
       });
     },
@@ -383,10 +404,16 @@
     },
   );
 
+  onBeforeRouteLeave(() => {
+    abortInit();
+  });
+
+  onDeactivated(() => {
+    abortInit();
+  });
+
   onUnmounted(() => {
-    initSeq += 1;
-    lastInitKey = '';
-    destroyApp();
+    abortInit();
   });
 
 </script>
