@@ -15,10 +15,16 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="retrieval-result-wrap">
-    <div class="retrieval-result-card">
-      <!-- 已识别筛选条件 -->
-      <div class="condition-section">
+  <div
+    class="retrieval-result-wrap"
+    :class="{ 'is-embedded': embedded }">
+    <div
+      class="retrieval-result-card"
+      :class="{ 'is-embedded': embedded }">
+      <!-- 已识别筛选条件：自然语言检索气泡展示，条件筛选内嵌结果不展示 -->
+      <div
+        v-if="!embedded"
+        class="condition-section">
         <div class="condition-header">
           <audit-icon
             class="condition-icon"
@@ -37,7 +43,9 @@
       </div>
 
       <!-- 过程信息 -->
-      <div class="process-section">
+      <div
+        v-if="!embedded"
+        class="process-section">
         <div
           class="process-row"
           @click="toolsExpanded = !toolsExpanded">
@@ -305,9 +313,12 @@
     status: 'loading' | 'done';
   }
 
-  const props = defineProps<{
+  const props = withDefaults(defineProps<{
     result: RetrievalResultPayload;
-  }>();
+    embedded?: boolean;
+  }>(), {
+    embedded: false,
+  });
 
   const emit = defineEmits<{
     export: [mode: 'preview' | 'all'];
@@ -484,6 +495,10 @@
     width: 900px;
     max-width: 100%;
     flex-direction: column;
+
+    &.is-embedded {
+      width: 100%;
+    }
   }
 
   .retrieval-result-card {
@@ -497,6 +512,14 @@
     border-radius: 8px;
     box-shadow: 0 0 10px rgb(0 0 0 / 10%);
     box-sizing: border-box;
+
+    &.is-embedded {
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
   }
 
   .condition-section {

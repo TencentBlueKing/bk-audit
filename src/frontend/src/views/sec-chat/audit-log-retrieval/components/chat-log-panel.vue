@@ -45,8 +45,7 @@
               v-else-if="msg.type === 'retrieval-guide'"
               :systems="msg.systems || []"
               @reselect="$emit('reselect-system')"
-              @select-suggestion="handleSelectSuggestion"
-              @submit-query="handleSubmitQuery" />
+              @select-suggestion="handleSelectSuggestion" />
 
             <!-- 查询后的结构化结果卡片 -->
             <retrieval-result-card
@@ -96,10 +95,6 @@
 
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);
-  };
-
-  const handleSubmitQuery = (text: string) => {
-    emit('send', text);
   };
 
   const handleRegenerate = (text: string) => {

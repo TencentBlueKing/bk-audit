@@ -18,6 +18,7 @@
   <bk-popover
     ref="popoverRef"
     :arrow="false"
+    :ext-cls="compact ? 'nl-tag-select-compact' : ''"
     :is-show="isShow"
     placement="bottom-start"
     theme="light nl-tag-popover"
@@ -46,6 +47,7 @@
     <template #content>
       <div
         class="nl-tag-editor-popover nl-tag-select-popover"
+        :class="{ 'is-compact': compact }"
         @click.stop
         @mousedown.stop>
         <div class="nl-tag-search-input">
@@ -111,6 +113,7 @@
     tag: IConditionTag;
     isEditing: boolean;
     optionsCache: Record<string, Array<Record<string, any>>>;
+    compact?: boolean;
   }
   interface Emits {
     (e: 'startEdit', fieldName: string): void;
@@ -120,7 +123,9 @@
     (e: 'updateCache', fieldName: string, options: Array<Record<string, any>>): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    compact: false,
+  });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -355,6 +360,11 @@
     width: 320px;
     padding: 8px;
 
+    &.is-compact {
+      width: 180px;
+      min-width: 180px;
+    }
+
     .nl-tag-search-input {
       display: flex;
       align-items: center;
@@ -440,5 +450,12 @@
         text-align: center;
       }
     }
+  }
+</style>
+<style lang="postcss">
+  /* 仅 compact 模式使用，不影响风险列表自然语言搜索的 320px 下拉 */
+  .bk-popover.bk-pop2-content.nl-tag-select-compact {
+    width: fit-content;
+    min-width: 0;
   }
 </style>
