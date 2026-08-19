@@ -19,6 +19,11 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarPinRequestSerializer,
     SidebarSearchRequestSerializer,
 )
+from services.web.ai_assistant.serializers.feedback import (
+    FeedbackDeleteRequestSerializer,
+    FeedbackResponseSerializer,
+    FeedbackUpsertRequestSerializer,
+)
 from services.web.ai_assistant.serializers.message import (
     InitialMessageRequestSerializer,
     MessageCreateRequestSerializer,
@@ -42,6 +47,9 @@ __all__ = [
     "ConversationGroupDetailRequestSerializer",
     "ConversationGroupUpdateRequestSerializer",
     "ConversationUpdateRequestSerializer",
+    "FeedbackResponseSerializer",
+    "FeedbackDeleteRequestSerializer",
+    "FeedbackUpsertRequestSerializer",
     "SidebarMoveRequestSerializer",
     "SidebarNodeListRequestSerializer",
     "SidebarPinRequestSerializer",

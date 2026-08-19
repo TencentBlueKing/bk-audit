@@ -13,6 +13,7 @@ from django.utils import timezone
 from services.web.ai_assistant.constants import (
     ExecutionMode,
     ExecutionStatus,
+    FeedbackSourceType,
     MessageErrorCode,
     MessageHistoryDirection,
     MessageType,
@@ -35,6 +36,7 @@ from services.web.ai_assistant.schemas import (
     dump_snapshot,
     parse_snapshot,
 )
+from services.web.ai_assistant.services.feedback import FeedbackService
 from services.web.ai_assistant.services.message_execution import finish_message_failure
 
 logger = logging.getLogger(__name__)
@@ -169,6 +171,7 @@ class MessageService:
             raise MessageNotFound() from error
         if message is None:
             raise MessageNotFound()
+        FeedbackService(user=self.user).bind_current_feedback(sources=[message], source_type=FeedbackSourceType.MESSAGE)
         return message
 
     def list(
@@ -230,6 +233,8 @@ class MessageService:
                 has_after=False,
                 include_content=include_content,
             )
+
+        FeedbackService(user=self.user).bind_current_feedback(sources=results, source_type=FeedbackSourceType.MESSAGE)
 
         return MessageWindow(
             results=results,

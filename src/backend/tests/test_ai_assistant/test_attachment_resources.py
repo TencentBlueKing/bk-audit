@@ -13,6 +13,8 @@ from core.utils.spectacular import BKResourceAutoSchema
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionStatus,
+    FeedbackSourceType,
+    FeedbackType,
     MessageType,
 )
 from services.web.ai_assistant.exceptions import (
@@ -21,7 +23,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentSource,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
     GetAttachment,
@@ -42,6 +44,7 @@ from services.web.ai_assistant.serializers.attachment import (
     _attachment_schema_mapping,
     _editable_attachment_output_schema_mapping,
 )
+from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_success,
     load_attachment_execution,
@@ -54,6 +57,7 @@ from tests.test_ai_assistant.handlers import (
     EchoAttachmentAsyncHandler,
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
+    FeedbackAttachmentEchoHandler,
 )
 
 
@@ -129,6 +133,7 @@ class AttachmentRequestSerializerTest(TestCase):
             AttachmentUpdateRequestSerializer,
             AttachmentResponseSerializer,
             AttachmentListItemSerializer,
+            FeedbackResponseSerializer,
         )
 
         for serializer_class in serializer_classes:
@@ -238,6 +243,8 @@ class AttachmentRequestSerializerTest(TestCase):
                 "error_message",
                 "created_at",
                 "updated_at",
+                "supports_feedback",
+                "feedback",
             },
         )
         self.assertEqual(
@@ -251,6 +258,7 @@ class AttachmentRequestSerializerTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "supports_feedback",
             },
         )
         for field_name in ("id", "context_data", "task_id", "is_stream", "stream_config", "stream_archive"):
@@ -371,7 +379,7 @@ class AttachmentResourceTest(TestCase):
             created_by="alice",
             updated_by="alice",
         )
-        self.sync_handler = EchoAttachmentSyncHandler()
+        self.sync_handler = FeedbackAttachmentEchoHandler()
         self.async_handler = EchoAttachmentAsyncHandler()
         attachment_handler_registry.register(self.sync_handler)
         attachment_handler_registry.register(self.async_handler)
@@ -420,6 +428,8 @@ class AttachmentResourceTest(TestCase):
         self.assertEqual(response["source_message_uid"], str(self.source_message.uid))
         self.assertEqual(response["input_data"], {"text": "hello"})
         self.assertEqual(response["output_data"], {"content": "sync:hello"})
+        self.assertTrue(response["supports_feedback"])
+        self.assertIsNone(response["feedback"])
         for internal_field in ("id", "context_data", "task_id", "is_stream", "stream_config", "stream_archive"):
             self.assertNotIn(internal_field, response)
 
@@ -528,12 +538,32 @@ class AttachmentResourceTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "supports_feedback",
             },
         )
         self.assertNotIn("input_data", response[0])
         self.assertNotIn("output_data", response[0])
         self.assertEqual(response[0]["source_message"]["uid"], str(self.source_message.uid))
         self.assertEqual(response[0]["conversation"]["uid"], str(self.conversation.uid))
+
+    def test_attachment_detail_exposes_current_feedback_but_list_only_exposes_capability(self, _username):
+        attachment = self.create_attachment(output_data={"content": "feedback"})
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.ATTACHMENT,
+            source_id=attachment.id,
+            feedback_type=FeedbackType.DISLIKE,
+            comment="不准确",
+            created_by="alice",
+            updated_by="alice",
+        )
+
+        detail = GetAttachment().request({"attachment_uid": str(attachment.uid)})
+        listed = ListAttachments().request({})
+
+        self.assertTrue(detail["supports_feedback"])
+        self.assertEqual(detail["feedback"]["source_uid"], str(attachment.uid))
+        self.assertTrue(listed[0]["supports_feedback"])
+        self.assertNotIn("feedback", listed[0])
 
     def test_update_supports_title_and_editable_ai_analysis_output(self, _username):
         title_attachment = self.create_attachment(

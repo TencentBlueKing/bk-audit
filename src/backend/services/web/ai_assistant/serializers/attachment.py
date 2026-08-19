@@ -10,6 +10,7 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationError
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
+from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 
 
 def _attachment_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -149,11 +150,14 @@ class AttachmentResponseSerializer(serializers.Serializer):
     )
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
+    supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对附件的反馈")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     updated_at = serializers.DateTimeField(help_text="附件最后更新时间")
 
     def to_representation(self, instance):
         handler = attachment_handler_registry.require(instance.attachment_type)
+        supports_feedback = handler.supports_feedback
         output_data = None
         if instance.output_data is not None:
             output_data = parse_snapshot(
@@ -179,6 +183,12 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "output_data": output_data,
             "error_code": instance.error_code,
             "error_message": instance.error_message,
+            "supports_feedback": supports_feedback,
+            "feedback": (
+                FeedbackResponseSerializer(getattr(instance, "_current_feedback", None)).data
+                if supports_feedback and getattr(instance, "_current_feedback", None)
+                else None
+            ),
             "created_at": instance.created_at,
             "updated_at": instance.updated_at,
         }
@@ -195,9 +205,11 @@ class AttachmentListItemSerializer(serializers.Serializer):
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
     conversation = AttachmentConversationSummarySerializer(help_text="所属会话摘要")
+    supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
 
     def to_representation(self, instance):
         conversation = instance.source_message.conversation
+        handler = attachment_handler_registry.require(instance.attachment_type)
         return {
             "uid": str(instance.uid),
             "attachment_type": instance.attachment_type,
@@ -216,4 +228,5 @@ class AttachmentListItemSerializer(serializers.Serializer):
                 "created_at": conversation.created_at,
                 "updated_at": conversation.updated_at,
             },
+            "supports_feedback": handler.supports_feedback,
         }

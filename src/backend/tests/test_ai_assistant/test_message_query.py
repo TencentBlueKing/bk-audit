@@ -181,8 +181,8 @@ class MessageQueryTest(TestCase):
                     updated_by=self.user,
                 )
 
-        # 会话校验、消息窗口、附件预取、前后边界各一次，共 5 次查询。
-        with self.assertNumQueries(5):
+        # 会话校验、消息窗口、附件预取、前后边界及当前用户反馈各一次，共 6 次查询。
+        with self.assertNumQueries(6):
             window = self.service.list(conversation_uid=str(self.conversation.uid), limit=20)
             attachments = [attachment for message in window.results for attachment in message.attachments.all()]
             attachment_uids = [str(attachment.uid) for attachment in attachments]
@@ -211,8 +211,8 @@ class MessageQueryTest(TestCase):
             updated_by=self.user,
         )
 
-        # 带锚点比无锚点多一次锚点归属查询，共 6 次查询。
-        with self.assertNumQueries(6):
+        # 带锚点比无锚点多一次锚点归属查询，共 7 次查询。
+        with self.assertNumQueries(7):
             window = self.service.list(
                 conversation_uid=str(self.conversation.uid),
                 anchor_uid=str(messages[1].uid),

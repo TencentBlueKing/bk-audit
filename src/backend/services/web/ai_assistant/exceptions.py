@@ -160,3 +160,21 @@ class InvalidMessageState(AIAssistantException):
     MESSAGE = gettext_lazy("消息状态无效")
     ERROR_CODE = "026"
     STATUS_CODE = 400
+
+
+class FeedbackSourceNotFound(AIAssistantException):
+    MESSAGE = gettext_lazy("反馈来源不存在")
+    ERROR_CODE = "027"
+    STATUS_CODE = 404
+
+
+class FeedbackNotSupported(AIAssistantException):
+    MESSAGE = gettext_lazy("当前对象不支持反馈")
+    ERROR_CODE = "028"
+    STATUS_CODE = 400
+
+
+class InvalidFeedbackSourceState(AIAssistantException):
+    MESSAGE = gettext_lazy("当前对象状态不支持反馈")
+    ERROR_CODE = "029"
+    STATUS_CODE = 400

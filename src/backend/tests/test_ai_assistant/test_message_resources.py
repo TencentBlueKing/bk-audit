@@ -1,12 +1,16 @@
 from unittest import mock
 from uuid import UUID, uuid4
 
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import resolve
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionStatus,
+    FeedbackSourceType,
+    FeedbackType,
     MessageHistoryDirection,
     MessageType,
 )
@@ -17,14 +21,18 @@ from services.web.ai_assistant.exceptions import (
     MessageNotFound,
     MessageSnapshotValidationError,
 )
-from services.web.ai_assistant.handlers import message_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.handlers import (
+    attachment_handler_registry,
+    message_handler_registry,
+)
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
     ListMessages,
     RetryMessage,
 )
+from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.serializers.message import (
     AttachmentSummarySerializer,
     InitialMessageRequestSerializer,
@@ -35,6 +43,7 @@ from services.web.ai_assistant.serializers.message import (
     MessageWindowResponseSerializer,
     _message_schema_mapping,
 )
+from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import (
     finish_message_success,
     load_message_execution,
@@ -42,9 +51,12 @@ from services.web.ai_assistant.services.message_execution import (
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
+    EchoAttachmentAsyncHandler,
     EchoInput,
     EchoOutput,
     EchoSyncHandler,
+    FeedbackAttachmentEchoHandler,
+    FeedbackEchoSyncHandler,
 )
 
 
@@ -132,6 +144,7 @@ class MessageRequestSerializerTest(TestCase):
             MessageListRequestSerializer,
             MessageResponseSerializer,
             MessageWindowResponseSerializer,
+            FeedbackResponseSerializer,
         )
 
         for serializer_class in serializer_classes:
@@ -161,14 +174,20 @@ class MessageRequestSerializerTest(TestCase):
 class MessageResourceTest(TestCase):
     def setUp(self):
         self.conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
-        self.sync_handler = EchoSyncHandler()
+        self.sync_handler = FeedbackEchoSyncHandler()
         self.async_handler = EchoAsyncHandler()
+        self.attachment_handler = FeedbackAttachmentEchoHandler()
+        self.async_attachment_handler = EchoAttachmentAsyncHandler()
         message_handler_registry.register(self.sync_handler)
         message_handler_registry.register(self.async_handler)
+        attachment_handler_registry.register(self.attachment_handler)
+        attachment_handler_registry.register(self.async_attachment_handler)
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
+        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
 
     def test_create_sync_message_returns_success_without_internal_fields(self, _username):
         response = CreateMessage().request(
@@ -185,6 +204,8 @@ class MessageResourceTest(TestCase):
         self.assertEqual(response["output_data"], {"content": "system:system-a"})
         self.assertIsNone(response["parent_message_uid"])
         self.assertEqual(response["attachments"], [])
+        self.assertTrue(response["supports_feedback"])
+        self.assertIsNone(response["feedback"])
         for internal_field in ("id", "task_id", "stream_config", "stream_archive"):
             self.assertNotIn(internal_field, response)
 
@@ -280,7 +301,7 @@ class MessageResourceTest(TestCase):
         self.assertNotIn("output_data", item)
         self.assertEqual(
             set(item["attachments"][0]),
-            {"uid", "attachment_type", "status", "title", "content_updated_at", "created_at"},
+            {"uid", "attachment_type", "status", "title", "content_updated_at", "created_at", "supports_feedback"},
         )
         self.assertEqual(
             [summary["uid"] for summary in item["attachments"]],
@@ -290,6 +311,49 @@ class MessageResourceTest(TestCase):
         detail = GetMessage().request({"message_uid": created["uid"]})
         self.assertEqual(detail["input_data"], {"text": "system-a"})
         self.assertNotIn("context_data", detail)
+
+    def test_message_response_exposes_current_feedback_and_list_uses_one_feedback_query(self, _username):
+        messages = [
+            Message.objects.create(
+                conversation=self.conversation,
+                message_type=MessageType.SYSTEM_SELECTION,
+                status=ExecutionStatus.SUCCESS,
+                input_data={"text": f"message-{index}"},
+                context_data={"prefix": "system"},
+                output_data={"content": f"system:message-{index}"},
+                created_by="alice",
+                updated_by="alice",
+            )
+            for index in range(20)
+        ]
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.MESSAGE,
+            source_id=messages[0].id,
+            feedback_type=FeedbackType.LIKE,
+            comment="有帮助",
+            created_by="alice",
+            updated_by="alice",
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            window = MessageService(user="alice").list(
+                conversation_uid=str(self.conversation.uid),
+                limit=20,
+                include_content=False,
+            )
+            response = MessageWindowResponseSerializer(window).data
+
+        feedback_selects = [
+            query["sql"]
+            for query in queries.captured_queries
+            if "ai_assistant_feedback" in query["sql"].lower() and query["sql"].lstrip().upper().startswith("SELECT")
+        ]
+        self.assertEqual(len(feedback_selects), 1)
+        self.assertTrue(response["results"][0]["supports_feedback"])
+        self.assertEqual(response["results"][0]["feedback"]["source_uid"], str(messages[0].uid))
+        self.assertNotIn(
+            "feedback", response["results"][0]["attachments"][0] if response["results"][0]["attachments"] else {}
+        )
 
     def test_list_after_anchor_discovers_new_messages(self, _username):
         first = CreateMessage().request(

@@ -83,6 +83,8 @@ class HandlerRegistry(Generic[HandlerT]):
             raise ImproperlyConfigured(f"无效的{self._label}类型: {handler_type}")
         if str(execution_mode) not in ExecutionMode.values:
             raise ImproperlyConfigured(f"无效的执行方式: {execution_mode}")
+        if not isinstance(handler.supports_feedback, bool):
+            raise ImproperlyConfigured(f"{self._label} supports_feedback 必须是 bool")
         for field_name in ("input_model", "context_model", "output_model"):
             schema_type = getattr(handler, field_name, None)
             if not isinstance(schema_type, type) or not issubclass(schema_type, MessageSchema):

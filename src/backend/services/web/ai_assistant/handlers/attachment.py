@@ -42,6 +42,8 @@ class AttachmentTypeHandler(Generic[InputT, ContextT, OutputT], ABC):
     input_model: type[InputT]
     context_model: type[ContextT]
     output_model: type[OutputT]
+    # 反馈由业务 Handler 显式开放，默认不向前端暴露该能力。
+    supports_feedback: bool = False
     # 同步 Handler 无需重复声明；异步 Handler 直接绑定平台装饰器生成的 Task。
     async_task: "AttachmentAsyncTask[InputT, ContextT, OutputT] | None" = None
 

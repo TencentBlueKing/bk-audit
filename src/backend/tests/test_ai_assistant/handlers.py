@@ -55,6 +55,12 @@ class EchoSyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
         return EchoOutput(content=f"{context_data.prefix}:{input_data.text}")
 
 
+class FeedbackEchoSyncHandler(EchoSyncHandler):
+    """显式开放反馈的消息 Handler，用于反馈能力测试。"""
+
+    supports_feedback = True
+
+
 @message_execution_task(
     name="tests.ai_assistant.echo_async_success",
     queue="tests_ai_assistant",
@@ -239,6 +245,12 @@ class EchoAttachmentSyncHandler(
         execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
     ) -> AttachmentEchoOutput:
         return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+class FeedbackAttachmentEchoHandler(EchoAttachmentSyncHandler):
+    """显式开放反馈的附件 Handler，用于反馈能力测试。"""
+
+    supports_feedback = True
 
 
 @attachment_execution_task(
