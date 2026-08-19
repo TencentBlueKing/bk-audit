@@ -16,243 +16,282 @@
 -->
 <template>
   <div class="condition-filter-card">
-    <div class="card-header">
-      <div class="card-title">
-        <audit-icon
-          class="title-icon"
-          type="search1" />
-        <h4>条件筛选</h4>
-      </div>
-      <div
-        class="card-close"
-        @click="$emit('close')">
-        <audit-icon type="close" />
-      </div>
+    <div class="card-title-row">
+      <audit-icon
+        class="title-icon"
+        type="search1" />
+      <span class="card-title">请添加条件进行检索</span>
     </div>
 
-    <div class="card-body">
-      <p class="card-tip">
-        添加条件进行检索
-      </p>
-      <div class="condition-row">
-        <div
-          v-for="item in conditions"
-          :key="item.id"
-          class="condition-tag"
-          :class="{ 'is-time': item.type === 'time' }">
-          <span class="tag-label">{{ item.field }}：</span>
-          <span class="tag-value">{{ item.value }}</span>
-          <span
-            v-if="item.type === 'time'"
-            class="tag-caret" />
-          <audit-icon
-            v-else-if="item.removable"
-            class="tag-close"
-            type="close"
-            @click="removeCondition(item.id)" />
-        </div>
+    <div class="condition-area">
+      <condition-tags
+        ref="conditionTagsRef"
+        compact-select-popover
+        :condition-list="[]"
+        :event-field-items="[]"
+        :field-config="fieldConfig"
+        :search-model="searchModel"
+        @clear-all="handleClear"
+        @remove="handleRemoveCondition"
+        @update="handleUpdateCondition">
+        <add-condition
+          accent
+          :event-fields="[]"
+          :field-config="fieldConfig"
+          primary-tab-label="通用字段"
+          :primary-field-names="commonFieldKeys"
+          secondary-source="config"
+          secondary-tab-label="拓展字段"
+          :secondary-field-names="extendFieldKeys"
+          :selected-event-field-ids="[]"
+          :selected-fields="selectedFieldNames"
+          @add-field="handleAddField" />
+      </condition-tags>
+    </div>
 
-        <bk-popover
-          :arrow="false"
-          :is-show="addPopoverShow"
-          placement="bottom-start"
-          theme="light"
-          trigger="manual"
-          @after-hidden="addPopoverShow = false">
-          <button
-            class="add-condition-btn"
-            type="button"
-            @click.stop="addPopoverShow = !addPopoverShow">
-            + 添加条件
-          </button>
-          <template #content>
-            <div
-              class="add-field-panel"
-              @click.stop>
-              <div
-                v-for="field in addableFields"
-                :key="field"
-                class="add-field-item"
-                @click="handleAddField(field)">
-                {{ field }}
-              </div>
-              <div
-                v-if="!addableFields.length"
-                class="add-field-empty">
-                暂无可添加字段
-              </div>
-            </div>
-          </template>
-        </bk-popover>
+    <div class="card-actions">
+      <bk-button
+        class="search-btn"
+        theme="primary"
+        @click="handleSearch">
+        开始检索
+      </bk-button>
+    </div>
 
-        <button
-          v-if="conditions.length"
-          class="clear-btn"
-          type="button"
-          @click="clearConditions">
-          <audit-icon
-            class="clear-icon"
-            type="delete" />
-          <span>清空</span>
-        </button>
-      </div>
-
-      <div class="card-actions">
-        <bk-button
-          class="search-btn"
-          :disabled="!conditions.length"
-          theme="primary"
-          @click="handleSearch">
-          开始检索
-        </bk-button>
-      </div>
+    <div
+      v-if="inlineResult"
+      class="inline-result">
+      <retrieval-result-card
+        embedded
+        :result="inlineResult"
+        @regenerate="handleSearch" />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref, watch } from 'vue';
+  import dayjs from 'dayjs';
+  import { computed, nextTick, ref } from 'vue';
 
-  import type { SelectedSystem } from '../../types';
+  import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
-  export interface SeedField {
-    name: string;
-    sample?: string;
-  }
+  import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
+  import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
 
-  interface ConditionItem {
-    id: string;
-    field: string;
-    value: string;
-    type: 'time' | 'normal';
-    removable: boolean;
-  }
+  import RetrievalResultCard from './retrieval-result-card.vue';
+  import type { RetrievalResultPayload, SelectedSystem } from '../../types';
+  import { buildMockRetrievalResult } from '../utils/build-mock-result';
+  import {
+    COMMON_FIELD_KEYS,
+    createConditionFieldConfig,
+    createDefaultDatetime,
+    createDefaultDatetimeOrigin,
+    DATETIME_SHORTCUT_LABEL_MAP,
+    EXTEND_FIELD_KEYS,
+    FIELD_LABEL_TO_KEY,
+  } from '../config/condition-fields';
 
   const props = withDefaults(defineProps<{
-    seedField?: SeedField | null;
     systems?: SelectedSystem[];
-    fieldOptions?: string[];
   }>(), {
-    seedField: null,
     systems: () => [],
-    fieldOptions: () => [],
   });
 
   const emit = defineEmits<{
-    close: [];
-    search: [summary: string];
+    searched: [];
   }>();
 
-  const conditions = ref<ConditionItem[]>([]);
-  const addPopoverShow = ref(false);
-  let conditionSeq = 0;
+  const commonFieldKeys = COMMON_FIELD_KEYS;
+  const extendFieldKeys = EXTEND_FIELD_KEYS;
 
-  const defaultFieldOptions = [
-    '操作起始时间',
-    '操作人',
-    '操作人账号类型',
-    '来源系统',
-    '操作结果',
-    '操作途径',
-    '来源IP',
-    '事件ID',
-    '请求ID',
-  ];
-
-  const allFieldOptions = computed(() => {
-    const list = props.fieldOptions.length ? props.fieldOptions : defaultFieldOptions;
-    return Array.from(new Set(list));
+  const conditionTagsRef = ref<{ startEditField?: (fieldName: string) => void }>();
+  const inlineResult = ref<RetrievalResultPayload | null>(null);
+  const searchModel = ref<Record<string, any>>({
+    datetime: createDefaultDatetime(),
+    datetime_origin: createDefaultDatetimeOrigin(),
   });
 
-  const addableFields = computed(() => {
-    const used = new Set(conditions.value.map(item => item.field));
-    return allFieldOptions.value.filter(name => !used.has(name));
-  });
+  const fieldConfig = computed(() => createConditionFieldConfig(props.systems));
 
-  const createId = () => {
-    conditionSeq += 1;
-    return `cond-${Date.now()}-${conditionSeq}`;
-  };
+  const selectedFieldNames = computed(() => Object.keys(searchModel.value)
+    .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
 
-  const buildDefaultValue = (field: string, sample?: string) => {
-    if (field === '操作起始时间') return '近 6 月';
-    if (field === '来源系统') {
-      return sample
-        || props.systems[0]?.name
-        || 'TOD 账单系统';
+  const getDefaultValue = (config: IFieldConfig) => {
+    if (config.type === 'select' || config.type === 'user-selector') {
+      return [];
     }
-    return sample || '替换为实际值';
-  };
-
-  const initConditions = () => {
-    const next: ConditionItem[] = [{
-      id: createId(),
-      field: '操作起始时间',
-      value: '近 6 月',
-      type: 'time',
-      removable: false,
-    }];
-
-    const seed = props.seedField;
-    if (seed?.name && seed.name !== '操作起始时间') {
-      next.push({
-        id: createId(),
-        field: seed.name,
-        value: buildDefaultValue(seed.name, seed.sample),
-        type: 'normal',
-        removable: true,
-      });
-    } else if (props.systems.length) {
-      next.push({
-        id: createId(),
-        field: '来源系统',
-        value: props.systems.map(item => item.name).slice(0, 1)
-          .join('、') || 'TOD 账单系统',
-        type: 'normal',
-        removable: true,
-      });
+    if (config.type === 'datetimerange') {
+      return createDefaultDatetime();
     }
-
-    conditions.value = next;
-    addPopoverShow.value = false;
+    return '';
   };
 
-  watch(() => props.seedField, () => {
-    initConditions();
-  }, { immediate: true, deep: true });
+  const resolveFieldKey = (fieldNameOrLabel: string) => (
+    FIELD_LABEL_TO_KEY[fieldNameOrLabel] || fieldNameOrLabel
+  );
 
-  const removeCondition = (id: string) => {
-    conditions.value = conditions.value.filter(item => item.id !== id);
+  const sampleToValue = (config: IFieldConfig, sample?: string, fieldName?: string) => {
+    if (!sample) {
+      return getDefaultValue(config);
+    }
+    if (config.type === 'user-selector') {
+      return [sample];
+    }
+    if (config.type === 'select') {
+      if (fieldName === 'system_id') {
+        const matched = props.systems.find(item => item.id === sample || item.name === sample);
+        return [matched?.id || sample];
+      }
+      return [sample];
+    }
+    return sample;
   };
 
-  const clearConditions = () => {
-    conditions.value = [];
-  };
-
-  const handleAddField = (field: string) => {
-    conditions.value.push({
-      id: createId(),
-      field,
-      value: buildDefaultValue(field),
-      type: field === '操作起始时间' ? 'time' : 'normal',
-      removable: field !== '操作起始时间',
+  const insertFieldAtFront = (fieldName: string, value: any) => {
+    const next: Record<string, any> = {
+      datetime: searchModel.value.datetime || createDefaultDatetime(),
+      datetime_origin: searchModel.value.datetime_origin || createDefaultDatetimeOrigin(),
+    };
+    if (fieldName !== 'datetime' && fieldName !== 'datetime_origin') {
+      next[fieldName] = value;
+    }
+    Object.keys(searchModel.value).forEach((key) => {
+      if (key === 'datetime' || key === 'datetime_origin' || key === fieldName) return;
+      next[key] = searchModel.value[key];
     });
-    addPopoverShow.value = false;
+    searchModel.value = next;
+  };
+
+  const handleAddField = async (fieldName: string, config: IFieldConfig, initialValue?: any) => {
+    if (fieldName !== 'datetime' && searchModel.value[fieldName] !== undefined) {
+      conditionTagsRef.value?.startEditField?.(fieldName);
+      return;
+    }
+    const value = initialValue !== undefined ? initialValue : getDefaultValue(config);
+    insertFieldAtFront(fieldName, value);
+    conditionTagsRef.value?.startEditField?.(fieldName);
+    await nextTick();
+  };
+
+  const handleRemoveCondition = (fieldName: string) => {
+    if (fieldName === 'datetime') return;
+    const next = { ...searchModel.value };
+    delete next[fieldName];
+    searchModel.value = next;
+  };
+
+  const handleUpdateCondition = (fieldName: string, value: any) => {
+    if (fieldName === 'datetime') {
+      if (Array.isArray(value) && value.length >= 2) {
+        const formatted = value.map((item: any) => (
+          typeof item === 'number' || item instanceof Date
+            ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
+            : item
+        ));
+        searchModel.value.datetime = formatted;
+        searchModel.value.datetime_origin = formatted;
+      }
+      return;
+    }
+    if (fieldName === 'datetime_origin') {
+      searchModel.value.datetime_origin = value;
+      return;
+    }
+    searchModel.value[fieldName] = value;
+  };
+
+  const handleClear = () => {
+    searchModel.value = {
+      datetime: createDefaultDatetime(),
+      datetime_origin: createDefaultDatetimeOrigin(),
+    };
+    inlineResult.value = null;
+  };
+
+  const formatConditionValue = (fieldName: string, config: IFieldConfig, value: any): string => {
+    if (config.type === 'datetimerange') {
+      const origin = searchModel.value.datetime_origin?.[0];
+      if (origin && DATETIME_SHORTCUT_LABEL_MAP[origin]) {
+        return DATETIME_SHORTCUT_LABEL_MAP[origin];
+      }
+      if (Array.isArray(value) && value.length >= 2) {
+        return `${value[0]} - ${value[1]}`;
+      }
+      return '';
+    }
+    if (Array.isArray(value)) {
+      if (fieldName === 'system_id') {
+        return value.map((item) => {
+          const matched = props.systems.find(system => system.id === item || system.name === item);
+          return matched ? `${matched.name}(${matched.id})` : String(item);
+        }).filter(Boolean)
+          .join('，');
+      }
+      return value.map(item => String(item)).filter(Boolean)
+        .join('，');
+    }
+    if (value === undefined || value === null || value === '') {
+      return '';
+    }
+    return String(value);
+  };
+
+  const hasConditionValue = (value: any) => {
+    if (Array.isArray(value)) {
+      return value.some(item => item !== undefined && item !== null && item !== '');
+    }
+    return value !== undefined && value !== null && value !== '';
+  };
+
+  const buildConditionSummary = () => {
+    const parts: string[] = [];
+    const datetimeValue = formatConditionValue('datetime', fieldConfig.value.datetime, searchModel.value.datetime);
+    if (datetimeValue) {
+      parts.push(`${fieldConfig.value.datetime.label}为${datetimeValue}`);
+    }
+
+    Object.keys(searchModel.value).forEach((fieldName) => {
+      if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
+      const config = fieldConfig.value[fieldName];
+      if (!config) return;
+      const displayValue = formatConditionValue(fieldName, config, searchModel.value[fieldName]);
+      if (!displayValue && !hasConditionValue(searchModel.value[fieldName])) return;
+      parts.push(`${config.label}为${displayValue || '空'}`);
+    });
+
+    return parts.join('，');
   };
 
   const handleSearch = () => {
-    if (!conditions.value.length) return;
-    const summary = conditions.value
-      .map(item => `${item.field}为${item.value}`)
-      .join('，');
-    emit('search', `条件筛选：${summary}`);
+    const summary = buildConditionSummary();
+    if (!summary) return;
+    inlineResult.value = buildMockRetrievalResult(`条件筛选：${summary}`);
+    emit('searched');
   };
+
+  const addOrFocusField = async (fieldNameOrLabel: string, sample?: string) => {
+    const fieldName = resolveFieldKey(fieldNameOrLabel);
+    const config = fieldConfig.value[fieldName];
+    if (!config) return;
+
+    if (fieldName === 'datetime' || searchModel.value[fieldName] !== undefined) {
+      conditionTagsRef.value?.startEditField?.(fieldName);
+      return;
+    }
+
+    await handleAddField(fieldName, config, sampleToValue(config, sample, fieldName));
+  };
+
+  defineExpose({
+    addOrFocusField,
+  });
 </script>
 
 <style lang="postcss" scoped>
   .condition-filter-card {
     width: 100%;
     max-width: 100%;
+    padding: 16px 24px 20px;
     overflow: visible;
     font-size: 14px;
     font-weight: 400;
@@ -266,172 +305,32 @@
     box-sizing: border-box;
   }
 
-  .card-header {
+  .card-title-row {
     display: flex;
-    height: 52px;
-    padding: 0 24px;
-    background: #f0f1f5;
-    border-bottom: 1px solid #dcdee5;
-    border-radius: 8px 8px 0 0;
+    margin-bottom: 12px;
     align-items: center;
-    justify-content: space-between;
-    box-sizing: border-box;
+
+    .title-icon {
+      margin-right: 8px;
+      font-size: 16px;
+      color: #979ba5;
+      flex-shrink: 0;
+    }
 
     .card-title {
-      display: flex;
-      font-size: 16px;
-      font-weight: 700;
-      line-height: 24px;
-      color: #313238;
-      letter-spacing: 0;
-      align-items: center;
-      gap: 8px;
-
-      h4 {
-        margin: 0;
-        font-size: inherit;
-        font-weight: inherit;
-        line-height: inherit;
-        color: inherit;
-      }
-
-      .title-icon {
-        font-size: 18px;
-        color: #979ba5;
-        flex-shrink: 0;
-      }
-    }
-
-    .card-close {
-      display: flex;
-      width: 32px;
-      height: 32px;
-      margin-right: -8px;
-      font-size: 18px;
-      color: #979ba5;
-      cursor: pointer;
-      border-radius: 2px;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-
-      &:hover {
-        color: #63656e;
-        background: #eaebf0;
-      }
-    }
-  }
-
-  .card-body {
-    padding: 24px;
-    background: #fff;
-  }
-
-  .card-tip {
-    margin: 0 0 16px;
-    font-size: 14px;
-    line-height: 22px;
-    color: #979ba5;
-  }
-
-  .condition-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .condition-tag {
-    display: inline-flex;
-    max-width: 100%;
-    height: 32px;
-    padding: 0 8px 0 12px;
-    font-size: 12px;
-    line-height: 30px;
-    color: #63656e;
-    background: #f0f1f5;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
-    align-items: center;
-    gap: 4px;
-    box-sizing: border-box;
-
-    .tag-label {
-      flex-shrink: 0;
-      color: #63656e;
-    }
-
-    .tag-value {
-      font-weight: 700;
-      color: #313238;
-    }
-
-    .tag-caret {
-      display: inline-block;
-      width: 0;
-      height: 0;
-      margin-left: 4px;
-      border-style: solid;
-      border-width: 5px 4px 0;
-      border-color: #979ba5 transparent transparent;
-      flex-shrink: 0;
-    }
-
-    .tag-close {
-      margin-left: 2px;
       font-size: 14px;
+      line-height: 22px;
       color: #979ba5;
-      cursor: pointer;
-      flex-shrink: 0;
-
-      &:hover {
-        color: #63656e;
-      }
     }
   }
 
-  .add-condition-btn {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 12px;
-    line-height: 30px;
-    color: #3a84ff;
-    cursor: pointer;
-    background: #fff;
-    border: 1px dashed #3a84ff;
-    border-radius: 2px;
-    box-sizing: border-box;
-
-    &:hover {
-      background: #f0f5ff;
-    }
-  }
-
-  .clear-btn {
-    display: inline-flex;
-    height: 32px;
-    padding: 0 4px;
-    font-size: 12px;
-    line-height: 32px;
-    color: #979ba5;
-    cursor: pointer;
-    background: none;
-    border: none;
-    align-items: center;
-    gap: 4px;
-
-    &:hover {
-      color: #63656e;
-    }
-
-    .clear-icon {
-      font-size: 14px;
-    }
+  .condition-area {
+    min-height: 32px;
   }
 
   .card-actions {
     display: flex;
-    margin-top: 24px;
+    margin-top: 16px;
     justify-content: flex-start;
 
     .search-btn {
@@ -445,30 +344,56 @@
     }
   }
 
-  .add-field-panel {
-    min-width: 160px;
-    max-height: 240px;
-    padding: 4px 0;
-    overflow: auto;
+  .inline-result {
+    margin-top: 20px;
   }
-
-  .add-field-item {
-    padding: 8px 12px;
-    font-size: 12px;
-    line-height: 20px;
-    color: #63656e;
-    cursor: pointer;
-
-    &:hover {
-      color: #3a84ff;
-      background: #f0f5ff;
+</style>
+<style lang="postcss">
+  /* 仅覆盖 AI 对话条件筛选：标签灰色底 + 32px 高，不影响风险列表条件区 */
+  .condition-filter-card {
+    .nl-condition-tags-first-row,
+    .nl-condition-tags-content {
+      align-items: center;
     }
-  }
 
-  .add-field-empty {
-    padding: 12px;
-    font-size: 12px;
-    color: #c4c6cc;
-    text-align: center;
+    .condition-tag-item {
+      height: 32px;
+      padding: 0 8px 0 12px;
+      background: #f0f1f5;
+      border: 1px solid #dcdee5;
+      box-sizing: border-box;
+
+      &:hover {
+        .tag-value-wrapper {
+          background: transparent;
+        }
+      }
+    }
+
+    .nl-tag-input-item.is-editing {
+      height: auto;
+      min-height: 32px;
+    }
+
+    .nl-add-condition-trigger {
+      height: 32px;
+      padding: 0 12px;
+      box-sizing: border-box;
+
+      &.is-accent {
+        background: #f0f5ff;
+      }
+    }
+
+    .condition-clear-btn {
+      height: 32px;
+    }
+
+    .nl-tag-user-selector-item.is-editing.condition-tag-item:not(.has-users),
+    .nl-tag-user-selector-item.is-editing.condition-tag-item.has-users {
+      height: 32px !important;
+      max-height: 32px !important;
+      min-height: 32px !important;
+    }
   }
 </style>

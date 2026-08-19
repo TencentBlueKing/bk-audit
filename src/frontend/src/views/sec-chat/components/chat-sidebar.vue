@@ -1,13 +1,15 @@
 <template>
   <div
+    ref="sidebarRootRef"
     class="chat-sidebar"
     :class="{ 'is-collapsed': collapsed }">
     <template v-if="!collapsed">
       <!-- 场景选择 -->
       <div class="sidebar-project">
         <scene-system-selector
+          ref="sceneSelectorRef"
           v-model="selectedScene"
-          :popover-width="288"
+          :popover-width="224"
           scene-permission="view_scene"
           system-permission="view_system"
           width="100%"
@@ -26,10 +28,12 @@
           <search class="search-icon" />
         </div>
         <bk-dropdown
+          :key="filterDropdownKey"
+          ref="filterDropdownRef"
           :is-show="isDropdownShow"
-          placement="bottom-end"
+          placement="bottom-start"
           trigger="click"
-          @hide="isDropdownShow = false"
+          @hide="handleFilterDropdownHide"
           @show="isDropdownShow = true">
           <div
             class="filter-btn"
@@ -44,11 +48,15 @@
             <bk-dropdown-menu>
               <bk-dropdown-item ext-cls="sub-menu-item">
                 <bk-dropdown
+                  ref="exportSubmenuRef"
+                  :is-show="isExportSubmenuShow"
                   placement="right-start"
                   style="width: 100%"
-                  trigger="hover">
+                  trigger="hover"
+                  @hide="isExportSubmenuShow = false"
+                  @show="isExportSubmenuShow = true">
                   <div class="dropdown-sub-trigger">
-                    <span>导出对话</span>
+                    <span>导出会话</span>
                     <angle-right class="sub-icon" />
                   </div>
                   <template #content>
@@ -67,13 +75,13 @@
                 </bk-dropdown>
               </bk-dropdown-item>
               <bk-dropdown-item @click="showImportDialog">
-                导入对话
+                导入会话
               </bk-dropdown-item>
               <bk-dropdown-item @click="showReportList">
                 报告列表
               </bk-dropdown-item>
               <bk-dropdown-item @click="showClearAllDialog">
-                清空所有对话
+                清空所有会话
               </bk-dropdown-item>
             </bk-dropdown-menu>
           </template>
@@ -99,18 +107,56 @@
         <div class="conv-section">
           <div class="section-label">
             <span class="label-text">历史对话</span>
-            <span
-              class="label-action"
-              @click="showAddGroupDialog">
-              <plus />
-            </span>
+            <bk-popover
+              arrow
+              ext-cls="add-group-popover"
+              :is-show="addGroupDialog.show"
+              placement="bottom-end"
+              theme="light"
+              trigger="click"
+              :width="260"
+              @after-show="handleAddGroupPopoverShow"
+              @update:is-show="onAddGroupShowChange">
+              <span
+                class="label-action"
+                :class="{ 'is-active': addGroupDialog.show }">
+                <plus />
+              </span>
+              <template #content>
+                <div
+                  class="add-group-popover-content"
+                  @click.stop>
+                  <div class="add-group-title">
+                    新建分组
+                  </div>
+                  <bk-input
+                    ref="addGroupInputRef"
+                    v-model="addGroupDialog.name"
+                    placeholder="请输入分组名称"
+                    @enter="confirmAddGroup" />
+                  <div class="add-group-footer">
+                    <bk-button
+                      theme="primary"
+                      @click="confirmAddGroup">
+                      确定
+                    </bk-button>
+                    <bk-button @click="closeAddGroupPopover">
+                      取消
+                    </bk-button>
+                  </div>
+                </div>
+              </template>
+            </bk-popover>
           </div>
 
           <div
             v-for="conv in filteredHistoryList"
             :key="conv.id"
             class="conv-item"
-            :class="{ 'is-active': activeId === conv.id, 'is-menu-open': activeMenuId === conv.id }"
+            :class="{
+              'is-active': activeId === conv.id && editingConvId !== conv.id,
+              'is-menu-open': activeMenuId === conv.id,
+            }"
             draggable="true"
             @click="$emit('select', conv.id)"
             @dragend="handleDragEnd"
@@ -120,6 +166,7 @@
               <bk-input
                 ref="editConvInputRef"
                 v-model="editConvTitle"
+                autofocus
                 class="conv-title-input"
                 size="small"
                 @blur="cancelEditConv"
@@ -131,25 +178,25 @@
             </template>
             <div
               class="conv-actions"
-              :class="{ 'is-pinned-actions': conv.pinned }">
-              <audit-icon
-                v-if="conv.pinned"
-                class="action-btn pin-icon"
-                type="attention" />
+              :class="{ 'is-pinned-actions': conv.pinned }"
+              @click.stop
+              @mousedown.stop>
               <bk-dropdown
-                :is-show="activeMenuId === conv.id"
+                class="more-dropdown"
                 placement="bottom-end"
+                :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
                 trigger="click"
-                @click.stop
                 @hide="hideMenu"
                 @show="showMenu(conv.id)">
-                <ellipsis
+                <div
                   class="action-btn"
-                  :class="{ 'is-active': activeMenuId === conv.id }" />
+                  :class="{ 'is-active': activeMenuId === conv.id }">
+                  <audit-icon type="more" />
+                </div>
                 <template #content>
                   <bk-dropdown-menu>
                     <bk-dropdown-item @click="handlePin(conv.id)">
-                      {{ conv.pinned ? '取消置顶' : '置顶对话' }}
+                      {{ conv.pinned ? '取消置顶' : '置顶' }}
                     </bk-dropdown-item>
                     <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
                       重命名
@@ -199,8 +246,8 @@
                         </template>
                       </bk-dropdown>
                     </bk-dropdown-item>
-                    <bk-dropdown-item @click="handleDelete(conv.id)">
-                      删除对话
+                    <bk-dropdown-item @click="handleDelete(conv)">
+                      删除
                     </bk-dropdown-item>
                   </bk-dropdown-menu>
                 </template>
@@ -229,17 +276,22 @@
                 { 'is-menu-open': activeGroupMenuId === group.name },
               ]"
               @click="toggleGroup(group.name)">
-              <folder
+              <img
                 v-if="collapsedGroups.has(group.name)"
-                class="group-icon" />
-              <folder-shape
+                alt=""
+                class="group-icon"
+                :src="folderEmptyIcon">
+              <img
                 v-else
-                class="group-icon" />
+                alt=""
+                class="group-icon"
+                :src="folderIcon">
 
               <template v-if="editingGroup === group.name">
                 <bk-input
                   ref="editGroupInputRef"
                   v-model="editGroupName"
+                  autofocus
                   size="small"
                   @blur="cancelEditGroup"
                   @click.stop
@@ -252,19 +304,46 @@
                 </span>
                 <bk-dropdown
                   class="group-more-dropdown"
-                  :is-show="activeGroupMenuId === group.name"
                   placement="bottom-end"
+                  :popover-options="{ extCls: 'chat-group-dropdown-pop' }"
                   trigger="click"
                   @click.stop
                   @hide="hideGroupMenu"
+                  @mousedown.stop
                   @show="showGroupMenu(group.name)">
-                  <ellipsis
+                  <div
                     class="group-more"
-                    :class="{ 'is-active': activeGroupMenuId === group.name }" />
+                    :class="{ 'is-active': activeGroupMenuId === group.name }">
+                    <audit-icon type="more" />
+                  </div>
                   <template #content>
                     <bk-dropdown-menu>
                       <bk-dropdown-item @click="startEditGroup(group.name)">
                         重命名
+                      </bk-dropdown-item>
+                      <bk-dropdown-item ext-cls="sub-menu-item">
+                        <bk-dropdown
+                          placement="right-start"
+                          style="width: 100%"
+                          trigger="hover">
+                          <div class="dropdown-sub-trigger">
+                            <span>导出会话</span>
+                            <angle-right class="sub-icon" />
+                          </div>
+                          <template #content>
+                            <bk-dropdown-menu>
+                              <bk-dropdown-item @click="showGroupExportDialog('json', group.name)">
+                                导出 JSON
+                              </bk-dropdown-item>
+                              <bk-dropdown-item @click="showGroupExportDialog('markdown', group.name)">
+                                导出 Markdown
+                              </bk-dropdown-item>
+                              <bk-dropdown-item @click="showGroupExportDialog('pdf', group.name)">
+                                导出 PDF
+                              </bk-dropdown-item>
+                            </bk-dropdown-menu>
+                          </template>
+                        </bk-dropdown>
                       </bk-dropdown-item>
                       <bk-dropdown-item @click="showDeleteGroup(group.name)">
                         删除分组
@@ -282,7 +361,10 @@
                 v-for="conv in filteredGroupedHistory[group.name]"
                 :key="conv.id"
                 class="conv-item conv-item--indent"
-                :class="{ 'is-active': activeId === conv.id, 'is-menu-open': activeMenuId === conv.id }"
+                :class="{
+                  'is-active': activeId === conv.id && editingConvId !== conv.id,
+                  'is-menu-open': activeMenuId === conv.id,
+                }"
                 draggable="true"
                 @click="$emit('select', conv.id)"
                 @dragend="handleDragEnd"
@@ -290,7 +372,9 @@
                 <span class="conv-dot">•</span>
                 <template v-if="editingConvId === conv.id">
                   <bk-input
+                    ref="editConvInputRef"
                     v-model="editConvTitle"
+                    autofocus
                     class="conv-title-input"
                     size="small"
                     @blur="cancelEditConv"
@@ -300,27 +384,29 @@
                 <template v-else>
                   <span class="conv-title">{{ conv.title }}</span>
                 </template>
-                <div class="conv-actions">
+                <div
+                  class="conv-actions"
+                  @click.stop
+                  @mousedown.stop>
                   <bk-dropdown
-                    :is-show="activeMenuId === conv.id"
+                    class="more-dropdown"
                     placement="bottom-end"
+                    :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
                     trigger="click"
-                    @click.stop
                     @hide="hideMenu"
                     @show="showMenu(conv.id)">
-                    <ellipsis
+                    <div
                       class="action-btn"
-                      :class="{ 'is-active': activeMenuId === conv.id }" />
+                      :class="{ 'is-active': activeMenuId === conv.id }">
+                      <audit-icon type="more" />
+                    </div>
                     <template #content>
                       <bk-dropdown-menu>
                         <bk-dropdown-item @click="handlePin(conv.id)">
-                          置顶对话
+                          置顶
                         </bk-dropdown-item>
                         <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
                           重命名
-                        </bk-dropdown-item>
-                        <bk-dropdown-item @click="moveToGroup(conv.id, undefined)">
-                          移出分组
                         </bk-dropdown-item>
                         <bk-dropdown-item ext-cls="sub-menu-item">
                           <bk-dropdown
@@ -367,8 +453,8 @@
                             </template>
                           </bk-dropdown>
                         </bk-dropdown-item>
-                        <bk-dropdown-item @click="handleDelete(conv.id)">
-                          删除对话
+                        <bk-dropdown-item @click="handleDelete(conv)">
+                          删除
                         </bk-dropdown-item>
                       </bk-dropdown-menu>
                     </template>
@@ -391,25 +477,69 @@
       v-if="collapsed"
       class="collapsed-toolbar">
       <div
+        v-bk-tooltips="{ content: '展开侧栏', placement: 'right' }"
         class="toolbar-item"
-        title="展开"
-        @click="$emit('toggle')">
+        @click="handleCollapsedToggle">
         <angle-right class="toolbar-icon expand-icon" />
       </div>
       <div
+        v-bk-tooltips="{ content: '新对话', placement: 'right' }"
         class="toolbar-item"
-        title="新对话"
-        @click="$emit('new-chat')">
+        @click="handleCollapsedNewChat">
         <img
           alt=""
           class="toolbar-icon add-icon"
           :src="aiAddIcon">
       </div>
       <div
+        ref="collapsedSearchButtonRef"
+        v-bk-tooltips="{ content: '搜索对话', placement: 'right' }"
         class="toolbar-item"
-        title="搜索对话"
-        @click="handleSearchClick">
+        @click="openCollapsedSearch">
         <search class="toolbar-icon search-icon" />
+      </div>
+    </div>
+
+    <!-- 折叠态：搜索下拉面板 -->
+    <div
+      v-if="isCollapsedSearchOpen"
+      class="collapsed-search-popover"
+      :style="collapsedSearchPanelStyle">
+      <div class="collapsed-search-cards">
+        <div class="collapsed-search-card">
+          <div class="collapsed-search-input-row">
+            <input
+              ref="collapsedSearchInputRef"
+              v-model="collapsedSearchKeyword"
+              class="collapsed-search-input"
+              placeholder="搜索对话"
+              type="search">
+            <search class="collapsed-search-icon" />
+          </div>
+
+          <div class="collapsed-search-section">
+            <div class="collapsed-search-section-title">
+              最近对话 ({{ collapsedFilteredHistoryList.length }})
+            </div>
+            <div class="collapsed-search-scroll-wrap">
+              <scroll-faker
+                :key="`collapsed-search-${collapsedSearchKeyword}-${collapsedFilteredHistoryList.length}`">
+                <div class="collapsed-search-list">
+                  <div
+                    v-for="conv in collapsedFilteredHistoryList"
+                    :key="conv.id"
+                    class="collapsed-search-item"
+                    @click="handleCollapsedSelect(conv.id)">
+                    <span class="collapsed-bullet">•</span>
+                    <span
+                      class="collapsed-item-title"
+                      v-html="getHighlightedTitle(conv.title)" />
+                  </div>
+                </div>
+              </scroll-faker>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -421,70 +551,30 @@
       <angle-left class="collapse-icon" />
     </div>
 
-    <!-- 新建分组弹窗 -->
-    <bk-dialog
-      v-model:is-show="addGroupDialog.show"
-      title="新建分组"
-      :width="400"
-      @confirm="confirmAddGroup">
-      <div class="add-group-content">
-        <bk-input
-          v-model="addGroupDialog.name"
-          placeholder="请输入分组名称"
-          @enter="confirmAddGroup" />
-      </div>
-    </bk-dialog>
+    <!-- 删除分组弹窗：通过 InfoBox 复用同类删除确认样式 -->
 
-    <!-- 删除分组弹窗 -->
-    <bk-dialog
-      v-model:is-show="deleteGroupDialog.show"
-      class="delete-group-dialog"
-      header-align="center"
-      title="是否删除该分组？">
-      <div class="delete-group-content">
-        <div class="group-name-display">
-          分组：{{ deleteGroupDialog.groupName }}
-        </div>
-        <bk-checkbox
-          v-model="deleteGroupDialog.deleteConversations"
-          class="delete-checkbox">
-          同步删除该分组下的所有对话
-        </bk-checkbox>
-        <div class="delete-warning-box">
-          勾选后将同步删除该分组下的所有对话，请谨慎操作！
-        </div>
-      </div>
-      <template #footer>
-        <div class="delete-dialog-footer">
-          <bk-button
-            theme="danger"
-            @click="confirmDeleteGroup">
-            删除
-          </bk-button>
-          <bk-button @click="deleteGroupDialog.show = false">
-            取消
-          </bk-button>
-        </div>
-      </template>
-    </bk-dialog>
-
-    <!-- 导出对话弹窗 -->
+    <!-- 导出会话弹窗 -->
     <bk-dialog
       v-model:is-show="exportDialog.show"
-      title="导出对话"
-      width="480"
+      class="session-select-dialog"
+      ext-cls="session-select-dialog"
+      title="导出会话"
+      :width="480"
+      @after-show="closeSidebarPopovers"
       @closed="closeExportDialog"
       @confirm="confirmExport">
       <div class="export-dialog-content">
-        <div class="select-all-wrap">
-          <bk-checkbox
-            v-model="isAllExportSelected"
-            :indeterminate="exportIndeterminate"
-            @change="handleSelectAllExport">
-            全选 ({{ exportDialog.selectedIds.length }} / {{ props.conversations.length }})
-          </bk-checkbox>
-        </div>
         <div class="export-list">
+          <div class="export-item select-all-item">
+            <bk-checkbox
+              v-model="isAllExportSelected"
+              :indeterminate="exportIndeterminate"
+              @change="handleSelectAllExport">
+              <span class="select-all-text">
+                全选 ( {{ exportDialog.selectedIds.length }}/{{ props.conversations.length }} )
+              </span>
+            </bk-checkbox>
+          </div>
           <div
             v-for="conv in props.conversations"
             :key="conv.id"
@@ -493,7 +583,7 @@
               :model-value="exportDialog.selectedIds.includes(conv.id)"
               @change="(val) => handleSelectExport(val, conv.id)">
               <span class="conv-name">{{ conv.title }}</span>
-              <span class="conv-count">({{ conv.messages?.length || 0 }}条消息)</span>
+              <span class="conv-count">( {{ conv.messages?.length || 0 }}条消息 )</span>
             </bk-checkbox>
           </div>
         </div>
@@ -513,27 +603,32 @@
       </template>
     </bk-dialog>
 
-    <!-- 导入对话弹窗 -->
+    <!-- 导入会话弹窗 -->
     <bk-dialog
       v-model:is-show="importDialog.show"
-      title="导入对话"
-      width="480"
+      class="session-select-dialog"
+      ext-cls="session-select-dialog"
+      title="导入会话"
+      :width="480"
+      @after-show="closeSidebarPopovers"
       @closed="closeImportDialog"
       @confirm="confirmImport">
       <div class="import-dialog-content">
         <bk-alert
-          style="margin-bottom: 16px;"
+          class="import-alert"
           theme="warning"
           title="已有同名分组，导入的会话将合并到现有分组中" />
-        <div class="select-all-wrap">
-          <bk-checkbox
-            v-model="isAllImportSelected"
-            :indeterminate="importIndeterminate"
-            @change="handleSelectAllImport">
-            全选 ({{ importDialog.selectedIds.length }} / {{ importDialog.mockData.length }})
-          </bk-checkbox>
-        </div>
         <div class="import-list">
+          <div class="import-item select-all-item">
+            <bk-checkbox
+              v-model="isAllImportSelected"
+              :indeterminate="importIndeterminate"
+              @change="handleSelectAllImport">
+              <span class="select-all-text">
+                全选 ( {{ importDialog.selectedIds.length }}/{{ importDialog.mockData.length }} )
+              </span>
+            </bk-checkbox>
+          </div>
           <div
             v-for="conv in importDialog.mockData"
             :key="conv.id"
@@ -542,7 +637,7 @@
               :model-value="importDialog.selectedIds.includes(conv.id)"
               @change="(val) => handleSelectImport(val, conv.id)">
               <span class="conv-name">{{ conv.title }}</span>
-              <span class="conv-count">({{ conv.messages?.length || 0 }}条消息)</span>
+              <span class="conv-count">( {{ conv.messages?.length || 0 }}条消息 )</span>
             </bk-checkbox>
           </div>
         </div>
@@ -556,48 +651,6 @@
             确认导入
           </bk-button>
           <bk-button @click="closeImportDialog">
-            取消
-          </bk-button>
-        </div>
-      </template>
-    </bk-dialog>
-
-    <!-- 清空所有对话弹窗 -->
-    <bk-dialog
-      v-model:is-show="clearAllDialog.show"
-      class="clear-all-dialog"
-      :show-header="false"
-      width="480"
-      @closed="closeClearAllDialog">
-      <div class="clear-all-dialog-content">
-        <audit-icon
-          class="warning-icon-wrap"
-          type="info-fill" />
-        <div class="dialog-title">
-          确定清空所有会话？
-        </div>
-        <div class="warning-text-box">
-          此操作将删除所有会话及消息记录，包括已分组和未分组的共 <strong>{{ props.conversations.length }}</strong> 个会话。<br>
-          <span class="danger-text">此操作不可恢复，请谨慎操作！</span>
-        </div>
-        <div class="confirm-input-wrap">
-          <div class="input-label">
-            请输入「确认清空」以继续
-          </div>
-          <bk-input
-            v-model="clearAllDialog.confirmText"
-            placeholder="确认清空" />
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer center">
-          <bk-button
-            :disabled="clearAllDialog.confirmText !== '确认清空'"
-            theme="danger"
-            @click="confirmClearAll">
-            清空
-          </bk-button>
-          <bk-button @click="closeClearAllDialog">
             取消
           </bk-button>
         </div>
@@ -767,13 +820,19 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref, computed, watch, nextTick } from 'vue';
-  import { AngleLeft, AngleRight, Search, Folder, FolderShape, Ellipsis, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
+  import { computed, h, nextTick, onUnmounted, ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { AngleLeft, AngleRight, Search, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
 
+  import useMessage from '@hooks/use-message';
+
+  import ScrollFaker from '@components/scroll-faker/index.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
 
   import aiAddIcon from '@images/ai-add.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
+  import folderEmptyIcon from '@images/folder-empty.svg';
+  import folderIcon from '@images/folder.svg';
 
   interface Conversation {
     id: string;
@@ -793,6 +852,10 @@
     id: string;
     name: string;
     type: 'aggregate' | 'scene' | 'system';
+  }
+
+  interface DropdownRefExpose {
+    hide?: () => void;
   }
 
   const props = defineProps<{
@@ -817,14 +880,167 @@
     'update-conv-title': [id: string, title: string];
   }>();
 
+  const { messageSuccess } = useMessage();
+
+  const sidebarRootRef = ref<HTMLElement | null>(null);
   const searchKeyword = ref('');
   const searchInputRef = ref<HTMLInputElement | null>(null);
   const isDropdownShow = ref(false);
-  const isSearchClicked = ref(false);
+  const isExportSubmenuShow = ref(false);
+  const filterDropdownKey = ref(0);
+  const filterDropdownRef = ref<DropdownRefExpose | null>(null);
+  const exportSubmenuRef = ref<DropdownRefExpose | null>(null);
+  const sceneSelectorRef = ref<InstanceType<typeof SceneSystemSelector>>();
+
+  const handleFilterDropdownHide = () => {
+    isDropdownShow.value = false;
+    isExportSubmenuShow.value = false;
+  };
+
+  const closeFilterDropdown = (forceRemount = false) => {
+    isDropdownShow.value = false;
+    isExportSubmenuShow.value = false;
+    filterDropdownRef.value?.hide?.();
+    exportSubmenuRef.value?.hide?.();
+    if (forceRemount) {
+      filterDropdownKey.value += 1;
+    }
+  };
+
+  const closeSidebarPopovers = () => {
+    closeFilterDropdown(true);
+    sceneSelectorRef.value?.close?.();
+  };
+
+  // 折叠态搜索下拉面板
+  const isCollapsedSearchOpen = ref(false);
+  const collapsedSearchKeyword = ref('');
+  const collapsedSearchInputRef = ref<HTMLInputElement | null>(null);
+  const collapsedSearchButtonRef = ref<HTMLElement | null>(null);
+  const collapsedSearchPanelStyle = ref<Record<string, string>>({
+    left: '56px',
+    top: '70px',
+  });
+
   const selectedScene = ref<SceneItem | null>(null);
 
   const handleSceneChange = (value: SceneItem | null) => {
     selectedScene.value = value;
+  };
+
+  const handleCollapsedToggle = () => {
+    isCollapsedSearchOpen.value = false;
+    emit('toggle');
+  };
+
+  const handleCollapsedNewChat = () => {
+    isCollapsedSearchOpen.value = false;
+    emit('new-chat');
+  };
+
+  const handleCollapsedSelect = (id: string) => {
+    emit('select', id);
+    closeCollapsedSearch();
+  };
+
+  const updateCollapsedSearchPanelPosition = () => {
+    const rootEl = sidebarRootRef.value;
+    const btnEl = collapsedSearchButtonRef.value;
+    if (!rootEl || !btnEl) return;
+
+    const rootRect = rootEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+    // 面板显示在搜索按钮右侧，略微上移以对齐截图观感
+    collapsedSearchPanelStyle.value = {
+      left: `${btnRect.right - rootRect.left + 8}px`,
+      top: `${Math.max(8, btnRect.top - rootRect.top - 12)}px`,
+    };
+  };
+
+  const openCollapsedSearch = async () => {
+    // 折叠态：仅展示搜索下拉面板，不展开侧栏
+    if (!props.collapsed) return;
+    isCollapsedSearchOpen.value = true;
+    await nextTick();
+    updateCollapsedSearchPanelPosition();
+    collapsedSearchInputRef.value?.focus?.();
+  };
+
+  const closeCollapsedSearch = () => {
+    isCollapsedSearchOpen.value = false;
+  };
+
+  watch(
+    () => props.collapsed,
+    (newVal) => {
+      if (!newVal) closeCollapsedSearch();
+    },
+  );
+
+  let documentMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+  let documentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  watch(isCollapsedSearchOpen, (open) => {
+    if (open) {
+      documentMouseDownHandler = (e: MouseEvent) => {
+        const rootEl = sidebarRootRef.value;
+        if (!rootEl) return;
+        if (!rootEl.contains(e.target as Node)) closeCollapsedSearch();
+      };
+      documentKeydownHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') closeCollapsedSearch();
+      };
+      document.addEventListener('mousedown', documentMouseDownHandler);
+      window.addEventListener('keydown', documentKeydownHandler);
+      return;
+    }
+
+    if (documentMouseDownHandler) document.removeEventListener('mousedown', documentMouseDownHandler);
+    if (documentKeydownHandler) window.removeEventListener('keydown', documentKeydownHandler);
+    documentMouseDownHandler = null;
+    documentKeydownHandler = null;
+  });
+
+  onUnmounted(() => {
+    if (documentMouseDownHandler) document.removeEventListener('mousedown', documentMouseDownHandler);
+    if (documentKeydownHandler) window.removeEventListener('keydown', documentKeydownHandler);
+  });
+
+  const collapsedSortedConversations = computed(() => {
+    const pinned = props.conversations.filter(c => c.pinned);
+    const unpinned = props.conversations.filter(c => !c.pinned);
+    return [...pinned, ...unpinned];
+  });
+
+  const collapsedFilteredHistoryList = computed(() => {
+    const keyword = collapsedSearchKeyword.value.trim();
+    if (!keyword) return collapsedSortedConversations.value;
+    return collapsedSortedConversations.value.filter(c => c.title.includes(keyword));
+  });
+
+  const escapeHtml = (str: string) => str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const getHighlightedTitle = (title: string) => {
+    const keyword = collapsedSearchKeyword.value.trim();
+    if (!keyword) return escapeHtml(title);
+    if (!title.includes(keyword)) return escapeHtml(title);
+
+    const parts = title.split(keyword);
+    if (parts.length === 1) return escapeHtml(title);
+
+    // 用 v-html 包裹高亮，确保未匹配部分已做转义，避免 XSS
+    return parts
+      .map((p, idx) => {
+        const safeText = escapeHtml(p);
+        if (idx === parts.length - 1) return safeText;
+        return `${safeText}<span class="search-highlight">${escapeHtml(keyword)}</span>`;
+      })
+      .join('');
   };
 
   // 报告列表相关
@@ -912,7 +1128,7 @@
 
   const showReportList = () => {
     isReportListShow.value = true;
-    isDropdownShow.value = false;
+    closeSidebarPopovers();
   };
 
   const closeReportList = () => {
@@ -943,19 +1159,6 @@
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
-
-  const handleSearchClick = () => {
-    isSearchClicked.value = true;
-    emit('toggle');
-  };
-
-  watch(() => props.collapsed, async (newVal) => {
-    if (!newVal && isSearchClicked.value) {
-      isSearchClicked.value = false;
-      await nextTick();
-      searchInputRef.value?.focus();
-    }
-  });
 
   const filteredHistoryList = computed(() => {
     const ungrouped = props.conversations.filter(c => !c.groupName);
@@ -1085,23 +1288,40 @@
     dragOverState.value = { type: null, id: null, position: null };
   };
 
-  // 新建分组弹窗
+  // 新建分组气泡弹窗
   const addGroupDialog = ref({
     show: false,
     name: '',
   });
+  const addGroupInputRef = ref<any>(null);
 
-  const showAddGroupDialog = () => {
-    addGroupDialog.value.show = true;
+  const closeAddGroupPopover = () => {
+    addGroupDialog.value.show = false;
     addGroupDialog.value.name = '';
   };
 
-  const confirmAddGroup = () => {
-    if (addGroupDialog.value.name.trim()) {
-      const newGroups = [...props.groups, { id: `g_${Date.now()}`, name: addGroupDialog.value.name.trim() }];
-      emit('update-groups', newGroups);
+  const onAddGroupShowChange = (val: boolean) => {
+    addGroupDialog.value.show = val;
+    if (!val) addGroupDialog.value.name = '';
+  };
+
+  const handleAddGroupPopoverShow = async () => {
+    addGroupDialog.value.name = '';
+    await nextTick();
+    const inputRef = addGroupInputRef.value;
+    if (typeof inputRef?.focus === 'function') {
+      inputRef.focus();
+      return;
     }
-    addGroupDialog.value.show = false;
+    inputRef?.$el?.querySelector?.('input')?.focus();
+  };
+
+  const confirmAddGroup = () => {
+    const groupName = addGroupDialog.value.name.trim();
+    if (!groupName) return;
+    const newGroups = [...props.groups, { id: `g_${Date.now()}`, name: groupName }];
+    emit('update-groups', newGroups);
+    closeAddGroupPopover();
   };
 
   // 重命名分组
@@ -1109,12 +1329,19 @@
   const editGroupName = ref('');
   const editGroupInputRef = ref<HTMLInputElement | null>(null);
 
+  const ignoreEditGroupBlur = ref(false);
+
   const startEditGroup = async (groupName: string) => {
+    ignoreEditGroupBlur.value = true;
     editingGroup.value = groupName;
     editGroupName.value = groupName;
     hideGroupMenu();
     await nextTick();
-    editGroupInputRef.value?.focus();
+    editGroupInputRef.value?.focus?.();
+    window.setTimeout(() => {
+      editGroupInputRef.value?.focus?.();
+      ignoreEditGroupBlur.value = false;
+    }, 50);
   };
 
   const confirmEditGroup = (oldName: string) => {
@@ -1133,6 +1360,7 @@
   };
 
   const cancelEditGroup = () => {
+    if (ignoreEditGroupBlur.value) return;
     editingGroup.value = null;
   };
 
@@ -1141,16 +1369,32 @@
   const editConvTitle = ref('');
   const editConvInputRef = ref<any>(null);
 
+  const ignoreEditConvBlur = ref(false);
+
+  const getEditConvInputEl = () => {
+    const inputRef = Array.isArray(editConvInputRef.value)
+      ? editConvInputRef.value[0]
+      : editConvInputRef.value;
+    if (!inputRef) return null;
+    if (typeof inputRef.focus === 'function' && inputRef.$el) {
+      return inputRef.$el.querySelector?.('input') as HTMLInputElement | null;
+    }
+    if (inputRef instanceof HTMLInputElement) return inputRef;
+    return inputRef;
+  };
+
   const startEditConv = async (id: string, title: string) => {
+    ignoreEditConvBlur.value = true;
+    hideMenu();
     editingConvId.value = id;
     editConvTitle.value = title;
-    hideMenu();
     await nextTick();
-    if (Array.isArray(editConvInputRef.value)) {
-      editConvInputRef.value[0]?.focus();
-    } else {
-      editConvInputRef.value?.focus();
-    }
+    const nativeInput = getEditConvInputEl();
+    nativeInput?.focus?.();
+    window.setTimeout(() => {
+      getEditConvInputEl()?.focus?.();
+      ignoreEditConvBlur.value = false;
+    }, 50);
   };
 
   const confirmEditConv = (id: string) => {
@@ -1162,28 +1406,159 @@
   };
 
   const cancelEditConv = () => {
+    if (ignoreEditConvBlur.value) return;
     editingConvId.value = null;
   };
 
-  // 删除分组弹窗
-  const deleteGroupDialog = ref({
-    show: false,
-    groupName: '',
-    deleteConversations: false,
-  });
-
+  // 删除分组确认弹窗：复用之前的删除 InfoBox 风格
   const showDeleteGroup = (groupName: string) => {
-    deleteGroupDialog.value = {
-      show: true,
-      groupName,
-      deleteConversations: false,
-    };
     hideGroupMenu();
-  };
 
-  const confirmDeleteGroup = () => {
-    emit('delete-group', deleteGroupDialog.value.groupName, !deleteGroupDialog.value.deleteConversations);
-    deleteGroupDialog.value.show = false;
+    const confirmName = ref('');
+    const confirmBtnClass = 'chat-delete-group-confirm-btn';
+    const groupConversationsCount = props.conversations.filter(c => c.groupName === groupName).length;
+
+    const getConfirmBtnStyle = (isMatch: boolean) => ({
+      height: '32px',
+      padding: '0 16px',
+      fontSize: '14px',
+      lineHeight: '32px',
+      borderRadius: '2px',
+      border: '1px solid',
+      outline: 'none',
+      marginRight: '8px',
+      backgroundColor: isMatch ? '#ea3636' : '#fff',
+      borderColor: isMatch ? '#ea3636' : '#dcdee5',
+      color: isMatch ? '#fff' : '#c4c6cc',
+      cursor: isMatch ? 'pointer' : 'not-allowed',
+    });
+
+    const cancelBtnStyle = {
+      height: '32px',
+      padding: '0 16px',
+      fontSize: '14px',
+      lineHeight: '32px',
+      borderRadius: '2px',
+      border: '1px solid #c4c6cc',
+      outline: 'none',
+      marginRight: '0',
+      backgroundColor: '#fff',
+      color: '#63656e',
+      cursor: 'pointer',
+    };
+
+    const infoBoxInputStyle = {
+      width: '100%',
+      height: '32px',
+      padding: '0 10px',
+      fontSize: '14px',
+      border: '1px solid #c4c6cc',
+      borderRadius: '2px',
+      outline: 'none',
+      boxSizing: 'border-box',
+    };
+
+    const updateConfirmBtn = (isMatch: boolean) => {
+      const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+      if (!btn) return;
+      if (isMatch) {
+        btn.removeAttribute('disabled');
+      } else {
+        btn.setAttribute('disabled', 'disabled');
+      }
+      Object.assign(btn.style, getConfirmBtnStyle(isMatch));
+    };
+
+    const copyGroupName = () => {
+      if (!groupName) return;
+      navigator.clipboard.writeText(groupName)
+        .then(() => messageSuccess('复制成功'))
+        .catch(() => undefined);
+    };
+
+    const deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定删除该分组？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            lineHeight: '22px',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          '删除分组将',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '同步删除该分组下的'),
+          ' ',
+          h('span', { style: { fontWeight: 700, color: '#ea3636' } }, `${groupConversationsCount}`),
+          ' ',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '个会话'),
+          '，请谨慎操作！',
+        ]),
+        h('div', {
+          style: { marginBottom: '8px', fontSize: '14px', color: '#63656e' },
+        }, [
+          h('span', {}, '请输入分组名称「'),
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: copyGroupName,
+          }, groupName),
+          h('span', {}, '」以继续'),
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: `请输入分组名称：${groupName}`,
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmName.value = value;
+            updateConfirmBtn(value.trim() === groupName);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: `info-box-confirm-btn ${confirmBtnClass}`,
+          onClick: () => {
+            if (confirmName.value.trim() !== groupName) return;
+            // 不提供同步删除选项：按设计直接删除分组下的会话
+            emit('delete-group', groupName, false);
+            deleteInfoInstance?.hide();
+          },
+          onVnodeMounted: (vnode: any) => {
+            const el = vnode.el as HTMLButtonElement;
+            el.setAttribute('disabled', 'disabled');
+            Object.assign(el.style, getConfirmBtnStyle(false));
+          },
+        }, '删除'),
+        h('button', {
+          style: cancelBtnStyle,
+          onClick: () => deleteInfoInstance?.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmName.value = '';
+        // InfoBox 的 DOM 可能复用/未销毁；关闭时强制重置按钮，避免“关掉后仍可点击”。
+        const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+        if (btn) {
+          btn.setAttribute('disabled', 'disabled');
+          Object.assign(btn.style, getConfirmBtnStyle(false));
+        }
+      },
+    });
   };
 
   // 会话操作菜单
@@ -1216,9 +1591,9 @@
     hideMenu();
   };
 
-  const handleDelete = (convId: string) => {
-    emit('delete', convId);
+  const handleDelete = (conv: Conversation) => {
     hideMenu();
+    showDeleteConversationDialog(conv);
   };
 
   // 导出对话逻辑
@@ -1247,13 +1622,20 @@
     return selectedCount > 0 && selectedCount < props.conversations.length;
   });
 
-  const showExportDialog = (type: string) => {
+  const showExportDialog = (type: string, ids?: string[]) => {
     exportDialog.value.type = type;
-    exportDialog.value.selectedIds = [];
+    exportDialog.value.selectedIds = ids ? [...ids] : [];
     exportDialog.value.show = true;
-    isDropdownShow.value = false;
+    closeSidebarPopovers();
     hideMenu();
     hideGroupMenu();
+  };
+
+  const showGroupExportDialog = (type: string, groupName: string) => {
+    const ids = props.conversations
+      .filter(c => c.groupName === groupName)
+      .map(c => c.id);
+    showExportDialog(type, ids);
   };
 
   const handleSelectAllExport = (val: boolean) => {
@@ -1312,8 +1694,19 @@
   const showImportDialog = () => {
     importDialog.value.selectedIds = [];
     importDialog.value.show = true;
-    isDropdownShow.value = false;
+    closeSidebarPopovers();
   };
+
+  watch(
+    () => [exportDialog.value.show, importDialog.value.show],
+    ([exportShow, importShow]) => {
+      if (exportShow || importShow) {
+        nextTick(() => {
+          closeSidebarPopovers();
+        });
+      }
+    },
+  );
 
   const handleSelectAllImport = (val: boolean) => {
     isAllImportSelected.value = val;
@@ -1337,27 +1730,226 @@
     closeImportDialog();
   };
 
-  // 清空所有对话逻辑
-  const clearAllDialog = ref({
-    show: false,
-    confirmText: '',
+  // 删除会话 / 清空所有会话：复用场景配置/平台管理删除弹窗（InfoBox）
+  const CLEAR_CONFIRM_TEXT = '确认清空';
+
+  const getDangerConfirmBtnStyle = (isMatch: boolean) => ({
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid',
+    outline: 'none',
+    marginRight: '8px',
+    backgroundColor: isMatch ? '#ea3636' : '#fff',
+    borderColor: isMatch ? '#ea3636' : '#dcdee5',
+    color: isMatch ? '#fff' : '#c4c6cc',
+    cursor: isMatch ? 'pointer' : 'not-allowed',
   });
 
-  const showClearAllDialog = () => {
-    clearAllDialog.value.confirmText = '';
-    clearAllDialog.value.show = true;
-    isDropdownShow.value = false;
+  const infoBoxCancelBtnStyle = {
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid #c4c6cc',
+    outline: 'none',
+    marginRight: '0',
+    backgroundColor: '#fff',
+    color: '#63656e',
+    cursor: 'pointer',
   };
 
-  const closeClearAllDialog = () => {
-    clearAllDialog.value.show = false;
+  const infoBoxInputStyle = {
+    width: '100%',
+    height: '32px',
+    padding: '0 10px',
+    fontSize: '14px',
+    border: '1px solid #c4c6cc',
+    borderRadius: '2px',
+    outline: 'none',
+    boxSizing: 'border-box',
   };
 
-  const confirmClearAll = () => {
-    if (clearAllDialog.value.confirmText === '确认清空') {
-      emit('clear-all');
-      closeClearAllDialog();
+  const updateDangerConfirmBtn = (className: string, isMatch: boolean) => {
+    const btn = document.querySelector(`.${className}`) as HTMLButtonElement | null;
+    if (!btn) return;
+    if (isMatch) {
+      btn.removeAttribute('disabled');
+    } else {
+      btn.setAttribute('disabled', 'disabled');
     }
+    Object.assign(btn.style, getDangerConfirmBtnStyle(isMatch));
+  };
+
+  const copyConfirmName = (name: string) => {
+    if (!name) return;
+    navigator.clipboard.writeText(name).then(() => {
+      messageSuccess('复制成功');
+    });
+  };
+
+  const showDeleteConversationDialog = (conv: Conversation) => {
+    const confirmName = ref('');
+    const confirmBtnClass = 'chat-delete-confirm-btn';
+    const deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定删除该会话？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            lineHeight: '22px',
+            color: '#63656e',
+            textAlign: 'left',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, [
+          '此操作将',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '永久删除该会话及消息记录'),
+          '，不可恢复，请谨慎操作！',
+        ]),
+        h('div', {
+          style: {
+            marginBottom: '8px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          '请输入会话名称「',
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: () => copyConfirmName(conv.title),
+          }, conv.title),
+          '」以确认删除',
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: '请输入待删除的会话名称',
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmName.value = value;
+            updateDangerConfirmBtn(confirmBtnClass, value.trim() === conv.title);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: `info-box-confirm-btn ${confirmBtnClass}`,
+          onClick: () => {
+            if (confirmName.value.trim() !== conv.title) return;
+            emit('delete', conv.id);
+            deleteInfoInstance.hide();
+          },
+          onVnodeMounted: (vnode: any) => {
+            const el = vnode.el as HTMLButtonElement;
+            el.setAttribute('disabled', 'disabled');
+            Object.assign(el.style, getDangerConfirmBtnStyle(false));
+          },
+        }, '删除'),
+        h('button', {
+          style: infoBoxCancelBtnStyle,
+          onClick: () => deleteInfoInstance.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmName.value = '';
+        // InfoBox 的 DOM 可能复用/未销毁；关闭时强制重置按钮，避免“关掉后仍可点击”。
+        const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+        if (btn) {
+          btn.setAttribute('disabled', 'disabled');
+          Object.assign(btn.style, getDangerConfirmBtnStyle(false));
+        }
+      },
+    });
+  };
+
+  const showClearAllDialog = () => {
+    closeSidebarPopovers();
+    const confirmText = ref('');
+    const clearInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定清空所有会话？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            lineHeight: '22px',
+            color: '#63656e',
+            textAlign: 'left',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, [
+          '此操作将删除所有会话及消息记录，包括已分组和未分组的共 ',
+          h('strong', {}, String(props.conversations.length)),
+          ' 个会话。',
+          h('br'),
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '此操作不可恢复，请谨慎操作！'),
+        ]),
+        h('div', {
+          style: {
+            marginBottom: '8px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, '请输入「确认清空」以继续'),
+        h('input', {
+          value: confirmText.value,
+          placeholder: CLEAR_CONFIRM_TEXT,
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmText.value = value;
+            updateDangerConfirmBtn('chat-clear-confirm-btn', value === CLEAR_CONFIRM_TEXT);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: 'info-box-confirm-btn chat-clear-confirm-btn',
+          style: getDangerConfirmBtnStyle(false),
+          onClick: () => {
+            if (confirmText.value !== CLEAR_CONFIRM_TEXT) return;
+            emit('clear-all');
+            clearInfoInstance.hide();
+          },
+        }, '清空'),
+        h('button', {
+          style: infoBoxCancelBtnStyle,
+          onClick: () => clearInfoInstance.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmText.value = '';
+      },
+    });
   };
 </script>
 
