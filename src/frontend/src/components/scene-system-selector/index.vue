@@ -162,6 +162,7 @@
   import useRequest from '@/hooks/use-request';
   import {
     buildSceneContextQueryFromSelection,
+    clearRecentSceneSwitch,
     getQueryFromLocation,
     isRecentManualSceneSwitch,
     markSceneSelectorSwitched,
@@ -439,12 +440,14 @@
     if (showSystem && systemItems.length === 0) return;
 
     // 用户刚切换场景：当前选中与 URL 不一致 → 以用户选择为准并回写 URL
+    // 若当前选中项已失去管理权限（上锁），仍按 URL / 兜底逻辑重选
     if (
       hasInitializedSelection
       && selectedItem.value
       && urlMatchId
       && urlMatchId !== selectedItem.value.id
       && (shouldSuppressRouteResync() || isRecentManualSceneSwitch())
+      && !isSceneLocked(selectedItem.value)
     ) {
       syncSceneIdToRoute(selectedItem.value);
       return;
@@ -454,11 +457,12 @@
       return;
     }
 
-    // 已初始化且当前选中与 URL 一致 → 无需重复处理
+    // 已初始化且当前选中与 URL 一致 → 无需重复处理（上锁场景除外，需重新兜底）
     if (
       hasInitializedSelection
       && selectedItem.value
       && (!urlMatchId || selectedItem.value.id === urlMatchId)
+      && !isSceneLocked(selectedItem.value)
     ) {
       return;
     }
@@ -695,7 +699,8 @@
 
     if (urlMatchId && item?.id && urlMatchId !== item.id) {
       // 用户刚手动切换，URL 尚未跟上 → 回写 URL，不按旧 URL 改回选中项
-      if (isRecentManualSceneSwitch()) {
+      // 当前选中项已上锁时，允许按新 URL 重选
+      if (isRecentManualSceneSwitch() && !isSceneLocked(item)) {
         syncSceneIdToRoute(item);
         return;
       }
@@ -706,7 +711,7 @@
     }
 
     if (urlMatchId) {
-      if (item?.id === urlMatchId) return;
+      if (item?.id === urlMatchId && item && !isSceneLocked(item)) return;
       // 列表未就绪时交由 trySelectFromRoute；已就绪则立即按 URL 切换
       if (sceneList.value.length > 0 || systemList.value.length > 0) {
         trySelectFromRoute();
@@ -744,6 +749,8 @@
   const handleLostManage = (sceneId: unknown) => {
     const id = String(sceneId || '');
     if (!id) return;
+    clearRecentSceneSwitch();
+    suppressRouteResyncUntil = 0;
     lostManageSceneIds.add(id);
     sceneList.value = sceneList.value
       .map(item => (item.id === id
@@ -753,6 +760,8 @@
     const plainList = sceneList.value.filter(item => item.type !== 'aggregate');
     localStorage.setItem('scene-system-selector:sceneList', JSON.stringify(plainList));
     sceneEmit('scene-list-ready', plainList);
+    // 本地先标记失去管理权限，立即重选第一个仍可管理的场景
+    trySelectFromRoute();
     fetchSceneAll({
       status: 'enabled',
     });
