@@ -21,6 +21,7 @@
       label-width="0"
       required>
       <collapse-panel
+        v-if="stepMode === 'basic'"
         :is-active="isActive"
         :label="t('方案输入')"
         style="margin-bottom: 14px;">
@@ -61,6 +62,7 @@
       </collapse-panel>
 
       <collapse-panel
+        v-if="stepMode === 'rules'"
         :is-active="isActive"
         :label="t('方案参数')"
         style="margin-bottom: 14px;">
@@ -73,6 +75,7 @@
       </collapse-panel>
 
       <collapse-panel
+        v-if="stepMode === 'basic'"
         :is-active="isActive"
         :label="t('调度配置')"
         style="margin-bottom: 12px;">
@@ -175,7 +178,13 @@
   interface Props {
     controlDetail: ControlModel;
     triggerError?: boolean,
+    stepMode?: 'basic' | 'rules',
   }
+
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+  });
+  const emits = defineEmits<Emits>();
   interface Emits {
     (e: 'updateDataSource', value: Record<string, any>): void,
     (e: 'updateConfigType', value: string): void,
@@ -203,8 +212,6 @@
     },
   }
 
-  const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
   const comMap: Record<string, any> = {
     EventLog: EventLogComponent,
     BuildIn: ResourceDataComponent,
@@ -328,10 +335,13 @@
 
   defineExpose<Exposes>({
     getValue() {
+      if (props.stepMode === 'basic') {
+        return comRef.value?.getValue?.() ?? Promise.resolve();
+      }
       if (!props.controlDetail.variable_config.parameter.length) {
         return Promise.resolve();
       }
-      return comRef.value.getValue().then(() => paramenterRef.value.getValue());
+      return paramenterRef.value.getValue();
     },
     setConfigs(configs: IFormData['configs']) {
       formData.value.configs.config_type = configs.config_type;
@@ -345,9 +355,11 @@
         table_type: formData.value.configs.config_type,
         scene_id: getSceneSystemParams().scope_id,
       }).then(() => {
-        comRef.value.setConfigs(configs);
+        comRef.value?.setConfigs?.(configs);
       });
-      paramenterRef.value.setConfigs(configs.variable_config);
+      if (props.stepMode !== 'basic') {
+        paramenterRef.value?.setConfigs?.(configs.variable_config);
+      }
       isInit = true;
     },
     getFields() {

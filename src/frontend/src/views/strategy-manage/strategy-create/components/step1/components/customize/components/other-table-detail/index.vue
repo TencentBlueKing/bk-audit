@@ -29,34 +29,24 @@
       </bk-button>
     </div>
     <div class="detail-form">
-      <render-info-block class="info-block">
-        <render-info-item
-          :label="t('数据名称')">
-          {{ rtMeta.result_table_name || '--' }}
-        </render-info-item>
-        <render-info-item
-          :label="t('数据ID')">
-          {{ rtMeta.result_table_id || '--' }}
-        </render-info-item>
-        <render-info-item
-          :label="t('中文名称')">
-          {{ rtMeta.result_table_name_alias || '--' }}
-        </render-info-item>
-      </render-info-block>
-      <render-info-block class="info-block">
-        <render-info-item
-          :label="t('数据管理员')">
-          {{ rtMeta.managers?.join(',') || '--' }}
-        </render-info-item>
-        <render-info-item
-          :label="t('业务运维人员')">
-          <edit-tag :data="rtMeta.sensitivity_info?.biz_role_memebers || []" />
-        </render-info-item>
-        <render-info-item
-          :label="t('表类型')">
-          {{ rtMeta.processing_type || '--' }}
-        </render-info-item>
-      </render-info-block>
+      <render-info-item :label="t('数据名称')">
+        {{ rtMeta.result_table_name || '--' }}
+      </render-info-item>
+      <render-info-item :label="t('数据ID')">
+        {{ rtMeta.result_table_id || '--' }}
+      </render-info-item>
+      <render-info-item :label="t('中文名称')">
+        {{ rtMeta.result_table_name_alias || '--' }}
+      </render-info-item>
+      <render-info-item :label="t('数据管理员')">
+        {{ rtMeta.managers?.join(',') || '--' }}
+      </render-info-item>
+      <render-info-item :label="t('业务运维人员')">
+        <edit-tag :data="rtMeta.sensitivity_info?.biz_role_memebers || []" />
+      </render-info-item>
+      <render-info-item :label="t('表类型')">
+        {{ rtMeta.processing_type || '--' }}
+      </render-info-item>
     </div>
   </div>
 </template>
@@ -70,7 +60,6 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -109,6 +98,7 @@
 </script>
 <style scoped lang="postcss">
   .other-table-detail {
+    width: 100%;
     padding: 8px 16px;
     margin-top: 8px;
     background-color: #f5f7fa;
@@ -119,11 +109,31 @@
       align-items: center;
     }
 
-    .info-block {
-      display: grid;
-      margin-bottom: 12px;
-      grid-template-columns: repeat(3, 1fr);
-      grid-gap: 12px;
+    .detail-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+
+      :deep(.render-info-item) {
+        display: flex;
+        align-items: flex-start;
+        line-height: 20px;
+      }
+
+      :deep(.info-label) {
+        min-width: 96px;
+        color: #979ba5;
+        text-align: right;
+        flex: 0 0 96px;
+      }
+
+      :deep(.info-value) {
+        padding-left: 14px;
+        color: #63656e;
+        word-break: break-all;
+        flex: 1;
+      }
     }
   }
 </style>

@@ -1284,9 +1284,9 @@
 
   const tabToStepMap: Record<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther', number> = {
     riskDetection: 1,
-    riskDisplay: 2,
-    eventReport: 3,
-    riskOther: 4,
+    riskDisplay: 3,
+    eventReport: 4,
+    riskOther: 5,
   };
 
   const handleDetailTabChange = (tab: string) => {
