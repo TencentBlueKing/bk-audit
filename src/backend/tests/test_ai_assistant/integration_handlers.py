@@ -1,0 +1,235 @@
+import os
+import threading
+
+from django.conf import settings
+
+from services.web.ai_assistant.constants import (
+    AttachmentType,
+    ExecutionMode,
+    MessageType,
+)
+from services.web.ai_assistant.handlers import (
+    AttachmentPreparation,
+    AttachmentTypeHandler,
+    MessagePreparation,
+    MessageTypeHandler,
+)
+from services.web.ai_assistant.models import Conversation, Message
+from services.web.ai_assistant.schemas import MessageSchema
+from services.web.ai_assistant.services import AttachmentExecution, MessageExecution
+from services.web.ai_assistant.tasks import (
+    attachment_execution_task,
+    message_execution_task,
+)
+
+# 队列名带进程 pid，确保并行/重复运行的真实 Worker 各自独占队列，互不串消息。
+INTEGRATION_QUEUE = f"{settings.CELERY_TEST_QUEUE_PREFIX}_{os.getpid()}_ai_assistant"
+
+
+class IntegrationInput(MessageSchema):
+    text: str
+
+
+class IntegrationContext(MessageSchema):
+    prefix: str
+
+
+class IntegrationOutput(MessageSchema):
+    content: str
+
+
+@message_execution_task(
+    name="tests.ai_assistant.integration.message_success",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_message_success(
+    self,
+    execution: MessageExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    return IntegrationOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+class RealMessageSuccessHandler(MessageTypeHandler[IntegrationInput, IntegrationContext, IntegrationOutput]):
+    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    execution_mode = ExecutionMode.ASYNC
+    input_model = IntegrationInput
+    context_model = IntegrationContext
+    output_model = IntegrationOutput
+    async_task = execute_real_message_success
+
+    def prepare(
+        self,
+        *,
+        user: str,
+        conversation: Conversation,
+        parent_message: Message | None,
+        input_data: IntegrationInput,
+    ) -> MessagePreparation[IntegrationContext]:
+        return MessagePreparation(
+            parent_message=parent_message,
+            context_data=IntegrationContext(prefix="real"),
+        )
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_success",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_success(
+    self,
+    execution: AttachmentExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    return IntegrationOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+class RealAttachmentSuccessHandler(AttachmentTypeHandler[IntegrationInput, IntegrationContext, IntegrationOutput]):
+    attachment_type = AttachmentType.AI_ANALYSIS
+    execution_mode = ExecutionMode.ASYNC
+    input_model = IntegrationInput
+    context_model = IntegrationContext
+    output_model = IntegrationOutput
+    async_task = execute_real_attachment_success
+
+    def prepare(
+        self,
+        *,
+        user: str,
+        source_message: Message,
+        input_data: IntegrationInput,
+    ) -> AttachmentPreparation[IntegrationContext]:
+        return AttachmentPreparation(
+            title="真实 Celery 附件",
+            context_data=IntegrationContext(prefix="real"),
+        )
+
+
+# ── 重试与并发观测器 ──────────────────────────────────────
+# 观测器只保存计数和线程同步原语，绝不持有 Django Model 实例或数据库连接，
+# 避免跨线程复用连接；业务断言仍以数据库快照为准。
+
+retry_statuses: list[str] = []
+retry_statuses_lock = threading.Lock()
+autoretry_attempts = 0
+autoretry_lock = threading.Lock()
+duplicate_barrier: threading.Barrier | None = None
+duplicate_executions = 0
+duplicate_lock = threading.Lock()
+old_task_execution_ids: list[str] = []
+old_task_lock = threading.Lock()
+
+
+class RetryableIntegrationError(RuntimeError):
+    pass
+
+
+@message_execution_task(
+    name="tests.ai_assistant.integration.message_self_retry",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_message_self_retry(
+    self,
+    execution: MessageExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    execution.message.refresh_from_db(fields=["status"])
+    with retry_statuses_lock:
+        retry_statuses.append(execution.message.status)
+    if self.request.retries == 0:
+        raise self.retry(exc=RetryableIntegrationError("temporary private detail"), countdown=0)
+    return IntegrationOutput(content="retry:success")
+
+
+@message_execution_task(
+    name="tests.ai_assistant.integration.message_autoretry_exhausted",
+    queue=INTEGRATION_QUEUE,
+    autoretry_for=(RetryableIntegrationError,),
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_message_autoretry_exhausted(
+    self,
+    execution: MessageExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    global autoretry_attempts
+    with autoretry_lock:
+        autoretry_attempts += 1
+    raise RetryableIntegrationError("autoretry private detail")
+
+
+@message_execution_task(
+    name="tests.ai_assistant.integration.message_duplicate",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_message_duplicate(
+    self,
+    execution: MessageExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    global duplicate_executions
+    with duplicate_lock:
+        duplicate_executions += 1
+    barrier = duplicate_barrier
+    if barrier is not None:
+        barrier.wait(timeout=settings.CELERY_TEST_TASK_TIMEOUT)
+    return IntegrationOutput(content="duplicate:success")
+
+
+@message_execution_task(
+    name="tests.ai_assistant.integration.message_old_task",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_message_old_task(
+    self,
+    execution: MessageExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    with old_task_lock:
+        old_task_execution_ids.append(self.request.id)
+    return IntegrationOutput(content="old:must-not-win")
+
+
+class RealMessageSelfRetryHandler(RealMessageSuccessHandler):
+    async_task = execute_real_message_self_retry
+
+
+class RealMessageAutoretryFailureHandler(RealMessageSuccessHandler):
+    async_task = execute_real_message_autoretry_exhausted
+
+
+class RealMessageDuplicateHandler(RealMessageSuccessHandler):
+    async_task = execute_real_message_duplicate
+
+
+class RealMessageOldTaskHandler(RealMessageSuccessHandler):
+    async_task = execute_real_message_old_task
+
+
+def reset_retry_observations() -> None:
+    global autoretry_attempts
+    with retry_statuses_lock:
+        retry_statuses.clear()
+    with autoretry_lock:
+        autoretry_attempts = 0
+
+
+def reset_duplicate_observations(*, parties: int = 2) -> None:
+    global duplicate_barrier, duplicate_executions
+    duplicate_barrier = threading.Barrier(parties)
+    with duplicate_lock:
+        duplicate_executions = 0
+
+
+def clear_duplicate_observations() -> None:
+    global duplicate_barrier
+    duplicate_barrier = None
+
+
+def reset_old_task_observations() -> None:
+    """清空业务执行 task ID，用于证明 fencing 发生在业务调用之前。"""
+
+    with old_task_lock:
+        old_task_execution_ids.clear()
