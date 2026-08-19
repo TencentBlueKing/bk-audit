@@ -59,6 +59,11 @@ export const markSceneSelectorSwitched = () => {
   sessionStorage.setItem(SCENE_SELECTOR_LAST_SWITCH_KEY, String(Date.now()));
 };
 
+/** 清除手动切换标记（权限被回收等系统跳转时避免把 URL 打回旧场景） */
+export const clearRecentSceneSwitch = () => {
+  sessionStorage.removeItem(SCENE_SELECTOR_LAST_SWITCH_KEY);
+};
+
 const isRecentSceneSwitch = () => {
   const lastSwitch = Number(sessionStorage.getItem(SCENE_SELECTOR_LAST_SWITCH_KEY) || 0);
   return Date.now() - lastSwitch < 10000;
