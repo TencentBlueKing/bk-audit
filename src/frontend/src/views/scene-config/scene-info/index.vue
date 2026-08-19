@@ -95,6 +95,7 @@
   import StatCards from './components/stat-cards.vue';
 
   import {
+    clearRecentSceneSwitch,
     getQueryFromLocation,
     getSceneSystemParams,
     setActiveSceneSelection,
@@ -572,6 +573,8 @@
     if (firstManageable) {
       persistSelectedScene(firstManageable);
       const nextId = String(firstManageable.scene_id);
+      clearRecentSceneSwitch();
+      setActiveSceneSelection({ id: nextId, type: 'scene' });
       lastLoadedSceneId = undefined;
       await router.replace({
         name: 'sceneInfo',

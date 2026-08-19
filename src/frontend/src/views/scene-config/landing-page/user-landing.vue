@@ -413,8 +413,8 @@
     const grantStatus = options?.grantStatus || '';
     const grantStatusDisplay = options?.grantStatusDisplay || '';
     if (
-      matchStatus(REJECTED_STATUS, grantStatus, grantStatusDisplay, ['拒绝'])
-      || matchStatus(REJECTED_STATUS, status, statusDisplay, ['拒绝'])
+      matchStatus(REJECTED_STATUS, grantStatus, grantStatusDisplay, ['拒绝', '驳回'])
+      || matchStatus(REJECTED_STATUS, status, statusDisplay, ['拒绝', '驳回'])
     ) {
       return 'rejected';
     }
@@ -490,7 +490,7 @@
 
   const resolveItemStatus = (item: ScenePermissionApplicationModel): ApplyStatus => {
     const { application } = item;
-    return mapApplyStatus(
+    const resolvedStatus = mapApplyStatus(
       application?.status,
       application?.status_display,
       {
@@ -500,6 +500,16 @@
         grantStatusDisplay: application?.grant_status_display,
       },
     );
+    // 仅有使用权限、无管理权限时：忽略历史「已通过」记录，仍展示申请按钮；
+    // 申请中 / 已拒绝 保留真实状态展示。
+    if (
+      item.permission?.view_scene
+      && !item.permission?.manage_scene
+      && resolvedStatus === 'passed'
+    ) {
+      return 'idle';
+    }
+    return resolvedStatus;
   };
 
   const applyApplicationList = (list: ScenePermissionApplicationModel[]) => {
