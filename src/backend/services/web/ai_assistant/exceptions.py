@@ -145,6 +145,30 @@ class InvalidAttachmentState(AIAssistantException):
     STATUS_CODE = 400
 
 
+class AttachmentExportNotSupported(AIAssistantException):
+    """附件类型未声明请求的导出格式。"""
+
+    MESSAGE = gettext_lazy("当前附件不支持该导出格式")
+    ERROR_CODE = "030"
+    STATUS_CODE = 400
+
+
+class AttachmentContentTooLarge(AIAssistantException):
+    """Markdown 原文超过同步导出允许的字节上限。"""
+
+    MESSAGE = gettext_lazy("附件内容过大")
+    ERROR_CODE = "031"
+    STATUS_CODE = 400
+
+
+class AttachmentExportFailed(AIAssistantException):
+    """导出器内部失败时返回的稳定公开错误。"""
+
+    MESSAGE = gettext_lazy("附件导出失败，请稍后重试")
+    ERROR_CODE = "032"
+    STATUS_CODE = 500
+
+
 class AttachmentOutputValidationError(AIAssistantException):
     MESSAGE = gettext_lazy("附件产物格式错误")
     ERROR_CODE = "024"

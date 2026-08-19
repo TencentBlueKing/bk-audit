@@ -230,6 +230,15 @@ ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER = strtobool(os.getenv("BKAPP_ANALYSE_REP
 # 消息历史接口的默认窗口与最大窗口，限制单次响应的数据量。
 AI_ASSISTANT_MESSAGE_HISTORY_DEFAULT_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_HISTORY_DEFAULT_LIMIT", 20))
 AI_ASSISTANT_MESSAGE_HISTORY_MAX_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_HISTORY_MAX_LIMIT", 100))
+# AI 分析附件实时导出上限，按 UTF-8 字节数限制，避免多字节内容绕过同步资源控制。
+AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
+    os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES", 10 * 1024 * 1024)
+)
+# 公共 CJK 字体只供受限 PDF 资源回调放行，风险报告和 AI 附件共享同一资产路径。
+PDF_CJK_FONT_PATH = os.getenv(
+    "BKAPP_PDF_CJK_FONT_PATH",
+    os.path.join(BASE_DIR, "support-files", "fonts", "NotoSansSC-Regular.ttf"),
+)
 # AI 助手消息或附件反馈说明的最大字符数，环境变量未配置时默认允许 2000 字符。
 AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH", 2000))
 # 分批删除侧栏节点时，每批交给 Django Collector 处理的最大行数。

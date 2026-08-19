@@ -3,6 +3,7 @@ from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_fiel
 from rest_framework import serializers
 
 from services.web.ai_assistant.constants import (
+    AttachmentExportFormat,
     AttachmentType,
     ExecutionStatus,
     MessageHistoryDirection,
@@ -114,6 +115,10 @@ class AttachmentSummarySerializer(serializers.Serializer):
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    export_formats = serializers.ListField(
+        child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
+        help_text="当前类型支持的后端导出格式",
+    )
 
     def to_representation(self, instance):
         handler = attachment_handler_registry.require(instance.attachment_type)
@@ -125,6 +130,7 @@ class AttachmentSummarySerializer(serializers.Serializer):
             "content_updated_at": instance.content_updated_at,
             "created_at": instance.created_at,
             "supports_feedback": handler.supports_feedback,
+            "export_formats": [str(export_format) for export_format in handler.export_formats],
         }
 
 

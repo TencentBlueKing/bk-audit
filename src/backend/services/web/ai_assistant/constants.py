@@ -57,6 +57,13 @@ class AttachmentType(TextChoices):
     AI_ANALYSIS = "AI_ANALYSIS", gettext_lazy("AI 分析")
 
 
+class AttachmentExportFormat(TextChoices):
+    """Attachment Handler 可声明的后端导出格式。"""
+
+    MARKDOWN = "MARKDOWN", gettext_lazy("Markdown")
+    PDF = "PDF", gettext_lazy("PDF")
+
+
 class FeedbackSourceType(TextChoices):
     """反馈支持关联的平台对象类型。"""
 
