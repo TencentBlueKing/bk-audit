@@ -531,9 +531,11 @@
                     class="collapsed-search-item"
                     @click="handleCollapsedSelect(conv.id)">
                     <span class="collapsed-bullet">•</span>
+                    <!-- eslint-disable vue/no-v-html -->
                     <span
                       class="collapsed-item-title"
                       v-html="getHighlightedTitle(conv.title)" />
+                    <!-- eslint-enable vue/no-v-html -->
                   </div>
                 </div>
               </scroll-faker>
