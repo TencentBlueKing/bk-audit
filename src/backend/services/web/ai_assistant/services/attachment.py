@@ -9,11 +9,15 @@ from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     AttachmentErrorCode,
+    AttachmentExportFormat,
     ExecutionMode,
     ExecutionStatus,
     FeedbackSourceType,
 )
 from services.web.ai_assistant.exceptions import (
+    AIAssistantException,
+    AttachmentExportFailed,
+    AttachmentExportNotSupported,
     AttachmentNotFound,
     AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
@@ -23,6 +27,7 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import (
     AttachmentExecutionContext,
+    AttachmentExportResult,
     attachment_handler_registry,
 )
 from services.web.ai_assistant.models import Attachment, Message
@@ -115,6 +120,59 @@ class AttachmentService:
     def get(self, *, attachment_uid: str) -> Attachment:
         """返回当前用户可见会话中的一个附件详情。"""
 
+        return self._get_visible_attachment(attachment_uid=attachment_uid, bind_feedback=True)
+
+    def export(
+        self,
+        *,
+        attachment_uid: str,
+        export_format: str | AttachmentExportFormat,
+    ) -> AttachmentExportResult:
+        """实时导出当前用户可见的成功附件，不修改附件也不创建额外记录。"""
+
+        attachment = self._get_visible_attachment(attachment_uid=attachment_uid, bind_feedback=False)
+        if attachment.status != ExecutionStatus.SUCCESS:
+            raise InvalidAttachmentState()
+        try:
+            normalized_format = AttachmentExportFormat(export_format)
+        except (TypeError, ValueError) as error:
+            raise AttachmentExportNotSupported() from error
+
+        handler = attachment_handler_registry.require(attachment.attachment_type)
+        if normalized_format not in handler.export_formats:
+            raise AttachmentExportNotSupported()
+        output_data = parse_snapshot(
+            handler.output_model,
+            attachment.output_data,
+            field_name="output_data",
+            error_type=AttachmentSnapshotValidationError,
+        )
+        try:
+            result = handler.export(
+                attachment=attachment,
+                output_data=output_data,
+                export_format=normalized_format,
+            )
+            if not isinstance(result, AttachmentExportResult):
+                raise TypeError("Attachment Handler export() 必须返回 AttachmentExportResult")
+            return result
+        except AIAssistantException:
+            raise
+        except Exception as error:
+            # 仅记录稳定元信息，导出快照可能含敏感 AI 内容，严禁写入日志。
+            logger.exception(
+                "AI 助手附件导出失败",
+                extra={
+                    "attachment_id": attachment.id,
+                    "attachment_type": attachment.attachment_type,
+                    "export_format": normalized_format,
+                },
+            )
+            raise AttachmentExportFailed() from error
+
+    def _get_visible_attachment(self, *, attachment_uid: str, bind_feedback: bool) -> Attachment:
+        """统一 UUID、用户及软删除会话边界；导出按需跳过无关的 Feedback 查询。"""
+
         try:
             attachment = (
                 self._visible_attachments()
@@ -126,9 +184,10 @@ class AttachmentService:
             raise AttachmentNotFound() from error
         if attachment is None:
             raise AttachmentNotFound()
-        FeedbackService(user=self.user).bind_current_feedback(
-            sources=[attachment], source_type=FeedbackSourceType.ATTACHMENT
-        )
+        if bind_feedback:
+            FeedbackService(user=self.user).bind_current_feedback(
+                sources=[attachment], source_type=FeedbackSourceType.ATTACHMENT
+            )
         return attachment
 
     def list(

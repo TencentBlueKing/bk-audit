@@ -1,3 +1,5 @@
+from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy
 
 from core.models import get_request_username
@@ -5,6 +7,7 @@ from services.web.ai_assistant.resources.conversation import AIAssistantResource
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentCreateRequestSerializer,
     AttachmentDetailRequestSerializer,
+    AttachmentExportRequestSerializer,
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
     AttachmentResponseSerializer,
@@ -62,6 +65,25 @@ class GetAttachment(AIAssistantResource):
         return AttachmentService(user=get_request_username()).get(
             attachment_uid=str(validated_request_data["attachment_uid"]),
         )
+
+
+class ExportAttachment(AIAssistantResource):
+    """实时导出成功 Attachment；格式读取详情 export_formats，文件不会被平台留存。"""
+
+    name = gettext_lazy("导出附件")
+    RequestSerializer = AttachmentExportRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        result = AttachmentService(user=get_request_username()).export(
+            attachment_uid=str(validated_request_data["attachment_uid"]),
+            export_format=validated_request_data["export_format"],
+        )
+        response = HttpResponse(result.content, content_type=result.content_type)
+        response["Content-Disposition"] = content_disposition_header(
+            as_attachment=True,
+            filename=result.filename,
+        )
+        return response
 
 
 class UpdateAttachment(AIAssistantResource):

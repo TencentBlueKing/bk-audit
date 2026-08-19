@@ -1,6 +1,7 @@
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentCreateRequestSerializer,
     AttachmentDetailRequestSerializer,
+    AttachmentExportRequestSerializer,
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
     AttachmentResponseSerializer,
@@ -36,6 +37,7 @@ from services.web.ai_assistant.serializers.message import (
 __all__ = [
     "AttachmentCreateRequestSerializer",
     "AttachmentDetailRequestSerializer",
+    "AttachmentExportRequestSerializer",
     "AttachmentListItemSerializer",
     "AttachmentListRequestSerializer",
     "AttachmentResponseSerializer",

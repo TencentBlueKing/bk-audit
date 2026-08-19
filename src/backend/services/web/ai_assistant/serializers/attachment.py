@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from core.serializers import FlexibleListField
 from services.web.ai_assistant.constants import (
+    AttachmentExportFormat,
     AttachmentType,
     ExecutionStatus,
     MessageType,
@@ -83,6 +84,16 @@ class AttachmentDetailRequestSerializer(serializers.Serializer):
     attachment_uid = serializers.UUIDField(help_text="附件对外 UUID")
 
 
+class AttachmentExportRequestSerializer(serializers.Serializer):
+    """实时导出成功附件的路径和查询参数。"""
+
+    attachment_uid = serializers.UUIDField(help_text="待导出附件 UUID")
+    export_format = serializers.ChoiceField(
+        choices=AttachmentExportFormat.choices,
+        help_text="导出格式，必须包含在附件详情 export_formats 中",
+    )
+
+
 class AttachmentListRequestSerializer(serializers.Serializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
 
@@ -151,6 +162,10 @@ class AttachmentResponseSerializer(serializers.Serializer):
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    export_formats = serializers.ListField(
+        child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
+        help_text="当前类型支持的后端导出格式",
+    )
     feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对附件的反馈")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     updated_at = serializers.DateTimeField(help_text="附件最后更新时间")
@@ -184,6 +199,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "supports_feedback": supports_feedback,
+            "export_formats": [str(export_format) for export_format in handler.export_formats],
             "feedback": (
                 FeedbackResponseSerializer(getattr(instance, "_current_feedback", None)).data
                 if supports_feedback and getattr(instance, "_current_feedback", None)
@@ -206,6 +222,10 @@ class AttachmentListItemSerializer(serializers.Serializer):
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
     conversation = AttachmentConversationSummarySerializer(help_text="所属会话摘要")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    export_formats = serializers.ListField(
+        child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
+        help_text="当前类型支持的后端导出格式",
+    )
 
     def to_representation(self, instance):
         conversation = instance.source_message.conversation
@@ -229,4 +249,5 @@ class AttachmentListItemSerializer(serializers.Serializer):
                 "updated_at": conversation.updated_at,
             },
             "supports_feedback": handler.supports_feedback,
+            "export_formats": [str(export_format) for export_format in handler.export_formats],
         }

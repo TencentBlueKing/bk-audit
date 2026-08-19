@@ -1,4 +1,5 @@
 from services.web.ai_assistant.constants import (
+    AttachmentExportFormat,
     AttachmentType,
     ExecutionMode,
     MessageType,
@@ -7,6 +8,7 @@ from services.web.ai_assistant.exceptions import (
     AttachmentExecutionFailed,
     InvalidAttachmentState,
 )
+from services.web.ai_assistant.exporters import MarkdownDocumentExporter
 from services.web.ai_assistant.handlers import (
     AttachmentPreparation,
     AttachmentTypeHandler,
@@ -251,6 +253,19 @@ class FeedbackAttachmentEchoHandler(EchoAttachmentSyncHandler):
     """显式开放反馈的附件 Handler，用于反馈能力测试。"""
 
     supports_feedback = True
+
+
+class ExportableAnalysisAttachmentHandler(EditableAttachmentEchoHandler):
+    """仅用于测试 Attachment 导出协议，不属于生产 AI 分析 Handler。"""
+
+    attachment_type = AttachmentType.AI_ANALYSIS
+    export_formats = (
+        AttachmentExportFormat.MARKDOWN,
+        AttachmentExportFormat.PDF,
+    )
+
+    def export(self, *, attachment, output_data, export_format):
+        return MarkdownDocumentExporter(title=attachment.title, markdown=output_data.content).export(export_format)
 
 
 @attachment_execution_task(

@@ -11,11 +11,14 @@ from django.utils import timezone
 from services.web.ai_assistant import services as ai_assistant_services
 from services.web.ai_assistant.constants import (
     AttachmentErrorCode,
+    AttachmentExportFormat,
     AttachmentType,
     ExecutionStatus,
     MessageType,
 )
 from services.web.ai_assistant.exceptions import (
+    AttachmentExportFailed,
+    AttachmentExportNotSupported,
     AttachmentNotEditable,
     AttachmentNotFound,
     AttachmentOutputValidationError,
@@ -29,7 +32,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentPreparation,
     attachment_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentListItemSerializer,
@@ -46,6 +49,7 @@ from tests.test_ai_assistant.handlers import (
     EchoAttachmentAsyncHandler,
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
+    ExportableAnalysisAttachmentHandler,
 )
 
 UNSET = object()
@@ -172,6 +176,12 @@ class AttachmentServiceTest(TestCase):
 
     def register_async_handler(self, handler=None):
         handler = handler or RecordingAttachmentAsyncHandler()
+        attachment_handler_registry.register(handler)
+        return handler
+
+    def register_exportable_handler(self):
+        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        handler = ExportableAnalysisAttachmentHandler()
         attachment_handler_registry.register(handler)
         return handler
 
@@ -543,6 +553,114 @@ class AttachmentServiceTest(TestCase):
 
     def test_attachment_service_is_exported_from_services_package(self):
         self.assertIs(ai_assistant_services.AttachmentService, AttachmentService)
+
+    def test_export_returns_handler_result_for_supported_success_attachment(self):
+        self.register_exportable_handler()
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            title="AI 分析",
+            output_data={"content": "# Markdown"},
+        )
+
+        markdown = self.service.export(
+            attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN
+        )
+        pdf = self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.PDF)
+
+        self.assertEqual(markdown.content, b"# Markdown")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+
+    def test_export_rejects_processing_and_failed_attachment(self):
+        self.register_exportable_handler()
+        for status in (ExecutionStatus.PROCESSING, ExecutionStatus.FAILED):
+            attachment = self.create_attachment(
+                attachment_type=AttachmentType.AI_ANALYSIS,
+                status=status,
+                task_id="task" if status != ExecutionStatus.SUCCESS else None,
+            )
+            with self.subTest(status=status), self.assertRaises(InvalidAttachmentState):
+                self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+    def test_export_rejects_unlisted_format_without_calling_handler(self):
+        handler = self.register_sync_handler()
+        attachment = self.create_attachment()
+
+        with mock.patch.object(handler, "export", wraps=handler.export) as export:
+            with self.assertRaises(AttachmentExportNotSupported):
+                self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+        export.assert_not_called()
+
+    def test_export_rejects_foreign_and_soft_deleted_conversation(self):
+        self.register_exportable_handler()
+        foreign_conversation = Conversation.objects.create(created_by=self.other_user, updated_by=self.other_user)
+        foreign = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            source_message=self.create_source_message(conversation=foreign_conversation, user=self.other_user),
+            created_by=self.other_user,
+        )
+        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        deleted = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            source_message=self.create_source_message(conversation=deleted_conversation),
+        )
+        deleted_conversation.delete()
+
+        for attachment in (foreign, deleted):
+            with self.subTest(attachment=attachment.uid), self.assertRaises(AttachmentNotFound):
+                self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+    def test_export_rejects_corrupted_output_snapshot(self):
+        self.register_exportable_handler()
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            output_data={"invalid": True},
+        )
+
+        with self.assertRaises(AttachmentSnapshotValidationError):
+            self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+    def test_export_maps_unexpected_handler_error_to_public_failure(self):
+        handler = self.register_exportable_handler()
+        attachment = self.create_attachment(attachment_type=AttachmentType.AI_ANALYSIS)
+
+        with mock.patch.object(handler, "export", side_effect=RuntimeError("private content")):
+            with self.assertRaises(AttachmentExportFailed):
+                self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+    def test_export_maps_invalid_handler_result_to_public_failure(self):
+        handler = self.register_exportable_handler()
+        attachment = self.create_attachment(attachment_type=AttachmentType.AI_ANALYSIS)
+
+        with mock.patch.object(handler, "export", return_value={"content": b"invalid"}):
+            with self.assertRaises(AttachmentExportFailed):
+                self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+
+    def test_export_does_not_update_attachment_or_create_records(self):
+        self.register_exportable_handler()
+        attachment = self.create_attachment(attachment_type=AttachmentType.AI_ANALYSIS)
+        before = (
+            attachment.updated_at,
+            attachment.content_updated_at,
+            attachment.output_data,
+            Attachment.objects.count(),
+            Feedback.objects.count(),
+        )
+
+        self.service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+        attachment.refresh_from_db()
+
+        self.assertEqual(
+            (
+                attachment.updated_at,
+                attachment.content_updated_at,
+                attachment.output_data,
+                Attachment.objects.count(),
+                Feedback.objects.count(),
+            ),
+            before,
+        )
 
     def test_update_distinguishes_null_output_from_valid_empty_object(self):
         handler = EmptyObjectEditableAttachmentHandler()

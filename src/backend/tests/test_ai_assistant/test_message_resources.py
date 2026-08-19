@@ -301,8 +301,18 @@ class MessageResourceTest(TestCase):
         self.assertNotIn("output_data", item)
         self.assertEqual(
             set(item["attachments"][0]),
-            {"uid", "attachment_type", "status", "title", "content_updated_at", "created_at", "supports_feedback"},
+            {
+                "uid",
+                "attachment_type",
+                "status",
+                "title",
+                "content_updated_at",
+                "created_at",
+                "supports_feedback",
+                "export_formats",
+            },
         )
+        self.assertEqual(item["attachments"][0]["export_formats"], [])
         self.assertEqual(
             [summary["uid"] for summary in item["attachments"]],
             [str(latest_attachment.uid), str(attachment.uid)],

@@ -5,6 +5,7 @@ from celery import Task
 from django.core.exceptions import ImproperlyConfigured
 
 from services.web.ai_assistant.constants import (
+    AttachmentExportFormat,
     AttachmentType,
     ExecutionMode,
     MessageType,
@@ -143,6 +144,22 @@ class AttachmentHandlerRegistry(HandlerRegistry[AttachmentTypeHandler]):
             task_class_loader=_load_attachment_task_class,
             label="附件",
         )
+
+    def _validate(self, handler: Any) -> None:
+        """在通用 Handler 校验后收敛附件导出声明，防止能力与实现不一致。"""
+
+        super()._validate(handler)
+        export_formats = handler.export_formats
+        if type(export_formats) is not tuple:
+            raise ImproperlyConfigured("附件 export_formats 必须是 tuple")
+        try:
+            normalized_formats = tuple(AttachmentExportFormat(export_format) for export_format in export_formats)
+        except (TypeError, ValueError) as error:
+            raise ImproperlyConfigured("附件 export_formats 包含不支持的格式") from error
+        if len(normalized_formats) != len(set(normalized_formats)):
+            raise ImproperlyConfigured("附件 export_formats 不允许重复")
+        if bool(normalized_formats) != (type(handler).export is not AttachmentTypeHandler.export):
+            raise ImproperlyConfigured("附件 export_formats 声明必须与 export() 实现一致")
 
 
 message_handler_registry = MessageHandlerRegistry()

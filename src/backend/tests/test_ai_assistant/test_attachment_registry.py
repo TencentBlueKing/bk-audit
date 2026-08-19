@@ -1,12 +1,18 @@
 from celery import Task
 from django.core.exceptions import ImproperlyConfigured
+from pydantic import ValidationError
 
-from services.web.ai_assistant.constants import AttachmentType, ExecutionMode
+from services.web.ai_assistant.constants import (
+    AttachmentExportFormat,
+    AttachmentType,
+    ExecutionMode,
+)
 from services.web.ai_assistant.exceptions import (
     AttachmentNotEditable,
     UnsupportedAttachmentType,
 )
 from services.web.ai_assistant.handlers import (
+    AttachmentExportResult,
     AttachmentHandlerRegistry,
     AttachmentPreparation,
     AttachmentTypeHandler,
@@ -66,6 +72,41 @@ class AttachmentHandlerRegistryTest(TestCase):
         handler = FeedbackAttachmentHandler()
         self.assertTrue(handler.supports_feedback)
         self.assertIs(self.registry.register(handler), handler)
+
+    def test_export_capability_requires_immutable_unique_supported_formats_and_export_override(self):
+        invalid_handlers = (
+            ExportFormatsAsListHandler(),
+            DuplicateExportFormatsHandler(),
+            InvalidExportFormatHandler(),
+            DeclaresFormatWithoutExportHandler(),
+            OverridesExportWithoutFormatHandler(),
+        )
+
+        for handler in invalid_handlers:
+            with self.subTest(handler=type(handler).__name__), self.assertRaises(ImproperlyConfigured):
+                self.registry.register(handler)
+
+    def test_export_capability_allows_handler_with_declared_formats_and_export_override(self):
+        handler = ExportableAttachmentHandler()
+
+        self.assertIs(self.registry.register(handler), handler)
+
+    def test_export_result_validates_fields_and_is_immutable(self):
+        result = AttachmentExportResult(
+            filename="report.pdf",
+            content_type="application/pdf",
+            content=b"%PDF",
+        )
+
+        for invalid_data in (
+            {"filename": "", "content_type": "application/pdf", "content": b"%PDF"},
+            {"filename": "report.pdf", "content_type": "", "content": b"%PDF"},
+            {"filename": "report.pdf", "content_type": "application/pdf", "content": "%PDF"},
+        ):
+            with self.subTest(invalid_data=invalid_data), self.assertRaises(ValidationError):
+                AttachmentExportResult(**invalid_data)
+        with self.assertRaises(ValidationError):
+            result.filename = "changed.pdf"
 
     def test_duplicate_attachment_type_is_rejected(self):
         self.registry.register(EchoAttachmentSyncHandler())
@@ -254,6 +295,42 @@ class InvalidFeedbackAttachmentHandler(EchoAttachmentSyncHandler):
 
 class FeedbackAttachmentHandler(EchoAttachmentSyncHandler):
     supports_feedback = True
+
+
+class ExportFormatsAsListHandler(EchoAttachmentSyncHandler):
+    export_formats = [AttachmentExportFormat.PDF]
+
+
+class DuplicateExportFormatsHandler(EchoAttachmentSyncHandler):
+    export_formats = (AttachmentExportFormat.PDF, AttachmentExportFormat.PDF)
+
+
+class InvalidExportFormatHandler(EchoAttachmentSyncHandler):
+    export_formats = ("HTML",)
+
+
+class DeclaresFormatWithoutExportHandler(EchoAttachmentSyncHandler):
+    export_formats = (AttachmentExportFormat.PDF,)
+
+
+class OverridesExportWithoutFormatHandler(EchoAttachmentSyncHandler):
+    def export(self, *, attachment, output_data, export_format):
+        return AttachmentExportResult(
+            filename="report.pdf",
+            content_type="application/pdf",
+            content=b"%PDF",
+        )
+
+
+class ExportableAttachmentHandler(EchoAttachmentSyncHandler):
+    export_formats = (AttachmentExportFormat.MARKDOWN, AttachmentExportFormat.PDF)
+
+    def export(self, *, attachment, output_data, export_format):
+        return AttachmentExportResult(
+            filename="report.pdf",
+            content_type="application/pdf",
+            content=b"%PDF",
+        )
 
 
 class InvalidAttachmentExecutionModeRegistryTest(TestCase):

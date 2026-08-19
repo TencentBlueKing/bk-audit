@@ -7,7 +7,7 @@ from django.test import TransactionTestCase, override_settings
 from django.urls import resolve
 from drf_spectacular.drainage import get_override
 from drf_spectacular.views import SpectacularAPIView
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from core.utils.spectacular import BKResourceAutoSchema
 from services.web.ai_assistant.constants import (
@@ -26,6 +26,7 @@ from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
+    ExportAttachment,
     GetAttachment,
     ListAttachments,
     RetryAttachment,
@@ -34,6 +35,7 @@ from services.web.ai_assistant.resources.attachment import (
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentCreateRequestSerializer,
     AttachmentDetailRequestSerializer,
+    AttachmentExportRequestSerializer,
     AttachmentInputDataField,
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
@@ -57,6 +59,7 @@ from tests.test_ai_assistant.handlers import (
     EchoAttachmentAsyncHandler,
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
+    ExportableAnalysisAttachmentHandler,
     FeedbackAttachmentEchoHandler,
 )
 
@@ -129,6 +132,7 @@ class AttachmentRequestSerializerTest(TestCase):
         serializer_classes = (
             AttachmentCreateRequestSerializer,
             AttachmentDetailRequestSerializer,
+            AttachmentExportRequestSerializer,
             AttachmentListRequestSerializer,
             AttachmentUpdateRequestSerializer,
             AttachmentResponseSerializer,
@@ -245,6 +249,7 @@ class AttachmentRequestSerializerTest(TestCase):
                 "updated_at",
                 "supports_feedback",
                 "feedback",
+                "export_formats",
             },
         )
         self.assertEqual(
@@ -259,11 +264,40 @@ class AttachmentRequestSerializerTest(TestCase):
                 "source_message",
                 "conversation",
                 "supports_feedback",
+                "export_formats",
             },
         )
         for field_name in ("id", "context_data", "task_id", "is_stream", "stream_config", "stream_archive"):
             self.assertNotIn(field_name, detail_fields)
             self.assertNotIn(field_name, list_fields)
+
+    def test_attachment_response_projects_registered_export_formats(self):
+        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        attachment_handler_registry.register(ExportableAnalysisAttachmentHandler())
+        detail = AttachmentResponseSerializer(
+            Attachment.objects.create(
+                source_message=Message.objects.create(
+                    conversation=Conversation.objects.create(created_by="alice", updated_by="alice"),
+                    message_type=MessageType.LOG_SEARCH,
+                    status=ExecutionStatus.SUCCESS,
+                    input_data={"text": "query"},
+                    context_data={"prefix": "source"},
+                    output_data={"content": "source"},
+                    created_by="alice",
+                    updated_by="alice",
+                ),
+                attachment_type=AttachmentType.AI_ANALYSIS,
+                status=ExecutionStatus.SUCCESS,
+                title="分析",
+                input_data={"text": "input"},
+                context_data={"prefix": "context"},
+                output_data={"content": "output"},
+                created_by="alice",
+                updated_by="alice",
+            )
+        ).data
+
+        self.assertEqual(detail["export_formats"], ["MARKDOWN", "PDF"])
 
     @override_settings(ROOT_URLCONF="urls")
     def test_real_openapi_endpoint_exposes_attachment_list_response_as_array(self):
@@ -295,6 +329,26 @@ class AttachmentRequestSerializerTest(TestCase):
                 self.assertEqual(set(parameter["schema"]["items"]["enum"]), expected_enum)
                 self.assertEqual(parameter["style"], "form")
                 self.assertTrue(parameter["explode"])
+
+    @override_settings(ROOT_URLCONF="urls")
+    def test_real_openapi_attachment_export_exposes_binary_media_types(self):
+        request = APIRequestFactory().get("/api/schema/")
+        request.user = mock.Mock(is_staff=True, is_authenticated=True)
+
+        response = SpectacularAPIView.as_view()(request)
+        response.render()
+        schema = yaml.safe_load(response.content)
+        export_content = schema["paths"]["/api/v1/ai_assistant/attachments/{attachment_uid}/export/"]["get"][
+            "responses"
+        ]["200"]["content"]
+
+        self.assertEqual(
+            export_content,
+            {
+                "text/markdown": {"schema": {"type": "string", "format": "binary"}},
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            },
+        )
 
     @override_settings(ROOT_URLCONF="urls")
     def test_common_auto_schema_recognizes_flexible_list_query_parameters(self):
@@ -539,8 +593,10 @@ class AttachmentResourceTest(TestCase):
                 "source_message",
                 "conversation",
                 "supports_feedback",
+                "export_formats",
             },
         )
+        self.assertEqual(response[0]["export_formats"], [])
         self.assertNotIn("input_data", response[0])
         self.assertNotIn("output_data", response[0])
         self.assertEqual(response[0]["source_message"]["uid"], str(self.source_message.uid))
@@ -711,6 +767,33 @@ class AttachmentResourceTest(TestCase):
         with self.assertRaises(AttachmentSnapshotValidationError):
             GetAttachment().request({"attachment_uid": str(corrupted_attachment.uid)})
 
+    def test_export_resource_returns_raw_file_response_through_request_and_viewset(self, _username):
+        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        attachment_handler_registry.register(ExportableAnalysisAttachmentHandler())
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            title="AI 分析",
+            output_data={"content": "# 导出内容"},
+        )
+
+        resource_response = ExportAttachment().request(
+            {"attachment_uid": str(attachment.uid), "export_format": "MARKDOWN"}
+        )
+        self.assertEqual(resource_response.status_code, 200)
+        self.assertEqual(resource_response["Content-Type"], "text/markdown; charset=utf-8")
+        self.assertIn("attachment", resource_response["Content-Disposition"])
+        self.assertEqual(resource_response.content, b"# \xe5\xaf\xbc\xe5\x87\xba\xe5\x86\x85\xe5\xae\xb9")
+
+        path = f"/api/v1/ai_assistant/attachments/{attachment.uid}/export/"
+        view = resolve(path).func
+        request = APIRequestFactory().get(path, {"export_format": "PDF"})
+        force_authenticate(request, user=mock.Mock(is_authenticated=True))
+        view_response = view(request, attachment_uid=attachment.uid)
+        self.assertEqual(view_response.status_code, 200)
+        self.assertEqual(view_response["Content-Type"], "application/pdf")
+        self.assertTrue(view_response.content.startswith(b"%PDF"))
+
 
 @override_settings(ROOT_URLCONF="services.web.urls")
 class AttachmentResourceRoutingTest(TestCase):
@@ -723,8 +806,10 @@ class AttachmentResourceRoutingTest(TestCase):
         self.assertEqual(nested_create.kwargs, {"message_uid": message_uid})
         detail = resolve(f"/api/v1/ai_assistant/attachments/{attachment_uid}/")
         retry = resolve(f"/api/v1/ai_assistant/attachments/{attachment_uid}/retry/")
+        export = resolve(f"/api/v1/ai_assistant/attachments/{attachment_uid}/export/")
         self.assertEqual(detail.kwargs, {"attachment_uid": attachment_uid})
         self.assertEqual(retry.kwargs, {"attachment_uid": attachment_uid})
+        self.assertEqual(export.kwargs, {"attachment_uid": attachment_uid})
 
 
 class AttachmentResourceTransactionTest(TransactionTestCase):

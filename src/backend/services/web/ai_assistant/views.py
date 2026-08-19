@@ -1,9 +1,11 @@
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from blueapps.contrib.drf.utils.pagination import CustomPageNumberPagination
+from drf_spectacular.types import OpenApiTypes
 
 from core.utils.spectacular import BKResourceAutoSchema
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
+    ExportAttachment,
     GetAttachment,
     ListAttachments,
     RetryAttachment,
@@ -56,13 +58,24 @@ class AIAssistantPaginatedViewSet(ResourceViewSet):
 
 
 class AttachmentAutoSchema(BKResourceAutoSchema):
-    """修正附件列表的非分页数组响应 OpenAPI。"""
+    """补充附件列表和即时文件导出的专属 OpenAPI 响应协议。"""
 
     def _is_list_view(self, serializer=None):
         route = self._get_matched_route()
         if route and route.resource_class is ListAttachments:
             return True
         return super()._is_list_view(serializer)
+
+    def get_response_serializers(self):
+        """按实际 Content-Type 描述导出文件，避免被默认 JSON Renderer 误标。"""
+
+        route = self._get_matched_route()
+        if route and route.resource_class is ExportAttachment:
+            return {
+                (200, "text/markdown"): OpenApiTypes.BINARY,
+                (200, "application/pdf"): OpenApiTypes.BINARY,
+            }
+        return super().get_response_serializers()
 
 
 class ConversationGroupsViewSet(ResourceViewSet):
@@ -111,6 +124,7 @@ class AttachmentsViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", ListAttachments),
         ResourceRoute("GET", GetAttachment, pk_field="attachment_uid"),
+        ResourceRoute("GET", ExportAttachment, endpoint="export", pk_field="attachment_uid"),
         ResourceRoute("PATCH", UpdateAttachment, pk_field="attachment_uid"),
         ResourceRoute("POST", RetryAttachment, endpoint="retry", pk_field="attachment_uid"),
     ]
