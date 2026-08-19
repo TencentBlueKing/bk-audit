@@ -165,6 +165,7 @@
 <style scoped lang="postcss">
 .panel-edit {
   position: relative;
+  width: 100%;
   min-height: 32px;
   padding: 0 3px;
   background: #f5f7fa;
