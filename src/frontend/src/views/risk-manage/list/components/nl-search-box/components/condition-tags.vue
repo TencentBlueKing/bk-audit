@@ -143,6 +143,8 @@
   }
 
   const props = withDefaults(defineProps<Props>(), {
+    eventFieldItems: () => [],
+    conditionList: () => [],
     compactSelectPopover: false,
   });
   const emit = defineEmits<Emits>();
