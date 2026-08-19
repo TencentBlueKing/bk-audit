@@ -201,6 +201,11 @@ BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
+# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
+BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
+BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
+# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
+BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
@@ -438,6 +443,9 @@ BKAUDIT_API_STAG_HOST = os.getenv("BKAPP_BKAUDIT_API_STAG_HOST", "")
 BKAUDIT_API_RELEASE_STAGES = [stag for stag in os.getenv("BKAPP_BKAUDIT_API_RELEASE_STAGES", "").split(",") if stag]
 # 用于网关资源文档
 BK_APIGW_RESOURCE_DOCS_BASE_DIR = os.getenv("BKAPP_APIGW_RESOURCE_DOCS_BASE_DIR", "support-files/apigw/docs")
+
+# ITSM 回调地址前缀（API gateway地址，供 ITSM 回调使用）
+BKAUDIT_CALLBACK_URL_PREFIX = os.getenv("BKAPP_BKAUDIT_CALLBACK_URL_PREFIX", "")
 
 # BK Audit
 BK_AUDIT_SETTINGS = {
