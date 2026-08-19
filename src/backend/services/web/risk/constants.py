@@ -794,10 +794,10 @@ class EventBasicField(TextChoices):
 
     RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")
     OPERATOR = "operator", gettext_lazy("责任人")
-    EVENT_TIME = "event_time", gettext_lazy("事件时间")
+    EVENT_TIME = "event_time", gettext_lazy("事件发生时间")
     EVENT_SOURCE = "event_source", gettext_lazy("事件来源")
-    STRATEGY_ID = "strategy_id", gettext_lazy("策略ID")
-    EVENT_CONTENT = "event_content", gettext_lazy("事件内容")
+    STRATEGY_ID = "strategy_id", gettext_lazy("命中策略ID")
+    EVENT_CONTENT = "event_content", gettext_lazy("事件描述")
     EVENT_TYPE = "event_type", gettext_lazy("事件类型")
 
     @property
