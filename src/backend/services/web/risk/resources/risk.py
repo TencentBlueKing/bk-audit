@@ -89,6 +89,7 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
+    EventBasicField,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskFields,
@@ -481,6 +482,12 @@ class ListRisk(RiskMeta):
         if not event_filters:
             return queryset
 
+        # type = "basic_event_field" 的字段不参与策略配置 gate；
+        data_filter_items = [item for item in event_filters if item.get("type") != "basic_event_field"]
+
+        if not data_filter_items:
+            return queryset
+
         strategy_ids = list(queryset.values_list("strategy_id", flat=True).distinct())
         if not strategy_ids:
             return queryset.none()
@@ -488,8 +495,8 @@ class ListRisk(RiskMeta):
         # 使用JSONField contains能力在数据库侧完成过滤，避免加载并解析所有配置
         strategy_queryset = Strategy.objects.filter(strategy_id__in=strategy_ids)
 
-        for item in event_filters:
-            field = item.get("field")
+        for item in data_filter_items:
+            field = item.get("field") or ""
             display_name = item.get("display_name")
             strategy_queryset = strategy_queryset.filter(
                 event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
@@ -1485,6 +1492,7 @@ class RiskExportAsync(RiskMeta):
         )
 
 
+# ============== 风险报告相关接口 ==============
 class ListEventFieldsByStrategy(RiskMeta):
     """
     新增接口：根据策略获取对应的事件字段；支持返回所有策略的事件字段（不传 strategy_ids）
@@ -1497,26 +1505,40 @@ class ListEventFieldsByStrategy(RiskMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        # 决定策略集合
         strategy_ids = validated_request_data.get("strategy_ids")
         if strategy_ids:
             strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
         else:
             strategies = Strategy.objects.all()
 
-        results = set()
+        extended = set()
         for s in strategies:
-            for config_name in ["event_data_field_configs"]:
-                for cfg in getattr(s, config_name) or []:
-                    field_name = cfg.get("field_name")
-                    display_name = cfg.get("display_name") or field_name
-                    if not field_name:
-                        continue
-                    results.add((field_name, display_name))
-        return [
-            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
-            for field_name, display_name in results
+            for cfg in s.event_data_field_configs or []:
+                field_name = cfg.get("field_name")
+                display_name = cfg.get("display_name") or field_name
+                if field_name:
+                    extended.add((field_name, display_name))
+
+        basic = [(field_name, str(label)) for field_name, label in EventBasicField.choices]
+        basic_field_names = {field_name for field_name, _ in basic}
+        extended = [
+            (field_name, display_name) for field_name, display_name in extended if field_name not in basic_field_names
         ]
+
+        basic_results = [
+            {
+                "field_name": field_name,
+                "display_name": display_name,
+                "id": f"{display_name}:{field_name}",
+                "type": "basic_event_field",
+            }
+            for field_name, display_name in basic
+        ]
+        extended_results = [
+            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
+            for field_name, display_name in extended
+        ]
+        return basic_results + extended_results
 
 
 # ============== 风险报告相关接口 ==============

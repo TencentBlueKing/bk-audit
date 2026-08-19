@@ -22,6 +22,7 @@ from typing import List
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -37,6 +38,7 @@ from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     AnalyseReportStatus,
     AnalyseReportType,
+    EventBasicField,
     EventFilterOperator,
     EventMappingFields,
     NL2RiskFilterLogStatus,
@@ -378,6 +380,8 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     id = serializers.CharField(label=gettext_lazy("字段ID"))
+    # 增加type字段，用于区分事件基本字段和非基本字段
+    type = serializers.CharField(label=gettext_lazy("事件基本字段"), required=False, allow_null=True)
 
 
 class RiskEventSubscriptionQuerySerializer(serializers.Serializer):
@@ -414,6 +418,19 @@ class EventFieldFilterItemSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
     value = AnyValueField(label=gettext_lazy("值"))
+    # 增加type字段，用于区分事件基本字段和非基本字段
+    type = serializers.CharField(label=gettext_lazy("事件基本字段"), required=False, allow_null=True)
+
+    def validate(self, attrs):
+        field = attrs.get("field")
+        value = attrs.get("value")
+        # 事件时间列（dtEventTime）为字符串时间列：值必须是 YYYY-MM-DD HH:mm:ss 字符串,拒绝数字时间戳等格式
+        if field == EventBasicField.EVENT_TIME.value and value is not None and value != "":
+            if parse_datetime(str(value)) is None:
+                raise serializers.ValidationError(
+                    gettext("event_time 的值必须为 YYYY-MM-DD HH:mm:ss 格式字符串（如 2026-08-11 10:00:00），收到：%s") % value
+                )
+        return attrs
 
 
 class TicketPermissionProviderSerializer(serializers.ModelSerializer):

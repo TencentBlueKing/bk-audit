@@ -235,6 +235,66 @@ class TestListRiskRequestSerializer(SimpleTestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-event_data.ip"])
 
+    # ---- event_time 值格式校验（字符串时间列禁止数字时间戳混合比较）----
+
+    def test_event_time_accepts_datetime_string(self):
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": "2026-08-06 10:00:00",
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_event_time_rejects_numeric_timestamp(self):
+        """event_time 是字符串时间列：数字时间戳会产生混合类型比较（Doris 隐式转换 → 静默筛错），必须 400"""
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": 1700000000,
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertFalse(serializer.is_valid())
+        error_text = str(serializer.errors)
+        self.assertIn("YYYY-MM-DD HH:mm:ss", error_text)
+
+    def test_event_time_rejects_invalid_string_format(self):
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": "1700000000",
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("YYYY-MM-DD HH:mm:ss", str(serializer.errors))
+
     # ---- status → display_status 映射测试 ----
 
     def test_status_mapped_to_display_status_in_validated_data(self):
@@ -461,3 +521,232 @@ class TestListRiskRequestSerializerHasReport(SimpleTestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         # 确认 validated_data 中 has_report 是布尔值，而非列表
         self.assertIsInstance(serializer.validated_data["has_report"], bool)
+
+
+class TestEventFilterBasicColumnMode(SimpleTestCase):
+    """基本信息字段（列模式）筛选：白名单解析与 SQL 生成"""
+
+    def _resolver(self, event_filters):
+        return BkBaseFieldResolver(
+            order_fields=[],
+            event_filters=event_filters,
+            duplicate_field_map={},
+        )
+
+    def test_basic_field_resolves_to_column(self):
+        """field=operator 应命中白名单，column=operator，json_path 为空"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "operator",
+                    "display_name": "责任人",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "xxx",
+                }
+            ]
+        )
+        spec = resolver.event_filters[0]
+        self.assertEqual(spec.column, "operator")
+        self.assertEqual(spec.json_path, "")
+        self.assertFalse(spec.requires_numeric)
+
+    def test_event_data_field_keeps_json_path(self):
+        """field=event_data.ip 不应命中白名单，column=None，json_path=$.ip（回归）"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "event_data.ip",
+                    "display_name": "IP",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "1.1.1.1",
+                }
+            ]
+        )
+        spec = resolver.event_filters[0]
+        self.assertIsNone(spec.column)
+        self.assertEqual(spec.json_path, "$.ip")
+
+    def test_event_time_maps_to_string_time_column(self):
+        """event_time 是字符串时间列（与 dtEventTime 同源），映射 dtEventTime，且不要求数值"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "event_time",
+                    "display_name": "事件时间",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "2026-08-06 10:00:00",
+                }
+            ]
+        )
+        spec = resolver.event_filters[0]
+        self.assertEqual(spec.column, "dtEventTime")
+        self.assertFalse(spec.requires_numeric)
+        self.assertEqual(spec.json_path, "")
+
+    def test_matched_event_filter_uses_column_directly(self):
+        """列模式过滤 SQL 应直接引用 matched_event.operator，不含 JSON_EXTRACT_STRING"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "operator",
+                    "display_name": "责任人",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "xxx",
+                }
+            ]
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("matched_event_src.operator", matched_sql)
+        self.assertNotIn("JSON_EXTRACT_STRING", matched_sql)
+
+    def test_mixed_filter_combines_column_and_json(self):
+        """基本字段与 event_data 字段混合时，SQL 同时含列条件与 JSON_EXTRACT_STRING，AND 连接"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "operator",
+                    "display_name": "责任人",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "xxx",
+                },
+                {
+                    "field": "event_data.ip",
+                    "display_name": "IP",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "1.1.1.1",
+                },
+            ]
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("matched_event_src.operator", matched_sql)
+        self.assertIn("JSON_EXTRACT_STRING", matched_sql)
+
+    def test_event_time_string_range_two_conditions(self):
+        """event_time 字符串时间列区间：>= 与 < 直接字符串比较，无 CAST"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "event_time",
+                    "display_name": "事件时间",
+                    "operator": EventFilterOperator.GREATER_THAN_EQUAL.value,
+                    "value": "2026-08-06 10:00:00",
+                },
+                {
+                    "field": "event_time",
+                    "display_name": "事件时间",
+                    "operator": EventFilterOperator.LESS_THAN.value,
+                    "value": "2026-08-06 10:00:01",
+                },
+            ]
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("matched_event_src.dtEventTime >= '2026-08-06 10:00:00'", matched_sql)
+        self.assertIn("matched_event_src.dtEventTime < '2026-08-06 10:00:01'", matched_sql)
+        self.assertNotIn("CAST(matched_event_src.dtEventTime", matched_sql)
+
+    def test_event_time_numeric_value_uses_string_comparison_without_cast(self):
+        """列模式：event_time 传数值时间戳仍走字符串比较、禁止 CAST（CAST 字符串时间列为 0/NULL 会静默错）"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "event_time",
+                    "display_name": "事件时间",
+                    "operator": EventFilterOperator.GREATER_THAN.value,
+                    "value": 1700000000,
+                }
+            ]
+        )
+        spec = resolver.event_filters[0]
+        # 字段级判定：event_time 非数值列，即使值是数值也不标记 requires_numeric
+        self.assertFalse(spec.requires_numeric)
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("matched_event_src.dtEventTime > 1700000000", matched_sql)
+        self.assertNotIn("CAST(matched_event_src.dtEventTime", matched_sql)
+
+    def test_strategy_id_numeric_operator_casts_to_double(self):
+        """列模式：strategy_id 数值比较保留 CAST（词序比较 "9" > "100" 为真，数值比较必须 CAST）"""
+        resolver = self._resolver(
+            [
+                {
+                    "field": "strategy_id",
+                    "display_name": "策略ID",
+                    "operator": EventFilterOperator.GREATER_THAN.value,
+                    "value": "100",
+                }
+            ]
+        )
+        spec = resolver.event_filters[0]
+        # 字段级判定：strategy_id 为数值列，字符串形态的数字也标记 requires_numeric
+        self.assertTrue(spec.requires_numeric)
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("CAST(matched_event_src.strategy_id AS DOUBLE) > 100", matched_sql)
