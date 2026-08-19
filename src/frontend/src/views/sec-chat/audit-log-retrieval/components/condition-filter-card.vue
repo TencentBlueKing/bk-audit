@@ -38,11 +38,11 @@
           accent
           :event-fields="[]"
           :field-config="fieldConfig"
-          primary-tab-label="通用字段"
           :primary-field-names="commonFieldKeys"
+          primary-tab-label="通用字段"
+          :secondary-field-names="extendFieldKeys"
           secondary-source="config"
           secondary-tab-label="拓展字段"
-          :secondary-field-names="extendFieldKeys"
           :selected-event-field-ids="[]"
           :selected-fields="selectedFieldNames"
           @add-field="handleAddField" />
@@ -104,7 +104,7 @@
   const commonFieldKeys = COMMON_FIELD_KEYS;
   const extendFieldKeys = EXTEND_FIELD_KEYS;
 
-  const conditionTagsRef = ref<{ startEditField?: (fieldName: string) => void }>();
+  const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const inlineResult = ref<RetrievalResultPayload | null>(null);
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),

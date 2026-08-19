@@ -240,7 +240,9 @@
   const fieldExpanded = ref(true);
   const fieldTab = ref<'common' | 'extend'>('common');
   const filterCardShow = ref(false);
-  const filterCardRef = ref<{ addOrFocusField?: (fieldName: string, sample?: string) => Promise<void> | void } | null>(null);
+  const filterCardRef = ref<{
+    addOrFocusField?:(fieldName: string, sample?: string) => Promise<void> | void
+  } | null>(null);
   const filterCardAnchorRef = ref<HTMLElement | null>(null);
 
   const commonSuggestions = [
