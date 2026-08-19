@@ -207,11 +207,9 @@
       ref="filterCardAnchorRef"
       class="condition-filter-slot">
       <condition-filter-card
-        :field-options="allFieldNames"
-        :seed-field="filterSeedField"
+        ref="filterCardRef"
         :systems="systems"
-        @close="filterCardShow = false"
-        @search="handleFilterSearch" />
+        @searched="scrollFilterCardIntoView" />
     </div>
   </div>
 </template>
@@ -229,7 +227,6 @@
   const emit = defineEmits<{
     reselect: [];
     'select-suggestion': [text: string];
-    'submit-query': [text: string];
   }>();
 
   interface FieldRow {
@@ -243,7 +240,7 @@
   const fieldExpanded = ref(true);
   const fieldTab = ref<'common' | 'extend'>('common');
   const filterCardShow = ref(false);
-  const filterSeedField = ref<{ name: string; sample?: string } | null>(null);
+  const filterCardRef = ref<{ addOrFocusField?: (fieldName: string, sample?: string) => Promise<void> | void } | null>(null);
   const filterCardAnchorRef = ref<HTMLElement | null>(null);
 
   const commonSuggestions = [
@@ -399,11 +396,6 @@
     fieldTab.value === 'common' ? commonFields : extendFields
   ));
 
-  const allFieldNames = computed(() => Array.from(new Set([
-    ...commonFields.map(item => item.name),
-    ...extendFields.map(item => item.name),
-  ])));
-
   const scrollFilterCardIntoView = async () => {
     await nextTick();
     // 等布局完成后再滚，确保筛选卡高度已计入滚动区域
@@ -415,23 +407,16 @@
     });
   };
 
-  const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
+  const handleFieldSearch = async (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
-      filterSeedField.value = {
-        name: row.name,
-        sample: row.sample,
-      };
       filterCardShow.value = true;
+      await nextTick();
+      await filterCardRef.value?.addOrFocusField?.(row.name, row.sample);
       scrollFilterCardIntoView();
       return;
     }
     const sampleText = row.sample || '替换为实际值';
     emit('select-suggestion', `查询「${row.name}」为 ${sampleText} 的审计日志`);
-  };
-
-  const handleFilterSearch = (summary: string) => {
-    filterCardShow.value = false;
-    emit('submit-query', summary);
   };
 </script>
 
