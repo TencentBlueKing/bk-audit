@@ -15,98 +15,15 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-customize">
+  <div
+    class="strategy-customize"
+    :class="{ 'customize-basic-mode': stepMode === 'basic' }">
     <auth-collapse-panel
+      v-if="stepMode === 'rules'"
       is-active
-      :label="t('规则配置')"
+      :label="t('风险发现规则')"
       style="margin-bottom: 14px">
       <div class="customize-rule">
-        <bk-form-item
-          label=""
-          label-width="0"
-          required>
-          <span
-            v-bk-tooltips="{
-              content: t(
-                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
-              ),
-              extCls: 'strategy-config-type-tooltips',
-              placement: 'top-start'
-            }"
-            class="label-is-required"
-            style="
-              color: #63656e;
-              cursor: pointer;
-              border-bottom: 1px dashed #979ba5;
-            ">
-            {{ t('数据源') }}
-          </span>
-          <bk-loading :loading="typeTableLoading">
-            <div class="select-group">
-              <bk-form-item
-                class="no-label"
-                label-width="0"
-                property="configs.config_type">
-                <data-source-picker
-                  v-model="tableId"
-                  :decode-type-biz-id="decodeTypeBizId"
-                  :list="allConfigTypeTable"
-                  :load-children="handlePickerLoadChildren"
-                  :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
-                  :system-ids="formData.configs.data_source.system_ids"
-                  @change="handleChangeTable"
-                  @event-log-commit="handleEventLogCommit" />
-              </bk-form-item>
-            </div>
-          </bk-loading>
-          <!-- 联表详情 -->
-          <link-data-detail-component
-            v-if="formData.configs.data_source.link_table
-              && formData.configs.data_source.link_table.uid
-            "
-            :join-type-list="joinTypeList"
-            :link-data-detail="linkDataDetail"
-            @refresh-link-data="handleRefreshLinkData" />
-          <!-- 其他数据表详情 -->
-          <other-table-detail-component
-            v-if="formData.configs.data_source.rt_id?.length"
-            :rt-id="formData.configs.data_source.rt_id"
-            @show-structure-preview="handleShowStructureView" />
-          <!-- 查看表字段详情 -->
-          <structure-preview-component
-            v-model:show-structure="showStructure"
-            :current-view-field="currentViewField"
-            :rt-id="currentViewRtId" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160"
-          property="configs.select"
-          required>
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
-              }"
-              style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
-              {{ t('预期结果') }}
-            </span>
-          </template>
-          <expected-results
-            ref="expectedResultsRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :table-fields="tableFields"
-            @update-expected-result="handleUpdateExpectedResult" />
-        </bk-form-item>
         <bk-form-item
           label=""
           label-width="160"
@@ -140,86 +57,153 @@
         </bk-form-item>
       </div>
     </auth-collapse-panel>
-    <auth-collapse-panel
-      is-active
-      :label="t('调度配置')"
-      style="margin-bottom: 12px">
-      <div class="dispatch-wrap">
-        <bk-form-item
-          :label="t('调度方式')"
-          property="configs.data_source.source_type"
-          style="margin-bottom: 12px">
-          <bk-radio-group
-            v-model="formData.configs.data_source.source_type"
-            class="source-type-radio-group"
-            :disabled="isEditMode"
-            @change="handleSourceTypeChange">
-            <bk-radio
-              v-bk-tooltips="{
-                content: getSourceTypeStatus('batch_join_source').tips,
-                placement: 'top-start',
-                disabled: !getSourceTypeStatus('batch_join_source').disabled
-              }"
-              :disabled="getSourceTypeStatus('batch_join_source').disabled"
-              label="batch_join_source" />
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start',
-              }"
-              :style="{
-                color: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
-                  ? '#c4c6cc' : '#979ba5'}`,
-                marginLeft: '6px',
-                lineHeight: '12px',
-              }">
-              {{ t('固定周期调度') }}
-            </span>
-            <bk-radio
-              v-bk-tooltips="{
-                content: getSourceTypeStatus('stream_source').tips,
-                placement: 'top-start',
-                disabled: !getSourceTypeStatus('stream_source').disabled
-              }"
-              :disabled="getSourceTypeStatus('stream_source').disabled"
-              label="stream_source" />
-            <span
-              v-bk-tooltips="{
-                content: t('策略实时运行'),
-                placement: 'top-start',
-              }"
-              :style="{
-                color: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
-                  ? '#c4c6cc' : '#979ba5'}`,
-                marginLeft: '6px',
-                lineHeight: '12px',
-              }">
-              {{ t('实时调度') }}
-            </span>
-          </bk-radio-group>
-        </bk-form-item>
-        <template
-          v-if="
-            formData.configs.data_source.source_type === 'batch_join_source'
-          ">
+    <div
+      v-if="stepMode === 'basic'"
+      class="customize-rule customize-rule-basic">
+      <bk-form-item
+        class="is-required"
+        property="configs.config_type">
+        <template #label>
           <span
-            v-bk-tooltips="t('策略运行的周期')"
-            class="label-is-required circle">
-            {{ t('调度周期') }}
+            v-bk-tooltips="{
+              content: t(
+                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start'
+            }"
+            class="form-label-tip">
+            {{ t('数据源') }}
           </span>
-          <div class="flex-center">
+        </template>
+        <bk-loading :loading="typeTableLoading">
+          <div class="select-group">
+            <data-source-picker
+              v-model="tableId"
+              :decode-type-biz-id="decodeTypeBizId"
+              :list="allConfigTypeTable"
+              :load-children="handlePickerLoadChildren"
+              :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
+              :system-ids="formData.configs.data_source.system_ids"
+              @change="handleChangeTable"
+              @event-log-commit="handleEventLogCommit" />
+          </div>
+        </bk-loading>
+        <link-data-detail-component
+          v-if="formData.configs.data_source.link_table
+            && formData.configs.data_source.link_table.uid
+          "
+          :join-type-list="joinTypeList"
+          :link-data-detail="linkDataDetail"
+          @refresh-link-data="handleRefreshLinkData" />
+        <other-table-detail-component
+          v-if="formData.configs.data_source.rt_id?.length"
+          :rt-id="formData.configs.data_source.rt_id"
+          @show-structure-preview="handleShowStructureView" />
+        <structure-preview-component
+          v-model:show-structure="showStructure"
+          :current-view-field="currentViewField"
+          :rt-id="currentViewRtId" />
+      </bk-form-item>
+      <bk-form-item
+        property="configs.select">
+        <template #label>
+          <span
+            v-bk-tooltips="{
+              content: t(
+                '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start'
+            }"
+            class="form-label-tip">
+            {{ t('预测结果') }}
+          </span>
+        </template>
+        <expected-results
+          ref="expectedResultsRef"
+          :aggregate-list="aggregateList"
+          :config-type="formData.configs.config_type"
+          :table-fields="tableFields"
+          @update-expected-result="handleUpdateExpectedResult" />
+      </bk-form-item>
+    </div>
+    <div
+      v-if="stepMode === 'basic'"
+      class="dispatch-wrap dispatch-wrap-basic">
+      <bk-form-item
+        :label="t('调度方式')"
+        property="configs.data_source.source_type">
+        <bk-radio-group
+          v-model="formData.configs.data_source.source_type"
+          class="source-type-radio-group"
+          :disabled="isEditMode"
+          @change="handleSourceTypeChange">
+          <bk-radio
+            v-bk-tooltips="{
+              content: getSourceTypeStatus('batch_join_source').tips,
+              placement: 'top-start',
+              disabled: !getSourceTypeStatus('batch_join_source').disabled
+            }"
+            :disabled="getSourceTypeStatus('batch_join_source').disabled"
+            label="batch_join_source" />
+          <span
+            v-bk-tooltips="{
+              content: t(
+                '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start',
+            }"
+            :style="{
+              color: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
+              cursor: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
+              borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                ? '#c4c6cc' : '#979ba5'}`,
+              marginLeft: '6px',
+              lineHeight: '12px',
+            }">
+            {{ t('固定周期调度') }}
+          </span>
+          <bk-radio
+            v-bk-tooltips="{
+              content: getSourceTypeStatus('stream_source').tips,
+              placement: 'top-start',
+              disabled: !getSourceTypeStatus('stream_source').disabled
+            }"
+            :disabled="getSourceTypeStatus('stream_source').disabled"
+            label="stream_source" />
+          <span
+            v-bk-tooltips="{
+              content: t('策略实时运行'),
+              placement: 'top-start',
+            }"
+            :style="{
+              color: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
+              cursor: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
+              borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                ? '#c4c6cc' : '#979ba5'}`,
+              marginLeft: '6px',
+              lineHeight: '12px',
+            }">
+            {{ t('实时调度') }}
+          </span>
+        </bk-radio-group>
+      </bk-form-item>
+      <template
+        v-if="
+          formData.configs.data_source.source_type === 'batch_join_source'
+        ">
+        <bk-form-item
+          class="is-required"
+          :label="t('调度周期')"
+          style="margin-bottom: 12px">
+          <div class="schedule-period-row">
             <bk-form-item
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.count_freq"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-input
                 v-model="formData.configs.schedule_config.count_freq"
                 class="schedule-input"
@@ -232,7 +216,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.schedule_period"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-select
                 v-model="formData.configs.schedule_config.schedule_period"
                 class="schedule-select"
@@ -246,9 +230,9 @@
               </bk-select>
             </bk-form-item>
           </div>
-        </template>
-      </div>
-    </auth-collapse-panel>
+        </bk-form-item>
+      </template>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -345,9 +329,14 @@
     typeTableLoading: boolean;
   }
   interface Props {
-    editData: any
+    editData: any,
+    stepMode?: 'basic' | 'rules',
+    parentConfigs?: Record<string, any>,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+    parentConfigs: () => ({}),
+  });
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -361,6 +350,7 @@
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
   let isInit = false;
+  let isInitFromParent = false;
   // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
   let tableIdEchoSeq = 0;
 
@@ -1162,7 +1152,9 @@
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
-    expectedResultsRef.value.setSelect(editData.configs.select);
+    if (expectedResultsRef.value?.setSelect) {
+      expectedResultsRef.value.setSelect(editData.configs.select);
+    }
     if (isEditMode) {
       originalEditWhere.value = _.cloneDeep(editData.configs.where);
       originalEditHaving.value = editData.configs.having
@@ -1170,15 +1162,17 @@
         : undefined;
       isWhereModified.value = false;
     }
-    const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
-    const having = editData.configs.having
-      ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
-      : undefined;
-    isWhereSettingUp.value = true;
-    rulesComponentRef.value.setWhere(where, having);
-    nextTick(() => {
-      isWhereSettingUp.value = false;
-    });
+    if (rulesComponentRef.value) {
+      const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
+      const having = editData.configs.having
+        ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
+        : undefined;
+      isWhereSettingUp.value = true;
+      rulesComponentRef.value.setWhere(where, having);
+      nextTick(() => {
+        isWhereSettingUp.value = false;
+      });
+    }
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
@@ -1220,6 +1214,21 @@
     }
   });
 
+  watch(
+    [() => props.parentConfigs, () => allConfigTypeTable.value.length],
+    ([configs, tableLen]) => {
+      if (props.stepMode === 'rules'
+        && configs?.config_type
+        && tableLen > 0
+        && !isInit
+        && !isInitFromParent) {
+        setFormData({ configs });
+        isInitFromParent = true;
+      }
+    },
+    { immediate: true, deep: true },
+  );
+
   defineExpose<Expose>({
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
@@ -1239,7 +1248,8 @@
         : '') as string;
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
-      if (!options?.forValidate) {
+      // 基础信息步骤不做 where/having 转换
+      if (props.stepMode === 'rules' && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
           if (originalEditHaving.value) {
@@ -1307,7 +1317,7 @@
             transferFilter(params.configs.having);
           }
         }
-      } else if (params.configs.where) {
+      } else if (props.stepMode === 'rules' && params.configs.where) {
         params.configs.where = normalizeWhereForDisplay(params.configs.where) as Where;
         if (params.configs.having) {
           params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
@@ -1343,11 +1353,47 @@
     padding-right: 0;
   }
 
+  &.customize-basic-mode {
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+
+    :deep(.bk-form-item) {
+      overflow: visible;
+    }
+
+    .select-group,
+    :deep(.data-source-picker) {
+      width: 100%;
+      overflow: visible;
+    }
+
+    :deep(.data-source-picker .dsp-trigger),
+    :deep(.other-table-detail),
+    :deep(.link-data-detail),
+    :deep(.panel-edit) {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
   .customize-rule {
     padding: 16px 32px 24px;
 
+    &.customize-rule-basic {
+      padding: 0;
+      overflow: visible;
+    }
+
+    .form-label-tip {
+      color: #63656e;
+      cursor: pointer;
+      border-bottom: 1px dashed #979ba5;
+    }
+
     .select-group {
       width: 100%;
+      overflow: visible;
 
       :deep(.bk-form-item) {
         margin-bottom: 0;
@@ -1362,6 +1408,10 @@
   .dispatch-wrap {
     padding: 16px 24px;
 
+    &.dispatch-wrap-basic {
+      padding: 0;
+    }
+
     :deep(.source-type-radio-group) {
       .bk-radio-label {
         display: none;
@@ -1372,6 +1422,40 @@
       display: flex;
       align-items: center;
       justify-content: left;
+    }
+
+    .schedule-period-row {
+      display: inline-flex;
+      width: auto;
+      align-items: center;
+      gap: 0;
+
+      :deep(.bk-form-item) {
+        width: auto;
+        margin-bottom: 0;
+        flex: none;
+      }
+
+      :deep(.bk-form-content) {
+        width: auto;
+      }
+
+      .schedule-input {
+        width: 120px;
+
+        :deep(.bk-input) {
+          border-right: 0;
+          border-radius: 2px 0 0 2px;
+        }
+      }
+
+      .schedule-select {
+        width: 68px;
+
+        :deep(.bk-input) {
+          border-radius: 0 2px 2px 0;
+        }
+      }
     }
 
     .circle {

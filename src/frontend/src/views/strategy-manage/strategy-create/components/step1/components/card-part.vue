@@ -20,13 +20,17 @@
       class="card-part-title"
       @click="handleChangeCollapse">
       <slot name="title">
-        <span>
-          {{ title }}
+        <span class="card-part-title-default">
+          <audit-icon
+            v-if="showIcon"
+            class="card-part-collapse-icon"
+            :class="{ 'is-collapsed': isCollapse }"
+            type="angle-line-down" />
+          <span class="card-part-title-text">
+            {{ title }}
+          </span>
         </span>
       </slot>
-      <audit-icon
-        v-if="showIcon"
-        :type="isCollapse ? 'angle-line-up' : 'angle-line-down'" />
     </div>
 
     <div
@@ -62,7 +66,6 @@
 
 <style scoped lang="postcss">
 .strategy-create-card-part {
-  /* width: 82%; */
   margin-bottom: 16px;
   background: #fff;
   border-radius: 2px;
@@ -72,22 +75,38 @@
     display: flex;
     height: 53px;
     padding: 0 16px;
-
-    /* font-family: PingFangSC-SNaNpxibold; */
     font-size: 14px;
     font-weight: 600;
     color: #313238;
+    cursor: pointer;
     align-items: center;
-    justify-content: space-between;
 
-    >.audit-icon {
-      cursor: pointer;
+    .card-part-title-default {
+      display: flex;
+      align-items: center;
+    }
+
+    .card-part-collapse-icon {
+      display: inline-block;
+      margin-right: 8px;
+      font-size: 14px;
+      color: #63656e;
+      transition: transform .2s ease;
+
+      &.is-collapsed {
+        transform: rotate(-90deg);
+      }
+    }
+
+    .card-part-title-text {
+      display: inline-flex;
+      align-items: center;
     }
   }
 
   >.card-part-content {
-    padding: 10px 16px 0;
-    overflow: hidden;
+    padding: 10px 16px 16px;
+    overflow: visible;
     border-top: 1px solid #f0f1f5;
   }
 }

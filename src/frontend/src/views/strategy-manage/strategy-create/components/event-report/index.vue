@@ -387,7 +387,7 @@
       reportInfo.value.config = buildReportConfig();
     }
 
-    emits('previousStep', 2, {
+    emits('previousStep', 3, {
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,
@@ -406,7 +406,7 @@
       reportInfo.value.config = buildReportConfig();
     }
 
-    emits('nextStep', 4, {
+    emits('nextStep', 5, {
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,

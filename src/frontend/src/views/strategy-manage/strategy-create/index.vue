@@ -41,6 +41,7 @@
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
       @save-current-step="handleSaveCurrentStep"
+      @save-draft="handleSaveDraft"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
   </keep-alive>
@@ -98,7 +99,8 @@
 
   import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
-  import Step1 from './components/step1/index.vue';
+  import StepBasicInfo from './components/step-basic-info/index.vue';
+  import StepRiskRules from './components/step-risk-rules/index.vue';
   import Step2 from './components/step2/index.vue';
   import Step3 from './components/step3/index.vue';
 
@@ -140,28 +142,30 @@
   const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
 
   const comMap = {
-    1: Step1,
-    2: Step2,
-    3: eventReport,
-    4: Step3,
+    1: StepBasicInfo,
+    2: StepRiskRules,
+    3: Step2,
+    4: eventReport,
+    5: Step3,
   };
   const steps = [
-    { title: t('风险发现') },
+    { title: t('基础信息') },
+    { title: t('风险发现规则') },
     { title: t('单据展示') },
     { title: t('事件调查报告') },
-    { title: t('其他配置') },
+    { title: t('风险分派规则') },
   ];
-  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 => {
+  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
     const n = Number(step);
-    if ([1, 2, 3, 4].includes(n)) {
-      return n as 1 | 2 | 3 | 4;
+    if ([1, 2, 3, 4, 5].includes(n)) {
+      return n as 1 | 2 | 3 | 4 | 5;
     }
     return 1;
   };
 
   const initialStep = normalizeStep(route.query.step || 1);
-  const targetStep = ref<1 | 2 | 3 | 4>(initialStep);
-  const currentStep = ref<1 | 2 | 3 | 4>(1);
+  const targetStep = ref<1 | 2 | 3 | 4 | 5>(initialStep);
+  const currentStep = ref<1 | 2 | 3 | 4 | 5>(1);
   const comRef = ref();
 
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
@@ -196,7 +200,7 @@
     control_id: '',
     configs: {},
     status: '',
-    risk_level: '',
+    risk_level: 'MIDDLE',
     risk_hazard: '',
     risk_guidance: '',
     risk_title: '',
@@ -323,7 +327,7 @@
   // 是否在保存成功后停留在当前页，仅刷新本页数据（不返回列表）
   const stayOnPageAfterSave = ref(false);
   // 从「下一步」弹窗触发保存时，保存成功后需要前往的目标步骤
-  const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | null>(null);
+  const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | 5 | null>(null);
 
   // 保存接口
   const {
@@ -440,12 +444,20 @@
   const doSave = async () => {
     await ensureTagMapLoaded();
     const params = normalizeSubmitParams(formData.value);
+    if (isCloneMode) {
+      delete params.strategy_id;
+    }
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
     saveStrategy({
       ...params,
       scene_id: getSceneSystemParams().scope_id,
     });
+  };
+
+  const handleSaveDraft = (params: Record<string, any>) => {
+    Object.assign(formData.value, params);
+    doSave();
   };
 
   // 提交
@@ -730,7 +742,7 @@
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 650px;
+  width: 780px;
   margin: 0 auto;
   transform: translateX(-86px);
 
