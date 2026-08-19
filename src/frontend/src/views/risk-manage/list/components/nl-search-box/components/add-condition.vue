@@ -88,21 +88,36 @@
             </div>
           </template>
           <template v-else>
-            <div
-              v-for="item in filteredEventFields"
-              :key="item.id"
-              class="field-item"
-              @click="handleSelectEventField(item)">
-              <span
-                v-bk-tooltips="{
-                  content: `${item.display_name}[${item.field_name}]`,
-                  disabled: !overflowFlags[`event_${item.id}`],
-                }"
-                class="field-item-label"
-                @mouseenter="(e: MouseEvent) => checkOverflow(`event_${item.id}`, e)">
-                {{ `${item.display_name}[${item.field_name}]` }}
-              </span>
-            </div>
+            <template
+              v-for="group in eventFieldGroups"
+              :key="group.label">
+              <div
+                class="field-group-header"
+                @click="toggleGroup(group.label)">
+                <audit-icon
+                  class="field-group-arrow"
+                  :class="{ 'is-collapsed': collapsedGroups[group.label] }"
+                  type="angle-fill-down" />
+                <span class="field-group-label">{{ group.label }} ({{ group.items.length }})</span>
+              </div>
+              <template v-if="!collapsedGroups[group.label]">
+                <div
+                  v-for="item in group.items"
+                  :key="item.id"
+                  class="field-item field-item-indent"
+                  @click="handleSelectEventField(item)">
+                  <span
+                    v-bk-tooltips="{
+                      content: `${item.display_name}[${item.field_name}]`,
+                      disabled: !overflowFlags[`event_${item.id}`],
+                    }"
+                    class="field-item-label"
+                    @mouseenter="(e: MouseEvent) => checkOverflow(`event_${item.id}`, e)">
+                    {{ `${item.display_name}[${item.field_name}]` }}
+                  </span>
+                </div>
+              </template>
+            </template>
           </template>
 
           <!-- 空状态 -->
@@ -246,6 +261,26 @@
       return compareFieldName(first.field_name, second.field_name);
     });
   });
+
+  // 事件字段按分组拆分：有 type === 'basic_event_field' 的归"基本信息"，其余（无 type 或其他 type）归"事件详情"
+  const eventFieldGroups = computed(() => {
+    const basicFields = filteredEventFields.value.filter(item => item.type === 'basic_event_field');
+    const detailFields = filteredEventFields.value.filter(item => item.type !== 'basic_event_field');
+    const groups: Array<{ label: string; items: typeof basicFields }> = [];
+    if (basicFields.length > 0) {
+      groups.push({ label: t('基本信息'), items: basicFields });
+    }
+    if (detailFields.length > 0) {
+      groups.push({ label: t('事件详情'), items: detailFields });
+    }
+    return groups;
+  });
+
+  const collapsedGroups = ref<Record<string, boolean>>({});
+
+  const toggleGroup = (label: string) => {
+    collapsedGroups.value[label] = !collapsedGroups.value[label];
+  };
 
   // 列表是否为空
   const isListEmpty = computed(() => {
@@ -453,6 +488,36 @@
         background: transparent;
       }
 
+      .field-group-header {
+        display: flex;
+        height: 32px;
+        padding: 0 12px;
+        cursor: pointer;
+        background: transparent;
+        align-items: center;
+        user-select: none;
+
+        &:hover {
+          background: #f5f7fa;
+        }
+
+        .field-group-arrow {
+          margin-right: 6px;
+          font-size: 12px;
+          color: #979ba5;
+          transition: transform .2s;
+
+          &.is-collapsed {
+            transform: rotate(-90deg);
+          }
+        }
+
+        .field-group-label {
+          font-size: 12px;
+          color: #979ba5;
+        }
+      }
+
       .field-item {
         display: flex;
         min-height: 36px;
@@ -470,6 +535,10 @@
 
         &.is-selected {
           color: #3a84ff;
+        }
+
+        &.field-item-indent {
+          padding-left: 32px;
         }
 
         .field-item-label {
