@@ -70,10 +70,10 @@
   };
 
   const panels = [
-    { name: 'riskDetection', label: t('风险发现') },
+    { name: 'riskDetection', label: t('基础信息') },
     { name: 'riskDisplay', label: t('单据展示') },
     { name: 'eventReport', label: t('事件调查报告') },
-    { name: 'riskOther', label: t('其他配置') },
+    { name: 'riskOther', label: t('风险分派规则') },
   ];
   const active = ref<keyof typeof comMap>('riskDetection');
 

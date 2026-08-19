@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-const fieldTypeIconMap = import.meta.glob('@images/field-type/*.png', {
+const fieldTypeIconMap = import.meta.glob('@images/field-type/*.{svg,png}', {
   eager: true,
   import: 'default',
 }) as Record<string, string>;
@@ -25,7 +25,19 @@ const getIconUrlBySuffix = (suffix: string) => {
   return matchedKey ? fieldTypeIconMap[matchedKey] : '';
 };
 
-export default function getFieldTypeIcon(fieldType: string) {
-  return getIconUrlBySuffix(`/field-type/${fieldType}.png`)
+interface GetFieldTypeIconOptions {
+  highlight?: boolean;
+}
+
+export default function getFieldTypeIcon(fieldType: string, options?: GetFieldTypeIconOptions): string {
+  if (options?.highlight) {
+    return getIconUrlBySuffix(`/field-type/y-${fieldType}.svg`)
+      || getIconUrlBySuffix(`/field-type/y-${fieldType}.png`)
+      || getFieldTypeIcon(fieldType);
+  }
+
+  return getIconUrlBySuffix(`/field-type/${fieldType}.svg`)
+    || getIconUrlBySuffix(`/field-type/${fieldType}.png`)
+    || getIconUrlBySuffix('/field-type/any.svg')
     || getIconUrlBySuffix('/field-type/any.png');
 }

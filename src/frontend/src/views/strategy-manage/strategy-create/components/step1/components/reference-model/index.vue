@@ -17,20 +17,20 @@
 <template>
   <div class="strategy-reference-model">
     <bk-form-item
+      v-if="stepMode === 'basic'"
       class="is-required"
       :label="t('模型方案')"
-      label-width="160"
       property="control_id">
       <div
-        class="flex-center"
-        style="position: relative; width: 100%;">
+        class="flex-center plan-select-row"
+        style="position: relative;">
         <plan-select
           ref="planSelectRef"
           :control-list="controlList"
           :cur-version="(formData.control_version as number)"
           :default-value="formData.control_id"
           :disabled="isEditMode || isCloneMode"
-          style="width: 46%;"
+          style="width: 100%;"
           @change="onControlIdChange">
           <span
             v-if="controlTypeId === 'BKM'"
@@ -54,9 +54,11 @@
     </bk-form-item>
     <component
       :is="comMap[controlTypeId]"
+      v-if="shouldRenderSubComponent"
       ref="comRef"
       :control-detail="controlDetail"
       :data="formData"
+      :step-mode="stepMode"
       @update-aiops-config="handleUpdateAiopsConfig"
       @update-config-type="handleUpdateConfigType"
       @update-configs="handleUpdateConfigs"
@@ -98,17 +100,23 @@
   }
   interface Expose {
     getValue: () => void,
-    getFields: () => IFormData
+    getFields: () => IFormData,
+    controlTypeId: typeof controlTypeId,
   }
   interface Emits {
     (e: 'updateControlDetail', value: ControlModel | null): void;
     (e: 'updateFormData', value: IFormData): void;
   }
   interface Props {
-    editData: StrategyModel
+    editData: StrategyModel,
+    stepMode?: 'basic' | 'rules',
+    parentFormData?: Record<string, any>,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+    parentFormData: () => ({}),
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const route = useRoute();
@@ -136,6 +144,13 @@
 
   const isShowUpgradeTip = computed(() => isEditMode
     && maxVersionMap.value[formData.value.control_id] > (formData.value.control_version as number));
+  const shouldRenderSubComponent = computed(() => {
+    if (!controlTypeId.value) return false;
+    if (props.stepMode === 'basic') {
+      return controlTypeId.value === 'AIOps';
+    }
+    return true;
+  });
   const aggInterval = computed(() => {
     switch (timeType.value) {
     case 'minute':
@@ -312,7 +327,34 @@
     deep: true,
   });
 
+  watch(
+    () => props.parentFormData,
+    async (data) => {
+      if (props.stepMode !== 'rules' || !data?.control_id || !controlList.value.length) {
+        return;
+      }
+      const controlItem = controlMap.value[data.control_id];
+      if (!controlItem) return;
+      formData.value.control_id = data.control_id;
+      formData.value.control_version = data.control_version;
+      formData.value.configs = _.cloneDeep(data.configs ?? {});
+      controlTypeId.value = controlItem.control_type_id;
+      await fetchControlDetail({
+        control_id: data.control_id,
+        control_version: data.control_version,
+      });
+      nextTick(() => {
+        comRef.value?.setConfigs?.(formData.value.configs);
+        if (controlTypeId.value === 'BKM') {
+          comRef.value?.handleValueDicts?.(formData.value.configs.agg_condition);
+        }
+      });
+    },
+    { immediate: true, deep: true },
+  );
+
   defineExpose<Expose>({
+    controlTypeId,
     getValue() {
       const tastQueue = [planSelectRef.value.getValue()];
       if (controlTypeId.value && controlTypeId.value !== 'BKM') {
@@ -324,27 +366,30 @@
     getFields() {
       const params = { ...formData.value };
       params.configs = Object.assign({}, formData.value.configs);
-      // 内置模型
       if (controlTypeId.value !== 'BKM') {
-        const fields = comRef.value.getFields();
-        const tableIdList = params.configs.data_source.result_table_id;
-        if (params.configs.config_type !== 'EventLog') {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-            result_table_id: _.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList,
-          };
+        if (props.stepMode === 'basic') {
+          const fields = comRef.value.getFields();
+          const tableIdList = params.configs.data_source.result_table_id;
+          if (params.configs.config_type !== 'EventLog') {
+            params.configs.data_source = {
+              ...params.configs.data_source,
+              fields,
+              result_table_id: _.isArray(tableIdList) ? _.last(tableIdList) : tableIdList,
+            };
+          } else {
+            params.configs.data_source = {
+              ...params.configs.data_source,
+              fields,
+            };
+          }
         } else {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-          };
+          params.configs.variable_config = comRef.value.getParamenterFields();
         }
-        // 添加方案配置参数
-        params.configs.variable_config = comRef.value.getParamenterFields();
       } else {
-        params.configs.algorithms = [formData.value.configs.algorithms];
-        params.configs.agg_interval = aggInterval.value;
+        if (props.stepMode === 'rules') {
+          params.configs.algorithms = [formData.value.configs.algorithms];
+          params.configs.agg_interval = aggInterval.value;
+        }
       }
       return params;
     },
@@ -352,6 +397,14 @@
 </script>
 <style lang="postcss" scoped>
 .strategy-reference-model {
+  width: 100%;
+  max-width: none;
+
+  .plan-select-row {
+    width: 100%;
+    max-width: none;
+  }
+
   .upgrade-tip {
     margin-left: 13px;
     font-size: 12px;

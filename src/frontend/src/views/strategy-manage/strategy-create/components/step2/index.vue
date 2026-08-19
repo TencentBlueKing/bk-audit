@@ -251,12 +251,12 @@
       eventRef.value.getData(),
       strategyTableRef.value.getData(),
     );
-    emits('nextStep', 2, params);
+    emits('nextStep', 3, params);
     emits('showPreview');
   };
 
   const handlePrevious = () => {
-    emits('previousStep', 1,  buildStepParams());
+    emits('previousStep', 2,  buildStepParams());
   };
 
   const handleCancel = () => {
@@ -288,7 +288,7 @@
 
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      emits('nextStep', 3, buildStepParams());
+      emits('nextStep', 4, buildStepParams());
     });
   };
 

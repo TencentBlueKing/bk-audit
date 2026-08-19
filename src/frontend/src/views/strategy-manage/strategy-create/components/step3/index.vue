@@ -25,7 +25,7 @@
         form-type="vertical"
         :model="formData"
         :rules="rules">
-        <card-part-vue :title="t('其他配置')">
+        <card-part-vue :title="t('风险分派规则')">
           <template #content>
             <bk-form-item
               class="is-required"
@@ -275,7 +275,7 @@
   });
 
   const handlePrevious = () => {
-    emits('previousStep', 3, formData.value);
+    emits('previousStep', 4, formData.value);
   };
 
   const handleCancel = () => {
@@ -287,7 +287,7 @@
   const submit = () => {
     formRef.value.validate().then(() => {
       // 先更新formData, 最后一步step不变
-      emits('nextStep', 4, formData.value);
+      emits('nextStep', 5, formData.value);
       emits('submitData');
     });
   };

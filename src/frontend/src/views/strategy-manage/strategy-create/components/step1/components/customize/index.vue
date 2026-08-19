@@ -15,16 +15,55 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-customize">
+  <div
+    class="strategy-customize"
+    :class="{ 'customize-basic-mode': stepMode === 'basic' }">
     <auth-collapse-panel
+      v-if="stepMode === 'rules'"
       is-active
-      :label="t('规则配置')"
+      :label="t('风险发现规则')"
       style="margin-bottom: 14px">
       <div class="customize-rule">
         <bk-form-item
           label=""
-          label-width="0"
+          label-width="160"
           required>
+          <template #label>
+            <span
+              v-bk-tooltips="{
+                content: t(
+                  '配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'
+                ),
+                extCls: 'strategy-config-type-tooltips',
+                placement: 'top-start'
+              }"
+              style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
+              {{ t('风险发现规则') }}
+            </span>
+          </template>
+          <rules-component
+            ref="rulesComponentRef"
+            :aggregate-list="aggregateList"
+            :config-type="formData.configs.config_type"
+            :configs-data="formData.configs"
+            :expected-result="formData.configs.select"
+            :table-fields="tableFields"
+            @show-structure-preview="handleShowStructureView"
+            @update-where="handleUpdateWhere" />
+        </bk-form-item>
+      </div>
+    </auth-collapse-panel>
+    <div
+      v-if="stepMode === 'basic'"
+      class="customize-rule customize-rule-basic">
+      <bk-form-item
+        class="is-required"
+        property="configs.config_type">
+        <template #label>
           <span
             v-bk-tooltips="{
               content: t(
@@ -33,12 +72,7 @@
               extCls: 'strategy-config-type-tooltips',
               placement: 'top-start'
             }"
-            class="label-is-required"
-            style="
-              color: #63656e;
-              cursor: pointer;
-              border-bottom: 1px dashed #979ba5;
-            ">
+            class="form-label-tip">
             {{ t('数据源') }}
           </span>
           <bk-loading :loading="typeTableLoading">
@@ -218,7 +252,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.count_freq"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-input
                 v-model="formData.configs.schedule_config.count_freq"
                 class="schedule-input"
@@ -231,7 +265,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.schedule_period"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-select
                 v-model="formData.configs.schedule_config.schedule_period"
                 class="schedule-select"
@@ -245,9 +279,9 @@
               </bk-select>
             </bk-form-item>
           </div>
-        </template>
-      </div>
-    </auth-collapse-panel>
+        </bk-form-item>
+      </template>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -346,9 +380,14 @@
     typeTableLoading: boolean;
   }
   interface Props {
-    editData: any
+    editData: any,
+    stepMode?: 'basic' | 'rules',
+    parentConfigs?: Record<string, any>,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+    parentConfigs: () => ({}),
+  });
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -362,6 +401,7 @@
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
   let isInit = false;
+  let isInitFromParent = false;
   // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
   let tableIdEchoSeq = 0;
 
@@ -1163,7 +1203,9 @@
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
-    expectedResultsRef.value.setSelect(editData.configs.select);
+    if (expectedResultsRef.value?.setSelect) {
+      expectedResultsRef.value.setSelect(editData.configs.select);
+    }
     if (isEditMode) {
       originalEditWhere.value = _.cloneDeep(editData.configs.where);
       originalEditHaving.value = editData.configs.having
@@ -1171,15 +1213,17 @@
         : undefined;
       isWhereModified.value = false;
     }
-    const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
-    const having = editData.configs.having
-      ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
-      : undefined;
-    isWhereSettingUp.value = true;
-    rulesComponentRef.value.setWhere(where, having);
-    nextTick(() => {
-      isWhereSettingUp.value = false;
-    });
+    if (rulesComponentRef.value) {
+      const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
+      const having = editData.configs.having
+        ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
+        : undefined;
+      isWhereSettingUp.value = true;
+      rulesComponentRef.value.setWhere(where, having);
+      nextTick(() => {
+        isWhereSettingUp.value = false;
+      });
+    }
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
@@ -1221,6 +1265,21 @@
     }
   });
 
+  watch(
+    [() => props.parentConfigs, () => allConfigTypeTable.value.length],
+    ([configs, tableLen]) => {
+      if (props.stepMode === 'rules'
+        && configs?.config_type
+        && tableLen > 0
+        && !isInit
+        && !isInitFromParent) {
+        setFormData({ configs });
+        isInitFromParent = true;
+      }
+    },
+    { immediate: true, deep: true },
+  );
+
   defineExpose<Expose>({
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
@@ -1245,7 +1304,8 @@
         : '') as string;
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
-      if (!options?.forValidate) {
+      // 基础信息步骤不做 where/having 转换
+      if (props.stepMode === 'rules' && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
           if (originalEditHaving.value) {
@@ -1313,7 +1373,7 @@
             transferFilter(params.configs.having);
           }
         }
-      } else if (params.configs.where) {
+      } else if (props.stepMode === 'rules' && params.configs.where) {
         params.configs.where = normalizeWhereForDisplay(params.configs.where) as Where;
         if (params.configs.having) {
           params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
@@ -1349,11 +1409,47 @@
     padding-right: 0;
   }
 
+  &.customize-basic-mode {
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+
+    :deep(.bk-form-item) {
+      overflow: visible;
+    }
+
+    .select-group,
+    :deep(.data-source-picker) {
+      width: 100%;
+      overflow: visible;
+    }
+
+    :deep(.data-source-picker .dsp-trigger),
+    :deep(.other-table-detail),
+    :deep(.link-data-detail),
+    :deep(.panel-edit) {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
   .customize-rule {
     padding: 16px 32px 24px;
 
+    &.customize-rule-basic {
+      padding: 0;
+      overflow: visible;
+    }
+
+    .form-label-tip {
+      color: #63656e;
+      cursor: pointer;
+      border-bottom: 1px dashed #979ba5;
+    }
+
     .select-group {
       width: 100%;
+      overflow: visible;
 
       :deep(.bk-form-item) {
         margin-bottom: 0;
@@ -1368,6 +1464,10 @@
   .dispatch-wrap {
     padding: 16px 24px;
 
+    &.dispatch-wrap-basic {
+      padding: 0;
+    }
+
     :deep(.source-type-radio-group) {
       .bk-radio-label {
         display: none;
@@ -1378,6 +1478,40 @@
       display: flex;
       align-items: center;
       justify-content: left;
+    }
+
+    .schedule-period-row {
+      display: inline-flex;
+      width: auto;
+      align-items: center;
+      gap: 0;
+
+      :deep(.bk-form-item) {
+        width: auto;
+        margin-bottom: 0;
+        flex: none;
+      }
+
+      :deep(.bk-form-content) {
+        width: auto;
+      }
+
+      .schedule-input {
+        width: 120px;
+
+        :deep(.bk-input) {
+          border-right: 0;
+          border-radius: 2px 0 0 2px;
+        }
+      }
+
+      .schedule-select {
+        width: 68px;
+
+        :deep(.bk-input) {
+          border-radius: 0 2px 2px 0;
+        }
+      }
     }
 
     .circle {

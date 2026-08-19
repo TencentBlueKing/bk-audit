@@ -33,166 +33,170 @@
         type="angle-line-down" />
     </div>
 
-    <div
-      v-show="panelVisible"
-      class="dsp-panel"
-      :class="{ 'is-empty-panel': isSourceEmpty }">
+    <teleport to="body">
       <div
-        v-if="list.length"
-        class="dsp-tabs">
-        <span
-          v-for="tab in list"
-          :key="tab.value"
-          class="dsp-tab-item"
-          :class="{ 'is-active': activeTab === tab.value }"
-          @click="handleTabChange(tab.value)">
-          {{ tab.label }}
-        </span>
-      </div>
-
-      <div
-        v-if="isSourceEmpty"
-        class="dsp-empty">
-        <img
-          class="dsp-empty-img"
-          src="@images/empty.svg">
-        <div class="dsp-empty-title">
-          {{ t('暂无数据源') }}
-        </div>
-        <div class="dsp-empty-desc">
-          <span>{{ t('请在企微联系') }}</span>
+        v-show="panelVisible"
+        ref="panelRef"
+        class="dsp-panel"
+        :class="{ 'is-empty-panel': isSourceEmpty }"
+        :style="panelStyle">
+        <div
+          v-if="list.length"
+          class="dsp-tabs">
           <span
-            class="dsp-empty-contact"
-            @click.stop="contactHelper">iegsec_helper</span>
-          <span>{{ t('数据源空态联系后缀') }}</span>
+            v-for="tab in list"
+            :key="tab.value"
+            class="dsp-tab-item"
+            :class="{ 'is-active': activeTab === tab.value }"
+            @click="handleTabChange(tab.value)">
+            {{ tab.label }}
+          </span>
         </div>
-      </div>
 
-      <div
-        v-else
-        class="dsp-body"
-        :class="{ 'is-single-column': !hasThirdLevel }">
-        <div class="dsp-column dsp-column-left">
-          <div class="dsp-search">
-            <audit-icon
-              class="dsp-search-icon"
-              type="search1" />
-            <input
-              v-model="leftKeyword"
-              class="dsp-search-input"
-              :placeholder="leftSearchPlaceholder"
-              type="text"
-              @click.stop>
+        <div
+          v-if="isSourceEmpty"
+          class="dsp-empty">
+          <img
+            class="dsp-empty-img"
+            src="@images/empty.svg">
+          <div class="dsp-empty-title">
+            {{ t('暂无数据源') }}
           </div>
-          <div class="dsp-list">
-            <div
-              v-for="item in filteredLeftList"
-              :key="item.value"
-              v-bk-tooltips="getItemTooltip(item, true)"
-              class="dsp-list-item"
-              :class="{
-                'is-active': selectedLeftValue === item.value,
-                'is-disabled': item.disabled,
-              }"
-              @click="handleSelectLeft(item)">
-              <span class="dsp-list-item-label">{{ formatLeftLabel(item) }}</span>
-              <span
-                v-if="!isLeafNode(item)"
-                class="dsp-list-item-meta">
-                <bk-tag
-                  v-if="getChildCount(item) > 0"
-                  class="dsp-list-item-count"
-                  radius="8px">
-                  {{ getChildCount(item) }}
-                </bk-tag>
-                <audit-icon
-                  class="dsp-list-item-arrow"
-                  type="angle-line-down" />
-              </span>
-            </div>
-            <div
-              v-if="filteredLeftList.length === 0"
-              class="dsp-list-empty">
-              {{ t('暂无数据') }}
-            </div>
+          <div class="dsp-empty-desc">
+            <span>{{ t('请在企微联系') }}</span>
+            <span
+              class="dsp-empty-contact"
+              @click.stop="contactHelper">iegsec_helper</span>
+            <span>{{ t('数据源空态联系后缀') }}</span>
           </div>
         </div>
 
         <div
-          v-if="hasThirdLevel"
-          class="dsp-column dsp-column-right">
-          <div class="dsp-search">
-            <audit-icon
-              class="dsp-search-icon"
-              type="search1" />
-            <input
-              v-model="rightKeyword"
-              class="dsp-search-input"
-              :placeholder="rightSearchPlaceholder"
-              type="text"
-              @click.stop>
-          </div>
-          <bk-loading
-            class="dsp-right-loading"
-            :loading="rightLoading"
-            mode="spin"
-            size="small">
+          v-else
+          class="dsp-body"
+          :class="{ 'is-single-column': !hasThirdLevel }">
+          <div class="dsp-column dsp-column-left">
+            <div class="dsp-search">
+              <audit-icon
+                class="dsp-search-icon"
+                type="search1" />
+              <input
+                v-model="leftKeyword"
+                class="dsp-search-input"
+                :placeholder="leftSearchPlaceholder"
+                type="text"
+                @click.stop>
+            </div>
             <div class="dsp-list">
-              <template v-if="showRightPane">
-                <template v-if="isEventLogTab">
+              <div
+                v-for="item in filteredLeftList"
+                :key="item.value"
+                v-bk-tooltips="getItemTooltip(item, true)"
+                class="dsp-list-item"
+                :class="{
+                  'is-active': selectedLeftValue === item.value,
+                  'is-disabled': item.disabled,
+                }"
+                @click="handleSelectLeft(item)">
+                <span class="dsp-list-item-label">{{ formatLeftLabel(item) }}</span>
+                <span
+                  v-if="!isLeafNode(item)"
+                  class="dsp-list-item-meta">
+                  <bk-tag
+                    v-if="getChildCount(item) > 0"
+                    class="dsp-list-item-count"
+                    radius="8px">
+                    {{ getChildCount(item) }}
+                  </bk-tag>
+                  <audit-icon
+                    class="dsp-list-item-arrow"
+                    type="angle-line-down" />
+                </span>
+              </div>
+              <div
+                v-if="filteredLeftList.length === 0"
+                class="dsp-list-empty">
+                {{ t('暂无数据') }}
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="hasThirdLevel"
+            class="dsp-column dsp-column-right">
+            <div class="dsp-search">
+              <audit-icon
+                class="dsp-search-icon"
+                type="search1" />
+              <input
+                v-model="rightKeyword"
+                class="dsp-search-input"
+                :placeholder="rightSearchPlaceholder"
+                type="text"
+                @click.stop>
+            </div>
+            <bk-loading
+              class="dsp-right-loading"
+              :loading="rightLoading"
+              mode="spin"
+              size="small">
+              <div class="dsp-list">
+                <template v-if="showRightPane">
+                  <template v-if="isEventLogTab">
+                    <div
+                      class="dsp-list-item"
+                      :class="{ 'is-active': isAllSystemsSelected }"
+                      @click="handleToggleAllSystems">
+                      <span class="dsp-list-item-label">{{ t('全部系统') }}</span>
+                      <audit-icon
+                        v-if="isAllSystemsSelected"
+                        class="dsp-list-item-check"
+                        type="check-line" />
+                    </div>
+                    <div
+                      v-for="item in filteredRightList"
+                      :key="item.value"
+                      class="dsp-list-item"
+                      :class="{ 'is-active': isEventLogSystemSelected(item) }"
+                      @click="handleToggleEventLogSystem(item)">
+                      <span class="dsp-list-item-label">{{ formatEventLogSystemLabel(item) }}</span>
+                      <audit-icon
+                        v-if="isEventLogSystemSelected(item)"
+                        class="dsp-list-item-check"
+                        type="check-line" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div
+                      v-for="item in filteredRightList"
+                      :key="item.value"
+                      v-bk-tooltips="getItemTooltip(item, false)"
+                      class="dsp-list-item"
+                      :class="{
+                        'is-active': isRightSelected(item),
+                        'is-disabled': item.disabled,
+                      }"
+                      @click="handleSelectRight(item)">
+                      <span class="dsp-list-item-label">{{ item.label }}</span>
+                    </div>
+                  </template>
                   <div
-                    class="dsp-list-item"
-                    :class="{ 'is-active': isAllSystemsSelected }"
-                    @click="handleToggleAllSystems">
-                    <span class="dsp-list-item-label">{{ t('全部系统') }}</span>
-                    <audit-icon
-                      v-if="isAllSystemsSelected"
-                      class="dsp-list-item-check"
-                      type="check-line" />
-                  </div>
-                  <div
-                    v-for="item in filteredRightList"
-                    :key="item.value"
-                    class="dsp-list-item"
-                    :class="{ 'is-active': isEventLogSystemSelected(item) }"
-                    @click="handleToggleEventLogSystem(item)">
-                    <span class="dsp-list-item-label">{{ formatEventLogSystemLabel(item) }}</span>
-                    <audit-icon
-                      v-if="isEventLogSystemSelected(item)"
-                      class="dsp-list-item-check"
-                      type="check-line" />
-                  </div>
-                </template>
-                <template v-else>
-                  <div
-                    v-for="item in filteredRightList"
-                    :key="item.value"
-                    v-bk-tooltips="getItemTooltip(item, false)"
-                    class="dsp-list-item"
-                    :class="{
-                      'is-active': isRightSelected(item),
-                      'is-disabled': item.disabled,
-                    }"
-                    @click="handleSelectRight(item)">
-                    <span class="dsp-list-item-label">{{ item.label }}</span>
+                    v-if="filteredRightList.length === 0 && !rightLoading"
+                    class="dsp-list-empty">
+                    {{ t('暂无数据') }}
                   </div>
                 </template>
                 <div
-                  v-if="filteredRightList.length === 0 && !rightLoading"
+                  v-else
                   class="dsp-list-empty">
-                  {{ t('暂无数据') }}
+                  {{ rightEmptyHint }}
                 </div>
-              </template>
-              <div
-                v-else
-                class="dsp-list-empty">
-                {{ rightEmptyHint }}
               </div>
-            </div>
-          </bk-loading>
+            </bk-loading>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -276,7 +280,9 @@
   };
 
   const rootRef = ref<HTMLElement>();
+  const panelRef = ref<HTMLElement>();
   const panelVisible = ref(false);
+  const panelStyle = ref<Record<string, string>>({});
   const activeTab = ref('');
   const selectedLeftValue = ref('');
   const leftKeyword = ref('');
@@ -664,12 +670,36 @@
     setLocalSystemIds(rightList.value.map(item => item.value));
   };
 
+  const PANEL_WIDTH = 640;
+  const EMPTY_PANEL_WIDTH = 480;
+
+  const updatePanelPosition = () => {
+    if (!rootRef.value || !panelVisible.value) return;
+    const rect = rootRef.value.getBoundingClientRect();
+    const panelWidth = Math.min(
+      isSourceEmpty.value ? EMPTY_PANEL_WIDTH : PANEL_WIDTH,
+      window.innerWidth - 48,
+    );
+    const maxLeft = Math.max(24, window.innerWidth - panelWidth - 24);
+    const left = Math.min(rect.left, maxLeft);
+    panelStyle.value = {
+      position: 'fixed',
+      top: `${rect.bottom + 4}px`,
+      left: `${left}px`,
+      width: `${panelWidth}px`,
+      zIndex: '3000',
+    };
+  };
+
   const togglePanel = () => {
     if (panelVisible.value) {
       closePanel();
       return;
     }
     panelVisible.value = true;
+    nextTick(() => {
+      updatePanelPosition();
+    });
   };
 
   const syncFromModelValue = async () => {
@@ -695,7 +725,7 @@
   const handleDocumentClick = (event: MouseEvent) => {
     if (!panelVisible.value) return;
     const target = event.target as Node;
-    if (rootRef.value?.contains(target)) return;
+    if (rootRef.value?.contains(target) || panelRef.value?.contains(target)) return;
     // InfoBox 确认框点击不关闭提交（节点可能在 body 下）
     const targetEl = target as HTMLElement;
     if (targetEl?.closest?.('.bk-modal, .bk-dialog, .bk-info-wrapper, .bk-message')) {
@@ -728,15 +758,26 @@
   watch(panelVisible, async (visible) => {
     if (!visible) return;
     await nextTick();
+    updatePanelPosition();
     await syncFromModelValue();
   });
 
+  const handleWindowChange = () => {
+    updatePanelPosition();
+  };
+
   onMounted(() => {
     document.addEventListener('mousedown', handleDocumentClick, true);
+    window.addEventListener('resize', handleWindowChange);
+    document.querySelector('#auditNavigationContent .scroll-faker-content')
+      ?.addEventListener('scroll', handleWindowChange);
   });
 
   onBeforeUnmount(() => {
     document.removeEventListener('mousedown', handleDocumentClick, true);
+    window.removeEventListener('resize', handleWindowChange);
+    document.querySelector('#auditNavigationContent .scroll-faker-content')
+      ?.removeEventListener('scroll', handleWindowChange);
   });
 </script>
 
@@ -791,11 +832,8 @@
 }
 
 .dsp-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 100;
   width: 640px;
+  max-width: calc(100vw - 48px);
   overflow: hidden;
   background: #fff;
   border: 1px solid #dcdee5;
