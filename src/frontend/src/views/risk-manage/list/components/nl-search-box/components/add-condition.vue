@@ -27,7 +27,7 @@
     <span
       ref="triggerRef"
       class="nl-add-condition-trigger"
-      :class="{ 'is-active': shouldActivate }"
+      :class="{ 'is-active': shouldActivate, 'is-accent': accent }"
       @click.stop="handleTogglePopover"
       @mousedown.stop>
       <audit-icon
@@ -40,19 +40,19 @@
         class="nl-add-condition-panel"
         @click.stop
         @mousedown.stop>
-        <!-- Tab 切换：风险字段 / 事件字段 -->
+        <!-- Tab 切换：风险字段 / 事件字段（可通过 props 改成通用字段 / 拓展字段） -->
         <div class="panel-tabs">
           <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'risk' }"
             @click="activeTab = 'risk'">
-            {{ t('风险字段') }}
+            {{ primaryTabText }}
           </span>
           <span
             class="panel-tab-item"
             :class="{ active: activeTab === 'event' }"
             @click="activeTab = 'event'">
-            {{ t('事件字段') }}
+            {{ secondaryTabText }}
           </span>
         </div>
 
@@ -83,6 +83,23 @@
                 }"
                 class="field-item-label"
                 @mouseenter="(e: MouseEvent) => checkOverflow(`risk_${item.fieldName}`, e)">
+                {{ t(item.config.label) }}
+              </span>
+            </div>
+          </template>
+          <template v-else-if="secondaryUsesConfig">
+            <div
+              v-for="item in filteredSecondaryConfigFields"
+              :key="item.fieldName"
+              class="field-item"
+              @click="handleSelectField(item.fieldName, item.config)">
+              <span
+                v-bk-tooltips="{
+                  content: t(item.config.label),
+                  disabled: !overflowFlags[`secondary_${item.fieldName}`],
+                }"
+                class="field-item-label"
+                @mouseenter="(e: MouseEvent) => checkOverflow(`secondary_${item.fieldName}`, e)">
                 {{ t(item.config.label) }}
               </span>
             </div>
@@ -149,6 +166,12 @@
     selectedFields: string[];       // 已选中的风险字段名列表
     eventFields: Array<Record<string, any>>;   // 可用的事件字段列表
     selectedEventFieldIds: string[]; // 已选中的事件字段 ID 列表
+    primaryTabLabel?: string;
+    secondaryTabLabel?: string;
+    primaryFieldNames?: string[];
+    secondaryFieldNames?: string[];
+    secondarySource?: 'event' | 'config';
+    accent?: boolean;
   }
   interface Emits {
     (e: 'addField', fieldName: string, config: IFieldConfig): void;
@@ -156,7 +179,14 @@
     (e: 'removeEventField', id: string): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    primaryTabLabel: '',
+    secondaryTabLabel: '',
+    primaryFieldNames: undefined,
+    secondaryFieldNames: undefined,
+    secondarySource: 'event',
+    accent: false,
+  });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -199,6 +229,9 @@
     'scene_id',
   ];
   const riskFieldOrderMap = new Map(riskFieldOrder.map((field, index) => [field, index]));
+  const primaryTabText = computed(() => props.primaryTabLabel || t('风险字段'));
+  const secondaryTabText = computed(() => props.secondaryTabLabel || t('事件字段'));
+  const secondaryUsesConfig = computed(() => props.secondarySource === 'config');
 
   // 判断是否有已添加的条件（风险字段或事件字段）
   const hasAddedConditions = computed(() => props.selectedFields.length > 0 || props.selectedEventFieldIds.length > 0);
@@ -207,15 +240,16 @@
   const shouldActivate = computed(() => !hasAddedConditions.value && isShow.value);
 
   // 过滤风险字段（排除已添加的字段，且排除 datetimerange 类型，因为首次发现时间始终存在不可添加）
-  const filteredRiskFields = computed(() => {
+  const filterConfigFields = (
+    allowList: string[] | undefined,
+    sortByAllowList: boolean,
+  ) => {
     const keyword = searchKeyword.value.trim().toLowerCase();
 
     return Object.entries(props.fieldConfig).reduce((acc, [name, config]) => {
-      // 排除已选中的字段
       if (props.selectedFields.includes(name)) return acc;
-      // 排除 datetimerange 类型（首次发现时间始终展示，无需手动添加）
       if (config.type === 'datetimerange') return acc;
-      // 搜索过滤
+      if (allowList && !allowList.includes(name)) return acc;
       if (keyword && !config.label.toLowerCase().includes(keyword) && !name.toLowerCase().includes(keyword)) {
         return acc;
       }
@@ -226,6 +260,9 @@
       return acc;
     }, [] as Array<{ fieldName: string; config: IFieldConfig }>)
       .sort((first, second) => {
+        if (sortByAllowList && allowList) {
+          return allowList.indexOf(first.fieldName) - allowList.indexOf(second.fieldName);
+        }
         const firstOrder = riskFieldOrderMap.get(first.fieldName);
         const secondOrder = riskFieldOrderMap.get(second.fieldName);
 
@@ -237,7 +274,15 @@
 
         return compareFieldName(first.fieldName, second.fieldName);
       });
-  });
+  };
+
+  const filteredRiskFields = computed(() => (
+    filterConfigFields(props.primaryFieldNames, Boolean(props.primaryFieldNames))
+  ));
+
+  const filteredSecondaryConfigFields = computed(() => (
+    filterConfigFields(props.secondaryFieldNames, Boolean(props.secondaryFieldNames))
+  ));
 
   // 过滤事件字段（排除已添加的字段）
   const filteredEventFields = computed(() => {
@@ -283,6 +328,9 @@
   const isListEmpty = computed(() => {
     if (activeTab.value === 'risk') {
       return filteredRiskFields.value.length === 0;
+    }
+    if (secondaryUsesConfig.value) {
+      return filteredSecondaryConfigFields.value.length === 0;
     }
     return filteredEventFields.value.length === 0;
   });
@@ -391,6 +439,7 @@
     }
 
     &.is-active,
+    &.is-accent,
     &:active {
       color: #3a84ff;
       background: transparent;
@@ -399,6 +448,13 @@
       .nl-add-condition-icon {
         color: #3a84ff;
       }
+    }
+
+    &.is-accent:hover {
+      color: #3a84ff;
+      background: #f0f5ff;
+      border-color: #3a84ff;
+      border-style: solid;
     }
   }
 

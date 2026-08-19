@@ -40,6 +40,7 @@
           <!-- 下拉选择类型 -->
           <tag-select
             v-else-if="tag.type === 'select'"
+            :compact="compactSelectPopover"
             :is-editing="editingField === tag.fieldName"
             :options-cache="optionsCache"
             :search-model="searchModel"
@@ -128,6 +129,7 @@
     fieldConfig: Record<string, IFieldConfig>;
     eventFieldItems?: Array<Record<string, any>>;
     conditionList?: Array<{ id: string; name: string }>;
+    compactSelectPopover?: boolean;
   }
   interface Emits {
     (e: 'remove', fieldName: string): void;
@@ -140,7 +142,9 @@
     (e: 'updateEventValue', id: string, value: any): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    compactSelectPopover: false,
+  });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
