@@ -18,6 +18,7 @@
   <div
     class="strategy-customize"
     :class="{ 'customize-basic-mode': stepMode === 'basic' }">
+    <!-- rules 模式：带 collapse-panel 和 form-item 包裹（旧）-->
     <auth-collapse-panel
       v-if="stepMode === 'rules'"
       is-active
@@ -57,6 +58,20 @@
         </bk-form-item>
       </div>
     </auth-collapse-panel>
+    <!-- rules-only 模式：仅渲染命中条件，不带 collapse-panel 和 label 包裹 -->
+    <div
+      v-if="stepMode === 'rules-only'"
+      class="customize-rule-only">
+      <rules-component
+        ref="rulesComponentRef"
+        :aggregate-list="aggregateList"
+        :config-type="formData.configs.config_type"
+        :configs-data="formData.configs"
+        :expected-result="formData.configs.select"
+        :table-fields="tableFields"
+        @show-structure-preview="handleShowStructureView"
+        @update-where="handleUpdateWhere" />
+    </div>
     <div
       v-if="stepMode === 'basic'"
       class="customize-rule customize-rule-basic">
@@ -330,7 +345,7 @@
   }
   interface Props {
     editData: any,
-    stepMode?: 'basic' | 'rules',
+    stepMode?: 'basic' | 'rules' | 'rules-only',
     parentConfigs?: Record<string, any>,
   }
   const props = withDefaults(defineProps<Props>(), {
@@ -1217,7 +1232,7 @@
   watch(
     [() => props.parentConfigs, () => allConfigTypeTable.value.length],
     ([configs, tableLen]) => {
-      if (props.stepMode === 'rules'
+      if ((props.stepMode === 'rules' || props.stepMode === 'rules-only')
         && configs?.config_type
         && tableLen > 0
         && !isInit
@@ -1249,7 +1264,7 @@
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
       // 基础信息步骤不做 where/having 转换
-      if (props.stepMode === 'rules' && !options?.forValidate) {
+      if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
           if (originalEditHaving.value) {
@@ -1317,7 +1332,7 @@
             transferFilter(params.configs.having);
           }
         }
-      } else if (props.stepMode === 'rules' && params.configs.where) {
+      } else if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && params.configs.where) {
         params.configs.where = normalizeWhereForDisplay(params.configs.where) as Where;
         if (params.configs.having) {
           params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
@@ -1374,6 +1389,15 @@
     :deep(.panel-edit) {
       width: 100%;
       max-width: none;
+    }
+  }
+
+  .customize-rule-only {
+    padding: 0;
+    overflow: visible;
+
+    :deep(.bk-form-item) {
+      overflow: visible;
     }
   }
 
