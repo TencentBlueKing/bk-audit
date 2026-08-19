@@ -77,8 +77,13 @@ const buildTitle = (conditions: RetrievalFilterCondition[], query: string) => {
   const operator = conditions.find(item => item.field === '操作人')?.value;
   const time = conditions.find(item => item.field === '操作起始时间')?.value || '近 7 天';
   const action = conditions.find(item => item.field === '操作类型')?.value || '操作';
+  const system = conditions.find(item => item.field === '来源系统')?.value;
+  if (query.startsWith('条件筛选：')) {
+    const subject = operator || system || '';
+    const actionPart = conditions.find(item => item.field === '操作类型') ? `${action}操作` : '操作';
+    return subject ? `${subject}${time}的${actionPart}` : `${time}的${actionPart}`;
+  }
   if (operator) return `${operator}${time}的${action}操作`;
-  if (query.startsWith('条件筛选：')) return conditions.map(item => `${item.field}${item.value}`).join('，');
   return query.replace(/^查询\s*/, '').trim() || '审计日志检索结果';
 };
 

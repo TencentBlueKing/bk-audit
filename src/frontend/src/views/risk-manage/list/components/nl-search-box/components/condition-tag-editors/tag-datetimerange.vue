@@ -84,7 +84,6 @@
   interface Props {
     tag: IConditionTag;
     searchModel: Record<string, any>;
-    // eslint-disable-next-line vue/no-unused-properties
     isEditing: boolean;
     // eslint-disable-next-line vue/no-unused-properties
     removable?: boolean;
@@ -366,6 +365,13 @@
 
   watch(isPanelOpen, () => {
     updateEditorWidth();
+  });
+
+  watch(() => props.isEditing, (val) => {
+    if (val && !isPanelOpen.value) {
+      isPanelOpen.value = true;
+      emit('startEdit');
+    }
   });
 
   onMounted(() => {

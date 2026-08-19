@@ -821,6 +821,10 @@
     getLists,
     sceneList,
     systemList,
+    close: () => {
+      isPopoverShow.value = false;
+      popoverRef.value?.hide?.();
+    },
   });
 
   // 点击外部区域关闭 popover
