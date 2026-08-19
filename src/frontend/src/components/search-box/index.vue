@@ -109,11 +109,26 @@
                 <span>{{ t('添加关联事件条件') }}</span>
               </span>
             </template>
-            <bk-option
-              v-for="item in selectedItems"
-              :id="item.id"
-              :key="item.id"
-              :name="`${item.display_name}[${item.field_name}]`" />
+            <bk-option-group
+              v-if="groupedSelectedItems.basic.length > 0"
+              collapsible
+              :label="t('基本信息')">
+              <bk-option
+                v-for="item in groupedSelectedItems.basic"
+                :id="item.id"
+                :key="item.id"
+                :name="`${item.display_name}[${item.field_name}]`" />
+            </bk-option-group>
+            <bk-option-group
+              v-if="groupedSelectedItems.detail.length > 0"
+              collapsible
+              :label="t('事件详情')">
+              <bk-option
+                v-for="item in groupedSelectedItems.detail"
+                :id="item.id"
+                :key="item.id"
+                :name="`${item.display_name}[${item.field_name}]`" />
+            </bk-option-group>
           </bk-select>
         </template>
       </component>
@@ -225,6 +240,11 @@
   const { messageSuccess } = useMessage();
   const selectedVal = ref();
   const selectedItems = ref<Array<Record<string, any>>>([]);
+
+  const groupedSelectedItems = computed(() => ({
+    basic: selectedItems.value.filter(item => item.type === 'basic_event_field'),
+    detail: selectedItems.value.filter(item => item.type !== 'basic_event_field'),
+  }));
   const selectedItemList = ref<Array<Record<string, any>>>([]);
   const {
     getSearchParamsPost,
