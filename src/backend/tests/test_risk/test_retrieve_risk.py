@@ -297,28 +297,44 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertTrue(len(sql_log) == 2, "应走 BKBase 路径产生 SQL")
 
-    def test_gate_strips_event_data_prefix_before_matching(self):
-        """event_data.xxx 带前缀写法：gate 剥前缀后按裸名匹配策略声明。
+    def test_gate_type_basic_event_field_bypasses_strategy_config(self):
+        """type=basic_event_field（事件字段接口返回标识）的字段不参与策略配置 gate。
 
-        策略 event_data_field_configs 存裸名（如 ip）；若前端用显式前缀规避与基本字段
-        同名（如策略扩展字段也叫 operator），带前缀串直接匹配会落空，必须归一化后再匹配。
+        前端按 event_fields 接口返回的 type 原样回传，后端以 type 作为统一判据（兼容
+        尚未录入 EVENT_BASIC_COLUMN_MAP 的未来扩展顶层列字段），无需再拼接/解析前缀。
         """
         instance = ListRisk()
-        filters = [{"field": "event_data.ip", "display_name": "Source IP", "operator": "CONTAINS", "value": "1.2.3.4"}]
+        filters = [
+            {
+                "field": "tenant_id",
+                "display_name": "租户ID(tenant_id)",
+                "operator": "CONTAINS",
+                "value": "t1",
+                "type": "basic_event_field",
+            }
+        ]
         matched = instance._filter_queryset_by_event_data_fields(Risk.objects.all(), filters)
         self.assertEqual(list(matched.values_list("risk_id", flat=True)), [self.risk.risk_id])
 
     def test_gate_rejects_unmatched_display_name(self):
         """gate 按裸名 + display_name 双重匹配；display_name 不符 → 结果为空"""
         instance = ListRisk()
-        filters = [{"field": "event_data.ip", "display_name": "错误展示名", "operator": "CONTAINS", "value": "1.2.3.4"}]
+        filters = [{"field": "ip", "display_name": "错误展示名", "operator": "CONTAINS", "value": "1.2.3.4"}]
         matched = instance._filter_queryset_by_event_data_fields(Risk.objects.all(), filters)
         self.assertEqual(list(matched), [])
 
     def test_gate_basic_field_bypasses_strategy_config(self):
-        """基本字段（白名单命中）不参与策略配置 gate，直接放行"""
+        """基本字段（type=basic_event_field）不参与策略配置 gate，直接放行"""
         instance = ListRisk()
-        filters = [{"field": "operator", "display_name": "责任人", "operator": "CONTAINS", "value": "admin"}]
+        filters = [
+            {
+                "field": "operator",
+                "display_name": "责任人",
+                "operator": "CONTAINS",
+                "value": "admin",
+                "type": "basic_event_field",
+            }
+        ]
         matched = instance._filter_queryset_by_event_data_fields(Risk.objects.all(), filters)
         self.assertEqual(list(matched.values_list("risk_id", flat=True)), [self.risk.risk_id])
 

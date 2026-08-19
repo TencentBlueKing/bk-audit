@@ -86,7 +86,6 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
-    EVENT_BASIC_COLUMN_MAP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
@@ -483,11 +482,9 @@ class ListRisk(RiskMeta):
         if not event_filters:
             return queryset
 
-        # 基本信息字段（事件表顶层列）对每个策略均存在，不参与策略配置 gate；
-        # 仅 event_data.xxx（JSON 下钻）字段需要按策略声明的 event_data_field_configs 做校验。
-        data_filter_items = [
-            item for item in event_filters if (item.get("field") or "").strip() not in EVENT_BASIC_COLUMN_MAP
-        ]
+        # type = "basic_event_field" 的字段不参与策略配置 gate；
+        data_filter_items = [item for item in event_filters if item.get("type") != "basic_event_field"]
+
         if not data_filter_items:
             return queryset
 
@@ -499,7 +496,7 @@ class ListRisk(RiskMeta):
         strategy_queryset = Strategy.objects.filter(strategy_id__in=strategy_ids)
 
         for item in data_filter_items:
-            field = item.get("field")
+            field = item.get("field") or ""
             display_name = item.get("display_name")
             strategy_queryset = strategy_queryset.filter(
                 event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
@@ -1529,7 +1526,12 @@ class ListEventFieldsByStrategy(RiskMeta):
         ]
 
         basic_results = [
-            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
+            {
+                "field_name": field_name,
+                "display_name": display_name,
+                "id": f"{display_name}:{field_name}",
+                "type": "basic_event_field",
+            }
             for field_name, display_name in basic
         ]
         extended_results = [

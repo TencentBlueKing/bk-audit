@@ -380,7 +380,8 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     id = serializers.CharField(label=gettext_lazy("字段ID"))
-    type = serializers.CharField(label=gettext_lazy("事件字段类型"), required=False, allow_null=True)
+    # 增加type字段，用于区分事件基本字段和非基本字段
+    type = serializers.CharField(label=gettext_lazy("事件基本字段"), required=False, allow_null=True)
 
 
 class RiskEventSubscriptionQuerySerializer(serializers.Serializer):
@@ -417,6 +418,8 @@ class EventFieldFilterItemSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
     value = AnyValueField(label=gettext_lazy("值"))
+    # 增加type字段，用于区分事件基本字段和非基本字段
+    type = serializers.CharField(label=gettext_lazy("事件基本字段"), required=False, allow_null=True)
 
     def validate(self, attrs):
         field = attrs.get("field")

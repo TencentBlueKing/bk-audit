@@ -235,6 +235,66 @@ class TestListRiskRequestSerializer(SimpleTestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["order_fields"], ["-event_data.ip"])
 
+    # ---- event_time 值格式校验（字符串时间列禁止数字时间戳混合比较）----
+
+    def test_event_time_accepts_datetime_string(self):
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": "2026-08-06 10:00:00",
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_event_time_rejects_numeric_timestamp(self):
+        """event_time 是字符串时间列：数字时间戳会产生混合类型比较（Doris 隐式转换 → 静默筛错），必须 400"""
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": 1700000000,
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertFalse(serializer.is_valid())
+        error_text = str(serializer.errors)
+        self.assertIn("YYYY-MM-DD HH:mm:ss", error_text)
+
+    def test_event_time_rejects_invalid_string_format(self):
+        serializer = ListRiskRequestSerializer(
+            data=self._scope_data(
+                {
+                    "event_filters": [
+                        {
+                            "field": "event_time",
+                            "display_name": "事件时间(event_time)",
+                            "operator": EventFilterOperator.GREATER_THAN.value,
+                            "value": "1700000000",
+                        }
+                    ],
+                }
+            )
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("YYYY-MM-DD HH:mm:ss", str(serializer.errors))
+
     # ---- status → display_status 映射测试 ----
 
     def test_status_mapped_to_display_status_in_validated_data(self):
