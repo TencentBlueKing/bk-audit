@@ -783,6 +783,40 @@ class EventFilterOperator(TextChoices):
     LESS_THAN = "<", gettext_lazy("<")
 
 
+@register_choices("event_basic_field")
+class EventBasicField(TextChoices):
+    """
+    事件基本信息字段（risk_event 表顶层可检索列）
+
+    value = 字段名（event_fields 的 field_name；
+    label = 产品展示名（中文(英文字段名) 样式）；
+    """
+
+    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")
+    OPERATOR = "operator", gettext_lazy("责任人")
+    EVENT_TIME = "event_time", gettext_lazy("事件发生时间")
+    EVENT_SOURCE = "event_source", gettext_lazy("事件来源")
+    STRATEGY_ID = "strategy_id", gettext_lazy("命中策略ID")
+    EVENT_CONTENT = "event_content", gettext_lazy("事件描述")
+    EVENT_TYPE = "event_type", gettext_lazy("事件类型")
+
+    @property
+    def is_numeric(self) -> bool:
+        """该基本字段在数据库表中是否为数值列（列模式下允许数值 CAST 比较）"""
+        return self.value in self.NUMERIC_FIELDS
+
+    @property
+    def column(self) -> str:
+        """对应 risk_event物理列名：event_time → dtEventTime（字符串时间列，字典序==时间序），其余同名列"""
+        return "dtEventTime" if self.value == "event_time" else self.value
+
+
+# 事件基本信息字段 risk_event 顶层物理列 映射（列模式 SQL 直接引用事件表列）
+EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField}
+
+# 数值型基本字段, 其余字段默认字符串比较
+EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
+
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
 
@@ -944,6 +978,4 @@ class NL2RiskFilterLogStatus(TextChoices):
 # fetch_instance_list 反向拉取时，对非检索大字段的截断/置 NULL 阈值（bytes）。
 # 通过环境变量 FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES 覆盖，便于后续无需发版即可调整。
 # 实测：123 万行中仅 <0.1% 的记录超 100KB，99.9%+ 正常数据不受影响。
-FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES = int(
-    os.environ.get("FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES", 100*1024)
-)
+FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES = int(os.environ.get("FETCH_INSTANCE_LIST_FIELD_LIMIT_BYTES", 100 * 1024))
