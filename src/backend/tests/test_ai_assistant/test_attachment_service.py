@@ -448,6 +448,7 @@ class AttachmentServiceTest(TestCase):
 
     def test_list_prefetches_relations_and_defers_large_fields_in_constant_queries(self):
         self.register_sync_handler()
+        self.register_async_handler()
         for index in range(20):
             source_message = self.create_source_message()
             self.create_attachment(

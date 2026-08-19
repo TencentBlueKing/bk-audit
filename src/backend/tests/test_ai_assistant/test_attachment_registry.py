@@ -60,6 +60,13 @@ class AttachmentHandlerRegistryTest(TestCase):
         with self.assertRaises(TypeError):
             self.registry.handlers[AttachmentType.AI_ANALYSIS] = EchoAttachmentSyncHandler()
 
+    def test_feedback_capability_defaults_to_false_and_allows_explicit_true(self):
+        self.assertFalse(EchoAttachmentSyncHandler().supports_feedback)
+
+        handler = FeedbackAttachmentHandler()
+        self.assertTrue(handler.supports_feedback)
+        self.assertIs(self.registry.register(handler), handler)
+
     def test_duplicate_attachment_type_is_rejected(self):
         self.registry.register(EchoAttachmentSyncHandler())
 
@@ -83,6 +90,10 @@ class AttachmentHandlerRegistryTest(TestCase):
 
         with self.assertRaises(ImproperlyConfigured):
             self.registry.register(handler)
+
+    def test_non_boolean_feedback_capability_is_rejected(self):
+        with self.assertRaises(ImproperlyConfigured):
+            self.registry.register(InvalidFeedbackAttachmentHandler())
 
     def test_sync_handler_cannot_have_async_task(self):
         with self.assertRaises(ImproperlyConfigured):
@@ -235,6 +246,14 @@ class AsyncAttachmentHandlerWithInvalidTask(EchoAttachmentAsyncHandler):
 
 class InvalidAttachmentExecutionModeHandler(EchoAttachmentSyncHandler):
     execution_mode = "BACKGROUND"
+
+
+class InvalidFeedbackAttachmentHandler(EchoAttachmentSyncHandler):
+    supports_feedback = 1
+
+
+class FeedbackAttachmentHandler(EchoAttachmentSyncHandler):
+    supports_feedback = True
 
 
 class InvalidAttachmentExecutionModeRegistryTest(TestCase):

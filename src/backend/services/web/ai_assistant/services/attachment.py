@@ -11,6 +11,7 @@ from services.web.ai_assistant.constants import (
     AttachmentErrorCode,
     ExecutionMode,
     ExecutionStatus,
+    FeedbackSourceType,
 )
 from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
@@ -29,6 +30,7 @@ from services.web.ai_assistant.schemas import dump_snapshot, parse_snapshot
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
 )
+from services.web.ai_assistant.services.feedback import FeedbackService
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +126,9 @@ class AttachmentService:
             raise AttachmentNotFound() from error
         if attachment is None:
             raise AttachmentNotFound()
+        FeedbackService(user=self.user).bind_current_feedback(
+            sources=[attachment], source_type=FeedbackSourceType.ATTACHMENT
+        )
         return attachment
 
     def list(

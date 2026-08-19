@@ -38,6 +38,13 @@ class MessageHandlerRegistryTest(TestCase):
         with self.assertRaises(TypeError):
             self.registry.handlers[MessageType.LOG_SEARCH] = EchoSyncHandler()
 
+    def test_feedback_capability_defaults_to_false_and_allows_explicit_true(self):
+        self.assertFalse(EchoSyncHandler().supports_feedback)
+
+        handler = FeedbackMessageHandler()
+        self.assertTrue(handler.supports_feedback)
+        self.assertIs(self.registry.register(handler), handler)
+
     def test_duplicate_message_type_is_rejected(self):
         self.registry.register(EchoSyncHandler())
 
@@ -61,6 +68,10 @@ class MessageHandlerRegistryTest(TestCase):
 
         with self.assertRaises(ImproperlyConfigured):
             self.registry.register(handler)
+
+    def test_non_boolean_feedback_capability_is_rejected(self):
+        with self.assertRaises(ImproperlyConfigured):
+            self.registry.register(InvalidFeedbackMessageHandler())
 
     def test_sync_handler_cannot_have_async_task(self):
         with self.assertRaises(ImproperlyConfigured):
@@ -108,6 +119,14 @@ class MessageHandlerRegistryTest(TestCase):
 
 class InvalidExecutionModeHandler(EchoSyncHandler):
     execution_mode = "BACKGROUND"
+
+
+class InvalidFeedbackMessageHandler(EchoSyncHandler):
+    supports_feedback = "yes"
+
+
+class FeedbackMessageHandler(EchoSyncHandler):
+    supports_feedback = True
 
 
 class IncompleteHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):

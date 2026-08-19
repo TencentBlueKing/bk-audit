@@ -24,6 +24,7 @@ from services.web.ai_assistant.resources.conversation import (
     UpdateConversation,
     UpdateConversationGroup,
 )
+from services.web.ai_assistant.resources.feedback import DeleteFeedback, UpsertFeedback
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
@@ -112,6 +113,16 @@ class AttachmentsViewSet(ResourceViewSet):
         ResourceRoute("GET", GetAttachment, pk_field="attachment_uid"),
         ResourceRoute("PATCH", UpdateAttachment, pk_field="attachment_uid"),
         ResourceRoute("POST", RetryAttachment, endpoint="retry", pk_field="attachment_uid"),
+    ]
+
+
+class FeedbackViewSet(ResourceViewSet):
+    """当前用户对成功消息或附件的反馈写入与取消接口。"""
+
+    lookup_field = "feedback_uid"
+    resource_routes = [
+        ResourceRoute("POST", UpsertFeedback),
+        ResourceRoute("DELETE", DeleteFeedback, pk_field="feedback_uid"),
     ]
 
 

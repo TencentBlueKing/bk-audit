@@ -64,6 +64,10 @@ class BKResourceAutoSchema(AutoSchema):
         if route:
             serializer = route.resource_class.ResponseSerializer or route.resource_class.serializer_class
             if serializer:
+                # bk_resource 的 ResourceRoute 无论动作名称为何，运行时成功响应均为 200。
+                # drf-spectacular 会把默认 POST/create 推断为 201，这里显式对齐真实协议。
+                if route.method == "POST":
+                    return {200: serializer}
                 return serializer
             # 没有 ResponseSerializer（如文件下载接口），返回二进制响应类型
             return OpenApiTypes.BINARY

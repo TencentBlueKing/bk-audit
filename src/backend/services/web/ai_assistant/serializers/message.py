@@ -8,8 +8,12 @@ from services.web.ai_assistant.constants import (
     MessageHistoryDirection,
     MessageType,
 )
-from services.web.ai_assistant.handlers import message_handler_registry
+from services.web.ai_assistant.handlers import (
+    attachment_handler_registry,
+    message_handler_registry,
+)
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
+from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 
 
 def _message_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -109,6 +113,19 @@ class AttachmentSummarySerializer(serializers.Serializer):
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
+    supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+
+    def to_representation(self, instance):
+        handler = attachment_handler_registry.require(instance.attachment_type)
+        return {
+            "uid": str(instance.uid),
+            "attachment_type": instance.attachment_type,
+            "status": instance.status,
+            "title": instance.title,
+            "content_updated_at": instance.content_updated_at,
+            "created_at": instance.created_at,
+            "supports_feedback": handler.supports_feedback,
+        }
 
 
 class MessageResponseSerializer(serializers.Serializer):
@@ -124,6 +141,8 @@ class MessageResponseSerializer(serializers.Serializer):
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     attachments = AttachmentSummarySerializer(many=True, help_text="消息关联的附件摘要")
+    supports_feedback = serializers.BooleanField(help_text="消息类型是否支持当前用户反馈")
+    feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对消息的反馈")
     created_at = serializers.DateTimeField(help_text="消息创建时间")
     updated_at = serializers.DateTimeField(help_text="消息最后更新时间")
 
@@ -131,6 +150,7 @@ class MessageResponseSerializer(serializers.Serializer):
         """读取 JSONField 时重新执行类型校验，避免损坏快照扩散到前端。"""
 
         handler = message_handler_registry.require(instance.message_type)
+        supports_feedback = handler.supports_feedback
         data = {
             "uid": str(instance.uid),
             "conversation_uid": str(instance.conversation.uid),
@@ -140,6 +160,12 @@ class MessageResponseSerializer(serializers.Serializer):
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "attachments": AttachmentSummarySerializer(instance.attachments.all(), many=True).data,
+            "supports_feedback": supports_feedback,
+            "feedback": (
+                FeedbackResponseSerializer(getattr(instance, "_current_feedback", None)).data
+                if supports_feedback and getattr(instance, "_current_feedback", None)
+                else None
+            ),
             "created_at": instance.created_at,
             "updated_at": instance.updated_at,
         }
