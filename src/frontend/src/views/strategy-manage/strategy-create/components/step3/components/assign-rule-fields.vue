@@ -5,10 +5,15 @@
 <template>
   <div class="assign-rule-fields">
     <div class="form-section">
-      <div class="form-label is-required">{{ t('分派至场景空间') }}</div>
+      <div class="form-label is-required">
+        {{ t('分派至场景空间') }}
+      </div>
       <bk-select
-        v-model="localValue.scene_id"
+        v-model="localValue.scene_ids"
+        collapse-tags
         filterable
+        multiple
+        multiple-mode="tag"
         :placeholder="t('请选择')">
         <bk-option
           v-for="item in sceneOptions"
@@ -18,37 +23,50 @@
       </bk-select>
     </div>
 
-    <div class="form-section">
-      <div class="form-label is-required">{{ t('风险单处理人') }}</div>
-      <user-with-me
-        v-model="localValue.processors"
-        :current-username="currentUsername"
-        :placeholder="t('请输入用户名')" />
+    <div class="form-section form-section-row">
+      <div class="form-section-col">
+        <div class="form-label is-required">
+          {{ t('风险单处理人') }}
+        </div>
+        <audit-user-selector-tenant
+          v-model="localValue.processors"
+          allow-create
+          :placeholder="t('请输入用户名')" />
+      </div>
+      <div class="form-section-col">
+        <div class="form-label">
+          {{ t('关注人') }}
+        </div>
+        <audit-user-selector-tenant
+          v-model="localValue.notice_users"
+          allow-create
+          :placeholder="t('请输入用户名')" />
+      </div>
     </div>
 
     <div class="form-section">
-      <div class="form-label">{{ t('关注人') }}</div>
-      <user-with-me
-        v-model="localValue.notice_users"
-        :current-username="currentUsername"
-        :placeholder="t('请输入用户名')" />
-    </div>
-
-    <div class="form-section">
-      <div class="form-label">{{ t('风险单分派方式') }}</div>
+      <div class="form-label">
+        {{ t('风险单分派方式') }}
+      </div>
       <bk-radio-group v-model="localValue.assign_mode">
-        <bk-radio label="confirm">{{ t('确认后分派') }}</bk-radio>
-        <bk-radio label="direct">{{ t('直接分派') }}</bk-radio>
+        <bk-radio label="confirm">
+          {{ t('确认后分派') }}
+        </bk-radio>
+        <bk-radio label="direct">
+          {{ t('直接分派') }}
+        </bk-radio>
       </bk-radio-group>
     </div>
 
     <div
       v-if="localValue.assign_mode === 'confirm'"
       class="form-section">
-      <div class="form-label is-required">{{ t('确认人') }}</div>
-      <user-with-me
+      <div class="form-label is-required">
+        {{ t('确认人') }}
+      </div>
+      <audit-user-selector-tenant
         v-model="localValue.confirmers"
-        :current-username="currentUsername"
+        allow-create
         :placeholder="t('请输入用户名')" />
     </div>
   </div>
@@ -57,10 +75,10 @@
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import UserWithMe from './user-with-me.vue';
+  import AuditUserSelectorTenant from '@components/audit-user-selector-tenant/index.vue';
 
   interface RuleFields {
-    scene_id: string | number | '';
+    scene_ids: Array<string | number>;
     processors: string[];
     notice_users: string[];
     assign_mode: 'confirm' | 'direct';
@@ -70,16 +88,13 @@
   interface Props {
     modelValue: RuleFields;
     sceneOptions: Array<{ id: string | number; name: string }>;
-    currentUsername?: string;
   }
 
   interface Emits {
     (e: 'update:modelValue', value: RuleFields): void;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    currentUsername: '',
-  });
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -96,6 +111,16 @@
     &:last-child {
       margin-bottom: 0;
     }
+  }
+
+  .form-section-row {
+    display: flex;
+    gap: 16px;
+  }
+
+  .form-section-col {
+    flex: 1;
+    min-width: 0;
   }
 
   .form-label {

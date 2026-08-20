@@ -56,15 +56,17 @@
               v-show="!rule.collapsed"
               class="assign-rule-item-content">
               <div class="form-section">
-                <div class="form-label is-required">{{ t('命中条件') }}</div>
+                <div class="form-label is-required">
+                  {{ t('命中条件') }}
+                </div>
                 <assign-condition-rows
                   v-model="rule.conditions"
                   :field-options="fieldOptions" />
               </div>
               <assign-rule-fields
-                v-model="rule"
-                :current-username="currentUsername"
-                :scene-options="sceneOptions" />
+                :model-value="rule"
+                :scene-options="sceneOptions"
+                @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
             </div>
           </div>
 
@@ -85,7 +87,6 @@
               class="assign-rule-item-content">
               <assign-rule-fields
                 v-model="defaultRule"
-                :current-username="currentUsername"
                 :scene-options="sceneOptions" />
             </div>
           </div>
@@ -116,11 +117,9 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
-  import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
 
-  import AccountModel from '@model/account/account';
   import StrategyModel from '@model/strategy/strategy';
 
   import AssignConditionRows from './components/assign-condition-rows.vue';
@@ -140,7 +139,7 @@
     name: string;
     collapsed: boolean;
     conditions: ConditionItem[];
-    scene_id: string | number | '';
+    scene_ids: Array<string | number>;
     processors: string[];
     notice_users: string[];
     assign_mode: 'confirm' | 'direct';
@@ -184,13 +183,14 @@
   });
 
   const createRule = (overrides: Partial<AssignRuleItem> = {}): AssignRuleItem => {
-    const id = ruleIdSeq++;
+    const id = ruleIdSeq;
+    ruleIdSeq += 1;
     return {
       id,
       name: overrides.name ?? `分派规则${id}`,
       collapsed: false,
       conditions: [createCondition()],
-      scene_id: '',
+      scene_ids: [],
       processors: [],
       notice_users: [],
       assign_mode: 'confirm',
@@ -201,24 +201,38 @@
 
   const createDefaultRule = () => ({
     collapsed: false,
-    scene_id: '' as string | number | '',
+    scene_ids: [] as Array<string | number>,
     processors: [] as string[],
     notice_users: [] as string[],
     assign_mode: 'confirm' as 'confirm' | 'direct',
     confirmers: [] as string[],
   });
 
-  const assignRules = ref<AssignRuleItem[]>([createRule({ name: '分派规则1' })]);
+  const normalizeSceneIds = (item: Record<string, any> = {}): Array<string | number> => {
+    if (Array.isArray(item.scene_ids)) {
+      return item.scene_ids.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    }
+    if (Array.isArray(item.scene_id)) {
+      return item.scene_id.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    }
+    if (item.scene_id !== undefined && item.scene_id !== null && item.scene_id !== '') {
+      return [item.scene_id];
+    }
+    if (item.scene_space?.id) {
+      return [item.scene_space.id];
+    }
+    return [];
+  };
+
+  const assignRules = ref<AssignRuleItem[]>([]);
   const defaultRule = ref(createDefaultRule());
 
   const {
-    data: userInfo,
-  } = useRequest(AccountManageService.fetchUserInfo, {
-    defaultValue: new AccountModel(),
+    data: riskFieldList,
+  } = useRequest(RiskManageService.fetchFields, {
+    defaultValue: [],
     manual: true,
   });
-
-  const currentUsername = computed(() => userInfo.value?.username || '');
 
   const {
     data: sceneList,
@@ -232,13 +246,6 @@
     id: item.scene_id,
     name: item.name,
   })));
-
-  const {
-    data: riskFieldList,
-  } = useRequest(RiskManageService.fetchFields, {
-    defaultValue: [],
-    manual: true,
-  });
 
   const fieldOptions = computed(() => (riskFieldList.value || []).map((item: any) => ({
     id: item.id,
@@ -265,7 +272,7 @@
     const cloned = createRule({
       name: `${source.name}_复制`,
       conditions: source.conditions.map(item => ({ ...item })),
-      scene_id: source.scene_id,
+      scene_ids: [...source.scene_ids],
       processors: [...source.processors],
       notice_users: [...source.notice_users],
       assign_mode: source.assign_mode,
@@ -282,13 +289,14 @@
     assign_rules: assignRules.value.map(rule => ({
       ...rule,
       conditions: rule.conditions.map(item => ({ ...item })),
+      scene_ids: [...rule.scene_ids],
       processors: [...rule.processors],
       notice_users: [...rule.notice_users],
       confirmers: [...rule.confirmers],
     })),
     default_assign_rule: {
       collapsed: defaultRule.value.collapsed,
-      scene_id: defaultRule.value.scene_id,
+      scene_ids: [...defaultRule.value.scene_ids],
       processors: [...defaultRule.value.processors],
       notice_users: [...defaultRule.value.notice_users],
       assign_mode: defaultRule.value.assign_mode,
@@ -301,12 +309,12 @@
 
   const validateRules = () => {
     const validateOne = (rule: {
-      scene_id: string | number | '';
+      scene_ids: Array<string | number>;
       processors: string[];
       assign_mode: string;
       confirmers: string[];
     }, label: string) => {
-      if (!rule.scene_id && rule.scene_id !== 0) {
+      if (!rule.scene_ids?.length) {
         messageError(t('{label}：分派至场景空间不能为空', { label }));
         return false;
       }
@@ -354,7 +362,7 @@
         conditions: item.conditions?.length
           ? item.conditions.map((c: ConditionItem) => ({ ...c }))
           : [createCondition()],
-        scene_id: item.scene_id ?? '',
+        scene_ids: normalizeSceneIds(item),
         processors: item.processors ?? [],
         notice_users: item.notice_users ?? [],
         assign_mode: item.assign_mode || 'confirm',
@@ -365,6 +373,7 @@
       defaultRule.value = {
         ...createDefaultRule(),
         ...data.default_assign_rule,
+        scene_ids: normalizeSceneIds(data.default_assign_rule),
         processors: data.default_assign_rule.processors ?? [],
         notice_users: data.default_assign_rule.notice_users ?? [],
         confirmers: data.default_assign_rule.confirmers ?? [],
