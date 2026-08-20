@@ -64,6 +64,10 @@ class BKResourceAutoSchema(AutoSchema):
         if route:
             serializer = route.resource_class.ResponseSerializer or route.resource_class.serializer_class
             if serializer:
+                # bk_resource 的 ResourceRoute 无论动作名称为何，运行时成功响应均为 200。
+                # drf-spectacular 会把默认 POST/create 推断为 201，这里显式对齐真实协议。
+                if route.method == "POST":
+                    return {200: serializer}
                 return serializer
             # 没有 ResponseSerializer（如文件下载接口），返回二进制响应类型
             return OpenApiTypes.BINARY
@@ -73,35 +77,31 @@ class BKResourceAutoSchema(AutoSchema):
         params = super().get_override_parameters()
         route = self._get_matched_route()
         if route:
-            # 如果是 GET 请求，且 Resource 定义了 RequestSerializer，将其字段作为查询参数
-            if route.method.upper() == "GET":
-                serializer_class = route.resource_class.RequestSerializer
-                if serializer_class:
-                    try:
-                        serializer = serializer_class()
-                        path_parameter_names = self._get_path_parameter_names()
-                        for field_name, field in serializer.fields.items():
-                            if field_name in path_parameter_names:
-                                continue
-                            # 映射 DRF 字段类型到 OpenAPI 类型
-                            field_type_map = {
-                                drf_serializers.IntegerField: int,
-                                drf_serializers.FloatField: float,
-                                drf_serializers.BooleanField: bool,
-                            }
-                            openapi_type = field_type_map.get(type(field), str)
+            serializer_class = route.resource_class.RequestSerializer
+            if serializer_class:
+                try:
+                    serializer = serializer_class()
+                    path_parameter_names = self._get_path_parameter_names()
+                    for field_name, field in serializer.fields.items():
+                        if field_name in path_parameter_names:
+                            location = OpenApiParameter.PATH
+                        elif route.method.upper() == "GET":
+                            location = OpenApiParameter.QUERY
+                        else:
+                            continue
 
-                            params.append(
-                                OpenApiParameter(
-                                    name=field_name,
-                                    type=openapi_type,
-                                    location=OpenApiParameter.QUERY,
-                                    description=str(field.label) if field.label else field_name,
-                                    required=field.required,
-                                )
+                        parameter_options = self._get_parameter_options(field)
+                        params.append(
+                            OpenApiParameter(
+                                name=field_name,
+                                location=location,
+                                description=str(field.help_text or field.label or field_name),
+                                required=True if location == OpenApiParameter.PATH else field.required,
+                                **parameter_options,
                             )
-                    except Exception:
-                        pass
+                        )
+                except Exception:
+                    pass
             # 如果开启了分页，添加分页参数
             if route.enable_paginate:
                 params.extend(
@@ -113,6 +113,33 @@ class BKResourceAutoSchema(AutoSchema):
                     ]
                 )
         return params
+
+    @staticmethod
+    def _get_parameter_options(field):
+        """将 DRF 字段转换为 OpenAPI 参数配置，并保留 ListField 子类语义。"""
+
+        is_list = isinstance(field, drf_serializers.ListField)
+        value_field = field.child if is_list else field
+
+        # 使用 isinstance 支持 FlexibleListField 等自定义子类，而非只匹配字段的精确类型。
+        field_type_map = (
+            (drf_serializers.UUIDField, OpenApiTypes.UUID),
+            (drf_serializers.IntegerField, int),
+            (drf_serializers.FloatField, float),
+            (drf_serializers.BooleanField, bool),
+        )
+        openapi_type = next(
+            (field_type for field_class, field_type in field_type_map if isinstance(value_field, field_class)),
+            str,
+        )
+        options = {"type": openapi_type}
+
+        if isinstance(value_field, drf_serializers.ChoiceField):
+            options["enum"] = list(value_field.choices)
+        if is_list:
+            # form + explode 同时兼容标准重复参数；CSV 兼容方式由字段 help_text 补充说明。
+            options.update(many=True, style="form", explode=True)
+        return options
 
     def get_tags(self):
         # 尝试从 Resource 类获取 tags

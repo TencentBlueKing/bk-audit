@@ -407,10 +407,8 @@ class ExportAnalyseReport(AnalyseReportMeta):
         timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
         return f"{title}_{timestamp}{extension}"
 
-    # 项目内置中文字体路径（Noto Sans SC，SIL Open Font License）
-    _CJK_FONT_PATH = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), os.pardir, "fonts", "NotoSansSC-Regular.ttf")
-    )
+    # 公共 Noto Sans SC 字体路径（SIL Open Font License），保留原风险报告资源策略。
+    _CJK_FONT_PATH = settings.PDF_CJK_FONT_PATH
     _BLOCKED_PDF_RESOURCE_URI = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
 
     # PDF 报告的 HTML 模板，使用 @font-face 注册项目内置中文字体

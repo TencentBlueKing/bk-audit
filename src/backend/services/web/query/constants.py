@@ -250,6 +250,13 @@ class TaskEnum(TextChoices):
         ]
 
 
+class LogExportSourceType(TextChoices):
+    """日志导出任务的发起入口。"""
+
+    WEB_LOG_SEARCH = "WEB_LOG_SEARCH", gettext_lazy("Web 日志检索")
+    AI_ASSISTANT_MESSAGE = "AI_ASSISTANT_MESSAGE", gettext_lazy("AI 助手日志检索消息")
+
+
 class LogExportFieldScope(TextChoices):
     """
     日志导出字段范围
