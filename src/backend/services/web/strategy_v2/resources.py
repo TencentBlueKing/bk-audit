@@ -28,6 +28,7 @@ from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
+from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
@@ -510,6 +511,112 @@ class UpdateStrategy(StrategyV2Base):
         )
         return need_update_remote
 
+    @staticmethod
+    def calc_rules_digest(strategy: Strategy) -> Optional[str]:
+        """
+        计算发现规则集摘要：对进入 SQL 构造的规则属性做规范化 hash,当hash变化时flow需重建
+        覆盖 (rule_id, 匹配顺序, where, having)
+        """
+        rules = list(strategy.rules.filter(is_deleted=False))
+        if not rules:
+            return None
+        rule_order = strategy.rule_order or []
+        order_index = {rid: idx for idx, rid in enumerate(rule_order)}
+        ordered = sorted(rules, key=lambda r: order_index.get(r.rule_id, len(rule_order)))
+        digest_items = []
+        for rule in ordered:
+            conditions = rule.conditions or {}
+            digest_items.append(
+                {
+                    "rule_id": rule.rule_id,
+                    "where": conditions.get("where"),
+                    "having": conditions.get("having"),
+                }
+            )
+        return get_md5(json.dumps(digest_items, sort_keys=True, ensure_ascii=False))
+
+    @staticmethod
+    def _sync_strategy_rules(strategy: Strategy, rules_data: Optional[List[dict]]) -> None:
+        """
+        同步发现规则子表（软删缺失规则、更新/新建传入规则）
+
+        - 请求中有 rule_id → 保留并更新
+        - 请求中无 rule_id → 新建
+        - 数据库有但请求中没有 → 软删
+        rule_order按请求顺序重建
+        """
+        from services.web.strategy_v2.models import StrategyRule
+
+        if rules_data is None:
+            return
+        keep_ids = [r.get("rule_id") for r in rules_data if r.get("rule_id")]
+        # 软删未出现在请求中的规则
+        strategy.rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        for rule_data in rules_data:
+            fields = {
+                "rule_name": rule_data["rule_name"],
+                "conditions": rule_data.get("conditions") or {"where": None, "having": None},
+                "risk_title": rule_data.get("risk_title"),
+                "risk_level": rule_data.get("risk_level"),
+                "risk_hazard": rule_data.get("risk_hazard"),
+                "risk_guidance": rule_data.get("risk_guidance"),
+                "processor": rule_data.get("processor") or [],
+                "follower": rule_data.get("follower") or [],
+            }
+            if rule_data.get("rule_id"):
+                strategy.rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            else:
+                StrategyRule.objects.create(strategy=strategy, **fields)
+        # 重建 rule_order：按请求顺序排列
+        active_rules = {r.rule_id: r for r in strategy.rules.filter(is_deleted=False)}
+        ordered_ids = []
+        for rule_data in rules_data:
+            rid = rule_data.get("rule_id")
+            if rid and rid in active_rules:
+                ordered_ids.append(rid)
+        # 请求未含 rule_id 的新建规则追加到末尾
+        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+        strategy.rule_order = ordered_ids
+        strategy.save(update_fields=["rule_order"])
+
+    @staticmethod
+    def _sync_dispatch_rules(strategy: Strategy, dispatch_rules_data: Optional[List[dict]]) -> None:
+        """
+        同步分派规则子表（软删缺失规则、更新/新建传入规则）
+
+        - 请求中有 rule_id → 保留并更新
+        - 请求中无 rule_id → 新建
+        - 数据库有但请求中没有 → 软删
+        dispatch_rule_order 按请求顺序重建
+        """
+        from services.web.strategy_v2.models import DispatchRule
+
+        if dispatch_rules_data is None:
+            return
+        keep_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id")]
+        strategy.dispatch_rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        for rule_data in dispatch_rules_data:
+            fields = {
+                "rule_name": rule_data["rule_name"],
+                "conditions": rule_data.get("conditions") or {},
+                "target_scene_id": rule_data["target_scene_id"],
+                "processor": rule_data.get("processor") or [],
+                "follower": rule_data.get("follower") or [],
+                "confirmer": rule_data.get("confirmer") or [],
+                "dispatch_mode": rule_data.get("dispatch_mode"),
+                "is_default": bool(rule_data.get("is_default")),
+            }
+            if rule_data.get("rule_id"):
+                strategy.dispatch_rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            else:
+                DispatchRule.objects.create(strategy=strategy, **fields)
+        # 重建 dispatch_rule_order：按请求顺序（校验层已保证默认规则唯一）
+        active_rules = {r.rule_id for r in strategy.dispatch_rules.filter(is_deleted=False)}
+        ordered_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id") in active_rules]
+        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+        strategy.dispatch_rule_order = ordered_ids
+        strategy.save(update_fields=["dispatch_rule_order"])
+
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
         # 用于控制是否更新真实的监控策略或计算平台Flow
@@ -517,6 +624,10 @@ class UpdateStrategy(StrategyV2Base):
         has_manual_sql = self.has_sql_override(validated_request_data)
         # pop tag
         tag_names = validated_request_data.pop("tags", [])
+        rules_data = validated_request_data.pop("rules", None)
+        dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
+        # 计算更新前摘要
+        origin_rules_digest = self.calc_rules_digest(strategy)
         # check control
         if (
             validated_request_data["strategy_type"] == StrategyType.MODEL
@@ -531,6 +642,15 @@ class UpdateStrategy(StrategyV2Base):
                 need_update_remote = True
             setattr(strategy, key, val)
         strategy.save(update_fields=validated_request_data.keys())
+        # 同步发现规则子表 + 摘要比较：规则集（含顺序/条件）变化 = SQL 变化 -> 触发 flow 重建
+        if rules_data is not None:
+            self._sync_strategy_rules(strategy, rules_data)
+            new_rules_digest = self.calc_rules_digest(strategy)
+            if new_rules_digest != origin_rules_digest:
+                need_update_remote = True
+        # 同步分派规则子表
+        if dispatch_rules_data is not None:
+            self._sync_dispatch_rules(strategy, dispatch_rules_data)
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
