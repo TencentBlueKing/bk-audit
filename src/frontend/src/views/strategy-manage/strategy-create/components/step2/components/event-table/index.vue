@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, onActivated, ref } from 'vue';
+  import { computed, onActivated, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -167,10 +167,10 @@
   const groupMap = computed(() => (props.strategyType === 'rule'
     ? {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
     } : {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
       event_evidence_field_configs: t('事件证据'),
     }));
 
@@ -385,6 +385,14 @@
     process();
   });
 
+  watch(
+    () => props.select,
+    () => {
+      process();
+    },
+    { deep: true },
+  );
+
   defineExpose<Exposes>({
     getData() {
       return tableData.value;
@@ -421,6 +429,14 @@
       @include cell-base;
 
       background-color: #f5f7fa;
+      font-weight: 500;
+      color: #313238;
+
+      &:first-child {
+        width: 80px;
+        min-width: 80px;
+        flex-shrink: 0;
+      }
 
       &.field-name {
         width: 200px;
@@ -456,7 +472,10 @@
       @include cell-base;
 
       display: flex;
-      background-color: #f5f7fa;
+      width: 80px;
+      min-width: 80px;
+      flex-shrink: 0;
+      background-color: #fafbfd;
       align-items: center;
       justify-content: center;
     }

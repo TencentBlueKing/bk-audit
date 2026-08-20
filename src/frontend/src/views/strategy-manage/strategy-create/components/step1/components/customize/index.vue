@@ -1295,6 +1295,29 @@
     { immediate: true, deep: true },
   );
 
+  watch(
+    () => props.parentConfigs,
+    (configs) => {
+      if (props.stepMode !== 'rules-only' || !configs) return;
+      if (configs.select?.length) {
+        formData.value.configs.select = _.cloneDeep(configs.select);
+      }
+      if (configs.config_type) {
+        formData.value.configs.config_type = configs.config_type;
+      }
+      if (configs.data_source) {
+        formData.value.configs.data_source = {
+          ...formData.value.configs.data_source,
+          ..._.cloneDeep(configs.data_source),
+        };
+      }
+      if (configs.schedule_config) {
+        formData.value.configs.schedule_config = _.cloneDeep(configs.schedule_config);
+      }
+    },
+    { immediate: true, deep: true },
+  );
+
   defineExpose<Expose>({
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
@@ -1317,6 +1340,9 @@
       params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1
         ? params.configs.data_source.rt_id
         : '') as string;
+      if (props.stepMode === 'rules-only' && props.parentConfigs?.select?.length && !params.configs.select?.length) {
+        params.configs.select = _.cloneDeep(props.parentConfigs.select);
+      }
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
       // 基础信息步骤不做 where/having 转换

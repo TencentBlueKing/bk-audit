@@ -58,11 +58,6 @@
           type="delete"
           @click="handleClear" />
       </div>
-      <div
-        v-else
-        style="margin-left: 8px; color: #979ba5; user-select: none;">
-        {{ t('未配置时，默认查询语句为 select *') }}
-      </div>
     </template>
   </vuedraggable>
 </template>
@@ -81,6 +76,7 @@
   interface Expose {
     resetFormData: () => void,
     setSelect: (select: Array<DatabaseTableFieldModel>) => void;
+    getSelect: () => Array<DatabaseTableFieldModel>;
   }
   interface Emits {
     (e: 'updateExpectedResult', value: Array<DatabaseTableFieldModel>): void;
@@ -159,6 +155,9 @@
     },
     setSelect(select: Array<DatabaseTableFieldModel>) {
       expectedResultList.value = select;
+    },
+    getSelect() {
+      return expectedResultList.value;
     },
   });
 </script>
