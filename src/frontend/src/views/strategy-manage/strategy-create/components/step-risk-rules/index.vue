@@ -111,7 +111,7 @@
               <div class="rule-section-label is-required">
                 {{ t('命中条件') }}
               </div>
-              <div class="rule-section-body">
+              <div class="rule-section-body rule-section-body--condition">
                 <audit-form
                   class="rule-condition-form"
                   form-type="vertical"
@@ -137,7 +137,7 @@
                 <div
                   class="variable-input-content"
                   :class="[rule.variableInputActive ? 'active' : '']"
-                  @click.stop="(e) => handleVariableInputClick(e, index)">
+                  @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
                   <ul class="variable-input-list">
                     <template v-if="!rule.variableInputActive">
                       <li
@@ -166,35 +166,30 @@
                     {{ t('请输入') }}
                   </p>
                 </div>
-                <bk-button
-                  class="reference-variable-btn"
-                  size="small"
-                  @click="(e: MouseEvent) => toggleVariablePanel(e, index)">
-                  <audit-icon
-                    style="margin-right: 4px;"
-                    type="insert" />
-                  {{ t('引用变量') }}
-                </bk-button>
-                <!-- 变量选择面板 -->
-                <div
-                  v-if="rule.showVariablePanel"
-                  class="variable-panel"
-                  @click.stop>
-                  <div class="variable-panel-title">{{ t('变量列表') }}</div>
-                  <div
-                    v-for="field in (parentFormData.configs?.select || [])"
-                    :key="field.field_name"
-                    class="variable-item"
-                    @click="() => insertVariable(index, field.field_name)">
-                    <span class="variable-item-name">{{ getVariableTpl(field.field_name) }}</span>
-                    <span class="variable-item-label">{{ field.description || field.field_name }}</span>
-                  </div>
-                  <div
-                    v-if="!(parentFormData.configs?.select?.length)"
-                    class="variable-panel-empty">
-                    {{ t('暂无可用变量，请先配置数据源和预期结果') }}
-                  </div>
-                </div>
+                <bk-popover
+                  :component-event-delay="300"
+                  :is-show="rule.showVariablePanel"
+                  :offset="8"
+                  placement="bottom-end"
+                  theme="light"
+                  trigger="manual"
+                  width="490">
+                  <bk-button
+                    class="reference-variable-btn"
+                    size="small"
+                    @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
+                    <audit-icon
+                      style="margin-right: 4px;"
+                      type="insert" />
+                    {{ t('引用变量') }}
+                  </bk-button>
+                  <template #content>
+                    <variable-table
+                      :select="selectFields"
+                      :strategy-id="editData.strategy_id"
+                      @is-copy="() => handleVariableCopy(index)" />
+                  </template>
+                </bk-popover>
               </div>
             </div>
 
@@ -288,8 +283,9 @@
   import {
     computed,
     nextTick,
-    onBeforeUnmount,
-    onMounted,
+    onActivated,
+    onDeactivated,
+    onUnmounted,
     provide,
     ref,
     watch,
@@ -297,6 +293,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import collapseIcon from '@images/collapse.svg';
@@ -304,6 +301,7 @@
 
   import Customize from '../step1/components/customize/index.vue';
   import ReferenceModel from '../step1/components/reference-model/index.vue';
+  import VariableTable from '../step2/components/variable-table.vue';
 
   interface RuleItem {
     id: number;
@@ -312,6 +310,8 @@
     editingName: boolean;
     variableInputActive: boolean;
     showVariablePanel: boolean;
+    isVariableCopy: boolean;
+    clickLiIndex: number;
     riskTitleInputValue: string;
     risk_title: string;
     risk_level: string;
@@ -323,6 +323,7 @@
   interface Props {
     editData: StrategyModel,
     formData: Record<string, any>,
+    select: Array<DatabaseTableFieldModel>,
   }
 
   interface Emits {
@@ -359,26 +360,34 @@
 
   const parentFormData = computed(() => props.formData ?? {});
   const parentConfigs = computed(() => props.formData?.configs ?? {});
+  const selectFields = computed(() => props.select ?? parentFormData.value.configs?.select ?? []);
 
   let ruleIdSeq = 1;
 
-  const createRule = (overrides: Partial<RuleItem> = {}): RuleItem => ({
-    id: ruleIdSeq++,
-    name: `规则${ruleIdSeq - 1}`,
-    collapsed: false,
-    editingName: false,
-    variableInputActive: false,
-    showVariablePanel: false,
-    riskTitleInputValue: '',
-    risk_title: '',
-    risk_level: 'HIGH',
-    risk_hazard: '',
-    risk_guidance: '',
-    formData: {},
-    ...overrides,
-  });
+  const createRule = (overrides: Partial<RuleItem> = {}): RuleItem => {
+    const id = ruleIdSeq++;
+    return {
+      id,
+      name: overrides.name ?? `规则${id}`,
+      collapsed: false,
+      editingName: false,
+      variableInputActive: false,
+      showVariablePanel: false,
+      isVariableCopy: false,
+      clickLiIndex: -1,
+      riskTitleInputValue: '',
+      risk_title: '',
+      risk_level: 'HIGH',
+      risk_hazard: '',
+      risk_guidance: '',
+      formData: {},
+      ...overrides,
+    };
+  };
 
-  const ruleItems = ref<RuleItem[]>([createRule()]);
+  const ruleItems = ref<RuleItem[]>([createRule({ name: '规则1' })]);
+  const syncedEditStrategyId = ref<number | null>(null);
+  const draftRulesSynced = ref(false);
 
   const comRefs = ref<Array<any>>([]);
   const titleInputRefs = ref<Array<HTMLInputElement | null>>([]);
@@ -424,7 +433,7 @@
   };
 
   const handleAddRule = () => {
-    const newRule = createRule({ name: `规则${ruleIdSeq}` });
+    const newRule = createRule({ name: `规则${ruleItems.value.length + 1}` });
     ruleItems.value.push(newRule);
     nextTick(() => {
       ruleListRef.value?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -467,69 +476,106 @@
     }
   };
 
-  const handleVariableInputClick = (e: MouseEvent, index: number) => {
+  const handleRiskTitleClick = (e: Event, index: number, origin?: 'origin') => {
     const rule = ruleItems.value[index];
-    if (!rule.variableInputActive) {
+    if (origin && !rule.isVariableCopy) {
+      ruleItems.value.forEach((r, i) => {
+        if (i === index) return;
+        if (r.showVariablePanel && !r.isVariableCopy) {
+          r.showVariablePanel = false;
+          r.variableInputActive = false;
+          if (r.riskTitleInputValue) {
+            r.risk_title += r.riskTitleInputValue;
+            r.riskTitleInputValue = '';
+          }
+        }
+        r.isVariableCopy = false;
+      });
+
+      rule.showVariablePanel = true;
       rule.variableInputActive = true;
+      const display = getDisplayRiskTitle(rule.risk_title);
+      if (display.length) {
+        rule.riskTitleInputValue = display.map(item => item.value).join('');
+        rule.risk_title = '';
+      }
       nextTick(() => {
+        if (rule.clickLiIndex !== -1) {
+          titleInputRefs.value[index]?.setSelectionRange(rule.clickLiIndex, rule.clickLiIndex);
+          rule.clickLiIndex = -1;
+        }
         titleInputRefs.value[index]?.focus();
       });
     }
-    rule.showVariablePanel = false;
   };
 
   const handleClickTitleLi = (ruleIndex: number, liIndex: number) => {
-    const rule = ruleItems.value[ruleIndex];
-    const display = getDisplayRiskTitle(rule.risk_title);
-    // 找到点击位置，将前面的文本片段合并
-    rule.risk_title = display.slice(0, liIndex).map(i => i.value).join('');
-    rule.riskTitleInputValue = '';
-    rule.variableInputActive = true;
-    nextTick(() => {
-      titleInputRefs.value[ruleIndex]?.focus();
-    });
+    ruleItems.value[ruleIndex].clickLiIndex = liIndex;
+  };
+
+  const getClipboardContent = async (index: number) => {
+    const rule = ruleItems.value[index];
+    try {
+      const text = await navigator.clipboard.readText();
+      if (rule.riskTitleInputValue) {
+        rule.risk_title += rule.riskTitleInputValue;
+        rule.riskTitleInputValue = '';
+      } else {
+        rule.risk_title += text;
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard contents: ', err);
+    }
   };
 
   const handleTitleKeyDown = (e: KeyboardEvent, index: number) => {
     const rule = ruleItems.value[index];
-    if (e.key === 'Enter' || e.key === 'Escape') {
-      if (rule.riskTitleInputValue) {
-        rule.risk_title += rule.riskTitleInputValue;
-        rule.riskTitleInputValue = '';
-      }
+    if (e.code === 'Enter') {
+      rule.showVariablePanel = false;
+      rule.isVariableCopy = false;
       rule.variableInputActive = false;
+      titleInputRefs.value[index]?.blur();
+      getClipboardContent(index);
+      return;
+    }
+    if (rule.showVariablePanel && rule.riskTitleInputValue) return;
+    if (e.code === 'Backspace' && getDisplayRiskTitle(rule.risk_title).length) {
+      const display = getDisplayRiskTitle(rule.risk_title);
+      display.pop();
+      rule.risk_title = display.map(item => item.value).join('');
     }
   };
 
-  const toggleVariablePanel = (e: MouseEvent, index: number) => {
-    e.stopPropagation();
-    const rule = ruleItems.value[index];
-    // 关闭其他规则的变量面板
-    ruleItems.value.forEach((r, i) => {
-      if (i !== index) r.showVariablePanel = false;
-    });
-    rule.showVariablePanel = !rule.showVariablePanel;
-    if (rule.variableInputActive) {
-      if (rule.riskTitleInputValue) {
-        rule.risk_title += rule.riskTitleInputValue;
-        rule.riskTitleInputValue = '';
-      }
-      rule.variableInputActive = false;
-    }
-  };
-
-  const LBRACE = '{{';
-  const RBRACE = '}}';
-  const getVariableTpl = (fieldName: string) => `${LBRACE} ${fieldName} ${RBRACE}`;
-
-  const insertVariable = (index: number, fieldName: string) => {
-    const rule = ruleItems.value[index];
-    rule.risk_title += getVariableTpl(fieldName);
-    rule.showVariablePanel = false;
+  const handleVariableCopy = (index: number) => {
+    ruleItems.value[index].isVariableCopy = true;
   };
 
   const updateRuleFormData = (data: Record<string, any>, index: number) => {
     ruleItems.value[index].formData = { ...ruleItems.value[index].formData, ...data };
+  };
+
+  const mergeRuleConfigs = (fieldsConfigs: Record<string, any> = {}) => {
+    const parent = parentConfigs.value ?? {};
+    const merged = {
+      ...parent,
+      ...fieldsConfigs,
+    };
+    // 预期结果只在第一步维护，后续步骤不允许覆盖成空
+    if (parent.select?.length) {
+      merged.select = parent.select;
+    } else if (!fieldsConfigs.select?.length && parent.select) {
+      merged.select = parent.select;
+    }
+    if (!fieldsConfigs.config_type && parent.config_type) {
+      merged.config_type = parent.config_type;
+    }
+    if (!fieldsConfigs.data_source?.rt_id?.length && parent.data_source?.rt_id?.length) {
+      merged.data_source = parent.data_source;
+    }
+    if (!fieldsConfigs.schedule_config?.count_freq && parent.schedule_config) {
+      merged.schedule_config = parent.schedule_config;
+    }
+    return merged;
   };
 
   const buildStepParams = () => {
@@ -538,14 +584,12 @@
       const com = comRefs.value[index];
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
       return {
+        name: rule.name,
         risk_title: rule.risk_title,
         risk_level: rule.risk_level,
         risk_hazard: rule.risk_hazard,
         risk_guidance: rule.risk_guidance,
-        configs: {
-          ...(parentConfigs.value ?? {}),
-          ...(fields.configs ?? {}),
-        },
+        configs: mergeRuleConfigs(fields.configs),
       };
     });
 
@@ -557,50 +601,102 @@
       risk_level: firstRule.risk_level ?? baseFormData.risk_level ?? 'HIGH',
       risk_hazard: firstRule.risk_hazard ?? baseFormData.risk_hazard ?? '',
       risk_guidance: firstRule.risk_guidance ?? baseFormData.risk_guidance ?? '',
-      configs: firstRule.configs ?? baseFormData.configs ?? {},
+      configs: {
+        ...(firstRule.configs ?? baseFormData.configs ?? {}),
+        select: baseFormData.configs?.select?.length
+          ? baseFormData.configs.select
+          : (firstRule.configs?.select ?? []),
+      },
       rules,
     };
   };
 
-  watch(
-    () => props.formData,
-    (data) => {
-      if (!data) return;
-      stepFormData.value.strategy_type = data.strategy_type || 'rule';
-      stepFormData.value.strategy_name = data.strategy_name ?? '';
-      stepFormData.value.status = data.status ?? '';
-      stepFormData.value.risk_level = data.risk_level || 'MIDDLE';
+  const getMergedSourceData = () => {
+    const edit = props.editData ?? {};
+    const form = props.formData ?? {};
+    return {
+      ...edit,
+      ...form,
+      configs: {
+        ...(edit.configs ?? {}),
+        ...(form.configs ?? {}),
+      },
+    };
+  };
 
-      // 回填规则数据
-      if (data.rules?.length) {
-        ruleItems.value = data.rules.map((r: any, i: number) => createRule({
-          name: r.name || `规则${i + 1}`,
-          risk_title: r.risk_title || '',
-          risk_level: r.risk_level || 'HIGH',
-          risk_hazard: r.risk_hazard || '',
-          risk_guidance: r.risk_guidance || '',
-        }));
-      } else if (data.risk_title || data.risk_level) {
-        // 兼容旧数据：单规则回填
-        ruleItems.value = [createRule({
-          risk_title: data.risk_title || '',
-          risk_level: data.risk_level || 'HIGH',
-          risk_hazard: data.risk_hazard || '',
-          risk_guidance: data.risk_guidance || '',
-        })];
-      }
+  const syncStepFormMeta = (data: Record<string, any>) => {
+    stepFormData.value.strategy_type = data.strategy_type || 'rule';
+    stepFormData.value.strategy_name = data.strategy_name ?? '';
+    stepFormData.value.status = data.status ?? '';
+    stepFormData.value.risk_level = data.risk_level || 'MIDDLE';
+  };
+
+  const applyRuleItems = (data: Record<string, any>) => {
+    ruleIdSeq = 1;
+    if (data.rules?.length) {
+      ruleItems.value = data.rules.map((r: any, i: number) => createRule({
+        name: r.name || `规则${i + 1}`,
+        risk_title: r.risk_title || '',
+        risk_level: r.risk_level || 'HIGH',
+        risk_hazard: r.risk_hazard || '',
+        risk_guidance: r.risk_guidance || '',
+      }));
+    } else {
+      ruleItems.value = [createRule({
+        name: '规则1',
+        risk_title: data.risk_title || '',
+        risk_level: data.risk_level || 'HIGH',
+        risk_hazard: data.risk_hazard || '',
+        risk_guidance: data.risk_guidance || '',
+      })];
+    }
+    ruleIdSeq = Math.max(...ruleItems.value.map(item => item.id), 0) + 1;
+  };
+
+  const syncEditRuleItems = () => {
+    if (!isEditMode && !isCloneMode) return;
+
+    const data = getMergedSourceData();
+    const strategyId = data.strategy_id;
+    if (!strategyId || syncedEditStrategyId.value === strategyId) return;
+
+    syncStepFormMeta(data);
+    applyRuleItems(data);
+    syncedEditStrategyId.value = strategyId;
+  };
+
+  const syncDraftRuleItems = () => {
+    if (isEditMode || isCloneMode || draftRulesSynced.value) return;
+
+    const data = props.formData;
+    if (!data?.rules?.length) return;
+
+    syncStepFormMeta(data);
+    applyRuleItems(data);
+    draftRulesSynced.value = true;
+  };
+
+  watch(
+    () => [
+      props.editData?.strategy_id,
+      props.formData?.strategy_id,
+      props.formData?.risk_title,
+      props.formData?.risk_hazard,
+      props.formData?.risk_guidance,
+      props.formData?.configs?.where?.conditions?.length,
+    ],
+    () => {
+      syncEditRuleItems();
     },
-    { immediate: true, deep: true },
+    { immediate: true },
   );
 
   watch(
-    () => props.editData,
-    (data) => {
-      if ((isEditMode || isCloneMode) && data?.strategy_id) {
-        stepFormData.value.strategy_type = data.strategy_type || 'rule';
-      }
+    () => props.formData?.rules,
+    () => {
+      syncDraftRuleItems();
     },
-    { immediate: true },
+    { immediate: true, deep: true },
   );
 
   const handlePrevious = () => {
@@ -633,24 +729,38 @@
     router.push({ name: 'strategyList' });
   };
 
-  // 关闭所有变量面板（点击外部时）
   const handleDocumentClick = () => {
-    ruleItems.value.forEach(r => {
-      if (r.variableInputActive && r.riskTitleInputValue) {
-        r.risk_title += r.riskTitleInputValue;
-        r.riskTitleInputValue = '';
+    ruleItems.value.forEach((rule) => {
+      if (!rule.showVariablePanel) return;
+      if (!rule.isVariableCopy) {
+        rule.showVariablePanel = false;
+        rule.variableInputActive = false;
+        if (rule.riskTitleInputValue) {
+          rule.risk_title += rule.riskTitleInputValue;
+          rule.riskTitleInputValue = '';
+        }
       }
-      r.variableInputActive = false;
-      r.showVariablePanel = false;
+      rule.isVariableCopy = false;
     });
   };
 
-  // 挂载时绑定文档点击事件
-  onMounted(() => {
-    document.addEventListener('click', handleDocumentClick);
+  onActivated(() => {
+    syncEditRuleItems();
+    syncDraftRuleItems();
+    window.addEventListener('click', handleDocumentClick);
   });
-  onBeforeUnmount(() => {
-    document.removeEventListener('click', handleDocumentClick);
+
+  onDeactivated(() => {
+    ruleItems.value.forEach((rule) => {
+      rule.showVariablePanel = false;
+      rule.isVariableCopy = false;
+      rule.variableInputActive = false;
+    });
+    window.removeEventListener('click', handleDocumentClick);
+  });
+
+  onUnmounted(() => {
+    window.removeEventListener('click', handleDocumentClick);
   });
 </script>
 <style lang="postcss" scoped>
@@ -830,6 +940,7 @@
     .rule-item-content {
       padding: 20px 24px 24px;
       background: #fafbfd !important;
+      overflow: visible;
 
       .rule-section {
         margin-bottom: 20px;
@@ -856,30 +967,67 @@
           position: relative;
           overflow: visible;
 
+          &.rule-section-body--condition {
+            overflow: visible;
+            padding-left: 4px;
+          }
+
           .rule-condition-form {
             position: static;
+            min-width: 0;
             overflow: visible;
 
             /* 隐藏 form 本身可能产生的红色 border/shadow 溢出 */
             :deep(.bk-form) {
               position: static;
+              min-width: 0;
+              overflow: visible;
             }
 
-            /* 命中条件行铺满宽度 */
+            /* 命中条件行铺满宽度，保留左侧 and 连接块空间 */
             :deep(.strategy-customize-rules) {
               width: 100%;
+              min-width: 0;
               overflow: visible;
             }
 
             :deep(.strategy-customize) {
+              min-width: 0;
+              overflow: visible;
+            }
+
+            :deep(.customize-rule-only) {
+              min-width: 0;
               overflow: visible;
             }
 
             /* 命中条件每组行背景色（和 rules/index.vue 保持一致） */
             :deep(.strategy-customize-rules .rule-item) {
+              box-sizing: border-box;
+              padding-right: 36px;
+              overflow: visible;
               background: #f5f7fa;
               border: 1px solid #dcdee5;
               border-radius: 2px;
+            }
+
+            :deep(.strategy-customize-rules .rule-item-wrap) {
+              overflow: visible;
+            }
+
+            :deep(.strategy-customize-rules .rule-item-field) {
+              grid-template-columns: minmax(0, 280px) minmax(0, 160px) minmax(0, 1fr) auto;
+              min-width: 0;
+              max-width: 100%;
+
+              :deep(.bk-form-item) {
+                min-width: 0;
+              }
+
+              .icon-group {
+                flex-shrink: 0;
+                white-space: nowrap;
+              }
             }
           }
         }
@@ -951,39 +1099,42 @@
         display: flex;
         align-items: center;
         min-height: 32px;
-        padding: 4px 8px;
+        padding-left: 5px;
         font-size: 12px;
         color: #63656e;
-        cursor: text;
+        cursor: pointer;
         background: #fff;
         border: 1px solid #c4c6cc;
         border-right: none;
         border-radius: 2px 0 0 2px;
         flex: 1;
-        flex-wrap: wrap;
-        gap: 2px;
 
         &.active {
+          cursor: text;
           border-color: #3a84ff;
           border-right: none;
         }
 
         .variable-input-list {
           display: flex;
-          flex: 1;
+          max-width: 100%;
           flex-wrap: wrap;
-          gap: 2px;
           list-style: none;
           padding: 0;
           margin: 0;
 
+          li {
+            display: flex;
+            align-items: center;
+          }
+
           .is-variable {
-            color: #3a84ff;
+            padding: 5px 0;
+            background-color: #f2f3f6;
           }
 
           .list-item-input {
             flex: 1;
-            min-width: 60px;
 
             .title-input {
               width: 100%;
@@ -1008,63 +1159,15 @@
         align-items: stretch;
         position: relative;
 
+        :deep(.bk-popover) {
+          flex-shrink: 0;
+        }
+
         .reference-variable-btn {
           height: auto;
           min-height: 32px;
           border-radius: 0 2px 2px 0;
           flex-shrink: 0;
-        }
-      }
-
-      .variable-panel {
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        z-index: 2000;
-        width: 500px;
-        max-height: 320px;
-        overflow-y: auto;
-        background: #fff;
-        border: 1px solid #dcdee5;
-        border-radius: 2px;
-        box-shadow: 0 4px 12px 0 #0000001a;
-
-        .variable-panel-title {
-          padding: 12px 16px 8px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #313238;
-          border-bottom: 1px solid #f0f1f5;
-        }
-
-        .variable-item {
-          display: flex;
-          align-items: center;
-          padding: 8px 16px;
-          cursor: pointer;
-          gap: 16px;
-
-          &:hover {
-            background: #f5f6fa;
-          }
-
-          .variable-item-name {
-            font-size: 12px;
-            color: #3a84ff;
-            min-width: 160px;
-          }
-
-          .variable-item-label {
-            font-size: 12px;
-            color: #63656e;
-          }
-        }
-
-        .variable-panel-empty {
-          padding: 16px;
-          font-size: 12px;
-          color: #979ba5;
-          text-align: center;
         }
       }
     }

@@ -133,13 +133,16 @@
     report_enabled: boolean,
     report_auto_render: boolean,
     report_config: Record<string, any>,
+    rules?: Array<Record<string, any>>,
+    assign_rules?: Array<Record<string, any>>,
+    default_assign_rule?: Record<string, any>,
   }
 
   const router = useRouter();
   const route = useRoute();
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   const comMap = {
     1: StepBasicInfo,
@@ -308,6 +311,17 @@
         report_enabled: d.report_enabled ?? false,
         report_auto_render: d.report_auto_render ?? false,
         report_config: _.cloneDeep(d.report_config ?? {}),
+        rules: d.rules?.length
+          ? _.cloneDeep(d.rules)
+          : [{
+            name: '规则1',
+            risk_title: d.risk_title ?? '',
+            risk_level: d.risk_level ?? 'HIGH',
+            risk_hazard: d.risk_hazard ?? '',
+            risk_guidance: d.risk_guidance ?? '',
+          }],
+        assign_rules: _.cloneDeep((d as any).assign_rules ?? []),
+        default_assign_rule: _.cloneDeep((d as any).default_assign_rule ?? {}),
       };
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;
@@ -733,9 +747,7 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 

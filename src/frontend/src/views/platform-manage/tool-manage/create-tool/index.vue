@@ -236,7 +236,7 @@
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   const isEditMode = route.name === 'platformToolEdit';
   const backRouteName = 'platformToolConfig';
@@ -827,9 +827,7 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 
