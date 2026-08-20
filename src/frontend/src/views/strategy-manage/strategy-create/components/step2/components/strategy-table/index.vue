@@ -241,6 +241,8 @@
       @include cell-base;
 
       background-color: #f5f7fa;
+      font-weight: 500;
+      color: #313238;
 
       &.field-name {
         width: 250px;
