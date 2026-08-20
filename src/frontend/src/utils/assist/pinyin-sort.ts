@@ -114,3 +114,36 @@ export const compareFieldName = (first = '', second = ''): number => {
 
   return unifiedFieldNameSorter.compare(first, second);
 };
+
+/** 基本信息字段展示顺序（与风险单据「基本信息」区块一致） */
+export const BASIC_EVENT_FIELD_ORDER = [
+  'raw_event_id',
+  'operator',
+  'event_time',
+  'event_source',
+  'strategy_id',
+  'event_content',
+  'event_type',
+];
+
+const basicEventFieldOrderMap = new Map(
+  BASIC_EVENT_FIELD_ORDER.map((fieldName, index) => [fieldName, index]),
+);
+
+/**
+ * @desc 按基本信息固定顺序排序事件字段
+ */
+export const sortByBasicEventFieldOrder = <T extends { field_name?: string }>(list: T[]): T[] => (
+  [...list].sort((first, second) => {
+    const firstOrder = basicEventFieldOrderMap.get(first.field_name || '');
+    const secondOrder = basicEventFieldOrderMap.get(second.field_name || '');
+
+    if (firstOrder !== undefined || secondOrder !== undefined) {
+      if (firstOrder === undefined) return 1;
+      if (secondOrder === undefined) return -1;
+      return firstOrder - secondOrder;
+    }
+
+    return compareFieldName(first.field_name, second.field_name);
+  })
+);

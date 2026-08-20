@@ -165,6 +165,7 @@
   import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
 
+  import { sortByBasicEventFieldOrder } from '@utils/assist';
   import {
     applyDatetimeUrlParams,
     ensureDatetimeSynced,
@@ -242,7 +243,9 @@
   const selectedItems = ref<Array<Record<string, any>>>([]);
 
   const groupedSelectedItems = computed(() => ({
-    basic: selectedItems.value.filter(item => item.type === 'basic_event_field'),
+    basic: sortByBasicEventFieldOrder(
+      selectedItems.value.filter(item => item.type === 'basic_event_field'),
+    ),
     detail: selectedItems.value.filter(item => item.type !== 'basic_event_field'),
   }));
   const selectedItemList = ref<Array<Record<string, any>>>([]);
