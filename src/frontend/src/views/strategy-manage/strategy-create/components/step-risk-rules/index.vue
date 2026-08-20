@@ -38,9 +38,9 @@
               class="ml8"
               @click="handleToggleAllCollapse">
               <img
+                alt=""
                 class="collapse-toggle-icon"
-                :src="allCollapsed ? expandIcon : collapseIcon"
-                alt="">
+                :src="allCollapsed ? expandIcon : collapseIcon">
               {{ allCollapsed ? t('一键展开') : t('一键收起') }}
             </bk-button>
           </div>
@@ -50,201 +50,205 @@
         <div
           ref="ruleListRef"
           class="rule-list">
-        <div
-          v-for="(rule, index) in ruleItems"
-          :key="rule.id"
-          class="rule-item-card"
-          :class="{ 'is-collapsed': rule.collapsed }">
-          <!-- 规则卡片头部 -->
-          <div class="rule-item-header">
-            <span
-              class="rule-drag-handle"
-              title="拖拽排序">
-              <audit-icon type="move" />
-            </span>
-            <audit-icon
-              class="rule-collapse-icon"
-              :class="{ 'is-collapsed': rule.collapsed }"
-              type="angle-line-down"
-              @click="() => toggleCollapse(index)" />
-
-            <!-- 规则名称（可编辑） -->
-            <template v-if="rule.editingName">
-              <input
-                ref="nameInputRefs"
-                v-model="rule.name"
-                class="rule-name-input"
-                type="text"
-                @blur="() => stopEditName(index)"
-                @keydown.enter="() => stopEditName(index)" />
-            </template>
-            <template v-else>
-              <span class="rule-name">{{ rule.name }}</span>
-              <audit-icon
-                class="rule-name-edit-icon"
-                type="edit-fill"
-                @click="() => startEditName(index)" />
-            </template>
-
-            <!-- 头部右侧操作 -->
-            <div class="rule-header-actions">
-              <audit-icon
-                v-bk-tooltips="t('克隆')"
-                class="rule-action-icon"
-                type="copy"
-                @click="() => handleCloneRule(index)" />
-              <audit-icon
-                v-bk-tooltips="t('删除')"
-                class="rule-action-icon rule-action-delete"
-                type="delete"
-                @click="() => handleDeleteRule(index)" />
-            </div>
-          </div>
-
-          <!-- 规则卡片内容 -->
           <div
-            v-show="!rule.collapsed"
-            class="rule-item-content"
-            style="background: #fafbfd;">
-            <!-- 命中条件 -->
-            <div class="rule-section">
-              <div class="rule-section-label is-required">
-                {{ t('命中条件') }}
-              </div>
-              <div class="rule-section-body rule-section-body--condition">
-                <audit-form
-                  class="rule-condition-form"
-                  form-type="vertical"
-                  :model="rule.formData">
-                  <component
-                    :is="strategyWayComMap[stepFormData.strategy_type]"
-                    :ref="(el: any) => setComRef(el, index)"
-                    :edit-data="editData"
-                    :parent-configs="parentConfigs"
-                    :parent-form-data="parentFormData"
-                    step-mode="rules-only"
-                    @update-form-data="(data: any) => updateRuleFormData(data, index)" />
-                </audit-form>
+            v-for="(rule, index) in ruleItems"
+            :key="rule.id"
+            class="rule-item-card"
+            :class="{ 'is-collapsed': rule.collapsed }">
+            <!-- 规则卡片头部 -->
+            <div class="rule-item-header">
+              <span
+                class="rule-drag-handle"
+                title="拖拽排序">
+                <audit-icon type="move" />
+              </span>
+              <audit-icon
+                class="rule-collapse-icon"
+                :class="{ 'is-collapsed': rule.collapsed }"
+                type="angle-line-down"
+                @click="() => toggleCollapse(index)" />
+
+              <!-- 规则名称（可编辑） -->
+              <template v-if="rule.editingName">
+                <input
+                  ref="nameInputRefs"
+                  v-model="rule.name"
+                  class="rule-name-input"
+                  type="text"
+                  @blur="() => stopEditName(index)"
+                  @keydown.enter="() => stopEditName(index)">
+              </template>
+              <template v-else>
+                <span class="rule-name">{{ rule.name }}</span>
+                <audit-icon
+                  class="rule-name-edit-icon"
+                  type="edit-fill"
+                  @click="() => startEditName(index)" />
+              </template>
+
+              <!-- 头部右侧操作 -->
+              <div class="rule-header-actions">
+                <audit-icon
+                  v-bk-tooltips="t('克隆')"
+                  class="rule-action-icon"
+                  type="copy"
+                  @click="() => handleCloneRule(index)" />
+                <audit-icon
+                  v-bk-tooltips="t('删除')"
+                  class="rule-action-icon rule-action-delete"
+                  type="delete"
+                  @click="() => handleDeleteRule(index)" />
               </div>
             </div>
 
-            <!-- 风险单标题 -->
-            <div class="rule-section">
-              <div class="rule-section-label is-required">
-                {{ t('风险单标题') }}
-              </div>
-              <div class="rule-section-body">
-                <div
-                  class="variable-input-content"
-                  :class="[rule.variableInputActive ? 'active' : '']"
-                  @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
-                  <ul class="variable-input-list">
-                    <template v-if="!rule.variableInputActive">
-                      <li
-                        v-for="(item, i) in getDisplayRiskTitle(rule.risk_title)"
-                        :key="i"
-                        @click="handleClickTitleLi(index, i)">
-                        <span :class="[item.isVariable ? 'is-variable' : '']">
-                          {{ item.value }}
-                        </span>
-                      </li>
-                    </template>
-                    <li
-                      v-else
-                      class="list-item-input">
-                      <input
-                        :ref="(el: any) => setTitleInputRef(el, index)"
-                        v-model.trim="rule.riskTitleInputValue"
-                        class="title-input"
-                        type="text"
-                        @keydown="(e) => handleTitleKeyDown(e, index)" />
-                    </li>
-                  </ul>
-                  <p
-                    v-if="!rule.variableInputActive && !rule.risk_title"
-                    class="variable-input-placeholder">
-                    {{ t('请输入') }}
-                  </p>
+            <!-- 规则卡片内容 -->
+            <div
+              v-show="!rule.collapsed"
+              class="rule-item-content"
+              style="background: #fafbfd;">
+              <!-- 命中条件 -->
+              <div class="rule-section">
+                <div class="rule-section-label is-required">
+                  {{ t('命中条件') }}
                 </div>
-                <bk-popover
-                  :component-event-delay="300"
-                  :is-show="rule.showVariablePanel"
-                  :offset="8"
-                  placement="bottom-end"
-                  theme="light"
-                  trigger="manual"
-                  width="490">
-                  <bk-button
-                    class="reference-variable-btn"
-                    size="small"
+                <div class="rule-section-body rule-section-body--condition">
+                  <audit-form
+                    class="rule-condition-form"
+                    form-type="vertical"
+                    :model="rule.formData">
+                    <component
+                      :is="strategyWayComMap[stepFormData.strategy_type]"
+                      :ref="(el: any) => setComRef(el, index)"
+                      :edit-data="editData"
+                      :parent-configs="parentConfigs"
+                      :parent-form-data="parentFormData"
+                      step-mode="rules-only"
+                      @update-form-data="(data: any) => updateRuleFormData(data, index)" />
+                  </audit-form>
+                </div>
+              </div>
+
+              <!-- 风险单标题 -->
+              <div class="rule-section">
+                <div class="rule-section-label is-required">
+                  {{ t('风险单标题') }}
+                </div>
+                <div class="rule-section-body">
+                  <div
+                    class="variable-input-content"
+                    :class="[rule.variableInputActive ? 'active' : '']"
                     @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
-                    <audit-icon
-                      style="margin-right: 4px;"
-                      type="insert" />
-                    {{ t('引用变量') }}
-                  </bk-button>
-                  <template #content>
-                    <variable-table
-                      :select="selectFields"
-                      :strategy-id="editData.strategy_id"
-                      @is-copy="() => handleVariableCopy(index)" />
-                  </template>
-                </bk-popover>
-              </div>
-            </div>
-
-            <!-- 风险等级 -->
-            <div class="rule-section">
-              <div class="rule-section-label is-required">
-                {{ t('风险等级') }}
-              </div>
-              <div class="rule-section-body">
-                <div class="risk-level-group">
-                  <button
-                    v-for="level in riskLevelOptions"
-                    :key="level.value"
-                    class="risk-level-btn"
-                    :class="[
-                      `level-${level.value.toLowerCase()}`,
-                      rule.risk_level === level.value ? 'is-active' : ''
-                    ]"
-                    type="button"
-                    @click="() => rule.risk_level = level.value">
-                    {{ level.label }}
-                  </button>
+                    <ul class="variable-input-list">
+                      <template v-if="!rule.variableInputActive">
+                        <li
+                          v-for="(item, i) in getDisplayRiskTitle(rule.risk_title)"
+                          :key="i"
+                          @click="handleClickTitleLi(index, i)">
+                          <span :class="[item.isVariable ? 'is-variable' : '']">
+                            {{ item.value }}
+                          </span>
+                        </li>
+                      </template>
+                      <li
+                        v-else
+                        class="list-item-input">
+                        <input
+                          :ref="(el: any) => setTitleInputRef(el, index)"
+                          v-model.trim="rule.riskTitleInputValue"
+                          class="title-input"
+                          type="text"
+                          @keydown="(e) => handleTitleKeyDown(e, index)">
+                      </li>
+                    </ul>
+                    <p
+                      v-if="!rule.variableInputActive && !rule.risk_title"
+                      class="variable-input-placeholder">
+                      {{ t('请输入') }}
+                    </p>
+                  </div>
+                  <bk-popover
+                    :component-event-delay="300"
+                    :is-show="rule.showVariablePanel"
+                    :offset="8"
+                    placement="bottom-end"
+                    theme="light"
+                    trigger="manual"
+                    width="490">
+                    <bk-button
+                      class="reference-variable-btn"
+                      size="small"
+                      @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
+                      <audit-icon
+                        style="margin-right: 4px;"
+                        type="insert" />
+                      {{ t('引用变量') }}
+                    </bk-button>
+                    <template #content>
+                      <variable-table
+                        :select="selectFields"
+                        :strategy-id="editData.strategy_id"
+                        @is-copy="() => handleVariableCopy(index)" />
+                    </template>
+                  </bk-popover>
                 </div>
               </div>
-            </div>
 
-            <!-- 风险危害 + 处理指引（两列） -->
-            <div class="rule-section rule-section-two-col">
-              <div class="rule-section-col">
-                <div class="rule-section-label">{{ t('风险危害') }}</div>
+              <!-- 风险等级 -->
+              <div class="rule-section">
+                <div class="rule-section-label is-required">
+                  {{ t('风险等级') }}
+                </div>
                 <div class="rule-section-body">
-                  <bk-input
-                    v-model="rule.risk_hazard"
-                    :maxlength="100"
-                    :placeholder="t('请输入')"
-                    :rows="3"
-                    show-word-limit
-                    type="textarea" />
+                  <div class="risk-level-group">
+                    <button
+                      v-for="level in riskLevelOptions"
+                      :key="level.value"
+                      class="risk-level-btn"
+                      :class="[
+                        `level-${level.value.toLowerCase()}`,
+                        rule.risk_level === level.value ? 'is-active' : ''
+                      ]"
+                      type="button"
+                      @click="() => rule.risk_level = level.value">
+                      {{ level.label }}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div class="rule-section-col">
-                <div class="rule-section-label">{{ t('处理指引') }}</div>
-                <div class="rule-section-body">
-                  <bk-input
-                    v-model="rule.risk_guidance"
-                    :maxlength="100"
-                    :placeholder="t('请输入')"
-                    :rows="3"
-                    show-word-limit
-                    type="textarea" />
+
+              <!-- 风险危害 + 处理指引（两列） -->
+              <div class="rule-section rule-section-two-col">
+                <div class="rule-section-col">
+                  <div class="rule-section-label">
+                    {{ t('风险危害') }}
+                  </div>
+                  <div class="rule-section-body">
+                    <bk-input
+                      v-model="rule.risk_hazard"
+                      :maxlength="100"
+                      :placeholder="t('请输入')"
+                      :rows="3"
+                      show-word-limit
+                      type="textarea" />
+                  </div>
+                </div>
+                <div class="rule-section-col">
+                  <div class="rule-section-label">
+                    {{ t('处理指引') }}
+                  </div>
+                  <div class="rule-section-body">
+                    <bk-input
+                      v-model="rule.risk_guidance"
+                      :maxlength="100"
+                      :placeholder="t('请输入')"
+                      :rows="3"
+                      show-word-limit
+                      type="textarea" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
           <!-- 空状态 -->
           <div
@@ -365,7 +369,8 @@
   let ruleIdSeq = 1;
 
   const createRule = (overrides: Partial<RuleItem> = {}): RuleItem => {
-    const id = ruleIdSeq++;
+    const id = ruleIdSeq;
+    ruleIdSeq += 1;
     return {
       id,
       name: overrides.name ?? `规则${id}`,
@@ -429,7 +434,9 @@
 
   const handleToggleAllCollapse = () => {
     const shouldCollapse = !allCollapsed.value;
-    ruleItems.value.forEach(r => { r.collapsed = shouldCollapse; });
+    ruleItems.value.forEach((_, i) => {
+      ruleItems.value[i].collapsed = shouldCollapse;
+    });
   };
 
   const handleAddRule = () => {
@@ -479,17 +486,18 @@
   const handleRiskTitleClick = (e: Event, index: number, origin?: 'origin') => {
     const rule = ruleItems.value[index];
     if (origin && !rule.isVariableCopy) {
-      ruleItems.value.forEach((r, i) => {
+      ruleItems.value.forEach((_, i) => {
         if (i === index) return;
-        if (r.showVariablePanel && !r.isVariableCopy) {
-          r.showVariablePanel = false;
-          r.variableInputActive = false;
-          if (r.riskTitleInputValue) {
-            r.risk_title += r.riskTitleInputValue;
-            r.riskTitleInputValue = '';
+        const current = ruleItems.value[i];
+        if (current.showVariablePanel && !current.isVariableCopy) {
+          ruleItems.value[i].showVariablePanel = false;
+          ruleItems.value[i].variableInputActive = false;
+          if (current.riskTitleInputValue) {
+            ruleItems.value[i].risk_title += current.riskTitleInputValue;
+            ruleItems.value[i].riskTitleInputValue = '';
           }
         }
-        r.isVariableCopy = false;
+        ruleItems.value[i].isVariableCopy = false;
       });
 
       rule.showVariablePanel = true;
@@ -709,12 +717,10 @@
     }
     // 验证所有规则的命中条件
     try {
-      await Promise.all(
-        ruleItems.value.map((_, index) => {
-          const com = comRefs.value[index];
-          return com?.getValue?.() ?? Promise.resolve();
-        }),
-      );
+      await Promise.all(ruleItems.value.map((_, index) => {
+        const com = comRefs.value[index];
+        return com?.getValue?.() ?? Promise.resolve();
+      }));
       emits('nextStep', 3, buildStepParams());
     } catch {
       // 验证失败，停留在当前步骤
@@ -730,17 +736,18 @@
   };
 
   const handleDocumentClick = () => {
-    ruleItems.value.forEach((rule) => {
-      if (!rule.showVariablePanel) return;
-      if (!rule.isVariableCopy) {
-        rule.showVariablePanel = false;
-        rule.variableInputActive = false;
-        if (rule.riskTitleInputValue) {
-          rule.risk_title += rule.riskTitleInputValue;
-          rule.riskTitleInputValue = '';
+    ruleItems.value.forEach((_, i) => {
+      const current = ruleItems.value[i];
+      if (!current.showVariablePanel) return;
+      if (!current.isVariableCopy) {
+        ruleItems.value[i].showVariablePanel = false;
+        ruleItems.value[i].variableInputActive = false;
+        if (current.riskTitleInputValue) {
+          ruleItems.value[i].risk_title += current.riskTitleInputValue;
+          ruleItems.value[i].riskTitleInputValue = '';
         }
       }
-      rule.isVariableCopy = false;
+      ruleItems.value[i].isVariableCopy = false;
     });
   };
 
@@ -751,10 +758,10 @@
   });
 
   onDeactivated(() => {
-    ruleItems.value.forEach((rule) => {
-      rule.showVariablePanel = false;
-      rule.isVariableCopy = false;
-      rule.variableInputActive = false;
+    ruleItems.value.forEach((_, i) => {
+      ruleItems.value[i].showVariablePanel = false;
+      ruleItems.value[i].isVariableCopy = false;
+      ruleItems.value[i].variableInputActive = false;
     });
     window.removeEventListener('click', handleDocumentClick);
   });
