@@ -18,12 +18,13 @@ to the current version of the project delivered to anyone in the future.
 import json
 import operator
 from functools import reduce
-from typing import Dict, Optional, Type, Union
+from typing import Dict, List, Optional, Type, Union
 
 from pypika import Table
+from pypika import terms as pypika_terms
 from pypika.functions import Cast, Count
 from pypika.queries import QueryBuilder
-from pypika.terms import BasicCriterion, EmptyCriterion, Function
+from pypika.terms import BasicCriterion, EmptyCriterion, Function, Term, ValueWrapper
 
 from core.sql.builder.builder import BkBaseTable
 from core.sql.builder.functions import GetJsonObject
@@ -33,6 +34,7 @@ from core.sql.constants import AggregateType, FieldType, FilterConnector
 from core.sql.exceptions import (
     FilterValueError,
     InvalidAggregateTypeError,
+    InvalidRuleConfigError,
     MissingFromOrJoinError,
     TableNotRegisteredError,
     UnsupportedJoinTypeError,
@@ -127,6 +129,173 @@ class SQLGenerator:
         query = self._build_pagination(query)
         return query
 
+    def generate_rule_mode(self, config: SqlConfig) -> QueryBuilder:
+        """
+        多规则：构建 L1 条件聚合层。
+
+        表注册：_register_tables
+        from子句：_build_from
+        select子句：_build_rule_mode_select
+            - 维度列：策略级 select 的非聚合字段（与单规则一致）
+            - 聚合列：每个聚合字段 × 每条规则展开为 AGG(CASE WHEN w_i THEN f END) AS {alias}__r{i}
+            - 守卫列：每条规则生成；分组场景 COUNT(CASE WHEN w_i THEN 1 END)（零匹配稳定为 0），
+        WHERE子句：_build_rule_mode_where
+            OR(各规则 where) AND config.where（config.where 为 system_ids 等策略级条件；
+        """
+        if not config.select_fields:
+            # L2 要求显式列清单、守卫/聚合展开均依赖 select 字段，空 select 无法构建
+            raise InvalidRuleConfigError("策略级 select 至少需要配置一个输出字段")
+        if not config.rules:
+            raise InvalidRuleConfigError("至少需要配置一条发现规则")
+        self.config = config
+        self.table_map = {}
+        self._register_tables()
+        # 预计算各规则的 where criterion，L1 select / L1 where / L2 hit-case 一致消费
+        self.rule_criterions: Dict[int, Term] = {}
+        for idx, rule in enumerate(self.config.rules, start=1):
+            criterion = self._apply_filter_conditions(rule.where) if rule.where else None
+            if criterion is None or isinstance(criterion, EmptyCriterion):
+                raise InvalidRuleConfigError(f"规则 {rule.rule_id} 缺少 where 过滤条件（规则 where 必填）")
+            self.rule_criterions[idx] = criterion
+        # 行级判定：select 无聚合字段且未显式指定 group_by -> 行级模式守卫，逐行标记0/1
+        self.rule_mode_row_level = not any(f.aggregate for f in self.config.select_fields) and not self.config.group_by
+        self._rule_mode_ready = True
+        query = self.query_builder
+        query = self._build_from(query)
+        query = self._build_rule_mode_select(query)
+        query = self._build_rule_mode_where(query)
+        query = self._build_group_by(query)
+        query = self._build_order_by(query)
+        query = self._build_pagination(query)
+        return query
+
+    RULE_AGG_SUFFIX = "__r{}"
+    RULE_GUARD_PREFIX = "wguard__r{}"
+    RULE_HIT_FIELD = "strategy_rule_id"
+
+    def _rule_agg_alias(self, display_name: str, rule_idx: int) -> str:
+        """规则 i 的聚合列别名"""
+        return f"{display_name}{self.RULE_AGG_SUFFIX.format(rule_idx)}"
+
+    def _rule_guard_alias(self, rule_idx: int) -> str:
+        """规则 i 的守卫列别名"""
+        return self.RULE_GUARD_PREFIX.format(rule_idx)
+
+    def get_rule_mode_output_columns(self) -> List[str]:
+        """
+        L1 全部输出列名（维度列 + 每聚合字段×每规则的展开列 + 守卫列），按生成顺序。供 L2 以显式列引用构建 SELECT
+        """
+        if not getattr(self, "_rule_mode_ready", False):
+            raise ValueError("get_rule_mode_output_columns must be called after generate_rule_mode")
+        columns = []
+        for field in self.config.select_fields or []:
+            if not field.aggregate:
+                columns.append(field.display_name)
+                continue
+            for idx in range(1, len(self.config.rules) + 1):
+                columns.append(self._rule_agg_alias(field.display_name, idx))
+        for idx in range(1, len(self.config.rules) + 1):
+            columns.append(self._rule_guard_alias(idx))
+        return columns
+
+    def _build_rule_mode_select(self, query: QueryBuilder) -> QueryBuilder:
+        """多规则模式 SELECT：非聚合列原样 + 聚合列按规则展开（全 CASE WHEN）+ 守卫列（每规则一条）"""
+        self.rule_alias_map: Dict[tuple, str] = {}
+        # config.select_fields: 用户在页面选择的select字段
+        for field in self.config.select_fields:
+            # 非聚合列
+            if not field.aggregate:
+                query = query.select(self._get_pypika_field(field).as_(field.display_name))
+                continue
+            # 聚合列按规则展开（规则数 * 聚合字段数）
+            pypika_field = self._get_pypika_field(field)
+            for idx in range(1, len(self.config.rules) + 1):
+                alias = self._rule_agg_alias(field.display_name, idx)
+                self.rule_alias_map[(field.display_name, idx)] = alias
+                # CASE 无 ELSE：且不匹配 -> NULL -> 聚合忽略（COUNT/SUM 跳过 NULL）
+                conditional = pypika_terms.Case().when(self.rule_criterions[idx], pypika_field)
+                query = query.select(self._build_aggregate_term(field, conditional).as_(alias))
+        # 守卫列：确保只有真实出现过该规则数据的组才能命中；否则像 COUNT(xx) < 2 这类低向阈值，会在“组存在但零匹配”（COUNT=0）时凭空满足条件而出单。
+        for idx in range(1, len(self.config.rules) + 1):
+            criterion = self.rule_criterions[idx]
+            if self.rule_mode_row_level:
+                guard = pypika_terms.Case().when(criterion, 1).else_(0)
+            else:
+                guard = Count(pypika_terms.Case().when(criterion, 1))
+            query = query.select(guard.as_(self._rule_guard_alias(idx)))
+        return query
+
+    def _build_rule_mode_where(self, query: QueryBuilder) -> QueryBuilder:
+        """
+        多规则 WHERE：OR(各规则 where)  AND 策略级条件（system_ids 等）。
+        """
+        rules_where = reduce(operator.or_, self.rule_criterions.values())
+        query = query.where(rules_where)
+        if self.config.where:
+            strategy_criterion = self._apply_filter_conditions(self.config.where)
+            if strategy_criterion and not isinstance(strategy_criterion, EmptyCriterion):
+                query = query.where(strategy_criterion)
+        return query
+
+    def build_rule_hit_case(self) -> Term:
+        """
+        构建多规则的 L2 命中表达式（根据L1中的守卫列和各规则聚合列结果得到strategy_rule_id列）。
+        为每个规则生成一个when分支
+        CASE
+            WHEN wguard__r1 > 0 [AND <having'_1 按 L1 列引用求值>] THEN rule_id_1
+            WHEN ... THEN ...
+        END
+
+        """
+        if not getattr(self, "_rule_mode_ready", False):
+            raise ValueError("build_rule_hit_case must be called after generate_rule_mode")
+        case = pypika_terms.Case()
+        for idx, rule in enumerate(self.config.rules, start=1):
+            branch = pypika_terms.Field(self._rule_guard_alias(idx)) > 0
+            if rule.having is not None:
+                having_criterion = self._apply_filter_conditions(
+                    rule.having, leaf_handler=lambda c, _idx=idx: self._handle_rule_having_condition(c, _idx)
+                )
+                if having_criterion is not None and not isinstance(having_criterion, EmptyCriterion):
+                    branch = branch & having_criterion
+            case = case.when(branch, ValueWrapper(rule.rule_id))
+        return case
+
+    def _handle_rule_having_condition(self, condition: Condition, rule_idx: int) -> BasicCriterion:
+        """
+        L2 列引用模式的 having 叶子条件：引用 L1 输出列（聚合字段 -> {alias}__r{i}；维度字段 -> md5 别名列）。
+        """
+        field = condition.field
+        if field.aggregate:
+            # 聚合字段：直接使用 display_name（已经是 md5 别名）查找 rule_alias_map
+            alias = self.rule_alias_map.get((field.display_name, rule_idx))
+            if alias is None:
+                raise InvalidRuleConfigError(
+                    f"规则 having 引用的聚合字段 {field.display_name} 不在策略级 select 中"
+                )
+            pypika_field = pypika_terms.Field(alias)
+            filter_type = (field.aggregate.result_data_type or field.field_type).python_type
+        else:
+            # 维度字段：L1 输出列别名（display_name 已由上层映射为 md5 别名）
+            dimension_columns = {f.display_name for f in self.config.select_fields if not f.aggregate}
+            if field.display_name not in dimension_columns:
+                raise InvalidRuleConfigError(
+                    f"规则 having 引用的维度字段 {field.display_name} 不在策略级 select 的维度列中"
+                )
+            pypika_field = pypika_terms.Field(field.display_name)
+            filter_type = field.field_type.python_type
+        try:
+            return operate(
+                condition.operator,
+                pypika_field,
+                filter_type(condition.filter) if condition.filter not in (None, "") else None,
+                [filter_type(f) for f in condition.filters],
+            )
+        except ValueError:
+            raise FilterValueError(
+                condition.field.raw_name, condition.filter or condition.filters, filter_type, condition.field.aggregate
+            )
+
     def _build_from(self, query: QueryBuilder) -> QueryBuilder:
         """添加 FROM 子句"""
         if not (self.config.from_table or self.config.join_tables):
@@ -183,6 +352,13 @@ class SQLGenerator:
         pypika_field = aggregate_func(pypika_field)
         return pypika_field
 
+    def _build_aggregate_term(self, field: Field, term: Term) -> Term:
+        """用于聚合函数嵌套case when（条件聚合复用 get_function 映射）"""
+        aggregate_func = get_function(field.aggregate)
+        if not aggregate_func:
+            raise InvalidAggregateTypeError(field.aggregate)
+        return aggregate_func(term)
+
     def _build_where(self, query: QueryBuilder) -> QueryBuilder:
         """添加 WHERE 子句"""
         if self.config.where:
@@ -215,7 +391,9 @@ class SQLGenerator:
             return operate(
                 operator,
                 field,
-                filter_type(condition.filter) if condition.filter else None,
+                # "" 为前端存储约定的"值在 filters"标记，视同未设置；
+                # 注意 0/False 是合法配置值，不能用真值判断（与 _handle_rule_having_condition 一致）
+                filter_type(condition.filter) if condition.filter not in (None, "") else None,
                 [filter_type(f) for f in condition.filters],
             )
         except ValueError:
@@ -223,16 +401,22 @@ class SQLGenerator:
                 condition.field.raw_name, condition.filter or condition.filters, filter_type, condition.field.aggregate
             )
 
-    def _apply_filter_conditions(self, condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
-        """递归构建 WHERE/HAVING 子句"""
+    def _apply_filter_conditions(
+        self, condition: Union[WhereCondition, HavingCondition], leaf_handler=None
+    ) -> BasicCriterion:
+        """递归构建 WHERE/HAVING 子句。
+
+        :param leaf_handler: 叶子条件（Condition）处理器，默认 handle_condition；
+            多规则 L2 列引用模式传入 _handle_rule_having_condition（聚合字段解析为 L1 输出列）
+        """
+        leaf_handler = leaf_handler or self.handle_condition
         if condition.condition:
-            return self.handle_condition(condition.condition)
+            return leaf_handler(condition.condition)
 
         if condition.conditions:
-            # 过滤掉空的查询条件，避免出现 Criterion.get_sql() got an unexpected keyword argument 'subcriterion'
             sub_criterions = []
             for sub_condition in condition.conditions:
-                criterion = self._apply_filter_conditions(sub_condition)
+                criterion = self._apply_filter_conditions(sub_condition, leaf_handler)
                 if not isinstance(criterion, EmptyCriterion):
                     sub_criterions.append(criterion)
 
