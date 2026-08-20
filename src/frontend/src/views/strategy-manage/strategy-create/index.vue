@@ -320,8 +320,8 @@
             risk_hazard: d.risk_hazard ?? '',
             risk_guidance: d.risk_guidance ?? '',
           }],
-        assign_rules: _.cloneDeep((d as any).assign_rules ?? []),
-        default_assign_rule: _.cloneDeep((d as any).default_assign_rule ?? {}),
+        assign_rules: _.cloneDeep(d.assign_rules ?? []),
+        default_assign_rule: _.cloneDeep(d.default_assign_rule ?? {}),
       };
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;
