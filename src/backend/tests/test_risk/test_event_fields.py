@@ -109,7 +109,7 @@ class TestListEventFieldsByStrategy(TestCase):
 
         self.assertEqual(display_map["raw_event_id"], "原始事件ID")
         self.assertEqual(display_map["operator"], "责任人")
-        self.assertEqual(display_map["event_time"], "事件时间")
+        self.assertEqual(display_map["event_time"], "事件发生时间")
 
     def test_basic_fields_marked_with_type(self):
         """基本信息字段返回 type=basic_event_field 标识；扩展字段无 type，前端据此区分字段来源"""
