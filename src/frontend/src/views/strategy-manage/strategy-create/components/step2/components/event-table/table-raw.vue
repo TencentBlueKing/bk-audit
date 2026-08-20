@@ -139,6 +139,10 @@
     description: valueKey === 'description',
   });
 
+  const getRowIndex = (element: StrategyFieldEvent['event_basic_field_configs'][0]) => (
+    props.eventItemArr.findIndex(item => item.field_name === element.field_name)
+  );
+
   const updateFieldValue = (config: any, key: string, value: any) => {
     // eslint-disable-next-line no-param-reassign
     config[key] = value;
@@ -205,10 +209,16 @@
 <style lang="postcss" scoped>
 .table-row {
   display: flex;
+  background: #fff;
+
+  &.is-even {
+    background: #fafbfd;
+  }
 
   .cell {
     display: flex;
     height: 42px;
+    padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;

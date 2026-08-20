@@ -140,7 +140,7 @@
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   const stageNameMap: Record<string, string> = {
     await_deal: t('人工处理'),
@@ -397,9 +397,7 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 

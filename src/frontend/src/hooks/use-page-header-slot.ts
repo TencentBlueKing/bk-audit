@@ -1,5 +1,6 @@
 import {
   computed,
+  nextTick,
   onActivated,
   onBeforeUnmount,
   onDeactivated,
@@ -36,16 +37,38 @@ export default function usePageHeaderSlot() {
     clearPageHeaderSlots();
   };
 
+  const activate = () => {
+    claim();
+    nextTick(() => {
+      if (activeOwnerId.value === ownerId) {
+        isPageActive.value = true;
+      }
+    });
+  };
+
+  const refresh = () => {
+    if (activeOwnerId.value !== ownerId) {
+      return;
+    }
+    isPageActive.value = false;
+    nextTick(() => {
+      claim();
+      nextTick(() => {
+        if (activeOwnerId.value === ownerId) {
+          isPageActive.value = true;
+        }
+      });
+    });
+  };
+
   const isActive = computed(() => isPageActive.value && activeOwnerId.value === ownerId);
 
   onMounted(() => {
-    isPageActive.value = true;
-    claim();
+    activate();
   });
 
   onActivated(() => {
-    isPageActive.value = true;
-    claim();
+    activate();
   });
 
   onDeactivated(() => {
@@ -63,5 +86,6 @@ export default function usePageHeaderSlot() {
     isPageActive,
     claim,
     release,
+    refresh,
   };
 }
