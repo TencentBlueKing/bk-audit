@@ -106,6 +106,9 @@ export default class Strategy {
   report_enabled: boolean;
   report_config: any;
   report_auto_render: boolean;
+  rules?: Array<Record<string, any>>;
+  assign_rules?: Array<Record<string, any>>;
+  default_assign_rule?: Record<string, any>;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -141,6 +144,9 @@ export default class Strategy {
     this.report_config = payload.report_config;
     this.report_auto_render = payload.report_auto_render;
     this.report_status = payload.report_status;
+    this.rules = payload.rules;
+    this.assign_rules = payload.assign_rules;
+    this.default_assign_rule = payload.default_assign_rule;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {
