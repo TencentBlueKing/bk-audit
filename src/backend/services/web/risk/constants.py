@@ -138,6 +138,7 @@ class EventMappingFields:
             self.EVENT_CONTENT,
             self.RAW_EVENT_ID,
             self.STRATEGY_ID,
+            self.STRATEGY_RULE_ID,
             self.EVENT_EVIDENCE,
             self.EVENT_TYPE,
             self.EVENT_DATA,
@@ -193,6 +194,16 @@ class EventMappingFields:
         field_name="strategy_id",
         alias_name="strategy_id",
         description=gettext_lazy("命中策略(ID)"),
+        field_type=FIELD_TYPE_LONG,
+        option=dict(),
+        is_index=True,
+        is_dimension=False,
+    )
+
+    STRATEGY_RULE_ID = Field(
+        field_name="strategy_rule_id",
+        alias_name="strategy_rule_id",
+        description=gettext_lazy("命中发现规则(ID)"),
         field_type=FIELD_TYPE_LONG,
         option=dict(),
         is_index=True,
