@@ -142,7 +142,7 @@
 
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
-  import { compareFieldName } from '@/utils/assist';
+  import { compareFieldName, sortByBasicEventFieldOrder } from '@/utils/assist';
 
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
@@ -248,23 +248,22 @@
       list = list.filter(item => item.display_name.toLowerCase().includes(keyword)
         || item.field_name.toLowerCase().includes(keyword));
     }
-    return list.sort((first, second) => {
-      const firstIsBasic = first.type === 'basic_event_field';
-      const secondIsBasic = second.type === 'basic_event_field';
-      if (firstIsBasic !== secondIsBasic) {
-        return firstIsBasic ? -1 : 1;
-      }
-
+    const basicFields = list.filter(item => item.type === 'basic_event_field');
+    const detailFields = list.filter(item => item.type !== 'basic_event_field');
+    const sortedBasicFields = sortByBasicEventFieldOrder(basicFields);
+    const sortedDetailFields = [...detailFields].sort((first, second) => {
       const displayNameCompare = compareFieldName(first.display_name, second.display_name);
-
       if (displayNameCompare !== 0) return displayNameCompare;
       return compareFieldName(first.field_name, second.field_name);
     });
+    return sortedBasicFields.concat(sortedDetailFields);
   });
 
   // 事件字段按分组拆分：有 type === 'basic_event_field' 的归"基本信息"，其余（无 type 或其他 type）归"事件详情"
   const eventFieldGroups = computed(() => {
-    const basicFields = filteredEventFields.value.filter(item => item.type === 'basic_event_field');
+    const basicFields = sortByBasicEventFieldOrder(
+      filteredEventFields.value.filter(item => item.type === 'basic_event_field'),
+    );
     const detailFields = filteredEventFields.value.filter(item => item.type !== 'basic_event_field');
     const groups: Array<{ label: string; items: typeof basicFields }> = [];
     if (basicFields.length > 0) {
