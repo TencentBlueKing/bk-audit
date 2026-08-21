@@ -261,9 +261,7 @@
 
   // 事件字段按分组拆分：有 type === 'basic_event_field' 的归"基本信息"，其余（无 type 或其他 type）归"事件详情"
   const eventFieldGroups = computed(() => {
-    const basicFields = sortByBasicEventFieldOrder(
-      filteredEventFields.value.filter(item => item.type === 'basic_event_field'),
-    );
+    const basicFields = sortByBasicEventFieldOrder(filteredEventFields.value.filter(item => item.type === 'basic_event_field'));
     const detailFields = filteredEventFields.value.filter(item => item.type !== 'basic_event_field');
     const groups: Array<{ label: string; items: typeof basicFields }> = [];
     if (basicFields.length > 0) {
