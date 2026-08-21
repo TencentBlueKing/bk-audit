@@ -312,6 +312,8 @@
       }
       config_type: string
       select: Array<DatabaseTableFieldModel>
+      // 前端临时字段：预期结果为空时用于兜底，提交前会剔除
+      table_fields?: Array<DatabaseTableFieldModel>
       where: Where
       having?: Where
       schedule_config: {
