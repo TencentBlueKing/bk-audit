@@ -1,7 +1,9 @@
 <template>
   <div class="chat-input-area">
     <div class="input-wrapper">
-      <div class="shortcut-commands">
+      <div
+        v-if="!hideShortcuts"
+        class="shortcut-commands">
         <div
           v-if="!showShortcuts"
           class="command-btn"
@@ -58,9 +60,10 @@
         <div
           class="attach-btn"
           @click="handleAttach">
-          <audit-icon
-            class="attach-icon"
-            type="link" />
+          <img
+            alt=""
+            class="attach-icon-img"
+            :src="linkIcon">
         </div>
         <div class="input-content">
           <!-- 斜杠命令菜单 -->
@@ -142,11 +145,13 @@
   import fasongIcon from '@images/fasong-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
+  import linkIcon from '@images/link.svg';
   import shiyongIcon from '@images/shiyong-icon.svg';
 
   const props = defineProps<{
     disabled?: boolean;
     generating?: boolean;
+    hideShortcuts?: boolean;
     placeholder?: string;
   }>();
 
@@ -435,26 +440,31 @@
 
             .shortcut-tag {
               display: flex;
-              padding: 4px 12px;
+              height: 28px;
+              padding: 0 12px;
               font-size: 12px;
+              line-height: 26px;
               color: #63656e;
               white-space: nowrap;
               cursor: pointer;
-              background: #fff;
+              background: #f5f7fa;
               border: 1px solid transparent;
-              border-radius: 16px;
+              border-radius: 14px;
               transition: all .2s;
               align-items: center;
               gap: 4px;
               flex-shrink: 0;
+              box-sizing: border-box;
 
               &:hover:not(.is-disabled) {
                 color: #3a84ff;
+                background: #f0f5ff;
                 border-color: #3a84ff;
               }
 
               &.is-disabled {
                 cursor: not-allowed;
+                opacity: .5;
               }
 
               i {
@@ -512,11 +522,11 @@
         padding: 12px 16px;
         overflow: visible;
         background: #fff;
-        border: 1px solid #eaebf0;
+        border: 1px solid #dcdee5;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
-        transition: all .2s;
-        align-items: flex-end;
+        transition: border-color .2s, box-shadow .2s;
+        align-items: center;
         box-sizing: border-box;
 
         &:focus-within {
@@ -540,8 +550,10 @@
             color: #3a84ff;
           }
 
-          .attach-icon {
-            font-size: 18px;
+          .attach-icon-img {
+            display: block;
+            width: 16px;
+            height: 16px;
           }
         }
 
@@ -618,7 +630,7 @@
           .input-textarea {
             width: 100%;
             max-height: 160px;
-            min-height: 22px;
+            min-height: 32px;
             padding: 5px 0;
             margin: 0;
             overflow-y: auto;
@@ -703,7 +715,7 @@
         margin-top: 8px;
         font-size: 12px;
         line-height: 18px;
-        color: #c4c6cc;
+        color: #979BA5;
         text-align: center;
       }
     }

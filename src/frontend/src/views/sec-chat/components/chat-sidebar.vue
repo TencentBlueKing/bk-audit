@@ -12,7 +12,7 @@
           :popover-width="224"
           scene-permission="view_scene"
           system-permission="view_system"
-          width="100%"
+          :width="224"
           @change="handleSceneChange" />
       </div>
 
@@ -150,108 +150,115 @@
           </div>
 
           <div
-            v-for="conv in filteredHistoryList"
-            :key="conv.id"
-            class="conv-item"
-            :class="{
-              'is-active': activeId === conv.id && editingConvId !== conv.id,
-              'is-menu-open': activeMenuId === conv.id,
-            }"
-            draggable="true"
-            @click="$emit('select', conv.id)"
-            @dragend="handleDragEnd"
-            @dragstart="handleDragStart($event, 'conversation', conv.id)">
-            <span class="conv-dot">•</span>
-            <template v-if="editingConvId === conv.id">
-              <bk-input
-                ref="editConvInputRef"
-                v-model="editConvTitle"
-                autofocus
-                class="conv-title-input"
-                size="small"
-                @blur="cancelEditConv"
-                @click.stop
-                @enter="confirmEditConv(conv.id)" />
-            </template>
-            <template v-else>
-              <span class="conv-title">{{ conv.title }}</span>
-            </template>
+            class="history-conv-list"
+            :class="getHistoryDropClass()"
+            @dragleave="handleDragLeave"
+            @dragover="handleDragOver($event, 'history', 'history')"
+            @drop="handleDrop($event, 'history', 'history')">
             <div
-              class="conv-actions"
-              :class="{ 'is-pinned-actions': conv.pinned }"
-              @click.stop
-              @mousedown.stop>
-              <bk-dropdown
-                class="more-dropdown"
-                placement="bottom-end"
-                :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
-                trigger="click"
-                @hide="hideMenu"
-                @show="showMenu(conv.id)">
-                <div
-                  class="action-btn"
-                  :class="{ 'is-active': activeMenuId === conv.id }">
-                  <audit-icon type="more" />
-                </div>
-                <template #content>
-                  <bk-dropdown-menu>
-                    <bk-dropdown-item @click="handlePin(conv.id)">
-                      {{ conv.pinned ? '取消置顶' : '置顶' }}
-                    </bk-dropdown-item>
-                    <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
-                      重命名
-                    </bk-dropdown-item>
-                    <bk-dropdown-item ext-cls="sub-menu-item">
-                      <bk-dropdown
-                        placement="right-start"
-                        style="width: 100%"
-                        trigger="hover">
-                        <div class="dropdown-sub-trigger">
-                          <span>移动到分组</span>
-                          <angle-right class="sub-icon" />
-                        </div>
-                        <template #content>
-                          <bk-dropdown-menu>
-                            <bk-dropdown-item
-                              v-for="g in groups"
-                              :key="g.id"
-                              @click="moveToGroup(conv.id, g.name)">
-                              {{ g.name }}
-                            </bk-dropdown-item>
-                          </bk-dropdown-menu>
-                        </template>
-                      </bk-dropdown>
-                    </bk-dropdown-item>
-                    <bk-dropdown-item ext-cls="sub-menu-item">
-                      <bk-dropdown
-                        placement="right-start"
-                        style="width: 100%"
-                        trigger="hover">
-                        <div class="dropdown-sub-trigger">
-                          <span>导出</span>
-                          <angle-right class="sub-icon" />
-                        </div>
-                        <template #content>
-                          <bk-dropdown-menu>
-                            <bk-dropdown-item @click="showExportDialog('json')">
-                              导出 JSON
-                            </bk-dropdown-item>
-                            <bk-dropdown-item @click="showExportDialog('markdown')">
-                              导出 Markdown
-                            </bk-dropdown-item>
-                            <bk-dropdown-item @click="showExportDialog('pdf')">
-                              导出 PDF
-                            </bk-dropdown-item>
-                          </bk-dropdown-menu>
-                        </template>
-                      </bk-dropdown>
-                    </bk-dropdown-item>
-                    <bk-dropdown-item @click="handleDelete(conv)">
-                      删除
-                    </bk-dropdown-item>
-                  </bk-dropdown-menu>
-                </template>
-              </bk-dropdown>
+              v-for="conv in filteredHistoryList"
+              :key="conv.id"
+              class="conv-item"
+              :class="{
+                'is-active': activeId === conv.id && editingConvId !== conv.id,
+                'is-menu-open': activeMenuId === conv.id,
+              }"
+              draggable="true"
+              @click="$emit('select', conv.id)"
+              @dragend="handleDragEnd"
+              @dragstart="handleDragStart($event, 'conversation', conv.id)">
+              <span class="conv-dot">•</span>
+              <template v-if="editingConvId === conv.id">
+                <bk-input
+                  ref="editConvInputRef"
+                  v-model="editConvTitle"
+                  autofocus
+                  class="conv-title-input"
+                  size="small"
+                  @blur="cancelEditConv"
+                  @click.stop
+                  @enter="confirmEditConv(conv.id)" />
+              </template>
+              <template v-else>
+                <span class="conv-title">{{ conv.title }}</span>
+              </template>
+              <div
+                class="conv-actions"
+                :class="{ 'is-pinned-actions': conv.pinned }"
+                @click.stop
+                @mousedown.stop>
+                <bk-dropdown
+                  class="more-dropdown"
+                  placement="bottom-end"
+                  :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
+                  trigger="click"
+                  @hide="hideMenu"
+                  @show="showMenu(conv.id)">
+                  <div
+                    class="action-btn"
+                    :class="{ 'is-active': activeMenuId === conv.id }">
+                    <audit-icon type="more" />
+                  </div>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item @click="handlePin(conv.id)">
+                        {{ conv.pinned ? '取消置顶' : '置顶' }}
+                      </bk-dropdown-item>
+                      <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
+                        重命名
+                      </bk-dropdown-item>
+                      <bk-dropdown-item ext-cls="sub-menu-item">
+                        <bk-dropdown
+                          placement="right-start"
+                          style="width: 100%"
+                          trigger="hover">
+                          <div class="dropdown-sub-trigger">
+                            <span>移动到分组</span>
+                            <angle-right class="sub-icon" />
+                          </div>
+                          <template #content>
+                            <bk-dropdown-menu>
+                              <bk-dropdown-item
+                                v-for="g in groups"
+                                :key="g.id"
+                                @click="moveToGroup(conv.id, g.name)">
+                                {{ g.name }}
+                              </bk-dropdown-item>
+                            </bk-dropdown-menu>
+                          </template>
+                        </bk-dropdown>
+                      </bk-dropdown-item>
+                      <bk-dropdown-item ext-cls="sub-menu-item">
+                        <bk-dropdown
+                          placement="right-start"
+                          style="width: 100%"
+                          trigger="hover">
+                          <div class="dropdown-sub-trigger">
+                            <span>导出</span>
+                            <angle-right class="sub-icon" />
+                          </div>
+                          <template #content>
+                            <bk-dropdown-menu>
+                              <bk-dropdown-item @click="showExportDialog('json')">
+                                导出 JSON
+                              </bk-dropdown-item>
+                              <bk-dropdown-item @click="showExportDialog('markdown')">
+                                导出 Markdown
+                              </bk-dropdown-item>
+                              <bk-dropdown-item @click="showExportDialog('pdf')">
+                                导出 PDF
+                              </bk-dropdown-item>
+                            </bk-dropdown-menu>
+                          </template>
+                        </bk-dropdown>
+                      </bk-dropdown-item>
+                      <bk-dropdown-item @click="handleDelete(conv)">
+                        删除
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
+              </div>
             </div>
           </div>
         </div>
@@ -521,7 +528,9 @@
             <div class="collapsed-search-section-title">
               最近对话 ({{ collapsedFilteredHistoryList.length }})
             </div>
-            <div class="collapsed-search-scroll-wrap">
+            <div
+              class="collapsed-search-scroll-wrap"
+              :style="collapsedSearchScrollStyle">
               <scroll-faker
                 :key="`collapsed-search-${collapsedSearchKeyword}-${collapsedFilteredHistoryList.length}`">
                 <div class="collapsed-search-list">
@@ -1016,8 +1025,22 @@
 
   const collapsedFilteredHistoryList = computed(() => {
     const keyword = collapsedSearchKeyword.value.trim();
-    if (!keyword) return collapsedSortedConversations.value;
-    return collapsedSortedConversations.value.filter(c => c.title.includes(keyword));
+    const list = !keyword
+      ? collapsedSortedConversations.value
+      : collapsedSortedConversations.value.filter(c => c.title.includes(keyword));
+    return list.slice(0, 10);
+  });
+
+  const COLLAPSED_SEARCH_ITEM_HEIGHT = 32;
+  const COLLAPSED_SEARCH_MAX_ITEMS = 10;
+
+  const collapsedSearchScrollStyle = computed(() => {
+    const count = collapsedFilteredHistoryList.value.length;
+    if (!count) {
+      return { height: '0px' };
+    }
+    const visibleCount = Math.min(count, COLLAPSED_SEARCH_MAX_ITEMS);
+    return { height: `${visibleCount * COLLAPSED_SEARCH_ITEM_HEIGHT}px` };
   });
 
   const escapeHtml = (str: string) => str
@@ -1207,10 +1230,17 @@
   }>({ type: null, id: null });
 
   const dragOverState = ref<{
-    type: 'group' | 'conversation' | null;
+    type: 'group' | 'conversation' | 'history' | null;
     id: string | null;
     position: 'top' | 'bottom' | 'inside' | null;
   }>({ type: null, id: null, position: null });
+
+  const getHistoryDropClass = () => ({
+    'is-drag-over-inside': dragOverState.value.type === 'history'
+      && dragOverState.value.id === 'history'
+      && dragOverState.value.position === 'inside',
+    'is-drag-target': dragState.value.type === 'conversation' && !!dragState.value.sourceGroup,
+  });
 
   const getGroupItemDragClass = (groupName: string) => ({
     'is-drag-over-top': dragOverState.value.type === 'group'
@@ -1236,22 +1266,21 @@
     dragState.value = { type, id, sourceGroup };
   };
 
-  const handleDragOver = (e: DragEvent, type: 'group' | 'conversation', id: string) => {
+  const handleDragOver = (e: DragEvent, type: 'group' | 'conversation' | 'history', id: string) => {
     e.preventDefault();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
     }
 
-    if (dragState.value.type === 'conversation' && type === 'group') {
+    if (dragState.value.type === 'conversation' && type === 'history') {
+      dragOverState.value = { type, id, position: 'inside' };
+    } else if (dragState.value.type === 'conversation' && type === 'group') {
       dragOverState.value = { type, id, position: 'inside' };
     } else if (dragState.value.type === 'group' && type === 'group') {
       const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const midY = targetRect.top + targetRect.height / 2;
       const position = e.clientY < midY ? 'top' : 'bottom';
       dragOverState.value = { type, id, position };
-    } else if (dragState.value.type === 'conversation' && type === 'conversation') {
-      // 暂不支持会话排序，只支持移动到分组
-      dragOverState.value = { type: null, id: null, position: null };
     }
   };
 
@@ -1259,14 +1288,15 @@
     dragOverState.value = { type: null, id: null, position: null };
   };
 
-  const handleDrop = (e: DragEvent, targetType: 'group' | 'conversation', targetId: string) => {
+  const handleDrop = (e: DragEvent, targetType: 'group' | 'conversation' | 'history', targetId: string) => {
     e.preventDefault();
-    const { type, id } = dragState.value;
+    const { type, id, sourceGroup } = dragState.value;
     const { position } = dragOverState.value;
 
     if (type === 'conversation' && targetType === 'group') {
-      // 移动会话到分组
       emit('update-group', id!, targetId);
+    } else if (type === 'conversation' && (targetType === 'history' || (targetType === 'conversation' && sourceGroup))) {
+      emit('update-group', id!, undefined);
     } else if (type === 'group' && targetType === 'group' && id !== targetId) {
       // 分组排序
       const newGroups = [...props.groups];
@@ -1478,7 +1508,8 @@
         .catch(() => undefined);
     };
 
-    const deleteInfoInstance = InfoBox({
+    let deleteInfoInstance: any = null;
+    deleteInfoInstance = InfoBox({
       type: 'warning',
       title: '确定删除该分组？',
       headerAlign: 'center',
@@ -1796,7 +1827,8 @@
   const showDeleteConversationDialog = (conv: Conversation) => {
     const confirmName = ref('');
     const confirmBtnClass = 'chat-delete-confirm-btn';
-    const deleteInfoInstance = InfoBox({
+    let deleteInfoInstance: any = null;
+    deleteInfoInstance = InfoBox({
       type: 'warning',
       title: '确定删除该会话？',
       headerAlign: 'center',
@@ -1884,7 +1916,8 @@
   const showClearAllDialog = () => {
     closeSidebarPopovers();
     const confirmText = ref('');
-    const clearInfoInstance = InfoBox({
+    let clearInfoInstance: any = null;
+    clearInfoInstance = InfoBox({
       type: 'warning',
       title: '确定清空所有会话？',
       headerAlign: 'center',

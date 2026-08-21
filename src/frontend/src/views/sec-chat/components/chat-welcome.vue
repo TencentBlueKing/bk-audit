@@ -16,56 +16,61 @@
 -->
 <template>
   <div class="chat-welcome">
-    <div class="welcome-column">
-      <!-- 标题区 -->
-      <div class="welcome-hero">
-        <img
-          alt="AI助手"
-          class="logo-icon"
-          :src="aiChatIcon">
-        <h1 class="hero-title">
-          AI助手
-        </h1>
-        <p class="hero-desc">
-          审计中心智能助手 — 分析审计风险、解读告警、检索日志、生成报告
-        </p>
-      </div>
+    <div class="welcome-body">
+      <div class="welcome-column">
+        <!-- 标题区 -->
+        <div class="welcome-hero">
+          <img
+            alt="AI助手"
+            class="logo-icon"
+            :src="aiAssistantIcon">
+          <h1 class="hero-title">
+            AI助手
+          </h1>
+          <p class="hero-desc">
+            审计中心智能助手 — 分析审计风险、解读告警、检索日志、生成报告
+          </p>
+        </div>
 
-      <!-- 功能卡片 -->
-      <div class="prompt-grid">
-        <div
-          v-for="item in promptCards"
-          :key="item.title"
-          class="prompt-card"
-          :class="{ 'is-disabled': item.disabled }"
-          :title="item.disabled ? '暂未开放' : undefined"
-          @click="handleCardClick(item)">
-          <div class="card-icon">
-            <img
-              v-if="item.iconSrc"
-              alt=""
-              class="card-icon-img"
-              :src="item.iconSrc">
-            <audit-icon
-              v-else
-              :type="item.icon" />
-          </div>
-          <div class="card-content">
-            <div class="card-title">
-              {{ item.title }}
+        <!-- 功能卡片 -->
+        <div class="prompt-grid">
+          <div
+            v-for="item in promptCards"
+            :key="item.title"
+            class="prompt-card"
+            :class="{ 'is-disabled': item.disabled }"
+            :title="item.disabled ? '暂未开放' : undefined"
+            @click="handleCardClick(item)">
+            <div class="card-icon">
+              <img
+                v-if="item.iconSrc"
+                alt=""
+                class="card-icon-img"
+                :src="item.iconSrc">
+              <audit-icon
+                v-else
+                :type="item.icon" />
             </div>
-            <div class="card-desc">
-              {{ item.desc }}
+            <div class="card-content">
+              <div class="card-title">
+                {{ item.title }}
+              </div>
+              <div class="card-desc">
+                {{ item.desc }}
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- 输入区：与卡片同宽 -->
-      <chat-input
-        class="welcome-input"
-        @attach="$emit('attach')"
-        @send="handleInputSend" />
+    <div class="welcome-footer">
+      <div class="welcome-column">
+        <chat-input
+          hide-shortcuts
+          @attach="$emit('attach')"
+          @send="handleInputSend" />
+      </div>
     </div>
   </div>
 </template>
@@ -74,7 +79,7 @@
   import ChatInput from './chat-input.vue';
   import type { ChatSceneType, SelectPromptPayload } from '../types';
 
-  import aiChatIcon from '@images/ai-chat-icon.svg';
+  import aiAssistantIcon from '@images/ai-assistant.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';
@@ -157,20 +162,36 @@
     display: flex;
     width: 100%;
     height: 100%;
-    padding: 40px 24px;
-    overflow: auto;
+    overflow: hidden;
     background-color: #f5f7fa;
     box-sizing: border-box;
     flex: 1;
     flex-direction: column;
+  }
+
+  .welcome-body {
+    display: flex;
+    min-height: 0;
+    padding: 40px 24px 24px;
+    overflow: auto;
+    flex: 1;
     align-items: center;
     justify-content: center;
   }
 
-  /* 标题 / 卡片 / 输入 同一宽度，水平垂直居中 */
+  .welcome-footer {
+    display: flex;
+    flex-shrink: 0;
+    width: 100%;
+    padding: 0 24px 20px;
+    box-sizing: border-box;
+    justify-content: center;
+  }
+
+  /* 标题 / 卡片 / 输入 同一宽度，与对话区 900 对齐 */
   .welcome-column {
     display: flex;
-    width: 960px;
+    width: 900px;
     max-width: 100%;
     min-width: 0;
     flex-direction: column;
@@ -179,30 +200,30 @@
 
   .welcome-hero {
     display: flex;
-    margin-bottom: 40px;
+    margin-bottom: 32px;
     flex-direction: column;
     align-items: center;
 
     .logo-icon {
       display: block;
-      width: 56px;
-      height: auto;
+      width: 64px;
+      height: 64px;
       margin-bottom: 16px;
     }
 
     .hero-title {
-      margin: 0 0 12px;
-      font-size: 36px;
-      font-weight: 600;
-      line-height: 44px;
+      margin: 0 0 16px;
+      font-size: 48px;
+      font-weight: 800;
+      line-height: 40px;
       color: #313238;
     }
 
     .hero-desc {
       margin: 0;
-      font-size: 14px;
+      font-size: 16px;
       line-height: 22px;
-      color: #63656e;
+      color: #4D4F56;
       text-align: center;
     }
   }
@@ -210,26 +231,25 @@
   .prompt-grid {
     display: grid;
     width: 100%;
-    margin-bottom: 28px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 12px;
 
     .prompt-card {
       display: flex;
       min-width: 0;
-      padding: 20px;
+      min-height: 98px;
+      padding: 16px;
       cursor: pointer;
       background: #fff;
       border: 1px solid #eaebf0;
-      border-radius: 8px;
-      transition: border-color .2s, box-shadow .2s;
-      align-items: flex-start;
-      gap: 14px;
+      border-radius: 4px;
+      transition: box-shadow .2s;
+      align-items: center;
+      gap: 12px;
       box-sizing: border-box;
 
-      &:hover:not(.is-disabled) {
-        border-color: #3a84ff;
-        box-shadow: 0 2px 8px rgb(58 132 255 / 12%);
+      &:hover {
+        box-shadow: 0 2px 10px 0 rgb(0 0 0 / 16%);
       }
 
       &.is-disabled {
@@ -238,10 +258,10 @@
 
       .card-icon {
         display: flex;
-        width: 44px;
-        height: 44px;
+        width: 50px;
+        height: 50px;
         background: #f0f5ff;
-        border-radius: 8px;
+        border-radius: 4px;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
@@ -249,14 +269,14 @@
         i,
         .audit-icon,
         .card-icon-img {
-          font-size: 22px;
+          font-size: 20px;
           color: #3a84ff;
         }
 
         .card-icon-img {
           display: block;
-          width: 22px;
-          height: 22px;
+          width: 20px;
+          height: 20px;
         }
       }
 
@@ -265,26 +285,19 @@
         min-width: 0;
 
         .card-title {
-          margin-bottom: 4px;
-          font-size: 14px;
-          font-weight: 500;
+          margin-bottom: 5px;
+          font-size: 16px;
+          font-weight: 700;
           line-height: 22px;
-          color: #313238;
+          color: #000;
         }
 
         .card-desc {
-          font-size: 12px;
+          font-size: 14px;
           line-height: 20px;
-          color: #979ba5;
+          color: #4D4F56;
         }
       }
     }
-  }
-
-  .welcome-input {
-    position: relative;
-    width: 100%;
-    min-width: 0;
-    z-index: 10;
   }
 </style>
