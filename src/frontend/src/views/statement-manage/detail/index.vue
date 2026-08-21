@@ -23,7 +23,7 @@
       id="panel"
       ref="panelRef" />
   </div>
-  <!-- 指定大屏报表：Teleport + 等比缩放 + 可滚动 -->
+  <!-- 大屏报表（panels 含 iframe）：Teleport + 等比缩放 + 可滚动 -->
   <template v-else>
     <div class="statement-detail-placeholder" />
     <teleport to="body">
@@ -44,7 +44,6 @@
 </template>
 <script setup lang="ts">
   import {
-    computed,
     nextTick,
     onDeactivated,
     onMounted,
@@ -72,11 +71,7 @@
     status: number
   }
 
-  // 仅这些报表走大屏适配；其余保持原来的普通嵌入方式
-  const LARGE_SCREEN_PANEL_IDS = new Set([
-    '555a9e45d36a3029afbde612e4dbe7ff',
-  ]);
-
+  // panels 含 type=iframe 时走大屏适配；其余保持普通嵌入
   const BKVISION_SCRIPT_SRC = 'https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js';
   const FALLBACK_WIDTH = 1920;
   const FALLBACK_HEIGHT = 1080;
@@ -86,6 +81,8 @@
   const wrapRef = ref<HTMLElement | null>(null);
   const scalerRef = ref<HTMLElement | null>(null);
   const panelRef = ref<HTMLElement | null>(null);
+  /** 由 share_detail.panels 是否含 iframe 组件决定 */
+  const isLargeScreenReport = ref(false);
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
   let app: any;
@@ -99,10 +96,6 @@
   let remountTimers: number[] = [];
   let layoutRaf = 0;
   let sideResizeObserver: ResizeObserver | null = null;
-
-  const isLargeScreenReport = computed(() => (
-    LARGE_SCREEN_PANEL_IDS.has(String(route.params.id || ''))
-  ));
 
   const isValidId = (id: any): boolean => {
     if (!id) return false;
@@ -425,24 +418,28 @@
   };
 
   /**
-   * 从 share_detail 解析变量 / 交互组件 flag 集合
-   * 与报表配置、BKVision 工具一致：variable → constants，其余 → filters
+   * 从 share_detail 解析：
+   * 1) variable / 交互组件 flag
+   * 2) panels 是否含 type=iframe（大屏判断）
    */
-  const resolveParamFlagSets = async (visionId: string) => {
+  const resolveShareDetailMeta = async (shareUid: string) => {
     const variableFlags = new Set<string>();
     const filterFlags = new Set<string>();
+    let hasIframePanel = false;
 
-    if (!visionId) {
-      return { variableFlags, filterFlags };
+    if (!shareUid) {
+      return { variableFlags, filterFlags, hasIframePanel };
     }
 
     try {
-      const res = await ToolManageService.fetchReportLists({ share_uid: visionId });
+      const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
       if (!res?.data) {
-        return { variableFlags, filterFlags };
+        return { variableFlags, filterFlags, hasIframePanel };
       }
 
       const panels = Array.isArray(res.data.panels) ? res.data.panels : [];
+      hasIframePanel = panels.some((item: any) => item?.type === 'iframe');
+
       const variables = Array.isArray(res.data.variables) ? res.data.variables : [];
       const shareFilters = res.filters || {};
       const shareConstants = res.constants || {};
@@ -470,10 +467,10 @@
         });
       }
     } catch (e) {
-      console.error('获取报表参数分类失败:', e);
+      console.error('获取报表 share_detail 失败:', e);
     }
 
-    return { variableFlags, filterFlags };
+    return { variableFlags, filterFlags, hasIframePanel };
   };
 
   // 按 BKVision 工具规则拆分覆盖值到 constants / filters
@@ -523,6 +520,7 @@
     canvasLocked = false;
     canvasW = FALLBACK_WIDTH;
     canvasH = FALLBACK_HEIGHT;
+    isLargeScreenReport.value = false;
     destroyApp();
     resetWrapLayout();
   };
@@ -568,11 +566,9 @@
     const seq = initSeq;
     destroyApp();
     lastInitKey = '';
-    if (isLargeScreenReport.value) {
-      updatePanelLayout();
-    } else {
-      resetWrapLayout();
-    }
+    // 先按普通布局占位，等 share_detail 判断后再切大屏
+    isLargeScreenReport.value = false;
+    resetWrapLayout();
 
     try {
       if (!window.BkVisionSDK) {
@@ -584,7 +580,18 @@
       const panelDetail = await fetchPanelDetailWithOverride(scopeConstants);
       if (seq !== initSeq) return;
 
-      const { variableFlags, filterFlags } = await resolveParamFlagSets(panelDetail.vision_id);
+      // share_uid：优先平台配置的 vision_id，否则用路由 panel id
+      const shareUid = panelDetail.vision_id || String(route.params.id);
+      const {
+        variableFlags,
+        filterFlags,
+        hasIframePanel,
+      } = await resolveShareDetailMeta(shareUid);
+      if (seq !== initSeq) return;
+
+      // panels 含 iframe → 大屏布局
+      isLargeScreenReport.value = hasIframePanel;
+      await nextTick();
       if (seq !== initSeq) return;
 
       const { constants: overrideConstants, filters: overrideFilters } = splitOverrideParams(
@@ -595,7 +602,6 @@
 
       // 再次确保容器干净，避免上一次异步渲染残留
       clearPanelDom();
-      // 切换普通/大屏时 DOM 结构不同，等下一帧再挂载
       await nextTick();
       if (isLargeScreenReport.value) {
         updatePanelLayout();
