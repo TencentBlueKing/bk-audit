@@ -16,26 +16,19 @@
 -->
 <template>
   <div class="select-system-card">
-    <div class="card-header">
-      <div class="card-title">
-        <audit-icon
-          class="title-icon"
-          type="help-fill" />
-        <h4>选择系统</h4>
-      </div>
-      <div
-        class="card-close"
-        @click="$emit('close')">
-        <audit-icon type="close" />
-      </div>
-    </div>
     <div class="card-body">
       <p class="card-tip">
-        先选择要查询的系统<span class="tip-extra">（可多选，仅限有权限的系统）</span>
+        <img
+          alt=""
+          class="tip-icon"
+          :src="wenhaoIcon">
+        <span>
+          先选择要查询的系统<span class="tip-extra">（可多选，仅限有权限的系统）</span>
+        </span>
       </p>
       <div class="field-block">
         <div class="field-label">
-          系统选择<span class="required">*</span>
+          系统选择
         </div>
         <div class="field-control">
           <bk-select
@@ -55,9 +48,15 @@
             <bk-option
               v-for="item in displaySystemList"
               :key="item.id"
+              :disabled="isOptionDisabled(item.id)"
               :label="`${item.name}(${item.id})`"
               :value="item.id" />
           </bk-select>
+        </div>
+        <div
+          v-if="selectedIds.length"
+          class="field-count">
+          已选系统 {{ selectedIds.length }} / {{ MAX_SYSTEM_COUNT }}
         </div>
       </div>
       <div class="card-actions">
@@ -77,6 +76,8 @@
   import { ref, watch } from 'vue';
 
   import useMessage from '@hooks/use-message';
+
+  import wenhaoIcon from '@images/wenhao.svg';
 
   import type { SelectedSystem } from '../../types';
 
@@ -100,6 +101,8 @@
     close: [];
   }>();
 
+  const MAX_SYSTEM_COUNT = 10;
+
   const { messageWarn } = useMessage();
   const selectedIds = ref<string[]>([...(props.modelValue || [])]);
 
@@ -112,17 +115,26 @@
     };
   });
 
-  // 卡片贴底靠近输入区，下拉默认向下会被挡住：强制向上展开并挂到 body
   const selectPopoverOptions = {
     extCls: 'sec-chat-system-select-popover',
     boundary: 'body',
-    placement: 'top-start',
+    placement: 'bottom-start',
     autoPlacement: true,
     zIndex: 9999,
   } as const;
 
+  const isOptionDisabled = (id: string) => (
+    selectedIds.value.length >= MAX_SYSTEM_COUNT && !selectedIds.value.includes(id)
+  );
+
   watch(() => props.modelValue, (val) => {
-    selectedIds.value = [...(val || [])];
+    selectedIds.value = [...(val || [])].slice(0, MAX_SYSTEM_COUNT);
+  });
+
+  watch(selectedIds, (val) => {
+    if (val.length <= MAX_SYSTEM_COUNT) return;
+    selectedIds.value = val.slice(0, MAX_SYSTEM_COUNT);
+    messageWarn(`最多选择 ${MAX_SYSTEM_COUNT} 个系统`);
   });
 
   const handleConfirm = () => {
@@ -145,8 +157,8 @@
   .select-system-card {
     width: 900px;
     max-width: 100%;
-    /* 避免裁剪下拉面板 */
     overflow: visible;
+    padding: 20px 24px 24px;
     font-size: 14px;
     font-weight: 400;
     line-height: 22px;
@@ -154,86 +166,47 @@
     letter-spacing: 0;
     text-align: left;
     background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgb(0 0 0 / 10%);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
-  }
-
-  .card-header {
-    display: flex;
-    height: 52px;
-    padding: 0 24px;
-    background: #f0f1f5;
-    border-bottom: 1px solid #dcdee5;
-    border-radius: 8px 8px 0 0;
-    align-items: center;
-    justify-content: space-between;
-    box-sizing: border-box;
-
-    .card-title {
-      display: flex;
-      font-size: 16px;
-      font-weight: 400;
-      line-height: 24px;
-      color: #313238;
-      letter-spacing: 0;
-      text-align: left;
-      align-items: center;
-      gap: 8px;
-
-      .title-icon {
-        font-size: 18px;
-        color: #979ba5;
-        flex-shrink: 0;
-      }
-    }
-
-    .card-close {
-      display: flex;
-      width: 32px;
-      height: 32px;
-      margin-right: -8px;
-      font-size: 18px;
-      color: #979ba5;
-      cursor: pointer;
-      border-radius: 2px;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-
-      &:hover {
-        color: #63656e;
-        background: #eaebf0;
-      }
-    }
   }
 
   .card-body {
     display: flex;
-    padding: 24px;
-    background: #fff;
+    padding: 0;
+    background: transparent;
     flex-direction: column;
   }
 
   .card-tip {
-    margin: 0 0 12px;
+    display: flex;
+    margin: 0 0 16px;
     font-size: 14px;
     font-weight: 400;
     line-height: 22px;
     color: #63656e;
     letter-spacing: 0;
     text-align: left;
+    align-items: flex-start;
+    gap: 8px;
+
+    .tip-icon {
+      display: block;
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
 
     .tip-extra {
-      color: #63656e;
+      color: #9ea1aa;
     }
   }
 
   .field-block {
     display: flex;
     width: 100%;
-    margin: 0 0 24px;
+    margin: 0 0 16px;
     padding: 0;
     overflow: visible;
     flex-direction: column;
@@ -242,20 +215,16 @@
   .field-label {
     display: block;
     width: 100%;
+    margin-bottom: 8px;
     padding: 0;
     font-size: 14px;
-    font-weight: 400;
+    font-weight: 700;
     line-height: 22px;
-    color: #63656e;
+    color: #313238;
     letter-spacing: 0;
     text-align: left;
     flex-shrink: 0;
     box-sizing: border-box;
-
-    .required {
-      margin-left: 4px;
-      color: #ea3636;
-    }
   }
 
   .field-control {
@@ -265,6 +234,13 @@
     padding: 0;
     flex-shrink: 0;
     box-sizing: border-box;
+  }
+
+  .field-count {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
   }
 
   .system-select {
@@ -395,7 +371,6 @@
 </style>
 
 <style lang="postcss">
-  /* 下拉挂到 body，向上展开；提高层级避免被底部输入区遮挡 */
   .sec-chat-system-select-popover {
     z-index: 9999 !important;
   }
