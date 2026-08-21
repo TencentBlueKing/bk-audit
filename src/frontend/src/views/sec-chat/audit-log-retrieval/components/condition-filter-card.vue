@@ -49,17 +49,59 @@
       </condition-tags>
     </div>
 
-    <div class="card-actions">
+    <div
+      v-if="searchState !== 'done'"
+      class="card-actions">
       <bk-button
+        v-if="searchState !== 'loading'"
         class="search-btn"
         theme="primary"
         @click="handleSearch">
         开始检索
       </bk-button>
+      <div
+        v-else
+        aria-label="检索中"
+        class="search-btn is-loading">
+        <span class="loading-dot" />
+        <span class="loading-dot" />
+        <span class="loading-dot" />
+        <span class="loading-dot" />
+      </div>
     </div>
 
     <div
-      v-if="inlineResult"
+      v-if="searchState === 'empty'"
+      class="status-panel is-empty">
+      <img
+        alt=""
+        class="empty-icon"
+        :src="emptySearchIcon">
+      <div class="status-title">
+        检索结果为空
+      </div>
+      <div class="status-desc">
+        可以尝试修改或减少检索条件
+      </div>
+    </div>
+
+    <div
+      v-else-if="searchState === 'failed'"
+      class="status-panel is-failed">
+      <img
+        alt=""
+        class="failed-icon"
+        :src="errorSearchIcon">
+      <div class="status-title">
+        检索失败
+      </div>
+      <div class="status-desc">
+        {{ searchError || '请检查网络是否通畅或联系管理员' }}
+      </div>
+    </div>
+
+    <div
+      v-if="inlineResult && searchState === 'done'"
       class="inline-result">
       <retrieval-result-card
         embedded
@@ -77,6 +119,9 @@
 
   import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
   import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
+
+  import emptySearchIcon from '@images/empty-search.svg';
+  import errorSearchIcon from '@images/error-search.svg';
 
   import RetrievalResultCard from './retrieval-result-card.vue';
   import type { RetrievalResultPayload, SelectedSystem } from '../../types';
@@ -106,6 +151,9 @@
 
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const inlineResult = ref<RetrievalResultPayload | null>(null);
+  const searchState = ref<'idle' | 'loading' | 'empty' | 'failed' | 'done'>('idle');
+  const searchError = ref('');
+  const searchAttempt = ref(0);
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),
     datetime_origin: createDefaultDatetimeOrigin(),
@@ -206,6 +254,8 @@
       datetime_origin: createDefaultDatetimeOrigin(),
     };
     inlineResult.value = null;
+    searchState.value = 'idle';
+    searchError.value = '';
   };
 
   const formatConditionValue = (fieldName: string, config: IFieldConfig, value: any): string => {
@@ -262,10 +312,34 @@
     return parts.join('，');
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     const summary = buildConditionSummary();
     if (!summary) return;
+    if (searchState.value === 'loading') return;
+
+    // 本阶段：mock 检索过程用来展示“检索中/检索为空/检索失败”样式
+    searchAttempt.value += 1;
+    searchState.value = 'loading';
+    searchError.value = '';
+    inlineResult.value = null;
+
+    await new Promise(resolve => setTimeout(resolve, 1200));
+
+    const mod = searchAttempt.value % 3;
+    if (mod === 1) {
+      searchState.value = 'empty';
+      emit('searched');
+      return;
+    }
+    if (mod === 2) {
+      searchState.value = 'failed';
+      searchError.value = '请检查网络是否畅通或联系管理员';
+      emit('searched');
+      return;
+    }
+
     inlineResult.value = buildMockRetrievalResult(`条件筛选：${summary}`);
+    searchState.value = 'done';
     emit('searched');
   };
 
@@ -291,7 +365,7 @@
   .condition-filter-card {
     width: 100%;
     max-width: 100%;
-    padding: 16px 24px 20px;
+    padding: 20px 24px 24px;
     overflow: visible;
     font-size: 14px;
     font-weight: 400;
@@ -299,9 +373,8 @@
     color: #63656e;
     letter-spacing: 0;
     background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgb(0 0 0 / 10%);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
   }
 
@@ -320,7 +393,7 @@
     .card-title {
       font-size: 14px;
       line-height: 22px;
-      color: #979ba5;
+      color: #313238;
     }
   }
 
@@ -334,6 +407,7 @@
     justify-content: flex-start;
 
     .search-btn {
+      display: inline-flex;
       min-width: 88px;
       height: 32px;
       padding: 0 16px;
@@ -341,11 +415,117 @@
       font-weight: 400;
       line-height: 32px;
       border-radius: 2px;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+
+      &.is-loading {
+        gap: 4px;
+        color: #fff;
+        pointer-events: none;
+        background: #a3c5fd;
+        border: none;
+      }
+    }
+  }
+
+  .loading-dot {
+    width: 4px;
+    height: 4px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 40%;
+    animation: loading-dot 1s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .loading-dot:nth-child(2) {
+    animation-delay: .15s;
+  }
+
+  .loading-dot:nth-child(3) {
+    animation-delay: .3s;
+  }
+
+  .loading-dot:nth-child(4) {
+    animation-delay: .45s;
+  }
+
+  @keyframes loading-dot {
+    0%,
+    100% {
+      opacity: 40%;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 100%;
+      transform: scale(1.15);
+    }
+  }
+
+  .status-panel {
+    display: flex;
+    margin-top: 24px;
+    min-height: 180px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .status-panel.is-empty {
+    .empty-icon {
+      display: block;
+      width: 98px;
+      height: 88px;
+    }
+
+    .status-title {
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #4D4F56;
+      text-align: center;
+    }
+  }
+
+  .status-panel.is-failed {
+    .failed-icon {
+      display: block;
+      width: 48px;
+      height: 48px;
+    }
+
+    .status-title {
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #4D4F56;
+      text-align: center;
     }
   }
 
   .inline-result {
     margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #dcdee5;
   }
 </style>
 <style lang="postcss">
