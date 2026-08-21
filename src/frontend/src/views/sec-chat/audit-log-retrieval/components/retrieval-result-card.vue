@@ -83,7 +83,11 @@
             {{ result.title }}
           </h3>
           <p class="summary-desc">
-            共命中 {{ formatNumber(result.totalHit) }} 条日志，数据量较大，已展示前 {{ result.previewCount }} 条预览
+            共命中
+            <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
+            条日志，数据量较大，已展示前
+            <span class="summary-num">{{ result.previewCount }}</span>
+            条预览
           </p>
         </div>
         <bk-dropdown
@@ -508,9 +512,8 @@
     line-height: 22px;
     color: #63656e;
     background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgb(0 0 0 / 10%);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
 
     &.is-embedded {
@@ -536,7 +539,7 @@
     gap: 8px;
 
     .condition-icon {
-      font-size: 16px;
+      font-size: 18px;
       color: #979ba5;
     }
   }
@@ -616,8 +619,8 @@
   }
 
   .summary-title {
-    margin: 0 0 8px;
-    font-size: 16px;
+    margin: 0 0 19px;
+    font-size: 20px;
     font-weight: 700;
     line-height: 24px;
     color: #313238;
@@ -625,9 +628,14 @@
 
   .summary-desc {
     margin: 0;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 22px;
     color: #63656e;
+
+    .summary-num {
+      font-weight: 700;
+      color: #313238;
+    }
   }
 
   .export-dropdown {
@@ -655,8 +663,6 @@
   .table-section {
     margin-bottom: 20px;
     overflow: hidden;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
   }
 
   .table-scroll {
@@ -693,18 +699,23 @@
       text-align: left;
       text-overflow: ellipsis;
       white-space: nowrap;
-      border-bottom: 1px solid #dcdee5;
+      border: none;
       box-sizing: border-box;
     }
 
     th {
-      font-weight: 700;
+      font-weight: 400;
       color: #313238;
       background: #fafbfd;
+      border-bottom: 1px solid #dcdee5;
     }
 
-    tbody tr:last-child td {
-      border-bottom: none;
+    td {
+      background: #fff;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fafbfd;
     }
   }
 
