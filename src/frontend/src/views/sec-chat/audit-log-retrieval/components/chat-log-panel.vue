@@ -61,6 +61,7 @@
       <div class="chat-surface">
         <chat-input
           ref="chatInputRef"
+          hide-shortcuts
           @attach="$emit('attach')"
           @send="$emit('send', $event)" />
       </div>
@@ -160,8 +161,6 @@
     }
 
     .chat-surface {
-      /* 内容少时贴底，但与输入区留出间距，避免卡片底部被挡住 */
-      margin-top: auto;
       margin-bottom: 8px;
       overflow: visible;
     }
@@ -172,7 +171,7 @@
     width: 100%;
     overflow: visible;
     flex-direction: column;
-    gap: 16px;
+    gap: 24px;
   }
 
   .message-row {
@@ -196,15 +195,16 @@
   }
 
   .user-bubble {
-    max-width: 70%;
-    padding: 10px 16px;
+    max-width: 640px;
+    padding: 12px 24px;
     font-size: 14px;
     line-height: 22px;
-    color: #fff;
+    color: #313238;
     letter-spacing: 0;
     word-break: break-word;
-    background: #3a84ff;
-    border-radius: 8px 2px 8px 8px;
+    background: #CDDFFE;
+    border-radius: 16px 0px 16px 16px;
+    box-sizing: border-box;
   }
 
   .panel-footer {
