@@ -1995,3 +1995,21 @@ class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
     """风险反查报告请求"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+
+
+class ConfirmRiskRequestSerializer(serializers.Serializer):
+    """确认风险请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+
+
+class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """确认为误报请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )

@@ -73,6 +73,7 @@ class RiskFlowBaseHandler:
     # 子类可覆盖以实现特殊映射（如 NewRisk 将 AWAIT_PROCESS 映射为"待处理"）
     DISPLAY_STATUS_MAP = {
         RiskStatus.NEW: RiskDisplayStatus.NEW,
+        RiskStatus.PENDING_CONFIRM: RiskDisplayStatus.PENDING_CONFIRM,  # 二次确认状态
         RiskStatus.FOR_APPROVE: RiskDisplayStatus.FOR_APPROVE,
         RiskStatus.AUTO_PROCESS: RiskDisplayStatus.AUTO_PROCESS,
         RiskStatus.CLOSED: RiskDisplayStatus.CLOSED,
@@ -219,10 +220,16 @@ class RiskFlowBaseHandler:
         预检查
         """
 
-        # 已关闭状态 或 状态不在允许的范围内
-        if self.risk.status == RiskStatus.CLOSED or (
-            self.allowed_status and self.risk.status not in self.allowed_status
-        ):
+        # 已关闭状态
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+
+        # 待确认状态禁止所有普通操作（仅 ConfirmRisk 和 ConfirmAsMisReport 允许）
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行此操作")
+
+        # 状态不在允许的范围内
+        if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
 
     @abc.abstractmethod
@@ -700,6 +707,8 @@ class MisReport(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
+        super().pre_check(*args, **kwargs)
+        # 检查风险标签
         if self.risk.risk_label != RiskLabel.NORMAL:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.risk_label)
 
@@ -853,3 +862,143 @@ class OperateFailed(RiskFlowBaseHandler):
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return kwargs
+
+
+class ConfirmRisk(RiskFlowBaseHandler):
+    """
+    风险确认 - 从 PENDING_CONFIRM 转为 NEW 并触发处理流程
+    """
+
+    name = gettext_lazy("风险确认")
+    allowed_status = [RiskStatus.PENDING_CONFIRM]
+
+    def pre_check(self, *args, **kwargs) -> None:
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 检查 allowed_status
+        if self.allowed_status and self.risk.status not in self.allowed_status:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 验证只能由 confirmer 操作
+        username = kwargs.get("username")
+        if username and username not in self.risk.confirmer:
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认风险")
+
+    def process(self, *args, **kwargs) -> dict:
+        # 确认风险，状态将在 update_status 中保存
+        return {"success": True, "message": "风险确认成功"}
+
+    def update_status(self, process_result: dict, *args, **kwargs) -> None:
+        # 确认后将状态从 PENDING_CONFIRM 转为 NEW
+        self.risk.status = RiskStatus.NEW
+        self.risk.save(update_fields=["status"])
+
+    def update_operator(self, process_result: dict, *args, **kwargs) -> None:
+        # 确认后立即初始化处理人（复用 NewRisk 的逻辑）
+        # 有处理套餐且需要审批则当前处理人为空，否则为安全责任人/处理组
+        if self.process_application:
+            self.risk.current_operator = [] if self.process_application.need_approve else self.load_processor()
+        else:
+            self.risk.current_operator = self.load_processor()
+        self.risk.save(update_fields=["current_operator"])
+
+    def sync_display_status(self) -> None:
+        # 同步 display_status
+        self.risk.display_status = self.DISPLAY_STATUS_MAP.get(self.risk.status, RiskDisplayStatus.NEW)
+
+    def post_process(self, *args, **kwargs) -> None:
+        # 事务提交后触发处理计划（复用 NewRisk 的 apply_processing_plan 逻辑）
+        # 但不重新匹配 StrategyRule 和 RiskRule
+        try:
+            # 直接应用已绑定的 risk_rule
+            if self.risk.rule_id:
+                # 已有绑定规则，检查是否有处理套餐
+                if self.process_application:
+                    # 有处理套餐，根据是否需要审批决定
+                    if self.process_application.need_approve:
+                        from services.web.risk.handlers.ticket import ForApprove
+
+                        ForApprove(risk_id=self.risk.risk_id, operator=self.operator).run()
+                    else:
+                        from services.web.risk.handlers.ticket import AutoProcess
+
+                        AutoProcess(risk_id=self.risk.risk_id, operator=self.operator).run()
+                else:
+                    # 无处理套餐，转为人工处理
+                    self.risk.status = RiskStatus.AWAIT_PROCESS
+                    self.sync_display_status()
+                    self.risk.save(update_fields=["status", "display_status"])
+            else:
+                # 无绑定规则，转为 AWAIT_PROCESS
+                self.risk.status = RiskStatus.AWAIT_PROCESS
+                self.sync_display_status()
+                self.risk.save(update_fields=["status", "display_status"])
+        except Exception as e:
+            logger.exception(f"[ConfirmRisk] 触发处理计划失败：{e}")
+            # 失败不影响确认结果，记录日志即可
+
+
+class ConfirmAsMisReport(RiskFlowBaseHandler):
+    """
+    风险确认为误报 - 直接关单
+    """
+
+    name = gettext_lazy("误报确认")
+    allowed_status = [RiskStatus.PENDING_CONFIRM]
+
+    def pre_check(self, *args, **kwargs) -> None:
+        # 检查 CLOSED 状态（不调用 super() 避免 PENDING_CONFIRM 检查）
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 检查 allowed_status
+        if self.allowed_status and self.risk.status not in self.allowed_status:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 验证只能由 confirmer 操作
+        username = kwargs.get("username")
+        if username and username not in self.risk.confirmer:
+            from django.core.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认误报")
+
+    def process(self, description: str = "", *args, **kwargs) -> dict:
+        # 标记误报
+        self.risk.risk_label = RiskLabel.MISREPORT
+        # 状态将在 update_status 中保存
+
+        return {
+            "success": True,
+            "message": "风险确认为误报",
+            "description": description,
+        }
+
+    def update_status(self, process_result: dict, *args, **kwargs) -> None:
+        # 确认为误报后直接关闭
+        self.risk.status = RiskStatus.CLOSED
+        self.risk.save(update_fields=["status"])
+
+    def update_operator(self, process_result: dict, *args, **kwargs) -> None:
+        # 关单后清空处理人
+        self.risk.current_operator = []
+        self.risk.save(update_fields=["current_operator"])
+
+    def sync_display_status(self) -> None:
+        self.risk.display_status = RiskDisplayStatus.CLOSED
+
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        # 记录历史
+        TicketNode.objects.create(
+            risk_id=self.risk.risk_id,
+            operator=self.operator,
+            current_operator=self.risk.current_operator,
+            action=self.__class__.__name__,
+            timestamp=datetime.datetime.now().timestamp(),
+            time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+            process_result=process_result,
+            extra={
+                "description": kwargs.get("description", ""),
+                "from_status": RiskStatus.PENDING_CONFIRM,
+                "to_status": RiskStatus.CLOSED,
+            },
+        )
+        self.risk.save(update_fields=["last_operate_time"])
