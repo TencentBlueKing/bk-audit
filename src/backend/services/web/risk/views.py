@@ -213,6 +213,21 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute(
             "GET", resource.risk.list_nl2_risk_filter_log, endpoint="nl2risk_filter_log", enable_paginate=True
         ),
+        # 风险二次确认
+        ResourceRoute(
+            "POST",
+            resource.risk.list_pending_confirm_risk,
+            endpoint="pending_confirm",
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.EDIT_RISK, ActionEnum.PROCESS_RISK],
+                    data_field=lambda data: data["results"],
+                    id_field=lambda risk: risk["risk_id"],
+                )
+            ],
+        ),
+        ResourceRoute("POST", resource.risk.confirm_risk, endpoint="confirm", pk_field="risk_id"),
+        ResourceRoute("POST", resource.risk.confirm_as_mis_report, endpoint="confirm_as_misreport", pk_field="risk_id"),
     ]
 
 

@@ -147,6 +147,8 @@ from services.web.risk.models import (
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
+    ConfirmAsMisReportRequestSerializer,
+    ConfirmRiskRequestSerializer,
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
@@ -687,7 +689,21 @@ class ListRisk(RiskMeta):
 
     def load_risks(self, validated_request_data: dict, username: str = None) -> QuerySet["Risk"]:
         q = self._build_filter_query(validated_request_data)
-        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
+        return (
+            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
+            .filter(
+                q,
+                # 排除待确认状态（待确认有独立列表）
+                display_status__in=[
+                    RiskDisplayStatus.NEW,
+                    RiskDisplayStatus.PROCESSING,
+                    RiskDisplayStatus.FOR_APPROVE,
+                    RiskDisplayStatus.AUTO_PROCESS,
+                    RiskDisplayStatus.AWAIT_PROCESS,
+                ],
+            )
+            .distinct()
+        )
 
     def load_filter_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
         """复用列表筛选、权限过滤和 DB/BKBase 检索分支，按指定用户加载风险 ID。"""
@@ -875,6 +891,13 @@ class ListMineRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             current_operator__contains=username,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+            ],
         ).distinct()
 
 
@@ -894,6 +917,14 @@ class ListNoticingRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             notice_users__contains=username,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
+            ],
         ).distinct()
 
 
@@ -911,7 +942,19 @@ class ListProcessedRisk(ListRisk):
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
         ).values("risk_id")
-        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
+        return Risk.objects.filter(
+            q,
+            risk_id__in=processed_risk_ids,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
+                RiskDisplayStatus.CLOSED,
+            ],
+        ).exclude(current_operator__contains=username)
 
 
 class ListRiskFields(RiskMeta):
@@ -1840,3 +1883,89 @@ class ListNL2RiskFilterLog(RiskMeta):
 
         # 分页由框架 enable_paginate 自动处理
         return queryset.order_by("-id")
+
+
+class ConfirmRiskResource(RiskMeta):
+    """确认风险"""
+
+    name = gettext_lazy("确认风险")
+    RequestSerializer = ConfirmRiskRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+
+        # 验证状态
+        if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("风险状态不是待确认")
+
+        # 验证权限
+        username = get_request_username()
+        if username not in risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认")
+
+        # 执行确认
+        from services.web.risk.handlers.ticket import ConfirmRisk
+
+        ConfirmRisk(risk_id=risk_id, operator=username).run(username=username)
+
+        return {"success": True}
+
+
+class ConfirmAsMisReportResource(RiskMeta):
+    """确认为误报"""
+
+    name = gettext_lazy("确认为误报")
+    RequestSerializer = ConfirmAsMisReportRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        description = validated_request_data.get("description", "")
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+
+        # 验证状态
+        if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("风险状态不是待确认")
+
+        # 验证权限
+        username = get_request_username()
+        if username not in risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认误报")
+
+        # 执行误报确认
+        from services.web.risk.handlers.ticket import ConfirmAsMisReport
+
+        ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
+
+        return {"success": True}
+
+
+class ListPendingConfirmRisk(ListRisk):
+    """获取待我确认的风险列表"""
+
+    name = gettext_lazy("待我确认")
+
+    def load_risks(self, validated_request_data, username: str = None):
+        username = username or get_request_username()
+        q = self._build_filter_query(validated_request_data)
+
+        return (
+            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
+            .filter(
+                q,
+                display_status=RiskDisplayStatus.PENDING_CONFIRM,
+                confirmer__contains=username,  # 确认人包含当前用户
+                is_deleted=False,
+            )
+            .distinct()
+            .order_by("-event_time")
+        )
