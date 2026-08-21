@@ -71,7 +71,7 @@ class DispatchResult:
     target_scene_id: Optional[int] = None
     processor: List[int] = field(default_factory=list)  # 处理人通知组 ID 列表
     follower: List[int] = field(default_factory=list)  # 关注人通知组 ID 列表
-    confirmer: List[str] = field(default_factory=list)  # 确认人用户名列表
+    confirmer: List[int] = field(default_factory=list)  # 确认人通知组 ID 列表
 
     @classmethod
     def miss(cls) -> "DispatchResult":

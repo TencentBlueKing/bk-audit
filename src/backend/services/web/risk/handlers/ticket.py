@@ -56,6 +56,7 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
+from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 
@@ -114,15 +115,53 @@ class RiskFlowBaseHandler:
     def load_processor(self) -> List[str]:
         """
         获取处理人(用安全接口人进行兜底)
+
+        处理人来源
+        规则策略
+            1. 全局策略风险：分派规则 DispatchRule.processor
+            2. 场景策略风险：命中发现规则的 StrategyRule.processor
+        模型策略（strategy_type=model）：策略级 processor_groups
         """
 
         # 获取策略
         if not self.strategy:
             return self.load_security_person()
-        # 获取处理组成员
-        processor_groups: List[NoticeGroup] = list(
-            NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
-        )
+
+        # 1. 规则策略 全局策略风险：分派规则的处理组
+        if getattr(self.risk, "dispatch_rule_id", None):
+            from services.web.strategy_v2.models import DispatchRule
+
+            dispatch_rule = DispatchRule.objects.filter(rule_id=self.risk.dispatch_rule_id).first()
+            if dispatch_rule:
+                processor_groups: List[NoticeGroup] = list(
+                    NoticeGroup.objects.filter(group_id__in=dispatch_rule.processor or [])
+                )
+                parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+                if parsed_members:
+                    return parsed_members
+            return self.load_security_person()
+
+        # 2. 规则策略 场景策略：处理人只来自命中发现规则的 processor
+        if self.strategy.strategy_type == StrategyType.RULE:
+            from services.web.strategy_v2.models import StrategyRule
+
+            group_ids = []
+            if getattr(self.risk, "strategy_rule_id", None):
+                rule = StrategyRule.objects.filter(rule_id=self.risk.strategy_rule_id, is_deleted=False).first()
+                if rule:
+                    group_ids = rule.processor or []
+            processor_groups = list(NoticeGroup.objects.filter(group_id__in=group_ids))
+            origin_members = NoticeGroup.parse_members(processor_groups)
+            # 解析处理组
+            parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+            logger.info(
+                f"[{self.__class__.__name__}]Risk:{self.risk.risk_id};"
+                f"Notice Groups Members:{origin_members};Parsed Members:{parsed_members}"
+            )
+            return parsed_members or self.load_security_person()
+
+        # 3. 模型策略：策略级处理组
+        processor_groups = list(NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or []))
         origin_members = NoticeGroup.parse_members(processor_groups)
         # 解析处理组(变量)
         parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)

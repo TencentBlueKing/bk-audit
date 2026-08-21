@@ -52,8 +52,11 @@ from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
-from services.web.strategy_v2.constants import StrategyStatusChoices
-from services.web.strategy_v2.models import Strategy
+from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.filters import BindingMetadataHelper
+from services.web.scene.models import ResourceBinding, ResourceBindingScene
+from services.web.strategy_v2.constants import DispatchMode, StrategyStatusChoices
+from services.web.strategy_v2.models import Strategy, StrategyRule
 
 
 class RiskHandler:
@@ -139,12 +142,12 @@ class RiskHandler:
     @classmethod
     def render_risk_title(cls, create_params: dict) -> Optional[str]:
         """
-        生成风险标题
+        生成风险标题: 获取发现规则中的risk_title
         自动处理变量中的 list 类型，渲染为逗号拼接的字符串
         """
         create_params = create_params.copy()
-        strategy: Strategy = Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
-        if not strategy or not strategy.risk_title:
+        title_template = create_params.pop("_title_template", None)
+        if not title_template:
             return None
 
         # 事件证据为字符串需要转换成列表，并取第一条字典数据
@@ -158,18 +161,18 @@ class RiskHandler:
 
         try:
             risk_title = Jinja2Renderer(undefined=VariableUndefined, autoescape=True).jinja_render(
-                strategy.risk_title,
+                title_template,
                 processed_params,  # 使用预处理后的参数
             )
             return risk_title
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
                 "[RenderRiskTitleFailed] risk_title: %s; risk_content: %s; err: %s",
-                strategy.risk_title,
+                title_template,
                 create_params,
                 err,
             )
-            return strategy.risk_title
+            return title_template
 
     def gen_risk_create_params(self, event: dict) -> dict:
         create_params = {
@@ -184,6 +187,31 @@ class RiskHandler:
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
         }
+        # 规则级元信息
+        strategy_rule_id = event.get("strategy_rule_id")
+        rule: Optional[StrategyRule] = None
+        if strategy_rule_id:
+            rule = StrategyRule.objects.filter(rule_id=strategy_rule_id, is_deleted=False).first()
+            if rule is not None and rule.strategy_id != event["strategy_id"]:
+                # 事件的规则归属与策略不一致（异常事件），按无规则处理走策略级回退
+                logger.warning(
+                    "[CreateRisk] rule %s not belong to strategy %s, fallback to strategy meta",
+                    strategy_rule_id,
+                    event["strategy_id"],
+                )
+                rule = None
+        strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
+        create_params["strategy_rule_id"] = rule.rule_id if rule else None
+        create_params["risk_level"] = (rule.risk_level if rule else None) or (strategy.risk_level if strategy else None)
+        create_params["risk_hazard"] = (rule.risk_hazard if rule else None) or (
+            strategy.risk_hazard if strategy else None
+        )
+        create_params["risk_guidance"] = (rule.risk_guidance if rule else None) or (
+            strategy.risk_guidance if strategy else None
+        )
+        create_params["_title_template"] = (rule.risk_title if rule else None) or (
+            strategy.risk_title if strategy else None
+        )
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
 
@@ -212,13 +240,17 @@ class RiskHandler:
             return False, None
 
         # 检查是否有已存在的
-        # 策略ID相同，原始事件ID相同，不为关单状态或事件时间小于最后发现时间
+        # 策略ID相同，原始事件ID相同，命中发现规则相同，不为关单状态或事件时间小于最后发现时间(strategy_rule_id 参与去重键)
         # 若未关单，则不创建新风险
         # 若事件时间小于最后发现时间，则应当收敛风险
         risk = (
             Risk.objects.filter(
                 Q(
-                    Q(strategy_id=event["strategy_id"], raw_event_id=event["raw_event_id"])
+                    Q(
+                        strategy_id=event["strategy_id"],
+                        raw_event_id=event["raw_event_id"],
+                        strategy_rule_id=event.get("strategy_rule_id"),
+                    )
                     & Q(
                         ~Q(status=RiskStatus.CLOSED)
                         | Q(
@@ -260,13 +292,120 @@ class RiskHandler:
             create_params["display_status"] = RiskDisplayStatus.STAND_BY
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
+
+        # 将风险分派按规则到场景
+        # 分派结果（dispatch_rule/confirmer）固化到风险单，后续分派规则编辑不影响已产生单据
+        dispatch_result = self._dispatch_risk(risk, event, create_params)
+        if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
+            # 全局策略：确认后分派：进入 PENDING_CONFIRM，等待 confirmer 确认（确认接口负责建绑定 + NewRisk 分流）
+            # 不渲染报告、不通知关注人/处理人（确认后再触发），仅通知确认人
+            self._send_confirm_notice(risk, dispatch_result.confirmer)
+            return False, risk
+
+        # 全局策略：direct 分派：建 RISK 场景绑定
+        if dispatch_result is not None:
+            BindingMetadataHelper.create_risk_scene_binding(risk.risk_id, dispatch_result.target_scene_id)
+        else:
+            # 场景策略
+            scene_id = self._get_strategy_scene_id(event["strategy_id"])
+            BindingMetadataHelper.create_risk_scene_binding(risk.risk_id, scene_id)
         return True, risk
+
+    def _dispatch_risk(self, risk: Risk, event: dict, create_params: dict):
+        """
+        全局策略分派：按 dispatch_rule_order 首匹配分派规则，固化 dispatch_rule/confirmer。
+
+        :return: DispatchResult（matched=False 或非全局策略时返回 None，调用方按场景策略处理）
+        """
+        from services.web.strategy_v2.handlers.dispatch import match_dispatch_rule
+
+        # 策略绑定类型：platform_binding 才走分派
+        binding_type = (
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(event["strategy_id"]),
+            )
+            .values_list("binding_type", flat=True)
+            .first()
+        )
+        if binding_type != BindingType.PLATFORM_BINDING:
+            return None
+        strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
+        if strategy is None:
+            return None
+        # ctx：事件字段 + 已实例化的规则元信息（实例化先行——匹配器字段词表 RULE_META_FIELDS 契约：
+        ctx = {
+            **event,
+            "risk_level": create_params.get("risk_level"),
+            "risk_hazard": create_params.get("risk_hazard"),
+            "risk_guidance": create_params.get("risk_guidance"),
+        }
+        dispatch_result = match_dispatch_rule(ctx, strategy=strategy)
+        if not dispatch_result.matched:
+            logger.warning(
+                "[DispatchRisk] no dispatch rule matched. risk_id=%s, strategy_id=%s",
+                risk.risk_id,
+                event["strategy_id"],
+            )
+            return None
+        risk.dispatch_rule_id = dispatch_result.rule.rule_id
+        risk.confirmer = dispatch_result.confirmer
+        if dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
+            # 确认后分派：进入待确认状态（display_status 同步，否则列表页展示为空；
+            # 周期任务 process_one_risk 的 match 无该分支会跳过，由确认/驳回接口驱动流转）
+            risk.status = RiskStatus.PENDING_CONFIRM
+            risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
+        risk.save(update_fields=["dispatch_rule", "confirmer", "status", "display_status"])
+        return dispatch_result
+
+    def _get_strategy_scene_id(self, strategy_id) -> Optional[int]:
+        """策略绑定的场景 ID（场景策略）"""
+        return (
+            ResourceBindingScene.objects.filter(
+                scene__is_deleted=False,
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id=str(strategy_id),
+            )
+            .values_list("scene_id", flat=True)
+            .first()
+        )
+
+    def _send_confirm_notice(self, risk: Risk, confirmer: List[int]) -> None:
+        """
+        PENDING_CONFIRM 阶段通知确认人，复用 notice 模块的默认配置；确认人接收后经确认接口流转。
+
+        confirmer 为通知组 ID 列表（分派规则固化快照），发送时解析为组内成员用户名。
+        """
+        if not confirmer:
+            return
+        notice_groups = list(NoticeGroup.objects.filter(group_id__in=confirmer))
+        receivers = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
+        if not receivers:
+            logger.warning("[SendConfirmNotice] empty receivers. risk_id=%s, confirmer=%s", risk.risk_id, confirmer)
+            return
+        try:
+            resource.notice.send_notice(
+                relate_type=RelateType.RISK,
+                relate_id=risk.pk,
+                agg_key=f"risk_confirm:{risk.risk_id}",
+                msg_type=["mail"],
+                receivers=receivers,
+                title=gettext("风险单待确认"),
+                content=gettext("风险单[%s]等待您的确认") % risk.risk_id,
+            )
+        except Exception as err:  # NOCC:broad-except(通知失败不阻断主流程)
+            logger.exception("[SendConfirmNoticeFailed] risk_id=%s, err=%s", risk.risk_id, err)
 
     def trigger_render_task(self, risk: Risk):
         """
         触发渲染任务
         """
         from services.web.risk.tasks import render_risk_report
+
+        # 待确认（after_confirm 分派）不渲染报告：确认流转后再触发
+        if risk.status == RiskStatus.PENDING_CONFIRM:
+            logger.info("[TriggerRender] Skip render for pending confirm risk. risk_id=%s", risk.risk_id)
+            return
 
         # 检查触发条件：策略开启报告 + 风险开启自动生成
         if not risk.can_auto_generate_report():
@@ -312,7 +451,11 @@ class RiskHandler:
 
     def send_risk_notice(self, risk: Risk) -> None:
         """
-        发送通知
+        发送通知给关注人
+
+        关注人来源：
+        1. 全局策略风险：分派规则的follower DispatchRule.follower
+        2. 场景策略风险：发现规则的follower  StrategyRule.follower
         """
 
         # 获取策略
@@ -320,8 +463,24 @@ class RiskHandler:
         if not strategy:
             return
 
+        # 1. 全局策略风险：分派规则的关注组
+        if getattr(risk, "dispatch_rule_id", None):
+            from services.web.strategy_v2.models import DispatchRule
+
+            dispatch_rule = DispatchRule.objects.filter(rule_id=risk.dispatch_rule_id).first()
+            follower_group_ids = (dispatch_rule.follower if dispatch_rule else None) or []
+        else:
+            # 2. 场景策略风险：发现规则的关注组
+            follower_group_ids = strategy.notice_groups or []
+            if getattr(risk, "strategy_rule_id", None):
+                from services.web.strategy_v2.models import StrategyRule
+
+                rule = StrategyRule.objects.filter(rule_id=risk.strategy_rule_id, is_deleted=False).first()
+                if rule and rule.follower:
+                    follower_group_ids = rule.follower
+
         # 获取通知组
-        notice_groups = NoticeGroup.objects.filter(group_id__in=(strategy.notice_groups or []))
+        notice_groups = NoticeGroup.objects.filter(group_id__in=follower_group_ids)
         if not notice_groups:
             return
 

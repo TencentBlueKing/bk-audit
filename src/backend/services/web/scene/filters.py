@@ -238,6 +238,36 @@ class BindingMetadataHelper:
         ).delete()
         return deleted_count
 
+    @staticmethod
+    def create_risk_scene_binding(risk_id: str, scene_id: int) -> None:
+        """
+        为风险单创建 RISK 类型的场景归属绑定（RISK 场景归属单轨制的运行时写入路径）。
+
+        写入时机（分派方案四.3 节）：
+        - 场景策略风险：create_risk 创建后立即写（scene_id 来自策略的场景绑定）
+        - 全局策略 direct：分派匹配后写（scene_id 来自 DispatchRule.target_scene_id）
+        - 全局策略 after_confirm：confirmer 确认后写（确认接口负责）
+
+        幂等：已有绑定（含场景关联）时跳过，避免重复调用产生脏数据。
+        """
+        from services.web.scene.constants import ResourceVisibilityType
+
+        if not scene_id:
+            return
+        resource_id = str(risk_id)
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.RISK,
+            resource_id=resource_id,
+        ).first()
+        if binding is None:
+            binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.RISK,
+                resource_id=resource_id,
+                binding_type=BindingType.SCENE_BINDING,
+            )
+        if not ResourceBindingScene.objects.filter(binding=binding, scene_id=scene_id).exists():
+            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
+
 
 def _normalize_scope_values(value) -> list:
     """将单值/多值 scope 参数统一转为列表。"""
