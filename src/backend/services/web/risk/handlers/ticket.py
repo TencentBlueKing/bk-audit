@@ -886,7 +886,13 @@ class ConfirmRisk(RiskFlowBaseHandler):
             raise PermissionDenied("非确认人，无权确认风险")
 
     def process(self, *args, **kwargs) -> dict:
-        # 确认风险，状态将在 update_status 中保存
+        # 确认后分派：按固化的分派规则建 RISK 场景绑定
+        from services.web.scene.filters import BindingMetadataHelper
+        from services.web.strategy_v2.models import DispatchRule
+
+        dispatch_rule = DispatchRule.objects.filter(rule_id=self.risk.dispatch_rule_id).first()
+        if dispatch_rule:
+            BindingMetadataHelper.create_risk_scene_binding(self.risk.risk_id, dispatch_rule.target_scene_id)
         return {"success": True, "message": "风险确认成功"}
 
     def update_status(self, process_result: dict, *args, **kwargs) -> None:
@@ -937,7 +943,10 @@ class ConfirmRisk(RiskFlowBaseHandler):
         except Exception as e:
             logger.exception(f"[ConfirmRisk] 触发处理计划失败：{e}")
             # 失败不影响确认结果，记录日志即可
-
+        # 通知风险关注人
+        RiskHandler().send_risk_notice(self.risk)
+        # 触发渲染任务
+        RiskHandler().trigger_render_task(self.risk)
 
 class ConfirmAsMisReport(RiskFlowBaseHandler):
     """
