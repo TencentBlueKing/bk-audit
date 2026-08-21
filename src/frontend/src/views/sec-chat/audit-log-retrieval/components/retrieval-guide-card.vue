@@ -23,9 +23,10 @@
           class="systems-header"
           @click="systemsExpanded = !systemsExpanded">
           <div class="systems-title">
-            <audit-icon
+            <img
+              alt=""
               class="title-icon"
-              type="help-fill" />
+              :src="wenhaoIcon">
             <span>已选 {{ systems.length }} 个系统</span>
           </div>
           <audit-icon
@@ -219,6 +220,8 @@
 
   import ConditionFilterCard from './condition-filter-card.vue';
   import type { SelectedSystem } from '../../types';
+
+  import wenhaoIcon from '@images/wenhao.svg';
 
   defineProps<{
     systems: SelectedSystem[];
@@ -444,9 +447,8 @@
     color: #63656e;
     letter-spacing: 0;
     background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgb(0 0 0 / 10%);
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
   }
 
@@ -472,8 +474,10 @@
     color: #313238;
 
     .title-icon {
-      font-size: 16px;
-      color: #979ba5;
+      display: block;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
     }
   }
 
@@ -535,7 +539,7 @@
 
   .suggest-title {
     margin-bottom: 12px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
     line-height: 22px;
     color: #313238;

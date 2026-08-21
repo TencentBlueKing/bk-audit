@@ -105,6 +105,8 @@ const conversations = ref<Conversation[]>([
   }),
 ]);
 
+groups.value = groups.value.filter(g => conversations.value.some(c => c.groupName === g.name));
+
 const activeConversation = computed(() => (
   conversations.value.find(c => c.id === activeConversationId.value) || null
 ));
@@ -183,6 +185,10 @@ export function useSecChatStore() {
     ensureLogConversationMessages(id);
   };
 
+  const pruneEmptyGroups = () => {
+    groups.value = groups.value.filter(g => conversations.value.some(c => c.groupName === g.name));
+  };
+
   const deleteConversation = (id: string) => {
     const idx = conversations.value.findIndex(c => c.id === id);
     if (idx === -1) return;
@@ -190,6 +196,7 @@ export function useSecChatStore() {
     if (activeConversationId.value === id) {
       activeConversationId.value = null;
     }
+    pruneEmptyGroups();
   };
 
   const pinConversation = (id: string) => {
@@ -200,6 +207,7 @@ export function useSecChatStore() {
   const updateConversationGroup = (id: string, groupName?: string) => {
     const conv = conversations.value.find(c => c.id === id);
     if (conv) conv.groupName = groupName;
+    pruneEmptyGroups();
   };
 
   const updateConversationTitle = (id: string, title: string) => {
