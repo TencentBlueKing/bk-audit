@@ -81,8 +81,7 @@
         <bk-form-item
           label=""
           label-width="160"
-          property="configs.select"
-          required>
+          property="configs.select">
           <template #label>
             <span
               v-bk-tooltips="{
@@ -1224,6 +1223,11 @@
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
       const params = _.cloneDeep(formData.value);
+      // 预期结果为空等价 select *，但接口 select 不能为空：下一步/提交时自动选中数据源全部字段（不回显到预期结果 UI）
+      params.configs.table_fields = _.cloneDeep(tableFields.value);
+      if (!params.configs.select?.length && tableFields.value.length) {
+        params.configs.select = _.cloneDeep(tableFields.value);
+      }
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
         params.configs.data_source = {

@@ -21,35 +21,32 @@
       :list="eventItemArr">
       <template #item="{element}: { element: StrategyFieldEvent['event_basic_field_configs'][0] }">
         <div class="table-row">
-          <template
-            v-for="(value, valueKey) in element"
-            :key="valueKey">
-            <div
-              v-if="!excludeKey.includes(valueKey)"
-              class="cell"
-              :class="getCellClass(valueKey)">
-              <template v-if="valueKey === 'field_name'">
-                <audit-icon
-                  style=" margin: 0 10px;font-size: 13px;color: #c4c6cc;"
-                  type="move" />
-              </template>
-              <field-cell
-                ref="fieldCellRef"
-                :all-tools-data="allToolsData"
-                :event-item="element"
-                :event-item-key="eventItemKey"
-                :field-key="valueKey"
-                :output-fields="outputFields"
-                :select-options="localSelect"
-                :strategy-name="strategyName"
-                :tag-data="tagData"
-                @add-custom-constant="addCustomConstant"
-                @open-tool="handleOpenTool"
-                @refresh-tool-list="handleRefreshToolList"
-                @select="handleSelect"
-                @update:field-value="updateFieldValue(element, valueKey, $event)" />
-            </div>
-          </template>
+          <div
+            v-for="valueKey in columnKeys"
+            :key="valueKey"
+            class="cell"
+            :class="getCellClass(valueKey)">
+            <template v-if="valueKey === 'field_name'">
+              <audit-icon
+                style=" margin: 0 10px;font-size: 13px;color: #c4c6cc;"
+                type="move" />
+            </template>
+            <field-cell
+              ref="fieldCellRef"
+              :all-tools-data="allToolsData"
+              :event-item="element"
+              :event-item-key="eventItemKey"
+              :field-key="valueKey"
+              :output-fields="outputFields"
+              :select-options="localSelect"
+              :strategy-name="strategyName"
+              :tag-data="tagData"
+              @add-custom-constant="addCustomConstant"
+              @open-tool="handleOpenTool"
+              @refresh-tool-list="handleRefreshToolList"
+              @select="handleSelect"
+              @update:field-value="updateFieldValue(element, valueKey, $event)" />
+          </div>
         </div>
       </template>
     </vuedraggable>
@@ -114,13 +111,23 @@
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
-  // strategyType为model时，排除map_config
-  const excludeKey = computed<Array<string>>(() => {
-    const initKey = ['example', 'prefix'];
+  // 固定列顺序，避免按对象 key 遍历导致「基本信息 / 事件结果」列错位
+  const columnKeys = computed(() => {
+    const keys = [
+      'field_name',
+      'display_name',
+      'is_show',
+      'is_priority',
+      'duplicate_field',
+      'map_config',
+      'enum_mappings',
+      'drill_config',
+      'description',
+    ];
     if (props.strategyType === 'model') {
-      initKey.push('map_config');
+      return keys.filter(key => key !== 'map_config');
     }
-    return initKey;
+    return keys;
   });
 
   const getCellClass = (valueKey: string) => ({
@@ -212,6 +219,20 @@
 
     &.display-name {
       width: 200px;
+      padding: 0 12px;
+      box-sizing: border-box;
+
+      /* 与只读文本对齐：输入框去掉左右内边距，统一由单元格控制 */
+      :deep(.bk-input) {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      :deep(.bk-input--text),
+      :deep(input) {
+        padding-left: 0;
+        padding-right: 0;
+      }
     }
 
     &.is-priority {
