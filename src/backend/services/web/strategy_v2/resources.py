@@ -92,9 +92,18 @@ from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.risk.report.task_submitter import submit_render_task
 from services.web.risk.report_config import ReportConfig
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
-from services.web.scene.models import ResourceBindingScene
+from services.web.scene.binding_validation import assert_binding_relation_integrity
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    VisibilityScope,
+)
+from services.web.scene.filters import (
+    BindingMetadataHelper,
+    CompositeScopeFilter,
+    SceneScopeFilter,
+)
+from services.web.scene.models import ResourceBinding, ResourceBindingScene
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -280,6 +289,128 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
         return RuleAuditSQLBuilder(strategy).build_sql()
 
+    @staticmethod
+    def calc_rules_digest(strategy: Strategy) -> Optional[str]:
+        """
+        计算发现规则集摘要：对进入 SQL 构造的规则属性做规范化 hash,当hash变化时flow需重建
+        覆盖 (rule_id, 匹配顺序, where, having)
+        """
+        rules = list(strategy.rules.filter(is_deleted=False))
+        if not rules:
+            return None
+        rule_order = strategy.rule_order or []
+        order_index = {rid: idx for idx, rid in enumerate(rule_order)}
+        ordered = sorted(rules, key=lambda r: order_index.get(r.rule_id, len(rule_order)))
+        digest_items = []
+        for rule in ordered:
+            conditions = rule.conditions or {}
+            digest_items.append(
+                {
+                    "rule_id": rule.rule_id,
+                    "where": conditions.get("where"),
+                    "having": conditions.get("having"),
+                }
+            )
+        return get_md5(json.dumps(digest_items, sort_keys=True, ensure_ascii=False))
+
+    @staticmethod
+    def _sync_strategy_rules(strategy: Strategy, rules_data: Optional[List[dict]]) -> None:
+        """
+        同步发现规则子表（软删缺失规则、更新/新建传入规则）
+
+        - 请求中有 rule_id → 保留并更新
+        - 请求中无 rule_id → 新建
+        - 数据库有但请求中没有 → 软删
+        rule_order按请求顺序重建
+        """
+        from services.web.strategy_v2.models import StrategyRule
+
+        if rules_data is None:
+            return
+        # 本策略已有的（未软删）规则 id 集合，用于归属校验与 order 重建
+        existing_ids = set(strategy.rules.filter(is_deleted=False).values_list("rule_id", flat=True))
+        keep_ids = [r.get("rule_id") for r in rules_data if r.get("rule_id")]
+        # 软删未出现在请求中的规则（仅限本策略范围内）
+        strategy.rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        for rule_data in rules_data:
+            rule_id = rule_data.get("rule_id")
+            # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
+            if rule_id and rule_id not in existing_ids:
+                raise serializers.ValidationError(
+                    gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
+                )
+            fields = {
+                "rule_name": rule_data["rule_name"],
+                "conditions": rule_data.get("conditions") or {"where": None, "having": None},
+                "risk_title": rule_data.get("risk_title"),
+                "risk_level": rule_data.get("risk_level"),
+                "risk_hazard": rule_data.get("risk_hazard"),
+                "risk_guidance": rule_data.get("risk_guidance"),
+                "processor": rule_data.get("processor") or [],
+                "follower": rule_data.get("follower") or [],
+            }
+            if rule_data.get("rule_id"):
+                strategy.rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            else:
+                StrategyRule.objects.create(strategy=strategy, **fields)
+        # 重建 rule_order：按请求顺序排列
+        active_rules = {r.rule_id: r for r in strategy.rules.filter(is_deleted=False)}
+        ordered_ids = []
+        for rule_data in rules_data:
+            rid = rule_data.get("rule_id")
+            if rid and rid in active_rules:
+                ordered_ids.append(rid)
+        # 请求未含 rule_id 的新建规则追加到末尾
+        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+        strategy.rule_order = ordered_ids
+        strategy.save(update_fields=["rule_order"])
+
+    @staticmethod
+    def _sync_dispatch_rules(strategy: Strategy, dispatch_rules_data: Optional[List[dict]]) -> None:
+        """
+        同步分派规则子表（软删缺失规则、更新/新建传入规则）
+
+        - 请求中有 rule_id → 保留并更新
+        - 请求中无 rule_id → 新建
+        - 数据库有但请求中没有 → 软删
+        dispatch_rule_order 按请求顺序重建
+        """
+        from services.web.strategy_v2.models import DispatchRule
+
+        if dispatch_rules_data is None:
+            return
+        # 本策略已有的（未软删）规则 id 集合，用于归属校验与 order 重建
+        existing_ids = set(strategy.dispatch_rules.filter(is_deleted=False).values_list("rule_id", flat=True))
+        keep_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id")]
+        strategy.dispatch_rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        for rule_data in dispatch_rules_data:
+            rule_id = rule_data.get("rule_id")
+            # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
+            if rule_id and rule_id not in existing_ids:
+                raise serializers.ValidationError(
+                    gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
+                )
+            fields = {
+                "rule_name": rule_data["rule_name"],
+                "conditions": rule_data.get("conditions") or {},
+                "target_scene_id": rule_data["target_scene_id"],
+                "processor": rule_data.get("processor") or [],
+                "follower": rule_data.get("follower") or [],
+                "confirmer": rule_data.get("confirmer") or [],
+                "dispatch_mode": rule_data.get("dispatch_mode"),
+                "is_default": bool(rule_data.get("is_default")),
+            }
+            if rule_data.get("rule_id"):
+                strategy.dispatch_rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            else:
+                DispatchRule.objects.create(strategy=strategy, **fields)
+        # 重建 dispatch_rule_order：按请求顺序（校验层已保证默认规则唯一）
+        active_rules = {r.rule_id for r in strategy.dispatch_rules.filter(is_deleted=False)}
+        ordered_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id") in active_rules]
+        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+        strategy.dispatch_rule_order = ordered_ids
+        strategy.save(update_fields=["dispatch_rule_order"])
+
     def _check_source_type(self, validated_request_data):
         """
         校验 source_type 是否支持
@@ -342,11 +473,17 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
     @staticmethod
     def ensure_active_scene_binding_or_404(strategy_id: int) -> None:
-        if not ResourceBindingScene.objects.filter(
+        has_scene_binding = ResourceBindingScene.objects.filter(
             scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
             binding__resource_id=str(strategy_id),
-        ).exists():
+        ).exists()
+        has_platform_binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy_id),
+            binding_type=BindingType.PLATFORM_BINDING,
+        ).exists()
+        if not (has_scene_binding or has_platform_binding):
             raise Http404
 
 
@@ -384,22 +521,42 @@ class CreateStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
         scene_id = validated_request_data.pop("scene_id", None)
+        # 绑定类型：全局（platform_binding）/ 场景（scene_binding）。
+        binding_type = validated_request_data.pop("binding_type", None)
         self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
+            # 取出规则数据
+            rules_data = validated_request_data.pop("rules", None)
+            dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
-            # 创建 ResourceBinding 关联（scene_id 必传，序列化器已校验）
-
-            BindingMetadataHelper.create_resource_binding(
-                resource_id=str(strategy.strategy_id),
-                resource_type=ResourceVisibilityType.STRATEGY,
-                scene_id=scene_id,
-            )
+            # 创建 ResourceBinding 关联：按 binding_type 区分全局/场景策略
+            if binding_type == BindingType.PLATFORM_BINDING:
+                # 全局策略：平台级绑定，默认全可见
+                binding = ResourceBinding.objects.create(
+                    resource_type=ResourceVisibilityType.STRATEGY,
+                    resource_id=str(strategy.strategy_id),
+                    binding_type=BindingType.PLATFORM_BINDING,
+                    visibility_type=VisibilityScope.ALL_VISIBLE,
+                )
+                assert_binding_relation_integrity(binding)
+            else:
+                # 场景策略：与场景绑定
+                BindingMetadataHelper.create_resource_binding(
+                    resource_id=str(strategy.strategy_id),
+                    resource_type=ResourceVisibilityType.STRATEGY,
+                    scene_id=scene_id,
+                )
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
             self._save_strategy_tools(strategy, validated_request_data)
+            # 同步发现规则 / 分派规则子表
+            if rules_data is not None:
+                self._sync_strategy_rules(strategy, rules_data)
+            if dispatch_rules_data is not None:
+                self._sync_dispatch_rules(strategy, dispatch_rules_data)
             if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
@@ -452,6 +609,9 @@ class UpdateStrategy(StrategyV2Base):
         # load strategy
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data.pop("strategy_id", int()))
         self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 绑定类型/场景不在本次更新范围（Strategy 模型无该字段），pop 避免误写入
+        validated_request_data.pop("binding_type", None)
+        validated_request_data.pop("scene_id", None)
         self._check_source_type(validated_request_data)
         # check strategy status
         if strategy.status in [
@@ -510,112 +670,6 @@ class UpdateStrategy(StrategyV2Base):
             need_update_remote,
         )
         return need_update_remote
-
-    @staticmethod
-    def calc_rules_digest(strategy: Strategy) -> Optional[str]:
-        """
-        计算发现规则集摘要：对进入 SQL 构造的规则属性做规范化 hash,当hash变化时flow需重建
-        覆盖 (rule_id, 匹配顺序, where, having)
-        """
-        rules = list(strategy.rules.filter(is_deleted=False))
-        if not rules:
-            return None
-        rule_order = strategy.rule_order or []
-        order_index = {rid: idx for idx, rid in enumerate(rule_order)}
-        ordered = sorted(rules, key=lambda r: order_index.get(r.rule_id, len(rule_order)))
-        digest_items = []
-        for rule in ordered:
-            conditions = rule.conditions or {}
-            digest_items.append(
-                {
-                    "rule_id": rule.rule_id,
-                    "where": conditions.get("where"),
-                    "having": conditions.get("having"),
-                }
-            )
-        return get_md5(json.dumps(digest_items, sort_keys=True, ensure_ascii=False))
-
-    @staticmethod
-    def _sync_strategy_rules(strategy: Strategy, rules_data: Optional[List[dict]]) -> None:
-        """
-        同步发现规则子表（软删缺失规则、更新/新建传入规则）
-
-        - 请求中有 rule_id → 保留并更新
-        - 请求中无 rule_id → 新建
-        - 数据库有但请求中没有 → 软删
-        rule_order按请求顺序重建
-        """
-        from services.web.strategy_v2.models import StrategyRule
-
-        if rules_data is None:
-            return
-        keep_ids = [r.get("rule_id") for r in rules_data if r.get("rule_id")]
-        # 软删未出现在请求中的规则
-        strategy.rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
-        for rule_data in rules_data:
-            fields = {
-                "rule_name": rule_data["rule_name"],
-                "conditions": rule_data.get("conditions") or {"where": None, "having": None},
-                "risk_title": rule_data.get("risk_title"),
-                "risk_level": rule_data.get("risk_level"),
-                "risk_hazard": rule_data.get("risk_hazard"),
-                "risk_guidance": rule_data.get("risk_guidance"),
-                "processor": rule_data.get("processor") or [],
-                "follower": rule_data.get("follower") or [],
-            }
-            if rule_data.get("rule_id"):
-                strategy.rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
-            else:
-                StrategyRule.objects.create(strategy=strategy, **fields)
-        # 重建 rule_order：按请求顺序排列
-        active_rules = {r.rule_id: r for r in strategy.rules.filter(is_deleted=False)}
-        ordered_ids = []
-        for rule_data in rules_data:
-            rid = rule_data.get("rule_id")
-            if rid and rid in active_rules:
-                ordered_ids.append(rid)
-        # 请求未含 rule_id 的新建规则追加到末尾
-        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
-        strategy.rule_order = ordered_ids
-        strategy.save(update_fields=["rule_order"])
-
-    @staticmethod
-    def _sync_dispatch_rules(strategy: Strategy, dispatch_rules_data: Optional[List[dict]]) -> None:
-        """
-        同步分派规则子表（软删缺失规则、更新/新建传入规则）
-
-        - 请求中有 rule_id → 保留并更新
-        - 请求中无 rule_id → 新建
-        - 数据库有但请求中没有 → 软删
-        dispatch_rule_order 按请求顺序重建
-        """
-        from services.web.strategy_v2.models import DispatchRule
-
-        if dispatch_rules_data is None:
-            return
-        keep_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id")]
-        strategy.dispatch_rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
-        for rule_data in dispatch_rules_data:
-            fields = {
-                "rule_name": rule_data["rule_name"],
-                "conditions": rule_data.get("conditions") or {},
-                "target_scene_id": rule_data["target_scene_id"],
-                "processor": rule_data.get("processor") or [],
-                "follower": rule_data.get("follower") or [],
-                "confirmer": rule_data.get("confirmer") or [],
-                "dispatch_mode": rule_data.get("dispatch_mode"),
-                "is_default": bool(rule_data.get("is_default")),
-            }
-            if rule_data.get("rule_id"):
-                strategy.dispatch_rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
-            else:
-                DispatchRule.objects.create(strategy=strategy, **fields)
-        # 重建 dispatch_rule_order：按请求顺序（校验层已保证默认规则唯一）
-        active_rules = {r.rule_id for r in strategy.dispatch_rules.filter(is_deleted=False)}
-        ordered_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id") in active_rules]
-        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
-        strategy.dispatch_rule_order = ordered_ids
-        strategy.save(update_fields=["dispatch_rule_order"])
 
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
@@ -755,8 +809,8 @@ class ListStrategy(StrategyV2Base):
             .prefetch_related("tools")
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
-        # 按场景过滤（通过 ResourceBinding）
-        queryset = SceneScopeFilter.filter_queryset(
+        # 按场景过滤（CompositeScopeFilter：场景级 + 对该场景可见的全局级策略并集）
+        queryset = CompositeScopeFilter.filter_queryset(
             queryset=queryset,
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.STRATEGY,
@@ -826,7 +880,8 @@ class ListStrategyAll(StrategyV2Base):
         strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         scene_id = validated_request_data.get("scene_id")
         if scene_id:
-            strategies = SceneScopeFilter.filter_queryset(
+            # 传 scene_id：场景级 + 对该场景可见的全局级策略并集
+            strategies = CompositeScopeFilter.filter_queryset(
                 queryset=strategies,
                 scene_id=scene_id,
                 resource_type=ResourceVisibilityType.STRATEGY,
@@ -1065,7 +1120,7 @@ class ListStrategyTags(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         scene_id = validated_request_data["scene_id"]
-        strategies = SceneScopeFilter.filter_queryset(
+        strategies = CompositeScopeFilter.filter_queryset(
             queryset=Strategy.objects.exclude(source=StrategySource.SYSTEM),
             scene_id=scene_id,
             resource_type=ResourceVisibilityType.STRATEGY,
