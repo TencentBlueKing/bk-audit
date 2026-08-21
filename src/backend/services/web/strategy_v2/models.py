@@ -507,7 +507,7 @@ class DispatchRule(SoftDeleteModel):
         gettext_lazy("Confirmer"),
         default=list,
         blank=True,
-        help_text=gettext_lazy("确认人用户名列表"),
+        help_text=gettext_lazy("确认人通知组 ID 列表"),
     )
     dispatch_mode = models.CharField(
         gettext_lazy("Dispatch Mode"),

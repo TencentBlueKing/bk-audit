@@ -95,6 +95,9 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
+    strategy_rule_id = serializers.IntegerField(
+        label=EventMappingFields.STRATEGY_RULE_ID.description, required=False, allow_null=True, default=None
+    )
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
     event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(

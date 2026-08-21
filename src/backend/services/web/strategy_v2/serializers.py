@@ -779,10 +779,10 @@ class DispatchRuleSerializer(serializers.Serializer):
     )
     confirmer = serializers.ListField(
         label=gettext_lazy("Confirmer"),
-        child=serializers.CharField(label=gettext_lazy("Confirmer Username")),
+        child=serializers.IntegerField(label=gettext_lazy("Confirmer Group")),
         required=False,
         default=list,
-        help_text=gettext_lazy("确认人用户名列表"),
+        help_text=gettext_lazy("确认人通知组 ID 列表"),
     )
     dispatch_mode = serializers.ChoiceField(
         label=gettext_lazy("Dispatch Mode"), choices=DispatchMode.choices, default=DispatchMode.DIRECT
@@ -920,8 +920,10 @@ class MultiRuleValidateMixin:
                     raise serializers.ValidationError(
                         gettext("分派规则[%s]的目标场景[%s]不存在") % (rule.get("rule_name"), rule.get("target_scene_id"))
                     )
-                # 通知组属于目标场景
-                notice_group_ids = list(set((rule.get("processor") or []) + (rule.get("follower") or [])))
+                # 通知组属于目标场景（processor/follower/confirmer 三者同属通知组 ID，统一校验）
+                notice_group_ids = list(
+                    set((rule.get("processor") or []) + (rule.get("follower") or []) + (rule.get("confirmer") or []))
+                )
                 self._validate_notice_groups("dispatch_rules", notice_group_ids, rule.get("target_scene_id"))
             if default_count != 1:
                 raise serializers.ValidationError(
