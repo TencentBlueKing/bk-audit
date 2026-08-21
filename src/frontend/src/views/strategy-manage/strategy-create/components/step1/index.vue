@@ -398,13 +398,6 @@
         message: t('数据源不能为空'),
         trigger: 'change',
       }],
-    'configs.select': [
-      {
-        validator: (value: Array<Record<string, any>>) => Array.isArray(value) && value.length > 0,
-        message: t('预期结果不能为空'),
-        trigger: 'change',
-      },
-    ],
     'configs.data_source.system_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
