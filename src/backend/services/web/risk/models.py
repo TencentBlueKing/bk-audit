@@ -250,7 +250,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         gettext_lazy("Confirmer"),
         default=list,
         blank=True,
-        help_text=gettext_lazy("确认人通知组 ID 列表"),
+        help_text=gettext_lazy("确认人用户名 列表"),
     )
 
     def can_auto_generate_report(self) -> bool:

@@ -299,7 +299,7 @@ class RiskHandler:
         if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
             # 全局策略：确认后分派：进入 PENDING_CONFIRM，等待 confirmer 确认（确认接口负责建绑定 + NewRisk 分流）
             # 不渲染报告、不通知关注人/处理人（确认后再触发），仅通知确认人
-            self._send_confirm_notice(risk, dispatch_result.confirmer)
+            self._send_confirm_notice(risk, risk.confirmer)
             return False, risk
 
         # 全局策略：direct 分派：建 RISK 场景绑定
@@ -349,7 +349,8 @@ class RiskHandler:
             )
             return None
         risk.dispatch_rule_id = dispatch_result.rule.rule_id
-        risk.confirmer = dispatch_result.confirmer
+        notice_groups = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.confirmer))
+        risk.confirmer = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
         if dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
             # 确认后分派：进入待确认状态（display_status 同步，否则列表页展示为空；
             # 周期任务 process_one_risk 的 match 无该分支会跳过，由确认/驳回接口驱动流转）
@@ -370,18 +371,13 @@ class RiskHandler:
             .first()
         )
 
-    def _send_confirm_notice(self, risk: Risk, confirmer: List[int]) -> None:
+    def _send_confirm_notice(self, risk: Risk, confirmer: List[str]) -> None:
         """
         PENDING_CONFIRM 阶段通知确认人，复用 notice 模块的默认配置；确认人接收后经确认接口流转。
 
-        confirmer 为通知组 ID 列表（分派规则固化快照），发送时解析为组内成员用户名。
+        confirmer 为用户名列表
         """
         if not confirmer:
-            return
-        notice_groups = list(NoticeGroup.objects.filter(group_id__in=confirmer))
-        receivers = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
-        if not receivers:
-            logger.warning("[SendConfirmNotice] empty receivers. risk_id=%s, confirmer=%s", risk.risk_id, confirmer)
             return
         try:
             resource.notice.send_notice(
@@ -389,7 +385,7 @@ class RiskHandler:
                 relate_id=risk.pk,
                 agg_key=f"risk_confirm:{risk.risk_id}",
                 msg_type=["mail"],
-                receivers=receivers,
+                receivers=confirmer,
                 title=gettext("风险单待确认"),
                 content=gettext("风险单[%s]等待您的确认") % risk.risk_id,
             )
