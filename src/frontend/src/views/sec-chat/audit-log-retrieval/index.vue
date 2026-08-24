@@ -16,34 +16,23 @@
 -->
 <template>
   <div class="audit-log-retrieval-page">
-    <!-- 临时返回：后续按产品设计替换 -->
-    <div class="temp-back-bar">
-      <bk-button
-        text
-        theme="primary"
-        @click="handleBack">
-        <audit-icon
-          class="back-icon"
-          type="angle-line-left" />
-        返回
-      </bk-button>
-    </div>
     <chat-log-panel
-      v-if="activeConversation"
-      :messages="activeConversation.messages"
+      v-if="panelConversation"
+      :messages="panelConversation.messages"
       @attach="handleAttach"
-      @close-select-system="closeSelectSystem"
-      @confirm-system="confirmSystem"
+      @close-select-system="handleCloseSelectSystem"
+      @confirm-system="handleConfirmSystem"
       @reselect-system="reselectSystem"
       @send="handleConversationSend" />
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { watch } from 'vue';
+  import { computed, watch } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';
+  import type { SelectedSystem } from '../types';
   import ChatLogPanel from './components/chat-log-panel.vue';
 
   const route = useRoute();
@@ -51,6 +40,7 @@
   const {
     activeConversation,
     conversations,
+    draftConversation,
     setActiveConversation,
     confirmSystem,
     closeSelectSystem,
@@ -58,29 +48,65 @@
     sendLogQuery,
   } = useSecChatStore();
 
-  const syncConversationFromRoute = () => {
+  const panelConversation = computed(() => activeConversation.value);
+
+  const syncConversationFromRoute = async () => {
     const conversationId = route.params.conversationId as string | undefined;
     if (!conversationId) {
       router.replace({ name: 'secChatHome' });
       return;
     }
-    const conv = conversations.value.find(c => c.id === conversationId);
-    if (!conv || conv.sceneType !== 'log') {
+
+    if (conversationId.startsWith('draft-')) {
+      if (draftConversation.value?.id === conversationId) {
+        await setActiveConversation(conversationId);
+        return;
+      }
       router.replace({ name: 'secChatHome' });
       return;
     }
-    setActiveConversation(conversationId);
+
+    try {
+      await setActiveConversation(conversationId);
+      if (!conversations.value.find(c => c.id === conversationId)) {
+        router.replace({ name: 'secChatHome' });
+      }
+    } catch {
+      router.replace({ name: 'secChatHome' });
+    }
   };
 
   watch(() => route.params.conversationId, syncConversationFromRoute, { immediate: true });
 
-  const handleBack = () => {
-    setActiveConversation(null);
-    router.push({ name: 'secChatHome' });
-  };
-
   const handleConversationSend = (content: string) => {
     sendLogQuery(content);
+  };
+
+  const handleConfirmSystem = async (
+    messageId: string,
+    systemIds: string[],
+    systems: SelectedSystem[],
+  ) => {
+    const wasDraft = Boolean(activeConversation.value?.isDraft);
+    try {
+      const result = await confirmSystem(messageId, systemIds, systems);
+      if (wasDraft && result?.id) {
+        await router.replace({
+          name: 'secChatAuditLog',
+          params: { conversationId: result.id },
+        });
+      }
+    } catch {
+      // 创建失败留在选系统页，提示由全局 request 中间件处理
+    }
+  };
+
+  const handleCloseSelectSystem = (messageId: string) => {
+    const wasDraft = Boolean(activeConversation.value?.isDraft);
+    closeSelectSystem(messageId);
+    if (wasDraft) {
+      router.push({ name: 'secChatHome' });
+    }
   };
 
   const handleAttach = () => {};
@@ -94,17 +120,5 @@
     min-height: 0;
     overflow: hidden;
     flex-direction: column;
-  }
-
-  .temp-back-bar {
-    display: flex;
-    padding: 12px 16px 0;
-    flex-shrink: 0;
-    align-items: center;
-
-    .back-icon {
-      margin-right: 4px;
-      font-size: 16px;
-    }
   }
 </style>

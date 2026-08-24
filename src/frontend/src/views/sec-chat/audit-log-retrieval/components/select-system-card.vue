@@ -37,7 +37,7 @@
             collapse-tags
             filterable
             :input-search="false"
-            :loading="false"
+            :loading="systemListLoading"
             multiple
             multiple-mode="tag"
             placeholder="请选择"
@@ -73,20 +73,20 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
+
+  import MetaManageService from '@service/meta-manage';
 
   import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import wenhaoIcon from '@images/wenhao.svg';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   import type { SelectedSystem } from '../../types';
 
   export type { SelectedSystem };
-
-  interface SystemOption {
-    id: string;
-    name: string;
-  }
 
   interface Props {
     modelValue?: string[];
@@ -106,14 +106,26 @@
   const { messageWarn } = useMessage();
   const selectedIds = ref<string[]>([...(props.modelValue || [])]);
 
-  // 临时模拟 20 条系统数据，便于验证下拉滚动与遮挡
-  const displaySystemList: SystemOption[] = Array.from({ length: 20 }, (_, index) => {
-    const n = index + 1;
-    return {
-      id: `mock_system_${String(n).padStart(2, '0')}`,
-      name: `模拟系统${n}`,
-    };
+  // 与日志检索「系统名称」下拉使用同一接口
+  const {
+    loading: systemListLoading,
+    data: systemList,
+  } = useRequest(() => {
+    const params = getSceneSystemParams();
+    return MetaManageService.fetchSystemWithAction({
+      scope_id: params.scope_id || '',
+      scope_type: params.scope_type || '',
+      audit_status__in: 'accessed',
+    });
+  }, {
+    defaultValue: [],
+    manual: true,
   });
+
+  const displaySystemList = computed(() => (systemList.value || []).map(item => ({
+    id: String(item.id),
+    name: item.name,
+  })));
 
   const selectPopoverOptions = {
     extCls: 'sec-chat-system-select-popover',
@@ -144,7 +156,7 @@
     }
     const systems = selectedIds.value
       .map((id) => {
-        const item = displaySystemList.find(sys => sys.id === id);
+        const item = displaySystemList.value.find(sys => sys.id === id);
         return item
           ? { id: item.id, name: item.name }
           : { id, name: id };
