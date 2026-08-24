@@ -1,4 +1,4 @@
-import threading
+﻿import threading
 from unittest import mock
 from uuid import uuid4
 
@@ -32,6 +32,7 @@ from tests.test_ai_assistant.handlers import (
     EchoInput,
     EchoOutput,
     EchoSyncHandler,
+    register_test_message_handler,
 )
 
 
@@ -98,7 +99,7 @@ class MessageServiceTest(TestCase):
         self.service = MessageService(user=self.user)
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         self.sync_handler = RecordingSyncHandler()
-        message_handler_registry.register(self.sync_handler)
+        register_test_message_handler(self.sync_handler)
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
@@ -186,7 +187,7 @@ class MessageServiceTest(TestCase):
                 )
 
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=parent))
         with self.assertRaises(InvalidInitialMessage):
             self.service.prepare_initial(
                 conversation=Conversation(created_by=self.user, updated_by=self.user),
@@ -212,7 +213,7 @@ class MessageServiceTest(TestCase):
 
     def test_sync_execute_failure_does_not_create_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(FailingSyncHandler())
+        register_test_message_handler(FailingSyncHandler())
 
         with self.assertRaises(RuntimeError):
             self.service.create(
@@ -225,7 +226,7 @@ class MessageServiceTest(TestCase):
 
     def test_sync_invalid_output_does_not_create_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(InvalidOutputSyncHandler())
+        register_test_message_handler(InvalidOutputSyncHandler())
 
         with self.assertRaises(MessageSnapshotValidationError):
             self.service.create(
@@ -252,7 +253,7 @@ class MessageServiceTest(TestCase):
     def test_handler_can_return_fallback_parent(self):
         parent = self.create_parent()
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=parent))
 
         message = self.service.create(
             conversation=self.conversation,
@@ -266,7 +267,7 @@ class MessageServiceTest(TestCase):
         other_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         foreign_parent = self.create_parent(conversation=other_conversation)
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=foreign_parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=foreign_parent))
 
         message = self.service.create(
             conversation=self.conversation,
@@ -306,7 +307,7 @@ class MessageServiceTest(TestCase):
     def test_parent_business_status_is_decided_by_handler(self):
         processing_parent = self.create_parent(status=ExecutionStatus.PROCESSING)
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RejectingParentHandler())
+        register_test_message_handler(RejectingParentHandler())
 
         with self.assertRaises(InvalidParentMessage) as context:
             self.service.create(
@@ -342,7 +343,7 @@ class MessageServiceTest(TestCase):
 
     def register_async_handler(self):
         handler = EchoAsyncHandler()
-        message_handler_registry.register(handler)
+        register_test_message_handler(handler)
         return handler
 
     def test_async_create_persists_processing_message_and_dispatches_after_commit(self):
@@ -544,7 +545,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
     def setUp(self):
         self.user = "alice"
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        message_handler_registry.register(EchoAsyncHandler())
+        register_test_message_handler(EchoAsyncHandler())
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,

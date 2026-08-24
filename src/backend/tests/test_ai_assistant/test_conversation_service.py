@@ -1,4 +1,4 @@
-from unittest import mock
+﻿from unittest import mock
 
 from django.db import IntegrityError, connection
 from django.test import override_settings
@@ -26,6 +26,7 @@ from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoSyncHandler,
     SystemSelectionAsyncHandler,
+    register_test_message_handler,
 )
 
 
@@ -35,7 +36,7 @@ class ConversationServiceTest(TestCase):
         self.other_user = "bob"
         self.service = ConversationService(user=self.user)
         self.other_service = ConversationService(user=self.other_user)
-        message_handler_registry.register(EchoSyncHandler())
+        register_test_message_handler(EchoSyncHandler())
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
@@ -88,7 +89,7 @@ class ConversationServiceTest(TestCase):
     def test_create_conversation_supports_async_initial_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         handler = SystemSelectionAsyncHandler()
-        message_handler_registry.register(handler)
+        register_test_message_handler(handler)
 
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with self.captureOnCommitCallbacks(execute=True):

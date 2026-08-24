@@ -1,4 +1,4 @@
-from unittest import mock
+﻿from unittest import mock
 
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
 from django.core.exceptions import ImproperlyConfigured
@@ -36,6 +36,7 @@ from tests.test_ai_assistant.handlers import (
     execute_async_retry_exhausted,
     execute_async_retry_without_exc,
     execute_async_success,
+    register_test_message_handler,
 )
 
 
@@ -44,7 +45,7 @@ class MessageTaskTest(TestCase):
         self.user = "alice"
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         self.handler = EchoAsyncHandler()
-        message_handler_registry.register(self.handler)
+        register_test_message_handler(self.handler)
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)

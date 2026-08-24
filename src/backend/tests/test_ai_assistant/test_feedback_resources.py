@@ -1,4 +1,4 @@
-import json
+﻿import json
 from unittest import mock
 from uuid import uuid4
 
@@ -25,7 +25,7 @@ from services.web.ai_assistant.serializers.feedback import (
     FeedbackUpsertRequestSerializer,
 )
 from tests.base import TestCase
-from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler
+from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler, register_test_message_handler
 
 
 class FeedbackRequestSerializerTest(TestCase):
@@ -80,7 +80,7 @@ class FeedbackResourceTest(TestCase):
             created_by="alice",
             updated_by="alice",
         )
-        message_handler_registry.register(FeedbackEchoSyncHandler())
+        register_test_message_handler(FeedbackEchoSyncHandler())
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
@@ -174,7 +174,7 @@ class FeedbackResourceRoutingTest(TestCase):
             created_by="alice",
             updated_by="alice",
         )
-        message_handler_registry.register(FeedbackEchoSyncHandler())
+        register_test_message_handler(FeedbackEchoSyncHandler())
         self.addCleanup(message_handler_registry.unregister, MessageType.SYSTEM_SELECTION)
         path = "/api/v1/ai_assistant/feedback/"
         request = APIRequestFactory().post(
