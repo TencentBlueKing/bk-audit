@@ -6,6 +6,7 @@ from django.test import SimpleTestCase, override_settings
 from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory
 
+from services.web.ai_assistant.resources.stream import GetAttachmentStream
 from services.web.ai_assistant.urls import router
 from services.web.ai_assistant.views import (
     AttachmentsViewSet,
@@ -16,6 +17,13 @@ from services.web.ai_assistant.views import (
 
 
 class ResourceDescriptionTest(SimpleTestCase):
+    def test_attachment_stream_description_explains_eventsource_reconnect(self):
+        description = inspect.getdoc(GetAttachmentStream)
+
+        for keyword in ("EventSource", "300 秒", "onerror", "PROCESSING", "addEventListener"):
+            with self.subTest(keyword=keyword):
+                self.assertIn(keyword, description)
+
     def test_every_resource_route_defines_own_description(self):
         # 直接使用生产路由注册表，保证后续新增 ViewSet 会自动进入接口描述门禁。
         for _, viewset_class, _ in router.registry:
@@ -63,6 +71,18 @@ class ResourceDescriptionTest(SimpleTestCase):
                 "/api/v1/ai_assistant/attachments/{attachment_uid}/retry/",
                 "post",
                 "原对象",
+                AttachmentsViewSet,
+            ),
+            (
+                "/api/v1/ai_assistant/attachments/{attachment_uid}/stream/snapshot/",
+                "get",
+                "快照",
+                AttachmentsViewSet,
+            ),
+            (
+                "/api/v1/ai_assistant/attachments/{attachment_uid}/stream/",
+                "get",
+                "续传",
                 AttachmentsViewSet,
             ),
             (

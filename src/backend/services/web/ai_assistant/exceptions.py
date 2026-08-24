@@ -202,3 +202,33 @@ class InvalidFeedbackSourceState(AIAssistantException):
     MESSAGE = gettext_lazy("当前对象状态不支持反馈")
     ERROR_CODE = "029"
     STATUS_CODE = 400
+
+
+class StreamNotEnabled(AIAssistantException):
+    """对非流式附件调用流接口或读取 Runtime 属于接入错误。"""
+
+    MESSAGE = gettext_lazy("当前附件未启用流式输出")
+    ERROR_CODE = "033"
+    STATUS_CODE = 400
+
+
+class InvalidStreamEvent(AIAssistantException):
+    """事件无法 JSON 序列化，或内部流配置/归档结构非法。"""
+
+    MESSAGE = gettext_lazy("流式事件格式错误")
+    ERROR_CODE = "034"
+
+
+class InvalidStreamCursor(AIAssistantException):
+    """客户端提交的 Redis Stream 游标不符合 `<ms>-<seq>` 格式。"""
+
+    MESSAGE = gettext_lazy("流式游标格式错误")
+    ERROR_CODE = "035"
+    STATUS_CODE = 400
+
+
+class StreamRuntimeClosed(AIAssistantException):
+    """终态或 Retry 后继续 publish 属于业务 Task 接入错误。"""
+
+    MESSAGE = gettext_lazy("流式运行时已经关闭")
+    ERROR_CODE = "036"

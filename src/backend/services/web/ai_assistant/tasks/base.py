@@ -54,6 +54,7 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
     def _finish_failure(
         self,
         *,
+        execution: ExecutionT | None,
         instance_id: int,
         task_id: str,
         exception: Exception,
@@ -61,6 +62,9 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
         """由领域 Task 映射异常并写入失败终态。"""
 
         raise NotImplementedError
+
+    def _handle_retry(self, *, execution: ExecutionT | None) -> None:
+        """领域 Task 可在 Celery Retry 退出前强制持久化执行过程。"""
 
     def __call__(self, *args, **kwargs):
         """注入执行上下文；已终态或 task_id 不匹配的投递直接忽略。"""
@@ -83,6 +87,7 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
     def _execute(self, *, instance_id: int, task_id: str):
         """执行业务 Task，并让领域 Hook 负责快照校验和终态写入。"""
 
+        execution: ExecutionT | None = None
         try:
             execution = self._load_execution(
                 instance_id=instance_id,
@@ -91,7 +96,11 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
             )
             # 保留 Celery request 的原始 kwargs，保证 self.retry() 能重投相同平台参数。
             result = self.run(execution)
-        except (Retry, self.stale_exception):
+        except Retry:
+            # Retry 只表示任务已重投，退出前必须让领域 Hook 落盘执行过程。
+            self._handle_retry(execution=execution)
+            raise
+        except self.stale_exception:
             raise
         except Exception as error:
             self._log_failure(
@@ -99,7 +108,7 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
                 instance_id=instance_id,
                 task_id=task_id,
             )
-            self._finish_failure(instance_id=instance_id, task_id=task_id, exception=error)
+            self._fail_or_retry(execution=execution, instance_id=instance_id, task_id=task_id, exception=error)
             raise
 
         try:
@@ -108,6 +117,9 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
                 task_id=task_id,
                 output_data=result,
             )
+        except Retry:
+            self._handle_retry(execution=execution)
+            raise
         except self.stale_exception:
             raise
         except Exception as error:
@@ -116,7 +128,28 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
                 instance_id=instance_id,
                 task_id=task_id,
             )
-            self._finish_failure(instance_id=instance_id, task_id=task_id, exception=error)
+            self._fail_or_retry(execution=execution, instance_id=instance_id, task_id=task_id, exception=error)
+            raise
+
+    def _fail_or_retry(
+        self,
+        *,
+        execution: ExecutionT | None,
+        instance_id: int,
+        task_id: str,
+        exception: Exception,
+    ) -> None:
+        """写失败终态；若领域 Hook 判定需要基础设施重试则改走 Retry。"""
+
+        try:
+            self._finish_failure(
+                execution=execution,
+                instance_id=instance_id,
+                task_id=task_id,
+                exception=exception,
+            )
+        except Retry:
+            self._handle_retry(execution=execution)
             raise
 
     def _extract_arguments(self, kwargs) -> tuple[int, str]:

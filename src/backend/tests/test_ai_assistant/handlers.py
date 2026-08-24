@@ -14,6 +14,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentTypeHandler,
     MessagePreparation,
     MessageTypeHandler,
+    attachment_handler_registry,
 )
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import MessageSchema
@@ -421,3 +422,107 @@ def execute_attachment_async_execution_failed(
     execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
 ):
     raise AttachmentExecutionFailed(message="可公开的执行失败")
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.echo_attachment_stream_success",
+    queue="tests_ai_assistant",
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=1,
+    time_limit=30,
+)
+def execute_attachment_stream_success(
+    self,
+    execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
+):
+    """流式业务 Task 只通过平台注入的 Runtime 写 UI 事件，并返回最终类型化产物。"""
+
+    execution.stream.send({"content": execution.input_data.text})
+    return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.echo_attachment_stream_retry",
+    queue="tests_ai_assistant",
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=1,
+    time_limit=30,
+)
+def execute_attachment_stream_retry(
+    self,
+    execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
+):
+    """首次投递发布事件后重试，用于验证 Retry 前平台强制刷盘。"""
+
+    execution.stream.send({"content": "before retry"})
+    if self.request.retries == 0:
+        raise self.retry()
+    return AttachmentEchoOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.echo_attachment_stream_autoretry",
+    queue="tests_ai_assistant",
+    autoretry_for=(RetryableAttachmentError,),
+    max_retries=2,
+)
+def execute_attachment_stream_autoretry(
+    self,
+    execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
+):
+    """通过 autoretry_for 触发重试，验证平台无需业务显式调用 retry。"""
+
+    execution.stream.send({"content": "before autoretry"})
+    raise RetryableAttachmentError("stream autoretry private detail")
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.echo_attachment_stream_failure",
+    queue="tests_ai_assistant",
+    acks_late=True,
+    max_retries=2,
+    default_retry_delay=1,
+    time_limit=30,
+)
+def execute_attachment_stream_failure(
+    self,
+    execution: AttachmentExecution[AttachmentEchoInput, AttachmentEchoContext],
+):
+    """流式业务执行失败，用于验证失败终态同样经由 Runtime 收敛。"""
+
+    execution.stream.send({"content": "partial"})
+    raise AttachmentExecutionFailed(message="可公开的执行失败")
+
+
+class EchoAttachmentStreamHandler(EchoAttachmentAsyncHandler):
+    """示例流式附件 Handler：异步执行且开启 UI 实时流。"""
+
+    is_stream = True
+    async_task = execute_attachment_stream_success
+
+
+def use_attachment_handler(test_case, handler: AttachmentTypeHandler) -> AttachmentTypeHandler:
+    """在用例内独占注册某个附件 Handler。
+
+    Handler 注册表是进程级单例，直接 ``register()`` 会因同类型已存在而抛出
+    ``ImproperlyConfigured``。这里先卸载同类型再注册，并交由
+    ``AttachmentHandlerRegistryMixin`` 在用例结束时统一清空注册表。
+    """
+
+    attachment_handler_registry.unregister(handler.attachment_type)
+    return attachment_handler_registry.register(handler)
+
+
+class AttachmentHandlerRegistryMixin:
+    """为用例提供隔离的附件 Handler 注册表。
+
+    注册表是进程级单例，任何用例遗留的 Handler 都会让后续用例注册失败或读到
+    错误协议。这里在每个用例结束时清空全部类型，保证下一个用例从干净状态开始。
+    """
+
+    def tearDown(self):
+        for attachment_type in AttachmentType.values:
+            attachment_handler_registry.unregister(attachment_type)
+        super().tearDown()

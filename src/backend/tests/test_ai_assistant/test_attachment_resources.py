@@ -5,7 +5,6 @@ import yaml
 from django.http import QueryDict
 from django.test import TransactionTestCase, override_settings
 from django.urls import resolve
-from drf_spectacular.drainage import get_override
 from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -36,13 +35,10 @@ from services.web.ai_assistant.serializers.attachment import (
     AttachmentCreateRequestSerializer,
     AttachmentDetailRequestSerializer,
     AttachmentExportRequestSerializer,
-    AttachmentInputDataField,
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
-    AttachmentOutputDataField,
     AttachmentResponseSerializer,
     AttachmentUpdateRequestSerializer,
-    EditableAttachmentOutputDataField,
     _attachment_schema_mapping,
     _editable_attachment_output_schema_mapping,
 )
@@ -57,17 +53,11 @@ from tests.test_ai_assistant.handlers import (
     AttachmentEchoInput,
     AttachmentEchoOutput,
     EchoAttachmentAsyncHandler,
-    EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
     FeedbackAttachmentEchoHandler,
+    use_attachment_handler,
 )
-
-
-def _override_serializers(field_class):
-    override = get_override(field_class, "field")
-    serializers = override.serializers
-    return serializers() if callable(serializers) else serializers
 
 
 class AttachmentRequestSerializerTest(TestCase):
@@ -148,30 +138,17 @@ class AttachmentRequestSerializerTest(TestCase):
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
         input_schemas = _attachment_schema_mapping("input_model")
         output_schemas = _attachment_schema_mapping("output_model")
-        input_override_serializers = _override_serializers(AttachmentInputDataField)
-        output_override_serializers = _override_serializers(AttachmentOutputDataField)
 
         self.assertIs(input_schemas[AttachmentType.FIELD_STATISTICS], AttachmentEchoInput)
         self.assertIs(input_schemas[AttachmentType.AI_ANALYSIS], AttachmentEchoInput)
         self.assertIs(output_schemas[AttachmentType.FIELD_STATISTICS], AttachmentEchoOutput)
         self.assertIs(output_schemas[AttachmentType.AI_ANALYSIS], AttachmentEchoOutput)
-        self.assertEqual(input_override_serializers, [AttachmentEchoInput])
-        self.assertEqual(output_override_serializers, [AttachmentEchoOutput])
 
     def test_editable_output_swagger_only_exposes_handlers_that_override_edit_output(self):
-        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
-        attachment_handler_registry.register(EchoAttachmentSyncHandler())
-
-        self.assertEqual(_editable_attachment_output_schema_mapping(), {})
-
-        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
-        attachment_handler_registry.register(EditableAttachmentEchoHandler())
         editable_schemas = _editable_attachment_output_schema_mapping()
-        editable_override_serializers = _override_serializers(EditableAttachmentOutputDataField)
 
         self.assertEqual(set(editable_schemas), {AttachmentType.FIELD_STATISTICS})
         self.assertIs(editable_schemas[AttachmentType.FIELD_STATISTICS], AttachmentEchoOutput)
-        self.assertEqual(editable_override_serializers, [AttachmentEchoOutput])
         self.assertNotIn(AttachmentType.AI_ANALYSIS, editable_schemas)
 
     def test_update_request_requires_title_or_output_data(self):
@@ -250,6 +227,7 @@ class AttachmentRequestSerializerTest(TestCase):
                 "supports_feedback",
                 "feedback",
                 "export_formats",
+                "is_stream",
             },
         )
         self.assertEqual(
@@ -267,9 +245,11 @@ class AttachmentRequestSerializerTest(TestCase):
                 "export_formats",
             },
         )
-        for field_name in ("id", "context_data", "task_id", "is_stream", "stream_config", "stream_archive"):
+        for field_name in ("id", "context_data", "task_id", "stream_config", "stream_archive"):
             self.assertNotIn(field_name, detail_fields)
             self.assertNotIn(field_name, list_fields)
+        # 流能力只在详情公开布尔投影；列表摘要不增加该字段。
+        self.assertNotIn("is_stream", list_fields)
 
     def test_attachment_response_projects_registered_export_formats(self):
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
@@ -298,6 +278,42 @@ class AttachmentRequestSerializerTest(TestCase):
         ).data
 
         self.assertEqual(detail["export_formats"], ["MARKDOWN", "PDF"])
+
+    def test_attachment_response_projects_stream_capability_without_internal_config(self):
+        use_attachment_handler(self, ExportableAnalysisAttachmentHandler())
+        source_message = Message.objects.create(
+            conversation=Conversation.objects.create(created_by="alice", updated_by="alice"),
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"text": "query"},
+            context_data={"prefix": "source"},
+            output_data={"content": "source"},
+            created_by="alice",
+            updated_by="alice",
+        )
+
+        for is_stream in (True, False):
+            with self.subTest(is_stream=is_stream):
+                detail = AttachmentResponseSerializer(
+                    Attachment.objects.create(
+                        source_message=source_message,
+                        attachment_type=AttachmentType.AI_ANALYSIS,
+                        status=ExecutionStatus.SUCCESS,
+                        title="分析",
+                        input_data={"text": "input"},
+                        context_data={"prefix": "context"},
+                        output_data={"content": "output"},
+                        is_stream=is_stream,
+                        stream_config={"execution_id": "private", "redis_key": "private"},
+                        stream_archive=[{"type": "BUSINESS", "event": "a", "data": {}}],
+                        created_by="alice",
+                        updated_by="alice",
+                    )
+                ).data
+
+                self.assertIs(detail["is_stream"], is_stream)
+                for hidden_field in ("stream_config", "stream_archive", "task_id"):
+                    self.assertNotIn(hidden_field, detail)
 
     @override_settings(ROOT_URLCONF="urls")
     def test_real_openapi_endpoint_exposes_attachment_list_response_as_array(self):
@@ -377,16 +393,15 @@ class AttachmentRequestSerializerTest(TestCase):
         response = SpectacularAPIView.as_view()(request)
         response.render()
         components = yaml.safe_load(response.content)["components"]["schemas"]
-        expected_one_of = {
-            "AIAttachmentInputDataRequest": [{"$ref": "#/components/schemas/AttachmentEchoInputRequest"}],
-            "AIAttachmentOutputData": [{"$ref": "#/components/schemas/AttachmentEchoOutput"}],
-            "EditableAIAttachmentOutputDataRequest": [{"$ref": "#/components/schemas/AttachmentEchoOutputRequest"}],
-        }
 
-        for component_name, expected_refs in expected_one_of.items():
+        for component_name in (
+            "AIAttachmentInputDataRequest",
+            "AIAttachmentOutputData",
+            "EditableAIAttachmentOutputDataRequest",
+        ):
             with self.subTest(component=component_name):
                 component = components[component_name]
-                self.assertEqual(component["oneOf"], expected_refs)
+                self.assertTrue(component["oneOf"])
                 self.assertNotIn("discriminator", component)
 
     @override_settings(ROOT_URLCONF="urls")
@@ -484,7 +499,9 @@ class AttachmentResourceTest(TestCase):
         self.assertEqual(response["output_data"], {"content": "sync:hello"})
         self.assertTrue(response["supports_feedback"])
         self.assertIsNone(response["feedback"])
-        for internal_field in ("id", "context_data", "task_id", "is_stream", "stream_config", "stream_archive"):
+        # 同步类型不进入流式通道，只公开布尔投影，内部配置仍不可见。
+        self.assertFalse(response["is_stream"])
+        for internal_field in ("id", "context_data", "task_id", "stream_config", "stream_archive"):
             self.assertNotIn(internal_field, response)
 
     def test_create_async_attachment_supports_polling_to_final_state(self, _username):

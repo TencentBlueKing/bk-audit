@@ -48,6 +48,7 @@ class MessageExecutionTask(BaseExecutionTask[MessageExecution]):
     def _finish_failure(
         self,
         *,
+        execution: MessageExecution | None,
         instance_id: int,
         task_id: str,
         exception: Exception,

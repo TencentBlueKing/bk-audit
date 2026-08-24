@@ -286,7 +286,7 @@ class Attachment(ExternalUIDModel, OperateRecordModel, ExecutionSnapshotModel):
     content_updated_at = models.DateTimeField(gettext_lazy("内容更新时间"), null=True, blank=True, db_index=True)
     is_stream = models.BooleanField(gettext_lazy("是否流式执行"), default=False)
     stream_config = models.JSONField(gettext_lazy("流式配置"), default=dict)
-    # 保存已确认需要归档的完整事件对象，具体 AG-UI 协议由业务模块定义。
+    # 保存平台统一事件信封，data 内业务协议由具体模块定义。
     stream_archive = models.JSONField(gettext_lazy("流式事件归档"), default=list, blank=True)
 
     class Meta:

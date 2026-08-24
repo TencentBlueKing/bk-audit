@@ -83,3 +83,18 @@ class SidebarNodeType(TextChoices):
 
     GROUP = "GROUP", gettext_lazy("分组")
     CONVERSATION = "CONVERSATION", gettext_lazy("会话")
+
+
+class StreamArchiveStatus(TextChoices):
+    """MySQL 事件归档相对实时流的完整性；仅影响 UI 展示，不影响最终产物。"""
+
+    COMPLETE = "COMPLETE", gettext_lazy("完整")
+    DEGRADED = "DEGRADED", gettext_lazy("降级")
+    TRUNCATED = "TRUNCATED", gettext_lazy("已截断")
+
+
+class PlatformStreamEvent(TextChoices):
+    """平台保留的流控制事件名称；前端据此切换或结束渲染。"""
+
+    STREAM_RESET = "platform.stream_reset", gettext_lazy("流已切换")
+    STREAM_END = "platform.stream_end", gettext_lazy("流已结束")

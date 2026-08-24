@@ -24,6 +24,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentPreparation,
     InvalidAttachmentSource,
     InvalidAttachmentState,
+    StreamNotEnabled,
 )
 from services.web.ai_assistant.handlers import (
     AttachmentExecutionContext,
@@ -112,6 +113,8 @@ class AttachmentService:
             input_data=parsed_input.model_dump(mode="json"),
             context_data=parsed_context.model_dump(mode="json"),
             output_data=output_snapshot,
+            # 同步类型不进入流式通道，显式固化为 False，避免继承默认值歧义。
+            is_stream=False,
             content_updated_at=now,
             created_by=self.user,
             updated_by=self.user,
@@ -170,16 +173,41 @@ class AttachmentService:
             )
             raise AttachmentExportFailed() from error
 
-    def _get_visible_attachment(self, *, attachment_uid: str, bind_feedback: bool) -> Attachment:
+    def get_for_stream(self, *, attachment_uid: str, include_archive: bool = False) -> Attachment:
+        """返回当前用户可见的流式附件，不绑定 Feedback 或解析大型产物。
+
+        SSE 只需主键和流标识；快照额外读取 ``stream_archive``。
+        两者均跳过 Feedback 与业务 input/output JSON，避免多端连接放大数据库传输。
+        """
+
+        fields = ["id", "uid", "status", "task_id", "is_stream", "stream_config"]
+        if include_archive:
+            fields.append("stream_archive")
+        attachment = self._get_visible_attachment(
+            attachment_uid=attachment_uid,
+            bind_feedback=False,
+            only_fields=fields,
+        )
+        if not attachment.is_stream:
+            raise StreamNotEnabled()
+        return attachment
+
+    def _get_visible_attachment(
+        self,
+        *,
+        attachment_uid: str,
+        bind_feedback: bool,
+        only_fields: list[str] | None = None,
+    ) -> Attachment:
         """统一 UUID、用户及软删除会话边界；导出按需跳过无关的 Feedback 查询。"""
 
         try:
-            attachment = (
-                self._visible_attachments()
-                .select_related("source_message__conversation")
-                .filter(uid=attachment_uid)
-                .first()
-            )
+            queryset = self._visible_attachments()
+            if only_fields is None:
+                queryset = queryset.select_related("source_message__conversation")
+            else:
+                queryset = queryset.only(*only_fields)
+            attachment = queryset.filter(uid=attachment_uid).first()
         except DjangoValidationError as error:
             raise AttachmentNotFound() from error
         if attachment is None:
@@ -323,6 +351,10 @@ class AttachmentService:
         old_task_id = attachment.task_id
         new_task_id = str(uuid4())
         now = timezone.now()
+        # 流式附件保留旧配置供新 Worker 补发 reset；非流式统一清空避免残留脏数据。
+        stream_updates: dict[str, Any] = {"stream_archive": []}
+        if not attachment.is_stream:
+            stream_updates["stream_config"] = {}
         with transaction.atomic():
             # 不加行锁；依赖 FAILED + old task_id 的 CAS 让并发重试只有一个成功。
             updated = Attachment.restart_failed(
@@ -330,8 +362,7 @@ class AttachmentService:
                 old_task_id=old_task_id,
                 new_task_id=new_task_id,
                 extra_updates={
-                    "stream_config": {},
-                    "stream_archive": [],
+                    **stream_updates,
                     "content_updated_at": now,
                     "updated_by": self.user,
                     "updated_at": now,
@@ -340,10 +371,15 @@ class AttachmentService:
             if not updated:
                 raise InvalidAttachmentState()
             # CAS 使用 QuerySet 原子抢占；刷新实例供 on_commit 投递和接口返回共同使用。
-            # 流式配置与事件均属于单次运行，任务启动前先清空，避免排队或投递失败时暴露旧数据。
             attachment.refresh_from_db()
+
+            def after_commit() -> None:
+                """事务提交后投递新任务，由下一次 execution 负责通知旧流。"""
+
+                self._dispatch(handler=handler, attachment=attachment)
+
             # 只有 CAS 成功的请求才能注册 on_commit，避免旧 task_id 被重新投递。
-            transaction.on_commit(lambda: self._dispatch(handler=handler, attachment=attachment))
+            transaction.on_commit(after_commit)
         return attachment
 
     def _visible_attachments(self):
@@ -405,6 +441,8 @@ class AttachmentService:
                 input_data=input_snapshot,
                 context_data=context_snapshot,
                 output_data=None,
+                # 创建时固化 Handler 的流能力声明，后续执行和接口都以模型字段为准。
+                is_stream=handler.is_stream,
                 content_updated_at=now,
                 created_by=self.user,
                 updated_by=self.user,

@@ -64,6 +64,8 @@ class AttachmentTypeHandler(Generic[InputT, ContextT, OutputT], ABC):
     supports_feedback: bool = False
     # 只有显式声明且覆写 export() 的类型才向前端公开下载格式。
     export_formats: tuple[AttachmentExportFormat, ...] = ()
+    # 声明该类型是否使用平台 UI 流；仅异步 Handler 可开启，注册阶段强制校验。
+    is_stream: bool = False
     # 同步 Handler 无需重复声明；异步 Handler 直接绑定平台装饰器生成的 Task。
     async_task: "AttachmentAsyncTask[InputT, ContextT, OutputT] | None" = None
 

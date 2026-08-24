@@ -162,6 +162,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    is_stream = serializers.BooleanField(help_text="是否使用流式输出；为真时可订阅流快照与 SSE 接口")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
         help_text="当前类型支持的后端导出格式",
@@ -199,6 +200,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "supports_feedback": supports_feedback,
+            "is_stream": instance.is_stream,
             "export_formats": [str(export_format) for export_format in handler.export_formats],
             "feedback": (
                 FeedbackResponseSerializer(getattr(instance, "_current_feedback", None)).data

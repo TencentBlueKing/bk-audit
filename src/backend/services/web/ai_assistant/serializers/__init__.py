@@ -33,6 +33,10 @@ from services.web.ai_assistant.serializers.message import (
     MessageResponseSerializer,
     MessageWindowResponseSerializer,
 )
+from services.web.ai_assistant.serializers.stream import (
+    AttachmentStreamRequestSerializer,
+    AttachmentStreamSnapshotResponseSerializer,
+)
 
 __all__ = [
     "AttachmentCreateRequestSerializer",
@@ -41,6 +45,8 @@ __all__ = [
     "AttachmentListItemSerializer",
     "AttachmentListRequestSerializer",
     "AttachmentResponseSerializer",
+    "AttachmentStreamRequestSerializer",
+    "AttachmentStreamSnapshotResponseSerializer",
     "AttachmentUpdateRequestSerializer",
     "ConversationCreateRequestSerializer",
     "ConversationCreateResponseSerializer",
