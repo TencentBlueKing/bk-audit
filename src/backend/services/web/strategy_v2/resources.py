@@ -893,6 +893,9 @@ class ListStrategy(StrategyV2Base):
         system_id = validated_request_data.pop("system_id", None)
         # 绑定类型筛选（platform_binding=平台视角仅全局策略；scene_binding=仅场景策略；不传+scene_id=并集）
         binding_type = validated_request_data.pop("binding_type", None) or None
+        # 校验：binding_type=scene_binding 时必须传 scene_id
+        if binding_type == BindingType.SCENE_BINDING and not scene_id:
+            raise serializers.ValidationError(gettext("binding_type=scene_binding 时必须传 scene_id 参数"))
         # 排序字段
         order_field = validated_request_data.get("order_field") or "-strategy_id"
         # init queryset
@@ -915,14 +918,16 @@ class ListStrategy(StrategyV2Base):
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # CompositeScopeFilter：binding_type + scene_id/system_id 组合过滤
-        queryset = CompositeScopeFilter.filter_queryset(
-            queryset=queryset,
-            binding_type=binding_type,
-            scene_id=scene_id,
-            system_id=system_id,
-            resource_type=ResourceVisibilityType.STRATEGY,
-            pk_field="strategy_id",
-        )
+        # 当三个参数都为空时，返回所有策略（不做过滤）
+        if binding_type or scene_id or system_id:
+            queryset = CompositeScopeFilter.filter_queryset(
+                queryset=queryset,
+                binding_type=binding_type,
+                scene_id=scene_id,
+                system_id=system_id,
+                resource_type=ResourceVisibilityType.STRATEGY,
+                pk_field="strategy_id",
+            )
         # 排序
         queryset = queryset.order_by(order_field)
 
@@ -989,14 +994,20 @@ class ListStrategyAll(StrategyV2Base):
     def filter_queryset_by_scope_relation(queryset, validated_request_data: dict):
         """
         按 scope 关联关系过滤全量策略（不校验当前用户权限），与工具 ListToolAll 对齐：
+        - 都不传：默认平台视角（仅全局策略），与 ListToolAll 默认行为一致
         - scope_type + scope_id：scene/cross_scene 展开为 scene_id 列表，system/cross_system 展开为 system_id 列表
-        - 无 scope：binding_type 过滤（不传默认 platform_binding，平台级全局策略）
+        - 无 scope + binding_type：按 binding_type 过滤（scene_binding 单独传 = 全部场景策略）
         """
         from services.web.common.constants import ScopeType
 
         scope_type = validated_request_data.get("scope_type")
         binding_type = validated_request_data.get("binding_type") or None
+        scope_id = validated_request_data.get("scope_id")
+        # 校验：scope_type=scene 时必须传 scope_id
+        if scope_type == ScopeType.SCENE and not scope_id:
+            raise serializers.ValidationError(gettext("scope_type=scene 时必须传 scope_id 参数"))
         if not scope_type:
+            # 无 scope 时按 binding_type 过滤；不传默认平台视角（仅全局策略）
             binding_filter = binding_type or BindingType.PLATFORM_BINDING
             strategy_ids = ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.STRATEGY,
@@ -1011,7 +1022,6 @@ class ListStrategyAll(StrategyV2Base):
                 ).values_list("binding__resource_id", flat=True)
             return queryset.filter(strategy_id__in=strategy_ids)
         # scope 视角：展开为 scene/system ID 列表后走组合过滤
-        scope_id = validated_request_data.get("scope_id")
         scene_ids: List[int] = []
         system_ids: List[str] = []
         if scope_type == ScopeType.SCENE:
