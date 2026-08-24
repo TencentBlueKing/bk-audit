@@ -27,7 +27,7 @@
           class="report-title-input"
           size="small"
           @blur="handleSave"
-          @enter="handleSave" />
+          @enter="handleEnter" />
       </template>
       <template v-else-if="titleGenerating">
         <span class="report-title-generating-placeholder" />
@@ -136,6 +136,12 @@
         isSaving = false;
       });
     }
+  };
+
+  // 输入法选词时的 Enter 不应触发保存（bk-input 在 isComposing 时仍可能 emit enter）
+  const handleEnter = (_value: string, evt: KeyboardEvent) => {
+    if (evt?.isComposing || evt?.keyCode === 229) return;
+    handleSave();
   };
 </script>
 

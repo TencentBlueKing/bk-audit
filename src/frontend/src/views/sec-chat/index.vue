@@ -21,15 +21,18 @@
       :collapsed="sidebarCollapsed"
       :conversations="conversations"
       :groups="groups"
+      @add-group="handleAddGroup"
+      @clear-all="handleClearAll"
       @delete="handleDeleteConversation"
       @delete-group="handleDeleteGroup"
       @new-chat="handleNewChat"
-      @pin="pinConversation"
+      @rename-group="handleRenameGroup"
+      @reorder-conversation="handleReorderConversation"
       @select="handleSelectConversation"
       @toggle="toggleSidebar"
-      @update-conv-title="updateConversationTitle"
-      @update-group="updateConversationGroup"
-      @update-groups="updateGroups" />
+      @update-conv-title="handleUpdateConvTitle"
+      @update-group="handleUpdateGroup"
+      @update-groups="handleUpdateGroups" />
 
     <div class="sec-chat-main">
       <router-view v-slot="{ Component }">
@@ -42,8 +45,10 @@
 </template>
 
 <script lang="ts" setup>
+  import { onMounted, onUnmounted } from 'vue';
   import { useRouter } from 'vue-router';
 
+  import type { Group } from './types';
   import { useSecChatStore } from './composables/use-sec-chat-store';
   import ChatSidebar from './components/chat-sidebar.vue';
 
@@ -54,24 +59,37 @@
     groups,
     conversations,
     toggleSidebar,
+    initSidebar,
     setActiveConversation,
     deleteConversation,
-    pinConversation,
     updateConversationGroup,
+    reorderConversation,
     updateConversationTitle,
+    createGroup,
     updateGroups,
+    renameGroup,
     deleteGroup,
+    clearAllConversations,
+    stopAllMessagePolls,
   } = useSecChatStore();
+
+  onMounted(() => {
+    void initSidebar();
+  });
+
+  onUnmounted(() => {
+    stopAllMessagePolls();
+  });
 
   const handleNewChat = () => {
     setActiveConversation(null);
     router.push({ name: 'secChatHome' });
   };
 
+  /** 仅改路由；消息拉取由子页 watch conversationId 单源触发，避免侧栏+路由叠打 */
   const handleSelectConversation = (id: string) => {
     const conv = conversations.value.find(c => c.id === id);
-    setActiveConversation(id);
-    if (conv?.sceneType === 'log') {
+    if (conv?.sceneType === 'log' || id.startsWith('draft-')) {
       router.push({
         name: 'secChatAuditLog',
         params: { conversationId: id },
@@ -81,19 +99,51 @@
     router.push({ name: 'secChatHome' });
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteConversation = async (id: string) => {
     const wasActive = activeConversationId.value === id;
-    deleteConversation(id);
+    await deleteConversation(id);
     if (wasActive) {
       router.push({ name: 'secChatHome' });
     }
   };
 
-  const handleDeleteGroup = (groupName: string, keepConversations: boolean) => {
-    deleteGroup(groupName, keepConversations);
+  const handleUpdateConvTitle = (id: string, title: string) => {
+    void updateConversationTitle(id, title);
+  };
+
+  const handleUpdateGroup = (id: string, groupName?: string) => {
+    void updateConversationGroup(id, groupName);
+  };
+
+  const handleReorderConversation = (
+    id: string,
+    payload: { groupName?: string; beforeId?: string; toEnd?: boolean },
+  ) => {
+    void reorderConversation(id, payload);
+  };
+
+  const handleUpdateGroups = (newGroups: Group[]) => {
+    void updateGroups(newGroups);
+  };
+
+  const handleAddGroup = (name: string) => {
+    void createGroup(name);
+  };
+
+  const handleRenameGroup = (groupId: string, name: string) => {
+    void renameGroup(groupId, name);
+  };
+
+  const handleDeleteGroup = async (groupName: string, keepConversations: boolean) => {
+    await deleteGroup(groupName, keepConversations);
     if (!activeConversationId.value) {
       router.push({ name: 'secChatHome' });
     }
+  };
+
+  const handleClearAll = async () => {
+    await clearAllConversations();
+    router.push({ name: 'secChatHome' });
   };
 </script>
 
@@ -120,7 +170,6 @@
         height: 100%;
         min-height: 0;
         overflow: hidden;
-        flex: 1;
         flex-direction: column;
       }
     }
