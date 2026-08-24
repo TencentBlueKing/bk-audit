@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
 from django.utils import timezone
@@ -9,6 +9,7 @@ from services.web.ai_assistant.exceptions import (
     AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
     StaleAttachmentTask,
+    StreamNotEnabled,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Message
@@ -18,6 +19,7 @@ from services.web.ai_assistant.schemas import (
     dump_snapshot,
     parse_snapshot,
 )
+from services.web.ai_assistant.streaming import UIStreamRuntime
 
 InputT = TypeVar("InputT", bound=MessageSchema)
 ContextT = TypeVar("ContextT", bound=MessageSchema)
@@ -30,12 +32,28 @@ class AttachmentExecution(Generic[InputT, ContextT]):
     attachment: Attachment
     input_data: InputT
     context_data: ContextT
+    # 仅流式附件由平台注入；业务统一通过 stream 属性访问，避免误判 None。
+    _stream: UIStreamRuntime | None = field(default=None, repr=False)
 
     @property
     def source_message(self) -> Message:
         """保留业务 Task 读取来源消息的便捷入口。"""
 
         return self.attachment.source_message
+
+    @property
+    def stream(self) -> UIStreamRuntime:
+        """非流式附件访问流出口属于接入错误，直接暴露平台异常。"""
+
+        if self._stream is None:
+            raise StreamNotEnabled()
+        return self._stream
+
+    @property
+    def has_stream(self) -> bool:
+        """平台内部据此决定是否走 Runtime 终态与 Retry 刷盘。"""
+
+        return self._stream is not None
 
 
 def load_attachment_execution(
@@ -60,20 +78,25 @@ def load_attachment_execution(
     if attachment is None:
         raise StaleAttachmentTask()
     handler = attachment_handler_registry.require(attachment.attachment_type)
+    input_data = parse_snapshot(
+        handler.input_model,
+        attachment.input_data,
+        field_name="input_data",
+        error_type=AttachmentSnapshotValidationError,
+    )
+    context_data = parse_snapshot(
+        handler.context_model,
+        attachment.context_data,
+        field_name="context_data",
+        error_type=AttachmentSnapshotValidationError,
+    )
+    # 流能力以模型字段为准；Handler 声明只在创建时固化，避免运行期改动影响历史执行。
+    stream = UIStreamRuntime.start(attachment_id=attachment.id, task_id=task_id) if attachment.is_stream else None
     return AttachmentExecution(
         attachment=attachment,
-        input_data=parse_snapshot(
-            handler.input_model,
-            attachment.input_data,
-            field_name="input_data",
-            error_type=AttachmentSnapshotValidationError,
-        ),
-        context_data=parse_snapshot(
-            handler.context_model,
-            attachment.context_data,
-            field_name="context_data",
-            error_type=AttachmentSnapshotValidationError,
-        ),
+        input_data=input_data,
+        context_data=context_data,
+        _stream=stream,
     )
 
 
@@ -83,7 +106,7 @@ def finish_attachment_success(
     task_id: str,
     output_data: SnapshotInput,
 ) -> dict[str, Any]:
-    """校验附件输出并通过 PROCESSING CAS 竞争写入 SUCCESS。"""
+    """校验附件输出后写入 SUCCESS；流式经 Runtime 终态事务收敛。"""
 
     handler = attachment_handler_registry.require(execution.attachment.attachment_type)
     try:
@@ -95,6 +118,10 @@ def finish_attachment_success(
         )
     except AttachmentSnapshotValidationError as error:
         raise AttachmentOutputValidationError() from error
+    if execution.has_stream:
+        # 流式必须让剩余事件与终态落在同一事务，避免终态先可见、尾部事件丢失。
+        execution.stream.finish_success(output_data=output_snapshot, updated_by=execution.attachment.created_by)
+        return output_snapshot
     now = timezone.now()
     updated = Attachment.finish_processing(
         instance_id=execution.attachment.id,
@@ -120,8 +147,9 @@ def finish_attachment_failure(
     task_id: str,
     exception: Exception,
     error_code: str | AttachmentErrorCode = AttachmentErrorCode.TASK_EXECUTION_FAILED,
+    execution: AttachmentExecution | None = None,
 ) -> bool:
-    """映射附件错误并通过 PROCESSING CAS 尝试写入 FAILED。"""
+    """映射附件错误并写入 FAILED；流式复用 Runtime 保留已产生的事件。"""
 
     processing_attachment = Attachment.objects.filter(
         id=attachment_id,
@@ -144,6 +172,13 @@ def finish_attachment_failure(
             resolved_error_code = exception.code
     else:
         public_message = "附件执行失败，请稍后重试"
+    # 投递失败等未进入 Worker 的场景没有 Runtime，继续走 CAS 终态。
+    if execution is not None and execution.has_stream:
+        return execution.stream.finish_failure(
+            error_code=resolved_error_code,
+            error_message=public_message,
+            updated_by=created_by,
+        )
     return Attachment.finish_processing(
         instance_id=attachment_id,
         task_id=task_id,

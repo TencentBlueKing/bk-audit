@@ -1,5 +1,6 @@
 from services.web.ai_assistant.services.attachment import AttachmentService
 from services.web.ai_assistant.services.attachment_execution import AttachmentExecution
+from services.web.ai_assistant.services.attachment_stream import AttachmentStreamService
 from services.web.ai_assistant.services.conversation import (
     ConversationCreation,
     ConversationService,
@@ -16,6 +17,7 @@ from services.web.ai_assistant.services.sidebar import ConversationSidebarServic
 __all__ = [
     "AttachmentExecution",
     "AttachmentService",
+    "AttachmentStreamService",
     "ConversationSidebarService",
     "ConversationCreation",
     "ConversationService",

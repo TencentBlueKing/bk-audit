@@ -52,6 +52,8 @@ class HandlerRegistry(Generic[HandlerT]):
     def register(self, handler: HandlerT) -> HandlerT:
         """注册一个 Handler；同一类型重复注册属于启动配置错误。"""
 
+        # PolymorphicProxySerializer 会在首次生成 OpenAPI 时固化当前注册表：
+        # 此前通过 AppConfig.ready() 注册的全部 Handler 都会被包含，之后热注册不保证刷新。
         self._validate(handler)
         handler_type = str(getattr(handler, self._type_attribute))
         if handler_type in self._handlers:
@@ -146,9 +148,13 @@ class AttachmentHandlerRegistry(HandlerRegistry[AttachmentTypeHandler]):
         )
 
     def _validate(self, handler: Any) -> None:
-        """在通用 Handler 校验后收敛附件导出声明，防止能力与实现不一致。"""
+        """在通用 Handler 校验后收敛附件导出与流式声明，防止能力与实现不一致。"""
 
         super()._validate(handler)
+        if not isinstance(handler.is_stream, bool):
+            raise ImproperlyConfigured("附件 is_stream 必须是 bool")
+        if handler.is_stream and handler.execution_mode != ExecutionMode.ASYNC:
+            raise ImproperlyConfigured("流式附件必须使用异步执行")
         export_formats = handler.export_formats
         if type(export_formats) is not tuple:
             raise ImproperlyConfigured("附件 export_formats 必须是 tuple")
