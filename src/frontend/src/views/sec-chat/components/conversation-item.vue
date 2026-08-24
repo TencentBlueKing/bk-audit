@@ -11,14 +11,6 @@
       v-if="hovered || active"
       class="conv-actions"
       @click.stop>
-      <bk-button
-        v-bk-tooltips="conversation.pinned ? '取消置顶' : '置顶'"
-        class="action-btn"
-        text
-        theme="default"
-        @click="$emit('pin')">
-        <audit-icon :type="conversation.pinned ? 'attention' : 'view-2'" />
-      </bk-button>
       <bk-popover
         :arrow="false"
         placement="bottom-end"
@@ -66,7 +58,6 @@
   defineEmits<{
     click: [];
     delete: [];
-    pin: [];
   }>();
 
   const hovered = ref(false);
