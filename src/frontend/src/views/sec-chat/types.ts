@@ -7,7 +7,7 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-    10|  software distributed under the License is distributed on
+  software distributed under the License is distributed on
   an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
   either express or implied. See the License for the
   specific language governing permissions and limitations under the License.
@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 export type ChatSceneType = 'log';
+
+export type AiUiMessageStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED';
 
 export interface SelectedSystem {
   id: string;
@@ -55,6 +57,11 @@ export interface ChatMessage {
   systemIds?: string[];
   systems?: SelectedSystem[];
   result?: RetrievalResultPayload;
+  /** 后端消息状态（轮询用） */
+  apiStatus?: AiUiMessageStatus;
+  messageType?: string;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 export interface Conversation {
@@ -67,11 +74,29 @@ export interface Conversation {
   systems: SelectedSystem[];
   messages: ChatMessage[];
   createdAt: number;
+  /** 本地草稿：确认系统前尚未落库 */
+  isDraft?: boolean;
+  /**
+   * 是否已完成过消息历史拉取。
+   * 用于区分「从未拉取」与「拉取过但列表为空」，避免空会话反复请求。
+   */
+  messagesHydrated?: boolean;
+  /** 当前有效 SYSTEM_SELECTION 消息 UID */
+  selectedSystemMessageUid?: string | null;
+  messageFirstUid?: string | null;
+  messageLastUid?: string | null;
+  hasBeforeMessages?: boolean;
+  hasAfterMessages?: boolean;
 }
 
 export interface Group {
   id: string;
   name: string;
+  conversationCount?: number;
+  /** 是否已拉取过该分组下的会话列表 */
+  childrenLoaded?: boolean;
+  /** 分组子节点加载中 */
+  childrenLoading?: boolean;
 }
 
 export interface SelectPromptPayload {

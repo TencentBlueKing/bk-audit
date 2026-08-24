@@ -26,6 +26,8 @@ export default {
     navName: 'secChat',
     nodeSideContent: true,
     keepAlive: true,
+    // 与子路由共用 key，避免首页/会话页切换时整页（含侧栏）被拆成两份缓存并反复挂载
+    keepAliveKey: 'secChat',
   },
   children: [
     {
@@ -37,6 +39,7 @@ export default {
         navName: 'secChat',
         nodeSideContent: true,
         keepAlive: true,
+        keepAliveKey: 'secChat',
       },
     },
     {
@@ -48,6 +51,7 @@ export default {
         navName: 'secChat',
         nodeSideContent: true,
         keepAlive: true,
+        keepAliveKey: 'secChat',
       },
     },
   ],
