@@ -90,12 +90,22 @@
     }
   }
 
-  /* 场景选择：定宽 224，左右各 16 间距，与日志检索选择器用法一致 */
   .sidebar-project {
     width: 100%;
     padding: 16px 16px 12px;
     box-sizing: border-box;
     flex-shrink: 0;
+
+    > span {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+
+    .scene-system-selector {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
   }
 
   /* 搜索区：搜索框 + 筛选按钮（上方有分隔线） */
@@ -241,9 +251,6 @@
       border-radius: 2px;
     }
 
-    .conv-section {
-      margin-bottom: 16px;
-    }
 
     /* 历史对话（未分组）条目：与 section-label 对齐左右间距 */
     .history-conv-list {
@@ -430,6 +437,13 @@
           border-left: 1px dashed #dcdee5;
           content: '';
         }
+
+        .group-children-loading {
+          padding: 6px 8px;
+          font-size: 12px;
+          line-height: 20px;
+          color: #979ba5;
+        }
       }
     }
 
@@ -446,6 +460,27 @@
 
       &:active {
         cursor: grabbing;
+      }
+
+      /* 同列表排序插入线（用 ::after，避免与分组树 ::before 冲突） */
+      &.is-drag-over-top::after,
+      &.is-drag-over-bottom::after {
+        position: absolute;
+        right: 0;
+        left: 0;
+        z-index: 2;
+        height: 2px;
+        pointer-events: none;
+        background: #3a84ff;
+        content: '';
+      }
+
+      &.is-drag-over-top::after {
+        top: -1px;
+      }
+
+      &.is-drag-over-bottom::after {
+        bottom: -1px;
       }
 
       &:hover {
@@ -490,7 +525,7 @@
         margin-right: 6px;
         font-size: 16px;
         line-height: 1;
-        color: #979ba5;
+        color: #c4c6cc;
         flex-shrink: 0;
       }
 
@@ -515,10 +550,6 @@
         transition: opacity .2s;
         align-items: center;
         flex-shrink: 0;
-
-        &.is-pinned-actions {
-          opacity: 100%;
-        }
 
         .more-dropdown {
           display: flex;
@@ -890,6 +921,11 @@
     padding-bottom: 0 !important;
     border-bottom: none !important;
   }
+}
+
+/* 清空所有会话弹窗确认输入框 placeholder */
+.chat-clear-confirm-input::placeholder {
+  color: #c4c6cc;
 }
 
 /* 清空所有会话弹窗 - 复用场景配置/平台管理删除弹窗样式 */
