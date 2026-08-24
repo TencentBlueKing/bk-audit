@@ -52,6 +52,7 @@
 
 from typing import Any, Iterable, Sequence
 
+from blueapps.utils.logger import logger
 from django.db.models import Count, QuerySet
 
 from services.web.scene.binding_validation import assert_binding_relation_integrity
@@ -243,7 +244,7 @@ class BindingMetadataHelper:
         """
         为风险单创建 RISK 类型的场景归属绑定（RISK 场景归属单轨制的运行时写入路径）。
 
-        写入时机（分派方案四.3 节）：
+        写入时机
         - 场景策略风险：create_risk 创建后立即写（scene_id 来自策略的场景绑定）
         - 全局策略 direct：分派匹配后写（scene_id 来自 DispatchRule.target_scene_id）
         - 全局策略 after_confirm：confirmer 确认后写（确认接口负责）
@@ -253,6 +254,14 @@ class BindingMetadataHelper:
         from services.web.scene.constants import ResourceVisibilityType
 
         if not scene_id:
+            return
+        # 目标场景不存在或已软删时不建绑定（避免风险挂到已删场景形成脏数据）
+        if not Scene.objects.filter(scene_id=scene_id, is_deleted=False).exists():
+            logger.warning(
+                "[CreateRiskSceneBinding] scene %s not exists or deleted, skip binding. risk_id=%s",
+                scene_id,
+                risk_id,
+            )
             return
         resource_id = str(risk_id)
         binding = ResourceBinding.objects.filter(

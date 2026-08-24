@@ -34,8 +34,8 @@ def forwards(apps, schema_editor):
     # -------- 第一步：为每个 rule 策略生成 StrategyRule --------
     print("[forwards] 第一步：迁移策略规则", flush=True)
 
-    # 只处理 rule 类型的策略
-    rule_strategies = Strategy.objects.filter(strategy_type="rule")
+    # 只处理 rule 类型的策略（排除已软删策略，避免为其创建孤儿规则行）
+    rule_strategies = Strategy.objects.filter(strategy_type="rule", is_deleted=False)
     strategy_count = rule_strategies.count()
     print(f"[forwards] 共有 {strategy_count} 个 rule 策略需要迁移", flush=True)
 

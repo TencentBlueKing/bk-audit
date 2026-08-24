@@ -62,27 +62,39 @@ class StrategyViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（仅全局策略，无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 ),
             ]
         if self.action in ["strategy_running_status_list", "retrieve"]:
+            # 场景策略：场景实例权限（反查策略所属场景）；全局策略无场景关联，回退平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id_by_strategy,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id_by_strategy,
+                    ),
                 ),
             ]
         if self.action in ["create"]:
+            # 场景策略：请求携带 scene_id 走场景实例权限；全局策略（binding_type=platform_binding，无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.CREATE_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.CREATE_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 ),
             ]
         if self.action in ["update", "toggle", "retry"]:
@@ -151,11 +163,15 @@ class StrategyTagsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（无 scene_id）走平台管理权限
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_STRATEGY],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_STRATEGY],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
                 )
             ]
         return []
