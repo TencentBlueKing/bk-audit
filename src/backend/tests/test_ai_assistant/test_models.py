@@ -106,6 +106,8 @@ class AbstractModelTest(TestCase):
                 ("parent_message", "message_type", "id"),
                 ("status", "task_id"),
                 ("status", "updated_at", "id"),
+                # 历史操作按用户查询最近自然语言消息
+                ("created_by", "message_type", "id"),
             ],
             Attachment: [
                 ("source_message", "id"),
