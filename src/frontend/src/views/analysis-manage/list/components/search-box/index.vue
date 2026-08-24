@@ -21,6 +21,8 @@
         :is="renderComponent"
         ref="renderComRef"
         v-model="searchModel"
+        :loading="loading"
+        @reset="clearValue"
         @submit="handleSubmit" />
     </keep-alive>
     <div
@@ -56,6 +58,12 @@
   interface Exposes {
     clearValue: () => void;
   }
+  interface Props {
+    loading?: boolean;
+  }
+  withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
   const emit = defineEmits<Emits>();
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
 
@@ -233,29 +241,31 @@
     emit('change', result);
   };
 
+  const clearValue = () => {
+    // 重置搜索模型
+    searchModel.value = {
+      // 用于查询的date参数
+      datetime: [
+        dayjs(Date.now() - 3600000).format('YYYY-MM-DDTHH:mm:ssZ'),
+        dayjs().format('YYYY-MM-DDTHH:mm:ssZ'),
+      ],
+      // 用于now语法的date参数（只用使用now语法，选择最近时间才会实时更新）
+      datetime_origin: [
+        'now-1h',
+        'now',
+      ],
+    };
+    // 同时重置子组件的字段配置（清除自定义字段、收藏字段等）
+    renderComRef.value?.clearValue?.();
+    handleSubmit();
+  };
+
   onMounted(() => {
     handleSubmit();
   });
 
   defineExpose<Exposes>({
-    clearValue() {
-      // 重置搜索模型
-      searchModel.value = {
-        // 用于查询的date参数
-        datetime: [
-          dayjs(Date.now() - 3600000).format('YYYY-MM-DDTHH:mm:ssZ'),
-          dayjs().format('YYYY-MM-DDTHH:mm:ssZ'),
-        ],
-        // 用于now语法的date参数（只用使用now语法，选择最近时间才会实时更新）
-        datetime_origin: [
-          'now-1h',
-          'now',
-        ],
-      };
-      // 同时重置子组件的字段配置（清除自定义字段、收藏字段等）
-      renderComRef.value?.clearValue?.();
-      handleSubmit();
-    },
+    clearValue,
   });
 
 </script>

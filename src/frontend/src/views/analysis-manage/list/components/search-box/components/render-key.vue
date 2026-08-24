@@ -89,13 +89,14 @@
       style="display: flex;">
       <bk-button
         class="mr8"
+        :loading="isQueryLoading"
         theme="primary"
         @click="handleSubmit">
         {{ t('查询') }}
       </bk-button>
       <bk-button
         class="mr8"
-        @click="handleReset">
+        @click="handleResetClick">
         {{ t('重置') }}
       </bk-button>
       <bk-button
@@ -214,11 +215,13 @@
 
   interface Props {
     modelValue: Record<string, any>
+    loading?: boolean
   }
 
   interface Emits {
     (e: 'update:modelValue', value: Record<string, any>): void,
     (e: 'submit'): void,
+    (e: 'reset'): void,
   }
   interface UrlCondition {
     field: {
@@ -234,11 +237,15 @@
     resetFieldConfig: () => void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const localQueryLoading = ref(false);
+  const isQueryLoading = computed(() => localQueryLoading.value || props.loading);
   const { feature: isDoris } = useFeature('enable_doris');
   const { getSearchParamsPost } = useUrlSearch();
   const urlPostParams = getSearchParamsPost('conditions');
@@ -690,6 +697,12 @@
     id,
   });
 
+  watch(() => props.loading, (loading) => {
+    if (!loading) {
+      localQueryLoading.value = false;
+    }
+  });
+
   // 同步外部值的改动
   watch(() => props.modelValue, () => {
     localSearchModel.value = props.modelValue;
@@ -710,11 +723,19 @@
   };
   // 提交搜索
   const handleSubmit = () => {
+    localQueryLoading.value = true;
     const getValues = fieldConfigRef.value.map((item: any) => item.getValue());
     Promise.all(getValues).then(() => {
       emits('update:modelValue', localSearchModel.value);
       emits('submit');
-    });
+    })
+      .catch(() => {
+        localQueryLoading.value = false;
+      });
+  };
+  // 重置：与表格「清空搜索条件」一致，清空条件并重新查询
+  const handleResetClick = () => {
+    emits('reset');
   };
   // 重置所有搜索条件
   const handleReset = () => {
