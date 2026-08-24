@@ -22,7 +22,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
@@ -47,7 +47,7 @@ from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
-from apps.meta.models import DataMap, EnumMappingRelatedType, Tag
+from apps.meta.models import DataMap, EnumMappingRelatedType, System, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from apps.meta.utils.fields import (
     ACTION_ID,
@@ -103,7 +103,7 @@ from services.web.scene.filters import (
     CompositeScopeFilter,
     SceneScopeFilter,
 )
-from services.web.scene.models import ResourceBinding, ResourceBindingScene
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, ResourceBindingSystem, Scene
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -314,14 +314,27 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         return get_md5(json.dumps(digest_items, sort_keys=True, ensure_ascii=False))
 
     @staticmethod
+    def _soft_delete_rules(rules: List[Any]) -> None:
+        """
+        软删发现规则/分派规则并重命名：释放 (strategy, rule_name) 唯一约束，避免软删后同名重建触发 unique_together
+        """
+        for rule in rules:
+            max_length = rule._meta.get_field("rule_name").max_length
+            suffix = f"__deleted_{rule.rule_id}"
+            rule.rule_name = f"{rule.rule_name[: max_length - len(suffix)]}{suffix}"
+            rule.is_deleted = True
+            # 走 Model.save 保留 updated_at/updated_by 审计字段
+            rule.save(update_fields=["rule_name", "is_deleted"])
+
+    @staticmethod
     def _sync_strategy_rules(strategy: Strategy, rules_data: Optional[List[dict]]) -> None:
         """
         同步发现规则子表（软删缺失规则、更新/新建传入规则）
 
         - 请求中有 rule_id → 保留并更新
         - 请求中无 rule_id → 新建
-        - 数据库有但请求中没有 → 软删
-        rule_order按请求顺序重建
+        - 数据库有但请求中没有 → 软删（重命名释放唯一约束）
+        - rule_order 严格按请求顺序重建（新建规则按请求位置插入，而非 DB 自增 ID 序）
         """
         from services.web.strategy_v2.models import StrategyRule
 
@@ -331,7 +344,8 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         existing_ids = set(strategy.rules.filter(is_deleted=False).values_list("rule_id", flat=True))
         keep_ids = [r.get("rule_id") for r in rules_data if r.get("rule_id")]
         # 软删未出现在请求中的规则（仅限本策略范围内）
-        strategy.rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        StrategyV2Base._soft_delete_rules(list(strategy.rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False)))
+        ordered_ids: List[int] = []
         for rule_data in rules_data:
             rule_id = rule_data.get("rule_id")
             # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
@@ -349,19 +363,21 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
                 "processor": rule_data.get("processor") or [],
                 "follower": rule_data.get("follower") or [],
             }
-            if rule_data.get("rule_id"):
-                strategy.rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            if rule_id:
+                rule = strategy.rules.filter(rule_id=rule_id, is_deleted=False).first()
+                if rule is None:
+                    raise serializers.ValidationError(
+                        gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
+                    )
+                for key, val in fields.items():
+                    setattr(rule, key, val)
+                # 走 Model.save 保留 updated_at/updated_by 审计字段
+                rule.save(update_fields=list(fields.keys()))
             else:
-                StrategyRule.objects.create(strategy=strategy, **fields)
-        # 重建 rule_order：按请求顺序排列
-        active_rules = {r.rule_id: r for r in strategy.rules.filter(is_deleted=False)}
-        ordered_ids = []
-        for rule_data in rules_data:
-            rid = rule_data.get("rule_id")
-            if rid and rid in active_rules:
-                ordered_ids.append(rid)
-        # 请求未含 rule_id 的新建规则追加到末尾
-        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+                rule = StrategyRule.objects.create(strategy=strategy, **fields)
+                rule_id = rule.rule_id
+            if rule_id not in ordered_ids:
+                ordered_ids.append(rule_id)
         strategy.rule_order = ordered_ids
         strategy.save(update_fields=["rule_order"])
 
@@ -372,8 +388,8 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
         - 请求中有 rule_id → 保留并更新
         - 请求中无 rule_id → 新建
-        - 数据库有但请求中没有 → 软删
-        dispatch_rule_order 按请求顺序重建
+        - 数据库有但请求中没有 → 软删（重命名释放唯一约束）
+        - dispatch_rule_order 严格按请求顺序重建（新建规则按请求位置插入，而非 DB 自增 ID 序）
         """
         from services.web.strategy_v2.models import DispatchRule
 
@@ -382,7 +398,10 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         # 本策略已有的（未软删）规则 id 集合，用于归属校验与 order 重建
         existing_ids = set(strategy.dispatch_rules.filter(is_deleted=False).values_list("rule_id", flat=True))
         keep_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id")]
-        strategy.dispatch_rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False).update(is_deleted=True)
+        StrategyV2Base._soft_delete_rules(
+            list(strategy.dispatch_rules.exclude(rule_id__in=keep_ids).filter(is_deleted=False))
+        )
+        ordered_ids: List[int] = []
         for rule_data in dispatch_rules_data:
             rule_id = rule_data.get("rule_id")
             # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
@@ -400,14 +419,21 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
                 "dispatch_mode": rule_data.get("dispatch_mode"),
                 "is_default": bool(rule_data.get("is_default")),
             }
-            if rule_data.get("rule_id"):
-                strategy.dispatch_rules.filter(rule_id=rule_data["rule_id"], is_deleted=False).update(**fields)
+            if rule_id:
+                rule = strategy.dispatch_rules.filter(rule_id=rule_id, is_deleted=False).first()
+                if rule is None:
+                    raise serializers.ValidationError(
+                        gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
+                    )
+                for key, val in fields.items():
+                    setattr(rule, key, val)
+                # 走 Model.save 保留 updated_at/updated_by 审计字段
+                rule.save(update_fields=list(fields.keys()))
             else:
-                DispatchRule.objects.create(strategy=strategy, **fields)
-        # 重建 dispatch_rule_order：按请求顺序（校验层已保证默认规则唯一）
-        active_rules = {r.rule_id for r in strategy.dispatch_rules.filter(is_deleted=False)}
-        ordered_ids = [r.get("rule_id") for r in dispatch_rules_data if r.get("rule_id") in active_rules]
-        ordered_ids.extend(rid for rid in active_rules if rid not in ordered_ids)
+                rule = DispatchRule.objects.create(strategy=strategy, **fields)
+                rule_id = rule.rule_id
+            if rule_id not in ordered_ids:
+                ordered_ids.append(rule_id)
         strategy.dispatch_rule_order = ordered_ids
         strategy.save(update_fields=["dispatch_rule_order"])
 
@@ -472,6 +498,63 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             )
 
     @staticmethod
+    def attach_binding_visibility(strategies: List[Strategy]) -> None:
+        """
+        批量回填策略绑定与可见范围（binding_type/visibility_type/scene_ids/system_ids），
+        供列表/详情响应序列化器输出
+        """
+        strategy_ids = [str(s.strategy_id) for s in strategies]
+        if not strategy_ids:
+            return
+        bindings = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id__in=strategy_ids,
+        )
+        scene_rows = ResourceBindingScene.objects.filter(
+            binding__in=bindings, scene__is_deleted=False
+        ).values_list("binding_id", "scene_id")
+        system_rows = ResourceBindingSystem.objects.filter(binding__in=bindings).values_list(
+            "binding_id", "system_id"
+        )
+        binding_scene_map: Dict[str, List[int]] = {}
+        for binding_id, scene_id in scene_rows:
+            binding_scene_map.setdefault(str(binding_id), []).append(scene_id)
+        binding_system_map: Dict[str, List[str]] = {}
+        for binding_id, system_id in system_rows:
+            binding_system_map.setdefault(str(binding_id), []).append(system_id)
+        binding_map = {str(b.resource_id): b for b in bindings}
+        for strategy in strategies:
+            binding = binding_map.get(str(strategy.strategy_id))
+            if binding is None:
+                setattr(strategy, "visibility", None)
+                continue
+            setattr(
+                strategy,
+                "visibility",
+                {
+                    "binding_type": binding.binding_type,
+                    "visibility_type": binding.visibility_type,
+                    "scene_ids": binding_scene_map.get(str(binding.id), []),
+                    "system_ids": binding_system_map.get(str(binding.id), []),
+                },
+            )
+
+    @staticmethod
+    def apply_platform_visibility(binding: ResourceBinding, visibility_data: Optional[dict]) -> None:
+        """
+        应用全局策略可见范围配置（visibility_type + 指定场景/系统关联）
+        """
+        visibility_data = visibility_data or {}
+        binding.visibility_type = visibility_data.get("visibility_type") or VisibilityScope.ALL_VISIBLE
+        binding.save(update_fields=["visibility_type"])
+        binding.binding_scenes.all().delete()
+        binding.binding_systems.all().delete()
+        for scene_id in visibility_data.get("scene_ids", []):
+            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
+        for system_id in visibility_data.get("system_ids", []):
+            ResourceBindingSystem.objects.create(binding=binding, system_id=system_id)
+
+    @staticmethod
     def ensure_active_scene_binding_or_404(strategy_id: int) -> None:
         has_scene_binding = ResourceBindingScene.objects.filter(
             scene__is_deleted=False,
@@ -530,17 +613,21 @@ class CreateStrategy(StrategyV2Base):
             # 取出规则数据
             rules_data = validated_request_data.pop("rules", None)
             dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
+            # 可见范围配置（仅全局策略有效，序列化层已校验；须 pop 避免误传入模型 create）
+            visibility_data = validated_request_data.pop("visibility", None)
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # 创建 ResourceBinding 关联：按 binding_type 区分全局/场景策略
             if binding_type == BindingType.PLATFORM_BINDING:
-                # 全局策略：平台级绑定，默认全可见
+                # 全局策略：平台级绑定；有 visibility 配置直接一步写入，无则默认全可见
+                visibility_data = visibility_data or {}
                 binding = ResourceBinding.objects.create(
                     resource_type=ResourceVisibilityType.STRATEGY,
                     resource_id=str(strategy.strategy_id),
                     binding_type=BindingType.PLATFORM_BINDING,
-                    visibility_type=VisibilityScope.ALL_VISIBLE,
+                    visibility_type=visibility_data.get("visibility_type") or VisibilityScope.ALL_VISIBLE,
                 )
+                self.apply_platform_visibility(binding, visibility_data)
                 assert_binding_relation_integrity(binding)
             else:
                 # 场景策略：与场景绑定
@@ -680,6 +767,8 @@ class UpdateStrategy(StrategyV2Base):
         tag_names = validated_request_data.pop("tags", [])
         rules_data = validated_request_data.pop("rules", None)
         dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
+        # 可见范围配置（仅全局策略有效，序列化层已校验绑定类型；须 pop 避免误 setattr 到模型字段）
+        visibility_data = validated_request_data.pop("visibility", None)
         # 计算更新前摘要
         origin_rules_digest = self.calc_rules_digest(strategy)
         # check control
@@ -705,6 +794,16 @@ class UpdateStrategy(StrategyV2Base):
         # 同步分派规则子表
         if dispatch_rules_data is not None:
             self._sync_dispatch_rules(strategy, dispatch_rules_data)
+        # 更新全局策略可见范围（传入才更新，全量替换）
+        if visibility_data is not None:
+            binding = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy.strategy_id),
+                binding_type=BindingType.PLATFORM_BINDING,
+            ).first()
+            if binding is not None:
+                self.apply_platform_visibility(binding, visibility_data)
+                assert_binding_relation_integrity(binding)
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
@@ -756,6 +855,9 @@ class DeleteStrategy(StrategyV2Base):
         # delete tags
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
         StrategyTool.objects.filter(strategy=strategy).delete()
+        # 级联软删规则子表（重命名释放唯一约束），避免残留孤儿规则
+        self._soft_delete_rules(list(strategy.rules.filter(is_deleted=False)))
+        self._soft_delete_rules(list(strategy.dispatch_rules.filter(is_deleted=False)))
         # delete
         try:
             call_controller(
@@ -786,8 +888,11 @@ class ListStrategy(StrategyV2Base):
     audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
-        # 场景过滤
+        # 场景/系统过滤
         scene_id = validated_request_data.pop("scene_id", None)
+        system_id = validated_request_data.pop("system_id", None)
+        # 绑定类型筛选（platform_binding=平台视角仅全局策略；scene_binding=仅场景策略；不传+scene_id=并集）
+        binding_type = validated_request_data.pop("binding_type", None) or None
         # 排序字段
         order_field = validated_request_data.get("order_field") or "-strategy_id"
         # init queryset
@@ -809,10 +914,12 @@ class ListStrategy(StrategyV2Base):
             .prefetch_related("tools")
         )
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
-        # 按场景过滤（CompositeScopeFilter：场景级 + 对该场景可见的全局级策略并集）
+        # CompositeScopeFilter：binding_type + scene_id/system_id 组合过滤
         queryset = CompositeScopeFilter.filter_queryset(
             queryset=queryset,
+            binding_type=binding_type,
             scene_id=scene_id,
+            system_id=system_id,
             resource_type=ResourceVisibilityType.STRATEGY,
             pk_field="strategy_id",
         )
@@ -867,6 +974,8 @@ class ListStrategy(StrategyV2Base):
                 to_attr='prefetched_tags',
             )
         )
+        # 批量回填绑定与可见范围（全局策略展示 binding/visibility）
+        self.attach_binding_visibility(list(queryset))
 
         # response
         return queryset
@@ -876,17 +985,55 @@ class ListStrategyAll(StrategyV2Base):
     name = gettext_lazy("List All Strategy")
     RequestSerializer = ListStrategyAllRequestSerializer
 
+    @staticmethod
+    def filter_queryset_by_scope_relation(queryset, validated_request_data: dict):
+        """
+        按 scope 关联关系过滤全量策略（不校验当前用户权限），与工具 ListToolAll 对齐：
+        - scope_type + scope_id：scene/cross_scene 展开为 scene_id 列表，system/cross_system 展开为 system_id 列表
+        - 无 scope：binding_type 过滤（不传默认 platform_binding，平台级全局策略）
+        """
+        from services.web.common.constants import ScopeType
+
+        scope_type = validated_request_data.get("scope_type")
+        binding_type = validated_request_data.get("binding_type") or None
+        if not scope_type:
+            binding_filter = binding_type or BindingType.PLATFORM_BINDING
+            strategy_ids = ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                binding_type=binding_filter,
+            ).values_list("resource_id", flat=True)
+            if binding_filter == BindingType.SCENE_BINDING:
+                # 场景级绑定需排除已软删场景的关联
+                strategy_ids = ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.STRATEGY,
+                    binding__binding_type=BindingType.SCENE_BINDING,
+                    scene__is_deleted=False,
+                ).values_list("binding__resource_id", flat=True)
+            return queryset.filter(strategy_id__in=strategy_ids)
+        # scope 视角：展开为 scene/system ID 列表后走组合过滤
+        scope_id = validated_request_data.get("scope_id")
+        scene_ids: List[int] = []
+        system_ids: List[str] = []
+        if scope_type == ScopeType.SCENE:
+            scene_ids = [int(scope_id)]
+        elif scope_type == ScopeType.CROSS_SCENE:
+            scene_ids = list(Scene.objects.filter(is_deleted=False).values_list("scene_id", flat=True))
+        elif scope_type == ScopeType.SYSTEM:
+            system_ids = [str(scope_id)]
+        elif scope_type == ScopeType.CROSS_SYSTEM:
+            system_ids = list(System.objects.values_list("system_id", flat=True))
+        return CompositeScopeFilter.filter_queryset(
+            queryset=queryset,
+            binding_type=binding_type,
+            scene_id=scene_ids,
+            system_id=system_ids,
+            resource_type=ResourceVisibilityType.STRATEGY,
+            pk_field="strategy_id",
+        )
+
     def perform_request(self, validated_request_data):
         strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
-        scene_id = validated_request_data.get("scene_id")
-        if scene_id:
-            # 传 scene_id：场景级 + 对该场景可见的全局级策略并集
-            strategies = CompositeScopeFilter.filter_queryset(
-                queryset=strategies,
-                scene_id=scene_id,
-                resource_type=ResourceVisibilityType.STRATEGY,
-                pk_field="strategy_id",
-            )
+        strategies = self.filter_queryset_by_scope_relation(strategies, validated_request_data)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data
@@ -1119,10 +1266,17 @@ class ListStrategyTags(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data["scene_id"]
+        scene_id = validated_request_data.get("scene_id")
+        system_id = validated_request_data.get("system_id")
+        binding_type = validated_request_data.get("binding_type") or None
+        if not (scene_id or system_id or binding_type):
+            # 无任何过滤参数：默认平台视角（仅全局策略的标签聚合，与列表平台视角一致）
+            binding_type = BindingType.PLATFORM_BINDING
         strategies = CompositeScopeFilter.filter_queryset(
             queryset=Strategy.objects.exclude(source=StrategySource.SYSTEM),
+            binding_type=binding_type,
             scene_id=scene_id,
+            system_id=system_id,
             resource_type=ResourceVisibilityType.STRATEGY,
             pk_field="strategy_id",
         )
@@ -2132,6 +2286,8 @@ class RetrieveStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         strategy_id = validated_request_data["strategy_id"]
         strategy = get_object_or_404(Strategy, strategy_id=strategy_id)
+        # 回填绑定与可见范围（编辑页回填 visibility）
+        self.attach_binding_visibility([strategy])
         return strategy
 
 

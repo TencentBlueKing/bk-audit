@@ -129,10 +129,11 @@ class RiskFlowBaseHandler:
             return self.load_security_person()
 
         # 1. 规则策略 全局策略风险：分派规则的处理组
+        # dispatch_rule_id 为分派时固化引用，规则可能已被软删，绕过软删过滤读取
         if getattr(self.risk, "dispatch_rule_id", None):
             from services.web.strategy_v2.models import DispatchRule
 
-            dispatch_rule = DispatchRule.objects.filter(rule_id=self.risk.dispatch_rule_id).first()
+            dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
             if dispatch_rule:
                 processor_groups: List[NoticeGroup] = list(
                     NoticeGroup.objects.filter(group_id__in=dispatch_rule.processor or [])
@@ -143,12 +144,13 @@ class RiskFlowBaseHandler:
             return self.load_security_person()
 
         # 2. 规则策略 场景策略：处理人只来自命中发现规则的 processor
+        # strategy_rule_id 为建单时固化引用，规则可能已被软删，绕过软删过滤读取
         if self.strategy.strategy_type == StrategyType.RULE:
             from services.web.strategy_v2.models import StrategyRule
 
             group_ids = []
             if getattr(self.risk, "strategy_rule_id", None):
-                rule = StrategyRule.objects.filter(rule_id=self.risk.strategy_rule_id, is_deleted=False).first()
+                rule = StrategyRule._base_manager.filter(rule_id=self.risk.strategy_rule_id).first()
                 if rule:
                     group_ids = rule.processor or []
             processor_groups = list(NoticeGroup.objects.filter(group_id__in=group_ids))
@@ -887,10 +889,11 @@ class ConfirmRisk(RiskFlowBaseHandler):
 
     def process(self, *args, **kwargs) -> dict:
         # 确认后分派：按固化的分派规则建 RISK 场景绑定
+        # 分派规则可能已被编辑/软删（分派后改策略），绕过软删过滤读取固化引用的规则行
         from services.web.scene.filters import BindingMetadataHelper
         from services.web.strategy_v2.models import DispatchRule
 
-        dispatch_rule = DispatchRule.objects.filter(rule_id=self.risk.dispatch_rule_id).first()
+        dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
         if dispatch_rule:
             BindingMetadataHelper.create_risk_scene_binding(self.risk.risk_id, dispatch_rule.target_scene_id)
         return {"success": True, "message": "风险确认成功"}
