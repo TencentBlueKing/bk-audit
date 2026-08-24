@@ -144,6 +144,9 @@
   import { InfoBox } from 'bkui-vue';
   import {
     computed,
+    nextTick,
+    onActivated,
+    onDeactivated,
     onMounted,
     onUnmounted,
     ref,
@@ -317,6 +320,31 @@
 
   // 标记是否已执行过默认选中逻辑
   let hasInitializedSelection = false;
+  // keep-alive 激活态：失活时不因 URL 同步去抢路由 / 触发父页 change
+  const isPageActive = ref(true);
+
+  const readSavedSelection = (): SelectorItem | null => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.id) {
+        return saved as SelectorItem;
+      }
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  onActivated(() => {
+    isPageActive.value = true;
+    // 失活期间其他页可能已改 scene（写入 URL / localStorage），激活后强制对齐
+    nextTick(() => {
+      if (sceneList.value.length > 0 || systemList.value.length > 0) {
+        trySelectFromRoute({ forceAlign: true });
+      }
+    });
+  });
+  onDeactivated(() => {
+    isPageActive.value = false;
+  });
 
   /** 根据角色确定可用列表范围 */
   const getRoleScope = () => ({
@@ -341,14 +369,6 @@
   });
 
   const buildSceneQuery = buildSceneContextQueryFromSelection;
-
-  const getSavedSelection = (): SelectorItem | null => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    } catch {
-      return null;
-    }
-  };
 
   // 用户手动切换场景后，短暂忽略 route 守护，避免 stale URL 把选中项打回旧场景
   let suppressRouteResyncUntil = 0;
@@ -405,10 +425,13 @@
     hasInitializedSelection = true;
     selectedItem.value = targetItem;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(targetItem));
-    syncSceneIdToRoute(targetItem);
+    // keep-alive 失活实例不写路由、不抛 change，避免把当前页（如 AI 助手）强行导航走
+    if (isPageActive.value) {
+      syncSceneIdToRoute(targetItem);
+    }
     if (!isSame) {
       emits('update:modelValue', targetItem);
-      if (emitChange) {
+      if (emitChange && isPageActive.value) {
         emits('change', targetItem);
       }
     }
@@ -421,7 +444,7 @@
    * 3. URL无ID时恢复 localStorage / 兜底选第一项
    * 4. URL 指向无管理权限场景 → 跳转权限申请页（不自动改选第一个可管理场景）
    */
-  const trySelectFromRoute = () => {
+  const trySelectFromRoute = (options?: { forceAlign?: boolean }) => {
     const { hasSceneAccess, hasSystemAccess } = getRoleScope();
     // 基于当前页面的 listScope 决定实际可用的匹配范围
     const showScene = props.listScope.includes('scene') && hasSceneAccess;
@@ -434,6 +457,7 @@
     const unlockedSceneItems = sceneItems.filter(item => !isSceneLocked(item));
     const systemItems = systemItemsForMatch.filter(item => item.type !== 'aggregate');
     const urlMatchId = getUrlMatchId();
+    const savedSelection = readSavedSelection();
 
     // 检查当前页面所需列表是否已加载完毕（仅检查 listScope 范围内的）
     if (showScene && sceneItems.length === 0) return;
@@ -457,14 +481,18 @@
       return;
     }
 
-    // 已初始化且当前选中与 URL 一致 → 无需重复处理（上锁场景除外，需重新兜底）
-    if (
-      hasInitializedSelection
-      && selectedItem.value
-      && (!urlMatchId || selectedItem.value.id === urlMatchId)
-      && !isSceneLocked(selectedItem.value)
-    ) {
-      return;
+    // 已初始化且与权威来源一致 → 无需重复处理（上锁场景除外，需重新兜底）
+    // URL 有值以 URL 为准；URL 无值以 localStorage 为准（避免 keep-alive 失活期间错过跨页切换）
+    // forceAlign 时强制重新对齐（如 keep-alive 激活后）
+    if (!options?.forceAlign && hasInitializedSelection && selectedItem.value && !isSceneLocked(selectedItem.value)) {
+      if (urlMatchId) {
+        if (selectedItem.value.id === urlMatchId) return;
+      } else if (
+        !savedSelection
+        || (savedSelection.id === selectedItem.value.id && savedSelection.type === selectedItem.value.type)
+      ) {
+        return;
+      }
     }
 
     let targetItem: SelectorItem | null = null;
@@ -502,18 +530,17 @@
     }
 
     // ── 阶段2.5：恢复用户上次的选择（跨页面记忆，需在当前页面可见范围内）──
-    if (!targetItem) {
-      const saved = getSavedSelection();
-      if (saved && saved.id) {
-        // 只在当前页面实际展示的列表中恢复（包括聚合项）
-        const availableItems = [
-          ...sceneItemsForMatch,
-          ...systemItemsForMatch,
-        ];
-        const savedItem = availableItems.find(item => item.id === saved.id && item.type === saved.type) || null;
-        // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
-        targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
-      }
+    if (!targetItem && savedSelection?.id) {
+      // 只在当前页面实际展示的列表中恢复（包括聚合项）
+      const availableItems = [
+        ...sceneItemsForMatch,
+        ...systemItemsForMatch,
+      ];
+      const savedItem = availableItems.find(item => (
+        item.id === savedSelection.id && item.type === savedSelection.type
+      )) || null;
+      // 锁定场景 / 已不在列表中：不可恢复，走兜底第一个有权限场景
+      targetItem = savedItem && !isSceneLocked(savedItem) ? savedItem : null;
     }
 
     // ── 阶段3：URL无ID / 匹配失败 / 上次选择不可用时的兜底逻辑 ──
@@ -662,8 +689,8 @@
   // 监听外部值变化
   watch(() => props.modelValue, (newVal) => {
     selectedItem.value = newVal;
-    // 外部设置选中项时也同步 URL
-    if (newVal) {
+    // 外部设置选中项时也同步 URL（失活实例不写，避免抢路由）
+    if (newVal && isPageActive.value) {
       syncSceneIdToRoute(newVal);
     }
   });
@@ -672,8 +699,12 @@
   // （防止其他组件的路由跳转丢失 query 参数）
   // 若 URL 已明确指向其他场景，不回写（优先走 URL 临时切换）
   watch(selectedItem, (newVal) => {
+    if (!isPageActive.value) return;
     if (!newVal || !newVal.id) return;
     const q = getLiveRouteQuery();
+    const urlId = (q.scene_id || q.scope_id) as string | undefined;
+    // URL 已明确指向其他场景时不回写（优先走 URL 临时切换）
+    if (urlId && urlId !== newVal.id) return;
     const needsFix = (
       q.scene_id !== newVal.id
       || (newVal.type === 'scene' && q.scope_id !== newVal.id)
@@ -690,6 +721,7 @@
   // - URL 有场景参数且与当前选中不一致 → 按 URL 临时切换（并回写 localStorage）
   // - URL 丢失场景参数 → 用当前选中项补回 query
   watch(() => route.query, () => {
+    if (!isPageActive.value) return;
     if (shouldSuppressRouteResync()) {
       return;
     }
@@ -719,8 +751,20 @@
       return;
     }
 
+    // URL 无场景时：先按 localStorage 对齐，再补回 query（避免把失活前的旧选中写回去）
+    if (sceneList.value.length > 0 || systemList.value.length > 0) {
+      trySelectFromRoute({ forceAlign: true });
+      return;
+    }
     if (!item || !item.id) return;
-    setTimeout(() => syncSceneIdToRoute(item), 50);
+    setTimeout(() => {
+      if (!isPageActive.value) return;
+      const latest = selectedItem.value;
+      if (!latest?.id) return;
+      const liveId = (route.query.scene_id || route.query.scope_id) as string | undefined;
+      if (liveId) return;
+      syncSceneIdToRoute(latest);
+    }, 50);
   });
 
   // 获取数据的方法（按角色按需请求）
