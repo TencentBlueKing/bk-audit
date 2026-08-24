@@ -35,6 +35,7 @@
         <div class="search-box">
           <search-box
             ref="searchBoxRef"
+            :loading="isLoading"
             @change="handleSearchChange"
             @change-table-height="handleTableHeightChange" />
           <div class="search-result-action">
