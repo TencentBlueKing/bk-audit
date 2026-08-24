@@ -180,11 +180,6 @@
     }
   }
 
-  /* 解决表格悬停超出 */
-  .bk-table-fixed .column_fixed {
-    bottom: 80px !important;
-  }
-
   .search-result-action {
     display: flex;
     margin-top: 16px;
