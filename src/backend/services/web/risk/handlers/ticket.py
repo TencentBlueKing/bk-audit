@@ -881,7 +881,7 @@ class ConfirmRisk(RiskFlowBaseHandler):
         # 验证只能由 confirmer 操作
         username = kwargs.get("username")
         if username and username not in self.risk.confirmer:
-            from django.core.exceptions import PermissionDenied
+            from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("非确认人，无权确认风险")
 
@@ -894,60 +894,20 @@ class ConfirmRisk(RiskFlowBaseHandler):
         dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
         if dispatch_rule:
             BindingMetadataHelper.create_risk_scene_binding(self.risk.risk_id, dispatch_rule.target_scene_id)
-        return {"success": True, "message": "风险确认成功"}
+        return {}
 
     def update_status(self, process_result: dict, *args, **kwargs) -> None:
         # 确认后将状态从 PENDING_CONFIRM 转为 NEW
         self.risk.status = RiskStatus.NEW
-        self.risk.save(update_fields=["status"])
+        self.risk.display_status = RiskDisplayStatus.NEW
+        self.risk.save(update_fields=["status", "display_status"])
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
-        # 确认后立即初始化处理人（复用 NewRisk 的逻辑）
-        # 有处理套餐且需要审批则当前处理人为空，否则为安全责任人/处理组
-        if self.process_application:
-            self.risk.current_operator = [] if self.process_application.need_approve else self.load_processor()
-        else:
-            self.risk.current_operator = self.load_processor()
-        self.risk.save(update_fields=["current_operator"])
+        pass
 
-    def sync_display_status(self) -> None:
-        # 同步 display_status
-        self.risk.display_status = self.DISPLAY_STATUS_MAP.get(self.risk.status, RiskDisplayStatus.NEW)
+    def post_process(self, process_result: dict, *args, **kwargs) -> None:
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
 
-    def post_process(self, *args, **kwargs) -> None:
-        # 事务提交后触发处理计划（复用 NewRisk 的 apply_processing_plan 逻辑）
-        # 但不重新匹配 StrategyRule 和 RiskRule
-        try:
-            # 直接应用已绑定的 risk_rule
-            if self.risk.rule_id:
-                # 已有绑定规则，检查是否有处理套餐
-                if self.process_application:
-                    # 有处理套餐，根据是否需要审批决定
-                    if self.process_application.need_approve:
-                        from services.web.risk.handlers.ticket import ForApprove
-
-                        ForApprove(risk_id=self.risk.risk_id, operator=self.operator).run()
-                    else:
-                        from services.web.risk.handlers.ticket import AutoProcess
-
-                        AutoProcess(risk_id=self.risk.risk_id, operator=self.operator).run()
-                else:
-                    # 无处理套餐，转为人工处理
-                    self.risk.status = RiskStatus.AWAIT_PROCESS
-                    self.sync_display_status()
-                    self.risk.save(update_fields=["status", "display_status"])
-            else:
-                # 无绑定规则，转为 AWAIT_PROCESS
-                self.risk.status = RiskStatus.AWAIT_PROCESS
-                self.sync_display_status()
-                self.risk.save(update_fields=["status", "display_status"])
-        except Exception as e:
-            logger.exception(f"[ConfirmRisk] 触发处理计划失败：{e}")
-            # 失败不影响确认结果，记录日志即可
-        # 通知风险关注人
-        RiskHandler().send_risk_notice(self.risk)
-        # 触发渲染任务
-        RiskHandler().trigger_render_task(self.risk)
 
 class ConfirmAsMisReport(RiskFlowBaseHandler):
     """
@@ -967,7 +927,7 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         # 验证只能由 confirmer 操作
         username = kwargs.get("username")
         if username and username not in self.risk.confirmer:
-            from django.core.exceptions import PermissionDenied
+            from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("非确认人，无权确认误报")
 
@@ -976,16 +936,14 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         self.risk.risk_label = RiskLabel.MISREPORT
         # 状态将在 update_status 中保存
 
-        return {
-            "success": True,
-            "message": "风险确认为误报",
-            "description": description,
-        }
+        return {}
 
     def update_status(self, process_result: dict, *args, **kwargs) -> None:
         # 确认为误报后直接关闭
         self.risk.status = RiskStatus.CLOSED
-        self.risk.save(update_fields=["status"])
+        self.risk.display_status = RiskDisplayStatus.CLOSED
+        self.risk.risk_label = RiskLabel.MISREPORT
+        self.risk.save(update_fields=["status", "display_status", "risk_label"])
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         # 关单后清空处理人

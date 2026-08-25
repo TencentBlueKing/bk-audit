@@ -146,6 +146,7 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.serializers import (
+    BatchConfirmRiskRequestSerializer,
     BulkCustomTransRiskReqSerializer,
     ConfirmAsMisReportRequestSerializer,
     ConfirmRiskRequestSerializer,
@@ -1912,7 +1913,32 @@ class ConfirmRiskResource(RiskMeta):
         from services.web.risk.handlers.ticket import ConfirmRisk
 
         ConfirmRisk(risk_id=risk_id, operator=username).run(username=username)
+        return {"success": True}
 
+
+class BatchConfirmRiskResource(RiskMeta):
+    """批量确认风险"""
+
+    name = gettext_lazy("批量确认风险")
+    RequestSerializer = BatchConfirmRiskRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        risk_ids = validated_request_data["risk_ids"]
+
+        # 查询所有风险，验证当前用户是否为确认人
+        risks = Risk.objects.filter(risk_id__in=risk_ids)
+
+        # 验证：当前用户必须是所有风险的确认人
+        for risk in risks:
+            if username not in risk.confirmer:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认")
+
+        bulk_req_params = [{"risk_id": risk_id, "username": username} for risk_id in risk_ids]
+
+        ConfirmRiskResource().bulk_request(bulk_req_params, ignore_exceptions=True)
         return {"success": True}
 
 
@@ -1945,8 +1971,6 @@ class ConfirmAsMisReportResource(RiskMeta):
         from services.web.risk.handlers.ticket import ConfirmAsMisReport
 
         ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
-
-        return {"success": True}
 
 
 class ListPendingConfirmRisk(ListRisk):

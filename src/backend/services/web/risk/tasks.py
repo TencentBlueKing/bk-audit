@@ -93,6 +93,7 @@ from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
+from services.web.strategy_v2.models import Strategy, StrategyRule
 
 cache: DefaultClient = _cache
 
@@ -192,6 +193,20 @@ def manual_add_event(data: list):
             continue
         payload = serializer.validated_data
         payload["event_data"] = json.loads(payload["event_data"])
+
+        # 获取风险元信息（优先级：规则 > 策略）
+        strategy_rule_id = payload.get("strategy_rule_id")
+        rule = None
+        if strategy_rule_id:
+            rule = StrategyRule.objects.filter(rule_id=strategy_rule_id).first()
+
+        strategy = Strategy.objects.filter(strategy_id=payload["strategy_id"]).first()
+
+        # 优先级：规则 > 策略
+        risk_level = (rule.risk_level if rule else None) or (strategy.risk_level if strategy else None)
+        risk_hazard = (rule.risk_hazard if rule else None) or (strategy.risk_hazard if strategy else None)
+        risk_guidance = (rule.risk_guidance if rule else None) or (strategy.risk_guidance if strategy else None)
+
         event_time = datetime.datetime.fromtimestamp(payload["event_time"] / 1000, tz=timezone.get_default_timezone())
         manual_events.append(
             ManualEvent(
@@ -204,6 +219,12 @@ def manual_add_event(data: list):
                 event_time=event_time,
                 event_source=payload.get("event_source"),
                 operator=payload.get("operator"),
+                # 保存 strategy_rule
+                strategy_rule=strategy_rule_id,
+                # 保存风险元信息快照
+                risk_level=risk_level,
+                risk_hazard=risk_hazard,
+                risk_guidance=risk_guidance,
             )
         )
     if not manual_events:
