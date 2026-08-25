@@ -109,6 +109,10 @@ export default class Strategy {
   rules?: Array<Record<string, any>>;
   assign_rules?: Array<Record<string, any>>;
   default_assign_rule?: Record<string, any>;
+  dispatch_rules?: Array<Record<string, any>>;
+  binding_type?: string;
+  visibility?: Record<string, any>;
+  scene_id?: string | number;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -147,6 +151,10 @@ export default class Strategy {
     this.rules = payload.rules;
     this.assign_rules = payload.assign_rules;
     this.default_assign_rule = payload.default_assign_rule;
+    this.dispatch_rules = payload.dispatch_rules;
+    this.binding_type = payload.binding_type;
+    this.visibility = payload.visibility;
+    this.scene_id = payload.scene_id;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

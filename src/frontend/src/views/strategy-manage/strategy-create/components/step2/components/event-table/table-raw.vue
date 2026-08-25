@@ -75,6 +75,8 @@
 
   import FieldCell from './field-cell.vue';
 
+  type EventFieldKey = keyof StrategyFieldEvent['event_basic_field_configs'][0];
+
   interface Props {
     eventItemArr: StrategyFieldEvent['event_basic_field_configs'];
     eventItemKey: keyof StrategyFieldEvent;
@@ -112,8 +114,8 @@
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
   // 固定列顺序，避免按对象 key 遍历导致「基本信息 / 事件结果」列错位
-  const columnKeys = computed(() => {
-    const keys = [
+  const columnKeys = computed((): EventFieldKey[] => {
+    const keys: EventFieldKey[] = [
       'field_name',
       'display_name',
       'is_show',
@@ -130,7 +132,7 @@
     return keys;
   });
 
-  const getCellClass = (valueKey: string) => ({
+  const getCellClass = (valueKey: EventFieldKey) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
     'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings' || valueKey === 'duplicate_field',
@@ -139,11 +141,7 @@
     description: valueKey === 'description',
   });
 
-  const getRowIndex = (element: StrategyFieldEvent['event_basic_field_configs'][0]) => (
-    props.eventItemArr.findIndex(item => item.field_name === element.field_name)
-  );
-
-  const updateFieldValue = (config: any, key: string, value: any) => {
+  const updateFieldValue = (config: any, key: EventFieldKey, value: any) => {
     // eslint-disable-next-line no-param-reassign
     config[key] = value;
   };

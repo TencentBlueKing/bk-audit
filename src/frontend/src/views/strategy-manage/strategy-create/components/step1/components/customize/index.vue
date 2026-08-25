@@ -76,7 +76,7 @@
       v-if="stepMode === 'basic'"
       class="customize-rule customize-rule-basic">
       <bk-form-item
-        class="is-required"
+        class="is-required data-source-form-item"
         property="configs.config_type">
         <template #label>
           <span
@@ -90,105 +90,70 @@
             class="form-label-tip">
             {{ t('数据源') }}
           </span>
-          <bk-loading :loading="typeTableLoading">
-            <div class="select-group">
-              <bk-form-item
-                class="no-label"
-                label-width="0"
-                property="configs.config_type">
-                <data-source-picker
-                  v-model="tableId"
-                  :decode-type-biz-id="decodeTypeBizId"
-                  :list="allConfigTypeTable"
-                  :load-children="handlePickerLoadChildren"
-                  :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
-                  :system-ids="formData.configs.data_source.system_ids"
-                  @change="handleChangeTable"
-                  @event-log-commit="handleEventLogCommit" />
-              </bk-form-item>
-            </div>
-          </bk-loading>
-          <!-- 联表详情 -->
-          <link-data-detail-component
-            v-if="formData.configs.data_source.link_table
-              && formData.configs.data_source.link_table.uid
-            "
-            :join-type-list="joinTypeList"
-            :link-data-detail="linkDataDetail"
-            @refresh-link-data="handleRefreshLinkData" />
-          <!-- 其他数据表详情 -->
-          <other-table-detail-component
-            v-if="formData.configs.data_source.rt_id?.length"
-            :rt-id="formData.configs.data_source.rt_id"
-            @show-structure-preview="handleShowStructureView" />
-          <!-- 查看表字段详情 -->
-          <structure-preview-component
-            v-model:show-structure="showStructure"
-            :current-view-field="currentViewField"
-            :rt-id="currentViewRtId" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160"
-          property="configs.select">
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
-              }"
-              style="
+        </template>
+        <bk-loading :loading="typeTableLoading">
+          <div class="select-group">
+            <data-source-picker
+              v-model="tableId"
+              :decode-type-biz-id="decodeTypeBizId"
+              :list="allConfigTypeTable"
+              :load-children="handlePickerLoadChildren"
+              :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
+              :system-ids="formData.configs.data_source.system_ids"
+              @change="handleChangeTable"
+              @event-log-commit="handleEventLogCommit" />
+          </div>
+        </bk-loading>
+      </bk-form-item>
+      <!-- 联表详情 -->
+      <link-data-detail-component
+        v-if="formData.configs.data_source.link_table
+          && formData.configs.data_source.link_table.uid
+        "
+        :join-type-list="joinTypeList"
+        :link-data-detail="linkDataDetail"
+        @refresh-link-data="handleRefreshLinkData" />
+      <!-- 其他数据表详情 -->
+      <other-table-detail-component
+        v-if="formData.configs.data_source.rt_id?.length"
+        :rt-id="formData.configs.data_source.rt_id"
+        @show-structure-preview="handleShowStructureView" />
+      <!-- 查看表字段详情 -->
+      <structure-preview-component
+        v-model:show-structure="showStructure"
+        :current-view-field="currentViewField"
+        :rt-id="currentViewRtId" />
+      <bk-form-item
+        class="expected-result-form-item"
+        label=""
+        label-width="160">
+        <template #label>
+          <span
+            v-bk-tooltips="{
+              content: t(
+                '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start'
+            }"
+            style="
                 color: #63656e;
                 cursor: pointer;
                 border-bottom: 1px dashed #979ba5;
               ">
-              {{ t('预期结果') }}
-            </span>
-          </template>
-          <expected-results
-            ref="expectedResultsRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :table-fields="tableFields"
-            @update-expected-result="handleUpdateExpectedResult" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160"
-          required>
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
-              }"
-              style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
-              {{ t('风险发现规则') }}
-            </span>
-          </template>
-          <rules-component
-            ref="rulesComponentRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :configs-data="formData.configs"
-            :expected-result="formData.configs.select"
-            :table-fields="tableFields"
-            @show-structure-preview="handleShowStructureView"
-            @update-where="handleUpdateWhere" />
-        </bk-form-item>
-      </div>
-    </auth-collapse-panel>
+            {{ t('预期结果') }}
+          </span>
+        </template>
+        <expected-results
+          ref="expectedResultsRef"
+          :aggregate-list="aggregateList"
+          :config-type="formData.configs.config_type"
+          :table-fields="tableFields"
+          @update-expected-result="handleUpdateExpectedResult" />
+      </bk-form-item>
+    </div>
     <auth-collapse-panel
+      v-if="stepMode === 'basic'"
       is-active
       :label="t('调度配置')"
       style="margin-bottom: 12px">
@@ -294,9 +259,9 @@
               </bk-select>
             </bk-form-item>
           </div>
-        </bk-form-item>
-      </template>
-    </div>
+        </template>
+      </div>
+    </auth-collapse-panel>
   </div>
 </template>
 <script setup lang="ts">
@@ -1233,11 +1198,15 @@
       const having = editData.configs.having
         ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
         : undefined;
-      isWhereSettingUp.value = true;
-      rulesComponentRef.value.setWhere(where, having);
-      nextTick(() => {
-        isWhereSettingUp.value = false;
-      });
+      const hasWhere = Boolean(where?.conditions?.length);
+      const hasHaving = Boolean(having?.conditions?.length);
+      if (hasWhere || hasHaving) {
+        isWhereSettingUp.value = true;
+        rulesComponentRef.value.setWhere(where, having);
+        nextTick(() => {
+          isWhereSettingUp.value = false;
+        });
+      }
     }
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
@@ -1288,7 +1257,13 @@
         && tableLen > 0
         && !isInit
         && !isInitFromParent) {
-        setFormData({ configs });
+        setFormData({
+          configs: {
+            ...configs,
+            where: props.editData?.configs?.where ?? configs.where,
+            having: props.editData?.configs?.having ?? configs.having,
+          },
+        });
         isInitFromParent = true;
       }
     },
@@ -1475,7 +1450,7 @@
   }
 
   .customize-rule-only {
-    padding: 0;
+    padding: 0 8px 0 8px;
     overflow: visible;
 
     :deep(.bk-form-item) {
@@ -1489,6 +1464,27 @@
     &.customize-rule-basic {
       padding: 0;
       overflow: visible;
+
+      > :deep(.data-source-form-item),
+      > :deep(.expected-result-form-item) {
+        margin-bottom: 16px;
+      }
+
+      :deep(.data-source-form-item .bk-form-content) {
+        min-height: 0;
+        line-height: normal;
+        padding-bottom: 0;
+      }
+
+      :deep(.data-source-form-item .bk-form-error) {
+        position: static;
+        margin-top: 4px;
+        line-height: 16px;
+      }
+
+      :deep(.bk-loading) {
+        min-height: 0;
+      }
     }
 
     .form-label-tip {
@@ -1500,10 +1496,6 @@
     .select-group {
       width: 100%;
       overflow: visible;
-
-      :deep(.bk-form-item) {
-        margin-bottom: 0;
-      }
     }
 
     :deep(.bk-infobox-title) {
