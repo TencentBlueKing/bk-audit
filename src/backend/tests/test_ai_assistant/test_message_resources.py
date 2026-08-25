@@ -2,9 +2,16 @@ from unittest import mock
 from uuid import UUID, uuid4
 
 from django.db import connection
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.plumbing import ComponentRegistry
+from drf_spectacular.serializers import PolymorphicProxySerializerExtension
+from drf_spectacular.utils import PolymorphicProxySerializer
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
+from rest_framework.views import APIView
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
@@ -32,6 +39,7 @@ from services.web.ai_assistant.resources.message import (
     ListMessages,
     RetryMessage,
 )
+from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.serializers.message import (
     AttachmentSummarySerializer,
@@ -168,6 +176,109 @@ class MessageRequestSerializerTest(TestCase):
         self.assertIs(input_schemas[MessageType.NATURAL_LANGUAGE_SEARCH], EchoInput)
         self.assertIs(output_schemas[MessageType.SYSTEM_SELECTION], EchoOutput)
         self.assertIs(output_schemas[MessageType.NATURAL_LANGUAGE_SEARCH], EchoOutput)
+
+
+class StartupAlphaMessageInput(MessageSchema):
+    alpha: str
+
+
+class StartupAlphaMessageOutput(MessageSchema):
+    content: str
+
+
+class StartupBetaMessageInput(MessageSchema):
+    beta: str
+
+
+class StartupBetaMessageOutput(MessageSchema):
+    content: str
+
+
+class StartupGammaMessageInput(MessageSchema):
+    gamma: str
+
+
+class StartupGammaMessageOutput(MessageSchema):
+    content: str
+
+
+class StartupAlphaMessageHandler(EchoSyncHandler):
+    input_model = StartupAlphaMessageInput
+    output_model = StartupAlphaMessageOutput
+
+    def execute(self, *, input_data, context_data):
+        return StartupAlphaMessageOutput(content=input_data.alpha)
+
+
+class StartupBetaMessageHandler(EchoSyncHandler):
+    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    input_model = StartupBetaMessageInput
+    output_model = StartupBetaMessageOutput
+
+    def execute(self, *, input_data, context_data):
+        return StartupBetaMessageOutput(content=input_data.beta)
+
+
+class StartupGammaMessageHandler(EchoSyncHandler):
+    message_type = MessageType.LOG_SEARCH
+    input_model = StartupGammaMessageInput
+    output_model = StartupGammaMessageOutput
+
+    def execute(self, *, input_data, context_data):
+        return StartupGammaMessageOutput(content=input_data.gamma)
+
+
+def _map_polymorphic_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
+    view = APIView()
+    view.request = Request(APIRequestFactory().get("/"))
+    view.format_kwarg = None
+    auto_schema = AutoSchema()
+    auto_schema.view = view
+    auto_schema.method = "GET"
+    auto_schema.path = "/"
+    auto_schema.registry = ComponentRegistry()
+    return PolymorphicProxySerializerExtension(target=proxy).map_serializer(auto_schema, "response")
+
+
+class MessageOpenAPIStartupContractTest(SimpleTestCase):
+    def tearDown(self):
+        for message_type in MessageType.values:
+            message_handler_registry.unregister(message_type)
+
+    def test_first_openapi_generation_includes_registered_handlers_and_freezes(self):
+        message_handler_registry.register(StartupAlphaMessageHandler())
+        message_handler_registry.register(StartupBetaMessageHandler())
+        input_proxy = PolymorphicProxySerializer(
+            component_name="AIMessageInputDataStartupGate",
+            serializers=lambda: _message_schema_mapping("input_model"),
+            resource_type_field_name="message_type",
+        )
+        output_proxy = PolymorphicProxySerializer(
+            component_name="AIMessageOutputDataStartupGate",
+            serializers=lambda: _message_schema_mapping("output_model"),
+            resource_type_field_name="message_type",
+        )
+
+        input_schema = _map_polymorphic_proxy_oneof(input_proxy)
+        output_schema = _map_polymorphic_proxy_oneof(output_proxy)
+        input_refs = {item["$ref"] for item in input_schema["oneOf"]}
+        output_refs = {item["$ref"] for item in output_schema["oneOf"]}
+
+        self.assertIn("#/components/schemas/StartupAlphaMessageInput", input_refs)
+        self.assertIn("#/components/schemas/StartupBetaMessageInput", input_refs)
+        self.assertIn("#/components/schemas/StartupAlphaMessageOutput", output_refs)
+        self.assertIn("#/components/schemas/StartupBetaMessageOutput", output_refs)
+
+        frozen_input = input_proxy.serializers
+        frozen_output = output_proxy.serializers
+        message_handler_registry.register(StartupGammaMessageHandler())
+
+        self.assertIs(input_proxy.serializers, frozen_input)
+        self.assertIs(output_proxy.serializers, frozen_output)
+        self.assertIsNot(frozen_input[MessageType.LOG_SEARCH], StartupGammaMessageInput)
+        self.assertIsNot(frozen_output[MessageType.LOG_SEARCH], StartupGammaMessageOutput)
+        refreshed_input_refs = {item["$ref"] for item in _map_polymorphic_proxy_oneof(input_proxy)["oneOf"]}
+        self.assertNotIn("#/components/schemas/StartupGammaMessageInput", refreshed_input_refs)
 
 
 @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="alice")

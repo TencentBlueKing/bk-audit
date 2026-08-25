@@ -18,7 +18,12 @@ on:
 
 jobs:
   unittest:
+    name: tests (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [regular, special]
     services:
       mysql:
         image: mysql:5.7.44
@@ -77,10 +82,11 @@ jobs:
       REDIS_PORT: "6379"
       REDIS_DB: "0"
       REDIS_PASSWORD: ""
-      REDIS_KEY_PREFIX: "bk_audit"
+      REDIS_KEY_PREFIX: "bk_audit_${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.suite }}"
       BKAPP_CELERY_TEST_BROKER_URL: "amqp://guest:guest@127.0.0.1:5672//"
-      BKAPP_CELERY_TEST_QUEUE_PREFIX: "bk_audit_test_${{ github.run_id }}_${{ github.run_attempt }}"
+      BKAPP_CELERY_TEST_QUEUE_PREFIX: "bk_audit_test_${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.suite }}"
       BKAPP_CELERY_TEST_TASK_TIMEOUT: "30"
+      BKAPP_AI_ASSISTANT_SPECIAL_LOG_DIR: "special-logs"
       BKAPP_PLATFORM_AUTH_ACCESS_USERNAME: "admin"
       BKAPP_PLATFORM_AUTH_ACCESS_TOKEN: "admin"
       BKAPP_BK_IAM_APIGATEWAY_URL: "https://bkapi.paas.example.com/api/bk-iam/prod"
@@ -123,10 +129,28 @@ jobs:
       - name: Run tests
         run: |
           cd src/backend
-          make test
+          if [ "${{ matrix.suite }}" = "regular" ]; then
+            make test TEST_ARGS="--junitxml=test-results-regular.xml"
+          else
+            make test-special TEST_ARGS="--junitxml=test-results-special.xml"
+          fi
       - name: Upload coverage to Codecov
+        if: matrix.suite == 'regular'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: src/backend/coverage.xml
           fail_ci_if_error: true
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.suite }}
+          path: src/backend/test-results-${{ matrix.suite }}.xml
+      - name: Upload special worker logs
+        if: always() && matrix.suite == 'special'
+        uses: actions/upload-artifact@v4
+        with:
+          name: special-worker-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: src/backend/special-logs/
+          if-no-files-found: ignore

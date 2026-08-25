@@ -11,8 +11,27 @@ from celery.contrib.testing.worker import start_worker
 from django.conf import settings
 from django.db import close_old_connections
 from django.db.models import Model
+from kombu import pools as kombu_pools
 
 ModelT = TypeVar("ModelT", bound=Model)
+
+
+def once_then_original(original, *, exc: BaseException):
+    """第一次调用抛出指定异常，后续调用回落到原实现。"""
+
+    lock = threading.Lock()
+    attempts = {"count": 0}
+
+    def wrapper(*args, **kwargs):
+        with lock:
+            attempts["count"] += 1
+            current = attempts["count"]
+        if current == 1:
+            raise exc
+        return original(*args, **kwargs)
+
+    wrapper.attempts = attempts
+    return wrapper
 
 
 def _reset_broker_pools() -> None:
@@ -31,6 +50,9 @@ def _reset_broker_pools() -> None:
     if broker_pool is not None:
         broker_pool.force_close_all()
         celery_app._pool = None
+    # kombu 全局 connections/producers 会缓存已关闭的池；只清空 App 引用
+    # 时，后续 Worker 仍可能拿到 closed pool。
+    kombu_pools.reset()
 
 
 def _delete_queue(queue_name: str) -> None:
@@ -140,7 +162,7 @@ def _record_integration_task_postrun(*, sender=None, task_id=None, state=None, *
     """记录真实集成 Task 已退出 Worker；业务断言仍以数据库快照为准。"""
 
     task_name = getattr(sender, "name", "")
-    if not task_id or not task_name.startswith("tests.ai_assistant.integration."):
+    if not task_id or not task_name.startswith("tests.ai_assistant."):
         return
     with _postrun_condition:
         _postrun_counts[task_id] = _postrun_counts.get(task_id, 0) + 1

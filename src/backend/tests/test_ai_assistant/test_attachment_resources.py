@@ -3,10 +3,16 @@ from uuid import UUID, uuid4
 
 import yaml
 from django.http import QueryDict
-from django.test import TransactionTestCase, override_settings
+from django.test import SimpleTestCase, TransactionTestCase, override_settings
 from django.urls import resolve
+from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.plumbing import ComponentRegistry
+from drf_spectacular.serializers import PolymorphicProxySerializerExtension
+from drf_spectacular.utils import PolymorphicProxySerializer
 from drf_spectacular.views import SpectacularAPIView
+from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.views import APIView
 
 from core.utils.spectacular import BKResourceAutoSchema
 from services.web.ai_assistant.constants import (
@@ -31,6 +37,7 @@ from services.web.ai_assistant.resources.attachment import (
     RetryAttachment,
     UpdateAttachment,
 )
+from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentCreateRequestSerializer,
     AttachmentDetailRequestSerializer,
@@ -41,6 +48,7 @@ from services.web.ai_assistant.serializers.attachment import (
     AttachmentUpdateRequestSerializer,
     _attachment_schema_mapping,
     _editable_attachment_output_schema_mapping,
+    _unique_schema_models,
 )
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.services.attachment_execution import (
@@ -423,6 +431,109 @@ class AttachmentRequestSerializerTest(TestCase):
         ):
             with self.subTest(component=component_name):
                 self.assertTrue(components[component_name]["oneOf"])
+
+
+class StartupAlphaAttachmentInput(MessageSchema):
+    alpha: str
+
+
+class StartupAlphaAttachmentOutput(MessageSchema):
+    content: str
+
+
+class StartupBetaAttachmentInput(MessageSchema):
+    beta: str
+
+
+class StartupBetaAttachmentOutput(MessageSchema):
+    content: str
+
+
+class StartupGammaAttachmentInput(MessageSchema):
+    gamma: str
+
+
+class StartupGammaAttachmentOutput(MessageSchema):
+    content: str
+
+
+class StartupAlphaAttachmentHandler(EditableAttachmentEchoHandler):
+    input_model = StartupAlphaAttachmentInput
+    output_model = StartupAlphaAttachmentOutput
+
+    def execute(self, *, execution):
+        return StartupAlphaAttachmentOutput(content=execution.input_data.alpha)
+
+
+class StartupBetaAttachmentHandler(EditableAttachmentEchoHandler):
+    attachment_type = AttachmentType.AI_ANALYSIS
+    input_model = StartupBetaAttachmentInput
+    output_model = StartupBetaAttachmentOutput
+
+    def execute(self, *, execution):
+        return StartupBetaAttachmentOutput(content=execution.input_data.beta)
+
+
+class StartupGammaAttachmentHandler(EditableAttachmentEchoHandler):
+    attachment_type = AttachmentType.AI_STATISTICS
+    input_model = StartupGammaAttachmentInput
+    output_model = StartupGammaAttachmentOutput
+
+    def execute(self, *, execution):
+        return StartupGammaAttachmentOutput(content=execution.input_data.gamma)
+
+
+def _map_attachment_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
+    view = APIView()
+    view.request = Request(APIRequestFactory().get("/"))
+    view.format_kwarg = None
+    auto_schema = AutoSchema()
+    auto_schema.view = view
+    auto_schema.method = "GET"
+    auto_schema.path = "/"
+    auto_schema.registry = ComponentRegistry()
+    return PolymorphicProxySerializerExtension(target=proxy).map_serializer(auto_schema, "response")
+
+
+class AttachmentOpenAPIStartupContractTest(SimpleTestCase):
+    def tearDown(self):
+        for attachment_type in AttachmentType.values:
+            attachment_handler_registry.unregister(attachment_type)
+
+    def test_first_openapi_generation_includes_registered_handlers_and_freezes(self):
+        attachment_handler_registry.register(StartupAlphaAttachmentHandler())
+        attachment_handler_registry.register(StartupBetaAttachmentHandler())
+        input_proxy = PolymorphicProxySerializer(
+            component_name="AIAttachmentInputDataStartupGate",
+            serializers=lambda: _unique_schema_models(_attachment_schema_mapping("input_model")),
+            resource_type_field_name=None,
+        )
+        output_proxy = PolymorphicProxySerializer(
+            component_name="AIAttachmentOutputDataStartupGate",
+            serializers=lambda: _unique_schema_models(_attachment_schema_mapping("output_model")),
+            resource_type_field_name=None,
+        )
+
+        input_schema = _map_attachment_proxy_oneof(input_proxy)
+        output_schema = _map_attachment_proxy_oneof(output_proxy)
+        input_refs = {item["$ref"] for item in input_schema["oneOf"]}
+        output_refs = {item["$ref"] for item in output_schema["oneOf"]}
+
+        self.assertIn("#/components/schemas/StartupAlphaAttachmentInput", input_refs)
+        self.assertIn("#/components/schemas/StartupBetaAttachmentInput", input_refs)
+        self.assertIn("#/components/schemas/StartupAlphaAttachmentOutput", output_refs)
+        self.assertIn("#/components/schemas/StartupBetaAttachmentOutput", output_refs)
+
+        frozen_input = input_proxy.serializers
+        frozen_output = output_proxy.serializers
+        attachment_handler_registry.register(StartupGammaAttachmentHandler())
+
+        self.assertIs(input_proxy.serializers, frozen_input)
+        self.assertIs(output_proxy.serializers, frozen_output)
+        self.assertNotIn(StartupGammaAttachmentInput, frozen_input)
+        self.assertNotIn(StartupGammaAttachmentOutput, frozen_output)
+        refreshed_input_refs = {item["$ref"] for item in _map_attachment_proxy_oneof(input_proxy)["oneOf"]}
+        self.assertNotIn("#/components/schemas/StartupGammaAttachmentInput", refreshed_input_refs)
 
 
 class EditableAnalysisAttachmentHandler(EditableAttachmentEchoHandler):

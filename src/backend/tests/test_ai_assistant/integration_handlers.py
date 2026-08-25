@@ -343,6 +343,84 @@ def reset_stream_observations() -> None:
         stream_redis_keys.clear()
 
 
+http_stream_started = threading.Event()
+http_stream_release = threading.Event()
+http_attachment_fail_once = True
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_stream",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_http_stream(self, execution):
+    execution.stream.send({"step": 1})
+    http_stream_started.set()
+    if not http_stream_release.wait(settings.CELERY_TEST_TASK_TIMEOUT):
+        raise TimeoutError("HTTP stream test release timeout")
+    execution.stream.send({"step": 2})
+    return IntegrationOutput(content="http-stream:success")
+
+
+class RealAttachmentHttpStreamHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_http_stream
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_stream_retry",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_attachment_http_stream_retry(self, execution):
+    execution.stream.send({"step": 1})
+    http_stream_started.set()
+    if not http_stream_release.wait(settings.CELERY_TEST_TASK_TIMEOUT):
+        raise TimeoutError("HTTP stream test release timeout")
+    if self.request.retries == 0:
+        raise self.retry(exc=RetryableIntegrationError("http stream retry"), countdown=0)
+    execution.stream.send({"step": 2})
+    return IntegrationOutput(content="http-stream:success")
+
+
+class RealAttachmentHttpStreamRetryHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_http_stream_retry
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_fail_once",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_http_fail_once(self, execution):
+    global http_attachment_fail_once
+    if http_attachment_fail_once:
+        http_attachment_fail_once = False
+        raise RuntimeError("http attachment fail")
+    return IntegrationOutput(content="http-retry:success")
+
+
+class RealAttachmentHttpFailOnceHandler(RealAttachmentSuccessHandler):
+    async_task = execute_real_attachment_http_fail_once
+
+
+def release_http_stream_events() -> None:
+    """先唤醒仍卡在 wait() 上的 Worker，再交给 reset 清旗。"""
+
+    http_stream_release.set()
+
+
+def reset_http_stream_events() -> None:
+    http_stream_started.clear()
+    http_stream_release.clear()
+
+
+def reset_http_attachment_fail_once() -> None:
+    global http_attachment_fail_once
+    http_attachment_fail_once = True
+
+
 def reset_stream_duplicate_observations(*, parties: int = 2) -> None:
     """为同 task ID 的两次真实投递建立同步栅栏。"""
 
