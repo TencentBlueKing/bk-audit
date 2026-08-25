@@ -99,7 +99,6 @@ class ListDepartments(UserManageResource):
 
     cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60, user_related=False)
     platform_authorization = True
-    use_admin_username = True
 
 
 class RetrieveDepartment(UserManageResource):
@@ -120,7 +119,6 @@ class RetrieveDepartment(UserManageResource):
 
     cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
     platform_authorization = True
-    use_admin_username = True
 
 
 class BatchLookupVirtualUserResource(UserManageResource):

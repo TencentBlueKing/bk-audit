@@ -57,14 +57,7 @@ class BkBaseResource(AuditBkApiResource, abc.ABC):
 
     def build_request_data(self, validated_request_data: dict) -> dict:
         data = super().build_request_data(validated_request_data)
-        # 注意：这里的 bk_username 是请求体中的字段，与 Header 中的 bk_username 不同
-        # 多租户模式下应使用 bk_admin 的用户名
-        if self.use_muti_tenant_mode():
-            from core.tenant import get_admin_username
-
-            data["bk_username"] = get_admin_username(settings.BK_TENANT_ID)
-        else:
-            data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+        data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
         data["bk_app_code"] = settings.APP_CODE
         return data
 
@@ -118,8 +111,6 @@ class DatabusCleansDelete(BkBaseResource):
     action = "/v3/databus/cleans/{processing_id}/"
     method = "DELETE"
     url_keys = ["processing_id"]
-    # 鉴权头 X-Bkapi-Authorization 需要带 bk_username
-    use_admin_username = True
 
 
 class DatabusTasksPost(BkBaseResource):
@@ -225,8 +216,6 @@ class AuthTickets(AiopsBaseResource):
     name = gettext_lazy("RT授权")
     action = "/v3/auth/tickets/"
     method = "POST"
-    # 鉴权头 X-Bkapi-Authorization 需要带 bk_username
-    use_admin_username = True
 
 
 class CreateFlow(AiopsBaseResource):

@@ -76,7 +76,7 @@ from core.utils.data import distinct
 
 class BKLogBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bk-log"
-    use_admin_username = False
+    use_admin_username = True
 
     @property
     def base_url(self):

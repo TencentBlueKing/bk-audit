@@ -47,7 +47,6 @@ class AIAgentBase(AuditBkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
-    use_admin_username = True
     app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
     secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
 
