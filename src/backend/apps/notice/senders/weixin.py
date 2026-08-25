@@ -19,6 +19,10 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import api
 
 from apps.notice.senders.base import Sender
+from core.bk_api_base import AuditBkApiResource
+
+# v1 多租户模式下，企业微信 agentid/corpsecret 为顶层参数，需从消息体中剥离
+_WEIXIN_TOP_LEVEL_KEYS = ("wx_qy_agentid", "wx_qy_corpsecret")
 
 
 class WeixinSender(Sender):
@@ -29,11 +33,25 @@ class WeixinSender(Sender):
     api_resource = api.bk_cmsi.send_weixin
 
     def _build_params(self) -> dict:
+        if not AuditBkApiResource.use_muti_tenant_mode():
+            # 旧 ESB 统一接口：消息体使用 data 字段
+            return {
+                "receiver__username": self.receivers,
+                "data": {
+                    "heading": self.title,
+                    "message": self.content.to_string(),
+                    **self.configs,
+                },
+            }
+
+        # v1 多租户接口：消息体使用 message_data 字段，agentid/corpsecret 置于顶层
+        top_level = {key: self.configs.pop(key) for key in _WEIXIN_TOP_LEVEL_KEYS if key in self.configs}
         return {
             "receiver__username": self.receivers,
-            "data": {
+            "message_data": {
                 "heading": self.title,
                 "message": self.content.to_string(),
                 **self.configs,
             },
+            **top_level,
         }

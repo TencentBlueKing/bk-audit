@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 from binascii import Error
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
@@ -67,14 +66,23 @@ from api.bk_log.serializers import (
     ValidateContainerConfigYamlRequestSerializer,
     ValidateContainerConfigYamlResponseSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_LOG_API_URL
+from api.utils import get_endpoint
 from apps.bk_crypto.crypto import asymmetric_cipher
+from core.bk_api_base import AuditBkApiResource
 from core.utils.data import distinct
 
 
-class BKLogBaseResource(BkApiResource, abc.ABC):
-    base_url = BK_LOG_API_URL
+class BKLogBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bk-log"
+    use_admin_username = False
+
+    @property
+    def base_url(self):
+        if self.use_muti_tenant_mode():
+            return get_endpoint("bk-log-search", APIProvider.APIGW, stage="prod")
+        return BK_LOG_API_URL
 
 
 class GetOperators(BKLogBaseResource):
@@ -283,8 +291,13 @@ class CreateCollector(CollectorsBaseResource):
 
 class UpdateCollector(CollectorsBaseResource):
     name = gettext_lazy("更新采集")
-    action = "/databus_collector_plugins/update_instance/"
     method = "PUT"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/databus/collector_plugins/update_instance/"
+        return "/databus_collector_plugins/update_instance/"
 
 
 class ListBcsClusters(BizBaseResource):

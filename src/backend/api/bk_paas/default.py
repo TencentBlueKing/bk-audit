@@ -21,18 +21,25 @@ import json
 from typing import Dict
 
 import requests
-from bk_resource import BkApiResource
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import BK_PAAS_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class PaaSV3BaseResource(BkApiResource, abc.ABC):
-    base_url = BK_PAAS_API_URL
+class PaaSV3BaseResource(AuditBkApiResource, abc.ABC):
     bkapi_header_authorization = False
     bkapi_data_authorization = False
     module_name = "paasv3"
+
+    @property
+    def base_url(self):
+        if self.use_muti_tenant_mode():
+            return get_endpoint("bkpaas3", APIProvider.APIGW, stage="prod")
+        return BK_PAAS_API_URL
 
 
 class UniAppsQuery(PaaSV3BaseResource):

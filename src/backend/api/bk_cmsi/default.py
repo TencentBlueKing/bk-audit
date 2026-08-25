@@ -19,18 +19,26 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 import requests
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.logger import logger
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import BK_CMSI_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class CMSIResource(BkApiResource, abc.ABC):
-    base_url = BK_CMSI_API_URL
+class CMSIResource(AuditBkApiResource, abc.ABC):
     module_name = "bk_cmsi"
     IS_STANDARD_FORMAT = False
+
+    @property
+    def base_url(self):
+        """多租户模式切换到 CMSI APIGW"""
+        if self.use_muti_tenant_mode():
+            return get_endpoint("bk-cmsi", APIProvider.APIGW, stage="prod")
+        return BK_CMSI_API_URL
 
     def parse_response(self, response: requests.Response) -> any:
         data = super().parse_response(response)
@@ -54,34 +62,64 @@ class CMSIResource(BkApiResource, abc.ABC):
 class GetMsgType(CMSIResource):
     name = gettext_lazy("获取消息类型")
     method = "GET"
-    action = "/get_msg_type/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/channels/"
+        return "/get_msg_type/"
 
 
 class SendMail(CMSIResource):
     name = gettext_lazy("发送邮件")
     method = "POST"
-    action = "/send_mail/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/send_mail/"
+        return "/send_mail/"
 
 
 class SendRtx(CMSIResource):
     name = gettext_lazy("发送企业微信")
     method = "POST"
-    action = "/send_rtx/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/send_rtx/"
+        return "/send_rtx/"
 
 
 class SendVoice(CMSIResource):
     name = gettext_lazy("发送语音")
     method = "POST"
-    action = "/send_voice_msg/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/send_voice/"
+        return "/send_voice_msg/"
 
 
 class SendMsg(CMSIResource):
     name = gettext_lazy("发送消息")
     method = "POST"
-    action = "/send_msg/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/send_sms/"
+        return "/send_msg/"
 
 
 class SendWeixin(CMSIResource):
     name = gettext_lazy("发送微信")
     method = "POST"
-    action = "/send_weixin/"
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/v1/send_weixin/"
+        return "/send_weixin/"

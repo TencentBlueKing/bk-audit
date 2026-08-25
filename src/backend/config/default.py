@@ -346,6 +346,8 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    # AI 相关能力总开关：默认开启；多租户环境由 apps.feature.plugins.AiCapabilityPlugin 强制关闭
+    "ai_capability": os.getenv("BKAPP_FEATURE_AI_CAPABILITY", "available"),
 }
 
 # BkLog
@@ -455,8 +457,34 @@ BK_AUDIT_SETTINGS = {
 # 全局配置
 BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
 
-# 租户id
-BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
+# 多租户配置
+# 多租户模式总开关（取值 1/true/yes/on 视为开启）
+BKPAAS_MULTI_TENANT_MODE = str(os.getenv("BKPAAS_MULTI_TENANT_MODE", "False")).lower() in ("1", "true", "yes", "on")
+
+# 实例绑定租户：由部署控制面注入，只读、非空
+# 多租户开启时必须设置；关闭时可留空（兼容模式）
+AUDIT_INSTANCE_TENANT_ID = os.getenv("BKAPP_AUDIT_INSTANCE_TENANT_ID", "").strip().lower()
+
+# 外部调用 X-Bk-Tenant-Id Header 取值
+# 多租户模式 = AUDIT_INSTANCE_TENANT_ID（不可为空）
+# 非多租户模式 = BKPAAS_APP_TENANT_ID（兼容旧行为，默认 tencent）
+BK_TENANT_ID = AUDIT_INSTANCE_TENANT_ID or os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
+
+# 租户前缀（共享资源命名空间化：队列/索引名等）
+# 非多租户模式为空字符串
+AUDIT_TENANT_PREFIX = f"{AUDIT_INSTANCE_TENANT_ID}_" if AUDIT_INSTANCE_TENANT_ID else ""
+
+# 非多租户模式下的应用态默认用户名（get_admin_username 回退）
+COMMON_USERNAME = os.getenv("BKAPP_COMMON_USERNAME", "admin")
+
+# 多租户 IAM 网关地址（覆盖默认 BK_IAM_API_URL）
+BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL", "")
+
+# APP_ID
+APP_ID = os.getenv("APP_ID", "")
+
+# APP_TOKEN
+APP_TOKEN = os.getenv("APP_TOKEN", "")
 
 # CORS 允许的 header
 CORS_ALLOW_HEADERS = [

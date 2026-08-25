@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 import requests
-from bk_resource import BkApiResource
 from django.utils.translation import gettext_lazy
 
 from api.domains import BK_IAM_API_URL
+from core.bk_api_base import AuditBkApiResource
 
 
-class IAMBaseResource(BkApiResource, abc.ABC):
+class IAMBaseResource(AuditBkApiResource, abc.ABC):
     base_url = BK_IAM_API_URL
     module_name = "iam"
 
@@ -50,9 +50,14 @@ class GetSystemRoles(IAMBaseResource):
 
 class GetSystemInfo(IAMBaseResource):
     name = gettext_lazy("获取IAM系统信息")
-    action = "/api/v1/model/share/systems/{system_id}/query"
     method = "GET"
     url_keys = ["system_id"]
+
+    @property
+    def action(self):
+        if self.use_muti_tenant_mode():
+            return "/api/v1/model/systems/{system_id}/query"
+        return "/api/v1/model/share/systems/{system_id}/query"
 
     def parse_response(self, response: requests.Response):
         result_json = super().parse_response(response)

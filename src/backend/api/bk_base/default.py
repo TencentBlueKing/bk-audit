@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import traceback
 
-from bk_resource import BkApiResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
@@ -40,17 +39,32 @@ from api.bk_base.serializers import (
     UserAuthCheckReqSerializer,
     UserAuthCheckRespSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class BkBaseResource(BkApiResource, abc.ABC):
-    base_url = BK_BASE_API_URL
+class BkBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bkbase"
     platform_authorization = True
 
+    @property
+    def base_url(self):
+        if self.use_muti_tenant_mode():
+            return get_endpoint("bk-base", APIProvider.APIGW, stage="prod")
+        return BK_BASE_API_URL
+
     def build_request_data(self, validated_request_data: dict) -> dict:
         data = super().build_request_data(validated_request_data)
-        data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+        # 注意：这里的 bk_username 是请求体中的字段，与 Header 中的 bk_username 不同
+        # 多租户模式下应使用 bk_admin 的用户名
+        if self.use_muti_tenant_mode():
+            from core.tenant import get_admin_username
+
+            data["bk_username"] = get_admin_username(settings.BK_TENANT_ID)
+        else:
+            data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
         data["bk_app_code"] = settings.APP_CODE
         return data
 
@@ -58,7 +72,12 @@ class BkBaseResource(BkApiResource, abc.ABC):
 class DebugBkBaseResource(BkBaseResource, abc.ABC):
     """用于调试场景的 BKBase 资源，支持独立 base_url。"""
 
-    base_url = BK_BASE_DEBUG_API_URL
+    @property
+    def base_url(self):
+        """多租户模式切换到租户 APIGW"""
+        if self.use_muti_tenant_mode():
+            return get_endpoint("bk-base", APIProvider.APIGW, stage="prod")
+        return BK_BASE_DEBUG_API_URL
 
 
 class DatabusStoragesPost(BkBaseResource):
@@ -99,6 +118,8 @@ class DatabusCleansDelete(BkBaseResource):
     action = "/v3/databus/cleans/{processing_id}/"
     method = "DELETE"
     url_keys = ["processing_id"]
+    # 鉴权头 X-Bkapi-Authorization 需要带 bk_username
+    use_admin_username = True
 
 
 class DatabusTasksPost(BkBaseResource):
@@ -204,6 +225,8 @@ class AuthTickets(AiopsBaseResource):
     name = gettext_lazy("RT授权")
     action = "/v3/auth/tickets/"
     method = "POST"
+    # 鉴权头 X-Bkapi-Authorization 需要带 bk_username
+    use_admin_username = True
 
 
 class CreateFlow(AiopsBaseResource):

@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -33,9 +32,10 @@ from api.bk_plugins_ai_agent.constants import (
 )
 from api.constants import AIAgentCode
 from api.utils import get_agent_base_url
+from core.bk_api_base import AuditBkApiResource
 
 
-class AIAgentBase(BkApiResource, abc.ABC):
+class AIAgentBase(AuditBkApiResource, abc.ABC):
     """AI 智能体通用 API 基类
 
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
@@ -47,6 +47,7 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
+    use_admin_username = True
     app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
     secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
 
@@ -97,8 +98,12 @@ class ChatCompletion(AIAgentBase):
         base_url = get_agent_base_url(agent_code)
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
-    def build_header(self, validated_request_data):
-        headers = super().build_header(validated_request_data)
+    def set_headers(self, headers, validated_request_data):
+        """追加 AI Agent 专用 Header
+
+        设计理由：X-BKAIDEV-USER 是 AI Agent 网关认证必需 Header，
+        通过 set_headers 追加而不影响基类的多租户 Header 注入。
+        """
         user = validated_request_data.pop("user", None)
         if user:
             headers["X-BKAIDEV-USER"] = user

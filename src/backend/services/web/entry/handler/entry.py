@@ -62,8 +62,14 @@ class EntryHandler(object):
         if app_subdomains:
             static_url = "//%s/static/" % app_subdomains.split(";")[0]
 
-        # 特性开关
-        feature_toggle = {}
+        # 特性开关：首屏一次性下发各开关的 enabled 状态，前端据此控制入口显隐
+        feature_toggle = {
+            feature_id: (FeatureHandler(feature_id).check() and FeatureHandler(feature_id).feature.is_enable_view)
+            for feature_id in (
+                FeatureTypeChoices.WATERMARK.value,
+                FeatureTypeChoices.AI_CAPABILITY.value,
+            )
+        }
 
         # 平台管理员
         manage_actions = "list_storage,list_sensitive_object"

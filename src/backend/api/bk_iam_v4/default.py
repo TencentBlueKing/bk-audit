@@ -40,9 +40,10 @@ from api.bk_iam_v4.serializers import (
     RevokeAuthorizationRequestSerializer,
 )
 from api.domains import BK_IAM_V4_API_URL
+from core.bk_api_base import AuditBkApiResource
 
 
-class IAMV4BaseResource(BkApiResource, abc.ABC):
+class IAMV4BaseResource(AuditBkApiResource, abc.ABC):
     base_url = BK_IAM_V4_API_URL
     module_name = "bk_iam_v4"
 
