@@ -19,10 +19,9 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from unittest import mock
 
-from bk_resource import resource
-from django.core.exceptions import PermissionDenied
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
 from services.web.risk.handlers.ticket import ConfirmAsMisReport, ConfirmRisk, NewRisk
 from services.web.risk.models import Risk
@@ -34,7 +33,6 @@ from tests.test_risk.test_tickets.constants import (
     APPROVE_TICKET_STATUS,
     RISK_INFO,
     SOPS_FLOW_INFO,
-    SOPS_FLOW_STATUS,
     SOPS_TEMPLATE_INFO,
 )
 
@@ -78,6 +76,20 @@ class ConfirmAsMisReportRequestSerializerTest(TicketTest):
 
 class ConfirmRiskTest(TicketTest):
     """测试 ConfirmRisk Handler"""
+
+    def setUp(self):
+        super().setUp()
+        # 设置安全责任人配置，避免测试失败
+        from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE
+        from apps.meta.models import GlobalMetaConfig
+        from services.web.risk.constants import SECURITY_PERSON_KEY
+
+        GlobalMetaConfig.objects.get_or_create(
+            config_level="global",
+            instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+            config_key=SECURITY_PERSON_KEY,
+            defaults={"config_value": ["test_security_person"]},
+        )
 
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
@@ -158,7 +170,7 @@ class ConfirmRiskTest(TicketTest):
 
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
-        mock.Mock(return_value=SOPS_FLOW_STATUS),
+        mock.Mock(return_value={"state": SOPSTaskStatus.FINISHED.value}),
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
@@ -180,13 +192,22 @@ class ConfirmRiskTest(TicketTest):
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator",
         mock.Mock(return_value=None),
     )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskHandler.send_risk_notice",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskHandler.trigger_render_task",
+        mock.Mock(return_value=None),
+    )
     def test_confirm_with_auto_process(self):
         """
         测试确认风险（有处理套餐，自动处理）
         关键验证：状态流转、处理人初始化
         """
         operator = uuid.uuid1().hex
-        with RuleContext(pa_info={"need_approve": False}) as (pa, rule):
+        # 创建处理套餐和规则
+        with RuleContext(pa_info={"need_approve": False}, rule_info={"auto_close_risk": True}) as (pa, rule):
             with RiskContext(
                 risk_info={
                     "status": RiskStatus.PENDING_CONFIRM,
@@ -341,6 +362,20 @@ class ConfirmAsMisReportTest(TicketTest):
 class ConfirmRiskResourceTest(TicketTest):
     """测试 ConfirmRisk Resource"""
 
+    def setUp(self):
+        super().setUp()
+        # 设置安全责任人配置，避免测试失败
+        from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE
+        from apps.meta.models import GlobalMetaConfig
+        from services.web.risk.constants import SECURITY_PERSON_KEY
+
+        GlobalMetaConfig.objects.get_or_create(
+            config_level="global",
+            instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+            config_key=SECURITY_PERSON_KEY,
+            defaults={"config_value": ["test_security_person"]},
+        )
+
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
         mock.Mock(return_value=None),
@@ -358,6 +393,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 成功调用
         关键验证：资源接口调用
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -366,7 +403,8 @@ class ConfirmRiskResourceTest(TicketTest):
             }
         ) as risk:
             # 调用资源接口
-            result = resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+            resource_instance = ConfirmRiskResource()
+            result = resource_instance.perform_request({"risk_id": risk.risk_id})
             self.assertTrue(result["success"])
 
     @mock.patch(
@@ -378,6 +416,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 状态错误
         关键验证：ValidationError 异常
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.NEW,
@@ -385,8 +425,9 @@ class ConfirmRiskResourceTest(TicketTest):
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
+            resource_instance = ConfirmRiskResource()
             with self.assertRaises(ValidationError):
-                resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+                resource_instance.perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -397,6 +438,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 权限拒绝
         关键验证：PermissionDenied 异常
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -404,12 +447,27 @@ class ConfirmRiskResourceTest(TicketTest):
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
+            resource_instance = ConfirmRiskResource()
             with self.assertRaises(PermissionDenied):
-                resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+                resource_instance.perform_request({"risk_id": risk.risk_id})
 
 
 class ConfirmAsMisReportResourceTest(TicketTest):
     """测试 ConfirmAsMisReport Resource"""
+
+    def setUp(self):
+        super().setUp()
+        # 设置安全责任人配置，避免测试失败
+        from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE
+        from apps.meta.models import GlobalMetaConfig
+        from services.web.risk.constants import SECURITY_PERSON_KEY
+
+        GlobalMetaConfig.objects.get_or_create(
+            config_level="global",
+            instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+            config_key=SECURITY_PERSON_KEY,
+            defaults={"config_value": ["test_security_person"]},
+        )
 
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
@@ -428,6 +486,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 成功调用
         关键验证：资源接口调用
         """
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -436,9 +496,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
             }
         ) as risk:
             # 调用资源接口
-            result = resource.risk.confirm_as_misreport.perform_request(
-                {"risk_id": risk.risk_id, "description": "测试误报"}
-            )
+            resource_instance = ConfirmAsMisReportResource()
+            result = resource_instance.perform_request({"risk_id": risk.risk_id, "description": "测试误报"})
             self.assertTrue(result["success"])
 
     @mock.patch(
@@ -450,6 +509,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 状态错误
         关键验证：ValidationError 异常
         """
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.NEW,
@@ -457,8 +518,9 @@ class ConfirmAsMisReportResourceTest(TicketTest):
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
+            resource_instance = ConfirmAsMisReportResource()
             with self.assertRaises(ValidationError):
-                resource.risk.confirm_as_misreport.perform_request({"risk_id": risk.risk_id})
+                resource_instance.perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -469,6 +531,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 权限拒绝
         关键验证：PermissionDenied 异常
         """
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -476,12 +540,27 @@ class ConfirmAsMisReportResourceTest(TicketTest):
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
+            resource_instance = ConfirmAsMisReportResource()
             with self.assertRaises(PermissionDenied):
-                resource.risk.confirm_as_misreport.perform_request({"risk_id": risk.risk_id})
+                resource_instance.perform_request({"risk_id": risk.risk_id})
 
 
 class ListPendingConfirmRiskTest(TicketTest):
     """测试 ListPendingConfirmRisk Resource"""
+
+    def setUp(self):
+        super().setUp()
+        # 设置安全责任人配置，避免测试失败
+        from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE
+        from apps.meta.models import GlobalMetaConfig
+        from services.web.risk.constants import SECURITY_PERSON_KEY
+
+        GlobalMetaConfig.objects.get_or_create(
+            config_level="global",
+            instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+            config_key=SECURITY_PERSON_KEY,
+            defaults={"config_value": ["test_security_person"]},
+        )
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -492,6 +571,8 @@ class ListPendingConfirmRiskTest(TicketTest):
         测试待确认风险列表
         关键验证：用户过滤
         """
+        from services.web.risk.resources.risk import ListPendingConfirmRisk
+
         # 创建待确认风险（用户 1 是确认人）
         with RiskContext(
             risk_info={
@@ -509,7 +590,8 @@ class ListPendingConfirmRiskTest(TicketTest):
                 }
             ) as risk2:
                 # 查询用户 1 的待确认风险
-                risks = resource.risk.list_pending_confirm_risk.perform_request({})
+                resource_instance = ListPendingConfirmRisk()
+                risks = resource_instance.perform_request({})
                 risk_ids = [r.risk_id for r in risks]
                 # 应只包含用户 1 的风险
                 self.assertIn(risk1.risk_id, risk_ids)
@@ -547,30 +629,6 @@ class RiskCreateWithDispatchModeTest(TicketTest):
                 risk.delete()
         finally:
             scene.delete()
-
-
-# 移除标题渲染测试，因为 ConfirmRisk 没有 render_title 方法
-# class ConfirmRiskTitleRenderTest(TicketTest):
-#     """测试 ConfirmRisk 标题渲染"""
-#
-#     def test_render_title_with_template(self):
-#         """测试使用固化标题模板"""
-#         with RiskContext(risk_info={"status": RiskStatus.PENDING_CONFIRM}) as risk:
-#             handler = ConfirmRisk(risk_id=risk.risk_id, operator="test")
-#             # 假设有 title_template
-#             title = handler.render_title(title_template="确认风险：{{risk_id}}")
-#             self.assertIn(risk.risk_id, title)
-#
-#     def test_render_title_without_template(self):
-#         """测试不传模板时查询 strategy"""
-#         with RiskContext(
-#             risk_info={"status": RiskStatus.PENDING_CONFIRM, "strategy_id": 1}
-#         ) as risk:
-#             handler = ConfirmRisk(risk_id=risk.risk_id, operator="test")
-#             # 无模板时返回 None 或查询 strategy
-#             title = handler.render_title()
-#             # 根据实际实现验证
-#             self.assertIsNotNone(title) or self.assertIsNone(title)
 
 
 class RiskStatusPreCheckTest(TicketTest):
