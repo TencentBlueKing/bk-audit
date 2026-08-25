@@ -50,6 +50,16 @@ export interface FlatToolParamsOptions {
   inputRawNames?: string[];
 }
 
+export const shouldApplyToolUrlParams = (
+  toolUid: string,
+  routeUid: string,
+  urlParamsOwnerUid?: string | null,
+): boolean => {
+  if (!toolUid || !routeUid || toolUid !== routeUid) return false;
+  if (!urlParamsOwnerUid) return true;
+  return urlParamsOwnerUid === toolUid;
+};
+
 export const getRouteQueryValue = (value: unknown): string => {
   if (Array.isArray(value)) {
     // 对于时间范围/多值类参数，URL 可能以数组形式传入（如 filters[time_range]）。
