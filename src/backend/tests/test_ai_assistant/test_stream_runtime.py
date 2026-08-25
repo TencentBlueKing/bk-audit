@@ -186,6 +186,7 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         self.assertIsNone(event.event)
         self.assertIsNotNone(event.stream_id)
         self.assertEqual(runtime.pending_count, 1)
+        self.assertEqual(runtime._pending_bytes, len(serialize_stream_event(event)))
         self.assertEqual(self.redis_events(runtime), [event])
         # 未达到自动 checkpoint 阈值前不落库，避免每条事件一次 UPDATE。
         self.assertEqual(self.archived_events(), [])
@@ -335,6 +336,62 @@ class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
         self.assertIsNotNone(event.stream_id)
         self.assertEqual(runtime.pending_count, 1)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
+
+    def test_database_outage_cannot_grow_pending_buffer_past_archive_limit(self):
+        runtime = self.start_runtime()
+
+        with (
+            override_settings(AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES=256),
+            mock.patch.object(runtime, "CHECKPOINT_EVENT_COUNT", 1),
+            mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=DatabaseError("db down")),
+        ):
+            for index in range(20):
+                runtime.send({"index": index, "content": "x" * 32})
+
+        self.assertLess(runtime.pending_count, 20)
+        self.assertEqual(runtime.archive_status, StreamArchiveStatus.TRUNCATED)
+        self.assertTrue(runtime._archive_stopped)
+
+    def test_pending_buffer_retries_checkpoint_before_truncating_after_database_recovers(self):
+        runtime = self.start_runtime()
+        first_data = {"content": "A"}
+        second_data = {"content": "B"}
+        checkpoint = runtime._archive_store.checkpoint
+        attempts = 0
+
+        def fail_once(*args, **kwargs):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise DatabaseError("db down")
+            return checkpoint(*args, **kwargs)
+
+        with (
+            mock.patch.object(runtime, "CHECKPOINT_EVENT_COUNT", 1),
+            mock.patch.object(runtime._archive_store, "checkpoint", side_effect=fail_once),
+        ):
+            runtime.send(first_data)
+
+        self.assertEqual(runtime.pending_count, 1)
+        self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
+        # MySQL JSON 数组还需要两个方括号；该上限刚好容纳第一条完整事件，
+        # 但加入第二条前必须先恢复性 checkpoint。
+        archive_limit = runtime._pending_bytes + 2
+
+        with (
+            override_settings(AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES=archive_limit),
+            mock.patch.object(runtime._archive_store, "checkpoint", side_effect=fail_once),
+        ):
+            runtime.send(second_data)
+
+        self.assertEqual(attempts, 2)
+        self.assertFalse(runtime._archive_stopped)
+        self.assertEqual(runtime.pending_count, 1)
+        self.assertEqual([item["data"] for item in self.archived_events()], [first_data])
+
+        runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
+        archived_business = [item["data"] for item in self.archived_events() if item["event"] is None]
+        self.assertEqual(archived_business, [first_data, second_data])
 
     def test_value_error_from_automatic_checkpoint_propagates(self):
         runtime = self.start_runtime()

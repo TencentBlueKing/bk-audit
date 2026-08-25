@@ -25,7 +25,7 @@ from services.web.ai_assistant.handlers import (
     message_handler_registry,
 )
 from services.web.ai_assistant.models import Conversation, Message
-from services.web.ai_assistant.services import MessageService
+from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.message_execution import finish_message_failure
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
@@ -634,3 +634,42 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
         self.assertEqual(self.message.status, ExecutionStatus.PROCESSING)
         self.assertEqual(self.message.task_id, results[0].task_id)
         self.assertNotEqual(self.message.task_id, "task-old")
+
+    def test_retry_rechecks_conversation_after_delete(self):
+        retry_paused = threading.Event()
+        release_retry = threading.Event()
+        original_lock = MessageService._lock_active_conversation
+
+        def pause_before_lock(service, *, conversation):
+            retry_paused.set()
+            release_retry.wait(timeout=5)
+            return original_lock(service, conversation=conversation)
+
+        errors = []
+
+        def retry_message():
+            close_old_connections()
+            try:
+                MessageService(user=self.user).retry(message_uid=str(self.message.uid))
+            except Exception as error:  # noqa: BLE001 - 线程中断言领域异常
+                errors.append(error)
+            finally:
+                close_old_connections()
+
+        with mock.patch.object(MessageService, "_lock_active_conversation", pause_before_lock), mock.patch.object(
+            MessageService, "_dispatch"
+        ) as dispatch:
+            thread = threading.Thread(target=retry_message)
+            thread.start()
+            self.assertTrue(retry_paused.wait(timeout=5))
+            ConversationService(user=self.user).delete_conversation(conversation_uid=str(self.conversation.uid))
+            release_retry.set()
+            thread.join(timeout=10)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], InvalidParentMessage)
+        dispatch.assert_not_called()
+        self.message.refresh_from_db()
+        self.assertEqual(self.message.status, ExecutionStatus.FAILED)
+        self.assertEqual(self.message.task_id, "task-old")

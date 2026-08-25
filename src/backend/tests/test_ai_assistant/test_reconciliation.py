@@ -1,5 +1,6 @@
 from datetime import timedelta
 from unittest import mock
+from uuid import uuid4
 
 from django.test.utils import override_settings
 from django.utils import timezone
@@ -10,6 +11,8 @@ from services.web.ai_assistant.constants import (
     ExecutionStatus,
     MessageErrorCode,
     MessageType,
+    PlatformStreamEvent,
+    StreamArchiveStatus,
 )
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.services.reconciliation import (
@@ -63,6 +66,16 @@ class ReconciliationTest(TestCase):
             input_data={},
             context_data={},
             is_stream=is_stream,
+            stream_config=(
+                {
+                    "task_id": task_id,
+                    "execution_id": str(uuid4()),
+                    "redis_key": f"stream:{task_id}",
+                    "archive_status": StreamArchiveStatus.COMPLETE,
+                }
+                if is_stream
+                else {}
+            ),
             stream_archive=[{"data": {"content": "snapshot"}}] if is_stream else [],
             created_by=self.user,
             updated_by=self.user,
@@ -84,8 +97,10 @@ class ReconciliationTest(TestCase):
     @mock.patch("services.web.ai_assistant.services.reconciliation.report_execution_finished_batch")
     @mock.patch("services.web.ai_assistant.services.reconciliation.report_processing_metrics")
     @mock.patch("services.web.ai_assistant.services.reconciliation.report_reconcile_metric")
+    @mock.patch("services.web.ai_assistant.services.reconciliation.RedisLiveStore")
     def test_reconcile_buckets_and_auto_fails_only_expired(
         self,
+        redis_store,
         report_reconcile_metric,
         report_processing_metrics,
         report_execution_finished_batch,
@@ -106,7 +121,10 @@ class ReconciliationTest(TestCase):
         self.assertEqual(warning.status, ExecutionStatus.PROCESSING)
         self.assertEqual(expired.error_code, MessageErrorCode.TASK_EXECUTION_TIMEOUT)
         self.assertEqual(stream_attachment.error_code, AttachmentErrorCode.TASK_EXECUTION_TIMEOUT)
-        self.assertEqual(stream_attachment.stream_archive, [{"data": {"content": "snapshot"}}])
+        self.assertEqual(stream_attachment.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
+        self.assertEqual(stream_attachment.stream_archive[-1]["data"], {"status": ExecutionStatus.FAILED})
+        self.assertEqual(stream_attachment.stream_config["archive_status"], StreamArchiveStatus.DEGRADED)
+        redis_store.return_value.append.assert_called_once()
         self.assertEqual(summary.failed_count, 2)
         self.assertEqual(summary.expired_count, 2)
         records = report_processing_metrics.call_args.args[0]

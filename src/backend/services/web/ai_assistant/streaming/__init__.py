@@ -54,6 +54,7 @@ from services.web.ai_assistant.streaming.types import (
     StreamExecutionBinding,
     StreamReadResult,
     StreamRotation,
+    StreamTimeoutResult,
 )
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     "StreamExecutionBinding",
     "StreamReadResult",
     "StreamRotation",
+    "StreamTimeoutResult",
     "UIStreamRuntime",
     "build_stream_key",
     "encode_sse_event",

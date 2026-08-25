@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.conf import settings
@@ -11,6 +12,7 @@ from services.web.ai_assistant.constants import (
     ExecutionMode,
     ExecutionObjectType,
     ExecutionStatus,
+    PlatformStreamEvent,
     StreamArchiveStatus,
 )
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
@@ -31,6 +33,7 @@ from services.web.ai_assistant.streaming.types import (
     StreamCheckpointResult,
     StreamExecutionBinding,
     StreamRotation,
+    StreamTimeoutResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -420,6 +423,80 @@ class AttachmentArchiveStore:
             },
         )
         return persisted_status
+
+    def timeout_processing(
+        self,
+        *,
+        attachment_id: int,
+        task_id: str,
+        cutoff: datetime,
+        error_code: str,
+        error_message: str,
+        now: datetime,
+    ) -> StreamTimeoutResult:
+        """巡检原子收敛失活流，并为已启动 execution 持久化终止事件。
+
+        Worker 异常退出时进程内尾部事件可能尚未 checkpoint，因此当前归档只能标记
+        DEGRADED。若任务尚未建立有效 stream_config，则没有可关闭的实时流，仍按普通
+        Attachment 超时 CAS 收敛状态。
+        """
+
+        with transaction.atomic():
+            attachment = self._lock_attachment(attachment_id=attachment_id)
+            if (
+                attachment is None
+                or attachment.status != ExecutionStatus.PROCESSING
+                or attachment.task_id != task_id
+                or attachment.last_activity_at is None
+                or attachment.last_activity_at > cutoff
+            ):
+                return StreamTimeoutResult(updated=False)
+
+            config = self.safe_parse_config(attachment)
+            terminal_event = None
+            redis_key = None
+            extra_updates: dict[str, Any] = {
+                "content_updated_at": now,
+                "updated_at": now,
+            }
+            if config is not None and config.task_id == task_id:
+                binding = StreamExecutionBinding(
+                    attachment_id=attachment.id,
+                    attachment_uid=attachment.uid,
+                    business_type=attachment.attachment_type,
+                    config=config,
+                )
+                terminal_event = UIStreamEvent(
+                    event=PlatformStreamEvent.STREAM_END,
+                    data={"status": ExecutionStatus.FAILED},
+                )
+                self._apply_events(
+                    attachment=attachment,
+                    binding=binding,
+                    events=[terminal_event],
+                    incoming_status=StreamArchiveStatus.DEGRADED,
+                    enforce_capacity=False,
+                )
+                extra_updates.update(
+                    stream_archive=attachment.stream_archive,
+                    stream_config=attachment.stream_config,
+                )
+                redis_key = config.redis_key
+
+            updated = Attachment.timeout_processing(
+                instance_id=attachment.id,
+                task_id=task_id,
+                cutoff=cutoff,
+                error_code=error_code,
+                error_message=error_message,
+                now=now,
+                extra_updates=extra_updates,
+            )
+        return StreamTimeoutResult(
+            updated=updated,
+            redis_key=redis_key if updated else None,
+            terminal_event=terminal_event if updated else None,
+        )
 
     def snapshot(self, *, attachment: Attachment) -> AttachmentStreamSnapshot:
         """构建当前附件的流式归档快照（供 API 读取端使用）。

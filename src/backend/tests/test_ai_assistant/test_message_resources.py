@@ -50,6 +50,7 @@ from services.web.ai_assistant.serializers.message import (
     MessageResponseSerializer,
     MessageWindowResponseSerializer,
     _message_schema_mapping,
+    _message_schema_models,
 )
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import (
@@ -250,13 +251,13 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
         message_handler_registry.register(StartupBetaMessageHandler())
         input_proxy = PolymorphicProxySerializer(
             component_name="AIMessageInputDataStartupGate",
-            serializers=lambda: _message_schema_mapping("input_model"),
-            resource_type_field_name="message_type",
+            serializers=lambda: _message_schema_models("input_model"),
+            resource_type_field_name=None,
         )
         output_proxy = PolymorphicProxySerializer(
             component_name="AIMessageOutputDataStartupGate",
-            serializers=lambda: _message_schema_mapping("output_model"),
-            resource_type_field_name="message_type",
+            serializers=lambda: _message_schema_models("output_model"),
+            resource_type_field_name=None,
         )
 
         input_schema = _map_polymorphic_proxy_oneof(input_proxy)
@@ -268,6 +269,8 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
         self.assertIn("#/components/schemas/StartupBetaMessageInput", input_refs)
         self.assertIn("#/components/schemas/StartupAlphaMessageOutput", output_refs)
         self.assertIn("#/components/schemas/StartupBetaMessageOutput", output_refs)
+        self.assertNotIn("discriminator", input_schema)
+        self.assertNotIn("discriminator", output_schema)
 
         frozen_input = input_proxy.serializers
         frozen_output = output_proxy.serializers
@@ -275,10 +278,40 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertIs(input_proxy.serializers, frozen_input)
         self.assertIs(output_proxy.serializers, frozen_output)
-        self.assertIsNot(frozen_input[MessageType.LOG_SEARCH], StartupGammaMessageInput)
-        self.assertIsNot(frozen_output[MessageType.LOG_SEARCH], StartupGammaMessageOutput)
+        self.assertNotIn(StartupGammaMessageInput, frozen_input)
+        self.assertNotIn(StartupGammaMessageOutput, frozen_output)
         refreshed_input_refs = {item["$ref"] for item in _map_polymorphic_proxy_oneof(input_proxy)["oneOf"]}
         self.assertNotIn("#/components/schemas/StartupGammaMessageInput", refreshed_input_refs)
+
+    def test_openapi_deduplicates_unregistered_message_fallback_schema(self):
+        proxy = PolymorphicProxySerializer(
+            component_name="AIMessageInputDataFallbackGate",
+            serializers=lambda: _message_schema_models("input_model"),
+            resource_type_field_name=None,
+        )
+
+        schema = _map_polymorphic_proxy_oneof(proxy)
+
+        self.assertEqual(
+            [item["$ref"] for item in schema["oneOf"]],
+            ["#/components/schemas/MessageSchema"],
+        )
+
+    def test_openapi_deduplicates_schema_shared_by_multiple_handlers(self):
+        message_handler_registry.register(EchoSyncHandler())
+        message_handler_registry.register(EchoAsyncHandler())
+        proxy = PolymorphicProxySerializer(
+            component_name="AIMessageInputDataSharedModelGate",
+            serializers=lambda: _message_schema_models("input_model"),
+            resource_type_field_name=None,
+        )
+
+        schema = _map_polymorphic_proxy_oneof(proxy)
+
+        self.assertEqual(
+            [item["$ref"] for item in schema["oneOf"]],
+            ["#/components/schemas/EchoInput", "#/components/schemas/MessageSchema"],
+        )
 
 
 @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="alice")

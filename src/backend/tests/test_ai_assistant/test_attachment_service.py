@@ -894,7 +894,7 @@ class AttachmentServiceTest(TestCase):
             task_id=retried.task_id,
         )
 
-    def test_retry_does_not_use_for_update(self):
+    def test_retry_locks_only_active_conversation(self):
         self.register_async_handler()
         attachment = self.create_attachment(
             attachment_type=AttachmentType.AI_ANALYSIS,
@@ -909,7 +909,9 @@ class AttachmentServiceTest(TestCase):
             self.service.retry(attachment_uid=str(attachment.uid))
 
         lock_queries = [query["sql"] for query in captured.captured_queries if "FOR UPDATE" in query["sql"].upper()]
-        self.assertEqual(lock_queries, [])
+        self.assertEqual(len(lock_queries), 1)
+        self.assertIn("ai_assistant_conversation", lock_queries[0])
+        self.assertNotIn("ai_assistant_attachment", lock_queries[0])
 
     def test_old_task_id_cannot_overwrite_new_retry_task(self):
         self.register_async_handler()
@@ -1067,6 +1069,62 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
         self.assertEqual(attachment.task_id, results[0].task_id)
         self.assertNotEqual(attachment.task_id, "task-old")
+
+    def test_retry_rechecks_conversation_after_delete(self):
+        attachment = Attachment.objects.create(
+            source_message=self.source_message,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="原始标题",
+            status=ExecutionStatus.FAILED,
+            task_id="task-old",
+            input_data={"text": "hello"},
+            context_data={"prefix": "ctx"},
+            output_data={"content": "failed"},
+            error_code="OLD_CODE",
+            error_message="old error",
+            content_updated_at=timezone.now(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        retry_paused = threading.Event()
+        release_retry = threading.Event()
+        original_lock = AttachmentService._lock_active_source
+
+        def pause_before_lock(service, *, source_message):
+            retry_paused.set()
+            release_retry.wait(timeout=5)
+            return original_lock(service, source_message=source_message)
+
+        errors = []
+
+        def retry_attachment():
+            close_old_connections()
+            try:
+                AttachmentService(user=self.user).retry(attachment_uid=str(attachment.uid))
+            except Exception as error:  # noqa: BLE001 - 线程中断言领域异常
+                errors.append(error)
+            finally:
+                close_old_connections()
+
+        with mock.patch.object(AttachmentService, "_lock_active_source", pause_before_lock), mock.patch.object(
+            AttachmentService, "_dispatch"
+        ) as dispatch:
+            thread = threading.Thread(target=retry_attachment)
+            thread.start()
+            self.assertTrue(retry_paused.wait(timeout=5))
+            ai_assistant_services.ConversationService(user=self.user).delete_conversation(
+                conversation_uid=str(self.conversation.uid)
+            )
+            release_retry.set()
+            thread.join(timeout=10)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], InvalidAttachmentSource)
+        dispatch.assert_not_called()
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+        self.assertEqual(attachment.task_id, "task-old")
 
 
 class StreamAttachmentRetryTest(AttachmentHandlerRegistryMixin, TestCase):

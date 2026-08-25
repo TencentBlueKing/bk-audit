@@ -57,3 +57,12 @@ class StreamCheckpointResult:
 
     archive_status: StreamArchiveStatus
     capacity_exhausted: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StreamTimeoutResult:
+    """巡检收敛流式附件的结果；实时通知只在当前 execution 可定位时返回。"""
+
+    updated: bool
+    redis_key: str | None = None
+    terminal_event: UIStreamEvent | None = None

@@ -2,6 +2,8 @@ import inspect
 import re
 
 from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.plumbing import is_list_serializer
+from drf_spectacular.settings import spectacular_settings
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter
 from rest_framework import serializers as drf_serializers
@@ -54,16 +56,46 @@ class BKResourceAutoSchema(AutoSchema):
         return super().get_request_serializer()
 
     def _is_list_view(self, serializer=None):
+        """按真实响应声明判断是否生成数组 schema。"""
+
         route = self._get_matched_route()
         if route:
-            return route.enable_paginate
+            return route.enable_paginate or is_list_serializer(serializer)
         return super()._is_list_view(serializer)
+
+    def get_operation_id(self):
+        """按 ResourceRoute 的集合/详情语义生成稳定的 operationId。"""
+
+        operation_id = super().get_operation_id()
+        route = self._get_matched_route()
+        if not route or self.method != "GET":
+            return operation_id
+
+        # 上游已负责路径分词、格式后缀与配置校验，平台只修正
+        # bk_resource 集合路由可能返回对象包装时的 list/retrieve 动作语。
+        action = "list" if route.enable_paginate or not route.pk_field else "retrieve"
+        tokens = operation_id.split("_")
+        action_index = 0 if spectacular_settings.OPERATION_ID_METHOD_POSITION == "PRE" else -1
+        tokens[action_index] = action
+        return "_".join(tokens)
+
+    def _get_paginator(self):
+        """仅为当前 ResourceRoute 显式启用的接口生成分页响应包装。"""
+
+        route = self._get_matched_route()
+        if route and not route.enable_paginate:
+            return None
+        return super()._get_paginator()
 
     def get_response_serializers(self):
         route = self._get_matched_route()
         if route:
             serializer = route.resource_class.ResponseSerializer or route.resource_class.serializer_class
             if serializer:
+                if route.resource_class.many_response_data and not route.enable_paginate:
+                    # 自定义 action 名称无法稳定触发 drf-spectacular 的 list 推断，
+                    # 直接按 bk_resource 运行时声明构造数组响应。
+                    serializer = serializer(many=True)
                 # bk_resource 的 ResourceRoute 无论动作名称为何，运行时成功响应均为 200。
                 # drf-spectacular 会把默认 POST/create 推断为 201，这里显式对齐真实协议。
                 if route.method == "POST":

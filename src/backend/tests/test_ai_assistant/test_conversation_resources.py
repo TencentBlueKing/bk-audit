@@ -1,10 +1,12 @@
 import json
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import yaml
 from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve
+from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from services.web.ai_assistant.constants import (
@@ -189,6 +191,45 @@ class ConversationResourceTest(TestCase):
 
         self.assertFalse(Conversation.objects.filter(uid=conversation["uid"]).exists())
         self.assertFalse(ConversationSidebarNode.objects.filter(created_by="alice").exists())
+
+    @override_settings(ROOT_URLCONF="urls")
+    def test_openapi_separates_operation_semantics_from_response_shape(self, _username):
+        request = APIRequestFactory().get("/api/schema/")
+        request.user = Mock(is_staff=True, is_authenticated=True)
+
+        response = SpectacularAPIView.as_view()(request)
+        response.render()
+        schema = yaml.safe_load(response.content)
+        paths = schema["paths"]
+
+        pinned = paths["/api/v1/ai_assistant/conversation_sidebar/pinned/"]["get"]
+        pinned_schema = pinned["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(pinned["operationId"], "api_v1_ai_assistant_conversation_sidebar_pinned_list")
+        self.assertEqual(
+            pinned_schema,
+            {"type": "array", "items": {"$ref": "#/components/schemas/SidebarNodeResponse"}},
+        )
+
+        message_list = paths["/api/v1/ai_assistant/messages/"]["get"]
+        message_list_schema = message_list["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(message_list["operationId"], "api_v1_ai_assistant_messages_list")
+        self.assertEqual(message_list_schema, {"$ref": "#/components/schemas/MessageWindowResponse"})
+
+        message_detail = paths["/api/v1/ai_assistant/messages/{message_uid}/"]["get"]
+        message_detail_schema = message_detail["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(message_detail["operationId"], "api_v1_ai_assistant_messages_retrieve")
+        self.assertEqual(message_detail_schema, {"$ref": "#/components/schemas/MessageResponse"})
+
+        # 无响应序列化器的 GET 也不能因为 collection 路由语义被误包装成数组。
+        ping_schema = paths["/ping/"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(ping_schema.get("type"), "object")
+
+        for list_path in (
+            "/api/v1/databus/namespaces/{namespace}/collector_plugins/",
+            "/api/v1/meta/namespaces/{namespace}/general_config/",
+        ):
+            list_schema = paths[list_path]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+            self.assertEqual(list_schema.get("type"), "array")
 
 
 @override_settings(ROOT_URLCONF="services.web.urls")

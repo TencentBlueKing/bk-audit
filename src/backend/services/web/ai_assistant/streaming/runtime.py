@@ -159,13 +159,16 @@ class UIStreamRuntime:
             self._require_open()
             ui_event = UIStreamEvent(data=data)
             # 先编码：非法 data 属于接入错误，必须在任何降级判断前暴露。
-            payload_size = len(serialize_stream_event(ui_event, include_stream_id=False))
-            if not self._accept_business_event(payload_size=payload_size):
+            live_payload_size = len(serialize_stream_event(ui_event, include_stream_id=False))
+            if not self._accept_business_event(payload_size=live_payload_size):
                 return None
             self._business_event_count += 1
-            self._business_event_bytes += payload_size
-            ui_event = self._write_live(ui_event, payload_size=payload_size)
-            self._buffer(ui_event, payload_size=payload_size)
+            self._business_event_bytes += live_payload_size
+            ui_event = self._write_live(ui_event, payload_size=live_payload_size)
+            # MySQL 保存的是带 stream_id（实时写入失败时为 null）的完整事件，
+            # pending 内存边界必须使用同一编码口径，不能复用 Redis entry 大小。
+            archive_payload_size = len(serialize_stream_event(ui_event))
+            self._buffer(ui_event, payload_size=archive_payload_size)
             return ui_event
 
     def finish_retry(self) -> None:
@@ -324,6 +327,26 @@ class UIStreamRuntime:
         """事件进入归档缓冲，达到批阈值时仅对数据库故障降级。"""
 
         if self._archive_stopped:
+            self._touch_activity_if_due()
+            return
+        # MySQL 持续故障时 checkpoint 无法清空 pending。进程内缓冲仍必须受与
+        # 持久归档相同的字节上限约束，避免单任务把 Worker 内存无限吃满。
+        if self._pending_bytes + payload_size > settings.AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES:
+            # 缓冲触顶可能只是数据库短暂故障。先用现有 pending 做最后一次恢复性
+            # checkpoint；成功后继续接收当前事件，失败或持久归档已耗尽才截断。
+            try:
+                self._checkpoint()
+            except DatabaseError:
+                self._degrade(
+                    "AI 助手附件流式缓冲触顶前归档失败",
+                    status=StreamArchiveStatus.DEGRADED,
+                )
+        if self._archive_stopped or self._pending_bytes + payload_size > settings.AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES:
+            self._archive_stopped = True
+            self._degrade(
+                "AI 助手附件流式待归档缓冲超过上限",
+                status=StreamArchiveStatus.TRUNCATED,
+            )
             self._touch_activity_if_due()
             return
         self._pending.append(event)

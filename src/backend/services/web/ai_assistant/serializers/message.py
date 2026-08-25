@@ -27,11 +27,19 @@ def _message_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchem
     }
 
 
+def _message_schema_models(model_attribute: str) -> list[type[MessageSchema]]:
+    """按注册顺序返回唯一模型，避免多个消息类型生成重复 oneOf 分支。"""
+
+    return list(dict.fromkeys(_message_schema_mapping(model_attribute).values()))
+
+
 @extend_schema_field(
     PolymorphicProxySerializer(
         component_name="AIMessageInputData",
-        serializers=lambda: _message_schema_mapping("input_model"),
-        resource_type_field_name="message_type",
+        serializers=lambda: _message_schema_models("input_model"),
+        # message_type 位于外层消息对象，不在 input_data 内；这里只生成 oneOf，
+        # 避免 OpenAPI 客户端错误地从嵌套 JSON 中读取 discriminator。
+        resource_type_field_name=None,
     )
 )
 class MessageInputDataField(serializers.JSONField):
@@ -41,8 +49,8 @@ class MessageInputDataField(serializers.JSONField):
 @extend_schema_field(
     PolymorphicProxySerializer(
         component_name="AIMessageOutputData",
-        serializers=lambda: _message_schema_mapping("output_model"),
-        resource_type_field_name="message_type",
+        serializers=lambda: _message_schema_models("output_model"),
+        resource_type_field_name=None,
     )
 )
 class MessageOutputDataField(serializers.JSONField):
