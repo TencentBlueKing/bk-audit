@@ -119,7 +119,7 @@
                     <component
                       :is="strategyWayComMap[stepFormData.strategy_type]"
                       :ref="(el: any) => setComRef(el, index)"
-                      :edit-data="editData"
+                      :edit-data="getRuleEditData(index)"
                       :parent-configs="parentConfigs"
                       :parent-form-data="parentFormData"
                       step-mode="rules-only"
@@ -321,6 +321,9 @@
     risk_level: string;
     risk_hazard: string;
     risk_guidance: string;
+    processor?: Array<string | number>;
+    follower?: Array<string | number>;
+    conditions?: Record<string, any>;
     formData: Record<string, any>;
   }
 
@@ -385,6 +388,8 @@
       risk_level: 'HIGH',
       risk_hazard: '',
       risk_guidance: '',
+      processor: [],
+      follower: [],
       formData: {},
       ...overrides,
     };
@@ -455,6 +460,8 @@
       risk_level: source.risk_level,
       risk_hazard: source.risk_hazard,
       risk_guidance: source.risk_guidance,
+      processor: [...(source.processor ?? [])],
+      follower: [...(source.follower ?? [])],
     });
     ruleItems.value.splice(index + 1, 0, cloned);
   };
@@ -591,31 +598,61 @@
     const rules = ruleItems.value.map((rule, index) => {
       const com = comRefs.value[index];
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
+      const mergedConfigs = mergeRuleConfigs(fields.configs);
       return {
         name: rule.name,
+        rule_name: rule.name,
         risk_title: rule.risk_title,
         risk_level: rule.risk_level,
         risk_hazard: rule.risk_hazard,
         risk_guidance: rule.risk_guidance,
-        configs: mergeRuleConfigs(fields.configs),
+        processor: rule.processor ?? [],
+        follower: rule.follower ?? [],
+        conditions: {
+          where: mergedConfigs.where ?? null,
+          having: mergedConfigs.having ?? null,
+        },
+        configs: mergedConfigs,
       };
     });
 
-    // 兼容现有数据结构：取第一条规则的数据合并到 formData
+    // 预览/步骤间兼容：顶层仍带第一条规则的风险字段；提交时会按新协议剥离
     const firstRule = rules[0] ?? {};
+    const topConfigs = {
+      ...(firstRule.configs ?? baseFormData.configs ?? {}),
+      select: baseFormData.configs?.select?.length
+        ? baseFormData.configs.select
+        : (firstRule.configs?.select ?? []),
+    };
+    delete topConfigs.where;
+    delete topConfigs.having;
     return {
       ...baseFormData,
       risk_title: firstRule.risk_title ?? baseFormData.risk_title ?? '',
       risk_level: firstRule.risk_level ?? baseFormData.risk_level ?? 'HIGH',
       risk_hazard: firstRule.risk_hazard ?? baseFormData.risk_hazard ?? '',
       risk_guidance: firstRule.risk_guidance ?? baseFormData.risk_guidance ?? '',
-      configs: {
-        ...(firstRule.configs ?? baseFormData.configs ?? {}),
-        select: baseFormData.configs?.select?.length
-          ? baseFormData.configs.select
-          : (firstRule.configs?.select ?? []),
-      },
+      configs: topConfigs,
       rules,
+    };
+  };
+
+  const getRuleEditData = (index: number) => {
+    const base = getMergedSourceData();
+    const formRule = props.formData?.rules?.[index] ?? {};
+    const where = formRule.conditions?.where
+      ?? formRule.configs?.where
+      ?? (index === 0 ? base.configs?.where : undefined);
+    const having = formRule.conditions?.having
+      ?? formRule.configs?.having
+      ?? (index === 0 ? base.configs?.having : undefined);
+    return {
+      ...base,
+      configs: {
+        ...(base.configs ?? {}),
+        where,
+        having,
+      },
     };
   };
 
@@ -643,11 +680,15 @@
     ruleIdSeq = 1;
     if (data.rules?.length) {
       ruleItems.value = data.rules.map((r: any, i: number) => createRule({
-        name: r.name || `规则${i + 1}`,
+        name: r.rule_name || r.name || `规则${i + 1}`,
         risk_title: r.risk_title || '',
         risk_level: r.risk_level || 'HIGH',
         risk_hazard: r.risk_hazard || '',
         risk_guidance: r.risk_guidance || '',
+        processor: r.processor ?? [],
+        follower: r.follower ?? [],
+        conditions: r.conditions,
+        formData: r.configs ? { configs: r.configs } : {},
       }));
     } else {
       ruleItems.value = [createRule({
@@ -976,66 +1017,11 @@
 
           &.rule-section-body--condition {
             overflow: visible;
-            padding-left: 4px;
+            padding: 0;
           }
 
           .rule-condition-form {
-            position: static;
-            min-width: 0;
             overflow: visible;
-
-            /* 隐藏 form 本身可能产生的红色 border/shadow 溢出 */
-            :deep(.bk-form) {
-              position: static;
-              min-width: 0;
-              overflow: visible;
-            }
-
-            /* 命中条件行铺满宽度，保留左侧 and 连接块空间 */
-            :deep(.strategy-customize-rules) {
-              width: 100%;
-              min-width: 0;
-              overflow: visible;
-            }
-
-            :deep(.strategy-customize) {
-              min-width: 0;
-              overflow: visible;
-            }
-
-            :deep(.customize-rule-only) {
-              min-width: 0;
-              overflow: visible;
-            }
-
-            /* 命中条件每组行背景色（和 rules/index.vue 保持一致） */
-            :deep(.strategy-customize-rules .rule-item) {
-              box-sizing: border-box;
-              padding-right: 36px;
-              overflow: visible;
-              background: #f5f7fa;
-              border: 1px solid #dcdee5;
-              border-radius: 2px;
-            }
-
-            :deep(.strategy-customize-rules .rule-item-wrap) {
-              overflow: visible;
-            }
-
-            :deep(.strategy-customize-rules .rule-item-field) {
-              grid-template-columns: minmax(0, 280px) minmax(0, 160px) minmax(0, 1fr) auto;
-              min-width: 0;
-              max-width: 100%;
-
-              :deep(.bk-form-item) {
-                min-width: 0;
-              }
-
-              .icon-group {
-                flex-shrink: 0;
-                white-space: nowrap;
-              }
-            }
           }
         }
       }

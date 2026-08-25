@@ -355,28 +355,62 @@
   };
 
   const applyEchoData = (data: Record<string, any>) => {
-    if (data.assign_rules?.length) {
+    const assignSource = data.assign_rules?.length
+      ? data.assign_rules
+      : (data.dispatch_rules || []).filter((item: any) => {
+        const { conditions } = item;
+        return Array.isArray(conditions)
+          ? conditions.some((c: any) => c.field)
+          : !!conditions?.conditions?.length;
+      });
+    if (assignSource?.length) {
       ruleIdSeq = 1;
-      assignRules.value = data.assign_rules.map((item: any, index: number) => createRule({
-        name: item.name || `分派规则${index + 1}`,
-        conditions: item.conditions?.length
-          ? item.conditions.map((c: ConditionItem) => ({ ...c }))
-          : [createCondition()],
-        scene_ids: normalizeSceneIds(item),
-        processors: item.processors ?? [],
-        notice_users: item.notice_users ?? [],
-        assign_mode: item.assign_mode || 'confirm',
-        confirmers: item.confirmers ?? [],
-      }));
+      assignRules.value = assignSource.map((item: any, index: number) => {
+        const flatConditions = Array.isArray(item.conditions)
+          ? item.conditions
+          : (item.conditions?.conditions || []).map((node: any) => ({
+            field: node.condition?.field ?? node.field ?? '',
+            operator: node.condition?.operator ?? node.operator ?? 'eq',
+            value: node.condition?.filter ?? node.value ?? '',
+          }));
+        return createRule({
+          name: item.rule_name || item.name || `分派规则${index + 1}`,
+          conditions: flatConditions.length
+            ? flatConditions.map((c: ConditionItem) => ({ ...c }))
+            : [createCondition()],
+          scene_ids: normalizeSceneIds({
+            ...item,
+            scene_ids: item.scene_ids ?? (item.target_scene_id !== undefined ? [item.target_scene_id] : []),
+          }),
+          processors: item.processors ?? item.processor ?? [],
+          notice_users: item.notice_users ?? item.follower ?? [],
+          assign_mode: item.assign_mode || (item.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
+          confirmers: item.confirmers ?? item.confirmer ?? [],
+        });
+      });
     }
-    if (data.default_assign_rule) {
+    const defaultSource = (data.default_assign_rule && Object.keys(data.default_assign_rule).length)
+      ? data.default_assign_rule
+      : (data.dispatch_rules || []).find((item: any) => {
+        const { conditions } = item;
+        if (Array.isArray(conditions)) {
+          return !conditions.some((c: any) => c.field);
+        }
+        return !conditions?.conditions?.length;
+      });
+    if (defaultSource) {
       defaultRule.value = {
         ...createDefaultRule(),
-        ...data.default_assign_rule,
-        scene_ids: normalizeSceneIds(data.default_assign_rule),
-        processors: data.default_assign_rule.processors ?? [],
-        notice_users: data.default_assign_rule.notice_users ?? [],
-        confirmers: data.default_assign_rule.confirmers ?? [],
+        ...defaultSource,
+        scene_ids: normalizeSceneIds({
+          ...defaultSource,
+          scene_ids: defaultSource.scene_ids
+            ?? (defaultSource.target_scene_id !== undefined ? [defaultSource.target_scene_id] : []),
+        }),
+        processors: defaultSource.processors ?? defaultSource.processor ?? [],
+        notice_users: defaultSource.notice_users ?? defaultSource.follower ?? [],
+        confirmers: defaultSource.confirmers ?? defaultSource.confirmer ?? [],
+        assign_mode: defaultSource.assign_mode || (defaultSource.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
       };
     }
   };
@@ -385,7 +419,7 @@
     () => props.formData,
     (data) => {
       if (!data) return;
-      if (data.assign_rules || data.default_assign_rule) {
+      if (data.assign_rules || data.default_assign_rule || data.dispatch_rules) {
         applyEchoData(data);
       }
     },
@@ -397,7 +431,7 @@
     (data) => {
       if (!(isEditMode || isCloneMode) || !data) return;
       const anyData = data as any;
-      if (anyData.assign_rules || anyData.default_assign_rule) {
+      if (anyData.assign_rules || anyData.default_assign_rule || anyData.dispatch_rules) {
         applyEchoData(anyData);
       }
     },

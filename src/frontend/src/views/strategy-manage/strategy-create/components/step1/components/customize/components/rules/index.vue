@@ -117,7 +117,7 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const where = ref<Where>({
+  const createEmptyWhere = (): Where => ({
     connector: 'and',
     conditions: [{
       connector: 'and',
@@ -132,6 +132,8 @@
       }],
     }],
   });
+  const isEmptyWhere = (whereData?: Where) => !whereData?.conditions?.length;
+  const where = ref<Where>(createEmptyWhere());
   const needCondition = computed(() => where.value.conditions.length > 1);
 
   // 是否有选中预期结果
@@ -236,24 +238,10 @@
 
   defineExpose<Expose>({
     resetFormData: () => {
-      where.value = {
-        connector: 'and',
-        conditions: [{
-          connector: 'and',
-          index: 0,
-          conditions: [{
-            condition: {
-              field: new DatabaseTableFieldModel(),
-              filter: '',
-              filters: [],
-              operator: '',
-            },
-          }],
-        }],
-      };
+      where.value = createEmptyWhere();
     },
     setWhere(whereData: Where, having: Where) {
-      where.value = whereData;
+      where.value = isEmptyWhere(whereData) ? createEmptyWhere() : whereData;
       if (having && having.conditions.length > 0) {
         // 将having条件合并到where条件中, conditions根据item.index进行排序合并
         where.value.conditions = where.value.conditions.concat(having.conditions);
