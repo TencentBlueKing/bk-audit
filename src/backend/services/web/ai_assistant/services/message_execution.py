@@ -3,7 +3,12 @@ from typing import Any, Generic, TypeVar
 
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageErrorCode
+from services.web.ai_assistant.constants import (
+    ExecutionMode,
+    ExecutionObjectType,
+    ExecutionStatus,
+    MessageErrorCode,
+)
 from services.web.ai_assistant.exceptions import (
     AIAssistantException,
     MessageExecutionFailed,
@@ -12,6 +17,12 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Message
+from services.web.ai_assistant.observability import (
+    ExecutionMetricSnapshot,
+    report_execution_finished,
+    report_invariant_violation,
+    set_execution_span_context,
+)
 from services.web.ai_assistant.schemas import (
     MessageSchema,
     SnapshotInput,
@@ -42,6 +53,8 @@ def load_message_execution(
 
     if celery_task_id != task_id:
         raise StaleMessageTask()
+    if not Message.mark_processing_started(instance_id=message_id, task_id=task_id):
+        raise StaleMessageTask()
     message = Message.objects.filter(
         id=message_id,
         task_id=task_id,
@@ -50,6 +63,11 @@ def load_message_execution(
     if message is None:
         raise StaleMessageTask()
     handler = message_handler_registry.require(message.message_type)
+    set_execution_span_context(
+        object_uid=str(message.uid),
+        business_type=message.message_type,
+        is_stream=False,
+    )
     return MessageExecution(
         message=message,
         input_data=parse_snapshot(handler.input_model, message.input_data, field_name="input_data"),
@@ -71,6 +89,7 @@ def finish_message_success(
         output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
     except MessageSnapshotValidationError as error:
         raise MessageExecutionFailed(message="任务执行结果格式错误") from error
+    now = timezone.now()
     updated = Message.finish_processing(
         instance_id=message.id,
         task_id=task_id,
@@ -80,11 +99,26 @@ def finish_message_success(
         error_message="",
         extra_updates={
             "updated_by": message.created_by,
-            "updated_at": timezone.now(),
+            "updated_at": now,
         },
+        now=now,
     )
     if not updated:
         raise StaleMessageTask()
+    report_execution_finished(
+        ExecutionMetricSnapshot(
+            object_type=ExecutionObjectType.MESSAGE,
+            business_type=message.message_type,
+            execution_mode=ExecutionMode.ASYNC,
+            is_stream=False,
+            status=ExecutionStatus.SUCCESS,
+            error_code="",
+            created_at=message.created_at,
+            queued_at=message.queued_at,
+            started_at=message.started_at,
+            finished_at=now,
+        )
+    )
     return output_snapshot
 
 
@@ -113,7 +147,8 @@ def finish_message_failure(
         error_code = exception.code
     else:
         public_message = "消息执行失败，请稍后重试"
-    return Message.finish_processing(
+    now = timezone.now()
+    updated = Message.finish_processing(
         instance_id=message_id,
         task_id=task_id,
         status=ExecutionStatus.FAILED,
@@ -122,6 +157,33 @@ def finish_message_failure(
         error_message=public_message,
         extra_updates={
             "updated_by": message.created_by,
-            "updated_at": timezone.now(),
+            "updated_at": now,
         },
+        now=now,
     )
+    if updated:
+        if isinstance(exception, MessageExecutionFailed) and isinstance(
+            exception.__cause__, MessageSnapshotValidationError
+        ):
+            report_invariant_violation(
+                object_type=ExecutionObjectType.MESSAGE,
+                business_type=message.message_type,
+                object_uid=str(message.uid),
+                task_id=task_id,
+                error_code=str(exception.__cause__.code),
+            )
+        report_execution_finished(
+            ExecutionMetricSnapshot(
+                object_type=ExecutionObjectType.MESSAGE,
+                business_type=message.message_type,
+                execution_mode=ExecutionMode.ASYNC,
+                is_stream=False,
+                status=ExecutionStatus.FAILED,
+                error_code=str(error_code),
+                created_at=message.created_at,
+                queued_at=message.queued_at,
+                started_at=message.started_at,
+                finished_at=now,
+            )
+        )
+    return updated

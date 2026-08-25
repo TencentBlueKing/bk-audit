@@ -10,10 +10,13 @@ from django.utils import timezone
 from core.models import OperateRecordModel, SoftDeleteModel
 from services.web.ai_assistant import models as ai_models
 from services.web.ai_assistant.constants import (
+    AttachmentErrorCode,
     AttachmentType,
+    ExecutionObjectType,
     ExecutionStatus,
     FeedbackSourceType,
     FeedbackType,
+    MessageErrorCode,
     MessageType,
     SidebarNodeType,
 )
@@ -35,6 +38,7 @@ class AIAssistantConstantsTest(SimpleTestCase):
     def test_app_and_model_constants(self):
         self.assertEqual(apps.get_app_config("ai_assistant").name, "services.web.ai_assistant")
         self.assertEqual(set(ExecutionStatus.values), {"PROCESSING", "SUCCESS", "FAILED"})
+        self.assertEqual(set(ExecutionObjectType.values), {"MESSAGE", "ATTACHMENT"})
         self.assertEqual(
             set(MessageType.values),
             {"SYSTEM_SELECTION", "NATURAL_LANGUAGE_SEARCH", "LOG_SEARCH"},
@@ -46,6 +50,8 @@ class AIAssistantConstantsTest(SimpleTestCase):
         self.assertEqual(set(FeedbackSourceType.values), {"MESSAGE", "ATTACHMENT"})
         self.assertEqual(set(FeedbackType.values), {"LIKE", "DISLIKE"})
         self.assertEqual(set(SidebarNodeType.values), {"GROUP", "CONVERSATION"})
+        self.assertIn("TASK_EXECUTION_TIMEOUT", MessageErrorCode.values)
+        self.assertIn("TASK_EXECUTION_TIMEOUT", AttachmentErrorCode.values)
         self.assertEqual(set(LogExportSourceType.values), {"WEB_LOG_SEARCH", "AI_ASSISTANT_MESSAGE"})
 
 
@@ -63,6 +69,10 @@ class AbstractModelTest(TestCase):
                 "output_data",
                 "error_code",
                 "error_message",
+                "queued_at",
+                "started_at",
+                "last_activity_at",
+                "finished_at",
             },
         )
         self.assertFalse(hasattr(ai_models, "SourceModel"))
@@ -105,12 +115,12 @@ class AbstractModelTest(TestCase):
                 ("conversation", "id"),
                 ("parent_message", "message_type", "id"),
                 ("status", "task_id"),
-                ("status", "updated_at", "id"),
+                ("status", "last_activity_at", "id"),
             ],
             Attachment: [
                 ("source_message", "id"),
                 ("status", "task_id"),
-                ("status", "updated_at", "id"),
+                ("status", "last_activity_at", "id"),
                 ("created_by", "attachment_type", "status", "content_updated_at", "id"),
             ],
             Feedback: [("source_type", "source_id")],
@@ -478,6 +488,16 @@ class AIAssistantAdminTest(SimpleTestCase):
                 model_admin = admin.site._registry[model]
                 self.assertFalse(model_admin.has_add_permission(self.request))
                 self.assertFalse(model_admin.has_delete_permission(self.request))
+
+    def test_execution_timestamps_are_readonly_in_admin(self):
+        execution_timestamps = {"queued_at", "started_at", "last_activity_at", "finished_at"}
+
+        for model in (Message, Attachment):
+            with self.subTest(model=model):
+                model_admin = admin.site._registry[model]
+                self.assertTrue(
+                    execution_timestamps.issubset(model_admin.get_readonly_fields(self.request)),
+                )
 
     def test_feedback_keeps_delete_permission_and_protects_source_fields(self):
         feedback_admin = admin.site._registry[Feedback]

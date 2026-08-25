@@ -2,7 +2,9 @@ from typing import Any
 
 from django.db import DatabaseError
 
+from services.web.ai_assistant.constants import ExecutionObjectType
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
+from services.web.ai_assistant.models import Attachment
 from services.web.ai_assistant.schemas import SnapshotInput
 from services.web.ai_assistant.services.attachment_execution import (
     AttachmentExecution,
@@ -19,6 +21,7 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
     abstract = True
     id_argument = "attachment_id"
     object_label = "附件"
+    object_type = ExecutionObjectType.ATTACHMENT
     stale_exception = StaleAttachmentTask
 
     def _load_execution(
@@ -80,3 +83,8 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
 
         if execution is not None and execution.has_stream:
             execution.stream.finish_retry()
+        if execution is not None:
+            Attachment.touch_processing(
+                instance_id=execution.attachment.id,
+                task_id=execution.attachment.task_id,
+            )

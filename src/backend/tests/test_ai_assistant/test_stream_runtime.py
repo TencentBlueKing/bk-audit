@@ -1,8 +1,10 @@
+from datetime import timedelta
 from unittest import mock
 
 from django.db import DatabaseError
 from django.test import TransactionTestCase
 from django.test.utils import override_settings
+from django.utils import timezone
 from redis.exceptions import RedisError
 
 from services.web.ai_assistant.constants import (
@@ -99,6 +101,12 @@ class StreamRuntimeTestCase(TransactionTestCase):
             block_ms=1,
         ).events
 
+    def send_and_checkpoint(self, runtime: UIStreamRuntime, data: dict) -> UIStreamEvent | None:
+        """通过真实 ``send`` 自动阈值触发 checkpoint，不依赖测试专用生产接口。"""
+
+        with mock.patch.object(runtime, "CHECKPOINT_EVENT_COUNT", 1):
+            return runtime.send(data)
+
     def archived_events(self, attachment: Attachment | None = None) -> list[dict]:
         attachment = attachment or self.attachment
         attachment.refresh_from_db()
@@ -140,8 +148,7 @@ class StreamRuntimeStartTest(StreamRuntimeTestCase):
 
     def test_start_of_second_execution_resets_only_old_stream_and_keeps_new_archive_empty(self):
         runtime_a = self.start_runtime()
-        runtime_a.send({"content": "old"})
-        runtime_a.flush()
+        self.send_and_checkpoint(runtime_a, {"content": "old"})
 
         runtime_b = self.start_runtime()
 
@@ -153,8 +160,7 @@ class StreamRuntimeStartTest(StreamRuntimeTestCase):
         self.assertEqual(new_events, [])
         self.assertEqual(self.archived_events(), [])
 
-        runtime_b.send({"content": "new"})
-        runtime_b.flush()
+        self.send_and_checkpoint(runtime_b, {"content": "new"})
         archived = self.archived_events()
         self.assertEqual(len(archived), 1)
         self.assertIsNone(archived[0]["event"])
@@ -181,7 +187,7 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         self.assertIsNotNone(event.stream_id)
         self.assertEqual(runtime.pending_count, 1)
         self.assertEqual(self.redis_events(runtime), [event])
-        # 未 flush 前不落库，避免每条事件一次 UPDATE。
+        # 未达到自动 checkpoint 阈值前不落库，避免每条事件一次 UPDATE。
         self.assertEqual(self.archived_events(), [])
 
     def test_business_api_only_accepts_data(self):
@@ -191,27 +197,8 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
 
         self.assertIsNone(event.event)
         self.assertFalse(hasattr(runtime, "publish"))
-
-    def test_flush_persists_buffer_in_order_and_clears_pending(self):
-        runtime = self.start_runtime()
-        runtime.send({"content": "A"})
-        runtime.send({"content": "B"})
-
-        runtime.flush()
-
-        self.assertEqual(runtime.pending_count, 0)
-        archived = self.archived_events()
-        self.assertEqual([item["data"]["content"] for item in archived], ["A", "B"])
-        self.assertTrue(all("type" not in item for item in archived))
-        self.assertEqual(runtime.archive_status, StreamArchiveStatus.COMPLETE)
-
-    def test_flush_without_pending_events_does_not_write(self):
-        runtime = self.start_runtime()
-
-        with mock.patch.object(AttachmentArchiveStore, "checkpoint") as checkpoint:
-            runtime.flush()
-
-        checkpoint.assert_not_called()
+        self.assertFalse(hasattr(runtime, "flush"))
+        self.assertFalse(hasattr(runtime, "flush_best_effort"))
 
     def test_send_auto_checkpoints_when_event_count_threshold_reached(self):
         runtime = self.start_runtime()
@@ -224,7 +211,12 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         runtime.send({"index": UIStreamRuntime.CHECKPOINT_EVENT_COUNT - 1})
 
         self.assertEqual(runtime.pending_count, 0)
-        self.assertEqual(len(self.archived_events()), UIStreamRuntime.CHECKPOINT_EVENT_COUNT)
+        archived = self.archived_events()
+        self.assertEqual(
+            [item["data"]["index"] for item in archived],
+            list(range(UIStreamRuntime.CHECKPOINT_EVENT_COUNT)),
+        )
+        self.assertTrue(all("type" not in item for item in archived))
 
     def test_send_auto_checkpoints_when_byte_threshold_reached(self):
         runtime = self.start_runtime()
@@ -239,6 +231,34 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         self.assertGreater(UIStreamRuntime.CHECKPOINT_BYTES, 0)
         self.assertEqual(runtime.pending_count, 0)
         self.assertEqual(len(self.archived_events()), 3)
+
+    def test_low_frequency_event_checkpoints_by_activity_interval(self):
+        runtime = self.start_runtime()
+        old_activity = timezone.now() - timedelta(hours=1)
+        Attachment.objects.filter(id=self.attachment.id).update(last_activity_at=old_activity)
+        runtime._last_activity_checkpoint_at -= 61
+
+        with override_settings(AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS=60):
+            runtime.send({"content": "low frequency"})
+
+        self.attachment.refresh_from_db()
+        self.assertEqual(runtime.pending_count, 0)
+        self.assertEqual(self.archived_events()[0]["data"], {"content": "low frequency"})
+        self.assertGreater(self.attachment.last_activity_at, old_activity)
+
+    def test_truncated_archive_still_refreshes_activity_for_live_events(self):
+        runtime = self.start_runtime()
+        old_activity = timezone.now() - timedelta(hours=1)
+        Attachment.objects.filter(id=self.attachment.id).update(last_activity_at=old_activity)
+        runtime._archive_stopped = True
+        runtime._last_activity_checkpoint_at -= 61
+
+        with override_settings(AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS=60):
+            runtime.send({"content": "still running"})
+
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.archived_events(), [])
+        self.assertGreater(self.attachment.last_activity_at, old_activity)
 
     def test_send_rejects_non_json_data_as_integration_error(self):
         runtime = self.start_runtime()
@@ -259,13 +279,6 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         with self.assertRaises(StreamRuntimeClosed):
             runtime.send({})
 
-    def test_flush_after_close_raises_runtime_closed(self):
-        runtime = self.start_runtime()
-        runtime.finish_retry()
-
-        with self.assertRaises(StreamRuntimeClosed):
-            runtime.flush()
-
 
 class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
     def test_redis_error_from_business_append_degrades_but_keeps_event_in_archive(self):
@@ -277,7 +290,7 @@ class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
         # 实时推送失败的事件没有 Redis 游标，但仍必须落归档。
         self.assertIsNone(event.stream_id)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
-        runtime.flush()
+        runtime.finish_retry()
         archived = self.archived_events()
         self.assertEqual(len(archived), 1)
         self.assertIsNone(archived[0]["stream_id"])
@@ -341,43 +354,20 @@ class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
             with self.assertRaises(StaleAttachmentTask):
                 runtime_a.send({"content": "old"})
 
-    def test_database_error_from_best_effort_flush_keeps_buffer_without_duplication(self):
+    def test_automatic_checkpoint_retries_buffer_without_duplication(self):
         runtime = self.start_runtime()
-        runtime.send({"content": "A"})
 
-        with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=DatabaseError("db down")):
-            runtime.flush_best_effort()
+        with mock.patch.object(runtime, "CHECKPOINT_EVENT_COUNT", 1):
+            with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=DatabaseError("db down")):
+                runtime.send({"content": "A"})
 
         self.assertEqual(runtime.pending_count, 1)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
 
-        runtime.send({"content": "B"})
-        runtime.flush()
+        self.send_and_checkpoint(runtime, {"content": "B"})
 
         self.assertEqual(runtime.pending_count, 0)
         self.assertEqual([item["data"]["content"] for item in self.archived_events()], ["A", "B"])
-
-    def test_flush_propagates_database_error_while_best_effort_degrades(self):
-        runtime = self.start_runtime()
-        runtime.send({"content": "A"})
-
-        with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=DatabaseError("db down")):
-            with self.assertRaises(DatabaseError):
-                runtime.flush()
-            runtime.flush_best_effort()
-
-        self.assertEqual(runtime.pending_count, 1)
-
-    def test_flush_best_effort_propagates_checkpoint_implementation_error(self):
-        runtime = self.start_runtime()
-        runtime.send({"content": "A"})
-
-        with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=ValueError("invalid archive")):
-            with self.assertRaises(ValueError):
-                runtime.flush_best_effort()
-
-        self.assertEqual(runtime.pending_count, 1)
-        self.assertEqual(runtime.archive_status, StreamArchiveStatus.COMPLETE)
 
 
 class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
@@ -410,15 +400,17 @@ class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
             first = runtime.send({"index": 0})
             second = runtime.send({"index": 1})
             third = runtime.send({"index": 2})
-            runtime.flush()
+            runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
 
         self.assertIsNotNone(first)
         self.assertIsNotNone(second)
         # 超过条数上限后停止归档，但实时流仍可继续观看。
         self.assertIsNotNone(third)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.TRUNCATED)
-        self.assertEqual([item["data"]["index"] for item in self.archived_events()], [0, 1])
-        self.assertEqual(len(self.redis_events(runtime)), 3)
+        business_events = [item for item in self.archived_events() if item["event"] is None]
+        self.assertEqual([item["data"]["index"] for item in business_events], [0, 1])
+        live_business_events = [event for event in self.redis_events(runtime) if event.event is None]
+        self.assertEqual(len(live_business_events), 3)
 
     def test_redis_byte_cap_stops_live_write_but_keeps_archiving(self):
         runtime = self.start_runtime()
@@ -429,21 +421,22 @@ class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
         with override_settings(AI_ASSISTANT_STREAM_REDIS_MAX_BYTES=first_payload_size):
             first = runtime.send(first_data)
             second = runtime.send({"content": "tail"})
-            runtime.flush()
+            runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
 
         self.assertIsNotNone(first.stream_id)
         self.assertIsNone(second.stream_id)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
-        self.assertEqual(len(self.redis_events(runtime)), 1)
+        business_events = [event for event in self.redis_events(runtime) if event.event is None]
+        self.assertEqual(len(business_events), 1)
         # 实时通道停写后归档仍要完整保留事件，刷新页面可看到全部内容。
-        self.assertEqual(len(self.archived_events()), 2)
+        archived_business_events = [item for item in self.archived_events() if item["event"] is None]
+        self.assertEqual(len(archived_business_events), 2)
 
     def test_archive_capacity_truncation_does_not_fail_final_output(self):
         runtime = self.start_runtime()
 
         with override_settings(AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES=256):
-            runtime.send({"content": "x" * 512})
-            runtime.flush_best_effort()
+            self.send_and_checkpoint(runtime, {"content": "x" * 512})
             runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
 
         self.attachment.refresh_from_db()
@@ -455,8 +448,7 @@ class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
         runtime = self.start_runtime()
 
         with override_settings(AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES=256):
-            runtime.send({"content": "x" * 512})
-            runtime.flush_best_effort()
+            self.send_and_checkpoint(runtime, {"content": "x" * 512})
             with mock.patch.object(
                 runtime._archive_store,
                 "checkpoint",
@@ -494,6 +486,67 @@ class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
 
 
 class StreamRuntimeTerminalTest(StreamRuntimeTestCase):
+    @mock.patch("services.web.ai_assistant.streaming.runtime.start_stream_span")
+    def test_terminal_and_retry_use_stream_convergence_span(self, start_stream_span):
+        success_runtime = self.start_runtime()
+        success_runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
+
+        retry_attachment = self.create_attachment(task_id="task-retry")
+        retry_runtime = self.start_runtime(attachment=retry_attachment)
+        retry_runtime.finish_retry()
+
+        self.assertEqual(start_stream_span.call_count, 2)
+        self.assertEqual(start_stream_span.call_args_list[0].kwargs["status"], ExecutionStatus.SUCCESS)
+        self.assertEqual(start_stream_span.call_args_list[1].kwargs["status"], "RETRY")
+
+    @mock.patch("services.web.ai_assistant.streaming.runtime.report_stream_execution")
+    def test_success_reports_one_aggregate_summary(self, report_stream_execution):
+        runtime = self.start_runtime()
+        first_data = {"content": "A"}
+        second_data = {"content": "B"}
+        expected_bytes = sum(
+            len(serialize_stream_event(UIStreamEvent(data=data), include_stream_id=False))
+            for data in (first_data, second_data)
+        )
+        runtime.send(first_data)
+        runtime.send(second_data)
+
+        runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
+
+        report_stream_execution.assert_called_once()
+        snapshot = report_stream_execution.call_args.args[0]
+        self.assertEqual(snapshot.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(snapshot.event_count, 2)
+        self.assertEqual(snapshot.event_bytes, expected_bytes)
+        self.assertFalse(snapshot.degraded)
+        self.assertFalse(snapshot.truncated)
+
+    @mock.patch("services.web.ai_assistant.streaming.runtime.report_stream_execution")
+    def test_retry_reports_degraded_summary_once(self, report_stream_execution):
+        runtime = self.start_runtime()
+        with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("redis down")):
+            runtime.send({"content": "A"})
+
+        runtime.finish_retry()
+        runtime.finish_retry()
+
+        report_stream_execution.assert_called_once()
+        snapshot = report_stream_execution.call_args.args[0]
+        self.assertEqual(snapshot.status, "RETRY")
+        self.assertTrue(snapshot.degraded)
+
+    @mock.patch("services.web.ai_assistant.streaming.runtime.report_stream_execution")
+    def test_truncation_is_distinct_from_transport_degradation(self, report_stream_execution):
+        runtime = self.start_runtime()
+        with override_settings(AI_ASSISTANT_STREAM_MAX_EVENT_BYTES=1):
+            runtime.send({"content": "too large"})
+
+        runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
+
+        snapshot = report_stream_execution.call_args.args[0]
+        self.assertTrue(snapshot.truncated)
+        self.assertFalse(snapshot.degraded)
+
     def test_finish_success_persists_terminal_then_publishes_stream_end(self):
         runtime = self.start_runtime()
         runtime.send({"content": "A"})

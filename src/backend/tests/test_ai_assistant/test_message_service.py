@@ -1,9 +1,11 @@
 import threading
+from datetime import timedelta
 from unittest import mock
 from uuid import uuid4
 
 from django.db import IntegrityError, close_old_connections
 from django.test import TransactionTestCase
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     ExecutionStatus,
@@ -156,6 +158,10 @@ class MessageServiceTest(TestCase):
 
         self.assertEqual(message.status, ExecutionStatus.SUCCESS)
         self.assertEqual(message.output_data, {"content": "alice:sync:hello"})
+        self.assertIsNone(message.queued_at)
+        self.assertIsNone(message.started_at)
+        self.assertIsNotNone(message.finished_at)
+        self.assertEqual(message.last_activity_at, message.finished_at)
 
     def test_prepare_initial_only_accepts_owned_unsaved_system_selection(self):
         parent = self.create_parent()
@@ -362,6 +368,10 @@ class MessageServiceTest(TestCase):
         self.assertEqual(message.input_data, {"text": "hello"})
         self.assertEqual(message.context_data, {"prefix": "async"})
         self.assertIsNone(message.output_data)
+        self.assertIsNotNone(message.queued_at)
+        self.assertEqual(message.last_activity_at, message.queued_at)
+        self.assertIsNone(message.started_at)
+        self.assertIsNone(message.finished_at)
         apply_async.assert_called_once_with(
             kwargs={"message_id": message.id, "task_id": message.task_id},
             task_id=message.task_id,
@@ -440,6 +450,13 @@ class MessageServiceTest(TestCase):
         old_uid = message.uid
         old_input = message.input_data
         old_context = message.context_data
+        old_queued_at = timezone.now() - timedelta(minutes=10)
+        Message.objects.filter(id=message.id).update(
+            queued_at=old_queued_at,
+            started_at=old_queued_at,
+            last_activity_at=old_queued_at,
+            finished_at=old_queued_at,
+        )
 
         with mock.patch.object(handler, "prepare", side_effect=AssertionError("must not prepare")):
             with mock.patch.object(handler.async_task, "apply_async") as apply_async:
@@ -455,6 +472,10 @@ class MessageServiceTest(TestCase):
         self.assertIsNone(retried.output_data)
         self.assertEqual(retried.error_code, "")
         self.assertEqual(retried.error_message, "")
+        self.assertGreater(retried.queued_at, old_queued_at)
+        self.assertEqual(retried.last_activity_at, retried.queued_at)
+        self.assertIsNone(retried.started_at)
+        self.assertIsNone(retried.finished_at)
         apply_async.assert_called_once_with(
             kwargs={"message_id": retried.id, "task_id": retried.task_id},
             task_id=retried.task_id,

@@ -1,4 +1,5 @@
 import threading
+from datetime import timedelta
 from unittest import mock
 from urllib.parse import urlparse
 
@@ -8,10 +9,13 @@ from celery._state import _apps
 from django.conf import settings
 from django.db import DatabaseError
 from django.test import SimpleTestCase, TransactionTestCase
+from django.test.utils import override_settings
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionStatus,
+    MessageErrorCode,
     MessageType,
     PlatformStreamEvent,
 )
@@ -22,6 +26,9 @@ from services.web.ai_assistant.handlers import (
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.services import AttachmentService, MessageService
+from services.web.ai_assistant.services.reconciliation import (
+    reconcile_processing_executions,
+)
 from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
 from tests.test_ai_assistant import integration_handlers
 from tests.test_ai_assistant.celery_integration import (
@@ -404,6 +411,44 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         self.assertEqual(message.task_id, "current-task-id")
         self.assertIsNone(message.output_data)
         self.assertNotIn("old-task-id", integration_handlers.old_task_execution_ids)
+
+    @override_settings(
+        AI_ASSISTANT_MESSAGE_WARNING_SECONDS=300,
+        AI_ASSISTANT_MESSAGE_FAILURE_SECONDS=900,
+        AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS=3600,
+        AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS=7200,
+        AI_ASSISTANT_RECONCILE_BATCH_SIZE=200,
+        AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED=True,
+    )
+    def test_timeout_fencing_rejects_late_real_worker(self):
+        """巡检失败后再到达的 RabbitMQ 任务不能覆盖 MySQL 终态。"""
+
+        integration_handlers.reset_old_task_observations()
+        handler = message_handler_registry.register(RealMessageOldTaskHandler())
+        message = self.create_processing_message(task_id="timed-out-task-id")
+        expired_at = timezone.now() - timedelta(hours=1)
+        Message.objects.filter(id=message.id).update(
+            queued_at=expired_at,
+            last_activity_at=expired_at,
+        )
+
+        summary = reconcile_processing_executions(now=timezone.now())
+        message.refresh_from_db()
+        self.assertEqual(summary.failed_count, 1)
+        self.assertEqual(message.status, ExecutionStatus.FAILED)
+        self.assertEqual(message.error_code, MessageErrorCode.TASK_EXECUTION_TIMEOUT)
+
+        reset_task_postrun(task_id=message.task_id)
+        handler.async_task.apply_async(
+            kwargs={"message_id": message.id, "task_id": message.task_id},
+            task_id=message.task_id,
+        )
+        wait_for_task_postrun(task_id=message.task_id)
+
+        message.refresh_from_db()
+        self.assertEqual(message.status, ExecutionStatus.FAILED)
+        self.assertEqual(message.error_code, MessageErrorCode.TASK_EXECUTION_TIMEOUT)
+        self.assertNotIn(message.task_id, integration_handlers.old_task_execution_ids)
 
     def test_duplicate_delivery_allows_concurrent_execution_but_only_one_terminal_snapshot(self):
         integration_handlers.reset_duplicate_observations(parties=2)

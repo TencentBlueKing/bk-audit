@@ -1,10 +1,12 @@
 import json
+from datetime import timedelta
 from unittest import mock
 from uuid import UUID, uuid4
 
 from django.db import DatabaseError, connection
 from django.test import SimpleTestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext, override_settings
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
@@ -260,12 +262,17 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         self.assertEqual(self.attachment.stream_config, rotation_b.binding.config.model_dump(mode="json"))
 
     def test_start_execution_binding_carries_attachment_identity(self):
+        old_activity = timezone.now() - timedelta(hours=1)
+        Attachment.objects.filter(id=self.attachment.id).update(last_activity_at=old_activity)
         rotation = self.start()
 
         self.assertEqual(rotation.binding.attachment_id, self.attachment.id)
         self.assertEqual(rotation.binding.attachment_uid, self.attachment.uid)
+        self.assertEqual(rotation.binding.business_type, self.attachment.attachment_type)
         self.assertEqual(rotation.binding.task_id, self.attachment.task_id)
         self.assertIsInstance(rotation.binding.config.execution_id, UUID)
+        self.attachment.refresh_from_db()
+        self.assertGreater(self.attachment.last_activity_at, old_activity)
 
     def test_start_execution_rejects_stale_task_wrong_state_or_non_stream(self):
         cases = {
@@ -310,6 +317,7 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         stale_binding = StreamExecutionBinding(
             attachment_id=rotation.binding.attachment_id,
             attachment_uid=rotation.binding.attachment_uid,
+            business_type=rotation.binding.business_type,
             config=AttachmentStreamConfig(
                 task_id=rotation.binding.task_id,
                 execution_id=uuid4(),
@@ -337,6 +345,8 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
 
     def test_checkpoint_appends_events_in_order_and_returns_persisted_status(self):
         rotation = self.start()
+        old_activity = timezone.now() - timedelta(hours=1)
+        Attachment.objects.filter(id=self.attachment.id).update(last_activity_at=old_activity)
         first = business_event("a", stream_id="1-0")
         second = business_event("b", stream_id="2-0")
 
@@ -357,6 +367,7 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         )
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.stream_config["archive_status"], StreamArchiveStatus.COMPLETE)
+        self.assertGreater(self.attachment.last_activity_at, old_activity)
 
     def test_checkpoint_persists_incoming_degraded_status_into_config(self):
         rotation = self.start()
@@ -483,6 +494,28 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         self.assertEqual(len(self.attachment.stream_archive), 3)
         self.assertIsNotNone(self.attachment.content_updated_at)
         self.assertEqual(self.attachment.updated_by, self.user)
+        self.assertIsNotNone(self.attachment.finished_at)
+        self.assertEqual(self.attachment.last_activity_at, self.attachment.finished_at)
+
+    @mock.patch("services.web.ai_assistant.streaming.archive.report_execution_finished")
+    def test_finalize_reports_terminal_execution_after_commit(self, report_execution_finished):
+        rotation = self.start()
+
+        self.store.finalize(
+            binding=rotation.binding,
+            events=[],
+            terminal_event=terminal_event(ExecutionStatus.SUCCESS),
+            status=ExecutionStatus.SUCCESS,
+            output_data={"content": "done"},
+            error_code="",
+            error_message="",
+            updated_by=self.user,
+        )
+
+        report_execution_finished.assert_called_once()
+        snapshot = report_execution_finished.call_args.args[0]
+        self.assertEqual(snapshot.status, ExecutionStatus.SUCCESS)
+        self.assertTrue(snapshot.is_stream)
 
     def test_finalize_persists_failed_terminal_state_without_output(self):
         rotation = self.start()
