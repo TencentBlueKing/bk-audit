@@ -7,9 +7,18 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import ExecutionStatus, StreamArchiveStatus
+from services.web.ai_assistant.constants import (
+    ExecutionMode,
+    ExecutionObjectType,
+    ExecutionStatus,
+    StreamArchiveStatus,
+)
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
 from services.web.ai_assistant.models import Attachment
+from services.web.ai_assistant.observability import (
+    ExecutionMetricSnapshot,
+    report_execution_finished,
+)
 from services.web.ai_assistant.schemas import (
     AttachmentStreamConfig,
     AttachmentStreamSnapshot,
@@ -194,13 +203,19 @@ class AttachmentArchiveStore:
             attachment.stream_config = config.model_dump(mode="json")
             # 新执行从空归档开始；旧事件只保留在旧 Redis 流中直到 TTL 过期。
             attachment.stream_archive = []
-            attachment.updated_at = timezone.now()
+            now = timezone.now()
+            attachment.last_activity_at = now
+            attachment.updated_at = now
             # Celery Worker 无请求态用户，必须跳过自动操作人覆写。
-            attachment.save(update_record=False, update_fields=["stream_config", "stream_archive", "updated_at"])
+            attachment.save(
+                update_record=False,
+                update_fields=["stream_config", "stream_archive", "last_activity_at", "updated_at"],
+            )
 
         binding = StreamExecutionBinding(
             attachment_id=attachment.id,
             attachment_uid=attachment.uid,
+            business_type=attachment.attachment_type,
             config=config,
         )
         logger.info(
@@ -272,13 +287,29 @@ class AttachmentArchiveStore:
                 enforce_capacity=True,
             )
             if update_fields:
-                update_fields.append("updated_at")
-                attachment.updated_at = timezone.now()
+                now = timezone.now()
+                update_fields.extend(["last_activity_at", "updated_at"])
+                attachment.last_activity_at = now
+                attachment.updated_at = now
                 attachment.save(update_record=False, update_fields=update_fields)
         return StreamCheckpointResult(
             archive_status=persisted_status,
             capacity_exhausted=capacity_exhausted,
         )
+
+    def touch_activity(self, *, binding: StreamExecutionBinding) -> None:
+        """为仍有实时输出但已停止归档的 execution 刷新活动时间。
+
+        使用与 checkpoint 相同的 task_id + execution_id fencing。该方法只由
+        Runtime 按固定时间间隔调用，不会为每条 UI 事件产生数据库写入。
+        """
+
+        with transaction.atomic():
+            attachment = self._require_current_attachment(binding=binding, require_processing=True)
+            now = timezone.now()
+            attachment.last_activity_at = now
+            attachment.updated_at = now
+            attachment.save(update_record=False, update_fields=["last_activity_at", "updated_at"])
 
     def finalize(
         self,
@@ -292,7 +323,7 @@ class AttachmentArchiveStore:
         error_code: str,
         error_message: str,
         updated_by: str,
-    ) -> None:
+    ) -> StreamArchiveStatus:
         """终态写入：在一次锁行事务内原子落库业务尾部事件、终止标记与执行结果。
 
         设计意图：
@@ -312,6 +343,9 @@ class AttachmentArchiveStore:
             error_message: 错误描述（成功时为空字符串）。
             updated_by: 操作人标识。
 
+        Returns:
+            当前执行最终持久化的归档状态，供 Runtime 汇总降级和截断情况。
+
         Raises:
             StaleAttachmentTask: 绑定已过期。
         """
@@ -326,7 +360,7 @@ class AttachmentArchiveStore:
                 enforce_capacity=True,
             )
             # terminal 是终态快照的一部分，不受业务归档容量限制，且不携带 Redis 游标。
-            _, terminal_update_fields, _ = self._apply_events(
+            persisted_status, terminal_update_fields, _ = self._apply_events(
                 attachment=attachment,
                 binding=binding,
                 events=[terminal_event],
@@ -341,6 +375,8 @@ class AttachmentArchiveStore:
             attachment.content_updated_at = now
             attachment.updated_by = updated_by
             attachment.updated_at = now
+            attachment.last_activity_at = now
+            attachment.finished_at = now
             # 归档与终态必须同一条 UPDATE 落库，避免出现终态但缺尾部事件的中间态。
             attachment.save(
                 update_record=False,
@@ -354,9 +390,25 @@ class AttachmentArchiveStore:
                         "content_updated_at",
                         "updated_by",
                         "updated_at",
+                        "last_activity_at",
+                        "finished_at",
                     }
                 ),
             )
+            metric_snapshot = ExecutionMetricSnapshot(
+                object_type=ExecutionObjectType.ATTACHMENT,
+                business_type=attachment.attachment_type,
+                execution_mode=ExecutionMode.ASYNC,
+                is_stream=True,
+                status=str(status),
+                error_code=error_code,
+                created_at=attachment.created_at,
+                queued_at=attachment.queued_at,
+                started_at=attachment.started_at,
+                finished_at=now,
+            )
+            # 监控必须在终态事务提交后投递，避免回滚对象产生虚假成功指标。
+            transaction.on_commit(lambda: report_execution_finished(metric_snapshot))
         logger.info(
             "AI 助手附件流式执行已结束",
             extra={
@@ -367,6 +419,7 @@ class AttachmentArchiveStore:
                 "event_count": len(events) + 1,
             },
         )
+        return persisted_status
 
     def snapshot(self, *, attachment: Attachment) -> AttachmentStreamSnapshot:
         """构建当前附件的流式归档快照（供 API 读取端使用）。

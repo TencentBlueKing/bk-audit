@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from unittest import mock
 
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
@@ -122,6 +123,73 @@ class AttachmentTaskTest(TestCase):
         self.assertNotIn("executor", AttachmentExecutionTask.__dict__)
         for method_name in ("_load_execution", "_finish_success", "_finish_failure"):
             self.assertIn(method_name, AttachmentExecutionTask.__dict__)
+
+    def test_task_marks_worker_start_and_refreshes_activity_on_retry(self):
+        attachment = self.create_attachment()
+
+        with self.assertRaises(Retry):
+            self.invoke(execute_attachment_async_retry, attachment=attachment)
+
+        attachment.refresh_from_db()
+        self.assertIsNotNone(attachment.started_at)
+        self.assertIsNotNone(attachment.last_activity_at)
+        self.assertGreaterEqual(attachment.last_activity_at, attachment.started_at)
+        self.assertIsNone(attachment.finished_at)
+
+    @mock.patch("services.web.ai_assistant.services.attachment_execution.report_execution_finished")
+    def test_non_stream_terminal_metric_is_reported_only_by_cas_winner(self, report_execution_finished):
+        attachment = self.create_attachment()
+
+        self.invoke(execute_attachment_async_success, attachment=attachment)
+        with self.assertRaises(Ignore):
+            self.invoke(execute_attachment_async_success, attachment=attachment)
+
+        report_execution_finished.assert_called_once()
+        self.assertEqual(report_execution_finished.call_args.args[0].status, ExecutionStatus.SUCCESS)
+
+    @mock.patch("services.web.ai_assistant.services.attachment_execution.report_invariant_violation")
+    def test_invalid_output_reports_invariant_violation(self, report_invariant_violation):
+        attachment = self.create_attachment()
+
+        with mock.patch.object(execute_attachment_async_success, "run", return_value={"invalid": True}):
+            with self.assertRaises(AttachmentOutputValidationError):
+                self.invoke(execute_attachment_async_success, attachment=attachment)
+
+        report_invariant_violation.assert_called_once()
+
+    @mock.patch("services.web.ai_assistant.services.attachment_execution.report_invariant_violation")
+    def test_invalid_output_invariant_is_reported_only_by_failure_cas_winner(self, report_invariant_violation):
+        attachment = self.create_attachment()
+        validation_error = AttachmentSnapshotValidationError()
+        execution_error = AttachmentOutputValidationError()
+        execution_error.__cause__ = validation_error
+
+        self.assertTrue(
+            finish_attachment_failure(
+                attachment_id=attachment.id,
+                task_id=attachment.task_id,
+                exception=execution_error,
+            )
+        )
+        self.assertFalse(
+            finish_attachment_failure(
+                attachment_id=attachment.id,
+                task_id=attachment.task_id,
+                exception=execution_error,
+            )
+        )
+        report_invariant_violation.assert_called_once()
+
+    @mock.patch("services.web.ai_assistant.tasks.base.start_execution_span")
+    def test_task_wraps_execution_with_platform_span(self, start_execution_span):
+        attachment = self.create_attachment()
+        start_execution_span.return_value = nullcontext()
+
+        self.invoke(execute_attachment_async_success, attachment=attachment)
+
+        start_execution_span.assert_called_once()
+        self.assertEqual(start_execution_span.call_args.kwargs["object_type"], "ATTACHMENT")
+        self.assertEqual(start_execution_span.call_args.kwargs["task_id"], attachment.task_id)
 
     @staticmethod
     def invoke(task, *, attachment: Attachment, celery_task_id: str | None = None, retries: int = 0):
@@ -359,7 +427,7 @@ class AttachmentTaskTest(TestCase):
         finally:
             execute_attachment_async_success.pop_request()
 
-    def test_load_execution_uses_one_query_and_preloads_source_message_conversation(self):
+    def test_load_execution_marks_start_then_preloads_source_message_conversation(self):
         attachment = self.create_attachment()
 
         with CaptureQueriesContext(connection) as captured:
@@ -373,7 +441,8 @@ class AttachmentTaskTest(TestCase):
             self.assertIsInstance(execution.input_data, AttachmentEchoInput)
             self.assertIsInstance(execution.context_data, AttachmentEchoContext)
 
-        self.assertEqual(len(captured), 1)
+        # 第一条 CAS 标记 Worker 开始，第二条一次性加载附件、来源消息和会话。
+        self.assertEqual(len(captured), 2)
 
     def test_non_stream_execution_has_no_runtime_and_rejects_stream_access(self):
         attachment = self.create_attachment()
@@ -531,7 +600,8 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(self.attachment.output_data)
 
-    def test_output_validation_error_does_not_retry_and_marks_failed(self):
+    @mock.patch("services.web.ai_assistant.services.attachment_execution.report_invariant_violation")
+    def test_output_validation_error_does_not_retry_and_marks_failed(self, report_invariant_violation):
         with mock.patch.object(execute_attachment_stream_success, "run", return_value={"invalid": True}):
             with self.assertRaises(AttachmentOutputValidationError):
                 self.invoke(execute_attachment_stream_success, attachment=self.attachment)
@@ -540,6 +610,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         self.assertEqual(self.attachment.status, ExecutionStatus.FAILED)
         self.assertEqual(self.attachment.error_code, AttachmentErrorCode.OUTPUT_VALIDATION_FAILED)
         self.assertEqual(self.attachment.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
+        report_invariant_violation.assert_called_once()
 
     def test_stale_delivery_does_not_start_stream_execution(self):
         Attachment.objects.filter(id=self.attachment.id).update(task_id="task-new")

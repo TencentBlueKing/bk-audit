@@ -19,11 +19,19 @@ class ExecutionStatus(TextChoices):
     FAILED = "FAILED", gettext_lazy("失败")
 
 
+class ExecutionObjectType(TextChoices):
+    """平台异步执行与可观测性使用的对象类型。"""
+
+    MESSAGE = "MESSAGE", gettext_lazy("消息")
+    ATTACHMENT = "ATTACHMENT", gettext_lazy("附件")
+
+
 class MessageErrorCode(TextChoices):
     """平台消息执行链路写入快照的稳定错误码。"""
 
     TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("任务投递失败")
     TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("任务执行失败")
+    TASK_EXECUTION_TIMEOUT = "TASK_EXECUTION_TIMEOUT", gettext_lazy("任务执行超时")
 
 
 class AttachmentErrorCode(TextChoices):
@@ -31,6 +39,7 @@ class AttachmentErrorCode(TextChoices):
 
     TASK_DISPATCH_FAILED = "TASK_DISPATCH_FAILED", gettext_lazy("附件任务投递失败")
     TASK_EXECUTION_FAILED = "TASK_EXECUTION_FAILED", gettext_lazy("附件任务执行失败")
+    TASK_EXECUTION_TIMEOUT = "TASK_EXECUTION_TIMEOUT", gettext_lazy("附件任务执行超时")
     OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
 
 

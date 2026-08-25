@@ -17,7 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, ClassVar, Dict, List, Mapping, Optional
 
 from bk_resource import api
 from blueapps.core.celery import celery_app
@@ -25,7 +26,14 @@ from django.conf import settings
 
 from core.utils.service import get_service_name
 
-__all__ = ["Event", "Metric", "report_event_to_bk_monitor", "report_metric_to_bk_monitor"]
+__all__ = [
+    "Event",
+    "Metric",
+    "MetricDimension",
+    "MetricField",
+    "report_event_to_bk_monitor",
+    "report_metric_to_bk_monitor",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -115,15 +123,40 @@ def report_event_to_bk_monitor(payload: Dict):
     return api.bk_monitor.report_event(payload)
 
 
+@dataclass(frozen=True, slots=True)
+class MetricField:
+    """声明一个自定义指标的稳定语义。
+
+    ``documentation`` 说明计算口径；``unit`` 使用 BKM 查询中可识别的
+    简短单位，例如 ``count``、``ms`` 或 ``byte``。元数据不进入上报 payload。
+    """
+
+    documentation: str
+    unit: str
+
+
+@dataclass(frozen=True, slots=True)
+class MetricDimension:
+    """声明指标维度的含义、值域来源和基数约束。"""
+
+    documentation: str
+
+
 class Metric:
     """BKM 自定义指标记录封装。
 
     调用方只需要关心 metrics 和低基数 dimension；data_id、access_token、target、
     timestamp、job 这些 BKM 协议字段统一在这里补齐。单条记录直接传 metrics /
-    dimension；多条记录传 records，不需要调用方拼 BKM payload。
+    dimension；多条记录传 records，不需要调用方拼 BKM payload。新指标建议通过子类的
+    ``documentation``、``metric_fields`` 和 ``dimension_fields`` 声明协议；空声明
+    保留历史宽松调用方式。``dimension_fields`` 只声明调用方维度，
+    最终 payload 由公共层额外注入固定 ``job`` 维度。
     """
 
     target: str = "bk_audit"
+    documentation: ClassVar[str] = ""
+    metric_fields: ClassVar[Mapping[str, MetricField]] = {}
+    dimension_fields: ClassVar[Mapping[str, MetricDimension]] = {}
 
     def __init__(
         self,

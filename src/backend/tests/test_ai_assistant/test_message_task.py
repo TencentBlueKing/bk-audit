@@ -1,7 +1,9 @@
+from contextlib import nullcontext
 from unittest import mock
 
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
 from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError
 
 from core.exceptions import ValidationError as CoreValidationError
 from services.web.ai_assistant.constants import (
@@ -70,6 +72,73 @@ class MessageTaskTest(TestCase):
         self.assertNotIn("executor", MessageExecutionTask.__dict__)
         for method_name in ("_load_execution", "_finish_success", "_finish_failure"):
             self.assertIn(method_name, MessageExecutionTask.__dict__)
+
+    def test_task_marks_worker_start_and_refreshes_activity_on_retry(self):
+        message = self.create_message()
+
+        with self.assertRaises(Retry):
+            self.invoke(execute_async_retry, message=message)
+
+        message.refresh_from_db()
+        self.assertIsNotNone(message.started_at)
+        self.assertIsNotNone(message.last_activity_at)
+        self.assertGreaterEqual(message.last_activity_at, message.started_at)
+        self.assertIsNone(message.finished_at)
+
+    @mock.patch("services.web.ai_assistant.services.message_execution.report_execution_finished")
+    def test_terminal_metric_is_reported_only_by_cas_winner(self, report_execution_finished):
+        message = self.create_message()
+
+        self.invoke(execute_async_success, message=message)
+        with self.assertRaises(Ignore):
+            self.invoke(execute_async_success, message=message)
+
+        report_execution_finished.assert_called_once()
+        self.assertEqual(report_execution_finished.call_args.args[0].status, ExecutionStatus.SUCCESS)
+
+    @mock.patch("services.web.ai_assistant.services.message_execution.report_invariant_violation")
+    def test_invalid_output_reports_invariant_violation(self, report_invariant_violation):
+        message = self.create_message()
+
+        with mock.patch.object(execute_async_success, "run", return_value={"invalid": True}):
+            with self.assertRaises(MessageExecutionFailed):
+                self.invoke(execute_async_success, message=message)
+
+        report_invariant_violation.assert_called_once()
+
+    @mock.patch("services.web.ai_assistant.services.message_execution.report_invariant_violation")
+    def test_invalid_output_invariant_is_reported_only_by_failure_cas_winner(self, report_invariant_violation):
+        message = self.create_message()
+        validation_error = MessageSnapshotValidationError()
+        execution_error = MessageExecutionFailed(message="任务执行结果格式错误")
+        execution_error.__cause__ = validation_error
+
+        self.assertTrue(
+            finish_message_failure(
+                message_id=message.id,
+                task_id=message.task_id,
+                exception=execution_error,
+            )
+        )
+        self.assertFalse(
+            finish_message_failure(
+                message_id=message.id,
+                task_id=message.task_id,
+                exception=execution_error,
+            )
+        )
+        report_invariant_violation.assert_called_once()
+
+    @mock.patch("services.web.ai_assistant.tasks.base.start_execution_span")
+    def test_task_wraps_execution_with_platform_span(self, start_execution_span):
+        message = self.create_message()
+        start_execution_span.return_value = nullcontext()
+
+        self.invoke(execute_async_success, message=message)
+
+        start_execution_span.assert_called_once()
+        self.assertEqual(start_execution_span.call_args.kwargs["object_type"], "MESSAGE")
+        self.assertEqual(start_execution_span.call_args.kwargs["task_id"], message.task_id)
 
     @staticmethod
     def invoke(task, *, message: Message, celery_task_id: str | None = None, retries: int = 0):
@@ -179,6 +248,13 @@ class MessageTaskTest(TestCase):
         message.refresh_from_db()
         self.assertEqual(result, {"content": "async:hello"})
         self.assertEqual(message.status, ExecutionStatus.SUCCESS)
+
+    @mock.patch.object(Message, "touch_processing", side_effect=DatabaseError("database unavailable"))
+    def test_retry_activity_failure_does_not_replace_retry(self, _touch_processing):
+        message = self.create_message()
+
+        with self.assertRaises(Retry):
+            self.invoke(execute_async_retry, message=message)
 
     def test_retry_with_exception_marks_failed_after_max_retries(self):
         message = self.create_message()

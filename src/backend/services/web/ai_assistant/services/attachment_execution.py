@@ -3,7 +3,12 @@ from typing import Any, Generic, TypeVar
 
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import AttachmentErrorCode, ExecutionStatus
+from services.web.ai_assistant.constants import (
+    AttachmentErrorCode,
+    ExecutionMode,
+    ExecutionObjectType,
+    ExecutionStatus,
+)
 from services.web.ai_assistant.exceptions import (
     AIAssistantException,
     AttachmentOutputValidationError,
@@ -13,6 +18,12 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Message
+from services.web.ai_assistant.observability import (
+    ExecutionMetricSnapshot,
+    report_execution_finished,
+    report_invariant_violation,
+    set_execution_span_context,
+)
 from services.web.ai_assistant.schemas import (
     MessageSchema,
     SnapshotInput,
@@ -66,6 +77,8 @@ def load_attachment_execution(
 
     if celery_task_id != task_id:
         raise StaleAttachmentTask()
+    if not Attachment.mark_processing_started(instance_id=attachment_id, task_id=task_id):
+        raise StaleAttachmentTask()
     attachment = (
         Attachment.objects.select_related("source_message__conversation")
         .filter(
@@ -78,6 +91,11 @@ def load_attachment_execution(
     if attachment is None:
         raise StaleAttachmentTask()
     handler = attachment_handler_registry.require(attachment.attachment_type)
+    set_execution_span_context(
+        object_uid=str(attachment.uid),
+        business_type=attachment.attachment_type,
+        is_stream=attachment.is_stream,
+    )
     input_data = parse_snapshot(
         handler.input_model,
         attachment.input_data,
@@ -135,9 +153,24 @@ def finish_attachment_success(
             "updated_by": execution.attachment.created_by,
             "updated_at": now,
         },
+        now=now,
     )
     if not updated:
         raise StaleAttachmentTask()
+    report_execution_finished(
+        ExecutionMetricSnapshot(
+            object_type=ExecutionObjectType.ATTACHMENT,
+            business_type=execution.attachment.attachment_type,
+            execution_mode=ExecutionMode.ASYNC,
+            is_stream=False,
+            status=ExecutionStatus.SUCCESS,
+            error_code="",
+            created_at=execution.attachment.created_at,
+            queued_at=execution.attachment.queued_at,
+            started_at=execution.attachment.started_at,
+            finished_at=now,
+        )
+    )
     return output_snapshot
 
 
@@ -156,9 +189,10 @@ def finish_attachment_failure(
         task_id=task_id,
         status=ExecutionStatus.PROCESSING,
     )
-    created_by = processing_attachment.values_list("created_by", flat=True).first()
-    if created_by is None:
+    attachment = processing_attachment.first()
+    if attachment is None:
         return False
+    created_by = attachment.created_by
 
     resolved_error_code = str(error_code)
     if resolved_error_code == AttachmentErrorCode.TASK_DISPATCH_FAILED:
@@ -172,22 +206,56 @@ def finish_attachment_failure(
             resolved_error_code = exception.code
     else:
         public_message = "附件执行失败，请稍后重试"
-    # 投递失败等未进入 Worker 的场景没有 Runtime，继续走 CAS 终态。
     if execution is not None and execution.has_stream:
-        return execution.stream.finish_failure(
+        is_stream_execution = True
+        # 流式 Runtime 在同一事务内收敛归档与终态，并返回当前任务是否赢得竞争。
+        updated = execution.stream.finish_failure(
             error_code=resolved_error_code,
             error_message=public_message,
             updated_by=created_by,
         )
-    return Attachment.finish_processing(
-        instance_id=attachment_id,
-        task_id=task_id,
-        status=ExecutionStatus.FAILED,
-        output_data=None,
-        error_code=resolved_error_code,
-        error_message=public_message,
-        extra_updates={
-            "updated_by": created_by,
-            "updated_at": timezone.now(),
-        },
-    )
+    else:
+        is_stream_execution = False
+        # 投递失败等未进入 Worker 的场景没有 Runtime，直接通过任务 fencing 写终态。
+        now = timezone.now()
+        updated = Attachment.finish_processing(
+            instance_id=attachment_id,
+            task_id=task_id,
+            status=ExecutionStatus.FAILED,
+            output_data=None,
+            error_code=resolved_error_code,
+            error_message=public_message,
+            extra_updates={
+                "updated_by": created_by,
+                "updated_at": now,
+            },
+            now=now,
+        )
+    if updated:
+        if isinstance(exception, AttachmentOutputValidationError) and isinstance(
+            exception.__cause__, AttachmentSnapshotValidationError
+        ):
+            report_invariant_violation(
+                object_type=ExecutionObjectType.ATTACHMENT,
+                business_type=attachment.attachment_type,
+                object_uid=str(attachment.uid),
+                task_id=task_id,
+                error_code=AttachmentErrorCode.OUTPUT_VALIDATION_FAILED,
+            )
+        # 流式 Runtime 已在最终事务提交后上报 Execution Metric，避免重复计数。
+        if not is_stream_execution:
+            report_execution_finished(
+                ExecutionMetricSnapshot(
+                    object_type=ExecutionObjectType.ATTACHMENT,
+                    business_type=attachment.attachment_type,
+                    execution_mode=ExecutionMode.ASYNC,
+                    is_stream=attachment.is_stream,
+                    status=ExecutionStatus.FAILED,
+                    error_code=resolved_error_code,
+                    created_at=attachment.created_at,
+                    queued_at=attachment.queued_at,
+                    started_at=attachment.started_at,
+                    finished_at=now,
+                )
+            )
+    return updated

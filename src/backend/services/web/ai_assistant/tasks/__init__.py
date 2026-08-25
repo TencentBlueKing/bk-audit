@@ -6,6 +6,7 @@ from services.web.ai_assistant.tasks.decorators import (
     attachment_execution_task,
     message_execution_task,
 )
+from services.web.ai_assistant.tasks.maintenance import monitor_ai_assistant_executions
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "MessageExecutionTask",
     "attachment_execution_task",
     "message_execution_task",
+    "monitor_ai_assistant_executions",
 ]

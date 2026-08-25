@@ -24,6 +24,8 @@ class StreamExecutionBinding:
 
     attachment_id: int
     attachment_uid: UUID
+    # 固化创建执行时的附件类型，终态汇总无需再查询数据库或依赖 Handler 注册表。
+    business_type: str
     config: AttachmentStreamConfig
 
     @property

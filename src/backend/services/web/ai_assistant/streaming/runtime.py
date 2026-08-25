@@ -11,7 +11,7 @@
 降级策略
 --------
 - Redis 故障：标记 DEGRADED，停止实时推送，归档继续。
-- MySQL checkpoint 故障：标记 DEGRADED，保留缓冲等待下次 flush 重试。
+- MySQL checkpoint 故障：标记 DEGRADED，保留缓冲等待后续自动 checkpoint 或终态收敛重试。
 - 归档容量耗尽：标记 TRUNCATED，停止缓冲新事件，Redis 推送继续。
 - Fencing 失效：抛出 StaleAttachmentTask，由业务 Task 的异常策略决定忽略或重试。
 
@@ -22,6 +22,7 @@
 
 import logging
 import threading
+import time
 from typing import Any
 
 from django.conf import settings
@@ -36,6 +37,11 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     StaleAttachmentTask,
     StreamRuntimeClosed,
+)
+from services.web.ai_assistant.observability import (
+    StreamMetricSnapshot,
+    report_stream_execution,
+    start_stream_span,
 )
 from services.web.ai_assistant.schemas import (
     AttachmentStreamConfig,
@@ -55,7 +61,8 @@ logger = logging.getLogger(__name__)
 class UIStreamRuntime:
     """业务 Task 唯一的流式出口；封装实时推送、归档缓冲与终态收敛。
 
-    业务只调用 ``send()`` 与平台注入的终态方法，不感知 Redis 与归档细节。
+    Handler 只调用 ``send()``，成功、失败和 Retry 收敛由平台 Task/Service 调用
+    ``finish_*`` 生命周期方法；两者都不感知 Redis 与归档细节。
     Redis 连接故障与 MySQL checkpoint 故障降级为 ``DEGRADED``/``TRUNCATED``；
     接入错误、实现错误、MySQL fencing 判定执行失效和终态事务失败向业务抛出。
     """
@@ -85,9 +92,15 @@ class UIStreamRuntime:
         self._closed = False
         # 业务事件计数与字节量用于容量降级判断。
         self._business_event_count = 0
+        self._business_event_bytes = 0
         self._redis_business_bytes = 0
+        self._degraded = False
+        self._truncated = False
+        self._summary_reported = False
         self._archive_stopped = False
         self._redis_stopped = False
+        # 只在实际落库成功后推进，数据库故障时下一条事件会继续尝试。
+        self._last_activity_checkpoint_at = time.monotonic()
 
     @classmethod
     def start(
@@ -150,39 +163,30 @@ class UIStreamRuntime:
             if not self._accept_business_event(payload_size=payload_size):
                 return None
             self._business_event_count += 1
+            self._business_event_bytes += payload_size
             ui_event = self._write_live(ui_event, payload_size=payload_size)
             self._buffer(ui_event, payload_size=payload_size)
             return ui_event
 
-    def flush(self) -> None:
-        """把缓冲事件写入归档；归档故障向调用方抛出。"""
-
-        with self._lock:
-            self._require_open()
-            self._checkpoint()
-
-    def flush_best_effort(self) -> None:
-        """尽力归档；仅数据库故障降级并保留缓冲，供下一次 flush 重试。"""
-
-        with self._lock:
-            self._require_open()
-            try:
-                self._checkpoint()
-            except DatabaseError:
-                self._degrade("AI 助手附件流式归档失败", status=StreamArchiveStatus.DEGRADED)
-
     def finish_retry(self) -> None:
         """Celery Retry 退出前强制刷盘并关闭，不写任何终态。"""
 
-        with self._lock:
-            if self._closed:
-                return
-            try:
-                self._checkpoint()
-            except DatabaseError:
-                # 数据库基础设施故障不改变已有 Celery Retry 语义。
-                self._degrade("AI 助手附件流式重试前归档失败", status=StreamArchiveStatus.DEGRADED)
-            self._closed = True
+        with start_stream_span(
+            attachment_uid=str(self._binding.attachment_uid),
+            business_type=self._binding.business_type,
+            execution_id=str(self._binding.config.execution_id),
+            status="RETRY",
+        ):
+            with self._lock:
+                if self._closed:
+                    return
+                try:
+                    self._checkpoint()
+                except DatabaseError:
+                    # 数据库基础设施故障不改变已有 Celery Retry 语义。
+                    self._degrade("AI 助手附件流式重试前归档失败", status=StreamArchiveStatus.DEGRADED)
+                self._closed = True
+                self._report_summary(status="RETRY", error_code="")
 
     def finish_success(self, *, output_data: dict[str, Any], updated_by: str) -> None:
         """在最终事务内写入剩余事件与成功终态，随后补发 stream_end 事件。"""
@@ -227,26 +231,34 @@ class UIStreamRuntime:
         若 Redis 补发失败则仅降级（MySQL 终态已提交，不可回滚）。
         """
 
-        with self._lock:
-            self._require_open()
-            pending = list(self._pending)
-            terminal_event = UIStreamEvent(event=PlatformStreamEvent.STREAM_END, data={"status": status})
-            # 终态事务失败必须保留缓冲并保持未关闭，由 Task 的异常策略收敛。
-            self._archive_store.finalize(
-                binding=self._binding,
-                events=pending,
-                terminal_event=terminal_event,
-                archive_status=self._archive_status,
-                status=status,
-                output_data=output_data,
-                error_code=error_code,
-                error_message=error_message,
-                updated_by=updated_by,
-            )
-            self._pending.clear()
-            self._pending_bytes = 0
-            self._closed = True
-            self._publish_terminal(terminal_event)
+        with start_stream_span(
+            attachment_uid=str(self._binding.attachment_uid),
+            business_type=self._binding.business_type,
+            execution_id=str(self._binding.config.execution_id),
+            status=str(status),
+        ):
+            with self._lock:
+                self._require_open()
+                pending = list(self._pending)
+                terminal_event = UIStreamEvent(event=PlatformStreamEvent.STREAM_END, data={"status": status})
+                # 终态事务失败必须保留缓冲并保持未关闭，由 Task 的异常策略收敛。
+                persisted_status = self._archive_store.finalize(
+                    binding=self._binding,
+                    events=pending,
+                    terminal_event=terminal_event,
+                    archive_status=self._archive_status,
+                    status=status,
+                    output_data=output_data,
+                    error_code=error_code,
+                    error_message=error_message,
+                    updated_by=updated_by,
+                )
+                self._observe_archive_status(persisted_status)
+                self._pending.clear()
+                self._pending_bytes = 0
+                self._closed = True
+                self._publish_terminal(terminal_event)
+                self._report_summary(status=str(status), error_code=error_code)
 
     def _reset_previous_stream(self, *, previous_config: AttachmentStreamConfig | None) -> None:
         """向旧 execution 的 Redis Stream 尝试补发 reset。"""
@@ -312,10 +324,15 @@ class UIStreamRuntime:
         """事件进入归档缓冲，达到批阈值时仅对数据库故障降级。"""
 
         if self._archive_stopped:
+            self._touch_activity_if_due()
             return
         self._pending.append(event)
         self._pending_bytes += payload_size
-        if len(self._pending) >= self.CHECKPOINT_EVENT_COUNT or self._pending_bytes >= self.CHECKPOINT_BYTES:
+        if (
+            len(self._pending) >= self.CHECKPOINT_EVENT_COUNT
+            or self._pending_bytes >= self.CHECKPOINT_BYTES
+            or self._activity_checkpoint_due()
+        ):
             try:
                 self._checkpoint()
             except DatabaseError:
@@ -338,10 +355,32 @@ class UIStreamRuntime:
         self._pending.clear()
         self._pending_bytes = 0
         self._archive_status = merge_archive_status(self._archive_status, result.archive_status)
+        self._last_activity_checkpoint_at = time.monotonic()
+        self._observe_archive_status(result.archive_status)
         # 容量截断后 Redis 实时流仍继续，但不再缓冲业务事件，
         # 避免每批都锁行重新解析已接近上限的大 JSON。
         if result.capacity_exhausted:
             self._archive_stopped = True
+
+    def _activity_checkpoint_due(self) -> bool:
+        """低频事件按时间触发 checkpoint，避免真实长任务被巡检误判失活。"""
+
+        return (
+            time.monotonic() - self._last_activity_checkpoint_at
+            >= settings.AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS
+        )
+
+    def _touch_activity_if_due(self) -> None:
+        """归档停止后仍按时间刷新 execution 活动；数据库故障沿用流降级语义。"""
+
+        if not self._activity_checkpoint_due():
+            return
+        try:
+            self._archive_store.touch_activity(binding=self._binding)
+        except DatabaseError:
+            self._degrade("AI 助手附件流式活动刷新失败", status=StreamArchiveStatus.DEGRADED)
+            return
+        self._last_activity_checkpoint_at = time.monotonic()
 
     def _degrade(
         self,
@@ -353,6 +392,7 @@ class UIStreamRuntime:
         """统一降级入口：提升归档状态并记录不含事件正文的告警。"""
 
         self._archive_status = merge_archive_status(self._archive_status, status)
+        self._observe_archive_status(status)
         logger.warning(
             message,
             extra={
@@ -362,6 +402,32 @@ class UIStreamRuntime:
                 "archive_status": str(self._archive_status),
                 **(extra or {}),
             },
+        )
+
+    def _observe_archive_status(self, status: StreamArchiveStatus) -> None:
+        """记录本次 execution 曾发生的降级类型，终态汇总不读取事件正文。"""
+
+        if status == StreamArchiveStatus.DEGRADED:
+            self._degraded = True
+        elif status == StreamArchiveStatus.TRUNCATED:
+            self._truncated = True
+
+    def _report_summary(self, *, status: str, error_code: str) -> None:
+        """一次 Runtime 只上报一条汇总，避免事件和 checkpoint 形成指标洪峰。"""
+
+        if self._summary_reported:
+            return
+        self._summary_reported = True
+        report_stream_execution(
+            StreamMetricSnapshot(
+                business_type=self._binding.business_type,
+                status=status,
+                error_code=error_code,
+                degraded=self._degraded,
+                truncated=self._truncated,
+                event_count=self._business_event_count,
+                event_bytes=self._business_event_bytes,
+            )
         )
 
     def _require_open(self) -> None:

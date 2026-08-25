@@ -150,6 +150,7 @@ class MessageService:
                 input_snapshot=prepared.input_data,
                 context_snapshot=prepared.context_data,
             )
+        now = timezone.now()
         return Message.objects.create(
             conversation=conversation,
             parent_message=prepared.parent_message,
@@ -158,6 +159,8 @@ class MessageService:
             input_data=prepared.input_data,
             context_data=prepared.context_data,
             output_data=prepared.output_data,
+            last_activity_at=now,
+            finished_at=now,
             created_by=self.user,
             updated_by=self.user,
         )
@@ -269,6 +272,7 @@ class MessageService:
                     "updated_by": self.user,
                     "updated_at": now,
                 },
+                now=now,
             )
             if not updated:
                 raise InvalidMessageState()
@@ -399,6 +403,7 @@ class MessageService:
         """先持久化 PROCESSING 消息，并在事务提交后投递绑定的业务任务。"""
 
         task_id = str(uuid4())
+        now = timezone.now()
         with transaction.atomic():
             message = Message.objects.create(
                 conversation=conversation,
@@ -409,6 +414,8 @@ class MessageService:
                 input_data=input_snapshot,
                 context_data=context_snapshot,
                 output_data=None,
+                queued_at=now,
+                last_activity_at=now,
                 created_by=self.user,
                 updated_by=self.user,
             )

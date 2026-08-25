@@ -113,6 +113,8 @@ class AttachmentService:
             input_data=parsed_input.model_dump(mode="json"),
             context_data=parsed_context.model_dump(mode="json"),
             output_data=output_snapshot,
+            last_activity_at=now,
+            finished_at=now,
             # 同步类型不进入流式通道，显式固化为 False，避免继承默认值歧义。
             is_stream=False,
             content_updated_at=now,
@@ -367,6 +369,7 @@ class AttachmentService:
                     "updated_by": self.user,
                     "updated_at": now,
                 },
+                now=now,
             )
             if not updated:
                 raise InvalidAttachmentState()
@@ -441,6 +444,8 @@ class AttachmentService:
                 input_data=input_snapshot,
                 context_data=context_snapshot,
                 output_data=None,
+                queued_at=now,
+                last_activity_at=now,
                 # 创建时固化 Handler 的流能力声明，后续执行和接口都以模型字段为准。
                 is_stream=handler.is_stream,
                 content_updated_at=now,

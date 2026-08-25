@@ -1,8 +1,11 @@
 import uuid
+from datetime import datetime
 from typing import Any, Mapping
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel
@@ -41,6 +44,49 @@ class ExecutionSnapshotModel(models.Model):
     output_data = models.JSONField(gettext_lazy("输出快照"), default=None, null=True, blank=True)
     error_code = models.CharField(gettext_lazy("错误码"), max_length=64, default="", blank=True)
     error_message = models.TextField(gettext_lazy("脱敏错误信息"), default="", blank=True)
+    # 四个时间字段只描述当前执行；同步对象没有排队和 Worker 开始时间。
+    queued_at = models.DateTimeField(gettext_lazy("排队时间"), null=True, blank=True)
+    started_at = models.DateTimeField(gettext_lazy("开始时间"), null=True, blank=True)
+    last_activity_at = models.DateTimeField(gettext_lazy("最近活动时间"), null=True, blank=True)
+    finished_at = models.DateTimeField(gettext_lazy("结束时间"), null=True, blank=True)
+
+    @classmethod
+    def mark_processing_started(
+        cls,
+        *,
+        instance_id: int,
+        task_id: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """标记当前任务已开始；Worker 重投只刷新活动时间，不覆盖首次开始时间。"""
+
+        now = now or timezone.now()
+        return (
+            cls.objects.filter(id=instance_id, status=ExecutionStatus.PROCESSING, task_id=task_id,).update(
+                started_at=Coalesce("started_at", models.Value(now)),
+                last_activity_at=now,
+            )
+            == 1
+        )
+
+    @classmethod
+    def touch_processing(
+        cls,
+        *,
+        instance_id: int,
+        task_id: str,
+        now: datetime | None = None,
+    ) -> bool:
+        """刷新当前任务的平台活动时间，旧任务或终态对象不会被续活。"""
+
+        return (
+            cls.objects.filter(
+                id=instance_id,
+                status=ExecutionStatus.PROCESSING,
+                task_id=task_id,
+            ).update(last_activity_at=now or timezone.now())
+            == 1
+        )
 
     @classmethod
     def finish_processing(
@@ -53,6 +99,7 @@ class ExecutionSnapshotModel(models.Model):
         error_code: str,
         error_message: str,
         extra_updates: Mapping[str, Any] | None = None,
+        now: datetime | None = None,
     ) -> bool:
         """仅当指定任务仍处于处理中时，以单条 SQL 竞争写入执行终态。
 
@@ -64,12 +111,15 @@ class ExecutionSnapshotModel(models.Model):
         if terminal_status not in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
             raise ValueError("执行终态必须是 SUCCESS 或 FAILED")
 
+        now = now or (extra_updates or {}).get("updated_at") or timezone.now()
         updates = dict(extra_updates or {})
         updates.update(
             status=terminal_status,
             output_data=output_data,
             error_code=str(error_code),
             error_message=str(error_message),
+            last_activity_at=now,
+            finished_at=now,
         )
         return (
             cls.objects.filter(
@@ -88,6 +138,7 @@ class ExecutionSnapshotModel(models.Model):
         old_task_id: str,
         new_task_id: str,
         extra_updates: Mapping[str, Any] | None = None,
+        now: datetime | None = None,
     ) -> bool:
         """通过失败状态和旧任务 ID，原子抢占一次原对象重试。
 
@@ -95,6 +146,7 @@ class ExecutionSnapshotModel(models.Model):
         ``extra_updates`` 显式传入审计时间及消息、附件各自的领域字段。
         """
 
+        now = now or (extra_updates or {}).get("updated_at") or timezone.now()
         updates = dict(extra_updates or {})
         updates.update(
             status=ExecutionStatus.PROCESSING,
@@ -102,12 +154,50 @@ class ExecutionSnapshotModel(models.Model):
             output_data=None,
             error_code="",
             error_message="",
+            queued_at=now,
+            started_at=None,
+            last_activity_at=now,
+            finished_at=None,
         )
         return (
             cls.objects.filter(
                 id=instance_id,
                 status=ExecutionStatus.FAILED,
                 task_id=old_task_id,
+            ).update(**updates)
+            == 1
+        )
+
+    @classmethod
+    def timeout_processing(
+        cls,
+        *,
+        instance_id: int,
+        task_id: str,
+        cutoff: datetime,
+        error_code: str,
+        error_message: str,
+        now: datetime | None = None,
+        extra_updates: Mapping[str, Any] | None = None,
+    ) -> bool:
+        """按任务和最后活动时间原子收敛失活对象，不锁行也不依赖 Celery 状态。"""
+
+        now = now or timezone.now()
+        updates = dict(extra_updates or {})
+        updates.update(
+            status=ExecutionStatus.FAILED,
+            output_data=None,
+            error_code=str(error_code),
+            error_message=error_message,
+            last_activity_at=now,
+            finished_at=now,
+        )
+        return (
+            cls.objects.filter(
+                id=instance_id,
+                status=ExecutionStatus.PROCESSING,
+                task_id=task_id,
+                last_activity_at__lte=cutoff,
             ).update(**updates)
             == 1
         )
@@ -268,7 +358,7 @@ class Message(ExternalUIDModel, OperateRecordModel, ExecutionSnapshotModel):
                 name="ai_msg_parent_type_idx",
             ),
             models.Index(fields=["status", "task_id"], name="ai_msg_task_idx"),
-            models.Index(fields=["status", "updated_at", "id"], name="ai_msg_status_time_idx"),
+            models.Index(fields=["status", "last_activity_at", "id"], name="ai_msg_status_time_idx"),
         ]
 
 
@@ -295,7 +385,7 @@ class Attachment(ExternalUIDModel, OperateRecordModel, ExecutionSnapshotModel):
         indexes = [
             models.Index(fields=["source_message", "id"], name="ai_att_source_idx"),
             models.Index(fields=["status", "task_id"], name="ai_att_task_idx"),
-            models.Index(fields=["status", "updated_at", "id"], name="ai_att_status_time_idx"),
+            models.Index(fields=["status", "last_activity_at", "id"], name="ai_att_status_time_idx"),
             models.Index(
                 fields=["created_by", "attachment_type", "status", "content_updated_at", "id"],
                 name="ai_att_owner_type_idx",

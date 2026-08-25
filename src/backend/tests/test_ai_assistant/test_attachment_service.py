@@ -316,6 +316,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(attachment.title, "字段统计")
         self.assertEqual(attachment.context_data, {"prefix": "alice:sync"})
         self.assertEqual(attachment.output_data, {"content": "alice:sync:hello"})
+        self.assertIsNone(attachment.queued_at)
+        self.assertIsNone(attachment.started_at)
+        self.assertIsNotNone(attachment.finished_at)
+        self.assertEqual(attachment.last_activity_at, attachment.finished_at)
         self.assertIsInstance(handler.prepared_input, AttachmentEchoInput)
         self.assertEqual(handler.prepare_atomic_depth, self.atomic_depth)
         self.assertEqual(handler.execution_context.source_message, self.source_message)
@@ -386,6 +390,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(attachment.context_data, {"prefix": "alice:async"})
         self.assertIsNone(attachment.output_data)
         self.assertIsNotNone(attachment.task_id)
+        self.assertIsNotNone(attachment.queued_at)
+        self.assertEqual(attachment.last_activity_at, attachment.queued_at)
+        self.assertIsNone(attachment.started_at)
+        self.assertIsNone(attachment.finished_at)
         self.assertEqual(handler.prepare_atomic_depth, self.atomic_depth)
         apply_async.assert_called_once_with(
             kwargs={"attachment_id": attachment.id, "task_id": attachment.task_id},
@@ -912,6 +920,13 @@ class AttachmentServiceTest(TestCase):
             output_data={"content": "failed"},
         )
         old_task_id = attachment.task_id
+        old_queued_at = timezone.now() - timedelta(minutes=10)
+        Attachment.objects.filter(id=attachment.id).update(
+            queued_at=old_queued_at,
+            started_at=old_queued_at,
+            last_activity_at=old_queued_at,
+            finished_at=old_queued_at,
+        )
 
         with mock.patch("services.web.ai_assistant.services.attachment.transaction.on_commit"):
             retried = self.service.retry(attachment_uid=str(attachment.uid))
@@ -928,6 +943,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
         self.assertEqual(retried.task_id, new_task_id)
         self.assertNotEqual(retried.task_id, old_task_id)
+        self.assertGreater(retried.queued_at, old_queued_at)
+        self.assertEqual(retried.last_activity_at, retried.queued_at)
+        self.assertIsNone(retried.started_at)
+        self.assertIsNone(retried.finished_at)
 
     def test_retry_dispatch_failure_returns_failed_instance_and_can_retry_again(self):
         handler = self.register_async_handler()
