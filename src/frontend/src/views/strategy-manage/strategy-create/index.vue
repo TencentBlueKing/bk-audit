@@ -107,7 +107,10 @@
   import useMessage from '@/hooks/use-message';
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    buildStrategyCreatePayload,
+    parseStrategyDetailToForm,
+  } from './utils/strategy-protocol';
 
 
   interface IFormData {
@@ -136,6 +139,10 @@
     rules?: Array<Record<string, any>>,
     assign_rules?: Array<Record<string, any>>,
     default_assign_rule?: Record<string, any>,
+    dispatch_rules?: Array<Record<string, any>>,
+    binding_type?: string,
+    visibility?: Record<string, any>,
+    scene_id?: string | number,
   }
 
   const router = useRouter();
@@ -293,9 +300,10 @@
       });
       // 确保标签映射已加载后，再用接口返回的数据初始化表单（将 tags 从 ID 转为名称）
       await ensureTagMapLoaded();
-      const d = editData.value;
+      const d = editData.value as any;
       const normalizedTags = (d.tags ?? []).map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
       d.tags = normalizedTags;
+      const protocolForm = parseStrategyDetailToForm(d);
       // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「提交」时提交的是全量数据
       formData.value = {
         strategy_name: d.strategy_name ?? '',
@@ -306,10 +314,10 @@
         control_version: d.control_version,
         configs: _.cloneDeep(d.configs ?? {}),
         status: d.status ?? '',
-        risk_level: d.risk_level ?? '',
-        risk_hazard: d.risk_hazard ?? '',
-        risk_guidance: d.risk_guidance ?? '',
-        risk_title: d.risk_title ?? '',
+        risk_level: protocolForm.risk_level ?? '',
+        risk_hazard: protocolForm.risk_hazard ?? '',
+        risk_guidance: protocolForm.risk_guidance ?? '',
+        risk_title: protocolForm.risk_title ?? '',
         strategy_type: d.strategy_type ?? '',
         event_data_field_configs: _.cloneDeep(d.event_data_field_configs ?? []),
         event_basic_field_configs: _.cloneDeep(d.event_basic_field_configs ?? []),
@@ -320,17 +328,21 @@
         report_enabled: d.report_enabled ?? false,
         report_auto_render: d.report_auto_render ?? false,
         report_config: _.cloneDeep(d.report_config ?? {}),
-        rules: d.rules?.length
-          ? _.cloneDeep(d.rules)
+        rules: protocolForm.rules?.length
+          ? _.cloneDeep(protocolForm.rules)
           : [{
             name: '规则1',
-            risk_title: d.risk_title ?? '',
-            risk_level: d.risk_level ?? 'HIGH',
-            risk_hazard: d.risk_hazard ?? '',
-            risk_guidance: d.risk_guidance ?? '',
+            risk_title: protocolForm.risk_title ?? '',
+            risk_level: protocolForm.risk_level ?? 'HIGH',
+            risk_hazard: protocolForm.risk_hazard ?? '',
+            risk_guidance: protocolForm.risk_guidance ?? '',
           }],
-        assign_rules: _.cloneDeep(d.assign_rules ?? []),
-        default_assign_rule: _.cloneDeep(d.default_assign_rule ?? {}),
+        assign_rules: _.cloneDeep(protocolForm.assign_rules ?? []),
+        default_assign_rule: _.cloneDeep(protocolForm.default_assign_rule ?? {}),
+        dispatch_rules: _.cloneDeep(protocolForm.dispatch_rules ?? []),
+        binding_type: protocolForm.binding_type,
+        visibility: _.cloneDeep(protocolForm.visibility),
+        scene_id: protocolForm.scene_id,
       };
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;
@@ -480,10 +492,7 @@
     }
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
-    saveStrategy({
-      ...params,
-      scene_id: getSceneSystemParams().scope_id,
-    });
+    saveStrategy(buildStrategyCreatePayload(params));
   };
 
   const handleSaveDraft = (params: Record<string, any>) => {
