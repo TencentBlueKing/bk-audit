@@ -391,9 +391,7 @@ class SQLGenerator:
             return operate(
                 operator,
                 field,
-                # "" 为前端存储约定的"值在 filters"标记，视同未设置；
-                # 注意 0/False 是合法配置值，不能用真值判断（与 _handle_rule_having_condition 一致）
-                filter_type(condition.filter) if condition.filter not in (None, "") else None,
+                filter_type(condition.filter) if condition.filter else None,
                 [filter_type(f) for f in condition.filters],
             )
         except ValueError:
@@ -404,7 +402,7 @@ class SQLGenerator:
     def _apply_filter_conditions(
         self, condition: Union[WhereCondition, HavingCondition], leaf_handler=None
     ) -> BasicCriterion:
-        """递归构建 WHERE/HAVING 子句。
+        """递归构建 WHERE/HAVING 子句
 
         :param leaf_handler: 叶子条件（Condition）处理器，默认 handle_condition；
             多规则 L2 列引用模式传入 _handle_rule_having_condition（聚合字段解析为 L1 输出列）

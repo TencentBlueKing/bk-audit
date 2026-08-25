@@ -21,7 +21,7 @@
 
 from django.db import migrations
 
-
+# 分批处理，避免一次性加载/更新过多数据导致数据库压力过大或内存溢出
 BATCH_SIZE = 5000
 # resource_type / binding_type 直接使用字符串常量，避免 apps.get_model 无法拿到 TextChoices
 RESOURCE_TYPE_RISK = "risk"
@@ -43,8 +43,7 @@ def forwards(apps, schema_editor):
 
     print("[forwards] 开始为存量 Risk 建立 RISK 场景绑定", flush=True)
 
-    # 1. 一次性拉取 strategy_id -> scene_id 映射（策略量级 O(百)，可安全全量加载）
-    #    键统一为 str，与 ResourceBinding.resource_id 的存储类型对齐
+    # 1. 一次性拉取 strategy_id -> scene_id 映射
     strategy_scene_map = {
         str(strategy_id): scene_id
         for strategy_id, scene_id in ResourceBindingScene.objects.filter(
@@ -60,7 +59,6 @@ def forwards(apps, schema_editor):
         return
 
     # 2. 提前查出已存在的 RISK 绑定，避免重复建
-    #    量级：与存量 Risk 相同；若过大可改为分批 exists 查询，这里先按典型规模处理
     existing_risk_ids = set(
         ResourceBinding.objects.filter(resource_type=RESOURCE_TYPE_RISK).values_list(
             "resource_id", flat=True
@@ -68,8 +66,7 @@ def forwards(apps, schema_editor):
     )
     print(f"[forwards] 已存在 RISK 绑定 {len(existing_risk_ids)} 条，将跳过", flush=True)
 
-    # 3. 流式扫描 Risk，按 scene_id 分组待建列表
-    #    仅拉必要字段 + iterator 避免内存爆
+    # 3. 扫描 Risk，按 scene_id 分组待建列表,仅拉必要字段
     to_create_by_scene = {}  # scene_id -> [risk_id, ...]
     scanned = 0
     skipped_no_strategy_binding = 0
@@ -105,7 +102,7 @@ def forwards(apps, schema_editor):
 
     for scene_id, risk_id_list in to_create_by_scene.items():
         for batch in _iter_batches(risk_id_list, BATCH_SIZE):
-            # 4.1 建 binding；ignore_conflicts 兜底幂等
+            # 4.1 建 binding
             ResourceBinding.objects.bulk_create(
                 [
                     ResourceBinding(
@@ -118,7 +115,7 @@ def forwards(apps, schema_editor):
                 batch_size=BATCH_SIZE,
                 ignore_conflicts=True,
             )
-            # 4.2 拉回本批的 binding id，无论是本次新建还是先前存在
+            # 4.2 拉回本批的 binding id
             binding_pairs = list(
                 ResourceBinding.objects.filter(
                     resource_type=RESOURCE_TYPE_RISK,
@@ -127,7 +124,7 @@ def forwards(apps, schema_editor):
             )
             created_binding_total += len(binding_pairs)
 
-            # 4.3 建 ResourceBindingScene；ResourceBindingScene 无 unique 约束，需要先过滤已存在的
+            # 4.3 建 ResourceBindingScene；需要先过滤已存在的
             existing_scene_binding_ids = set(
                 ResourceBindingScene.objects.filter(
                     binding_id__in=[bid for bid, _ in binding_pairs],
@@ -163,12 +160,6 @@ def forwards(apps, schema_editor):
 def backwards(apps, schema_editor):
     """
     回滚：删除所有 RISK 类型的 ResourceBinding。
-
-    风险与限制：
-    - 无法区分本次迁移创建的 binding 和后续运行时双写创建的 binding
-      （字段层没有 created_by 之类的锚点）。
-    - 因此本 backwards 会清空所有 RISK 类型 binding。生产回滚请谨慎评估，
-      通常应通过重新执行 forwards 恢复数据，而不是回滚本迁移。
     """
     ResourceBinding = apps.get_model("scene", "ResourceBinding")
 
@@ -181,11 +172,6 @@ def backwards(apps, schema_editor):
 class Migration(migrations.Migration):
     """
     存量 Risk 场景绑定回填。
-
-    依赖：
-    - risk 0059：Risk 已具备本特性所需字段（strategy_rule / dispatch_rule / confirmer 等）
-    - strategy_v2 0027：策略规则数据迁移已完成（本迁移不直接依赖，但顺序上应在其后）
-    - scene 0013：ResourceBinding/ResourceBindingScene 表结构就位
     """
 
     dependencies = [

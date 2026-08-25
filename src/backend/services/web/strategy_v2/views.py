@@ -74,7 +74,6 @@ class StrategyViewSet(ResourceViewSet):
                 ),
             ]
         if self.action in ["strategy_running_status_list", "retrieve"]:
-            # 场景策略：场景实例权限（反查策略所属场景）；全局策略无场景关联，回退平台管理权限
             return [
                 AnyOfPermissions(
                     IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
@@ -86,7 +85,6 @@ class StrategyViewSet(ResourceViewSet):
                 ),
             ]
         if self.action in ["create"]:
-            # 场景策略：请求携带 scene_id 走场景实例权限；全局策略（binding_type=platform_binding，无 scene_id）走平台管理权限
             return [
                 AnyOfPermissions(
                     IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
@@ -163,7 +161,6 @@ class StrategyTagsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
-            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（无 scene_id）走平台管理权限
             return [
                 AnyOfPermissions(
                     IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),

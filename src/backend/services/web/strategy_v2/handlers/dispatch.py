@@ -30,7 +30,6 @@ from services.web.strategy_v2.models import DispatchRule, Strategy
 - 事件输出字段：EventMappingFields 定义的全部字段（strategy_id/strategy_rule_id/event_data/event_type/event_time/event_source/operator/raw_event_id/event_content...）
 - 规则实例化字段：risk_level、risk_hazard / risk_guidance 
 - event_data.* JSON 路径：覆盖策略级 select 的维度/聚合字段（如 event_data.resource_type），resolve_field 按 '.' 分层下钻取值
-- 排除流转态字段：status / current_operator / rule_id（处置规则）等——分派先于流转
 """
 
 
@@ -186,7 +185,7 @@ def _first_value(v: Any, vs: List[Any]) -> Any:
         return v
     if vs:
         return vs[0]
-    return v  # None 或 ""（保持原值参与语义，如 isnull）
+    return v
 
 # sql操作符的python等价实现
 PY_OPERATORS = {

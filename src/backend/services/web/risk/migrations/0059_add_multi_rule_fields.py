@@ -77,7 +77,6 @@ class Migration(migrations.Migration):
             name='status',
             field=models.CharField(choices=[('new', '新'), ('pending_confirm', '待确认'), ('await_deal', '待处理'), ('for_approve', '自动处理审批中'), ('auto_process', '套餐处理中'), ('closed', '已关单')], db_index=True, default='new', max_length=32, verbose_name='Risk Status'),
         ),
-        # 按 strategy_rule 统计/查询风险 + 二次确认可见性过滤
         migrations.AddIndex(
             model_name='risk',
             index=models.Index(

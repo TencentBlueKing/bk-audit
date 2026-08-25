@@ -158,8 +158,7 @@ def forwards(apps, schema_editor):
 
 def backwards(apps, schema_editor):
     """
-    回滚迁移：数据迁移不做逆向全表清洗，避免误伤生产数据。
-
+    回滚迁移
     - 仅回滚"由本次迁移写入的" StrategyRule（created_by == MIGRATION_CREATED_BY）
     - Risk/ManualEvent 的关联字段不做逆向清洗，如需清洗请人工介入
     """
@@ -177,26 +176,23 @@ def backwards(apps, schema_editor):
         Strategy.objects.filter(strategy_id__in=strategy_ids).update(rule_order=[])
         print(f"[backwards] 清空 {len(strategy_ids)} 条策略的 rule_order", flush=True)
 
-    # 硬删除本次迁移写入的规则（历史 model 无 SoftDeleteModel 语义，直接 delete 即为 DELETE）
+    # 硬删除本次迁移写入的规则
     count = migration_rules.count()
     migration_rules.delete()
     print(f"[backwards] 删除 {count} 条 StrategyRule 记录", flush=True)
 
     print(
-        "[backwards] 回滚完成。注意：Risk/ManualEvent 上的 strategy_rule/dispatch_rule/"
-        "confirmer/risk_level/risk_hazard/risk_guidance 字段"
-        "不做逆向清洗，如需清洗请人工介入",
+        "[backwards] 回滚完成。Risk/ManualEvent 上的 strategy_rule/dispatch_rule/confirmer/risk_level/risk_hazard/risk_guidance 等字段不做逆向清洗",
         flush=True,
     )
 
 
 class Migration(migrations.Migration):
     """
-    数据迁移：将现有单规则策略迁移到 StrategyRule 表。
+    数据迁移：将现有单规则策略迁移到 StrategyRule 表
 
     当前状态：
-    - 所有策略都是场景策略（scene_binding）
-    - 无全局策略（platform_binding）
+    - 所有策略都是场景策略（scene_binding），无全局策略（platform_binding）
     - processor_groups/notice_groups 迁移到 StrategyRule
     - confirmer 为空（无全局策略）
     """

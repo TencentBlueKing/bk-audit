@@ -242,7 +242,7 @@ class BindingMetadataHelper:
     @staticmethod
     def create_risk_scene_binding(risk_id: str, scene_id: int) -> None:
         """
-        为风险单创建 RISK 类型的场景归属绑定（RISK 场景归属单轨制的运行时写入路径）。
+        为风险单创建 RISK 类型的场景归属绑定
 
         写入时机
         - 场景策略风险：create_risk 创建后立即写（scene_id 来自策略的场景绑定）

@@ -277,7 +277,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
             # 软删除后修复覆盖索引失效：strategy_id 等值 + is_deleted 等值 + event_time 范围
             # 使 ListStrategy risk_count 子查询恢复 index-only scan（Using index）
             models.Index(fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"),
-            # 按发现规则统计/筛选风险：strategy_rule + is_deleted 作为锁定路径
+            # 按发现规则筛选风险
             models.Index(fields=["strategy_rule", "is_deleted", "event_time"], name="idx_risk_srule_isdel_time"),
             # 二次确认可见性过滤：先命中 display_status 索引收敛到小范围再做 confirmer 包含判断
             models.Index(

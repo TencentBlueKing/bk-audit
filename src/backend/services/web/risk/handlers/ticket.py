@@ -128,8 +128,7 @@ class RiskFlowBaseHandler:
         if not self.strategy:
             return self.load_security_person()
 
-        # 1. 规则策略 全局策略风险：分派规则的处理组
-        # dispatch_rule_id 为分派时固化引用，规则可能已被软删，绕过软删过滤读取
+        # 1. 规则策略 全局策略风险：从分派规则中获取处理组
         if getattr(self.risk, "dispatch_rule_id", None):
             from services.web.strategy_v2.models import DispatchRule
 
@@ -143,8 +142,7 @@ class RiskFlowBaseHandler:
                     return parsed_members
             return self.load_security_person()
 
-        # 2. 规则策略 场景策略：处理人只来自命中发现规则的 processor
-        # strategy_rule_id 为建单时固化引用，规则可能已被软删，绕过软删过滤读取
+        # 2. 规则策略 场景策略：从命中发现规则中获取处理组
         if self.strategy.strategy_type == StrategyType.RULE:
             from services.web.strategy_v2.models import StrategyRule
 

@@ -45,7 +45,7 @@ def _default_strategy_rule_conditions() -> dict:
     """
     StrategyRule.conditions 的默认值。
 
-    结构：{"where": None, "having": None}，明确表达"未配置"。
+    结构：{"where": None, "having": None}。
     """
     return {"where": None, "having": None}
 
@@ -402,21 +402,21 @@ class StrategyRule(SoftDeleteModel):
         gettext_lazy("Conditions"),
         default=_default_strategy_rule_conditions,
         blank=True,
-        help_text=gettext_lazy('检测条件，结构：{"where": {...}, "having": {...}}；键值为 None 表示未配置'),
+        help_text=gettext_lazy('检测条件，结构：{"where": {...}, "having": {...}}'),
     )
     risk_title = models.CharField(
         gettext_lazy("Risk Title"),
         max_length=255,
         null=True,
         blank=True,
-        help_text=gettext_lazy("风险标题模板（Jinja2）"),
+        help_text=gettext_lazy("风险标题模板"),
     )
     risk_level = models.CharField(
         gettext_lazy("Risk Level"),
         max_length=16,
         null=True,
         blank=True,
-        help_text=gettext_lazy("风险等级：HIGH/MIDDLE/LOW"),
+        help_text=gettext_lazy("风险等级"),
     )
     risk_hazard = models.TextField(
         gettext_lazy("Risk Hazard"),
@@ -453,7 +453,6 @@ class StrategyRule(SoftDeleteModel):
         unique_together = [["strategy", "rule_name"]]
 
     def __str__(self):
-        # 使用 strategy_id 避免额外查询触发 N+1，Django Admin 会自行懒加载 strategy 对象
         try:
             strategy_name = self.strategy.strategy_name
         except Exception:  # pylint: disable=broad-except
