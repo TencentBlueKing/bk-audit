@@ -1,4 +1,4 @@
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from unittest import mock
 
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
@@ -139,6 +139,28 @@ class MessageTaskTest(TestCase):
         start_execution_span.assert_called_once()
         self.assertEqual(start_execution_span.call_args.kwargs["object_type"], "MESSAGE")
         self.assertEqual(start_execution_span.call_args.kwargs["task_id"], message.task_id)
+
+    @mock.patch("services.web.ai_assistant.tasks.base.start_execution_span")
+    def test_stale_delivery_is_ignored_outside_span(self, start_execution_span):
+        message = self.create_message()
+        Message.objects.filter(id=message.id).update(status=ExecutionStatus.SUCCESS)
+        message.refresh_from_db()
+        escaped_exceptions = []
+
+        @contextmanager
+        def recording_span():
+            try:
+                yield
+            except BaseException as error:  # noqa: BLE001 - 验证控制异常不逃出 Span
+                escaped_exceptions.append(error)
+                raise
+
+        start_execution_span.return_value = recording_span()
+
+        with self.assertRaises(Ignore):
+            self.invoke(execute_async_success, message=message)
+
+        self.assertEqual(escaped_exceptions, [])
 
     @staticmethod
     def invoke(task, *, message: Message, celery_task_id: str | None = None, retries: int = 0):

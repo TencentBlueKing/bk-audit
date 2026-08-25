@@ -1167,6 +1167,7 @@ class ListGeneralConfigResource(Meta, ModelResource):
     model = GeneralConfig
     filter_fields = ["scene", "config_name", "created_by"]
     action = "list"
+    many_response_data = True
     serializer_class = GeneralConfigSerializer
     RequestSerializer = ListGeneralConfigReqSerializer
 

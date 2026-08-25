@@ -64,6 +64,12 @@ class ConversationService:
         """软删除组内会话，再物理删除分组和完整 Node 子树。"""
 
         group = self._get_group(group_uid=group_uid, for_update=True)
+        # 删除和移动统一锁 Group Node。只有会话 Node 才允许以它为父节点，
+        # 因此该精确行锁足以阻止删除过程中有会话移入或移出。
+        ConversationSidebarNode.objects.select_for_update().filter(
+            group=group,
+            created_by=self.user,
+        ).first()
         child_nodes = ConversationSidebarNode.objects.filter(
             parent_node__group=group,
             created_by=self.user,
@@ -141,11 +147,20 @@ class ConversationService:
     def clear_conversations(self) -> None:
         """清空当前用户的会话和会话 Node，保留分组及空分组 Node。"""
 
-        Conversation.objects.filter(created_by=self.user).delete()
+        # clear 与消息/附件最终写入共用 Conversation 行锁；后续删除严格绑定这批
+        # 初始 ID，避免 READ COMMITTED 下误删事务期间并发创建的新会话 Node。
+        conversation_ids = list(
+            Conversation.objects.select_for_update()
+            .filter(created_by=self.user, is_deleted=False)
+            .order_by("id")
+            .values_list("id", flat=True)
+        )
+        Conversation.objects.filter(created_by=self.user, id__in=conversation_ids).delete()
         self._delete_nodes_in_batches(
             ConversationSidebarNode.objects.filter(
                 created_by=self.user,
                 node_type=SidebarNodeType.CONVERSATION,
+                conversation_id__in=conversation_ids,
             )
         )
 

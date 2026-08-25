@@ -4,6 +4,7 @@ MySQL 是状态事实源。巡检只按状态与活动时间索引扫描候选�
 截止时间 CAS 收敛，不查询 Celery Worker、Result Backend 或 RabbitMQ 状态。
 """
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -31,6 +32,9 @@ from services.web.ai_assistant.observability import (
     report_processing_metrics,
     report_reconcile_metric,
 )
+from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
+
+logger = logging.getLogger(__name__)
 
 _TIMEOUT_MESSAGE = "任务执行超时，请重试"
 
@@ -158,14 +162,12 @@ def _reconcile_model(*, config: _ModelReconcileConfig, now: datetime) -> _ModelR
                 # 迁移后正常行一定有 task_id/activity；异常空值只进入观测，不做不安全推断。
                 if not task_id or candidate["last_activity_at"] is None:
                     continue
-                updated = config.model.timeout_processing(
-                    instance_id=candidate["id"],
+                updated = _timeout_candidate(
+                    config=config,
+                    candidate=candidate,
                     task_id=task_id,
-                    cutoff=failure_cutoff,
-                    error_code=config.timeout_error_code,
-                    error_message=_TIMEOUT_MESSAGE,
+                    failure_cutoff=failure_cutoff,
                     now=now,
-                    extra_updates={"updated_at": now},
                 )
                 if not updated:
                     continue
@@ -204,6 +206,49 @@ def _reconcile_model(*, config: _ModelReconcileConfig, now: datetime) -> _ModelR
         expired_count=expired_count,
         failed_count=len(timeout_records),
     )
+
+
+def _timeout_candidate(
+    *,
+    config: _ModelReconcileConfig,
+    candidate: dict,
+    task_id: str,
+    failure_cutoff: datetime,
+    now: datetime,
+) -> bool:
+    """按对象类型收敛超时；流式附件额外关闭当前实时流。"""
+
+    if config.model is not Attachment or not candidate.get("is_stream", False):
+        return config.model.timeout_processing(
+            instance_id=candidate["id"],
+            task_id=task_id,
+            cutoff=failure_cutoff,
+            error_code=config.timeout_error_code,
+            error_message=_TIMEOUT_MESSAGE,
+            now=now,
+            extra_updates={"updated_at": now},
+        )
+
+    timeout_result = AttachmentArchiveStore().timeout_processing(
+        attachment_id=candidate["id"],
+        task_id=task_id,
+        cutoff=failure_cutoff,
+        error_code=config.timeout_error_code,
+        error_message=_TIMEOUT_MESSAGE,
+        now=now,
+    )
+    if timeout_result.redis_key and timeout_result.terminal_event:
+        try:
+            RedisLiveStore().append(
+                redis_key=timeout_result.redis_key,
+                event=timeout_result.terminal_event,
+            )
+        except Exception:  # NOCC:broad-except(MySQL 终态已提交，实时通知只能最佳努力)
+            logger.warning(
+                "AI 助手超时附件终止事件实时发布失败",
+                extra={"attachment_id": candidate["id"], "task_id": task_id},
+            )
+    return timeout_result.updated
 
 
 def _aggregate_processing(

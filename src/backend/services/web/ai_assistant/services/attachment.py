@@ -18,6 +18,7 @@ from services.web.ai_assistant.exceptions import (
     AIAssistantException,
     AttachmentExportFailed,
     AttachmentExportNotSupported,
+    AttachmentNotEditable,
     AttachmentNotFound,
     AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
@@ -31,7 +32,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentExportResult,
     attachment_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import dump_snapshot, parse_snapshot
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
@@ -104,23 +105,25 @@ class AttachmentService:
             raise AttachmentOutputValidationError() from error
 
         now = timezone.now()
-        return Attachment.objects.create(
-            source_message=source_message,
-            attachment_type=str(handler.attachment_type),
-            title=title,
-            status=ExecutionStatus.SUCCESS,
-            task_id=None,
-            input_data=parsed_input.model_dump(mode="json"),
-            context_data=parsed_context.model_dump(mode="json"),
-            output_data=output_snapshot,
-            last_activity_at=now,
-            finished_at=now,
-            # 同步类型不进入流式通道，显式固化为 False，避免继承默认值歧义。
-            is_stream=False,
-            content_updated_at=now,
-            created_by=self.user,
-            updated_by=self.user,
-        )
+        with transaction.atomic():
+            self._lock_active_source(source_message=source_message)
+            return Attachment.objects.create(
+                source_message=source_message,
+                attachment_type=str(handler.attachment_type),
+                title=title,
+                status=ExecutionStatus.SUCCESS,
+                task_id=None,
+                input_data=parsed_input.model_dump(mode="json"),
+                context_data=parsed_context.model_dump(mode="json"),
+                output_data=output_snapshot,
+                last_activity_at=now,
+                finished_at=now,
+                # 同步类型不进入流式通道，显式固化为 False，避免继承默认值歧义。
+                is_stream=False,
+                content_updated_at=now,
+                created_by=self.user,
+                updated_by=self.user,
+            )
 
     def get(self, *, attachment_uid: str) -> Attachment:
         """返回当前用户可见会话中的一个附件详情。"""
@@ -290,11 +293,7 @@ class AttachmentService:
                 raise InvalidAttachmentState()
             handler = attachment_handler_registry.require(attachment.attachment_type)
             if not handler.supports_output_edit():
-                raise handler.edit_output(
-                    attachment=attachment,
-                    current_output=None,  # pragma: no cover - 立即抛异常
-                    submitted_output=None,
-                )
+                raise AttachmentNotEditable()
 
             # 用户提交的数据格式错误属于 400；仅数据库旧快照或 Handler 返回值错误属于平台 500。
             submitted_output = parse_snapshot(
@@ -358,7 +357,8 @@ class AttachmentService:
         if not attachment.is_stream:
             stream_updates["stream_config"] = {}
         with transaction.atomic():
-            # 不加行锁；依赖 FAILED + old task_id 的 CAS 让并发重试只有一个成功。
+            # 会话锁隔离删除竞态；附件本身仍依赖 FAILED + old task_id CAS 抢占重试。
+            self._lock_active_source(source_message=attachment.source_message)
             updated = Attachment.restart_failed(
                 instance_id=attachment.id,
                 old_task_id=old_task_id,
@@ -411,6 +411,27 @@ class AttachmentService:
             raise InvalidAttachmentSource()
         return source_message
 
+    def _lock_active_source(self, *, source_message: Message) -> None:
+        """锁定来源会话并复核消息，避免删除提交后继续创建隐藏附件。"""
+
+        conversation_exists = (
+            Conversation.objects.select_for_update()
+            .filter(
+                id=source_message.conversation_id,
+                created_by=self.user,
+                is_deleted=False,
+            )
+            .exists()
+        )
+        message_exists = Message.objects.filter(
+            id=source_message.id,
+            conversation_id=source_message.conversation_id,
+            created_by=self.user,
+            status=ExecutionStatus.SUCCESS,
+        ).exists()
+        if not conversation_exists or not message_exists:
+            raise InvalidAttachmentSource()
+
     @staticmethod
     def _normalize_title(title: str) -> str:
         """统一裁剪标题并复用同一业务异常，避免空白标题落库。"""
@@ -435,6 +456,7 @@ class AttachmentService:
         now = timezone.now()
         handler = attachment_handler_registry.require(attachment_type)
         with transaction.atomic():
+            self._lock_active_source(source_message=source_message)
             attachment = Attachment.objects.create(
                 source_message=source_message,
                 attachment_type=attachment_type,

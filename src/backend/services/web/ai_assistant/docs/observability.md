@@ -4,6 +4,8 @@
 生命周期约束。Metric/Event 字段、函数调用顺序和异常分支以代码及其注释为准，不在本文
 重复维护。BKM 策略、SLO、环境配置和故障处置见
 [`docs/ai_assistant_observability.md`](../../../../docs/ai_assistant_observability.md)。
+平台总体设计见 [`../README.md`](../README.md)，流式运行与降级语义见
+[`../streaming/README.md`](../streaming/README.md)。
 
 ## 1. 架构
 
@@ -77,6 +79,8 @@ stateDiagram-v2
 - Celery Retry 保持 `PROCESSING`，手动重试则产生新的 `task_id` 并开始新一轮平台执行；
 - 巡检以 MySQL 生命周期字段发现失活对象，通过相同的条件更新收敛，不依赖 Celery
   Result Backend、Worker inspect 或 RabbitMQ 状态；
+- 流式 Attachment 被巡检收敛时会同时写入 `stream_end` 并把归档提升为至少 `DEGRADED`，
+  Redis 通知仍是最佳努力；
 - 流式执行的 Redis 实时通道和 MySQL UI 快照都是展示能力，Attachment 最终状态与
   `output_data` 仍是最终事实。
 
@@ -113,6 +117,9 @@ Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID�
 普通业务失败、正常 Retry、旧任务 fencing 和单次流降级通过 Metric/Trace 观察，不升级为
 Event。Event 只表达需要维护者处理的平台异常，例如长期失活收敛、巡检不可用或输出契约
 被破坏。
+
+旧 task ID、重复投递和已终态对象属于正常 fencing 控制流。平台在执行 Span 内将其转换为
+受控忽略，再向 Celery 抛出 `Ignore`，避免这些投递被 OTel 误标为业务错误。
 
 ## 4. 模块职责
 

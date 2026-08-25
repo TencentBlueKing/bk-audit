@@ -185,8 +185,8 @@ class ConversationSidebarService:
            再按主键升序逐个 SELECT FOR UPDATE 加行锁，锁定后重新校验 pinned_at 和
            parent_node_id 等关键状态，消除 TOCTOU 竞态。
 
-        4. **固定锁顺序**：move 最多涉及 source、target_parent、anchor 三个 Node，
-           始终按主键 id 升序加锁，避免 ABBA 死锁。
+        4. **固定锁顺序**：move 涉及 source、来源父分组、目标父分组和 anchor，
+           始终按主键 id 升序加锁，避免 ABBA 死锁，并与分组删除共用父分组锁。
 
         5. **死锁重试**：同一用户并发拖拽时，批量平移的范围 UPDATE 可能因 InnoDB
            next-key lock 产生死锁。外层捕获 MySQL 1213 错误码后线性退避重试（最多
@@ -255,14 +255,19 @@ class ConversationSidebarService:
             target_parent_id=target_parent_id,
         )
         # 按主键升序加行锁，保证全局锁顺序一致，避免 ABBA 死锁。
+        source_parent_id = source.parent_node_id
         source, target_parent, anchor = self._lock_move_nodes(
             source=source,
             target_parent=target_parent,
             anchor=anchor,
+            source_parent_id=source_parent_id,
         )
         # 二次校验：加锁后重新检查关键状态，消除乐观读与加锁之间的 TOCTOU 竞态。
         target_parent_id = target_parent.id if target_parent else None
         if source.pinned_at is not None:
+            raise SidebarNodeNotMovable()
+        if source.parent_node_id != source_parent_id:
+            # 另一笔移动已先提交，当前请求基于过期容器快照，不继续计算位置。
             raise SidebarNodeNotMovable()
         if anchor is not None and (anchor.parent_node_id != target_parent_id or anchor.pinned_at is not None):
             raise InvalidSidebarAnchor()
@@ -364,13 +369,17 @@ class ConversationSidebarService:
         source: ConversationSidebarNode,
         target_parent: ConversationSidebarNode | None,
         anchor: ConversationSidebarNode | None,
+        source_parent_id: int | None,
     ) -> tuple[ConversationSidebarNode, ConversationSidebarNode | None, ConversationSidebarNode | None]:
-        """按主键固定顺序锁定 move 涉及的精确 Node，避免关联查询和反向加锁。"""
+        """按主键锁定来源/目标容器和节点，与分组删除共享同一锁协议。"""
 
         nodes = [node for node in (source, target_parent, anchor) if node is not None]
         locked_nodes = {}
-        # move 最多涉及三个 Node；逐主键加锁比依赖 IN 查询的执行计划更容易保证锁顺序。
-        for node_id in sorted({node.id for node in nodes}):
+        node_ids = {node.id for node in nodes}
+        if source_parent_id is not None:
+            node_ids.add(source_parent_id)
+        # 逐主键加锁比依赖 IN 查询的执行计划更容易保证锁顺序。
+        for node_id in sorted(node_ids):
             locked_node = self._lock_node(node_id=node_id)
             if locked_node is not None:
                 locked_nodes[node_id] = locked_node
@@ -381,6 +390,8 @@ class ConversationSidebarService:
             raise ConversationGroupNotFound()
         if anchor is not None and anchor.id not in locked_nodes:
             raise InvalidSidebarAnchor()
+        if source_parent_id is not None and source_parent_id not in locked_nodes:
+            raise SidebarNodeNotMovable()
         return (
             locked_nodes[source.id],
             locked_nodes[target_parent.id] if target_parent is not None else None,

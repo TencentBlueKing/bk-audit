@@ -75,28 +75,32 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
         """注入执行上下文；已终态或 task_id 不匹配的投递直接忽略。"""
 
         instance_id, task_id = self._extract_arguments(kwargs)
-        try:
-            delivery_info = self.request.delivery_info or {}
-            with start_execution_span(
-                object_type=self.object_type,
-                object_id=instance_id,
-                task_id=task_id,
-                task_name=self.name,
-                retries=self.request.retries,
-                redelivered=bool(delivery_info.get("redelivered")),
-            ):
+        stale_error = None
+        delivery_info = self.request.delivery_info or {}
+        with start_execution_span(
+            object_type=self.object_type,
+            object_id=instance_id,
+            task_id=task_id,
+            task_name=self.name,
+            retries=self.request.retries,
+            redelivered=bool(delivery_info.get("redelivered")),
+        ):
+            try:
                 return self._execute(instance_id=instance_id, task_id=task_id)
-        except self.stale_exception as error:
-            logger.info(
-                "忽略已失效或重复投递的 AI 助手任务",
-                extra={
-                    "object_label": self.object_label,
-                    self.id_argument: instance_id,
-                    "task_id": task_id,
-                    "task_name": self.name,
-                },
-            )
-            raise Ignore() from error
+            except self.stale_exception as error:
+                # fencing 是预期控制流，在 Span 内吞掉后再转为 Celery Ignore，
+                # 避免重复投递被 OTel 误标为业务 ERROR。
+                stale_error = error
+        logger.info(
+            "忽略已失效或重复投递的 AI 助手任务",
+            extra={
+                "object_label": self.object_label,
+                self.id_argument: instance_id,
+                "task_id": task_id,
+                "task_name": self.name,
+            },
+        )
+        raise Ignore() from stale_error
 
     def _execute(self, *, instance_id: int, task_id: str):
         """执行业务 Task，并让领域 Hook 负责快照校验和终态写入。"""
