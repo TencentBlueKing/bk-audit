@@ -1,12 +1,14 @@
 """审计日志检索的业务 Celery 任务。
 
 自然语言检索为异步消息（调 AIDev 耗时长）；
-常见操作缓存刷新为异步定时任务（django_celery_beat DatabaseScheduler 配置周期）。
+常见操作缓存刷新为声明式周期任务（对齐上游 periodic_task 惯例，beat 自动调度）。
 """
 
 import logging
 
+from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
+from celery.schedules import crontab
 
 from services.web.ai_assistant.constants import MessageType
 from services.web.ai_assistant.schemas.audit_search import NLSearchOutputSchema
@@ -75,11 +77,12 @@ def execute_natural_language_search(self, execution: MessageExecution) -> NLSear
     return NLSearchOutputSchema(condition=condition)
 
 
-@celery_app.task
+@periodic_task(run_every=crontab(hour="*/1"))
 def refresh_common_queries() -> dict:
-    """定时聚合最近成功自然语言消息，按系统刷新常见操作 Redis 缓存。
+    """每小时聚合最近成功自然语言消息，按系统刷新常见操作 Redis 缓存。
 
-    通过 django_celery_beat（DatabaseScheduler）配置周期，建议每小时执行；
+    周期随代码声明（blueapps periodic_task，对齐上游 query/tasks.py 惯例），
+    由 beat 自动调度，无需在 django_celery_beat 后台手动配置；
     任务幂等，重复执行只会覆盖为相同数据。
     """
 
