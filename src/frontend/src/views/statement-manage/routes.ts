@@ -21,6 +21,7 @@ export default {
   meta: {
     title: '',
     navName: 'auditStatement',
+    hideToggleBtn: true,
   },
   children: [
     {
