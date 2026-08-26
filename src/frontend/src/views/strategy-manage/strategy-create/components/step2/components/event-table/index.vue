@@ -226,6 +226,9 @@
     fetchToolTags(buildToolListParams());
   };
 
+  // 进入第二步即拉取工具列表，打开「配置数据下钻」时下拉可直接展示
+  handleRefreshToolList();
+
   const getHeaderClass = (valueKey: string | undefined) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',

@@ -207,6 +207,9 @@
     fetchToolTags(buildToolListParams());
   };
 
+  // 进入页面即拉取工具列表，打开「配置数据下钻」时下拉可直接展示
+  handleRefreshToolList();
+
   defineExpose<Exposes>({
     getData() {
       return {
