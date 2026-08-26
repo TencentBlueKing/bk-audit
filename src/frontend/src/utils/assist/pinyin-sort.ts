@@ -126,9 +126,7 @@ export const BASIC_EVENT_FIELD_ORDER = [
   'event_type',
 ];
 
-const basicEventFieldOrderMap = new Map(
-  BASIC_EVENT_FIELD_ORDER.map((fieldName, index) => [fieldName, index]),
-);
+const basicEventFieldOrderMap = new Map(BASIC_EVENT_FIELD_ORDER.map((fieldName, index) => [fieldName, index]));
 
 /**
  * @desc 按基本信息固定顺序排序事件字段

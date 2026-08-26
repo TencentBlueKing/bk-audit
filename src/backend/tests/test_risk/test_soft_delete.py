@@ -137,8 +137,12 @@ class TestQueryIsolation(TestCase):
 
     def test_filter_excludes_deleted(self):
         """filter 自动过滤软删除"""
-        r1 = _make_risk(risk_id="soft-delete-101", raw_event_id="raw-101", strategy=self.strategy, status=RiskStatus.NEW)
-        r2 = _make_risk(risk_id="soft-delete-102", raw_event_id="raw-102", strategy=self.strategy, status=RiskStatus.NEW)
+        r1 = _make_risk(
+            risk_id="soft-delete-101", raw_event_id="raw-101", strategy=self.strategy, status=RiskStatus.NEW
+        )
+        r2 = _make_risk(
+            risk_id="soft-delete-102", raw_event_id="raw-102", strategy=self.strategy, status=RiskStatus.NEW
+        )
         r1.delete()
 
         risks = list(Risk.objects.filter(status=RiskStatus.NEW).values_list("risk_id", flat=True))
@@ -431,9 +435,7 @@ class TestListRiskBkbaseSqlIsDeletedPredicate(TestCase):
                 event_filters=[],
             )
 
-        self.assertGreaterEqual(
-            len(sql_log), 1, "retrieve_via_bkbase 应至少生成 count SQL"
-        )
+        self.assertGreaterEqual(len(sql_log), 1, "retrieve_via_bkbase 应至少生成 count SQL")
         # count SQL 和 data SQL 都应含 is_deleted 谓词（base_queryset 透传）
         for idx, sql in enumerate(sql_log):
             self.assertIn(

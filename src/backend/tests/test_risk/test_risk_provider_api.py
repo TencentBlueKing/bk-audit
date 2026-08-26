@@ -193,7 +193,9 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_event_content_truncated_when_oversize(self):
         """event_content 超 100KB 被截断到阈值以内"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-trunc-content")
         event_time = timezone.now()
@@ -206,7 +208,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -222,7 +226,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -230,7 +236,9 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_event_evidence_nullified_when_oversize(self):
         """event_evidence 超阈值置 NULL"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-evidence-null")
         event_time = timezone.now()
@@ -243,7 +251,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -259,7 +269,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -267,7 +279,9 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_event_data_nullified_when_oversize(self):
         """event_data 超 100KB 置 NULL（保证 JSON 合法性）"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-data-null")
         event_time = timezone.now()
@@ -278,7 +292,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -295,7 +311,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -303,7 +321,9 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_small_fields_unchanged_after_truncation(self):
         """截断后小字段（status/risk_id/event_time_timestamp 等）不受影响"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-small-unchanged")
         event_time = timezone.now().replace(microsecond=123000)
@@ -318,7 +338,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -333,7 +355,9 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_is_deleted_still_returned_after_truncation(self):
         """截断后 is_deleted 仍正确返回（顶层 + data 内）"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-del-trunc")
         event_time = timezone.now()
@@ -347,16 +371,16 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
         self.assertTrue(item["is_deleted"])
         self.assertTrue(item["data"]["is_deleted"])
         # 截断仍生效
-        self.assertLessEqual(
-            len(item["data"]["event_content"]), FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
-        )
+        self.assertLessEqual(len(item["data"]["event_content"]), FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES)
 
     def test_schema_unchanged_after_truncation(self):
         """fetch_resource_type_schema 仍返回完整 schema（不受截断影响）"""
@@ -392,30 +416,40 @@ class RiskResourceProviderAPITest(TestCase):
         utf8mb4 中文 3 字节/字符，截断 102400 字符后实际可达 ~300KB。
         此测试标注该问题；修复后（改为字节级判断/截断）应转为 unexpected success。
         """
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-mb-bytes")
         event_time = timezone.now()
         limit = FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
         content = "中" * (limit + 1000)
         risk = self._create_risk_with_fields(
-            risk_id="risk-mb-bytes", strategy=strategy, event_time=event_time, event_content=content,
+            risk_id="risk-mb-bytes",
+            strategy=strategy,
+            event_time=event_time,
+            event_content=content,
         )
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
         truncated = item["data"]["event_content"]
         self.assertLessEqual(
-            len(truncated.encode("utf-8")), limit,
+            len(truncated.encode("utf-8")),
+            limit,
             f"event_content 截断后字节数 {len(truncated.encode('utf-8'))} 超阈值 {limit}",
         )
 
     def test_fields_exactly_at_threshold(self):
         """大字段恰好等于阈值字节时不截断/不置 NULL（> 严格大于，= 不触发）"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-exact-threshold")
         event_time = timezone.now()
@@ -424,12 +458,17 @@ class RiskResourceProviderAPITest(TestCase):
         content = "x" * limit
         evidence = "y" * limit
         risk = self._create_risk_with_fields(
-            risk_id="risk-exact-threshold", strategy=strategy, event_time=event_time,
-            event_content=content, event_evidence=evidence,
+            risk_id="risk-exact-threshold",
+            strategy=strategy,
+            event_time=event_time,
+            event_content=content,
+            event_evidence=evidence,
         )
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -443,12 +482,18 @@ class RiskResourceProviderAPITest(TestCase):
         strategy = self._create_strategy("strategy-null-fields")
         event_time = timezone.now()
         risk = self._create_risk_with_fields(
-            risk_id="risk-null-fields", strategy=strategy, event_time=event_time,
-            event_content=None, event_evidence=None, event_data=None,
+            risk_id="risk-null-fields",
+            strategy=strategy,
+            event_time=event_time,
+            event_content=None,
+            event_evidence=None,
+            event_data=None,
         )
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -463,12 +508,18 @@ class RiskResourceProviderAPITest(TestCase):
         strategy = self._create_strategy("strategy-empty")
         event_time = timezone.now()
         risk = self._create_risk_with_fields(
-            risk_id="risk-empty", strategy=strategy, event_time=event_time,
-            event_content="", event_evidence="", event_data={},
+            risk_id="risk-empty",
+            strategy=strategy,
+            event_time=event_time,
+            event_content="",
+            event_evidence="",
+            event_data={},
         )
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)
@@ -479,14 +530,17 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_truncation_works_on_deep_page(self):
         """深分页（slice_from > 0）时截断仍生效"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-deep-page")
         base_time = timezone.now() - datetime.timedelta(minutes=10)
         limit = FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
         for i in range(5):
             r = self._create_risk_with_fields(
-                risk_id=f"risk-deep-{i}", strategy=strategy,
+                risk_id=f"risk-deep-{i}",
+                strategy=strategy,
                 event_time=base_time + datetime.timedelta(seconds=i),
                 event_content="x" * (limit + 1024),
             )
@@ -494,7 +548,9 @@ class RiskResourceProviderAPITest(TestCase):
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(2, 2),
         )
         self.assertGreaterEqual(result.count, 5)
@@ -504,19 +560,26 @@ class RiskResourceProviderAPITest(TestCase):
 
     def test_soft_deleted_with_nullified_event_data(self):
         """软删记录的 event_data 超阈值时置 NULL"""
-        from services.web.risk.constants import FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
+        from services.web.risk.constants import (
+            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES,
+        )
 
         strategy = self._create_strategy("strategy-del-null")
         event_time = timezone.now()
         big_json = {"key": "v" * (FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES + 1024)}
         risk = self._create_risk_with_fields(
-            risk_id="risk-del-null", strategy=strategy, event_time=event_time, event_data=big_json,
+            risk_id="risk-del-null",
+            strategy=strategy,
+            event_time=event_time,
+            event_data=big_json,
         )
         risk.delete()
 
         now = timezone.now()
         result = self.provider.fetch_instance_list(
-            FancyDict(start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))),
+            FancyDict(
+                start_time=_ms(now - datetime.timedelta(hours=1)), end_time=_ms(now + datetime.timedelta(hours=1))
+            ),
             Page(50, 0),
         )
         item = next(data for data in result.results if data["id"] == risk.risk_id)

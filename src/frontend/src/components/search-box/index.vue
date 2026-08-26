@@ -243,9 +243,7 @@
   const selectedItems = ref<Array<Record<string, any>>>([]);
 
   const groupedSelectedItems = computed(() => ({
-    basic: sortByBasicEventFieldOrder(
-      selectedItems.value.filter(item => item.type === 'basic_event_field'),
-    ),
+    basic: sortByBasicEventFieldOrder(selectedItems.value.filter(item => item.type === 'basic_event_field')),
     detail: selectedItems.value.filter(item => item.type !== 'basic_event_field'),
   }));
   const selectedItemList = ref<Array<Record<string, any>>>([]);
