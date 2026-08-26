@@ -10,5 +10,4 @@ class Migration(migrations.Migration):
         ('ai_assistant', '0003_message_ai_msg_owner_type_idx'),
     ]
 
-    operations = [
-    ]
+    operations = []

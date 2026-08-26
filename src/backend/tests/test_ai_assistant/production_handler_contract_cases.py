@@ -32,7 +32,10 @@ from tests.test_ai_assistant.base import (
     ensure_business_handlers_registered,
     make_condition,
 )
-from tests.test_ai_assistant.handlers import EchoAsyncHandler, register_test_message_handler
+from tests.test_ai_assistant.handlers import (
+    EchoAsyncHandler,
+    register_test_message_handler,
+)
 from tests.test_ai_assistant.test_handlers import (
     TestLogSearchHandler,
     TestNaturalLanguageSearchHandler,
