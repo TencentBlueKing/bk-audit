@@ -19,9 +19,7 @@
     ref="rootRef"
     class="audit-tdesign-list"
     :class="[{ 'is-loading': isLoading }]">
-    <bk-loading
-      :loading="isLoading"
-      style="z-index: 1999;">
+    <bk-loading :loading="isLoading">
       <div
         v-if="settings.length > 0"
         class="setings">
