@@ -44,7 +44,7 @@
 如果你有好的意见或建议，欢迎给我们提 Issues 或 Pull Requests，为蓝鲸开源社区贡献力量。
 [腾讯开源激励计划](https://opensource.tencent.com/contribution) 鼓励开发者的参与和贡献，期待你的加入。
 
-后端开发请先阅读 [pre-commit 开发规范](./docs/development/backend-pre-commit.md)，安装本地提交
+后端开发请先阅读 [pre-commit 开发规范](./src/backend/docs/pre-commit.md)，安装本地提交
 hook，并在提交前完成暂存区检查和单元测试。
 
 ## License
