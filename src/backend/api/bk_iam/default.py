@@ -50,14 +50,9 @@ class GetSystemRoles(IAMBaseResource):
 
 class GetSystemInfo(IAMBaseResource):
     name = gettext_lazy("获取IAM系统信息")
+    action = "/api/v1/model/share/systems/{system_id}/query"
     method = "GET"
     url_keys = ["system_id"]
-
-    @property
-    def action(self):
-        if self.use_muti_tenant_mode():
-            return "/api/v1/model/systems/{system_id}/query"
-        return "/api/v1/model/share/systems/{system_id}/query"
 
     def parse_response(self, response: requests.Response):
         result_json = super().parse_response(response)
