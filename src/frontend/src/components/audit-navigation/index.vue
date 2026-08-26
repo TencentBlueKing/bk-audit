@@ -24,7 +24,7 @@
   <div
     class="audit-navigation"
     :class="{
-      'is-fixed': isSideMenuFixed,
+      'is-fixed': isSideMenuExpanded,
       'show-notice-navigation': showNotice.enabled && showAlert
     }">
     <div
@@ -115,6 +115,7 @@
     onBeforeUnmount,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useRoute } from 'vue-router';
 
@@ -139,38 +140,38 @@
   const SIDE_LEFT_INEXPAND_WIDTH = 60;
 
   // const isSideMenuFixed = ref(Boolean(localStorage.getItem(TOGGLE_CACHE)));
+  // 其他模块的收起/固定状态；报表模块独立，始终展开且不改写该值
   const isSideMenuFixed = ref(true);
 
   const isSideMenuHover = ref(false);
   const pageWidth = ref(PAGE_MIN_WIDTH);
   const sideLeftExpandWidth = ref();
 
+  const isReportsModule = computed(() => route.meta?.navName === 'auditStatement'
+    || route.name === 'statementManage'
+    || route.name === 'statementManageDetail');
+
+  const isSideMenuExpanded = computed(() => isReportsModule.value || isSideMenuFixed.value);
+
+  // 侧栏实际占位宽度：固定展开 / 报表模块 / 收起后 hover 展开时都应推开主内容
   const realSideWidth = computed(() => {
     if (route.meta?.hideSidebar) {
       return 0;
     }
-    return isSideMenuFixed.value
-      ? sideLeftExpandWidth.value
-      : SIDE_LEFT_INEXPAND_WIDTH;
-  });
-  const zIndex = ref(1999);
-  const sideStyles = computed(() => {
-    if (isSideMenuHover.value) {
-      return {
-        width: `${sideLeftExpandWidth.value}px`,
-        zIndex: zIndex.value,
-      };
+    if (isSideMenuExpanded.value || isSideMenuHover.value) {
+      return sideLeftExpandWidth.value;
     }
-    return {
-      width: `${realSideWidth.value}px`,
-      zIndex: zIndex.value,
-    };
+    return SIDE_LEFT_INEXPAND_WIDTH;
   });
+  const sideStyles = computed(() => ({
+    width: `${realSideWidth.value}px`,
+  }));
 
   const mainStyles = computed(() => ({
     paddingTop: '52px',
     marginLeft: `${realSideWidth.value}px`,
     zIndex: 1999,
+    transition: 'margin-left .3s',
   }));
   // const bodyHeaderStyles = computed(() => ({
   //   left: `${realSideWidth.value}px`,
@@ -189,12 +190,14 @@
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
       height: `calc(100vh - ${contentHeaderHeight + headerTipsHeight}px)`,
+      transition: 'width .3s',
     };
   });
 
 
   const contentStyles = computed(() => ({
     width: `${pageWidth.value - realSideWidth.value}px`,
+    transition: 'width .3s',
   }));
 
   const init = () => {
@@ -204,44 +207,55 @@
       ? SIDE_LEFT_EXPAND_SMALL_WIDTH
       : SIDE_LEFT_EXPAND_BIG_WIDTH;
   };
+  // 侧栏宽度变化时通知浮层跟随重定位（含 transition 过程中持续刷新）
+  const notifySideWidthChange = () => {
+    emits('side-menu-width-change');
+    const start = performance.now();
+    const tick = () => {
+      emits('side-menu-width-change');
+      if (performance.now() - start < 320) {
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  };
+
   /**
    * @desc 鼠标移入
    */
   let hoverTimer = 0;
-  let delayIndexTimer = 0;
   const handleSideMouseenter = () => {
-    if (isSideMenuFixed.value) {
+    if (isSideMenuExpanded.value) {
       return;
     }
     clearTimeout(hoverTimer);
-    zIndex.value = 4000;
     hoverTimer = setTimeout(() => {
       isSideMenuHover.value = true;
       emit('menu-flod', false);
+      notifySideWidthChange();
     }, 50);
   };
   /**
    * @desc 鼠标移出
    */
   const handleSideMouseleave = () => {
-    if (isSideMenuFixed.value) {
+    if (isSideMenuExpanded.value) {
       return;
     }
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
       isSideMenuHover.value = false;
       emit('menu-flod', true);
-
-      clearTimeout(delayIndexTimer);
-      delayIndexTimer = setTimeout(() => {
-        zIndex.value = 1999;
-      }, 20);
+      notifySideWidthChange();
     }, 50);
   };
   /**
    * @desc 切换左侧面板是否固定的状态
    */
   const handleSideFlodToggle = () => {
+    if (isReportsModule.value) {
+      return;
+    }
     isSideMenuFixed.value = !isSideMenuFixed.value;
     // if (isSideMenuFixed.value) {
     //   localStorage.setItem(TOGGLE_CACHE, 'true');
@@ -251,8 +265,23 @@
     if (!isSideMenuFixed.value) {
       emit('menu-flod', isSideMenuFixed.value);
     }
+    // 收起时清掉 hover 展开态，避免宽度计算异常
+    if (isSideMenuFixed.value) {
+      isSideMenuHover.value = false;
+    }
+    notifySideWidthChange();
   };
   const resizeHandler = _.throttle(init, 100);
+
+  watch(isReportsModule, (isReports) => {
+    isSideMenuHover.value = false;
+    if (isReports) {
+      emit('menu-flod', false);
+    } else {
+      emit('menu-flod', !isSideMenuFixed.value);
+    }
+    notifySideWidthChange();
+  });
 
   onMounted(() => {
     init();

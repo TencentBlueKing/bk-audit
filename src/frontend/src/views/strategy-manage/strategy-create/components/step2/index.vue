@@ -32,39 +32,6 @@
               :label="t('风险单标题')"
               label-width="160"
               property="risk_title">
-              <div
-                class="variable-input-content"
-                :class="[variableInputActive ? 'active' : '']"
-                @click.stop="(e) => handleClick(e, 'origin')">
-                <ul class="list">
-                  <template v-if="!variableInputActive">
-                    <li
-                      v-for="(item, index) in displayRiskTitle"
-                      :key="index"
-                      @click="handleClickLi(index)">
-                      <span
-                        :class="[item.isVariable ? 'is-variable' : '']">
-                        {{ item.value }}
-                      </span>
-                    </li>
-                  </template>
-                  <li
-                    v-else
-                    class="list-item-input">
-                    <input
-                      ref="inputRef"
-                      v-model.trim="riskTitleValue"
-                      class="input"
-                      type="text"
-                      @keydown="handleKeyDown">
-                  </li>
-                </ul>
-                <p
-                  v-if="!variableInputActive && !formData.risk_title"
-                  class="placeholder">
-                  {{ t('请输入风险单名称') }}
-                </p>
-              </div>
               <bk-popover
                 ref="variablePopRef"
                 :component-event-delay="300"
@@ -74,6 +41,39 @@
                 theme="light"
                 trigger="manual"
                 width="490">
+                <div
+                  class="variable-input-content"
+                  :class="[variableInputActive ? 'active' : '']"
+                  @click.stop="(e) => handleClick(e, 'origin')">
+                  <ul class="list">
+                    <template v-if="!variableInputActive">
+                      <li
+                        v-for="(item, index) in displayRiskTitle"
+                        :key="index"
+                        @click="handleClickLi(index)">
+                        <span
+                          :class="[item.isVariable ? 'is-variable' : '']">
+                          {{ item.value }}
+                        </span>
+                      </li>
+                    </template>
+                    <li
+                      v-else
+                      class="list-item-input">
+                      <input
+                        ref="inputRef"
+                        v-model.trim="riskTitleValue"
+                        class="input"
+                        type="text"
+                        @keydown="handleKeyDown">
+                    </li>
+                  </ul>
+                  <p
+                    v-if="!variableInputActive && !formData.risk_title"
+                    class="placeholder">
+                    {{ t('请输入风险单名称') }}
+                  </p>
+                </div>
                 <template #content>
                   <variable-table
                     :select="select"
@@ -151,6 +151,8 @@
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
+  import useEventBus from '@hooks/use-event-bus';
+
   import CardPartVue from '../step1/components/card-part.vue';
 
   // import EventInfoTable from './components/event-info-table.vue';
@@ -186,11 +188,12 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
+  const { on, off } = useEventBus();
 
   const formRef = ref();
   const eventRef = ref();
   const inputRef = ref();
-  const variablePopRef = ref();
+  const variablePopRef = ref<{ updatePopover?: () => void }>();
   const strategyTableRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
@@ -411,8 +414,17 @@
     immediate: isEditMode || isCloneMode,
   });
 
+  // 侧栏展开/收起会推动主内容位移，手动刷新浮层位置
+  const syncVariablePopoverPosition = () => {
+    if (!isShow.value) return;
+    nextTick(() => {
+      variablePopRef.value?.updatePopover?.();
+    });
+  };
+
   onActivated(() => {
     window.addEventListener('click', handleClick);
+    on('side-menu-width-change', syncVariablePopoverPosition);
   });
 
   onDeactivated(() => {
@@ -420,10 +432,12 @@
     isCopy.value = false;
     variableInputActive.value = false;
     window.removeEventListener('click', handleClick);
+    off('side-menu-width-change', syncVariablePopoverPosition);
   });
 
   onUnmounted(() => {
     window.removeEventListener('click', handleClick);
+    off('side-menu-width-change', syncVariablePopoverPosition);
   });
 </script>
 <style lang="postcss" scoped>
