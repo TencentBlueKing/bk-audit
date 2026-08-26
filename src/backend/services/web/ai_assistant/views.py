@@ -30,8 +30,10 @@ from services.web.ai_assistant.resources.conversation import (
 from services.web.ai_assistant.resources.feedback import DeleteFeedback, UpsertFeedback
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
+    CreateMessageFullExport,
     GetMessage,
     ListMessages,
+    PreviewExportMessage,
     RetryMessage,
 )
 from services.web.ai_assistant.resources.stream import (
@@ -120,6 +122,8 @@ class MessagesViewSet(ResourceViewSet):
         ResourceRoute("GET", GetMessage, pk_field="message_uid"),
         ResourceRoute("POST", RetryMessage, endpoint="retry", pk_field="message_uid"),
         ResourceRoute("POST", CreateAttachment, endpoint="attachments", pk_field="message_uid"),
+        ResourceRoute("GET", PreviewExportMessage, endpoint="preview-export", pk_field="message_uid"),
+        ResourceRoute("POST", CreateMessageFullExport, endpoint="full-export", pk_field="message_uid"),
     ]
 
 

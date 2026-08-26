@@ -15,6 +15,7 @@ from services.web.ai_assistant.handlers import (
     MessagePreparation,
     MessageTypeHandler,
     attachment_handler_registry,
+    message_handler_registry,
 )
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import MessageSchema
@@ -23,6 +24,17 @@ from services.web.ai_assistant.tasks import (
     attachment_execution_task,
     message_execution_task,
 )
+
+
+def register_test_message_handler(handler):
+    """注册测试用消息 Handler；同类型已有业务 Handler 时先移除再注册。
+
+    业务 Handler（audit_search）常驻注册表后，平台机制测试需要用 Echo Handler
+    临时替换真实消息类型；tearDown 的 unregister 语义保持不变。
+    """
+
+    message_handler_registry.unregister(str(handler.message_type))
+    return message_handler_registry.register(handler)
 
 
 class EchoInput(MessageSchema):

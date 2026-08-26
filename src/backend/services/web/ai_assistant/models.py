@@ -359,6 +359,8 @@ class Message(ExternalUIDModel, OperateRecordModel, ExecutionSnapshotModel):
             ),
             models.Index(fields=["status", "task_id"], name="ai_msg_task_idx"),
             models.Index(fields=["status", "last_activity_at", "id"], name="ai_msg_status_time_idx"),
+            # 历史操作按用户查询最近自然语言消息（口径⑥）
+            models.Index(fields=["created_by", "message_type", "id"], name="ai_msg_owner_type_idx"),
         ]
 
 

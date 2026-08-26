@@ -1,4 +1,4 @@
-from django.db import connection
+﻿from django.db import connection
 from django.db.models.signals import pre_save
 from django.test.utils import CaptureQueriesContext
 
@@ -26,6 +26,7 @@ from tests.test_ai_assistant.handlers import (
     EchoSyncHandler,
     FeedbackAttachmentEchoHandler,
     FeedbackEchoSyncHandler,
+    register_test_message_handler,
 )
 
 
@@ -36,7 +37,7 @@ class FeedbackServiceTest(TestCase):
         self.user = "alice"
         self.service = FeedbackService(user=self.user)
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        message_handler_registry.register(FeedbackEchoSyncHandler())
+        register_test_message_handler(FeedbackEchoSyncHandler())
         attachment_handler_registry.register(FeedbackAttachmentEchoHandler())
         self.message = self.create_message()
         self.attachment = self.create_attachment()
@@ -148,7 +149,7 @@ class FeedbackServiceTest(TestCase):
                 )
 
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(EchoSyncHandler())
+        register_test_message_handler(EchoSyncHandler())
         with self.assertRaises(FeedbackNotSupported):
             self.service.upsert(
                 source_type=FeedbackSourceType.MESSAGE,

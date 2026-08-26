@@ -1,4 +1,4 @@
-from unittest import mock
+﻿from unittest import mock
 from uuid import UUID, uuid4
 
 from django.db import connection
@@ -66,6 +66,7 @@ from tests.test_ai_assistant.handlers import (
     EchoSyncHandler,
     FeedbackAttachmentEchoHandler,
     FeedbackEchoSyncHandler,
+    register_test_message_handler,
 )
 
 
@@ -164,8 +165,8 @@ class MessageRequestSerializerTest(TestCase):
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
         sync_handler = EchoSyncHandler()
         async_handler = EchoAsyncHandler()
-        message_handler_registry.register(sync_handler)
-        message_handler_registry.register(async_handler)
+        register_test_message_handler(sync_handler)
+        register_test_message_handler(async_handler)
         try:
             input_schemas = _message_schema_mapping("input_model")
             output_schemas = _message_schema_mapping("output_model")
@@ -322,8 +323,8 @@ class MessageResourceTest(TestCase):
         self.async_handler = EchoAsyncHandler()
         self.attachment_handler = FeedbackAttachmentEchoHandler()
         self.async_attachment_handler = EchoAttachmentAsyncHandler()
-        message_handler_registry.register(self.sync_handler)
-        message_handler_registry.register(self.async_handler)
+        register_test_message_handler(self.sync_handler)
+        register_test_message_handler(self.async_handler)
         attachment_handler_registry.register(self.attachment_handler)
         attachment_handler_registry.register(self.async_attachment_handler)
 

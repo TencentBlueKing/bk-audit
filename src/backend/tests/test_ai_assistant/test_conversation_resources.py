@@ -37,7 +37,7 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarNodeResponseSerializer,
 )
 from tests.base import TestCase
-from tests.test_ai_assistant.handlers import EchoSyncHandler
+from tests.test_ai_assistant.handlers import EchoSyncHandler, register_test_message_handler
 
 
 @patch("services.web.ai_assistant.resources.conversation.get_request_username", return_value="alice")
@@ -45,7 +45,7 @@ class ConversationResourceTest(TestCase):
     """资源测试统一走 request()，覆盖请求和响应序列化链路。"""
 
     def setUp(self):
-        message_handler_registry.register(EchoSyncHandler())
+        register_test_message_handler(EchoSyncHandler())
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)

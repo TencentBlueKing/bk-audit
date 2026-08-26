@@ -31,6 +31,7 @@ from services.web.ai_assistant.services.reconciliation import (
 )
 from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
 from tests.test_ai_assistant import integration_handlers
+from tests.test_ai_assistant.handlers import register_test_message_handler
 from tests.test_ai_assistant.celery_integration import (
     reset_task_postrun,
     running_celery_worker,
@@ -145,7 +146,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         )
 
     def test_message_service_dispatches_real_task_and_persists_success(self):
-        message_handler_registry.register(RealMessageSuccessHandler())
+        register_test_message_handler(RealMessageSuccessHandler())
 
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
@@ -315,7 +316,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_self_retry_keeps_processing_and_reuses_business_task_id(self):
         integration_handlers.reset_retry_observations()
-        handler = message_handler_registry.register(RealMessageSelfRetryHandler())
+        handler = register_test_message_handler(RealMessageSelfRetryHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
@@ -366,7 +367,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_autoretry_exhaustion_marks_message_failed_once(self):
         integration_handlers.reset_retry_observations()
-        message_handler_registry.register(RealMessageAutoretryFailureHandler())
+        register_test_message_handler(RealMessageAutoretryFailureHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
@@ -385,7 +386,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_old_task_id_is_ignored_before_business_execution(self):
         integration_handlers.reset_old_task_observations()
-        handler = message_handler_registry.register(RealMessageOldTaskHandler())
+        handler = register_test_message_handler(RealMessageOldTaskHandler())
         message = self.create_processing_message(task_id="current-task-id")
 
         reset_task_postrun(task_id="old-task-id")
@@ -453,7 +454,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
     def test_duplicate_delivery_allows_concurrent_execution_but_only_one_terminal_snapshot(self):
         integration_handlers.reset_duplicate_observations(parties=2)
         try:
-            handler = message_handler_registry.register(RealMessageDuplicateHandler())
+            handler = register_test_message_handler(RealMessageDuplicateHandler())
             message = self.create_processing_message(task_id="duplicate-task-id")
             kwargs = {"message_id": message.id, "task_id": message.task_id}
 
@@ -478,7 +479,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
             integration_handlers.clear_duplicate_observations()
 
     def test_manual_retry_uses_new_task_id_and_old_task_cannot_overwrite(self):
-        handler = message_handler_registry.register(RealMessageSuccessHandler())
+        handler = register_test_message_handler(RealMessageSuccessHandler())
         failed = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
