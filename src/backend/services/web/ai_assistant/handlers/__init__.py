@@ -16,12 +16,17 @@ from services.web.ai_assistant.handlers.registry import (
     message_handler_registry,
 )
 
-# 导入业务处理器模块以触发注册（注册表与任务基类已就绪，模块内完成绑定）
+# isort: off
+# 导入业务处理器模块以触发注册（注册表与任务基类已就绪，模块内完成绑定）。
+# 注意：audit_search 会经 tasks -> services -> services.attachment 触发对
+# handlers 包的回环导入，此处必须保持在 registry 导入之后，否则循环导入。
 from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
     NaturalLanguageSearchHandler,
     SystemSelectionHandler,
 )
+
+# isort: on
 
 __all__ = [
     "AttachmentExecutionContext",

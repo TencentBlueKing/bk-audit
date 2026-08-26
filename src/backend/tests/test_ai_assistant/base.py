@@ -36,6 +36,7 @@ def ensure_business_handlers_registered():
         if str(handler_class.message_type) not in registered_types:
             message_handler_registry.register(handler_class())
 
+
 TARGET_SYSTEM_ID = "bk_log"
 
 

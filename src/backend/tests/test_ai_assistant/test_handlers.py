@@ -3,7 +3,6 @@
 
 from unittest import mock
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidParentMessage,

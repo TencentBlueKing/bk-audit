@@ -31,13 +31,13 @@ from services.web.ai_assistant.services.reconciliation import (
 )
 from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
 from tests.test_ai_assistant import integration_handlers
-from tests.test_ai_assistant.handlers import register_test_message_handler
 from tests.test_ai_assistant.celery_integration import (
     reset_task_postrun,
     running_celery_worker,
     wait_for_snapshot,
     wait_for_task_postrun,
 )
+from tests.test_ai_assistant.handlers import register_test_message_handler
 from tests.test_ai_assistant.integration_handlers import (
     INTEGRATION_QUEUE,
     RealAttachmentStreamDuplicateHandler,
