@@ -1,3 +1,5 @@
+from django.http import HttpResponse
+from django.utils.http import content_disposition_header
 from django.utils.translation import gettext_lazy
 
 from core.models import get_request_username
@@ -5,11 +7,17 @@ from services.web.ai_assistant.resources.conversation import AIAssistantResource
 from services.web.ai_assistant.serializers.message import (
     MessageCreateRequestSerializer,
     MessageDetailRequestSerializer,
+    MessageFullExportRequestSerializer,
+    MessageFullExportResponseSerializer,
     MessageListRequestSerializer,
+    MessagePreviewExportRequestSerializer,
     MessageResponseSerializer,
     MessageWindowResponseSerializer,
 )
 from services.web.ai_assistant.services import ConversationService, MessageService
+from services.web.ai_assistant.services.log_export import MessageExportService
+
+XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 class CreateMessage(AIAssistantResource):
@@ -82,4 +90,36 @@ class RetryMessage(AIAssistantResource):
     def perform_request(self, validated_request_data):
         return MessageService(user=get_request_username()).retry(
             message_uid=str(validated_request_data["message_uid"]),
+        )
+
+
+class PreviewExportMessage(AIAssistantResource):
+    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。"""
+
+    name = gettext_lazy("预览导出日志检索")
+    RequestSerializer = MessagePreviewExportRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        result = MessageExportService(user=get_request_username()).preview_export(
+            message_uid=str(validated_request_data["message_uid"]),
+        )
+        response = HttpResponse(result.content, content_type=XLSX_CONTENT_TYPE)
+        response["Content-Disposition"] = content_disposition_header(
+            as_attachment=True,
+            filename=result.file_name,
+        )
+        return response
+
+
+class CreateMessageFullExport(AIAssistantResource):
+    """从成功日志检索消息快照重建条件，创建既有 LogExportTask 全量导出。"""
+
+    name = gettext_lazy("创建全量日志导出")
+    RequestSerializer = MessageFullExportRequestSerializer
+    ResponseSerializer = MessageFullExportResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        return MessageExportService(user=get_request_username()).create_full_export(
+            message_uid=str(validated_request_data["message_uid"]),
+            export_config=validated_request_data.get("export_config") or {},
         )
