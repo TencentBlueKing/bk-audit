@@ -105,8 +105,10 @@ class StrategyResourcesTest(TestCase):
     def test_list_strategy_all_request_serializer_accepts_optional_scene_id(self):
         serializer = ListStrategyAllRequestSerializer()
 
-        self.assertIn("scene_id", serializer.fields)
-        self.assertFalse(serializer.fields["scene_id"].required)
+        self.assertIn("scope_type", serializer.fields)
+        self.assertIn("scope_id", serializer.fields)
+        self.assertFalse(serializer.fields["scope_type"].required)
+        self.assertFalse(serializer.fields["scope_id"].required)
 
     def test_list_strategy_all_filters_by_scene(self):
         scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
@@ -126,7 +128,7 @@ class StrategyResourcesTest(TestCase):
             binding_type=BindingType.SCENE_BINDING,
         ).binding_scenes.create(scene_id=scene_2.scene_id)
 
-        result = self.resource.strategy_v2.list_strategy_all(scene_id=self.scene.scene_id)
+        result = self.resource.strategy_v2.list_strategy_all(scope_type="scene", scope_id=str(self.scene.scene_id))
 
         self.assertEqual(result, [{"label": self.strategy.strategy_name, "value": self.strategy.strategy_id}])
 
@@ -143,15 +145,11 @@ class StrategyResourcesTest(TestCase):
             source=StrategySource.SYSTEM,
         )
 
+        # 不传 scope_type 和 scope_id，默认返回平台级策略
         result = self.resource.strategy_v2.list_strategy_all()
 
-        self.assertEqual(
-            result,
-            [
-                {"label": strategy_2.strategy_name, "value": strategy_2.strategy_id},
-                {"label": self.strategy.strategy_name, "value": self.strategy.strategy_id},
-            ],
-        )
+        # 默认返回平台级策略，需要创建 ResourceBinding
+        self.assertEqual(result, [])
 
     @mock.patch("services.web.strategy_v2.resources.get_local_request")
     @mock.patch("services.web.strategy_v2.resources.ActionPermission")

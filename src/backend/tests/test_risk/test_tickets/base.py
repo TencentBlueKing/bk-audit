@@ -36,6 +36,14 @@ class RiskContext:
     def __init__(self, risk_info: dict = None):
         Risk.objects.all().delete()
         risk_info = risk_info or {}
+        # 确保策略存在
+        strategy_id = risk_info.get("strategy_id", RISK_INFO.get("strategy_id"))
+        if strategy_id:
+            from services.web.strategy_v2.models import Strategy
+            Strategy.objects.get_or_create(
+                strategy_id=strategy_id,
+                defaults={"strategy_name": f"test_strategy_{strategy_id}"},
+            )
         self.risk = Risk.objects.create(**{**RISK_INFO, **risk_info})
 
     def __enter__(self) -> Risk:

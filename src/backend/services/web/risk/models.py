@@ -55,7 +55,12 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
-from services.web.strategy_v2.models import Strategy, StrategyTag
+from services.web.strategy_v2.models import (
+    DispatchRule,
+    Strategy,
+    StrategyRule,
+    StrategyTag,
+)
 
 
 def generate_risk_id() -> str:
@@ -73,6 +78,7 @@ def generate_risk_id() -> str:
 class UserType(models.TextChoices):
     OPERATOR = "operator"
     NOTICE_USER = "notice_user"
+    CONFIRMER = "confirmer"
 
 
 class StrategyTagMixin:
@@ -200,6 +206,51 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         db_index=True,
         help_text=gettext_lazy("任何流程为该风险生成报告后置为 True"),
     )
+    strategy_rule = models.ForeignKey(
+        StrategyRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="risks",
+        verbose_name=gettext_lazy("Strategy Rule"),
+        help_text=gettext_lazy("命中的发现规则"),
+    )
+    dispatch_rule = models.ForeignKey(
+        DispatchRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="risks",
+        verbose_name=gettext_lazy("Dispatch Rule"),
+        help_text=gettext_lazy("命中的分派规则（仅全局策略）"),
+    )
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        max_length=16,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险等级（实例化）"),
+    )
+    risk_hazard = models.TextField(
+        gettext_lazy("Risk Hazard"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险危害描述（实例化）"),
+    )
+    risk_guidance = models.TextField(
+        gettext_lazy("Risk Guidance"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("处理指引（实例化）"),
+    )
+    confirmer = models.JSONField(
+        gettext_lazy("Confirmer"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("确认人用户名 列表"),
+    )
 
     def can_auto_generate_report(self) -> bool:
         """
@@ -225,8 +276,13 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
             models.Index(fields=["strategy", "display_status", "event_time"], name="idx_risk_strategy_status_time"),
             # 软删除后修复覆盖索引失效：strategy_id 等值 + is_deleted 等值 + event_time 范围
             # 使 ListStrategy risk_count 子查询恢复 index-only scan（Using index）
+            models.Index(fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"),
+            # 按发现规则筛选风险
+            models.Index(fields=["strategy_rule", "is_deleted", "event_time"], name="idx_risk_srule_isdel_time"),
+            # 二次确认可见性过滤：先命中 display_status 索引收敛到小范围再做 confirmer 包含判断
             models.Index(
-                fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"
+                fields=["display_status", "is_deleted", "last_operate_time"],
+                name="idx_risk_dstatus_isdel_time",
             ),
         ]
 
@@ -383,6 +439,35 @@ class ManualEvent(OperateRecordModel):
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
     manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=False)
+    strategy_rule = models.ForeignKey(
+        StrategyRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="manual_events",
+        verbose_name=gettext_lazy("Strategy Rule"),
+        help_text=gettext_lazy("关联的发现规则"),
+    )
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        max_length=16,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险等级（实例化）"),
+    )
+    risk_hazard = models.TextField(
+        gettext_lazy("Risk Hazard"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险危害描述（实例化）"),
+    )
+    risk_guidance = models.TextField(
+        gettext_lazy("Risk Guidance"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("处理指引（实例化）"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("手动事件存储")

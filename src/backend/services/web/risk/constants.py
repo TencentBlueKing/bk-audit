@@ -138,6 +138,7 @@ class EventMappingFields:
             self.EVENT_CONTENT,
             self.RAW_EVENT_ID,
             self.STRATEGY_ID,
+            self.STRATEGY_RULE_ID,
             self.EVENT_EVIDENCE,
             self.EVENT_TYPE,
             self.EVENT_DATA,
@@ -193,6 +194,16 @@ class EventMappingFields:
         field_name="strategy_id",
         alias_name="strategy_id",
         description=gettext_lazy("命中策略(ID)"),
+        field_type=FIELD_TYPE_LONG,
+        option=dict(),
+        is_index=True,
+        is_dimension=False,
+    )
+
+    STRATEGY_RULE_ID = Field(
+        field_name="strategy_rule_id",
+        alias_name="strategy_rule_id",
+        description=gettext_lazy("命中发现规则(ID)"),
         field_type=FIELD_TYPE_LONG,
         option=dict(),
         is_index=True,
@@ -301,6 +312,9 @@ class RiskStatus(TextChoices):
     # 新
     NEW = "new", gettext_lazy("新")
 
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
+
     # 人工处理
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
     FOR_APPROVE = "for_approve", gettext_lazy("自动处理审批中")
@@ -362,6 +376,9 @@ class RiskDisplayStatus(TextChoices):
 
     # 新
     NEW = "new", gettext_lazy("新")
+
+    # 待确认（二次确认）
+    PENDING_CONFIRM = "pending_confirm", gettext_lazy("待确认")
 
     # 待处理（仅 NEW → 未配置处理规则 时）
     AWAIT_PROCESS = "await_deal", gettext_lazy("待处理")
@@ -818,7 +835,7 @@ EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField
 EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
 
 # 风险等级排序字段
-RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+RISK_LEVEL_ORDER_FIELD = "risk_level"
 
 
 @register_choices("risk_report_status")

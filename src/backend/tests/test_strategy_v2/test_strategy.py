@@ -182,6 +182,25 @@ class StrategyTest(TestCase):
             "risk_guidance": "",
             "risk_title": "risk title",
             "processor_groups": [self.notice_group.group_id],
+            "rules": [
+                {
+                    "rule_name": "default_rule",
+                    "conditions": {
+                        "where": {
+                            "condition": {
+                                "field": {"table": "bklog.demo_table", "raw_name": "event_type", "display_name": "event_type", "field_type": "string"},
+                                "operator": "eq",
+                                "filters": ["test"],
+                            }
+                        },
+                        "having": None,
+                    },
+                    "risk_level": RiskLevel.HIGH.value,
+                    "risk_hazard": "",
+                    "risk_guidance": "",
+                    "risk_title": "risk title",
+                }
+            ],
             # 满足规则策略对基础字段映射的校验要求
             "event_basic_field_configs": [
                 {

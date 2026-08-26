@@ -101,6 +101,9 @@ class AnalyseReportTestBase(TestCase):
             status="new",
             title="Test Risk 1",
             event_time=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc),
+            risk_level=RiskLevel.HIGH.value,
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         self.risk2 = Risk.objects.create(
             risk_id="risk-agent-002",
@@ -109,6 +112,9 @@ class AnalyseReportTestBase(TestCase):
             status="new",
             title="Test Risk 2",
             event_time=datetime.datetime(2026, 1, 2, tzinfo=datetime.timezone.utc),
+            risk_level=RiskLevel.HIGH.value,
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
         )
         # 创建内置场景
         self.scenario_person, _ = AnalyseReportScenario.objects.update_or_create(
@@ -1567,13 +1573,9 @@ class TestListAnalyseReportRisk(AnalyseReportTestBase):
 
     def test_list_report_risks_filters_by_risk_level(self):
         """测试报告关联风险列表支持按风险等级过滤"""
-        low_strategy = Strategy.objects.create(
-            namespace="default",
-            strategy_name="test-low-strategy",
-            risk_level=RiskLevel.LOW.value,
-        )
-        self.risk2.strategy = low_strategy
-        self.risk2.save(update_fields=["strategy"])
+        # risk_level 现为 Risk 模型的快照字段，直接修改 risk2 的快照值
+        self.risk2.risk_level = RiskLevel.LOW.value
+        self.risk2.save(update_fields=["risk_level"])
 
         result = self.resource.risk.list_analyse_report_risk.request(
             {"report_id": self.report.report_id, "risk_level": RiskLevel.HIGH.value}

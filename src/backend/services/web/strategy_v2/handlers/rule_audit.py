@@ -23,6 +23,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from pydantic import BaseModel
 from pypika import functions as fn
+from pypika import terms as pypika_terms
 from pypika.terms import Function, Term, ValueWrapper
 
 from apps.meta.utils.fields import SYSTEM_ID
@@ -33,8 +34,10 @@ from core.sql.constants import FilterConnector, Operator
 from core.sql.model import (
     Condition,
     Field,
+    HavingCondition,
     JoinTable,
     LinkField,
+    RuleFilterConfig,
     SqlConfig,
     Table,
     WhereCondition,
@@ -46,7 +49,7 @@ from services.web.strategy_v2.exceptions import (
     LinkTableConfigError,
     RuleAuditSqlGeneratorError,
 )
-from services.web.strategy_v2.models import LinkTable, Strategy
+from services.web.strategy_v2.models import LinkTable, Strategy, StrategyRule
 
 
 class UdfBuildOriginData(Function):
@@ -192,9 +195,12 @@ class RuleAuditSQLBuilder:
 
         return _from_table, join_tables, tables_with_system_ids
 
-    def format(self, config_json: dict) -> SqlConfig:
+    def format(self, config_json: dict, rules: List[RuleFilterConfig]) -> SqlConfig:
         """
         将前端 JSON 配置转换为可供 SQLGenerator 使用的 SqlConfig。
+
+        :param config_json: 策略级配置（data_source/select/system_ids 等）
+        :param rules: 发现规则过滤配置（where/having 属于规则级，不读 config_json）
         """
         config_type = config_json["config_type"]
         data_source = config_json["data_source"]
@@ -208,35 +214,23 @@ class RuleAuditSQLBuilder:
         else:
             from_table, join_tables, tables_with_system_ids = self.build_single_table_config(data_source)
 
-        # Step C. 构建前端传入的 where 条件
-        where_json = config_json.get("where")
+        # Step C. 构建策略级 where 条件（这里仅包含configs.data_source.system_ids,各规则的where和having条件在rules中）
         where_conditions_to_merge = []
-
-        if where_json:
-            where_conditions_to_merge.append(where_json)
-
-        # Step D. 为每个包含 system_ids 的表构建条件
         for table_name, system_ids in tables_with_system_ids.items():
-            if not system_ids:  # 若没有 system_ids，可根据需要决定是否忽略或抛异常
+            if not system_ids:
                 continue
-            system_ids_where = self.build_system_ids_condition(table_name, system_ids)
-            where_conditions_to_merge.append(system_ids_where)
+            where_conditions_to_merge.append(self.build_system_ids_condition(table_name, system_ids))
 
-        # Step E. 合并所有条件
         final_where = None
         if where_conditions_to_merge:
             final_where = WhereCondition(connector=FilterConnector.AND, conditions=where_conditions_to_merge)
 
-        # Step F. 构建前端传入的 having 条件
-        final_having = config_json.get("having")
-
-        # Step G. 构造 SqlConfig 并返回
         return SqlConfig(
             select_fields=select_fields,
             from_table=from_table,
             join_tables=join_tables,
             where=final_where,
-            having=final_having,
+            rules=rules,
         )
 
     def format_alias(self, alias: str) -> str:
@@ -246,13 +240,81 @@ class RuleAuditSQLBuilder:
 
         return f"u_{get_md5(alias)}"
 
+    def _get_ordered_rules(self) -> List[StrategyRule]:
+        """
+        获取按匹配优先级排序的发现规则（首匹配语义：rule_order 顺序 = CASE 分支顺序）。
+        """
+        rules = list(StrategyRule.objects.filter(strategy=self.strategy, is_deleted=False).order_by())
+        if not rules:
+            return []
+        rule_order = self.strategy.rule_order or []
+        if rule_order:
+            order_index = {rule_id: idx for idx, rule_id in enumerate(rule_order)}
+            rules.sort(key=lambda r: order_index.get(r.rule_id, len(rule_order)))
+        return rules
+
+    def _build_rule_filter_configs(self, rules: List[StrategyRule]) -> List[RuleFilterConfig]:
+        """
+        StrategyRule（ORM）-> RuleFilterConfig（SQL 构造用）
+        conditions 结构: {"where": xxx, "having": x}。
+        """
+        configs = []
+        for rule in rules:
+            conditions = rule.conditions or {}
+            where_json = conditions.get("where")
+            having_json = conditions.get("having")
+            if not where_json:
+                # 规则 where 必填（无兜底规则概念），缺失即数据异常
+                raise RuleAuditSqlGeneratorError(
+                    gettext("strategy %s rule %s missing where conditions" % (self.strategy.strategy_id, rule.rule_id))
+                )
+            configs.append(
+                RuleFilterConfig(
+                    rule_id=rule.rule_id,
+                    where=WhereCondition(**where_json),
+                    having=HavingCondition(**having_json) if having_json else None,
+                )
+            )
+        return configs
+
     def build_sql(self) -> str:
         """
         将规则审计策略生成 sql
         field_mapping 中的 key 为 select 中的字段名，value 为 FieldMap 对象,用于映射字段
         """
+        rules = self._get_ordered_rules()
+        if not rules:
+            raise RuleAuditSqlGeneratorError(
+                gettext("strategy %s has no strategy rule" % self.strategy.strategy_id)
+            )
+        rule_configs = self._build_rule_filter_configs(rules)
+        sql_config = self.format(self.strategy.configs, rules=rule_configs)
+        return self._build_outer_sql(sql_config, rules=rule_configs)
 
-        config_json: dict = self.strategy.configs
+    def _map_rules_having_fields(self, rules: List[RuleFilterConfig]) -> None:
+        """
+        用于把原有字段名跟md5别名映射，用于having在外层引用内层查询结果
+        """
+        alias_map = self.display2tmp_name_map
+
+        def walk(node):
+            if node.condition:
+                original = node.condition.field.display_name
+                if original in alias_map:
+                    node.condition.field.display_name = alias_map[original]
+            for sub in node.conditions:
+                walk(sub)
+
+        for rule in rules:
+            if rule.having:
+                walk(rule.having)
+
+    def _build_outer_sql(self, sql_config: SqlConfig, rules: List[RuleFilterConfig]) -> str:
+        """
+            L1: generator.generate_rule_mode(config)  条件聚合层（核心）
+            L2：_build_outer_sql  命中层   产出每行/每组命中了哪条规则
+            L3：_build_outer_sql   事件映射层    产出 BKBase 事件流的最终字段
+        """
         event_basic_field_configs: List[dict] = self.strategy.event_basic_field_configs
         field_mapping = {
             field["field_name"]: FieldMap(**field["map_config"])
@@ -260,7 +322,6 @@ class RuleAuditSQLBuilder:
             if field.get("map_config")
         }
         # 1. 生成子查询 (sub_table)
-        sql_config = self.format(config_json)
         for field in sql_config.select_fields:
             self.display2tmp_name_map[field.display_name] = self.format_alias(field.display_name)
         # 格式化别名
@@ -270,22 +331,37 @@ class RuleAuditSQLBuilder:
             drill_function = JsonValue
         else:
             drill_function = GetJsonObject
-        sub_table = (
-            BkBaseComputeSqlGenerator(query_builder=self.query_builder, drill_function=drill_function)
-            .generate(config=sql_config)
-            .as_("sub_table")
-        )
+        # having 树聚合字段 display_name 同步替换为 md5 别名
+        self._map_rules_having_fields(rules)
+        # L1 条件聚合
+        generator = BkBaseComputeSqlGenerator(query_builder=self.query_builder, drill_function=drill_function)
+        l1_query = generator.generate_rule_mode(config=sql_config)
+        # L2 命中层：显式引用 L1 全部输出列 + CASE ... END AS strategy_rule_id
+        hit_case = generator.build_rule_hit_case().as_(generator.RULE_HIT_FIELD)
+        l1_alias = l1_query.as_("t")
+        l2_builder = BKBaseQueryBuilder().from_(l1_alias)
+        for column in generator.get_rule_mode_output_columns():
+            l2_builder = l2_builder.select(l1_alias.field(column))
+        l2_builder = l2_builder.select(hit_case)
+        sub_table = l2_builder.as_("sub_table")
         # 2. 构造 JSON_OBJECT(...) 参数
         display_names = self.display2tmp_name_map.keys()
-        fields = [sub_table.field(field.display_name) for field in sql_config.select_fields]
+        fields = []
+        for field in sql_config.select_fields:
+            if field.aggregate:
+                fields.append(self._build_rule_value_case(generator, field, sub_table))
+            else:
+                fields.append(sub_table.field(field.display_name))
         json_obj_args = dict(zip(display_names, fields))
         # 3. 最外层 select 列表
         #    3.1 JSON_OBJECT(...) => event_data
         #    3.2 strategy_id => strategy_id
-        #    3.3 其他字段 => 来自 field_mapping
+        #    3.3 strategy_rule_id => 命中规则标识
+        #    3.4 其他字段 => 来自 field_mapping
         select_fields = [
             make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
             ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
+            sub_table.field(generator.RULE_HIT_FIELD).as_(EventMappingFields.STRATEGY_RULE_ID.field_name),
         ]
         for display_name, map_config in field_mapping.items():
             if map_config.target_value:
@@ -293,8 +369,53 @@ class RuleAuditSQLBuilder:
             elif map_config.source_field:
                 if map_config.source_field not in self.display2tmp_name_map:
                     raise RuleAuditSqlGeneratorError(gettext("source_field %s not found" % map_config.source_field))
+                # select_fields 的 display_name 已替换为 md5 别名，source_field 为前端原始名——先取 md5 再比对
+                source_md5 = self.display2tmp_name_map[map_config.source_field]
+                source_field = next(
+                    (f for f in sql_config.select_fields if f.display_name == source_md5), None
+                )
+                if source_field is not None and source_field.aggregate:
+                    # map_config 引用聚合字段：同样按命中规则取值
+                    select_fields.append(
+                        self._build_rule_value_case(
+                            generator,
+                            source_field,
+                            sub_table,
+                            alias=source_md5,
+                            output_alias=display_name,
+                        )
+                    )
+                    continue
                 select_fields.append(
                     sub_table.field(self.display2tmp_name_map[map_config.source_field]).as_(display_name)
                 )
-        # 4. 构建最终查询: from sub_table select ...
-        return str(self.query_builder.from_(sub_table).select(*select_fields))
+        # 4. 构建最终查询: from sub_table select ...；过滤未命中（strategy_rule_id IS NULL）
+        query = self.query_builder.from_(sub_table).select(*select_fields)
+        query = query.where(sub_table.field(generator.RULE_HIT_FIELD).notnull())
+        return str(query)
+
+    def _build_rule_value_case(
+        self,
+        generator: BkBaseComputeSqlGenerator,
+        field: Field,
+        sub_table,
+        alias: Optional[str] = None,
+        output_alias: Optional[str] = None,
+    ) -> Term:
+        """
+        聚合字段按命中规则取值：CASE strategy_rule_id WHEN r1 THEN u__r1 ... END。
+
+        字段引用使用 md5 后的别名
+        """
+        alias = alias or field.display_name
+        rule_hit_field = sub_table.field(generator.RULE_HIT_FIELD)
+        case = pypika_terms.Case()
+        for idx, rule in enumerate(generator.config.rules, start=1):
+            rule_alias = generator.rule_alias_map.get((alias, idx))
+            if rule_alias is None:
+                # generator 对每个聚合 select 字段 × 每条规则都会注册别名，miss 即上游数据不一致
+                raise RuleAuditSqlGeneratorError(
+                    gettext("aggregate field %s rule %s column not found" % (alias, rule.rule_id))
+                )
+            case = case.when(rule_hit_field == rule.rule_id, sub_table.field(rule_alias))
+        return case.as_(output_alias) if output_alias else case
