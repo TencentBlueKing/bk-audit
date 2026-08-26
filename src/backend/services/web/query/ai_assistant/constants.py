@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 AI 助手日志检索组件常量
 
 决策点（D1-D4，详见设计文档 §17.5）默认实现对应的开关/模板集中在此，
@@ -43,8 +41,9 @@ from django.utils.translation import gettext_lazy
 # }
 AI_ASSISTANT_FIELD_META_CONFIG_KEY = "ai_assistant_field_meta"
 
-# L2 采样开关（默认关闭：sample_value=None，拓展字段仅来自 L1 人工配置）
-AI_ASSISTANT_FIELD_SAMPLE_ENABLED = False
+# L2 采样开关（默认开启：sample_value 采样回填 + 拓展字段动态发现；此为 settings 缺失时的兜底值，
+# 实际取值走 config/default.py 的 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED）
+AI_ASSISTANT_FIELD_SAMPLE_ENABLED = True
 # L2 采样回看窗口（天）：产品口径「最新一条数据的字段信息」——
 # 窗口仅用于分区裁剪与性能兜底，实际取窗口内按 dtEventTimeStamp 倒序的第 1 条（最新一条）
 FIELD_SAMPLE_LOOKBACK_DAYS = 30

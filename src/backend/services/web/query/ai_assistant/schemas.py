@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 AI 助手日志检索消息协议模型
 
 与《W0 消息业务载荷协议》1:1：
@@ -117,17 +115,28 @@ class SystemSelectionInput(BaseModel):
     system_ids: List[str] = Field(..., min_length=1, max_length=1)
 
 
+class SelectionFieldOption(BaseModel):
+    """枚举字段可选值（与日志检索页 es_query/field_map 返回同构 [{id, name}]）"""
+
+    id: str
+    name: str
+
+
 class SelectionFieldMeta(BaseModel):
     """字段元数据（协议 §3.2，standard_fields / extension_fields 共用结构）"""
 
     raw_name: str
     keys: List[str] = Field(default_factory=list)
+    # 字段值类型（FieldType.value，如 string/integer/long；拓展字段一期恒 string）
+    field_type: Optional[str] = None
     display_name: str = ""
     nl_name: str = ""
     description: str = ""
     allow_operators: List[str] = Field(default_factory=list)
     # 原始查询值（如 0/-1，非展示值"成功(0)"），无数据为 None
     sample_value: Optional[Any] = None
+    # 枚举字段可选值（如 result_code 的 成功0/其他-1），非枚举字段为 None；前端 options 非空时渲染下拉
+    options: Optional[List[SelectionFieldOption]] = None
     # 仅拓展字段返回
     system_id: Optional[str] = None
 

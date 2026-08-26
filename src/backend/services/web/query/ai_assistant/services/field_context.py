@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 F1 字段上下文服务（SYSTEM_SELECTION 消息核心组件）
 
 字段清单与现有检索白名单（COLLECT_SEARCH_CONFIG）同源全量，三层构建：
@@ -50,6 +48,7 @@ from services.web.query.ai_assistant.constants import (
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
 from services.web.query.ai_assistant.schemas import (
     SelectionFieldMeta,
+    SelectionFieldOption,
     SelectionSystem,
     SystemSelectionInput,
     SystemSelectionOutput,
@@ -57,9 +56,11 @@ from services.web.query.ai_assistant.schemas import (
 from services.web.query.constants import (
     COLLECT_SEARCH_CONFIG,
     DEFAULT_COLLECTOR_SORT_LIST,
+    DEFAULT_TIMEDELTA,
 )
 from services.web.query.serializers import CollectorSearchAllReqSerializer
 from services.web.query.utils.doris import DorisQuerySQLBuilder
+from services.web.query.utils.field_map import FieldMapHandler
 from services.web.query.utils.search_config import (
     FieldSearchConfig,
     QueryConditionOperator,
@@ -97,9 +98,7 @@ class FieldContextService:
         system_map = cls._load_system_map(namespace, allowed_ids)
 
         # ③ 逐系统构建字段上下文（L0+L1+L2）；常见/历史操作由平台层组装
-        systems = [
-            cls._build_system(namespace, system_id, system_map.get(system_id, {})) for system_id in allowed_ids
-        ]
+        systems = [cls._build_system(namespace, system_id, system_map.get(system_id, {})) for system_id in allowed_ids]
         return SystemSelectionOutput(systems=systems)
 
     # ------------------------------------------------------------------
@@ -119,10 +118,13 @@ class FieldContextService:
     def _build_system(cls, namespace: str, system_id: str, system: dict) -> SelectionSystem:
         sys_cfg = cls._load_l1_config(system_id)
 
-        # L0 + L1：通用字段（白名单同源全量）
+        # L0 + L1：通用字段（白名单同源全量）；枚举字段 options 与日志检索页 field_map 同源
         field_overrides = sys_cfg.get("fields", {})
+        options_map = cls._load_enum_options(namespace)
         standard_fields = [
-            cls._to_standard_field(cfg, field_overrides.get(cfg.field.field_name, {}))
+            cls._to_standard_field(
+                cfg, field_overrides.get(cfg.field.field_name, {}), options_map.get(cfg.field.field_name)
+            )
             for cfg in COLLECT_SEARCH_CONFIG.field_configs
         ]
 
@@ -134,9 +136,7 @@ class FieldContextService:
             extension_fields = cls._discover_extension_fields(system_id, sample_row)
 
         # L1：人工配置的拓展字段（L2 关闭时的唯一来源；与 L2 结果按 (raw_name, keys) 去重合并）
-        extension_fields = cls._merge_extension_fields(
-            extension_fields, cls._l1_extension_fields(system_id, sys_cfg)
-        )
+        extension_fields = cls._merge_extension_fields(extension_fields, cls._l1_extension_fields(system_id, sys_cfg))
 
         return SelectionSystem(
             system_id=system_id,
@@ -152,18 +152,34 @@ class FieldContextService:
         return config.get("systems", {}).get(system_id, {})
 
     @staticmethod
-    def _to_standard_field(cfg: FieldSearchConfig, override: dict) -> SelectionFieldMeta:
-        """L0 兜底 + L1 覆盖（nl_name / description / sample_value）"""
+    def _load_enum_options(namespace: str) -> Dict[str, List[dict]]:
+        """
+        枚举字段可选值（与日志检索页 es_query/field_map 接口同源；
+        白名单未来新增枚举字段自动透出，无需改本服务）
+        """
+        return FieldMapHandler(
+            fields=[cfg.field.field_name for cfg in COLLECT_SEARCH_CONFIG.field_configs],
+            timedelta=DEFAULT_TIMEDELTA,
+            namespace=namespace,
+        ).field_map
+
+    @staticmethod
+    def _to_standard_field(
+        cfg: FieldSearchConfig, override: dict, options: Optional[List[dict]] = None
+    ) -> SelectionFieldMeta:
+        """L0 兜底 + L1 覆盖（nl_name / description / sample_value）；枚举字段附 options"""
         # alias_name 均为字段名本身，中文显示名取 description
         display_name = str(cfg.field.description or cfg.field.alias_name or cfg.field.field_name)
         return SelectionFieldMeta(
             raw_name=cfg.field.field_name,
             keys=[],
+            field_type=cfg.field.field_type,
             display_name=display_name,
             nl_name=override.get("nl_name") or display_name,
             description=override.get("description") or str(cfg.field.description or ""),
             allow_operators=[operator.value for operator in cfg.allow_operators],
             sample_value=override.get("sample_value"),
+            options=[SelectionFieldOption(**item) for item in options] if options else None,
         )
 
     @staticmethod
@@ -173,6 +189,8 @@ class FieldContextService:
         return SelectionFieldMeta(
             raw_name=raw_name,
             keys=keys,
+            # 一期拓展字段恒按 string 处理（协议待冻结 #6）
+            field_type="string",
             display_name=display_name,
             nl_name=override.get("nl_name") or f"{EXTENSION_NL_NAME_PREFIX}{display_name}",
             description=override.get("description", ""),
@@ -237,9 +255,7 @@ class FieldContextService:
             return None
 
     @classmethod
-    def _fill_sample_values(
-        cls, standard_fields: List[SelectionFieldMeta], field_overrides: dict, row: dict
-    ) -> None:
+    def _fill_sample_values(cls, standard_fields: List[SelectionFieldMeta], field_overrides: dict, row: dict) -> None:
         """采样值回填（原始查询值）；L1 人工配置的 sample_value 优先"""
         for item in standard_fields:
             if item.raw_name in field_overrides and "sample_value" in field_overrides[item.raw_name]:
@@ -268,9 +284,7 @@ class FieldContextService:
             for key, value in container.items():
                 if key in declared_keys:
                     continue
-                extension_fields.append(
-                    cls._to_extension_field(system_id, raw_name, [key], {"sample_value": value})
-                )
+                extension_fields.append(cls._to_extension_field(system_id, raw_name, [key], {"sample_value": value}))
         return extension_fields
 
     # ------------------------------------------------------------------
