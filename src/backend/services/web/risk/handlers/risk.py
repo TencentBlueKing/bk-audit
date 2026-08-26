@@ -188,7 +188,6 @@ class RiskHandler:
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
         }
-        # 规则级元信息
         strategy_rule_id = event.get("strategy_rule_id")
         rule: Optional[StrategyRule] = None
         if strategy_rule_id:
@@ -202,11 +201,28 @@ class RiskHandler:
                     event["strategy_id"],
                 )
                 rule = None
+        # 存量事件strategy_rule_id为空，需要从本地DB去查rule
+        if rule is None:
+            rule_order = (
+                Strategy.objects.filter(strategy_id=event["strategy_id"]).values_list("rule_order", flat=True).first()
+            )
+            if rule_order:
+                rule = StrategyRule._base_manager.filter(rule_id=rule_order[0]).first()
+        # 规则级元信息（优先级：规则 > 策略；策略级回退覆盖模型策略与窗口期事件）
+        strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
         create_params["strategy_rule_id"] = rule.rule_id if rule else None
-        create_params["risk_level"] = rule.risk_level if rule else None
-        create_params["risk_hazard"] = rule.risk_hazard if rule else None
-        create_params["risk_guidance"] = rule.risk_guidance if rule else None
-        create_params["_title_template"] = rule.risk_title if rule else None
+        create_params["risk_level"] = (rule.risk_level if rule else None) or (
+            strategy.risk_level if strategy else None
+        )
+        create_params["risk_hazard"] = (rule.risk_hazard if rule else None) or (
+            strategy.risk_hazard if strategy else None
+        )
+        create_params["risk_guidance"] = (rule.risk_guidance if rule else None) or (
+            strategy.risk_guidance if strategy else None
+        )
+        create_params["_title_template"] = (rule.risk_title if rule else None) or (
+            strategy.risk_title if strategy else None
+        )
         create_params["title"] = self.render_risk_title(create_params)
         create_params.pop("_title_template", None)
         return create_params
@@ -235,8 +251,12 @@ class RiskHandler:
             )
             return False, None
 
+        # 构建建单参数（含发现规则归因），查重键与建单参数共用同一 strategy_rule_id，
+        # 避免旧 SQL 未重建窗口期事件因规则 ID 为空导致去重错位、重复建单
+        create_params = self.gen_risk_create_params(event)
+
         # 检查是否有已存在的
-        # 策略ID相同，原始事件ID相同，命中发现规则相同，不为关单状态或事件时间小于最后发现时间(strategy_rule_id 参与去重)
+        # 策略ID相同，原始事件ID相同，命中发现规则相同，不为关单状态或事件时间小于最后发现时间
         # 若未关单，则不创建新风险
         # 若事件时间小于最后发现时间，则应当收敛风险
         risk = (
@@ -245,7 +265,7 @@ class RiskHandler:
                     Q(
                         strategy_id=event["strategy_id"],
                         raw_event_id=event["raw_event_id"],
-                        strategy_rule_id=event.get("strategy_rule_id"),
+                        strategy_rule_id=create_params["strategy_rule_id"],
                     )
                     & Q(
                         ~Q(status=RiskStatus.CLOSED)
@@ -282,7 +302,6 @@ class RiskHandler:
             return False, risk
 
         # 不存在则创建
-        create_params = self.gen_risk_create_params(event)
         if manual:
             create_params["manual_synced"] = False
             create_params["display_status"] = RiskDisplayStatus.STAND_BY

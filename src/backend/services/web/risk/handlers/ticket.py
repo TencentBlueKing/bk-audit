@@ -151,6 +151,9 @@ class RiskFlowBaseHandler:
                 rule = StrategyRule._base_manager.filter(rule_id=self.risk.strategy_rule_id).first()
                 if rule:
                     group_ids = rule.processor or []
+            if not group_ids:
+                # 未关联规则（旧 SQL 未重建窗口期建的单据）时回退策略级处理组，
+                group_ids = self.strategy.processor_groups or []
             processor_groups = list(NoticeGroup.objects.filter(group_id__in=group_ids))
             origin_members = NoticeGroup.parse_members(processor_groups)
             # 解析处理组
