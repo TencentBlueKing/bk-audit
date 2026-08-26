@@ -1,3 +1,4 @@
+from services.web.ai_assistant.constants import MessageType
 from services.web.ai_assistant.handlers import (
     AttachmentTypeHandler,
     MessageTypeHandler,
@@ -6,7 +7,17 @@ from services.web.ai_assistant.handlers import (
 )
 from tests.test_ai_assistant.handler_contracts import HandlerContractSpec
 
-MESSAGE_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {}
+MESSAGE_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
+    MessageType.SYSTEM_SELECTION: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.production_handler_contract_cases.SystemSelectionHandlerContract"
+    ),
+    MessageType.NATURAL_LANGUAGE_SEARCH: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.production_handler_contract_cases.NaturalLanguageSearchHandlerContract"
+    ),
+    MessageType.LOG_SEARCH: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.production_handler_contract_cases.LogSearchHandlerContract"
+    ),
+}
 ATTACHMENT_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {}
 
 _CAPTURED_MESSAGE_HANDLERS: dict[str, MessageTypeHandler] | None = None
