@@ -12,7 +12,10 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Conversation, Feedback, Message
 from services.web.ai_assistant.services.feedback import FeedbackService
-from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler, register_test_message_handler
+from tests.test_ai_assistant.handlers import (
+    FeedbackEchoSyncHandler,
+    register_test_message_handler,
+)
 
 
 class FeedbackServiceConcurrencyTest(TransactionTestCase):

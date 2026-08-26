@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 SQL 生成安全回归（共享 builder 行为固化）
 
 背景（2026-08-14 实证）：AI 输出的 filters 直接进 DorisQuerySQLBuilder（共享链路，

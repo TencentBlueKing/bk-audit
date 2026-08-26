@@ -14,9 +14,9 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""F3 检索快照服务测试"""
+F3 检索快照服务测试
+"""
 
 from unittest import mock
 
@@ -108,8 +108,15 @@ class TestLogSearchService(AIAssistantTestCase):
         self.assertEqual(set(output.model_dump().keys()), {"total", "columns", "samples", "query_summary"})
         # 产品需求 9 列固定展示字段（2026-08-14），首列 start_time
         expected_columns = [
-            "start_time", "username", "system_id", "action_id", "resource_type_id",
-            "instance_id", "result_code", "extend_data", "log",
+            "start_time",
+            "username",
+            "system_id",
+            "action_id",
+            "resource_type_id",
+            "instance_id",
+            "result_code",
+            "extend_data",
+            "log",
         ]
         self.assertEqual([column.raw_name for column in output.columns], expected_columns)
         # 显示名用产品文案

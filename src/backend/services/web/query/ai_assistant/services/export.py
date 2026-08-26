@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 F4 导出服务（预览导出 / 全量导出）
 
 - 预览导出：数据源 = LOG_SEARCH 快照 samples（≤100 条，不重查），列与列头 = output_data.columns，
@@ -37,18 +35,13 @@ from django.core.files import File
 
 from apps.meta.permissions import SearchLogPermission
 from core.sql.constants import FieldType
-from services.web.query.ai_assistant.constants import (
-    AI_EXPORT_TASK_NAME_TEMPLATE,
-)
+from services.web.query.ai_assistant.constants import AI_EXPORT_TASK_NAME_TEMPLATE
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
     AIOutputInvalidError,
     AIPermissionDeniedError,
 )
-from services.web.query.ai_assistant.schemas import (
-    LogSearchOutput,
-    SearchCondition,
-)
+from services.web.query.ai_assistant.schemas import LogSearchOutput, SearchCondition
 from services.web.query.constants import (
     DEFAULT_COLLECTOR_SORT_LIST,
     FieldCategoryEnum,
@@ -121,8 +114,7 @@ class PreviewExportService:
         # ① 内存态 LogExportTask 作 ExportConfig 载体（不 save —— 预览导出无任务实体）
         #    samples 字典键 = 列 full_key，故导出字段按 full_key 直取（keys 置空不再二次下钻）
         export_fields = [
-            {"raw_name": column.full_key, "display_name": column.display_name, "keys": []}
-            for column in output.columns
+            {"raw_name": column.full_key, "display_name": column.display_name, "keys": []} for column in output.columns
         ]
         task_stub = LogExportTask(
             export_config={

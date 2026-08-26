@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 F2 NL2JSON 服务（NATURAL_LANGUAGE_SEARCH 消息核心组件）
 
 薄代理原则：业务逻辑（字段语义/操作符规则/few-shot）全在 AIDev System Prompt，
@@ -59,11 +57,11 @@ from services.web.query.ai_assistant.exceptions import (
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (
+    NO_VALUE_OPERATORS,
     AIConditionItem,
     AIConditionPayload,
     Condition,
     ConditionField,
-    NO_VALUE_OPERATORS,
     SearchCondition,
     SystemSelectionOutput,
 )
@@ -186,12 +184,8 @@ class NL2JSONService:
                 {
                     "system_id": system.system_id,
                     "name": system.name,
-                    "standard_fields": [
-                        field.model_dump(exclude_none=True) for field in system.standard_fields
-                    ],
-                    "extension_fields": [
-                        field.model_dump(exclude_none=True) for field in system.extension_fields
-                    ],
+                    "standard_fields": [field.model_dump(exclude_none=True) for field in system.standard_fields],
+                    "extension_fields": [field.model_dump(exclude_none=True) for field in system.extension_fields],
                 }
             )
         return json.dumps(systems, ensure_ascii=False)
@@ -297,12 +291,8 @@ class NL2JSONService:
         - 数值比较操作符仅数值类型字段可用（拓展字段一期恒 string 不支持）
         """
         standard_map = {f.raw_name: f for s in selection.systems for f in s.standard_fields}
-        extension_map = {
-            (f.raw_name, tuple(f.keys)): f for s in selection.systems for f in s.extension_fields
-        }
-        json_containers = {
-            cfg.field.field_name for cfg in COLLECT_SEARCH_CONFIG.field_configs if cfg.field.is_json
-        }
+        extension_map = {(f.raw_name, tuple(f.keys)): f for s in selection.systems for f in s.extension_fields}
+        json_containers = {cfg.field.field_name for cfg in COLLECT_SEARCH_CONFIG.field_configs if cfg.field.is_json}
         valid_operators = {choice[0] for choice in QueryConditionOperator.choices}
 
         valid_conditions: List[AIConditionItem] = []
@@ -342,9 +332,7 @@ class NL2JSONService:
                 extra={"condition": cond.model_dump(), "reason": "extension field not in field context"}
             )
         if cond.raw_name not in json_containers:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "keys on non-json field"}
-            )
+            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "keys on non-json field"})
         if cond.operator not in meta.allow_operators:
             raise AIOutputInvalidError(
                 extra={"condition": cond.model_dump(), "reason": "operator not allowed for extension field"}
@@ -359,9 +347,7 @@ class NL2JSONService:
     def _validate_standard_condition(cls, cond: AIConditionItem, standard_map: dict) -> None:
         meta = standard_map.get(cond.raw_name)
         if meta is None:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "field not in field context"}
-            )
+            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "field not in field context"})
         if cond.operator not in meta.allow_operators:
             raise AIOutputInvalidError(
                 extra={"condition": cond.model_dump(), "reason": "operator not allowed for field"}
@@ -384,9 +370,7 @@ class NL2JSONService:
     def _assemble(cls, payload: AIConditionPayload, scope_id: str) -> SearchCondition:
         """scope 取入参（不信任 AI）；时间 AI 优先，缺省/非法补默认窗口（D2）"""
         end_time = cls._safe_parse_time(payload.end_time) or timezone.now()
-        start_time = cls._safe_parse_time(payload.start_time) or (
-            end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS)
-        )
+        start_time = cls._safe_parse_time(payload.start_time) or (end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS))
         return SearchCondition(
             scope_type="system",
             scope_id=scope_id,

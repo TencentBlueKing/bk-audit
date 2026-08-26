@@ -14,9 +14,9 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""F2 NL2JSON 服务测试"""
+F2 NL2JSON 服务测试
+"""
 
 import json
 from unittest import mock
@@ -38,9 +38,7 @@ from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 NL2JSON_MODULE = "services.web.query.ai_assistant.services.nl2json"
 
 VALID_AI_OUTPUT = {
-    "conditions": [
-        {"raw_name": "username", "keys": [], "field_type": None, "operator": "eq", "filters": ["admin"]}
-    ],
+    "conditions": [{"raw_name": "username", "keys": [], "field_type": None, "operator": "eq", "filters": ["admin"]}],
     "start_time": "2026-08-13T00:00:00+08:00",
     "end_time": "2026-08-14T00:00:00+08:00",
 }
@@ -147,9 +145,7 @@ class TestNL2JSONService(AIAssistantTestCase):
     def test_extension_not_in_context_rejected(self, mock_chat):
         # 字段清单中没有该拓展字段（防幻觉）
         output = dict(VALID_AI_OUTPUT)
-        output["conditions"] = [
-            {"raw_name": "extend_data", "keys": ["not_exist"], "operator": "eq", "filters": ["x"]}
-        ]
+        output["conditions"] = [{"raw_name": "extend_data", "keys": ["not_exist"], "operator": "eq", "filters": ["x"]}]
         mock_chat.return_value = json.dumps(output)
         with self.assertRaises(AIOutputInvalidError):
             self._convert()
@@ -252,18 +248,14 @@ class TestNL2JSONAdversarial(AIAssistantTestCase):
 
     def test_fullwidth_quotes_rejected(self, mock_chat):
         """全角引号（中文标点）——当前不支持，文档化行为：拒绝而非错判"""
-        mock_chat.return_value = (
-            '{"conditions": [{"raw_name": "username", "operator": "eq", "filters": ["admin"]}]}'
-        )
+        mock_chat.return_value = '{"conditions": [{"raw_name": "username", "operator": "eq", "filters": ["admin"]}]}'
         condition = self._convert()
         self.assertEqual(len(condition.conditions), 1)
 
     def test_unicode_escaped_json(self, mock_chat):
         """\\uXXXX 转义（ensure_ascii 输出）"""
         output = dict(VALID_AI_OUTPUT)
-        output["conditions"] = [
-            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["管理员"]}
-        ]
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "eq", "filters": ["管理员"]}]
         mock_chat.return_value = json.dumps(output, ensure_ascii=True)
         condition = self._convert()
         self.assertEqual(condition.conditions[0].filters, ["管理员"])
@@ -271,9 +263,7 @@ class TestNL2JSONAdversarial(AIAssistantTestCase):
     def test_numeric_filters_for_eq(self, mock_chat):
         """eq 操作符的数值型 filters（原始查询值形态）"""
         selection = self.make_selection(
-            standard_fields=[
-                self.make_standard_field(raw_name="result_code", allow_operators=["eq", "gt"])
-            ]
+            standard_fields=[self.make_standard_field(raw_name="result_code", allow_operators=["eq", "gt"])]
         )
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "result_code", "keys": [], "operator": "eq", "filters": [0]}]

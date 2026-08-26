@@ -16,7 +16,10 @@ from services.web.ai_assistant.exceptions import (
     LogExportPermissionDenied,
 )
 from services.web.ai_assistant.models import Message
-from services.web.ai_assistant.schemas.audit_search import LogSearchInputSchema, LogSearchOutputSchema
+from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchInputSchema,
+    LogSearchOutputSchema,
+)
 from services.web.ai_assistant.services.message import MessageService
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
@@ -25,7 +28,11 @@ from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError as QueryAIPermissionDeniedError,
 )
 from services.web.query.ai_assistant.schemas import LogSearchOutput
-from services.web.query.ai_assistant.services.export import FullExportService, PreviewExportFile, PreviewExportService
+from services.web.query.ai_assistant.services.export import (
+    FullExportService,
+    PreviewExportFile,
+    PreviewExportService,
+)
 
 logger = logging.getLogger(__name__)
 

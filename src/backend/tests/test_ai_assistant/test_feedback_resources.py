@@ -25,7 +25,10 @@ from services.web.ai_assistant.serializers.feedback import (
     FeedbackUpsertRequestSerializer,
 )
 from tests.base import TestCase
-from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler, register_test_message_handler
+from tests.test_ai_assistant.handlers import (
+    FeedbackEchoSyncHandler,
+    register_test_message_handler,
+)
 
 
 class FeedbackRequestSerializerTest(TestCase):

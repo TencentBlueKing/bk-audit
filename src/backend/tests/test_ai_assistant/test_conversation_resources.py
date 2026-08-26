@@ -37,7 +37,10 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarNodeResponseSerializer,
 )
 from tests.base import TestCase
-from tests.test_ai_assistant.handlers import EchoSyncHandler, register_test_message_handler
+from tests.test_ai_assistant.handlers import (
+    EchoSyncHandler,
+    register_test_message_handler,
+)
 
 
 @patch("services.web.ai_assistant.resources.conversation.get_request_username", return_value="alice")

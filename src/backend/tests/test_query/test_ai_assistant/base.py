@@ -14,9 +14,9 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""AI 助手组件测试公共基类与夹具"""
+AI 助手组件测试公共基类与夹具
+"""
 
 from typing import Any, Dict, List, Optional
 
