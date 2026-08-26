@@ -96,9 +96,10 @@
             id-key="id"
             multiple
             :popover-options="{
-              'width': 'auto',
+              width: 'auto',
               extCls: 'add-search-tree-pop',
-              boundary: 'document.body'
+              boundary: 'body',
+              zIndex: 2500,
             }"
             @change="handleSelectChange">
             <template #trigger>
@@ -634,6 +635,7 @@
 <style lang="postcss">
 .analysis-search-box {
   position: relative;
+  z-index: 2100;
   background-color: #fff;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
@@ -668,6 +670,10 @@
   }
 }
 
+
+.add-search-tree-pop {
+  z-index: 2500 !important;
+}
 
 .box-row {
   display: grid;

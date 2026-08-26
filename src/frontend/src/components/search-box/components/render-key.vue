@@ -63,6 +63,9 @@
         </div>
       </template>
       <slot name="more-list" />
+    </div>
+    <!-- 放在滚动容器外，避免下拉被 overflow 裁切 -->
+    <div class="render-form-serach-more-button">
       <slot name="more-button" />
     </div>
 
@@ -256,7 +259,13 @@
 
     .render-form-serach-top {
       max-height: 40vh;
-      overflow-y: auto
+      overflow-y: auto;
+    }
+
+    .render-form-serach-more-button {
+      position: relative;
+      z-index: 2;
+      margin-top: 4px;
     }
 
     .box-row {

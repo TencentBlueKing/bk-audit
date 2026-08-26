@@ -1118,7 +1118,7 @@
 <style lang="postcss">
   .nl-search-box {
     position: relative;
-    z-index: 100;
+    z-index: 2100;
     overflow: visible;
     background: linear-gradient(90deg, #edeeff 54.99%, #ebe7ff 94.25%);
     border-radius: 8px;
