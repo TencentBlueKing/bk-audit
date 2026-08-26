@@ -1,4 +1,4 @@
-import threading
+﻿import threading
 
 from django.db import close_old_connections
 from django.test import TransactionTestCase
@@ -12,7 +12,7 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Conversation, Feedback, Message
 from services.web.ai_assistant.services.feedback import FeedbackService
-from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler
+from tests.test_ai_assistant.handlers import FeedbackEchoSyncHandler, register_test_message_handler
 
 
 class FeedbackServiceConcurrencyTest(TransactionTestCase):
@@ -34,7 +34,7 @@ class FeedbackServiceConcurrencyTest(TransactionTestCase):
             created_by=self.user,
             updated_by=self.user,
         )
-        message_handler_registry.register(FeedbackEchoSyncHandler())
+        register_test_message_handler(FeedbackEchoSyncHandler())
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
