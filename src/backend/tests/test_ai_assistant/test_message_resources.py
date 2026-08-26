@@ -163,6 +163,9 @@ class MessageRequestSerializerTest(TestCase):
                     self.assertTrue(field.help_text)
 
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
+        # 保存常驻业务 Handler，测试结束后恢复，避免污染全局单例影响后续测试。
+        saved_sync = message_handler_registry.handlers.get(MessageType.SYSTEM_SELECTION)
+        saved_async = message_handler_registry.handlers.get(MessageType.NATURAL_LANGUAGE_SEARCH)
         sync_handler = EchoSyncHandler()
         async_handler = EchoAsyncHandler()
         register_test_message_handler(sync_handler)
@@ -173,6 +176,10 @@ class MessageRequestSerializerTest(TestCase):
         finally:
             message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
             message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+            if saved_sync is not None:
+                message_handler_registry.register(saved_sync)
+            if saved_async is not None:
+                message_handler_registry.register(saved_async)
 
         self.assertIs(input_schemas[MessageType.SYSTEM_SELECTION], EchoInput)
         self.assertIs(input_schemas[MessageType.NATURAL_LANGUAGE_SEARCH], EchoInput)
@@ -243,9 +250,24 @@ def _map_polymorphic_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
 
 
 class MessageOpenAPIStartupContractTest(SimpleTestCase):
+    def setUp(self):
+        # 业务 Handler（audit_search）常驻注册表后，本测试需要三种消息类型空闲：
+        # 先卸载保存、结束后原样恢复，避免依赖收集顺序破坏全局单例。
+        self._saved_handlers = {
+            message_type: message_handler_registry.unregister(message_type)
+            for message_type in (
+                MessageType.SYSTEM_SELECTION,
+                MessageType.NATURAL_LANGUAGE_SEARCH,
+                MessageType.LOG_SEARCH,
+            )
+        }
+
     def tearDown(self):
-        for message_type in MessageType.values:
+        # 清除测试注册的替身，并恢复常驻业务 Handler。
+        for message_type, handler in self._saved_handlers.items():
             message_handler_registry.unregister(message_type)
+            if handler is not None:
+                message_handler_registry.register(handler)
 
     def test_first_openapi_generation_includes_registered_handlers_and_freezes(self):
         message_handler_registry.register(StartupAlphaMessageHandler())
