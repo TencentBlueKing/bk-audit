@@ -910,6 +910,10 @@ class ConfirmRisk(RiskFlowBaseHandler):
 
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
+        # 触发渲染任务
+        RiskHandler().trigger_render_task(self.risk)
+        # 通知关注人
+        RiskHandler().send_risk_notice(self.risk)
 
 
 class ConfirmAsMisReport(RiskFlowBaseHandler):

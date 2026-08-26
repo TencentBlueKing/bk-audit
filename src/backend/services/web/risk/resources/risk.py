@@ -667,7 +667,7 @@ class ListRisk(RiskMeta):
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
         if risk_level:
-            q &= Q(strategy__risk_level__in=risk_level)
+            q &= Q(risk_level__in=risk_level)
 
         # 标签筛选条件
         if tag_filter := validated_request_data.pop("tag_objs__in", None):
@@ -701,6 +701,8 @@ class ListRisk(RiskMeta):
                     RiskDisplayStatus.FOR_APPROVE,
                     RiskDisplayStatus.AUTO_PROCESS,
                     RiskDisplayStatus.AWAIT_PROCESS,
+                    RiskDisplayStatus.CLOSED,
+                    RiskDisplayStatus.STAND_BY,
                 ],
             )
             .distinct()
@@ -1971,6 +1973,7 @@ class ConfirmAsMisReportResource(RiskMeta):
         from services.web.risk.handlers.ticket import ConfirmAsMisReport
 
         ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
+        return {"success": True}
 
 
 class ListPendingConfirmRisk(ListRisk):

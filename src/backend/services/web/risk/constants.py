@@ -835,7 +835,7 @@ EVENT_BASIC_COLUMN_MAP = {field.value: field.column for field in EventBasicField
 EventBasicField.NUMERIC_FIELDS = frozenset({EventBasicField.STRATEGY_ID.value})
 
 # 风险等级排序字段
-RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"
+RISK_LEVEL_ORDER_FIELD = "risk_level"
 
 
 @register_choices("risk_report_status")

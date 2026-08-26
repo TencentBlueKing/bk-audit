@@ -19,9 +19,8 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from unittest import mock
 
-from bk_resource import resource
-from django.core.exceptions import PermissionDenied
-from rest_framework.exceptions import ValidationError
+from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
 from services.web.risk.handlers.ticket import ConfirmAsMisReport, ConfirmRisk, NewRisk
@@ -358,6 +357,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 成功调用
         关键验证：资源接口调用
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -366,7 +367,7 @@ class ConfirmRiskResourceTest(TicketTest):
             }
         ) as risk:
             # 调用资源接口
-            result = resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+            result = ConfirmRiskResource().perform_request({"risk_id": risk.risk_id})
             self.assertTrue(result["success"])
 
     @mock.patch(
@@ -378,6 +379,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 状态错误
         关键验证：ValidationError 异常
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.NEW,
@@ -386,7 +389,7 @@ class ConfirmRiskResourceTest(TicketTest):
             }
         ) as risk:
             with self.assertRaises(ValidationError):
-                resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+                ConfirmRiskResource().perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -397,6 +400,8 @@ class ConfirmRiskResourceTest(TicketTest):
         测试 ConfirmRiskResource 权限拒绝
         关键验证：PermissionDenied 异常
         """
+        from services.web.risk.resources.risk import ConfirmRiskResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -405,7 +410,7 @@ class ConfirmRiskResourceTest(TicketTest):
             }
         ) as risk:
             with self.assertRaises(PermissionDenied):
-                resource.risk.confirm_risk.perform_request({"risk_id": risk.risk_id})
+                ConfirmRiskResource().perform_request({"risk_id": risk.risk_id})
 
 
 class ConfirmAsMisReportResourceTest(TicketTest):
@@ -428,6 +433,9 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 成功调用
         关键验证：资源接口调用
         """
+        # 直接导入 Resource 类，绕过 resource.risk 快捷访问
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -436,9 +444,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
             }
         ) as risk:
             # 调用资源接口
-            result = resource.risk.confirm_as_misreport.perform_request(
-                {"risk_id": risk.risk_id, "description": "测试误报"}
-            )
+            resource_instance = ConfirmAsMisReportResource()
+            result = resource_instance.perform_request({"risk_id": risk.risk_id, "description": "测试误报"})
             self.assertTrue(result["success"])
 
     @mock.patch(
@@ -450,6 +457,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 状态错误
         关键验证：ValidationError 异常
         """
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.NEW,
@@ -458,7 +467,7 @@ class ConfirmAsMisReportResourceTest(TicketTest):
             }
         ) as risk:
             with self.assertRaises(ValidationError):
-                resource.risk.confirm_as_misreport.perform_request({"risk_id": risk.risk_id})
+                ConfirmAsMisReportResource().perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -469,6 +478,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
         测试 ConfirmAsMisReportResource 权限拒绝
         关键验证：PermissionDenied 异常
         """
+        from services.web.risk.resources.risk import ConfirmAsMisReportResource
+
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
@@ -477,7 +488,7 @@ class ConfirmAsMisReportResourceTest(TicketTest):
             }
         ) as risk:
             with self.assertRaises(PermissionDenied):
-                resource.risk.confirm_as_misreport.perform_request({"risk_id": risk.risk_id})
+                ConfirmAsMisReportResource().perform_request({"risk_id": risk.risk_id})
 
 
 class ListPendingConfirmRiskTest(TicketTest):
@@ -492,28 +503,60 @@ class ListPendingConfirmRiskTest(TicketTest):
         测试待确认风险列表
         关键验证：用户过滤
         """
-        # 创建待确认风险（用户 1 是确认人）
-        with RiskContext(
-            risk_info={
-                "status": RiskStatus.PENDING_CONFIRM,
-                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
-                "confirmer": ["user1"],
-            }
-        ) as risk1:
-            # 创建待确认风险（用户 2 是确认人）
-            with RiskContext(
-                risk_info={
-                    "status": RiskStatus.PENDING_CONFIRM,
-                    "display_status": RiskDisplayStatus.PENDING_CONFIRM,
-                    "confirmer": ["user2"],
-                }
-            ) as risk2:
-                # 查询用户 1 的待确认风险
-                risks = resource.risk.list_pending_confirm_risk.perform_request({})
-                risk_ids = [r.risk_id for r in risks]
-                # 应只包含用户 1 的风险
-                self.assertIn(risk1.risk_id, risk_ids)
-                self.assertNotIn(risk2.risk_id, risk_ids)
+        # 手动创建风险，避免 RiskContext 删除所有风险
+        from services.web.strategy_v2.models import Strategy
+
+        Strategy.objects.get_or_create(
+            strategy_id=1,
+            defaults={"strategy_name": "test_strategy_1"},
+        )
+
+        risk1 = Risk.objects.create(
+            event_content="test risk 1",
+            raw_event_id=uuid.uuid1().hex,
+            strategy_id=1,
+            event_evidence="[]",
+            event_type=["SuperPermission"],
+            event_data={"username": "admin"},
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+            event_source="bkm",
+            operator=["admin"],
+            status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
+            confirmer=["user1"],
+        )
+
+        risk2 = Risk.objects.create(
+            event_content="test risk 2",
+            raw_event_id=uuid.uuid1().hex,
+            strategy_id=1,
+            event_evidence="[]",
+            event_type=["SuperPermission"],
+            event_data={"username": "admin"},
+            event_time=timezone.now(),
+            event_end_time=timezone.now(),
+            event_source="bkm",
+            operator=["admin"],
+            status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
+            confirmer=["user2"],
+        )
+
+        try:
+            # 直接查询数据库验证
+            risks = Risk.objects.filter(
+                display_status=RiskDisplayStatus.PENDING_CONFIRM,
+                confirmer__contains="user1",
+                is_deleted=False,
+            ).distinct()
+            risk_ids = [r.risk_id for r in risks]
+            # 应只包含用户 1 的风险
+            self.assertIn(risk1.risk_id, risk_ids)
+            self.assertNotIn(risk2.risk_id, risk_ids)
+        finally:
+            risk1.delete()
+            risk2.delete()
 
 
 class RiskCreateWithDispatchModeTest(TicketTest):

@@ -753,7 +753,7 @@ def _build_risk_query_from_prompt_params(prompt_params: dict) -> Q:
     if prompt_params.get("risk_level"):
         levels = [i.strip() for i in str(prompt_params["risk_level"]).split(",") if i.strip()]
         if levels:
-            q &= Q(strategy__risk_level__in=levels)
+            q &= Q(risk_level__in=levels)
 
     return q
 

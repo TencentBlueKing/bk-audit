@@ -35,7 +35,6 @@ from services.web.common.constants import ScopeQueryField
 from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
-    RISK_LEVEL_ORDER_FIELD,
     AnalyseReportStatus,
     AnalyseReportType,
     EventBasicField,
@@ -606,15 +605,13 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
-        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（risk_level 直接使用快照字段排序）。"""
         order_fields = []
         for item in sort_list:
             bare = item.lstrip("-")
             if not bare:
                 continue
             prefix = "-" if item.startswith("-") else ""
-            if bare == Strategy.risk_level.field.name:
-                bare = RISK_LEVEL_ORDER_FIELD
             order_fields.append(f"{prefix}{bare}")
         return order_fields
 

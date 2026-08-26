@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import uuid
 from unittest import mock
 
+from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.sops.constants import SOPSTaskStatus
@@ -582,20 +583,42 @@ class ListPendingConfirmRiskTest(TicketTest):
             }
         ) as risk1:
             # 创建待确认风险（用户 2 是确认人）
-            with RiskContext(
-                risk_info={
+            # 注意：RiskContext.__init__ 会清空全部风险，故此处直接 create，
+            # 避免把外层 risk1 一并删除导致查询结果为空
+            risk2 = Risk.objects.create(
+                **{
+                    **RISK_INFO,
                     "status": RiskStatus.PENDING_CONFIRM,
                     "display_status": RiskDisplayStatus.PENDING_CONFIRM,
                     "confirmer": ["user2"],
                 }
-            ) as risk2:
-                # 查询用户 1 的待确认风险
-                resource_instance = ListPendingConfirmRisk()
-                risks = resource_instance.perform_request({})
-                risk_ids = [r.risk_id for r in risks]
-                # 应只包含用户 1 的风险
-                self.assertIn(risk1.risk_id, risk_ids)
-                self.assertNotIn(risk2.risk_id, risk_ids)
+            )
+            self.addCleanup(risk2.delete)
+
+            # 查询用户 1 的待确认风险
+            from types import SimpleNamespace
+
+            from blueapps.utils.local import request_local
+            from rest_framework.request import Request
+            from rest_framework.test import APIRequestFactory
+
+            factory = APIRequestFactory()
+            django_request = factory.get("/risks/", data={"page": 1, "page_size": 10})
+            django_request.user = SimpleNamespace(username="user1", is_authenticated=True)
+            request = Request(django_request)
+            request.user = django_request.user
+            setattr(request_local, "request", request)
+            self.addCleanup(lambda: delattr(request_local, "request") if hasattr(request_local, "request") else None)
+
+            resource_instance = ListPendingConfirmRisk()
+            # ListPendingConfirmRisk 内部走 IAM 权限校验，需 mock 以返回全部风险，
+            # 由 confirmer__contains 控制仅返回当前确认人的风险
+            with mock.patch("services.web.risk.models.Risk.iam_risk_filter", return_value=Q()):
+                result = resource_instance.perform_request({"_request": request})
+            risk_ids = [r["risk_id"] for r in result["results"]]
+            # 应只包含用户 1 的风险
+            self.assertIn(risk1.risk_id, risk_ids)
+            self.assertNotIn(risk2.risk_id, risk_ids)
 
 
 class RiskCreateWithDispatchModeTest(TicketTest):

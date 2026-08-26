@@ -44,6 +44,10 @@ RISK_INFO = {
     "event_source": "bkm",
     "operator": ["admin"],
     "status": RiskStatus.NEW,
+    # 风险快照字段
+    "risk_level": "high",
+    "risk_hazard": "测试危害描述",
+    "risk_guidance": "测试处理指引",
 }
 
 PA_INFO = {
