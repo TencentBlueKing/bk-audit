@@ -35,7 +35,6 @@ from services.web.common.constants import ScopeQueryField
 from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
-    RISK_LEVEL_ORDER_FIELD,
     AnalyseReportStatus,
     AnalyseReportType,
     EventBasicField,
@@ -97,6 +96,9 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
+    strategy_rule_id = serializers.IntegerField(
+        label=EventMappingFields.STRATEGY_RULE_ID.description, required=False, allow_null=True, default=None
+    )
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
     event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(
@@ -603,15 +605,13 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
-        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（risk_level 直接使用快照字段排序）。"""
         order_fields = []
         for item in sort_list:
             bare = item.lstrip("-")
             if not bare:
                 continue
             prefix = "-" if item.startswith("-") else ""
-            if bare == Strategy.risk_level.field.name:
-                bare = RISK_LEVEL_ORDER_FIELD
             order_fields.append(f"{prefix}{bare}")
         return order_fields
 
@@ -2009,3 +2009,41 @@ class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
     """风险反查报告请求"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+
+
+class ConfirmRiskRequestSerializer(serializers.Serializer):
+    """确认风险请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+
+
+class BatchConfirmRiskRequestSerializer(serializers.Serializer):
+    """批量确认风险请求"""
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("风险 ID 列表"),
+        child=serializers.CharField(),
+        min_length=1,
+        required=True,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
+        return sorted(list(set(risk_ids)))
+
+
+class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """确认为误报请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
