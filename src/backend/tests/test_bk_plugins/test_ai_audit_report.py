@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import os
 import sys
 import unittest
 from collections import Counter
@@ -269,6 +270,72 @@ class TestAIAuditReportAuth(TestCase):
 
         self.assertEqual(headers["X-BKAIDEV-USER"], "xxx")
         self.assertNotIn("user", params)
+
+
+class TestAgentScopedCredentials(TestCase):
+    """per-agent 凭证（新增能力）：BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY 优先于全局链，仅对该 agent 生效"""
+
+    def setUp(self):
+        self.resource = BaseChatCompletion()
+
+    def tearDown(self):
+        # 资源为单例且 agent 状态按线程隔离，测试串行复用同一线程，必须清理
+        self.resource._current_agent_code = None
+
+    @staticmethod
+    def _env_without_bkapp_ai() -> dict:
+        return {k: v for k, v in os.environ.items() if not k.startswith("BKAPP_AI_")}
+
+    def test_per_agent_credential_overrides_global(self):
+        """日志检索配置 per-agent 凭证后优先于全局 AI_AGENT_APP_CODE（独立凭证路径，不再依赖全局变量）"""
+        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        env = self._env_without_bkapp_ai()
+        env.update(
+            {
+                "BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE": "log_search_app",
+                "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY": "log_search_secret",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AGENT_SECRET_KEY="global_agent_secret",
+            ):
+                self.assertEqual(self.resource.app_code, "log_search_app")
+                self.assertEqual(self.resource.secret_key, "log_search_secret")
+
+    def test_per_agent_credential_fallback_to_global_chain(self):
+        """未配置 per-agent 凭证时回退原有全局链 AI_AGENT_APP_CODE（历史行为不变）"""
+        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AUDIT_REPORT_APP_CODE="report_app",
+            ):
+                self.assertEqual(self.resource.app_code, "global_agent_app")
+
+    def test_agent_without_context_keeps_global_chain(self):
+        """无 agent 上下文的资源（如审计报告/分析）不受 per-agent 机制影响"""
+        self.assertIsNone(self.resource._current_agent_code)
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AUDIT_REPORT_APP_CODE="report_app",
+            ):
+                self.assertEqual(self.resource.app_code, "global_agent_app")
+
+    def test_build_url_remembers_agent_code(self):
+        """build_url 记录 agent_code 供 per-agent 凭证解析"""
+        url = self.resource.build_url({"agent_code": "bp-ai-aud-rsk-srch"})
+        self.assertEqual(self.resource._current_agent_code, AIAgentCode.RISK_SEARCH)
+        self.assertIn("chat_completion", url)
+
+    @mock.patch("bk_resource.contrib.api.APIResource.perform_request", mock.Mock(return_value="ok"))
+    def test_perform_request_clears_agent_context(self):
+        """请求结束后清理线程内 agent 状态，避免残留影响后续请求"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        self.assertEqual(self.resource.perform_request({"agent_code": AIAgentCode.RISK_SEARCH}), "ok")
+        self.assertIsNone(self.resource._current_agent_code)
 
 
 class TestAIAuditAnalyseAuth(TestCase):
