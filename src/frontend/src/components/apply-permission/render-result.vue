@@ -21,10 +21,12 @@
         class="lock"
         src="@images/no-permission.svg">
       <p class="tips-text">
-        {{ t('该操作需要以下权限') }}
+        {{ data.displayMessage || t('该操作需要以下权限') }}
       </p>
     </div>
-    <div class="permission-list">
+    <div
+      v-if="!data.displayMessage || data.permissionList.length"
+      class="permission-list">
       <table>
         <thead>
           <tr>
@@ -59,6 +61,11 @@
         class="permission-list-empty">
         {{ t('你已拥有权限，请刷新页面') }}
       </div>
+      <div
+        v-else-if="!data.permissionList.length"
+        class="permission-list-empty">
+        {{ t('暂无权限明细') }}
+      </div>
     </div>
   </div>
 </template>
@@ -85,9 +92,11 @@
     }
 
     .tips-text {
-      margin: 8px 0 22px;
+      max-width: 640px;
+      margin: 8px auto 22px;
       font-size: 20px;
       color: #63656e;
+      word-break: break-word;
     }
   }
 

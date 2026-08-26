@@ -22,14 +22,13 @@
       <render-result :data="permissionResult" />
       <div class="perimission-section-footer">
         <bk-button
-          v-if="!isApplyed"
-          :disabled="permissionResult.hasPermission"
+          v-if="!isApplyed && permissionResult.canApply"
           theme="primary"
           @click="handleGoApply">
           {{ t('去申请') }}
         </bk-button>
         <bk-button
-          v-else
+          v-else-if="isApplyed"
           theme="primary"
           @click="handleApplyed">
           {{ t('已申请') }}

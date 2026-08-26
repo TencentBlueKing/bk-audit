@@ -192,9 +192,10 @@
             </div>
           </template>
 
-          <!-- bkVision工具 -->
+          <!-- bkVision工具：按工具 uid 强制重建，避免切换 tab 后残留上一个实例 -->
           <bk-vision-result
             v-if="toolDetails?.tool_type === 'bk_vision'"
+            :key="toolDetails?.uid || activeUid"
             ref="bkVisionResultRef"
             :drill-down-item-config="drillDownItemConfig"
             :drill-down-item-row-data="drillDownItemRowData"
@@ -394,6 +395,38 @@
     ...getToolDetailScopeQuery(),
   });
 
+  const getToolNameAndType = (uid: string): { name: string, type: string } => {
+    const tool = props.allToolsData?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
+  const resolveTabName = (toolUid: string, drillItem?: DrillDownItem) => {
+    const drillConfig = drillItem?.drill_config?.find(item => item.tool.uid === toolUid);
+    return drillConfig?.drill_name || getToolNameAndType(toolUid).name || '';
+  };
+
+  const syncTabsToHeader = () => {
+    if (!isShowTags.value) return;
+    nextTick(() => {
+      dialogHeaderRef.value?.initTabsValue([...tabs.value], activeUid.value);
+    });
+  };
+
+  const fillTabName = (toolUid: string, name: string) => {
+    if (!name) return;
+    const tab = tabs.value.find(item => item.uid === toolUid);
+    if (tab && !tab.name) {
+      tab.name = name;
+      syncTabsToHeader();
+    }
+  };
+
   const {
     run: fetchToolsDetail,
     data: toolDetails,
@@ -401,12 +434,12 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       uid.value = data.uid;
+      // 工具详情返回后补全对应 tab 标题（allToolsData 未命中时常见）
+      fillTabName(data.uid, data.name);
 
-      if (data.tool_type !== 'bk_vision') {
-        // 创建弹框form
-        createDialogContent(data);
-      } else {
-        // bkVision工具直接执行
+      // 无论工具类型都先按当前工具重建 searchList，避免沿用上一个工具的变量导致 403
+      createDialogContent(data);
+      if (data.tool_type === 'bk_vision') {
         nextTick(() => {
           if (bkVisionResultRef.value) {
             bkVisionResultRef.value.executeTool();
@@ -432,7 +465,15 @@
 
   // 点击头部标签(切换工具)
   const handleChangeTool = (TagItem: any) => {
+    // 切换前先销毁上一个 BKVision 实例，避免内容残留
+    if (bkVisionResultRef.value?.closeBK) {
+      bkVisionResultRef.value.closeBK();
+    }
+    // 清空当前工具详情与查询变量，避免把上一个工具的参数带到下一次 execute
+    toolDetails.value = new ToolDetailModel();
+    searchList.value = [];
     activeUid.value = TagItem.uid;
+    uid.value = TagItem.uid;
 
     drillDownItemConfig.value = drillDownItem.value?.drill_config
       .find(item => item.tool.uid === activeUid.value)?.config || [];
@@ -472,17 +513,6 @@
       return null;
     }).filter(e => e !== null);
     return tagNameList.join(',');
-  };
-
-  const getToolNameAndType = (uid: string): { name: string, type: string } => {
-    const tool = props.allToolsData?.find(item => item.uid === uid);
-    return tool ? {
-      name: tool.name,
-      type: tool.tool_type,
-    } : {
-      name: '',
-      type: '',
-    };
   };
 
   // 创建单元格渲染函数（公共函数）
@@ -720,19 +750,28 @@
       // 默认激活第一个
       activeUid.value = isActiveUid || uids[0];
 
-      // 创建tabs列表
-      const tabs = uids.map(uid => ({
-        uid,
-        name: getToolNameAndType(uid).name,
+      // 创建tabs列表：优先下钻配置名，其次工具列表名
+      tabs.value = uids.map(toolUid => ({
+        uid: toolUid,
+        name: resolveTabName(toolUid, isDrillDownItem),
       }));
 
       // 如果tabs列表长度大于1，则显示tabs
-      if (tabs.length > 1) {
+      if (tabs.value.length > 1) {
         isShowTags.value = true;
-        nextTick(() => {
-          dialogHeaderRef.value.initTabsValue(tabs, activeUid.value);
-        });
+        syncTabsToHeader();
       }
+
+      // 标题仍为空的非激活工具，补拉详情以填充 tab 名
+      uids
+        .filter(toolUid => toolUid !== activeUid.value && !tabs.value.find(item => item.uid === toolUid)?.name)
+        .forEach((toolUid) => {
+          ToolManageService.fetchToolsDetail(buildFetchToolDetailParams(toolUid))
+            .then((data) => {
+              fillTabName(toolUid, data?.name || '');
+            })
+            .catch(() => undefined);
+        });
     } else {
       activeUid.value = itemUid;
     }
@@ -779,8 +818,28 @@
     dialogWidth.value = '50%';
     isFullScreen.value = false;
     isShow.value = false;
+    isShowTags.value = false;
+    tabs.value = [];
     emit('close', dialogUid.value);
   };
+
+  // 工具列表异步到位后，补全仍为空的 tab 标题
+  watch(() => props.allToolsData, (list) => {
+    if (!isShowTags.value || !tabs.value.length || !list?.length) return;
+    let changed = false;
+    tabs.value = tabs.value.map((tab) => {
+      if (tab.name) return tab;
+      const tool = list.find(item => item.uid === tab.uid);
+      if (tool?.name) {
+        changed = true;
+        return { ...tab, name: tool.name };
+      }
+      return tab;
+    });
+    if (changed) {
+      syncTabsToHeader();
+    }
+  }, { deep: true });
 
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {

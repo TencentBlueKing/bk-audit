@@ -30,6 +30,16 @@ interface IRelatedResourceType {
   instances: Array<Array<IInstance>>
 }
 
+type IPermissionActions = {
+  system_id: string;
+  system_name: string;
+  actions: Array<{
+    id: string,
+    name: string,
+    related_resource_types: Array<IRelatedResourceType>
+  }>
+};
+
 type IRenderPermissionList = Array<{
   systemName: string,
   actionName: string,
@@ -39,34 +49,61 @@ type IRenderPermissionList = Array<{
   }>
 }>
 
+type ApplyDataPayload = {
+  apply_url?: string;
+  permission?: IPermissionActions | string;
+  message?: string;
+};
+
 export default class ApplyData {
   apply_url: string;
-  permission: {
-    system_id: string;
-    system_name: string;
-    actions: Array<{
-      id: string,
-      name: string,
-      related_resource_types: Array<IRelatedResourceType>
-    }>
-  };
+  /** 接口顶层 message，优先展示 */
+  message: string;
+  /** IAM 结构化权限，或后端直接返回的权限说明文案 */
+  permission: IPermissionActions | string;
 
-  constructor(payload = {} as ApplyData) {
+  constructor(payload = {} as ApplyDataPayload) {
     this.apply_url = payload.apply_url || '';
-    this.permission = payload.permission || {};
+    this.message = payload.message || '';
+    this.permission = payload.permission || '';
+  }
+
+  /** permission 为纯文案（非 IAM actions 结构） */
+  get isPermissionMessage() {
+    return typeof this.permission === 'string';
+  }
+
+  /** 弹窗标题/提示文案：优先 message */
+  get displayMessage() {
+    if (this.message) {
+      return this.message;
+    }
+    if (this.isPermissionMessage) {
+      return this.permission as string;
+    }
+    return '';
   }
 
   get hasPermission() {
     return !this.apply_url;
   }
 
+  /** 是否具备可跳转申请的 IAM 权限明细 */
+  get canApply() {
+    return Boolean(this.apply_url) && this.permissionList.length > 0;
+  }
+
   get permissionList() {
-    const systemName = this.permission.system_name;
+    if (typeof this.permission !== 'object' || !this.permission) {
+      return [] as IRenderPermissionList;
+    }
+    const permission = this.permission as IPermissionActions;
+    const systemName = permission.system_name;
     const stack = [] as IRenderPermissionList;
-    this.permission.actions?.forEach((action) => {
+    permission.actions?.forEach((action) => {
       const relatedResourceTypes: IRenderPermissionList[0]['relatedResources'] = [];
-      action.related_resource_types.forEach((relateResource) => {
-        const instances = relateResource.instances.reduce((result, instancePathList) => {
+      (action.related_resource_types || []).forEach((relateResource) => {
+        const instances = (relateResource.instances || []).reduce((result, instancePathList) => {
           const lastItem = _.last(instancePathList);
           if (lastItem) {
             result.push(lastItem.name);

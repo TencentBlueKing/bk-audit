@@ -201,8 +201,12 @@ const handlePermission = (error:RequestError) => {
   const {  emit } = useEventBus();
   // eslint-disable-next-line no-case-declarations
   const requestPayload = error.response.config.payload;
+  const responseData = error.response.data || {};
   // eslint-disable-next-line no-case-declarations
-  const iamResult = new IamApplyDataModel(error.response.data.data || {});
+  const iamResult = new IamApplyDataModel({
+    ...(responseData.data || {}),
+    message: responseData.message || '',
+  });
   if (requestPayload.permission === 'page') {
     // 配合 jb-router-view（@components/audit-router-view）全局展示没权限提示
     emit('permission-page', iamResult);
