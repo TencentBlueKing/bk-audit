@@ -216,18 +216,13 @@ class RiskResourceProvider(IAMResourceProvider):
         #   （实测 1000 条 × 3 字段 = 3000 次查询，序列化 15.87s，JSON 790MB，进程 OOM）
         # ⚠️ RiskProviderSerializer 可直接序列化 values() 返回的 dict（DRF 3.15+ Field.get_attribute
         #   原生支持 Mapping），无需新建独立序列化器
-        values_fields, annotations = self._build_fetch_values_kwargs(
-            FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES
-        )
+        values_fields, annotations = self._build_fetch_values_kwargs(FETCH_INSTANCE_LIST_LARGE_FIELD_LIMIT_BYTES)
         queryset = (
             Risk._objects.filter(risk_id__in=pk_list).order_by("updated_at").values(*values_fields, **annotations)
         )
 
         # 截断/置 NULL 字段用别名 _truncated_<field>，需映射回原名供 RiskProviderSerializer 读取
-        alias_map = {
-            f"_truncated_{f}": f
-            for f in list(self._TEXT_FIELDS_TO_TRUNCATE) + list(self._FIELDS_TO_NULLIFY)
-        }
+        alias_map = {f"_truncated_{f}": f for f in list(self._TEXT_FIELDS_TO_TRUNCATE) + list(self._FIELDS_TO_NULLIFY)}
 
         results = [
             {
@@ -237,9 +232,7 @@ class RiskResourceProvider(IAMResourceProvider):
                 "created_at": None,
                 "updater": None,
                 "updated_at": None,
-                "data": self.resource_provider_serializer(
-                    {alias_map.get(k, k): v for k, v in item.items()}
-                ).data,
+                "data": self.resource_provider_serializer({alias_map.get(k, k): v for k, v in item.items()}).data,
                 "is_deleted": item["is_deleted"],
             }
             for item in queryset
