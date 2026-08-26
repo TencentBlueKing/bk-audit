@@ -20,7 +20,13 @@ from apps.meta.models import GlobalMetaConfig
 from core.sql.builder.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.builder.functions import Concat, GroupConcat
 from core.sql.builder.generator import BkbaseDorisSqlGenerator
-from core.sql.constants import AggregateType, FieldType, FilterConnector, JoinType, Operator
+from core.sql.constants import (
+    AggregateType,
+    FieldType,
+    FilterConnector,
+    JoinType,
+    Operator,
+)
 from core.sql.model import (
     Condition,
     Field,
@@ -198,9 +204,7 @@ class RiskEventSubscriptionSQLBuilder:
             field_type=FieldType.LONG,
         )
         time_condition = WhereCondition(
-            condition=Condition(
-                field=time_field, operator=Operator.BETWEEN, filters=[self._start_time, self._end_time]
-            )
+            condition=Condition(field=time_field, operator=Operator.BETWEEN, filters=[self._start_time, self._end_time])
         )
         # 2. 风险软删除过滤（Doris 中 is_deleted 为 string，值为 "true"/"false"）
         risk_deleted_field = Field(
