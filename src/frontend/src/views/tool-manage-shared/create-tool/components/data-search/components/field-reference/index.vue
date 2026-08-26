@@ -87,14 +87,7 @@
                   <router-link
                     class="create_tool-group"
                     target="_blank"
-                    :to="{
-                      name: createRouteName,
-                      query: {
-                        scene_id: route.query.scene_id,
-                        scope_id: route.query.scope_id,
-                        scope_type: route.query.scope_type,
-                      },
-                    }">
+                    :to="createToolTo">
                     <audit-icon
                       style="font-size: 14px;color: #3a84ff;"
                       type="plus-circle" />
@@ -309,11 +302,14 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, inject, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
-  import { useToolManageContext } from '@views/tool-manage-shared/context';
+  import {
+    TOOL_MANAGE_CONTEXT_KEY,
+    useToolManageContext,
+  } from '@views/tool-manage-shared/context';
   import Vuedraggable from 'vuedraggable';
 
   import ToolManageService from '@service/tool-manage';
@@ -323,6 +319,7 @@
   // import AlternativeField from './alternative-field.vue';
   // import SelectMapValue from './select-map-value.vue';
   import AuditCollapsePanel from '@/components/audit-collapse-panel/index.vue';
+  import { getSceneContextQuery } from '@/utils/assist/scene-system-params';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface SearchItem {
@@ -407,7 +404,23 @@
   const activeFieldName = ref<string>('');
 
   const route = useRoute();
+  const toolManageContext = inject(TOOL_MANAGE_CONTEXT_KEY, null);
   const { createRouteName } = useToolManageContext();
+  // 策略等未注入上下文时，按当前场景打开场景「新建工具」；已注入则沿用上下文路由
+  const createToolTo = computed(() => {
+    const sceneQuery = getSceneContextQuery();
+    const query = Object.keys(sceneQuery).length
+      ? sceneQuery
+      : {
+        scene_id: route.query.scene_id,
+        scope_id: route.query.scope_id,
+        scope_type: route.query.scope_type,
+      };
+    return {
+      name: toolManageContext ? createRouteName : 'sceneToolCreate',
+      query,
+    };
+  });
   const toolTypeMap = ref<Record<string, string>>({
     data_search: 'SQL',
     api: 'API',
@@ -925,9 +938,25 @@
     deep: true,
   });
 
-  watch(() => props.allToolsData, (data) => {
+  watch(
+    [() => props.allToolsData, () => props.tagData],
+    ([tools]) => {
+      isToolLoading.value = false;
+      buildToolCascaderList(tools || []);
+    },
+    { immediate: true, deep: true },
+  );
+
+  // 打开侧栏时若尚未有工具数据，主动拉取；已有数据则立即重建下拉列表
+  watch(showEditSql, (visible) => {
+    if (!visible) return;
+    if (!props.allToolsData?.length) {
+      isToolLoading.value = true;
+      emit('refresh-tool-list');
+      return;
+    }
+    buildToolCascaderList(props.allToolsData);
     isToolLoading.value = false;
-    buildToolCascaderList(data);
   });
 
   defineExpose<Expose>({
