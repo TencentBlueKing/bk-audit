@@ -314,6 +314,7 @@ export default {
   关联的资源实例: 'Related resource instances',
   无需关联实例: 'No need to associate instance',
   '你已拥有权限，请刷新页面': 'You already have the permission, please refresh the page',
+  暂无权限明细: 'No permission details',
   'Agent 状态': 'Agent status',
   云区域: 'BK-Net',
   操作系统: 'OS type',

@@ -324,7 +324,10 @@
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (!isActiveOnDetailRoute()) return;
     if (err?.data?.code === '9900403') {
-      const iamResult = new IamApplyDataModel(err.data.data || {});
+      const iamResult = new IamApplyDataModel({
+        ...(err.data.data || {}),
+        message: err.data.message || '',
+      });
       // 页面展示没权限提示
       emit('permission-page', iamResult);
     } else if (err?.message) {

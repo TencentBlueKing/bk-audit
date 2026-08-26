@@ -115,13 +115,21 @@
   const executeTool = () => {
     if (isExecuting.value) return;
     isExecuting.value = true;
+    // 只提交当前工具已声明的变量，避免残留未声明参数触发 403
+    const declaredNames = new Set((props.toolDetails?.config?.input_variable || []).map((item: any) => item.raw_name));
+    const toolVariables = props.searchList
+      .filter(item => declaredNames.has(item.raw_name))
+      .map(item => ({
+        raw_name: item.raw_name,
+        // eslint-disable-next-line no-nested-ternary
+        value: (item.field_category === 'person_select')
+          ? (item.value.length === 0 ? '' : item.value.join(','))
+          : item.value,
+      }));
     fetchToolsExecute({
       uid: props.toolDetails?.uid || props.uid,
       params: {
-        tool_variables: props.searchList.map(item => ({
-          raw_name: item.raw_name,
-          // eslint-disable-next-line no-nested-ternary
-          value: (item.field_category === 'person_select') ? (item.value.length === 0 ?  '' :  item.value.join(','))  :  item.value        })),
+        tool_variables: toolVariables,
       },
       ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
     });
@@ -132,6 +140,9 @@
     if (app) {
       app.unmount();
       app = null;
+    }
+    if (panelRef.value) {
+      panelRef.value.innerHTML = '';
     }
   };
 
@@ -147,7 +158,10 @@
   // 错误处理
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (err.data.code === '9900403') {
-      const iamResult = new IamApplyDataModel(err.data.data || {});
+      const iamResult = new IamApplyDataModel({
+        ...(err.data.data || {}),
+        message: err.data.message || '',
+      });
       // 页面展示没权限提示
       emitBus('permission-page', iamResult);
     } else {
@@ -275,10 +289,7 @@
 
   // 组件销毁时清理实例（作为后备机制）
   onUnmounted(() => {
-    if (app) {
-      app.unmount();
-      app = null;
-    }
+    closeBK();
   });
 </script>
 

@@ -828,6 +828,7 @@
     defaultParams: {
       scope_type: 'scene',
       scope_id: props.data.scene_id,
+      status: 'published',
     },
   });
 
@@ -1226,10 +1227,12 @@
         fetchAllTools({
           scope_id: data.scene_id,
           scope_type: 'scene',
+          status: 'published',
         });
         fetchToolTags({
           scope_id: data.scene_id,
           scope_type: 'scene',
+          status: 'published',
         });
       }, 0);
     }
