@@ -8,11 +8,12 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import SpanKind, StatusCode
 
-from core.monitor import Event, Metric
+from core.monitor import Event, Metric, MetricDimension, MetricField
 from core.observability import (
     OBSERVATION_METRIC_STATUS_SUCCESS,
     BKResourceAPIInstrumentor,
     report_observation_metric,
+    set_span_attributes,
     start_observation_span,
 )
 
@@ -40,6 +41,19 @@ class DummyEvent(Event):
     labelnames = ["status", "error_type"]
     data_id = 321
     access_token = "event-token"
+
+
+class DummyDeclarativeMetric(Metric):
+    """测试声明式 Metric 的协议元数据，不改变实际 BKM payload。"""
+
+    documentation = "测试调用量和耗时"
+    metric_fields = {
+        "call_count": MetricField(documentation="调用次数", unit="count"),
+        "duration_ms": MetricField(documentation="调用耗时", unit="ms"),
+    }
+    dimension_fields = {
+        "status": MetricDimension(documentation="执行状态，取值为 success 或 failed"),
+    }
 
 
 class TestMonitorPayloads(SimpleTestCase):
@@ -105,6 +119,14 @@ class TestMonitorPayloads(SimpleTestCase):
 
 
 class TestObservationMetric(SimpleTestCase):
+    def test_declarative_metric_exposes_protocol_metadata(self):
+        self.assertEqual(DummyDeclarativeMetric.documentation, "测试调用量和耗时")
+        self.assertEqual(DummyDeclarativeMetric.metric_fields["duration_ms"].unit, "ms")
+        self.assertEqual(
+            DummyDeclarativeMetric.dimension_fields["status"].documentation,
+            "执行状态，取值为 success 或 failed",
+        )
+
     @override_settings(LOG_EXPORT_STATUS_DATA_ID=456, LOG_EXPORT_STATUS_ACCESS_TOKEN="log-token")
     @mock.patch("core.monitor.report_metric_to_bk_monitor.delay")
     def test_metric_builds_single_record_payload(self, mock_delay):
@@ -369,3 +391,51 @@ class TestStartObservationSpan(SimpleTestCase):
             pass
 
         mock_delay.assert_not_called()
+
+    @mock.patch("core.observability.trace.get_tracer", side_effect=RuntimeError("trace unavailable"))
+    def test_start_observation_span_creation_failure_does_not_block_business(self, _get_tracer):
+        executed = False
+
+        with start_observation_span("risk.nl2risk_filter.generate"):
+            executed = True
+
+        self.assertTrue(executed)
+
+    def test_set_span_attributes_failure_does_not_block_business(self):
+        span = mock.Mock()
+        span.is_recording.side_effect = RuntimeError("trace unavailable")
+
+        self.assertIsNone(set_span_attributes(span, {"bk_audit.service": "risk"}))
+
+    def test_set_span_attribute_write_failure_does_not_block_business(self):
+        span = mock.Mock()
+        span.is_recording.return_value = True
+        span.set_attribute.side_effect = RuntimeError("trace unavailable")
+
+        self.assertIsNone(set_span_attributes(span, {"bk_audit.service": "risk"}))
+
+    def test_start_observation_span_close_failure_does_not_block_business(self):
+        span = mock.Mock()
+        span_context = mock.MagicMock()
+        span_context.__enter__.return_value = span
+        span_context.__exit__.side_effect = RuntimeError("trace close failed")
+        tracer = mock.Mock()
+        tracer.start_as_current_span.return_value = span_context
+
+        with mock.patch("core.observability.trace.get_tracer", return_value=tracer):
+            with start_observation_span("risk.nl2risk_filter.generate"):
+                pass
+
+        span_context.__exit__.assert_called_once_with(None, None, None)
+
+    def test_start_observation_span_preserves_business_error_when_close_fails(self):
+        span_context = mock.MagicMock()
+        span_context.__enter__.return_value = mock.Mock()
+        span_context.__exit__.side_effect = RuntimeError("trace close failed")
+        tracer = mock.Mock()
+        tracer.start_as_current_span.return_value = span_context
+
+        with mock.patch("core.observability.trace.get_tracer", return_value=tracer):
+            with self.assertRaisesRegex(ValueError, "business failed"):
+                with start_observation_span("risk.nl2risk_filter.generate"):
+                    raise ValueError("business failed")

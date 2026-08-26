@@ -141,26 +141,32 @@ class MessageService:
         """持久化已准备的消息；异步消息在事务提交后投递业务 Task。"""
 
         self._validate_conversation(conversation=conversation)
-        if prepared.execution_mode == ExecutionMode.ASYNC:
-            handler = message_handler_registry.require(prepared.message_type)
-            return self._create_async(
+        with transaction.atomic():
+            # prepare 可能较慢，最终写入前再锁定会话，与删除/清空串行化。
+            self._lock_active_conversation(conversation=conversation)
+            if prepared.execution_mode == ExecutionMode.ASYNC:
+                handler = message_handler_registry.require(prepared.message_type)
+                return self._create_async(
+                    conversation=conversation,
+                    handler=handler,
+                    parent_message=prepared.parent_message,
+                    input_snapshot=prepared.input_data,
+                    context_snapshot=prepared.context_data,
+                )
+            now = timezone.now()
+            return Message.objects.create(
                 conversation=conversation,
-                handler=handler,
                 parent_message=prepared.parent_message,
-                input_snapshot=prepared.input_data,
-                context_snapshot=prepared.context_data,
+                message_type=prepared.message_type,
+                status=ExecutionStatus.SUCCESS,
+                input_data=prepared.input_data,
+                context_data=prepared.context_data,
+                output_data=prepared.output_data,
+                last_activity_at=now,
+                finished_at=now,
+                created_by=self.user,
+                updated_by=self.user,
             )
-        return Message.objects.create(
-            conversation=conversation,
-            parent_message=prepared.parent_message,
-            message_type=prepared.message_type,
-            status=ExecutionStatus.SUCCESS,
-            input_data=prepared.input_data,
-            context_data=prepared.context_data,
-            output_data=prepared.output_data,
-            created_by=self.user,
-            updated_by=self.user,
-        )
 
     def get(self, *, message_uid: str) -> Message:
         """按外部 UID 获取当前用户有效会话中的一条消息。"""
@@ -261,6 +267,8 @@ class MessageService:
         new_task_id = str(uuid4())
         now = timezone.now()
         with transaction.atomic():
+            # 重试与会话删除共用同一行锁，删除提交后不得重新投递隐藏消息任务。
+            self._lock_active_conversation(conversation=message.conversation)
             updated = Message.restart_failed(
                 instance_id=message.id,
                 old_task_id=old_task_id,
@@ -269,6 +277,7 @@ class MessageService:
                     "updated_by": self.user,
                     "updated_at": now,
                 },
+                now=now,
             )
             if not updated:
                 raise InvalidMessageState()
@@ -327,6 +336,20 @@ class MessageService:
             or conversation.created_by != self.user
             or conversation.is_deleted
             or not Conversation.objects.filter(id=conversation.id, created_by=self.user).exists()
+        ):
+            raise InvalidParentMessage(message="会话无效")
+
+    def _lock_active_conversation(self, *, conversation: Conversation) -> None:
+        """锁定最终写入所属会话，阻止删除成功后继续创建隐藏消息。"""
+
+        if (
+            not Conversation.objects.select_for_update()
+            .filter(
+                id=conversation.id,
+                created_by=self.user,
+                is_deleted=False,
+            )
+            .exists()
         ):
             raise InvalidParentMessage(message="会话无效")
 
@@ -399,20 +422,22 @@ class MessageService:
         """先持久化 PROCESSING 消息，并在事务提交后投递绑定的业务任务。"""
 
         task_id = str(uuid4())
-        with transaction.atomic():
-            message = Message.objects.create(
-                conversation=conversation,
-                parent_message=parent_message,
-                message_type=handler.message_type,
-                status=ExecutionStatus.PROCESSING,
-                task_id=task_id,
-                input_data=input_snapshot,
-                context_data=context_snapshot,
-                output_data=None,
-                created_by=self.user,
-                updated_by=self.user,
-            )
-            transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
+        now = timezone.now()
+        message = Message.objects.create(
+            conversation=conversation,
+            parent_message=parent_message,
+            message_type=handler.message_type,
+            status=ExecutionStatus.PROCESSING,
+            task_id=task_id,
+            input_data=input_snapshot,
+            context_data=context_snapshot,
+            output_data=None,
+            queued_at=now,
+            last_activity_at=now,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
         return message
 
     @staticmethod

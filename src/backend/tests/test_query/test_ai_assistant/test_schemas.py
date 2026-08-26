@@ -14,9 +14,9 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""协议层模型（schemas）形态校验测试"""
+协议层模型（schemas）形态校验测试
+"""
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -24,7 +24,6 @@ from services.web.query.ai_assistant.schemas import (
     Condition,
     ConditionField,
     ResultColumn,
-    SearchCondition,
     SystemSelectionInput,
 )
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -34,9 +33,7 @@ class TestCondition(AIAssistantTestCase):
     """单条检索条件形态校验"""
 
     def test_eq_with_filters(self):
-        cond = Condition(
-            field=ConditionField(raw_name="username"), operator="eq", filters=["admin"]
-        )
+        cond = Condition(field=ConditionField(raw_name="username"), operator="eq", filters=["admin"])
         self.assertEqual(cond.field.raw_name, "username")
         self.assertEqual(cond.field.keys, [])
 
@@ -79,9 +76,7 @@ class TestSearchCondition(AIAssistantTestCase):
         """model_dump 输出与 QuerySearchConditionSerializer 输入逐键一致"""
         condition = self.make_condition(conditions=[self.make_field_condition(keys=[])])
         dumped = condition.model_dump()
-        self.assertEqual(
-            set(dumped.keys()), {"scope_type", "scope_id", "start_time", "end_time", "conditions"}
-        )
+        self.assertEqual(set(dumped.keys()), {"scope_type", "scope_id", "start_time", "end_time", "conditions"})
         self.assertEqual(set(dumped["conditions"][0].keys()), {"field", "operator", "filters"})
         self.assertEqual(set(dumped["conditions"][0]["field"].keys()), {"raw_name", "field_type", "keys"})
 

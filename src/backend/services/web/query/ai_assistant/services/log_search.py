@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 F3 检索快照服务（LOG_SEARCH 消息核心组件）
 
 七步链路（设计文档 §17.3）：
@@ -206,9 +204,7 @@ class LogSearchService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _build_output(
-        cls, condition: SearchCondition, data: dict, results: List[dict], source: str
-    ) -> LogSearchOutput:
+    def _build_output(cls, condition: SearchCondition, data: dict, results: List[dict], source: str) -> LogSearchOutput:
         columns = cls.build_columns()
         samples = [cls._build_sample(row, columns) for row in results[:LOG_SEARCH_SNAPSHOT_PAGE_SIZE]]
         return LogSearchOutput(

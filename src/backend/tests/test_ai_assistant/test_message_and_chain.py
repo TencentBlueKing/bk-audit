@@ -91,7 +91,6 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
             parent=selection,
             status=ExecutionStatus.PROCESSING,
         )
-        handler = MessageService(user=self.user)
         # 复用平台解析函数构造类型化执行快照
         from services.web.ai_assistant.handlers import message_handler_registry
 
@@ -99,9 +98,7 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         execution = MessageExecution(
             message=nl_message,
             input_data=parse_snapshot(nl_handler.input_model, nl_message.input_data, field_name="input_data"),
-            context_data=parse_snapshot(
-                nl_handler.context_model, nl_message.context_data, field_name="context_data"
-            ),
+            context_data=parse_snapshot(nl_handler.context_model, nl_message.context_data, field_name="context_data"),
         )
         return nl_message, execution
 

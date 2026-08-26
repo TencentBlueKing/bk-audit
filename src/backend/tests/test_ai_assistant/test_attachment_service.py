@@ -33,7 +33,12 @@ from services.web.ai_assistant.handlers import (
     attachment_handler_registry,
 )
 from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
-from services.web.ai_assistant.schemas import MessageSchema
+from services.web.ai_assistant.schemas import (
+    AttachmentStreamConfig,
+    MessageSchema,
+    UIStreamEvent,
+    parse_stream_config,
+)
 from services.web.ai_assistant.serializers.attachment import (
     AttachmentListItemSerializer,
 )
@@ -41,15 +46,19 @@ from services.web.ai_assistant.services.attachment import AttachmentService
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
 )
+from services.web.ai_assistant.streaming import build_stream_key
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoContext,
     AttachmentEchoInput,
     AttachmentEchoOutput,
+    AttachmentHandlerRegistryMixin,
     EchoAttachmentAsyncHandler,
+    EchoAttachmentStreamHandler,
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
+    use_attachment_handler,
 )
 
 UNSET = object()
@@ -103,6 +112,27 @@ class RecordingAttachmentAsyncHandler(EchoAttachmentAsyncHandler):
         return AttachmentPreparation(
             title=self.title,
             context_data=AttachmentEchoContext(prefix=f"{user}:async"),
+        )
+
+
+class RecordingAttachmentStreamHandler(EchoAttachmentStreamHandler):
+    """流式异步 Handler；创建时必须把流能力固化到 Attachment。"""
+
+    def __init__(self, *, title: str = "AI 分析"):
+        self.title = title
+        self.prepare_calls = 0
+
+    def prepare(
+        self,
+        *,
+        user: str,
+        source_message: Message,
+        input_data: AttachmentEchoInput,
+    ) -> AttachmentPreparation[AttachmentEchoContext]:
+        self.prepare_calls += 1
+        return AttachmentPreparation(
+            title=self.title,
+            context_data=AttachmentEchoContext(prefix=f"{user}:stream"),
         )
 
 
@@ -286,6 +316,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(attachment.title, "字段统计")
         self.assertEqual(attachment.context_data, {"prefix": "alice:sync"})
         self.assertEqual(attachment.output_data, {"content": "alice:sync:hello"})
+        self.assertIsNone(attachment.queued_at)
+        self.assertIsNone(attachment.started_at)
+        self.assertIsNotNone(attachment.finished_at)
+        self.assertEqual(attachment.last_activity_at, attachment.finished_at)
         self.assertIsInstance(handler.prepared_input, AttachmentEchoInput)
         self.assertEqual(handler.prepare_atomic_depth, self.atomic_depth)
         self.assertEqual(handler.execution_context.source_message, self.source_message)
@@ -356,6 +390,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(attachment.context_data, {"prefix": "alice:async"})
         self.assertIsNone(attachment.output_data)
         self.assertIsNotNone(attachment.task_id)
+        self.assertIsNotNone(attachment.queued_at)
+        self.assertEqual(attachment.last_activity_at, attachment.queued_at)
+        self.assertIsNone(attachment.started_at)
+        self.assertIsNone(attachment.finished_at)
         self.assertEqual(handler.prepare_atomic_depth, self.atomic_depth)
         apply_async.assert_called_once_with(
             kwargs={"attachment_id": attachment.id, "task_id": attachment.task_id},
@@ -380,6 +418,44 @@ class AttachmentServiceTest(TestCase):
         db_attachment = Attachment.objects.get(id=attachment.id)
         self.assertEqual(db_attachment.status, ExecutionStatus.FAILED)
         self.assertEqual(db_attachment.error_code, AttachmentErrorCode.TASK_DISPATCH_FAILED)
+
+    def test_create_freezes_handler_stream_capability_on_attachment(self):
+        self.register_sync_handler()
+        stream_handler = use_attachment_handler(self, RecordingAttachmentStreamHandler())
+
+        sync_attachment = self.service.create(
+            source_message_uid=str(self.source_message.uid),
+            attachment_type=AttachmentType.FIELD_STATISTICS,
+            input_data={"text": "hello"},
+        )
+        with mock.patch.object(stream_handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                stream_attachment = self.service.create(
+                    source_message_uid=str(self.source_message.uid),
+                    attachment_type=AttachmentType.AI_ANALYSIS,
+                    input_data={"text": "hello"},
+                )
+
+        self.assertFalse(sync_attachment.is_stream)
+        self.assertFalse(Attachment.objects.get(id=sync_attachment.id).is_stream)
+        self.assertTrue(stream_attachment.is_stream)
+        self.assertTrue(Attachment.objects.get(id=stream_attachment.id).is_stream)
+        self.assertEqual(stream_attachment.stream_config, {})
+        self.assertEqual(stream_attachment.stream_archive, [])
+
+    def test_async_create_of_non_stream_handler_keeps_is_stream_false(self):
+        handler = self.register_async_handler()
+
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                attachment = self.service.create(
+                    source_message_uid=str(self.source_message.uid),
+                    attachment_type=AttachmentType.AI_ANALYSIS,
+                    input_data={"text": "hello"},
+                )
+
+        self.assertFalse(attachment.is_stream)
+        self.assertFalse(Attachment.objects.get(id=attachment.id).is_stream)
 
     def test_get_only_returns_visible_attachment(self):
         self.register_sync_handler()
@@ -818,7 +894,7 @@ class AttachmentServiceTest(TestCase):
             task_id=retried.task_id,
         )
 
-    def test_retry_does_not_use_for_update(self):
+    def test_retry_locks_only_active_conversation(self):
         self.register_async_handler()
         attachment = self.create_attachment(
             attachment_type=AttachmentType.AI_ANALYSIS,
@@ -833,7 +909,9 @@ class AttachmentServiceTest(TestCase):
             self.service.retry(attachment_uid=str(attachment.uid))
 
         lock_queries = [query["sql"] for query in captured.captured_queries if "FOR UPDATE" in query["sql"].upper()]
-        self.assertEqual(lock_queries, [])
+        self.assertEqual(len(lock_queries), 1)
+        self.assertIn("ai_assistant_conversation", lock_queries[0])
+        self.assertNotIn("ai_assistant_attachment", lock_queries[0])
 
     def test_old_task_id_cannot_overwrite_new_retry_task(self):
         self.register_async_handler()
@@ -844,6 +922,13 @@ class AttachmentServiceTest(TestCase):
             output_data={"content": "failed"},
         )
         old_task_id = attachment.task_id
+        old_queued_at = timezone.now() - timedelta(minutes=10)
+        Attachment.objects.filter(id=attachment.id).update(
+            queued_at=old_queued_at,
+            started_at=old_queued_at,
+            last_activity_at=old_queued_at,
+            finished_at=old_queued_at,
+        )
 
         with mock.patch("services.web.ai_assistant.services.attachment.transaction.on_commit"):
             retried = self.service.retry(attachment_uid=str(attachment.uid))
@@ -860,6 +945,10 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
         self.assertEqual(retried.task_id, new_task_id)
         self.assertNotEqual(retried.task_id, old_task_id)
+        self.assertGreater(retried.queued_at, old_queued_at)
+        self.assertEqual(retried.last_activity_at, retried.queued_at)
+        self.assertIsNone(retried.started_at)
+        self.assertIsNone(retried.finished_at)
 
     def test_retry_dispatch_failure_returns_failed_instance_and_can_retry_again(self):
         handler = self.register_async_handler()
@@ -980,3 +1069,155 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
         self.assertEqual(attachment.task_id, results[0].task_id)
         self.assertNotEqual(attachment.task_id, "task-old")
+
+    def test_retry_rechecks_conversation_after_delete(self):
+        attachment = Attachment.objects.create(
+            source_message=self.source_message,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="原始标题",
+            status=ExecutionStatus.FAILED,
+            task_id="task-old",
+            input_data={"text": "hello"},
+            context_data={"prefix": "ctx"},
+            output_data={"content": "failed"},
+            error_code="OLD_CODE",
+            error_message="old error",
+            content_updated_at=timezone.now(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        retry_paused = threading.Event()
+        release_retry = threading.Event()
+        original_lock = AttachmentService._lock_active_source
+
+        def pause_before_lock(service, *, source_message):
+            retry_paused.set()
+            release_retry.wait(timeout=5)
+            return original_lock(service, source_message=source_message)
+
+        errors = []
+
+        def retry_attachment():
+            close_old_connections()
+            try:
+                AttachmentService(user=self.user).retry(attachment_uid=str(attachment.uid))
+            except Exception as error:  # noqa: BLE001 - 线程中断言领域异常
+                errors.append(error)
+            finally:
+                close_old_connections()
+
+        with mock.patch.object(AttachmentService, "_lock_active_source", pause_before_lock), mock.patch.object(
+            AttachmentService, "_dispatch"
+        ) as dispatch:
+            thread = threading.Thread(target=retry_attachment)
+            thread.start()
+            self.assertTrue(retry_paused.wait(timeout=5))
+            ai_assistant_services.ConversationService(user=self.user).delete_conversation(
+                conversation_uid=str(self.conversation.uid)
+            )
+            release_retry.set()
+            thread.join(timeout=10)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], InvalidAttachmentSource)
+        dispatch.assert_not_called()
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+        self.assertEqual(attachment.task_id, "task-old")
+
+
+class StreamAttachmentRetryTest(AttachmentHandlerRegistryMixin, TestCase):
+    """流式附件手动重试保留旧 config，下一次 execution 再向旧流发 reset。"""
+
+    def setUp(self):
+        self.user = "alice"
+        self.service = AttachmentService(user=self.user)
+        self.source_message = Message.objects.create(
+            conversation=Conversation.objects.create(created_by=self.user, updated_by=self.user),
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.SUCCESS,
+            task_id="source-task",
+            input_data={"text": "query"},
+            context_data={"prefix": "source"},
+            output_data={"content": "source"},
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.handler = use_attachment_handler(self, RecordingAttachmentStreamHandler())
+
+    def create_failed_stream_attachment(self) -> tuple[Attachment, AttachmentStreamConfig]:
+        attachment = Attachment.objects.create(
+            source_message=self.source_message,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="AI 分析",
+            status=ExecutionStatus.FAILED,
+            task_id="task-old",
+            input_data={"text": "hello"},
+            context_data={"prefix": "alice:stream"},
+            output_data=None,
+            error_code="9999034",
+            error_message="旧失败",
+            is_stream=True,
+            content_updated_at=timezone.now(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        old_execution_id = uuid4()
+        old_config = AttachmentStreamConfig(
+            task_id=attachment.task_id,
+            execution_id=old_execution_id,
+            redis_key=build_stream_key(attachment_uid=attachment.uid, execution_id=old_execution_id),
+        )
+        Attachment.objects.filter(id=attachment.id).update(
+            stream_config=old_config.model_dump(mode="json"),
+            stream_archive=[UIStreamEvent(stream_id="1-0", data={"content": "old"}).model_dump(mode="json")],
+        )
+        attachment.refresh_from_db()
+        return attachment, old_config
+
+    def test_retry_keeps_old_config_clears_archive_and_does_not_access_redis(self):
+        attachment, old_config = self.create_failed_stream_attachment()
+
+        with mock.patch("services.web.ai_assistant.streaming.redis.get_redis_connection") as get_redis_connection:
+            with mock.patch.object(self.handler.async_task, "apply_async") as apply_async:
+                with self.captureOnCommitCallbacks(execute=True):
+                    retried = self.service.retry(attachment_uid=str(attachment.uid))
+
+        retried.refresh_from_db()
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        self.assertNotEqual(retried.task_id, "task-old")
+        self.assertEqual(retried.stream_archive, [])
+        # 旧 config 必须保留，新 Worker 才知道要向哪条旧流补发 reset。
+        self.assertEqual(parse_stream_config(retried.stream_config), old_config)
+        self.assertNotEqual(old_config.task_id, retried.task_id)
+        get_redis_connection.assert_not_called()
+        apply_async.assert_called_once_with(
+            kwargs={"attachment_id": retried.id, "task_id": retried.task_id},
+            task_id=retried.task_id,
+        )
+
+    def test_non_stream_retry_keeps_empty_stream_fields(self):
+        handler = use_attachment_handler(self, RecordingAttachmentAsyncHandler())
+        attachment = Attachment.objects.create(
+            source_message=self.source_message,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="AI 分析",
+            status=ExecutionStatus.FAILED,
+            task_id="task-old",
+            input_data={"text": "hello"},
+            context_data={"prefix": "alice:async"},
+            output_data=None,
+            is_stream=False,
+            content_updated_at=timezone.now(),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = self.service.retry(attachment_uid=str(attachment.uid))
+
+        retried.refresh_from_db()
+        self.assertEqual(retried.stream_config, {})
+        self.assertEqual(retried.stream_archive, [])

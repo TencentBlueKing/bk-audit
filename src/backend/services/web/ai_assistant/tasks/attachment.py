@@ -1,6 +1,10 @@
 from typing import Any
 
+from django.db import DatabaseError
+
+from services.web.ai_assistant.constants import ExecutionObjectType
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
+from services.web.ai_assistant.models import Attachment
 from services.web.ai_assistant.schemas import SnapshotInput
 from services.web.ai_assistant.services.attachment_execution import (
     AttachmentExecution,
@@ -17,6 +21,7 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
     abstract = True
     id_argument = "attachment_id"
     object_label = "附件"
+    object_type = ExecutionObjectType.ATTACHMENT
     stale_exception = StaleAttachmentTask
 
     def _load_execution(
@@ -43,15 +48,43 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
     ) -> dict[str, Any]:
         """将附件业务输出交给附件领域函数校验并收敛。"""
 
-        return finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
+        try:
+            return finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
+        except DatabaseError as error:
+            # 流式最终事务失败属于基础设施故障；重试才能重新生成流并保留业务产物。
+            if execution.has_stream:
+                raise self.retry(exc=error) from error
+            raise
 
     def _finish_failure(
         self,
         *,
+        execution: AttachmentExecution | None,
         instance_id: int,
         task_id: str,
         exception: Exception,
     ) -> bool:
         """将 Worker 异常交给附件领域函数映射为公开失败快照。"""
 
-        return finish_attachment_failure(attachment_id=instance_id, task_id=task_id, exception=exception)
+        try:
+            return finish_attachment_failure(
+                attachment_id=instance_id,
+                task_id=task_id,
+                exception=exception,
+                execution=execution,
+            )
+        except DatabaseError as error:
+            if execution is not None and execution.has_stream:
+                raise self.retry(exc=error) from error
+            raise
+
+    def _handle_retry(self, *, execution: AttachmentExecution | None) -> None:
+        """Retry 退出前强制刷盘，避免本次执行已产生的事件丢失。"""
+
+        if execution is not None and execution.has_stream:
+            execution.stream.finish_retry()
+        if execution is not None:
+            Attachment.touch_processing(
+                instance_id=execution.attachment.id,
+                task_id=execution.attachment.task_id,
+            )

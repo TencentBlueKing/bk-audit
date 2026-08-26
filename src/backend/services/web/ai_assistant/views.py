@@ -3,6 +3,7 @@ from blueapps.contrib.drf.utils.pagination import CustomPageNumberPagination
 from drf_spectacular.types import OpenApiTypes
 
 from core.utils.spectacular import BKResourceAutoSchema
+from services.web.ai_assistant.renderers import EventStreamRenderer
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
     ExportAttachment,
@@ -35,6 +36,10 @@ from services.web.ai_assistant.resources.message import (
     PreviewExportMessage,
     RetryMessage,
 )
+from services.web.ai_assistant.resources.stream import (
+    GetAttachmentStream,
+    GetAttachmentStreamSnapshot,
+)
 from services.web.ai_assistant.serializers.conversation import (
     ConversationSearchResponseSerializer,
     SidebarNodeResponseSerializer,
@@ -60,7 +65,7 @@ class AIAssistantPaginatedViewSet(ResourceViewSet):
 
 
 class AttachmentAutoSchema(BKResourceAutoSchema):
-    """补充附件列表和即时文件导出的专属 OpenAPI 响应协议。"""
+    """补充附件列表、即时文件导出和 SSE 订阅的专属 OpenAPI 响应协议。"""
 
     def _is_list_view(self, serializer=None):
         route = self._get_matched_route()
@@ -69,7 +74,7 @@ class AttachmentAutoSchema(BKResourceAutoSchema):
         return super()._is_list_view(serializer)
 
     def get_response_serializers(self):
-        """按实际 Content-Type 描述导出文件，避免被默认 JSON Renderer 误标。"""
+        """按实际 Content-Type 描述导出文件与事件流，避免被默认 JSON Renderer 误标。"""
 
         route = self._get_matched_route()
         if route and route.resource_class is ExportAttachment:
@@ -77,6 +82,9 @@ class AttachmentAutoSchema(BKResourceAutoSchema):
                 (200, "text/markdown"): OpenApiTypes.BINARY,
                 (200, "application/pdf"): OpenApiTypes.BINARY,
             }
+        if route and route.resource_class is GetAttachmentStream:
+            # SSE 是长连接文本流，没有一次性 JSON body 可供描述。
+            return {(200, "text/event-stream"): OpenApiTypes.STR}
         return super().get_response_serializers()
 
 
@@ -120,7 +128,7 @@ class MessagesViewSet(ResourceViewSet):
 
 
 class AttachmentsViewSet(ResourceViewSet):
-    """附件创建后的查询、编辑和重试接口。"""
+    """附件创建后的查询、编辑、重试和流式订阅接口。"""
 
     schema = AttachmentAutoSchema()
     pagination_class = None
@@ -129,9 +137,18 @@ class AttachmentsViewSet(ResourceViewSet):
         ResourceRoute("GET", ListAttachments),
         ResourceRoute("GET", GetAttachment, pk_field="attachment_uid"),
         ResourceRoute("GET", ExportAttachment, endpoint="export", pk_field="attachment_uid"),
+        ResourceRoute("GET", GetAttachmentStreamSnapshot, endpoint="stream/snapshot", pk_field="attachment_uid"),
+        ResourceRoute("GET", GetAttachmentStream, endpoint="stream", pk_field="attachment_uid"),
         ResourceRoute("PATCH", UpdateAttachment, pk_field="attachment_uid"),
         ResourceRoute("POST", RetryAttachment, endpoint="retry", pk_field="attachment_uid"),
     ]
+
+    def get_renderers(self):
+        """SSE action 单独参与 ``text/event-stream`` 内容协商，其余接口保持统一 JSON。"""
+
+        if self.action == "stream":
+            return [EventStreamRenderer()]
+        return super().get_renderers()
 
 
 class FeedbackViewSet(ResourceViewSet):

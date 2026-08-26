@@ -14,9 +14,7 @@ either express or implied. See the License for the specific language governing
 permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
-"""
 
-"""
 组件串联集成演练（D6）
 
 F1（字段上下文）→ F2（NL2JSON）→ F3（检索快照）→ F4（预览/全量导出）
@@ -51,21 +49,15 @@ class TestComponentChain(AIAssistantTestCase):
     def test_full_chain(self):
         # ---------- F1：SYSTEM_SELECTION ----------
         with (
-            mock.patch(
-                f"{FIELD_CONTEXT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True
-            ),
+            mock.patch(f"{FIELD_CONTEXT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True),
             mock.patch(f"{FIELD_CONTEXT_MODULE}.resource.meta.system_list") as mock_system_list,
             mock.patch(f"{FIELD_CONTEXT_MODULE}.GlobalMetaConfig.get") as mock_meta_get,
         ):
-            mock_system_list.return_value = [
-                {"system_id": self.target_system_id, "name": self.target_system_name}
-            ]
+            mock_system_list.return_value = [{"system_id": self.target_system_id, "name": self.target_system_name}]
             mock_meta_get.return_value = {
                 "systems": {
                     self.target_system_id: {
-                        "extension_fields": [
-                            {"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单内容"}
-                        ]
+                        "extension_fields": [{"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单内容"}]
                     }
                 }
             }
@@ -125,9 +117,7 @@ class TestComponentChain(AIAssistantTestCase):
             mock.patch.object(LogSearchService, "_format_hits", side_effect=lambda rows, username: rows),
         ):
             mock_query_sync.bulk_request.return_value = ({"list": hits}, {"list": [{"count": 1}]})
-            mock_system_list.return_value = [
-                {"system_id": self.target_system_id, "name": self.target_system_name}
-            ]
+            mock_system_list.return_value = [{"system_id": self.target_system_id, "name": self.target_system_name}]
             output = LogSearchService.search(
                 condition=condition,
                 namespace=self.namespace,
@@ -147,9 +137,7 @@ class TestComponentChain(AIAssistantTestCase):
 
         # ---------- F4b：全量导出（condition 原样重建 query_params） ----------
         with (
-            mock.patch(
-                f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True
-            ),
+            mock.patch(f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True),
             mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task") as mock_create,
         ):
             FullExportService.create_task(

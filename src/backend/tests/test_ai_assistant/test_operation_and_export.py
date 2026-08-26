@@ -3,7 +3,7 @@
 
 from unittest import mock
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageType
+from services.web.ai_assistant.constants import ExecutionStatus
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidMessageState,
@@ -12,7 +12,10 @@ from services.web.ai_assistant.exceptions import (
     MessageNotFound,
 )
 from services.web.ai_assistant.services.log_export import MessageExportService
-from services.web.ai_assistant.services.operation import CommonQueryStore, OperationContextService
+from services.web.ai_assistant.services.operation import (
+    CommonQueryStore,
+    OperationContextService,
+)
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
@@ -21,7 +24,6 @@ from services.web.query.ai_assistant.services.export import PreviewExportFile
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
-    make_condition,
     make_selection_output,
 )
 
@@ -50,9 +52,7 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
         store.replace(TARGET_SYSTEM_ID, ["q1", "q2", ""])
         pipeline = store.redis_client.pipeline.return_value
         pipeline.delete.assert_called_once()
-        pipeline.rpush.assert_called_once_with(
-            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}", "q1", "q2"
-        )
+        pipeline.rpush.assert_called_once_with(f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}", "q1", "q2")
         pipeline.execute.assert_called_once()
 
 
@@ -61,20 +61,17 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         """总闸关闭：操作上下文返回空（设计稿确认后默认开启，开关保留作一键总闸）。"""
 
         with mock.patch("django.conf.settings.AI_ASSISTANT_OPERATION_RANKING_ENABLED", False):
-            common, historical = OperationContextService.build(
-                system_ids=[TARGET_SYSTEM_ID], username=self.user
-            )
+            common, historical = OperationContextService.build(system_ids=[TARGET_SYSTEM_ID], username=self.user)
         self.assertEqual(common, [])
         self.assertEqual(historical, [])
 
     def test_build_enabled_by_default(self):
         """默认开启：走真实实现（Redis 未预热/无历史消息时自然为空，不报错）。"""
 
-        common, historical = OperationContextService.build(
-            system_ids=[TARGET_SYSTEM_ID], username=self.user
-        )
+        common, historical = OperationContextService.build(system_ids=[TARGET_SYSTEM_ID], username=self.user)
         self.assertEqual(common, [])
         self.assertEqual(historical, [])
+
     def test_build_historical_filters_by_system_and_deduplicates(self):
         """历史操作：按系统过滤 + 去重 + 上限。"""
 
@@ -90,13 +87,9 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         other_message.context_data["system_selection"]["systems"][0]["system_id"] = "other_system"
         other_message.save(update_record=False, update_fields=["context_data"])
         # 失败消息不进入结果
-        self.create_nl_message(
-            query_text="失败的不算", parent=selection, status=ExecutionStatus.FAILED
-        )
+        self.create_nl_message(query_text="失败的不算", parent=selection, status=ExecutionStatus.FAILED)
 
-        historical = OperationContextService.build_historical(
-            system_ids=[TARGET_SYSTEM_ID], username=self.user
-        )
+        historical = OperationContextService.build_historical(system_ids=[TARGET_SYSTEM_ID], username=self.user)
         query_texts = [item.query_text for item in historical]
         self.assertEqual(query_texts, ["查导出失败的记录", "查 admin 的日志"])
         self.assertNotIn("other system query", query_texts)

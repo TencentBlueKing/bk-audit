@@ -448,7 +448,8 @@ ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
 
-# monitor event
+# Event 异步上报 Celery Task 的硬时限（秒），只限制 BKM 事件 API 投递任务，
+# 不是产生 Event 的 AI 助手或其他业务任务执行超时。
 MONITOR_EVENT_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_EVENT_TASK_TIMEOUT", 60))
 
 # Throttler
@@ -604,18 +605,22 @@ STUCK_TASK_SEARCH_DAYS = int(os.getenv("BKAPP_STUCK_TASK_SEARCH_DAYS", 7))
 # 处理状态为运行中且卡住的日志导出任务调度周期(小时)
 PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/1")
 
-#  Alert Configuration
+# BKM 自定义事件数据源 ID。与 ACCESS_TOKEN 配对使用；未配置时事件任务
+# 仍会按公共 Event 逻辑尝试投递，由 BKM 接口返回配置错误，不影响业务流程。
 ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
 
-#  Alert Configuration
+# BKM 自定义事件数据源访问令牌，必须与 ALERT_DATA_ID 属于同一数据源。
 ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
 
+# Metric 异步上报 Celery Task 的硬时限（秒），只限制 BKM 指标 API 投递任务，
+# 不是 Message、Attachment 或其他业务任务的执行超时。
 MONITOR_METRIC_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_METRIC_TASK_TIMEOUT", 60))
 
-# 日志导出状态上报的数据ID
+# 共享 BKM 自定义 Metric 数据源 ID。配置名保留历史“日志导出状态”命名，
+# 当前同时供 AI 助手等模块的自定义 Metric 复用；为 0 或 token 为空时 Metric 不投递。
 LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 
-# 日志导出状态上报的数据token
+# 共享 BKM 自定义 Metric 数据源访问令牌，必须与 LOG_EXPORT_STATUS_DATA_ID 配对使用。
 LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
 # Asset Observability（资产可观测性）

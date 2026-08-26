@@ -11,6 +11,7 @@ from services.web.ai_assistant.tasks.decorators import (
     attachment_execution_task,
     message_execution_task,
 )
+from services.web.ai_assistant.tasks.maintenance import monitor_ai_assistant_executions
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "attachment_execution_task",
     "execute_natural_language_search",
     "message_execution_task",
+    "monitor_ai_assistant_executions",
     "refresh_common_queries",
 ]

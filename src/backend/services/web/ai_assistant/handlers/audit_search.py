@@ -9,14 +9,21 @@
 from django.conf import settings
 from pydantic import ValidationError
 
-from services.web.ai_assistant.constants import ExecutionMode, ExecutionStatus, MessageType
+from services.web.ai_assistant.constants import (
+    ExecutionMode,
+    ExecutionStatus,
+    MessageType,
+)
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidParentMessage,
     SystemSelectionPermissionDenied,
     SystemSelectionRequired,
 )
-from services.web.ai_assistant.handlers.message import MessagePreparation, MessageTypeHandler
+from services.web.ai_assistant.handlers.message import (
+    MessagePreparation,
+    MessageTypeHandler,
+)
 from services.web.ai_assistant.handlers.registry import message_handler_registry
 from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.schemas.audit_search import (
@@ -30,10 +37,16 @@ from services.web.ai_assistant.schemas.audit_search import (
     SystemSelectionInputSchema,
     SystemSelectionOutputSchema,
 )
-from services.web.ai_assistant.services.operation import OperationContextService, extract_system_ids
+from services.web.ai_assistant.services.operation import (
+    OperationContextService,
+    extract_system_ids,
+)
 from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
-from services.web.query.ai_assistant.schemas import SearchCondition, SystemSelectionOutput
+from services.web.query.ai_assistant.schemas import (
+    SearchCondition,
+    SystemSelectionOutput,
+)
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.ai_assistant.services.log_search import LogSearchService
 
@@ -193,11 +206,7 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
     ) -> MessagePreparation[LogSearchContextSchema]:
         parent = self._resolve_parent(user=user, conversation=conversation, parent_message=parent_message)
         self._validate_scope(parent=parent, condition=input_data.condition)
-        source = (
-            "natural_language"
-            if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH
-            else "field_condition"
-        )
+        source = "natural_language" if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH else "field_condition"
         return MessagePreparation(
             parent_message=parent,
             context_data=LogSearchContextSchema(

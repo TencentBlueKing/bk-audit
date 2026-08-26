@@ -182,6 +182,24 @@ class AttachmentHandlerRegistryTest(TestCase):
         self.assertEqual(handler.execution_mode, ExecutionMode.ASYNC)
         self.assertIs(handler.async_task, execute_attachment_async_success)
 
+    def test_stream_capability_defaults_to_false(self):
+        self.assertFalse(EchoAttachmentSyncHandler().is_stream)
+        self.assertFalse(EchoAttachmentAsyncHandler().is_stream)
+
+    def test_stream_flag_must_be_bool(self):
+        with self.assertRaisesRegex(ImproperlyConfigured, "is_stream 必须是 bool"):
+            self.registry.register(InvalidStreamFlagAttachmentHandler())
+
+    def test_stream_handler_must_be_async(self):
+        with self.assertRaisesRegex(ImproperlyConfigured, "流式附件必须使用异步执行"):
+            self.registry.register(SyncStreamAttachmentHandler())
+
+    def test_async_stream_handler_is_supported(self):
+        handler = StreamAttachmentHandler()
+
+        self.assertIs(self.registry.register(handler), handler)
+        self.assertTrue(handler.is_stream)
+
     def test_async_task_keeps_business_celery_options(self):
         self.assertTrue(execute_attachment_async_success.acks_late)
         self.assertEqual(execute_attachment_async_success.queue, "tests_ai_assistant")
@@ -295,6 +313,24 @@ class InvalidFeedbackAttachmentHandler(EchoAttachmentSyncHandler):
 
 class FeedbackAttachmentHandler(EchoAttachmentSyncHandler):
     supports_feedback = True
+
+
+class SyncStreamAttachmentHandler(EchoAttachmentSyncHandler):
+    """同步 Handler 声明流式属于配置错误，注册阶段必须拒绝。"""
+
+    is_stream = True
+
+
+class InvalidStreamFlagAttachmentHandler(EchoAttachmentAsyncHandler):
+    """is_stream 只接受 bool，避免真值字符串意外开启流式链路。"""
+
+    is_stream = "yes"
+
+
+class StreamAttachmentHandler(EchoAttachmentAsyncHandler):
+    """合法的异步流式 Handler。"""
+
+    is_stream = True
 
 
 class ExportFormatsAsListHandler(EchoAttachmentSyncHandler):

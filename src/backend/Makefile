@@ -69,7 +69,9 @@ prompt-nl2riskfilter:
 PYTEST := $(if $(wildcard .venv/bin/pytest),.venv/bin/pytest,pytest)
 TEST_COMPOSE := docker compose -f docker-compose.test.yml -p bk-audit-test
 
-.PHONY: test-deps-up test-deps-status test-deps-down test-deps-reset test
+TEST_ARGS ?=
+
+.PHONY: test-deps-up test-deps-status test-deps-down test-deps-reset test test-special test-all
 
 test-deps-up:
 	$(TEST_COMPOSE) up -d --wait
@@ -85,4 +87,12 @@ test-deps-reset:
 	$(TEST_COMPOSE) up -d --wait
 
 test:
-	$(PYTEST) --cov=. --cov-report=term-missing --cov-report=xml
+	$(PYTEST) -m "not special" --cov=. --cov-report=term-missing --cov-report=xml $(TEST_ARGS)
+
+test-special:
+	$(PYTEST) -m special $(TEST_ARGS)
+
+# 串行执行两层门禁，避免常规与专项测试并发争用测试数据库和中间件资源。
+test-all:
+	$(MAKE) test
+	$(MAKE) test-special

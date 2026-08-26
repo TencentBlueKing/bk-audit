@@ -1,6 +1,8 @@
 from typing import Any
 
+from services.web.ai_assistant.constants import ExecutionObjectType
 from services.web.ai_assistant.exceptions import StaleMessageTask
+from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import SnapshotInput
 from services.web.ai_assistant.services.message_execution import (
     MessageExecution,
@@ -17,6 +19,7 @@ class MessageExecutionTask(BaseExecutionTask[MessageExecution]):
     abstract = True
     id_argument = "message_id"
     object_label = "消息"
+    object_type = ExecutionObjectType.MESSAGE
     stale_exception = StaleMessageTask
 
     def _load_execution(
@@ -48,6 +51,7 @@ class MessageExecutionTask(BaseExecutionTask[MessageExecution]):
     def _finish_failure(
         self,
         *,
+        execution: MessageExecution | None,
         instance_id: int,
         task_id: str,
         exception: Exception,
@@ -55,3 +59,9 @@ class MessageExecutionTask(BaseExecutionTask[MessageExecution]):
         """将 Worker 异常交给消息领域函数映射为公开失败快照。"""
 
         return finish_message_failure(message_id=instance_id, task_id=task_id, exception=exception)
+
+    def _handle_retry(self, *, execution: MessageExecution | None) -> None:
+        """Retry 保持消息处理中，并刷新巡检使用的平台活动时间。"""
+
+        if execution is not None:
+            Message.touch_processing(instance_id=execution.message.id, task_id=execution.message.task_id)

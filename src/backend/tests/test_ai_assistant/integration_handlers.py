@@ -105,6 +105,26 @@ class RealAttachmentSuccessHandler(AttachmentTypeHandler[IntegrationInput, Integ
         )
 
 
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_stream_success",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_stream_success(
+    self,
+    execution: AttachmentExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    execution.stream.send({"content": execution.input_data.text})
+    return IntegrationOutput(content=f"{execution.context_data.prefix}:{execution.input_data.text}")
+
+
+class RealAttachmentStreamSuccessHandler(RealAttachmentSuccessHandler):
+    """通过真实 Worker 执行的平台流式附件。"""
+
+    is_stream = True
+    async_task = execute_real_attachment_stream_success
+
+
 # ── 重试与并发观测器 ──────────────────────────────────────
 # 观测器只保存计数和线程同步原语，绝不持有 Django Model 实例或数据库连接，
 # 避免跨线程复用连接；业务断言仍以数据库快照为准。
@@ -118,10 +138,90 @@ duplicate_executions = 0
 duplicate_lock = threading.Lock()
 old_task_execution_ids: list[str] = []
 old_task_lock = threading.Lock()
+stream_execution_ids: list[str] = []
+stream_redis_keys: list[str] = []
+stream_execution_lock = threading.Lock()
+stream_duplicate_barrier: threading.Barrier | None = None
+stream_duplicate_executions = 0
+stream_duplicate_lock = threading.Lock()
 
 
 class RetryableIntegrationError(RuntimeError):
     pass
+
+
+def _record_stream_execution(execution: AttachmentExecution) -> None:
+    """记录真实 Worker 创建的 execution，供集成测试验证换流与清理 Redis。"""
+
+    with stream_execution_lock:
+        stream_execution_ids.append(str(execution.stream.binding.config.execution_id))
+        stream_redis_keys.append(execution.stream.binding.config.redis_key)
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_stream_retry",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_attachment_stream_retry(
+    self,
+    execution: AttachmentExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    _record_stream_execution(execution)
+    execution.stream.send({"attempt": self.request.retries})
+    if self.request.retries == 0:
+        raise self.retry(exc=RetryableIntegrationError("temporary stream error"), countdown=0)
+    return IntegrationOutput(content="stream:success")
+
+
+class RealAttachmentStreamRetryHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_stream_retry
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_stream_duplicate",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_stream_duplicate(
+    self,
+    execution: AttachmentExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    global stream_duplicate_executions
+    _record_stream_execution(execution)
+    execution.stream.send({"execution_id": str(execution.stream.binding.config.execution_id)})
+    with stream_duplicate_lock:
+        stream_duplicate_executions += 1
+    barrier = stream_duplicate_barrier
+    if barrier is not None:
+        barrier.wait(timeout=settings.CELERY_TEST_TASK_TIMEOUT)
+    return IntegrationOutput(content="duplicate:success")
+
+
+class RealAttachmentStreamDuplicateHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_stream_duplicate
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_stream_finalize_retry",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_attachment_stream_finalize_retry(
+    self,
+    execution: AttachmentExecution[IntegrationInput, IntegrationContext],
+) -> IntegrationOutput:
+    _record_stream_execution(execution)
+    execution.stream.send({"content": execution.input_data.text})
+    return IntegrationOutput(content="finalize:success")
+
+
+class RealAttachmentStreamFinalizeRetryHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_stream_finalize_retry
 
 
 @message_execution_task(
@@ -233,3 +333,103 @@ def reset_old_task_observations() -> None:
 
     with old_task_lock:
         old_task_execution_ids.clear()
+
+
+def reset_stream_observations() -> None:
+    """清空流式重试执行记录，避免集成用例之间共享进程状态。"""
+
+    with stream_execution_lock:
+        stream_execution_ids.clear()
+        stream_redis_keys.clear()
+
+
+http_stream_started = threading.Event()
+http_stream_release = threading.Event()
+http_attachment_fail_once = True
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_stream",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_http_stream(self, execution):
+    execution.stream.send({"step": 1})
+    http_stream_started.set()
+    if not http_stream_release.wait(settings.CELERY_TEST_TASK_TIMEOUT):
+        raise TimeoutError("HTTP stream test release timeout")
+    execution.stream.send({"step": 2})
+    return IntegrationOutput(content="http-stream:success")
+
+
+class RealAttachmentHttpStreamHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_http_stream
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_stream_retry",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+    max_retries=1,
+    default_retry_delay=0,
+)
+def execute_real_attachment_http_stream_retry(self, execution):
+    execution.stream.send({"step": 1})
+    http_stream_started.set()
+    if not http_stream_release.wait(settings.CELERY_TEST_TASK_TIMEOUT):
+        raise TimeoutError("HTTP stream test release timeout")
+    if self.request.retries == 0:
+        raise self.retry(exc=RetryableIntegrationError("http stream retry"), countdown=0)
+    execution.stream.send({"step": 2})
+    return IntegrationOutput(content="http-stream:success")
+
+
+class RealAttachmentHttpStreamRetryHandler(RealAttachmentStreamSuccessHandler):
+    async_task = execute_real_attachment_http_stream_retry
+
+
+@attachment_execution_task(
+    name="tests.ai_assistant.integration.attachment_http_fail_once",
+    queue=INTEGRATION_QUEUE,
+    acks_late=True,
+)
+def execute_real_attachment_http_fail_once(self, execution):
+    global http_attachment_fail_once
+    if http_attachment_fail_once:
+        http_attachment_fail_once = False
+        raise RuntimeError("http attachment fail")
+    return IntegrationOutput(content="http-retry:success")
+
+
+class RealAttachmentHttpFailOnceHandler(RealAttachmentSuccessHandler):
+    async_task = execute_real_attachment_http_fail_once
+
+
+def release_http_stream_events() -> None:
+    """先唤醒仍卡在 wait() 上的 Worker，再交给 reset 清旗。"""
+
+    http_stream_release.set()
+
+
+def reset_http_stream_events() -> None:
+    http_stream_started.clear()
+    http_stream_release.clear()
+
+
+def reset_http_attachment_fail_once() -> None:
+    global http_attachment_fail_once
+    http_attachment_fail_once = True
+
+
+def reset_stream_duplicate_observations(*, parties: int = 2) -> None:
+    """为同 task ID 的两次真实投递建立同步栅栏。"""
+
+    global stream_duplicate_barrier, stream_duplicate_executions
+    stream_duplicate_barrier = threading.Barrier(parties)
+    with stream_duplicate_lock:
+        stream_duplicate_executions = 0
+
+
+def clear_stream_duplicate_observations() -> None:
+    global stream_duplicate_barrier
+    stream_duplicate_barrier = None
