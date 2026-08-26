@@ -214,7 +214,10 @@ BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 #   1. BKAPP_AI_{AGENT_CODE}_API_URL     — 完整 URL 直接使用
 #   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
 #   3. get_endpoint(apigw_name, APIGW, stage="prod") — 自动生成
-# 认证配置（所有 agent 共用，旧变量保留向后兼容）
+# 认证配置：per-agent 应用凭证 BKAPP_AI_{AGENT}_APP_CODE / _SECRET_KEY 优先级最高，
+# 仅对该 agent 生效（如上云版的 BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE），未配置时走下方全局链。
+# 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 为原有逻辑（所有 agent 共用，历史上早于日志检索迭代存在），
+# 注意：若配置的凭证与其网关环境不匹配会导致凭证错配，跨平台 agent 请一律使用 per-agent 变量。
 AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
 AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
@@ -235,16 +238,16 @@ AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
     os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES", 10 * 1024 * 1024)
 )
 # AI 助手日志检索：L2 字段采样开关 / D3 操作榜单开关
-# （L2 采样默认关闭待 staging 验证延迟与样例质量；操作上下文设计稿已确认需求，
-#   默认开启且由平台层 services/web/ai_assistant/services/operation.py 统一管控）
-AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "False"))
+# （L2 采样默认开启：设计稿已确认「最近一条数据」与「拓展字段动态获取」需求，
+#   SYSTEM_SELECTION 每次多一次 Doris LIMIT 1 采样查询（30 天窗口分区裁剪）且失败自动降级；
+#   若线上延迟或样例质量异常，可设 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED=false 关闭；
+#   操作上下文由平台层 services/web/ai_assistant/services/operation.py 统一管控）
+AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "True"))
 AI_ASSISTANT_OPERATION_RANKING_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_OPERATION_RANKING_ENABLED", "True"))
 # AI 助手常见/历史操作（常见操作走 Redis 缓存 + 定时任务刷新，历史操作直查最近 NL 消息）
 AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT", 50))
 AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT", 10))
-AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT = int(
-    os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT", 500)
-)
+AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT", 500))
 AI_ASSISTANT_HISTORICAL_QUERY_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_LIMIT", 10))
 AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT", 50))
 # 公共 CJK 字体只供受限 PDF 资源回调放行，风险报告和 AI 附件共享同一资产路径。
