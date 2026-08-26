@@ -232,3 +232,43 @@ class StreamRuntimeClosed(AIAssistantException):
 
     MESSAGE = gettext_lazy("流式运行时已经关闭")
     ERROR_CODE = "036"
+
+
+class SystemSelectionRequired(AIAssistantException):
+    """当前会话不存在可绑定的成功系统选择消息（父消息由后端解析绑定）。"""
+
+    MESSAGE = gettext_lazy("当前会话尚未选择系统，请先选择检索系统")
+    ERROR_CODE = "037"
+    STATUS_CODE = 400
+
+
+class InvalidMessageSnapshot(AIAssistantException):
+    """父消息快照缺失或无法恢复执行所需的字段上下文。"""
+
+    MESSAGE = gettext_lazy("父消息快照无效，请重新选择系统后重试")
+    ERROR_CODE = "038"
+    STATUS_CODE = 400
+
+
+class LogExportFailed(AIAssistantException):
+    """日志导出（预览/全量）执行失败。"""
+
+    MESSAGE = gettext_lazy("日志导出失败，请稍后重试")
+    ERROR_CODE = "039"
+    STATUS_CODE = 500
+
+
+class LogExportPermissionDenied(AIAssistantException):
+    """当前用户无目标系统的日志导出权限。"""
+
+    MESSAGE = gettext_lazy("无目标系统的日志导出权限")
+    ERROR_CODE = "040"
+    STATUS_CODE = 403
+
+
+class SystemSelectionPermissionDenied(AIAssistantException):
+    """系统选择时所选系统均无日志检索权限（静默剔除后为空）。"""
+
+    MESSAGE = gettext_lazy("无所选系统的日志检索权限")
+    ERROR_CODE = "041"
+    STATUS_CODE = 403

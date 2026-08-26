@@ -38,6 +38,9 @@ class APIProvider(Enum):
 AI_AGENT_API_URL_TMPL = "BKAPP_AI_{}_API_URL"
 # APIGW 网关名覆盖：BKAPP_AI_{AGENT_CODE}_APIGW_NAME
 AI_AGENT_APIGW_NAME_TMPL = "BKAPP_AI_{}_APIGW_NAME"
+# 应用凭证（per-agent，作用域与 URL 路由一致）：BKAPP_AI_{AGENT_CODE}_APP_CODE / _SECRET_KEY
+AI_AGENT_APP_CODE_TMPL = "BKAPP_AI_{}_APP_CODE"
+AI_AGENT_SECRET_KEY_TMPL = "BKAPP_AI_{}_SECRET_KEY"
 
 
 class AIAgentCode(TextChoices):
@@ -45,11 +48,14 @@ class AIAgentCode(TextChoices):
 
     value 为默认 APIGW 网关名，新增 agent 只需加一行。
     环境变量按模板自动生效：
-      - BKAPP_AI_{name}_API_URL      完整 URL（优先级最高）
-      - BKAPP_AI_{name}_APIGW_NAME   覆盖网关名
+      - BKAPP_AI_{name}_API_URL       完整 URL（优先级最高）
+      - BKAPP_AI_{name}_APIGW_NAME    覆盖网关名
+      - BKAPP_AI_{name}_APP_CODE      应用凭证（per-agent，作用域与 URL 路由一致）
+      - BKAPP_AI_{name}_SECRET_KEY    应用密钥（per-agent）
     """
 
     AUDIT_REPORT = "bp-ai-audit-report", gettext_lazy("风险报告智能体")
     RISK_SEARCH = "bp-ai-aud-rsk-srch", gettext_lazy("风险检索助手")
     ALS_TITLE_SUM = "bp-ai-als-title-sum", gettext_lazy("AI 风险分析报告标题生成")
     AUDIT_ANALYSE = "bp-ai-audit-analyse", gettext_lazy("审计风险分析助手")
+    AUDIT_LOG_SEARCH = "bp-audit-log-search", gettext_lazy("审计日志检索助手")

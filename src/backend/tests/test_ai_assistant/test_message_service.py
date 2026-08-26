@@ -34,6 +34,7 @@ from tests.test_ai_assistant.handlers import (
     EchoInput,
     EchoOutput,
     EchoSyncHandler,
+    register_test_message_handler,
 )
 
 
@@ -100,7 +101,7 @@ class MessageServiceTest(TestCase):
         self.service = MessageService(user=self.user)
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         self.sync_handler = RecordingSyncHandler()
-        message_handler_registry.register(self.sync_handler)
+        register_test_message_handler(self.sync_handler)
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
@@ -192,7 +193,7 @@ class MessageServiceTest(TestCase):
                 )
 
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=parent))
         with self.assertRaises(InvalidInitialMessage):
             self.service.prepare_initial(
                 conversation=Conversation(created_by=self.user, updated_by=self.user),
@@ -218,7 +219,7 @@ class MessageServiceTest(TestCase):
 
     def test_sync_execute_failure_does_not_create_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(FailingSyncHandler())
+        register_test_message_handler(FailingSyncHandler())
 
         with self.assertRaises(RuntimeError):
             self.service.create(
@@ -231,7 +232,7 @@ class MessageServiceTest(TestCase):
 
     def test_sync_invalid_output_does_not_create_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(InvalidOutputSyncHandler())
+        register_test_message_handler(InvalidOutputSyncHandler())
 
         with self.assertRaises(MessageSnapshotValidationError):
             self.service.create(
@@ -258,7 +259,7 @@ class MessageServiceTest(TestCase):
     def test_handler_can_return_fallback_parent(self):
         parent = self.create_parent()
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=parent))
 
         message = self.service.create(
             conversation=self.conversation,
@@ -272,7 +273,7 @@ class MessageServiceTest(TestCase):
         other_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
         foreign_parent = self.create_parent(conversation=other_conversation)
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RecordingSyncHandler(fallback_parent=foreign_parent))
+        register_test_message_handler(RecordingSyncHandler(fallback_parent=foreign_parent))
 
         message = self.service.create(
             conversation=self.conversation,
@@ -312,7 +313,7 @@ class MessageServiceTest(TestCase):
     def test_parent_business_status_is_decided_by_handler(self):
         processing_parent = self.create_parent(status=ExecutionStatus.PROCESSING)
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.register(RejectingParentHandler())
+        register_test_message_handler(RejectingParentHandler())
 
         with self.assertRaises(InvalidParentMessage) as context:
             self.service.create(
@@ -348,7 +349,7 @@ class MessageServiceTest(TestCase):
 
     def register_async_handler(self):
         handler = EchoAsyncHandler()
-        message_handler_registry.register(handler)
+        register_test_message_handler(handler)
         return handler
 
     def test_async_create_persists_processing_message_and_dispatches_after_commit(self):
@@ -498,12 +499,18 @@ class MessageServiceTest(TestCase):
             ):
                 self.service.retry(message_uid=str(message.uid))
 
-        unregistered = self.create_failed_async_message(
-            message_type=MessageType.LOG_SEARCH,
-            task_id="task-unregistered",
-        )
-        with self.assertRaises(UnsupportedMessageType):
-            self.service.retry(message_uid=str(unregistered.uid))
+        # 业务 Handler（audit_search）常驻注册表，需先摘除 LOG_SEARCH 才能构造未注册路径，结束后恢复
+        original_handler = message_handler_registry.unregister(str(MessageType.LOG_SEARCH))
+        try:
+            unregistered = self.create_failed_async_message(
+                message_type=MessageType.LOG_SEARCH,
+                task_id="task-unregistered",
+            )
+            with self.assertRaises(UnsupportedMessageType):
+                self.service.retry(message_uid=str(unregistered.uid))
+        finally:
+            if original_handler is not None:
+                message_handler_registry.register(original_handler)
 
     def test_retry_hides_foreign_or_deleted_conversation_message(self):
         self.register_async_handler()
@@ -565,7 +572,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
     def setUp(self):
         self.user = "alice"
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        message_handler_registry.register(EchoAsyncHandler())
+        register_test_message_handler(EchoAsyncHandler())
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
