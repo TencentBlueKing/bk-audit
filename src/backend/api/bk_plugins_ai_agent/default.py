@@ -33,9 +33,7 @@ from api.bk_plugins_ai_agent.constants import (
     AI_STREAM_PREVIEW_LIMIT,
     AI_THINKING_PLACEHOLDERS,
 )
-from api.constants import AIAgentCode
-from api.constants import AI_AGENT_APP_CODE_TMPL
-from api.constants import AI_AGENT_SECRET_KEY_TMPL
+from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
 
 
@@ -45,11 +43,11 @@ class AIAgentBase(BkApiResource, abc.ABC):
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
     不直接继承 AIAuditReport 以避免循环导入（bk_resource 按字母序扫描 api/ 目录）。
 
-    凭证作用域与 URL 路由作用域保持一致（per-agent）：
-      - 带 agent_code 的资源（ChatCompletion）优先读 BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY；
-      - 未命中时回退 AI_AUDIT_REPORT_APP_CODE/_SECRET_KEY → APP_CODE/SECRET_KEY；
-      - 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 已废弃（2026-08-26 事故：全局凭证会把
-        存量内网 agent 的凭证一并切换，与其内网网关路由错配，AIDev 返回 app not found）。
+    凭证解析（原有全局链保持不变，per-agent 为新增覆盖）：
+      - 带 agent_code 的资源（ChatCompletion）优先读 BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY，
+        为需要独立凭证的智能体（如上云版的日志检索）提供与 URL 路由同作用域的专属凭证；
+      - 未配置 per-agent 凭证时走原有全局链，行为与历史版本完全一致：
+        AI_AGENT_APP_CODE/_SECRET_KEY → AI_AUDIT_REPORT_APP_CODE/_SECRET_KEY → APP_CODE/SECRET_KEY。
     """
 
     module_name = "bk_plugins_ai_agent"
@@ -57,8 +55,8 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
-    app_code_setting_names = ("AI_AUDIT_REPORT_APP_CODE",)
-    secret_key_setting_names = ("AI_AUDIT_REPORT_SECRET_KEY",)
+    app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
+    secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
     # 资源为进程级单例，agent 状态按线程隔离（gevent 部署下为 greenlet 隔离）
     _agent_ctx = threading.local()
 

@@ -214,10 +214,10 @@ BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 #   1. BKAPP_AI_{AGENT_CODE}_API_URL     — 完整 URL 直接使用
 #   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
 #   3. get_endpoint(apigw_name, APIGW, stage="prod") — 自动生成
-# 认证配置：per-agent 应用凭证 BKAPP_AI_{AGENT}_APP_CODE / _SECRET_KEY（与 URL 路由作用域一致，
-# 如 BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE），未配置的 agent 回退下方 AI_AUDIT_REPORT_* → APP_CODE。
-# 已废弃（勿配置）：全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 会把存量内网 agent 的凭证一并切换，
-# 与其内网网关路由错配（AIDev 返回 app not found，2026-08-26 事故），代码已不再读取。
+# 认证配置：per-agent 应用凭证 BKAPP_AI_{AGENT}_APP_CODE / _SECRET_KEY 优先级最高，
+# 仅对该 agent 生效（如上云版的 BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE），未配置时走下方全局链。
+# 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 为原有逻辑（所有 agent 共用，历史上早于日志检索迭代存在），
+# 注意：若配置的凭证与其网关环境不匹配会导致凭证错配，跨平台 agent 请一律使用 per-agent 变量。
 AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
 AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
