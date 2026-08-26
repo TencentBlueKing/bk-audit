@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import os
 import sys
 import unittest
 from collections import Counter
@@ -161,9 +162,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.app_code, settings.APP_CODE)
 
     def test_app_code_custom(self):
-        """测试统一 AI_AGENT_APP_CODE 优先于旧审计报告 APP_CODE"""
+        """测试全局 AI_AGENT_APP_CODE 已废弃：审计报告不再读取（2026-08-26 事故回归）"""
         with override_settings(AI_AGENT_APP_CODE="agent_app", AI_AUDIT_REPORT_APP_CODE="report_app"):
-            self.assertEqual(self.resource.app_code, "agent_app")
+            self.assertEqual(self.resource.app_code, "report_app")
 
     def test_app_code_fallback_to_report(self):
         """测试 APP_CODE 回退到 AI_AUDIT_REPORT_APP_CODE"""
@@ -176,9 +177,9 @@ class TestAIAuditReportAuth(TestCase):
             self.assertEqual(self.resource.secret_key, settings.SECRET_KEY)
 
     def test_secret_key_custom(self):
-        """测试统一 AI_AGENT_SECRET_KEY 优先于旧审计报告 SECRET_KEY"""
+        """测试全局 AI_AGENT_SECRET_KEY 已废弃：审计报告不再读取"""
         with override_settings(AI_AGENT_SECRET_KEY="agent_secret", AI_AUDIT_REPORT_SECRET_KEY="report_secret"):
-            self.assertEqual(self.resource.secret_key, "agent_secret")
+            self.assertEqual(self.resource.secret_key, "report_secret")
 
     def test_secret_key_fallback_to_report(self):
         """测试 SECRET_KEY 回退到 AI_AUDIT_REPORT_SECRET_KEY"""
@@ -271,6 +272,68 @@ class TestAIAuditReportAuth(TestCase):
         self.assertNotIn("user", params)
 
 
+class TestAgentScopedCredentials(TestCase):
+    """per-agent 凭证作用域（2026-08-26 事故回归：全局 BKAPP_AI_AGENT_APP_CODE 不得影响存量 agent）"""
+
+    def setUp(self):
+        self.resource = BaseChatCompletion()
+
+    def tearDown(self):
+        # 资源为单例且 agent 状态按线程隔离，测试串行复用同一线程，必须清理
+        self.resource._current_agent_code = None
+
+    @staticmethod
+    def _env_without_bkapp_ai() -> dict:
+        return {k: v for k, v in os.environ.items() if not k.startswith("BKAPP_AI_")}
+
+    def test_global_agent_app_code_not_applied_to_legacy_agents(self):
+        """配置全局 BKAPP_AI_AGENT_APP_CODE 后，存量 agent（RISK_SEARCH）凭证不受影响"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="cloud_agent_app",
+                AI_AGENT_SECRET_KEY="cloud_agent_secret",
+                AI_AUDIT_REPORT_APP_CODE="report_app",
+                AI_AUDIT_REPORT_SECRET_KEY="report_secret",
+            ):
+                self.assertEqual(self.resource.app_code, "report_app")
+                self.assertEqual(self.resource.secret_key, "report_secret")
+
+    def test_per_agent_credential_env(self):
+        """per-agent 环境变量 BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE/_SECRET_KEY 生效"""
+        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        env = self._env_without_bkapp_ai()
+        env.update(
+            {
+                "BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE": "log_search_app",
+                "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY": "log_search_secret",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(self.resource.app_code, "log_search_app")
+            self.assertEqual(self.resource.secret_key, "log_search_secret")
+
+    def test_per_agent_credential_fallback_to_legacy_chain(self):
+        """未配置 per-agent 凭证时回退 AI_AUDIT_REPORT_*（全局变量同样不生效）"""
+        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(AI_AGENT_APP_CODE="cloud_agent_app", AI_AUDIT_REPORT_APP_CODE="report_app"):
+                self.assertEqual(self.resource.app_code, "report_app")
+
+    def test_build_url_remembers_agent_code(self):
+        """build_url 记录 agent_code 供 per-agent 凭证解析"""
+        url = self.resource.build_url({"agent_code": "bp-ai-aud-rsk-srch"})
+        self.assertEqual(self.resource._current_agent_code, AIAgentCode.RISK_SEARCH)
+        self.assertIn("chat_completion", url)
+
+    @mock.patch("bk_resource.contrib.api.APIResource.perform_request", mock.Mock(return_value="ok"))
+    def test_perform_request_clears_agent_context(self):
+        """请求结束后清理线程内 agent 状态，避免残留影响后续请求"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        self.assertEqual(self.resource.perform_request({"agent_code": AIAgentCode.RISK_SEARCH}), "ok")
+        self.assertIsNone(self.resource._current_agent_code)
+
+
 class TestAIAuditAnalyseAuth(TestCase):
     """测试AI分析智能体复用通用 Agent 能力并使用共享认证信息"""
 
@@ -280,19 +343,21 @@ class TestAIAuditAnalyseAuth(TestCase):
     def test_reuses_base_chat_completion(self):
         self.assertIsInstance(self.resource, BaseChatCompletion)
 
-    def test_app_code_uses_shared_agent_config(self):
+    def test_app_code_ignores_deprecated_global_agent_config(self):
+        """测试分析智能体同样不读取已废弃的全局 AI_AGENT_APP_CODE"""
         with override_settings(
             AI_AGENT_APP_CODE="agent_app",
             AI_AUDIT_REPORT_APP_CODE="report_app",
         ):
-            self.assertEqual(self.resource.app_code, "agent_app")
+            self.assertEqual(self.resource.app_code, "report_app")
 
-    def test_secret_key_uses_shared_agent_config(self):
+    def test_secret_key_ignores_deprecated_global_agent_config(self):
+        """测试分析智能体同样不读取已废弃的全局 AI_AGENT_SECRET_KEY"""
         with override_settings(
             AI_AGENT_SECRET_KEY="agent_secret",
             AI_AUDIT_REPORT_SECRET_KEY="report_secret",
         ):
-            self.assertEqual(self.resource.secret_key, "agent_secret")
+            self.assertEqual(self.resource.secret_key, "report_secret")
 
     def test_legacy_stream_keeps_text_done_fallback(self):
         response = mock.MagicMock()

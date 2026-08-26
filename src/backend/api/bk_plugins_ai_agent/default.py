@@ -18,6 +18,8 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
+import os
+import threading
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -32,6 +34,8 @@ from api.bk_plugins_ai_agent.constants import (
     AI_THINKING_PLACEHOLDERS,
 )
 from api.constants import AIAgentCode
+from api.constants import AI_AGENT_APP_CODE_TMPL
+from api.constants import AI_AGENT_SECRET_KEY_TMPL
 from api.utils import get_agent_base_url
 
 
@@ -40,6 +44,12 @@ class AIAgentBase(BkApiResource, abc.ABC):
 
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
     不直接继承 AIAuditReport 以避免循环导入（bk_resource 按字母序扫描 api/ 目录）。
+
+    凭证作用域与 URL 路由作用域保持一致（per-agent）：
+      - 带 agent_code 的资源（ChatCompletion）优先读 BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY；
+      - 未命中时回退 AI_AUDIT_REPORT_APP_CODE/_SECRET_KEY → APP_CODE/SECRET_KEY；
+      - 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 已废弃（2026-08-26 事故：全局凭证会把
+        存量内网 agent 的凭证一并切换，与其内网网关路由错配，AIDev 返回 app not found）。
     """
 
     module_name = "bk_plugins_ai_agent"
@@ -47,8 +57,18 @@ class AIAgentBase(BkApiResource, abc.ABC):
     platform_authorization = True
     tags = ["AIAgent"]
     TIMEOUT = 300
-    app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
-    secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
+    app_code_setting_names = ("AI_AUDIT_REPORT_APP_CODE",)
+    secret_key_setting_names = ("AI_AUDIT_REPORT_SECRET_KEY",)
+    # 资源为进程级单例，agent 状态按线程隔离（gevent 部署下为 greenlet 隔离）
+    _agent_ctx = threading.local()
+
+    @property
+    def _current_agent_code(self):
+        return getattr(self._agent_ctx, "agent_code", None)
+
+    @_current_agent_code.setter
+    def _current_agent_code(self, agent_code):
+        self._agent_ctx.agent_code = agent_code
 
     @staticmethod
     def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
@@ -58,12 +78,29 @@ class AIAgentBase(BkApiResource, abc.ABC):
                 return setting_value
         return getattr(settings, default_setting_name)
 
+    def _get_agent_scoped_credential(self, is_app_code: bool) -> str:
+        """per-agent 应用凭证：BKAPP_AI_{AGENT}_APP_CODE / BKAPP_AI_{AGENT}_SECRET_KEY
+
+        与 get_agent_base_url 的 URL 路由作用域一致，仅影响当前 agent，不影响其它智能体。
+        """
+        agent_code = self._current_agent_code
+        if agent_code is None:
+            return ""
+        tmpl = AI_AGENT_APP_CODE_TMPL if is_app_code else AI_AGENT_SECRET_KEY_TMPL
+        return os.getenv(tmpl.format(agent_code.name), "").strip()
+
     @property
     def app_code(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=True)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.app_code_setting_names, "APP_CODE")
 
     @property
     def secret_key(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=False)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
@@ -94,8 +131,17 @@ class ChatCompletion(AIAgentBase):
             raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
         if isinstance(agent_code, str):
             agent_code = AIAgentCode(agent_code)
+        # 记录本次请求的 agent，供 per-agent 凭证解析（build_url 先于 build_header 执行）
+        self._current_agent_code = agent_code
         base_url = get_agent_base_url(agent_code)
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
+
+    def perform_request(self, validated_request_data):
+        # 请求结束后清理线程内 agent 状态，避免残留影响同线程后续请求（如审计报告等无 agent 的资源）
+        try:
+            return super().perform_request(validated_request_data)
+        finally:
+            self._current_agent_code = None
 
     def build_header(self, validated_request_data):
         headers = super().build_header(validated_request_data)

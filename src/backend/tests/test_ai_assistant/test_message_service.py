@@ -478,12 +478,18 @@ class MessageServiceTest(TestCase):
             ):
                 self.service.retry(message_uid=str(message.uid))
 
-        unregistered = self.create_failed_async_message(
-            message_type=MessageType.LOG_SEARCH,
-            task_id="task-unregistered",
-        )
-        with self.assertRaises(UnsupportedMessageType):
-            self.service.retry(message_uid=str(unregistered.uid))
+        # 业务 Handler（audit_search）常驻注册表，需先摘除 LOG_SEARCH 才能构造未注册路径，结束后恢复
+        original_handler = message_handler_registry.unregister(str(MessageType.LOG_SEARCH))
+        try:
+            unregistered = self.create_failed_async_message(
+                message_type=MessageType.LOG_SEARCH,
+                task_id="task-unregistered",
+            )
+            with self.assertRaises(UnsupportedMessageType):
+                self.service.retry(message_uid=str(unregistered.uid))
+        finally:
+            if original_handler is not None:
+                message_handler_registry.register(original_handler)
 
     def test_retry_hides_foreign_or_deleted_conversation_message(self):
         self.register_async_handler()
