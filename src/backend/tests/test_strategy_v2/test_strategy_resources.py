@@ -133,7 +133,7 @@ class StrategyResourcesTest(TestCase):
         self.assertEqual(result, [{"label": self.strategy.strategy_name, "value": self.strategy.strategy_id}])
 
     def test_list_strategy_all_returns_all_user_strategies_without_scene_id(self):
-        strategy_2 = Strategy.objects.create(
+        Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="another-user-strategy",
             strategy_type=StrategyType.MODEL.value,

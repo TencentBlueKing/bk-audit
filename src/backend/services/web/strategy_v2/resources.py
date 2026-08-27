@@ -103,7 +103,12 @@ from services.web.scene.filters import (
     CompositeScopeFilter,
     SceneScopeFilter,
 )
-from services.web.scene.models import ResourceBinding, ResourceBindingScene, ResourceBindingSystem, Scene
+from services.web.scene.models import (
+    ResourceBinding,
+    ResourceBindingScene,
+    ResourceBindingSystem,
+    Scene,
+)
 from services.web.strategy_v2.constants import (
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
@@ -348,9 +353,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             rule_id = rule_data.get("rule_id")
             # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
             if rule_id and rule_id not in existing_ids:
-                raise serializers.ValidationError(
-                    gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
-                )
+                raise serializers.ValidationError(gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id)
             fields = {
                 "rule_name": rule_data["rule_name"],
                 "conditions": rule_data.get("conditions") or {"where": None, "having": None},
@@ -364,9 +367,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             if rule_id:
                 rule = strategy.rules.filter(rule_id=rule_id, is_deleted=False).first()
                 if rule is None:
-                    raise serializers.ValidationError(
-                        gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
-                    )
+                    raise serializers.ValidationError(gettext("发现规则[rule_id=%s]不属于当前策略，无法更新") % rule_id)
                 for key, val in fields.items():
                     setattr(rule, key, val)
                 rule.save(update_fields=list(fields.keys()))
@@ -403,9 +404,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             rule_id = rule_data.get("rule_id")
             # 越权校验：传入的 rule_id 必须属于本策略，避免误操作系统其他策略的规则
             if rule_id and rule_id not in existing_ids:
-                raise serializers.ValidationError(
-                    gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
-                )
+                raise serializers.ValidationError(gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id)
             fields = {
                 "rule_name": rule_data["rule_name"],
                 "conditions": rule_data.get("conditions") or {},
@@ -419,9 +418,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             if rule_id:
                 rule = strategy.dispatch_rules.filter(rule_id=rule_id, is_deleted=False).first()
                 if rule is None:
-                    raise serializers.ValidationError(
-                        gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id
-                    )
+                    raise serializers.ValidationError(gettext("分派规则[rule_id=%s]不属于当前策略，无法更新") % rule_id)
                 for key, val in fields.items():
                     setattr(rule, key, val)
                 rule.save(update_fields=list(fields.keys()))
@@ -506,12 +503,10 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             resource_type=ResourceVisibilityType.STRATEGY,
             resource_id__in=strategy_ids,
         )
-        scene_rows = ResourceBindingScene.objects.filter(
-            binding__in=bindings, scene__is_deleted=False
-        ).values_list("binding_id", "scene_id")
-        system_rows = ResourceBindingSystem.objects.filter(binding__in=bindings).values_list(
-            "binding_id", "system_id"
+        scene_rows = ResourceBindingScene.objects.filter(binding__in=bindings, scene__is_deleted=False).values_list(
+            "binding_id", "scene_id"
         )
+        system_rows = ResourceBindingSystem.objects.filter(binding__in=bindings).values_list("binding_id", "system_id")
         binding_scene_map: Dict[str, List[int]] = {}
         for binding_id, scene_id in scene_rows:
             binding_scene_map.setdefault(str(binding_id), []).append(scene_id)

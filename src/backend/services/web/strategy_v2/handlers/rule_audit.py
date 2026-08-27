@@ -266,7 +266,9 @@ class RuleAuditSQLBuilder:
             if not where_json:
                 # 规则 where 必填（无兜底规则概念），缺失即数据异常
                 raise RuleAuditSqlGeneratorError(
-                    gettext("strategy %s rule %s missing where conditions" % (self.strategy.strategy_id, rule.rule_id))
+                    gettext(
+                        "strategy {} rule {} missing where conditions".format(self.strategy.strategy_id, rule.rule_id)
+                    )
                 )
             configs.append(
                 RuleFilterConfig(
@@ -284,9 +286,7 @@ class RuleAuditSQLBuilder:
         """
         rules = self._get_ordered_rules()
         if not rules:
-            raise RuleAuditSqlGeneratorError(
-                gettext("strategy %s has no strategy rule" % self.strategy.strategy_id)
-            )
+            raise RuleAuditSqlGeneratorError(gettext("strategy %s has no strategy rule" % self.strategy.strategy_id))
         rule_configs = self._build_rule_filter_configs(rules)
         sql_config = self.format(self.strategy.configs, rules=rule_configs)
         return self._build_outer_sql(sql_config, rules=rule_configs)
@@ -311,9 +311,9 @@ class RuleAuditSQLBuilder:
 
     def _build_outer_sql(self, sql_config: SqlConfig, rules: List[RuleFilterConfig]) -> str:
         """
-            L1: generator.generate_rule_mode(config)  条件聚合层（核心）
-            L2：_build_outer_sql  命中层   产出每行/每组命中了哪条规则
-            L3：_build_outer_sql   事件映射层    产出 BKBase 事件流的最终字段
+        L1: generator.generate_rule_mode(config)  条件聚合层（核心）
+        L2：_build_outer_sql  命中层   产出每行/每组命中了哪条规则
+        L3：_build_outer_sql   事件映射层    产出 BKBase 事件流的最终字段
         """
         event_basic_field_configs: List[dict] = self.strategy.event_basic_field_configs
         field_mapping = {
@@ -371,9 +371,7 @@ class RuleAuditSQLBuilder:
                     raise RuleAuditSqlGeneratorError(gettext("source_field %s not found" % map_config.source_field))
                 # select_fields 的 display_name 已替换为 md5 别名，source_field 为前端原始名——先取 md5 再比对
                 source_md5 = self.display2tmp_name_map[map_config.source_field]
-                source_field = next(
-                    (f for f in sql_config.select_fields if f.display_name == source_md5), None
-                )
+                source_field = next((f for f in sql_config.select_fields if f.display_name == source_md5), None)
                 if source_field is not None and source_field.aggregate:
                     # map_config 引用聚合字段：同样按命中规则取值
                     select_fields.append(
@@ -415,7 +413,7 @@ class RuleAuditSQLBuilder:
             if rule_alias is None:
                 # generator 对每个聚合 select 字段 × 每条规则都会注册别名，miss 即上游数据不一致
                 raise RuleAuditSqlGeneratorError(
-                    gettext("aggregate field %s rule %s column not found" % (alias, rule.rule_id))
+                    gettext("aggregate field {} rule {} column not found".format(alias, rule.rule_id))
                 )
             case = case.when(rule_hit_field == rule.rule_id, sub_table.field(rule_alias))
         return case.as_(output_alias) if output_alias else case

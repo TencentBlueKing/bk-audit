@@ -240,9 +240,7 @@ class TestOperators(TestCase):
         from unittest import mock as mock_module
 
         cond = DispatchCondition(field="field", operator=Operator.EQ, filters=[], filter="value")
-        with mock_module.patch.dict(
-            "services.web.strategy_v2.handlers.dispatch.PY_OPERATORS", clear=True
-        ):
+        with mock_module.patch.dict("services.web.strategy_v2.handlers.dispatch.PY_OPERATORS", clear=True):
             self.assertFalse(apply_condition(cond, ctx))
 
 

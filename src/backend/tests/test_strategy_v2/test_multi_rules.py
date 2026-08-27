@@ -8,7 +8,6 @@
 - 全局策略与场景策略区分逻辑
 """
 
-import unittest.mock
 
 from rest_framework import serializers
 
@@ -17,12 +16,10 @@ from services.web.analyze.models import Control, ControlVersion
 from services.web.scene.constants import BindingType, ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import Scene
-from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType, StrategyType
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.constants import RiskLevel, StrategyType
 from services.web.strategy_v2.serializers import (
     CreateStrategyRequestSerializer,
     MultiRuleValidateMixin,
-    UpdateStrategyRequestSerializer,
 )
 from tests.base import TestCase
 
@@ -262,7 +259,11 @@ class CheckRulesTest(TestCase):
             "strategy_type": StrategyType.RULE.value,
             "configs": self.valid_configs,
             "rules": [
-                {"rule_name": "rule_high", "conditions": {"where": self.valid_where}, "risk_level": RiskLevel.HIGH.value},
+                {
+                    "rule_name": "rule_high",
+                    "conditions": {"where": self.valid_where},
+                    "risk_level": RiskLevel.HIGH.value,
+                },
                 {"rule_name": "rule_low", "conditions": {"where": self.valid_where}, "risk_level": RiskLevel.LOW.value},
             ],
         }

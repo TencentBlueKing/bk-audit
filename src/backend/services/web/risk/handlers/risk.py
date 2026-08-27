@@ -211,9 +211,7 @@ class RiskHandler:
         # 规则级元信息（优先级：规则 > 策略；策略级回退覆盖模型策略与窗口期事件）
         strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
         create_params["strategy_rule_id"] = rule.rule_id if rule else None
-        create_params["risk_level"] = (rule.risk_level if rule else None) or (
-            strategy.risk_level if strategy else None
-        )
+        create_params["risk_level"] = (rule.risk_level if rule else None) or (strategy.risk_level if strategy else None)
         create_params["risk_hazard"] = (rule.risk_hazard if rule else None) or (
             strategy.risk_hazard if strategy else None
         )
@@ -374,9 +372,7 @@ class RiskHandler:
                 event["strategy_id"],
                 event.get("raw_event_id"),
             )
-            raise ValueError(
-                gettext("全局策略[%s]分派规则未命中且无默认兜底规则，请检查策略分派规则配置") % event["strategy_id"]
-            )
+            raise ValueError(gettext("全局策略[%s]分派规则未命中且无默认兜底规则，请检查策略分派规则配置") % event["strategy_id"])
         return dispatch_result
 
     def _apply_dispatch(self, risk: Risk, dispatch_result) -> None:

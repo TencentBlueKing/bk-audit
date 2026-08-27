@@ -38,6 +38,7 @@ class RiskContext:
         strategy_id = risk_info.get("strategy_id", RISK_INFO.get("strategy_id"))
         if strategy_id:
             from services.web.strategy_v2.models import Strategy
+
             Strategy.objects.get_or_create(
                 strategy_id=strategy_id,
                 defaults={"strategy_name": f"test_strategy_{strategy_id}"},

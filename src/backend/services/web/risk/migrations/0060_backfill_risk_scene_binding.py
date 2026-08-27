@@ -32,7 +32,7 @@ BINDING_TYPE_SCENE = "scene_binding"
 def _iter_batches(iterable, size):
     """按 size 切片迭代 list，避免一次性构造巨型 IN 列表。"""
     for i in range(0, len(iterable), size):
-        yield iterable[i:i + size]
+        yield iterable[i : i + size]
 
 
 def forwards(apps, schema_editor):
@@ -60,9 +60,7 @@ def forwards(apps, schema_editor):
 
     # 2. 提前查出已存在的 RISK 绑定，避免重复建
     existing_risk_ids = set(
-        ResourceBinding.objects.filter(resource_type=RESOURCE_TYPE_RISK).values_list(
-            "resource_id", flat=True
-        )
+        ResourceBinding.objects.filter(resource_type=RESOURCE_TYPE_RISK).values_list("resource_id", flat=True)
     )
     print(f"[forwards] 已存在 RISK 绑定 {len(existing_risk_ids)} 条，将跳过", flush=True)
 
@@ -151,8 +149,7 @@ def forwards(apps, schema_editor):
         )
 
     print(
-        f"[forwards] 数据迁移完成：新建/复用 RISK 绑定 {created_binding_total} 条，"
-        f"新增场景关联 {created_scene_total} 条",
+        f"[forwards] 数据迁移完成：新建/复用 RISK 绑定 {created_binding_total} 条，" f"新增场景关联 {created_scene_total} 条",
         flush=True,
     )
 
