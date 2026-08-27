@@ -94,11 +94,12 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 }
 2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键——字段上下文已列出的照抄，未列出但用户明确指定的按用户描述的子键名生成
 3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
-4. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
-5. 时间按当前时间推算，ISO8601 带时区；用户未提时间时输出 null，由后端补默认窗口
-6. 关键词全文检索用 match_all/match_any 操作符表达
-7. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
-8. 仅当所有检索需求都无法映射到字段上下文时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
+4. 同一字段的多个取值（如多个操作人、多个资源类型）输出为单个条件：filters 放全部值、operator 用 include（排除语义用 exclude）；禁止拆成多个同字段条件，也禁止把多个值塞进 eq
+5. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
+6. 时间按当前时间推算，ISO8601 带时区；用户未提时间时输出 null，由后端补默认窗口
+7. 关键词全文检索用 match_all/match_any 操作符表达
+8. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
+9. 仅当所有检索需求都无法映射到字段上下文时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
 # 数值比较操作符（仅数值类型字段可用）
 NUMERIC_OPERATORS = {

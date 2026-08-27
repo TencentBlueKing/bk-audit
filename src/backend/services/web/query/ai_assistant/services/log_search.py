@@ -29,7 +29,7 @@ F3 检索快照服务（LOG_SEARCH 消息核心组件）
 """
 
 import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from bk_resource import api, resource
 from bk_resource.base import Empty
@@ -45,6 +45,7 @@ from core.sql.constants import FieldType
 from core.utils.data import extract_nested_value
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
+    EXTENSION_FIELD_DEFAULT_OPERATORS,
     LOG_SEARCH_SNAPSHOT_PAGE_SIZE,
     LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH,
     SNAPSHOT_DEFAULT_COLUMNS,
@@ -52,12 +53,13 @@ from services.web.query.ai_assistant.constants import (
 )
 from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
 from services.web.query.ai_assistant.schemas import (
+    Condition,
     LogSearchOutput,
     QuerySummary,
     ResultColumn,
     SearchCondition,
 )
-from services.web.query.constants import DEFAULT_COLLECTOR_SORT_LIST
+from services.web.query.constants import COLLECT_SEARCH_CONFIG, DEFAULT_COLLECTOR_SORT_LIST
 from services.web.query.resources.base import SearchDataParser
 from services.web.query.serializers import CollectorSearchAllReqSerializer
 from services.web.query.utils.doris import DorisQuerySQLBuilder
@@ -88,6 +90,8 @@ class LogSearchService:
         span.set_attribute("ai.log_search.scope_id", condition.scope_id)
         span.set_attribute("ai.log_search.source", source)
 
+        # ⓪ 条件归一（字段筛选多选 / NL 多值拆分统一聚合为 IN/NOT IN）
+        condition = cls._normalize_condition(condition)
         # ① DRF 校验（字段白名单/操作符/keys + 4 条时间条件注入，全复用）
         validated = cls._validate_condition(condition, namespace)
         # ② 权限注入（显式 username）
@@ -100,6 +104,66 @@ class LogSearchService:
         cls._bind_system_info(namespace, results)
         # ⑥ 快照组装
         return cls._build_output(condition, data, results, source)
+
+    # ------------------------------------------------------------------
+    # ⓪ 条件归一（同字段多值聚合）
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _normalize_condition(cls, condition: SearchCondition) -> SearchCondition:
+        """条件归一：同字段同操作符聚合 + eq/neq 多值转 include/exclude（IN/NOT IN）。
+
+        字段筛选多选传入 eq + 多 filters 时，SQL 层单值操作符仅取首个值（静默丢弃其余）；
+        NL 多值拆分为多条同字段 eq 条件时，AND 组合恒空——统一按日志检索页多选语义
+        聚合为 IN/NOT IN；操作符不同的同字段条件保留原样（用户显式 AND 意图，不猜测合并）。
+        """
+
+        mergeable = {
+            QueryConditionOperator.EQ.value,
+            QueryConditionOperator.NEQ.value,
+            QueryConditionOperator.INCLUDE.value,
+            QueryConditionOperator.EXCLUDE.value,
+        }
+        normalized: List[Condition] = []
+        merged_map: Dict[Tuple[str, Tuple[str, ...], str], Condition] = {}
+        for cond in condition.conditions:
+            if cond.operator not in mergeable:
+                normalized.append(cond)
+                continue
+            key = (cond.field.raw_name, tuple(cond.field.keys), cond.operator)
+            if key in merged_map:
+                # 同字段同操作符：filters 合并（去重保序）
+                merged_map[key].filters = list(dict.fromkeys(merged_map[key].filters + cond.filters))
+                continue
+            clone = cond.model_copy(deep=True)
+            merged_map[key] = clone
+            normalized.append(clone)
+        for cond in normalized:
+            if cond.operator not in (QueryConditionOperator.EQ.value, QueryConditionOperator.NEQ.value):
+                continue
+            if len(cond.filters) <= 1:
+                continue
+            # eq/neq 多值聚合后转 include/exclude（字段白名单不允许时保持原样）
+            target = (
+                QueryConditionOperator.INCLUDE.value
+                if cond.operator == QueryConditionOperator.EQ.value
+                else QueryConditionOperator.EXCLUDE.value
+            )
+            if target in cls._field_allowed_operators(cond.field.raw_name, tuple(cond.field.keys)):
+                cond.operator = target
+        condition.conditions = normalized
+        return condition
+
+    @staticmethod
+    def _field_allowed_operators(raw_name: str, keys: Tuple[str, ...]) -> List[str]:
+        """查询字段白名单操作符（标准字段取 COLLECT_SEARCH_CONFIG，拓展子键取默认集合）"""
+
+        if keys:
+            return list(EXTENSION_FIELD_DEFAULT_OPERATORS)
+        for cfg in COLLECT_SEARCH_CONFIG.field_configs:
+            if cfg.field.field_name == raw_name:
+                return list(cfg.allow_operators)
+        return []
 
     # ------------------------------------------------------------------
     # ① DRF 校验复用
