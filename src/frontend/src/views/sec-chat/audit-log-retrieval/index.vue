@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
+    software distributed under the License is distributed on
+    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+    either express or implied. See the License for the
+    specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
@@ -23,16 +23,18 @@
       @close-select-system="handleCloseSelectSystem"
       @confirm-system="handleConfirmSystem"
       @reselect-system="reselectSystem"
+      @retry-message="retryMessage"
       @send="handleConversationSend" />
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { computed, watch } from 'vue';
+  import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';
   import type { SelectedSystem } from '../types';
+  import { preserveSecChatQuery } from '../utils/last-route';
   import ChatLogPanel from './components/chat-log-panel.vue';
 
   const route = useRoute();
@@ -46,14 +48,26 @@
     closeSelectSystem,
     reselectSystem,
     sendLogQuery,
+    retryMessage,
   } = useSecChatStore();
+
+  /** keep-alive 失活后 route 已是其他页，禁止再 replace 抢导航（否则点工具广场会先被拉回会话首页） */
+  const isPageActive = ref(true);
 
   const panelConversation = computed(() => activeConversation.value);
 
+  const withQuery = (to: { name: string; params?: Record<string, string> }) => ({
+    ...to,
+    query: preserveSecChatQuery(route.query as Record<string, unknown>),
+  });
+
   const syncConversationFromRoute = async () => {
+    // 仅在本页激活且当前路由仍是会话详情时同步；切到工具广场等页面时直接忽略
+    if (!isPageActive.value || route.name !== 'secChatAuditLog') return;
+
     const conversationId = route.params.conversationId as string | undefined;
     if (!conversationId) {
-      router.replace({ name: 'secChatHome' });
+      router.replace(withQuery({ name: 'secChatHome' }));
       return;
     }
 
@@ -62,24 +76,35 @@
         await setActiveConversation(conversationId);
         return;
       }
-      router.replace({ name: 'secChatHome' });
+      router.replace(withQuery({ name: 'secChatHome' }));
       return;
     }
 
     try {
       await setActiveConversation(conversationId);
+      if (!isPageActive.value || route.name !== 'secChatAuditLog') return;
       if (!conversations.value.find(c => c.id === conversationId)) {
-        router.replace({ name: 'secChatHome' });
+        router.replace(withQuery({ name: 'secChatHome' }));
       }
     } catch {
-      router.replace({ name: 'secChatHome' });
+      if (!isPageActive.value || route.name !== 'secChatAuditLog') return;
+      router.replace(withQuery({ name: 'secChatHome' }));
     }
   };
 
   watch(() => route.params.conversationId, syncConversationFromRoute, { immediate: true });
 
+  onActivated(() => {
+    isPageActive.value = true;
+    void syncConversationFromRoute();
+  });
+
+  onDeactivated(() => {
+    isPageActive.value = false;
+  });
+
   const handleConversationSend = (content: string) => {
-    sendLogQuery(content);
+    void sendLogQuery(content);
   };
 
   const handleConfirmSystem = async (
@@ -91,10 +116,10 @@
     try {
       const result = await confirmSystem(messageId, systemIds, systems);
       if (wasDraft && result?.id) {
-        await router.replace({
+        await router.replace(withQuery({
           name: 'secChatAuditLog',
           params: { conversationId: result.id },
-        });
+        }));
       }
     } catch {
       // 创建失败留在选系统页，提示由全局 request 中间件处理
@@ -105,7 +130,7 @@
     const wasDraft = Boolean(activeConversation.value?.isDraft);
     closeSelectSystem(messageId);
     if (wasDraft) {
-      router.push({ name: 'secChatHome' });
+      router.push(withQuery({ name: 'secChatHome' }));
     }
   };
 

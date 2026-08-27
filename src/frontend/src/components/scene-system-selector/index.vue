@@ -335,15 +335,19 @@
 
   onActivated(() => {
     isPageActive.value = true;
-    // 失活期间其他页可能已改 scene（写入 URL / localStorage），激活后强制对齐
+    // 失活期间其他页可能已改 scene；仅在 URL/选中不一致时对齐，避免无意义 replace 打断 keep-alive 导航
     nextTick(() => {
-      if (sceneList.value.length > 0 || systemList.value.length > 0) {
-        trySelectFromRoute({ forceAlign: true });
-      }
+      if (sceneList.value.length === 0 && systemList.value.length === 0) return;
+      const liveId = String((getLiveRouteQuery().scene_id || getLiveRouteQuery().scope_id || ''));
+      if (liveId && selectedItem.value?.id === liveId) return;
+      trySelectFromRoute({ forceAlign: true });
     });
   });
   onDeactivated(() => {
     isPageActive.value = false;
+    // keep-alive 失活时关掉 teleport 到 body 的 popover，避免遮罩残留挡住其他页点击
+    isPopoverShow.value = false;
+    popoverRef.value?.hide?.();
   });
 
   /** 根据角色确定可用列表范围 */
@@ -620,9 +624,29 @@
 
   // 同步场景参数到地址栏（以 replaceState 为准，再让 vue-router 对齐地址栏，避免 route.query 旧值覆盖）
   const syncSceneIdToRoute = (item: SelectorItem | null) => {
+    // keep-alive 失活实例绝不能写路由；否则切回 AI 助手后补 query 会触发 parentNode 空引用并打断导航
+    if (!isPageActive.value) return;
     const nextQuery = buildSceneQuery(item);
-    syncSceneContextToUrl(nextQuery);
-    router.replace({ query: getQueryFromLocation() }).catch(() => {});
+    if (!Object.keys(nextQuery).length) return;
+
+    const locationQuery = getQueryFromLocation();
+    const routeQuery = route.query as Record<string, unknown>;
+    const sceneKeys = ['scene_id', 'scope_id', 'scope_type'] as const;
+    const locationAligned = sceneKeys.every(key => (
+      !nextQuery[key] || locationQuery[key] === nextQuery[key]
+    ));
+    const routeAligned = sceneKeys.every(key => (
+      !nextQuery[key] || String(routeQuery[key] ?? '') === nextQuery[key]
+    ));
+    // 已对齐则跳过，避免无意义 replace/popstate 在 keep-alive 下打爆 Vue 更新
+    if (locationAligned && routeAligned) return;
+
+    if (!locationAligned) {
+      syncSceneContextToUrl(nextQuery);
+    }
+    if (!routeAligned || !locationAligned) {
+      router.replace({ query: getQueryFromLocation() }).catch(() => {});
+    }
   };
 
   // 弹出层显示

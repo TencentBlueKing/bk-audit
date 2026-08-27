@@ -88,6 +88,7 @@
   import * as echarts from 'echarts';
   import {
     nextTick,
+    onDeactivated,
     onBeforeUnmount,
     ref,
     watch,
@@ -132,6 +133,11 @@
   const handleUpdateShow = (val: boolean) => {
     emit('update:isShow', val);
   };
+
+  // keep-alive 场景下失活时，关闭侧滑避免 teleport/遮罩残留影响其他页点击
+  onDeactivated(() => {
+    emit('update:isShow', false);
+  });
 
   const resizeCharts = () => {
     trendChart?.resize();

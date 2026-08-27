@@ -76,149 +76,194 @@
         </div>
       </div>
 
-      <!-- 结果摘要 -->
-      <div class="summary-section">
-        <div class="summary-main">
-          <h3 class="summary-title">
-            {{ result.title }}
-          </h3>
-          <p class="summary-desc">
-            共命中
-            <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
-            条日志，数据量较大，已展示前
-            <span class="summary-num">{{ result.previewCount }}</span>
-            条预览
-          </p>
-        </div>
-        <bk-dropdown
-          class="export-dropdown"
-          placement="bottom-start"
-          trigger="click">
-          <bk-button class="export-btn">
-            <audit-icon
-              class="export-icon"
-              type="download" />
-            导出
-          </bk-button>
-          <template #content>
-            <bk-dropdown-menu>
-              <bk-dropdown-item @click="handleExport('preview')">
-                导出前 {{ result.previewCount }} 条数据
-              </bk-dropdown-item>
-              <bk-dropdown-item @click="handleExport('all')">
-                导出全量数据
-              </bk-dropdown-item>
-            </bk-dropdown-menu>
-          </template>
-        </bk-dropdown>
-      </div>
-
-      <!-- 数据预览表 -->
-      <div class="table-section">
-        <div class="table-scroll">
-          <table class="result-table">
-            <thead>
-              <tr>
-                <th>操作起始时间</th>
-                <th>操作人</th>
-                <th>操作人账号类型</th>
-                <th>来源系统</th>
-                <th>操作结果</th>
-                <th>操作途径</th>
-                <th>来源IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(row, index) in pageRows"
-                :key="`${row.startTime}-${index}`">
-                <td>{{ row.startTime }}</td>
-                <td>{{ row.operator }}</td>
-                <td>{{ row.accountType }}</td>
-                <td>{{ row.system }}</td>
-                <td>{{ row.result }}</td>
-                <td>{{ row.method }}</td>
-                <td>{{ row.sourceIp }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="table-pagination">
-          <bk-pagination
-            v-model="currentPage"
-            align="right"
-            :count="result.rows.length"
-            :layout="['total', 'limit', 'list']"
-            :limit="pageSize"
-            :limit-list="[10, 20, 50]"
-            location="right"
-            size="small"
-            @change="handlePageChange"
-            @limit-change="handleLimitChange" />
-        </div>
-      </div>
-
-      <!-- 后续操作 -->
-      <div class="action-section">
-        <bk-button
-          class="analyze-btn"
-          outline
-          @click="analyzeDialogShow = true">
-          <img
-            alt=""
-            class="ai-agent-ai"
-            height="14"
-            :src="aiSvg"
-            width="24">
-          智能分析
-        </bk-button>
-        <bk-button
-          class="statistics-btn"
-          outline
-          @click="handleStatistics">
-          <audit-icon
-            class="action-icon"
-            type="shujutongji" />
-          数据统计
-        </bk-button>
-      </div>
-
-      <!-- 报告生成状态 -->
+      <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
       <div
-        v-if="reportItems.length"
-        class="report-status-section"
-        :class="{ 'is-done': hasDoneReport }">
-        <div
-          v-for="item in reportItems"
-          :key="item.id"
-          class="report-status-row">
-          <template v-if="item.status === 'loading'">
-            <audit-icon
-              class="status-icon is-loading"
-              type="loading" />
-            <span class="status-text">{{ item.title }}生成中...</span>
-          </template>
-          <template v-else>
-            <audit-icon
-              class="status-icon is-success"
-              type="success" />
-            <span class="status-text">{{ item.title }}已生成</span>
-            <span class="status-time">{{ item.createdAt }}</span>
-            <button
-              class="view-report-btn"
-              type="button"
-              @click="openReport(item)">
-              <audit-icon
-                class="view-icon"
-                type="help-document-fill" />
-              查看报告
-            </button>
-          </template>
+        v-if="isEmpty"
+        class="status-panel is-empty">
+        <img
+          alt=""
+          class="empty-icon"
+          :src="emptySearchIcon">
+        <div class="status-title">
+          检索结果为空
+        </div>
+        <div class="status-desc">
+          可以尝试修改或减少检索条件
         </div>
       </div>
 
-      <!-- 反馈操作：位于对话框内部底部 -->
-      <div class="feedback-row">
+      <template v-else>
+        <!-- 结果摘要 -->
+        <div class="summary-section">
+          <div class="summary-main">
+            <h3 class="summary-title">
+              {{ result.title }}
+            </h3>
+            <p class="summary-desc">
+              <template v-if="result.showPreviewHint">
+                共命中
+                <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
+                条日志，数据量较大，已展示前
+                <span class="summary-num">{{ result.previewCount }}</span>
+                条预览
+              </template>
+              <template v-else>
+                共命中
+                <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
+                条日志
+              </template>
+            </p>
+          </div>
+          <bk-dropdown
+            class="export-dropdown"
+            :disabled="!canExport || exporting"
+            placement="bottom-start"
+            trigger="click">
+            <bk-button
+              class="export-btn"
+              :disabled="!canExport"
+              :loading="exporting">
+              <audit-icon
+                class="export-icon"
+                type="download" />
+              {{ exporting ? '导出中…' : '导出' }}
+            </bk-button>
+            <template #content>
+              <bk-dropdown-menu>
+                <bk-dropdown-item
+                  :disabled="exporting"
+                  @click="handleExport('preview')">
+                  导出前 {{ result.previewCount }} 条数据
+                </bk-dropdown-item>
+                <bk-dropdown-item
+                  :disabled="exporting"
+                  @click="handleExport('all')">
+                  导出全量数据
+                </bk-dropdown-item>
+              </bk-dropdown-menu>
+            </template>
+          </bk-dropdown>
+        </div>
+
+        <!-- 数据预览表 -->
+        <div class="table-section">
+          <div class="table-scroll">
+            <table
+              class="result-table"
+              :style="{ minWidth: tableMinWidth }">
+              <thead>
+                <tr>
+                  <th
+                    v-for="col in result.columns"
+                    :key="col.rawName"
+                    :style="getColumnStyle(col)">
+                    <show-tooltips-text
+                      class="cell-tip"
+                      :data="col.displayName"
+                      :max-width="360" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(row, index) in pageRows"
+                  :key="`row-${index}`">
+                  <td
+                    v-for="col in result.columns"
+                    :key="`${col.rawName}-${index}`"
+                    :style="getColumnStyle(col)">
+                    <show-tooltips-text
+                      class="cell-tip"
+                      :data="formatCell(row[col.rawName])"
+                      :max-width="480" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <bk-pagination
+              v-model="currentPage"
+              align="right"
+              :count="result.rows.length"
+              :layout="['total', 'limit', 'list']"
+              :limit="pageSize"
+              :limit-list="[10, 20, 50]"
+              location="right"
+              size="small"
+              @change="handlePageChange"
+              @limit-change="handleLimitChange" />
+          </div>
+        </div>
+
+        <!-- 后续操作：本期先禁用智能分析 / 数据统计 -->
+        <div class="action-section">
+          <bk-button
+            class="analyze-btn"
+            disabled
+            outline
+            title="暂未开放"
+            @click="analyzeDialogShow = true">
+            <img
+              alt=""
+              class="ai-agent-ai"
+              height="14"
+              :src="aiSvg"
+              width="24">
+            智能分析
+          </bk-button>
+          <bk-button
+            class="statistics-btn"
+            disabled
+            outline
+            title="暂未开放"
+            @click="handleStatistics">
+            <audit-icon
+              class="action-icon"
+              type="shujutongji" />
+            数据统计
+          </bk-button>
+        </div>
+
+        <!-- 报告生成状态 -->
+        <div
+          v-if="reportItems.length"
+          class="report-status-section"
+          :class="{ 'is-done': hasDoneReport }">
+          <div
+            v-for="item in reportItems"
+            :key="item.id"
+            class="report-status-row">
+            <template v-if="item.status === 'loading'">
+              <audit-icon
+                class="status-icon is-loading"
+                type="loading" />
+              <span class="status-text">{{ item.title }}生成中...</span>
+            </template>
+            <template v-else>
+              <audit-icon
+                class="status-icon is-success"
+                type="success" />
+              <span class="status-text">{{ item.title }}已生成</span>
+              <span class="status-time">{{ item.createdAt }}</span>
+              <button
+                class="view-report-btn"
+                type="button"
+                @click="openReport(item)">
+                <audit-icon
+                  class="view-icon"
+                  type="help-document-fill" />
+                查看报告
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- 反馈操作：本期先不做，后续再开放 -->
+      <div
+        v-if="showFeedbackActions"
+        class="feedback-row">
         <button
           class="feedback-btn"
           title="复制"
@@ -277,16 +322,19 @@
     </div>
 
     <log-analyze-dialog
+      v-if="analyzeDialogShow"
       v-model="analyzeDialogShow"
       :conditions="result.conditions"
       :total-hit="result.totalHit"
       @select="handleAnalyzeSelect" />
 
     <log-statistics-dialog
+      v-if="statisticsDialogShow"
       v-model="statisticsDialogShow"
       @confirm="handleStatisticsConfirm" />
 
     <log-report-drawer
+      v-if="reportDrawerShow"
       v-model:is-show="reportDrawerShow"
       :conditions="result.conditions"
       :report="activeReport"
@@ -294,6 +342,7 @@
       :total-hit="result.totalHit" />
 
     <log-statistics-drawer
+      v-if="statisticsDrawerShow"
       v-model:is-show="statisticsDrawerShow"
       :created-at="statisticsCreatedAt"
       :fields="statisticsFields" />
@@ -301,26 +350,32 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onBeforeUnmount, ref, watch } from 'vue';
+  import { computed, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 
   import useMessage from '@hooks/use-message';
 
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
   import aiSvg from '@images/ai.svg';
+  import emptySearchIcon from '@images/empty-search.svg';
 
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
   import LogStatisticsDialog from './log-statistics-dialog.vue';
   import LogStatisticsDrawer from './log-statistics-drawer.vue';
   import type { RetrievalResultPayload } from '../../types';
-
-  interface ReportStatusItem extends LogReportInfo {
-    status: 'loading' | 'done';
-  }
+  import {
+    exportLogSearchFull,
+    exportLogSearchPreview,
+  } from '../utils/export-log-search';
 
   const props = withDefaults(defineProps<{
     result: RetrievalResultPayload;
+    /** LOG_SEARCH 成功消息 uid，导出接口必填 */
+    messageUid?: string;
     embedded?: boolean;
   }>(), {
+    messageUid: '',
     embedded: false,
   });
 
@@ -331,7 +386,42 @@
     regenerate: [];
   }>();
 
-  const { messageSuccess } = useMessage();
+  /** 本期先隐藏底部反馈操作行 */
+  const showFeedbackActions = false;
+
+  interface ReportStatusItem extends LogReportInfo {
+    status: 'loading' | 'done';
+  }
+
+  /** 多列时保证列宽可读，超出横向滚动 */
+  const COLUMN_MIN_WIDTH = 140;
+  const TIME_COLUMN_MIN_WIDTH = 220;
+
+  const isTimeColumn = (col: { rawName: string; displayName: string }) => {
+    const text = `${col.rawName} ${col.displayName}`;
+    return /时间|time|date|datetime/i.test(text);
+  };
+
+  const getColumnWidth = (col: { rawName: string; displayName: string }) => (
+    isTimeColumn(col) ? TIME_COLUMN_MIN_WIDTH : COLUMN_MIN_WIDTH
+  );
+
+  const getColumnStyle = (col: { rawName: string; displayName: string }) => {
+    const width = getColumnWidth(col);
+    return {
+      width: `${width}px`,
+      minWidth: `${width}px`,
+      maxWidth: isTimeColumn(col) ? '260px' : '280px',
+    };
+  };
+
+  const { messageSuccess, messageError, messageWarn } = useMessage();
+  const exporting = ref(false);
+  const isEmpty = computed(() => props.result.totalHit <= 0);
+  const canExport = computed(() => (
+    Boolean(props.messageUid)
+    && props.result.totalHit > 0
+  ));
 
   const thumbUpPath = 'M5.2 14.5H3.4c-.5 0-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9h1.8v7.6z'
     + 'M13.4 6.9H9.7l.5-2.4c.1-.6-.1-1.2-.5-1.6L9 2.2c-.2-.2-.5-.2-.7 0l-.2.2'
@@ -362,6 +452,11 @@
     return props.result.rows.slice(start, start + pageSize.value);
   });
 
+  const tableMinWidth = computed(() => {
+    const total = props.result.columns.reduce((sum, col) => sum + getColumnWidth(col), 0);
+    return `${Math.max(total, 760)}px`;
+  });
+
   const hasDoneReport = computed(() => reportItems.value.some(item => item.status === 'done'));
 
   const systemNames = computed(() => {
@@ -387,7 +482,27 @@
     if (generateTimer) clearTimeout(generateTimer);
   });
 
+  // keep-alive 失活时卸载弹层，避免消息多时大量 teleport/sideslider 残留导致切回白屏
+  onDeactivated(() => {
+    analyzeDialogShow.value = false;
+    statisticsDialogShow.value = false;
+    reportDrawerShow.value = false;
+    statisticsDrawerShow.value = false;
+  });
+
   const formatNumber = (num: number) => num.toLocaleString('en-US');
+
+  const formatCell = (value: any) => {
+    if (value === undefined || value === null || value === '') return '—';
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
 
   const formatNow = () => {
     const d = new Date();
@@ -404,11 +519,28 @@
     currentPage.value = 1;
   };
 
-  const handleExport = (mode: 'preview' | 'all') => {
+  const handleExport = async (mode: 'preview' | 'all') => {
+    if (!canExport.value || exporting.value) return;
+    if (!props.messageUid) {
+      messageWarn('缺少消息标识，无法导出');
+      return;
+    }
+
+    exporting.value = true;
     emit('export', mode);
-    messageSuccess(mode === 'preview'
-      ? `已选择导出前 ${props.result.previewCount} 条数据`
-      : '已选择导出全量数据');
+    try {
+      if (mode === 'preview') {
+        await exportLogSearchPreview(props.messageUid);
+        messageSuccess(`已导出前 ${props.result.previewCount} 条数据`);
+      } else {
+        await exportLogSearchFull(props.messageUid);
+        messageSuccess('全量数据导出完成');
+      }
+    } catch (error: any) {
+      messageError(error?.message || '导出失败，请稍后重试');
+    } finally {
+      exporting.value = false;
+    }
   };
 
   const startGenerate = (
@@ -496,9 +628,11 @@
 <style lang="postcss" scoped>
   .retrieval-result-wrap {
     display: flex;
-    width: 900px;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     flex-direction: column;
+    box-sizing: border-box;
 
     &.is-embedded {
       width: 100%;
@@ -605,6 +739,40 @@
     color: #c4c6cc;
   }
 
+  .status-panel {
+    display: flex;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    min-height: 200px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .status-panel.is-empty {
+    .empty-icon {
+      display: block;
+      width: 98px;
+      height: 88px;
+    }
+
+    .status-title {
+      margin-top: 8px;
+      font-size: 14px;
+      line-height: 22px;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #4d4f56;
+      text-align: center;
+    }
+  }
+
   .summary-section {
     display: flex;
     margin-bottom: 16px;
@@ -684,12 +852,14 @@
 
   .result-table {
     width: 100%;
-    min-width: 760px;
     border-collapse: collapse;
     table-layout: fixed;
 
     th,
     td {
+      width: 140px;
+      min-width: 140px;
+      max-width: 280px;
       height: 42px;
       padding: 0 12px;
       overflow: hidden;
@@ -697,10 +867,20 @@
       line-height: 42px;
       color: #63656e;
       text-align: left;
-      text-overflow: ellipsis;
-      white-space: nowrap;
       border: none;
       box-sizing: border-box;
+    }
+
+    .cell-tip {
+      width: 100%;
+      max-width: 100%;
+      line-height: 20px;
+      vertical-align: middle;
+    }
+
+    .empty-cell {
+      color: #979ba5;
+      text-align: center;
     }
 
     th {
@@ -743,6 +923,18 @@
       border-color: #9b5cff;
     }
 
+    &.is-disabled,
+    &[disabled] {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      border-color: #dcdee5;
+      opacity: 1;
+
+      .ai-agent-ai {
+        opacity: 40%;
+      }
+    }
+
     .ai-agent-ai {
       margin-right: 4px;
     }
@@ -757,9 +949,17 @@
       font-size: 16px;
     }
 
-    &:hover {
+    &:not(.is-disabled, [disabled]):hover {
       color: #3a84ff;
       border-color: #3a84ff;
+    }
+
+    &.is-disabled,
+    &[disabled] {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      border-color: #dcdee5;
+      opacity: 1;
     }
   }
 
