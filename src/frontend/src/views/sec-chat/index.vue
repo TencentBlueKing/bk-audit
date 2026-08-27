@@ -17,6 +17,7 @@
 <template>
   <div class="sec-chat-page">
     <chat-sidebar
+      ref="sidebarRef"
       :active-id="activeConversationId"
       :collapsed="sidebarCollapsed"
       :conversations="conversations"
@@ -35,6 +36,10 @@
       @update-groups="handleUpdateGroups" />
 
     <div class="sec-chat-main">
+      <!-- 弹层专用挂载点：禁止 teleport 到含 router-view 的容器，否则 keep-alive 失活时会误卸主内容导致白屏 -->
+      <div
+        id="sec-chat-overlay-root"
+        class="sec-chat-overlay-root" />
       <router-view v-slot="{ Component }">
         <component
           :is="Component"
@@ -45,14 +50,21 @@
 </template>
 
 <script lang="ts" setup>
-  import { onMounted, onUnmounted } from 'vue';
-  import { useRouter } from 'vue-router';
+  import { onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
+  import { useRoute, useRouter } from 'vue-router';
 
   import type { Group } from './types';
   import { useSecChatStore } from './composables/use-sec-chat-store';
+  import { preserveSecChatQuery, saveSecChatLastRoute } from './utils/last-route';
   import ChatSidebar from './components/chat-sidebar.vue';
 
+  const route = useRoute();
   const router = useRouter();
+  const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
+  const withQuery = (to: { name: string; params?: Record<string, string> }) => ({
+    ...to,
+    query: preserveSecChatQuery(route.query as Record<string, unknown>),
+  });
   const {
     sidebarCollapsed,
     activeConversationId,
@@ -73,8 +85,33 @@
     stopAllMessagePolls,
   } = useSecChatStore();
 
+  /** keep-alive 切走时关掉 teleport 到 body 的弹层，避免遮罩残留导致整页无法点击 */
+  const closeKeepAliveOverlays = () => {
+    sidebarRef.value?.closeKeepAliveOverlays?.();
+  };
+
+  watch(
+    () => ({
+      name: route.name,
+      params: route.params,
+      query: route.query,
+    }),
+    (current) => {
+      saveSecChatLastRoute(current);
+    },
+    { deep: true, immediate: true },
+  );
+
   onMounted(() => {
     void initSidebar();
+  });
+
+  onActivated(() => {
+    closeKeepAliveOverlays();
+  });
+
+  onDeactivated(() => {
+    closeKeepAliveOverlays();
   });
 
   onUnmounted(() => {
@@ -83,27 +120,27 @@
 
   const handleNewChat = () => {
     setActiveConversation(null);
-    router.push({ name: 'secChatHome' });
+    router.push(withQuery({ name: 'secChatHome' }));
   };
 
   /** 仅改路由；消息拉取由子页 watch conversationId 单源触发，避免侧栏+路由叠打 */
   const handleSelectConversation = (id: string) => {
     const conv = conversations.value.find(c => c.id === id);
     if (conv?.sceneType === 'log' || id.startsWith('draft-')) {
-      router.push({
+      router.push(withQuery({
         name: 'secChatAuditLog',
         params: { conversationId: id },
-      });
+      }));
       return;
     }
-    router.push({ name: 'secChatHome' });
+    router.push(withQuery({ name: 'secChatHome' }));
   };
 
   const handleDeleteConversation = async (id: string) => {
     const wasActive = activeConversationId.value === id;
     await deleteConversation(id);
     if (wasActive) {
-      router.push({ name: 'secChatHome' });
+      router.push(withQuery({ name: 'secChatHome' }));
     }
   };
 
@@ -137,13 +174,13 @@
   const handleDeleteGroup = async (groupName: string, keepConversations: boolean) => {
     await deleteGroup(groupName, keepConversations);
     if (!activeConversationId.value) {
-      router.push({ name: 'secChatHome' });
+      router.push(withQuery({ name: 'secChatHome' }));
     }
   };
 
   const handleClearAll = async () => {
     await clearAllConversations();
-    router.push({ name: 'secChatHome' });
+    router.push(withQuery({ name: 'secChatHome' }));
   };
 </script>
 
@@ -163,6 +200,13 @@
       background-color: #f5f7fa;
       flex: 1;
       flex-direction: column;
+
+      .sec-chat-overlay-root {
+        position: absolute;
+        inset: 0;
+        z-index: 100;
+        pointer-events: none;
+      }
 
       .sec-chat-route {
         display: flex;

@@ -15,9 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <teleport to=".sec-chat-main">
+  <teleport
+    v-if="isShow"
+    to="#sec-chat-overlay-root">
     <div
-      v-if="isShow"
       class="log-statistics-overlay"
       @click.self="handleClose">
       <div class="log-statistics-modal">
@@ -128,7 +129,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref, watch } from 'vue';
+  import { computed, onDeactivated, ref, watch } from 'vue';
 
   const props = withDefaults(defineProps<{
     modelValue?: boolean;
@@ -201,6 +202,15 @@
     isShow.value = false;
   };
 
+  // keep-alive 场景下失活时，关闭 teleport 弹层避免遮罩/DOM 残留
+  onDeactivated(() => {
+    isShow.value = false;
+    keyword.value = '';
+    selectedFields.value = [];
+    customExpanded.value = false;
+    customPrompt.value = '';
+  });
+
   const handleConfirm = () => {
     if (!canConfirm.value) return;
     emit('confirm', {
@@ -219,6 +229,7 @@
     display: flex;
     padding: 24px;
     overflow: auto;
+    pointer-events: auto;
     background: rgb(0 0 0 / 40%);
     box-sizing: border-box;
     align-items: center;

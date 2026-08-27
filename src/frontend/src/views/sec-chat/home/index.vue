@@ -19,12 +19,14 @@
 </template>
 
 <script lang="ts" setup>
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import ChatWelcome from '../components/chat-welcome.vue';
   import { useSecChatStore } from '../composables/use-sec-chat-store';
   import type { SelectPromptPayload } from '../types';
+  import { preserveSecChatQuery } from '../utils/last-route';
 
+  const route = useRoute();
   const router = useRouter();
   const { createLogConversation } = useSecChatStore();
 
@@ -34,6 +36,7 @@
     router.push({
       name: 'secChatAuditLog',
       params: { conversationId: conversation.id },
+      query: preserveSecChatQuery(route.query as Record<string, unknown>),
     });
   };
 </script>

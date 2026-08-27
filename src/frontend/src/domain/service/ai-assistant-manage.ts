@@ -18,6 +18,7 @@ import type {
   AiConversation,
   AiCreateConversationParams,
   AiCreateMessageParams,
+  AiExportConfig,
   AiMessageHistoryParams,
   AiSidebarMoveParams,
   AiSidebarNode,
@@ -150,6 +151,29 @@ export default {
 
   retryMessage(params: { message_uid: string }) {
     return AiAssistantManageSource.retryMessage(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * 预览导出（xlsx blob，中间件会触发下载）
+   */
+  previewExport(params: { message_uid: string }, options?: { catchError?: boolean }) {
+    return AiAssistantManageSource.previewExport(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  /**
+   * 全量异步导出
+   */
+  fullExport(
+    params: { message_uid: string; export_config?: AiExportConfig },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.fullExport(params, {
+      catchError: options?.catchError,
+    })
       .then(({ data }) => data);
   },
 };

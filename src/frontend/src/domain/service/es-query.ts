@@ -88,4 +88,31 @@ export default {
     return EsQuerySource.createQueryTask(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 导出任务详情
+   */
+  fetchQueryTask(params: { id: number | string }, options?: { catchError?: boolean }) {
+    return EsQuerySource.getQueryTask(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 导出任务列表
+   */
+  fetchQueryTaskList(params: Record<string, any> = {}, options?: { catchError?: boolean }) {
+    return EsQuerySource.listQueryTask(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 下载导出任务文件
+   */
+  downloadQueryTask(params: { id: number | string }, options?: { catchError?: boolean }) {
+    return EsQuerySource.downloadQueryTask(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
 };

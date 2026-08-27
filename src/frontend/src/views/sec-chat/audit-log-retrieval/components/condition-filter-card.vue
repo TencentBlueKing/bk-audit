@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
+    software distributed under the License is distributed on
+    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+    either express or implied. See the License for the
+    specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
@@ -20,7 +20,7 @@
       <audit-icon
         class="title-icon"
         type="search1" />
-      <span class="card-title">请添加条件进行检索</span>
+      <span class="card-title">请输入条件进行检索</span>
     </div>
 
     <div class="condition-area">
@@ -50,19 +50,20 @@
     </div>
 
     <div
-      v-if="searchState !== 'done'"
+      v-if="searchState !== 'loading'"
       class="card-actions">
       <bk-button
-        v-if="searchState !== 'loading'"
         class="search-btn"
         theme="primary"
         @click="handleSearch">
         开始检索
       </bk-button>
-      <div
-        v-else
-        aria-label="检索中"
-        class="search-btn is-loading">
+    </div>
+    <div
+      v-else
+      aria-label="检索中"
+      class="card-actions">
+      <div class="search-btn is-loading">
         <span class="loading-dot" />
         <span class="loading-dot" />
         <span class="loading-dot" />
@@ -101,12 +102,12 @@
     </div>
 
     <div
-      v-if="inlineResult && searchState === 'done'"
+      v-else-if="inlineResult && searchState === 'done'"
       class="inline-result">
       <retrieval-result-card
         embedded
-        :result="inlineResult"
-        @regenerate="handleSearch" />
+        :message-uid="resultMessageUid"
+        :result="inlineResult" />
     </div>
   </div>
 </template>
@@ -123,43 +124,52 @@
   import emptySearchIcon from '@images/empty-search.svg';
   import errorSearchIcon from '@images/error-search.svg';
 
-  import RetrievalResultCard from './retrieval-result-card.vue';
-  import type { RetrievalResultPayload, SelectedSystem } from '../../types';
-  import { buildMockRetrievalResult } from '../utils/build-mock-result';
+  import { useSecChatStore } from '../../composables/use-sec-chat-store';
+  import type { RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
   import {
-    COMMON_FIELD_KEYS,
-    createConditionFieldConfig,
+    buildAiSearchCondition,
+    createConditionFieldConfigFromSystemFields,
     createDefaultDatetime,
     createDefaultDatetimeOrigin,
-    DATETIME_SHORTCUT_LABEL_MAP,
-    EXTEND_FIELD_KEYS,
-    FIELD_LABEL_TO_KEY,
+    getPrimaryFieldNames,
+    getSecondaryFieldNames,
   } from '../config/condition-fields';
+
+  import RetrievalResultCard from './retrieval-result-card.vue';
 
   const props = withDefaults(defineProps<{
     systems?: SelectedSystem[];
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
   }>(), {
     systems: () => [],
+    standardFields: () => [],
+    extensionFields: () => [],
   });
 
   const emit = defineEmits<{
     searched: [];
   }>();
 
-  const commonFieldKeys = COMMON_FIELD_KEYS;
-  const extendFieldKeys = EXTEND_FIELD_KEYS;
+  const { sendConditionSearch } = useSecChatStore();
 
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
-  const inlineResult = ref<RetrievalResultPayload | null>(null);
   const searchState = ref<'idle' | 'loading' | 'empty' | 'failed' | 'done'>('idle');
   const searchError = ref('');
-  const searchAttempt = ref(0);
+  const inlineResult = ref<RetrievalResultPayload | null>(null);
+  const resultMessageUid = ref('');
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),
     datetime_origin: createDefaultDatetimeOrigin(),
   });
 
-  const fieldConfig = computed(() => createConditionFieldConfig(props.systems));
+  const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
+    props.standardFields,
+    props.extensionFields,
+  ));
+
+  const commonFieldKeys = computed(() => getPrimaryFieldNames(props.standardFields));
+  const extendFieldKeys = computed(() => getSecondaryFieldNames(props.extensionFields));
 
   const selectedFieldNames = computed(() => Object.keys(searchModel.value)
     .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
@@ -174,22 +184,18 @@
     return '';
   };
 
-  const resolveFieldKey = (fieldNameOrLabel: string) => (
-    FIELD_LABEL_TO_KEY[fieldNameOrLabel] || fieldNameOrLabel
-  );
+  const resolveFieldKey = (fieldNameOrLabel: string) => {
+    if (fieldConfig.value[fieldNameOrLabel]) return fieldNameOrLabel;
+    const matched = Object.entries(fieldConfig.value)
+      .find(([, config]) => config.label === fieldNameOrLabel);
+    return matched?.[0] || fieldNameOrLabel;
+  };
 
-  const sampleToValue = (config: IFieldConfig, sample?: string, fieldName?: string) => {
+  const sampleToValue = (config: IFieldConfig, sample?: string) => {
     if (!sample) {
       return getDefaultValue(config);
     }
-    if (config.type === 'user-selector') {
-      return [sample];
-    }
-    if (config.type === 'select') {
-      if (fieldName === 'system_id') {
-        const matched = props.systems.find(item => item.id === sample || item.name === sample);
-        return [matched?.id || sample];
-      }
+    if (config.type === 'user-selector' || config.type === 'select') {
       return [sample];
     }
     return sample;
@@ -253,94 +259,58 @@
       datetime: createDefaultDatetime(),
       datetime_origin: createDefaultDatetimeOrigin(),
     };
-    inlineResult.value = null;
     searchState.value = 'idle';
     searchError.value = '';
-  };
-
-  const formatConditionValue = (fieldName: string, config: IFieldConfig, value: any): string => {
-    if (config.type === 'datetimerange') {
-      const origin = searchModel.value.datetime_origin?.[0];
-      if (origin && DATETIME_SHORTCUT_LABEL_MAP[origin]) {
-        return DATETIME_SHORTCUT_LABEL_MAP[origin];
-      }
-      if (Array.isArray(value) && value.length >= 2) {
-        return `${value[0]} - ${value[1]}`;
-      }
-      return '';
-    }
-    if (Array.isArray(value)) {
-      if (fieldName === 'system_id') {
-        return value.map((item) => {
-          const matched = props.systems.find(system => system.id === item || system.name === item);
-          return matched ? `${matched.name}(${matched.id})` : String(item);
-        }).filter(Boolean)
-          .join('，');
-      }
-      return value.map(item => String(item)).filter(Boolean)
-        .join('，');
-    }
-    if (value === undefined || value === null || value === '') {
-      return '';
-    }
-    return String(value);
-  };
-
-  const hasConditionValue = (value: any) => {
-    if (Array.isArray(value)) {
-      return value.some(item => item !== undefined && item !== null && item !== '');
-    }
-    return value !== undefined && value !== null && value !== '';
-  };
-
-  const buildConditionSummary = () => {
-    const parts: string[] = [];
-    const datetimeValue = formatConditionValue('datetime', fieldConfig.value.datetime, searchModel.value.datetime);
-    if (datetimeValue) {
-      parts.push(`${fieldConfig.value.datetime.label}为${datetimeValue}`);
-    }
-
-    Object.keys(searchModel.value).forEach((fieldName) => {
-      if (fieldName === 'datetime' || fieldName === 'datetime_origin' || fieldName === 'sort') return;
-      const config = fieldConfig.value[fieldName];
-      if (!config) return;
-      const displayValue = formatConditionValue(fieldName, config, searchModel.value[fieldName]);
-      if (!displayValue && !hasConditionValue(searchModel.value[fieldName])) return;
-      parts.push(`${config.label}为${displayValue || '空'}`);
-    });
-
-    return parts.join('，');
+    inlineResult.value = null;
+    resultMessageUid.value = '';
   };
 
   const handleSearch = async () => {
-    const summary = buildConditionSummary();
-    if (!summary) return;
     if (searchState.value === 'loading') return;
 
-    // 本阶段：mock 检索过程用来展示“检索中/检索为空/检索失败”样式
-    searchAttempt.value += 1;
+    const scopeId = props.systems[0]?.id;
+    const condition = buildAiSearchCondition({
+      scopeId: scopeId || '',
+      searchModel: searchModel.value,
+      fieldConfig: fieldConfig.value,
+    });
+    if (!condition) {
+      searchState.value = 'failed';
+      searchError.value = scopeId ? '请至少选择时间范围' : '请先选择系统';
+      inlineResult.value = null;
+      resultMessageUid.value = '';
+      return;
+    }
+
     searchState.value = 'loading';
     searchError.value = '';
     inlineResult.value = null;
+    resultMessageUid.value = '';
 
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    const mod = searchAttempt.value % 3;
-    if (mod === 1) {
-      searchState.value = 'empty';
+    try {
+      const chatMessage = await sendConditionSearch(condition);
+      if (chatMessage.apiStatus === 'FAILED') {
+        searchState.value = 'failed';
+        searchError.value = chatMessage.errorMessage || '检索失败';
+        emit('searched');
+        return;
+      }
+      const { result } = chatMessage;
+      if (!result || result.totalHit === 0) {
+        searchState.value = 'empty';
+        emit('searched');
+        return;
+      }
+      // 按设计稿：结果内嵌在当前条件卡，不追加消息列表卡片
+      inlineResult.value = result;
+      resultMessageUid.value = chatMessage.id;
+      searchState.value = 'done';
       emit('searched');
-      return;
-    }
-    if (mod === 2) {
+    } catch (error: any) {
       searchState.value = 'failed';
-      searchError.value = '请检查网络是否畅通或联系管理员';
+      searchError.value = error?.message || '请检查网络是否通畅或联系管理员';
       emit('searched');
-      return;
     }
-
-    inlineResult.value = buildMockRetrievalResult(`条件筛选：${summary}`);
-    searchState.value = 'done';
-    emit('searched');
   };
 
   const addOrFocusField = async (fieldNameOrLabel: string, sample?: string) => {
@@ -353,7 +323,7 @@
       return;
     }
 
-    await handleAddField(fieldName, config, sampleToValue(config, sample, fieldName));
+    await handleAddField(fieldName, config, sampleToValue(config, sample));
   };
 
   defineExpose({
@@ -469,8 +439,9 @@
 
   .status-panel {
     display: flex;
-    margin-top: 24px;
-    min-height: 180px;
+    margin-top: 32px;
+    margin-bottom: 8px;
+    min-height: 200px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -523,9 +494,7 @@
   }
 
   .inline-result {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #dcdee5;
+    margin-top: 24px;
   }
 </style>
 <style lang="postcss">

@@ -142,7 +142,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref, watch } from 'vue';
+  import { computed, onDeactivated, ref, watch } from 'vue';
 
   import useMessage from '@hooks/use-message';
 
@@ -246,6 +246,11 @@
   const handleUpdateShow = (val: boolean) => {
     emit('update:isShow', val);
   };
+
+  // keep-alive 场景下失活时，关闭侧滑避免遮罩残留导致页面不可点击
+  onDeactivated(() => {
+    emit('update:isShow', false);
+  });
 
   const handleEdit = () => {
     editTitle.value = savedTitle.value;
