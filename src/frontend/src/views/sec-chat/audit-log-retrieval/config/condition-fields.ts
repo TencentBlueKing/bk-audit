@@ -16,9 +16,9 @@
 */
 import dayjs from 'dayjs';
 
-import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
-
 import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/types';
+
+import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
 import type { SelectedSystem, SystemFieldRow } from '../../types';
 
@@ -95,9 +95,9 @@ const fieldConfigFromRow = (field: SystemFieldRow): IFieldConfig => {
     type: isUser ? 'user-selector' : 'string',
     required: false,
     // 透传元数据，拼 condition 时使用
-    ...( {
-      __meta: field,
-      __operator: pickDefaultOperator(operators),
+    ...({
+      fieldMeta: field,
+      defaultOperator: pickDefaultOperator(operators),
     } as any),
   };
 };
@@ -155,14 +155,17 @@ export const buildAiSearchCondition = (params: {
   const { scopeId, searchModel, fieldConfig } = params;
   if (!scopeId) return null;
 
-  const datetime = searchModel.datetime;
+  const { datetime } = searchModel;
   if (!Array.isArray(datetime) || datetime.length < 2) return null;
 
   const conditions: AiConditionItem[] = [];
 
   Object.keys(searchModel).forEach((fieldKey) => {
     if (fieldKey === 'datetime' || fieldKey === 'datetime_origin' || fieldKey === 'sort') return;
-    const config = fieldConfig[fieldKey] as IFieldConfig & { __meta?: SystemFieldRow; __operator?: string };
+    const config = fieldConfig[fieldKey] as IFieldConfig & {
+      fieldMeta?: SystemFieldRow;
+      defaultOperator?: string;
+    };
     if (!config) return;
 
     const value = searchModel[fieldKey];
@@ -171,12 +174,15 @@ export const buildAiSearchCondition = (params: {
       : value !== undefined && value !== null && value !== '';
     if (!hasValue) return;
 
-    const meta = config.__meta;
+    const meta = config.fieldMeta;
     const rawName = meta?.rawName || fieldKey.split('.')[0];
-    const keys = meta?.keys?.length
-      ? meta.keys
-      : (fieldKey.includes('.') ? fieldKey.split('.').slice(1) : []);
-    const operator = config.__operator || pickDefaultOperator(meta?.allowOperators);
+    let keys: string[] = [];
+    if (meta?.keys?.length) {
+      keys = meta.keys;
+    } else if (fieldKey.includes('.')) {
+      keys = fieldKey.split('.').slice(1);
+    }
+    const operator = config.defaultOperator || pickDefaultOperator(meta?.allowOperators);
     const filters = Array.isArray(value) ? value.filter(item => item !== undefined && item !== null && item !== '') : [value];
 
     conditions.push({
