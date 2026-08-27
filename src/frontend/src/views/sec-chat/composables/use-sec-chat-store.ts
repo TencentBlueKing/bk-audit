@@ -385,9 +385,7 @@ export function useSecChatStore() {
         .map(node => mapConversationNode(node));
 
       const prevGroups = groups.value;
-      const loadedIdSet = new Set(
-        prevGroups.filter(g => g.childrenLoaded).map(g => g.id),
-      );
+      const loadedIdSet = new Set(prevGroups.filter(g => g.childrenLoaded).map(g => g.id));
 
       const nextGroups: Group[] = groupNodes.map(groupNode => ({
         id: groupNode.node_uid,
