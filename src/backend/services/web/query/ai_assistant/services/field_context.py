@@ -43,6 +43,7 @@ from services.web.query.ai_assistant.constants import (
     AI_ASSISTANT_FIELD_META_CONFIG_KEY,
     AI_ASSISTANT_FIELD_SAMPLE_ENABLED,
     AI_ASSISTANT_FIELD_SAMPLE_ROWS,
+    EXTENSION_FIELD_DEFAULT_OPERATORS,
     EXTENSION_NL_NAME_PREFIX,
     FIELD_SAMPLE_LOOKBACK_DAYS,
 )
@@ -196,14 +197,7 @@ class FieldContextService:
             nl_name=override.get("nl_name") or f"{EXTENSION_NL_NAME_PREFIX}{display_name}",
             description=override.get("description", ""),
             # 一期拓展字段恒按 string 处理（协议待冻结 #6），给出通用操作符
-            allow_operators=override.get("allow_operators")
-            or [
-                QueryConditionOperator.EQ.value,
-                QueryConditionOperator.NEQ.value,
-                QueryConditionOperator.INCLUDE.value,
-                QueryConditionOperator.EXCLUDE.value,
-                QueryConditionOperator.LIKE.value,
-            ],
+            allow_operators=override.get("allow_operators") or list(EXTENSION_FIELD_DEFAULT_OPERATORS),
             sample_value=override.get("sample_value"),
             system_id=system_id,
         )

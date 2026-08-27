@@ -53,6 +53,10 @@ AI_ASSISTANT_FIELD_SAMPLE_ROWS = 50
 # 拓展字段 nl_name 前缀（D-G：拓展字段 nl_name 带 extend. 前缀，与注入 AI 的字段上下文同源）
 EXTENSION_NL_NAME_PREFIX = "extend."
 
+# 拓展字段默认允许的操作符（一期拓展字段恒 string；采样发现与用户显式指定的子键共用，
+# field_context 缺省值与 nl2json 校验同源引用，防止两处漂移）
+EXTENSION_FIELD_DEFAULT_OPERATORS = ("eq", "neq", "include", "exclude", "like")
+
 # ---------------------------------------------------------------------------
 # F3 检索快照
 # ---------------------------------------------------------------------------
