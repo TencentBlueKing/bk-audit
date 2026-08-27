@@ -29,7 +29,7 @@ export type SecChatLastRoute = {
 const normalizeQuery = (query: Record<string, unknown> = {}) => {
   const next: Record<string, string> = {};
   Object.entries(query).forEach(([key, value]) => {
-    if (value == null || value === '') return;
+    if (value === undefined || value === null || value === '') return;
     next[key] = Array.isArray(value) ? String(value[0]) : String(value);
   });
   return next;
@@ -66,7 +66,7 @@ export const saveSecChatLastRoute = (route: {
   if (route.name !== 'secChatHome' && route.name !== 'secChatAuditLog') return;
   const params: Record<string, string> = {};
   Object.entries(route.params || {}).forEach(([key, value]) => {
-    if (value == null) return;
+    if (value === undefined || value === null) return;
     params[key] = Array.isArray(value) ? String(value[0]) : String(value);
   });
   try {
