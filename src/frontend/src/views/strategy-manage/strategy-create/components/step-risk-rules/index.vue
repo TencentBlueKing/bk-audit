@@ -247,6 +247,38 @@
                   </div>
                 </div>
               </div>
+
+              <!-- 审计策略：处理人 / 关注人写入 rules；全局策略在分派规则中维护 -->
+              <div
+                v-if="showRuleNoticeGroups"
+                class="rule-section rule-section-two-col">
+                <div class="rule-section-col">
+                  <div class="rule-section-label is-required">
+                    {{ t('风险单处理人') }}
+                  </div>
+                  <div class="rule-section-body">
+                    <notice-group-select
+                      v-model="rule.processor"
+                      :check-result-map="checkResultMap"
+                      :group-list="groupList"
+                      :loading="isGroupLoading"
+                      @refresh="refreshGroupList" />
+                  </div>
+                </div>
+                <div class="rule-section-col">
+                  <div class="rule-section-label">
+                    {{ t('关注人') }}
+                  </div>
+                  <div class="rule-section-body">
+                    <notice-group-select
+                      v-model="rule.follower"
+                      :check-result-map="checkResultMap"
+                      :group-list="groupList"
+                      :loading="isGroupLoading"
+                      @refresh="refreshGroupList" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -297,8 +329,15 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
+  import NoticeManageService from '@service/notice-group';
+
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
+
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   import collapseIcon from '@images/collapse.svg';
   import expandIcon from '@images/expand.svg';
@@ -306,6 +345,14 @@
   import Customize from '../step1/components/customize/index.vue';
   import ReferenceModel from '../step1/components/reference-model/index.vue';
   import VariableTable from '../step2/components/variable-table.vue';
+  import NoticeGroupSelect from '../step3/components/notice-group-select.vue';
+
+  import {
+    getStrategyRouteNames,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../utils/strategy-routes';
 
   interface RuleItem {
     id: number;
@@ -344,10 +391,42 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { t } = useI18n();
+  const { messageError } = useMessage();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const showRuleNoticeGroups = !isPlatformStrategyRoute(route.name);
+
+  const {
+    data: checkResultMap,
+  } = useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'list_notice_group_v2,create_notice_group_v2',
+      resources: getSceneSystemParams().scope_id,
+    },
+    defaultValue: {},
+    manual: true,
+  });
+
+  const {
+    loading: isGroupLoading,
+    data: groupList,
+    run: fetchGroupList,
+  } = useRequest(NoticeManageService.fetchGroupSelectList, {
+    defaultValue: [],
+    defaultParams: {
+      page_size: 1000,
+      page: 1,
+    },
+    manual: true,
+  });
+
+  const refreshGroupList = () => {
+    groupList.value = [];
+    fetchGroupList();
+  };
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -756,6 +835,14 @@
     if (ruleItems.value.length === 0) {
       return;
     }
+    if (showRuleNoticeGroups) {
+      for (const rule of ruleItems.value) {
+        if (!rule.processor?.length) {
+          messageError(t('{label}：风险单处理人不能为空', { label: rule.name }));
+          return;
+        }
+      }
+    }
     // 验证所有规则的命中条件
     try {
       await Promise.all(ruleItems.value.map((_, index) => {
@@ -773,7 +860,7 @@
   };
 
   const handleCancel = () => {
-    router.push({ name: 'strategyList' });
+    router.push({ name: strategyRoutes.list });
   };
 
   const handleDocumentClick = () => {

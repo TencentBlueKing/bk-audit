@@ -64,8 +64,12 @@
                   :field-options="fieldOptions" />
               </div>
               <assign-rule-fields
+                :check-result-map="checkResultMap"
+                :group-list="groupList"
+                :group-loading="isGroupLoading"
                 :model-value="rule"
                 :scene-options="sceneOptions"
+                @refresh-group-list="refreshGroupList"
                 @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
             </div>
           </div>
@@ -87,7 +91,11 @@
               class="assign-rule-item-content">
               <assign-rule-fields
                 v-model="defaultRule"
-                :scene-options="sceneOptions" />
+                :check-result-map="checkResultMap"
+                :group-list="groupList"
+                :group-loading="isGroupLoading"
+                :scene-options="sceneOptions"
+                @refresh-group-list="refreshGroupList" />
             </div>
           </div>
         </div>
@@ -117,6 +125,8 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
+  import NoticeManageService from '@service/notice-group';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
 
@@ -127,6 +137,12 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../utils/strategy-routes';
 
   interface ConditionItem {
     field: string;
@@ -140,10 +156,10 @@
     collapsed: boolean;
     conditions: ConditionItem[];
     scene_ids: Array<string | number>;
-    processors: string[];
-    notice_users: string[];
+    processors: Array<string | number>;
+    notice_users: Array<string | number>;
     assign_mode: 'confirm' | 'direct';
-    confirmers: string[];
+    confirmers: Array<string | number>;
   }
 
   interface IFormData {
@@ -168,11 +184,12 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { t } = useI18n();
   const { messageError } = useMessage();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   let ruleIdSeq = 1;
 
@@ -202,10 +219,10 @@
   const createDefaultRule = () => ({
     collapsed: false,
     scene_ids: [] as Array<string | number>,
-    processors: [] as string[],
-    notice_users: [] as string[],
+    processors: [] as Array<string | number>,
+    notice_users: [] as Array<string | number>,
     assign_mode: 'confirm' as 'confirm' | 'direct',
-    confirmers: [] as string[],
+    confirmers: [] as Array<string | number>,
   });
 
   const normalizeSceneIds = (item: Record<string, any> = {}): Array<string | number> => {
@@ -241,6 +258,35 @@
     defaultParams: { status: 'enabled' },
     manual: true,
   });
+
+  const {
+    data: checkResultMap,
+  } = useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'list_notice_group_v2,create_notice_group_v2',
+      resources: getSceneSystemParams().scope_id,
+    },
+    defaultValue: {},
+    manual: true,
+  });
+
+  const {
+    loading: isGroupLoading,
+    data: groupList,
+    run: fetchGroupList,
+  } = useRequest(NoticeManageService.fetchGroupSelectList, {
+    defaultValue: [],
+    defaultParams: {
+      page_size: 1000,
+      page: 1,
+    },
+    manual: true,
+  });
+
+  const refreshGroupList = () => {
+    groupList.value = [];
+    fetchGroupList();
+  };
 
   const sceneOptions = computed(() => (sceneList.value || []).map((item: any) => ({
     id: item.scene_id,
@@ -310,9 +356,9 @@
   const validateRules = () => {
     const validateOne = (rule: {
       scene_ids: Array<string | number>;
-      processors: string[];
+      processors: Array<string | number>;
       assign_mode: string;
-      confirmers: string[];
+      confirmers: Array<string | number>;
     }, label: string) => {
       if (!rule.scene_ids?.length) {
         messageError(t('{label}：分派至场景空间不能为空', { label }));
@@ -345,7 +391,7 @@
   };
 
   const handleCancel = () => {
-    router.push({ name: 'strategyList' });
+    router.push({ name: strategyRoutes.list });
   };
 
   const submit = () => {

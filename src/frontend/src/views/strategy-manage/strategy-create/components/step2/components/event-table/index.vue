@@ -99,6 +99,10 @@
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
   import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -128,8 +132,8 @@
     handleOpenTool,
   } = useToolDialog();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   // 用于自动填充参数
   const fieldMap: Record<string, string> = {
     event_id: 'raw_event_id',

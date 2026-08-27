@@ -155,6 +155,13 @@
   import FieldCascader from './field-cascader.vue';
   import FieldSelect from './field-select.vue';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
+
   interface Props {
     data: Record<string, any>[];
     configs: Record<string, any>[];
@@ -180,9 +187,9 @@
   const route = useRoute();
   const fieldItemRef = ref();
   const actionIdSourceField = ref<Array<FieldType>>([]);
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyEdit';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
 
   const selectActionIdMap = computed(() => {
     if (actionIdSourceField.value) {

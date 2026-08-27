@@ -192,6 +192,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { isStrategyEditRoute } from '../../../../../../../utils/strategy-routes';
+
   interface Emits {
     (e: 'handleNodeChecked', node: any): void;
     (e: 'saveStorageTreeData', node: any): void;
@@ -419,7 +421,7 @@
         treeData.value = JSON.parse(sessionStorage.getItem('storage-tree-data') || '[]');
       } else {
         const initTreeData = JSON.parse(JSON.stringify(newData.configData));
-        if (route.name === 'strategyEdit') {
+        if (isStrategyEditRoute(route.name)) {
           // 编辑时手动插入数据回显
           const initData = transformData(initTreeData);
           newData.expectedResultList.forEach((e) => {

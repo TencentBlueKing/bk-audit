@@ -93,6 +93,13 @@
   import FilterCondition,  { type ConditionData } from '../components/filter-condition.vue';
   import RenderField from '../components/render-field.vue';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
+
   interface Props {
     loading: boolean;
     tableData: Array<{
@@ -123,9 +130,9 @@
   const { t } = useI18n();
   const route = useRoute();
   let isInit = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
   // const outputFields = computed(() => props.controlDetail?.output_config[0]?.fields);
   const fieldRef = ref();
   const filterRef = ref();

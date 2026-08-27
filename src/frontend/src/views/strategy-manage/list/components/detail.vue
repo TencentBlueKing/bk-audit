@@ -40,10 +40,12 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import type StrategyModel from '@model/strategy/strategy';
 
@@ -51,6 +53,8 @@
   import RiskDisplay from './risk-display.vue';
   import RiskOther from './risk-other.vue';
   import StrategyEventReport from './strategy-event-report.vue';
+
+  import { isPlatformStrategyRoute } from '../../utils/strategy-routes';
 
   interface Props {
     data: StrategyModel,
@@ -61,6 +65,7 @@
   defineProps<Props>();
   const emits = defineEmits(['tab-change']);
   const { t } = useI18n();
+  const route = useRoute();
 
   const comMap: Record<string, any> = {
     riskDetection: RiskDetection,
@@ -69,12 +74,18 @@
     riskOther: RiskOther,
   };
 
-  const panels = [
-    { name: 'riskDetection', label: t('基础信息') },
-    { name: 'riskDisplay', label: t('单据展示') },
-    { name: 'eventReport', label: t('事件调查报告') },
-    { name: 'riskOther', label: t('风险分派规则') },
-  ];
+  // 全局策略详情展示「风险分派规则」；审计策略不展示
+  const panels = computed(() => {
+    const list = [
+      { name: 'riskDetection', label: t('基础信息') },
+      { name: 'riskDisplay', label: t('单据展示') },
+      { name: 'eventReport', label: t('事件调查报告') },
+    ];
+    if (isPlatformStrategyRoute(route.name)) {
+      list.push({ name: 'riskOther', label: t('风险分派规则') });
+    }
+    return list;
+  });
   const active = ref<keyof typeof comMap>('riskDetection');
 
   watch(

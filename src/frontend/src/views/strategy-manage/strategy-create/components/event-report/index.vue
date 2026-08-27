@@ -129,7 +129,7 @@
           class="ml8"
           theme="primary"
           @click="handleNext">
-          {{ t(isEnvent ? '下一步' : '跳过') }}
+          {{ primaryActionText }}
         </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
@@ -167,6 +167,13 @@
   import PreviewReport from './preview-report.vue';
 
   import { formatDate } from '@/utils/assist/timestamp-conversion';
+  import {
+    getStrategyRouteNames,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyCreateRoute,
+    isStrategyEditRoute,
+  } from '../../../utils/strategy-routes';
 
   interface IFormData {
     processor_groups?: Array<any>,
@@ -211,9 +218,18 @@
   const aiEditorRef = ref();
   const route = useRoute();
   const router = useRouter();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isCreateeMode = route.name === 'strategyCreate';
+  const strategyRoutes = getStrategyRouteNames(route);
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isCreateeMode = isStrategyCreateRoute(route.name);
+  // 全局策略有第 5 步风险分派；审计策略在本步直接提交
+  const hasAssignStep = isPlatformStrategyRoute(route.name);
+  const primaryActionText = computed(() => {
+    if (hasAssignStep) {
+      return t(isEnvent.value ? '下一步' : '跳过');
+    }
+    return t('提交');
+  });
 
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -406,11 +422,18 @@
       reportInfo.value.config = buildReportConfig();
     }
 
-    emits('nextStep', 5, {
+    const stepParams = {
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,
-    });
+    };
+
+    if (hasAssignStep) {
+      emits('nextStep', 5, stepParams);
+      return;
+    }
+    // 审计策略：第 4 步为最后一步，直接提交
+    emits('saveCurrentStep', stepParams);
   };
 
   // 提交（编辑态）：效果与「其他配置」的提交一致
@@ -435,7 +458,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
 
