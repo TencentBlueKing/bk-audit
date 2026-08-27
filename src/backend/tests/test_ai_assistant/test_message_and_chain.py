@@ -3,14 +3,21 @@
 
 from unittest import mock
 
+from pydantic import ValidationError as PydanticValidationError
+
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import SystemSelectionRequired
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
+from services.web.ai_assistant.schemas.audit_search import NLSearchErrorSchema, NLSearchOutputSchema
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
-from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputInvalidError,
+    AIServiceError,
+    QueryNotRecognizedError,
+)
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
@@ -166,3 +173,68 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         self.assertFalse(
             Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
         )
+
+    def test_nl_recognized_failure_returns_structured_error(self):
+        """预期内识别失败（AI 未识别）：消息任务 SUCCESS + 结构化 error 协议，不 FAILED。"""
+
+        nl_message, execution = self._create_processing_nl(auto_execute=True)
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            side_effect=QueryNotRecognizedError(),
+        ):
+            output = execute_natural_language_search.run(execution)
+            execute_natural_language_search._finish_success(
+                execution=execution, task_id=nl_message.task_id, output_data=output
+            )
+        nl_message.refresh_from_db()
+        self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(nl_message.error_code, "")
+        self.assertIsNone(nl_message.output_data["condition"])
+        self.assertEqual(nl_message.output_data["error"]["error_code"], "QUERY_NOT_RECOGNIZED")
+        self.assertIn("未能理解", nl_message.output_data["error"]["error_message"])
+        # 无识别条件，不创建续链子消息
+        self.assertFalse(
+            Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
+        )
+
+    def test_nl_service_error_returns_structured_error(self):
+        """预期内服务异常（AIDev 5xx）：同样收敛 SUCCESS + 结构化 error 协议。"""
+
+        nl_message, execution = self._create_processing_nl(auto_execute=True)
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            side_effect=AIServiceError(),
+        ):
+            output = execute_natural_language_search.run(execution)
+        self.assertEqual(output.error.error_code, "AI_SERVICE_ERROR")
+        self.assertIsNone(output.condition)
+        self.assertFalse(
+            Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
+        )
+
+    def test_nl_unexpected_error_still_raises(self):
+        """非预期异常（代码缺陷）继续冒泡，由平台收敛为 FAILED。"""
+
+        nl_message, execution = self._create_processing_nl(auto_execute=True)
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            side_effect=TypeError("unexpected"),
+        ):
+            with self.assertRaises(TypeError):
+                execute_natural_language_search.run(execution)
+        nl_message.refresh_from_db()
+        self.assertEqual(nl_message.status, ExecutionStatus.PROCESSING)
+
+    def test_nl_output_schema_payload_exclusive(self):
+        """协议互斥：condition 与 error 必须且只能携带其一。"""
+
+        with self.assertRaises(PydanticValidationError):
+            NLSearchOutputSchema()
+        with self.assertRaises(PydanticValidationError):
+            NLSearchOutputSchema(
+                condition=make_condition(),
+                error=NLSearchErrorSchema(error_code="X", error_message="y"),
+            )
+        # 单独携带 error 合法
+        error_only = NLSearchOutputSchema(error=NLSearchErrorSchema(error_code="X", error_message="y"))
+        self.assertIsNone(error_only.condition)

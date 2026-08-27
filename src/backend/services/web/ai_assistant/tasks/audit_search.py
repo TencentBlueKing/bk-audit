@@ -11,11 +11,12 @@ from blueapps.core.celery import celery_app
 from celery.schedules import crontab
 
 from services.web.ai_assistant.constants import MessageType
-from services.web.ai_assistant.schemas.audit_search import NLSearchOutputSchema
+from services.web.ai_assistant.schemas.audit_search import NLSearchErrorSchema, NLSearchOutputSchema
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
+from services.web.query.ai_assistant.exceptions import AIAssistantError
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ logger = logging.getLogger(__name__)
 class NLSearchExecutionTask(MessageExecutionTask):
     """自然语言检索任务：消息成功后按 auto_execute 续链同步执行 LOG_SEARCH。
 
-    续链的日志检索为同步消息——在 Worker 线程内直接执行，
+    预期内识别失败时消息同样收敛 SUCCESS（output_data 携带结构化 error 协议），
+    无 condition 不续链；续链的日志检索为同步消息——在 Worker 线程内直接执行，
     成功即创建 SUCCESS 子消息；失败则子消息不创建，自然语言消息本身
     保留 SUCCESS 和 condition，前端可基于该消息重新发起检索。
     """
@@ -51,6 +53,9 @@ class NLSearchExecutionTask(MessageExecutionTask):
         message = execution.message
         if not execution.input_data.auto_execute:
             return
+        if output_data.condition is None:
+            # 识别失败（结构化 error 协议）无检索条件，不续链
+            return
         MessageService(user=message.created_by).create(
             conversation=message.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -65,15 +70,31 @@ class NLSearchExecutionTask(MessageExecutionTask):
 
 @celery_app.task(bind=True, base=NLSearchExecutionTask)
 def execute_natural_language_search(self, execution: MessageExecution) -> NLSearchOutputSchema:  # noqa: N805
-    """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。"""
+    """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。
+
+    预期内识别失败（AI 未识别 / 输出非法 / 服务异常 / 超时）不抛出：
+    消息任务收敛 SUCCESS 并携带结构化 error 协议供前端展示；
+    仅非预期异常继续冒泡，由平台收敛为 FAILED。
+    """
 
     context_data = execution.context_data
-    condition = NL2JSONService.convert(
-        query_text=execution.input_data.query_text,
-        selection=context_data.system_selection,
-        scope_id=context_data.scope_id,
-        username=context_data.username,
-    )
+    try:
+        condition = NL2JSONService.convert(
+            query_text=execution.input_data.query_text,
+            selection=context_data.system_selection,
+            scope_id=context_data.scope_id,
+            username=context_data.username,
+        )
+    except AIAssistantError as error:
+        # query 侧业务异常自带稳定 error_code 与脱敏 message，属预期内失败
+        logger.warning(
+            "[execute_natural_language_search] nl2json recognized failure, message_id=%s, error_code=%s",
+            execution.message.id,
+            error.error_code,
+        )
+        return NLSearchOutputSchema(
+            error=NLSearchErrorSchema(error_code=error.error_code, error_message=error.message),
+        )
     return NLSearchOutputSchema(condition=condition)
 
 
