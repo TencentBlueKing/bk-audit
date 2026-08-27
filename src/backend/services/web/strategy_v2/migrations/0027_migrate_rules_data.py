@@ -60,6 +60,15 @@ def forwards(apps, schema_editor):
             )
             continue
 
+        # configs 必须为 dict（含 select/where/having）；非 dict（历史遗留的 list 事件字段映射等）
+        # 视为格式异常，跳过迁移并告警，留待人工确认后重新配置规则
+        if not isinstance(strategy.configs, dict):
+            print(
+                f"[forwards] 策略 {strategy.strategy_id} configs 为非 dict "
+                f"（{type(strategy.configs).__name__}），跳过迁移，请人工确认该策略配置",
+                flush=True,
+            )
+            continue
         # 从 configs 中提取 where 和 having
         configs = strategy.configs or {}
         where_conditions = configs.get("where")
