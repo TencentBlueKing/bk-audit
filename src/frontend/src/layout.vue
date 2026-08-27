@@ -69,7 +69,7 @@
           :class="{
             active: curNavName === 'secChat'
           }"
-          :to="{ name: 'secChat', query: {} }">
+          :to="{ name: 'secChat' }">
           {{ t('AI助手') }}
         </router-link>
         <router-link

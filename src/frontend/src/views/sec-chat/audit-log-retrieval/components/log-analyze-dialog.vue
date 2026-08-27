@@ -15,9 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <teleport to=".sec-chat-main">
+  <teleport
+    v-if="isShow"
+    to="#sec-chat-overlay-root">
     <div
-      v-if="isShow"
       class="log-analyze-overlay"
       @click.self="handleClose">
       <div class="log-analyze-modal">
@@ -97,7 +98,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref, watch } from 'vue';
+  import { computed, onDeactivated, ref, watch } from 'vue';
 
   import useMessage from '@hooks/use-message';
 
@@ -154,6 +155,13 @@
     isShow.value = false;
   };
 
+  // keep-alive 场景下失活时，防止 teleport 留下遮罩/DOM 影响其他页面点击
+  onDeactivated(() => {
+    isShow.value = false;
+    isCustomExpanded.value = false;
+    customRequirement.value = '';
+  });
+
   const handleRecommend = () => {
     emit('select', {
       type: 'recommend',
@@ -184,6 +192,7 @@
     display: flex;
     padding: 24px;
     overflow: auto;
+    pointer-events: auto;
     background: rgb(0 0 0 / 40%);
     box-sizing: border-box;
     align-items: center;

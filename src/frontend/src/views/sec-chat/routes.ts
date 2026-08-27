@@ -14,13 +14,14 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import { resolveSecChatEntryRoute } from './utils/last-route';
+
 export default {
   path: '/sec-chat',
   name: 'secChat',
   component: () => import('@views/sec-chat/index.vue'),
-  redirect: {
-    name: 'secChatHome',
-  },
+  // 顶栏点「AI助手」进父路由时，恢复离开前的会话页（新对话仅由侧栏「新对话」进入首页）
+  redirect: () => resolveSecChatEntryRoute(),
   meta: {
     title: 'AI助手',
     navName: 'secChat',

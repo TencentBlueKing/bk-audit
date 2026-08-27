@@ -43,13 +43,47 @@
             <!-- 确认选择后的检索引导卡片 -->
             <retrieval-guide-card
               v-else-if="msg.type === 'retrieval-guide'"
+              :common-operations="msg.commonOperations || []"
+              :extension-fields="msg.extensionFields || []"
+              :historical-operations="msg.historicalOperations || []"
+              :standard-fields="msg.standardFields || []"
               :systems="msg.systems || []"
               @reselect="$emit('reselect-system')"
               @select-suggestion="handleSelectSuggestion" />
 
-            <!-- 查询后的结构化结果卡片 -->
+            <!-- NL 处理中 -->
+            <div
+              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'PROCESSING'"
+              class="result-status-card is-loading">
+              <span class="loading-dot" />
+              <span class="loading-dot" />
+              <span class="loading-dot" />
+              <span class="status-text">正在理解检索意图…</span>
+            </div>
+
+            <!-- NL / LOG 失败（条件检索失败在条件卡内展示） -->
+            <div
+              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED' && !isConditionLogResult(msg)"
+              class="result-status-card is-failed">
+              <div class="status-title">
+                检索失败
+              </div>
+              <div class="status-desc">
+                {{ msg.errorMessage || '请稍后重试或改用条件筛选' }}
+              </div>
+              <bk-button
+                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH'"
+                size="small"
+                theme="primary"
+                @click="$emit('retry-message', msg.id)">
+                重试
+              </bk-button>
+            </div>
+
+            <!-- 查询后的结构化结果卡片；条件检索根 LOG 不在此渲染（内嵌于条件卡） -->
             <retrieval-result-card
-              v-else-if="msg.type === 'retrieval-result' && msg.result"
+              v-else-if="msg.type === 'retrieval-result' && msg.result && !isConditionLogResult(msg)"
+              :message-uid="msg.id"
               :result="msg.result"
               @regenerate="handleRegenerate(msg.content || '')" />
           </div>
@@ -70,7 +104,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { nextTick, ref, watch } from 'vue';
+  import { nextTick, onActivated, ref, watch } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
@@ -87,12 +121,18 @@
     'confirm-system': [messageId: string, systemIds: string[], systems: SelectedSystem[]];
     'close-select-system': [messageId: string];
     'reselect-system': [];
+    'retry-message': [messageUid: string];
     send: [content: string];
     attach: [];
   }>();
 
   const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
+
+  /** 条件筛选产生的根 LOG_SEARCH（无 parent），结果在条件卡内嵌展示 */
+  const isConditionLogResult = (msg: ChatMessage) => (
+    msg.messageType === 'LOG_SEARCH' && !msg.parentMessageUid
+  );
 
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);
@@ -102,17 +142,27 @@
     if (text) emit('send', text);
   };
 
-  const scrollToBottom = async () => {
+  const scrollToBottom = async (smooth = true) => {
     await nextTick();
     requestAnimationFrame(() => {
       const el = panelBodyRef.value;
       if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      // keep-alive 恢复后需等布局稳定，再滚到最新消息
+      requestAnimationFrame(() => {
+        el.scrollTo({
+          top: el.scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto',
+        });
+      });
     });
   };
 
   watch(() => props.messages.length, () => {
-    scrollToBottom();
+    void scrollToBottom(true);
+  });
+
+  onActivated(() => {
+    void scrollToBottom(false);
   });
 </script>
 
@@ -130,7 +180,9 @@
   .chat-surface {
     width: 100%;
     max-width: 900px;
+    min-width: 0;
     margin: 0 auto;
+    box-sizing: border-box;
   }
 
   .panel-body {
@@ -140,6 +192,7 @@
     padding: 24px 24px 24px;
     overflow: auto;
     flex-direction: column;
+    scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: #dcdee5 transparent;
 
@@ -169,6 +222,7 @@
   .message-list {
     display: flex;
     width: 100%;
+    min-width: 0;
     overflow: visible;
     flex-direction: column;
     gap: 24px;
@@ -177,6 +231,7 @@
   .message-row {
     display: flex;
     width: 100%;
+    min-width: 0;
     overflow: visible;
 
     &.is-user {
@@ -185,11 +240,12 @@
 
     &.is-assistant {
       justify-content: center;
-      overflow: visible;
+      overflow: hidden;
 
       > * {
-        width: 900px;
+        width: 100%;
         max-width: 100%;
+        min-width: 0;
       }
     }
   }
@@ -207,10 +263,85 @@
     box-sizing: border-box;
   }
 
+  .result-status-card {
+    display: flex;
+    width: 100%;
+    max-width: 900px;
+    padding: 20px 24px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+
+    &.is-loading {
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      color: #63656e;
+    }
+
+    .status-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #313238;
+    }
+
+    .status-desc {
+      font-size: 12px;
+      line-height: 18px;
+      color: #979ba5;
+    }
+
+    .status-text {
+      margin-left: 4px;
+      font-size: 14px;
+      color: #63656e;
+    }
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    background: #3a84ff;
+    border-radius: 50%;
+    opacity: 40%;
+    animation: chat-loading-dot 1s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .loading-dot:nth-child(2) {
+    animation-delay: .15s;
+  }
+
+  .loading-dot:nth-child(3) {
+    animation-delay: .3s;
+  }
+
+  @keyframes chat-loading-dot {
+    0%,
+    100% {
+      opacity: 40%;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 100%;
+      transform: scale(1.15);
+    }
+  }
+
   .panel-footer {
     flex-shrink: 0;
     width: 100%;
     padding: 0 24px 20px;
+    /* 与消息区同样预留滚动条槽，保证输入框与卡片左右对齐、同宽 */
+    scrollbar-gutter: stable;
     box-sizing: border-box;
   }
 </style>
