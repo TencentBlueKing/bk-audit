@@ -75,6 +75,11 @@
 
   import FieldCell from './field-cell.vue';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+
   type EventFieldKey = keyof StrategyFieldEvent['event_basic_field_configs'][0];
 
   interface Props {
@@ -108,8 +113,8 @@
   const route = useRoute();
 
   const fieldCellRef = ref();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 

@@ -82,6 +82,11 @@
   import PlanSelect from './components/plan-select.vue';
 
   import useRequest from '@/hooks/use-request';
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
 
   interface ControlType {
     control_type_id: string;
@@ -121,12 +126,13 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const comRef = ref();
   const planSelectRef = ref();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   const comMap: Record<string, any> = {
     BKM: NormalCondition,
     AIOps: AiopsCondition,
@@ -277,7 +283,7 @@
   // 查看升级详情
   const handleShowUpgradeDetail = () => {
     router.push({
-      name: 'strategyUpgrade',
+      name: strategyRoutes.upgrade,
       params: {
         controlId: formData.value.control_id,
         strategyId: formData.value.strategy_id as number,

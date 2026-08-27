@@ -40,7 +40,7 @@ class Strategy extends ModuleBase {
     super();
     this.module = '/api/v1/';
   }
-  // 策略列表
+  // 策略列表（按 binding_type 区分场景/全局；全局不传 scene_id）
   getStrategyList(params: {
     label?: string,
     name?: string,
@@ -50,9 +50,25 @@ class Strategy extends ModuleBase {
     page_size?: number
     strategy_type?: string
     tag?: string
+    scene_id?: string | number | null
+    binding_type?: string
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/?scene_id=${getSceneSystemParams().scope_id}`, {
-      params,
+    const hasSceneIdKey = Object.prototype.hasOwnProperty.call(params, 'scene_id');
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams: Record<string, any> = { ...rest };
+    if (hasSceneIdKey) {
+      if (sceneId !== undefined && sceneId !== null && sceneId !== '') {
+        requestParams.scene_id = sceneId;
+      }
+    } else if (!requestParams.binding_type || requestParams.binding_type === 'scene_binding') {
+      // 兼容未传 scene_id 的旧调用：默认带当前场景
+      const scopeId = getSceneSystemParams().scope_id;
+      if (scopeId) {
+        requestParams.scene_id = scopeId;
+      }
+    }
+    return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/`, {
+      params: requestParams,
       payload,
     });
   }
@@ -265,9 +281,30 @@ class Strategy extends ModuleBase {
   }
 
 
-  // 获取策略标签
-  getStrategyTags() {
-    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/?scene_id=${getSceneSystemParams().scope_id}`);
+  // 获取策略标签（与列表一致：带 binding_type；全局不传 scene_id）
+  getStrategyTags(params: {
+    scene_id?: string | number | null
+    binding_type?: string
+  } = {}) {
+    const hasSceneIdKey = Object.prototype.hasOwnProperty.call(params, 'scene_id');
+    const { scene_id: sceneId, binding_type: bindingType, ...rest } = params;
+    const requestParams: Record<string, any> = { ...rest };
+    if (bindingType) {
+      requestParams.binding_type = bindingType;
+    }
+    if (hasSceneIdKey) {
+      if (sceneId !== undefined && sceneId !== null && sceneId !== '') {
+        requestParams.scene_id = sceneId;
+      }
+    } else {
+      const scopeId = getSceneSystemParams().scope_id;
+      if (scopeId) {
+        requestParams.scene_id = scopeId;
+      }
+    }
+    return Request.get<Array<StrategyTag>>(`${this.path}/strategy_tags/`, {
+      params: requestParams,
+    });
   }
 
   // 获取方案列表

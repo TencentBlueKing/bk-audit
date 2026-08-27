@@ -97,6 +97,12 @@
   import TableComponent from '../components/render-table.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
 
   interface Props{
     loading: boolean;
@@ -135,9 +141,9 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const route = useRoute();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
   let isInit = false;
   let isInitFields = false;
   const { t } = useI18n();

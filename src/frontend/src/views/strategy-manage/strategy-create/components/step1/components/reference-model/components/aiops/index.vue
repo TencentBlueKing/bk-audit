@@ -172,6 +172,11 @@
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../utils/strategy-routes';
 
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
@@ -219,9 +224,9 @@
   };
   const route = useRoute();
   let isInit = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
   const { t } = useI18n();
   const tableTypeTip: Record<string, string> = {
     EventLog: t('各应用系统按照审计中心规范上报的系统操作日志'),

@@ -296,6 +296,10 @@
   import useRequest from '@/hooks/use-request';
   import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
 
   interface Where {
     connector: 'and' | 'or'
@@ -375,8 +379,8 @@
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);

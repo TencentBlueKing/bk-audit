@@ -94,5 +94,6 @@ export default {
     排序成功: 'Sorted successfully',
     暂无数据: 'No data',
     场景管理员至少保留一个: 'At least one scene manager is required',
+    全局策略: 'Global Strategy',
   },
 };

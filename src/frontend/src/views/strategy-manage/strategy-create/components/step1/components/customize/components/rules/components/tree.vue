@@ -215,6 +215,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { isStrategyEditRoute } from '../../../../../../../../utils/strategy-routes';
+
 
   interface Emits {
     (e: 'handleNodeSelectedValue', node: any, value: string): void;
@@ -451,7 +453,7 @@
     } else {
       const initTreeData = JSON.parse(JSON.stringify(newData.configData));
 
-      if (route.name === 'strategyEdit') {
+      if (isStrategyEditRoute(route.name)) {
         // 编辑时手动插入数据回显
         const initData = transformData(initTreeData).map((e) => {
           if ((newData.condition.condition.field.parent_raw_name === e.raw_name) && !('from' in e)) {

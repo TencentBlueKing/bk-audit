@@ -34,6 +34,8 @@ export default {
     page_size?: number
     strategy_type?: string
     tag?: string
+    scene_id?: string | number | null
+    binding_type?: string
   }) {
     return StrategySource.getStrategyList(
       params,
@@ -232,8 +234,11 @@ export default {
   /**
    * @desc 获取策略标签
    */
-  fetchStrategyTags() {
-    return StrategySource.getStrategyTags()
+  fetchStrategyTags(params: {
+    scene_id?: string | number | null
+    binding_type?: string
+  } = {}) {
+    return StrategySource.getStrategyTags(params)
       .then(({ data }) => data);
   },
   /**

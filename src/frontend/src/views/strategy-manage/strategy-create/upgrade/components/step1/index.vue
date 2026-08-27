@@ -136,6 +136,7 @@
   import Card from './components/card.vue';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getStrategyRouteNames } from '../../../../utils/strategy-routes';
 
   interface ControlType {
     control_type_id: string;
@@ -156,6 +157,7 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const oldInputFields = shallowRef<ValueOf<AiopPlanModel['input_fields']>>([]);
   const newInputFields = shallowRef<ValueOf<AiopPlanModel['input_fields']>>([]);
@@ -484,7 +486,7 @@
   };
   const handleCancel = () => {
     router.push({
-      name: 'strategyEdit',
+      name: strategyRoutes.edit,
       params: {
         id: route.params.strategyId,
       },
