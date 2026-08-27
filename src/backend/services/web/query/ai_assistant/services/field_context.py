@@ -20,7 +20,7 @@ F1 字段上下文服务（SYSTEM_SELECTION 消息核心组件）
 字段清单与现有检索白名单（COLLECT_SEARCH_CONFIG）同源全量，三层构建：
 - L0 兜底：COLLECT_SEARCH_CONFIG 全量字段元数据
 - L1 人工：GlobalMetaConfig（ai_assistant_field_meta）覆盖/新增，运行时写入立即生效
-- L2 采样：Doris 最近 1h 采样回填 sample_value + 发现拓展字段（默认关闭）
+- L2 采样：Doris 最新 N 条采样——最新一条回填 sample_value，多条融合发现拓展字段
 
 nl_name 规则（D-G）：通用字段缺省 = display_name；拓展字段缺省 = extend.{display_name}。
 sample_value 给原始查询值（0/-1），不给展示值（"成功(0)"），防止 AI 照抄展示值构造查询。
@@ -42,6 +42,8 @@ from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
     AI_ASSISTANT_FIELD_META_CONFIG_KEY,
     AI_ASSISTANT_FIELD_SAMPLE_ENABLED,
+    AI_ASSISTANT_FIELD_SAMPLE_ROWS,
+    EXTENSION_FIELD_DEFAULT_OPERATORS,
     EXTENSION_NL_NAME_PREFIX,
     FIELD_SAMPLE_LOOKBACK_DAYS,
 )
@@ -128,12 +130,12 @@ class FieldContextService:
             for cfg in COLLECT_SEARCH_CONFIG.field_configs
         ]
 
-        # L2：采样回填 sample_value（原始查询值）+ 发现拓展字段（默认关闭）
-        sample_row = cls._sample_system_log(namespace, system_id)
+        # L2：采样回填 sample_value（原始查询值）+ 多行融合发现拓展字段（默认关闭）
+        sample_rows = cls._sample_system_logs(namespace, system_id)
         extension_fields = []
-        if sample_row:
-            cls._fill_sample_values(standard_fields, field_overrides, sample_row)
-            extension_fields = cls._discover_extension_fields(system_id, sample_row)
+        if sample_rows:
+            cls._fill_sample_values(standard_fields, field_overrides, sample_rows[0])
+            extension_fields = cls._discover_extension_fields(system_id, sample_rows)
 
         # L1：人工配置的拓展字段（L2 关闭时的唯一来源；与 L2 结果按 (raw_name, keys) 去重合并）
         extension_fields = cls._merge_extension_fields(extension_fields, cls._l1_extension_fields(system_id, sys_cfg))
@@ -195,14 +197,7 @@ class FieldContextService:
             nl_name=override.get("nl_name") or f"{EXTENSION_NL_NAME_PREFIX}{display_name}",
             description=override.get("description", ""),
             # 一期拓展字段恒按 string 处理（协议待冻结 #6），给出通用操作符
-            allow_operators=override.get("allow_operators")
-            or [
-                QueryConditionOperator.EQ.value,
-                QueryConditionOperator.NEQ.value,
-                QueryConditionOperator.INCLUDE.value,
-                QueryConditionOperator.EXCLUDE.value,
-                QueryConditionOperator.LIKE.value,
-            ],
+            allow_operators=override.get("allow_operators") or list(EXTENSION_FIELD_DEFAULT_OPERATORS),
             sample_value=override.get("sample_value"),
             system_id=system_id,
         )
@@ -212,16 +207,17 @@ class FieldContextService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _sample_system_log(cls, namespace: str, system_id: str) -> Optional[dict]:
+    def _sample_system_logs(cls, namespace: str, system_id: str) -> List[dict]:
         """
-        Doris 采样「最新一条」日志（产品口径：standard_fields 的 sample_value 与
-        extension_fields 均取自最新一条数据的字段信息）。
+        Doris 采样「最新 N 条」日志（按 dtEventTimeStamp 倒序）。
 
-        时间窗口仅用于分区裁剪与性能兜底，实际取窗口内 dtEventTimeStamp 倒序的第 1 条。
+        standard_fields 的 sample_value 取自最新一条（产品口径不变）；
+        其余样本用于融合发现更多拓展字段（单条日志的拓展子键覆盖不全）。
+        时间窗口仅用于分区裁剪与性能兜底。
         系统级采样：调用前已做 has_system_search_permission 过滤，不走权限 Mixin。
         """
         if not getattr(settings, "AI_ASSISTANT_FIELD_SAMPLE_ENABLED", AI_ASSISTANT_FIELD_SAMPLE_ENABLED):
-            return None
+            return []
         try:
             table = CollectorPlugin.build_collector_rt(namespace)
             end_time = timezone.now()
@@ -241,22 +237,21 @@ class FieldContextService:
                 conditions=conditions,
                 sort_list=DEFAULT_COLLECTOR_SORT_LIST,
                 page=1,
-                page_size=1,
+                page_size=getattr(settings, "AI_ASSISTANT_FIELD_SAMPLE_ROWS", AI_ASSISTANT_FIELD_SAMPLE_ROWS),
             )
             records = api.bk_base.query_sync(
                 sql=sql_builder.build_data_sql(),
                 prefer_storage=StorageType.DORIS.value,
             )
-            rows = records.get("list") or []
-            return rows[0] if rows else None
+            return records.get("list") or []
         except Exception as err:  # noqa: BLE001
             # 采样失败不阻断主流程，退化为 sample_value=None
             logger.warning(f"[FieldContextService] sample system log failed: {system_id}, err: {err}")
-            return None
+            return []
 
     @classmethod
     def _fill_sample_values(cls, standard_fields: List[SelectionFieldMeta], field_overrides: dict, row: dict) -> None:
-        """采样值回填（原始查询值）；L1 人工配置的 sample_value 优先"""
+        """采样值回填（原始查询值，取最新一条）；L1 人工配置的 sample_value 优先"""
         for item in standard_fields:
             if item.raw_name in field_overrides and "sample_value" in field_overrides[item.raw_name]:
                 continue
@@ -265,27 +260,34 @@ class FieldContextService:
                 item.sample_value = value
 
     @classmethod
-    def _discover_extension_fields(cls, system_id: str, row: dict) -> List[SelectionFieldMeta]:
-        """从 is_json 容器字段发现第一层子键（跳过白名单已声明的 sub_keys）"""
-        extension_fields = []
-        for cfg in COLLECT_SEARCH_CONFIG.field_configs:
-            if not cfg.field.is_json:
-                continue
-            raw_name = cfg.field.field_name
-            container = row.get(raw_name, row.get(raw_name.lower()))
-            if isinstance(container, str):
-                try:
-                    container = json.loads(container)
-                except (json.JSONDecodeError, TypeError):
-                    container = None
-            if not isinstance(container, dict):
-                continue
-            declared_keys = {sub["field_name"] for sub in (cfg.field.property or {}).get("sub_keys", [])}
-            for key, value in container.items():
-                if key in declared_keys:
+    def _discover_extension_fields(cls, system_id: str, rows: List[dict]) -> List[SelectionFieldMeta]:
+        """从 is_json 容器字段发现第一层子键（多行融合，跳过白名单已声明的 sub_keys）
+
+        rows 按时间倒序：同一 (容器, 子键) 保留最新一行的采样值，多行并集提升拓展字段覆盖率。
+        """
+        discovered: Dict[Tuple[str, Tuple[str, ...]], SelectionFieldMeta] = {}
+        for row in rows:
+            for cfg in COLLECT_SEARCH_CONFIG.field_configs:
+                if not cfg.field.is_json:
                     continue
-                extension_fields.append(cls._to_extension_field(system_id, raw_name, [key], {"sample_value": value}))
-        return extension_fields
+                raw_name = cfg.field.field_name
+                container = row.get(raw_name, row.get(raw_name.lower()))
+                if isinstance(container, str):
+                    try:
+                        container = json.loads(container)
+                    except (json.JSONDecodeError, TypeError):
+                        container = None
+                if not isinstance(container, dict):
+                    continue
+                declared_keys = {sub["field_name"] for sub in (cfg.field.property or {}).get("sub_keys", [])}
+                for key, value in container.items():
+                    if key in declared_keys:
+                        continue
+                    dedup_key = (raw_name, tuple([key]))
+                    if dedup_key in discovered:
+                        continue
+                    discovered[dedup_key] = cls._to_extension_field(system_id, raw_name, [key], {"sample_value": value})
+        return list(discovered.values())
 
     # ------------------------------------------------------------------
     # L1 拓展字段

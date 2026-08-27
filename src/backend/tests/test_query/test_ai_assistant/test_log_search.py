@@ -239,3 +239,128 @@ class TestLogSearchService(AIAssistantTestCase):
             rows = [{"a": 1}]
             LogSearchService._format_hits(rows, "alice")
             mock_parser.return_value.parse_data.assert_called_once_with(rows, username="alice")
+
+    def test_eq_multi_filters_converted_to_include_sql(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """字段筛选多选（eq + 多 filters）不再被 SQL 层截取首个值，聚合为 IN"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang", "wang"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username` IN ('zhang','wang')", data_sql)
+        self.assertNotIn("`username`='zhang'", data_sql)
+
+    def test_same_field_eq_conditions_merged_to_include(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """NL 多值拆分为多条同字段 eq 条件（AND 恒空）→ 合并为单条 IN"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="eq", filters=["wang"]),
+                self.make_field_condition(raw_name="action_id", operator="eq", filters=["delete"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username` IN ('zhang','wang')", data_sql)
+        self.assertIn("`action_id`='delete'", data_sql)
+
+    def test_same_field_eq_conditions_deduplicated(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段同值重复条件合并去重"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn("`username`='zhang'", self._data_sql(mock_query_sync))
+
+    def test_same_field_neq_conditions_merged_to_exclude(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段多条 neq 聚合为 NOT IN（排除语义；拓展字段白名单含 neq/exclude）"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="neq", filters=["Story-1"]
+                ),
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="neq", filters=["Story-2"]
+                ),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn(
+            "NOT JSON_EXTRACT_STRING(`extend_data`,'$.ticket_id') IN ('Story-1','Story-2')",
+            self._data_sql(mock_query_sync),
+        )
+
+    def test_mixed_operator_conditions_not_merged(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段不同操作符（eq + include）保留原样：用户显式 AND 意图不猜测合并"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="include", filters=["wang", "li"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username`='zhang'", data_sql)
+        self.assertIn("`username` IN ('wang','li')", data_sql)
+
+    def test_extension_eq_multi_converted_to_include(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """拓展子键（用户显式指定）eq 多值同样聚合为 include"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="eq", filters=["Story-1", "Story-2"]
+                ),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn("IN ('Story-1','Story-2')", self._data_sql(mock_query_sync))
+
+    def test_eq_multi_filters_without_include_allowed_kept(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """字段白名单不允许 include 时保持 eq 原样（不转非法操作符）"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        # instance_name 白名单仅 [like]，用 include 不合法的字段构造 eq 多值归一前置检查
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="instance_name", operator="eq", filters=["a", "b"]),
+            ]
+        )
+        normalized = LogSearchService._normalize_condition(condition)
+        # instance_name 不允许 eq/include：无操作符转换（后续 DRF 校验会拒绝，属协议边界）
+        self.assertEqual(normalized.conditions[0].operator, "eq")

@@ -10,7 +10,7 @@ Pydantic 嵌套模型完整执行，Swagger 只展示宽松对象结构。
 
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from rest_framework import serializers
 
 from services.web.ai_assistant.schemas.message import MessageSchema
@@ -29,6 +29,7 @@ __all__ = [
     "LogSearchInputSchema",
     "LogSearchOutputSchema",
     "NLSearchContextSchema",
+    "NLSearchErrorSchema",
     "NLSearchInputSchema",
     "NLSearchOutputSchema",
     "SystemSelectionContextSchema",
@@ -39,6 +40,7 @@ __all__ = [
 # 嵌套 query 模型 / 宽松集合的统一 DRF 表达（运行时校验仍走 Pydantic 嵌套模型）
 _NestedListField = serializers.ListField(child=serializers.DictField())
 _NestedObjectField = serializers.DictField()
+_NestedObjectOrNullField = serializers.DictField(allow_null=True)
 
 
 class CommonQuerySchema(MessageSchema):
@@ -84,10 +86,26 @@ class NLSearchContextSchema(MessageSchema):
     system_selection: Annotated[SystemSelectionOutput, _NestedObjectField]
 
 
-class NLSearchOutputSchema(MessageSchema):
-    """自然语言检索输出：受控检索条件（协议稳定键 condition）。"""
+class NLSearchErrorSchema(MessageSchema):
+    """自然语言识别失败的结构化协议（消息任务成功、识别业务失败）。"""
 
-    condition: Annotated[SearchCondition, _NestedObjectField]
+    error_code: str
+    error_message: str
+
+
+class NLSearchOutputSchema(MessageSchema):
+    """自然语言检索输出：成功携带受控检索条件；预期内识别失败携带结构化错误协议。"""
+
+    condition: Annotated[SearchCondition | None, _NestedObjectOrNullField] = None
+    error: NLSearchErrorSchema | None = None
+
+    @model_validator(mode="after")
+    def _validate_payload_exclusive(self) -> "NLSearchOutputSchema":
+        """condition 与 error 互斥：识别成功带条件，识别失败带错误协议。"""
+
+        if (self.condition is None) == (self.error is None):
+            raise ValueError("NL 检索输出必须且只能携带 condition 或 error 之一")
+        return self
 
 
 class LogSearchInputSchema(MessageSchema):
