@@ -142,10 +142,33 @@ class TestNL2JSONService(AIAssistantTestCase):
         condition = self._convert(selection=selection)
         self.assertEqual(condition.conditions[0].field.keys, ["ticket_id"])
 
-    def test_extension_not_in_context_rejected(self, mock_chat):
-        # 字段清单中没有该拓展字段（防幻觉）
+    def test_extension_user_specified_key_allowed(self, mock_chat):
+        """用户显式指定的下钻子键：字段上下文未列出也放行（采样覆盖有限，子键信任用户）"""
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "extend_data", "keys": ["not_exist"], "operator": "eq", "filters": ["x"]}]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].field.raw_name, "extend_data")
+        self.assertEqual(condition.conditions[0].field.keys, ["not_exist"])
+        self.assertEqual(condition.conditions[0].filters, ["x"])
+
+    def test_extension_user_specified_invalid_operator_rejected(self, mock_chat):
+        """未采样发现的子键：操作符仍按拓展字段默认集合校验（gt 数值比较拒绝）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "extend_data", "keys": ["not_exist"], "operator": "gt", "filters": ["1"]}
+        ]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(AIOutputInvalidError):
+            self._convert()
+
+    def test_extension_keys_on_non_json_field_rejected(self, mock_chat):
+        """容器白名单保留：非 JSON 容器字段带下钻 keys 仍拒绝（防编造容器）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "username", "keys": ["hijack"], "operator": "eq", "filters": ["x"]}
+        ]
         mock_chat.return_value = json.dumps(output)
         with self.assertRaises(AIOutputInvalidError):
             self._convert()

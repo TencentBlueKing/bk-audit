@@ -48,6 +48,7 @@ from services.web.query.ai_assistant.constants import (
     AI_FORBIDDEN_TIME_FIELDS,
     AI_NL2JSON_THREAD_ID_PREFIX,
     DEFAULT_SEARCH_WINDOW_DAYS,
+    EXTENSION_FIELD_DEFAULT_OPERATORS,
 )
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
@@ -91,12 +92,12 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
   "start_time": "...",
   "end_time": "..."
 }
-2. raw_name 必须来自字段上下文；keys 照抄字段上下文（通用字段为 []，拓展字段为下钻路径）
-3. operator 必须在该字段 allow_operators 内；filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
+2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键——字段上下文已列出的照抄，未列出但用户明确指定的按用户描述的子键名生成
+3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
 4. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
 5. 时间按当前时间推算，ISO8601 带时区；用户未提时间时输出 null，由后端补默认窗口
 6. 关键词全文检索用 match_all/match_any 操作符表达
-7. 用户提到的字段若不在字段上下文中，忽略该字段（禁止编造字段名或 keys），继续用字段上下文中已有的字段组装其余可识别的检索条件（如时间范围、操作人等）
+7. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
 8. 仅当所有检索需求都无法映射到字段上下文时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
 # 数值比较操作符（仅数值类型字段可用）
@@ -286,9 +287,8 @@ class NL2JSONService:
 
         规则与 QuerySearchConditionSerializer.validate 同源：
         - raw_name 白名单（通用字段清单 = COLLECT_SEARCH_CONFIG 同源）
-        - 下钻条件必须是字段清单中的拓展字段（容器 is_json + keys 照抄）
-        - operator ∈ 该字段 allow_operators（下钻条件按 judge_operator 语义放行自定义操作符，
-          但仍需在拓展字段自身 allow_operators 内）
+        - 下钻条件的容器字段必须在 is_json 白名单内；子键采样发现或用户显式指定均放行
+        - operator ∈ 该字段 allow_operators（未采样发现的子键按拓展字段默认操作符集合校验）
         - 数值比较操作符仅数值类型字段可用（拓展字段一期恒 string 不支持）
         """
         standard_map = {f.raw_name: f for s in selection.systems for f in s.standard_fields}
@@ -327,14 +327,21 @@ class NL2JSONService:
 
     @classmethod
     def _validate_extension_condition(cls, cond: AIConditionItem, extension_map: dict, json_containers: set) -> None:
-        meta = extension_map.get((cond.raw_name, tuple(cond.keys)))
-        if meta is None:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "extension field not in field context"}
-            )
+        """拓展子键信任边界：容器字段必须在白名单（防编造容器），子键采样发现或用户显式指定均放行。
+
+        采样覆盖率有限（单系统子键集合远大于 N 条样本），用户显式指定的下钻子键
+        不因「字段上下文未列出」被拒绝；用户指定的子键限单层（一期下钻协议），
+        多层路径仅字段上下文精确匹配（L1 人工配置）时放行；未发现子键的操作符按拓展字段默认集合校验。
+        """
         if cond.raw_name not in json_containers:
             raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "keys on non-json field"})
-        if cond.operator not in meta.allow_operators:
+        meta = extension_map.get((cond.raw_name, tuple(cond.keys)))
+        if meta is None and len(cond.keys) != 1:
+            raise AIOutputInvalidError(
+                extra={"condition": cond.model_dump(), "reason": "extension keys depth not supported"}
+            )
+        allowed_operators = meta.allow_operators if meta is not None else EXTENSION_FIELD_DEFAULT_OPERATORS
+        if cond.operator not in allowed_operators:
             raise AIOutputInvalidError(
                 extra={"condition": cond.model_dump(), "reason": "operator not allowed for extension field"}
             )
