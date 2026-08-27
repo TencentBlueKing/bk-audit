@@ -1,7 +1,7 @@
 """常见/历史操作上下文（D3 定稿方案）。
 
-常见操作 = 常见的自然语言检索样例，按系统维度缓存于 Redis list，
-由 Celery 定时任务从最近成功自然语言消息聚合刷新；
+常见操作 = 当前用户常见的自然语言检索样例，按用户 × 系统维度缓存于 Redis list，
+由 Celery 定时任务从最近成功自然语言消息聚合刷新（仅本人消息，用户间互相隔离）；
 历史操作 = 当前用户最近的自然语言检索，直接查询消息表（按系统过滤）。
 """
 
@@ -17,7 +17,7 @@ from services.web.ai_assistant.schemas.audit_search import CommonQuerySchema
 
 logger = logging.getLogger(__name__)
 
-COMMON_QUERY_KEY_TEMPLATE = "bk_audit:ai_assistant:common_queries:{system_id}"
+COMMON_QUERY_KEY_TEMPLATE = "bk_audit:ai_assistant:common_queries:{system_id}:{username}"
 
 
 def extract_system_ids(systems: Iterable[dict]) -> set[str]:
@@ -27,7 +27,7 @@ def extract_system_ids(systems: Iterable[dict]) -> set[str]:
 
 
 class CommonQueryStore:
-    """常见自然语言样例的 Redis list 存储（最近在前、去重、固定容量）。"""
+    """用户常见自然语言样例的 Redis list 存储（最近在前、去重、固定容量、按用户隔离）。"""
 
     def __init__(self, redis_client: redis.Redis | None = None):
         self.redis_client = redis_client or redis.Redis(
@@ -39,24 +39,24 @@ class CommonQueryStore:
         )
 
     @staticmethod
-    def build_key(system_id: str) -> str:
-        return COMMON_QUERY_KEY_TEMPLATE.format(system_id=system_id)
+    def build_key(system_id: str, username: str) -> str:
+        return COMMON_QUERY_KEY_TEMPLATE.format(system_id=system_id, username=username)
 
-    def list(self, system_id: str, limit: int) -> list[CommonQuerySchema]:
-        """读取系统常见样例；缓存未命中（定时任务未跑过）返回空列表。"""
+    def list(self, system_id: str, username: str, limit: int) -> list[CommonQuerySchema]:
+        """读取用户在指定系统的常见样例；缓存未命中（定时任务未跑过）返回空列表。"""
 
         try:
-            queries = self.redis_client.lrange(self.build_key(system_id), 0, limit - 1)
+            queries = self.redis_client.lrange(self.build_key(system_id, username), 0, limit - 1)
         except redis.RedisError:
-            logger.exception("[CommonQueryStore] redis read failed, system_id=%s", system_id)
+            logger.exception("[CommonQueryStore] redis read failed, system_id=%s, username=%s", system_id, username)
             return []
         return [CommonQuerySchema(query_text=query_text) for query_text in queries if query_text]
 
-    def replace(self, system_id: str, queries: Iterable[str]) -> None:
-        """整表替换系统样例；容量由调用方按 settings 约束。"""
+    def replace(self, system_id: str, username: str, queries: Iterable[str]) -> None:
+        """整表替换用户样例；容量由调用方按 settings 约束。"""
 
         pipeline = self.redis_client.pipeline()
-        key = self.build_key(system_id)
+        key = self.build_key(system_id, username)
         pipeline.delete(key)
         valid_queries = [query_text for query_text in queries if query_text]
         if valid_queries:
@@ -72,17 +72,19 @@ class OperationContextService:
         # 操作上下文总闸（设计稿已确认需求，默认开启；关闭时选择消息不携带常见/历史操作）
         if not getattr(settings, "AI_ASSISTANT_OPERATION_RANKING_ENABLED", True):
             return [], []
-        common = cls.build_common(system_ids=system_ids)
+        common = cls.build_common(system_ids=system_ids, username=username)
         historical = cls.build_historical(system_ids=system_ids, username=username)
         return common, historical
 
     @classmethod
-    def build_common(cls, *, system_ids: list[str]) -> list[CommonQuerySchema]:
+    def build_common(cls, *, system_ids: list[str], username: str) -> list[CommonQuerySchema]:
+        """读取当前用户在所选系统的常见样例（跨系统去重；用户间互相隔离）。"""
+
         store = CommonQueryStore()
         results: list[CommonQuerySchema] = []
         seen: set[str] = set()
         for system_id in system_ids:
-            for item in store.list(system_id, limit=settings.AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT):
+            for item in store.list(system_id, username, limit=settings.AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT):
                 if item.query_text in seen:
                     continue
                 seen.add(item.query_text)
@@ -131,7 +133,7 @@ class OperationContextService:
 
     @classmethod
     def refresh_common_queries(cls) -> dict[str, int]:
-        """定时任务入口：聚合最近成功自然语言消息，按系统刷新 Redis 缓存。"""
+        """定时任务入口：聚合最近成功自然语言消息，按用户 × 系统刷新 Redis 缓存。"""
 
         scan_limit = settings.AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT
         store_limit = settings.AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT
@@ -141,32 +143,37 @@ class OperationContextService:
                 status=ExecutionStatus.SUCCESS,
             )
             .order_by("-id")
-            .values_list("input_data", "context_data")[:scan_limit]
+            .values_list("input_data", "context_data", "created_by")[:scan_limit]
         )
-        # 最近在前；同一样例只保留最新一次出现的顺位
-        system_queries: dict[str, list[str]] = {}
-        system_seen: dict[str, set[str]] = {}
-        for input_data, context_data in messages:
+        # 最近在前；同一用户同一样例只保留最新一次出现的顺位（用户间天然隔离）
+        user_system_queries: dict[tuple[str, str], list[str]] = {}
+        user_system_seen: dict[tuple[str, str], set[str]] = {}
+        for input_data, context_data, created_by in messages:
             query_text = (input_data or {}).get("query_text") or ""
             if not query_text:
                 continue
             for system_id in cls._extract_message_system_ids(context_data):
-                seen = system_seen.setdefault(system_id, set())
+                key = (created_by, system_id)
+                seen = user_system_seen.setdefault(key, set())
                 if query_text in seen:
                     continue
                 seen.add(query_text)
-                system_queries.setdefault(system_id, []).append(query_text)
+                user_system_queries.setdefault(key, []).append(query_text)
 
         store = CommonQueryStore()
         refreshed = 0
-        for system_id, queries in system_queries.items():
+        for (username, system_id), queries in user_system_queries.items():
             try:
-                store.replace(system_id, queries[:store_limit])
+                store.replace(system_id, username, queries[:store_limit])
                 refreshed += 1
             except redis.RedisError:
-                logger.exception("[OperationContextService] refresh common queries failed, system_id=%s", system_id)
+                logger.exception(
+                    "[OperationContextService] refresh common queries failed, system_id=%s, username=%s",
+                    system_id,
+                    username,
+                )
         logger.info(
-            "[OperationContextService] common queries refreshed, systems=%d, scanned=%d",
+            "[OperationContextService] common queries refreshed, user_systems=%d, scanned=%d",
             refreshed,
             len(messages),
         )

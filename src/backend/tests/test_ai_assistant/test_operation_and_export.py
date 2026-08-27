@@ -11,6 +11,7 @@ from services.web.ai_assistant.exceptions import (
     LogExportPermissionDenied,
     MessageNotFound,
 )
+from services.web.ai_assistant.schemas.audit_search import CommonQuerySchema
 from services.web.ai_assistant.services.log_export import MessageExportService
 from services.web.ai_assistant.services.operation import (
     CommonQueryStore,
@@ -35,24 +36,26 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
 
     def test_list_reads_lrange(self):
         store = self._make_store(**{"lrange.return_value": ["查登录失败", "查导出记录"]})
-        items = store.list(TARGET_SYSTEM_ID, limit=10)
+        items = store.list(TARGET_SYSTEM_ID, self.user, limit=10)
         self.assertEqual([item.query_text for item in items], ["查登录失败", "查导出记录"])
         store.redis_client.lrange.assert_called_once_with(
-            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}", 0, 9
+            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}:{self.user}", 0, 9
         )
 
     def test_list_redis_error_returns_empty(self):
         import redis
 
         store = self._make_store(**{"lrange.side_effect": redis.RedisError("down")})
-        self.assertEqual(store.list(TARGET_SYSTEM_ID, limit=10), [])
+        self.assertEqual(store.list(TARGET_SYSTEM_ID, self.user, limit=10), [])
 
     def test_replace_deletes_and_pushes(self):
         store = self._make_store()
-        store.replace(TARGET_SYSTEM_ID, ["q1", "q2", ""])
+        store.replace(TARGET_SYSTEM_ID, self.user, ["q1", "q2", ""])
         pipeline = store.redis_client.pipeline.return_value
         pipeline.delete.assert_called_once()
-        pipeline.rpush.assert_called_once_with(f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}", "q1", "q2")
+        pipeline.rpush.assert_called_once_with(
+            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}:{self.user}", "q1", "q2"
+        )
         pipeline.execute.assert_called_once()
 
 
@@ -95,19 +98,39 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         self.assertNotIn("other system query", query_texts)
         self.assertNotIn("失败的不算", query_texts)
 
+    def test_build_common_reads_only_current_user(self):
+        """常见操作：仅读取当前用户 × 系统的缓存，不串看其他用户样例。"""
+
+        with mock.patch.object(
+            CommonQueryStore,
+            "list",
+            side_effect=lambda system_id, username, limit: (
+                [CommonQuerySchema(query_text=f"{username}-q")] if username == self.user else []
+            ),
+        ) as mock_list:
+            common = OperationContextService.build_common(system_ids=[TARGET_SYSTEM_ID], username=self.user)
+        self.assertEqual([item.query_text for item in common], [f"{self.user}-q"])
+        mock_list.assert_called_once_with(TARGET_SYSTEM_ID, self.user, limit=mock.ANY)
+
     def test_refresh_common_queries_aggregates(self):
-        """定时刷新：按系统聚合最近样例并整表替换。"""
+        """定时刷新：按用户 × 系统聚合最近样例并整表替换（用户间隔离）。"""
 
         selection = self.create_selection_message()
         self.create_nl_message(query_text="q1", parent=selection)
         self.create_nl_message(query_text="q2", parent=selection)
+        # 其他用户的样例进入独立缓存，不与当前用户混合
+        other_message = self.create_nl_message(query_text="other-q", parent=selection)
+        other_message.created_by = "other_user"
+        other_message.save(update_record=False, update_fields=["created_by"])
         with mock.patch.object(CommonQueryStore, "replace") as mock_replace:
             result = OperationContextService.refresh_common_queries()
-        mock_replace.assert_called_once()
-        args = mock_replace.call_args[0]
-        self.assertEqual(args[0], TARGET_SYSTEM_ID)
-        self.assertEqual(args[1], ["q2", "q1"])  # 最近在前
-        self.assertEqual(result, {"refreshed_systems": 1, "scanned_messages": 2})
+        replace_calls = {call.args[:2]: call.args[2] for call in mock_replace.call_args_list}
+        self.assertEqual(
+            replace_calls.get((TARGET_SYSTEM_ID, self.user)),
+            ["q2", "q1"],  # 最近在前
+        )
+        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, "other_user")), ["other-q"])
+        self.assertEqual(result, {"refreshed_systems": 2, "scanned_messages": 3})
 
 
 class TestMessageExport(AIAssistantPlatformTestCase):
