@@ -96,7 +96,8 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 4. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
 5. 时间按当前时间推算，ISO8601 带时区；用户未提时间时输出 null，由后端补默认窗口
 6. 关键词全文检索用 match_all/match_any 操作符表达
-7. 无法提取任何有效条件时返回：{"conditions":[],"start_time":null,"end_time":null}"""
+7. 用户提到的字段若不在字段上下文中，忽略该字段（禁止编造字段名或 keys），继续用字段上下文中已有的字段组装其余可识别的检索条件（如时间范围、操作人等）
+8. 仅当所有检索需求都无法映射到字段上下文时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
 # 数值比较操作符（仅数值类型字段可用）
 NUMERIC_OPERATORS = {

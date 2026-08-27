@@ -239,10 +239,11 @@ AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
 )
 # AI 助手日志检索：L2 字段采样开关 / D3 操作榜单开关
 # （L2 采样默认开启：设计稿已确认「最近一条数据」与「拓展字段动态获取」需求，
-#   SYSTEM_SELECTION 每次多一次 Doris LIMIT 1 采样查询（30 天窗口分区裁剪）且失败自动降级；
+#   SYSTEM_SELECTION 每次多一次 Doris 采样查询（30 天窗口分区裁剪，多行融合拓展字段）且失败自动降级；
 #   若线上延迟或样例质量异常，可设 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED=false 关闭；
 #   操作上下文由平台层 services/web/ai_assistant/services/operation.py 统一管控）
 AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "True"))
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "50"))
 AI_ASSISTANT_OPERATION_RANKING_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_OPERATION_RANKING_ENABLED", "True"))
 # AI 助手常见/历史操作（常见操作走 Redis 缓存 + 定时任务刷新，历史操作直查最近 NL 消息）
 AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT", 50))
