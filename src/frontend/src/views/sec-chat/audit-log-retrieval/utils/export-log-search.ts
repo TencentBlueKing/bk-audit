@@ -14,14 +14,14 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import AiAssistantManageService from '@service/ai-assistant-manage';
+import EsQueryService from '@service/es-query';
+
 import type {
   AiExportConfig,
   AiExportTaskDetail,
   AiFullExportResult,
 } from '@model/ai-assistant/types';
-
-import AiAssistantManageService from '@service/ai-assistant-manage';
-import EsQueryService from '@service/es-query';
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_MAX_ATTEMPTS = 120; // ~5 分钟
