@@ -33,7 +33,7 @@ class WeixinSender(Sender):
     api_resource = api.bk_cmsi.send_weixin
 
     def _build_params(self) -> dict:
-        if not AuditBkApiResource.use_muti_tenant_mode():
+        if not AuditBkApiResource.use_multi_tenant_mode():
             # 旧 ESB 统一接口：消息体使用 data 字段
             return {
                 "receiver__username": self.receivers,

@@ -31,7 +31,7 @@ class SMSSender(Sender):
     api_resource = api.bk_cmsi.send_msg
 
     def _build_params(self) -> dict:
-        if not AuditBkApiResource.use_muti_tenant_mode():
+        if not AuditBkApiResource.use_multi_tenant_mode():
             # 旧 ESB 统一接口：需指定 msg_type 与 title
             return {
                 "msg_type": MsgType.SMS.value,

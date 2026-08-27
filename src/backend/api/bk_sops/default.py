@@ -37,8 +37,8 @@ class BKSOps(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk_sops", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_SOPS_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_SOPS_API_URL
 
     def perform_request(self, validated_request_data):

@@ -80,8 +80,8 @@ class BKLogBaseResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-log-search", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.LOG_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_LOG_API_URL
 
 
@@ -295,7 +295,7 @@ class UpdateCollector(CollectorsBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/databus/collector_plugins/update_instance/"
         return "/databus_collector_plugins/update_instance/"
 

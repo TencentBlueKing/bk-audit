@@ -21,6 +21,7 @@ import abc
 import requests
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.logger import logger
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.constants import APIProvider
@@ -36,8 +37,8 @@ class CMSIResource(AuditBkApiResource, abc.ABC):
     @property
     def base_url(self):
         """多租户模式切换到 CMSI APIGW"""
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-cmsi", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_CMSI_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_CMSI_API_URL
 
     def parse_response(self, response: requests.Response) -> any:
@@ -65,7 +66,7 @@ class GetMsgType(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/channels/"
         return "/get_msg_type/"
 
@@ -76,7 +77,7 @@ class SendMail(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/send_mail/"
         return "/send_mail/"
 
@@ -87,7 +88,7 @@ class SendRtx(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/send_rtx/"
         return "/send_rtx/"
 
@@ -98,7 +99,7 @@ class SendVoice(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/send_voice/"
         return "/send_voice_msg/"
 
@@ -109,7 +110,7 @@ class SendMsg(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/send_sms/"
         return "/send_msg/"
 
@@ -120,6 +121,6 @@ class SendWeixin(CMSIResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/v1/send_weixin/"
         return "/send_weixin/"

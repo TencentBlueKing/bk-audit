@@ -20,7 +20,7 @@ import json
 from bk_resource import BkApiResource
 from django.conf import settings
 
-from core.tenant import get_admin_username
+from core.tenant import get_admin_username, use_multi_tenant_mode
 
 
 class AuditBkApiResource(BkApiResource):
@@ -38,14 +38,9 @@ class AuditBkApiResource(BkApiResource):
     use_admin_username = False
 
     @staticmethod
-    def use_muti_tenant_mode() -> bool:
+    def use_multi_tenant_mode() -> bool:
         """多租户模式开关检测"""
-        return str(getattr(settings, "BKPAAS_MULTI_TENANT_MODE", False)).lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
+        return use_multi_tenant_mode()
 
     def set_headers(self, headers: dict, validated_request_data: dict) -> dict:
         """子类扩展点：补充业务侧 Header。
@@ -69,7 +64,7 @@ class AuditBkApiResource(BkApiResource):
         """
         headers = super().build_header(validated_request_data)
 
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             tenant_id = getattr(settings, "BK_TENANT_ID", "")
             headers["X-Bk-Tenant-Id"] = tenant_id
 

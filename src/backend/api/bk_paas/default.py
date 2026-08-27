@@ -37,8 +37,8 @@ class PaaSV3BaseResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bkpaas3", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_PAAS_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_PAAS_API_URL
 
 

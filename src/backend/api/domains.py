@@ -20,10 +20,9 @@ from django.conf import settings
 
 from api.constants import AIAgentCode, APIProvider
 from api.utils import get_agent_base_url, get_endpoint
-from core.tenant import use_multi_tenant_mode
 
 APIGW_ENABLED = settings.USE_APIGW
-_TENANT_ENABLED = use_multi_tenant_mode()
+_TENANT_ENABLED = settings.BKPAAS_MULTI_TENANT_MODE
 
 # 权限中心地址
 BK_IAM_API_URL = (

@@ -22,10 +22,11 @@ import copy
 from bk_resource import APIResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_monitor.constants import BKMONITOR_METRIC_MAX_BATCH_SIZE
-from api.bk_monitor.serializers import ReportMetricSerializer
+from api.bk_monitor.serializers import ReportEventSerializer, ReportMetricSerializer
 from api.constants import APIProvider
 from api.domains import BK_MONITOR_API_URL, BK_MONITOR_METRIC_PROXY_URL
 from api.utils import get_endpoint
@@ -38,9 +39,9 @@ class BKMonitorBaseResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        """多租户模式切换到 CMSI APIGW"""
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-monitor", APIProvider.APIGW, stage="prod")
+        """多租户模式切换到监控 APIGW"""
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_MONITOR_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_MONITOR_API_URL
 
 
@@ -51,7 +52,7 @@ class SearchAlarmStrategy(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/alarm_strategy/search/"
         return "/search_alarm_strategy_v3/"
 
@@ -63,7 +64,7 @@ class SaveAlarmStrategy(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/alarm_strategy/save/"
         return "/save_alarm_strategy_v3/"
 
@@ -74,7 +75,7 @@ class DeleteAlarmStrategy(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/alarm_strategy/delete/"
         return "/delete_alarm_strategy_v3/"
 
@@ -85,7 +86,7 @@ class SwitchAlarmStrategy(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/alarm_strategy/switch/"
         return "/switch_alarm_strategy/"
 
@@ -97,7 +98,7 @@ class UnifyQuery(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/data_query/time_series_unify_query/"
         return "/time_series/unify_query/"
 
@@ -109,7 +110,7 @@ class GetVariableValue(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/data_query/get_variable_value/"
         return "/get_variable_value/"
 
@@ -120,9 +121,9 @@ class SearchNoticeGroup(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
-            return "/app/data_query/get_variable_value/"
-        return "/get_variable_value/"
+        if self.use_multi_tenant_mode():
+            return "/app/user_group/search/"
+        return "/search_notice_group/"
 
 
 class SaveNoticeGroup(BKMonitorBaseResource):
@@ -132,7 +133,7 @@ class SaveNoticeGroup(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/user_group/save/"
         return "/save_notice_group/"
 
@@ -144,7 +145,7 @@ class DeleteNoticeGroup(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/user_group/delete/"
         return "/delete_notice_group/"
 
@@ -156,7 +157,7 @@ class SearchAlert(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/app/alert/search/"
         return "/search_alert/"
 
@@ -168,9 +169,9 @@ class GetClusterInfo(BKMonitorBaseResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
-            return "/metadata_get_cluster_info/"
-        return "/app/metadata/get_cluster_info/"
+        if self.use_multi_tenant_mode():
+            return "/app/metadata/get_cluster_info/"
+        return "/metadata_get_cluster_info/"
 
 
 class ReportMetric(APIResource):
@@ -199,3 +200,8 @@ class ReportMetric(APIResource):
             validated_request_data["data"] = datas[i: i + BKMONITOR_METRIC_MAX_BATCH_SIZE]
             results["results"].append(super().perform_request(validated_request_data))
         return results
+
+
+class ReportEvent(ReportMetric):
+    name = gettext_lazy("上报到监控自定义事件")
+    RequestSerializer = ReportEventSerializer

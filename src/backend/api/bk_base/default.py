@@ -51,8 +51,8 @@ class BkBaseResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-base", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_BASE_API_URL
 
     def build_request_data(self, validated_request_data: dict) -> dict:
@@ -68,8 +68,8 @@ class DebugBkBaseResource(BkBaseResource, abc.ABC):
     @property
     def base_url(self):
         """多租户模式切换到租户 APIGW"""
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-base", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_BASE_DEBUG_API_URL
 
 

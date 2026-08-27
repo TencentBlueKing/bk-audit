@@ -25,7 +25,7 @@ from django.conf import settings
 
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.feature.constants import FeatureTypeChoices
-from apps.feature.handlers import FeatureHandler
+from apps.feature.handlers import FeatureHandler, get_entry_feature_toggle
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
     AGENT_AUTH_KEY,
@@ -63,13 +63,7 @@ class EntryHandler(object):
             static_url = "//%s/static/" % app_subdomains.split(";")[0]
 
         # 特性开关：首屏一次性下发各开关的 enabled 状态，前端据此控制入口显隐
-        feature_toggle = {
-            feature_id: (FeatureHandler(feature_id).check() and FeatureHandler(feature_id).feature.is_enable_view)
-            for feature_id in (
-                FeatureTypeChoices.WATERMARK.value,
-                FeatureTypeChoices.AI_CAPABILITY.value,
-            )
-        }
+        feature_toggle = get_entry_feature_toggle()
 
         # 平台管理员
         manage_actions = "list_storage,list_sensitive_object"

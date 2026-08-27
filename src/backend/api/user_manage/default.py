@@ -35,8 +35,8 @@ class UserManageResource(AuditBkApiResource, abc.ABC):
 
     @property
     def base_url(self):
-        if self.use_muti_tenant_mode():
-            return get_endpoint("bk-user", APIProvider.APIGW, stage="prod")
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_USER_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return USER_MANAGE_URL
 
 
@@ -46,7 +46,7 @@ class ListUsers(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/users/"
         return "/list_users/"
 
@@ -57,13 +57,13 @@ class RetrieveUser(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/users/{bk_username}/"
         return "/retrieve_user/"
 
     @property
     def url_keys(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return ["bk_username"]
         return []
 
@@ -74,13 +74,13 @@ class ListUserDepartments(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/users/{bk_username}/departments/"
         return "/list_profile_departments/"
 
     @property
     def url_keys(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return ["bk_username"]
         return []
 
@@ -93,7 +93,7 @@ class ListDepartments(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/departments/"
         return "/list_departments/"
 
@@ -107,13 +107,13 @@ class RetrieveDepartment(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/departments/{department_id}/"
         return "/retrieve_department/"
 
     @property
     def url_keys(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return ["department_id"]
         return []
 
@@ -134,7 +134,7 @@ class BatchLookupVirtualUserResource(UserManageResource):
 
     @property
     def action(self):
-        if self.use_muti_tenant_mode():
+        if self.use_multi_tenant_mode():
             return "/api/v3/open/tenant/virtual-users/-/lookup/"
         return "/batch_lookup_virtual_user/"
 
