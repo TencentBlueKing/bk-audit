@@ -22,8 +22,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name='risk',
-            index=models.Index(
-                fields=['strategy', 'is_deleted', 'event_time'], name='idx_risk_strategy_isdel_time'
-            ),
+            index=models.Index(fields=['strategy', 'is_deleted', 'event_time'], name='idx_risk_strategy_isdel_time'),
         ),
     ]

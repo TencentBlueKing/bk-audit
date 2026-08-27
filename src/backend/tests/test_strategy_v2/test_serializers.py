@@ -195,7 +195,12 @@ class StrategySerializersTest(TestCase):
                     "conditions": {
                         "where": {
                             "condition": {
-                                "field": {"table": "table", "raw_name": "event_type", "display_name": "event_type", "field_type": "string"},
+                                "field": {
+                                    "table": "table",
+                                    "raw_name": "event_type",
+                                    "display_name": "event_type",
+                                    "field_type": "string",
+                                },
                                 "operator": "eq",
                                 "filters": ["test"],
                             }
