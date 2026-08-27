@@ -27,7 +27,7 @@
               alt=""
               class="title-icon"
               :src="wenhaoIcon">
-            <span>已选 {{ systems.length }} 个系统</span>
+            <span>已选系统</span>
           </div>
           <audit-icon
             class="expand-icon"
@@ -70,7 +70,9 @@
               class="suggest-item"
               type="button"
               @click="$emit('select-suggestion', item)">
-              {{ item }}
+              <show-tooltips-text
+                class="suggest-text"
+                :data="item" />
             </button>
           </div>
           <div class="suggest-column">
@@ -83,7 +85,9 @@
               class="suggest-item"
               type="button"
               @click="$emit('select-suggestion', item)">
-              {{ item }}
+              <show-tooltips-text
+                class="suggest-text"
+                :data="item" />
             </button>
           </div>
         </div>
@@ -153,34 +157,26 @@
                 v-for="(row, index) in currentFieldRows"
                 :key="`${fieldTab}-${row.name}-${index}`">
                 <td class="col-name">
-                  <span
-                    v-bk-tooltips="{ content: row.name, disabled: !row.name }"
-                    class="cell-text">
-                    {{ row.name }}
-                  </span>
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.name || ''" />
                 </td>
                 <td class="col-desc">
-                  <span
-                    v-bk-tooltips="{ content: row.desc, disabled: !row.desc }"
-                    class="cell-text">
-                    {{ row.desc }}
-                  </span>
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.desc || ''" />
                 </td>
                 <td class="col-sample">
-                  <span
-                    v-bk-tooltips="{ content: row.sample, disabled: !row.sample }"
-                    class="cell-text">
-                    {{ row.sample }}
-                  </span>
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.sample || ''" />
                 </td>
                 <td
                   v-if="fieldTab === 'extend'"
                   class="col-system">
-                  <span
-                    v-bk-tooltips="{ content: row.system, disabled: !row.system }"
-                    class="cell-text">
-                    {{ row.system }}
-                  </span>
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.system || ''" />
                 </td>
                 <td class="col-actions">
                   <button
@@ -209,6 +205,8 @@
       class="condition-filter-slot">
       <condition-filter-card
         ref="filterCardRef"
+        :extension-fields="extensionFields"
+        :standard-fields="standardFields"
         :systems="systems"
         @searched="scrollFilterCardIntoView" />
     </div>
@@ -218,14 +216,25 @@
 <script lang="ts" setup>
   import { computed, nextTick, ref } from 'vue';
 
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
   import ConditionFilterCard from './condition-filter-card.vue';
-  import type { SelectedSystem } from '../../types';
+  import type { SelectedSystem, SystemFieldRow } from '../../types';
 
   import wenhaoIcon from '@images/wenhao.svg';
 
-  defineProps<{
+  const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
-  }>();
+    commonOperations?: string[];
+    historicalOperations?: string[];
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+  }>(), {
+    commonOperations: () => [],
+    historicalOperations: () => [],
+    standardFields: () => [],
+    extensionFields: () => [],
+  });
 
   const emit = defineEmits<{
     reselect: [];
@@ -237,7 +246,12 @@
     desc: string;
     sample: string;
     system?: string;
+    rawName: string;
+    nlName: string;
+    keys: string[];
   }
+
+  const SUGGESTION_LIMIT = 4;
 
   const systemsExpanded = ref(true);
   const fieldExpanded = ref(true);
@@ -248,162 +262,43 @@
   } | null>(null);
   const filterCardAnchorRef = ref<HTMLElement | null>(null);
 
-  const commonSuggestions = [
+  const fallbackCommonSuggestions = [
     '查询「替换为实际用户」近7天的删除操作',
     '查询「替换为实际安装包」近7天的下载操作',
     '查询「替换为实际安装包」近7天的成功操作',
     '查询「替换为实际用户」近30天的API操作',
   ];
 
-  const historySuggestions = [
-    '查询 frodomei 近7天的删除操作',
-    '查询 audit_admin 近30天的下载操作',
-    '查询「蓝盾」近7天的 package_delete 操作',
-    '查询 bkci-agent-2.0.7tgz 近30天的 API 操作',
-  ];
+  const commonSuggestions = computed(() => (
+    (props.commonOperations.length ? props.commonOperations : fallbackCommonSuggestions)
+      .slice(0, SUGGESTION_LIMIT)
+  ));
 
-  const commonFields: FieldRow[] = [
-    {
-      name: '操作起始时间',
-      desc: '日志中记录的操作开始时间，查询必填。',
-      sample: '2026-07-07 10:00:00',
-    },
-    {
-      name: '操作人',
-      desc: '发起操作的账号或用户标识。',
-      sample: 'frodomei',
-    },
-    {
-      name: '操作人账号类型',
-      desc: '账号来源类型，如个人账号、平台账号、服务账号。',
-      sample: '服务账号',
-    },
-    {
-      name: '来源系统',
-      desc: '上报该条审计日志的业务系统。',
-      sample: 'cetus_tk',
-    },
-    {
-      name: '操作结果',
-      desc: '操作是否成功。',
-      sample: '失败',
-    },
-    {
-      name: '操作途径',
-      desc: '操作入口来源。',
-      sample: 'API',
-    },
-    {
-      name: '来源IP',
-      desc: '发起操作的客户端 IP。',
-      sample: '10.12.8.21',
-    },
-    {
-      name: '事件ID',
-      desc: '审计事件唯一标识。',
-      sample: 'evt-cetus_tk-100000',
-    },
-    {
-      name: '请求ID',
-      desc: '业务请求链路标识。',
-      sample: 'req-0mw276db-0',
-    },
-  ];
+  const historySuggestions = computed(() => (
+    props.historicalOperations.slice(0, SUGGESTION_LIMIT)
+  ));
 
-  const extendFields: FieldRow[] = [
-    {
-      name: '请求路径',
-      desc: '请求路径',
-      sample: '/story/api/v1/story/create/',
-      system: 'cetus_tk',
-    },
-    {
-      name: '请求方法',
-      desc: '请求方法',
-      sample: 'GET',
-      system: 'cetus_tk',
-    },
-    {
-      name: 'ins_cu_content',
-      desc: '实例创建或更新的内容',
-      sample: '',
-      system: 'cetus_tk',
-    },
-    {
-      name: '蓝盾流水线ID',
-      desc: '蓝盾流水线ID',
-      sample: 'p-abc123',
-      system: '蓝盾',
-    },
-    {
-      name: '蓝盾流水线名称',
-      desc: '蓝盾流水线名称',
-      sample: 'audit-deploy',
-      system: '蓝盾',
-    },
-    {
-      name: '项目ID',
-      desc: '项目ID',
-      sample: 'space-120',
-      system: '蓝盾',
-    },
-    {
-      name: '构建号',
-      desc: '构建号',
-      sample: '1024',
-      system: '蓝盾',
-    },
-    {
-      name: '触发方式',
-      desc: '触发方式',
-      sample: 'manual',
-      system: '蓝盾',
-    },
-    {
-      name: '风险等级',
-      desc: '风险等级',
-      sample: '高',
-      system: '云安全审计',
-    },
-    {
-      name: '告警策略',
-      desc: '告警策略名称',
-      sample: '异常登录检测',
-      system: '云安全审计',
-    },
-    {
-      name: '资源类型',
-      desc: '权限资源类型',
-      sample: 'system',
-      system: '权限中心',
-    },
-    {
-      name: '操作动作',
-      desc: '权限操作动作',
-      sample: 'manage',
-      system: '权限中心',
-    },
-    {
-      name: '账单周期',
-      desc: '账单所属周期',
-      sample: '2026-06',
-      system: 'TOD账单系统',
-    },
-    {
-      name: '费用科目',
-      desc: '费用科目编码',
-      sample: 'cost-cloud',
-      system: 'TOD账单系统',
-    },
-  ];
+  const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
+    name: field.displayName || field.rawName,
+    desc: field.description || '',
+    sample: field.sampleValue === undefined || field.sampleValue === null
+      ? ''
+      : String(field.sampleValue),
+    system: field.systemName || field.systemId,
+    rawName: field.rawName,
+    nlName: field.nlName || field.displayName || field.rawName,
+    keys: field.keys || [],
+  });
+
+  const commonFields = computed(() => props.standardFields.map(mapToFieldRow));
+  const extendFields = computed(() => props.extensionFields.map(mapToFieldRow));
 
   const currentFieldRows = computed(() => (
-    fieldTab.value === 'common' ? commonFields : extendFields
+    fieldTab.value === 'common' ? commonFields.value : extendFields.value
   ));
 
   const scrollFilterCardIntoView = async () => {
     await nextTick();
-    // 等布局完成后再滚，确保筛选卡高度已计入滚动区域
     requestAnimationFrame(() => {
       filterCardAnchorRef.value?.scrollIntoView({
         behavior: 'smooth',
@@ -416,22 +311,25 @@
     if (mode === 'filter') {
       filterCardShow.value = true;
       await nextTick();
-      await filterCardRef.value?.addOrFocusField?.(row.name, row.sample);
+      await filterCardRef.value?.addOrFocusField?.(row.rawName || row.name, row.sample);
       scrollFilterCardIntoView();
       return;
     }
     const sampleText = row.sample || '替换为实际值';
-    emit('select-suggestion', `查询「${row.name}」为 ${sampleText} 的审计日志`);
+    // 文档：自然语言用 nl_name + sample_value → `{nl_name}为{sample_value}`
+    emit('select-suggestion', `${row.nlName}为${sampleText}`);
   };
 </script>
 
 <style lang="postcss" scoped>
   .retrieval-guide-wrap {
     display: flex;
-    width: 900px;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     flex-direction: column;
     gap: 16px;
+    box-sizing: border-box;
   }
 
   .condition-filter-slot {
@@ -439,9 +337,15 @@
   }
 
   .retrieval-guide-card {
+    display: flex;
     width: 100%;
     max-width: 100%;
+    /* 撑满消息区剩余视口，减少卡片与输入框之间的大片空白 */
+    height: calc(100vh - 160px);
+    max-height: calc(100vh - 160px);
+    min-height: 620px;
     padding: 20px 24px 24px;
+    overflow: hidden;
     font-size: 14px;
     line-height: 22px;
     color: #63656e;
@@ -450,10 +354,12 @@
     border-radius: 16px;
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
+    flex-direction: column;
   }
 
   .systems-section {
     margin-bottom: 20px;
+    flex-shrink: 0;
   }
 
   .systems-header {
@@ -535,6 +441,7 @@
 
   .suggest-section {
     margin-bottom: 8px;
+    flex-shrink: 0;
   }
 
   .suggest-title {
@@ -564,6 +471,7 @@
     width: 100%;
     margin-bottom: 8px;
     padding: 8px 12px;
+    overflow: hidden;
     font-size: 14px;
     line-height: 22px;
     color: #63656e;
@@ -585,15 +493,25 @@
       background: #f0f5ff;
       border-color: #c5d8ff;
     }
+
+    .suggest-text {
+      width: 100%;
+      color: inherit;
+    }
   }
 
   .field-section {
+    display: flex;
     margin-top: 16px;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
   .field-divider {
     display: flex;
     margin-bottom: 16px;
+    flex-shrink: 0;
     align-items: center;
     gap: 12px;
 
@@ -614,6 +532,7 @@
   .field-toolbar {
     display: flex;
     flex-wrap: wrap;
+    flex-shrink: 0;
     align-items: center;
     gap: 12px 16px;
   }
@@ -689,10 +608,24 @@
   }
 
   .field-table-wrap {
+    flex: 1;
+    min-height: 0;
     margin-top: 12px;
     overflow: auto;
     border: 1px solid #dcdee5;
     border-radius: 2px;
+    scrollbar-width: thin;
+    scrollbar-color: #dcdee5 transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #dcdee5;
+      border-radius: 2px;
+    }
   }
 
   .field-table {
@@ -713,6 +646,9 @@
     }
 
     th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
       height: 42px;
       font-weight: 400;
       color: #313238;

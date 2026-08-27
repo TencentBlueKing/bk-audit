@@ -32,6 +32,7 @@
           ref="filterDropdownRef"
           :is-show="isDropdownShow"
           placement="bottom-start"
+          :popover-options="{ extCls: 'chat-config-dropdown-pop' }"
           trigger="click"
           @hide="handleFilterDropdownHide"
           @show="isDropdownShow = true">
@@ -46,38 +47,26 @@
           </div>
           <template #content>
             <bk-dropdown-menu>
-              <bk-dropdown-item ext-cls="sub-menu-item">
-                <bk-dropdown
-                  ref="exportSubmenuRef"
-                  :is-show="isExportSubmenuShow"
-                  placement="right-start"
-                  style="width: 100%"
-                  trigger="hover"
-                  @hide="isExportSubmenuShow = false"
-                  @show="isExportSubmenuShow = true">
-                  <div class="dropdown-sub-trigger">
-                    <span>导出会话</span>
-                    <angle-right class="sub-icon" />
-                  </div>
-                  <template #content>
-                    <bk-dropdown-menu>
-                      <bk-dropdown-item @click="showExportDialog('json')">
-                        导出 JSON
-                      </bk-dropdown-item>
-                      <bk-dropdown-item @click="showExportDialog('markdown')">
-                        导出 Markdown
-                      </bk-dropdown-item>
-                      <bk-dropdown-item @click="showExportDialog('pdf')">
-                        导出 PDF
-                      </bk-dropdown-item>
-                    </bk-dropdown-menu>
-                  </template>
-                </bk-dropdown>
+              <!-- 本期仅开放「清空所有会话」，其余配置项禁用且不可点 -->
+              <bk-dropdown-item
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
+                <div class="config-item-row">
+                  <span>导出会话</span>
+                  <angle-right class="sub-icon" />
+                </div>
               </bk-dropdown-item>
-              <bk-dropdown-item @click="showImportDialog">
+              <bk-dropdown-item
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
                 导入会话
               </bk-dropdown-item>
-              <bk-dropdown-item @click="showReportList">
+              <bk-dropdown-item
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
                 报告列表
               </bk-dropdown-item>
               <bk-dropdown-item @click="showClearAllDialog">
@@ -287,7 +276,7 @@
                 getGroupHeaderDragClass(group.name),
                 { 'is-menu-open': activeGroupMenuId === group.name },
               ]"
-              @click="toggleGroup(group.name)">
+              @click="handleGroupHeaderClick(group.name)">
               <img
                 v-if="collapsedGroups.has(group.name)"
                 alt=""
@@ -844,7 +833,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, h, nextTick, onUnmounted, ref, watch } from 'vue';
+  import { computed, h, nextTick, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { InfoBox } from 'bkui-vue';
   import { AngleLeft, AngleRight, Search, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
 
@@ -919,22 +908,20 @@
   const searchKeyword = ref('');
   const searchInputRef = ref<HTMLInputElement | null>(null);
   const isDropdownShow = ref(false);
-  const isExportSubmenuShow = ref(false);
   const filterDropdownKey = ref(0);
   const filterDropdownRef = ref<DropdownRefExpose | null>(null);
-  const exportSubmenuRef = ref<DropdownRefExpose | null>(null);
   const sceneSelectorRef = ref<InstanceType<typeof SceneSystemSelector>>();
 
   const handleFilterDropdownHide = () => {
     isDropdownShow.value = false;
-    isExportSubmenuShow.value = false;
   };
+
+  /** 配置菜单禁用项：吞掉点击，避免仍触发关闭/业务逻辑 */
+  const onDisabledConfigClick = () => undefined;
 
   const closeFilterDropdown = (forceRemount = false) => {
     isDropdownShow.value = false;
-    isExportSubmenuShow.value = false;
     filterDropdownRef.value?.hide?.();
-    exportSubmenuRef.value?.hide?.();
     if (forceRemount) {
       filterDropdownKey.value += 1;
     }
@@ -1288,6 +1275,15 @@
     { immediate: true },
   );
 
+  // initSidebar 会清空组内会话并把 childrenLoaded 置 false，但分组 id/name 不变时
+  // 上面的 watch 不会触发，导致已展开分组子节点缺失；此处补拉展开组。
+  watch(
+    () => props.groups.map(g => `${g.id}:${g.childrenLoaded ? 1 : 0}`).join('\0'),
+    () => {
+      requestLoadExpandedGroups(props.groups);
+    },
+  );
+
   watch(searchKeyword, (keyword) => {
     if (!keyword.trim()) return;
     // 搜索需覆盖未展开分组：一次性按需拉取尚未加载的分组
@@ -1305,6 +1301,17 @@
     }
     collapsedGroups.value = next;
     persistExpandedGroups();
+  };
+
+  // 拖拽分组结束后浏览器会补发 click，会误触发折叠；拖拽后吞掉一次点击
+  const suppressGroupHeaderClick = ref(false);
+
+  const handleGroupHeaderClick = (groupName: string) => {
+    if (suppressGroupHeaderClick.value) {
+      suppressGroupHeaderClick.value = false;
+      return;
+    }
+    toggleGroup(groupName);
   };
 
   // 拖拽状态
@@ -1362,6 +1369,9 @@
       e.dataTransfer.setData('text/plain', JSON.stringify({ type, id, sourceGroup }));
     }
     dragState.value = { type, id, sourceGroup };
+    if (type === 'group') {
+      suppressGroupHeaderClick.value = false;
+    }
   };
 
   const handleDragOver = (
@@ -1424,6 +1434,7 @@
     e.preventDefault();
     const { type, id, sourceGroup } = dragState.value;
     const { position } = dragOverState.value;
+    const wasGroupDrag = type === 'group';
 
     if (type === 'conversation' && targetType === 'conversation' && id) {
       const sameContainer = (sourceGroup || undefined) === (targetGroup || undefined);
@@ -1479,11 +1490,26 @@
 
     dragState.value = { type: null, id: null };
     dragOverState.value = { type: null, id: null, position: null };
+    // drop 后仍可能补发 header click，需吞掉
+    if (wasGroupDrag) {
+      suppressGroupHeaderClick.value = true;
+      window.setTimeout(() => {
+        suppressGroupHeaderClick.value = false;
+      }, 100);
+    }
   };
 
   const handleDragEnd = () => {
+    const wasGroupDrag = dragState.value.type === 'group';
     dragState.value = { type: null, id: null };
     dragOverState.value = { type: null, id: null, position: null };
+    // 未落到可 drop 区域时只有 dragend；同样可能补发 click
+    if (wasGroupDrag) {
+      suppressGroupHeaderClick.value = true;
+      window.setTimeout(() => {
+        suppressGroupHeaderClick.value = false;
+      }, 100);
+    }
   };
 
   // 新建分组气泡弹窗
@@ -1931,6 +1957,10 @@
     closeSidebarPopovers();
   };
 
+  // 本期配置菜单未挂入口，保留实现便于恢复
+  void showImportDialog;
+  void showReportList;
+
   watch(
     () => [exportDialog.value.show, importDialog.value.show],
     ([exportShow, importShow]) => {
@@ -2199,6 +2229,26 @@
       },
     });
   };
+
+  /** keep-alive 失活时关闭 teleport/遮罩类浮层，避免切回后整页点击无响应 */
+  const closeKeepAliveOverlays = () => {
+    closeSidebarPopovers();
+    closeCollapsedSearch();
+    addGroupDialog.value.show = false;
+    addGroupDialog.value.name = '';
+    exportDialog.value.show = false;
+    importDialog.value.show = false;
+    isReportDetailShow.value = false;
+    isReportListShow.value = false;
+  };
+
+  onDeactivated(() => {
+    closeKeepAliveOverlays();
+  });
+
+  defineExpose({
+    closeKeepAliveOverlays,
+  });
 </script>
 
 <style

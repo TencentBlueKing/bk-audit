@@ -18,10 +18,7 @@
 /** 消息业务状态 */
 export type AiMessageStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED';
 
-/**
- * 消息类型。
- * SYSTEM_SELECTION / NATURAL_LANGUAGE_SEARCH / LOG_SEARCH 的 input/output Schema 下周再对齐。
- */
+/** 消息类型 */
 export type AiMessageType =
   | 'SYSTEM_SELECTION'
   | 'NATURAL_LANGUAGE_SEARCH'
@@ -33,6 +30,101 @@ export type AiSidebarNodeType = 'GROUP' | 'CONVERSATION';
 
 /** 消息历史翻页方向 */
 export type AiMessageDirection = 'BEFORE' | 'AFTER';
+
+/** 检索条件字段 */
+export interface AiConditionField {
+  raw_name: string;
+  field_type?: string;
+  keys: string[];
+}
+
+/** 单条筛选条件（与 NL output / LOG input 同构） */
+export interface AiConditionItem {
+  field: AiConditionField;
+  operator: string;
+  filters: any[];
+}
+
+/** 统一检索 condition */
+export interface AiSearchCondition {
+  scope_type: 'system' | string;
+  scope_id: string;
+  start_time: string;
+  end_time: string;
+  conditions?: AiConditionItem[];
+}
+
+/** SYSTEM_SELECTION 字段项 */
+export interface AiSystemFieldItem {
+  raw_name: string;
+  keys: string[];
+  display_name: string;
+  nl_name: string;
+  description: string;
+  allow_operators: string[];
+  sample_value?: any;
+}
+
+/** SYSTEM_SELECTION 系统项 */
+export interface AiSystemInfo {
+  system_id: string;
+  name: string;
+  standard_fields?: AiSystemFieldItem[];
+  extension_fields?: AiSystemFieldItem[];
+}
+
+export interface AiOperationHint {
+  query_text: string;
+}
+
+export interface AiSystemSelectionInput {
+  system_ids: string[];
+}
+
+export interface AiSystemSelectionOutput {
+  systems: AiSystemInfo[];
+  common_operations?: AiOperationHint[];
+  historical_operations?: AiOperationHint[];
+}
+
+export interface AiNaturalLanguageSearchInput {
+  query_text: string;
+  auto_execute?: boolean;
+}
+
+export interface AiNaturalLanguageSearchOutput {
+  condition: AiSearchCondition;
+}
+
+export interface AiLogSearchInput {
+  condition: AiSearchCondition;
+}
+
+export interface AiLogSearchColumn {
+  raw_name: string;
+  display_name: string;
+  description?: string;
+}
+
+export interface AiLogSearchQuerySummary {
+  scope_type?: string;
+  scope_id?: string;
+  time_range?: {
+    start_time?: string;
+    end_time?: string;
+  };
+  condition_count?: number;
+  source?: 'natural_language' | 'field_condition' | string;
+  took_ms?: number;
+  executed_at?: string;
+}
+
+export interface AiLogSearchOutput {
+  total: number;
+  columns: AiLogSearchColumn[];
+  samples: Record<string, any>[];
+  query_summary?: AiLogSearchQuerySummary;
+}
 
 export interface AiConversationGroup {
   uid: string;
@@ -55,14 +147,15 @@ export interface AiMessage {
   parent_message_uid?: string | null;
   message_type: AiMessageType;
   status: AiMessageStatus;
-  /** Schema 未冻结，按任意对象透传 */
   input_data?: Record<string, any>;
-  output_data?: Record<string, any>;
+  output_data?: Record<string, any> | null;
   error_code?: string | null;
   error_message?: string | null;
   created_at?: string;
   updated_at?: string;
   supports_feedback?: boolean;
+  feedback?: Record<string, any> | null;
+  attachments?: any[];
 }
 
 export interface AiMessageWindow {
@@ -157,4 +250,37 @@ export interface AiSidebarPinParams {
   node_type: 'CONVERSATION';
   node_uid: string;
   is_pinned: boolean;
+}
+
+/** 全量导出字段范围 */
+export type AiExportFieldScope = 'all' | 'standard' | 'snapshot' | 'specified';
+
+export interface AiExportField {
+  raw_name: string;
+  display_name?: string;
+  keys?: string[];
+}
+
+export interface AiExportConfig {
+  field_scope: AiExportFieldScope;
+  fields?: AiExportField[];
+}
+
+/** POST .../full-export/ 响应 */
+export interface AiFullExportResult {
+  export_task_id: number;
+  status: string;
+  /** 兼容任务模型原样返回 */
+  id?: number;
+}
+
+/** 导出任务详情（collector_query_task） */
+export interface AiExportTaskDetail {
+  id: number;
+  status: string;
+  name?: string;
+  error_msg?: string | null;
+  total?: number;
+  current_records?: number;
+  result?: Record<string, any> | null;
 }

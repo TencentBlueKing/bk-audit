@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
+    software distributed under the License is distributed on
+    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+    either express or implied. See the License for the
+    specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
@@ -23,19 +23,28 @@ export interface SelectedSystem {
   name: string;
 }
 
+/** 引导卡 / 条件筛选用的字段行（来自 SYSTEM_SELECTION） */
+export interface SystemFieldRow {
+  rawName: string;
+  keys: string[];
+  displayName: string;
+  nlName: string;
+  description: string;
+  allowOperators: string[];
+  sampleValue?: any;
+  systemId?: string;
+  systemName?: string;
+}
+
 export interface RetrievalFilterCondition {
   field: string;
   value: string;
 }
 
-export interface RetrievalResultRow {
-  startTime: string;
-  operator: string;
-  accountType: string;
-  system: string;
-  result: string;
-  method: string;
-  sourceIp: string;
+export interface RetrievalResultColumn {
+  rawName: string;
+  displayName: string;
+  description?: string;
 }
 
 export interface RetrievalResultPayload {
@@ -45,7 +54,11 @@ export interface RetrievalResultPayload {
   title: string;
   totalHit: number;
   previewCount: number;
-  rows: RetrievalResultRow[];
+  /** 是否需要展示「仅预览前 N 条」文案 */
+  showPreviewHint: boolean;
+  columns: RetrievalResultColumn[];
+  /** 行数据：key 为 column.rawName */
+  rows: Record<string, any>[];
 }
 
 export interface ChatMessage {
@@ -56,12 +69,18 @@ export interface ChatMessage {
   status?: 'pending' | 'confirmed' | 'closed';
   systemIds?: string[];
   systems?: SelectedSystem[];
+  /** SYSTEM_SELECTION 推荐问法 */
+  commonOperations?: string[];
+  historicalOperations?: string[];
+  standardFields?: SystemFieldRow[];
+  extensionFields?: SystemFieldRow[];
   result?: RetrievalResultPayload;
   /** 后端消息状态（轮询用） */
   apiStatus?: AiUiMessageStatus;
   messageType?: string;
   errorCode?: string;
   errorMessage?: string;
+  parentMessageUid?: string | null;
 }
 
 export interface Conversation {
@@ -72,6 +91,11 @@ export interface Conversation {
   sceneType?: ChatSceneType;
   systemIds: string[];
   systems: SelectedSystem[];
+  /** 最近成功 SYSTEM_SELECTION 的字段上下文 */
+  standardFields?: SystemFieldRow[];
+  extensionFields?: SystemFieldRow[];
+  commonOperations?: string[];
+  historicalOperations?: string[];
   messages: ChatMessage[];
   createdAt: number;
   /** 本地草稿：确认系统前尚未落库 */
