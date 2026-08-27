@@ -111,6 +111,13 @@
     buildStrategyCreatePayload,
     parseStrategyDetailToForm,
   } from './utils/strategy-protocol';
+  import {
+    getStrategyBindingScope,
+    getStrategyRouteNames,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../utils/strategy-routes';
 
 
   interface IFormData {
@@ -147,9 +154,13 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
+
+  // 全局策略（平台）含第 5 步「风险分派规则」；审计策略（场景）仅 4 步
+  const hasAssignStep = isPlatformStrategyRoute(route.name);
 
   const comMap = {
     1: StepBasicInfo,
@@ -158,17 +169,25 @@
     4: eventReport,
     5: Step3,
   };
-  const steps = [
-    { title: t('基础信息') },
-    { title: t('风险发现规则') },
-    { title: t('单据展示') },
-    { title: t('事件调查报告') },
-    { title: t('风险分派规则') },
-  ];
+  const steps = computed(() => {
+    const list = [
+      { title: t('基础信息') },
+      { title: t('风险发现规则') },
+      { title: t('单据展示') },
+      { title: t('事件调查报告') },
+    ];
+    if (hasAssignStep) {
+      list.push({ title: t('风险分派规则') });
+    }
+    return list;
+  });
+  const maxStep = hasAssignStep ? 5 : 4;
+  const stepBarWidth = computed(() => (hasAssignStep ? '780px' : '620px'));
   const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
     const n = Number(step);
     if ([1, 2, 3, 4, 5].includes(n)) {
-      return n as 1 | 2 | 3 | 4 | 5;
+      const clamped = Math.min(n, maxStep) as 1 | 2 | 3 | 4 | 5;
+      return clamped;
     }
     return 1;
   };
@@ -190,8 +209,8 @@
   });
 
   let isSwitchSuccess = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
@@ -212,6 +231,7 @@
     }
     return tagMapPromise;
   };
+  const createBindingScope = getStrategyBindingScope(route);
   const formData = ref<IFormData>({
     strategy_name: '',
     tags: [],
@@ -233,6 +253,9 @@
     report_enabled: false,
     report_auto_render: false,
     report_config: {},
+    binding_type: createBindingScope.binding_type,
+    visibility: createBindingScope.isPlatform ? undefined : {},
+    scene_id: createBindingScope.scene_id ?? undefined,
   });
   // 进入编辑时的初始表单快照（只在编辑态使用，用于还原）
   const initialFormData = ref<IFormData | null>(null);
@@ -392,7 +415,7 @@
       if (isEditMode && formData.value.status === 'running') {
         window.changeConfirm = false;
         router.push({
-          name: 'strategyList',
+          name: strategyRoutes.list,
         });
         messageSuccess(t('编辑成功'));
         return;
@@ -406,7 +429,7 @@
           if (isSwitchSuccess) return;
           window.changeConfirm = false;
           router.push({
-            name: 'strategyList',
+            name: strategyRoutes.list,
           });
         });
       };
@@ -432,7 +455,7 @@
         messageSuccess(isEditMode ? t('编辑成功') : t('新建成功'));
         window.changeConfirm = false;
         router.push({
-          name: 'strategyList',
+          name: strategyRoutes.list,
         });
       }
     },
@@ -454,7 +477,7 @@
     onSuccess: () => {
       window.changeConfirm = false;
       router.push({
-        name: 'strategyList',
+        name: strategyRoutes.list,
       });
       isSwitchSuccess = true;
     },
@@ -492,7 +515,7 @@
     }
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
-    saveStrategy(buildStrategyCreatePayload(params));
+    saveStrategy(buildStrategyCreatePayload(params, route));
   };
 
   const handleSaveDraft = (params: Record<string, any>) => {
@@ -756,7 +779,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
 
@@ -780,7 +803,7 @@
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 780px;
+  width: v-bind(stepBarWidth);
   margin: 0 auto;
   transform: translateX(-86px);
 

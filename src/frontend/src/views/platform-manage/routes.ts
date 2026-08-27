@@ -73,5 +73,63 @@ export default {
         nodeSideContent: false,
       },
     },
+    {
+      path: 'platform-strategy-list',
+      component: () => import('@views/strategy-manage/list/index.vue'),
+      name: 'platformStrategyList',
+      meta: {
+        title: '全局策略',
+        skeleton: 'strategyList',
+        nodeSideContent: false,
+      },
+    },
+    {
+      path: 'platform-strategy-create',
+      component: () => import('@views/strategy-manage/strategy-create/index.vue'),
+      name: 'platformStrategyCreate',
+      meta: {
+        title: '新建策略',
+        skeleton: 'strategyCreate',
+        nodeSideContent: false,
+        changeSceneIsBackedList: true,
+        ListPageName: 'platformStrategyList',
+      },
+    },
+    {
+      path: 'platform-strategy-edit/:id',
+      component: () => import('@views/strategy-manage/strategy-create/index.vue'),
+      name: 'platformStrategyEdit',
+      meta: {
+        title: '编辑策略',
+        skeleton: 'strategyEdit',
+        nodeSideContent: false,
+        changeSceneIsBackedList: true,
+        ListPageName: 'platformStrategyList',
+      },
+    },
+    {
+      path: 'platform-strategy-clone/:id',
+      component: () => import('@views/strategy-manage/strategy-create/index.vue'),
+      name: 'platformStrategyClone',
+      meta: {
+        title: '克隆策略',
+        skeleton: 'strategyClone',
+        nodeSideContent: false,
+        changeSceneIsBackedList: true,
+        ListPageName: 'platformStrategyList',
+      },
+    },
+    {
+      path: 'platform-strategy-upgrade/:strategyId/:controlId',
+      component: () => import('@views/strategy-manage/strategy-create/upgrade/index.vue'),
+      name: 'platformStrategyUpgrade',
+      meta: {
+        title: '升级详情',
+        skeleton: 'strategyUpgrade',
+        nodeSideContent: false,
+        changeSceneIsBackedList: true,
+        ListPageName: 'platformStrategyList',
+      },
+    },
   ],
 };

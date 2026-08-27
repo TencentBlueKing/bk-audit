@@ -58,7 +58,7 @@
   import _ from 'lodash';
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
@@ -68,6 +68,8 @@
 
   import EventTable from './components/event-table/index.vue';
   import StrategyTable from './components/strategy-table/index.vue';
+
+  import { getStrategyRouteNames } from '../../../utils/strategy-routes';
 
   interface IFormData {
     event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
@@ -93,6 +95,8 @@
   const emits = defineEmits<Emits>();
 
   const router = useRouter();
+  const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { t } = useI18n();
 
   const eventRef = ref();
@@ -132,7 +136,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
 

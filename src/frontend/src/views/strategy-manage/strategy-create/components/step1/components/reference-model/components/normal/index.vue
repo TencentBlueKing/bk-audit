@@ -355,6 +355,11 @@
 
   import useRequest from '@hooks/use-request';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../../../utils/strategy-routes';
+
   interface Emits {
     (e: 'updateConfigs', value: IFormData['configs']): void,
   }
@@ -416,8 +421,8 @@
 
   const { t } = useI18n();
   const route = useRoute();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const errors = ref<Array<Errors>>([]);
   // const timerRef = ref();

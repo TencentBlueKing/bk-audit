@@ -28,19 +28,23 @@
         <div class="form-label is-required">
           {{ t('风险单处理人') }}
         </div>
-        <audit-user-selector-tenant
+        <notice-group-select
           v-model="localValue.processors"
-          allow-create
-          :placeholder="t('请输入用户名')" />
+          :check-result-map="checkResultMap"
+          :group-list="groupList"
+          :loading="groupLoading"
+          @refresh="emits('refreshGroupList')" />
       </div>
       <div class="form-section-col">
         <div class="form-label">
           {{ t('关注人') }}
         </div>
-        <audit-user-selector-tenant
+        <notice-group-select
           v-model="localValue.notice_users"
-          allow-create
-          :placeholder="t('请输入用户名')" />
+          :check-result-map="checkResultMap"
+          :group-list="groupList"
+          :loading="groupLoading"
+          @refresh="emits('refreshGroupList')" />
       </div>
     </div>
 
@@ -64,10 +68,12 @@
       <div class="form-label is-required">
         {{ t('确认人') }}
       </div>
-      <audit-user-selector-tenant
+      <notice-group-select
         v-model="localValue.confirmers"
-        allow-create
-        :placeholder="t('请输入用户名')" />
+        :check-result-map="checkResultMap"
+        :group-list="groupList"
+        :loading="groupLoading"
+        @refresh="emits('refreshGroupList')" />
     </div>
   </div>
 </template>
@@ -75,26 +81,32 @@
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import AuditUserSelectorTenant from '@components/audit-user-selector-tenant/index.vue';
+  import NoticeGroupSelect from './notice-group-select.vue';
 
   interface RuleFields {
     scene_ids: Array<string | number>;
-    processors: string[];
-    notice_users: string[];
+    processors: Array<string | number>;
+    notice_users: Array<string | number>;
     assign_mode: 'confirm' | 'direct';
-    confirmers: string[];
+    confirmers: Array<string | number>;
   }
 
   interface Props {
     modelValue: RuleFields;
     sceneOptions: Array<{ id: string | number; name: string }>;
+    groupList: Array<{ id: string | number; name: string }>;
+    checkResultMap: Record<string, boolean>;
+    groupLoading?: boolean;
   }
 
   interface Emits {
     (e: 'update:modelValue', value: RuleFields): void;
+    (e: 'refreshGroupList'): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    groupLoading: false,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 

@@ -272,6 +272,7 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -308,6 +309,7 @@
     getSceneSystemParams,
     syncSceneContextToUrl,
   } from '@/utils/assist/scene-system-params';
+  import { getStrategyRouteNames, getStrategyListScopeParams } from '../utils/strategy-routes';
 
   enum FullEnum {
     FULL = 'full',
@@ -369,6 +371,8 @@
   const { on: onEvent, off } = useEventBus();
 
   const router = useRouter();
+  const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const {
     recordPageParams,
     removePageParams,
@@ -492,9 +496,14 @@
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
   const dataSource = (params: Record<string, any> = {}) => {
+    const scopeParams = getStrategyListScopeParams(route);
     // 记录本次请求实际使用的场景，供 scene:change 判断场景是否真正变化
-    lastFetchedScopeId.value = getSceneSystemParams().scope_id;
+    lastFetchedScopeId.value = scopeParams.scene_id !== undefined && scopeParams.scene_id !== null
+      ? String(scopeParams.scene_id)
+      : '__platform__';
     // render-list 统一产出 sort: ['-field'] / ['field']，策略后台接口使用 order_field + order_type
+    // Strategy 模型已无 scene_id，需过滤 URL/缓存中残留的非法排序字段
+    const STRATEGY_SORTABLE_FIELDS = new Set(['strategy_id', 'risk_count', 'updated_at']);
     const { sort, order_field: orderFieldFromParams, order_type: orderTypeFromParams, ...rest } = params;
     let orderField = orderFieldFromParams;
     let orderType = orderTypeFromParams;
@@ -509,8 +518,13 @@
       orderField = isDesc ? primarySort.slice(1) : primarySort;
       orderType = isDesc ? 'desc' : 'asc';
     }
+    if (orderField && !STRATEGY_SORTABLE_FIELDS.has(String(orderField))) {
+      orderField = undefined;
+      orderType = undefined;
+    }
     return StrategyManageService.fetchStrategyList({
       ...rest,
+      ...scopeParams,
       ...(orderField ? { order_field: orderField, order_type: orderType || 'asc' } : {}),
       tag: leftLabelFilterCondition.value,
     });
@@ -1081,6 +1095,7 @@
     defaultParams: {
       page: 1,
       page_size: 1,
+      ...getStrategyListScopeParams(route),
     },
     defaultValue: [],
     // manual: true,
@@ -1278,7 +1293,7 @@
   const handleCreate = () => {
     removePageParams();
     router.push({
-      name: 'strategyCreate',
+      name: strategyRoutes.create,
     });
   };
 
@@ -1300,7 +1315,7 @@
     if (data.isPending) return;
     recordPageParams();
     router.push({
-      name: 'strategyEdit',
+      name: strategyRoutes.edit,
       params: {
         id: data.strategy_id,
       },
@@ -1315,7 +1330,7 @@
     if (data.isPending || pendingStatusIdList.value.includes(data.strategy_id)) return;
     recordPageParams();
     router.push({
-      name: 'strategyClone',
+      name: strategyRoutes.clone,
       params: {
         id: data.strategy_id,
       },
@@ -1451,7 +1466,7 @@
       fetchGroupList();
     }
     if (!isRequest) {
-      Promise.all([fetchStrategyTags(), fetchStrategyCommon()]).then(() => {
+      Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {
         searchData = [
           ...defaultSearchData,
           {
@@ -1565,9 +1580,20 @@
     return hasKey;
   };
   const fetchData = () => {
+    // 清理 URL/缓存中残留的非法排序（如已移除的 scene_id 字段）
+    const urlParams = getSearchParams();
+    const sortableFields = new Set(['strategy_id', 'risk_count', 'updated_at']);
+    if (urlParams.order_field && !sortableFields.has(String(urlParams.order_field))) {
+      const nextParams = { ...urlParams };
+      delete nextParams.order_field;
+      delete nextParams.order_type;
+      delete nextParams.sort;
+      replaceSearchParams(nextParams);
+    }
+
     const hasKey = setSearchKey();
     // 标签与列表并行加载：列表不再依赖标签接口成功，避免标签失败时列表不渲染
-    void fetchStrategyTags();
+    void fetchStrategyTags(getStrategyListScopeParams(route));
     const tryFetch = (retry = 0) => {
       if (!listRef.value) {
         if (retry < 5) {

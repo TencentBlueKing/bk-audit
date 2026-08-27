@@ -71,6 +71,12 @@
 
   import useRequest from '@hooks/use-request';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
+
   interface Props {
     rtFields: Array<{
       label: string;
@@ -111,8 +117,8 @@
       .find(item => item.field_name === localValue.value[1])?.description || localValue.value[1];
     return `${val1}/${val2}`;
   });
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyEdit';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   // 获取参数值
   const {
     run: fetchStrategyFields,

@@ -4,8 +4,9 @@
 */
 
 import _ from 'lodash';
+import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
-import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+import { getStrategyBindingScope } from '../../utils/strategy-routes';
 
 type FlatCondition = {
   field?: string;
@@ -13,10 +14,7 @@ type FlatCondition = {
   value?: string;
 };
 
-const isSceneBindingContext = () => {
-  const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
-  return scopeType === 'scene' && !!scopeId;
-};
+type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
 export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined) => {
   if (!conditions || Array.isArray(conditions)) {
@@ -107,7 +105,11 @@ const toDispatchRule = (rule: Record<string, any>, isDefault: boolean) => {
   };
 };
 
-const buildDispatchRules = (params: Record<string, any>) => {
+/** 条件分派规则在前，默认分派规则在后，与页面顺序一致 */
+const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) => {
+  if (!isPlatform) {
+    return [];
+  }
   if (Array.isArray(params.dispatch_rules) && params.dispatch_rules.length && !params.assign_rules?.length) {
     return params.dispatch_rules.map((rule: Record<string, any>) => (
       toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)))
@@ -150,16 +152,20 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
       risk_hazard: params.risk_hazard,
       risk_guidance: params.risk_guidance,
       configs: params.configs,
-      processor: params.processor,
-      follower: params.follower,
+      processor: params.processor ?? params.processor_groups,
+      follower: params.follower ?? params.notice_groups,
     }];
 
-  const fallbackProcessor = params.default_assign_rule?.processors
-    ?? params.default_assign_rule?.processor
-    ?? [];
-  const fallbackFollower = params.default_assign_rule?.notice_users
-    ?? params.default_assign_rule?.follower
-    ?? [];
+  const fallbackProcessor = params.processor_groups?.length
+    ? params.processor_groups
+    : (params.default_assign_rule?.processors
+      ?? params.default_assign_rule?.processor
+      ?? []);
+  const fallbackFollower = params.notice_groups?.length
+    ? params.notice_groups
+    : (params.default_assign_rule?.notice_users
+      ?? params.default_assign_rule?.follower
+      ?? []);
 
   return source.map((rule: Record<string, any>, index: number) => {
     const { where, having } = pickWhereHaving(rule, index === 0 ? params.configs : undefined);
@@ -196,39 +202,42 @@ const stripConfigs = (configs: Record<string, any> | undefined) => {
 
 const buildVisibility = (params: Record<string, any>) => {
   if (params.visibility && typeof params.visibility === 'object') {
+    const keys = Object.keys(params.visibility);
+    if (!keys.length) {
+      return {};
+    }
     return {
       visibility_type: params.visibility.visibility_type || 'scenes_and_systems',
       scene_ids: params.visibility.scene_ids || [],
       system_ids: params.visibility.system_ids || [],
     };
   }
-  if (params.visibility_type || params.scene_ids || params.system_ids) {
+  if (params.visibility_type || params.scene_ids?.length || params.system_ids?.length) {
     return {
       visibility_type: params.visibility_type || 'scenes_and_systems',
       scene_ids: params.scene_ids || [],
       system_ids: params.system_ids || [],
     };
   }
-  return undefined;
+  return {};
 };
 
 /** 新建/编辑提交：将向导表单转为新协议 body */
-export const buildStrategyCreatePayload = (params: Record<string, any>) => {
+export const buildStrategyCreatePayload = (
+  params: Record<string, any>,
+  route?: RouteLike,
+) => {
   const next = _.cloneDeep(params);
-  const { scope_id: scopeId } = getSceneSystemParams();
-  const isScene = isSceneBindingContext();
+  const scope = getStrategyBindingScope(route);
+  const isScene = !scope.isPlatform;
 
-  next.binding_type = params.binding_type || (isScene ? 'scene_binding' : 'platform_binding');
-  next.scene_id = isScene ? (params.scene_id || scopeId) : (params.scene_id || '');
+  next.binding_type = params.binding_type || scope.binding_type;
+  next.scene_id = isScene
+    ? (params.scene_id ?? scope.scene_id ?? '')
+    : (params.scene_id || '');
 
-  if (!isScene) {
-    const visibility = buildVisibility(params);
-    if (visibility) {
-      next.visibility = visibility;
-    }
-  } else {
-    delete next.visibility;
-  }
+  // 场景策略固定传空字典；全局策略组装可见范围（未选则为 {}）
+  next.visibility = isScene ? {} : buildVisibility(params);
 
   const isRuleStrategy = !next.strategy_type || next.strategy_type === 'rule';
   if (isRuleStrategy) {
@@ -240,7 +249,7 @@ export const buildStrategyCreatePayload = (params: Record<string, any>) => {
     delete next.risk_title;
   }
 
-  next.dispatch_rules = buildDispatchRules(next);
+  next.dispatch_rules = buildDispatchRules(next, scope.isPlatform);
 
   delete next.assign_rules;
   delete next.default_assign_rule;

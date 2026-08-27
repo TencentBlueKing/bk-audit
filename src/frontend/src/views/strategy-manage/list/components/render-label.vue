@@ -93,6 +93,8 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute  } from 'vue-router';
 
+  import { isStrategyListRoute } from '../../utils/strategy-routes';
+
   interface TagItem {
     tag_id: string;
     tag_name: string;
@@ -126,7 +128,7 @@
   const showTipObjects = ref({} as Record<string, boolean>);
 
   const all = ref<Array<TagItem>>([
-    { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0, icon: 'quanbu' },
+    { tag_id: 'all', tag_name: isStrategyListRoute(route.name) ? '全部策略' : '', strategy_count: 0, icon: 'quanbu' },
   ]);
   const active = ref<string|number>(props.active);
   const showLabel = ref(true);

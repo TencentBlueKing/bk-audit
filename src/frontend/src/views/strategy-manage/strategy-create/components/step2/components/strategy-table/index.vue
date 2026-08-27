@@ -82,6 +82,10 @@
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
   import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -100,8 +104,8 @@
   const { t, locale } = useI18n();
   const route = useRoute();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   const disabledList = ['risk_level', 'status', 'current_operator'];
   const isPriorityList = ['risk_id', 'risk_tags', 'risk_hazard', 'risk_guidance'];
 

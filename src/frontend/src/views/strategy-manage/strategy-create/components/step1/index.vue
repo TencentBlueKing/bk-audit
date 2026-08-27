@@ -267,6 +267,14 @@
   import Customize from './components/customize/index.vue';
   import ReferenceModel from './components/reference-model/index.vue';
 
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyListRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../utils/strategy-routes';
+
   type ItemType = {
     label: string,
     value: string
@@ -303,12 +311,13 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const { removePageParams } = useRecordPage;
   const { t } = useI18n();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -716,7 +725,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
   const handleBeforeUnload = (evt: any) => {
@@ -728,7 +737,7 @@
 
   useRouterBack(() => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   });
   onMounted(() => {
@@ -738,7 +747,7 @@
     window.removeEventListener('beforeunload', handleBeforeUnload);
   });
   onBeforeRouteLeave((to) => {
-    if (to.name !== 'strategyList' && to.name !== 'strategyUpgrade') {
+    if (!isStrategyListRoute(to.name) && !isStrategyUpgradeRoute(to.name)) {
       removePageParams();
     }
   });
