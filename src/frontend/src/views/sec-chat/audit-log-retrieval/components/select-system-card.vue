@@ -23,7 +23,7 @@
           class="tip-icon"
           :src="wenhaoIcon">
         <span>
-          先选择要查询的系统<span class="tip-extra">（可多选，仅限有权限的系统）</span>
+          先选择要查询的系统<span class="tip-extra">（仅限有权限的系统）</span>
         </span>
       </p>
       <div class="field-block">
@@ -32,37 +32,28 @@
         </div>
         <div class="field-control">
           <bk-select
-            v-model="selectedIds"
-            class="system-select"
-            collapse-tags
+            v-model="selectedId"
+            class="sec-chat-system-picker"
+            clearable
             filterable
             :input-search="false"
             :loading="systemListLoading"
-            multiple
-            multiple-mode="tag"
-            placeholder="请选择"
+            placeholder="请选择系统"
             :popover-options="selectPopoverOptions"
-            :scroll-height="240"
-            show-selected-icon
+            :scroll-height="280"
             style="width: 100%; margin-left: 0;">
             <bk-option
               v-for="item in displaySystemList"
               :key="item.id"
-              :disabled="isOptionDisabled(item.id)"
               :label="`${item.name}(${item.id})`"
               :value="item.id" />
           </bk-select>
-        </div>
-        <div
-          v-if="selectedIds.length"
-          class="field-count">
-          已选系统 {{ selectedIds.length }} / {{ MAX_SYSTEM_COUNT }}
         </div>
       </div>
       <div class="card-actions">
         <bk-button
           class="confirm-btn"
-          :disabled="!selectedIds.length"
+          :disabled="!selectedId"
           theme="primary"
           @click="handleConfirm">
           确认选择
@@ -101,10 +92,8 @@
     close: [];
   }>();
 
-  const MAX_SYSTEM_COUNT = 10;
-
   const { messageWarn } = useMessage();
-  const selectedIds = ref<string[]>([...(props.modelValue || [])]);
+  const selectedId = ref<string>(props.modelValue?.[0] || '');
 
   // 与日志检索「系统名称」下拉使用同一接口
   const {
@@ -127,6 +116,12 @@
     name: item.name,
   })));
 
+  const selectedSystem = computed(() => {
+    if (!selectedId.value) return null;
+    return displaySystemList.value.find(item => item.id === selectedId.value)
+      || { id: selectedId.value, name: selectedId.value };
+  });
+
   const selectPopoverOptions = {
     extCls: 'sec-chat-system-select-popover',
     boundary: 'body',
@@ -135,40 +130,25 @@
     zIndex: 9999,
   } as const;
 
-  const isOptionDisabled = (id: string) => (
-    selectedIds.value.length >= MAX_SYSTEM_COUNT && !selectedIds.value.includes(id)
-  );
-
   watch(() => props.modelValue, (val) => {
-    selectedIds.value = [...(val || [])].slice(0, MAX_SYSTEM_COUNT);
-  });
-
-  watch(selectedIds, (val) => {
-    if (val.length <= MAX_SYSTEM_COUNT) return;
-    selectedIds.value = val.slice(0, MAX_SYSTEM_COUNT);
-    messageWarn(`最多选择 ${MAX_SYSTEM_COUNT} 个系统`);
+    selectedId.value = val?.[0] || '';
   });
 
   const handleConfirm = () => {
-    if (!selectedIds.value.length) {
+    if (!selectedId.value) {
       messageWarn('请选择系统');
       return;
     }
-    const systems = selectedIds.value
-      .map((id) => {
-        const item = displaySystemList.value.find(sys => sys.id === id);
-        return item
-          ? { id: item.id, name: item.name }
-          : { id, name: id };
-      });
-    emit('confirm', [...selectedIds.value], systems);
+    const system = selectedSystem.value || { id: selectedId.value, name: selectedId.value };
+    emit('confirm', [system.id], [system]);
   };
 </script>
 
 <style lang="postcss" scoped>
   .select-system-card {
-    width: 900px;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     overflow: visible;
     padding: 20px 24px 24px;
     font-size: 14px;
@@ -248,14 +228,7 @@
     box-sizing: border-box;
   }
 
-  .field-count {
-    margin-top: 8px;
-    font-size: 12px;
-    line-height: 20px;
-    color: #979ba5;
-  }
-
-  .system-select {
+  .sec-chat-system-picker {
     display: block;
     width: 100%;
     max-width: 100%;
@@ -265,68 +238,59 @@
   }
 
   .field-control :deep(.bk-select),
-  .field-control :deep(.system-select) {
+  .field-control :deep(.sec-chat-system-picker) {
     display: block;
     width: 100%;
     max-width: 100%;
     margin: 0;
     padding: 0;
+    background: transparent;
     box-sizing: border-box;
   }
 
-  .field-control :deep(.bk-select-trigger),
-  .field-control :deep(.bk-input),
-  .field-control :deep(.bk-select-tag) {
-    display: flex;
+  .field-control :deep(.bk-select-trigger) {
     width: 100%;
-    max-width: 100%;
+    background: #fff;
+  }
+
+  .field-control :deep(.bk-input),
+  .field-control :deep(.bk-select-trigger .bk-input) {
+    width: 100%;
     min-height: 32px;
     margin: 0;
     font-family: inherit;
     font-size: 14px;
+    color: #313238;
     letter-spacing: 0;
-    vertical-align: top;
     border: 1px solid #c4c6cc;
     border-radius: 2px;
     background: #fff;
     box-shadow: none;
     box-sizing: border-box;
-    align-items: center;
   }
 
-  .field-control :deep(.bk-input:hover),
-  .field-control :deep(.bk-select-tag:hover) {
+  .field-control :deep(.bk-input:hover) {
     border-color: #979ba5;
   }
 
   .field-control :deep(.is-focus > .bk-input),
-  .field-control :deep(.is-focus .bk-select-tag),
-  .field-control :deep(.bk-select.is-focus .bk-select-tag),
   .field-control :deep(.bk-select.is-focus .bk-input) {
     border-color: #3a84ff;
     box-shadow: none;
+    background: #fff;
   }
 
-  .field-control :deep(.bk-select-tag) {
-    padding: 0 28px 0 8px;
-  }
-
-  .field-control :deep(.bk-select-tag .bk-select-tag-wrapper) {
-    min-height: 30px;
-    padding: 0;
-  }
-
-  .field-control :deep(.bk-select-tag input) {
-    height: 30px;
-    margin: 0;
+  .field-control :deep(.bk-input--text),
+  .field-control :deep(.bk-input input),
+  .field-control :deep(input) {
     font-family: inherit;
     font-size: 14px;
-    line-height: 30px;
-    color: #63656e;
+    color: #313238;
     letter-spacing: 0;
+    background: transparent;
+    background-color: transparent;
   }
 
-  .field-control :deep(.bk-select-tag .placeholder),
   .field-control :deep(.bk-input--text::placeholder),
   .field-control :deep(input::placeholder) {
     font-family: inherit;
@@ -335,25 +299,9 @@
     letter-spacing: 0;
   }
 
-  .field-control :deep(.bk-select-tag .angle-up),
-  .field-control :deep(.bk-select-tag .angle-down),
   .field-control :deep(.bk-input--suffix-icon) {
     color: #979ba5;
-  }
-
-  .field-control :deep(.bk-tag) {
-    max-width: 220px;
-    height: 22px;
-    padding: 0 8px;
-    margin: 4px 4px 4px 0;
-    font-family: inherit;
-    font-size: 12px;
-    line-height: 22px;
-    color: #63656e;
-    letter-spacing: 0;
-    background: #f0f1f5;
-    border: none;
-    border-radius: 2px;
+    background: transparent;
   }
 
   .field-control :deep(.bk-loading),
@@ -362,6 +310,7 @@
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+    background: transparent;
   }
 
   .card-actions {

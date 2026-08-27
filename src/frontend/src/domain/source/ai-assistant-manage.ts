@@ -19,6 +19,8 @@ import type {
   AiConversationGroup,
   AiCreateConversationParams,
   AiCreateMessageParams,
+  AiExportConfig,
+  AiFullExportResult,
   AiMessage,
   AiMessageHistoryParams,
   AiMessageWindow,
@@ -170,6 +172,35 @@ class AiAssistantManage extends ModuleBase {
 
   retryMessage(params: { message_uid: string }, payload = {} as IRequestPayload) {
     return Request.post<AiMessage>(`${this.module}/messages/${params.message_uid}/retry/`, {
+      payload,
+    });
+  }
+
+  /**
+   * 预览导出：快照前 100 条，返回 xlsx 二进制流。
+   */
+  previewExport(params: { message_uid: string }, payload = {} as IRequestPayload) {
+    return Request.get(`${this.module}/messages/${params.message_uid}/preview-export/`, {
+      responseType: 'blob',
+      payload,
+    });
+  }
+
+  /**
+   * 全量导出：异步创建导出任务。
+   */
+  fullExport(
+    params: { message_uid: string; export_config?: AiExportConfig },
+    payload = {} as IRequestPayload,
+  ) {
+    const { message_uid: messageUid, export_config: exportConfig } = params;
+    return Request.post<AiFullExportResult>(`${this.module}/messages/${messageUid}/full-export/`, {
+      params: {
+        export_config: exportConfig || {
+          field_scope: 'all',
+          fields: [],
+        },
+      },
       payload,
     });
   }
