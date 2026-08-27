@@ -292,6 +292,40 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         mock_query_sync.assert_called_once()
 
     @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
+    def test_l2_multi_row_sampling_merges_extension_fields(
+        self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
+    ):
+        """多行采样融合拓展字段：并集覆盖 + 重复键保留最新一行采样值 + sample_value 取最新一条"""
+        mock_build_rt.return_value = "test_rt.doris"
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {}
+        mock_system_list.return_value = []
+        # 按时间倒序：第一行为最新一条；三条日志各携带不同拓展子键
+        rows = [
+            {"username": "admin", "system_id": "bk_log", "result_code": 0, "extend_data": {"ticket_id": "Story-1"}},
+            {"username": "ops", "system_id": "bk_log", "result_code": 0, "extend_data": {"order_no": "NO-2"}},
+            {"username": "tester", "system_id": "bk_log", "result_code": 0, "extend_data": {"ticket_id": "Story-3"}},
+        ]
+        mock_query_sync.return_value = {"list": rows}
+
+        output = FieldContextService.build_selection(
+            namespace=self.namespace, system_ids=[self.target_system_id], username=self.username
+        )
+
+        system = output.systems[0]
+        # standard_fields 的 sample_value 仍取最新一条（第一行，产品口径不变）
+        username_field = next(field for field in system.standard_fields if field.raw_name == "username")
+        self.assertEqual(username_field.sample_value, "admin")
+        # 拓展字段 = 多行并集；重复键 ticket_id 保留最新一行（第一行）的采样值
+        ext_map = {(ext.raw_name, tuple(ext.keys)): ext for ext in system.extension_fields}
+        self.assertIn(("extend_data", ("ticket_id",)), ext_map)
+        self.assertIn(("extend_data", ("order_no",)), ext_map)
+        self.assertEqual(ext_map[("extend_data", ("ticket_id",))].sample_value, "Story-1")
+        # 采样 SQL 按配置条数取数
+        sql = mock_query_sync.call_args.kwargs["sql"]
+        self.assertIn("LIMIT 50", sql)
+
+    @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
     def test_l2_sampling_failure_degrades_gracefully(
         self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
     ):

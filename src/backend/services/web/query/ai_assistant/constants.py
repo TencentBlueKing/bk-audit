@@ -44,9 +44,11 @@ AI_ASSISTANT_FIELD_META_CONFIG_KEY = "ai_assistant_field_meta"
 # L2 采样开关（默认开启：sample_value 采样回填 + 拓展字段动态发现；此为 settings 缺失时的兜底值，
 # 实际取值走 config/default.py 的 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED）
 AI_ASSISTANT_FIELD_SAMPLE_ENABLED = True
-# L2 采样回看窗口（天）：产品口径「最新一条数据的字段信息」——
-# 窗口仅用于分区裁剪与性能兜底，实际取窗口内按 dtEventTimeStamp 倒序的第 1 条（最新一条）
+# L2 采样回看窗口（天）：分区裁剪与性能兜底
 FIELD_SAMPLE_LOOKBACK_DAYS = 30
+# L2 采样条数：单条日志的拓展子键覆盖不全，采样多条按时间倒序融合发现更多拓展字段
+# （同一 (容器, 子键) 保留最新一行的采样值）；standard_fields 的 sample_value 仍取最新一条
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = 50
 
 # 拓展字段 nl_name 前缀（D-G：拓展字段 nl_name 带 extend. 前缀，与注入 AI 的字段上下文同源）
 EXTENSION_NL_NAME_PREFIX = "extend."
