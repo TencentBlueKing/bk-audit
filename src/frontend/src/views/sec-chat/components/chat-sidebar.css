@@ -880,6 +880,35 @@
   }
 }
 
+/* 配置下拉「导出会话」行：不再套一层 padding，与下方选项对齐 */
+.config-item-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+
+  .sub-icon {
+    font-size: 14px;
+    color: #c4c6cc;
+  }
+}
+
+/* 侧栏配置下拉：禁用项（挂到 teleport 的 popover 上） */
+.chat-config-dropdown-pop {
+  .bk-dropdown-item.is-config-disabled,
+  .is-config-disabled {
+    color: #c4c6cc !important;
+    cursor: not-allowed !important;
+    user-select: none;
+
+    &:hover {
+      color: #c4c6cc !important;
+      cursor: not-allowed !important;
+      background: transparent !important;
+    }
+  }
+}
+
 /* 新建分组气泡弹窗 */
 .add-group-popover.bk-pop2-content,
 .add-group-popover.bk-popover,
