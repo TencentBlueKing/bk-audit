@@ -33,7 +33,7 @@
       :edit-data="editData"
       :form-data="formData"
       :is-edit-data-loading="isEditDataLoading"
-      :select="formData.configs.select"
+      :select="fieldSelectOptions"
       :strategy-name="formData.strategy_name"
       :strategy-type="formData.strategy_type"
       style="margin-bottom: 24px;"
@@ -165,6 +165,15 @@
   const comRef = ref();
 
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
+
+  // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
+  const fieldSelectOptions = computed(() => {
+    const select = formData.value.configs?.select;
+    if (Array.isArray(select) && select.length) {
+      return select;
+    }
+    return formData.value.configs?.table_fields || [];
+  });
 
   let isSwitchSuccess = false;
   const isEditMode = route.name === 'strategyEdit';
@@ -426,6 +435,14 @@
     const next = _.cloneDeep(params);
     if (next.tags?.length && tagIdToNameMap.value && Object.keys(tagIdToNameMap.value).length > 0) {
       next.tags = next.tags.map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
+    }
+    // 接口 select 不能为空：未配置时用数据源全字段兜底
+    if (next.configs && !next.configs.select?.length && next.configs.table_fields?.length) {
+      next.configs.select = next.configs.table_fields;
+    }
+    // table_fields 仅前端临时字段，不提交后端
+    if (next.configs?.table_fields) {
+      delete next.configs.table_fields;
     }
     return next;
   };

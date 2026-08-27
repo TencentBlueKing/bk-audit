@@ -42,7 +42,6 @@ from apps.meta.serializers import EnumMappingSerializer
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.handlers.service import PermissionService
-from core.exceptions import PermissionException
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis

@@ -225,9 +225,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
             models.Index(fields=["strategy", "display_status", "event_time"], name="idx_risk_strategy_status_time"),
             # 软删除后修复覆盖索引失效：strategy_id 等值 + is_deleted 等值 + event_time 范围
             # 使 ListStrategy risk_count 子查询恢复 index-only scan（Using index）
-            models.Index(
-                fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"
-            ),
+            models.Index(fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"),
         ]
 
     # ──── 单一权限 ────

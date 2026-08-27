@@ -15,16 +15,38 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div style="width: 100%;height: 100%;">
+  <!-- 普通报表：沿用原有 100% 容器 -->
+  <div
+    v-if="!isLargeScreenReport"
+    class="statement-detail-normal">
     <div
       id="panel"
       ref="panelRef" />
   </div>
+  <!-- 大屏报表（panels 含 iframe）：Teleport + 等比缩放 + 可滚动 -->
+  <template v-else>
+    <div class="statement-detail-placeholder" />
+    <teleport to="body">
+      <div
+        ref="wrapRef"
+        class="statement-detail">
+        <div
+          ref="scalerRef"
+          class="statement-detail__scaler">
+          <div
+            id="panel"
+            ref="panelRef"
+            class="statement-detail__panel" />
+        </div>
+      </div>
+    </teleport>
+  </template>
 </template>
 <script setup lang="ts">
   import {
     nextTick,
     onDeactivated,
+    onMounted,
     onUnmounted,
     ref,
     watch,
@@ -49,25 +71,242 @@
     status: number
   }
 
+  // panels 含 type=iframe 时走大屏适配；其余保持普通嵌入
   const BKVISION_SCRIPT_SRC = 'https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js';
+  const FALLBACK_WIDTH = 1920;
+  const FALLBACK_HEIGHT = 1080;
+  const TOP_NAV_HEIGHT = 52;
 
   const route = useRoute();
+  const wrapRef = ref<HTMLElement | null>(null);
+  const scalerRef = ref<HTMLElement | null>(null);
   const panelRef = ref<HTMLElement | null>(null);
+  /** 由 share_detail.panels 是否含 iframe 组件决定 */
+  const isLargeScreenReport = ref(false);
   const { messageError } = useMessage();
   const {  emit } = useEventBus();
   let app: any;
-  // 取消过期的并发 init，避免先完成的请求覆盖正确图表
   let initSeq = 0;
   let lastInitKey = '';
-  /** 进行中的 SDK 实例（尚未赋给 app），用于并发时能正确销毁 */
   let pendingInstance: any = null;
+  let canvasW = FALLBACK_WIDTH;
+  let canvasH = FALLBACK_HEIGHT;
+  let canvasLocked = false;
+  let contentObserver: MutationObserver | null = null;
+  let remountTimers: number[] = [];
+  let layoutRaf = 0;
+  let sideResizeObserver: ResizeObserver | null = null;
 
-  // 校验id是否为有效值
   const isValidId = (id: any): boolean => {
     if (!id) return false;
     if (id === 'undefined' || id === 'null') return false;
     if (typeof id === 'string' && id.trim() === '') return false;
     return true;
+  };
+
+  const isActiveOnDetailRoute = () => (
+    route.name === 'statementManageDetail' && isValidId(route.params.id)
+  );
+
+  const parsePx = (value: string) => {
+    const num = parseFloat(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const isSaneSize = (w: number, h: number) => (
+    w >= 400 && w <= 4000 && h >= 300 && h <= 2500
+  );
+
+  /** 穿透 shadow，量 vue-grid-item 真实包围盒（不要用 1920×1080 空高，否则会「浮」在中间） */
+  const measureVisionCanvas = (): { w: number, h: number } | null => {
+    const panel = panelRef.value;
+    if (!panel) return null;
+
+    const roots: ParentNode[] = [panel];
+    const queue: Element[] = [panel];
+    while (queue.length) {
+      const el = queue.shift()!;
+      if (el.shadowRoot) {
+        roots.push(el.shadowRoot);
+        queue.push(...Array.from(el.shadowRoot.children));
+      }
+      queue.push(...Array.from(el.children));
+    }
+
+    for (const root of roots) {
+      const items = root.querySelectorAll?.('.vue-grid-item');
+      if (!items?.length) continue;
+      let maxRight = 0;
+      let maxBottom = 0;
+      items.forEach((node) => {
+        const item = node as HTMLElement;
+        const left = parsePx(item.style.left) || item.offsetLeft;
+        const top = parsePx(item.style.top) || item.offsetTop;
+        const width = parsePx(item.style.width) || item.offsetWidth;
+        const height = parsePx(item.style.height) || item.offsetHeight;
+        maxRight = Math.max(maxRight, left + width);
+        maxBottom = Math.max(maxBottom, top + height);
+      });
+      const w = Math.ceil(maxRight);
+      const h = Math.ceil(maxBottom);
+      if (isSaneSize(w, h)) return { w, h };
+    }
+    return null;
+  };
+
+  /**
+   * 侧栏右、标题栏下：保留 page-title；宽度等比适配，高度超出可滚动。
+   * 顶部预留工具条空间，避免全屏/刷新按钮被裁切。
+   */
+  const updatePanelLayout = () => {
+    if (!isActiveOnDetailRoute() || !isLargeScreenReport.value) return;
+    const wrap = wrapRef.value;
+    const scaler = scalerRef.value;
+    const panel = panelRef.value;
+    if (!wrap || !scaler || !panel) return;
+
+    const sideEl = document.querySelector('.audit-navigation-side') as HTMLElement | null;
+    const titleEl = document.querySelector('.audit-navigation-main .page-title') as HTMLElement | null;
+    // 若上次隐藏过标题，这里强制恢复
+    if (titleEl) {
+      titleEl.style.display = '';
+    }
+
+    const sideRect = sideEl?.getBoundingClientRect();
+    const titleRect = titleEl?.getBoundingClientRect();
+    const left = sideRect
+      ? Math.ceil(sideRect.right)
+      : 220;
+    // 必须在标题栏下方，标题保持显示
+    const top = titleRect
+      ? Math.ceil(titleRect.bottom)
+      : (TOP_NAV_HEIGHT + 52);
+    const cw = Math.max(window.innerWidth - left, 0);
+    const ch = Math.max(window.innerHeight - top, 0);
+    if (!cw || !ch) return;
+
+    // BKVision 顶部工具按钮大约需要 40px，避免贴顶被 overflow 裁掉
+    const toolBarGap = 40;
+
+    wrap.style.cssText = [
+      'position:fixed',
+      `top:${top}px`,
+      `left:${left}px`,
+      `width:${cw}px`,
+      `height:${ch}px`,
+      'z-index:100',
+      'margin:0',
+      `padding:${toolBarGap}px 0 0`,
+      'overflow:auto',
+      'background:transparent',
+      'display:block',
+      'box-sizing:border-box',
+    ].join(';');
+
+    // 先清缩放再量
+    panel.style.cssText = 'position:absolute;top:0;left:0;transform:none;margin:0;padding:0;';
+
+    if (!canvasLocked) {
+      const measured = measureVisionCanvas();
+      if (measured) {
+        canvasW = measured.w;
+        canvasH = measured.h;
+        canvasLocked = true;
+      }
+    }
+
+    // 可用宽度需扣除纵向滚动条，减少横向溢出
+    const scrollBarW = wrap.offsetWidth - wrap.clientWidth;
+    const fitW = Math.max(cw - scrollBarW, 0) || cw;
+    const scale = fitW / canvasW;
+    const scaledW = Math.ceil(canvasW * scale);
+    const scaledH = Math.ceil(canvasH * scale);
+
+    scaler.style.cssText = [
+      'position:relative',
+      `width:${scaledW}px`,
+      `height:${scaledH}px`,
+      'margin:0',
+      'padding:0',
+    ].join(';');
+
+    panel.style.cssText = [
+      'position:absolute',
+      'top:0',
+      'left:0',
+      `width:${canvasW}px`,
+      `height:${canvasH}px`,
+      `transform:scale(${scale})`,
+      'transform-origin:left top',
+      'margin:0',
+      'padding:0',
+      'will-change:transform',
+      'background:transparent',
+    ].join(';');
+  };
+
+  const scheduleLayout = () => {
+    if (layoutRaf) cancelAnimationFrame(layoutRaf);
+    layoutRaf = requestAnimationFrame(() => {
+      layoutRaf = 0;
+      updatePanelLayout();
+    });
+  };
+
+  const clearRemountTimers = () => {
+    remountTimers.forEach(id => window.clearTimeout(id));
+    remountTimers = [];
+  };
+
+  const stopContentObserver = () => {
+    contentObserver?.disconnect();
+    contentObserver = null;
+    clearRemountTimers();
+    if (layoutRaf) {
+      cancelAnimationFrame(layoutRaf);
+      layoutRaf = 0;
+    }
+  };
+
+  const watchVisionContent = () => {
+    if (!isLargeScreenReport.value) return;
+    stopContentObserver();
+    const panel = panelRef.value;
+    if (!panel) return;
+
+    contentObserver = new MutationObserver(() => {
+      // 图表尚未量到真实尺寸时允许重测
+      if (!canvasLocked) scheduleLayout();
+    });
+    contentObserver.observe(panel, { childList: true, subtree: true });
+
+    // shadow 晚挂载：延迟探测并锁定画布尺寸
+    const delays = [0, 100, 300, 600, 1200, 2500, 4000];
+    delays.forEach((ms) => {
+      const id = window.setTimeout(() => {
+        if (!isActiveOnDetailRoute()) return;
+        const host = panel.querySelector('*');
+        if (host?.shadowRoot && contentObserver) {
+          contentObserver.observe(host.shadowRoot, { childList: true, subtree: true });
+        }
+        if (!canvasLocked) {
+          updatePanelLayout();
+        }
+      }, ms);
+      remountTimers.push(id);
+    });
+  };
+
+  const resetWrapLayout = () => {
+    stopContentObserver();
+    const titleEl = document.querySelector('.audit-navigation-main .page-title') as HTMLElement | null;
+    if (titleEl) {
+      titleEl.style.display = '';
+    }
+    const wrap = wrapRef.value;
+    if (wrap) {
+      wrap.style.cssText = 'display:none';
+    }
   };
 
   const loadScript = (src: string) => new Promise((resolve, reject) => {
@@ -81,10 +320,6 @@
     script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
     document.head.appendChild(script);
   });
-
-  const isActiveOnDetailRoute = () => (
-    route.name === 'statementManageDetail' && isValidId(route.params.id)
-  );
 
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (!isActiveOnDetailRoute()) return;
@@ -183,24 +418,28 @@
   };
 
   /**
-   * 从 share_detail 解析变量 / 交互组件 flag 集合
-   * 与报表配置、BKVision 工具一致：variable → constants，其余 → filters
+   * 从 share_detail 解析：
+   * 1) variable / 交互组件 flag
+   * 2) panels 是否含 type=iframe（大屏判断）
    */
-  const resolveParamFlagSets = async (visionId: string) => {
+  const resolveShareDetailMeta = async (shareUid: string) => {
     const variableFlags = new Set<string>();
     const filterFlags = new Set<string>();
+    let hasIframePanel = false;
 
-    if (!visionId) {
-      return { variableFlags, filterFlags };
+    if (!shareUid) {
+      return { variableFlags, filterFlags, hasIframePanel };
     }
 
     try {
-      const res = await ToolManageService.fetchReportLists({ share_uid: visionId });
+      const res = await ToolManageService.fetchReportLists({ share_uid: shareUid });
       if (!res?.data) {
-        return { variableFlags, filterFlags };
+        return { variableFlags, filterFlags, hasIframePanel };
       }
 
       const panels = Array.isArray(res.data.panels) ? res.data.panels : [];
+      hasIframePanel = panels.some((item: any) => item?.type === 'iframe');
+
       const variables = Array.isArray(res.data.variables) ? res.data.variables : [];
       const shareFilters = res.filters || {};
       const shareConstants = res.constants || {};
@@ -228,10 +467,10 @@
         });
       }
     } catch (e) {
-      console.error('获取报表参数分类失败:', e);
+      console.error('获取报表 share_detail 失败:', e);
     }
 
-    return { variableFlags, filterFlags };
+    return { variableFlags, filterFlags, hasIframePanel };
   };
 
   // 按 BKVision 工具规则拆分覆盖值到 constants / filters
@@ -278,10 +517,19 @@
   const abortInit = () => {
     initSeq += 1;
     lastInitKey = '';
+    canvasLocked = false;
+    canvasW = FALLBACK_WIDTH;
+    canvasH = FALLBACK_HEIGHT;
+    isLargeScreenReport.value = false;
     destroyApp();
+    resetWrapLayout();
   };
 
   const destroyApp = () => {
+    stopContentObserver();
+    canvasLocked = false;
+    canvasW = FALLBACK_WIDTH;
+    canvasH = FALLBACK_HEIGHT;
     if (pendingInstance) {
       try {
         pendingInstance.unmount?.();
@@ -318,6 +566,9 @@
     const seq = initSeq;
     destroyApp();
     lastInitKey = '';
+    // 先按普通布局占位，等 share_detail 判断后再切大屏
+    isLargeScreenReport.value = false;
+    resetWrapLayout();
 
     try {
       if (!window.BkVisionSDK) {
@@ -329,7 +580,18 @@
       const panelDetail = await fetchPanelDetailWithOverride(scopeConstants);
       if (seq !== initSeq) return;
 
-      const { variableFlags, filterFlags } = await resolveParamFlagSets(panelDetail.vision_id);
+      // share_uid：优先平台配置的 vision_id，否则用路由 panel id
+      const shareUid = panelDetail.vision_id || String(route.params.id);
+      const {
+        variableFlags,
+        filterFlags,
+        hasIframePanel,
+      } = await resolveShareDetailMeta(shareUid);
+      if (seq !== initSeq) return;
+
+      // panels 含 iframe → 大屏布局
+      isLargeScreenReport.value = hasIframePanel;
+      await nextTick();
       if (seq !== initSeq) return;
 
       const { constants: overrideConstants, filters: overrideFilters } = splitOverrideParams(
@@ -340,7 +602,12 @@
 
       // 再次确保容器干净，避免上一次异步渲染残留
       clearPanelDom();
+      await nextTick();
+      if (isLargeScreenReport.value) {
+        updatePanelLayout();
+      }
       if (seq !== initSeq || !isActiveOnDetailRoute()) return;
+      if (!panelRef.value && !document.querySelector('#panel')) return;
 
       const instance = await window.BkVisionSDK.init(
         '#panel',
@@ -373,6 +640,12 @@
       app = instance;
       pendingInstance = null;
       lastInitKey = initKey;
+      nextTick(() => {
+        if (isLargeScreenReport.value) {
+          updatePanelLayout();
+          watchVisionContent();
+        }
+      });
     } catch (error) {
       if (seq === initSeq) {
         console.error(error);
@@ -412,8 +685,81 @@
     abortInit();
   });
 
+  const handleResizeOrSideChange = () => {
+    if (isLargeScreenReport.value) {
+      scheduleLayout();
+    }
+  };
+
+  onMounted(() => {
+    window.addEventListener('resize', handleResizeOrSideChange);
+    const sideEl = document.querySelector('.audit-navigation-side');
+    if (sideEl && typeof ResizeObserver !== 'undefined') {
+      sideResizeObserver = new ResizeObserver(handleResizeOrSideChange);
+      sideResizeObserver.observe(sideEl);
+    }
+    if (isLargeScreenReport.value) {
+      nextTick(() => {
+        updatePanelLayout();
+        requestAnimationFrame(() => updatePanelLayout());
+      });
+    }
+  });
+
   onUnmounted(() => {
+    window.removeEventListener('resize', handleResizeOrSideChange);
+    sideResizeObserver?.disconnect();
+    sideResizeObserver = null;
     abortInit();
   });
 
 </script>
+<style lang="postcss" scoped>
+.statement-detail-normal {
+  width: 100%;
+  height: 100%;
+}
+
+.statement-detail-placeholder {
+  width: 100%;
+  height: calc(100vh - 104px);
+}
+
+.statement-detail {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 22%) transparent;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 22%);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgb(255 255 255 / 38%);
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+.statement-detail__scaler {
+  position: relative;
+}
+
+.statement-detail__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+</style>
