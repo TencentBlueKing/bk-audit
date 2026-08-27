@@ -79,6 +79,26 @@ class EsQuery extends ModuleBase {
       params,
     });
   }
+  // 导出任务详情
+  getQueryTask(params: { id: number | string }, payload = {} as IRequestPayload) {
+    return Request.get(`${this.path}/collector_query_task/${params.id}/`, {
+      payload,
+    });
+  }
+  // 导出任务列表（任务详情 404 时可用来核对 namespace）
+  listQueryTask(params: Record<string, any> = {}, payload = {} as IRequestPayload) {
+    return Request.get(`${this.path}/collector_query_task/`, {
+      params,
+      payload,
+    });
+  }
+  // 下载导出任务文件（xlsx 流）
+  downloadQueryTask(params: { id: number | string }, payload = {} as IRequestPayload) {
+    return Request.get(`${this.path}/collector_query_task/${params.id}/download/`, {
+      responseType: 'blob',
+      payload,
+    });
+  }
 }
 
 export default new EsQuery();
