@@ -65,6 +65,7 @@
 
 <script lang="ts" setup>
   import { computed, ref, watch } from 'vue';
+  import { useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -92,13 +93,15 @@
     close: [];
   }>();
 
+  const route = useRoute();
   const { messageWarn } = useMessage();
   const selectedId = ref<string>(props.modelValue?.[0] || '');
 
-  // 与日志检索「系统名称」下拉使用同一接口
+  // 与日志检索「系统名称」下拉使用同一接口；挂载时拉一次，场景切换后再拉
   const {
     loading: systemListLoading,
     data: systemList,
+    run: fetchSystemList,
   } = useRequest(() => {
     const params = getSceneSystemParams();
     return MetaManageService.fetchSystemWithAction({
@@ -133,6 +136,23 @@
   watch(() => props.modelValue, (val) => {
     selectedId.value = val?.[0] || '';
   });
+
+  // 场景选择器切换后 URL scope 变化，需按新场景重新拉取有权限系统
+  watch(
+    () => [
+      String(route.query.scene_id || ''),
+      String(route.query.scope_id || ''),
+      String(route.query.scope_type || ''),
+    ].join('|'),
+    () => {
+      fetchSystemList().then((list) => {
+        const ids = (list || []).map(item => String(item.id));
+        if (selectedId.value && !ids.includes(selectedId.value)) {
+          selectedId.value = '';
+        }
+      });
+    },
+  );
 
   const handleConfirm = () => {
     if (!selectedId.value) {
