@@ -110,21 +110,6 @@
               </div>
             </template>
           </card-part-vue>
-          <card-part-vue
-            v-if="isPlatformMode"
-            :title="t('可见范围')">
-            <template #content>
-              <bk-form-item
-                :label="t('可见范围')"
-                property="visibility_type">
-                <visible-range-field
-                  :form-data="visibilityFormData"
-                  match-selector-width
-                  popover-class="is-compact"
-                  @update:form-data="handleVisibleRangeChange" />
-              </bk-form-item>
-            </template>
-          </card-part-vue>
         </audit-form>
 
         <!-- 算法说明 -->
@@ -191,16 +176,6 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
-  import VisibleRangeField from '@views/platform-manage/tool-manage/create-tool/components/visible-range-field.vue';
-  import {
-    applyVisibilityToFormData,
-    buildVisibilityPayload,
-  } from '@views/platform-manage/tool-manage/create-tool/submit-payload';
-  import type {
-    FormData as ToolFormData,
-    VisibilityType,
-  } from '@views/tool-manage-shared/create-tool/types';
-
   import CardPartVue from '../step1/components/card-part.vue';
   import ControlDescriptionVue from '../step1/components/control-description.vue';
   import Customize from '../step1/components/customize/index.vue';
@@ -212,7 +187,6 @@
 
   import {
     getStrategyRouteNames,
-    isPlatformStrategyRoute,
     isStrategyCloneRoute,
     isStrategyEditRoute,
     isStrategyListRoute,
@@ -238,10 +212,6 @@
     risk_hazard: string,
     risk_guidance: string,
     strategy_type: string,
-    visibility_type?: VisibilityType,
-    scene_ids?: number[],
-    system_ids?: string[],
-    visibility?: Record<string, any>,
   }
 
   interface Emits {
@@ -251,12 +221,9 @@
   }
   interface Props {
     editData: StrategyModel
-    formData?: Record<string, any>
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    formData: () => ({}),
-  });
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -270,7 +237,6 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
-  const isPlatformMode = isPlatformStrategyRoute(route.name);
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -296,53 +262,8 @@
     risk_hazard: '',
     risk_guidance: '',
     strategy_type: 'rule',
-    visibility_type: undefined,
-    scene_ids: [],
-    system_ids: [],
   });
   const isStockData = ref(false); // 是否是存量数据
-
-  const visibilityFormData = computed(() => ({
-    name: formData.value.strategy_name,
-    tags: [],
-    description: formData.value.description,
-    tool_type: '',
-    updated_at: '',
-    updated_by: '',
-    is_bkvision: false,
-    updated_time: null,
-    data_search_config_type: '',
-    visibility_type: formData.value.visibility_type,
-    scene_ids: formData.value.scene_ids || [],
-    system_ids: formData.value.system_ids || [],
-    config: {
-      referenced_tables: [],
-      input_variable: [],
-      output_fields: [],
-      sql: '',
-      uid: '',
-      output_config: {
-        enable_grouping: false,
-        groups: [],
-      },
-    },
-  } as unknown as ToolFormData));
-
-  const handleVisibleRangeChange = (value: ToolFormData) => {
-    formData.value.visibility_type = value.visibility_type;
-    formData.value.scene_ids = value.scene_ids || [];
-    formData.value.system_ids = value.system_ids || [];
-  };
-
-  const applyVisibilityEcho = (visibility?: Record<string, any>) => {
-    if (!isPlatformMode) return;
-    const applied = applyVisibilityToFormData(visibility);
-    if (applied) {
-      formData.value.visibility_type = applied.visibility_type;
-      formData.value.scene_ids = applied.scene_ids || [];
-      formData.value.system_ids = (applied.system_ids || []).map(id => String(id));
-    }
-  };
   const rules = {
     strategy_name: [
       {
@@ -540,7 +461,6 @@
       isStockData.value = true;
     }
     formData.value.strategy_type = editData.strategy_type || 'referenceModel';
-    applyVisibilityEcho((editData as any).visibility || props.formData?.visibility);
   };
 
   // 获取标签列表
@@ -679,22 +599,6 @@
       ...baseParams,
       ...fields,
     };
-    if (isPlatformMode) {
-      if (formData.value.visibility_type) {
-        params.visibility = buildVisibilityPayload({
-          visibility_type: formData.value.visibility_type,
-          scene_ids: formData.value.scene_ids || [],
-          system_ids: formData.value.system_ids || [],
-        });
-      } else {
-        params.visibility = {};
-      }
-    } else {
-      params.visibility = {};
-    }
-    delete params.visibility_type;
-    delete params.scene_ids;
-    delete params.system_ids;
     return params;
   };
 
@@ -715,16 +619,6 @@
       setFormData(data);
     }
   });
-
-  watch(
-    () => props.formData?.visibility,
-    (visibility) => {
-      if (isPlatformMode && visibility) {
-        applyVisibilityEcho(visibility);
-      }
-    },
-    { immediate: true },
-  );
 
   // 编辑模式：标签数据加载完成后，清除初始化时触发的误报校验
   // （编辑进入时 tags 先于 strategyTagMap 赋值，验证器查不到映射导致误报）

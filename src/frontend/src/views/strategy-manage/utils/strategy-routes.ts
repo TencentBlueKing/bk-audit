@@ -90,9 +90,7 @@ export const isStrategyUpgradeRoute = (routeName: RouteNameInput): boolean => (
  * - 全局策略（平台）：binding_type=platform_binding，scene_id 为空
  * - 审计策略（场景）：binding_type=scene_binding，传当前 scene_id
  */
-export const getStrategyBindingScope = (
-  route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null,
-): {
+export const getStrategyBindingScope = (route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null): {
   binding_type: 'platform_binding' | 'scene_binding';
   scene_id: string | number | null;
   isPlatform: boolean;
@@ -114,9 +112,40 @@ export const getStrategyBindingScope = (
 };
 
 /** 列表/标签等接口的作用域参数（兼容旧调用） */
-export const getStrategyListScopeParams = (
-  route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null,
-) => {
+export const getStrategyListScopeParams = (route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null) => {
   const { binding_type: bindingType, scene_id: sceneId } = getStrategyBindingScope(route);
   return { binding_type: bindingType, scene_id: sceneId };
+};
+
+/**
+ * 策略创建/编辑中拉取数据源、联表等资源时的 scene_id：
+ * - 全局策略：不传 scene_id，获取全部资源
+ * - 审计策略：传当前场景 scene_id
+ */
+export const getStrategyResourceSceneParams = (route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null): { scene_id?: string | number | null } => {
+  const { isPlatform, scene_id: sceneId } = getStrategyBindingScope(route);
+  // 全局策略显式 scene_id=null，避免 link_table 等接口回退到 URL 中的场景 ID
+  if (isPlatform) {
+    return { scene_id: null };
+  }
+  if (sceneId === undefined || sceneId === null || sceneId === '') {
+    return {};
+  }
+  return { scene_id: sceneId };
+};
+
+/**
+ * 策略创建中拉取系统列表等 IAM 范围参数：
+ * - 全局策略：cross_scene，不传 scope_id
+ * - 审计策略：当前场景 scope
+ */
+export const getStrategySystemScopeParams = (route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null): { scope_id?: string; scope_type: string } => {
+  const { isPlatform, scene_id: sceneId } = getStrategyBindingScope(route);
+  if (isPlatform) {
+    return { scope_type: 'cross_scene' };
+  }
+  if (sceneId !== undefined && sceneId !== null && sceneId !== '') {
+    return { scope_id: String(sceneId), scope_type: 'scene' };
+  }
+  return { scope_type: 'cross_scene' };
 };

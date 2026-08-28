@@ -363,9 +363,9 @@
         assign_rules: _.cloneDeep(protocolForm.assign_rules ?? []),
         default_assign_rule: _.cloneDeep(protocolForm.default_assign_rule ?? {}),
         dispatch_rules: _.cloneDeep(protocolForm.dispatch_rules ?? []),
-        binding_type: protocolForm.binding_type,
+        binding_type: protocolForm.binding_type ?? createBindingScope.binding_type,
         visibility: _.cloneDeep(protocolForm.visibility),
-        scene_id: protocolForm.scene_id,
+        scene_id: protocolForm.scene_id ?? createBindingScope.scene_id ?? undefined,
       };
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;

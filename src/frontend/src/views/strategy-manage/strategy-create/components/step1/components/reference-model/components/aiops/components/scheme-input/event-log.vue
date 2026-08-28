@@ -96,7 +96,7 @@
 
   import TableComponent from '../components/render-table.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getStrategySystemScopeParams } from '@/views/strategy-manage/utils/strategy-routes';
   import {
     isStrategyCloneRoute,
     isStrategyEditRoute,
@@ -174,8 +174,7 @@
     manual: true,
     defaultParams: {
       action_ids: 'view_system',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: 'scene',
+      ...getStrategySystemScopeParams(route),
     },
     onSuccess(data) {
       const ids = data.map(item => item.id).join(',');

@@ -72,12 +72,13 @@
 
   <!-- 策略详情 -->
   <audit-sideslider
-    ref="sidesliderRef"
+    ref="strategyDetailSidesliderRef"
     v-model:isShow="showDetail"
+    :before-close="handleDetailBeforeClose"
     :show-footer="false"
     show-header-slot
     title="策略详情"
-    :width="1100">
+    :width="1400">
     <template #header>
       <div
         class="flex"
@@ -111,7 +112,7 @@
             :class="{
               'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
             }"
-            :permission="strategyItem.permission.edit_strategy"
+            :permission="strategyItem.permission?.edit_strategy"
             :resource="strategyItem.strategy_id"
             theme="primary"
             @click="handleEdit(strategyItem)">
@@ -144,7 +145,7 @@
           <auth-component
             v-else
             action-id="delete_strategy"
-            :permission="strategyItem.permission.delete_strategy"
+            :permission="strategyItem.permission?.delete_strategy"
             :resource="strategyItem.strategy_id">
             <bk-button
               class="ml8"
@@ -170,13 +171,13 @@
               action-id="edit_strategy"
               disabled
               :model-value="strategyItem.status === 'running'"
-              :permission="strategyItem.permission.edit_strategy"
+              :permission="strategyItem.permission?.edit_strategy"
               :resource="strategyItem.strategy_id"
               theme="primary" />
             <auth-component
               v-else
               action-id="edit_strategy"
-              :permission="strategyItem.permission.edit_strategy"
+              :permission="strategyItem.permission?.edit_strategy"
               :resource="strategyItem.strategy_id">
               <audit-popconfirm
                 class="ml8"
@@ -194,9 +195,11 @@
         </div>
       </div>
     </template>
-    <div>
+    <div class="strategy-detail-wrap">
       <strategy-detail
+        :key="strategyItem.strategy_id"
         :data="strategyItem"
+        :detail-loading="detailLoading"
         :strategy-map="strategyTagMap"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
@@ -204,7 +207,7 @@
   </audit-sideslider>
 
   <audit-sideslider
-    ref="sidesliderRef"
+    ref="strategyRecordsSidesliderRef"
     v-model:isShow="showRecords"
     :show-footer="false"
     :title="t('运行记录')"
@@ -266,6 +269,7 @@
     onUnmounted,
     ref,
     shallowRef,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -283,7 +287,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
-  import type StrategyModel from '@model/strategy/strategy';
+  import StrategyModel from '@model/strategy/strategy';
 
   import useMessage from '@hooks/use-message';
   import useRecordPage from '@hooks/use-record-page';
@@ -309,7 +313,7 @@
     getSceneSystemParams,
     syncSceneContextToUrl,
   } from '@/utils/assist/scene-system-params';
-  import { getStrategyRouteNames, getStrategyListScopeParams } from '../utils/strategy-routes';
+  import { getStrategyRouteNames, getStrategyListScopeParams, getStrategyResourceSceneParams } from '../utils/strategy-routes';
 
   enum FullEnum {
     FULL = 'full',
@@ -383,12 +387,15 @@
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
   const showRecords = ref(false);
-  const currentDetailTab = ref<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther'>('riskDetection');
+  const currentDetailTab = ref<
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther'
+  >('riskDetection');
   const styles = shallowRef({ left: '216px' });
   // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
   const strategyLabelList = ref<any[]>([]);
   const searchKey = ref<Array<SearchKey>>([]);
   const strategyItem = ref({} as StrategyModel);
+  const detailLoading = ref(false);
   const permissionCheckData = ref();
   const renderLabelRef = ref();
   const total = ref(0);
@@ -495,12 +502,17 @@
     },
   ] as { name: string, id: string, placeholder: string, children?: any[] }[];
 
+  const getScopeKey = () => {
+    const { scene_id: sceneId } = getStrategyListScopeParams(route);
+    return sceneId !== undefined && sceneId !== null && sceneId !== ''
+      ? String(sceneId)
+      : '__platform__';
+  };
+
   const dataSource = (params: Record<string, any> = {}) => {
     const scopeParams = getStrategyListScopeParams(route);
     // 记录本次请求实际使用的场景，供 scene:change 判断场景是否真正变化
-    lastFetchedScopeId.value = scopeParams.scene_id !== undefined && scopeParams.scene_id !== null
-      ? String(scopeParams.scene_id)
-      : '__platform__';
+    lastFetchedScopeId.value = getScopeKey();
     // render-list 统一产出 sort: ['-field'] / ['field']，策略后台接口使用 order_field + order_type
     // Strategy 模型已无 scene_id，需过滤 URL/缓存中残留的非法排序字段
     const STRATEGY_SORTABLE_FIELDS = new Set(['strategy_id', 'risk_count', 'updated_at']);
@@ -1124,6 +1136,7 @@
   useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
+    defaultParams: getStrategyResourceSceneParams(route),
     onSuccess(data) {
       linkTableMaxVersionMap.value = data.reduce((res, item) => {
         res[item.uid] = item.version;
@@ -1275,12 +1288,49 @@
     execCopy(route, t('复制成功'));
   };
 
+  // 获取策略详情（仅点击策略名称时调用）
+  let detailRequestSeq = 0;
+  const loadStrategyDetail = (strategyId: number) => {
+    const id = Number(strategyId);
+    if (!id) return;
+    detailRequestSeq += 1;
+    const currentSeq = detailRequestSeq;
+    detailLoading.value = true;
+    StrategyManageService.fetchStrategyInfo({ strategy_id: id })
+      .then((data) => {
+        if (currentSeq !== detailRequestSeq) return;
+        const preservedPermission = strategyItem.value?.permission;
+        const model = data instanceof StrategyModel ? data : new StrategyModel(data);
+        if (!model.permission && preservedPermission) {
+          model.permission = preservedPermission;
+        }
+        strategyItem.value = model;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (currentSeq === detailRequestSeq) {
+          detailLoading.value = false;
+        }
+      });
+  };
+
+  watch(showDetail, (visible) => {
+    if (!visible) {
+      detailRequestSeq += 1;
+      detailLoading.value = false;
+    }
+  });
+
+  const handleDetailBeforeClose = () => Promise.resolve(true);
+
   // 详情
   const handleDetail = (data: StrategyModel) => {
-    if (!data) return;
+    const strategyId = Number(data?.strategy_id);
+    if (!strategyId) return;
     recordPageParams();
     strategyItem.value = data;
     showDetail.value = true;
+    loadStrategyDetail(strategyId);
   };
 
   // 运行记录
@@ -1297,16 +1347,20 @@
     });
   };
 
-  const tabToStepMap: Record<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther', number> = {
+  const tabToStepMap: Record<
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther',
+    number
+  > = {
     riskDetection: 1,
+    riskDiscoveryRules: 2,
     riskDisplay: 3,
     eventReport: 4,
     riskOther: 5,
   };
 
   const handleDetailTabChange = (tab: string) => {
-    if (tabToStepMap[tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther']) {
-      currentDetailTab.value = tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther';
+    if (tabToStepMap[tab as keyof typeof tabToStepMap]) {
+      currentDetailTab.value = tab as keyof typeof tabToStepMap;
     }
   };
 
@@ -1459,6 +1513,7 @@
     listRef.value.fetchData({ tag: name });
   };
   let isRequest = false;
+  let initialListFetchScheduled = false;
   const handleRequestSuccess = (data: Strategy) => {
     hasListLoadedOnce.value = true;
     // 先检验策略列表权限再获取通知组
@@ -1580,6 +1635,9 @@
     return hasKey;
   };
   const fetchData = () => {
+    // 预先记录作用域，避免 scene:change 与首屏 fetch 并发触发双请求
+    lastFetchedScopeId.value = getScopeKey();
+    initialListFetchScheduled = true;
     // 清理 URL/缓存中残留的非法排序（如已移除的 scene_id 字段）
     const urlParams = getSearchParams();
     const sortableFields = new Set(['strategy_id', 'risk_count', 'updated_at']);
@@ -1610,7 +1668,7 @@
     nextTick(() => tryFetch());
   };
   const handlFetchData = () => {
-    const currentScopeId = getSceneSystemParams().scope_id;
+    const currentScopeKey = getScopeKey();
     // 深链场景：URL 已携带 strategy_id 等筛选条件时，首屏的 fetchData() 会立刻触发筛选请求；
     // 若此刻收到 scene:change 事件，handlFetchData 里调用无筛选的 listRef.fetchData() 会把筛选冲掉。
     // 因此在“尚未首次加载成功”阶段，若存在 URL 筛选参数则直接跳过。
@@ -1624,16 +1682,16 @@
     if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
       return;
     }
-    // 场景未变且列表已成功加载过时才跳过；首屏因 sort 解析失败/请求取消等未加载成功时仍需重试
+    const isSceneChanged = lastFetchedScopeId.value !== null
+      && currentScopeKey !== lastFetchedScopeId.value;
     if (
-      lastFetchedScopeId.value !== null
-      && currentScopeId === lastFetchedScopeId.value
-      && hasListLoadedOnce.value
+      !isSceneChanged
+      && initialListFetchScheduled
+      && lastFetchedScopeId.value !== null
+      && currentScopeKey === lastFetchedScopeId.value
     ) {
       return;
     }
-    const isSceneChanged = lastFetchedScopeId.value !== null
-      && currentScopeId !== lastFetchedScopeId.value;
 
     total.value = 0;
     hasListLoadedOnce.value = false;
@@ -1643,6 +1701,7 @@
 
     // 真正切换场景：清空搜索/筛选/排序，避免旧场景参数带到新场景
     if (isSceneChanged) {
+      initialListFetchScheduled = false;
       syncSceneContextToUrl(getSceneContextQuery());
       router.replace({ query: getQueryFromLocation() }).catch(() => {});
       searchKey.value = [];
@@ -1833,6 +1892,19 @@
   .strategy-manage-content-text {
     font-weight: 700;
     cursor: pointer;
+  }
+}
+
+.strategy-detail-wrap {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+  background: #fff;
+
+  .strategy-detail {
+    flex: 1;
+    min-height: 0;
   }
 }
 </style>

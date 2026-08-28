@@ -16,185 +16,122 @@
 -->
 <template>
   <div class="risk-detection">
-    <collapse-panel
-      class="collapse-card-title"
-      :label="t('基础配置')"
-      style="margin-top: 14px;">
-      <render-info-block class="mt16">
-        <render-info-item :label="t('策略名称')">
-          {{ data.strategy_name }}
-        </render-info-item>
-      </render-info-block>
-      <render-info-block>
-        <render-info-item :label="t('策略标签')">
-          <edit-tag :data="data.tags?.map(item=> strategyMap[item] || item) || ''" />
-        </render-info-item>
-      </render-info-block>
-      <render-info-block>
-        <render-info-item :label="t('风险等级')">
-          <span
-            v-if="data.risk_level"
-            :style="{
-              'background-color': riskLevelMap[data.risk_level].color,
-              padding: '3px 8px',
-              'border-radius': '3px',
-              color: 'white'
-            }">
-            {{ riskLevelMap[data.risk_level].label }}
-          </span>
-          <span v-else>--</span>
-        </render-info-item>
-      </render-info-block>
-      <render-info-block
-        class="flex "
-        style="margin-bottom: 12px;">
-        <render-info-item
-          :label="t('风险危害')">
-          {{ data.risk_hazard || '--' }}
-        </render-info-item>
-      </render-info-block>
-      <render-info-block
-        class="flex "
-        style="margin-bottom: 12px;">
-        <render-info-item
-          :label="t('处理指引')">
-          {{ data.risk_guidance || '--' }}
-        </render-info-item>
-      </render-info-block>
-    </collapse-panel>
-    <collapse-panel
-      class="collapse-card-title"
-      :label="t('方案')"
-      style="margin-top: 24px;">
-      <render-info-block class="mt16">
-        <render-info-item :label="t('配置方式')">
-          <span
-            :style="{
-              padding: '4px 6px',
-              color: data.strategy_type === 'rule' ? '#299E56' : '#E38B02',
-              background: data.strategy_type === 'rule' ? '#DAF6E5' : '#FDEED8',
-              borderRadius: '2px',
-            }">
-            {{ strategyTypeTextMap[data.strategy_type] }}
-          </span>
-        </render-info-item>
-      </render-info-block>
-      <render-info-block
-        v-if="data.strategy_type === 'model'"
-        class="mt16">
-        <render-info-item :label="t('方案名称')">
-          {{ currentControl?.control_name || '--' }} - V{{ data.control_version }}
-        </render-info-item>
-      </render-info-block>
-      <!-- 自定义规则审计 -->
-      <template v-if="data.strategy_type === 'rule'">
-        <render-info-block class="mt16">
-          <render-info-item :label="t('数据源')">
-            <span>{{ commonData.rule_audit_config_type.
-              find(item => item.value === data.configs.config_type)?.label }}/</span>
-            <template v-if="data.configs.config_type === 'LinkTable'">
-              {{ LinkDataDetail.name }}
-            </template>
-            <template v-else>
-              {{ getDataSourceText(data.configs) }}
-            </template>
-          </render-info-item>
-        </render-info-block>
-        <render-info-block class="mt16">
-          <render-info-item :label="t('预期结果')">
-            <template v-if="data.configs.select.length">
-              <div class="panel-edit flex">
-                <div
-                  v-for="element in data.configs.select"
-                  :key="element.raw_name + element.aggregate + element.display_name"
-                  class="query-field flex-center-wrap">
-                  {{ getMetricName(element) }}
-                </div>
-              </div>
-            </template>
-            <div v-else>
-              --
-            </div>
-          </render-info-item>
-        </render-info-block>
-        <render-info-block>
-          <render-info-item :label="t('风险发现规则')">
-            <div class="condition-render-item">
-              <div
-                v-if="data.configs.where.conditions.length > 1"
-                class="condition-equation-wrap">
-                <span class="condition-equation first-equation">
-                  {{ data.configs.where.connector }}
+    <div class="detail-info-card">
+      <div class="detail-section">
+        <div class="detail-section-title">
+          {{ t('基础配置') }}
+        </div>
+        <div class="detail-section-body">
+          <render-info-block>
+            <render-info-item :label="t('策略名称')">
+              {{ data.strategy_name }}
+            </render-info-item>
+          </render-info-block>
+          <render-info-block>
+            <render-info-item :label="t('标签')">
+              <edit-tag :data="data.tags?.map(item=> strategyMap[item] || item) || ''" />
+            </render-info-item>
+          </render-info-block>
+          <render-info-block>
+            <render-info-item :label="t('描述')">
+              {{ data.description || '--' }}
+            </render-info-item>
+          </render-info-block>
+        </div>
+      </div>
+
+      <div class="detail-section-divider" />
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          {{ t('方案') }}
+        </div>
+        <div class="detail-section-body">
+          <render-info-block>
+            <render-info-item :label="t('配置方式')">
+              <div class="strategy-type-display">
+                <img
+                  :alt="strategyTypeTextMap[data.strategy_type]"
+                  class="strategy-type-icon"
+                  :src="strategyTypeIcon">
+                <span class="strategy-type-text">
+                  {{ strategyTypeTextMap[data.strategy_type] }}
                 </span>
               </div>
-              <div style="flex: 1; margin-bottom: 20px;">
-                <template
-                  v-for="(item, index) in data.configs.where.conditions"
-                  :key="index">
-                  <div
-                    v-for="(childItem, childIndex) in item.conditions"
-                    :key="childIndex"
-                    class="condition-item"
-                    :style="{ marginTop: index ? '12px' : '0px' }">
+            </render-info-item>
+          </render-info-block>
+          <render-info-block
+            v-if="data.strategy_type === 'model'">
+            <render-info-item :label="t('方案名称')">
+              {{ currentControl?.control_name || '--' }} - V{{ data.control_version }}
+            </render-info-item>
+          </render-info-block>
+          <!-- 自定义规则审计 -->
+          <template v-if="data.strategy_type === 'rule'">
+            <render-info-block>
+              <render-info-item :label="t('数据源')">
+                <span>{{ commonData.rule_audit_config_type.
+                  find(item => item.value === data.configs.config_type)?.label }}/</span>
+                <template v-if="data.configs.config_type === 'LinkTable'">
+                  {{ LinkDataDetail.name }}
+                </template>
+                <template v-else>
+                  {{ getDataSourceText(data.configs) }}
+                </template>
+              </render-info-item>
+            </render-info-block>
+            <render-info-block>
+              <render-info-item :label="t('预期结果')">
+                <template v-if="data.configs.select?.length">
+                  <div class="panel-edit flex">
                     <div
-                      v-if="childIndex"
-                      class="condition-equation mr4 mb4">
-                      {{ item.connector }}
+                      v-for="element in data.configs.select"
+                      :key="element.raw_name + element.aggregate + element.display_name"
+                      class="query-field flex-center-wrap">
+                      {{ getMetricName(element) }}
                     </div>
-                    <template v-if="childItem.condition.field">
-                      <div class="condition-key mr4 mb4">
-                        {{ childItem.condition.field.display_name }}
-                      </div>
-                      <div class="condition-method mr4 mb4">
-                        {{ commonData.rule_audit_condition_operator.
-                          find(item => item.value === childItem.condition.operator)?.label }}
-                      </div>
-                    </template>
-                    <template v-if="childItem.condition.filters.length">
-                      <div
-                        v-for="(value, valIndex) in childItem.condition.filters"
-                        :key="valIndex"
-                        class="condition-value mr4 mb4">
-                        {{ value }}
-                      </div>
-                    </template>
-                    <template v-else-if="childItem.condition.filter">
-                      <div class="condition-value mr4 mb4">
-                        {{ childItem.condition.filter }}
-                      </div>
-                    </template>
                   </div>
                 </template>
-              </div>
-            </div>
-          </render-info-item>
-        </render-info-block>
-        <render-info-block>
-          <render-info-item :label="t('调度周期')">
-            <template v-if="data.configs.schedule_config">
-              <span>
-                {{ data?.configs.schedule_config.count_freq }}
-              </span>
-              <span>
-                {{ commonData.offset_unit
-                  .find((item) =>
-                    item.value === data.configs.schedule_config.schedule_period)?.label }}
-              </span>
-            </template>
-            <span v-else>
-              --
-            </span>
-          </render-info-item>
-        </render-info-block>
-      </template>
+                <div v-else>
+                  --
+                </div>
+              </render-info-item>
+            </render-info-block>
+            <render-info-block>
+              <render-info-item :label="t('调度方式')">
+                {{ scheduleTypeText }}
+              </render-info-item>
+            </render-info-block>
+            <render-info-block>
+              <render-info-item :label="t('调度周期')">
+                <template
+                  v-if="data.configs.data_source?.source_type === 'batch_join_source'
+                    && data.configs.schedule_config">
+                  <span>
+                    {{ data.configs.schedule_config.count_freq }}
+                  </span>
+                  <span>
+                    {{ commonData.offset_unit
+                      .find((item) =>
+                        item.value === data.configs.schedule_config.schedule_period)?.label }}
+                  </span>
+                </template>
+                <span v-else>
+                  --
+                </span>
+              </render-info-item>
+            </render-info-block>
+          </template>
 
-      <bk-loading :loading="controlLoading">
-        <component
-          :is="comMap[currentControl?.control_type_id || '--']"
-          ref="comRef"
-          :data="data" />
-      </bk-loading>
-    </collapse-panel>
+          <bk-loading :loading="controlLoading">
+            <component
+              :is="comMap[currentControl?.control_type_id || '--']"
+              ref="comRef"
+              :data="data" />
+          </bk-loading>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -203,6 +140,7 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import LinkDataManageService from '@service/link-data-manage';
   import MetaManageService from '@service/meta-manage';
@@ -217,13 +155,18 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
+  import editWayIcon from '@images/strategy-manage/edit.svg';
+  import modelWayIcon from '@images/strategy-manage/model.svg';
+
   import RenderAiops from './aiops/index.vue';
-  import collapsePanel from './collapse-panel.vue';
   import FilterCondition from './normal/filter-condition.vue';
   import RenderInfoBlock from './render-info-block.vue';
   import RenderInfoItem from './render-info-item.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getStrategyResourceSceneParams,
+           getStrategySystemScopeParams,
+           isPlatformStrategyRoute,
+  } from '../../utils/strategy-routes';
 
   interface Props {
     data: StrategyModel,
@@ -232,6 +175,29 @@
 
   const props = defineProps<Props>();
   const { t } = useI18n();
+  const route = useRoute();
+  const isPlatformMode = computed(() => isPlatformStrategyRoute(route.name));
+
+  const fetchStrategyTableList = (params: {
+    table_type: string;
+    scene_id?: string | number | null;
+    bk_biz_id?: string | number;
+  }) => {
+    if (!params.table_type) {
+      return Promise.resolve([]);
+    }
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams = {
+      ...rest,
+      ...(sceneId !== undefined && sceneId !== null && sceneId !== ''
+        ? { scene_id: String(sceneId) }
+        : {}),
+    };
+    return isPlatformMode.value
+      ? StrategyManageService.fetchTable(requestParams)
+      : StrategyManageService.fetchScenePermissionTable(requestParams);
+  };
+
   const currentControl = computed(() => controlList.value
     .find(item => item.control_id === props.data.control_id));// 当前方案
   const comMap: Record<string, any> = {
@@ -239,34 +205,31 @@
     AIOps: RenderAiops,
   };
 
-  const riskLevelMap: Record<string, {
-    label: string,
-    color: string,
-  }> =  {
-    HIGH: {
-      label: t('高'),
-      color: '#ea3636',
-    },
-    MIDDLE: {
-      label: t('中'),
-      color: '#ff9c01',
-    },
-    LOW: {
-      label: t('低'),
-      color: '#979ba5',
-    },
-  };
-
   const strategyTypeTextMap = {
     rule: t('自定义规则审计'),
     model: t('引入模型审计'),
   } as Record<string, string>;
 
+  const strategyTypeIcon = computed(() => (
+    props.data.strategy_type === 'rule' ? editWayIcon : modelWayIcon
+  ));
+
+  const scheduleTypeText = computed(() => {
+    const sourceType = props.data.configs?.data_source?.source_type;
+    if (sourceType === 'stream_source') {
+      return t('实时调度');
+    }
+    if (sourceType === 'batch_join_source') {
+      return t('固定周期调度');
+    }
+    return '--';
+  });
+
   const {
     data: commonData,
+    run: fetchStrategyCommon,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
-    manual: true,
   });
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
@@ -317,14 +280,13 @@
     loading: controlLoading,
   } = useRequest(StrategyManageService.fetchControlList, {
     defaultValue: [],
-    manual: true,
   });
 
   // 获取tableid
   const {
     data: tableData,
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
+  } = useRequest(fetchStrategyTableList, {
     defaultValue: [],
   });
 
@@ -344,27 +306,46 @@
     defaultValue: new LinkDataDetailModel(),
   });
 
+  let commonDataRequested = false;
+
   watch(() => props.data, (data) => {
-    if (data.strategy_type !== 'rule') return;
-    if (data.configs.config_type !== 'LinkTable') {
-      fetchTable({
-        table_type: data.configs.config_type,
-        scene_id: getSceneSystemParams().scope_id,
-      });
+    if (!data?.strategy_id) return;
+
+    if (!commonDataRequested) {
+      commonDataRequested = true;
+      fetchStrategyCommon();
+    }
+
+    if (data.strategy_type === 'model') {
+      fetchControlList();
+      return;
+    }
+
+    if (data.strategy_type !== 'rule' || !data.configs?.config_type) return;
+
+    const configType = data.configs.config_type;
+    if (configType === 'LinkTable') {
+      if (data.link_table_uid) {
+        fetchLinkDataSheetDetail({
+          uid: data.link_table_uid,
+        });
+      }
     } else {
-      fetchLinkDataSheetDetail({
-        uid: data.link_table_uid,
+      fetchTable({
+        table_type: configType,
+        ...getStrategyResourceSceneParams(route),
       });
     }
-    if (data.configs.config_type === 'EventLog') {
+
+    if (configType === 'EventLog') {
       fetchSystemWithAction({
-        scope_id: getSceneSystemParams().scope_id,
         action_ids: 'view_system',
-        scope_type: 'scene',
+        ...getStrategySystemScopeParams(route),
       });
     }
-    if (data.configs.having && data.configs.having.conditions.length > 0) {
-      // 将having条件合并到where条件中, conditions根据item.index进行排序合并
+
+    if (data.configs.having?.conditions?.length && data.configs.where) {
+      // 将 having 条件合并到 where 条件中, conditions 根据 item.index 进行排序合并
       // eslint-disable-next-line no-param-reassign
       data.configs.where.conditions = data.configs.where.conditions.concat(data.configs.having.conditions);
       data.configs.where.conditions.sort((a, b) => a.index - b.index);
@@ -378,6 +359,42 @@
 </script>
 <style scoped lang="postcss">
 .risk-detection {
+  .detail-info-card {
+    padding-top: 24px;
+    background: #fff;
+  }
+
+  .detail-section-title {
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+    color: #313238;
+  }
+
+  .detail-section-divider {
+    margin: 24px 0;
+    border-top: 1px solid #f0f1f5;
+  }
+
+  .strategy-type-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .strategy-type-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .strategy-type-text {
+    font-size: 12px;
+    line-height: 20px;
+    color: #313238;
+  }
+
   .panel-edit {
     position: relative;
     min-height: 32px;
@@ -419,58 +436,6 @@
       align-items: center;
       justify-content: center;
       flex-wrap: wrap;
-    }
-  }
-
-  .condition-render-item {
-    display: flex;
-
-    .mb4 {
-      margin-bottom: 4px;
-    }
-
-    .condition-equation-wrap {
-      position: relative;
-      width: 50px;
-    }
-
-    .condition-equation {
-      padding: 2px 8px;
-      color: #3a84ff;
-      text-align: center;
-      background: #edf4ff;
-      border-radius: 2px;
-    }
-
-    .first-equation {
-      position: absolute;
-      top: calc(50% - 10px);
-    }
-
-    .condition-item {
-      display: flex;
-      flex-wrap: wrap;
-
-      .condition-key {
-        padding: 2px 8px;
-        color: #788779;
-        background: #dde9de;
-        border-radius: 2px;
-      }
-
-      .condition-method {
-        padding: 2px 8px;
-        color: #fe9c00;
-        background: #fff1db;
-        border-radius: 2px;
-      }
-
-      .condition-value {
-        padding: 2px 8px;
-        color: #63656e;
-        background: #f0f1f5;
-        border-radius: 2px;
-      }
     }
   }
 }

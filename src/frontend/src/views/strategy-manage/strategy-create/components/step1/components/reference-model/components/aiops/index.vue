@@ -171,11 +171,10 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-  import {
-    isStrategyCloneRoute,
-    isStrategyEditRoute,
-    isStrategyUpgradeRoute,
+  import { getStrategyResourceSceneParams,
+           isStrategyCloneRoute,
+           isStrategyEditRoute,
+           isStrategyUpgradeRoute,
   } from '../../../../../../../utils/strategy-routes';
 
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
@@ -223,6 +222,7 @@
     BizAsset: ResourceDataComponent,
   };
   const route = useRoute();
+  const strategySceneParams = () => getStrategyResourceSceneParams(route);
   let isInit = false;
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
@@ -272,7 +272,7 @@
         formData.value.configs.config_type = data.table_type[0].value;
         fetchTable({
           table_type: formData.value.configs.config_type,
-          scene_id: getSceneSystemParams().scope_id,
+          ...strategySceneParams(),
         });
       }
       sourceTypeMap.value = commonData.value.table_type.reduce((
@@ -298,7 +298,7 @@
   const handleDataSourceType = (item: boolean | string | number) => {
     fetchTable({
       table_type: item,
-      scene_id: getSceneSystemParams().scope_id,
+      ...strategySceneParams(),
     });
     if (isInit) {
       emits('updateDataSource', formData.value.configs.data_source);
@@ -358,7 +358,7 @@
 
       fetchTable({
         table_type: formData.value.configs.config_type,
-        scene_id: getSceneSystemParams().scope_id,
+        ...strategySceneParams(),
       }).then(() => {
         comRef.value?.setConfigs?.(configs);
       });
