@@ -608,9 +608,7 @@ export function useSecChatStore() {
     if (targetGroup) {
       reloadIds.add(targetGroup.id);
     }
-    await Promise.all(
-      [...reloadIds].map(groupId => loadGroupConversations(groupId, { force: true })),
-    );
+    await Promise.all([...reloadIds].map(groupId => loadGroupConversations(groupId, { force: true })));
 
     // 以本次操作为准校正归属后再去重，避免重拉分组时过期子节点与根列表各留一条
     conversations.value = dedupeConversations(conversations.value.map((item) => {

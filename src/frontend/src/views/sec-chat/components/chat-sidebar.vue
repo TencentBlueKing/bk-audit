@@ -283,11 +283,11 @@
             @drop="handleDrop($event, 'group', group.name)">
             <div
               class="group-header"
-              draggable="true"
               :class="[
                 getGroupHeaderDragClass(group.name),
                 { 'is-menu-open': activeGroupMenuId === group.name },
               ]"
+              draggable="true"
               @click="handleGroupHeaderClick(group.name)"
               @dragend="handleDragEnd"
               @dragstart="handleDragStart($event, 'group', group.name)">
