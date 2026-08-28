@@ -19,6 +19,7 @@
     <chat-log-panel
       v-if="panelConversation"
       :messages="panelConversation.messages"
+      :nl-suggestions="panelConversation.commonOperations || []"
       @attach="handleAttach"
       @close-select-system="handleCloseSelectSystem"
       @confirm-system="handleConfirmSystem"

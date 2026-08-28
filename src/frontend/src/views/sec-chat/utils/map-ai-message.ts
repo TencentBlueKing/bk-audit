@@ -18,6 +18,7 @@ import dayjs from 'dayjs';
 
 import type {
   AiMessage,
+  AiNlRecognitionError,
   AiSearchCondition,
   AiSystemFieldItem,
   AiSystemInfo,
@@ -217,6 +218,20 @@ export interface MapAiMessageOptions {
   fieldCatalog?: SystemFieldRow[];
 }
 
+/** NL 消息在 SUCCESS 时若 output_data.error 非空，表示识别失败（非任务 FAILED） */
+export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError | null => {
+  if (message.message_type !== 'NATURAL_LANGUAGE_SEARCH') return null;
+  if (message.status !== 'SUCCESS') return null;
+  const error = message.output_data?.error;
+  if (!error || typeof error !== 'object') return null;
+  const errorCode = String(error.error_code || '').trim();
+  if (!errorCode) return null;
+  return {
+    error_code: errorCode,
+    error_message: String(error.error_message || '').trim(),
+  };
+};
+
 /**
  * 将后端消息映射为当前 UI 卡片模型。
  */
@@ -265,6 +280,21 @@ export const mapAiMessageToChatMessage = (
 
   if (message.message_type === 'NATURAL_LANGUAGE_SEARCH') {
     const queryText = String(message.input_data?.query_text ?? '');
+    const recognitionError = getNlRecognitionError(message);
+    if (recognitionError) {
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'retrieval-result',
+        content: queryText,
+        result: undefined,
+        recognitionError: {
+          code: recognitionError.error_code,
+          message: recognitionError.error_message,
+        },
+        ...baseMeta,
+      };
+    }
     return {
       id: message.uid,
       role: 'assistant',
