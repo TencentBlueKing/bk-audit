@@ -37,12 +37,23 @@ class LinkDataManage extends ModuleBase {
     });
   }
   // 获取全部联表
-  getLinkTableAll() {
+  getLinkTableAll(params: { scene_id?: string | number | null } = {}) {
+    const hasSceneIdKey = Object.prototype.hasOwnProperty.call(params, 'scene_id');
+    const sceneId = hasSceneIdKey
+      ? params.scene_id
+      : getSceneSystemParams().scope_id;
+    const queryParams: Record<string, string | number> = {};
+    if (sceneId !== undefined && sceneId !== null && sceneId !== '') {
+      queryParams.scene_id = sceneId;
+    }
+    // 必须保留尾部斜杠，否则 /link_table/all 会被路由匹配为 uid=all 的详情接口而 404
     return Request.get<Array<{
       uid:string,
       name: string,
       version: number,
-    }>>(`${this.path}/link_table/all/?scene_id=${getSceneSystemParams().scope_id}`);
+    }>>(`${this.path}/link_table/all/`, {
+      params: queryParams,
+    });
   }
   // 获取联表标签
   getLinkTableTags() {
