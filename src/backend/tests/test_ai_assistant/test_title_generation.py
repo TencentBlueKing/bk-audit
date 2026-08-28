@@ -14,16 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-"""会话标题自动生成：统一模板渲染 + 共用智能体调用 + 清洗 + Celery 任务 + NL 触发链路。"""
+"""会话标题自动生成（一期复刻 risk 调用方式）：input 拼接 + 共用智能体调用 + 清洗 + Celery 任务 + NL 触发链路。"""
 
 from unittest import mock
 
 from api.constants import AIAgentCode
-from services.web.ai_assistant.constants import (
-    AI_TITLE_MODULE_CONFIGS,
-    ExecutionStatus,
-    MessageType,
-)
+from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.services.message_execution import MessageExecution
@@ -36,40 +32,14 @@ TITLE_AGENT_MODULE = "services.web.ai_assistant.services.title_agent"
 
 
 class TitleAgentServiceTest(AIAssistantPlatformTestCase):
-    """统一模板渲染 + 共用智能体调用 + 清洗"""
-
-    def test_render_user_prompt_structured(self):
-        """三段式模板：场景/任务/输入，模块配置与长度正确渲染"""
-
-        prompt = TitleAgentService.render_user_prompt(
-            module_config=AI_TITLE_MODULE_CONFIGS["log_search_conversation"],
-            input_text="查一下张三和王五最近三天的登录失败记录",
-            max_length=20,
-        )
-
-        self.assertIn("【场景】AI自然语言日志检索——用户在会话中用自然语言描述检索意图进行日志检索", prompt)
-        self.assertIn("为这次会话生成一个简短准确的标题：不超过20个字", prompt)
-        self.assertIn('【用户输入】"查一下张三和王五最近三天的登录失败记录"', prompt)
-
-    def test_normalize_title_cleans_and_truncates(self):
-        """清洗：去代码块/引号/空白折叠/截断（与 risk 标题清洗规则一致）"""
-
-        raw = '```json\n"张三 和五   的登录 失败记录查询啊测试超长标题"\n```'
-        title = TitleAgentService.normalize_title(raw, 20)
-
-        # 空白折叠后按 20 字符截断（空格计入长度）
-        self.assertEqual(title, "张三 和五 的登录 失败记录查询啊测试超")
-        # 空输入返回空串（调用方按跳过处理）
-        self.assertEqual(TitleAgentService.normalize_title(None, 20), "")
-        self.assertEqual(TitleAgentService.normalize_title('```""```', 20), "")
+    """User Prompt 拼接（与 risk 同构的单行 label 格式）+ 共用智能体调用 + 清洗"""
 
     def test_generate_title_calls_shared_agent(self):
-        """共用智能体：agent_code 为 ALS_TITLE_SUM（与风险报告标题同一智能体），User Message 为统一模板渲染"""
+        """复刻 risk 调用：同一智能体 ALS_TITLE_SUM，input 为单行 label 前缀格式"""
 
         with mock.patch(f"{TITLE_AGENT_MODULE}.api.bk_plugins_ai_agent.chat_completion") as mock_chat:
             mock_chat.return_value = '```"张三王五登录失败记录"```'
             title = TitleAgentService.generate_title(
-                module="log_search_conversation",
                 input_text="查一下张三和王五最近三天的登录失败记录",
                 username=self.user,
                 max_length=20,
@@ -79,13 +49,55 @@ class TitleAgentServiceTest(AIAssistantPlatformTestCase):
         mock_chat.assert_called_once_with(
             agent_code=AIAgentCode.ALS_TITLE_SUM,
             user=self.user,
-            input=mock.ANY,
+            input='用户自然语言检索描述: "查一下张三和王五最近三天的登录失败记录"',
             chat_history=[],
             execute_kwargs={"stream": False},
         )
-        prompt = mock_chat.call_args.kwargs["input"]
-        self.assertIn("【场景】AI自然语言日志检索", prompt)
-        self.assertIn("不超过20个字", prompt)
+
+    def test_normalize_title_cleans_and_truncates(self):
+        """清洗：去代码块/引号/空白折叠/截断（与 risk 标题清洗规则一致）"""
+
+        raw = '```json\n"张三 和五   的登录 失败记录查询啊测试超长标题"\n```'
+        title = TitleAgentService.normalize_title(raw, 20)
+
+        # 空白折叠后按 20 字符截断（空格计入长度）
+        self.assertEqual(title, "张三 和五 的登录 失败记录查询啊测试超")
+        # 空输入/非字符串返回空串（调用方按跳过处理，防异常对象污染标题）
+        self.assertEqual(TitleAgentService.normalize_title(None, 20), "")
+        self.assertEqual(TitleAgentService.normalize_title('```""```', 20), "")
+        self.assertEqual(TitleAgentService.normalize_title(object(), 20), "")
+
+    def test_normalize_title_handles_request_context_payload(self):
+        """bk_resource chat_completion 在 bkop 返回 RequestContext：payload 字符串化 tuple，
+        含错误响应（error_code）→ 空串；正常响应 → 解析后清洗"""
+
+        # 错误响应（bad request / 权限等）
+        class Ctx:
+            pass
+
+        bad = Ctx()
+        bad.payload = '[{"error_code": 1, "message": "bad request", "data": {}}, {"input": "x"}]'
+        self.assertEqual(TitleAgentService.normalize_title(bad, 20), "")
+
+        # 错误响应含 data 字段嵌套
+        bad_data = Ctx()
+        bad_data.payload = '[{"error_code": 403, "message": "no permission", "data": None}]'
+        self.assertEqual(TitleAgentService.normalize_title(bad_data, 20), "")
+
+        # 正常响应（payload 含 content）
+        normal = Ctx()
+        normal.payload = '[{"content": "```json\\n\\"张三王五登录记录\\"\\n```"}, {"role": "user"}]'
+        self.assertEqual(TitleAgentService.normalize_title(normal, 20), "张三王五登录记录")
+
+        # 正常响应（payload 含 message）
+        normal_msg = Ctx()
+        normal_msg.payload = '[{"message": "30天高危风险分析"}]'
+        self.assertEqual(TitleAgentService.normalize_title(normal_msg, 20), "30天高危风险分析")
+
+        # 异常输入（payload 以 [ 开头但语法不可解析）→ 空串，绝不污染标题
+        garbage = Ctx()
+        garbage.payload = "[garbage syntax without closing"
+        self.assertEqual(TitleAgentService.normalize_title(garbage, 20), "")
 
 
 class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
@@ -101,7 +113,6 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
 
         self.assertEqual(result["title"], "张三王五登录失败记录")
         mock_generate.assert_called_once()
-        self.assertEqual(mock_generate.call_args.kwargs["module"], "log_search_conversation")
         self.conversation.refresh_from_db()
         self.assertEqual(self.conversation.title, "张三王五登录失败记录")
 
