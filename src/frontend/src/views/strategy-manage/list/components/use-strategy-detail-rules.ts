@@ -29,7 +29,7 @@ export interface ConditionDisplayRow {
   values: string[];
 }
 
-const emptyWhere = (): RuleWhereDisplay => ({
+export const emptyWhere = (): RuleWhereDisplay => ({
   connector: 'and',
   conditions: [],
 });
@@ -119,6 +119,36 @@ export const buildConditionDisplayRows = (
   return rows;
 };
 
+export const dispatchConditionsToWhere = (
+  conditions: Record<string, any> | undefined,
+  getFieldLabel: (fieldName: string) => string,
+): RuleWhereDisplay => {
+  if (!conditions?.conditions?.length) {
+    return emptyWhere();
+  }
+  return {
+    connector: conditions.connector || 'and',
+    conditions: [{
+      connector: 'and',
+      conditions: conditions.conditions.map((item: Record<string, any>) => {
+        const cond = item.condition ?? item;
+        const fieldName = typeof cond.field === 'string'
+          ? cond.field
+          : (cond.field?.raw_name || cond.field?.field_name || '');
+        return {
+          condition: {
+            field: {
+              field_name: getFieldLabel(fieldName),
+            },
+            operator: cond.operator,
+            filter: cond.filter ?? cond.filters?.[0],
+          },
+        };
+      }),
+    }],
+  };
+};
+
 const toStrategyRecord = (data: StrategyModel | Record<string, any>): Record<string, any> => {
   const raw = toRaw(data) as Record<string, any>;
   return {
@@ -206,13 +236,7 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
   const resolveGroupNames = (
     ids: Array<string | number>,
     userGroupList: Array<{ id: number; name: string }>,
-  ) => {
-    if (!ids?.length) return '--';
-    const names = ids
-      .map(id => userGroupList.find(item => item.id === id || `${item.id}` === `${id}`)?.name || `${id}`)
-      .filter(Boolean);
-    return names.length ? names.join('、') : '--';
-  };
+  ) => resolveNoticeGroupNames(ids, userGroupList);
 
   return {
     displayRules,
@@ -220,4 +244,15 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
     getConditionFieldLabel,
     resolveGroupNames,
   };
+};
+
+export const resolveNoticeGroupNames = (
+  ids: Array<string | number>,
+  userGroupList: Array<{ id: number; name: string }>,
+) => {
+  if (!ids?.length) return '--';
+  const names = ids
+    .map(id => userGroupList.find(item => item.id === id || `${item.id}` === `${id}`)?.name || `${id}`)
+    .filter(Boolean);
+  return names.length ? names.join('、') : '--';
 };

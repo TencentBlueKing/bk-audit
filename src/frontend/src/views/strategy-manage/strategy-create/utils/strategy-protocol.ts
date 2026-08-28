@@ -130,6 +130,55 @@ const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) =>
   return list;
 };
 
+/** 从分派规则收集可见场景 ID（去重，保持出现顺序） */
+const collectVisibilitySceneIds = (params: Record<string, any>): Array<string | number> => {
+  const ids: Array<string | number> = [];
+  const seen = new Set<string | number>();
+
+  const addId = (value: unknown) => {
+    const normalized = normalizeSceneId(value);
+    if (normalized === undefined || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    ids.push(normalized);
+  };
+
+  const addFromRule = (rule: Record<string, any> | undefined) => {
+    if (!rule) return;
+    if (Array.isArray(rule.scene_ids) && rule.scene_ids.length) {
+      rule.scene_ids.forEach(addId);
+      return;
+    }
+    addId(toTargetSceneId(rule));
+  };
+
+  (params.assign_rules || []).forEach(addFromRule);
+  addFromRule(params.default_assign_rule);
+
+  if (!ids.length && Array.isArray(params.dispatch_rules)) {
+    params.dispatch_rules.forEach((rule: Record<string, any>) => {
+      if (Array.isArray(rule.scene_ids) && rule.scene_ids.length) {
+        rule.scene_ids.forEach(addId);
+      } else {
+        addId(toTargetSceneId(rule));
+      }
+    });
+  }
+
+  return ids;
+};
+
+const buildVisibility = (params: Record<string, any>, isPlatform: boolean) => {
+  if (!isPlatform) {
+    return undefined;
+  }
+  return {
+    visibility_type: 'specific_scenes' as const,
+    scene_ids: collectVisibilitySceneIds(params),
+  };
+};
+
 const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<string, any>) => {
   if (rule.conditions && (rule.conditions.where !== undefined || rule.conditions.having !== undefined)) {
     return {
@@ -263,11 +312,17 @@ export const buildStrategyCreatePayload = (
 
   next.dispatch_rules = buildDispatchRules(next, scope.isPlatform);
 
+  const visibility = buildVisibility(next, scope.isPlatform);
+  if (visibility) {
+    next.visibility = visibility;
+  } else {
+    delete next.visibility;
+  }
+
   delete next.assign_rules;
   delete next.default_assign_rule;
   delete next.processor_groups;
   delete next.notice_groups;
-  delete next.visibility;
   delete next.visibility_type;
   delete next.scene_ids;
   delete next.system_ids;

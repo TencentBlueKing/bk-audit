@@ -1,100 +1,200 @@
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
-  Copyright (C) 2023 THL A29 Limited,
-  a Tencent company. All rights reserved.
-  Licensed under the MIT License (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at http://opensource.org/licenses/MIT
-  Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
-  We undertake not to change the open source license (MIT license) applicable
-  to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="risk-other">
-    <render-info-block>
-      <render-info-item
-        class="group-render-item"
-        :label="t('风险单处理人')">
-        <span v-if="data.processor_groups.length">
-          <router-link
-            v-for="item in data.processor_groups"
-            :key="item"
-            class="notice-box"
-            :to="{
-              name:'noticeGroupList',
-              query:{
-                keyword: userGroupList.find(list => list.id === item)?.name
-              }
-            }">
-            {{ userGroupList.find(list => list.id === item)?.name }}
-          </router-link>
-        </span>
-        <span v-else>
-          --
-        </span>
-      </render-info-item>
-    </render-info-block>
-    <render-info-block>
-      <render-info-item
-        class="group-render-item"
-        :label="t('关注人')">
-        <span v-if="data.notice_groups.length">
-          <router-link
-            v-for="item in data.notice_groups"
-            :key="item"
-            class="notice-box"
-            :to="{
-              name:'noticeGroupList',
-              query:{
-                keyword: userGroupList.find(list => list.id === item)?.name
-              }
-            }">
-            {{ userGroupList.find(list => list.id === item)?.name }}
-          </router-link>
-        </span>
-        <span v-else>
-          --
-        </span>
-      </render-info-item>
-    </render-info-block>
+  <div class="risk-dispatch-rules">
+    <template v-if="!detailLoading && displayRules.length">
+      <div
+        v-for="(rule, ruleIndex) in displayRules"
+        :key="ruleIndex"
+        class="rule-item-card">
+        <div class="rule-item-header">
+          <span class="rule-name">{{ rule.name }}</span>
+        </div>
+        <div class="rule-item-content">
+          <div
+            v-if="!rule.isDefault"
+            class="rule-field-row">
+            <span class="rule-field-label">{{ t('命中条件') }}:</span>
+            <div class="rule-field-value">
+              <rule-condition-display
+                :operator-map="operatorMap"
+                :where="rule.where" />
+            </div>
+          </div>
+          <div class="rule-field-row">
+            <span class="rule-field-label">{{ t('分派场景空间') }}:</span>
+            <span class="rule-field-value">
+              {{ resolveSceneLabels(rule.sceneIds, sceneList) }}
+            </span>
+          </div>
+          <div class="rule-field-row">
+            <span class="rule-field-label">{{ t('风险单处理人') }}:</span>
+            <span class="rule-field-value">
+              {{ resolveNoticeGroupNames(rule.processors, userGroupList) }}
+            </span>
+          </div>
+          <div class="rule-field-row">
+            <span class="rule-field-label">{{ t('关注人') }}:</span>
+            <span class="rule-field-value">
+              {{ resolveNoticeGroupNames(rule.followers, userGroupList) }}
+            </span>
+          </div>
+          <div class="rule-field-row">
+            <span class="rule-field-label">{{ t('风险单分派方式') }}:</span>
+            <span class="rule-field-value">
+              {{ resolveDispatchModeLabel(rule.dispatchMode) }}
+            </span>
+          </div>
+          <div
+            v-if="rule.dispatchMode !== 'direct'"
+            class="rule-field-row">
+            <span class="rule-field-label">{{ t('确认人') }}:</span>
+            <span class="rule-field-value">
+              {{ resolveNoticeGroupNames(rule.confirmers, userGroupList) }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </template>
+    <bk-exception
+      v-else-if="!detailLoading"
+      class="risk-dispatch-rules-empty"
+      scene="part"
+      type="empty">
+      {{ t('暂无风险分派规则') }}
+    </bk-exception>
   </div>
 </template>
 <script setup lang="ts">
+  import { computed, onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import SceneManageService from '@service/scene-manage';
+  import StrategyManageService from '@service/strategy-manage';
+
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
-  import RenderInfoBlock from './render-info-block.vue';
-  import RenderInfoItem from './render-info-item.vue';
+  import useRequest from '@hooks/use-request';
+
+  import RuleConditionDisplay from './rule-condition-display.vue';
+  import { resolveNoticeGroupNames } from './use-strategy-detail-rules';
+  import { useStrategyDetailDispatchRules } from './use-strategy-detail-dispatch-rules';
 
   interface Props {
     data: StrategyModel,
-    userGroupList: Array<{id: number, name: string}>
+    userGroupList: Array<{ id: number; name: string }>,
+    detailLoading?: boolean,
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const { t } = useI18n();
-</script>
-<style lang="postcss">
-.risk-other {
-  margin-top: 8px;
-  margin-left: 24px;
 
-  .notice-box {
-    display: inline-block;
-    height: 22px;
-    padding: 2px 8px;
-    margin-right: 4px;
-    margin-bottom: 8px;
-    text-align: center;
-    background: #fafbfd;
-    border: 1px solid rgb(151 155 165 / 30%);
+  const strategyData = computed(() => props.data);
+  const {
+    displayRules,
+    resolveSceneLabels,
+    resolveDispatchModeLabel,
+  } = useStrategyDetailDispatchRules(strategyData);
+
+  const {
+    data: sceneList,
+    run: fetchSceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    defaultParams: { status: 'enabled' },
+    manual: true,
+  });
+
+  const {
+    data: commonData,
+    run: fetchStrategyCommon,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+  });
+
+  const operatorMap = computed(() => (
+    commonData.value.rule_audit_condition_operator || []
+  ).reduce((res, item) => {
+    res[item.value] = item.label;
+    return res;
+  }, {} as Record<string, string>));
+
+  onMounted(() => {
+    fetchSceneList();
+    fetchStrategyCommon();
+  });
+</script>
+<style scoped lang="postcss">
+.risk-dispatch-rules {
+  padding-top: 24px;
+  background: #fff;
+
+  .rule-item-card {
+    margin-bottom: 12px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #dcdee5;
     border-radius: 2px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .rule-item-header {
+    display: flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 16px;
+    background: #f0f1f5;
+    border-bottom: 1px solid #dcdee5;
+  }
+
+  .rule-name {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 22px;
+    color: #313238;
+  }
+
+  .rule-item-content {
+    padding: 16px 24px 20px;
+    background: #fff;
+  }
+
+  .rule-field-row {
+    display: flex;
+    margin-bottom: 16px;
+    line-height: 22px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .rule-field-label {
+    flex: 0 0 100px;
+    min-width: 100px;
+    color: #979ba5;
+    text-align: right;
+  }
+
+  .rule-field-value {
+    flex: 1;
+    padding-left: 14px;
+    color: #63656e;
+    word-break: break-all;
+  }
+
+  .risk-dispatch-rules-empty {
+    display: flex;
+    min-height: 320px;
+    align-items: center;
+    justify-content: center;
   }
 }
 </style>

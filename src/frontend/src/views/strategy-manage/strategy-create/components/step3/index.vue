@@ -64,12 +64,8 @@
                   :field-options="fieldOptions" />
               </div>
               <assign-rule-fields
-                :check-result-map="checkResultMap"
-                :group-list="groupList"
-                :group-loading="isGroupLoading"
                 :model-value="rule"
                 :scene-options="sceneOptions"
-                @refresh-group-list="refreshGroupList"
                 @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
             </div>
           </div>
@@ -91,11 +87,7 @@
               class="assign-rule-item-content">
               <assign-rule-fields
                 v-model="defaultRule"
-                :check-result-map="checkResultMap"
-                :group-list="groupList"
-                :group-loading="isGroupLoading"
-                :scene-options="sceneOptions"
-                @refresh-group-list="refreshGroupList" />
+                :scene-options="sceneOptions" />
             </div>
           </div>
         </div>
@@ -125,11 +117,9 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
-  import IamManageService from '@service/iam-manage';
-  import NoticeManageService from '@service/notice-group';
-  import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import AssignConditionRows from './components/assign-condition-rows.vue';
@@ -137,7 +127,6 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import {
     getStrategyRouteNames,
     isStrategyCloneRoute,
@@ -177,6 +166,7 @@
   interface Props {
     editData: StrategyModel;
     formData?: Record<string, any>;
+    select?: Array<DatabaseTableFieldModel>;
   }
 
   const props = defineProps<Props>();
@@ -204,7 +194,7 @@
     ruleIdSeq += 1;
     return {
       id,
-      name: overrides.name ?? `分派规则${id}`,
+      name: overrides.name ?? `规则${id}`,
       collapsed: false,
       conditions: [createCondition()],
       scene_ids: [],
@@ -226,29 +216,48 @@
   });
 
   const normalizeSceneIds = (item: Record<string, any> = {}): Array<string | number> => {
+    let ids: Array<string | number> = [];
     if (Array.isArray(item.scene_ids)) {
-      return item.scene_ids.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+      ids = item.scene_ids.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    } else if (Array.isArray(item.scene_id)) {
+      ids = item.scene_id.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    } else if (item.scene_id !== undefined && item.scene_id !== null && item.scene_id !== '') {
+      ids = [item.scene_id];
+    } else if (item.scene_space?.id) {
+      ids = [item.scene_space.id];
     }
-    if (Array.isArray(item.scene_id)) {
-      return item.scene_id.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
-    }
-    if (item.scene_id !== undefined && item.scene_id !== null && item.scene_id !== '') {
-      return [item.scene_id];
-    }
-    if (item.scene_space?.id) {
-      return [item.scene_space.id];
-    }
-    return [];
+    return ids.length ? [ids[0]] : [];
   };
 
   const assignRules = ref<AssignRuleItem[]>([]);
   const defaultRule = ref(createDefaultRule());
 
-  const {
-    data: riskFieldList,
-  } = useRequest(RiskManageService.fetchFields, {
-    defaultValue: [],
-    manual: true,
+  const getFieldOptionId = (field: DatabaseTableFieldModel) => {
+    const aliasField = field as DatabaseTableFieldModel & { value?: string };
+    return field.raw_name || aliasField.value || '';
+  };
+
+  const getFieldOptionLabel = (field: DatabaseTableFieldModel) => {
+    const aliasField = field as DatabaseTableFieldModel & { alias?: string; label?: string; value?: string };
+    if (aliasField.alias && aliasField.label) {
+      return `${aliasField.label}(${aliasField.value})`;
+    }
+    if (field.display_name && field.raw_name) {
+      return `${field.display_name}(${field.raw_name})`;
+    }
+    return field.display_name || field.raw_name || '';
+  };
+
+  const fieldOptions = computed(() => {
+    const fields: DatabaseTableFieldModel[] = props.select?.length
+      ? props.select
+      : (props.formData?.configs?.table_fields || []);
+    return fields
+      .map((item: DatabaseTableFieldModel) => ({
+        id: getFieldOptionId(item),
+        name: getFieldOptionLabel(item),
+      }))
+      .filter((item: { id: string; name: string }) => item.id);
   });
 
   const {
@@ -259,42 +268,8 @@
     manual: true,
   });
 
-  const {
-    data: checkResultMap,
-  } = useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'list_notice_group_v2,create_notice_group_v2',
-      resources: getSceneSystemParams().scope_id,
-    },
-    defaultValue: {},
-    manual: true,
-  });
-
-  const {
-    loading: isGroupLoading,
-    data: groupList,
-    run: fetchGroupList,
-  } = useRequest(NoticeManageService.fetchGroupSelectList, {
-    defaultValue: [],
-    defaultParams: {
-      page_size: 1000,
-      page: 1,
-    },
-    manual: true,
-  });
-
-  const refreshGroupList = () => {
-    groupList.value = [];
-    fetchGroupList();
-  };
-
   const sceneOptions = computed(() => (sceneList.value || []).map((item: any) => ({
     id: item.scene_id,
-    name: item.name,
-  })));
-
-  const fieldOptions = computed(() => (riskFieldList.value || []).map((item: any) => ({
-    id: item.id,
     name: item.name,
   })));
 
@@ -305,7 +280,7 @@
   };
 
   const handleAddRule = () => {
-    const rule = createRule({ name: `分派规则${assignRules.value.length + 1}` });
+    const rule = createRule({ name: `规则${assignRules.value.length + 1}` });
     assignRules.value.push(rule);
     nextTick(() => {
       document.querySelector('.assign-rule-item:last-of-type')
@@ -361,7 +336,7 @@
       confirmers: Array<string | number>;
     }, label: string) => {
       if (!rule.scene_ids?.length) {
-        messageError(t('{label}：分派至场景空间不能为空', { label }));
+        messageError(t('{label}：分派场景空间不能为空', { label }));
         return false;
       }
       if (!rule.processors?.length) {
