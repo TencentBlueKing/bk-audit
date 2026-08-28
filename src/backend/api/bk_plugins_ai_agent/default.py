@@ -20,6 +20,8 @@ import abc
 import json
 import os
 import threading
+from contextvars import ContextVar
+from typing import Any, Callable
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -28,10 +30,14 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
-from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
+from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser, AGUIStreamResponse
 from api.bk_plugins_ai_agent.constants import (
     AI_STREAM_PREVIEW_LIMIT,
     AI_THINKING_PLACEHOLDERS,
+)
+from api.bk_plugins_ai_agent.exceptions import (
+    AGUIStreamCapacityExceeded,
+    AGUIStreamProtocolError,
 )
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
@@ -419,3 +425,87 @@ class ChatCompletion(AIAgentBase):
                     if isinstance(delta, dict) and "content" in delta:
                         return delta["content"]
         return data
+
+
+class AGUIChatCompletion(ChatCompletion):
+    """AG-UI 专用流式资源：透传过程事件并返回完整结果。
+
+    Resource 是进程级单例，回调仅通过 ContextVar 在当前请求上下文传播，避免 gevent
+    并发调用之间相互覆盖。事件正文和工具参数不写入普通日志。
+    """
+
+    name = gettext_lazy("AG-UI 智能体流式对话")
+    support_data_collect = False
+    _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("agui_on_event", default=None)
+
+    def perform_request(self, validated_request_data):
+        # bk_resource 允许调用方复用请求字典；回调只能从本次调用副本中剥离。
+        request_data = dict(validated_request_data)
+        token = self._on_event_context.set(request_data.pop("on_event", None))
+        try:
+            return super().perform_request(request_data)
+        finally:
+            self._on_event_context.reset(token)
+
+    def parse_response(self, response):
+        response.raise_for_status()
+        return self._parse_agui_stream_response(response, on_event=self._on_event_context.get())
+
+    @staticmethod
+    def _parse_event(raw_line) -> dict[str, Any] | None:
+        """解析单行 SSE data 帧，只接受含非空 type 的 AG-UI 对象事件。"""
+        if isinstance(raw_line, (bytes, bytearray)):
+            line = raw_line.decode("utf-8", errors="replace")
+        else:
+            line = raw_line
+        if not line or not line.startswith("data:"):
+            return None
+        try:
+            event = json.loads(line[len("data:") :].strip())
+        except (TypeError, json.JSONDecodeError) as error:
+            raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象") from error
+        if not isinstance(event, dict) or not isinstance(event.get("type"), str) or not event["type"]:
+            raise AGUIStreamProtocolError("AG-UI 事件缺少 type")
+        return event
+
+    def _parse_agui_stream_response(self, response, on_event=None) -> AGUIStreamResponse:
+        """解析完整 AG-UI 流，并在通过形态与容量校验后同步回调每个事件。"""
+        events: list[dict[str, Any]] = []
+        final_message_parser = AGUIFinalMessageParser()
+        # 容量上限约束返回的完整 JSON 数组，初始即包含空数组的 `[]`。
+        serialized_bytes = 2
+        run_finished = False
+        final_result = None
+
+        for raw_line in response.iter_lines(decode_unicode=False):
+            event = self._parse_event(raw_line)
+            if event is None:
+                continue
+
+            event_count = len(events) + 1
+            serialized_bytes += len(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            if events:
+                serialized_bytes += 1
+            if event_count > settings.AI_ASSISTANT_STREAM_MAX_EVENTS:
+                raise AGUIStreamCapacityExceeded("AG-UI 事件数超过上限")
+            if serialized_bytes > settings.AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES:
+                raise AGUIStreamCapacityExceeded("AG-UI 事件体积超过上限")
+
+            events.append(event)
+            final_message_parser.consume(event)
+            if on_event is not None:
+                on_event(event)
+
+            if event["type"] == "RUN_ERROR":
+                raise AGUIStreamProtocolError("AG-UI 上游执行失败")
+            if event["type"] == "RUN_FINISHED":
+                run_finished = True
+                final_result = event.get("result")
+                break
+
+        if not run_finished:
+            raise AGUIStreamProtocolError("AG-UI 流未收到 RUN_FINISHED")
+        final_content = final_message_parser.get_final_content()
+        if not final_content:
+            raise AGUIStreamProtocolError(final_message_parser.error_reason)
+        return AGUIStreamResponse(events=tuple(events), final_content=final_content, final_result=final_result)

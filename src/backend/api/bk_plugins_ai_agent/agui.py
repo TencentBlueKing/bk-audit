@@ -17,6 +17,21 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class AGUIStreamResponse:
+    """完整 AG-UI 事件集及最后一条完整 assistant 正文。
+
+    AG-UI 调用方需要同步转发过程事件，同时将最终持久化内容与上游结果快照分离。
+    """
+
+    events: tuple[dict[str, Any], ...]
+    final_content: str
+    final_result: Any = None
+
 
 class AGUIFinalMessageParser:
     """聚合 AG-UI 中最后一条完整的 assistant 文本消息。"""
