@@ -186,6 +186,7 @@ USE_APIGW = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 # ESB配置
 BK_COMPONENT_API_URL = os.getenv("BKAPP_BK_COMPONENT_API_URL", os.getenv("BK_COMPONENT_API_URL"))
 
+BK_CW_AITSM_APIGW_NAME = os.getenv("BKAPP_BK_CW_AITSM_APIGW_NAME", "cw-aitsm")
 BK_USER_APIGW_NAME = os.getenv("BKAPP_USER_APIGW_NAME", "bk-user")
 BK_CMSI_APIGW_NAME = os.getenv("BKAPP_BK_CMSI_APIGW_NAME", "bk-cmsi")
 BK_IAM_APIGW_NAME = os.getenv("BKAPP_BK_IAM_APIGW_NAME", "bk-iam")
@@ -204,11 +205,7 @@ BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
@@ -468,9 +465,7 @@ BKPAAS_MULTI_TENANT_MODE = str(os.getenv("BKPAAS_MULTI_TENANT_MODE", "False")).l
 # 多租户开启时必须设置；关闭时可留空（兼容模式）
 AUDIT_INSTANCE_TENANT_ID = os.getenv("BKAPP_AUDIT_INSTANCE_TENANT_ID", "").strip().lower()
 
-# 启动期 fail-fast：多租户模式下实例必须绑定目标租户，
-# 禁止任何默认/应用归属租户（BKPAAS_APP_TENANT_ID / tencent）回退，
-# 否则 AuditBkApiResource 会把错误租户写入 X-Bk-Tenant-Id，直接破坏租户隔离。
+# 启动期 fail-fast：多租户模式下实例必须绑定目标租户
 if BKPAAS_MULTI_TENANT_MODE and not AUDIT_INSTANCE_TENANT_ID:
     raise RuntimeError(
         "多租户模式已开启（BKPAAS_MULTI_TENANT_MODE=true），但实例绑定租户未设置。"

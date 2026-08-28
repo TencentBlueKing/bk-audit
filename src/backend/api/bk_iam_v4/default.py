@@ -18,9 +18,9 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import math
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
@@ -39,13 +39,20 @@ from api.bk_iam_v4.serializers import (
     RetrieveSystemRequestSerializer,
     RevokeAuthorizationRequestSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_IAM_V4_API_URL
+from api.utils import get_endpoint
 from core.bk_api_base import AuditBkApiResource
 
 
 class IAMV4BaseResource(AuditBkApiResource, abc.ABC):
-    base_url = BK_IAM_V4_API_URL
     module_name = "bk_iam_v4"
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_IAM_V4_API_URL
 
     def parse_response(self, response):
         try:
