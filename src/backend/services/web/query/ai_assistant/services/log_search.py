@@ -77,12 +77,14 @@ class LogSearchService:
         namespace: str,
         username: str,
         source: str = "field_condition",
+        column_fields: List[str] = None,
     ) -> LogSearchOutput:
         """
         :param condition: 统一条件结构（NL 输出或前端字段条件构造，同构）
         :param namespace: 命名空间（后端按会话/消息归属注入）
         :param username: 操作人（显式传入，不依赖请求上下文）
         :param source: 条件来源 natural_language / field_condition
+        :param column_fields: 展示列偏好（平台层按用户读取注入；缺省为九个固定列）
         :return: LogSearchOutput（零命中也是成功态：total=0 + samples=[]）
         :raises AIOutputInvalidError: 条件整体校验失败（字段白名单/操作符/形态）
         """
@@ -102,8 +104,8 @@ class LogSearchService:
         results = cls._format_hits(data.pop("results", []), username)
         # ⑤ system_info 补充
         cls._bind_system_info(namespace, results)
-        # ⑥ 快照组装
-        return cls._build_output(condition, data, results, source)
+        # ⑥ 快照组装（columns 按注入的用户展示字段偏好输出并固化）
+        return cls._build_output(condition, data, results, source, column_fields=column_fields)
 
     # ------------------------------------------------------------------
     # ⓪ 条件归一（同字段多值聚合）
@@ -268,8 +270,10 @@ class LogSearchService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _build_output(cls, condition: SearchCondition, data: dict, results: List[dict], source: str) -> LogSearchOutput:
-        columns = cls.build_columns()
+    def _build_output(
+        cls, condition: SearchCondition, data: dict, results: List[dict], source: str, column_fields: List[str] = None
+    ) -> LogSearchOutput:
+        columns = cls.build_columns(raw_names=column_fields)
         samples = [cls._build_sample(row, columns) for row in results[:LOG_SEARCH_SNAPSHOT_PAGE_SIZE]]
         return LogSearchOutput(
             total=data["total"],
@@ -287,15 +291,17 @@ class LogSearchService:
         )
 
     @classmethod
-    def build_columns(cls) -> List[ResultColumn]:
+    def build_columns(cls, raw_names: List[str] = None) -> List[ResultColumn]:
         """
-        快照列（产品需求 9 列固定展示字段，首列 start_time）。
+        快照列：默认九个固定展示字段（首列 start_time）；调用方注入用户偏好列清单时按其输出
+        （偏好列 = 九列固定在前 + 自选列追加，由平台层按用户读取注入，query 层保持零 DB 依赖）。
 
-        display_name 用产品文案（SNAPSHOT_DEFAULT_COLUMNS），description 取自全量
-        字段元数据 LOG_SEARCH_ALL_FIELDS_MAP（COLLECT_SEARCH_CONFIG 只是条件字段白名单）。
+        display_name：九列用产品文案（SNAPSHOT_DEFAULT_COLUMNS），自选列用全量字段
+        元数据 LOG_SEARCH_ALL_FIELDS_MAP 的 description（与日志检索页字段清单同源）。
         """
+        locked_display_map = dict(SNAPSHOT_DEFAULT_COLUMNS)
         columns = []
-        for raw_name, display_name in SNAPSHOT_DEFAULT_COLUMNS:
+        for raw_name in raw_names or locked_display_map:
             field = LOG_SEARCH_ALL_FIELDS_MAP.get(raw_name)
             if not field:
                 continue
@@ -303,7 +309,7 @@ class LogSearchService:
                 ResultColumn(
                     raw_name=raw_name,
                     keys=[],
-                    display_name=display_name,
+                    display_name=locked_display_map.get(raw_name) or str(field.description or ""),
                     description=str(field.description or ""),
                 )
             )
