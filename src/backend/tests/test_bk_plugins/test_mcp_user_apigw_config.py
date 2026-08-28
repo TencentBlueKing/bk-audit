@@ -6,6 +6,7 @@ import yaml
 from django.test import SimpleTestCase
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+LOG_MCP_CHECKLIST = BACKEND_DIR / "support-files/apigw/mcp_log_analyse_acceptance_checklist.md"
 EXPECTED_MCP_RESOURCES = {
     "mcp_retrieve_risk": ("/mcp/risks/{risk_id}/", "get", "/api/v1/mcp_user/risk/{risk_id}/"),
     "mcp_retrieve_risk_strategy_info": (
@@ -164,8 +165,21 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.14")
+        self.assertEqual(definition["release"]["version"], "0.0.15")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
+        self.assertIn("日志分析 MCP 工具", definition["release"]["comment"])
+
+    def test_log_mcp_deployment_and_authorization_checklist_is_pending(self):
+        content = LOG_MCP_CHECKLIST.read_text(encoding="utf-8")
+
+        self.assertIn("状态：PENDING", content)
+        self.assertIn("bp-ai-log-analyse", content)
+        self.assertIn("stag", content)
+        self.assertIn("prod", content)
+        for operation_id in ("mcp_get_log_field_metadata", "mcp_search_logs", "mcp_aggregate_logs"):
+            self.assertIn(operation_id, content)
+        self.assertIn("未授权应用", content)
+        self.assertIn("没有额外 operationId", content)
 
     def _get_operations(self):
         return {

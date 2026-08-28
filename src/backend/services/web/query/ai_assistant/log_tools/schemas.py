@@ -2,10 +2,11 @@
 
 import re
 from enum import StrEnum
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
 from django.conf import settings
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from rest_framework import serializers
 
 from apps.meta.utils.fields import EXTEND_DATA, STANDARD_FIELDS, START_TIME
 from services.web.query.ai_assistant.schemas import (
@@ -16,6 +17,7 @@ from services.web.query.ai_assistant.schemas import (
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 
 FIELD_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+LogFieldKey = Annotated[str, Field(pattern=FIELD_KEY_PATTERN.pattern)]
 LOG_SEARCH_MAX_FIELDS = 20
 LOG_SEARCH_MAX_SORT_FIELDS = 3
 LOG_SEARCH_MAX_PAGE = 100
@@ -54,9 +56,19 @@ class LogFieldRef(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    raw_name: str = Field(..., min_length=1)
-    keys: List[str] = Field(default_factory=list)
-    field_type: Optional[str] = None
+    raw_name: str = Field(..., min_length=1, description="已声明的标准字段，或 extend_data。")
+    keys: Annotated[
+        List[LogFieldKey],
+        serializers.ListField(
+            child=serializers.RegexField(regex=FIELD_KEY_PATTERN),
+            allow_empty=True,
+            help_text="extend_data 的安全子路径；标准字段必须为空数组。",
+        ),
+    ] = Field(
+        default_factory=list,
+        description="extend_data 的安全子路径；标准字段必须为空数组。",
+    )
+    field_type: Optional[str] = Field(default=None, description="可选声明类型，仅用于字段元信息或安全数值转换。")
 
     @field_validator("keys")
     @classmethod
@@ -84,6 +96,13 @@ class LogFieldScope(StrEnum):
     EXTENDED = "EXTENDED"
 
 
+class LogFieldCategory(StrEnum):
+    """字段探索响应分类，不返回请求专用的 ALL。"""
+
+    BASIC = "BASIC"
+    EXTENDED = "EXTENDED"
+
+
 class LogFieldMetadataTypeSource(StrEnum):
     """字段类型的来源，避免把采样观察误表述为全量定义。"""
 
@@ -94,9 +113,25 @@ class LogFieldMetadataTypeSource(StrEnum):
 class GetLogFieldMetadataRequest(BaseModel):
     """字段元信息探索请求，父路径复用可消费的 extend_data 路径约束。"""
 
-    condition: SearchCondition
-    parent_keys: List[str] = Field(default_factory=list)
-    field_scope: LogFieldScope = LogFieldScope.ALL
+    model_config = ConfigDict(extra="forbid")
+
+    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
+    parent_keys: Annotated[
+        List[LogFieldKey],
+        serializers.ListField(
+            child=serializers.RegexField(regex=FIELD_KEY_PATTERN),
+            allow_empty=True,
+            required=False,
+            help_text="仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。",
+        ),
+    ] = Field(
+        default_factory=list,
+        description="仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。",
+    )
+    field_scope: LogFieldScope = Field(
+        default=LogFieldScope.ALL,
+        description="返回范围：BASIC 标准字段、EXTENDED 拓展字段或 ALL；样例最多来自 50 行脱敏数据。",
+    )
 
     @field_validator("parent_keys")
     @classmethod
@@ -109,7 +144,7 @@ class LogFieldMetadataItem(BaseModel):
     """单个可查询字段的声明元信息与当前样本观察。"""
 
     field: LogFieldRef
-    category: LogFieldScope
+    category: LogFieldCategory
     display_name: str = ""
     description: str = ""
     type_source: LogFieldMetadataTypeSource
@@ -117,7 +152,9 @@ class LogFieldMetadataItem(BaseModel):
     allow_operators: List[str] = Field(default_factory=list)
     options: Optional[List[SelectionFieldOption]] = None
     is_expandable: bool = False
-    sample_values: List[Any] = Field(default_factory=list)
+    sample_values: Annotated[
+        List[Any], serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="脱敏后的有界标量样例")
+    ] = Field(default_factory=list, description="脱敏后的有界标量样例；对象和数组不回显。")
     sampled_non_null_count: int = 0
     coverage: float = 0.0
 
@@ -157,11 +194,25 @@ class SearchLogsRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    condition: SearchCondition
-    fields: Optional[List[LogFieldRef]] = None
-    sort: List[LogSortItem] = Field(default_factory=list)
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1)
+    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
+    fields: Optional[List[LogFieldRef]] = Field(
+        default=None,
+        min_length=1,
+        max_length=LOG_SEARCH_MAX_FIELDS,
+        description="可选受控投影列；省略时使用紧凑默认列，显式传入时为 1 至 20 列。",
+    )
+    sort: List[LogSortItem] = Field(
+        default_factory=list,
+        max_length=LOG_SEARCH_MAX_SORT_FIELDS,
+        description="最多 3 个排序项；一期仅支持 start_time，未提供时使用稳定默认排序。",
+    )
+    page: int = Field(default=1, ge=1, le=LOG_SEARCH_MAX_PAGE, description="页码，最大 100；运行配置只能进一步收紧。")
+    page_size: int = Field(
+        default=20,
+        ge=1,
+        le=LOG_SEARCH_MAX_PAGE_SIZE,
+        description="每页条数，最大 100；运行配置只能进一步收紧。",
+    )
 
     @model_validator(mode="after")
     def validate_limits(self):
@@ -211,7 +262,10 @@ class SearchLogsResponse(BaseModel):
 
     total: int
     columns: List[LogDetailColumn] = Field(default_factory=list)
-    items: Tuple[Dict[str, Any], ...] = ()
+    items: Annotated[
+        Tuple[Dict[str, Any], ...],
+        serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="脱敏后的日志行"),
+    ] = Field(default=(), description="脱敏后的日志行，仅含 columns 声明的稳定 key。")
     pagination: LogSearchPagination
     query_summary: QuerySummary
 
@@ -251,6 +305,14 @@ class AggregationTimeInterval(StrEnum):
     DAY = "DAY"
 
 
+class AggregationEffectiveTimeInterval(StrEnum):
+    """聚合响应中的实际时间桶粒度，不含请求专用的 AUTO。"""
+
+    MINUTE = "MINUTE"
+    HOUR = "HOUR"
+    DAY = "DAY"
+
+
 class AggregationOrderDirection(StrEnum):
     """排序方向固定为 Doris 可映射的两个枚举值。"""
 
@@ -270,10 +332,22 @@ class AggregationDimension(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
-    type: AggregationDimensionType
-    field: LogFieldRef
-    interval: Optional[AggregationTimeInterval] = None
+    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="维度唯一 ID，仅允许字母开头。")
+    type: AggregationDimensionType = Field(
+        ...,
+        description="FIELD 按字段分组且不得传 interval；TIME_BUCKET 只能使用无 keys 的 start_time，必须传 interval。",
+    )
+    field: LogFieldRef = Field(
+        ...,
+        description=(
+            "FIELD 允许的根字段仅限 action_id、resource_type_id、username、result_code、access_type、"
+            "start_time、extend_data，extend_data 必须带 keys；TIME_BUCKET 只能使用无 keys 的 start_time。"
+        ),
+    )
+    interval: Optional[AggregationTimeInterval] = Field(
+        default=None,
+        description="FIELD 必须省略；TIME_BUCKET 必填，可选 AUTO、MINUTE、HOUR、DAY；AUTO 由服务按时间范围选择实际粒度。",
+    )
 
     @model_validator(mode="after")
     def validate_dimension_contract(self):
@@ -294,11 +368,34 @@ class AggregationMetric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
-    type: AggregationMetricType
-    field: Optional[LogFieldRef] = None
-    value_type: Optional[AggregationValueType] = None
-    percentile: Optional[float] = None
+    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="指标唯一 ID，仅允许字母开头。")
+    type: AggregationMetricType = Field(
+        ...,
+        description=(
+            "COUNT 仅 COUNT(*)，必须省略 field/value_type/percentile；DISTINCT_COUNT 必须传 field 且省略 "
+            "value_type/percentile；MIN/MAX/AVG/SUM 必须传 field，按字段类型决定 value_type 且必须省略 "
+            "percentile；PERCENTILE_APPROX 同数值指标并额外必须传 0 < percentile < 1。"
+        ),
+    )
+    field: Optional[LogFieldRef] = Field(
+        default=None,
+        description=(
+            "COUNT 必须省略；其余指标必须传。允许的根字段仅限 action_id、resource_type_id、username、"
+            "result_code、access_type、start_time、extend_data；extend_data 必须带 keys。"
+        ),
+    )
+    value_type: Optional[AggregationValueType] = Field(
+        default=None,
+        description=(
+            "COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 extend_data 数值"
+            "聚合必须传 LONG 或 DOUBLE，标准数值字段必须省略。"
+        ),
+    )
+    percentile: Optional[float] = Field(
+        default=None,
+        description="仅 PERCENTILE_APPROX 必填且满足 0 < percentile < 1；其余指标必须省略。",
+        json_schema_extra={"exclusiveMinimum": 0, "exclusiveMaximum": 1},
+    )
 
     @property
     def is_numeric(self) -> bool:
@@ -356,8 +453,8 @@ class AggregationOrder(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    target_id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
-    direction: AggregationOrderDirection
+    target_id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="已声明维度或指标的 ID。")
+    direction: AggregationOrderDirection = Field(..., description="固定排序方向 ASC 或 DESC。")
 
 
 class AggregateLogsRequest(BaseModel):
@@ -365,11 +462,25 @@ class AggregateLogsRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    condition: SearchCondition
-    dimensions: Tuple[AggregationDimension, ...] = ()
-    metrics: Tuple[AggregationMetric, ...]
-    order_by: Tuple[AggregationOrder, ...] = ()
-    limit: int = Field(default=20, ge=1)
+    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
+    dimensions: Tuple[AggregationDimension, ...] = Field(
+        default=(),
+        max_length=AGGREGATION_MAX_DIMENSIONS,
+        description="0 至 2 个分组维度；TIME_BUCKET 最多一个，AUTO 会按已验证时间范围选择实际粒度。",
+    )
+    metrics: Tuple[AggregationMetric, ...] = Field(
+        ...,
+        min_length=1,
+        max_length=AGGREGATION_MAX_METRICS,
+        description="1 至 5 个固定聚合指标；不接受 SQL、任意函数名或表达式。",
+    )
+    order_by: Tuple[AggregationOrder, ...] = Field(default=(), description="可选排序，只能引用已声明的维度或指标 ID。")
+    limit: int = Field(
+        default=20,
+        ge=1,
+        le=AGGREGATION_MAX_LIMIT,
+        description="返回分组数，最大 100；运行配置只能进一步收紧，服务通过多取一行计算 has_more。",
+    )
 
     @model_validator(mode="after")
     def validate_request_contract(self):
@@ -400,7 +511,7 @@ class AggregationColumn(BaseModel):
     name: str
     role: AggregationColumnRole
     data_type: str
-    effective_time_interval: Optional[AggregationTimeInterval] = None
+    effective_time_interval: Optional[AggregationEffectiveTimeInterval] = None
 
 
 class AggregationDataQuality(BaseModel):
@@ -425,6 +536,9 @@ class AggregateLogsResponse(BaseModel):
     """聚合响应仅含声明列、分组结果和转换质量摘要。"""
 
     columns: Tuple[AggregationColumn, ...]
-    rows: Tuple[Dict[str, Any], ...]
+    rows: Annotated[
+        Tuple[Dict[str, Any], ...],
+        serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="声明列对应的聚合结果行"),
+    ]
     query_summary: AggregationQuerySummary
     data_quality: Tuple[AggregationDataQuality, ...] = ()

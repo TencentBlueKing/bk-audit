@@ -34,7 +34,7 @@ from services.web.query.constants import (
     DEFAULT_COLLECTOR_SORT_LIST,
     DEFAULT_TIMEDELTA,
 )
-from services.web.query.resources.base import SearchDataParser
+from services.web.query.search_data import SearchDataParser
 from services.web.query.utils.field_map import FieldMapHandler
 
 
