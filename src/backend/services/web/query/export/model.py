@@ -65,6 +65,24 @@ class ExportConfig:
         return category_fields
 
     @cached_property
+    def flatten_extension(self) -> bool:
+        """
+        扩展字段平铺开关（任务 export_config.flatten_extension）
+        """
+
+        return bool(self.task.export_config.get("flatten_extension"))
+
+    @cached_property
+    def extension_keys(self) -> List[str]:
+        """
+        扩展字段平铺子键清单（任务 export_config.extension_keys）；
+        元素为非空字符串，过滤非字符串/空值，保留给定顺序。
+        """
+
+        raw_keys = self.task.export_config.get("extension_keys") or []
+        return [key for key in raw_keys if isinstance(key, str) and key]
+
+    @cached_property
     def export_fields(self) -> List[LogExportField]:
         """
         获取导出字段(按分类顺序排序)
@@ -73,5 +91,17 @@ class ExportConfig:
         ordered_fields = []
         for category in FieldCategoryEnum.get_orders():
             ordered_fields.extend(self.category_fields.get(category, []))
+
+        # 扩展字段平铺：把 extend_data 单列替换为每个子键单独一列
+        if self.flatten_extension and self.extension_keys:
+            ordered_fields = [
+                field
+                for field in ordered_fields
+                if not (field.raw_name == "extend_data" and not field.keys)
+            ]
+            ordered_fields.extend(
+                LogExportField(raw_name="extend_data", display_name=key, keys=[key])
+                for key in self.extension_keys
+            )
 
         return ordered_fields

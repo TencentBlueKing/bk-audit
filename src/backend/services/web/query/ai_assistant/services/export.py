@@ -41,10 +41,11 @@ from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIPermissionDeniedError,
 )
-from services.web.query.ai_assistant.schemas import LogSearchOutput, SearchCondition
+from services.web.query.ai_assistant.schemas import LogSearchOutput, ResultColumn, SearchCondition
 from services.web.query.constants import (
     DEFAULT_COLLECTOR_SORT_LIST,
     FieldCategoryEnum,
+    LOG_FIELD_KEY_JOIN_CHAR,
     LogExportFieldScope,
 )
 from services.web.query.export.data_processor import DataProcessor
@@ -103,13 +104,19 @@ class PreviewExportService:
     """GET preview-export：快照 samples → XLSX"""
 
     @classmethod
-    def export(cls, output: LogSearchOutput) -> PreviewExportFile:
+    def export(cls, output: LogSearchOutput, export_config: dict = None) -> PreviewExportFile:
         """
         :param output: LOG_SEARCH 消息 output_data 解析结果
+        :param export_config: 导出配置（field_scope/fields/flatten_extension/extension_keys）；
+            flatten_extension=True 时把 extend_data 内子键平铺为单独列（聚合自 samples）
         :raises AIAssistantError: 快照无样例数据
         """
         if not output.samples:
             raise AIAssistantError(message="快照无样例数据，无法导出", error_code="TASK_EXECUTION_FAILED")
+
+        config = export_config or {}
+        if config.get("flatten_extension"):
+            return cls._export_with_flatten_extension(output)
 
         # ① 内存态 LogExportTask 作 ExportConfig 载体（不 save —— 预览导出无任务实体）
         #    samples 字典键 = 列 full_key，故导出字段按 full_key 直取（keys 置空不再二次下钻）
@@ -128,6 +135,63 @@ class PreviewExportService:
         exporter = PreviewXLSXExporter(config)
         try:
             exporter.write(DataProcessor(config).batch_format_data(output.samples))
+            file = exporter.save()
+            content = file.read()
+            file_name = exporter.file_name
+        finally:
+            exporter.close()
+        return PreviewExportFile(content=content, file_name=file_name)
+
+    @classmethod
+    def _export_with_flatten_extension(cls, output: LogSearchOutput) -> PreviewExportFile:
+        """扩展字段平铺：聚合所有 samples 的 extend_data 子键并集，把 extend_data 单列替换为每个子键单独一列。"""
+
+        # ① 聚合所有 samples 的 extend_data 子键并集（保序去重）
+        keys: List[str] = []
+        seen: set = set()
+        for sample in output.samples:
+            ext = sample.get("extend_data")
+            if isinstance(ext, dict):
+                for key in ext.keys():
+                    if isinstance(key, str) and key and key not in seen:
+                        seen.add(key)
+                        keys.append(key)
+
+        # ② 构造展平后的列：移除 extend_data 单列；为每个子键添加 ResultColumn
+        flat_columns: List[ResultColumn] = [
+            column
+            for column in output.columns
+            if not (column.raw_name == "extend_data" and not column.keys)
+        ]
+        for key in keys:
+            flat_columns.append(ResultColumn(raw_name="extend_data", keys=[key], display_name=key))
+
+        # ③ 内存态 LogExportTask 走 SPECIFIED 形态
+        export_fields = [
+            {"raw_name": column.full_key, "display_name": column.display_name, "keys": []}
+            for column in flat_columns
+        ]
+        task_stub = LogExportTask(
+            export_config={
+                "field_scope": LogExportFieldScope.SPECIFIED.value,
+                "fields": export_fields,
+            }
+        )
+        config = ExportConfig(task=task_stub)
+
+        # ④ 同步展平 samples：把 extend_data dict 拆为 extend_data/{key} 顶层键（与列 full_key 对齐）
+        flat_samples: List[dict] = []
+        for sample in output.samples:
+            flat = {sample_key: value for sample_key, value in sample.items() if sample_key != "extend_data"}
+            ext = sample.get("extend_data")
+            if isinstance(ext, dict):
+                for sub_key, sub_value in ext.items():
+                    flat[LOG_FIELD_KEY_JOIN_CHAR.join(["extend_data", sub_key])] = sub_value
+            flat_samples.append(flat)
+
+        exporter = PreviewXLSXExporter(config)
+        try:
+            exporter.write(DataProcessor(config).batch_format_data(flat_samples))
             file = exporter.save()
             content = file.read()
             file_name = exporter.file_name
@@ -215,4 +279,18 @@ class FullExportService:
             if invalid_fields:
                 raise AIOutputInvalidError(
                     extra={"export_config": export_config, "reason": f"fields not in whitelist: {invalid_fields}"}
+                )
+        # 扩展字段平铺开关：布尔（缺省 false）
+        flatten = export_config.get("flatten_extension")
+        if flatten is not None and not isinstance(flatten, bool):
+            raise AIOutputInvalidError(
+                extra={"export_config": export_config, "reason": "flatten_extension must be bool"}
+            )
+        # 扩展字段平铺子键清单（仅在调用方未传 flatten_extension 时由 PreviewExportService 自动聚合；
+        # 全量导出场景无 samples 上下文，需由调用方预先传 extension_keys 触发子键列生成）
+        keys = export_config.get("extension_keys")
+        if keys is not None:
+            if not isinstance(keys, list) or not all(isinstance(k, str) and k for k in keys):
+                raise AIOutputInvalidError(
+                    extra={"export_config": export_config, "reason": "extension_keys must be list[str]"}
                 )

@@ -86,6 +86,14 @@ class MessageDetailRequestSerializer(serializers.Serializer):
 
 class MessagePreviewExportRequestSerializer(serializers.Serializer):
     message_uid = serializers.UUIDField(help_text="成功日志检索消息对外 UUID")
+    export_config = serializers.JSONField(
+        required=False,
+        default=dict,
+        help_text=(
+            "导出配置（field_scope/fields/flatten_extension/extension_keys）；"
+            "flatten_extension=true 时把 extend_data 子键平铺为单独列"
+        ),
+    )
 
 
 class MessageFullExportRequestSerializer(serializers.Serializer):
