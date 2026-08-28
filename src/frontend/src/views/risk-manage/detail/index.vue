@@ -358,6 +358,7 @@
       attentionManageDetail: 'attentionManageList',
       processedManageDetail: 'processedManageList',
       sceneRiskManageDetail: 'sceneRiskManageList',
+      confirmManageDetail: 'confirmManageList',
     };
     router.push({
       name: listNameMap[route.name as keyof typeof listNameMap],

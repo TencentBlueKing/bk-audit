@@ -132,6 +132,7 @@
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
     scenes?: Array<{ scene_id: number; name: string }>;
+    riskViewType?: string;
   }
 
   const { t } = useI18n();
@@ -667,7 +668,7 @@
   const getNlParseOptions = () => {
     const [startTime, endTime] = searchModel.value.datetime || [];
     return {
-      risk_view_type: urlSearchParams.risk_view_type || 'all',
+      risk_view_type: props.riskViewType || urlSearchParams.risk_view_type || 'all',
       start_time: startTime,
       end_time: endTime,
       scope_type: urlSearchParams.scope_type,

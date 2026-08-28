@@ -266,6 +266,7 @@
   // 获取场景列表
   const {
     data: sceneList,
+    run: fetchSceneAll,
   } = useRequest(SceneManageService.fetchSceneAll, {
     manual: true,
     defaultValue: [],
@@ -418,20 +419,20 @@
     defaultParams: {
     },
   });
-  watch(() => props.data, (val) => {
-    if (val.scene_id) {
-      fetchRuleAll({
-        scene_id: val.scene_id,
-      });
-      fetchRiskTags({
-        scope_id: val.scene_id,
-        scope_type: 'scene',
-      });
-      // 获取场景列表（用于展示所属场景名称）
-      SceneManageService.fetchSceneAll().then((data) => {
-        sceneList.value = data;
-      });
+  watch(() => props.data?.scene_id, (sceneId, oldSceneId) => {
+    if (!sceneId || sceneId === oldSceneId) {
+      return;
     }
+    fetchRuleAll({
+      scene_id: sceneId,
+    });
+    fetchRiskTags({
+      scope_id: sceneId,
+      scope_type: 'scene',
+    });
+    fetchSceneAll();
+  }, {
+    immediate: true,
   });
 </script>
 <style lang="postcss" scoped>
