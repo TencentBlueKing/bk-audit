@@ -15,48 +15,34 @@ limitations under the License.
 """
 
 """
-AI 标题生成服务（共用智能体）。
+AI 会话标题生成服务（一期：完全复刻 risk generate_analyse_report_title 的调用方式）。
 
-与风险分析报告标题（risk/tasks.py generate_analyse_report_title）共用同一智能体
-ALS_TITLE_SUM（System Prompt 平台侧统一配置，后端只发 User Message）；
-User Prompt 走统一结构化模板（constants.AI_TITLE_USER_PROMPT_TEMPLATE），
-新模块接入只需在 AI_TITLE_MODULE_CONFIGS 加一个条目。
+与风险分析报告标题共用同一智能体 ALS_TITLE_SUM（System Prompt 平台侧统一配置）；
+User Message 为单行 label 前缀格式（与 risk 的「用户自定义分析描述: "..."」同构，
+label 区分模块），清洗规则与 risk _normalize_analyse_report_ai_title 一致。
 """
 
 import logging
 from typing import Any
 
 from bk_resource import api
-from django.conf import settings
 
 from api.constants import AIAgentCode
-from services.web.ai_assistant.constants import (
-    AI_CONVERSATION_TITLE_MAX_LENGTH,
-    AI_TITLE_MODULE_CONFIGS,
-    AI_TITLE_USER_PROMPT_TEMPLATE,
-)
 
 logger = logging.getLogger(__name__)
 
+# 统一 User Prompt 格式：单行 label 前缀 + 引号包裹输入（与 risk 报告标题同构）
+AI_TITLE_INPUT_TEMPLATE = '用户自然语言检索描述: "{input_text}"'
+
 
 class TitleAgentService:
-    """共用智能体标题生成（当前服务 AI 日志检索会话标题）。"""
+    """共用智能体标题生成（复刻 risk 调用方式，服务 AI 日志检索会话标题）。"""
 
     @classmethod
-    def generate_title(cls, *, module: str, input_text: str, username: str, max_length: int = None) -> str:
-        """渲染统一模板 → 调共用智能体 → 清洗截断，返回标题文本（空串表示无可用标题）。
+    def generate_title(cls, *, input_text: str, username: str, max_length: int) -> str:
+        """拼 input → 调共用智能体 → 清洗截断，返回标题文本（空串表示无可用标题）。"""
 
-        :param module: AI_TITLE_MODULE_CONFIGS 中注册的模块标识
-        :param input_text: 用户输入（已组装好的自然语言文本）
-        :param username: 调用者（透传智能体鉴权与审计）
-        :param max_length: 标题最大长度（缺省取会话标题配置）
-        """
-
-        module_config = AI_TITLE_MODULE_CONFIGS[module]
-        max_length = max_length if max_length is not None else getattr(
-            settings, "AI_CONVERSATION_TITLE_MAX_LENGTH", AI_CONVERSATION_TITLE_MAX_LENGTH
-        )
-        prompt = cls.render_user_prompt(module_config=module_config, input_text=input_text, max_length=max_length)
+        prompt = AI_TITLE_INPUT_TEMPLATE.format(input_text=input_text)
         result = api.bk_plugins_ai_agent.chat_completion(
             agent_code=AIAgentCode.ALS_TITLE_SUM,
             user=username,
@@ -67,23 +53,61 @@ class TitleAgentService:
         return cls.normalize_title(result, max_length)
 
     @staticmethod
-    def render_user_prompt(*, module_config: dict, input_text: str, max_length: int) -> str:
-        """按统一三段式模板（场景/任务/输入）渲染 User Message。"""
-
-        template = getattr(settings, "AI_TITLE_USER_PROMPT_TEMPLATE", "") or AI_TITLE_USER_PROMPT_TEMPLATE
-        return template.format(
-            module_name=module_config["module_name"],
-            module_description=module_config["module_description"],
-            module_object=module_config["module_object"],
-            max_length=max_length,
-            input_text=input_text,
-        )
-
-    @staticmethod
     def normalize_title(raw_title: Any, max_length: int) -> str:
-        """清洗智能体返回：去 markdown 代码块/引号/空白折叠/截断（规则与 risk 标题清洗一致）。"""
+        """清洗智能体返回：去 markdown 代码块/引号/空白折叠/截断（规则与 risk 标题清洗一致）。
 
-        title = str(raw_title or "").strip()
+        适配 bk_resource chat_completion 返回 RequestContext 的场景（payload 字段为响应字符串化的内容）：
+        - payload 内含 error_code（非 0 / 存在 error 字段）→ 退回空串（上层判空跳过）
+        - 正常响应 → 走原有清洗截断
+        - 任何非预期输入 → 退回空串，绝不污染标题
+        """
+
+        # 1) RequestContext → payload 字符串
+        if not isinstance(raw_title, str):
+            payload = getattr(raw_title, "payload", None) or ""
+            candidate = str(payload).strip()
+        else:
+            candidate = raw_title.strip()
+
+        # 2) payload 形如 Python repr 的 tuple/list 字符串，解析后取首项内容
+        #    典型形态：'[{"error_code": 1, "message": "bad request", "data": {}}, {...}]'
+        extracted = candidate
+        if candidate.startswith(("[", "(")):
+            import ast
+
+            try:
+                parsed = ast.literal_eval(candidate)
+            except (ValueError, SyntaxError):
+                # 解析失败（payload 形态异常 / 含错误信息等）→ 空串，绝不污染标题
+                return ""
+            if not isinstance(parsed, (list, tuple)) or not parsed:
+                return ""
+            first = parsed[0]
+            if isinstance(first, dict):
+                if first.get("error_code") or "error" in first:
+                    # 错误响应：直接空串让上层跳过
+                    return ""
+                # 正常响应：取 content / message / data / text 等字符串字段
+                for key in ("content", "message", "data", "text"):
+                    value = first.get(key)
+                    if isinstance(value, str) and value:
+                        extracted = value
+                        break
+                    if isinstance(value, dict):
+                        for sub_key in ("content", "message", "text"):
+                            sub = value.get(sub_key)
+                            if isinstance(sub, str) and sub:
+                                extracted = sub
+                                break
+                        if extracted != first:
+                            break
+                else:
+                    # 没找到已知字段，整个 dict 序列化兜底
+                    extracted = str(first)
+            else:
+                extracted = str(first)
+
+        title = str(extracted or "").strip()
         title = title.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         title = title.strip("\"'“”‘’")
         title = " ".join(title.split())
