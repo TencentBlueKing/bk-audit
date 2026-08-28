@@ -16,7 +16,10 @@ from services.web.query.ai_assistant.exceptions import (
     UnsupportedAggregation,
     UnsupportedLogField,
 )
-from services.web.query.ai_assistant.log_tools.schemas import LogFieldRef
+from services.web.query.ai_assistant.log_tools.schemas import (
+    GetLogFieldMetadataRequest,
+    LogFieldRef,
+)
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
@@ -121,6 +124,14 @@ class TestLogFieldRef(AIAssistantTestCase):
             with self.subTest(key=key):
                 with self.assertRaises(PydanticValidationError):
                     LogFieldRef(raw_name="extend_data", keys=[key])
+
+
+class TestGetLogFieldMetadataRequest(AIAssistantTestCase):
+    """字段探索父路径必须复用安全子路径约束。"""
+
+    def test_parent_keys_reject_unsafe_key(self):
+        with self.assertRaises(PydanticValidationError):
+            GetLogFieldMetadataRequest(condition=self.make_condition(), parent_keys=["unsafe-key"])
 
 
 class TestProjectedLogSQLBuilder(AIAssistantTestCase):

@@ -29,7 +29,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
 from services.web.query.ai_assistant.schemas import QuerySummary, SelectionFieldOption
 from services.web.query.constants import DEFAULT_COLLECTOR_SORT_LIST, DEFAULT_TIMEDELTA
-from services.web.query.resources.base import SearchDataParser
+from services.web.query.search_data import SearchDataParser
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS_MAP
 from services.web.query.utils.field_map import FieldMapHandler
 
