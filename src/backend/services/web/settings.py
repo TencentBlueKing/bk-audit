@@ -1,5 +1,7 @@
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
@@ -57,6 +59,20 @@ AI_LOG_SEARCH_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_SEARCH_RESPONSE_M
 
 # 聚合只返回 TopN 分组；协议硬上限在 log_tools.schemas 中，环境变量只能收紧。
 AI_LOG_AGGREGATION_MAX_LIMIT = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_LIMIT", 100))
+
+# ============== 审计 AI 日志分析报告配置 ==============
+# 用户自定义分析指令的字符上限；默认 Prompt 由 GlobalMetaConfig 运营管理，不受此值限制。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH", 2048))
+# 长任务使用独立 Worker；Celery rate_limit 按 Worker 实例生效，不是集群全局限流。
+AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT = os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT", "5/m")
+# Celery 硬时限（秒）仅作为 Worker 最终保险；默认 30 分钟。
+AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT", 30 * 60))
+# 业务执行时限（秒）必须短于硬时限；默认 29 分钟，以普通异常进入平台 FAILED/流终态链路。
+AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT", 29 * 60))
+if not 0 < AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT < AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT:
+    raise ImproperlyConfigured(
+        "AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT 必须大于 0 且小于 " "AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT"
+    )
 
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))

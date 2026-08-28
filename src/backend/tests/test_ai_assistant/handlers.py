@@ -519,12 +519,38 @@ def use_attachment_handler(test_case, handler: AttachmentTypeHandler) -> Attachm
     """在用例内独占注册某个附件 Handler。
 
     Handler 注册表是进程级单例，直接 ``register()`` 会因同类型已存在而抛出
-    ``ImproperlyConfigured``。这里先卸载同类型再注册，并交由
-    ``AttachmentHandlerRegistryMixin`` 在用例结束时统一清空注册表。
+    ``ImproperlyConfigured``。这里保存并替换同类型注册项，用例结束后恢复，
+    既隔离测试替身，也不丢失生产 Handler。
     """
 
-    attachment_handler_registry.unregister(handler.attachment_type)
+    original_handler = attachment_handler_registry.unregister(handler.attachment_type)
+
+    def restore_handler() -> None:
+        attachment_handler_registry.unregister(handler.attachment_type)
+        if original_handler is not None:
+            attachment_handler_registry.register(original_handler)
+
+    test_case.addCleanup(restore_handler)
     return attachment_handler_registry.register(handler)
+
+
+def preserve_attachment_handler_registry(test_case) -> None:
+    """保存当前附件注册表，并在用例结束后完整恢复。
+
+    部分平台机制测试会在一个用例内替换多个 Handler，逐类型清理容易受
+    ``tearDown`` 与 ``addCleanup`` 的执行顺序影响。完整快照作为最后一道隔离
+    边界，确保后续生产 Handler 契约和 OpenAPI 测试不依赖用例顺序。
+    """
+
+    original_handlers = dict(attachment_handler_registry.handlers)
+
+    def restore_registry() -> None:
+        for attachment_type in AttachmentType.values:
+            attachment_handler_registry.unregister(attachment_type)
+        for handler in original_handlers.values():
+            attachment_handler_registry.register(handler)
+
+    test_case.addCleanup(restore_registry)
 
 
 class AttachmentHandlerRegistryMixin:
@@ -533,6 +559,10 @@ class AttachmentHandlerRegistryMixin:
     注册表是进程级单例，任何用例遗留的 Handler 都会让后续用例注册失败或读到
     错误协议。这里在每个用例结束时清空全部类型，保证下一个用例从干净状态开始。
     """
+
+    def setUp(self):
+        preserve_attachment_handler_registry(self)
+        super().setUp()
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:

@@ -1,4 +1,6 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from django.db import DatabaseError
 
@@ -6,16 +8,15 @@ from services.web.ai_assistant.constants import ExecutionObjectType
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
 from services.web.ai_assistant.models import Attachment
 from services.web.ai_assistant.schemas import SnapshotInput
-from services.web.ai_assistant.services.attachment_execution import (
-    AttachmentExecution,
-    finish_attachment_failure,
-    finish_attachment_success,
-    load_attachment_execution,
-)
 from services.web.ai_assistant.tasks.base import BaseExecutionTask
 
+if TYPE_CHECKING:
+    from services.web.ai_assistant.services.attachment_execution import (
+        AttachmentExecution,
+    )
 
-class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
+
+class AttachmentExecutionTask(BaseExecutionTask["AttachmentExecution"]):
     """为业务附件 Task 注入 AttachmentExecution，并由平台收敛执行终态。"""
 
     abstract = True
@@ -33,6 +34,11 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
     ) -> AttachmentExecution:
         """将平台通用对象参数适配为附件领域加载函数。"""
 
+        # 延迟导入打断 Celery 冷启动 tasks → services → handlers → tasks 回环。
+        from services.web.ai_assistant.services.attachment_execution import (
+            load_attachment_execution,
+        )
+
         return load_attachment_execution(
             attachment_id=instance_id,
             task_id=task_id,
@@ -47,6 +53,10 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
         output_data: SnapshotInput,
     ) -> dict[str, Any]:
         """将附件业务输出交给附件领域函数校验并收敛。"""
+
+        from services.web.ai_assistant.services.attachment_execution import (
+            finish_attachment_success,
+        )
 
         try:
             return finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
@@ -65,6 +75,10 @@ class AttachmentExecutionTask(BaseExecutionTask[AttachmentExecution]):
         exception: Exception,
     ) -> bool:
         """将 Worker 异常交给附件领域函数映射为公开失败快照。"""
+
+        from services.web.ai_assistant.services.attachment_execution import (
+            finish_attachment_failure,
+        )
 
         try:
             return finish_attachment_failure(

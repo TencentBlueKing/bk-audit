@@ -285,3 +285,10 @@ class ScopeContextRequired(AIAssistantException):
     MESSAGE = gettext_lazy("缺少场景过滤参数 scope_type，请携带当前场景后重试")
     ERROR_CODE = "042"
     STATUS_CODE = 400
+
+
+class LogAnalysisTimeout(AIAssistantException):
+    """日志分析超过可收敛业务时限，允许平台写入失败终态。"""
+
+    MESSAGE = gettext_lazy("日志分析超时，请重试")
+    ERROR_CODE = "043"
