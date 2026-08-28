@@ -1220,19 +1220,20 @@
     deep: true,
   });
 
-  watch(() => props.data, (data) => {
-    if (data) {
-      setTimeout(() => {
-        fetchAllTools({
-          scope_id: data.scene_id,
-          scope_type: 'scene',
-        });
-        fetchToolTags({
-          scope_id: data.scene_id,
-          scope_type: 'scene',
-        });
-      }, 0);
+  watch(() => props.data?.scene_id, (sceneId, oldSceneId) => {
+    if (!sceneId || sceneId === oldSceneId) {
+      return;
     }
+    fetchAllTools({
+      scope_id: sceneId,
+      scope_type: 'scene',
+    });
+    fetchToolTags({
+      scope_id: sceneId,
+      scope_type: 'scene',
+    });
+  }, {
+    immediate: true,
   });
   onMounted(() => {
     loading.value = true;

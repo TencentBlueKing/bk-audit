@@ -29,6 +29,7 @@ import type ConfigModel from '@model/root/config';
 import NotFound from '@views/404.vue';
 import AnalysisManage from '@views/analysis-manage/routes'; // 检索
 import AttentionManage from '@views/attention-manege/routes'; // 我的关注
+import ConfirmManage from '@views/confirm-manage/routes'; // 待我确认
 import EventManage from '@views/event-manage/routes'; // 审计风险
 import HandleManage from '@views/handle-manage/routes'; // 待我处理
 import LinkDataManage from '@views/link-data-manage/routes'; // 联表管理
@@ -243,6 +244,7 @@ export default (config: ConfigModel) => {
         PlatformManage,
         SceneResources,
         SceneRiskManage,
+        ConfirmManage,
       ],
     },
     {

@@ -89,6 +89,16 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 获取待我确认的风险列表
+  getConfirmRiskList(params: {
+    page: number,
+    page_size: number,
+    scene_id?: string,
+  }) {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/pending_confirm/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+    });
+  }
   // 获取风险可用字段
   getFields() {
     return Request.get<Array<{
@@ -229,6 +239,15 @@ class RiskManage extends ModuleBase {
     description: string
   }) {
     return Request.post(`${this.module}/bulk_trans/`, {
+      params,
+    });
+  }
+  // 批量确认风险单
+  batchConfirmRisk(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/batch_confirm/`, {
       params,
     });
   }
