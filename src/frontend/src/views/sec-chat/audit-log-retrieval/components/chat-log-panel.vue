@@ -18,8 +18,19 @@
   <div class="chat-log-panel">
     <div
       ref="panelBodyRef"
-      class="panel-body">
+      class="panel-body"
+      @scroll="handlePanelScroll">
       <div class="chat-surface">
+        <div
+          v-if="hasBeforeMessages || loadingOlderMessages"
+          class="history-loading-hint">
+          <template v-if="loadingOlderMessages">
+            <span class="loading-dot" />
+            <span class="loading-dot" />
+            <span class="loading-dot" />
+            <span class="history-loading-text">加载历史消息…</span>
+          </template>
+        </div>
         <div class="message-list">
           <div
             v-for="msg in messages"
@@ -149,10 +160,18 @@
   import type { ChatMessage, SelectedSystem } from '../../types';
 
   const props = withDefaults(defineProps<{
+    conversationId?: string;
     messages: ChatMessage[];
+    hasBeforeMessages?: boolean;
+    loadingOlderMessages?: boolean;
+    messageLoading?: boolean;
     /** 识别失败时展示的建议问法（来自 SYSTEM_SELECTION） */
     nlSuggestions?: string[];
   }>(), {
+    conversationId: undefined,
+    hasBeforeMessages: false,
+    loadingOlderMessages: false,
+    messageLoading: false,
     nlSuggestions: () => [],
   });
 
@@ -161,12 +180,21 @@
     'close-select-system': [messageId: string];
     'reselect-system': [];
     'retry-message': [messageUid: string];
+    'load-older': [];
     send: [content: string];
     attach: [];
   }>();
 
   const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
+  /** prepend 历史消息后用于恢复滚动位置 */
+  const scrollAnchor = ref<{ height: number; top: number } | null>(null);
+  /** 避免 scroll 事件在 loading 状态生效前重复触发 */
+  const olderLoadTriggered = ref(false);
+  /** 首次滚到底完成前禁止触发上滑加载，避免 scrollTop=0 误触 BEFORE 请求 */
+  const allowLoadOlder = ref(false);
+
+  const SCROLL_LOAD_THRESHOLD = 80;
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
@@ -220,26 +248,96 @@
     if (text) emit('send', text);
   };
 
-  const scrollToBottom = async (smooth = true) => {
+  const scrollToBottom = async (smooth = true): Promise<void> => {
+    allowLoadOlder.value = false;
     await nextTick();
-    requestAnimationFrame(() => {
-      const el = panelBodyRef.value;
-      if (!el) return;
-      // keep-alive 恢复后需等布局稳定，再滚到最新消息
+    return new Promise((resolve) => {
       requestAnimationFrame(() => {
-        el.scrollTo({
-          top: el.scrollHeight,
-          behavior: smooth ? 'smooth' : 'auto',
+        const el = panelBodyRef.value;
+        if (!el) {
+          allowLoadOlder.value = true;
+          resolve();
+          return;
+        }
+        // keep-alive 恢复后需等布局稳定，再滚到最新消息
+        requestAnimationFrame(() => {
+          el.scrollTo({
+            top: el.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+          });
+          const enableLoadOlder = () => {
+            allowLoadOlder.value = true;
+            resolve();
+          };
+          if (smooth) {
+            window.setTimeout(enableLoadOlder, 350);
+          } else {
+            enableLoadOlder();
+          }
         });
       });
     });
   };
 
-  watch(() => props.messages.length, () => {
-    void scrollToBottom(true);
+  const restoreScrollAnchor = async () => {
+    const anchor = scrollAnchor.value;
+    if (!anchor) return;
+    scrollAnchor.value = null;
+    await nextTick();
+    requestAnimationFrame(() => {
+      const el = panelBodyRef.value;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight - anchor.height + anchor.top;
+    });
+  };
+
+  const handlePanelScroll = () => {
+    const el = panelBodyRef.value;
+    if (!el || !allowLoadOlder.value || props.messageLoading) return;
+    if (!props.hasBeforeMessages || props.loadingOlderMessages || olderLoadTriggered.value) return;
+    if (el.scrollTop > SCROLL_LOAD_THRESHOLD) return;
+
+    olderLoadTriggered.value = true;
+    scrollAnchor.value = { height: el.scrollHeight, top: el.scrollTop };
+    emit('load-older');
+  };
+
+  watch(() => props.loadingOlderMessages, async (loading, wasLoading) => {
+    if (wasLoading && !loading) {
+      olderLoadTriggered.value = false;
+      // 等 length watch 先完成 scroll 恢复；若仍留有 anchor 说明加载失败或无新消息
+      await nextTick();
+      if (scrollAnchor.value) {
+        scrollAnchor.value = null;
+      }
+    }
+  });
+
+  watch(() => props.messages.length, async (newLen, oldLen) => {
+    if (scrollAnchor.value) {
+      await restoreScrollAnchor();
+      return;
+    }
+    if (newLen > oldLen) {
+      await scrollToBottom(oldLen !== 0);
+    }
+  });
+
+  watch(() => props.conversationId, () => {
+    scrollAnchor.value = null;
+    olderLoadTriggered.value = false;
+    allowLoadOlder.value = false;
+    void scrollToBottom(false);
+  });
+
+  watch(() => props.messageLoading, (loading, wasLoading) => {
+    if (wasLoading && !loading) {
+      void scrollToBottom(false);
+    }
   });
 
   onActivated(() => {
+    allowLoadOlder.value = false;
     void scrollToBottom(false);
   });
 </script>
@@ -304,6 +402,22 @@
     overflow: visible;
     flex-direction: column;
     gap: 24px;
+  }
+
+  .history-loading-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    margin-bottom: 16px;
+    gap: 6px;
+    color: #979ba5;
+  }
+
+  .history-loading-text {
+    margin-left: 4px;
+    font-size: 12px;
+    line-height: 18px;
   }
 
   .message-row {
