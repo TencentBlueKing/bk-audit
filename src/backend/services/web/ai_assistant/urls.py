@@ -10,6 +10,7 @@ router.register("conversations", views.ConversationsViewSet)
 router.register("messages", views.MessagesViewSet)
 router.register("attachments", views.AttachmentsViewSet)
 router.register("feedback", views.FeedbackViewSet)
+router.register("columns", views.ColumnConfigViewSet)
 router.register("conversation_sidebar", views.ConversationSidebarViewSet)
 router.register("conversation_sidebar/nodes", views.ConversationSidebarNodesViewSet)
 

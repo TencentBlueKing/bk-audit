@@ -27,6 +27,7 @@ from services.web.ai_assistant.resources.conversation import (
     UpdateConversation,
     UpdateConversationGroup,
 )
+from services.web.ai_assistant.resources.column import ApplyColumnConfig, ListColumnConfig
 from services.web.ai_assistant.resources.feedback import DeleteFeedback, UpsertFeedback
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
@@ -158,6 +159,15 @@ class FeedbackViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("POST", UpsertFeedback),
         ResourceRoute("DELETE", DeleteFeedback, pk_field="feedback_uid"),
+    ]
+
+
+class ColumnConfigViewSet(ResourceViewSet):
+    """AI 日志检索展示字段的自定义选择与跨设备同步接口（按用户隔离）。"""
+
+    resource_routes = [
+        ResourceRoute("GET", ListColumnConfig),
+        ResourceRoute("POST", ApplyColumnConfig, endpoint="apply"),
     ]
 
 
