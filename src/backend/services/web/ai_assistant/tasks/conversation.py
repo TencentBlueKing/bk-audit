@@ -25,7 +25,6 @@ from django.utils import timezone
 from services.web.ai_assistant.constants import AI_CONVERSATION_TITLE_MAX_LENGTH
 from services.web.ai_assistant.models import Conversation
 from services.web.ai_assistant.serializers.conversation import DEFAULT_CONVERSATION_TITLE
-from services.web.ai_assistant.services.title_agent import TitleAgentService
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +44,9 @@ def generate_conversation_title(conversation_id: int, query_text: str) -> dict:
         return {"conversation_id": conversation_id, "skipped": True}
 
     try:
+        # 延迟导入：避免 tasks → services 半初始化状态触发循环 import（PR #1716 实踩）
+        from services.web.ai_assistant.services.title_agent import TitleAgentService
+
         title = TitleAgentService.generate_title(
             module="log_search_conversation",
             input_text=query_text or "",
