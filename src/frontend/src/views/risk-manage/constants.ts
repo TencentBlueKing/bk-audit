@@ -46,6 +46,11 @@ export const RISK_STATUS_TAG_MAP: Record<string, RiskStatusMapItem> = {
     icon: 'loading',
     color: '#3A84FF',
   },
+  await_confirm: {
+    tag: 'warning',
+    icon: 'daichuli',
+    color: '#FF9E00',
+  },
 };
 
 export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
@@ -78,5 +83,10 @@ export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
     theme: 'info',
     icon: 'loading',
     color: '#3A84FF',
+  },
+  await_confirm: {
+    theme: 'warning',
+    icon: 'daichuli',
+    color: '#FF9E00',
   },
 };

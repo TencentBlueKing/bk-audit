@@ -109,6 +109,20 @@ export default {
       }));
   },
   /**
+   * @desc 获取待我确认风险列表
+   */
+  fetchConfirmRiskList(params: {
+    page: number,
+    page_size: number,
+    scene_id?: string,
+  }) {
+    return RiskManageSource.getConfirmRiskList(params)
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
    * @desc 获取风险可用字段
    */
   fetchFields() {
@@ -242,6 +256,17 @@ export default {
     description: string
   }) {
     return RiskManageSource.batchTransRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量确认风险单
+   */
+  batchConfirmRisk(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return RiskManageSource.batchConfirmRisk(params)
       .then(({ data }) => data);
   },
 
