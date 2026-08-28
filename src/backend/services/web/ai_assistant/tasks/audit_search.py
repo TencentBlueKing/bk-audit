@@ -4,6 +4,8 @@
 常见操作缓存刷新为声明式周期任务（对齐上游 periodic_task 惯例，beat 自动调度）。
 """
 
+from __future__ import annotations
+
 import logging
 import time
 
@@ -48,6 +50,9 @@ from services.web.query.ai_assistant.exceptions import (
 from services.web.query.ai_assistant.services.intent import IntentRecognitionService
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 
+if TYPE_CHECKING:
+    from services.web.ai_assistant.services.message_execution import MessageExecution
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +84,9 @@ class NLSearchExecutionTask(MessageExecutionTask):
     @staticmethod
     def _create_auto_log_search(*, execution: MessageExecution, output_data: NLSearchOutputSchema) -> None:
         """以自然语言消息为父消息同步创建日志检索子消息（失败不创建）。"""
+
+        # Worker 冷启动时 Handler 会反向绑定本 Task，业务 Service 必须在执行期加载。
+        from services.web.ai_assistant.services.message import MessageService
 
         message = execution.message
         if not execution.input_data.auto_execute:
@@ -480,5 +488,8 @@ def refresh_common_queries() -> dict:
     由 beat 自动调度，无需在 django_celery_beat 后台手动配置；
     任务幂等，重复执行只会覆盖为相同数据。
     """
+
+    # 同上，避免周期任务模块导入阶段提前初始化业务 Service 包。
+    from services.web.ai_assistant.services.operation import OperationContextService
 
     return OperationContextService.refresh_common_queries()
