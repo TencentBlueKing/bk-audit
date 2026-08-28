@@ -95,6 +95,82 @@ class TestPreviewExportService(AIAssistantTestCase):
         with self.assertRaises(AIAssistantError):
             PreviewExportService.export(output)
 
+    def test_export_with_flatten_extension(self):
+        """flatten_extension=True：extend_data 子键平铺为单独列，samples 字典同步展平"""
+        output = self.make_log_search_output(
+            columns=[
+                ResultColumn(raw_name="username", display_name="操作人"),
+                ResultColumn(raw_name="extend_data", display_name="拓展数据"),
+            ],
+            samples=[
+                {
+                    "username": "admin",
+                    "extend_data": {"ticket_id": "Story-3000", "operator": "frodomei"},
+                },
+                {
+                    "username": "zhangsan",
+                    "extend_data": {"ticket_id": "Story-4000", "instance_id": "vm-001"},
+                },
+            ],
+            total=2,
+        )
+
+        result = PreviewExportService.export(output, export_config={"flatten_extension": True})
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertIn("extend_data/ticket_id", full_keys)
+        self.assertIn("extend_data/operator", full_keys)
+        self.assertIn("extend_data/instance_id", full_keys)
+        # ② extend_data 单列已移除
+        self.assertNotIn("extend_data", full_keys)
+        # ③ 行 1：缺 operator/instance_id 不影响 ticket_id 取值
+        first_data_row = [cell.value for cell in sheet[4]]
+        self.assertIn("admin", first_data_row)
+        self.assertIn("Story-3000", first_data_row)
+        self.assertIn("frodomei", first_data_row)
+        # ④ 行 2：缺 operator 不报错，空值单元格（空字符串）
+        second_data_row = [cell.value for cell in sheet[5]]
+        self.assertIn("zhangsan", second_data_row)
+        self.assertIn("Story-4000", second_data_row)
+        self.assertIn("vm-001", second_data_row)
+
+    def test_flatten_extension_with_no_extension_data(self):
+        """flatten_extension=True 但 samples 全无 extend_data：等同未开启，输出列无变化"""
+        output = self.make_log_search_output(
+            columns=[ResultColumn(raw_name="username", display_name="操作人")],
+            samples=[{"username": "admin"}, {"username": "zhangsan"}],
+            total=2,
+        )
+
+        result = PreviewExportService.export(output, export_config={"flatten_extension": True})
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertEqual(full_keys.count("extend_data"), 0)
+
+    def test_flatten_extension_false_keeps_default(self):
+        """flatten_extension 缺省/False：保持原 extend_data 单列输出（与现状兼容）"""
+        output = self.make_log_search_output(
+            columns=[
+                ResultColumn(raw_name="username", display_name="操作人"),
+                ResultColumn(raw_name="extend_data", display_name="拓展数据"),
+            ],
+            samples=[{"username": "admin", "extend_data": {"ticket_id": "Story-3000"}}],
+            total=1,
+        )
+
+        result = PreviewExportService.export(output)
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertIn("extend_data", full_keys)
+        self.assertNotIn("extend_data/ticket_id", full_keys)
+
 
 @mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task")
 @mock.patch(f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission")
@@ -199,3 +275,142 @@ class TestFullExportService(AIAssistantTestCase):
     def test_build_task_name(self, mock_perm, mock_create_task):
         name = FullExportService.build_task_name("abcdef1234567890")
         self.assertIn("abcdef12", name)
+
+    def test_invalid_flatten_extension_type_rejected(self, mock_perm, mock_create_task):
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={"field_scope": "all", "fields": [], "flatten_extension": "yes"},
+                task_name="t",
+                username=self.username,
+            )
+        self.assertIn("flatten_extension", str(ctx.exception.extra))
+
+    def test_invalid_extension_keys_type_rejected(self, mock_perm, mock_create_task):
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={"field_scope": "all", "fields": [], "extension_keys": "ticket_id"},
+                task_name="t",
+                username=self.username,
+            )
+        self.assertIn("extension_keys", str(ctx.exception.extra))
+
+    def test_extension_keys_empty_string_filtered(self, mock_perm, mock_create_task):
+        """extension_keys 含空字符串被过滤；含非字符串整体拒绝"""
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError):
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={
+                    "field_scope": "all",
+                    "fields": [],
+                    "extension_keys": ["ticket_id", 123],  # 含非字符串
+                },
+                task_name="t",
+                username=self.username,
+            )
+
+    def test_flatten_extension_and_extension_keys_passthrough(self, mock_perm, mock_create_task):
+        """flatten_extension/extension_keys 合法值透传到 task.export_config（落库给 DataProcessor 运行时使用）"""
+        mock_perm.return_value = True
+        mock_create_task.return_value = {"id": 1, "status": "pending"}
+
+        FullExportService.create_task(
+            condition=self.make_condition(),
+            namespace=self.namespace,
+            export_config={
+                "field_scope": "all",
+                "fields": [],
+                "flatten_extension": True,
+                "extension_keys": ["ticket_id", "operator"],
+            },
+            task_name="t",
+            username=self.username,
+        )
+
+        _, kwargs = mock_create_task.call_args
+        self.assertTrue(kwargs["export_config"]["flatten_extension"])
+        self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
+
+
+class TestLogExportConfigSerializerProtocol(AIAssistantTestCase):
+    """协议层验证：LogExportReqSerializer 嵌套校验不再剥离 AI 导出新字段，且原检索页形态零变化。"""
+
+    def test_new_fields_survive_serialization(self):
+        """AI 导出 export_config 含新字段：经 LogExportConfigSerializer 校验后保留（可落库）"""
+        from services.web.query.serializers import LogExportConfigSerializer
+
+        serializer = LogExportConfigSerializer(
+            data={
+                "field_scope": "all",
+                "fields": [],
+                "flatten_extension": True,
+                "extension_keys": ["ticket_id", "operator"],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        self.assertTrue(validated["flatten_extension"])
+        self.assertEqual(validated["extension_keys"], ["ticket_id", "operator"])
+
+    def test_legacy_export_config_unchanged(self):
+        """原检索页 export_config（仅 field_scope/fields）：validated_data 不含新键，落库形态与历史一致"""
+        from services.web.query.serializers import LogExportConfigSerializer
+
+        serializer = LogExportConfigSerializer(data={"field_scope": "all", "fields": []})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        self.assertNotIn("flatten_extension", validated)
+        self.assertNotIn("extension_keys", validated)
+        self.assertEqual(validated, {"field_scope": "all", "fields": []})
+
+    # 注：非法形态（flatten_extension="yes" / extension_keys 含非字符串）的严格拦截在
+    # AI 侧 FullExportService._validate_export_config（isinstance 显式校验，入口先于 serializer 执行，
+    # 见 TestFullExportService 两个 rejected 用例）；serializer 层 DRF BooleanField/CharField 为宽松
+    # 归一语义（"yes"→True、int→str），不作为防线，此处不做拒绝断言。
+
+
+class TestExportConfigFlattenIsolation(AIAssistantTestCase):
+    """隔离性验证：ExportConfig 平铺分支仅在显式开启时生效，原检索页任务（无新字段）导出列零变化。"""
+
+    def _make_task(self, export_config: dict):
+        from services.web.query.models import LogExportTask
+
+        return LogExportTask(export_config=export_config)
+
+    def test_legacy_task_fields_unchanged(self):
+        """原检索页任务（field_scope=all 无新字段）：export_fields 与改动前完全一致（含 extend_data 单列）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(task=self._make_task({"field_scope": "all", "fields": []}))
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertIn("extend_data", full_keys)
+        # 新字段缺省不产生任何子键列
+        self.assertEqual([key for key in full_keys if key.startswith("extend_data/")], [])
+
+    def test_flatten_task_replaces_extend_data_column(self):
+        """开启平铺 + 子键清单：extend_data 单列被替换为子键列（仅 AI 导出路径构造此形态）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(
+            task=self._make_task(
+                {"field_scope": "all", "fields": [], "flatten_extension": True, "extension_keys": ["ticket_id"]}
+            )
+        )
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertNotIn("extend_data", full_keys)
+        self.assertIn("extend_data/ticket_id", full_keys)
+
+    def test_flatten_without_keys_keeps_single_column(self):
+        """开启平铺但未传子键清单：不替换（无列定义来源，保持单列）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(task=self._make_task({"field_scope": "all", "fields": [], "flatten_extension": True}))
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertIn("extend_data", full_keys)

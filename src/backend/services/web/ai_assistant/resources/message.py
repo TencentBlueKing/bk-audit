@@ -102,6 +102,7 @@ class PreviewExportMessage(AIAssistantResource):
     def perform_request(self, validated_request_data):
         result = MessageExportService(user=get_request_username()).preview_export(
             message_uid=str(validated_request_data["message_uid"]),
+            export_config=validated_request_data.get("export_config") or {},
         )
         response = HttpResponse(result.content, content_type=XLSX_CONTENT_TYPE)
         response["Content-Disposition"] = content_disposition_header(
