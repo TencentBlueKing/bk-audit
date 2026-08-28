@@ -92,8 +92,23 @@ export interface AiNaturalLanguageSearchInput {
   auto_execute?: boolean;
 }
 
+export type AiNlRecognitionErrorCode =
+  | 'QUERY_NOT_RECOGNIZED'
+  | 'AI_OUTPUT_PARSE_FAILED'
+  | 'AI_OUTPUT_INVALID'
+  | 'AI_SERVICE_ERROR'
+  | 'AI_TIMEOUT'
+  | 'PERMISSION_DENIED'
+  | string;
+
+export interface AiNlRecognitionError {
+  error_code: AiNlRecognitionErrorCode;
+  error_message: string;
+}
+
 export interface AiNaturalLanguageSearchOutput {
-  condition: AiSearchCondition;
+  condition: AiSearchCondition | null;
+  error?: AiNlRecognitionError | null;
 }
 
 export interface AiLogSearchInput {
