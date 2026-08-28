@@ -4,7 +4,6 @@ import re
 import time
 from typing import Any, Dict, Iterable, List, Sequence
 
-from bk_resource import api
 from bk_resource.base import Empty
 from django.conf import settings
 from django.utils import timezone
@@ -18,6 +17,7 @@ from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
+from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_SEARCH_RESPONSE_MAX_BYTES,
     LogDetailColumn,
@@ -115,7 +115,7 @@ class LogDetailSearchService:
             page_size=request.page_size,
         )
         started_at = time.perf_counter()
-        responses = api.bk_base.query_sync.bulk_request(
+        responses = safe_query_sync.bulk_request(
             [
                 {"sql": builder.build_data_sql(fields), "prefer_storage": StorageType.DORIS.value},
                 {"sql": builder.build_count_sql(), "prefer_storage": StorageType.DORIS.value},

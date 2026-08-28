@@ -65,7 +65,7 @@ class TestLogDetailSearchService(AIAssistantTestCase):
         self.mock_context = self.enterContext(
             mock.patch(f"{SEARCH_MODULE}.LogQueryContextService.build", return_value=self.context)
         )
-        self.mock_query = self.enterContext(mock.patch(f"{SEARCH_MODULE}.api.bk_base.query_sync"))
+        self.mock_query = self.enterContext(mock.patch(f"{SEARCH_MODULE}.safe_query_sync"))
         self.mock_query.bulk_request.return_value = ({"list": self.raw_rows}, {"list": [{"count": 3}]})
         self.mock_parser = self.enterContext(mock.patch(f"{SEARCH_MODULE}.SearchDataParser"))
         self.mock_parser.return_value.parse_data.return_value = self.safe_rows
@@ -384,7 +384,7 @@ class TestLogDetailSearchSensitiveProjection(TestCase):
 
     @override_settings(IAM_PERMISSION_BACKEND="v3")
     @mock.patch("services.web.query.resources.base.PermissionService")
-    @mock.patch(f"{SEARCH_MODULE}.api.bk_base.query_sync")
+    @mock.patch(f"{SEARCH_MODULE}.safe_query_sync")
     @mock.patch(f"{SEARCH_MODULE}.LogQueryContextService.build")
     def test_nested_sensitive_value_cannot_bypass_desensitization_by_projection(
         self, mock_context, mock_query, mock_permission_service

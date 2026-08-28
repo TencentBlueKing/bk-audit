@@ -3,7 +3,6 @@
 import json
 from typing import Any, Dict, Iterable, List, Tuple
 
-from bk_resource import api
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
 
@@ -18,6 +17,7 @@ from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
+from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
     FieldSampleSummary,
     GetLogFieldMetadataRequest,
@@ -99,7 +99,7 @@ class LogFieldMetadataService:
             page=1,
             page_size=getattr(settings, "AI_ASSISTANT_FIELD_SAMPLE_ROWS", AI_ASSISTANT_FIELD_SAMPLE_ROWS),
         )
-        records = api.bk_base.query_sync(
+        records = safe_query_sync(
             sql=builder.build_data_sql(cls._SAMPLE_FIELDS),
             prefer_storage=StorageType.DORIS.value,
         )
