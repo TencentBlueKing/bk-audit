@@ -320,11 +320,12 @@ class RiskHandler:
                 BindingMetadataHelper.create_risk_scene_binding(risk.risk_id, scene_id)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
 
-        if dispatch_result is not None:
+        if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
             # 待确认阶段不渲染报告、不通知关注人/处理人、不自动流转（确认后触发），
             # 仅通知确认人；事务提交后发送，保证接收人收到通知时数据已落库
             self._send_confirm_notice(risk, risk.confirmer)
             return False, risk
+        # 直接分派（direct）与场景策略一致：进入 NewRisk 流转
         return True, risk
 
     def _match_dispatch(self, event: dict, create_params: dict):
@@ -377,15 +378,20 @@ class RiskHandler:
 
     def _apply_dispatch(self, risk: Risk, dispatch_result) -> None:
         """
-        将分派结果固化到风险单（dispatch_rule/confirmer/待确认状态）
+        将分派结果固化到风险单（dispatch_rule 快照）
+        - after_confirm：额外固化确认人并进入待确认状态
+        - direct：无需确认人，直接分派，由调用方进入 NewRisk 流转
         """
         risk.dispatch_rule_id = dispatch_result.rule.rule_id
-        confirmers = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.confirmer))
-        risk.confirmer = RiskNoticeParser(risk=risk).parse_groups(confirmers)
-        # display_status 同步，否则列表页展示为空；周期任务 process_one_risk 的 match 无该分支会跳过，
-        risk.status = RiskStatus.PENDING_CONFIRM
-        risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
-        risk.save(update_fields=["dispatch_rule", "confirmer", "status", "display_status"])
+        update_fields = ["dispatch_rule"]
+        if dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
+            confirmers = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.confirmer))
+            risk.confirmer = RiskNoticeParser(risk=risk).parse_groups(confirmers)
+            # display_status 同步，否则列表页展示为空；周期任务 process_one_risk 的 match 无该分支会跳过，
+            risk.status = RiskStatus.PENDING_CONFIRM
+            risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
+            update_fields += ["confirmer", "status", "display_status"]
+        risk.save(update_fields=update_fields)
 
     def _get_strategy_scene_id(self, strategy_id) -> Optional[int]:
         """策略绑定的场景 ID（场景策略）"""
