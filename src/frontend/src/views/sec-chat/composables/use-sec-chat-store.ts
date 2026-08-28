@@ -35,6 +35,7 @@ import {
   buildFieldCatalog,
   extractFieldCatalogFromSystemMessage,
   findLatestSuccessSystemSelection,
+  getNlRecognitionError,
   mapAiMessageToChatMessage,
 } from '../utils/map-ai-message';
 
@@ -172,7 +173,7 @@ const fetchChildLogSearch = async (conversationId: string, nlUid: string) => {
 
 const handleNlTerminalStatus = async (conversationId: string, detail: AiMessage) => {
   if (detail.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
-  if (detail.status === 'SUCCESS') {
+  if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
     await fetchChildLogSearch(conversationId, detail.uid);
   }
 };
@@ -256,9 +257,11 @@ const applyMessageWindow = (conv: Conversation, windowData: {
 
   resumeProcessingPolls(conv.id, windowData.results);
 
-  // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次
+  // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次（识别失败除外）
   windowData.results.forEach((message) => {
-    if (message.message_type === 'NATURAL_LANGUAGE_SEARCH' && message.status === 'SUCCESS') {
+    if (message.message_type === 'NATURAL_LANGUAGE_SEARCH'
+      && message.status === 'SUCCESS'
+      && !getNlRecognitionError(message)) {
       const hasChild = windowData.results.some(item => (
         item.message_type === 'LOG_SEARCH' && item.parent_message_uid === message.uid
       )) || conv.messages.some(item => (
@@ -304,6 +307,16 @@ export function useSecChatStore() {
     .filter(item => item.messagesHydrated || item.messages.length > 0)
     .map(item => [item.id, item] as const));
 
+  /** 同 id 只保留首次出现（调用方保证更优先的列表在前） */
+  const dedupeConversations = (list: Conversation[]): Conversation[] => {
+    const seen = new Set<string>();
+    return list.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  };
+
   /**
    * 按需拉取分组下会话。展开分组 / 搜索时调用；已加载且非 force 则跳过。
    */
@@ -344,10 +357,11 @@ export function useSecChatStore() {
           }));
 
         const messageCache = snapshotMessageCache();
-        conversations.value = [
-          ...conversations.value.filter(c => c.groupName !== latest.name),
+        // 分组子节点在前：同 id 去重时优先采用本接口结果，避免与根列表旧副本叠出两条
+        conversations.value = dedupeConversations([
           ...mergeConversationCache(mapped, messageCache),
-        ];
+          ...conversations.value.filter(c => c.groupName !== latest.name),
+        ]);
         latest.childrenLoaded = true;
         latest.conversationCount = mapped.length;
       } catch {
@@ -419,10 +433,10 @@ export function useSecChatStore() {
           return c;
         });
 
-      conversations.value = [
+      conversations.value = dedupeConversations([
         ...mergeConversationCache(rootConversations, messageCache),
         ...mergeConversationCache(preservedGroupConvs, messageCache),
-      ];
+      ]);
       if (activeKeep && !conversations.value.some(c => c.id === activeKeep.id)) {
         const prev = prevGroups.find(g => g.name === activeKeep.groupName);
         const nextName = prev
@@ -560,8 +574,10 @@ export function useSecChatStore() {
   const updateConversationGroup = async (id: string, groupName?: string) => {
     const conv = conversations.value.find(c => c.id === id);
     if (!conv || conv.isDraft) return;
-    const targetGroup = groupName
-      ? groups.value.find(g => g.name === groupName)
+    const prevGroupName = conv.groupName;
+    const normalizedGroupName = groupName?.trim() || undefined;
+    const targetGroup = normalizedGroupName
+      ? groups.value.find(g => g.name === normalizedGroupName)
       : undefined;
 
     await AiAssistantManageService.moveSidebarNode({
@@ -572,9 +588,40 @@ export function useSecChatStore() {
         target_node_uid: targetGroup.id,
       } : {}),
     });
-    // 先改本地归属，initSidebar 保留已加载分组时成员才正确，无需整组清空重拉
-    conv.groupName = groupName;
+
+    // 本地改归属，并去掉同 id 重复项，避免根列表与分组子节点叠出两条
+    if (normalizedGroupName) {
+      conv.groupName = normalizedGroupName;
+    } else {
+      delete conv.groupName;
+    }
+    conversations.value = dedupeConversations(conversations.value);
+
     await initSidebar();
+
+    // 强制刷新相关分组，清掉 initSidebar 保留的过期子节点
+    const reloadIds = new Set<string>();
+    if (prevGroupName) {
+      const prev = groups.value.find(g => g.name === prevGroupName);
+      if (prev) reloadIds.add(prev.id);
+    }
+    if (targetGroup) {
+      reloadIds.add(targetGroup.id);
+    }
+    await Promise.all(
+      [...reloadIds].map(groupId => loadGroupConversations(groupId, { force: true })),
+    );
+
+    // 以本次操作为准校正归属后再去重，避免重拉分组时过期子节点与根列表各留一条
+    conversations.value = dedupeConversations(conversations.value.map((item) => {
+      if (item.id !== id) return item;
+      if (normalizedGroupName) {
+        return { ...item, groupName: normalizedGroupName };
+      }
+      const next = { ...item };
+      delete next.groupName;
+      return next;
+    }));
   };
 
   /**
