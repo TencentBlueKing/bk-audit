@@ -107,3 +107,23 @@ class PlatformStreamEvent(TextChoices):
 
     STREAM_RESET = "platform.stream_reset", gettext_lazy("流已切换")
     STREAM_END = "platform.stream_end", gettext_lazy("流已结束")
+
+
+# AI 标题生成（共用智能体 ALS_TITLE_SUM，System Prompt 平台侧统一配置）：
+# 统一 User Prompt 模板（后端侧配置，可经 BKAPP_AI_TITLE_USER_PROMPT_TEMPLATE 覆盖）
+AI_TITLE_USER_PROMPT_TEMPLATE = (
+    "【场景】{module_name}——{module_description}\n"
+    "【任务】请根据【用户输入】，为这次{module_object}生成一个简短准确的标题："
+    "不超过{max_length}个字，概括用户的核心意图，直接输出标题文本，不要附加任何其他内容\n"
+    '【用户输入】"{input_text}"'
+)
+# 模块配置（新模块接入 = 加一个条目，模板不动）
+AI_TITLE_MODULE_CONFIGS = {
+    "log_search_conversation": {
+        "module_name": "AI自然语言日志检索",
+        "module_description": "用户在会话中用自然语言描述检索意图进行日志检索",
+        "module_object": "会话",
+    },
+}
+# 会话标题默认最大长度（BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH 覆盖）
+AI_CONVERSATION_TITLE_MAX_LENGTH = 20

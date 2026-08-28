@@ -44,7 +44,26 @@ class NLSearchExecutionTask(MessageExecutionTask):
                 execution.message.id,
                 task_id,
             )
+        self._dispatch_title_generation(execution=execution)
         return result
+
+    @staticmethod
+    def _dispatch_title_generation(*, execution: MessageExecution) -> None:
+        """自然语言消息成功后异步生成会话标题（识别失败的结构化协议同样触发；失败静默不阻塞消息终态）。"""
+
+        try:
+            # 延迟导入：避免 tasks ↔ services 加载期循环依赖
+            from services.web.ai_assistant.tasks.conversation import generate_conversation_title
+
+            generate_conversation_title.delay(
+                conversation_id=execution.message.conversation_id,
+                query_text=execution.input_data.query_text,
+            )
+        except Exception:
+            logger.exception(
+                "[NLSearchExecutionTask] dispatch title generation failed, message_id=%s",
+                execution.message.id,
+            )
 
     @staticmethod
     def _create_auto_log_search(*, execution: MessageExecution, output_data: NLSearchOutputSchema) -> None:

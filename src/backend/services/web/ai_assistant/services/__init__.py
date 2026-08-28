@@ -14,6 +14,7 @@ from services.web.ai_assistant.services.message import (
 )
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.sidebar import ConversationSidebarService
+from services.web.ai_assistant.services.title_agent import TitleAgentService
 
 __all__ = [
     "AttachmentExecution",
@@ -29,4 +30,5 @@ __all__ = [
     "MessageService",
     "MessageWindow",
     "PreparedMessage",
+    "TitleAgentService",
 ]
