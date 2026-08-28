@@ -196,14 +196,18 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertNotIn("thedate", raw_names)
         self.assertIn("username", raw_names)
 
-    def test_all_time_field_conditions_raises_not_recognized(self, mock_chat):
+    def test_all_time_field_conditions_stripped_to_time_window(self, mock_chat):
+        """时间字段条件全被剔除，但 AI 输出了有效时间 → 降级为纯时间窗口检索而非未识别"""
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [
             {"raw_name": "dtEventTimeStamp", "keys": [], "operator": "gte", "filters": [1755129600000]}
         ]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(QueryNotRecognizedError):
-            self._convert()
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
+        self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
 
     def test_default_time_window(self, mock_chat):
         """D2 默认实现：AI 未输出时间时后端补最近 7 天窗口"""
@@ -238,6 +242,98 @@ class TestNL2JSONService(AIAssistantTestCase):
         with self.assertRaises(AIServiceError) as ctx:
             self._convert()
         self.assertEqual(ctx.exception.error_code, "AI_SERVICE_ERROR")
+
+
+@mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
+    """纯时间窗口 / 模糊意图话术（如"帮我查下最近七天的日志"）——时间有效即合法检索意图。
+
+    协议：conditions 空 + start/end 任一可解析 → 放行为纯时间窗口检索；
+    conditions 空 + 时间全空/非法 → QUERY_NOT_RECOGNIZED（寒暄/无关输入）。
+    """
+
+    def _convert(self, query_text: str = "帮我查下最近七天的日志"):
+        return NL2JSONService.convert(
+            query_text=query_text,
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            username=self.username,
+        )
+
+    def test_rolling_window_query(self, mock_chat):
+        """「帮我查下最近七天的日志」：AI 输出空 conditions + 滚动 7 天窗口 → 放行"""
+        now = "2026-08-28T18:00:00+08:00"
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-21T18:00:00+08:00",
+                "end_time": now,
+            }
+        )
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, "2026-08-21T18:00:00+08:00")
+        self.assertEqual(condition.end_time, now)
+
+    def test_natural_day_query(self, mock_chat):
+        """「看下昨天有什么操作」：AI 按自然日边界换算 → 放行"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-27T00:00:00+08:00",
+                "end_time": "2026-08-27T23:59:59+08:00",
+            }
+        )
+
+        condition = self._convert(query_text="看下昨天有什么操作")
+        self.assertEqual(condition.conditions, [])
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual((end_dt - start_dt).days, 0)
+
+    def test_vague_intent_default_window(self, mock_chat):
+        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 7 天窗口 → 放行"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-21T18:00:00+08:00",
+                "end_time": "2026-08-28T18:00:00+08:00",
+            }
+        )
+
+        condition = self._convert(query_text="帮我看看最近的情况")
+        self.assertEqual(condition.conditions, [])
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual((end_dt - start_dt).days, DEFAULT_SEARCH_WINDOW_DAYS)
+
+    def test_start_time_only_fills_end_with_now(self, mock_chat):
+        """AI 仅输出 start_time（end 缺失）→ 时间意图成立，end 由后端兜底当前时间"""
+        mock_chat.return_value = json.dumps(
+            {"conditions": [], "start_time": "2026-08-20T00:00:00+08:00", "end_time": None}
+        )
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, "2026-08-20T00:00:00+08:00")
+        end_dt = parse_datetime(condition.end_time)
+        self.assertIsNotNone(end_dt)
+
+    def test_empty_conditions_with_invalid_time_rejected(self, mock_chat):
+        """空 conditions + 时间非法（不可解析）→ 无法确认检索意图，判未识别"""
+        mock_chat.return_value = json.dumps({"conditions": [], "start_time": "不是时间", "end_time": "也不是时间"})
+
+        with self.assertRaises(QueryNotRecognizedError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.error_code, "QUERY_NOT_RECOGNIZED")
+
+    def test_greeting_unrecognized(self, mock_chat):
+        """寒暄（「你好」）：AI 全空输出 → 未识别（保持既有鲁棒行为）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "start_time": None, "end_time": None})
+
+        with self.assertRaises(QueryNotRecognizedError):
+            self._convert(query_text="你好")
 
 
 @mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")

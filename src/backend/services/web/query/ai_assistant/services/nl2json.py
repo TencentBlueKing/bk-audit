@@ -96,10 +96,16 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
 4. 同一字段的多个取值（如多个操作人、多个资源类型）输出为单个条件：filters 放全部值、operator 用 include（排除语义用 exclude）；禁止拆成多个同字段条件，也禁止把多个值塞进 eq
 5. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
-6. 时间按当前时间推算，ISO8601 带时区；用户未提时间时输出 null，由后端补默认窗口
+6. 时间按「当前时间」推算为 ISO8601 带时区的绝对时间：
+   - 相对表述（最近N天/近N天/最近N小时/近一小时/最近一周等）→ 滚动窗口：start_time=当前时间前推N天（或N小时），end_time=当前时间
+   - 自然单位（昨天/前天/上周/上个月）→ 按自然边界换算（如昨天=昨日00:00:00至昨日23:59:59，上周=上周一00:00:00至上周日23:59:59）；本周/本月 → 起点为自然边界，end_time 取当前时间
+   - 时段表述（今天上午/昨天下午等）→ 该时段起点至该时段终点
+   - 具体日期区间（如"8月1日到8月15日"）→ 按给出的起止边界换算
+   - 用户有检索意图（想查日志）但未提任何时间 → 输出最近 7 天滚动窗口
+   - 仅当用户输入与日志检索完全无关（寒暄/闲聊）时才输出 null
 7. 关键词全文检索用 match_all/match_any 操作符表达
 8. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
-9. 仅当所有检索需求都无法映射到字段上下文时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
+9. 时间范围本身就是有效检索需求：仅含时间的查询（如"帮我查下最近七天的日志"）必须输出空 conditions 与换算后的 start_time/end_time；仅当输入与日志检索完全无关（寒暄/闲聊）时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
 # 数值比较操作符（仅数值类型字段可用）
 NUMERIC_OPERATORS = {
@@ -311,8 +317,20 @@ class NL2JSONService:
             valid_conditions.append(cond)
 
         if not valid_conditions:
-            raise QueryNotRecognizedError(extra={"payload": payload.model_dump()})
+            # 纯时间窗口检索（如"帮我查下最近七天的日志"）：AI 已识别出有效时间即视为
+            # 合法检索意图，放行空条件（时间由 _assemble 统一组装，检索侧支持零条件）；
+            # 仅当时间同样无效（寒暄/无关输入）才判未识别
+            if not cls._payload_has_valid_time(payload):
+                raise QueryNotRecognizedError(extra={"payload": payload.model_dump()})
+            payload.conditions = []
+            return
         payload.conditions = valid_conditions
+
+    @classmethod
+    def _payload_has_valid_time(cls, payload: AIConditionPayload) -> bool:
+        """AI 输出是否携带可解析的有效时间（检索意图成立的信号，与 _assemble 同解析口径）"""
+
+        return any(cls._safe_parse_time(value) is not None for value in (payload.start_time, payload.end_time))
 
     @classmethod
     def _validate_operator_shape(cls, cond: AIConditionItem, valid_operators: set) -> None:
