@@ -96,6 +96,11 @@ AI_NL2JSON_THREAD_ID_PREFIX = "ai-log-search"
 DEFAULT_SEARCH_WINDOW_DAYS = 7
 # AI 输出中禁止出现的时间字段（出现后端剔除并告警，时间由后端统一管理）
 AI_FORBIDDEN_TIME_FIELDS = ("thedate", "dtEventTimeStamp")
+# AI 输出中禁止出现的条件字段（后端剔除并告警）：
+# - 时间字段：时间由后端统一管理（start_time/end_time 顶层协议）
+# - system_id：检索范围由 scope_id 唯一决定并做权限注入，AI 偷带该条件会与注入条件
+#   AND 组合——值不一致时恒假零命中（用户侧表现为"静默查空"），冗余时污染条件回显
+AI_FORBIDDEN_CONDITION_FIELDS = AI_FORBIDDEN_TIME_FIELDS + ("system_id",)
 
 # ---------------------------------------------------------------------------
 # F4 导出

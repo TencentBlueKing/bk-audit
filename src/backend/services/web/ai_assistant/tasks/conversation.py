@@ -48,7 +48,6 @@ def generate_conversation_title(conversation_id: int, query_text: str) -> dict:
         from services.web.ai_assistant.services.title_agent import TitleAgentService
 
         title = TitleAgentService.generate_title(
-            module="log_search_conversation",
             input_text=query_text or "",
             username=conversation.created_by,
             max_length=getattr(settings, "AI_CONVERSATION_TITLE_MAX_LENGTH", AI_CONVERSATION_TITLE_MAX_LENGTH),
