@@ -44,7 +44,7 @@ class MessageExportService:
         self.user = user
         self.message_service = MessageService(user=user)
 
-    def preview_export(self, *, message_uid: str) -> PreviewExportFile:
+    def preview_export(self, *, message_uid: str, export_config: dict = None) -> PreviewExportFile:
         """同步导出快照样例（≤100 条）；只校验所有权，不重查日志。"""
 
         message = self._get_success_log_search(message_uid=message_uid)
@@ -59,7 +59,7 @@ class MessageExportService:
             query_summary=snapshot.query_summary,
         )
         try:
-            return PreviewExportService.export(output=query_output)
+            return PreviewExportService.export(output=query_output, export_config=export_config or {})
         except QueryAIAssistantError as error:
             logger.warning(
                 "[MessageExportService] preview export failed, message_id=%s, error=%s",

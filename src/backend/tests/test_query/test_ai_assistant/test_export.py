@@ -95,6 +95,82 @@ class TestPreviewExportService(AIAssistantTestCase):
         with self.assertRaises(AIAssistantError):
             PreviewExportService.export(output)
 
+    def test_export_with_flatten_extension(self):
+        """flatten_extension=True：extend_data 子键平铺为单独列，samples 字典同步展平"""
+        output = self.make_log_search_output(
+            columns=[
+                ResultColumn(raw_name="username", display_name="操作人"),
+                ResultColumn(raw_name="extend_data", display_name="拓展数据"),
+            ],
+            samples=[
+                {
+                    "username": "admin",
+                    "extend_data": {"ticket_id": "Story-3000", "operator": "frodomei"},
+                },
+                {
+                    "username": "zhangsan",
+                    "extend_data": {"ticket_id": "Story-4000", "instance_id": "vm-001"},
+                },
+            ],
+            total=2,
+        )
+
+        result = PreviewExportService.export(output, export_config={"flatten_extension": True})
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertIn("extend_data/ticket_id", full_keys)
+        self.assertIn("extend_data/operator", full_keys)
+        self.assertIn("extend_data/instance_id", full_keys)
+        # ② extend_data 单列已移除
+        self.assertNotIn("extend_data", full_keys)
+        # ③ 行 1：缺 operator/instance_id 不影响 ticket_id 取值
+        first_data_row = [cell.value for cell in sheet[4]]
+        self.assertIn("admin", first_data_row)
+        self.assertIn("Story-3000", first_data_row)
+        self.assertIn("frodomei", first_data_row)
+        # ④ 行 2：缺 operator 不报错，空值单元格（空字符串）
+        second_data_row = [cell.value for cell in sheet[5]]
+        self.assertIn("zhangsan", second_data_row)
+        self.assertIn("Story-4000", second_data_row)
+        self.assertIn("vm-001", second_data_row)
+
+    def test_flatten_extension_with_no_extension_data(self):
+        """flatten_extension=True 但 samples 全无 extend_data：等同未开启，输出列无变化"""
+        output = self.make_log_search_output(
+            columns=[ResultColumn(raw_name="username", display_name="操作人")],
+            samples=[{"username": "admin"}, {"username": "zhangsan"}],
+            total=2,
+        )
+
+        result = PreviewExportService.export(output, export_config={"flatten_extension": True})
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertEqual(full_keys.count("extend_data"), 0)
+
+    def test_flatten_extension_false_keeps_default(self):
+        """flatten_extension 缺省/False：保持原 extend_data 单列输出（与现状兼容）"""
+        output = self.make_log_search_output(
+            columns=[
+                ResultColumn(raw_name="username", display_name="操作人"),
+                ResultColumn(raw_name="extend_data", display_name="拓展数据"),
+            ],
+            samples=[{"username": "admin", "extend_data": {"ticket_id": "Story-3000"}}],
+            total=1,
+        )
+
+        result = PreviewExportService.export(output)
+
+        workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+        sheet = workbook.active
+        full_keys = [cell.value for cell in sheet[3]]
+        self.assertIn("extend_data", full_keys)
+        self.assertNotIn("extend_data/ticket_id", full_keys)
+
 
 @mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task")
 @mock.patch(f"{EXPORT_MODULE}.SearchLogPermission.has_system_search_permission")
@@ -199,3 +275,65 @@ class TestFullExportService(AIAssistantTestCase):
     def test_build_task_name(self, mock_perm, mock_create_task):
         name = FullExportService.build_task_name("abcdef1234567890")
         self.assertIn("abcdef12", name)
+
+    def test_invalid_flatten_extension_type_rejected(self, mock_perm, mock_create_task):
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={"field_scope": "all", "fields": [], "flatten_extension": "yes"},
+                task_name="t",
+                username=self.username,
+            )
+        self.assertIn("flatten_extension", str(ctx.exception.extra))
+
+    def test_invalid_extension_keys_type_rejected(self, mock_perm, mock_create_task):
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={"field_scope": "all", "fields": [], "extension_keys": "ticket_id"},
+                task_name="t",
+                username=self.username,
+            )
+        self.assertIn("extension_keys", str(ctx.exception.extra))
+
+    def test_extension_keys_empty_string_filtered(self, mock_perm, mock_create_task):
+        """extension_keys 含空字符串被过滤；含非字符串整体拒绝"""
+        mock_perm.return_value = True
+        with self.assertRaises(AIOutputInvalidError):
+            FullExportService.create_task(
+                condition=self.make_condition(),
+                namespace=self.namespace,
+                export_config={
+                    "field_scope": "all",
+                    "fields": [],
+                    "extension_keys": ["ticket_id", 123],  # 含非字符串
+                },
+                task_name="t",
+                username=self.username,
+            )
+
+    def test_flatten_extension_and_extension_keys_passthrough(self, mock_perm, mock_create_task):
+        """flatten_extension/extension_keys 合法值透传到 task.export_config（落库给 DataProcessor 运行时使用）"""
+        mock_perm.return_value = True
+        mock_create_task.return_value = {"id": 1, "status": "pending"}
+
+        FullExportService.create_task(
+            condition=self.make_condition(),
+            namespace=self.namespace,
+            export_config={
+                "field_scope": "all",
+                "fields": [],
+                "flatten_extension": True,
+                "extension_keys": ["ticket_id", "operator"],
+            },
+            task_name="t",
+            username=self.username,
+        )
+
+        _, kwargs = mock_create_task.call_args
+        self.assertTrue(kwargs["export_config"]["flatten_extension"])
+        self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
