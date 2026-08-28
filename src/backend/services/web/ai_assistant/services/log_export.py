@@ -77,11 +77,24 @@ class MessageExportService:
         except ValidationError as error:
             raise InvalidMessageSnapshot() from error
         namespace = str((message.context_data or {}).get("namespace") or "")
+        export_config = dict(export_config or {})
+        # 扩展字段平铺开启且调用方未显式给子键清单时，从父消息的系统选择快照自动聚合
+        # （前端只需传 flatten_extension 开关，无需感知子键清单）
+        if export_config.get("flatten_extension") and not export_config.get("extension_keys"):
+            extension_keys = self._extract_extension_keys(message)
+            if extension_keys:
+                export_config["extension_keys"] = extension_keys
+                logger.info(
+                    "[MessageExportService] auto inject extension_keys for flatten export, "
+                    "message_id=%s, keys=%s",
+                    message.id,
+                    extension_keys,
+                )
         try:
             task = FullExportService.create_task(
                 condition=condition,
                 namespace=namespace,
-                export_config=export_config or {},
+                export_config=export_config,
                 task_name=FullExportService.build_task_name(str(message.uid)),
                 username=self.user,
             )
@@ -96,6 +109,36 @@ class MessageExportService:
             raise LogExportFailed() from error
         # resource 调用经 bk_resource 框架序列化后返回 ReturnDict（dict 子类），按键访问而非属性访问
         return {"export_task_id": task["id"], "status": task["status"]}
+
+    @staticmethod
+    def _extract_extension_keys(message: Message) -> list:
+        """从父消息聚合 extend_data 单层子键清单（保序去重）。
+
+        来源二选一：自然语言父消息的 context_data.system_selection.systems；
+        系统选择父消息的 output_data.systems。两者均为
+        systems[].extension_fields[]（SelectionFieldMeta dict 形态，raw_name+keys）。
+        """
+
+        parent = message.parent_message
+        if parent is None:
+            return []
+        if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
+            systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
+        else:
+            systems = (parent.output_data or {}).get("systems") or []
+        keys: list = []
+        seen: set = set()
+        for system in systems:
+            for field in (system or {}).get("extension_fields") or []:
+                if not isinstance(field, dict) or field.get("raw_name") != "extend_data":
+                    continue
+                # 一期下钻协议限单层，仅取第一层子键
+                field_keys = field.get("keys") or []
+                key = field_keys[0] if field_keys else ""
+                if isinstance(key, str) and key and key not in seen:
+                    seen.add(key)
+                    keys.append(key)
+        return keys
 
     def _get_success_log_search(self, *, message_uid: str) -> Message:
         """复用平台统一用户边界获取消息，再校验类型与状态。"""
