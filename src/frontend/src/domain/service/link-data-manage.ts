@@ -47,8 +47,8 @@ export default {
   /**
    * @desc 获取全部联表
    */
-  fetchLinkTableAll() {
-    return LinkDataSource.getLinkTableAll()
+  fetchLinkTableAll(params: { scene_id?: string | number | null } = {}) {
+    return LinkDataSource.getLinkTableAll(params)
       .then(({ data }) => data);
   },
   /**

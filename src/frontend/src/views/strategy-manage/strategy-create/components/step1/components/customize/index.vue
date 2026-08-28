@@ -295,8 +295,10 @@
 
   import useRequest from '@/hooks/use-request';
   import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import {
+    getStrategyResourceSceneParams,
+    getStrategySystemScopeParams,
+    isPlatformStrategyRoute,
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
@@ -381,6 +383,26 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const isPlatformMode = isPlatformStrategyRoute(route.name);
+  const strategySceneParams = computed(() => getStrategyResourceSceneParams(route));
+  const strategySystemScopeParams = computed(() => getStrategySystemScopeParams(route));
+
+  const fetchStrategyTableList = (params: {
+    table_type: string;
+    scene_id?: string | number;
+    bk_biz_id?: string | number;
+  }) => {
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams = {
+      ...rest,
+      ...(sceneId !== undefined && sceneId !== null && sceneId !== ''
+        ? { scene_id: String(sceneId) }
+        : {}),
+    };
+    return isPlatformMode
+      ? StrategyManageService.fetchTable(requestParams)
+      : StrategyManageService.fetchScenePermissionTable(requestParams);
+  };
 
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
@@ -547,7 +569,7 @@
   // 获取tableid
   const {
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
+  } = useRequest(fetchStrategyTableList, {
     defaultValue: [],
   });
 
@@ -595,10 +617,10 @@
     if (pending) {
       return pending;
     }
-    const promise = StrategyManageService.fetchScenePermissionTable({
+    const promise = fetchStrategyTableList({
       table_type: tableType,
       bk_biz_id: bizId,
-      scene_id: getSceneSystemParams().scope_id,
+      ...strategySceneParams.value,
     }).then((data) => {
       // 兼容：带 bk_biz_id 时可能直接返回子表，也可能仍返回业务树
       let tableList = data as Array<Record<string, any>>;
@@ -674,8 +696,7 @@
     eventLogSystemPending = (async () => {
       const systems = await MetaManageService.fetchSystemWithAction({
         action_ids: 'view_system',
-        scope_id: getSceneSystemParams().scope_id,
-        scope_type: 'scene',
+        ...strategySystemScopeParams.value,
       });
       const systemIds = (systems || []).map((item: { id: string }) => item.id).join(',');
       if (!systemIds) {
@@ -719,7 +740,7 @@
     const requests = ruleAuditConfigType.value.map((item) => {
       if (item.value === 'LinkTable') {
         return async () => {
-          const LinkTableData = await fetchLinkTableAll();
+          const LinkTableData = await fetchLinkTableAll(strategySceneParams.value);
           return [{
             ...item,
             children: LinkTableData.map(tableItem => ({
@@ -734,7 +755,7 @@
       return async () => {
         const data = await fetchTable({
           table_type: item.value,
-          scene_id: getSceneSystemParams().scope_id,
+          ...strategySceneParams.value,
         });
         return [{
           ...item,

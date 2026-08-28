@@ -8,6 +8,8 @@ import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
 import { getStrategyBindingScope } from '../../utils/strategy-routes';
 
+import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
 type FlatCondition = {
   field?: string;
   operator?: string;
@@ -200,27 +202,23 @@ const stripConfigs = (configs: Record<string, any> | undefined) => {
   return next;
 };
 
-const buildVisibility = (params: Record<string, any>) => {
-  if (params.visibility && typeof params.visibility === 'object') {
-    const keys = Object.keys(params.visibility);
-    if (!keys.length) {
-      return {};
-    }
-    return {
-      visibility_type: params.visibility.visibility_type || 'scenes_and_systems',
-      scene_ids: params.visibility.scene_ids || [],
-      system_ids: params.visibility.system_ids || [],
-    };
+const normalizeSceneId = (value: unknown): string | number | undefined => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
   }
-  if (params.visibility_type || params.scene_ids?.length || params.system_ids?.length) {
-    return {
-      visibility_type: params.visibility_type || 'scenes_and_systems',
-      scene_ids: params.scene_ids || [],
-      system_ids: params.system_ids || [],
-    };
-  }
-  return {};
+  const num = Number(value);
+  return Number.isNaN(num) ? value as string | number : num;
 };
+
+/** 场景策略提交时解析 scene_id（兼容详情未返回、表单为空字符串等情况） */
+export const resolveStrategySceneId = (
+  params: Record<string, any>,
+  route?: RouteLike,
+): string | number | undefined => (
+  normalizeSceneId(params.scene_id)
+  ?? normalizeSceneId(getStrategyBindingScope(route).scene_id)
+  ?? normalizeSceneId(getSceneSystemParams().scope_id)
+);
 
 /** 新建/编辑提交：将向导表单转为新协议 body */
 export const buildStrategyCreatePayload = (
@@ -229,15 +227,29 @@ export const buildStrategyCreatePayload = (
 ) => {
   const next = _.cloneDeep(params);
   const scope = getStrategyBindingScope(route);
-  const isScene = !scope.isPlatform;
+  const isEdit = !!next.strategy_id;
+  const bindingType = params.binding_type || scope.binding_type;
+  const isSceneBinding = bindingType === 'scene_binding';
 
-  next.binding_type = params.binding_type || scope.binding_type;
-  next.scene_id = isScene
-    ? (params.scene_id ?? scope.scene_id ?? '')
-    : (params.scene_id || '');
+  if (!isEdit) {
+    next.binding_type = bindingType;
+    if (isSceneBinding) {
+      const sceneId = resolveStrategySceneId(params, route);
+      if (sceneId !== undefined) {
+        next.scene_id = sceneId;
+      } else {
+        delete next.scene_id;
+      }
+    } else {
+      delete next.scene_id;
+    }
+  } else {
+    delete next.binding_type;
+    delete next.bind_type;
+    delete next.scene_id;
+  }
 
-  // 场景策略固定传空字典；全局策略组装可见范围（未选则为 {}）
-  next.visibility = isScene ? {} : buildVisibility(params);
+  const isScene = isSceneBinding;
 
   const isRuleStrategy = !next.strategy_type || next.strategy_type === 'rule';
   if (isRuleStrategy) {
@@ -255,6 +267,7 @@ export const buildStrategyCreatePayload = (
   delete next.default_assign_rule;
   delete next.processor_groups;
   delete next.notice_groups;
+  delete next.visibility;
   delete next.visibility_type;
   delete next.scene_ids;
   delete next.system_ids;
@@ -321,14 +334,19 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
   }] : undefined);
 
   const firstRule = rules?.[0];
+  const bindingType = d.binding_type;
+  const sceneId = normalizeSceneId(d.scene_id)
+    ?? (bindingType === 'scene_binding' || bindingType === undefined
+      ? normalizeSceneId(getSceneSystemParams().scope_id)
+      : undefined);
   return {
     rules,
     assign_rules: assignRules ?? [],
     default_assign_rule: defaultAssignRule ?? {},
     dispatch_rules: d.dispatch_rules,
-    binding_type: d.binding_type,
+    binding_type: bindingType,
     visibility: d.visibility,
-    scene_id: d.scene_id,
+    scene_id: sceneId,
     risk_title: firstRule?.risk_title ?? d.risk_title ?? '',
     risk_level: firstRule?.risk_level ?? d.risk_level ?? '',
     risk_hazard: firstRule?.risk_hazard ?? d.risk_hazard ?? '',
