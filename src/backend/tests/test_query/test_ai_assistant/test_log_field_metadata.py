@@ -86,7 +86,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.mock_context = self.enterContext(
             mock.patch(f"{FIELD_METADATA_MODULE}.LogQueryContextService.build", return_value=self.context)
         )
-        self.mock_query = self.enterContext(mock.patch(f"{FIELD_METADATA_MODULE}.api.bk_base.query_sync"))
+        self.mock_query = self.enterContext(mock.patch(f"{FIELD_METADATA_MODULE}.safe_query_sync"))
         self.mock_query.return_value = {"list": self.raw_rows}
         self.mock_parser = self.enterContext(mock.patch(f"{FIELD_METADATA_MODULE}.SearchDataParser"))
         self.mock_parser.return_value.parse_data.return_value = self.safe_rows

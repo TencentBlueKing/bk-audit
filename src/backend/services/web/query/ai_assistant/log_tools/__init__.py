@@ -1,5 +1,6 @@
 """Agent/MCP 日志工具的公共协议、查询上下文和受控 SQL 构建器。"""
 
+from .aggregation import LogAggregationService
 from .context import LogQueryContext, LogQueryContextService
 from .errors import map_log_query_error
 from .field_metadata import LogFieldMetadataService
@@ -25,6 +26,7 @@ __all__ = [
     "GetLogFieldMetadataRequest",
     "GetLogFieldMetadataResponse",
     "LogFieldMetadataItem",
+    "LogAggregationService",
     "LogFieldMetadataService",
     "LogFieldMetadataTypeSource",
     "LogFieldRef",
