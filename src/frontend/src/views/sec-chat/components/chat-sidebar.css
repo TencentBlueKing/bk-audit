@@ -14,8 +14,6 @@
     min-width: 0;
     overflow: visible;
     border-right: none;
-
-    /* 折叠态悬浮工具栏 */
     .collapsed-toolbar {
       position: absolute;
       top: 16px;
@@ -252,6 +250,38 @@
     }
 
 
+    /* 历史对话（未分组）：整块可接收「从分组拖出」 */
+    .conv-section--history {
+      &.is-drag-target {
+        position: relative;
+        z-index: 2;
+
+        .section-label {
+          background: #f5f7fa;
+          border-radius: 4px;
+        }
+      }
+
+      &.is-drag-over-inside {
+        .history-conv-list.is-drop-zone-active {
+          background: #e1ecff;
+          border: 1px dashed #3a84ff;
+          border-radius: 4px;
+        }
+
+        .section-label {
+          color: #3a84ff;
+          background: #e1ecff;
+        }
+
+        .history-drop-placeholder.is-visible {
+          color: #3a84ff;
+          background: transparent;
+          border-color: transparent;
+        }
+      }
+    }
+
     /* 历史对话（未分组）条目：与 section-label 对齐左右间距 */
     .history-conv-list {
       .conv-item {
@@ -259,15 +289,33 @@
         margin-left: 16px;
       }
 
-      &.is-drag-target {
-        min-height: 32px;
-      }
-
-      &.is-drag-over-inside {
-        min-height: 32px;
-        background: #e1ecff;
-        border: 1px dashed #3a84ff;
+      .history-drop-placeholder {
+        display: flex;
+        height: 0;
+        min-height: 0;
+        margin: 0;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 20px;
+        color: #699df4;
+        pointer-events: none;
+        background: #f0f5ff;
+        border: 0 dashed #a3c5fd;
         border-radius: 4px;
+        box-sizing: border-box;
+        opacity: 0;
+        transition: height .15s ease, margin .15s ease, opacity .15s ease, border-width .15s ease;
+        align-items: center;
+        justify-content: center;
+
+        &.is-visible {
+          height: 80px;
+          min-height: 80px;
+          margin: 0 8px 8px;
+          border-width: 1px;
+          opacity: 1;
+          pointer-events: auto;
+        }
       }
     }
 
@@ -310,11 +358,6 @@
     .group-item {
       position: relative;
       margin-bottom: 2px;
-      cursor: grab;
-
-      &:active {
-        cursor: grabbing;
-      }
 
       &.is-drag-over-top::before {
         position: absolute;
