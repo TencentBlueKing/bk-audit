@@ -67,11 +67,12 @@ class NoticeGroup extends ModuleBase {
   }
 
   // 获取通知组下拉列表
-  getGroupSelectList() {
+  getGroupSelectList(params?: { scene_id?: string | number }) {
+    const sceneId = params?.scene_id ?? getSceneSystemParams().scope_id;
     return Request.get<Array<{
       id: string;
       name: string
-    }>>(`${this.module}/all/?scene_id=${getSceneSystemParams().scope_id}`);
+    }>>(`${this.module}/all/?scene_id=${sceneId}`);
   }
 
   // 获取通知组详情

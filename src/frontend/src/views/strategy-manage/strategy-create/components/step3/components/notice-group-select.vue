@@ -10,22 +10,22 @@
       v-model="localValue"
       class="bk-select"
       collapse-tags
+      :disabled="disabled"
+      display-key="name"
       filterable
+      id-key="id"
       :input-search="false"
       multiple
       multiple-mode="tag"
-      :placeholder="t('请选择通知组')"
+      :placeholder="placeholderText"
       :popover-options="{
         zIndex: 1000,
       }"
       :search-placeholder="t('请输入关键字')">
-      <auth-option
-        v-for="(item, index) in groupList"
-        :key="index"
-        action-id="list_notice_group_v2"
+      <bk-option
+        v-for="item in displayGroupList"
+        :key="item.id"
         :label="item.name"
-        :permission="checkResultMap.list_notice_group_v2"
-        resource-is-scene
         :value="item.id" />
       <template #extension>
         <div class="create-notice-group">
@@ -33,14 +33,9 @@
             action-id="create_notice_group_v2"
             class="create_notice_group_v2"
             :permission="checkResultMap.create_notice_group_v2"
-            resource-is-scene
+            :resource="sceneId"
             target="_blank"
-            :to="{
-              name: 'noticeGroupList',
-              query: {
-                create: true,
-              },
-            }">
+            :to="createNoticeGroupRoute">
             <audit-icon
               style="font-size: 14px;color: #3a84ff;"
               type="plus-circle" />
@@ -72,7 +67,9 @@
     modelValue: Array<string | number>;
     groupList: Array<{ id: string | number; name: string }>;
     checkResultMap: Record<string, boolean>;
+    sceneId?: string | number | '';
     loading?: boolean;
+    disabled?: boolean;
   }
 
   interface Emits {
@@ -82,14 +79,65 @@
 
   const props = withDefaults(defineProps<Props>(), {
     loading: false,
+    disabled: false,
+    sceneId: '',
   });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const localValue = computed({
-    get: () => props.modelValue,
-    set: value => emits('update:modelValue', value),
+  const normalizeGroupId = (id: string | number | null | undefined) => {
+    if (id === '' || id === null || id === undefined) {
+      return id as '';
+    }
+    const num = Number(id);
+    return Number.isNaN(num) ? id : num;
+  };
+
+  const normalizedGroupList = computed(() => (props.groupList || []).map(item => ({
+    id: normalizeGroupId(item.id) as string | number,
+    name: item.name,
+  })));
+
+  const displayGroupList = computed(() => {
+    const optionMap = new Map<string, { id: string | number; name: string }>();
+    normalizedGroupList.value.forEach((item) => {
+      optionMap.set(String(item.id), item);
+    });
+    (props.modelValue || []).forEach((id) => {
+      const key = String(id);
+      if (!optionMap.has(key)) {
+        optionMap.set(key, {
+          id: normalizeGroupId(id) as string | number,
+          name: key,
+        });
+      }
+    });
+    return Array.from(optionMap.values());
   });
+
+  const localValue = computed({
+    get: () => (props.modelValue || []).map(id => normalizeGroupId(id)).filter(id => id !== ''),
+    set: (value: Array<string | number> | string | number) => {
+      const list = Array.isArray(value) ? value : [value];
+      emits('update:modelValue', list
+        .filter(id => id !== '' && id !== null && id !== undefined)
+        .map(id => normalizeGroupId(id) as string | number));
+    },
+  });
+
+  const placeholderText = computed(() => (
+    props.disabled ? t('请先选择分派场景空间') : t('请选择通知组')
+  ));
+
+  const createNoticeGroupRoute = computed(() => ({
+    name: 'noticeGroupList',
+    query: {
+      create: true,
+      ...(props.sceneId !== '' && props.sceneId !== null && props.sceneId !== undefined
+        ? { scene_id: props.sceneId }
+        : {}),
+    },
+  }));
 </script>
 <style lang="postcss" scoped>
 .create-notice-group {
