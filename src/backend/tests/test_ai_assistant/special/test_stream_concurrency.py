@@ -46,6 +46,7 @@ from tests.test_ai_assistant.celery_integration import (
     wait_for_snapshot,
     wait_for_task_postrun,
 )
+from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.http_integration import start_http_sse_collector
 from tests.test_ai_assistant.special_handlers import (
     CONCURRENT_ATTACHMENT_COUNT,
@@ -135,7 +136,7 @@ class StreamConcurrencySpecialTest(TransactionTestCase):
         )
 
     def test_two_consumers_read_the_same_sequence_and_terminal(self):
-        attachment_handler_registry.register(SpecialSequenceHandler())
+        use_attachment_handler(self, SpecialSequenceHandler())
         attachment = self.create_attachment(text="sequence")
         self.assertTrue(special_handlers.sequence_started.wait(settings.CELERY_TEST_TASK_TIMEOUT))
         snapshot = AttachmentStreamService(user=self.user).get_snapshot(attachment_uid=str(attachment.uid))
@@ -184,7 +185,7 @@ class StreamConcurrencySpecialTest(TransactionTestCase):
 
     def test_concurrent_attachments_are_isolated_and_one_failure_does_not_affect_others(self):
         # CONCURRENT_ATTACHMENT_COUNT 只用于制造执行重叠，不是性能 SLA。
-        attachment_handler_registry.register(SpecialIsolationHandler())
+        use_attachment_handler(self, SpecialIsolationHandler())
         source = self.create_source_message()
         tokens = [f"token-{index}" for index in range(CONCURRENT_ATTACHMENT_COUNT - 1)]
         tokens.append(f"token-{CONCURRENT_ATTACHMENT_COUNT - 1}:fail")
@@ -246,7 +247,7 @@ class StreamConcurrencySpecialTest(TransactionTestCase):
         self.assertEqual(len(set(redis_keys)), CONCURRENT_ATTACHMENT_COUNT)
 
     def test_soft_deleted_conversation_hides_user_apis_but_task_can_finish(self):
-        attachment_handler_registry.register(SpecialDeleteHoldHandler())
+        use_attachment_handler(self, SpecialDeleteHoldHandler())
         source = self.create_source_message()
         attachment = AttachmentService(user=self.user).create(
             source_message_uid=str(source.uid),
@@ -365,7 +366,7 @@ class StreamIdleHttpSpecialTest(LiveServerTestCase):
         return f"{self.live_server_url}/api/v1/ai_assistant{path}"
 
     def test_idle_http_stream_closes_after_heartbeat(self):
-        attachment_handler_registry.register(SpecialIdleHoldHandler())
+        use_attachment_handler(self, SpecialIdleHoldHandler())
         source = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,

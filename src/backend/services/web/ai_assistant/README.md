@@ -98,6 +98,7 @@ Node 移动支持互斥的 `before_node_*` 和 `after_node_*` 锚点。`after` �
 ## 6. 开发入口
 
 - [Handler 接入指南](docs/handler_integration.md)：新增消息或附件类型的最短路径。
+- [日志分析报告接入](docs/log_analysis.md)：三工具、Agent、Celery、AG-UI/SSE、重试和导出闭环。
 - [流式传输设计](streaming/README.md)：Redis、MySQL、SSE、重试和降级协议。
 - [可观测性架构](docs/observability.md)：生命周期、指标边界和巡检设计。
 - [运维与 Runbook](../../../docs/ai_assistant_observability.md)：SLO、BKM 和故障处置。
