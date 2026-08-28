@@ -495,6 +495,8 @@ class CheckAllowed(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/check_allowed/"
     method = "POST"
+    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
+    use_admin_username = False
 
     def perform_request(self, validated_request_data):
         resources = super(CheckAllowed, self).perform_request(validated_request_data)
@@ -510,6 +512,8 @@ class GetApplyData(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/get_apply_data/"
     method = "POST"
+    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
+    use_admin_username = False
 
     ResponseSerializer = GetApplyDataResponseSerializer
 
