@@ -16,13 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-"""
-AI 助手组件异常定义
+# AI 助手组件异常定义：error_code 与平台错误码对齐；error_message 只承载
+# 用户可读的脱敏摘要，prompt / 字段上下文 / AI 原始输出一律不进入 message。
 
-error_code 与平台错误码对齐（协议 §8）；
-error_message 只承载用户可读的脱敏摘要，prompt / 字段上下文 / AI 原始输出
-一律放 extra 仅落日志，不进 message。
-"""
+from django.utils.translation import gettext_lazy
+
+from apps.exceptions import CoreException
 
 
 class AIAssistantError(Exception):
@@ -81,3 +80,61 @@ class AIPermissionDeniedError(AIAssistantError):
 
     error_code = "PERMISSION_DENIED"
     error_message = "无目标系统的日志检索权限"
+
+
+class LogToolException(CoreException):
+    """Agent/MCP 日志工具异常基类，公开消息不能由底层异常覆盖。"""
+
+    MODULE_CODE = "26"
+
+    def __init__(self, *args, **kwargs):
+        # 查询条件和底层服务异常只允许留在日志上下文，不能进入对外响应。
+        super().__init__(message=self.MESSAGE)
+
+
+class InvalidLogCondition(LogToolException):
+    """日志工具请求条件不合法。"""
+
+    ERROR_CODE = "001"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("日志查询条件不合法")
+
+
+class UnsupportedLogField(LogToolException):
+    """日志工具不支持请求的字段。"""
+
+    ERROR_CODE = "002"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("不支持的日志字段")
+
+
+class UnsupportedAggregation(LogToolException):
+    """日志工具不支持请求的聚合方式。"""
+
+    ERROR_CODE = "003"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("不支持的日志聚合方式")
+
+
+class SensitiveFieldPermissionDenied(LogToolException):
+    """当前用户无敏感字段查询权限。"""
+
+    ERROR_CODE = "004"
+    STATUS_CODE = 403
+    MESSAGE = gettext_lazy("无敏感字段查询权限")
+
+
+class LogQueryTimeout(LogToolException):
+    """日志工具查询超时。"""
+
+    ERROR_CODE = "005"
+    STATUS_CODE = 504
+    MESSAGE = gettext_lazy("日志查询超时，请稍后重试")
+
+
+class LogQueryFailed(LogToolException):
+    """日志工具查询失败。"""
+
+    ERROR_CODE = "006"
+    STATUS_CODE = 502
+    MESSAGE = gettext_lazy("日志查询失败，请稍后重试")
