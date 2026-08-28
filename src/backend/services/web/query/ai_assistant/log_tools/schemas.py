@@ -1,11 +1,16 @@
 """日志工具共享的 Pydantic 协议。"""
 
 import re
-from typing import List, Optional
+from enum import StrEnum
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from apps.meta.utils.fields import EXTEND_DATA
+from services.web.query.ai_assistant.schemas import (
+    SearchCondition,
+    SelectionFieldOption,
+)
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 
 FIELD_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -40,3 +45,64 @@ class LogFieldRef(BaseModel):
         if self.keys and self.raw_name != EXTEND_DATA.field_name:
             raise ValueError("nested keys are only supported for extend_data")
         return self
+
+
+class LogFieldScope(StrEnum):
+    """字段探索范围；ALL 仅用于请求，返回字段分类只使用 BASIC/EXTENDED。"""
+
+    ALL = "ALL"
+    BASIC = "BASIC"
+    EXTENDED = "EXTENDED"
+
+
+class LogFieldMetadataTypeSource(StrEnum):
+    """字段类型的来源，避免把采样观察误表述为全量定义。"""
+
+    DECLARED = "DECLARED"
+    INFERRED = "INFERRED"
+
+
+class GetLogFieldMetadataRequest(BaseModel):
+    """字段元信息探索请求，父路径复用可消费的 extend_data 路径约束。"""
+
+    condition: SearchCondition
+    parent_keys: List[str] = Field(default_factory=list)
+    field_scope: LogFieldScope = LogFieldScope.ALL
+
+    @field_validator("parent_keys")
+    @classmethod
+    def validate_parent_keys(cls, parent_keys: List[str]) -> List[str]:
+        LogFieldRef(raw_name=EXTEND_DATA.field_name, keys=parent_keys)
+        return parent_keys
+
+
+class LogFieldMetadataItem(BaseModel):
+    """单个可查询字段的声明元信息与当前样本观察。"""
+
+    field: LogFieldRef
+    category: LogFieldScope
+    display_name: str = ""
+    description: str = ""
+    type_source: LogFieldMetadataTypeSource
+    observed_types: List[str] = Field(default_factory=list)
+    allow_operators: List[str] = Field(default_factory=list)
+    options: Optional[List[SelectionFieldOption]] = None
+    is_expandable: bool = False
+    sample_values: List[Any] = Field(default_factory=list)
+    sampled_non_null_count: int = 0
+    coverage: float = 0.0
+
+
+class FieldSampleSummary(BaseModel):
+    """字段探索的有界采样摘要。"""
+
+    sampled_count: int = 0
+    returned_field_count: int = 0
+    truncated: bool = False
+
+
+class GetLogFieldMetadataResponse(BaseModel):
+    """字段探索响应，不包含 SQL、物理表或未经脱敏的命中行。"""
+
+    fields: List[LogFieldMetadataItem] = Field(default_factory=list)
+    sample_summary: FieldSampleSummary

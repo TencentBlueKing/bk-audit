@@ -36,6 +36,16 @@ REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10)
 # MCP 事件字段简化接口返回上限
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
 
+# ============== 审计 AI 日志字段探索配置 ==============
+# 单次字段探索最多返回的字段数，限制 Agent 工具响应体积；采样行数复用 AI_ASSISTANT_FIELD_SAMPLE_ROWS。
+AI_LOG_FIELD_METADATA_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_MAX_FIELDS", 100))
+# 单字段保留的脱敏样例值数量，值在去重和稳定排序后截断。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUES", 3))
+# 单个标量样例的 UTF-8 JSON 编码字节上限；超限样例直接跳过，避免伪截断值参与后续查询推理。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = int(
+    os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES", 1024)
+)
+
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))
 ANALYSE_REPORT_AI_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_ANALYSE_REPORT_AI_TITLE_MAX_LENGTH", 20))
