@@ -533,12 +533,26 @@ class LogExportField(serializers.Serializer):
 class LogExportConfigSerializer(serializers.Serializer):
     """
     日志导出配置序列化器
+
+    flatten_extension / extension_keys 为 AI 助手导出的可选扩展键（required=False 且无 default：
+    原检索页不传时 validated_data 不含这两个键，落库形态与历史完全一致，行为零变化）。
     """
 
     field_scope = serializers.ChoiceField(
         label=gettext_lazy("字段范围"), choices=LogExportFieldScope.choices, help_text=gettext_lazy("指定字段时，字段列表不能为空")
     )
     fields = serializers.ListField(label=gettext_lazy("字段列表"), child=LogExportField(), default=list)
+    # 扩展字段平铺开关：true 时把 extend_data 内子键平铺为单独列（AI 助手导出）
+    flatten_extension = serializers.BooleanField(
+        label=gettext_lazy("扩展字段平铺"), required=False, help_text=gettext_lazy("true 时把 extend_data 子键平铺为单独列")
+    )
+    # 平铺子键清单（AI 助手全量导出场景由调用方传入，原检索页不传）
+    extension_keys = serializers.ListField(
+        label=gettext_lazy("扩展字段子键"),
+        child=serializers.CharField(),
+        required=False,
+        help_text=gettext_lazy("扩展字段平铺的子键清单，仅单层"),
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

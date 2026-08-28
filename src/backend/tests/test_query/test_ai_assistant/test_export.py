@@ -337,3 +337,80 @@ class TestFullExportService(AIAssistantTestCase):
         _, kwargs = mock_create_task.call_args
         self.assertTrue(kwargs["export_config"]["flatten_extension"])
         self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
+
+
+class TestLogExportConfigSerializerProtocol(AIAssistantTestCase):
+    """协议层验证：LogExportReqSerializer 嵌套校验不再剥离 AI 导出新字段，且原检索页形态零变化。"""
+
+    def test_new_fields_survive_serialization(self):
+        """AI 导出 export_config 含新字段：经 LogExportConfigSerializer 校验后保留（可落库）"""
+        from services.web.query.serializers import LogExportConfigSerializer
+
+        serializer = LogExportConfigSerializer(
+            data={
+                "field_scope": "all",
+                "fields": [],
+                "flatten_extension": True,
+                "extension_keys": ["ticket_id", "operator"],
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        self.assertTrue(validated["flatten_extension"])
+        self.assertEqual(validated["extension_keys"], ["ticket_id", "operator"])
+
+    def test_legacy_export_config_unchanged(self):
+        """原检索页 export_config（仅 field_scope/fields）：validated_data 不含新键，落库形态与历史一致"""
+        from services.web.query.serializers import LogExportConfigSerializer
+
+        serializer = LogExportConfigSerializer(data={"field_scope": "all", "fields": []})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        validated = serializer.validated_data
+        self.assertNotIn("flatten_extension", validated)
+        self.assertNotIn("extension_keys", validated)
+        self.assertEqual(validated, {"field_scope": "all", "fields": []})
+
+    # 注：非法形态（flatten_extension="yes" / extension_keys 含非字符串）的严格拦截在
+    # AI 侧 FullExportService._validate_export_config（isinstance 显式校验，入口先于 serializer 执行，
+    # 见 TestFullExportService 两个 rejected 用例）；serializer 层 DRF BooleanField/CharField 为宽松
+    # 归一语义（"yes"→True、int→str），不作为防线，此处不做拒绝断言。
+
+
+class TestExportConfigFlattenIsolation(AIAssistantTestCase):
+    """隔离性验证：ExportConfig 平铺分支仅在显式开启时生效，原检索页任务（无新字段）导出列零变化。"""
+
+    def _make_task(self, export_config: dict):
+        from services.web.query.models import LogExportTask
+
+        return LogExportTask(export_config=export_config)
+
+    def test_legacy_task_fields_unchanged(self):
+        """原检索页任务（field_scope=all 无新字段）：export_fields 与改动前完全一致（含 extend_data 单列）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(task=self._make_task({"field_scope": "all", "fields": []}))
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertIn("extend_data", full_keys)
+        # 新字段缺省不产生任何子键列
+        self.assertEqual([key for key in full_keys if key.startswith("extend_data/")], [])
+
+    def test_flatten_task_replaces_extend_data_column(self):
+        """开启平铺 + 子键清单：extend_data 单列被替换为子键列（仅 AI 导出路径构造此形态）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(
+            task=self._make_task(
+                {"field_scope": "all", "fields": [], "flatten_extension": True, "extension_keys": ["ticket_id"]}
+            )
+        )
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertNotIn("extend_data", full_keys)
+        self.assertIn("extend_data/ticket_id", full_keys)
+
+    def test_flatten_without_keys_keeps_single_column(self):
+        """开启平铺但未传子键清单：不替换（无列定义来源，保持单列）"""
+        from services.web.query.export.model import ExportConfig
+
+        config = ExportConfig(task=self._make_task({"field_scope": "all", "fields": [], "flatten_extension": True}))
+        full_keys = [field.full_key for field in config.export_fields]
+        self.assertIn("extend_data", full_keys)
