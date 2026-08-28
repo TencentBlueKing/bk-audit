@@ -531,19 +531,49 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             )
 
     @staticmethod
-    def apply_platform_visibility(binding: ResourceBinding, visibility_data: Optional[dict]) -> None:
+    def sync_platform_binding_scenes(strategy: Strategy) -> None:
         """
-        应用全局策略可见范围配置（visibility_type + 指定场景/系统关联）
+        同步全局策略可见场景（派生数据，写时物化到 ResourceBinding）
+
+        语义：全局策略对平台管理员（MANAGE_PLATFORM）和分派规则的目标场景可见，
+        可见场景集合 = 未软删分派规则的 target_scene_id 并集（含默认规则）；
+        visibility_type 固定 SPECIFIC_SCENES，系统维度不再使用。
+        分派规则仅可通过创建/更新策略变更，两个写入点在 _sync_dispatch_rules 之后
+        调用本函数保证派生数据与规则一致。
         """
-        visibility_data = visibility_data or {}
-        binding.visibility_type = visibility_data.get("visibility_type") or VisibilityScope.ALL_VISIBLE
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.PLATFORM_BINDING,
+        ).first()
+        if binding is None:
+            # 场景策略无平台绑定，无需同步
+            return
+        target_scene_ids = set(
+            strategy.dispatch_rules.filter(is_deleted=False).values_list("target_scene_id", flat=True)
+        )
+        if not target_scene_ids:
+            # 保存门禁保证全局策略必有分派规则；空集仅可能来自并发编辑/存量脏数据，
+            # 保留现状仅告警（清空会让 binding 违反 specific_scenes 完整性约束且场景侧不可见）
+            logger.warning(
+                "[SyncPlatformVisibility] strategy %s has no active dispatch rule, keep binding scenes unchanged",
+                strategy.strategy_id,
+            )
+            return
+        binding.visibility_type = VisibilityScope.SPECIFIC_SCENES
         binding.save(update_fields=["visibility_type"])
-        binding.binding_scenes.all().delete()
+        # 幂等 diff：移除多余场景关联、补建缺失；系统维度不再使用，统一清理
+        current_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
+        binding.binding_scenes.filter(scene_id__in=(current_scene_ids - target_scene_ids)).delete()
         binding.binding_systems.all().delete()
-        for scene_id in visibility_data.get("scene_ids", []):
-            ResourceBindingScene.objects.create(binding=binding, scene_id=scene_id)
-        for system_id in visibility_data.get("system_ids", []):
-            ResourceBindingSystem.objects.create(binding=binding, system_id=system_id)
+        ResourceBindingScene.objects.bulk_create(
+            [
+                ResourceBindingScene(binding=binding, scene_id=scene_id)
+                for scene_id in target_scene_ids - current_scene_ids
+            ],
+            ignore_conflicts=True,
+        )
+        assert_binding_relation_integrity(binding)
 
     @staticmethod
     def ensure_active_scene_binding_or_404(strategy_id: int) -> None:
@@ -605,22 +635,18 @@ class CreateStrategy(StrategyV2Base):
             # 取出规则数据
             rules_data = validated_request_data.pop("rules", None)
             dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
-            # 可见范围配置
-            visibility_data = validated_request_data.pop("visibility", None)
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # 创建 ResourceBinding 关联：按 binding_type 区分全局/场景策略
             if binding_type == BindingType.PLATFORM_BINDING:
-                # 全局策略：平台级绑定；有 visibility 配置直接一步写入，无则默认全可见
-                visibility_data = visibility_data or {}
-                binding = ResourceBinding.objects.create(
+                # 全局策略：平台级绑定；可见场景由分派规则目标场景派生（sync_platform_binding_scenes），
+                # 不再接收前端 visibility 配置
+                ResourceBinding.objects.create(
                     resource_type=ResourceVisibilityType.STRATEGY,
                     resource_id=str(strategy.strategy_id),
                     binding_type=BindingType.PLATFORM_BINDING,
-                    visibility_type=visibility_data.get("visibility_type") or VisibilityScope.ALL_VISIBLE,
+                    visibility_type=VisibilityScope.SPECIFIC_SCENES,
                 )
-                self.apply_platform_visibility(binding, visibility_data)
-                assert_binding_relation_integrity(binding)
             else:
                 # 场景策略：与场景绑定
                 BindingMetadataHelper.create_resource_binding(
@@ -636,6 +662,8 @@ class CreateStrategy(StrategyV2Base):
                 self._sync_strategy_rules(strategy, rules_data)
             if dispatch_rules_data is not None:
                 self._sync_dispatch_rules(strategy, dispatch_rules_data)
+            # 全局策略可见场景派生自分派规则，需在规则落库后同步
+            self.sync_platform_binding_scenes(strategy)
             if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
@@ -758,8 +786,6 @@ class UpdateStrategy(StrategyV2Base):
         tag_names = validated_request_data.pop("tags", [])
         rules_data = validated_request_data.pop("rules", None)
         dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
-        # 可见范围配置
-        visibility_data = validated_request_data.pop("visibility", None)
         # 计算更新前hash摘要
         origin_rules_digest = self.calc_rules_digest(strategy)
         # check control
@@ -782,19 +808,11 @@ class UpdateStrategy(StrategyV2Base):
             new_rules_digest = self.calc_rules_digest(strategy)
             if new_rules_digest != origin_rules_digest:
                 need_update_remote = True
-        # 同步分派规则子表
+        # 同步分派规则子表 + 全局策略可见场景派生同步（可见性 = 分派规则目标场景并集）；
+        # 场景策略在 sync 内部直接跳过
         if dispatch_rules_data is not None:
             self._sync_dispatch_rules(strategy, dispatch_rules_data)
-        # 更新全局策略可见范围
-        if visibility_data is not None:
-            binding = ResourceBinding.objects.filter(
-                resource_type=ResourceVisibilityType.STRATEGY,
-                resource_id=str(strategy.strategy_id),
-                binding_type=BindingType.PLATFORM_BINDING,
-            ).first()
-            if binding is not None:
-                self.apply_platform_visibility(binding, visibility_data)
-                assert_binding_relation_integrity(binding)
+            self.sync_platform_binding_scenes(strategy)
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
@@ -2104,9 +2122,14 @@ class ListLinkTableAll(LinkTableBase):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        link_tables = LinkTable.list_max_version_link_table()
+        # 不传 scene_id：平台视角（全局策略选择器）返回全部联表；传了按场景过滤
+        scene_id = validated_request_data.get("scene_id")
+        if not scene_id:
+            return link_tables
         return SceneScopeFilter.filter_queryset(
-            queryset=LinkTable.list_max_version_link_table(),
-            scene_id=validated_request_data["scene_id"],
+            queryset=link_tables,
+            scene_id=scene_id,
             resource_type=ResourceVisibilityType.LINK_TABLE,
             pk_field="uid",
         )
