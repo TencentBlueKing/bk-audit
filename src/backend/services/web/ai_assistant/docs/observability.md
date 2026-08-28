@@ -143,3 +143,25 @@ Event。Event 只表达需要维护者处理的平台异常，例如长期失活
 - 新的活动刷新点必须代表 Worker 的真实进展，浏览器连接、详情读取等用户行为不能续活任务。
 - 修改具体字段或埋点时同步更新代码声明、契约测试和运维文档；本文只在架构或生命周期原则
   变化时更新。
+
+## 6. 日志分析报告观测
+
+日志分析生产 Task 使用 `business_type=AI_ANALYSIS` 和专属队列
+`ai_assistant_log_analysis`。平台通用执行指标覆盖 `PROCESSING` 到 `SUCCESS/FAILED` 的排队耗时、
+执行耗时、状态和稳定错误码；流指标覆盖 execution 数、Redis 降级、归档降级、事件丢弃/截断与
+尾部收敛。业务超时应表现为 `LogAnalysisTimeout` 失败并在 29 分钟附近收敛，30 分钟 Celery
+hard limit 只作为最终保险。
+
+部署监控还应覆盖专属 RabbitMQ 队列的 ready/unacked 数、最老消息等待时间、`ai-log-analysis`
+Worker 在线数/重启数和 Worker 实例级 `5/m` rate limit 饱和。以下异常需要联合排查：
+
+- 队列积压增长但 Worker 在线：检查限流、Agent 延迟和 gevent 并发占用；
+- `LogAnalysisTimeout` 比例上升：检查 Agent 和三个日志工具耗时，不记录具体条件或返回正文；
+- hard kill/Worker 重启增长：检查 30 分钟硬时限、内存与外部连接，随后确认 late ack 重投；
+- 流降级增长但业务成功率正常：检查 Redis、归档 checkpoint 和事件容量，MySQL Markdown 仍是事实源；
+- 长期 `PROCESSING` 增长：检查 RabbitMQ 投递、Worker 注册/队列配置和巡检收敛结果。
+
+该链路禁止把分析指令、检索条件值、用户名、日志样例、工具请求/响应、SQL、AG-UI 事件正文或
+最终 Markdown 写入日志、Metric、Event 或 Trace。对象 UID、task ID、execution ID 只允许在受控
+Event/Trace 定位字段中使用，不得作为 Metric 维度。接入与时序见
+[`log_analysis.md`](log_analysis.md)。

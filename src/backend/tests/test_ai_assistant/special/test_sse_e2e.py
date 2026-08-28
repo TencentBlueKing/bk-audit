@@ -24,6 +24,7 @@ from tests.test_ai_assistant.celery_integration import (
     wait_for_snapshot,
     wait_for_task_postrun,
 )
+from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.http_integration import iter_http_sse_frames
 from tests.test_ai_assistant.special.web_process import running_gunicorn_web
 from tests.test_ai_assistant.special_handlers import (
@@ -124,7 +125,7 @@ class GunicornSSESpecialTest(TransactionTestCase):
 
     def create_stream_attachment(self, *, handler=None) -> Attachment:
         handler = handler or SpecialRealtimeSSEHandler()
-        attachment_handler_registry.register(handler)
+        use_attachment_handler(self, handler)
         source = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
