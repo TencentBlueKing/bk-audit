@@ -284,6 +284,7 @@
   import IamManageService from '@service/iam-manage';
   import LinkDataManageService from '@service/link-data-manage';
   import NoticeGroupManageService from '@service/notice-group';
+  import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
@@ -313,7 +314,7 @@
     getSceneSystemParams,
     syncSceneContextToUrl,
   } from '@/utils/assist/scene-system-params';
-  import { getStrategyRouteNames, getStrategyListScopeParams, getStrategyResourceSceneParams } from '../utils/strategy-routes';
+  import { getStrategyRouteNames, getStrategyListScopeParams, getStrategyResourceSceneParams, isPlatformStrategyRoute } from '../utils/strategy-routes';
 
   enum FullEnum {
     FULL = 'full',
@@ -377,6 +378,61 @@
   const router = useRouter();
   const route = useRoute();
   const strategyRoutes = getStrategyRouteNames(route);
+  const isPlatformList = computed(() => isPlatformStrategyRoute(route.name));
+  const sceneNameMap = ref<Record<string, string>>({});
+  const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
+
+  const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
+    if (Array.isArray(data.visibility?.scene_ids) && data.visibility.scene_ids.length) {
+      return data.visibility.scene_ids;
+    }
+    const ids = new Set<string | number>();
+    (data.dispatch_rules || []).forEach((rule: Record<string, any>) => {
+      if (rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== '') {
+        ids.add(rule.target_scene_id);
+        return;
+      }
+      (rule.scene_ids || []).forEach((id: string | number) => {
+        if (id !== '' && id !== null && id !== undefined) {
+          ids.add(id);
+        }
+      });
+    });
+    return Array.from(ids);
+  };
+
+  const getDispatchSceneLabels = (data: StrategyModel) => getDispatchSceneIds(data).map((id) => {
+    const key = String(id);
+    const name = sceneNameMap.value[key];
+    return name ? `${name}(${id})` : `${id}`;
+  });
+
+  const createDispatchSceneColumn = () => ({
+    label: () => t('分派场景'),
+    field: () => DISPATCH_SCENE_COLUMN_FIELD,
+    minWidth: 180,
+    width: 220,
+    render: ({ data }: { data: StrategyModel }) => {
+      const labels = getDispatchSceneLabels(data);
+      return labels.length
+        ? <EditTag data={labels} key={`dispatch-scenes-${data.strategy_id}`} showCopy={false} />
+        : <span>--</span>;
+    },
+  });
+
+  const syncPlatformTableColumns = () => {
+    const columnIndex = tableColumn.value.findIndex(column => column.field?.() === DISPATCH_SCENE_COLUMN_FIELD);
+    const riskCountIndex = tableColumn.value.findIndex(column => column.field?.() === 'risk_count');
+    if (isPlatformList.value) {
+      if (columnIndex < 0 && riskCountIndex >= 0) {
+        tableColumn.value.splice(riskCountIndex, 0, createDispatchSceneColumn());
+      }
+      return;
+    }
+    if (columnIndex >= 0) {
+      tableColumn.value.splice(columnIndex, 1);
+    }
+  };
   const {
     recordPageParams,
     removePageParams,
@@ -1051,7 +1107,9 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
+    checked: isPlatformList.value
+      ? ['strategy_id', 'strategy_name', 'dispatch_scenes', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status']
+      : ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -1074,6 +1132,20 @@
       num_pages: 1,
       results: [],
       total: 0,
+    },
+  });
+
+  const {
+    run: fetchSceneAll,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+      const map: Record<string, string> = {};
+      (data || []).forEach((item) => {
+        map[String(item.scene_id)] = item.name;
+      });
+      sceneNameMap.value = map;
     },
   });
 
@@ -1729,11 +1801,25 @@
   };
   window.addEventListener('beforeunload', handleBeforeUnload);
 
+  watch(
+    () => route.name,
+    () => {
+      syncPlatformTableColumns();
+      if (isPlatformList.value) {
+        fetchSceneAll({ status: 'enabled' });
+      }
+    },
+  );
+
   onMounted(() => {
     // 如果是页面刷新，则不高亮新建行
     if (sessionStorage.getItem('audit-strategy-page-reloaded')) {
       sessionStorage.removeItem('audit-strategy-page-reloaded');
       shouldHighlightNewRow.value = false;
+    }
+    syncPlatformTableColumns();
+    if (isPlatformList.value) {
+      fetchSceneAll({ status: 'enabled' });
     }
     // 立即注册监听，避免场景选择器在首屏解析场景时漏接事件导致空列表
     onEvent('scene:change', handlFetchData);
