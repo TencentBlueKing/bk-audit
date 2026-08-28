@@ -10,6 +10,7 @@ from pydantic import ValidationError as PydanticValidationError
 from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
     LogQueryFailed,
+    LogQueryResponseTooLarge,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
     UnsupportedAggregation,
@@ -79,6 +80,27 @@ class TestLogFieldRef(AIAssistantTestCase):
 
         self.assertEqual(field.model_dump(), {"raw_name": "username", "keys": [], "field_type": "string"})
 
+    def test_start_time_is_the_only_extra_projection_field_needed_by_default_columns(self):
+        field = LogFieldRef(raw_name="start_time")
+
+        self.assertEqual(field.raw_name, "start_time")
+
+    def test_internal_collector_fields_are_not_agent_projection_fields(self):
+        for raw_name in (
+            "__ext",
+            "cloudId",
+            "collector_config_id",
+            "end_time",
+            "gseIndex",
+            "iterationIndex",
+            "path",
+            "serverIp",
+            "snapshot_user_info",
+        ):
+            with self.subTest(raw_name=raw_name):
+                with self.assertRaises(PydanticValidationError):
+                    LogFieldRef(raw_name=raw_name)
+
     def test_extend_data_supports_empty_and_multilevel_keys(self):
         container = LogFieldRef(raw_name="extend_data")
         nested = LogFieldRef(raw_name="extend_data", keys=["ticket", "detail", "id"])
@@ -143,6 +165,7 @@ class TestLogToolExceptions(AIAssistantTestCase):
             (SensitiveFieldPermissionDenied, "26004", 403),
             (LogQueryTimeout, "26005", 504),
             (LogQueryFailed, "26006", 502),
+            (LogQueryResponseTooLarge, "26007", 413),
         )
 
         codes = set()

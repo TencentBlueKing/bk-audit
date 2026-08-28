@@ -46,6 +46,15 @@ AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = int(
     os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES", 1024)
 )
 
+# ============== 审计 AI 日志明细查询配置 ==============
+# 限制 Agent 单次明细查询的投影、排序与翻页成本；均可通过 BKAPP_ 环境变量调小。
+AI_LOG_SEARCH_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_FIELDS", 20))
+AI_LOG_SEARCH_MAX_SORT_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_SORT_FIELDS", 3))
+AI_LOG_SEARCH_MAX_PAGE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE", 100))
+AI_LOG_SEARCH_MAX_PAGE_SIZE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE", 100))
+# 完整 Agent 响应的 UTF-8 字节预算；协议硬上限在 log_tools.schemas 中，环境变量只能收紧。
+AI_LOG_SEARCH_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_SEARCH_RESPONSE_MAX_BYTES", 1024 * 1024))
+
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))
 ANALYSE_REPORT_AI_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_ANALYSE_REPORT_AI_TITLE_MAX_LENGTH", 20))
