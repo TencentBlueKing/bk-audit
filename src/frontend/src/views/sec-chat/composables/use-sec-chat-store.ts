@@ -58,6 +58,7 @@ const sidebarCollapsed = ref(false);
 const activeConversationId = ref<string | null>(null);
 const sidebarLoading = ref(false);
 const messageLoading = ref(false);
+const olderMessagesLoading = ref(false);
 
 const groups = ref<Group[]>([]);
 const conversations = ref<Conversation[]>([]);
@@ -244,10 +245,19 @@ const applyMessageWindow = (conv: Conversation, windowData: {
     conv.messages = [...conv.messages, ...mapped.filter(item => !existIds.has(item.id))];
   }
 
-  conv.messageFirstUid = windowData.first_uid;
-  conv.messageLastUid = windowData.last_uid;
-  conv.hasBeforeMessages = windowData.has_before;
-  conv.hasAfterMessages = windowData.has_after;
+  if (mode === 'replace') {
+    conv.messageFirstUid = windowData.first_uid;
+    conv.messageLastUid = windowData.last_uid;
+    conv.hasBeforeMessages = windowData.has_before;
+    conv.hasAfterMessages = windowData.has_after;
+  } else if (mode === 'prepend') {
+    conv.messageFirstUid = windowData.first_uid;
+    conv.hasBeforeMessages = windowData.has_before;
+    conv.hasAfterMessages = true;
+  } else {
+    conv.messageLastUid = windowData.last_uid;
+    conv.hasAfterMessages = windowData.has_after;
+  }
 
   // 仅在替换/追加更新「当前系统」；向前翻历史不应回退到更早的 SYSTEM_SELECTION
   if (mode !== 'prepend' && latestSystemInWindow) {
@@ -517,19 +527,20 @@ export function useSecChatStore() {
   const loadOlderMessages = async () => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft || !conv.hasBeforeMessages || !conv.messageFirstUid) return;
-    const windowData = await AiAssistantManageService.fetchMessageHistory({
-      conversation_uid: conv.id,
-      anchor_uid: conv.messageFirstUid,
-      direction: 'BEFORE',
-      include_content: true,
-    });
-    applyMessageWindow(conv, {
-      ...windowData,
-      // 翻页后窗口锚点需与合并后的列表对齐
-      first_uid: windowData.first_uid || conv.messageFirstUid,
-      last_uid: conv.messageLastUid || windowData.last_uid,
-      has_after: conv.hasAfterMessages ?? windowData.has_after,
-    }, 'prepend');
+    if (olderMessagesLoading.value) return;
+
+    olderMessagesLoading.value = true;
+    try {
+      const windowData = await AiAssistantManageService.fetchMessageHistory({
+        conversation_uid: conv.id,
+        anchor_uid: conv.messageFirstUid,
+        direction: 'BEFORE',
+        include_content: true,
+      });
+      applyMessageWindow(conv, windowData, 'prepend');
+    } finally {
+      olderMessagesLoading.value = false;
+    }
   };
 
   const setActiveConversation = async (id: string | null) => {
@@ -981,6 +992,7 @@ export function useSecChatStore() {
     sidebarCollapsed,
     sidebarLoading,
     messageLoading,
+    olderMessagesLoading,
     activeConversationId,
     groups,
     conversations,
