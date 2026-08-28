@@ -247,6 +247,67 @@ class TestAGUIChatCompletion(TestCase):
         for secret in (secret_input, secret_delta, secret_args, secret_http_body):
             self.assertFalse(any(secret in message for message in messages), secret)
 
+    def test_public_request_logs_real_agent_code_without_sensitive_payload(self):
+        secret_input = "SECRET_REQUEST_INPUT"
+        secret_history = "SECRET_CHAT_HISTORY"
+        resource = self.public_agui_resource
+        payload = self._public_request_payload(mock.Mock(), input_text=secret_input)
+        payload["chat_history"] = [{"role": "user", "content": secret_history}]
+
+        with patch_public_resource_request(resource, build_sse_response(build_complete_events())):
+            with capture_named_logs("app", "bk_resource") as records:
+                resource.request(payload)
+
+        messages = [record.getMessage() for record in records]
+        self.assertTrue(any("agent_code=bp-ai-aud-rsk-srch" in message for message in messages))
+        for secret in (secret_input, secret_history):
+            self.assertFalse(any(secret in message for message in messages))
+
+    def test_parse_response_logs_success_metadata_without_business_body(self):
+        secret_content = "SECRET_FINAL_CONTENT"
+        response = build_sse_response(build_complete_events(content=secret_content))
+
+        with capture_named_logs("app") as records:
+            result = self.resource.parse_response(response)
+
+        messages = [record.getMessage() for record in records]
+        self.assertEqual(result.final_content, secret_content)
+        self.assertTrue(any("status_code=200" in message and "stream_response=True" in message for message in messages))
+        self.assertTrue(
+            any(
+                "event_count=5" in message and f"final_content_size={len(secret_content)}" in message
+                for message in messages
+            )
+        )
+        self.assertFalse(any(secret_content in message for message in messages))
+
+    def test_parse_response_logs_http_error_metadata_without_business_body(self):
+        secret_body = "SECRET_HTTP_ERROR_BODY"
+        response = build_sse_response([])
+        response.status_code = 502
+        response.content = secret_body.encode()
+        response.raise_for_status.side_effect = HTTPError("bad gateway", response=response)
+
+        with capture_named_logs("app") as records:
+            with self.assertRaises(HTTPError):
+                self.resource.parse_response(response)
+
+        messages = [record.getMessage() for record in records]
+        self.assertTrue(any("status_code=502" in message and "stream_response=True" in message for message in messages))
+        self.assertFalse(any(secret_body in message for message in messages))
+
+    def test_parse_response_logs_run_error_metadata_without_business_body(self):
+        secret_error = "SECRET_RUN_ERROR_BODY"
+        response = build_sse_response([{"type": "RUN_ERROR", "message": secret_error}])
+
+        with capture_named_logs("app") as records:
+            with self.assertRaises(AGUIStreamProtocolError):
+                self.resource.parse_response(response)
+
+        messages = [record.getMessage() for record in records]
+        self.assertTrue(any("status_code=200" in message and "stream_response=True" in message for message in messages))
+        self.assertFalse(any(secret_error in message for message in messages))
+
     def test_public_agui_request_restores_session_after_protocol_error(self):
         response = build_sse_response([{"type": "RUN_ERROR", "message": "upstream failed"}])
 
