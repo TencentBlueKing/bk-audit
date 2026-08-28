@@ -37,6 +37,20 @@ def register_test_message_handler(handler):
     return message_handler_registry.register(handler)
 
 
+def use_message_handler(test_case, handler):
+    """在单个用例内替换消息 Handler，并在结束后恢复原注册项。"""
+
+    original_handler = message_handler_registry.unregister(handler.message_type)
+
+    def restore_handler() -> None:
+        message_handler_registry.unregister(handler.message_type)
+        if original_handler is not None:
+            message_handler_registry.register(original_handler)
+
+    test_case.addCleanup(restore_handler)
+    return message_handler_registry.register(handler)
+
+
 class EchoInput(MessageSchema):
     text: str
 
