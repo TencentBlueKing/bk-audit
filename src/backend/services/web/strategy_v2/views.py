@@ -248,6 +248,18 @@ class LinkTableViewSet(ResourceViewSet):
                     get_instance_id=self.get_scene_id,
                 ),
             ]
+        if self.action in ["all"]:
+            # 场景视角：请求携带 scene_id 走场景实例权限；平台视角（全局策略，无 scene_id）走平台管理权限
+            return [
+                AnyOfPermissions(
+                    IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM]),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_LINK_TABLE],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
+                ),
+            ]
         if self.action in ["create"]:
             return [
                 InstanceActionPermission(
