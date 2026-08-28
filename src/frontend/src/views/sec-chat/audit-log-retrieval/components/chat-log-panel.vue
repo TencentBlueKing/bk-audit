@@ -61,6 +61,39 @@
               <span class="status-text">正在理解检索意图…</span>
             </div>
 
+            <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
+            <div
+              v-else-if="msg.type === 'retrieval-result' && msg.recognitionError"
+              class="result-status-card is-recognition-failed">
+              <div class="recognition-error-header">
+                <img
+                  alt=""
+                  class="failed-icon"
+                  :src="errorSearchIcon">
+                <div class="status-title">
+                  {{ getRecognitionTitle(msg.recognitionError.code) }}
+                </div>
+                <div class="status-desc">
+                  {{ msg.recognitionError.message || getRecognitionFallback(msg.recognitionError.code) }}
+                </div>
+              </div>
+              <div
+                v-if="showRecognitionSuggestions(msg.recognitionError.code)"
+                class="suggest-section">
+                <div class="suggest-label">
+                  试试这样说：
+                </div>
+                <button
+                  v-for="(item, index) in displaySuggestions"
+                  :key="`nl-suggest-${index}`"
+                  class="suggest-item"
+                  type="button"
+                  @click="handleSelectSuggestion(item)">
+                  {{ item }}
+                </button>
+              </div>
+            </div>
+
             <!-- NL / LOG 失败（条件检索失败在条件卡内展示） -->
             <div
               v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED' && !isConditionLogResult(msg)"
@@ -104,18 +137,24 @@
 </template>
 
 <script lang="ts" setup>
-  import { nextTick, onActivated, ref, watch } from 'vue';
+  import { computed, nextTick, onActivated, ref, watch } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
+
+  import errorSearchIcon from '@images/error-search.svg';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
   import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
   import type { ChatMessage, SelectedSystem } from '../../types';
 
-  const props = defineProps<{
+  const props = withDefaults(defineProps<{
     messages: ChatMessage[];
-  }>();
+    /** 识别失败时展示的建议问法（来自 SYSTEM_SELECTION） */
+    nlSuggestions?: string[];
+  }>(), {
+    nlSuggestions: () => [],
+  });
 
   const emit = defineEmits<{
     'confirm-system': [messageId: string, systemIds: string[], systems: SelectedSystem[]];
@@ -128,6 +167,45 @@
 
   const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
+
+  const NL_RECOGNITION_TITLES: Record<string, string> = {
+    QUERY_NOT_RECOGNIZED: '未能理解检索需求',
+    AI_OUTPUT_PARSE_FAILED: '检索条件解析失败',
+    AI_OUTPUT_INVALID: '检索条件无效',
+    AI_SERVICE_ERROR: 'AI 服务暂不可用',
+    AI_TIMEOUT: 'AI 服务响应超时',
+    PERMISSION_DENIED: '无日志检索权限',
+  };
+
+  const NL_RECOGNITION_FALLBACKS: Record<string, string> = {
+    QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
+    AI_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
+    AI_OUTPUT_INVALID: '请修改描述后重试',
+    AI_SERVICE_ERROR: '请稍后重试',
+    AI_TIMEOUT: '请稍后重试',
+    PERMISSION_DENIED: '请联系管理员申请目标系统的日志检索权限',
+  };
+
+  const FALLBACK_SUGGESTIONS = [
+    '查询「替换为实际用户」近7天的删除操作',
+    '查询「替换为实际安装包」近7天的下载操作',
+    '查询「替换为实际安装包」近7天的成功操作',
+    '查询「替换为实际用户」近30天的API操作',
+  ];
+
+  const displaySuggestions = computed(() => (
+    (props.nlSuggestions.length ? props.nlSuggestions : FALLBACK_SUGGESTIONS).slice(0, 4)
+  ));
+
+  const getRecognitionTitle = (code: string) => (
+    NL_RECOGNITION_TITLES[code] || '未能完成检索'
+  );
+
+  const getRecognitionFallback = (code: string) => (
+    NL_RECOGNITION_FALLBACKS[code] || '请修改描述后重新发送'
+  );
+
+  const showRecognitionSuggestions = (code: string) => code === 'QUERY_NOT_RECOGNIZED';
 
   /** 条件筛选产生的根 LOG_SEARCH（无 parent），结果在条件卡内嵌展示 */
   const isConditionLogResult = (msg: ChatMessage) => (
@@ -281,6 +359,72 @@
       align-items: center;
       gap: 6px;
       color: #63656e;
+    }
+
+    &.is-recognition-failed {
+      align-items: stretch;
+      gap: 16px;
+
+      .recognition-error-header {
+        display: flex;
+        width: 100%;
+        padding: 16px 0 8px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-align: center;
+      }
+
+      .failed-icon {
+        display: block;
+        width: 48px;
+        height: 48px;
+      }
+
+      .status-title,
+      .status-desc {
+        text-align: center;
+      }
+    }
+
+    .suggest-section {
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    .suggest-label {
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 18px;
+      color: #979ba5;
+    }
+
+    .suggest-item {
+      display: block;
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      overflow: hidden;
+      font-size: 14px;
+      line-height: 22px;
+      color: #63656e;
+      text-align: left;
+      cursor: pointer;
+      background: #f5f7fa;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      transition: background-color .15s, border-color .15s;
+      box-sizing: border-box;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      &:hover {
+        background: #f0f5ff;
+        border-color: #a3c5fd;
+      }
     }
 
     .status-title {
