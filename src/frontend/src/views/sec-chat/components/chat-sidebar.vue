@@ -909,7 +909,7 @@
     delete: [id: string];
     'update-group': [id: string, groupName?: string];
     'reorder-conversation': [id: string, payload: { groupName?: string; beforeId?: string; toEnd?: boolean }];
-    'update-groups': [groups: Group[]];
+    'reorder-group': [id: string, payload: { beforeId?: string; toEnd?: boolean }];
     'add-group': [name: string];
     'rename-group': [groupId: string, name: string];
     'delete-group': [groupName: string, keepConversations: boolean];
@@ -1583,16 +1583,28 @@
     } else if (type === 'conversation' && targetType === 'history' && sourceGroup) {
       emit('update-group', id!, undefined);
     } else if (type === 'group' && targetType === 'group' && id !== targetId) {
-      // 分组排序
-      const newGroups = [...props.groups];
-      const sourceIndex = newGroups.findIndex(g => g.name === id);
-      const targetIndex = newGroups.findIndex(g => g.name === targetId);
-
-      if (sourceIndex !== -1 && targetIndex !== -1) {
-        const [movedGroup] = newGroups.splice(sourceIndex, 1);
-        const insertIndex = position === 'top' ? targetIndex : targetIndex + 1;
-        newGroups.splice(insertIndex, 0, movedGroup);
-        emit('update-groups', newGroups);
+      const movedGroup = props.groups.find(g => g.name === id);
+      if (movedGroup) {
+        const list = props.groups;
+        const without = list.filter(g => g.name !== id);
+        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const dropPosition = position
+          ?? (e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom');
+        const targetIndex = without.findIndex(g => g.name === targetId);
+        if (targetIndex !== -1) {
+          const insertAt = dropPosition === 'top' ? targetIndex : targetIndex + 1;
+          const fromIndex = list.findIndex(g => g.name === id);
+          const toIndexRaw = dropPosition === 'top'
+            ? list.findIndex(g => g.name === targetId)
+            : list.findIndex(g => g.name === targetId) + 1;
+          const toIndex = fromIndex < toIndexRaw ? toIndexRaw - 1 : toIndexRaw;
+          if (fromIndex !== -1 && fromIndex !== toIndex) {
+            const beforeId = without[insertAt]?.id;
+            emit('reorder-group', movedGroup.id, beforeId
+              ? { beforeId }
+              : { toEnd: true });
+          }
+        }
       }
     }
 
