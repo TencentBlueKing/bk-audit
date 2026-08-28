@@ -1,6 +1,7 @@
 from services.web.ai_assistant.services.attachment import AttachmentService
 from services.web.ai_assistant.services.attachment_execution import AttachmentExecution
 from services.web.ai_assistant.services.attachment_stream import AttachmentStreamService
+from services.web.ai_assistant.services.column_preference import ColumnPreferenceService
 from services.web.ai_assistant.services.conversation import (
     ConversationCreation,
     ConversationService,
@@ -18,6 +19,7 @@ __all__ = [
     "AttachmentExecution",
     "AttachmentService",
     "AttachmentStreamService",
+    "ColumnPreferenceService",
     "ConversationSidebarService",
     "ConversationCreation",
     "ConversationService",

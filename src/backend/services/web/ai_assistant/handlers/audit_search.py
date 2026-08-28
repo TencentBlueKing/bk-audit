@@ -37,6 +37,7 @@ from services.web.ai_assistant.schemas.audit_search import (
     SystemSelectionInputSchema,
     SystemSelectionOutputSchema,
 )
+from services.web.ai_assistant.services.column_preference import ColumnPreferenceService
 from services.web.ai_assistant.services.operation import (
     OperationContextService,
     extract_system_ids,
@@ -225,6 +226,8 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
             namespace=context_data.namespace,
             username=context_data.username,
             source=context_data.source,
+            # 展示列按用户偏好注入（九列固定 + 自选列，跨设备同步）
+            column_fields=ColumnPreferenceService(username=context_data.username).get_selected_fields(),
         )
         return LogSearchOutputSchema.from_query_output(output)
 

@@ -414,3 +414,20 @@ class Feedback(ExternalUIDModel, OperateRecordModel):
             )
         ]
         indexes = [models.Index(fields=["source_type", "source_id"], name="ai_feedback_source_idx")]
+
+
+class UserColumnPreference(OperateRecordModel):
+    """用户在 AI 日志检索结果中的自定义展示字段偏好（按用户隔离、跨设备同步）。
+
+    selected_fields 保存规范化后的 raw_name 列表（九个固定列在前 + 自选列按用户顺序追加）；
+    检索快照执行时按该偏好输出 columns 并固化。
+    """
+
+    selected_fields = models.JSONField(gettext_lazy("已选字段"), default=list)
+
+    class Meta:
+        verbose_name = gettext_lazy("AI 助手展示字段偏好")
+        verbose_name_plural = verbose_name
+        constraints = [
+            models.UniqueConstraint(fields=["created_by"], name="ai_column_pref_user_uniq"),
+        ]
