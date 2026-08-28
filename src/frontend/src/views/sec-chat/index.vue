@@ -33,7 +33,7 @@
       @toggle="toggleSidebar"
       @update-conv-title="handleUpdateConvTitle"
       @update-group="handleUpdateGroup"
-      @update-groups="handleUpdateGroups" />
+      @reorder-group="handleReorderGroup" />
 
     <div class="sec-chat-main">
       <!-- 弹层专用挂载点：禁止 teleport 到含 router-view 的容器，否则 keep-alive 失活时会误卸主内容导致白屏 -->
@@ -53,7 +53,6 @@
   import { onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
-  import type { Group } from './types';
   import { useSecChatStore } from './composables/use-sec-chat-store';
   import { preserveSecChatQuery, saveSecChatLastRoute } from './utils/last-route';
   import ChatSidebar from './components/chat-sidebar.vue';
@@ -78,7 +77,7 @@
     reorderConversation,
     updateConversationTitle,
     createGroup,
-    updateGroups,
+    reorderGroup,
     renameGroup,
     deleteGroup,
     clearAllConversations,
@@ -159,8 +158,11 @@
     void reorderConversation(id, payload);
   };
 
-  const handleUpdateGroups = (newGroups: Group[]) => {
-    void updateGroups(newGroups);
+  const handleReorderGroup = (
+    id: string,
+    payload: { beforeId?: string; toEnd?: boolean },
+  ) => {
+    void reorderGroup(id, payload);
   };
 
   const handleAddGroup = (name: string) => {
