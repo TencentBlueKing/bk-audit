@@ -4,10 +4,8 @@ import json
 from typing import Any, Dict, Iterable, List, Tuple
 
 from bk_resource import api
-from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
-from requests.exceptions import Timeout as RequestsTimeout
 
 from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import EXTEND_DATA
@@ -15,15 +13,11 @@ from services.web.query.ai_assistant.constants import (
     AI_ASSISTANT_FIELD_SAMPLE_ROWS,
     EXTENSION_FIELD_DEFAULT_OPERATORS,
 )
-from services.web.query.ai_assistant.exceptions import (
-    LogQueryFailed,
-    LogQueryTimeout,
-    LogToolException,
-)
 from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContext,
     LogQueryContextService,
 )
+from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 from services.web.query.ai_assistant.log_tools.schemas import (
     FieldSampleSummary,
     GetLogFieldMetadataRequest,
@@ -70,16 +64,11 @@ class LogFieldMetadataService:
             rows = cls._query_samples(context)
             # 脱敏必须先于 JSON 下钻和样例去重，否则受限字段可能经汇总链路泄露。
             safe_rows = SearchDataParser().parse_data(rows, username=username)
-        except LogToolException:
-            raise
-        except (RequestsTimeout, TimeoutError) as err:
-            raise LogQueryTimeout() from err
-        except APIRequestError as err:
-            if cls._has_timeout_in_chain(err):
-                raise LogQueryTimeout() from err
-            raise LogQueryFailed() from err
         except Exception as err:  # noqa: BLE001
-            raise LogQueryFailed() from err
+            mapped_error = map_log_query_error(err)
+            if mapped_error is err:
+                raise
+            raise mapped_error from err
 
         fields: List[LogFieldMetadataItem] = []
         if request.field_scope != LogFieldScope.EXTENDED:
@@ -283,19 +272,3 @@ class LogFieldMetadataService:
     @staticmethod
     def _is_scalar(value: Any) -> bool:
         return isinstance(value, (bool, int, float, str))
-
-    @staticmethod
-    def _has_timeout_in_chain(error: BaseException) -> bool:
-        """识别 bk_resource 保留在 cause/context 中的网络超时，不记录底层异常正文。"""
-
-        pending = [error]
-        visited = set()
-        while pending:
-            current = pending.pop()
-            if id(current) in visited:
-                continue
-            visited.add(id(current))
-            if isinstance(current, (RequestsTimeout, TimeoutError)):
-                return True
-            pending.extend(item for item in (current.__cause__, current.__context__) if item is not None)
-        return False

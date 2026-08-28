@@ -138,3 +138,11 @@ class LogQueryFailed(LogToolException):
     ERROR_CODE = "006"
     STATUS_CODE = 502
     MESSAGE = gettext_lazy("日志查询失败，请稍后重试")
+
+
+class LogQueryResponseTooLarge(LogToolException):
+    """日志工具响应超过协议字节预算。"""
+
+    ERROR_CODE = "007"
+    STATUS_CODE = 413
+    MESSAGE = gettext_lazy("日志查询结果过大，请缩小字段或 page_size 后重试")
