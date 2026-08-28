@@ -93,25 +93,34 @@
       <!-- 对话列表 -->
       <div class="conversation-list">
         <!-- 历史对话（未分组） -->
-        <div class="conv-section">
+        <div
+          ref="historySectionRef"
+          class="conv-section conv-section--history"
+          :class="getHistoryDropClass()"
+          @dragleave="handleHistoryDragLeave"
+          @dragover="handleDragOver($event, 'history', 'history')"
+          @drop="handleDrop($event, 'history', 'history')">
           <div class="section-label">
-            <span class="label-text">历史对话</span>
+            <span class="label-text">{{ historySectionLabel }}</span>
             <bk-popover
               arrow
+              :auto-visibility="false"
+              boundary="body"
               ext-cls="add-group-popover"
-              force-clickoutside
               hide-ignore-reference
               :is-show="addGroupDialog.show"
-              placement="bottom-end"
+              placement="right-start"
               theme="light"
               trigger="manual"
               :width="260"
               @after-show="handleAddGroupPopoverShow"
+              @clickoutside="onAddGroupClickOutside"
               @update:is-show="onAddGroupShowChange">
               <span
                 class="label-action"
                 :class="{ 'is-active': addGroupDialog.show }"
-                @click.stop="toggleAddGroupPopover">
+                @click.stop="toggleAddGroupPopover"
+                @mousedown.stop="prepareAddGroupToggle">
                 <plus />
               </span>
               <template #content>
@@ -143,10 +152,15 @@
 
           <div
             class="history-conv-list"
-            :class="getHistoryDropClass()"
-            @dragleave="handleDragLeave"
-            @dragover="handleDragOver($event, 'history', 'history')"
-            @drop="handleDrop($event, 'history', 'history')">
+            :class="{ 'is-drop-zone-active': showHistoryDropPlaceholder }">
+            <!-- 全部已分组时：拖入历史区域才展开投放位 -->
+            <div
+              class="history-drop-placeholder"
+              :class="{ 'is-visible': showHistoryDropPlaceholder }"
+              @dragover.prevent="onHistoryListDragOver"
+              @drop.prevent="handleDrop($event, 'history', 'history')">
+              拖放到此处移出分组
+            </div>
             <div
               v-for="conv in filteredHistoryList"
               :key="conv.id"
@@ -257,26 +271,26 @@
           </div>
         </div>
 
-        <!-- 分组对话 -->
+        <!-- 分组对话：仅标题可拖分组，避免抢走组内会话的拖拽/排序 -->
         <div class="conv-section">
           <div
             v-for="group in groups"
             :key="group.id"
             class="group-item"
             :class="getGroupItemDragClass(group.name)"
-            draggable="true"
-            @dragend="handleDragEnd"
             @dragleave="handleDragLeave"
             @dragover="handleDragOver($event, 'group', group.name)"
-            @dragstart="handleDragStart($event, 'group', group.name)"
             @drop="handleDrop($event, 'group', group.name)">
             <div
               class="group-header"
+              draggable="true"
               :class="[
                 getGroupHeaderDragClass(group.name),
                 { 'is-menu-open': activeGroupMenuId === group.name },
               ]"
-              @click="handleGroupHeaderClick(group.name)">
+              @click="handleGroupHeaderClick(group.name)"
+              @dragend="handleDragEnd"
+              @dragstart="handleDragStart($event, 'group', group.name)">
               <img
                 v-if="collapsedGroups.has(group.name)"
                 alt=""
@@ -357,7 +371,9 @@
 
             <div
               v-show="!collapsedGroups.has(group.name)"
-              class="group-children">
+              class="group-children"
+              @dragover="onGroupChildrenDragOver($event, group.name)"
+              @drop="onGroupChildrenDrop($event, group.name)">
               <div
                 v-if="group.childrenLoading && !filteredGroupedHistory[group.name]?.length"
                 class="group-children-loading">
@@ -428,8 +444,11 @@
                             </div>
                             <template #content>
                               <bk-dropdown-menu>
+                                <bk-dropdown-item @click="moveToGroup(conv.id)">
+                                  移出分组
+                                </bk-dropdown-item>
                                 <bk-dropdown-item
-                                  v-for="g in groups"
+                                  v-for="g in groups.filter(item => item.name !== group.name)"
                                   :key="g.id"
                                   @click="moveToGroup(conv.id, g.name)">
                                   {{ g.name }}
@@ -1188,8 +1207,24 @@
     document.body.style.userSelect = 'none';
   };
 
+  /** 同 id 多份时优先未分组副本，避免移出分组过程中根列表与分组各显示一条 */
+  const canonicalConversations = computed(() => {
+    const map = new Map<string, Conversation>();
+    props.conversations.forEach((conv) => {
+      const prev = map.get(conv.id);
+      if (!prev) {
+        map.set(conv.id, conv);
+        return;
+      }
+      if (!conv.groupName && prev.groupName) {
+        map.set(conv.id, conv);
+      }
+    });
+    return [...map.values()];
+  });
+
   const filteredHistoryList = computed(() => {
-    const ungrouped = props.conversations.filter(c => !c.groupName);
+    const ungrouped = canonicalConversations.value.filter(c => !c.groupName);
     if (!searchKeyword.value) return ungrouped;
     return ungrouped.filter(c => c.title.includes(searchKeyword.value));
   });
@@ -1200,7 +1235,7 @@
     props.groups.forEach((g) => {
       grouped[g.name] = [];
     });
-    const groupedConvs = props.conversations.filter(c => c.groupName);
+    const groupedConvs = canonicalConversations.value.filter(c => c.groupName);
     for (const conv of groupedConvs) {
       if (searchKeyword.value && !conv.title.includes(searchKeyword.value)) continue;
       const key = conv.groupName!;
@@ -1327,14 +1362,59 @@
     position: 'top' | 'bottom' | 'inside' | null;
   }>({ type: null, id: null, position: null });
 
+  const isDraggingGroupedConv = computed(() => (
+    dragState.value.type === 'conversation' && !!dragState.value.sourceGroup
+  ));
+
+  /** 侧栏未分组列表是否为空（以实际展示列表为准） */
+  const isHistoryListEmpty = computed(() => filteredHistoryList.value.length === 0);
+
+  /** 从分组拖出且拖入历史区域时才展示投放位 */
+  const showHistoryDropPlaceholder = computed(() => (
+    isHistoryListEmpty.value
+    && isDraggingGroupedConv.value
+    && dragOverState.value.type === 'history'
+    && dragOverState.value.id === 'history'
+    && dragOverState.value.position === 'inside'
+  ));
+
+  const historySectionLabel = computed(() => (
+    showHistoryDropPlaceholder.value ? '松手移出分组' : '历史对话'
+  ));
+
+  const historySectionRef = ref<HTMLElement | null>(null);
+
+  const activateHistoryDropZone = () => {
+    if (!isHistoryListEmpty.value || !isDraggingGroupedConv.value) return;
+    dragOverState.value = { type: 'history', id: 'history', position: 'inside' };
+    void nextTick(() => {
+      historySectionRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  };
+
   const getHistoryDropClass = () => ({
     // 仅「从分组拖出到未分组」时高亮整块区域；同列表排序改用条目下划线
     'is-drag-over-inside': dragOverState.value.type === 'history'
       && dragOverState.value.id === 'history'
       && dragOverState.value.position === 'inside'
       && !!dragState.value.sourceGroup,
-    'is-drag-target': dragState.value.type === 'conversation' && !!dragState.value.sourceGroup,
+    'is-drag-target': showHistoryDropPlaceholder.value,
   });
+
+  const onHistoryListDragOver = (e: DragEvent) => {
+    if (!isDraggingGroupedConv.value) return;
+    handleDragOver(e, 'history', 'history');
+  };
+
+  // 在历史区子节点间移动时不要清空高亮（relatedTarget 仍在区内）
+  const handleHistoryDragLeave = (e: DragEvent) => {
+    const current = e.currentTarget as HTMLElement | null;
+    const related = e.relatedTarget as Node | null;
+    if (current && related && current.contains(related)) {
+      return;
+    }
+    handleDragLeave();
+  };
 
   const getGroupItemDragClass = (groupName: string) => ({
     'is-drag-over-top': dragOverState.value.type === 'group'
@@ -1364,11 +1444,15 @@
 
   // 拖拽处理
   const handleDragStart = (e: DragEvent, type: 'group' | 'conversation', id: string, sourceGroup?: string) => {
+    const resolvedSourceGroup = sourceGroup
+      || (type === 'conversation'
+        ? props.conversations.find(c => c.id === id)?.groupName
+        : undefined);
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify({ type, id, sourceGroup }));
+      e.dataTransfer.setData('text/plain', JSON.stringify({ type, id, sourceGroup: resolvedSourceGroup }));
     }
-    dragState.value = { type, id, sourceGroup };
+    dragState.value = { type, id, sourceGroup: resolvedSourceGroup };
     if (type === 'group') {
       suppressGroupHeaderClick.value = false;
     }
@@ -1391,8 +1475,8 @@
       if (!sameContainer) {
         if (targetGroup) {
           dragOverState.value = { type: 'group', id: targetGroup, position: 'inside' };
-        } else if (dragState.value.sourceGroup) {
-          dragOverState.value = { type: 'history', id: 'history', position: 'inside' };
+        } else if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+          activateHistoryDropZone();
         }
         return;
       }
@@ -1404,9 +1488,9 @@
       const position = e.clientY < midY ? 'top' : 'bottom';
       dragOverState.value = { type, id, position };
     } else if (dragState.value.type === 'conversation' && type === 'history') {
-      // 仅从分组拖出时高亮未分组区域
-      if (dragState.value.sourceGroup) {
-        dragOverState.value = { type, id, position: 'inside' };
+      // 拖入历史区域：从未分组为空时才展开投放位
+      if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+        activateHistoryDropZone();
       }
     } else if (dragState.value.type === 'conversation' && type === 'group') {
       // 拖入其他分组：保持原样式；已在本组内则交给会话条目显示下划线
@@ -1425,6 +1509,29 @@
     dragOverState.value = { type: null, id: null, position: null };
   };
 
+  // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
+  const onGroupChildrenDragOver = (e: DragEvent, groupName: string) => {
+    if (dragState.value.type !== 'conversation') return;
+    if (dragState.value.sourceGroup === groupName) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      return;
+    }
+    handleDragOver(e, 'group', groupName);
+  };
+
+  const onGroupChildrenDrop = (e: DragEvent, groupName: string) => {
+    if (dragState.value.type === 'conversation' && dragState.value.sourceGroup === groupName) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragState.value = { type: null, id: null };
+      dragOverState.value = { type: null, id: null, position: null };
+      return;
+    }
+    handleDrop(e, 'group', groupName);
+  };
+
   const handleDrop = (
     e: DragEvent,
     targetType: 'group' | 'conversation' | 'history',
@@ -1432,6 +1539,7 @@
     targetGroup?: string,
   ) => {
     e.preventDefault();
+    e.stopPropagation();
     const { type, id, sourceGroup } = dragState.value;
     const { position } = dragOverState.value;
     const wasGroupDrag = type === 'group';
@@ -1518,33 +1626,59 @@
     name: '',
   });
   const addGroupInputRef = ref<any>(null);
+  /** 打开瞬间忽略同一次点击冒泡到 document 的 clickoutside，避免 bkop 环境闪关 */
+  let ignoreAddGroupClickOutside = false;
 
   const closeAddGroupPopover = () => {
     addGroupDialog.value.show = false;
     addGroupDialog.value.name = '';
+    ignoreAddGroupClickOutside = false;
+  };
+
+  // mousedown 早于 document 捕获阶段的 clickoutside，先标记避免同一次点击误关
+  const prepareAddGroupToggle = () => {
+    if (!addGroupDialog.value.show) {
+      ignoreAddGroupClickOutside = true;
+    }
   };
 
   const toggleAddGroupPopover = () => {
-    addGroupDialog.value.show = !addGroupDialog.value.show;
-    if (!addGroupDialog.value.show) {
-      addGroupDialog.value.name = '';
+    if (addGroupDialog.value.show) {
+      closeAddGroupPopover();
+      return;
     }
+    addGroupDialog.value.name = '';
+    addGroupDialog.value.show = true;
+    window.setTimeout(() => {
+      ignoreAddGroupClickOutside = false;
+    }, 0);
   };
 
   const onAddGroupShowChange = (val: boolean) => {
     addGroupDialog.value.show = val;
-    if (!val) addGroupDialog.value.name = '';
+    if (!val) {
+      addGroupDialog.value.name = '';
+      ignoreAddGroupClickOutside = false;
+    }
+  };
+
+  const onAddGroupClickOutside = () => {
+    if (ignoreAddGroupClickOutside) return;
+    closeAddGroupPopover();
   };
 
   const handleAddGroupPopoverShow = async () => {
     addGroupDialog.value.name = '';
     await nextTick();
-    const inputRef = addGroupInputRef.value;
-    if (typeof inputRef?.focus === 'function') {
-      inputRef.focus();
-      return;
-    }
-    inputRef?.$el?.querySelector?.('input')?.focus();
+    // 延迟 focus，减少 scroll-into-view 触发侧栏滚动后的误隐藏
+    window.setTimeout(() => {
+      const inputRef = addGroupInputRef.value;
+      if (typeof inputRef?.focus === 'function') {
+        inputRef.focus();
+        return;
+      }
+      inputRef?.$el?.querySelector?.('input')?.focus();
+    }, 0);
   };
 
   const confirmAddGroup = () => {
