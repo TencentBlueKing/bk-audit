@@ -18,11 +18,16 @@
   <div class="audit-log-retrieval-page">
     <chat-log-panel
       v-if="panelConversation"
+      :conversation-id="panelConversation.id"
+      :has-before-messages="panelConversation.hasBeforeMessages"
+      :loading-older-messages="olderMessagesLoading"
+      :message-loading="messageLoading"
       :messages="panelConversation.messages"
       :nl-suggestions="panelConversation.commonOperations || []"
       @attach="handleAttach"
       @close-select-system="handleCloseSelectSystem"
       @confirm-system="handleConfirmSystem"
+      @load-older="handleLoadOlder"
       @reselect-system="reselectSystem"
       @retry-message="retryMessage"
       @send="handleConversationSend" />
@@ -44,12 +49,15 @@
     activeConversation,
     conversations,
     draftConversation,
+    olderMessagesLoading,
+    messageLoading,
     setActiveConversation,
     confirmSystem,
     closeSelectSystem,
     reselectSystem,
     sendLogQuery,
     retryMessage,
+    loadOlderMessages,
   } = useSecChatStore();
 
   /** keep-alive 失活后 route 已是其他页，禁止再 replace 抢导航（否则点工具广场会先被拉回会话首页） */
@@ -106,6 +114,10 @@
 
   const handleConversationSend = (content: string) => {
     void sendLogQuery(content);
+  };
+
+  const handleLoadOlder = () => {
+    void loadOlderMessages();
   };
 
   const handleConfirmSystem = async (
