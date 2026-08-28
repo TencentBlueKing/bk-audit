@@ -109,13 +109,14 @@ class HandlerRegistry(Generic[HandlerT]):
 
 
 def _load_message_task_class() -> type[Task]:
-    from services.web.ai_assistant.tasks import MessageExecutionTask
+    # 子模块 import 而非包名 import，避免 tasks 包半初始化状态触发循环（PR #1716 实踩）
+    from services.web.ai_assistant.tasks.message import MessageExecutionTask
 
     return MessageExecutionTask
 
 
 def _load_attachment_task_class() -> type[Task]:
-    from services.web.ai_assistant.tasks import AttachmentExecutionTask
+    from services.web.ai_assistant.tasks.attachment import AttachmentExecutionTask
 
     return AttachmentExecutionTask
 
