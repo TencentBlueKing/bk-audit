@@ -80,6 +80,11 @@ export interface ChatMessage {
   messageType?: string;
   errorCode?: string;
   errorMessage?: string;
+  /** NL 识别失败（SUCCESS + output_data.error） */
+  recognitionError?: {
+    code: string;
+    message: string;
+  };
   parentMessageUid?: string | null;
 }
 
