@@ -28,7 +28,7 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     """探索当前用户可查询日志字段的脱敏样例和下一层 JSON 路径。
 
     仅采样至多 50 条已脱敏日志，不递归展开对象字段；返回的字段可直接用于明细或
-    聚合工具。可恢复的参数、字段和权限错误维持平台标准错误响应，调用方可调整范围后重试。
+    聚合工具，完整响应不超过 1 MiB。可恢复的参数、字段和权限错误维持平台标准错误响应。
     """
 
     name = gettext_lazy("MCP 获取日志字段元信息")
@@ -70,7 +70,7 @@ class MCPAggregateLogs(QueryBaseResource):
     """对当前用户可访问日志执行类型化、受控的分组聚合。
 
     最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或
-    拓展数值转换质量在 data_quality 中返回。敏感字段无权限时不执行查询，调用方应改用允许字段。
+    拓展数值转换质量在 data_quality 中返回，完整响应不超过 1 MiB。敏感字段无权限时不执行查询。
     """
 
     name = gettext_lazy("MCP 聚合日志")

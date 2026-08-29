@@ -118,12 +118,94 @@ class TestAGUIChatCompletion(TestCase):
 
     def test_run_error_is_delivered_before_protocol_error(self):
         seen = []
-        event = {"type": "RUN_ERROR", "message": "upstream failed"}
+        events = [
+            {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"},
+            {"type": "RUN_ERROR", "threadId": "t1", "runId": "r1", "message": "upstream failed"},
+        ]
 
         with self.assertRaises(AGUIStreamProtocolError):
-            self.resource._parse_agui_stream_response(build_sse_response([event]), on_event=seen.append)
+            self.resource._parse_agui_stream_response(build_sse_response(events), on_event=seen.append)
 
-        self.assertEqual(seen, [event])
+        self.assertEqual(seen, events)
+
+    def test_accepts_non_run_process_events_without_extra_order_rules(self):
+        events = build_complete_events()
+        process_event = {"type": "STATE_SNAPSHOT", "snapshot": {"phase": "searching"}}
+        events.insert(1, process_event)
+
+        result = self.resource._parse_agui_stream_response(build_sse_response(events))
+
+        self.assertEqual(result.final_content, "hello")
+        self.assertIn(process_event, result.events)
+
+    def test_rejects_complete_text_before_run_started_without_callback(self):
+        seen = []
+        events = [
+            {"type": "TEXT_MESSAGE_START", "messageId": "early", "role": "assistant"},
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "early", "delta": "premature"},
+            {"type": "TEXT_MESSAGE_END", "messageId": "early"},
+            {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"},
+            {"type": "RUN_FINISHED", "threadId": "t1", "runId": "r1"},
+        ]
+
+        with self.assertRaises(AGUIStreamProtocolError):
+            self.resource._parse_agui_stream_response(build_sse_response(events), on_event=seen.append)
+
+        self.assertEqual(seen, [])
+
+    def test_rejects_terminal_before_run_started(self):
+        events = build_complete_events()[1:]
+
+        with self.assertRaises(AGUIStreamProtocolError):
+            self.resource._parse_agui_stream_response(build_sse_response(events))
+
+    def test_rejects_missing_run_identity(self):
+        cases = (
+            [{"type": "RUN_STARTED", "runId": "r1"}],
+            [{"type": "RUN_STARTED", "threadId": "t1"}],
+            [
+                {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"},
+                {"type": "RUN_FINISHED", "runId": "r1"},
+            ],
+            [
+                {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"},
+                {"type": "RUN_ERROR", "threadId": "t1", "message": "failed"},
+            ],
+        )
+        for events in cases:
+            with self.subTest(events=events):
+                with self.assertRaises(AGUIStreamProtocolError):
+                    self.resource._parse_agui_stream_response(build_sse_response(events))
+
+    def test_rejects_terminal_with_mismatched_thread_or_run_id(self):
+        for identity in (
+            {"threadId": "other-thread", "runId": "r1"},
+            {"threadId": "t1", "runId": "other-run"},
+        ):
+            with self.subTest(identity=identity):
+                events = build_complete_events()
+                events[-1].update(identity)
+                with self.assertRaises(AGUIStreamProtocolError):
+                    self.resource._parse_agui_stream_response(build_sse_response(events))
+
+    def test_mismatched_run_error_is_rejected_before_callback(self):
+        seen = []
+        events = [
+            {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"},
+            {"type": "RUN_ERROR", "threadId": "t1", "runId": "other-run", "message": "failed"},
+        ]
+
+        with self.assertRaises(AGUIStreamProtocolError):
+            self.resource._parse_agui_stream_response(build_sse_response(events), on_event=seen.append)
+
+        self.assertEqual(seen, events[:1])
+
+    def test_rejects_duplicate_run_started(self):
+        events = build_complete_events()
+        events.insert(1, {"type": "RUN_STARTED", "threadId": "t1", "runId": "r1"})
+
+        with self.assertRaises(AGUIStreamProtocolError):
+            self.resource._parse_agui_stream_response(build_sse_response(events))
 
     def test_http_error_is_not_converted_to_stream_result(self):
         response = build_sse_response([])

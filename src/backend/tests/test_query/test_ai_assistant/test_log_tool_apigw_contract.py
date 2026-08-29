@@ -3,10 +3,13 @@
 
 from copy import deepcopy
 from pathlib import Path
+from unittest import mock
 
 import jsonschema
 import yaml
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
+from drf_spectacular.views import SpectacularAPIView
+from rest_framework.test import APIRequestFactory
 
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
@@ -213,6 +216,60 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         validator = jsonschema.Draft4Validator(schema, resolver=jsonschema.RefResolver.from_schema(self.json_schema))
         self.assertTrue(list(validator.iter_errors(payload)))
 
+    def test_shared_request_cost_limits_are_expressed_in_apigw_schema(self):
+        condition = self.resources["definitions"]["log_tool_condition"]
+        self.assertEqual(condition["properties"]["scope_id"]["maxLength"], 255)
+        self.assertEqual(condition["properties"]["conditions"]["maxItems"], 100)
+        item = condition["properties"]["conditions"]["items"]
+        self.assertEqual(item["properties"]["filters"]["maxItems"], 1000)
+        field = self.resources["definitions"]["log_tool_condition_field"]
+        self.assertEqual(field["properties"]["keys"]["maxItems"], 16)
+        self.assertEqual(field["properties"]["keys"]["items"]["maxLength"], 128)
+        self.assertIn("1024 bytes", field["properties"]["keys"]["description"])
+        self.assertIn("256 KiB", condition["description"])
+        self.assertIn("16 KiB", item["properties"]["filters"]["description"])
+
+        request = self._raw_body_schema("mcp_get_log_field_metadata")
+        self.assertEqual(request["properties"]["parent_keys"]["maxItems"], 16)
+        self.assertEqual(request["properties"]["parent_keys"]["items"]["maxLength"], 128)
+        self.assertIn("1024 bytes", request["properties"]["parent_keys"]["description"])
+
+    def test_response_capacity_and_expandable_semantics_are_documented(self):
+        field_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_get_log_field_metadata"][0]]["post"]
+        field_response = field_operation["responses"]["200"]["schema"]["properties"]["data"]
+        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 100)
+        field_item = field_response["properties"]["fields"]["items"]
+        self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
+        self.assertIn(
+            "extend_data 根字段及其对象子字段",
+            field_item["properties"]["is_expandable"]["description"],
+        )
+        self.assertIn("1 MiB", field_operation["description"])
+
+        aggregate_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_aggregate_logs"][0]]["post"]
+        aggregate_response = aggregate_operation["responses"]["200"]["schema"]["properties"]["data"]
+        self.assertEqual(aggregate_response["properties"]["rows"]["maxItems"], 100)
+        self.assertIn("1 MiB", aggregate_operation["description"])
+
+    @override_settings(ROOT_URLCONF="urls")
+    def test_response_field_ref_limits_match_dynamic_openapi(self):
+        request = APIRequestFactory().get("/api/schema/")
+        request.user = mock.Mock(is_staff=True, is_authenticated=True)
+        response = SpectacularAPIView.as_view()(request)
+        response.render()
+        openapi = yaml.safe_load(response.content)
+        operation = openapi["paths"][MCP_LOG_RESOURCES["mcp_get_log_field_metadata"][1]]["post"]
+        envelope = operation["responses"]["200"]["content"]["application/json"]["schema"]
+        dynamic_keys = envelope["properties"]["data"]["properties"]["fields"]["items"]["properties"]["field"][
+            "properties"
+        ]["keys"]
+        static_keys = self.resources["definitions"]["log_tool_field_ref_response"]["properties"]["keys"]
+
+        for keyword in ("maxItems", "description"):
+            self.assertEqual(static_keys.get(keyword), dynamic_keys[keyword])
+        for keyword in ("maxLength", "pattern"):
+            self.assertEqual(static_keys["items"].get(keyword), dynamic_keys["items"][keyword])
+
     def test_aggregate_descriptions_match_pydantic_and_explain_runtime_combinations(self):
         properties = self._raw_body_schema("mcp_aggregate_logs")["properties"]
         dimension = properties["dimensions"]["items"]["properties"]
@@ -299,6 +356,10 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         if "default" in pydantic_schema:
             self.assertIn("default", yaml_schema, path)
             self.assertEqual(pydantic_schema["default"], yaml_schema["default"], path)
+
+        for keyword in ("minLength", "maxLength", "minItems", "maxItems", "pattern"):
+            if keyword in pydantic_schema:
+                self.assertEqual(pydantic_schema[keyword], yaml_schema.get(keyword), path)
 
         pydantic_properties = pydantic_schema.get("properties", {})
         yaml_properties = yaml_schema.get("properties", {})

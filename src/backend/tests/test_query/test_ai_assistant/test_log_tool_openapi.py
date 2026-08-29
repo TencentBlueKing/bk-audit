@@ -106,6 +106,47 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         errors = list(jsonschema.Draft7Validator(self._openapi_json_schema(schema)).iter_errors(payload))
         self.assertTrue(errors)
 
+    def test_shared_condition_and_field_path_cost_limits_are_documented(self):
+        operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/"]["post"]
+        request = operation["requestBody"]["content"]["application/json"]["schema"]
+        condition = self._component(request["properties"]["condition"])
+        self.assertEqual(condition["properties"]["scope_id"]["maxLength"], 255)
+        self.assertEqual(condition["properties"]["conditions"]["maxItems"], 100)
+        condition_item = self._component(condition["properties"]["conditions"]["items"])
+        self.assertEqual(condition_item["properties"]["filters"]["maxItems"], 1000)
+        condition_field = self._component(condition_item["properties"]["field"])
+        self.assertEqual(condition_field["properties"]["keys"]["maxItems"], 16)
+        self.assertEqual(condition_field["properties"]["keys"]["items"]["maxLength"], 128)
+        self.assertIn("1024 bytes", condition_field["properties"]["keys"]["description"])
+        self.assertIn("256 KiB", condition["description"])
+        self.assertIn("16 KiB", condition_item["properties"]["filters"]["description"])
+
+        parent_keys = request["properties"]["parent_keys"]
+        self.assertEqual(parent_keys["maxItems"], 16)
+        self.assertEqual(parent_keys["items"]["maxLength"], 128)
+        self.assertIn("1024 bytes", parent_keys["description"])
+
+    def test_response_capacity_and_expandable_semantics_are_documented(self):
+        field_operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/"][
+            "post"
+        ]
+        field_response = self._response_payload(field_operation)
+        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 100)
+        field_item = self._component(field_response["properties"]["fields"]["items"])
+        self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
+        self.assertIn(
+            "extend_data 根字段及其对象子字段",
+            field_item["properties"]["is_expandable"]["description"],
+        )
+        self.assertIn("1 MiB", field_operation["description"])
+
+        aggregate_operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"][
+            "post"
+        ]
+        aggregate_response = self._response_payload(aggregate_operation)
+        self.assertEqual(aggregate_response["properties"]["rows"]["maxItems"], 100)
+        self.assertIn("1 MiB", aggregate_operation["description"])
+
     def test_aggregate_descriptions_explain_all_runtime_combinations(self):
         operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
         properties = operation["requestBody"]["content"]["application/json"]["schema"]["properties"]

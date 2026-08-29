@@ -94,6 +94,13 @@ def _scenario_events(instruction: str, attempt: int) -> list[dict[str, Any]]:
         ]
     if instruction == "disconnect":
         return [{"type": "RUN_STARTED", "threadId": "thread-disconnect", "runId": "run-disconnect"}]
+    if instruction == "id-mismatch":
+        events = _complete_events("# 不应落库")
+        events[-1]["runId"] = "other-run"
+        return events
+    if instruction == "pre-start-text":
+        events = _complete_events("# 不应落库")
+        return [*events[3:6], events[0], events[-1]]
     if instruction == "retry-once" and attempt == 1:
         return [
             {"type": "RUN_STARTED", "threadId": "thread-retry", "runId": "run-retry-1"},
@@ -153,7 +160,7 @@ def _build_handler(agent: FakeLogAnalysisAgent):
                 self.wfile.flush()
                 should_block = (
                     (instruction == "success" and index == 1)
-                    or (instruction in {"run-error", "disconnect"} and index == 0)
+                    or (instruction in {"run-error", "disconnect", "id-mismatch"} and index == 0)
                     or (instruction in {"redelivery", "fencing"} and attempt == 1 and index == 1)
                 )
                 if should_block:
