@@ -1,22 +1,30 @@
 # -*- coding: utf-8 -*-
 """aggregate_logs Service 的权限、批量查询和响应语义测试。"""
 
+import json
 from unittest import mock
 
 from bk_resource.exceptions import APIRequestError
+from django.test import override_settings
 from requests.exceptions import Timeout as RequestsTimeout
 
 from apps.meta.constants import SensitiveResourceTypeEnum, SensitiveUserData
 from apps.meta.models import SensitiveObject
+from core.exceptions import PermissionException
 from services.web.query.ai_assistant.exceptions import (
     LogQueryFailed,
+    LogQueryResponseTooLarge,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
 )
 from services.web.query.ai_assistant.log_tools.aggregation import LogAggregationService
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import AggregateLogsRequest
-from services.web.query.ai_assistant.schemas import SearchCondition
+from services.web.query.ai_assistant.schemas import (
+    Condition,
+    ConditionField,
+    SearchCondition,
+)
 from tests.base import TestCase
 
 AGGREGATION_MODULE = "services.web.query.ai_assistant.log_tools.aggregation"
@@ -95,7 +103,15 @@ class TestLogAggregationService(TestCase):
             scope_id=kwargs.pop("scope_id", self.target_system_id),
             start_time="2026-08-13T00:00:00+08:00",
             end_time="2026-08-14T00:00:00+08:00",
-            conditions=[],
+            conditions=kwargs.pop("conditions", []),
+        )
+
+    @staticmethod
+    def make_field_condition(*, raw_name, keys, operator, filters):
+        return Condition(
+            field=ConditionField(raw_name=raw_name, keys=keys),
+            operator=operator,
+            filters=filters,
         )
 
     def _aggregate(self, **kwargs):
@@ -131,6 +147,66 @@ class TestLogAggregationService(TestCase):
         (requests,), _ = self.mock_query.bulk_request.call_args
         self.assertEqual(len(requests), 2)
         self.assertIn("LIMIT 3", requests[0]["sql"])
+
+    def _aggregate_payload_dimension(self, value, *, limit=2):
+        self.mock_query.bulk_request.return_value = ({"list": [{"payload": value, "count": 1}]},)
+        return self._aggregate(
+            dimensions=[
+                {
+                    "id": "payload",
+                    "type": "FIELD",
+                    "field": {"raw_name": "extend_data", "keys": ["payload"]},
+                }
+            ],
+            metrics=[{"id": "count", "type": "COUNT"}],
+            order_by=[],
+            limit=limit,
+        )
+
+    def test_response_utf8_budget_accepts_exact_configured_limit_and_rejects_plus_one(self):
+        base = self._aggregate_payload_dimension("")
+        configured_limit = len(base.model_dump_json().encode("utf-8")) + 128
+
+        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=configured_limit):
+            result = self._aggregate_payload_dimension("x" * 128)
+        self.assertEqual(len(result.model_dump_json().encode("utf-8")), configured_limit)
+
+        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=configured_limit):
+            with self.assertRaises(LogQueryResponseTooLarge):
+                self._aggregate_payload_dimension("x" * 129)
+
+    def test_response_budget_counts_chinese_utf8_bytes(self):
+        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=1024):
+            with self.assertRaises(LogQueryResponseTooLarge):
+                self._aggregate_payload_dimension("中" * 400)
+
+    @override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=2 * 1024 * 1024)
+    def test_single_large_row_cannot_expand_hard_response_budget_and_does_not_leak_value(self):
+        marker = "secret-marker-" + "x" * (1024 * 1024)
+
+        with self.assertRaises(LogQueryResponseTooLarge) as raised:
+            self._aggregate_payload_dimension(marker)
+
+        self.assertNotIn("secret-marker", str(raised.exception))
+
+    def test_multiple_rows_are_rejected_when_cumulative_response_exceeds_budget(self):
+        self.mock_query.bulk_request.return_value = (
+            {"list": [{"payload": f"{index}-" + "x" * 11000, "count": 1} for index in range(100)]},
+        )
+
+        with self.assertRaises(LogQueryResponseTooLarge):
+            self._aggregate(
+                dimensions=[
+                    {
+                        "id": "payload",
+                        "type": "FIELD",
+                        "field": {"raw_name": "extend_data", "keys": ["payload"]},
+                    }
+                ],
+                metrics=[{"id": "count", "type": "COUNT"}],
+                order_by=[],
+                limit=100,
+            )
 
     def test_no_conversion_metric_uses_one_bulk_item_and_no_quality_result(self):
         self.mock_query.bulk_request.return_value = ({"list": [{"action": "view", "count": 1}]},)
@@ -177,6 +253,139 @@ class TestLogAggregationService(TestCase):
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate()
         self.mock_permissions.return_value.get_sensitive_object_permissions.assert_called_once_with([permitted.id])
+        self.mock_query.bulk_request.assert_not_called()
+
+    def test_count_star_condition_field_is_included_in_sensitive_precheck(self):
+        sensitive = SensitiveObject.objects.create(
+            name="sensitive condition",
+            system_id=self.target_system_id,
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "extend_data.ssn"}],
+        )
+        self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {str(sensitive.id): False}
+        self.condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="extend_data", keys=["ssn"], operator="eq", filters=["candidate"])
+            ]
+        )
+        self.mock_query.bulk_request.return_value = ({"list": []},)
+
+        with self.assertRaises(SensitiveFieldPermissionDenied):
+            self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], order_by=[])
+
+        self.mock_query.bulk_request.assert_not_called()
+
+    def test_sensitive_path_matches_ancestors_and_descendants_by_segments(self):
+        cases = (
+            ("extend_data.credentials", ["credentials", "token"]),
+            ("extend_data.credentials.token", ["credentials"]),
+        )
+        for sensitive_path, requested_keys in cases:
+            with self.subTest(sensitive_path=sensitive_path, requested_keys=requested_keys):
+                SensitiveObject.objects.all().delete()
+                sensitive = SensitiveObject.objects.create(
+                    name="sensitive nested path",
+                    system_id=self.target_system_id,
+                    resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+                    resource_id="host",
+                    fields=[{"field_name": sensitive_path}],
+                )
+                self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {
+                    str(sensitive.id): False
+                }
+                self.mock_query.bulk_request.return_value = ({"list": []},)
+
+                with self.assertRaises(SensitiveFieldPermissionDenied):
+                    self._aggregate(
+                        dimensions=[
+                            {
+                                "id": "credential",
+                                "type": "FIELD",
+                                "field": {"raw_name": "extend_data", "keys": requested_keys},
+                            }
+                        ],
+                        metrics=[{"id": "count", "type": "COUNT"}],
+                        order_by=[],
+                    )
+
+                self.mock_query.bulk_request.assert_not_called()
+
+    def test_private_sensitive_ancestor_is_rejected_without_permission_lookup(self):
+        SensitiveObject.objects.create(
+            name="private credential object",
+            system_id=self.target_system_id,
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "extend_data.credentials"}],
+            is_private=True,
+        )
+        self.mock_query.bulk_request.return_value = ({"list": []},)
+
+        with self.assertRaises(SensitiveFieldPermissionDenied):
+            self._aggregate(
+                dimensions=[
+                    {
+                        "id": "token",
+                        "type": "FIELD",
+                        "field": {"raw_name": "extend_data", "keys": ["credentials", "token"]},
+                    }
+                ],
+                metrics=[{"id": "count", "type": "COUNT"}],
+                order_by=[],
+            )
+
+        self.mock_permissions.assert_not_called()
+        self.mock_query.bulk_request.assert_not_called()
+
+    def test_similar_sensitive_path_prefix_does_not_match_another_segment(self):
+        SensitiveObject.objects.create(
+            name="different credential field",
+            system_id=self.target_system_id,
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "extend_data.credential"}],
+        )
+        self.mock_query.bulk_request.return_value = ({"list": [{"credentials": "safe", "count": 1}]},)
+
+        result = self._aggregate(
+            dimensions=[
+                {
+                    "id": "credentials",
+                    "type": "FIELD",
+                    "field": {"raw_name": "extend_data", "keys": ["credentials"]},
+                }
+            ],
+            metrics=[{"id": "count", "type": "COUNT"}],
+            order_by=[],
+        )
+
+        self.assertEqual(result.rows, ({"credentials": "safe", "count": 1},))
+        self.mock_permissions.assert_not_called()
+        self.mock_query.bulk_request.assert_called_once()
+
+    def test_system_permission_exception_is_preserved_before_doris_mapping(self):
+        permission_error = PermissionException(
+            action_name="view_system",
+            permission={"system_id": self.target_system_id},
+            apply_url="https://iam.example/apply",
+        )
+        self.mock_context.side_effect = permission_error
+
+        try:
+            self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], order_by=[])
+        except Exception as error:  # noqa: BLE001 - 断言异常身份，避免错误映射被误判为测试错误。
+            raised = error
+        else:
+            self.fail("system permission failure must be raised")
+
+        self.assertIs(raised, permission_error)
+        self.assertEqual(raised.STATUS_CODE, 403)
+        self.assertEqual(raised.code, "9900403")
+        self.assertEqual(
+            raised.data,
+            json.dumps({"permission": {"system_id": self.target_system_id}, "apply_url": "https://iam.example/apply"}),
+        )
         self.mock_query.bulk_request.assert_not_called()
 
     def test_global_sensitive_rule_is_checked_and_count_star_does_not_trigger_field_precheck(self):

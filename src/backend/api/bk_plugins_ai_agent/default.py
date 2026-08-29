@@ -21,6 +21,7 @@ import json
 import os
 import threading
 from contextvars import ContextVar
+from enum import StrEnum
 from typing import Any, Callable
 
 from bk_resource import BkApiResource
@@ -38,6 +39,56 @@ from api.bk_plugins_ai_agent.exceptions import (
 )
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
+
+
+class _AGUIRunState(StrEnum):
+    WAITING = "WAITING"
+    RUNNING = "RUNNING"
+    TERMINAL = "TERMINAL"
+
+
+class _AGUIRunLifecycle:
+    """以唯一 RUN_STARTED 开启副作用；RUNNING 后不限制合法过程事件。"""
+
+    def __init__(self):
+        self.state = _AGUIRunState.WAITING
+        self.thread_id = ""
+        self.run_id = ""
+
+    @staticmethod
+    def _identity(event: dict[str, Any]) -> tuple[str, str]:
+        thread_id = event.get("threadId")
+        run_id = event.get("runId")
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            raise AGUIStreamProtocolError("AG-UI RUN 事件缺少 threadId")
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise AGUIStreamProtocolError("AG-UI RUN 事件缺少 runId")
+        return thread_id, run_id
+
+    def consume(self, event: dict[str, Any]) -> bool:
+        event_type = event["type"]
+        if event_type == "RUN_STARTED":
+            if self.state != _AGUIRunState.WAITING:
+                raise AGUIStreamProtocolError("AG-UI 流重复收到 RUN_STARTED")
+            self.thread_id, self.run_id = self._identity(event)
+            self.state = _AGUIRunState.RUNNING
+            return False
+
+        if self.state == _AGUIRunState.WAITING:
+            raise AGUIStreamProtocolError("AG-UI RUN_STARTED 前收到过程事件")
+        if event_type not in {"RUN_FINISHED", "RUN_ERROR"}:
+            return False
+        thread_id, run_id = self._identity(event)
+        if (thread_id, run_id) != (self.thread_id, self.run_id):
+            raise AGUIStreamProtocolError("AG-UI RUN 终态身份不匹配")
+        self.state = _AGUIRunState.TERMINAL
+        return True
+
+    def ensure_terminal(self) -> None:
+        if self.state == _AGUIRunState.WAITING:
+            raise AGUIStreamProtocolError("AG-UI 流未收到有效 RUN_STARTED")
+        if self.state != _AGUIRunState.TERMINAL:
+            raise AGUIStreamProtocolError("AG-UI 连接结束时未收到 RUN 终态")
 
 
 class AIAgentBase(BkApiResource, abc.ABC):
@@ -518,6 +569,7 @@ class AGUIChatCompletion(ChatCompletion):
         """解析完整 AG-UI 流，并在通过形态与容量校验后同步回调每个事件。"""
         events: list[dict[str, Any]] = []
         final_message_parser = AGUIFinalMessageParser()
+        lifecycle = _AGUIRunLifecycle()
         # 容量上限约束返回的完整 JSON 数组，初始即包含空数组的 `[]`。
         serialized_bytes = 2
         run_finished = False
@@ -528,6 +580,8 @@ class AGUIChatCompletion(ChatCompletion):
             if event is None:
                 continue
 
+            # 生命周期是所有事件副作用的前置门禁，非法事件不得进入归档、正文解析或业务回调。
+            terminal = lifecycle.consume(event)
             event_count = len(events) + 1
             serialized_bytes += len(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
             if events:
@@ -544,11 +598,12 @@ class AGUIChatCompletion(ChatCompletion):
 
             if event["type"] == "RUN_ERROR":
                 raise AGUIStreamProtocolError("AG-UI 上游执行失败")
-            if event["type"] == "RUN_FINISHED":
+            if terminal:
                 run_finished = True
                 final_result = event.get("result")
                 break
 
+        lifecycle.ensure_terminal()
         if not run_finished:
             raise AGUIStreamProtocolError("AG-UI 流未收到 RUN_FINISHED")
         final_content = final_message_parser.get_final_content()

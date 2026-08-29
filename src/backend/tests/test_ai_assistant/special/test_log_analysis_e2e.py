@@ -119,7 +119,7 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
 
 
-@pytest.mark.parametrize("instruction", ["run-error", "disconnect"])
+@pytest.mark.parametrize("instruction", ["run-error", "disconnect", "id-mismatch"])
 def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instruction):
     attachment = log_analysis_stack.create_attachment(
         user=log_analysis_stack.username,
@@ -178,6 +178,29 @@ def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instructio
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
     if instruction == "run-error":
         assert any(event["data"].get("type") == "RUN_ERROR" for event in completed.stream_archive[:-1])
+    if instruction == "id-mismatch":
+        assert not any(event["data"].get("type") == "RUN_FINISHED" for event in completed.stream_archive[:-1])
+
+
+def test_log_analysis_rejects_text_before_run_started_without_archiving_it(log_analysis_stack):
+    attachment = log_analysis_stack.create_attachment(
+        user=log_analysis_stack.username,
+        instruction="pre-start-text",
+    )
+
+    completed = wait_for_terminal(attachment)
+    snapshot = get_stream_snapshot(log_analysis_stack, completed)
+
+    assert completed.status == ExecutionStatus.FAILED
+    assert completed.output_data is None
+    assert completed.stream_archive == [
+        {
+            "event": PlatformStreamEvent.STREAM_END,
+            "stream_id": None,
+            "data": {"status": ExecutionStatus.FAILED},
+        }
+    ]
+    assert snapshot["events"] == completed.stream_archive
 
 
 def test_log_analysis_manual_retry_rotates_execution_and_resets_old_stream(log_analysis_stack):

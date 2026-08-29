@@ -1,5 +1,6 @@
 """日志工具共享的 Pydantic 协议。"""
 
+import json
 import re
 from enum import StrEnum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
@@ -10,6 +11,8 @@ from rest_framework import serializers
 
 from apps.meta.utils.fields import EXTEND_DATA, STANDARD_FIELDS, START_TIME
 from services.web.query.ai_assistant.schemas import (
+    Condition,
+    ConditionField,
     QuerySummary,
     SearchCondition,
     SelectionFieldOption,
@@ -17,12 +20,28 @@ from services.web.query.ai_assistant.schemas import (
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 
 FIELD_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-LogFieldKey = Annotated[str, Field(pattern=FIELD_KEY_PATTERN.pattern)]
+LOG_TOOL_MAX_CONDITIONS = 100
+LOG_TOOL_MAX_FILTERS_PER_CONDITION = 1000
+LOG_TOOL_MAX_CONDITION_BYTES = 256 * 1024
+LOG_TOOL_MAX_FILTER_BYTES = 16 * 1024
+LOG_TOOL_MAX_FIELD_KEY_LENGTH = 128
+LOG_TOOL_MAX_FIELD_PATH_DEPTH = 16
+LOG_TOOL_MAX_FIELD_PATH_BYTES = 1024
+LOG_TOOL_MAX_SCOPE_ID_LENGTH = 255
+LogFieldKey = Annotated[
+    str,
+    Field(pattern=FIELD_KEY_PATTERN.pattern, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
+]
 LOG_SEARCH_MAX_FIELDS = 20
 LOG_SEARCH_MAX_SORT_FIELDS = 3
 LOG_SEARCH_MAX_PAGE = 100
 LOG_SEARCH_MAX_PAGE_SIZE = 100
 LOG_SEARCH_RESPONSE_MAX_BYTES = 1024 * 1024
+LOG_FIELD_METADATA_MAX_FIELDS = 100
+LOG_FIELD_METADATA_SAMPLE_ROWS = 50
+LOG_FIELD_METADATA_SAMPLE_VALUES = 3
+LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = 1024
+LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = 1024 * 1024
 # 字段展示元信息可覆盖 WEB 列，但 Agent 投影只能使用条件白名单和默认列必需的 start_time。
 LOG_TOOL_ALLOWED_FIELD_NAMES = frozenset((*COLLECT_SEARCH_CONFIG.query_field_map, START_TIME.field_name))
 LOG_TOOL_SORTABLE_FIELD_NAMES = frozenset((START_TIME.field_name,))
@@ -39,12 +58,129 @@ AGGREGATION_NUMERIC_FIELD_TYPES = frozenset(("int", "long", "float", "double", "
 AGGREGATION_MAX_DIMENSIONS = 2
 AGGREGATION_MAX_METRICS = 5
 AGGREGATION_MAX_LIMIT = 100
+AGGREGATION_RESPONSE_MAX_BYTES = 1024 * 1024
 
 
 def _bounded_limit(setting_name: str, hard_limit: int, minimum: int) -> int:
     """运行环境只能收紧冻结协议上限，不能放大 Agent 工具成本。"""
 
     return min(hard_limit, max(minimum, getattr(settings, setting_name, hard_limit)))
+
+
+def _json_size(value: Any) -> int:
+    """按真实 UTF-8 JSON 计算请求成本，不以 Python 字符数近似。"""
+
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return len(serialized.encode("utf-8"))
+    except (TypeError, ValueError, OverflowError, UnicodeEncodeError) as err:
+        raise ValueError("value is not valid UTF-8 JSON") from err
+
+
+def _validate_field_path(raw_name: str, keys: List[str]) -> None:
+    if len(keys) > _bounded_limit("AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", LOG_TOOL_MAX_FIELD_PATH_DEPTH, 0):
+        raise ValueError("field path is too deep")
+    key_limit = _bounded_limit("AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH", LOG_TOOL_MAX_FIELD_KEY_LENGTH, 0)
+    if any(len(key) > key_limit for key in keys):
+        raise ValueError("field key is too long")
+    path_limit = _bounded_limit("AI_LOG_TOOL_MAX_FIELD_PATH_BYTES", LOG_TOOL_MAX_FIELD_PATH_BYTES, 1)
+    if len(".".join((raw_name, *keys)).encode("utf-8")) > path_limit:
+        raise ValueError("field path is too long")
+
+
+class AgentConditionField(ConditionField):
+    """Agent 工具条件字段；只收紧公共 WEB 条件，不改变原检索协议。"""
+
+    keys: Annotated[
+        List[LogFieldKey],
+        serializers.ListField(
+            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
+            allow_empty=True,
+            max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+        ),
+    ] = Field(
+        default_factory=list,
+        max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+        description="最多 16 段 ASCII 安全子键；完整字段路径 UTF-8 最大 1024 bytes。",
+    )
+
+    @model_validator(mode="after")
+    def validate_agent_field_path(self):
+        _validate_field_path(self.raw_name, self.keys)
+        return self
+
+
+class AgentCondition(Condition):
+    """Agent 工具单条件，限制过滤值数量与单值 JSON 字节。"""
+
+    field: AgentConditionField
+    filters: Annotated[
+        List[Any],
+        serializers.ListField(
+            child=serializers.JSONField(),
+            allow_empty=True,
+            max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
+            help_text="最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。",
+        ),
+    ] = Field(
+        default_factory=list,
+        max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
+        description="最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。",
+    )
+
+    @model_validator(mode="after")
+    def validate_agent_filter_cost(self):
+        filter_count_limit = _bounded_limit(
+            "AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION", LOG_TOOL_MAX_FILTERS_PER_CONDITION, 0
+        )
+        if len(self.filters) > filter_count_limit:
+            raise ValueError("too many condition filters")
+        filter_bytes_limit = _bounded_limit("AI_LOG_TOOL_MAX_FILTER_BYTES", LOG_TOOL_MAX_FILTER_BYTES, 1)
+        if any(_json_size(value) > filter_bytes_limit for value in self.filters):
+            raise ValueError("condition filter is too large")
+        return self
+
+
+class AgentSearchCondition(SearchCondition):
+    """仅供三项 Agent 日志工具使用的冻结成本协议。"""
+
+    scope_id: str = Field(..., min_length=1, max_length=LOG_TOOL_MAX_SCOPE_ID_LENGTH)
+    conditions: List[AgentCondition] = Field(
+        default_factory=list,
+        max_length=LOG_TOOL_MAX_CONDITIONS,
+        description="最多 100 个条件；完整 condition 的 UTF-8 JSON 最大 256 KiB。",
+    )
+
+    @model_validator(mode="after")
+    def validate_agent_condition_cost(self):
+        scope_limit = _bounded_limit("AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH", LOG_TOOL_MAX_SCOPE_ID_LENGTH, 1)
+        if len(self.scope_id) > scope_limit:
+            raise ValueError("scope_id is too long")
+        condition_count_limit = _bounded_limit("AI_LOG_TOOL_MAX_CONDITIONS", LOG_TOOL_MAX_CONDITIONS, 0)
+        if len(self.conditions) > condition_count_limit:
+            raise ValueError("too many conditions")
+        condition_bytes_limit = _bounded_limit("AI_LOG_TOOL_MAX_CONDITION_BYTES", LOG_TOOL_MAX_CONDITION_BYTES, 1)
+        if _json_size(self.model_dump(mode="json")) > condition_bytes_limit:
+            raise ValueError("condition is too large")
+        return self
+
+
+class AgentLogToolRequest(BaseModel):
+    """三项 Agent 日志工具的公共条件入口。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    condition: AgentSearchCondition = Field(
+        ...,
+        description=("单系统日志检索条件；服务端会按当前用户重新鉴权。最多 100 个条件，" "完整 condition 的 UTF-8 JSON 最大 256 KiB。"),
+    )
+
+    @field_validator("condition", mode="before")
+    @classmethod
+    def normalize_existing_condition(cls, condition):
+        if isinstance(condition, SearchCondition):
+            return condition.model_dump(mode="json")
+        return condition
 
 
 class LogFieldRef(BaseModel):
@@ -60,13 +196,15 @@ class LogFieldRef(BaseModel):
     keys: Annotated[
         List[LogFieldKey],
         serializers.ListField(
-            child=serializers.RegexField(regex=FIELD_KEY_PATTERN),
+            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
             allow_empty=True,
+            max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
             help_text="extend_data 的安全子路径；标准字段必须为空数组。",
         ),
     ] = Field(
         default_factory=list,
-        description="extend_data 的安全子路径；标准字段必须为空数组。",
+        max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+        description="extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。",
     )
     field_type: Optional[str] = Field(default=None, description="可选声明类型，仅用于字段元信息或安全数值转换。")
 
@@ -85,6 +223,7 @@ class LogFieldRef(BaseModel):
         # 当前工具只允许动态 extend_data 下钻，避免将任意 JSON 容器暴露给 Agent。
         if self.keys and self.raw_name != EXTEND_DATA.field_name:
             raise ValueError("nested keys are only supported for extend_data")
+        _validate_field_path(self.raw_name, self.keys)
         return self
 
 
@@ -110,23 +249,22 @@ class LogFieldMetadataTypeSource(StrEnum):
     INFERRED = "INFERRED"
 
 
-class GetLogFieldMetadataRequest(BaseModel):
+class GetLogFieldMetadataRequest(AgentLogToolRequest):
     """字段元信息探索请求，父路径复用可消费的 extend_data 路径约束。"""
 
-    model_config = ConfigDict(extra="forbid")
-
-    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
     parent_keys: Annotated[
         List[LogFieldKey],
         serializers.ListField(
-            child=serializers.RegexField(regex=FIELD_KEY_PATTERN),
+            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
             allow_empty=True,
+            max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
             required=False,
             help_text="仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。",
         ),
     ] = Field(
         default_factory=list,
-        description="仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。",
+        max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+        description=("仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开，" "完整字段路径最大 1024 bytes。"),
     )
     field_scope: LogFieldScope = Field(
         default=LogFieldScope.ALL,
@@ -151,10 +289,23 @@ class LogFieldMetadataItem(BaseModel):
     observed_types: List[str] = Field(default_factory=list)
     allow_operators: List[str] = Field(default_factory=list)
     options: Optional[List[SelectionFieldOption]] = None
-    is_expandable: bool = False
+    is_expandable: bool = Field(
+        default=False,
+        description="extend_data 根字段及其对象子字段可为 true；其他标准 JSON 字段当前协议不可下钻。",
+    )
     sample_values: Annotated[
-        List[Any], serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="脱敏后的有界标量样例")
-    ] = Field(default_factory=list, description="脱敏后的有界标量样例；对象和数组不回显。")
+        List[Any],
+        serializers.ListField(
+            child=serializers.JSONField(),
+            allow_empty=True,
+            max_length=LOG_FIELD_METADATA_SAMPLE_VALUES,
+            help_text="最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes。",
+        ),
+    ] = Field(
+        default_factory=list,
+        max_length=LOG_FIELD_METADATA_SAMPLE_VALUES,
+        description="最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。",
+    )
     sampled_non_null_count: int = 0
     coverage: float = 0.0
 
@@ -170,7 +321,11 @@ class FieldSampleSummary(BaseModel):
 class GetLogFieldMetadataResponse(BaseModel):
     """字段探索响应，不包含 SQL、物理表或未经脱敏的命中行。"""
 
-    fields: List[LogFieldMetadataItem] = Field(default_factory=list)
+    fields: List[LogFieldMetadataItem] = Field(
+        default_factory=list,
+        max_length=LOG_FIELD_METADATA_MAX_FIELDS,
+        description="最多返回 100 个字段；完整响应 UTF-8 JSON 最大 1 MiB。",
+    )
     sample_summary: FieldSampleSummary
 
 
@@ -189,12 +344,9 @@ class LogSortItem(BaseModel):
         return self
 
 
-class SearchLogsRequest(BaseModel):
+class SearchLogsRequest(AgentLogToolRequest):
     """日志明细请求，所有字段和排序均以 LogFieldRef 表达。"""
 
-    model_config = ConfigDict(extra="forbid")
-
-    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
     fields: Optional[List[LogFieldRef]] = Field(
         default=None,
         min_length=1,
@@ -457,12 +609,9 @@ class AggregationOrder(BaseModel):
     direction: AggregationOrderDirection = Field(..., description="固定排序方向 ASC 或 DESC。")
 
 
-class AggregateLogsRequest(BaseModel):
+class AggregateLogsRequest(AgentLogToolRequest):
     """类型化聚合请求，配置只能收紧 frozen hard limit。"""
 
-    model_config = ConfigDict(extra="forbid")
-
-    condition: SearchCondition = Field(..., description="单系统日志检索条件；服务端会按当前用户重新鉴权。")
     dimensions: Tuple[AggregationDimension, ...] = Field(
         default=(),
         max_length=AGGREGATION_MAX_DIMENSIONS,
@@ -538,7 +687,16 @@ class AggregateLogsResponse(BaseModel):
     columns: Tuple[AggregationColumn, ...]
     rows: Annotated[
         Tuple[Dict[str, Any], ...],
-        serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="声明列对应的聚合结果行"),
-    ]
+        serializers.ListField(
+            child=serializers.JSONField(),
+            allow_empty=True,
+            max_length=AGGREGATION_MAX_LIMIT,
+            help_text="最多 100 行声明列对应的聚合结果；完整响应最大 1 MiB。",
+        ),
+    ] = Field(
+        ...,
+        max_length=AGGREGATION_MAX_LIMIT,
+        description="最多 100 行声明列对应的聚合结果；完整响应 UTF-8 JSON 最大 1 MiB。",
+    )
     query_summary: AggregationQuerySummary
     data_quality: Tuple[AggregationDataQuality, ...] = ()

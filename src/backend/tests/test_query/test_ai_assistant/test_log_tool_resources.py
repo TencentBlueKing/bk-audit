@@ -13,6 +13,7 @@ from drf_spectacular.views import SpectacularAPIView
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from core.exceptions import PermissionException
 from core.permissions import UserAPIGWPermission
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
@@ -128,6 +129,45 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertEqual(service.call_args.kwargs["username"], "alice")
         self.assertEqual(service.call_args.kwargs["namespace"], "default")
         self.assertEqual(response, response_model.model_dump(mode="json"))
+
+    def test_aggregate_resource_request_preserves_system_permission_exception_and_skips_doris(self):
+        from services.web.query.resources.ai_assistant import MCPAggregateLogs
+
+        permission_error = PermissionException(
+            action_name="view_system",
+            permission={"system_id": self.condition.scope_id},
+            apply_url="https://iam.example/apply",
+        )
+        with (
+            mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.aggregation.LogQueryContextService.build",
+                side_effect=permission_error,
+            ),
+            mock.patch("services.web.query.ai_assistant.log_tools.aggregation.safe_query_sync") as query,
+        ):
+            try:
+                MCPAggregateLogs().request(
+                    namespace="default",
+                    condition=self.condition.model_dump(mode="json"),
+                    metrics=[{"id": "count", "type": "COUNT"}],
+                )
+            except Exception as error:  # noqa: BLE001 - 断言 Resource 保留同一平台权限异常。
+                raised = error
+            else:
+                self.fail("system permission failure must be raised")
+
+        self.assertIs(raised, permission_error)
+        self.assertEqual(raised.STATUS_CODE, 403)
+        self.assertEqual(raised.code, "9900403")
+        self.assertEqual(
+            json.loads(raised.data),
+            {
+                "permission": {"system_id": self.condition.scope_id},
+                "apply_url": "https://iam.example/apply",
+            },
+        )
+        query.bulk_request.assert_not_called()
 
     def test_aggregate_http_accepts_model_dump_with_explicit_nulls(self):
         request_model = AggregateLogsRequest.model_validate(
@@ -265,6 +305,29 @@ class TestMCPUserLogResources(AIAssistantTestCase):
 
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("parent_keys", str(response.data))
+        service.assert_not_called()
+
+    def test_resource_request_rejects_oversized_shared_condition_before_service(self):
+        from services.web.query.resources.ai_assistant import MCPAggregateLogs
+
+        condition = self.condition.model_dump(mode="json")
+        condition["conditions"] = [
+            {
+                "field": {"raw_name": "username", "keys": []},
+                "operator": "eq",
+                "filters": ["alice"],
+            }
+        ] * 101
+        with mock.patch(
+            "services.web.query.ai_assistant.log_tools.aggregation.LogAggregationService.aggregate"
+        ) as service:
+            with self.assertRaises(ValidationError):
+                MCPAggregateLogs().request(
+                    namespace="default",
+                    condition=condition,
+                    metrics=[{"id": "count", "type": "COUNT"}],
+                )
+
         service.assert_not_called()
 
     def test_body_namespace_is_rejected_before_resource_execution(self):

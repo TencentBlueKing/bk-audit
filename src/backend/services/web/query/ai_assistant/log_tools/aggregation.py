@@ -4,6 +4,7 @@ import re
 import time
 from typing import Dict, Set
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
@@ -13,6 +14,7 @@ from apps.meta.constants import SensitiveUserData
 from apps.meta.models import SensitiveObject
 from apps.permission.handlers.service import PermissionService
 from services.web.query.ai_assistant.exceptions import (
+    LogQueryResponseTooLarge,
     SensitiveFieldPermissionDenied,
     UnsupportedAggregation,
 )
@@ -20,6 +22,7 @@ from services.web.query.ai_assistant.log_tools.context import LogQueryContextSer
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
+    AGGREGATION_RESPONSE_MAX_BYTES,
     AGGREGATION_STANDARD_FIELD_TYPES,
     AggregateLogsRequest,
     AggregateLogsResponse,
@@ -44,8 +47,10 @@ class LogAggregationService:
         except PydanticValidationError as err:
             raise UnsupportedAggregation() from err
 
+        # 系统无权属于平台权限协议，必须保留原 403、权限信息和申请地址；
+        # 仅 Doris 执行及其响应解析进入日志工具异常映射。
+        context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
         try:
-            context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
             cls._ensure_fields_aggregatable(
                 username=username,
                 system_id=request.condition.scope_id,
@@ -67,6 +72,7 @@ class LogAggregationService:
                 data_quality=quality,
             )
             response.query_summary.executed_at = timezone.now().isoformat()
+            cls._ensure_response_within_budget(response)
             return response
         except Exception as err:  # noqa: BLE001
             mapped_error = map_log_query_error(err)
@@ -89,7 +95,11 @@ class LogAggregationService:
         matched = [
             sensitive_object
             for sensitive_object in sensitive_objects
-            if cls._sensitive_field_names(sensitive_object).intersection(fields)
+            if any(
+                cls._field_paths_overlap(sensitive_path, requested_path)
+                for sensitive_path in cls._sensitive_field_names(sensitive_object)
+                for requested_path in fields
+            )
         ]
         if any(item.is_private for item in matched):
             raise SensitiveFieldPermissionDenied()
@@ -112,8 +122,27 @@ class LogAggregationService:
     @staticmethod
     def _requested_field_paths(request: AggregateLogsRequest) -> Set[str]:
         fields = [item.field for item in request.dimensions]
-        fields.extend(item.field for item in request.metrics if item.type != AggregationMetricType.COUNT)
+        fields.extend(item.field for item in request.metrics if item.field is not None)
+        fields.extend(item.field for item in request.condition.conditions)
         return {".".join((field.raw_name, *field.keys)) for field in fields if field is not None}
+
+    @staticmethod
+    def _field_paths_overlap(left: str, right: str) -> bool:
+        """按字段段判断双向祖先/后代，避免相似字符串前缀造成误判。"""
+
+        left_parts = tuple(left.split("."))
+        right_parts = tuple(right.split("."))
+        shared_length = min(len(left_parts), len(right_parts))
+        return left_parts[:shared_length] == right_parts[:shared_length]
+
+    @staticmethod
+    def _ensure_response_within_budget(response: AggregateLogsResponse) -> None:
+        """聚合结果按完整 UTF-8 响应计费，超限不返回原始维度值。"""
+
+        configured_limit = getattr(settings, "AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES", AGGREGATION_RESPONSE_MAX_BYTES)
+        response_limit = min(AGGREGATION_RESPONSE_MAX_BYTES, max(0, configured_limit))
+        if len(response.model_dump_json().encode("utf-8")) > response_limit:
+            raise LogQueryResponseTooLarge()
 
     @staticmethod
     def _query(builder: LogAggregationSQLBuilder) -> tuple[tuple[dict, ...], int]:

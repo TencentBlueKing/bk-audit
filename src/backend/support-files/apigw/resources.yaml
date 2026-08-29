@@ -19,10 +19,12 @@ definitions:
       keys:
         type: array
         default: []
+        maxItems: 16
         items:
           type: string
+          maxLength: 128
           pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-        description: extend_data 的安全子路径；标准字段必须为空数组。
+        description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
       field_type:
         type: string
         default: null
@@ -35,7 +37,12 @@ definitions:
       raw_name: {type: string}
       keys:
         type: array
-        items: {type: string}
+        maxItems: 16
+        items:
+          type: string
+          maxLength: 128
+          pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+        description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
       field_type:
         type: string
         x-nullable: true
@@ -49,10 +56,12 @@ definitions:
       keys:
         type: array
         default: []
-        items: {type: string}
+        maxItems: 16
+        items: {type: string, maxLength: 128, pattern: '^[A-Za-z_][A-Za-z0-9_]*$'}
+        description: 最多 16 段 ASCII 安全子键；完整字段路径 UTF-8 最大 1024 bytes。
   log_tool_condition:
     type: object
-    description: 单系统日志检索条件；服务端会按当前用户重新鉴权。
+    description: 单系统日志检索条件；服务端会按当前用户重新鉴权。最多 100 个条件，完整 condition 的 UTF-8 JSON 最大 256 KiB。
     additionalProperties: false
     required: [scope_id, start_time, end_time]
     properties:
@@ -63,6 +72,7 @@ definitions:
       scope_id:
         type: string
         minLength: 1
+        maxLength: 255
         description: 当前查询的单个系统 ID；服务端按真实用户重新鉴权。
       start_time:
         type: string
@@ -75,6 +85,7 @@ definitions:
       conditions:
         type: array
         default: []
+        maxItems: 100
         items:
           type: object
           additionalProperties: false
@@ -88,8 +99,9 @@ definitions:
             filters:
               type: array
               default: []
+              maxItems: 1000
               items: {}
-              description: 比较值列表；isnull/notnull 必须为空数组。
+              description: 最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。
   log_tool_option:
     type: object
     required: [id, name]
@@ -3045,7 +3057,7 @@ paths:
   /mcp/{namespace}/logs/field_metadata/:
     post:
       operationId: mcp_get_log_field_metadata
-      description: 探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；字段或权限错误可修正参数后重试。
+      description: 探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；完整响应最大 1 MiB，字段或权限错误可修正参数后重试。
       tags: []
       parameters:
         - in: path
@@ -3068,10 +3080,12 @@ paths:
               parent_keys:
                 type: array
                 default: []
+                maxItems: 16
                 items:
                   type: string
+                  maxLength: 128
                   pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-                description: 仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。
+                description: 仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开，完整字段路径最大 1024 bytes。
               field_scope:
                 type: string
                 enum: [ALL, BASIC, EXTENDED]
@@ -3095,6 +3109,7 @@ paths:
                 properties:
                   fields:
                     type: array
+                    maxItems: 100
                     items:
                       type: object
                       required: [field, category, display_name, description, type_source, observed_types, allow_operators, options, is_expandable, sample_values, sampled_non_null_count, coverage]
@@ -3107,8 +3122,8 @@ paths:
                         observed_types: {type: array, items: {type: string}}
                         allow_operators: {type: array, items: {type: string}}
                         options: {type: array, x-nullable: true, items: {$ref: '#/definitions/log_tool_option'}}
-                        is_expandable: {type: boolean, description: 对象字段可用 parent_keys 再探索下一层；不会自动递归返回。}
-                        sample_values: {type: array, items: {}, description: 脱敏后的有界标量样例；对象和数组不回显。}
+                        is_expandable: {type: boolean, description: extend_data 根字段及其对象子字段可为 true；其他标准 JSON 字段当前协议不可下钻。}
+                        sample_values: {type: array, maxItems: 3, items: {}, description: 最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。}
                         sampled_non_null_count: {type: integer}
                         coverage: {type: number, format: double}
                   sample_summary:
@@ -3259,7 +3274,7 @@ paths:
   /mcp/{namespace}/logs/aggregate/:
     post:
       operationId: mcp_aggregate_logs
-      description: 对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回。
+      description: 对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回，完整响应最大 1 MiB。
       tags: []
       parameters:
         - in: path
@@ -3330,10 +3345,12 @@ paths:
                         keys:
                           type: array
                           default: []
+                          maxItems: 16
                           items:
                             type: string
+                            maxLength: 128
                             pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-                          description: extend_data 的安全子路径；标准字段必须为空数组。
+                          description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
                         field_type:
                           type: string
                           default: null
@@ -3403,6 +3420,7 @@ paths:
                         effective_time_interval: {type: string, x-nullable: true, enum: [MINUTE, HOUR, DAY]}
                   rows:
                     type: array
+                    maxItems: 100
                     items: {type: object}
                     description: 每行仅使用请求中声明的 ID 作为键。
                   query_summary:

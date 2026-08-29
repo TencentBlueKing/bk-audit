@@ -2,9 +2,11 @@
 """日志工具公共协议与受控投影测试。"""
 
 import ast
+import json
 from pathlib import Path
 
 from django.conf import settings
+from django.test import override_settings
 from pydantic import ValidationError as PydanticValidationError
 
 from services.web.query.ai_assistant.exceptions import (
@@ -17,8 +19,10 @@ from services.web.query.ai_assistant.exceptions import (
     UnsupportedLogField,
 )
 from services.web.query.ai_assistant.log_tools.schemas import (
+    AggregateLogsRequest,
     GetLogFieldMetadataRequest,
     LogFieldRef,
+    SearchLogsRequest,
 )
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -132,6 +136,183 @@ class TestGetLogFieldMetadataRequest(AIAssistantTestCase):
     def test_parent_keys_reject_unsafe_key(self):
         with self.assertRaises(PydanticValidationError):
             GetLogFieldMetadataRequest(condition=self.make_condition(), parent_keys=["unsafe-key"])
+
+
+class TestAgentLogToolRequestCostBoundaries(AIAssistantTestCase):
+    """三项 Agent 日志工具共享同一组不可放大的请求成本边界。"""
+
+    request_models = (GetLogFieldMetadataRequest, SearchLogsRequest, AggregateLogsRequest)
+
+    def _request_payload(self, model, condition):
+        payload = {"condition": condition}
+        if model is AggregateLogsRequest:
+            payload["metrics"] = [{"id": "count", "type": "COUNT"}]
+        return payload
+
+    def _validate_all(self, condition):
+        for model in self.request_models:
+            with self.subTest(model=model.__name__):
+                model.model_validate(self._request_payload(model, condition))
+
+    def _reject_all(self, condition):
+        for model in self.request_models:
+            with self.subTest(model=model.__name__):
+                with self.assertRaises(PydanticValidationError):
+                    model.model_validate(self._request_payload(model, condition))
+
+    def _condition(self, **changes):
+        payload = self.make_condition().model_dump(mode="json")
+        payload.update(changes)
+        return payload
+
+    def _condition_with_encoded_size(self, encoded_size):
+        filters = [""] * 17
+        condition = self._condition(conditions=[self._field_condition(filters=filters)])
+        overhead = len(json.dumps(condition, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        remaining = encoded_size - overhead
+        for index in range(len(filters)):
+            content_bytes = min(16 * 1024 - 2, remaining)
+            filters[index] = "x" * content_bytes
+            remaining -= content_bytes
+        self.assertEqual(remaining, 0)
+        return condition
+
+    @staticmethod
+    def _field_condition(*, filters=None, keys=None):
+        return {
+            "field": {"raw_name": "extend_data", "field_type": None, "keys": keys or ["risk"]},
+            "operator": "eq",
+            "filters": ["value"] if filters is None else filters,
+        }
+
+    def test_condition_count_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        for count in (99, 100):
+            with self.subTest(count=count):
+                self._validate_all(self._condition(conditions=[self._field_condition()] * count))
+        self._reject_all(self._condition(conditions=[self._field_condition()] * 101))
+
+    def test_filter_count_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        for count in (999, 1000):
+            with self.subTest(count=count):
+                self._validate_all(self._condition(conditions=[self._field_condition(filters=["x"] * count)]))
+        self._reject_all(self._condition(conditions=[self._field_condition(filters=["x"] * 1001)]))
+
+    def test_single_filter_utf8_size_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        limit = 16 * 1024
+        for encoded_size in (limit - 1, limit):
+            with self.subTest(encoded_size=encoded_size):
+                value = "x" * (encoded_size - len(json.dumps("", ensure_ascii=False).encode("utf-8")))
+                self._validate_all(self._condition(conditions=[self._field_condition(filters=[value])]))
+        oversized = "中" * ((limit // 3) + 1)
+        self._reject_all(self._condition(conditions=[self._field_condition(filters=[oversized])]))
+
+    def test_complete_condition_utf8_size_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        limit = 256 * 1024
+        for encoded_size in (limit - 1, limit):
+            with self.subTest(encoded_size=encoded_size):
+                self._validate_all(self._condition_with_encoded_size(encoded_size))
+        self._reject_all(self._condition_with_encoded_size(limit + 1))
+
+    def test_field_key_length_and_depth_boundaries(self):
+        for key_length in (127, 128):
+            with self.subTest(key_length=key_length):
+                self._validate_all(self._condition(conditions=[self._field_condition(keys=["k" * key_length])]))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=["k" * 129])]))
+
+        for depth in (15, 16):
+            with self.subTest(depth=depth):
+                self._validate_all(self._condition(conditions=[self._field_condition(keys=["level"] * depth)]))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=["level"] * 17)]))
+
+    def test_full_field_path_utf8_size_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        prefix_size = len(b"extend_data.")
+        for encoded_size in (1023, 1024):
+            with self.subTest(encoded_size=encoded_size):
+                keys = ["k" * 128] * 7
+                consumed = prefix_size + sum(len(key) for key in keys) + len(keys)
+                keys.append("k" * (encoded_size - consumed))
+                self._validate_all(self._condition(conditions=[self._field_condition(keys=keys)]))
+        keys = ["k" * 128] * 7
+        consumed = prefix_size + sum(len(key) for key in keys) + len(keys)
+        keys.append("k" * (1025 - consumed))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=keys)]))
+
+    def test_scope_id_length_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
+        for length in (254, 255):
+            with self.subTest(length=length):
+                self._validate_all(self._condition(scope_id="s" * length))
+        self._reject_all(self._condition(scope_id="s" * 256))
+
+    def test_runtime_configuration_can_tighten_request_limits(self):
+        cases = (
+            ("AI_LOG_TOOL_MAX_CONDITIONS", 2, self._condition(conditions=[self._field_condition()] * 3)),
+            (
+                "AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION",
+                2,
+                self._condition(conditions=[self._field_condition(filters=["a", "b", "c"])]),
+            ),
+            (
+                "AI_LOG_TOOL_MAX_CONDITION_BYTES",
+                256,
+                self._condition(conditions=[self._field_condition(filters=["x" * 256])]),
+            ),
+            (
+                "AI_LOG_TOOL_MAX_FILTER_BYTES",
+                4,
+                self._condition(conditions=[self._field_condition(filters=["xxx"])]),
+            ),
+            (
+                "AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH",
+                2,
+                self._condition(conditions=[self._field_condition(keys=["key"])]),
+            ),
+            (
+                "AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH",
+                2,
+                self._condition(conditions=[self._field_condition(keys=["a", "b", "c"])]),
+            ),
+            (
+                "AI_LOG_TOOL_MAX_FIELD_PATH_BYTES",
+                16,
+                self._condition(conditions=[self._field_condition(keys=["abcdef"])]),
+            ),
+            ("AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH", 2, self._condition(scope_id="sys")),
+        )
+        for setting_name, limit, condition in cases:
+            with self.subTest(setting_name=setting_name):
+                with override_settings(**{setting_name: limit}):
+                    self._reject_all(condition)
+
+    @override_settings(
+        AI_LOG_TOOL_MAX_CONDITIONS=999,
+        AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION=9999,
+        AI_LOG_TOOL_MAX_CONDITION_BYTES=999999,
+        AI_LOG_TOOL_MAX_FILTER_BYTES=999999,
+        AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH=999,
+        AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH=999,
+        AI_LOG_TOOL_MAX_FIELD_PATH_BYTES=9999,
+        AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH=999,
+    )
+    def test_runtime_configuration_cannot_expand_frozen_request_limits(self):
+        self._reject_all(self._condition(scope_id="s" * 256))
+        self._reject_all(self._condition(conditions=[self._field_condition()] * 101))
+        self._reject_all(self._condition(conditions=[self._field_condition(filters=["x"] * 1001)]))
+        self._reject_all(self._condition(conditions=[self._field_condition(filters=["x" * (16 * 1024 - 1)])]))
+        self._reject_all(self._condition_with_encoded_size(256 * 1024 + 1))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=["x" * 129])]))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=["x"] * 17)]))
+        keys = ["k" * 128] * 7
+        consumed = len(b"extend_data.") + sum(len(key) for key in keys) + len(keys)
+        keys.append("k" * (1025 - consumed))
+        self._reject_all(self._condition(conditions=[self._field_condition(keys=keys)]))
+
+    def test_long_log_search_time_range_remains_valid(self):
+        self._validate_all(
+            self._condition(
+                start_time="2020-01-01T00:00:00+08:00",
+                end_time="2026-08-29T00:00:00+08:00",
+            )
+        )
 
 
 class TestProjectedLogSQLBuilder(AIAssistantTestCase):
