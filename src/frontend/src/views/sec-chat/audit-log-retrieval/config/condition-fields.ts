@@ -173,9 +173,7 @@ export const inferDatetimeOrigin = (startTime?: string, endTime?: string): strin
   }
 
   const diffMinutes = end.diff(start, 'minute');
-  const matched = DATETIME_SHORTCUT_CONFIGS.find(
-    item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2,
-  );
+  const matched = DATETIME_SHORTCUT_CONFIGS.find(item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2);
   if (matched) {
     return [matched.origin, 'now'];
   }
@@ -479,11 +477,14 @@ export const buildAiSearchCondition = (params: {
     if (!config) return;
 
     const value = searchModel[fieldKey];
-    const hasValue = config.type === 'log-field'
-      ? isLogFieldValue(value) && value.value !== undefined && value.value !== null && value.value !== ''
-      : Array.isArray(value)
-        ? value.some(item => item !== undefined && item !== null && item !== '')
-        : value !== undefined && value !== null && value !== '';
+    let hasValue = false;
+    if (config.type === 'log-field') {
+      hasValue = isLogFieldValue(value) && value.value !== undefined && value.value !== null && value.value !== '';
+    } else if (Array.isArray(value)) {
+      hasValue = value.some(item => item !== undefined && item !== null && item !== '');
+    } else {
+      hasValue = value !== undefined && value !== null && value !== '';
+    }
     if (!hasValue) return;
 
     const meta = config.fieldMeta;
