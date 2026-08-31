@@ -278,6 +278,8 @@ export interface AiExportField {
 
 export interface AiExportConfig {
   field_scope: AiExportFieldScope;
+  /** 为 true 时后端将扩展字段平铺为独立列 */
+  flatten_extension?: boolean;
   fields?: AiExportField[];
 }
 
