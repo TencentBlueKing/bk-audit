@@ -534,7 +534,7 @@
         messageSuccess(`已导出前 ${props.result.previewCount} 条数据`);
       } else {
         await exportLogSearchFull(props.messageUid);
-        messageSuccess('全量数据导出完成');
+        messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
       }
     } catch (error: any) {
       messageError(error?.message || '导出失败，请稍后重试');
