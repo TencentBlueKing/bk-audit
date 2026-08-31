@@ -66,7 +66,7 @@ class GetServiceDetail(BKITSM):
     @property
     def action(self):
         if self.use_multi_tenant_mode():
-            "/v2/itsm/get_service_detail/"
+            return "/v2/itsm/get_service_detail/"
         return "/get_service_detail/" if not APIGW_ENABLED else "/v2/itsm/get_service_detail/"
 
 

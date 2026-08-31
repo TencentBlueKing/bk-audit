@@ -200,6 +200,7 @@ class BizsList(BizBaseResource):
     name = gettext_lazy("业务列表")
     action = "/meta/projects/mine/"
     method = "GET"
+    use_admin_username = False
 
 
 class BizTopos(BizBaseResource):
@@ -523,6 +524,7 @@ class GetSpacesMine(BKLogBaseResource):
     method = "GET"
     action = "/meta/spaces/mine/"
     cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 10, user_related=True)
+    use_admin_username = False
 
 
 class CreateCustomCollector(CollectorsBaseResource):
