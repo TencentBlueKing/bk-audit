@@ -153,6 +153,108 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
         )
         self.assertEqual(self.positions(user=self.user), [4, 3, 2])
 
+    def test_move_root_node_after_anchor_keeps_relative_order(self):
+        first = self.create_conversation_node(title="first")
+        second = self.create_conversation_node(title="second")
+        third = self.create_conversation_node(title="third")
+
+        moved = self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(first.conversation.uid),
+            after_node_type=SidebarNodeType.CONVERSATION,
+            after_node_uid=str(third.conversation.uid),
+        )
+
+        self.assertEqual(moved.id, first.id)
+        self.assertEqual(
+            self.ordered_node_uids(),
+            [str(third.conversation.uid), str(first.conversation.uid), str(second.conversation.uid)],
+        )
+
+    def test_move_after_anchor_uses_pinned_node_as_implicit_successor(self):
+        anchor = self.create_conversation_node(title="anchor")
+        pinned = self.create_conversation_node(title="pinned")
+        source = self.create_conversation_node(title="source")
+        tail = self.create_conversation_node(title="tail")
+        for node, position in ((anchor, 4), (pinned, 3), (source, 2), (tail, 1)):
+            ConversationSidebarNode.objects.filter(id=node.id).update(position=position)
+        self.service.set_pinned(
+            conversation_uid=str(pinned.conversation.uid),
+            is_pinned=True,
+        )
+
+        self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(source.conversation.uid),
+            after_node_type=SidebarNodeType.CONVERSATION,
+            after_node_uid=str(anchor.conversation.uid),
+        )
+
+        self.assertEqual(
+            self.ordered_node_uids(),
+            [
+                str(anchor.conversation.uid),
+                str(source.conversation.uid),
+                str(pinned.conversation.uid),
+                str(tail.conversation.uid),
+            ],
+        )
+        self.assertEqual(
+            [str(node.conversation.uid) for node in self.service.list_nodes()],
+            [str(anchor.conversation.uid), str(source.conversation.uid), str(tail.conversation.uid)],
+        )
+
+        self.service.set_pinned(
+            conversation_uid=str(pinned.conversation.uid),
+            is_pinned=False,
+        )
+        self.assertEqual(
+            self.ordered_node_uids(),
+            [
+                str(anchor.conversation.uid),
+                str(source.conversation.uid),
+                str(pinned.conversation.uid),
+                str(tail.conversation.uid),
+            ],
+        )
+
+    def test_move_after_last_anchor_places_node_at_container_end(self):
+        first = self.create_conversation_node(title="first")
+        second = self.create_conversation_node(title="second")
+        third = self.create_conversation_node(title="third")
+
+        self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(third.conversation.uid),
+            after_node_type=SidebarNodeType.CONVERSATION,
+            after_node_uid=str(first.conversation.uid),
+        )
+
+        self.assertEqual(
+            self.ordered_node_uids(),
+            [str(second.conversation.uid), str(first.conversation.uid), str(third.conversation.uid)],
+        )
+
+    def test_move_after_last_anchor_is_idempotent_when_source_is_at_end(self):
+        anchor = self.create_conversation_node(title="anchor")
+        source = self.create_conversation_node(title="source")
+        ConversationSidebarNode.objects.filter(id=anchor.id).update(position=2)
+        ConversationSidebarNode.objects.filter(id=source.id).update(position=1)
+        original_positions = self.positions(user=self.user)
+
+        self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(source.conversation.uid),
+            after_node_type=SidebarNodeType.CONVERSATION,
+            after_node_uid=str(anchor.conversation.uid),
+        )
+
+        self.assertEqual(
+            self.ordered_node_uids(),
+            [str(anchor.conversation.uid), str(source.conversation.uid)],
+        )
+        self.assertEqual(self.positions(user=self.user), original_positions)
+
     def test_move_conversation_between_root_and_group(self):
         group = self.create_group(user=self.user)
         group_node = self.service.create_node(group=group)
@@ -175,6 +277,28 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
             [str(source.conversation.uid), str(existing.conversation.uid)],
         )
         self.assertEqual(self.positions(user=self.user), [1])
+
+    def test_move_conversation_into_group_after_anchor(self):
+        group = self.create_group(user=self.user)
+        group_node = self.service.create_node(group=group)
+        existing = self.create_conversation_node(title="existing", parent_node=group_node)
+        source = self.create_conversation_node(title="source")
+
+        self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(source.conversation.uid),
+            target_node_type=SidebarNodeType.GROUP,
+            target_node_uid=str(group.uid),
+            after_node_type=SidebarNodeType.CONVERSATION,
+            after_node_uid=str(existing.conversation.uid),
+        )
+
+        source.refresh_from_db()
+        self.assertEqual(source.parent_node_id, group_node.id)
+        self.assertEqual(
+            self.ordered_node_uids(parent_node_id=group_node.id),
+            [str(existing.conversation.uid), str(source.conversation.uid)],
+        )
 
     def test_move_without_anchor_places_node_at_container_start(self):
         group = self.create_group(user=self.user)

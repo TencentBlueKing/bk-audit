@@ -161,7 +161,39 @@ class SearchConversations(AIAssistantResource):
 
 
 class MoveConversationSidebarNode(AIAssistantResource):
-    """移动会话或分组节点；target 指定目标容器，before 锚点指定插入位置，省略锚点移到首位。"""
+    """
+    移动侧栏会话或分组 Node，并返回移动后的 Node 摘要。
+
+    前端按以下规则组装请求：
+
+    - `source_node_type/source_node_uid` 必填，`source_node_type` 可为 `GROUP` 或 `CONVERSATION`；UID 使用业务 UUID，
+      不是内部 Node ID。分组来源只能留在根容器，不能嵌套到其他分组。
+    - `target_node_type/target_node_uid` 必须成对出现，只用于指定目标容器；省略表示根容器，传 `GROUP + group_uid`
+      表示该分组。会话可以在根容器和分组之间移动。
+    - 不传 `before_*` 和 `after_*` 时移动到目标容器开头；两组锚点必须成对出现且不能同时传入。
+    - 传 `before_*` 时，来源节点落在锚点之前；传 `after_*` 时，来源节点落在锚点之后。
+      根容器的锚点可以是分组或未置顶会话，分组容器的锚点只能是该分组内的会话。
+    - `after` 按完整容器物理顺序计算，置顶节点虽然不显示在普通列表中，仍可能作为隐式后继；例如
+      `A、pinned、tail` 中执行 `source after A`，结果是 `A、source、pinned、tail`。置顶来源或置顶节点不能
+      作为可移动来源或显式锚点。
+    - 来源与锚点相同、或重复提交已经完成的移动，均按幂等成功处理；`after` 锚点已是物理末尾时，来源进入容器末尾。
+
+    常见请求示例：
+
+    ```json
+    {
+      "source_node_type": "CONVERSATION",
+      "source_node_uid": "source-conversation-uuid",
+      "target_node_type": "GROUP",
+      "target_node_uid": "group-uuid",
+      "after_node_type": "CONVERSATION",
+      "after_node_uid": "anchor-conversation-uuid"
+    }
+    ```
+
+    上例表示将会话移动到指定分组中锚点会话之后；移动到根容器时省略 `target_node_*`，移动到容器开头时再省略
+    两组锚点字段。接口成功后以响应中的 Node 摘要和重新读取的容器列表为准更新前端顺序。
+    """
 
     name = gettext_lazy("移动侧栏节点")
     RequestSerializer = SidebarMoveRequestSerializer
