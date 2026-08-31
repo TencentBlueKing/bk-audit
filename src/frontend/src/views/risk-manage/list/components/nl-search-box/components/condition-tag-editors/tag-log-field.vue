@@ -100,6 +100,12 @@
 
   import type { IConditionTag } from '../../types';
 
+  const props = withDefaults(defineProps<Props>(), {
+    isEditing: false,
+  });
+
+  const emit = defineEmits<Emits>();
+
   /** 下拉列表：符号 + 描述（对齐风险 NL 事件字段） */
   const LOG_OPERATOR_LABEL_MAP: Record<string, string> = {
     eq: '=  等于',
@@ -151,10 +157,6 @@
     (e: 'finishEdit'): void;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    isEditing: false,
-  });
-  const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
   const wrapperRef = ref<HTMLElement>();
