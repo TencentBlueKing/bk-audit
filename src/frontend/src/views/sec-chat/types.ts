@@ -25,6 +25,11 @@ export interface SelectedSystem {
   name: string;
 }
 
+export interface SystemFieldOption {
+  id: string;
+  name: string;
+}
+
 /** 引导卡 / 条件筛选用的字段行（来自 SYSTEM_SELECTION） */
 export interface SystemFieldRow {
   rawName: string;
@@ -33,9 +38,19 @@ export interface SystemFieldRow {
   nlName: string;
   description: string;
   allowOperators: string[];
+  fieldType?: string;
+  options?: SystemFieldOption[];
+  /** 是否为扩展字段（keys 非空） */
+  isExtension?: boolean;
   sampleValue?: any;
   systemId?: string;
   systemName?: string;
+}
+
+/** 扩展字段条件值（含操作符） */
+export interface LogFieldConditionValue {
+  operator: string;
+  value: string;
 }
 
 export interface RetrievalFilterCondition {
