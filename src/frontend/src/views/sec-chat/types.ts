@@ -14,6 +14,8 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type { AiSearchCondition } from '@model/ai-assistant/types';
+
 export type ChatSceneType = 'log';
 
 export type AiUiMessageStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED';
@@ -49,6 +51,8 @@ export interface RetrievalResultColumn {
 
 export interface RetrievalResultPayload {
   conditions: RetrievalFilterCondition[];
+  /** 原始结构化条件，供二次编辑后重新检索 */
+  rawCondition?: AiSearchCondition;
   toolCount: number;
   thinkSeconds: number;
   title: string;
@@ -86,6 +90,8 @@ export interface ChatMessage {
     message: string;
   };
   parentMessageUid?: string | null;
+  /** 条件修改后重新检索的消息，需在列表展示（区别于条件卡内嵌检索） */
+  showInMessageList?: boolean;
 }
 
 export interface Conversation {
