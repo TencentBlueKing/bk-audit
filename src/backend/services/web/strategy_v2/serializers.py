@@ -1012,8 +1012,14 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     report_config = ReportConfigSerializer(required=False, allow_null=True)
     rules = StrategyRuleSerializer(many=True, required=False, default=list)
     dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
-    # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集（后端派生，见
-    # StrategyV2Base.sync_platform_binding_scenes）；误传的 visibility 由 DRF 按未声明字段丢弃
+    is_draft = serializers.BooleanField(
+        label=gettext_lazy("Is Draft"),
+        required=False,
+        default=False,
+        write_only=True,
+        help_text=gettext_lazy("是否保存为草稿（草稿不部署，仅本地保存完整配置）"),
+    )
+    # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集
 
     class Meta:
         model = Strategy
@@ -1045,6 +1051,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
             "binding_type",
             "rules",
             "dispatch_rules",
+            "is_draft",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -1144,6 +1151,16 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     report_config = ReportConfigSerializer(required=False, allow_null=True)
     rules = StrategyRuleSerializer(many=True, required=False, default=list)
     dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
+    is_draft = serializers.BooleanField(
+        label=gettext_lazy("Is Draft"),
+        required=False,
+        allow_null=True,
+        default=None,
+        write_only=True,
+        help_text=gettext_lazy(
+            "仅草稿策略可传：true=保存草稿更新（不部署），false=提交为正式策略（触发部署）；不传=维持现状"
+        ),
+    )
     # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集（后端派生，
     # 见 StrategyV2Base.sync_platform_binding_scenes）；误传的 visibility 由 DRF 丢弃
 
@@ -1177,6 +1194,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
             "report_config",
             "rules",
             "dispatch_rules",
+            "is_draft",
         ]
 
     def get_scene_id(self, validated_request_data: dict) -> int | None:

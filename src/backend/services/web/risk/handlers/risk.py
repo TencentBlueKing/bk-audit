@@ -68,9 +68,11 @@ class RiskHandler:
     @classmethod
     def fetch_eligible_strategy_ids(cls, extra_filter: Optional[Q] = None) -> Set[str]:
         """
-        获取可用策略ID集合
+        获取可用策略ID集合（排除停用与草稿：草稿未部署不产生事件）
         """
-        queryset = Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value)
+        queryset = Strategy.objects.exclude(
+            status__in=[StrategyStatusChoices.DISABLED.value, StrategyStatusChoices.DRAFT.value]
+        )
         if extra_filter:
             queryset = queryset.filter(extra_filter)
         return set(queryset.values_list("strategy_id", flat=True))

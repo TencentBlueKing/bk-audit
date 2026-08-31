@@ -626,6 +626,8 @@ class CreateStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
         scene_id = validated_request_data.pop("scene_id", None)
+        # 草稿：完整配置仅落库，不部署
+        is_draft = validated_request_data.pop("is_draft", False)
         self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
@@ -683,18 +685,23 @@ class CreateStrategy(StrategyV2Base):
                             field_config.get('field_name'),
                             field_category,
                         )
+            # 草稿置状态
+            if is_draft:
+                strategy.status = StrategyStatusChoices.DRAFT
+                strategy.save(update_fields=["status"])
         # create
         # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
         # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
-        try:
-            call_controller(
-                BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)
-            )
-        except Exception as err:
-            strategy.status = StrategyStatusChoices.START_FAILED
-            strategy.status_msg = str(err)
-            strategy.save(update_fields=["status", "status_msg"])
-            raise err
+        if not is_draft:
+            try:
+                call_controller(
+                    BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)
+                )
+            except Exception as err:
+                strategy.status = StrategyStatusChoices.START_FAILED
+                strategy.status_msg = str(err)
+                strategy.save(update_fields=["status", "status_msg"])
+                raise err
         # auth
         username = get_request_username()
         if username:
@@ -718,6 +725,11 @@ class UpdateStrategy(StrategyV2Base):
         self.ensure_active_scene_binding_or_404(strategy.strategy_id)
         validated_request_data.pop("binding_type", None)
         validated_request_data.pop("scene_id", None)
+        # 草稿参数：None=维持现状；true=保存草稿更新；false=提交为正式策略（仅草稿策略可传）
+        is_draft = validated_request_data.pop("is_draft", None)
+        is_draft_strategy = strategy.status == StrategyStatusChoices.DRAFT
+        if is_draft and not is_draft_strategy:
+            raise serializers.ValidationError(gettext("草稿仅适用于未提交的策略"))
         self._check_source_type(validated_request_data)
         # check strategy status
         if strategy.status in [
@@ -733,8 +745,22 @@ class UpdateStrategy(StrategyV2Base):
         instance_origin_data = StrategyInfoSerializer(strategy).data
         # update db
         need_update_remote = self.update_db(strategy=strategy, validated_request_data=validated_request_data)
+        if is_draft_strategy:
+            # 草稿策略：仅落库不部署；提交（is_draft=False）时走创建链路部署（草稿从未部署，无 flow_id）
+            if is_draft is False:
+                try:
+                    call_controller(
+                        BaseControl.create.__name__,
+                        strategy.strategy_id,
+                        self.get_base_control_type(strategy.strategy_type),
+                    )
+                except Exception as err:
+                    strategy.status = StrategyStatusChoices.START_FAILED
+                    strategy.status_msg = str(err)
+                    strategy.save(update_fields=["status", "status_msg"])
+                    raise err
         # update remote
-        if need_update_remote:
+        elif need_update_remote:
             self.update_remote(strategy)
         # audit
         setattr(strategy, "instance_origin_data", instance_origin_data)
@@ -868,17 +894,19 @@ class DeleteStrategy(StrategyV2Base):
         self._soft_delete_rules(list(strategy.rules.filter(is_deleted=False)))
         self._soft_delete_rules(list(strategy.dispatch_rules.filter(is_deleted=False)))
         # delete
-        try:
-            call_controller(
-                BaseControl.delete.__name__,
-                validated_request_data["strategy_id"],
-                self.get_base_control_type(strategy.strategy_type),
-            )
-        except Exception as err:
-            strategy.status = StrategyStatusChoices.DELETE_FAILED
-            strategy.status_msg = str(err)
-            strategy.save(update_fields=["status", "status_msg"])
-            raise err
+        # 草稿未部署，无远端资源可删，本地删除即可
+        if strategy.status != StrategyStatusChoices.DRAFT:
+            try:
+                call_controller(
+                    BaseControl.delete.__name__,
+                    validated_request_data["strategy_id"],
+                    self.get_base_control_type(strategy.strategy_type),
+                )
+            except Exception as err:
+                strategy.status = StrategyStatusChoices.DELETE_FAILED
+                strategy.status_msg = str(err)
+                strategy.save(update_fields=["status", "status_msg"])
+                raise err
         # delete strategy
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
@@ -1150,6 +1178,9 @@ class ToggleStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿未部署，无启停语义
+        if strategy.status == StrategyStatusChoices.DRAFT:
+            raise serializers.ValidationError(gettext("草稿策略未部署，不支持启停操作"))
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         # 更新处理人
@@ -1169,6 +1200,9 @@ class RetryStrategy(StrategyV2Base):
         # load strategy
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿未部署无远端资源，无重试语义
+        if strategy.status == StrategyStatusChoices.DRAFT:
+            raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
         need_update = strategy.backend_data and (

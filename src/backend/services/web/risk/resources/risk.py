@@ -194,8 +194,8 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
+from services.web.scene.constants import BindingType, ResourceVisibilityType
+from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter, SceneScopeFilter
 from services.web.scene.models import ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
@@ -418,13 +418,27 @@ class ListRisk(RiskMeta):
         if not scene_ids:
             return queryset
 
-        strategy_ids = list(
+        # 场景级策略
+        scene_strategy_ids = set(
             ResourceBindingScene.objects.filter(
                 scene_id__in=scene_ids,
                 scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__binding_type=BindingType.SCENE_BINDING,
             ).values_list("binding__resource_id", flat=True)
         )
+        # 对该场景可见的全局策略
+        platform_strategy_ids = set(
+            CompositeScopeFilter.filter_queryset(
+                queryset=Strategy.objects.only("strategy_id"),
+                binding_type=BindingType.PLATFORM_BINDING,
+                scene_id=scene_ids,
+                resource_type=ResourceVisibilityType.STRATEGY,
+                pk_field="strategy_id",
+            ).values_list("strategy_id", flat=True)
+        )
+
+        strategy_ids = scene_strategy_ids | platform_strategy_ids
         if not strategy_ids:
             return queryset.none()
         return queryset.filter(strategy_id__in=strategy_ids)
@@ -1059,6 +1073,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     def load_risk_view_type_risks(cls, risk_view_type: str, filter_dict: dict, scene_ids=None) -> QuerySet[Risk]:
         """
         加载指定风险视图下有权限的风险
+        场景范围按策略推导（场景策略 ∪ 对场景可见的全局策略）
         """
 
         risk_cls = cls.risk_cls_map.get(risk_view_type)
@@ -1068,12 +1083,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         if scene_ids is None:
             return risks
 
-        return SceneScopeFilter.filter_queryset(
-            queryset=risks,
-            scene_id=scene_ids,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
+        return ListRisk()._filter_queryset_by_scene_ids(risks, scene_ids)
 
 
 class ListRiskTags(ListRiskMetaBase):
