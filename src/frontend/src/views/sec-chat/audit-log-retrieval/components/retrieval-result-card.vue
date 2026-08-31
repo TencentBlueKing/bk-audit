@@ -29,11 +29,54 @@
           <audit-icon
             class="condition-icon"
             type="search1" />
-          <span>已识别到 {{ result.conditions.length }} 个筛选条件进行检索</span>
+          <span>{{ conditionHeaderText }}</span>
         </div>
-        <div class="condition-tags">
+
+        <!-- 可编辑：复用条件检索组件 -->
+        <div
+          v-if="conditionEditable"
+          class="condition-editor">
+          <condition-tags
+            ref="conditionTagsRef"
+            compact-select-popover
+            :condition-list="[]"
+            :event-field-items="[]"
+            :field-config="fieldConfig"
+            :search-model="searchModel"
+            @clear-all="handleClearConditions"
+            @remove="handleRemoveCondition"
+            @update="handleUpdateCondition">
+            <add-condition
+              accent
+              :event-fields="[]"
+              :field-config="fieldConfig"
+              :primary-field-names="commonFieldKeys"
+              primary-tab-label="通用字段"
+              :secondary-field-names="extendFieldKeys"
+              secondary-source="config"
+              secondary-tab-label="拓展字段"
+              :selected-event-field-ids="[]"
+              :selected-fields="selectedFieldNames"
+              @add-field="handleAddField" />
+          </condition-tags>
+
+          <div class="condition-actions">
+            <bk-button
+              class="resubmit-btn"
+              :loading="resubmitLoading"
+              theme="primary"
+              @click="handleResubmit">
+              重新检索
+            </bk-button>
+          </div>
+        </div>
+
+        <!-- 兜底只读展示（无 rawCondition 或字段上下文缺失） -->
+        <div
+          v-else
+          class="condition-tags">
           <span
-            v-for="(item, index) in result.conditions"
+            v-for="(item, index) in displayResult.conditions"
             :key="`${item.field}-${index}`"
             class="condition-tag">
             <span class="tag-label">{{ item.field }}：</span>
@@ -53,7 +96,7 @@
             class="process-arrow"
             :class="{ 'is-collapsed': !toolsExpanded }"
             type="angle-line-down" />
-          <span>已调用 {{ result.toolCount }} 个工具</span>
+          <span>已调用 {{ displayResult.toolCount }} 个工具</span>
         </div>
         <div
           v-if="toolsExpanded"
@@ -67,7 +110,7 @@
             class="process-arrow"
             :class="{ 'is-collapsed': !thinkExpanded }"
             type="angle-line-down" />
-          <span>思考了 {{ result.thinkSeconds }} 秒</span>
+          <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
         </div>
         <div
           v-if="thinkExpanded"
@@ -76,9 +119,20 @@
         </div>
       </div>
 
+      <!-- 重新检索 loading：隐藏旧结果，避免用户误以为数据未刷新 -->
+      <div
+        v-if="resubmitLoading"
+        aria-label="检索中"
+        class="result-loading-panel">
+        <span class="loading-dot" />
+        <span class="loading-dot" />
+        <span class="loading-dot" />
+        <span class="loading-text">正在检索…</span>
+      </div>
+
       <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
       <div
-        v-if="isEmpty"
+        v-else-if="isEmpty"
         class="status-panel is-empty">
         <img
           alt=""
@@ -97,19 +151,19 @@
         <div class="summary-section">
           <div class="summary-main">
             <h3 class="summary-title">
-              {{ result.title }}
+              {{ displayResult.title }}
             </h3>
             <p class="summary-desc">
-              <template v-if="result.showPreviewHint">
+              <template v-if="displayResult.showPreviewHint">
                 共命中
-                <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
+                <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
                 条日志，数据量较大，已展示前
-                <span class="summary-num">{{ result.previewCount }}</span>
+                <span class="summary-num">{{ displayResult.previewCount }}</span>
                 条预览
               </template>
               <template v-else>
                 共命中
-                <span class="summary-num">{{ formatNumber(result.totalHit) }}</span>
+                <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
                 条日志
               </template>
             </p>
@@ -133,7 +187,7 @@
                 <bk-dropdown-item
                   :disabled="exporting"
                   @click="handleExport('preview')">
-                  导出前 {{ result.previewCount }} 条数据
+                  导出前 {{ displayResult.previewCount }} 条数据
                 </bk-dropdown-item>
                 <bk-dropdown-item
                   :disabled="exporting"
@@ -154,7 +208,7 @@
               <thead>
                 <tr>
                   <th
-                    v-for="col in result.columns"
+                    v-for="col in displayResult.columns"
                     :key="col.rawName"
                     :style="getColumnStyle(col)">
                     <show-tooltips-text
@@ -169,7 +223,7 @@
                   v-for="(row, index) in pageRows"
                   :key="`row-${index}`">
                   <td
-                    v-for="col in result.columns"
+                    v-for="col in displayResult.columns"
                     :key="`${col.rawName}-${index}`"
                     :style="getColumnStyle(col)">
                     <show-tooltips-text
@@ -185,7 +239,7 @@
             <bk-pagination
               v-model="currentPage"
               align="right"
-              :count="result.rows.length"
+              :count="displayResult.rows.length"
               :layout="['total', 'limit', 'list']"
               :limit="pageSize"
               :limit-list="[10, 20, 50]"
@@ -324,8 +378,8 @@
     <log-analyze-dialog
       v-if="analyzeDialogShow"
       v-model="analyzeDialogShow"
-      :conditions="result.conditions"
-      :total-hit="result.totalHit"
+      :conditions="displayResult.conditions"
+      :total-hit="displayResult.totalHit"
       @select="handleAnalyzeSelect" />
 
     <log-statistics-dialog
@@ -336,10 +390,10 @@
     <log-report-drawer
       v-if="reportDrawerShow"
       v-model:is-show="reportDrawerShow"
-      :conditions="result.conditions"
+      :conditions="displayResult.conditions"
       :report="activeReport"
       :systems="systemNames"
-      :total-hit="result.totalHit" />
+      :total-hit="displayResult.totalHit" />
 
     <log-statistics-drawer
       v-if="statisticsDrawerShow"
@@ -350,33 +404,55 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+  import dayjs from 'dayjs';
+  import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 
   import useMessage from '@hooks/use-message';
 
+  import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
+
+  import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
+  import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import aiSvg from '@images/ai.svg';
   import emptySearchIcon from '@images/empty-search.svg';
 
-  import LogAnalyzeDialog from './log-analyze-dialog.vue';
-  import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
-  import LogStatisticsDialog from './log-statistics-dialog.vue';
-  import LogStatisticsDrawer from './log-statistics-drawer.vue';
-  import type { RetrievalResultPayload } from '../../types';
+  import { useSecChatStore } from '../../composables/use-sec-chat-store';
+  import type { RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
+  import {
+    buildAiSearchCondition,
+    createConditionFieldConfigFromSystemFields,
+    createDefaultDatetime,
+    createDefaultDatetimeOrigin,
+    getPrimaryFieldNames,
+    getSecondaryFieldNames,
+    parseAiSearchConditionToSearchModel,
+  } from '../config/condition-fields';
   import {
     exportLogSearchFull,
     exportLogSearchPreview,
   } from '../utils/export-log-search';
+
+  import LogAnalyzeDialog from './log-analyze-dialog.vue';
+  import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
+  import LogStatisticsDialog from './log-statistics-dialog.vue';
+  import LogStatisticsDrawer from './log-statistics-drawer.vue';
 
   const props = withDefaults(defineProps<{
     result: RetrievalResultPayload;
     /** LOG_SEARCH 成功消息 uid，导出接口必填 */
     messageUid?: string;
     embedded?: boolean;
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+    systems?: SelectedSystem[];
   }>(), {
     messageUid: '',
     embedded: false,
+    standardFields: () => [],
+    extensionFields: () => [],
+    systems: () => [],
   });
 
   const emit = defineEmits<{
@@ -385,6 +461,12 @@
     statistics: [];
     regenerate: [];
   }>();
+
+  const { sendConditionSearch } = useSecChatStore();
+
+  /** 当前卡片展示的结果（重新检索后原地更新，不追加新消息） */
+  const displayResult = ref<RetrievalResultPayload>({ ...props.result });
+  const displayMessageUid = ref(props.messageUid || '');
 
   /** 本期先隐藏底部反馈操作行 */
   const showFeedbackActions = false;
@@ -417,10 +499,182 @@
 
   const { messageSuccess, messageError, messageWarn } = useMessage();
   const exporting = ref(false);
-  const isEmpty = computed(() => props.result.totalHit <= 0);
+  const resubmitLoading = ref(false);
+  const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
+  const searchModel = ref<Record<string, any>>({
+    datetime: createDefaultDatetime(),
+    datetime_origin: createDefaultDatetimeOrigin(),
+  });
+
+  const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
+    props.standardFields,
+    props.extensionFields,
+  ));
+  const commonFieldKeys = computed(() => getPrimaryFieldNames(props.standardFields));
+  const extendFieldKeys = computed(() => getSecondaryFieldNames(props.extensionFields));
+  const selectedFieldNames = computed(() => Object.keys(searchModel.value)
+    .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
+
+  const conditionEditable = computed(() => (
+    Boolean(displayResult.value.rawCondition)
+    && Object.keys(fieldConfig.value).length > 1
+  ));
+
+  const activeConditionCount = computed(() => (
+    Object.keys(searchModel.value).filter(key => (
+      key !== 'datetime_origin' && key !== 'sort' && fieldConfig.value[key]
+    )).length
+  ));
+
+  const conditionHeaderText = computed(() => {
+    if (conditionEditable.value) {
+      return `已识别到 ${activeConditionCount.value} 个筛选条件，可修改后重新检索`;
+    }
+    return `已识别到 ${displayResult.value.conditions.length} 个筛选条件进行检索`;
+  });
+
+  const syncSearchModelFromResult = () => {
+    const rawCondition = displayResult.value.rawCondition;
+    if (!rawCondition) return;
+    searchModel.value = parseAiSearchConditionToSearchModel(
+      rawCondition,
+      fieldConfig.value,
+    );
+  };
+
+  watch(
+    () => props.messageUid,
+    () => {
+      displayResult.value = props.result;
+      displayMessageUid.value = props.messageUid || '';
+      syncSearchModelFromResult();
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => [props.standardFields, props.extensionFields] as const,
+    () => {
+      syncSearchModelFromResult();
+    },
+    { deep: true },
+  );
+
+  const getDefaultValue = (config: IFieldConfig) => {
+    if (config.type === 'select' || config.type === 'user-selector') {
+      return [];
+    }
+    if (config.type === 'datetimerange') {
+      return createDefaultDatetime();
+    }
+    return '';
+  };
+
+  const insertFieldAtFront = (fieldName: string, value: any) => {
+    const next: Record<string, any> = {
+      datetime: searchModel.value.datetime || createDefaultDatetime(),
+      datetime_origin: searchModel.value.datetime_origin || createDefaultDatetimeOrigin(),
+    };
+    if (fieldName !== 'datetime' && fieldName !== 'datetime_origin') {
+      next[fieldName] = value;
+    }
+    Object.keys(searchModel.value).forEach((key) => {
+      if (key === 'datetime' || key === 'datetime_origin' || key === fieldName) return;
+      next[key] = searchModel.value[key];
+    });
+    searchModel.value = next;
+  };
+
+  const handleAddField = async (fieldName: string, config: IFieldConfig, initialValue?: any) => {
+    if (fieldName !== 'datetime' && searchModel.value[fieldName] !== undefined) {
+      conditionTagsRef.value?.startEditField?.(fieldName);
+      return;
+    }
+    const value = initialValue !== undefined ? initialValue : getDefaultValue(config);
+    insertFieldAtFront(fieldName, value);
+    conditionTagsRef.value?.startEditField?.(fieldName);
+    await nextTick();
+  };
+
+  const handleRemoveCondition = (fieldName: string) => {
+    if (fieldName === 'datetime') return;
+    const next = { ...searchModel.value };
+    delete next[fieldName];
+    searchModel.value = next;
+  };
+
+  const handleUpdateCondition = (fieldName: string, value: any) => {
+    if (fieldName === 'datetime') {
+      if (Array.isArray(value) && value.length >= 2) {
+        const formatted = value.map((item: any) => (
+          typeof item === 'number' || item instanceof Date
+            ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
+            : item
+        ));
+        searchModel.value.datetime = formatted;
+        searchModel.value.datetime_origin = formatted;
+      }
+      return;
+    }
+    if (fieldName === 'datetime_origin') {
+      searchModel.value.datetime_origin = value;
+      return;
+    }
+    searchModel.value[fieldName] = value;
+  };
+
+  const handleClearConditions = () => {
+    searchModel.value = {
+      datetime: createDefaultDatetime(),
+      datetime_origin: createDefaultDatetimeOrigin(),
+    };
+  };
+
+  const handleResubmit = async () => {
+    if (resubmitLoading.value) return;
+
+    const scopeId = displayResult.value.rawCondition?.scope_id || props.systems[0]?.id || '';
+    const condition = buildAiSearchCondition({
+      scopeId,
+      searchModel: searchModel.value,
+      fieldConfig: fieldConfig.value,
+    });
+    if (!condition) {
+      messageWarn(scopeId ? '请至少选择时间范围' : '请先选择系统');
+      return;
+    }
+
+    resubmitLoading.value = true;
+    try {
+      const chatMessage = await sendConditionSearch(condition);
+      if (chatMessage.apiStatus === 'FAILED') {
+        messageError(chatMessage.errorMessage || '检索失败');
+        return;
+      }
+      if (chatMessage.result) {
+        displayResult.value = chatMessage.result;
+        displayMessageUid.value = chatMessage.id;
+        if (chatMessage.result.rawCondition) {
+          searchModel.value = parseAiSearchConditionToSearchModel(
+            chatMessage.result.rawCondition,
+            fieldConfig.value,
+          );
+        }
+        currentPage.value = 1;
+        feedback.value = '';
+        reportItems.value = [];
+      }
+    } catch (error: any) {
+      messageError(error?.message || '检索失败，请稍后重试');
+    } finally {
+      resubmitLoading.value = false;
+    }
+  };
+
+  const isEmpty = computed(() => displayResult.value.totalHit <= 0);
   const canExport = computed(() => (
-    Boolean(props.messageUid)
-    && props.result.totalHit > 0
+    Boolean(displayMessageUid.value)
+    && displayResult.value.totalHit > 0
   ));
 
   const thumbUpPath = 'M5.2 14.5H3.4c-.5 0-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9h1.8v7.6z'
@@ -449,22 +703,22 @@
 
   const pageRows = computed(() => {
     const start = (currentPage.value - 1) * pageSize.value;
-    return props.result.rows.slice(start, start + pageSize.value);
+    return displayResult.value.rows.slice(start, start + pageSize.value);
   });
 
   const tableMinWidth = computed(() => {
-    const total = props.result.columns.reduce((sum, col) => sum + getColumnWidth(col), 0);
+    const total = displayResult.value.columns.reduce((sum, col) => sum + getColumnWidth(col), 0);
     return `${Math.max(total, 760)}px`;
   });
 
   const hasDoneReport = computed(() => reportItems.value.some(item => item.status === 'done'));
 
   const systemNames = computed(() => {
-    const systemCond = props.result.conditions.find(item => item.field === '来源系统');
+    const systemCond = displayResult.value.conditions.find(item => item.field === '来源系统');
     return systemCond?.value || '已选系统';
   });
 
-  watch(() => props.result, () => {
+  watch(() => displayResult.value, () => {
     currentPage.value = 1;
     feedback.value = '';
     reportItems.value = [];
@@ -521,7 +775,7 @@
 
   const handleExport = async (mode: 'preview' | 'all') => {
     if (!canExport.value || exporting.value) return;
-    if (!props.messageUid) {
+    if (!displayMessageUid.value) {
       messageWarn('缺少消息标识，无法导出');
       return;
     }
@@ -530,10 +784,10 @@
     emit('export', mode);
     try {
       if (mode === 'preview') {
-        await exportLogSearchPreview(props.messageUid);
-        messageSuccess(`已导出前 ${props.result.previewCount} 条数据`);
+        await exportLogSearchPreview(displayMessageUid.value);
+        messageSuccess(`已导出前 ${displayResult.value.previewCount} 条数据`);
       } else {
-        await exportLogSearchFull(props.messageUid);
+        await exportLogSearchFull(displayMessageUid.value);
         messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
       }
     } catch (error: any) {
@@ -612,9 +866,9 @@
 
   const handleCopy = async () => {
     const text = [
-      props.result.title,
-      `共命中 ${props.result.totalHit} 条`,
-      ...props.result.conditions.map(item => `${item.field}：${item.value}`),
+      displayResult.value.title,
+      `共命中 ${displayResult.value.totalHit} 条`,
+      ...displayResult.value.conditions.map(item => `${item.field}：${item.value}`),
     ].join('\n');
     try {
       await navigator.clipboard.writeText(text);
@@ -684,6 +938,21 @@
     gap: 8px;
   }
 
+  .condition-editor {
+    min-height: 32px;
+  }
+
+  .condition-actions {
+    display: flex;
+    margin-top: 12px;
+    justify-content: flex-start;
+
+    .resubmit-btn {
+      min-width: 88px;
+      height: 32px;
+    }
+  }
+
   .condition-tag {
     display: inline-flex;
     height: 32px;
@@ -737,6 +1006,59 @@
     font-size: 12px;
     line-height: 20px;
     color: #c4c6cc;
+  }
+
+  .result-loading-panel {
+    display: flex;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    min-height: 200px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-sizing: border-box;
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    background: #3a84ff;
+    border-radius: 50%;
+    opacity: 40%;
+    animation: result-loading-dot 1s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .loading-dot:nth-child(2) {
+    animation-delay: .15s;
+  }
+
+  .loading-dot:nth-child(3) {
+    animation-delay: .3s;
+  }
+
+  .loading-text {
+    margin-left: 4px;
+    font-size: 14px;
+    line-height: 22px;
+    color: #63656e;
+  }
+
+  @keyframes result-loading-dot {
+    0%,
+    100% {
+      opacity: 40%;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 100%;
+      transform: scale(1.15);
+    }
   }
 
   .status-panel {
@@ -1072,6 +1394,55 @@
     &.is-active {
       color: #3a84ff;
       background: #f0f5ff;
+    }
+  }
+</style>
+<style lang="postcss">
+  /* 结果卡内可编辑条件：与条件筛选卡视觉对齐 */
+  .retrieval-result-card .condition-editor {
+    .nl-condition-tags-first-row,
+    .nl-condition-tags-content {
+      align-items: center;
+    }
+
+    .condition-tag-item {
+      height: 32px;
+      padding: 0 8px 0 12px;
+      background: #f0f1f5;
+      border: 1px solid #dcdee5;
+      box-sizing: border-box;
+
+      &:hover {
+        .tag-value-wrapper {
+          background: transparent;
+        }
+      }
+    }
+
+    .nl-tag-input-item.is-editing {
+      height: auto;
+      min-height: 32px;
+    }
+
+    .nl-add-condition-trigger {
+      height: 32px;
+      padding: 0 12px;
+      box-sizing: border-box;
+
+      &.is-accent {
+        background: #f0f5ff;
+      }
+    }
+
+    .condition-clear-btn {
+      height: 32px;
+    }
+
+    .nl-tag-user-selector-item.is-editing.condition-tag-item:not(.has-users),
+    .nl-tag-user-selector-item.is-editing.condition-tag-item.has-users {
+      height: 32px !important;
+      max-height: 32px !important;
+      min-height: 32px !important;
     }
   }
 </style>
