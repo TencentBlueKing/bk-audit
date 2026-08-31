@@ -536,7 +536,7 @@
   });
 
   const syncSearchModelFromResult = () => {
-    const rawCondition = displayResult.value.rawCondition;
+    const { rawCondition } = displayResult.value;
     if (!rawCondition) return;
     searchModel.value = parseAiSearchConditionToSearchModel(
       rawCondition,
