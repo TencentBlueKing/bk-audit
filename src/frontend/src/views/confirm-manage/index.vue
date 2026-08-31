@@ -44,6 +44,7 @@
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
+        is-need-scene-id
         is-need-scene-params
         need-empty-search-tip
         row-key="risk_id"

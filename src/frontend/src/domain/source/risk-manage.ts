@@ -242,6 +242,28 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 确认风险
+  confirmRisk(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/${params.risk_id}/confirm/`, {
+      params: {
+        description: params.description,
+      },
+    });
+  }
+  // 确认为误报
+  confirmAsMisreport(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/${params.risk_id}/confirm_as_misreport/`, {
+      params: {
+        description: params.description,
+      },
+    });
+  }
   // 批量确认风险单
   batchConfirmRisk(params: {
     risk_ids: string[],

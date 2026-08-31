@@ -17,12 +17,14 @@
 <template>
   <bk-dialog
     v-model:is-show="isShow"
-    :confirm-handler="handleConfirm"
+    :esc-close="false"
     :is-loading="isSubmitting"
+    :quick-close="false"
     theme="primary"
     :title="t('批量确认风险单')"
     width="720"
-    @closed="handleClosed">
+    @closed="handleClosed"
+    @confirm="handleConfirm">
     <audit-form
       ref="formRef"
       form-type="vertical"
@@ -45,10 +47,10 @@
         :label="t('确认说明')"
         property="description">
         <rich-editor
+          :key="editorKey"
           v-model:content="formData.description"
           :default="formData.description"
-          :max-len="1000"
-          :placeholder="t('@通知他人, ctrl+enter快速提交')" />
+          :max-len="1000" />
       </bk-form-item>
     </audit-form>
   </bk-dialog>
@@ -63,7 +65,6 @@
   import RiskManageService from '@service/risk-manage';
 
   import useMessage from '@hooks/use-message';
-  import useRequest from '@hooks/use-request';
 
   import RichEditor from '@components/editor/index.vue';
 
@@ -77,11 +78,21 @@
 
   const isShow = ref(false);
   const formRef = ref();
+  const editorKey = ref(0);
   const riskIds = ref<string[]>([]);
   const formData = ref({
     confirm_result: 'confirm',
     description: '',
   });
+
+  const resetForm = () => {
+    formData.value = {
+      confirm_result: 'confirm',
+      description: '',
+    };
+    editorKey.value += 1;
+    formRef.value?.clearValidate?.();
+  };
 
   const rules = {
     confirm_result: [
@@ -93,58 +104,43 @@
     ],
   };
 
-  const {
-    run: submitBatchConfirm,
-    loading: isSubmitting,
-  } = useRequest(RiskManageService.batchConfirmRisk, {
-    manual: true,
-    onSuccess: () => {
-      messageSuccess(t('操作成功'));
-      isShow.value = false;
-      emit('success');
-    },
-  });
-
-  const {
-    run: updateRiskLabel,
-  } = useRequest(RiskManageService.updateRiskLabel, {
-    manual: true,
-  });
+  const isSubmitting = ref(false);
 
   const show = (ids: string[]) => {
     riskIds.value = ids;
-    formData.value = {
-      confirm_result: 'confirm',
-      description: '',
-    };
+    resetForm();
     isShow.value = true;
   };
 
   const handleClosed = () => {
-    formData.value = {
-      confirm_result: 'confirm',
-      description: '',
-    };
+    resetForm();
     riskIds.value = [];
   };
 
-  const handleConfirm = async () => {
-    await formRef.value?.validate?.();
-    if (formData.value.confirm_result === 'misreport') {
-      await Promise.all(riskIds.value.map(riskId => updateRiskLabel({
-        risk_id: riskId,
-        risk_label: 'misreport',
-        description: formData.value.description,
-        new_operators: [],
-      })));
-      messageSuccess(t('操作成功'));
-      isShow.value = false;
-      emit('success');
-      return;
-    }
-    await submitBatchConfirm({
-      risk_ids: riskIds.value,
-      description: formData.value.description,
+  const handleConfirm = () => {
+    formRef.value?.validate?.().then(async () => {
+      if (!riskIds.value.length) {
+        return;
+      }
+      isSubmitting.value = true;
+      try {
+        if (formData.value.confirm_result === 'misreport') {
+          await Promise.all(riskIds.value.map(riskId => RiskManageService.confirmAsMisreport({
+            risk_id: riskId,
+            description: formData.value.description,
+          })));
+        } else {
+          await RiskManageService.batchConfirmRisk({
+            risk_ids: riskIds.value,
+            description: formData.value.description,
+          });
+        }
+        messageSuccess(t('操作成功'));
+        isShow.value = false;
+        emit('success');
+      } finally {
+        isSubmitting.value = false;
+      }
     });
   };
 

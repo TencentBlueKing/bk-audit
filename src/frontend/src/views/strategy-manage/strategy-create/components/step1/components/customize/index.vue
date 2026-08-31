@@ -389,7 +389,7 @@
 
   const fetchStrategyTableList = (params: {
     table_type: string;
-    scene_id?: string | number;
+    scene_id?: string | number | null;
     bk_biz_id?: string | number;
   }) => {
     const { scene_id: sceneId, ...rest } = params;

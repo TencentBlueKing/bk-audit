@@ -41,7 +41,6 @@
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
       @save-current-step="handleSaveCurrentStep"
-      @save-draft="handleSaveDraft"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
   </keep-alive>
@@ -516,11 +515,6 @@
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
     saveStrategy(buildStrategyCreatePayload(params, route));
-  };
-
-  const handleSaveDraft = (params: Record<string, any>) => {
-    Object.assign(formData.value, params);
-    doSave();
   };
 
   // 提交

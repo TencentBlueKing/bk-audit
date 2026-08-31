@@ -61,7 +61,7 @@
       <template #content="{tag}">
         <!-- {{ getIndexByTag(tag).action }} -->
         <component
-          :is="comMap[getIndexByTag(tag).action as keyof typeof comMap]"
+          :is="getTimelineComponent(getIndexByTag(tag).action)"
           :data="getIndexByTag(tag)"
           :detail-data="data"
           :event-data-list="eventDataList"
@@ -116,6 +116,7 @@
   import CloseRisk from './components/closerisk.vue';
   import CustomProcess  from './components/custom-process.vue';
   import ForApprove from './components/for-approve.vue';
+  import ConfirmDescription from './components/confirm-description.vue';
   import MisReport from './components/misreport.vue';
   import RiskExperience from './components/risk-experience.vue';
   import ReOpenMisReport from './components/reopen-misreport.vue';
@@ -214,6 +215,26 @@
       name: t('风险总结'),
       icon: 'dialogue',
     },
+    ConfirmRisk: {
+      name: t('风险确认'),
+      icon: 'user',
+    },
+    ConfirmAsMisreport: {
+      name: t('标记误报'),
+      icon: 'biaojiwubao',
+    },
+    ConfirmAsMisReport: {
+      name: t('标记误报'),
+      icon: 'biaojiwubao',
+    },
+    TransOperator: {
+      name: t('转单'),
+      icon: 'user',
+    },
+  };
+  const getActionMeta = (action: string) => historyActionMap[action] || {
+    name: action,
+    icon: 'user',
   };
   const comMap = {
     ReOpenMisReport,
@@ -225,6 +246,10 @@
     ReOpen: ReOpenMisReport,
     AutoProcess: ForApprove,
     NewRisk: 'div',
+    ConfirmRisk: ConfirmDescription,
+    ConfirmAsMisreport: MisReport,
+    ConfirmAsMisReport: MisReport,
+    TransOperator: CustomProcess,
     await_deal: AwaitDeal,
     RiskExperience,
   };
@@ -358,7 +383,7 @@
           class="risk-handle-timeline-dialogue-icon"
           src={dialogueIconUrl} />
       ) : (
-        <audit-icon type={ historyActionMap[action].icon } />
+        <audit-icon type={ getActionMeta(action).icon } />
       )}
     </span>
   );
@@ -370,10 +395,16 @@
     </p>`
   );
 
-  const getTimelineTitle = (item: Record<string, any>) => (
-    ['MisReport', 'ReOpenMisReport'].includes(item.action)
-      ? `${item.operator} ${historyActionMap[item.action].name}`
-      : historyActionMap[item.action].name || item.action
+  const getTimelineTitle = (item: Record<string, any>) => {
+    const meta = getActionMeta(item.action);
+    if (['MisReport', 'ReOpenMisReport', 'ConfirmAsMisreport', 'ConfirmAsMisReport'].includes(item.action)) {
+      return item.operator ? `${item.operator} ${meta.name}` : meta.name;
+    }
+    return meta.name || item.action;
+  };
+
+  const getTimelineComponent = (action: string) => (
+    comMap[action as keyof typeof comMap] || 'div'
   );
 
   const getIndexByTag = (tag: string) => {
@@ -450,7 +481,7 @@
           tag: renderTimelineTag(
             item.action,
             data.ticket_history.length,
-            historyActionMap[item.action].name || item.action,
+            historyActionMap[item.action]?.name || getActionMeta(item.action).name || item.action,
             item.time,
           ),
           content: '<template/>',

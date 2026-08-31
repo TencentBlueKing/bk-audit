@@ -187,13 +187,20 @@
   const strategySystemScopeParams = () => getStrategySystemScopeParams(route);
   const fetchStrategyTableList = (params: {
     table_type: string;
-    scene_id?: string | number;
+    scene_id?: string | number | null;
     bk_biz_id?: string | number;
-  }) => (
-    isPlatformMode
-      ? StrategyManageService.fetchTable(params)
-      : StrategyManageService.fetchScenePermissionTable(params)
-  );
+  }) => {
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams = {
+      ...rest,
+      ...(sceneId !== undefined && sceneId !== null && sceneId !== ''
+        ? { scene_id: String(sceneId) }
+        : {}),
+    };
+    return isPlatformMode
+      ? StrategyManageService.fetchTable(requestParams)
+      : StrategyManageService.fetchScenePermissionTable(requestParams);
+  };
   const createRef = ref();
   const linkTableMaxVersionMap = ref<Record<string, number>>({});
   const tableTypeData = ref<Record<'BizRt' | 'BuildIn' | 'EventLog', Array<TableData>>>({
