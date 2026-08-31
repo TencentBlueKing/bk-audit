@@ -178,10 +178,18 @@ class AiAssistantManage extends ModuleBase {
 
   /**
    * 预览导出：快照前 100 条，返回 xlsx 二进制流。
+   * Query: export_config 为 JSON 字符串（paramsSerializer 自动序列化对象）。
    */
-  previewExport(params: { message_uid: string }, payload = {} as IRequestPayload) {
-    return Request.get(`${this.module}/messages/${params.message_uid}/preview-export/`, {
+  previewExport(
+    params: { message_uid: string; export_config?: Pick<AiExportConfig, 'flatten_extension'> },
+    payload = {} as IRequestPayload,
+  ) {
+    const { message_uid: messageUid, export_config: exportConfig } = params;
+    return Request.get(`${this.module}/messages/${messageUid}/preview-export/`, {
       responseType: 'blob',
+      params: {
+        export_config: exportConfig || { flatten_extension: true },
+      },
       payload,
     });
   }

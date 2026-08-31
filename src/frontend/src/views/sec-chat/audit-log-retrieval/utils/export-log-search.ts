@@ -70,7 +70,10 @@ const resolveExportErrorMessage = async (error: any, fallback: string) => {
  */
 export const exportLogSearchPreview = async (messageUid: string) => {
   try {
-    await AiAssistantManageService.previewExport({ message_uid: messageUid }, { catchError: true });
+    await AiAssistantManageService.previewExport({
+      message_uid: messageUid,
+      export_config: { flatten_extension: true },
+    }, { catchError: true });
   } catch (error: any) {
     throw new Error(await resolveExportErrorMessage(error, '预览导出失败，请稍后重试'));
   }
