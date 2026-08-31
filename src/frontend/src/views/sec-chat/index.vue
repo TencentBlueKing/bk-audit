@@ -29,11 +29,11 @@
       @new-chat="handleNewChat"
       @rename-group="handleRenameGroup"
       @reorder-conversation="handleReorderConversation"
+      @reorder-group="handleReorderGroup"
       @select="handleSelectConversation"
       @toggle="toggleSidebar"
       @update-conv-title="handleUpdateConvTitle"
-      @update-group="handleUpdateGroup"
-      @reorder-group="handleReorderGroup" />
+      @update-group="handleUpdateGroup" />
 
     <div class="sec-chat-main">
       <!-- 弹层专用挂载点：禁止 teleport 到含 router-view 的容器，否则 keep-alive 失活时会误卸主内容导致白屏 -->
