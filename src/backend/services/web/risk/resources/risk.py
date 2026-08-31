@@ -195,7 +195,11 @@ from services.web.risk.tasks import (
     sync_auto_result,
 )
 from services.web.scene.constants import BindingType, ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, CompositeScopeFilter, SceneScopeFilter
+from services.web.scene.filters import (
+    BindingMetadataHelper,
+    CompositeScopeFilter,
+    SceneScopeFilter,
+)
 from services.web.scene.models import ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag

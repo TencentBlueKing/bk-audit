@@ -77,6 +77,28 @@ class SceneStrategyNotDisabled(SceneException):
         return f"{cls.MESSAGE}：{', '.join(str(strategy_id) for strategy_id in strategy_ids[:10])}"
 
 
+class SceneDispatchRuleNotDisabled(SceneException):
+    MESSAGE = gettext_lazy("场景被启用的分派规则引用，请先停用对应策略或移除分派规则后再删除")
+    ERROR_CODE = "009"
+
+    def __init__(
+        self,
+        strategy_ids: Sequence[int] | None = None,
+        *args: object,
+        **kwargs: Any,
+    ):
+        strategy_ids = list(strategy_ids or [])
+        kwargs.setdefault("data", {"strategy_ids": strategy_ids})
+        kwargs.setdefault("message", self.build_message(strategy_ids))
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def build_message(cls, strategy_ids: Sequence[int]) -> str:
+        if not strategy_ids:
+            return str(cls.MESSAGE)
+        return f"{cls.MESSAGE}：{', '.join(str(strategy_id) for strategy_id in strategy_ids[:10])}"
+
+
 class PanelNotExist(SceneException):
     MESSAGE = gettext_lazy("报表不存在")
     ERROR_CODE = "004"

@@ -197,7 +197,7 @@ class CheckRulesTest(TestCase):
                                     "raw_name": "nonexistent",
                                     "display_name": "nonexistent",
                                     "field_type": "long",
-                                    "aggregate": "count",
+                                    "aggregate": "COUNT",
                                 },
                                 "operator": "gt",
                                 "filters": ["0"],

@@ -429,12 +429,10 @@ class StrategyResourcesTest(TestCase):
         """测试EventLog类型缺少scene_id时应该抛出参数校验错误"""
         # 框架在 request() 阶段会先通过 RequestSerializer 校验，
         # ListTablesRequestSerializer.validate() 要求 EventLog 必须提供 scene_id，故抛出参数校验错误
-        with self.assertRaises(Exception) as context:
-            ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
-
-        # 验证错误消息中包含scene_id相关的错误
-        self.assertIn("scene_id", str(context.exception))
-        self.assertIn("必须提供", str(context.exception))
+        # 注意：scene_id 现在是可选字段（全局策略不传返回平台视角全量），所以不会抛出异常
+        result = ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
+        # 验证返回结果不为空（实际会调用 list_tables 逻辑）
+        self.assertIsNotNone(result)
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")

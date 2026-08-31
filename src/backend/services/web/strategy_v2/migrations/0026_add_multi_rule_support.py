@@ -16,8 +16,7 @@ def _default_dispatch_rule_conditions() -> dict:
 def table_exists(schema_editor, table: str) -> bool:
     with schema_editor.connection.cursor() as cursor:
         cursor.execute(
-            "SELECT COUNT(*) FROM information_schema.TABLES "
-            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+            "SELECT COUNT(*) FROM information_schema.TABLES " "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
             [table],
         )
         return cursor.fetchone()[0] > 0
