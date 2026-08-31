@@ -11,12 +11,19 @@ from blueapps.core.celery import celery_app
 from celery.schedules import crontab
 
 from services.web.ai_assistant.constants import MessageType
-from services.web.ai_assistant.schemas.audit_search import NLSearchErrorSchema, NLSearchOutputSchema
+from services.web.ai_assistant.schemas.audit_search import (
+    NLSearchErrorSchema,
+    NLSearchOutputSchema,
+)
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
-from services.web.query.ai_assistant.exceptions import AIAssistantError
+from services.web.query.ai_assistant.exceptions import (
+    AIAssistantError,
+    AIServiceError,
+    AITimeoutError,
+)
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 
 logger = logging.getLogger(__name__)
@@ -53,7 +60,9 @@ class NLSearchExecutionTask(MessageExecutionTask):
 
         try:
             # 延迟导入：避免 tasks ↔ services 加载期循环依赖
-            from services.web.ai_assistant.tasks.conversation import generate_conversation_title
+            from services.web.ai_assistant.tasks.conversation import (
+                generate_conversation_title,
+            )
 
             generate_conversation_title.delay(
                 conversation_id=execution.message.conversation_id,
@@ -91,9 +100,11 @@ class NLSearchExecutionTask(MessageExecutionTask):
 def execute_natural_language_search(self, execution: MessageExecution) -> NLSearchOutputSchema:  # noqa: N805
     """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。
 
-    预期内识别失败（AI 未识别 / 输出非法 / 服务异常 / 超时）不抛出：
-    消息任务收敛 SUCCESS 并携带结构化 error 协议供前端展示；
-    仅非预期异常继续冒泡，由平台收敛为 FAILED。
+    暂态故障（AIDev 超时 / 服务异常）直接冒泡：平台收敛为 FAILED，
+    用户可通过消息重试接口重跑（重试可恢复的故障必须保留 FAILED 语义）。
+    确定性识别失败（未识别 / 输出非法 / 权限拒绝）不抛出：消息收敛 SUCCESS
+    并携带结构化 error 协议供前端展示（重试同输入仍会失败，引导调整问法）；
+    其余非预期异常继续冒泡，由平台收敛为 FAILED。
     """
 
     context_data = execution.context_data
@@ -104,8 +115,16 @@ def execute_natural_language_search(self, execution: MessageExecution) -> NLSear
             scope_id=context_data.scope_id,
             username=context_data.username,
         )
+    except (AITimeoutError, AIServiceError):
+        # 暂态基础设施故障：重试大概率恢复，冒泡收敛 FAILED 保留重试接口可用性，
+        # 不与确定性识别失败（SUCCESS + error 协议）混同恢复语义
+        logger.exception(
+            "[execute_natural_language_search] nl2json transient failure, message_id=%s",
+            execution.message.id,
+        )
+        raise
     except AIAssistantError as error:
-        # query 侧业务异常自带稳定 error_code 与脱敏 message，属预期内失败
+        # 确定性业务失败：query 侧业务异常自带稳定 error_code 与脱敏 message
         logger.warning(
             "[execute_natural_language_search] nl2json recognized failure, message_id=%s, error_code=%s",
             execution.message.id,
