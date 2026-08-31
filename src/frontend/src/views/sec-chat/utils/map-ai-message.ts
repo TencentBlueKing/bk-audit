@@ -51,9 +51,20 @@ const formatSampleValue = (value: any): string => {
   return String(value);
 };
 
+const mapFieldOptions = (options?: AiSystemFieldItem['options']) => {
+  if (!Array.isArray(options)) return [];
+  return options
+    .map(opt => ({
+      id: String(opt?.id ?? ''),
+      name: String(opt?.name ?? opt?.id ?? ''),
+    }))
+    .filter(opt => opt.id);
+};
+
 const mapFieldItem = (
   item: AiSystemFieldItem,
   system?: Pick<AiSystemInfo, 'system_id' | 'name'>,
+  isExtension = false,
 ): SystemFieldRow => ({
   rawName: String(item.raw_name || ''),
   keys: Array.isArray(item.keys) ? item.keys.map(String) : [],
@@ -61,6 +72,9 @@ const mapFieldItem = (
   nlName: String(item.nl_name || item.display_name || item.raw_name || ''),
   description: String(item.description || ''),
   allowOperators: Array.isArray(item.allow_operators) ? item.allow_operators.map(String) : ['eq'],
+  fieldType: item.field_type ? String(item.field_type) : undefined,
+  options: mapFieldOptions(item.options),
+  isExtension,
   sampleValue: item.sample_value,
   systemId: system?.system_id,
   systemName: system?.name,
@@ -101,10 +115,10 @@ const pickSystemFields = (output?: Record<string, any> | null) => {
 
   systems.forEach((system) => {
     (system.standard_fields || []).forEach((field) => {
-      standardFields.push(mapFieldItem(field, system));
+      standardFields.push(mapFieldItem(field, system, false));
     });
     (system.extension_fields || []).forEach((field) => {
-      extensionFields.push(mapFieldItem(field, system));
+      extensionFields.push(mapFieldItem(field, system, true));
     });
   });
 
