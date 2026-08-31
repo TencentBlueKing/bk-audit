@@ -289,6 +289,8 @@ export interface AiFullExportResult {
   status: string;
   /** 兼容任务模型原样返回 */
   id?: number;
+  /** 异步导出提示文案（如邮件通知说明） */
+  message?: string;
 }
 
 /** 导出任务详情（collector_query_task） */
