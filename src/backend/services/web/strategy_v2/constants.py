@@ -65,6 +65,9 @@ class StrategyStatusChoices(TextChoices):
     Strategy Status
     """
 
+    # 草稿
+    DRAFT = "draft", gettext_lazy("Draft")
+
     # 停用
     DISABLED = "disabled", gettext_lazy("Disabled")
 
