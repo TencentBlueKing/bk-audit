@@ -960,6 +960,27 @@ class ListProcessedRisk(ListRisk):
         ).exclude(current_operator__contains=username)
 
 
+class ListPendingConfirmRisk(ListRisk):
+    """获取待我确认的风险列表"""
+
+    name = gettext_lazy("待我确认")
+
+    def load_risks(self, validated_request_data, username: str = None):
+        username = username or get_request_username()
+        q = self._build_filter_query(validated_request_data)
+
+        return (
+            Risk.objects.filter(
+                q,
+                display_status=RiskDisplayStatus.PENDING_CONFIRM,
+                confirmer__contains=username,  # 确认人包含当前用户
+                is_deleted=False,
+            )
+            .distinct()
+            .order_by("-event_time")
+        )
+
+
 class ListRiskFields(RiskMeta):
     name = gettext_lazy("获取风险字段")
 
@@ -1031,6 +1052,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
         RiskViewType.PROCESSED.value: ListProcessedRisk,
+        RiskViewType.CONFIRM.value: ListPendingConfirmRisk,
     }
 
     @classmethod
@@ -1974,25 +1996,3 @@ class ConfirmAsMisReportResource(RiskMeta):
 
         ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
         return {"success": True}
-
-
-class ListPendingConfirmRisk(ListRisk):
-    """获取待我确认的风险列表"""
-
-    name = gettext_lazy("待我确认")
-
-    def load_risks(self, validated_request_data, username: str = None):
-        username = username or get_request_username()
-        q = self._build_filter_query(validated_request_data)
-
-        return (
-            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
-            .filter(
-                q,
-                display_status=RiskDisplayStatus.PENDING_CONFIRM,
-                confirmer__contains=username,  # 确认人包含当前用户
-                is_deleted=False,
-            )
-            .distinct()
-            .order_by("-event_time")
-        )
