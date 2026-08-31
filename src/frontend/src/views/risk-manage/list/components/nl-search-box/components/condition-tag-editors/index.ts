@@ -17,5 +17,6 @@
 export { default as TagDatetimerange } from './tag-datetimerange.vue';
 export { default as TagEventField } from './tag-event-field.vue';
 export { default as TagInput } from './tag-input.vue';
+export { default as TagLogField } from './tag-log-field.vue';
 export { default as TagSelect } from './tag-select.vue';
 export { default as TagUserSelector } from './tag-user-selector.vue';

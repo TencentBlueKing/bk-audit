@@ -128,11 +128,14 @@
   import type { RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
   import {
     buildAiSearchCondition,
+    appendSearchModelField,
     createConditionFieldConfigFromSystemFields,
     createDefaultDatetime,
     createDefaultDatetimeOrigin,
+    getConditionDefaultValue,
     getPrimaryFieldNames,
     getSecondaryFieldNames,
+    sampleToConditionValue,
   } from '../config/condition-fields';
 
   import RetrievalResultCard from './retrieval-result-card.vue';
@@ -174,15 +177,11 @@
   const selectedFieldNames = computed(() => Object.keys(searchModel.value)
     .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
 
-  const getDefaultValue = (config: IFieldConfig) => {
-    if (config.type === 'select' || config.type === 'user-selector') {
-      return [];
-    }
-    if (config.type === 'datetimerange') {
-      return createDefaultDatetime();
-    }
-    return '';
-  };
+  const getDefaultValue = (config: IFieldConfig) => getConditionDefaultValue(config);
+
+  const sampleToValue = (config: IFieldConfig, sample?: string) => (
+    sampleToConditionValue(config, sample)
+  );
 
   const resolveFieldKey = (fieldNameOrLabel: string) => {
     if (fieldConfig.value[fieldNameOrLabel]) return fieldNameOrLabel;
@@ -191,29 +190,16 @@
     return matched?.[0] || fieldNameOrLabel;
   };
 
-  const sampleToValue = (config: IFieldConfig, sample?: string) => {
-    if (!sample) {
-      return getDefaultValue(config);
-    }
-    if (config.type === 'user-selector' || config.type === 'select') {
-      return [sample];
-    }
-    return sample;
-  };
-
-  const insertFieldAtFront = (fieldName: string, value: any) => {
-    const next: Record<string, any> = {
-      datetime: searchModel.value.datetime || createDefaultDatetime(),
-      datetime_origin: searchModel.value.datetime_origin || createDefaultDatetimeOrigin(),
-    };
-    if (fieldName !== 'datetime' && fieldName !== 'datetime_origin') {
-      next[fieldName] = value;
-    }
-    Object.keys(searchModel.value).forEach((key) => {
-      if (key === 'datetime' || key === 'datetime_origin' || key === fieldName) return;
-      next[key] = searchModel.value[key];
-    });
-    searchModel.value = next;
+  const appendField = (fieldName: string, value: any) => {
+    searchModel.value = appendSearchModelField(
+      searchModel.value,
+      fieldName,
+      value,
+      {
+        datetime: createDefaultDatetime(),
+        datetimeOrigin: createDefaultDatetimeOrigin(),
+      },
+    );
   };
 
   const handleAddField = async (fieldName: string, config: IFieldConfig, initialValue?: any) => {
@@ -222,7 +208,7 @@
       return;
     }
     const value = initialValue !== undefined ? initialValue : getDefaultValue(config);
-    insertFieldAtFront(fieldName, value);
+    appendField(fieldName, value);
     conditionTagsRef.value?.startEditField?.(fieldName);
     await nextTick();
   };
