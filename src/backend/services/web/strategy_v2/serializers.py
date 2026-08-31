@@ -24,6 +24,7 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
+from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
 from api.bk_base.constants import UserAuthActionEnum
@@ -35,6 +36,7 @@ from apps.meta.serializers import (
 )
 from apps.notice.models import NoticeGroup
 from core.serializers import ChoiceListSerializer, OrderSerializer
+from core.sql.model import HavingCondition, WhereCondition
 from services.web.analyze.constants import (
     ControlTypeChoices,
     FilterConnector,
@@ -85,6 +87,7 @@ from services.web.strategy_v2.exceptions import (
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
+from services.web.strategy_v2.handlers.dispatch import DispatchConditionNode
 from services.web.strategy_v2.models import (
     DispatchRule,
     LinkTable,
@@ -832,6 +835,21 @@ class MultiRuleValidateMixin:
         for sub in node.get("conditions") or []:
             yield from MultiRuleValidateMixin._walk_tree_leaves(sub)
 
+    @staticmethod
+    def _validate_condition_tree(tree: Optional[dict], model_cls, label: str) -> None:
+        """
+        递归校验条件树结构（connector/field/operator/filter 类型与必填）
+        """
+        if not tree:
+            return
+        try:
+            model_cls.model_validate(tree)
+        except PydanticValidationError as exc:
+            first = exc.errors()[0] if exc.errors() else {}
+            loc = ".".join(str(item) for item in first.get("loc", []))
+            msg = first.get("msg", str(exc))
+            raise serializers.ValidationError(gettext("条件树[%s]结构非法（%s）：%s") % (label, loc, msg))
+
     def _check_rules(self, attrs: dict) -> dict:
         """校验发现规则集（attrs["rules"]）；由 Create/Update 序列化器在 validate() 中显式调用"""
         rules = attrs.get("rules") or []
@@ -863,6 +881,10 @@ class MultiRuleValidateMixin:
             conditions = rule.get("conditions") or {}
             where_tree = conditions.get("where")
             having_tree = conditions.get("having")
+
+            # 条件树结构校验（connector/field/operator/filter 类型与必填），前移 Pydantic 校验
+            self._validate_condition_tree(where_tree, WhereCondition, "where")
+            self._validate_condition_tree(having_tree, HavingCondition, "having")
 
             # 规则 where 必填
             if self._condition_tree_is_empty(where_tree):
@@ -916,6 +938,8 @@ class MultiRuleValidateMixin:
 
             default_count = 0
             for rule in dispatch_rules:
+                # 分派条件树结构校验（connector/field/operator/filter 类型与必填），前移 Pydantic 校验
+                self._validate_condition_tree(rule.get("conditions"), DispatchConditionNode, "dispatch_conditions")
                 # is_default 由 conditions 推导同步
                 is_default = self._condition_tree_is_empty(rule.get("conditions"))
                 rule["is_default"] = is_default
@@ -1157,9 +1181,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         allow_null=True,
         default=None,
         write_only=True,
-        help_text=gettext_lazy(
-            "仅草稿策略可传：true=保存草稿更新（不部署），false=提交为正式策略（触发部署）；不传=维持现状"
-        ),
+        help_text=gettext_lazy("仅草稿策略可传：true=保存草稿更新（不部署），false=提交为正式策略（触发部署）；不传=维持现状"),
     )
     # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集（后端派生，
     # 见 StrategyV2Base.sync_platform_binding_scenes）；误传的 visibility 由 DRF 丢弃

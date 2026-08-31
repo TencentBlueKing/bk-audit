@@ -52,6 +52,7 @@ from services.web.scene.exceptions import (
     AlreadyHasPermission,
     ApplicationPending,
     ApproveServiceNotConfigured,
+    SceneDispatchRuleNotDisabled,
     SceneException,
     SceneNotEnabled,
     SceneNotExist,
@@ -87,7 +88,7 @@ from services.web.scene.serializers import (
     UpdateSceneSerializer,
 )
 from services.web.strategy_v2.constants import StrategySource, StrategyStatusChoices
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import DispatchRule, Strategy
 
 
 class SceneResource(AuditMixinResource, abc.ABC):
@@ -540,6 +541,22 @@ class DeleteScene(SceneResource):
         )
         if active_strategy_ids:
             raise SceneStrategyNotDisabled(strategy_ids=active_strategy_ids)
+
+        # 检查是否有启用策略的活动分派规则引用该场景作为目标场景。
+        # 全局策略 direct / after_confirm 的分派结果会把 Risk 绑定到 DispatchRule.target_scene，
+        dispatch_strategy_ids = list(
+            DispatchRule.objects.filter(
+                target_scene=scene,
+                is_deleted=False,
+                strategy__is_deleted=False,
+            )
+            .exclude(strategy__status=StrategyStatusChoices.DISABLED)
+            .order_by("strategy_id")
+            .values_list("strategy_id", flat=True)
+            .distinct()
+        )
+        if dispatch_strategy_ids:
+            raise SceneDispatchRuleNotDisabled(strategy_ids=dispatch_strategy_ids)
 
         scene.delete()
         return {"message": "success"}

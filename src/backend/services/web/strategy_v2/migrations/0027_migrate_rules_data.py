@@ -13,6 +13,11 @@
 - processor_groups/notice_groups 迁移到 StrategyRule.processor/follower
 - confirmer 为空列表（无全局策略）
 - dispatch_rule 为 null（无全局策略）
+
+【不可逆声明】本数据迁移为不可逆迁移。回滚（backwards）不做任何数据清理：
+无法可靠识别"仍保持迁移原样"的记录（StrategyRule.created_by 在用户编辑后不变），
+按 created_by 回滚会误删用户已编辑的规则、清空 rule_order 并留下 Risk/ManualEvent
+的 strategy_rule 悬空引用。如需回退请走人工数据订正流程。
 """
 
 from django.db import migrations
@@ -158,31 +163,10 @@ def forwards(apps, schema_editor):
 
 def backwards(apps, schema_editor):
     """
-    回滚迁移
-    - 仅回滚"由本次迁移写入的" StrategyRule（created_by == MIGRATION_CREATED_BY）
-    - Risk/ManualEvent 的关联字段不做逆向清洗，如需清洗请人工介入
+    回滚迁移：本迁移声明为【不可逆】。
     """
-    StrategyRule = apps.get_model("strategy_v2", "StrategyRule")
-    Strategy = apps.get_model("strategy_v2", "Strategy")
-
-    print("[backwards] 开始回滚数据迁移（仅回滚本次迁移写入的 StrategyRule）", flush=True)
-
-    # 找出本次迁移写入的规则
-    migration_rules = StrategyRule.objects.filter(created_by=MIGRATION_CREATED_BY)
-    strategy_ids = list(migration_rules.values_list("strategy_id", flat=True).distinct())
-
-    # 清空对应策略的 rule_order
-    if strategy_ids:
-        Strategy.objects.filter(strategy_id__in=strategy_ids).update(rule_order=[])
-        print(f"[backwards] 清空 {len(strategy_ids)} 条策略的 rule_order", flush=True)
-
-    # 硬删除本次迁移写入的规则
-    count = migration_rules.count()
-    migration_rules.delete()
-    print(f"[backwards] 删除 {count} 条 StrategyRule 记录", flush=True)
-
     print(
-        "[backwards] 回滚完成。Risk/ManualEvent 上的 strategy_rule/dispatch_rule/confirmer/risk_level/risk_hazard/risk_guidance 等字段不做逆向清洗",
+        "无法可靠识别迁移原样记录（created_by 在编辑后不变），声明为不可逆，回滚不删除任何数据。",
         flush=True,
     )
 
