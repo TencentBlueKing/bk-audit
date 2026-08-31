@@ -5,12 +5,18 @@
 """
 
 import logging
+import time
 
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from celery.schedules import crontab
 
-from services.web.ai_assistant.constants import MessageType
+from services.web.ai_assistant.constants import (
+    NL_PARSE_MAX_RETRIES,
+    NL_PARSE_RETRY_INTERVAL_SECONDS,
+    NL_PARSE_RETRY_TIMEOUT_SECONDS,
+    MessageType,
+)
 from services.web.ai_assistant.schemas.audit_search import (
     NLSearchErrorSchema,
     NLSearchOutputSchema,
@@ -21,6 +27,7 @@ from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
+    AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
 )
@@ -100,6 +107,8 @@ class NLSearchExecutionTask(MessageExecutionTask):
 def execute_natural_language_search(self, execution: MessageExecution) -> NLSearchOutputSchema:  # noqa: N805
     """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。
 
+    解析失败（AI 返回内容不合格，具随机性）任务内自动重试：受次数上限与
+    总时长上限双约束，任一超限即结束并冒泡收敛 FAILED（手动重试重新获得预算）。
     暂态故障（AIDev 超时 / 服务异常）直接冒泡：平台收敛为 FAILED，
     用户可通过消息重试接口重跑（重试可恢复的故障必须保留 FAILED 语义）。
     确定性识别失败（未识别 / 输出非法 / 权限拒绝）不抛出：消息收敛 SUCCESS
@@ -108,15 +117,36 @@ def execute_natural_language_search(self, execution: MessageExecution) -> NLSear
     """
 
     context_data = execution.context_data
+    deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
     try:
-        condition = NL2JSONService.convert(
-            query_text=execution.input_data.query_text,
-            selection=context_data.system_selection,
-            scope_id=context_data.scope_id,
-            username=context_data.username,
-        )
-    except (AITimeoutError, AIServiceError):
-        # 暂态基础设施故障：重试大概率恢复，冒泡收敛 FAILED 保留重试接口可用性，
+        for attempt in range(NL_PARSE_MAX_RETRIES + 1):
+            try:
+                condition = NL2JSONService.convert(
+                    query_text=execution.input_data.query_text,
+                    selection=context_data.system_selection,
+                    scope_id=context_data.scope_id,
+                    username=context_data.username,
+                )
+            except AIOutputParseFailedError:
+                # 解析失败具随机性：预算内自动重试；超次数或超时长即结束并冒泡 FAILED
+                if attempt >= NL_PARSE_MAX_RETRIES or time.monotonic() >= deadline:
+                    logger.error(
+                        "[execute_natural_language_search] nl2json parse retry budget exhausted, "
+                        "message_id=%s, attempt=%s",
+                        execution.message.id,
+                        attempt + 1,
+                    )
+                    raise
+                logger.warning(
+                    "[execute_natural_language_search] nl2json parse failed, retrying, " "message_id=%s, attempt=%s",
+                    execution.message.id,
+                    attempt + 1,
+                )
+                time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
+            else:
+                break
+    except (AITimeoutError, AIServiceError, AIOutputParseFailedError):
+        # 暂态基础设施故障 + 超预算解析失败：冒泡收敛 FAILED 保留重试接口可用性，
         # 不与确定性识别失败（SUCCESS + error 协议）混同恢复语义
         logger.exception(
             "[execute_natural_language_search] nl2json transient failure, message_id=%s",

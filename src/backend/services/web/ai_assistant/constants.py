@@ -113,3 +113,10 @@ class PlatformStreamEvent(TextChoices):
 # User Prompt 单行 label 格式与清洗规则见 services/web/ai_assistant/services/title_agent.py
 # 会话标题默认最大长度（BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH 覆盖）
 AI_CONVERSATION_TITLE_MAX_LENGTH = 20
+
+# 自然语言解析失败（AI 返回内容不合格，具随机性）任务内自动重试预算：
+# 不含首发最多重试 NL_PARSE_MAX_RETRIES 次；重试间隔与总时长上限双约束，
+# 任一超限即放弃并冒泡收敛 FAILED（用户手动重试会重新获得整段预算）
+NL_PARSE_MAX_RETRIES = 2
+NL_PARSE_RETRY_INTERVAL_SECONDS = 2
+NL_PARSE_RETRY_TIMEOUT_SECONDS = 60
