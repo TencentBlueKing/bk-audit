@@ -1039,6 +1039,23 @@ export function useSecChatStore() {
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };
 
+  /**
+   * 修改已识别条件后重新检索：POST LOG_SEARCH 并追加到消息列表。
+   */
+  const appendConditionSearch = async (condition: AiSearchCondition) => {
+    const chatMessage = await sendConditionSearch(condition);
+    const conv = activeConversation.value;
+    if (!conv || conv.isDraft) return chatMessage;
+    const messageForList = { ...chatMessage, showInMessageList: true };
+    const existIdx = conv.messages.findIndex(item => item.id === chatMessage.id);
+    if (existIdx >= 0) {
+      conv.messages.splice(existIdx, 1, messageForList);
+    } else {
+      conv.messages.push(messageForList);
+    }
+    return messageForList;
+  };
+
   const retryMessage = async (messageUid: string) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) return;
@@ -1082,6 +1099,7 @@ export function useSecChatStore() {
     reselectSystem,
     sendLogQuery,
     sendConditionSearch,
+    appendConditionSearch,
     retryMessage,
     stopAllMessagePolls,
   };
