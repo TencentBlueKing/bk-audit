@@ -9,13 +9,17 @@ from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import SystemSelectionRequired
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
-from services.web.ai_assistant.schemas.audit_search import NLSearchErrorSchema, NLSearchOutputSchema
+from services.web.ai_assistant.schemas.audit_search import (
+    NLSearchErrorSchema,
+    NLSearchOutputSchema,
+)
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIServiceError,
+    AITimeoutError,
     QueryNotRecognizedError,
 )
 from tests.test_ai_assistant.base import (
@@ -197,17 +201,35 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
             Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
         )
 
-    def test_nl_service_error_returns_structured_error(self):
-        """预期内服务异常（AIDev 5xx）：同样收敛 SUCCESS + 结构化 error 协议。"""
+    def test_nl_service_error_raises_for_retry(self):
+        """暂态服务异常（AIDev 5xx）：任务冒泡由平台收敛 FAILED，保留重试接口可用性。"""
 
         nl_message, execution = self._create_processing_nl(auto_execute=True)
         with mock.patch(
             "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
             side_effect=AIServiceError(),
         ):
-            output = execute_natural_language_search.run(execution)
-        self.assertEqual(output.error.error_code, "AI_SERVICE_ERROR")
-        self.assertIsNone(output.condition)
+            with self.assertRaises(AIServiceError):
+                execute_natural_language_search.run(execution)
+        nl_message.refresh_from_db()
+        # 终态收敛由平台 finish_message_failure 完成（任务侧只负责冒泡）
+        self.assertEqual(nl_message.status, ExecutionStatus.PROCESSING)
+        self.assertFalse(
+            Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
+        )
+
+    def test_nl_timeout_error_raises_for_retry(self):
+        """暂态故障（AIDev 超时）：任务冒泡收敛 FAILED，重试可恢复。"""
+
+        nl_message, execution = self._create_processing_nl(auto_execute=True)
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            side_effect=AITimeoutError(),
+        ):
+            with self.assertRaises(AITimeoutError):
+                execute_natural_language_search.run(execution)
+        nl_message.refresh_from_db()
+        self.assertEqual(nl_message.status, ExecutionStatus.PROCESSING)
         self.assertFalse(
             Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
         )
