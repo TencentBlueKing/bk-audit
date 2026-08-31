@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on
-    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-    either express or implied. See the License for the
-    specific language governing permissions and limitations under the License.
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
@@ -20,7 +20,7 @@ import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/typ
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
-import type { SelectedSystem, SystemFieldRow } from '../../types';
+import type { LogFieldConditionValue, SelectedSystem, SystemFieldRow } from '../../types';
 
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
@@ -31,6 +31,69 @@ export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-3M': '近3月',
   'now-6M': '近6月',
   'now-12M': '近12月',
+};
+
+/** 日志检索操作符展示文案（符号 + 描述，与风险 NL 条件标签一致） */
+export const LOG_OPERATOR_NAME_MAP: Record<string, string> = {
+  eq: '=  等于',
+  neq: '!=  不等于',
+  include: '包含',
+  exclude: '不包含',
+  like: '模糊匹配',
+  not_like: '不匹配',
+  gt: '>  大于',
+  lt: '<  小于',
+  gte: '>=  大于等于',
+  lte: '<=  小于等于',
+  isnull: '为空',
+  notnull: '不为空',
+  match_any: '匹配任一',
+  match_all: '匹配全部',
+  '=': '=  等于',
+  '!=': '!=  不等于',
+};
+
+/** 操作符徽章上的简短展示（去掉多余空格） */
+export const LOG_OPERATOR_BADGE_MAP: Record<string, string> = {
+  eq: '= 等于',
+  neq: '!= 不等于',
+  include: '包含',
+  exclude: '不包含',
+  like: '模糊匹配',
+  not_like: '不匹配',
+  gt: '> 大于',
+  lt: '< 小于',
+  gte: '>= 大于等于',
+  lte: '<= 小于等于',
+  isnull: '为空',
+  notnull: '不为空',
+  match_any: '匹配任一',
+  match_all: '匹配全部',
+  '=': '= 等于',
+  '!=': '!= 不等于',
+};
+
+/**
+ * 将新条件字段追加到 searchModel 末尾（datetime 始终在最前）。
+ */
+export const appendSearchModelField = (
+  searchModel: Record<string, any>,
+  fieldName: string,
+  value: any,
+  datetimeDefaults?: { datetime?: any; datetimeOrigin?: any },
+): Record<string, any> => {
+  const next: Record<string, any> = {
+    datetime: searchModel.datetime ?? datetimeDefaults?.datetime,
+    datetime_origin: searchModel.datetime_origin ?? datetimeDefaults?.datetimeOrigin,
+  };
+  Object.keys(searchModel).forEach((key) => {
+    if (key === 'datetime' || key === 'datetime_origin' || key === fieldName) return;
+    next[key] = searchModel[key];
+  });
+  if (fieldName !== 'datetime' && fieldName !== 'datetime_origin') {
+    next[fieldName] = value;
+  }
+  return next;
 };
 
 /** 兼容旧静态配置的通用字段 key（无 SYSTEM 字段上下文时回退） */
@@ -63,6 +126,12 @@ export const FIELD_LABEL_TO_KEY: Record<string, string> = {
   事件ID: 'event_id',
   请求ID: 'request_id',
 };
+
+export interface ILogFieldConfig extends IFieldConfig {
+  fieldMeta?: SystemFieldRow;
+  defaultOperator?: string;
+  allowOperators?: string[];
+}
 
 export const createDefaultDatetime = () => ([
   dayjs(Date.now() - (86400000 * 1)).format('YYYY-MM-DD HH:mm:ss'),
@@ -120,25 +189,91 @@ const toIsoTime = (value: string) => {
   return parsed.format('YYYY-MM-DDTHH:mm:ss+08:00');
 };
 
-const pickDefaultOperator = (allowOperators: string[] = []) => {
+export const pickDefaultOperator = (allowOperators: string[] = []) => {
   if (allowOperators.includes('eq')) return 'eq';
   if (allowOperators.includes('=')) return '=';
   return allowOperators[0] || 'eq';
 };
 
-const fieldConfigFromRow = (field: SystemFieldRow): IFieldConfig => {
+/** 标准字段：根据值类型推断 include / eq */
+export const resolveStandardOperator = (
+  config: ILogFieldConfig,
+  value: any,
+): string => {
+  const ops = config.allowOperators || config.fieldMeta?.allowOperators || [];
+  if (ops.length === 1) return ops[0];
+  if (config.type === 'select' || config.type === 'user-selector') {
+    if (ops.includes('include')) return 'include';
+  }
+  if (ops.includes('include') && ops.includes('eq')) {
+    if (Array.isArray(value)) {
+      return value.length > 1 ? 'include' : 'eq';
+    }
+    return 'eq';
+  }
+  if (ops.includes('like') && !ops.includes('eq')) return 'like';
+  return config.defaultOperator || pickDefaultOperator(ops);
+};
+
+const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
+  value !== null
+  && typeof value === 'object'
+  && !Array.isArray(value)
+  && 'operator' in value
+);
+
+const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
   const operators = field.allowOperators || [];
-  // 用户类字段用 user-selector；其余默认字符串输入
-  const isUser = /user|username|operator/i.test(field.rawName) || field.nlName.includes('操作人');
+  const options = field.options || [];
+  const hasOptions = options.length > 0;
+  const isUser = /user|username/i.test(field.rawName) || field.nlName.includes('操作人');
+  const metaExtras = {
+    fieldMeta: field,
+    allowOperators: operators,
+  };
+
+  // 扩展字段且允许多操作符 → 展示操作符徽章
+  if (field.isExtension && operators.length > 1) {
+    return {
+      label: field.displayName || field.rawName,
+      type: 'log-field',
+      required: false,
+      defaultOperator: pickDefaultOperator(operators),
+      ...metaExtras,
+    };
+  }
+
+  // 标准字段：options 有值 → 下拉
+  if (hasOptions) {
+    return {
+      label: field.displayName || field.rawName,
+      type: 'select',
+      required: false,
+      service: () => Promise.resolve(options),
+      labelName: 'name',
+      valName: 'id',
+      defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
+      ...metaExtras,
+    };
+  }
+
+  if (isUser) {
+    return {
+      label: field.displayName || field.rawName,
+      type: 'user-selector',
+      required: false,
+      defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
+      ...metaExtras,
+    };
+  }
+
+  // 扩展字段仅一个操作符 / 标准文本字段 → 输入框 + 冒号
   return {
     label: field.displayName || field.rawName,
-    type: isUser ? 'user-selector' : 'string',
+    type: 'string',
     required: false,
-    // 透传元数据，拼 condition 时使用
-    ...({
-      fieldMeta: field,
-      defaultOperator: pickDefaultOperator(operators),
-    } as any),
+    defaultOperator: pickDefaultOperator(operators),
+    ...metaExtras,
   };
 };
 
@@ -149,8 +284,8 @@ const fieldConfigFromRow = (field: SystemFieldRow): IFieldConfig => {
 export const createConditionFieldConfigFromSystemFields = (
   standardFields: SystemFieldRow[] = [],
   extensionFields: SystemFieldRow[] = [],
-): Record<string, IFieldConfig> => {
-  const config: Record<string, IFieldConfig> = {
+): Record<string, ILogFieldConfig> => {
+  const config: Record<string, ILogFieldConfig> = {
     datetime: {
       label: '操作起始时间',
       type: 'datetimerange',
@@ -160,7 +295,6 @@ export const createConditionFieldConfigFromSystemFields = (
 
   [...standardFields, ...extensionFields].forEach((field) => {
     if (!field.rawName || field.rawName === 'datetime') return;
-    // 扩展字段用 raw_name + keys 路径做唯一 key，避免冲突
     const key = field.keys?.length
       ? `${field.rawName}.${field.keys.join('.')}`
       : field.rawName;
@@ -184,6 +318,42 @@ export const getSecondaryFieldNames = (extensionFields: SystemFieldRow[] = []) =
   }).filter(Boolean)
 );
 
+/** 条件字段默认值 */
+export const getConditionDefaultValue = (config: IFieldConfig): any => {
+  const logConfig = config as ILogFieldConfig;
+  if (config.type === 'log-field') {
+    return {
+      operator: logConfig.defaultOperator || pickDefaultOperator(logConfig.allowOperators),
+      value: '',
+    } satisfies LogFieldConditionValue;
+  }
+  if (config.type === 'select' || config.type === 'user-selector') {
+    return [];
+  }
+  if (config.type === 'datetimerange') {
+    return createDefaultDatetime();
+  }
+  return '';
+};
+
+/** 样本值转条件初值 */
+export const sampleToConditionValue = (config: IFieldConfig, sample?: string): any => {
+  if (!sample) {
+    return getConditionDefaultValue(config);
+  }
+  if (config.type === 'log-field') {
+    const logConfig = config as ILogFieldConfig;
+    return {
+      operator: logConfig.defaultOperator || pickDefaultOperator(logConfig.allowOperators),
+      value: sample,
+    } satisfies LogFieldConditionValue;
+  }
+  if (config.type === 'user-selector' || config.type === 'select') {
+    return [sample];
+  }
+  return sample;
+};
+
 const fieldCatalogKey = (rawName: string, keys: string[] = []) => (
   keys.length ? `${rawName}.${keys.join('.')}` : rawName
 );
@@ -205,7 +375,7 @@ export const resolveConditionFieldKey = (
   if (fieldConfig[exactKey]) return exactKey;
 
   const matched = Object.entries(fieldConfig).find(([, config]) => {
-    const meta = (config as IFieldConfig & { fieldMeta?: SystemFieldRow }).fieldMeta;
+    const meta = (config as ILogFieldConfig).fieldMeta;
     if (!meta) return false;
     const metaKey = fieldCatalogKey(meta.rawName, meta.keys || []);
     return metaKey === exactKey || meta.rawName === rawName;
@@ -213,6 +383,24 @@ export const resolveConditionFieldKey = (
   if (matched) return matched[0];
   if (fieldConfig[rawName]) return rawName;
   return null;
+};
+
+const normalizeFiltersToModelValue = (
+  config: IFieldConfig,
+  filters: any[],
+  operator?: string,
+) => {
+  if (config.type === 'log-field') {
+    const logConfig = config as ILogFieldConfig;
+    return {
+      operator: operator || logConfig.defaultOperator || 'eq',
+      value: filters.length === 1 ? String(filters[0]) : filters.map(String).join(','),
+    } satisfies LogFieldConditionValue;
+  }
+  if (config.type === 'user-selector' || config.type === 'select') {
+    return filters.map(String);
+  }
+  return filters.length === 1 ? filters[0] : filters.join(',');
 };
 
 /** 将 AiSearchCondition 转为条件筛选 searchModel（与 buildAiSearchCondition 互逆） */
@@ -240,14 +428,33 @@ export const parseAiSearchConditionToSearchModel = (
       : [];
     if (!filters.length) return;
 
-    if (config.type === 'user-selector' || config.type === 'select') {
-      searchModel[fieldKey] = filters;
-    } else {
-      searchModel[fieldKey] = filters.length === 1 ? filters[0] : filters.join(',');
-    }
+    searchModel[fieldKey] = normalizeFiltersToModelValue(config, filters, item.operator);
   });
 
   return searchModel;
+};
+
+const extractFieldValue = (config: ILogFieldConfig, value: any) => {
+  if (config.type === 'log-field' && isLogFieldValue(value)) {
+    return {
+      operator: value.operator || config.defaultOperator || 'eq',
+      rawValue: value.value,
+    };
+  }
+  return {
+    operator: resolveStandardOperator(config, value),
+    rawValue: value,
+  };
+};
+
+const valueToFilters = (config: ILogFieldConfig, rawValue: any): any[] => {
+  if (Array.isArray(rawValue)) {
+    return rawValue.filter(item => item !== undefined && item !== null && item !== '');
+  }
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return [];
+  }
+  return [rawValue];
 };
 
 /**
@@ -268,16 +475,15 @@ export const buildAiSearchCondition = (params: {
 
   Object.keys(searchModel).forEach((fieldKey) => {
     if (fieldKey === 'datetime' || fieldKey === 'datetime_origin' || fieldKey === 'sort') return;
-    const config = fieldConfig[fieldKey] as IFieldConfig & {
-      fieldMeta?: SystemFieldRow;
-      defaultOperator?: string;
-    };
+    const config = fieldConfig[fieldKey] as ILogFieldConfig;
     if (!config) return;
 
     const value = searchModel[fieldKey];
-    const hasValue = Array.isArray(value)
-      ? value.some(item => item !== undefined && item !== null && item !== '')
-      : value !== undefined && value !== null && value !== '';
+    const hasValue = config.type === 'log-field'
+      ? isLogFieldValue(value) && value.value !== undefined && value.value !== null && value.value !== ''
+      : Array.isArray(value)
+        ? value.some(item => item !== undefined && item !== null && item !== '')
+        : value !== undefined && value !== null && value !== '';
     if (!hasValue) return;
 
     const meta = config.fieldMeta;
@@ -288,8 +494,10 @@ export const buildAiSearchCondition = (params: {
     } else if (fieldKey.includes('.')) {
       keys = fieldKey.split('.').slice(1);
     }
-    const operator = config.defaultOperator || pickDefaultOperator(meta?.allowOperators);
-    const filters = Array.isArray(value) ? value.filter(item => item !== undefined && item !== null && item !== '') : [value];
+
+    const { operator, rawValue } = extractFieldValue(config, value);
+    const filters = valueToFilters(config, rawValue);
+    if (!filters.length) return;
 
     conditions.push({
       field: {
@@ -311,7 +519,7 @@ export const buildAiSearchCondition = (params: {
 };
 
 /** @deprecated 仅作无 SYSTEM 字段时的兜底；联调主路径用 createConditionFieldConfigFromSystemFields */
-export const createConditionFieldConfig = (systems: SelectedSystem[] = []): Record<string, IFieldConfig> => {
+export const createConditionFieldConfig = (systems: SelectedSystem[] = []): Record<string, ILogFieldConfig> => {
   const systemOptions = systems.map(item => ({ id: item.id, name: item.name }));
   return {
     datetime: {

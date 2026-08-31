@@ -62,6 +62,16 @@
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
 
+          <!-- 日志扩展字段（带操作符） -->
+          <tag-log-field
+            v-else-if="tag.type === 'log-field'"
+            :is-editing="editingField === tag.fieldName"
+            :tag="tag"
+            @finish-edit="handleFinishEdit"
+            @remove="handleRemove"
+            @start-edit="handleStartEdit"
+            @update="handleUpdate" />
+
           <!-- 输入类型 -->
           <tag-input
             v-else
@@ -120,6 +130,7 @@
     TagDatetimerange,
     TagEventField,
     TagInput,
+    TagLogField,
     TagSelect,
     TagUserSelector,
   } from './condition-tag-editors';
