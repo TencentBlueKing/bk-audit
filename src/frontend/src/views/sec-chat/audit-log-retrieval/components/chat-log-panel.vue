@@ -127,8 +127,11 @@
             <!-- 查询后的结构化结果卡片；条件检索根 LOG 不在此渲染（内嵌于条件卡） -->
             <retrieval-result-card
               v-else-if="msg.type === 'retrieval-result' && msg.result && !isConditionLogResult(msg)"
+              :extension-fields="extensionFields"
               :message-uid="msg.id"
               :result="msg.result"
+              :standard-fields="standardFields"
+              :systems="systems"
               @regenerate="handleRegenerate(msg.content || '')" />
           </div>
         </div>
@@ -157,7 +160,7 @@
   import RetrievalGuideCard from './retrieval-guide-card.vue';
   import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
-  import type { ChatMessage, SelectedSystem } from '../../types';
+  import type { ChatMessage, SelectedSystem, SystemFieldRow } from '../../types';
 
   const props = withDefaults(defineProps<{
     conversationId?: string;
@@ -167,12 +170,18 @@
     messageLoading?: boolean;
     /** 识别失败时展示的建议问法（来自 SYSTEM_SELECTION） */
     nlSuggestions?: string[];
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+    systems?: SelectedSystem[];
   }>(), {
     conversationId: undefined,
     hasBeforeMessages: false,
     loadingOlderMessages: false,
     messageLoading: false,
     nlSuggestions: () => [],
+    standardFields: () => [],
+    extensionFields: () => [],
+    systems: () => [],
   });
 
   const emit = defineEmits<{
@@ -237,7 +246,7 @@
 
   /** 条件筛选产生的根 LOG_SEARCH（无 parent），结果在条件卡内嵌展示 */
   const isConditionLogResult = (msg: ChatMessage) => (
-    msg.messageType === 'LOG_SEARCH' && !msg.parentMessageUid
+    msg.messageType === 'LOG_SEARCH' && !msg.parentMessageUid && !msg.showInMessageList
   );
 
   const handleSelectSuggestion = (text: string) => {
