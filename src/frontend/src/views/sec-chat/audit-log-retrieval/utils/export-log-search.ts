@@ -136,7 +136,7 @@ export const waitAndDownloadExportTask = async (exportTaskId: number) => {
  */
 export const exportLogSearchFull = async (
   messageUid: string,
-  exportConfig: AiExportConfig = { field_scope: 'all', fields: [] },
+  exportConfig: AiExportConfig = { field_scope: 'all', flatten_extension: true, fields: [] },
 ) => {
   let created: AiFullExportResult;
   try {

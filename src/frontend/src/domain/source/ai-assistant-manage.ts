@@ -198,6 +198,7 @@ class AiAssistantManage extends ModuleBase {
       params: {
         export_config: exportConfig || {
           field_scope: 'all',
+          flatten_extension: true,
           fields: [],
         },
       },
