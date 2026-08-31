@@ -202,6 +202,7 @@ export const mapLogSearchOutputToResult = (
 
   return {
     conditions: conditionTags,
+    rawCondition: condition || undefined,
     toolCount: output.query_summary?.source === 'natural_language' ? 3 : 2,
     thinkSeconds: tookMs > 0 ? Math.max(1, Math.round(tookMs / 1000)) : 1,
     title: '审计日志检索结果',
