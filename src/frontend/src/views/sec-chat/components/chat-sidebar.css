@@ -573,6 +573,7 @@
       }
 
       .conv-title {
+        min-width: 0;
         overflow: hidden;
         font-size: 14px;
         line-height: 22px;
@@ -582,6 +583,13 @@
         flex: 1;
       }
 
+      .conv-title.show-tooltips-text {
+        display: inline-block;
+        width: 100%;
+        max-width: 100%;
+        vertical-align: middle;
+      }
+
       .conv-title-input {
         flex: 1;
         margin-right: 8px;
@@ -589,6 +597,7 @@
 
       .conv-actions {
         display: flex;
+        margin-left: auto;
         opacity: 0%;
         transition: opacity .2s;
         align-items: center;
