@@ -191,6 +191,104 @@ class TestMessageExport(AIAssistantPlatformTestCase):
             with self.assertRaises(LogExportPermissionDenied):
                 self.service.create_full_export(message_uid=str(message.uid), export_config={})
 
+    def _make_nl_parent_with_extension_fields(self, extension_fields):
+        from tests.test_ai_assistant.base import make_selection_output
+
+        selection = self.create_selection_message(output=make_selection_output())
+        nl_message = self.create_nl_message(parent=selection)
+        nl_message.context_data["system_selection"]["systems"][0]["extension_fields"] = extension_fields
+        nl_message.save(update_record=False, update_fields=["context_data"])
+        return nl_message
+
+    def test_full_export_auto_injects_extension_keys(self):
+        """flatten 开启且未传 extension_keys：从 NL 父消息的系统选择快照自动聚合（前端只传开关）"""
+
+        nl_parent = self._make_nl_parent_with_extension_fields(
+            [
+                {"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单ID"},
+                {"raw_name": "extend_data", "keys": ["operator"], "display_name": "经办人"},
+                {"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "重复子键去重"},
+                {"raw_name": "instance_data", "keys": ["name"], "display_name": "非 extend_data 容器忽略"},
+                {"raw_name": "extend_data", "keys": [], "display_name": "无子键忽略"},
+            ]
+        )
+        message = self.create_log_search_message(parent=nl_parent)
+        fake_task = {"id": 123, "status": "PENDING"}
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value=fake_task,
+        ) as mock_create:
+            self.service.create_full_export(
+                message_uid=str(message.uid),
+                export_config={"field_scope": "all", "flatten_extension": True, "fields": []},
+            )
+        _, kwargs = mock_create.call_args
+        self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
+
+    def test_full_export_explicit_extension_keys_not_overridden(self):
+        """显式传 extension_keys：后端不覆盖调用方清单"""
+
+        nl_parent = self._make_nl_parent_with_extension_fields(
+            [{"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单ID"}]
+        )
+        message = self.create_log_search_message(parent=nl_parent)
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value={"id": 1, "status": "PENDING"},
+        ) as mock_create:
+            self.service.create_full_export(
+                message_uid=str(message.uid),
+                export_config={
+                    "field_scope": "all",
+                    "flatten_extension": True,
+                    "extension_keys": ["custom_key"],
+                    "fields": [],
+                },
+            )
+        _, kwargs = mock_create.call_args
+        self.assertEqual(kwargs["export_config"]["extension_keys"], ["custom_key"])
+
+    def test_full_export_no_flatten_no_injection(self):
+        """flatten 未开启：不聚合不注入（原检索页语义零变化）"""
+
+        nl_parent = self._make_nl_parent_with_extension_fields(
+            [{"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单ID"}]
+        )
+        message = self.create_log_search_message(parent=nl_parent)
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value={"id": 1, "status": "PENDING"},
+        ) as mock_create:
+            self.service.create_full_export(
+                message_uid=str(message.uid),
+                export_config={"field_scope": "all", "fields": []},
+            )
+        _, kwargs = mock_create.call_args
+        self.assertNotIn("extension_keys", kwargs["export_config"])
+
+    def test_extract_extension_keys_from_selection_parent(self):
+        """父为系统选择消息：走 output_data.systems 路径同样聚合"""
+
+        from services.web.query.ai_assistant.schemas import SelectionFieldMeta
+
+        from tests.test_ai_assistant.base import make_selection_output
+
+        selection_output = make_selection_output()
+        selection_output.systems[0].extension_fields = [
+            SelectionFieldMeta(raw_name="extend_data", keys=["ticket_id"], display_name="工单ID")
+        ]
+        selection_message = self.create_selection_message(output=selection_output)
+        message = self.create_log_search_message(parent=selection_message)
+
+        keys = MessageExportService._extract_extension_keys(message)
+        self.assertEqual(keys, ["ticket_id"])
+
+    def test_extract_extension_keys_no_parent(self):
+        """无父消息（如历史数据）：返回空清单（平铺退化不生效，不报错）"""
+
+        message = self.create_log_search_message()
+        self.assertEqual(MessageExportService._extract_extension_keys(message), [])
+
     def test_export_rejects_non_success_message(self):
         """仅成功的日志检索消息支持导出。"""
 
