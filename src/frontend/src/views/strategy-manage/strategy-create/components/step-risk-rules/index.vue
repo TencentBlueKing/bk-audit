@@ -309,11 +309,6 @@
       </bk-button>
       <bk-button
         class="ml8"
-        @click="handleSaveDraft">
-        {{ t('保存草稿') }}
-      </bk-button>
-      <bk-button
-        class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -389,7 +384,6 @@
   interface Emits {
     (e: 'nextStep', step: number, params: Record<string, any>): void;
     (e: 'previousStep', step: number, params: Record<string, any>): void;
-    (e: 'saveDraft', params: Record<string, any>): void;
   }
 
   const props = defineProps<Props>();
@@ -534,7 +528,7 @@
     ruleItems.value.push(newRule);
     nextTick(() => {
       const listEl = (ruleListRef.value as { $el?: HTMLElement } | HTMLElement | null);
-      const container = listEl && '$el' in listEl ? listEl.$el : listEl;
+      const container = (listEl && '$el' in listEl ? listEl.$el : listEl) as HTMLElement | null | undefined;
       container?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
@@ -878,10 +872,6 @@
     } catch {
       // 验证失败，停留在当前步骤
     }
-  };
-
-  const handleSaveDraft = () => {
-    emits('saveDraft', buildStepParams());
   };
 
   const handleCancel = () => {

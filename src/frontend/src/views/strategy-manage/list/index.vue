@@ -383,8 +383,9 @@
   const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
 
   const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
-    if (Array.isArray(data.visibility?.scene_ids) && data.visibility.scene_ids.length) {
-      return data.visibility.scene_ids;
+    const sceneIds = data.visibility?.scene_ids;
+    if (Array.isArray(sceneIds) && sceneIds.length) {
+      return sceneIds;
     }
     const ids = new Set<string | number>();
     (data.dispatch_rules || []).forEach((rule: Record<string, any>) => {
@@ -406,6 +407,14 @@
     const name = sceneNameMap.value[key];
     return name ? `${name}(${id})` : `${id}`;
   });
+
+  const getRiskCountLinkSceneId = (data: StrategyModel) => {
+    if (isPlatformList.value) {
+      const [firstSceneId] = getDispatchSceneIds(data);
+      return firstSceneId;
+    }
+    return getSceneSystemParams().scope_id;
+  };
 
   const createDispatchSceneColumn = () => ({
     label: () => t('分派场景'),
@@ -854,15 +863,16 @@
       width: 120,
       render: ({ data }: { data: StrategyModel }) => {
         const riskCount = data.risk_count ?? 0;
-        const to = {
+        const sceneId = getRiskCountLinkSceneId(data);
+        const to = sceneId ? {
           name: 'sceneRiskManageList',
           query: {
-            scene_id: getSceneSystemParams().scope_id,
+            scene_id: sceneId,
             scope_type: 'scene',
             strategy_id: data.strategy_id,
           },
-        };
-        return riskCount ? <router-link to = {to} target='_blank'>
+        } : null;
+        return riskCount && to ? <router-link to = {to} target='_blank'>
           <span v-bk-tooltips={{
             content: t('近6个月此策略产生风险单总数，点击查看'),
             disabled: !riskCount,
