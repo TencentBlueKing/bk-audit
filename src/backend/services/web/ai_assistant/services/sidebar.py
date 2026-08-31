@@ -24,6 +24,10 @@ from services.web.ai_assistant.models import (
 )
 
 
+class _SidebarMoveRetry(Exception):
+    """当前移动读取到并发变更，回滚事务后重新解析。"""
+
+
 class ConversationSidebarService:
     """维护用户侧栏 Node 的容器、顺序和展示状态。"""
 
@@ -166,6 +170,8 @@ class ConversationSidebarService:
         target_node_uid: str | None = None,
         before_node_type: str | None = None,
         before_node_uid: str | None = None,
+        after_node_type: str | None = None,
+        after_node_uid: str | None = None,
     ) -> ConversationSidebarNode:
         """
         执行完整 move 事务，将节点移动到目标容器的指定位置。
@@ -185,14 +191,14 @@ class ConversationSidebarService:
            再按主键升序逐个 SELECT FOR UPDATE 加行锁，锁定后重新校验 pinned_at 和
            parent_node_id 等关键状态，消除 TOCTOU 竞态。
 
-        4. **固定锁顺序**：move 涉及 source、来源父分组、目标父分组和 anchor，
-           始终按主键 id 升序加锁，避免 ABBA 死锁，并与分组删除共用父分组锁。
+        4. **固定锁顺序**：move 涉及 source、来源父分组、目标父分组、anchor 和
+           after_successor，始终按主键 id 升序加锁，避免 ABBA 死锁，并与分组删除共用父分组锁。
 
         5. **死锁重试**：同一用户并发拖拽时，批量平移的范围 UPDATE 可能因 InnoDB
            next-key lock 产生死锁。外层捕获 MySQL 1213 错误码后线性退避重试（最多
            重试 2 次），每次从头重新解析以获取最新状态。
 
-        6. **幂等性**：重复拖动到相同位置时检测到 source 已是锚点的直接前驱，直接
+        6. **幂等性**：重复拖动到相同位置时检测 source 是否已紧邻锚点，直接
            返回而不写入任何排序字段，避免无意义的行锁竞争和 binlog 膨胀。
         """
 
@@ -207,11 +213,17 @@ class ConversationSidebarService:
                     target_node_uid=target_node_uid,
                     before_node_type=before_node_type,
                     before_node_uid=before_node_uid,
+                    after_node_type=after_node_type,
+                    after_node_uid=after_node_uid,
                 )
             except OperationalError as error:
                 is_deadlock = bool(error.args) and error.args[0] == MYSQL_DEADLOCK_ERROR_CODE
                 if not is_deadlock or retry_count >= max_retries:
                     raise
+                time.sleep(retry_interval * (retry_count + 1))
+            except _SidebarMoveRetry as error:
+                if retry_count >= max_retries:
+                    raise SidebarNodeNotMovable() from error
                 time.sleep(retry_interval * (retry_count + 1))
         raise AssertionError("unreachable")
 
@@ -225,14 +237,17 @@ class ConversationSidebarService:
         target_node_uid: str | None = None,
         before_node_type: str | None = None,
         before_node_uid: str | None = None,
+        after_node_type: str | None = None,
+        after_node_uid: str | None = None,
     ) -> ConversationSidebarNode:
         """
-        将 Node 移到目标容器开头，或插入目标容器指定 Node（anchor）之前。
+        将 Node 移到目标容器开头，或插入目标容器指定 Node（anchor）前后。
 
         执行流程：
         1. 无锁解析 source / target_parent / anchor（快速校验参数合法性）
         2. 按主键升序加行锁，二次校验节点状态（防止并发修改导致的不一致）
-        3. 计算目标 position（优先利用空位，必要时平移相邻节点）
+        3. 将 after 锚点归一化为后继之前或容器末尾，再计算目标 position
+           （优先利用空位，必要时平移相邻节点）
         4. 原子更新 source 的 parent_node 和 position
         """
 
@@ -249,18 +264,29 @@ class ConversationSidebarService:
             target_node_uid=target_node_uid,
         )
         target_parent_id = target_parent.id if target_parent else None
-        anchor = self._resolve_anchor(
+        anchor, insert_after = self._resolve_anchor(
             before_node_type=before_node_type,
             before_node_uid=before_node_uid,
+            after_node_type=after_node_type,
+            after_node_uid=after_node_uid,
             target_parent_id=target_parent_id,
         )
+        after_successor = None
+        insert_at_end = False
+        if insert_after and anchor is not None and anchor.id != source.id:
+            after_successor = self._resolve_after_successor(
+                anchor=anchor,
+                source_id=source.id,
+                target_parent_id=target_parent_id,
+            )
         # 按主键升序加行锁，保证全局锁顺序一致，避免 ABBA 死锁。
         source_parent_id = source.parent_node_id
-        source, target_parent, anchor = self._lock_move_nodes(
+        source, target_parent, anchor, after_successor = self._lock_move_nodes(
             source=source,
             target_parent=target_parent,
             anchor=anchor,
             source_parent_id=source_parent_id,
+            after_successor=after_successor,
         )
         # 二次校验：加锁后重新检查关键状态，消除乐观读与加锁之间的 TOCTOU 竞态。
         target_parent_id = target_parent.id if target_parent else None
@@ -276,12 +302,32 @@ class ConversationSidebarService:
                 raise InvalidSidebarAnchor()
             return self._node_for_response(node=source)
 
+        if insert_after:
+            current_after_successor = self._resolve_after_successor(
+                anchor=anchor,
+                source_id=source.id,
+                target_parent_id=target_parent_id,
+                for_update=True,
+            )
+            expected_successor_id = after_successor.id if after_successor is not None else None
+            current_successor_id = current_after_successor.id if current_after_successor is not None else None
+            if current_successor_id != expected_successor_id:
+                raise _SidebarMoveRetry()
+            if after_successor is not None:
+                # 后继已按统一主键顺序锁定，转成“在后继之前插入”避免再次无锁找邻居。
+                anchor = after_successor
+            else:
+                # after 锚点没有后继时进入容器末尾；不能用 anchor=None 表示，否则会变成容器开头。
+                anchor = None
+                insert_at_end = True
+
         target_nodes = self._container_queryset(parent_node_id=target_parent_id).exclude(id=source.id)
         target_position = self._make_target_position(
             source=source,
             target_nodes=target_nodes,
             target_parent_id=target_parent_id,
             anchor=anchor,
+            insert_at_end=insert_at_end,
         )
         if target_position is None:
             return self._node_for_response(node=source)
@@ -304,13 +350,20 @@ class ConversationSidebarService:
         target_nodes: QuerySet[ConversationSidebarNode],
         target_parent_id: int | None,
         anchor: ConversationSidebarNode | None,
+        insert_at_end: bool = False,
     ) -> int | None:
         """
-        按稳定排序键 (-position, -id) 计算插入位置，仅在没有整数空位时平移锚点前缀。
+        按稳定排序键 (-position, -id) 计算插入位置。
+
+        target_nodes 是目标容器的完整节点集合，包含置顶节点；置顶只影响普通列表
+        展示，不改变节点在容器排序中的物理位置。
 
         返回 None 表示 source 已在目标位置，无需任何写操作（幂等保护）。
 
-        三种路径：
+        插入末尾和前置锚点共用同一位置计算入口：末尾使用当前最小 position 下方的空位，
+        前置锚点使用锚点前的空位或平移前缀。
+
+        前置锚点的三种路径：
         1. 无锚点，移到容器最前：position = top_node.position + 1
         2. 有锚点，锚点前有空位：position = anchor.position + 1（只更新 source 一行）
         3. 有锚点，锚点前无空位：批量平移锚点前方所有节点的 position，再插入
@@ -330,6 +383,19 @@ class ConversationSidebarService:
         """
 
         same_container = source.parent_node_id == target_parent_id
+        if insert_at_end:
+            bottom_node = target_nodes.order_by("position", "id").first()
+            if same_container and (
+                bottom_node is None or (source.position, source.id) < (bottom_node.position, bottom_node.id)
+            ):
+                return None
+            if bottom_node is None:
+                return 1
+            if bottom_node.position > 0:
+                return bottom_node.position - 1
+            target_nodes.update(_update_record=False, position=F("position") + 1)
+            return 0
+
         if anchor is None:
             top_node = target_nodes.order_by("-position", "-id").first()
             if same_container and (top_node is None or (source.position, source.id) > (top_node.position, top_node.id)):
@@ -370,10 +436,16 @@ class ConversationSidebarService:
         target_parent: ConversationSidebarNode | None,
         anchor: ConversationSidebarNode | None,
         source_parent_id: int | None,
-    ) -> tuple[ConversationSidebarNode, ConversationSidebarNode | None, ConversationSidebarNode | None]:
+        after_successor: ConversationSidebarNode | None = None,
+    ) -> tuple[
+        ConversationSidebarNode,
+        ConversationSidebarNode | None,
+        ConversationSidebarNode | None,
+        ConversationSidebarNode | None,
+    ]:
         """按主键锁定来源/目标容器和节点，与分组删除共享同一锁协议。"""
 
-        nodes = [node for node in (source, target_parent, anchor) if node is not None]
+        nodes = [node for node in (source, target_parent, anchor, after_successor) if node is not None]
         locked_nodes = {}
         node_ids = {node.id for node in nodes}
         if source_parent_id is not None:
@@ -390,12 +462,34 @@ class ConversationSidebarService:
             raise ConversationGroupNotFound()
         if anchor is not None and anchor.id not in locked_nodes:
             raise InvalidSidebarAnchor()
+        if after_successor is not None and after_successor.id not in locked_nodes:
+            raise _SidebarMoveRetry()
         if source_parent_id is not None and source_parent_id not in locked_nodes:
             raise SidebarNodeNotMovable()
         return (
             locked_nodes[source.id],
             locked_nodes[target_parent.id] if target_parent is not None else None,
             locked_nodes[anchor.id] if anchor is not None else None,
+            locked_nodes[after_successor.id] if after_successor is not None else None,
+        )
+
+    def _resolve_after_successor(
+        self,
+        *,
+        anchor: ConversationSidebarNode,
+        source_id: int,
+        target_parent_id: int | None,
+        for_update: bool = False,
+    ) -> ConversationSidebarNode | None:
+        """按完整容器顺序解析 after 锚点的直接后继；锁后复核使用当前读获取最新邻居。"""
+
+        target_nodes = self._container_queryset(parent_node_id=target_parent_id).exclude(id=source_id)
+        if for_update:
+            target_nodes = target_nodes.select_for_update()
+        return (
+            target_nodes.filter(Q(position__lt=anchor.position) | Q(position=anchor.position, id__lt=anchor.id))
+            .order_by("-position", "-id")
+            .first()
         )
 
     def _node_for_response(
@@ -437,24 +531,30 @@ class ConversationSidebarService:
         *,
         before_node_type: str | None,
         before_node_uid: str | None,
+        after_node_type: str | None,
+        after_node_uid: str | None,
         target_parent_id: int | None,
-    ) -> ConversationSidebarNode | None:
-        """锚点必须位于目标容器且未置顶。"""
+    ) -> tuple[ConversationSidebarNode | None, bool]:
+        """解析显式锚点；锚点须在目标容器且未置顶，after 的隐式后继不剔除置顶节点。"""
 
-        if bool(before_node_type) != bool(before_node_uid):
+        if bool(before_node_type) != bool(before_node_uid) or bool(after_node_type) != bool(after_node_uid):
             raise InvalidSidebarAnchor()
-        if before_node_type is None:
-            return None
+        if before_node_type is not None and after_node_type is not None:
+            raise InvalidSidebarAnchor()
+        anchor_node_type = after_node_type or before_node_type
+        anchor_node_uid = after_node_uid or before_node_uid
+        if anchor_node_type is None:
+            return None, False
         try:
             anchor = self._resolve_node(
-                node_type=before_node_type,
-                node_uid=before_node_uid,
+                node_type=anchor_node_type,
+                node_uid=anchor_node_uid,
             )
         except SidebarNodeNotFound as error:
             raise InvalidSidebarAnchor() from error
         if anchor.parent_node_id != target_parent_id or anchor.pinned_at is not None:
             raise InvalidSidebarAnchor()
-        return anchor
+        return anchor, after_node_type is not None
 
     def _resolve_node(
         self,

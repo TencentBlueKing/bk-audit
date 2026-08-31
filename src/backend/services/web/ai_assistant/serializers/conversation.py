@@ -97,7 +97,7 @@ class SidebarSearchRequestSerializer(serializers.Serializer):
 
 
 class SidebarMoveRequestSerializer(serializers.Serializer):
-    """将业务节点移到根容器或指定分组的开头/锚点前。"""
+    """将业务节点移到根容器或指定分组的开头/锚点前后。"""
 
     source_node_type = serializers.ChoiceField(
         choices=SidebarNodeType.choices,
@@ -122,20 +122,35 @@ class SidebarMoveRequestSerializer(serializers.Serializer):
         required=False,
         help_text="目标锚点业务对象的对外 UUID；不传表示移动到容器开头",
     )
+    after_node_type = serializers.ChoiceField(
+        choices=SidebarNodeType.choices,
+        required=False,
+        help_text="目标锚点类型；移动后来源节点位于该节点之后",
+    )
+    after_node_uid = serializers.UUIDField(
+        required=False,
+        help_text="目标锚点业务对象的对外 UUID；与 after_node_type 同时传入",
+    )
 
     def validate(self, attrs):
         self._validate_pair(attrs, "target_node_type", "target_node_uid", "目标节点")
-        self._validate_pair(attrs, "before_node_type", "before_node_uid", "锚点")
+        self._validate_pair(attrs, "before_node_type", "before_node_uid", "before 锚点")
+        self._validate_pair(attrs, "after_node_type", "after_node_uid", "after 锚点")
 
         source_type = attrs["source_node_type"]
         target_type = attrs.get("target_node_type")
         before_type = attrs.get("before_node_type")
+        after_type = attrs.get("after_node_type")
+        if before_type and after_type:
+            raise serializers.ValidationError("before 锚点和 after 锚点不能同时传入")
         if target_type and target_type != SidebarNodeType.GROUP:
             raise serializers.ValidationError({"target_node_type": "目标容器只能是分组"})
         if source_type == SidebarNodeType.GROUP and target_type:
             raise serializers.ValidationError({"target_node_type": "分组不能嵌套到其他分组"})
         if target_type == SidebarNodeType.GROUP and before_type and before_type != SidebarNodeType.CONVERSATION:
             raise serializers.ValidationError({"before_node_type": "分组内锚点只能是会话"})
+        if target_type == SidebarNodeType.GROUP and after_type and after_type != SidebarNodeType.CONVERSATION:
+            raise serializers.ValidationError({"after_node_type": "分组内锚点只能是会话"})
         return attrs
 
     @staticmethod

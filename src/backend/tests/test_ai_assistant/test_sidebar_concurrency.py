@@ -156,6 +156,36 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
             {first_node.id, second_node.id},
         )
 
+    def test_move_after_anchor_locks_direct_successor_before_reordering(self):
+        anchor = self.create_conversation("anchor")
+        successor = self.create_conversation("successor")
+        source = self.create_conversation("source")
+        tail = self.create_conversation("tail")
+        nodes = [
+            self.service.create_node(conversation=conversation) for conversation in (anchor, successor, source, tail)
+        ]
+        ConversationSidebarNode.objects.filter(id=nodes[0].id).update(position=4)
+        ConversationSidebarNode.objects.filter(id=nodes[1].id).update(position=3)
+        ConversationSidebarNode.objects.filter(id=nodes[2].id).update(position=2)
+        ConversationSidebarNode.objects.filter(id=nodes[3].id).update(position=1)
+        locked_ids = []
+        original_lock_node = ConversationSidebarService._lock_node
+
+        def record_lock(service, *, node_id):
+            locked_ids.append(node_id)
+            return original_lock_node(service, node_id=node_id)
+
+        with mock.patch.object(ConversationSidebarService, "_lock_node", record_lock):
+            self.service.move(
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(source.uid),
+                after_node_type=SidebarNodeType.CONVERSATION,
+                after_node_uid=str(anchor.uid),
+            )
+
+        self.assertIn(nodes[1].id, locked_ids)
+        self.assertEqual(locked_ids, sorted(set(locked_ids)))
+
     def test_crossed_move_ranges_retry_after_database_deadlock(self):
         first = self.create_conversation("first")
         second = self.create_conversation("second")
