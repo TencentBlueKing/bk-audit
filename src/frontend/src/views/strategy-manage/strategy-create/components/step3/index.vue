@@ -125,25 +125,26 @@
   import AssignConditionRows from './components/assign-condition-rows.vue';
   import AssignRuleFields from './components/assign-rule-fields.vue';
 
-  import useMessage from '@/hooks/use-message';
-  import useRequest from '@/hooks/use-request';
   import {
     getStrategyRouteNames,
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
+  import useRequest from '@/hooks/use-request';
+  import {
+    type AssignConditionForm,
+    createDefaultAssignConditionForm,
+    dispatchToAssignConditionForm,
+    hasValidAssignCondition,
+  } from '../../utils/strategy-protocol';
 
-  interface ConditionItem {
-    field: string;
-    operator: string;
-    value: string;
-  }
+  import useMessage from '@/hooks/use-message';
 
   interface AssignRuleItem {
     id: number;
     name: string;
     collapsed: boolean;
-    conditions: ConditionItem[];
+    conditions: AssignConditionForm;
     scene_ids: Array<string | number>;
     processors: Array<string | number>;
     notice_users: Array<string | number>;
@@ -183,10 +184,14 @@
 
   let ruleIdSeq = 1;
 
-  const createCondition = (): ConditionItem => ({
-    field: '',
-    operator: 'eq',
-    value: '',
+  const createConditionForm = (): AssignConditionForm => createDefaultAssignConditionForm();
+
+  const cloneConditionForm = (form: AssignConditionForm): AssignConditionForm => ({
+    connector: form.connector,
+    groups: form.groups.map(group => ({
+      connector: group.connector,
+      conditions: group.conditions.map(row => ({ ...row })),
+    })),
   });
 
   const createRule = (overrides: Partial<AssignRuleItem> = {}): AssignRuleItem => {
@@ -196,7 +201,7 @@
       id,
       name: overrides.name ?? `规则${id}`,
       collapsed: false,
-      conditions: [createCondition()],
+      conditions: createConditionForm(),
       scene_ids: [],
       processors: [],
       notice_users: [],
@@ -292,7 +297,7 @@
     const source = assignRules.value[index];
     const cloned = createRule({
       name: `${source.name}_复制`,
-      conditions: source.conditions.map(item => ({ ...item })),
+      conditions: cloneConditionForm(source.conditions),
       scene_ids: [...source.scene_ids],
       processors: [...source.processors],
       notice_users: [...source.notice_users],
@@ -309,7 +314,7 @@
   const buildStepParams = (): IFormData => ({
     assign_rules: assignRules.value.map(rule => ({
       ...rule,
-      conditions: rule.conditions.map(item => ({ ...item })),
+      conditions: cloneConditionForm(rule.conditions),
       scene_ids: [...rule.scene_ids],
       processors: [...rule.processors],
       notice_users: [...rule.notice_users],
@@ -351,7 +356,7 @@
     };
 
     for (const rule of assignRules.value) {
-      const hasValidCondition = rule.conditions.some(item => item.field && item.operator);
+      const hasValidCondition = hasValidAssignCondition(rule.conditions);
       if (!hasValidCondition) {
         messageError(t('{label}：命中条件不能为空', { label: rule.name }));
         return false;
@@ -387,18 +392,10 @@
     if (assignSource?.length) {
       ruleIdSeq = 1;
       assignRules.value = assignSource.map((item: any, index: number) => {
-        const flatConditions = Array.isArray(item.conditions)
-          ? item.conditions
-          : (item.conditions?.conditions || []).map((node: any) => ({
-            field: node.condition?.field ?? node.field ?? '',
-            operator: node.condition?.operator ?? node.operator ?? 'eq',
-            value: node.condition?.filter ?? node.value ?? '',
-          }));
+        const conditionForm = dispatchToAssignConditionForm(item.conditions);
         return createRule({
           name: item.rule_name || item.name || `分派规则${index + 1}`,
-          conditions: flatConditions.length
-            ? flatConditions.map((c: ConditionItem) => ({ ...c }))
-            : [createCondition()],
+          conditions: conditionForm,
           scene_ids: normalizeSceneIds({
             ...item,
             scene_ids: item.scene_ids ?? (item.target_scene_id !== undefined ? [item.target_scene_id] : []),

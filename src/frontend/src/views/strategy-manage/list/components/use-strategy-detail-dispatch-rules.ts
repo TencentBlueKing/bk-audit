@@ -51,28 +51,6 @@ const buildFieldLabelMap = (fields: Array<Record<string, any>> = []) => {
   return map;
 };
 
-const normalizeDispatchConditions = (conditions: unknown): Record<string, any> => {
-  if (!conditions) return {};
-  if (Array.isArray(conditions)) {
-    const valid = conditions.filter((item: Record<string, any>) => item.field);
-    if (!valid.length) return {};
-    return {
-      connector: 'and',
-      conditions: valid.map((item: Record<string, any>) => ({
-        condition: {
-          field: item.field,
-          operator: item.operator,
-          filter: item.value,
-        },
-      })),
-    };
-  }
-  if (typeof conditions === 'object') {
-    return conditions as Record<string, any>;
-  }
-  return {};
-};
-
 const normalizeSceneIds = (rule: Record<string, any> = {}): Array<string | number> => {
   if (Array.isArray(rule.scene_ids) && rule.scene_ids.length) {
     return rule.scene_ids.filter((id: unknown) => id !== '' && id !== null && id !== undefined);
@@ -106,11 +84,10 @@ export const useStrategyDetailDispatchRules = (data: ComputedRef<StrategyModel> 
     const items: DispatchRuleDisplayItem[] = [];
 
     assignRules.forEach((rule: Record<string, any>, index: number) => {
-      const conditions = normalizeDispatchConditions(rule.conditions);
       items.push({
         name: rule.name || rule.rule_name || `${t('规则')}${index + 1}`,
         isDefault: false,
-        where: dispatchConditionsToWhere(conditions, getFieldLabel),
+        where: dispatchConditionsToWhere(rule.conditions, getFieldLabel),
         sceneIds: normalizeSceneIds(rule),
         processors: rule.processors ?? rule.processor ?? [],
         followers: rule.notice_users ?? rule.follower ?? [],
@@ -151,7 +128,7 @@ export const useStrategyDetailDispatchRules = (data: ComputedRef<StrategyModel> 
           isDefault,
           where: isDefault
             ? emptyWhere()
-            : dispatchConditionsToWhere(normalizeDispatchConditions(rule.conditions), getFieldLabel),
+            : dispatchConditionsToWhere(rule.conditions, getFieldLabel),
           sceneIds: normalizeSceneIds(rule),
           processors: rule.processor ?? rule.processors ?? [],
           followers: rule.follower ?? rule.notice_users ?? [],

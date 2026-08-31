@@ -37,7 +37,7 @@ export default {
     },
     {
       path: 'detail/:riskId',
-      component: () => import('@views/risk-manage/detail/index.vue'),
+      component: () => import('@views/confirm-manage/detail/index.vue'),
       name: 'confirmManageDetail',
       meta: {
         title: '风险详情',

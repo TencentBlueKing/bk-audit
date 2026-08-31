@@ -71,7 +71,7 @@
               v-for="groupKey in eventGroupKeys"
               :key="groupKey">
               <div
-                v-if="tableData[groupKey]?.length"
+                v-if="getEventGroupRows(groupKey)?.length"
                 class="table-body-group">
                 <div
                   class="group-cell body-group-cell"
@@ -83,7 +83,7 @@
                     :all-tools-data="allToolsData"
                     :columns="eventDataColumns"
                     fill-last-column
-                    :item="tableData[groupKey]" />
+                    :item="getEventGroupRows(groupKey)" />
                 </div>
               </div>
             </template>
@@ -121,6 +121,8 @@
     width?: string;
     tips?: string;
   }
+
+  type EventGroupKey = 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs';
 
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
@@ -206,20 +208,13 @@
       : columns.filter(item => item.key !== 'map_config');
   });
 
-  const groupMap = computed<Record<string, string>>(() => (
-    props.data.strategy_type === 'rule'
-      ? {
-        event_basic_field_configs: t('基本信息'),
-        event_data_field_configs: t('事件结果'),
-      }
-      : {
-        event_basic_field_configs: t('基本信息'),
-        event_data_field_configs: t('事件结果'),
-        event_evidence_field_configs: t('事件证据'),
-      }
-  ));
+  const groupMap = computed<Record<string, string>>(() => ({
+    event_basic_field_configs: t('基本信息'),
+    event_data_field_configs: t('事件结果'),
+    event_evidence_field_configs: t('事件证据'),
+  }));
 
-  const eventGroupKeys = computed(() => (
+  const eventGroupKeys = computed((): EventGroupKey[] => (
     props.data.strategy_type === 'rule'
       ? ['event_basic_field_configs', 'event_data_field_configs']
       : ['event_basic_field_configs', 'event_data_field_configs', 'event_evidence_field_configs']
@@ -232,10 +227,10 @@
     risk_meta_field_config: props.data.risk_meta_field_config,
   }));
 
+  const getEventGroupRows = (key: EventGroupKey) => tableData.value[key];
+
   const hasEventFieldData = computed(() => (
-    eventGroupKeys.value.some(key => (
-      tableData.value[key as keyof StrategyFieldEvent]?.length
-    ))
+    eventGroupKeys.value.some(key => getEventGroupRows(key)?.length)
   ));
 
   const {

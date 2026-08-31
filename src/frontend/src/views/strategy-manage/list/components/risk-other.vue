@@ -32,13 +32,13 @@
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('风险单处理人') }}:</span>
             <span class="rule-field-value">
-              {{ resolveNoticeGroupNames(rule.processors, userGroupList) }}
+              {{ resolveDispatchNoticeGroupNames(rule.processors) }}
             </span>
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('关注人') }}:</span>
             <span class="rule-field-value">
-              {{ resolveNoticeGroupNames(rule.followers, userGroupList) }}
+              {{ resolveDispatchNoticeGroupNames(rule.followers) }}
             </span>
           </div>
           <div class="rule-field-row">
@@ -52,7 +52,7 @@
             class="rule-field-row">
             <span class="rule-field-label">{{ t('确认人') }}:</span>
             <span class="rule-field-value">
-              {{ resolveNoticeGroupNames(rule.confirmers, userGroupList) }}
+              {{ resolveDispatchNoticeGroupNames(rule.confirmers) }}
             </span>
           </div>
         </div>
@@ -68,9 +68,10 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, onMounted } from 'vue';
+  import { computed, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import NoticeGroupManageService from '@service/notice-group';
   import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
@@ -80,7 +81,6 @@
   import useRequest from '@hooks/use-request';
 
   import RuleConditionDisplay from './rule-condition-display.vue';
-  import { resolveNoticeGroupNames } from './use-strategy-detail-rules';
   import { useStrategyDetailDispatchRules } from './use-strategy-detail-dispatch-rules';
 
   interface Props {
@@ -122,6 +122,39 @@
     res[item.value] = item.label;
     return res;
   }, {} as Record<string, string>));
+
+  const noticeGroupNameMap = ref<Record<string, string>>({});
+
+  const loadNoticeGroupNames = async () => {
+    const sceneIds = new Set<string>();
+    displayRules.value.forEach((rule) => {
+      rule.sceneIds.forEach(id => sceneIds.add(String(id)));
+    });
+
+    const map: Record<string, string> = {};
+    props.userGroupList.forEach((item) => {
+      map[String(item.id)] = item.name;
+    });
+
+    await Promise.all([...sceneIds].map(async (sceneId) => {
+      const list = await NoticeGroupManageService.fetchGroupSelectList({ scene_id: sceneId });
+      (list || []).forEach((item) => {
+        map[String(item.id)] = item.name;
+      });
+    }));
+
+    noticeGroupNameMap.value = map;
+  };
+
+  const resolveDispatchNoticeGroupNames = (ids: Array<string | number>) => {
+    if (!ids?.length) return '--';
+    const names = ids
+      .map(id => noticeGroupNameMap.value[String(id)] || `${id}`)
+      .filter(Boolean);
+    return names.length ? names.join('、') : '--';
+  };
+
+  watch(displayRules, loadNoticeGroupNames, { immediate: true, deep: true });
 
   onMounted(() => {
     fetchSceneList();

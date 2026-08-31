@@ -5,7 +5,7 @@
 <template>
   <div class="reopen-mis-report-wrap">
     <div class="mis-content">
-      <render-info-item :label="t('误报说明')">
+      <render-info-item :label="t('确认说明')">
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="description-html"

@@ -278,6 +278,7 @@
   const {
     data: controlList,
     loading: controlLoading,
+    run: fetchControlList,
   } = useRequest(StrategyManageService.fetchControlList, {
     defaultValue: [],
   });

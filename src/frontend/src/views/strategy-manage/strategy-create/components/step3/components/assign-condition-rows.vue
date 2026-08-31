@@ -5,32 +5,32 @@
 <template>
   <div
     class="assign-condition-rows"
-    :class="{ 'has-condition': groups.length > 1 }">
+    :class="{ 'has-condition': formState.groups.length > 1 }">
     <div class="rule-item-wrap">
       <div
-        v-for="(group, groupIndex) in groups"
+        v-for="(group, groupIndex) in formState.groups"
         :key="groupIndex"
         class="rule-item"
         :style="{ paddingLeft: getGroupPaddingLeft(group) }">
-        <template v-if="groups.length > 1">
+        <template v-if="formState.groups.length > 1">
           <div class="row-line" />
           <div
             v-if="groupIndex > 0"
             class="column-line column-line-top" />
           <div
-            v-if="groupIndex < groups.length - 1"
+            v-if="groupIndex < formState.groups.length - 1"
             class="column-line column-line-bottom" />
         </template>
         <div
-          v-for="(item, index) in group"
+          v-for="(item, index) in group.conditions"
           :key="item.uid"
           class="rule-item-field"
-          :style="{ marginBottom: index === group.length - 1 ? '0px' : '8px' }">
+          :style="{ marginBottom: index === group.conditions.length - 1 ? '0px' : '8px' }">
           <div
-            v-if="group.length > 1"
+            v-if="group.conditions.length > 1"
             class="inner-row-line" />
           <div
-            v-if="index < group.length - 1"
+            v-if="index < group.conditions.length - 1"
             class="inner-column-line" />
           <bk-select
             filterable
@@ -65,28 +65,30 @@
               type="add-fill"
               @click="handleAddRow(groupIndex, index)" />
             <audit-icon
-              v-if="group.length > 1"
+              v-if="group.conditions.length > 1"
               style="cursor: pointer;"
               type="reduce-fill"
               @click="handleRemoveRow(groupIndex, index)" />
           </div>
         </div>
         <div
-          v-if="group.length > 1"
-          class="inner-condition">
-          and
+          v-if="group.conditions.length > 1"
+          class="inner-condition"
+          @click="handleChangeGroupConnector(groupIndex)">
+          {{ group.connector }}
         </div>
         <audit-icon
-          v-if="groups.length > 1"
+          v-if="formState.groups.length > 1"
           class="delete-conditions"
           style="font-size: 14px;"
           type="delete"
           @click="handleRemoveGroup(groupIndex)" />
       </div>
       <div
-        v-if="groups.length > 1"
-        class="condition">
-        and
+        v-if="formState.groups.length > 1"
+        class="condition"
+        @click="handleChangeOuterConnector">
+        {{ formState.connector }}
       </div>
     </div>
     <div
@@ -103,20 +105,37 @@
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  export interface ConditionItem {
-    uid?: number;
+  import {
+    type AssignConditionForm,
+    type AssignConditionGroup,
+    createDefaultAssignConditionForm,
+    dispatchToAssignConditionForm,
+    isAssignConditionForm,
+  } from '../../../utils/strategy-protocol';
+
+  interface ConditionRow {
+    uid: number;
     field: string;
     operator: string;
     value: string;
   }
 
+  interface InternalGroup extends Omit<AssignConditionGroup, 'conditions'> {
+    conditions: ConditionRow[];
+  }
+
+  interface InternalForm {
+    connector: 'and' | 'or';
+    groups: InternalGroup[];
+  }
+
   interface Props {
-    modelValue: ConditionItem[];
+    modelValue: AssignConditionForm | Array<{ field: string; operator: string; value: string }>;
     fieldOptions: Array<{ id: string; name: string }>;
   }
 
   interface Emits {
-    (e: 'update:modelValue', value: ConditionItem[]): void;
+    (e: 'update:modelValue', value: AssignConditionForm): void;
   }
 
   const props = defineProps<Props>();
@@ -135,7 +154,7 @@
   ];
 
   let rowUid = 1;
-  const createCondition = (overrides: Partial<ConditionItem> = {}): ConditionItem => {
+  const createCondition = (overrides: Partial<ConditionRow> = {}): ConditionRow => {
     const next = {
       uid: rowUid,
       field: '',
@@ -147,22 +166,43 @@
     return next;
   };
 
-  const groups = ref<ConditionItem[][]>([[createCondition()]]);
+  const toInternalForm = (value: Props['modelValue']): InternalForm => {
+    const normalized = isAssignConditionForm(value)
+      ? value
+      : dispatchToAssignConditionForm(Array.isArray(value) ? value : undefined);
+    return {
+      connector: normalized.connector,
+      groups: normalized.groups.map(group => ({
+        connector: group.connector,
+        conditions: group.conditions.length
+          ? group.conditions.map(row => createCondition({ ...row }))
+          : [createCondition()],
+      })),
+    };
+  };
+
+  const toEmitValue = (): AssignConditionForm => ({
+    connector: formState.value.connector,
+    groups: formState.value.groups.map(group => ({
+      connector: group.connector,
+      conditions: group.conditions.map(({ field, operator, value }) => ({
+        field,
+        operator,
+        value,
+      })),
+    })),
+  });
+
+  const formState = ref<InternalForm>(toInternalForm(createDefaultAssignConditionForm()));
   let lastEmitted = '';
 
-  const getGroupPaddingLeft = (group: ConditionItem[]) => {
-    const hasNested = groups.value.some(item => item.length > 1);
-    if (group.length > 1 || hasNested) {
+  const getGroupPaddingLeft = (group: InternalGroup) => {
+    const hasNested = formState.value.groups.some(item => item.conditions.length > 1);
+    if (group.conditions.length > 1 || hasNested) {
       return '55px';
     }
     return '16px';
   };
-
-  const toEmitValue = () => groups.value.flat().map(({ field, operator, value }) => ({
-    field,
-    operator,
-    value,
-  }));
 
   const emitChange = () => {
     const next = toEmitValue();
@@ -171,59 +211,67 @@
   };
 
   const handleFieldChange = (groupIndex: number, index: number, val: string) => {
-    groups.value[groupIndex][index].field = val;
+    formState.value.groups[groupIndex].conditions[index].field = val;
     emitChange();
   };
 
   const handleOperatorChange = (groupIndex: number, index: number, val: string) => {
-    groups.value[groupIndex][index].operator = val;
+    formState.value.groups[groupIndex].conditions[index].operator = val;
     emitChange();
   };
 
   const handleValueChange = (groupIndex: number, index: number, val: string) => {
-    groups.value[groupIndex][index].value = val;
+    formState.value.groups[groupIndex].conditions[index].value = val;
     emitChange();
   };
 
   const handleAddRow = (groupIndex: number, index: number) => {
-    groups.value[groupIndex].splice(index + 1, 0, createCondition());
+    formState.value.groups[groupIndex].conditions.splice(index + 1, 0, createCondition());
     emitChange();
   };
 
   const handleRemoveRow = (groupIndex: number, index: number) => {
-    if (groups.value[groupIndex].length <= 1) return;
-    groups.value[groupIndex].splice(index, 1);
+    if (formState.value.groups[groupIndex].conditions.length <= 1) return;
+    formState.value.groups[groupIndex].conditions.splice(index, 1);
     emitChange();
   };
 
   const handleAddGroup = () => {
-    groups.value.push([createCondition()]);
+    formState.value.groups.push({
+      connector: 'and',
+      conditions: [createCondition()],
+    });
     emitChange();
   };
 
   const handleRemoveGroup = (groupIndex: number) => {
-    if (groups.value.length <= 1) return;
-    groups.value.splice(groupIndex, 1);
+    if (formState.value.groups.length <= 1) return;
+    formState.value.groups.splice(groupIndex, 1);
+    emitChange();
+  };
+
+  const handleChangeGroupConnector = (groupIndex: number) => {
+    const group = formState.value.groups[groupIndex];
+    group.connector = group.connector === 'and' ? 'or' : 'and';
+    emitChange();
+  };
+
+  const handleChangeOuterConnector = () => {
+    formState.value.connector = formState.value.connector === 'and' ? 'or' : 'and';
     emitChange();
   };
 
   watch(
     () => props.modelValue,
     (value) => {
-      const incoming = JSON.stringify((value ?? []).map(item => ({
-        field: item.field,
-        operator: item.operator,
-        value: item.value,
-      })));
+      const incoming = JSON.stringify(isAssignConditionForm(value)
+        ? value
+        : dispatchToAssignConditionForm(Array.isArray(value) ? value : undefined));
       if (incoming === lastEmitted) return;
       lastEmitted = incoming;
-      if (!value?.length) {
-        groups.value = [[createCondition()]];
-        return;
-      }
-      groups.value = [value.map(item => createCondition({ ...item }))];
+      formState.value = toInternalForm(value ?? createDefaultAssignConditionForm());
     },
-    { immediate: true },
+    { immediate: true, deep: true },
   );
 </script>
 <style lang="postcss" scoped>
@@ -297,6 +345,7 @@
         line-height: 28px;
         color: #f5b401;
         text-align: center;
+        cursor: pointer;
         background: #fff;
         border: 1px solid #f5b401;
         border-radius: 2px;

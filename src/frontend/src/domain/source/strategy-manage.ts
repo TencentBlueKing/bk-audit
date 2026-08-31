@@ -40,7 +40,7 @@ class Strategy extends ModuleBase {
     super();
     this.module = '/api/v1/';
   }
-  // 策略列表（按 binding_type 区分场景/全局；全局不传 scene_id）
+  // 策略列表（按 binding_type 区分场景/全局；审计策略 binding_type 传空）
   getStrategyList(params: {
     label?: string,
     name?: string,
@@ -281,15 +281,18 @@ class Strategy extends ModuleBase {
   }
 
 
-  // 获取策略标签（与列表一致：带 binding_type；全局不传 scene_id）
+  // 获取策略标签（与列表一致：全局传 platform_binding；审计策略 binding_type 传空）
   getStrategyTags(params: {
     scene_id?: string | number | null
     binding_type?: string
   } = {}) {
     const hasSceneIdKey = Object.prototype.hasOwnProperty.call(params, 'scene_id');
+    const hasBindingTypeKey = Object.prototype.hasOwnProperty.call(params, 'binding_type');
     const { scene_id: sceneId, binding_type: bindingType, ...rest } = params;
     const requestParams: Record<string, any> = { ...rest };
-    if (bindingType) {
+    if (hasBindingTypeKey) {
+      requestParams.binding_type = bindingType ?? '';
+    } else if (bindingType) {
       requestParams.binding_type = bindingType;
     }
     if (hasSceneIdKey) {

@@ -3,7 +3,11 @@ import { useI18n } from 'vue-i18n';
 
 import type StrategyModel from '@model/strategy/strategy';
 
-import { parseStrategyDetailToForm } from '../../strategy-create/utils/strategy-protocol';
+import {
+  type AssignConditionForm,
+  dispatchToAssignConditionForm,
+  parseStrategyDetailToForm,
+} from '../../strategy-create/utils/strategy-protocol';
 
 export interface RuleWhereDisplay {
   connector: string;
@@ -93,9 +97,9 @@ export const buildConditionDisplayRows = (
   getOperatorLabel: (operator: string) => string,
 ): ConditionDisplayRow[] => {
   const rows: ConditionDisplayRow[] = [];
-  where.conditions.forEach((group) => {
+  where.conditions.forEach((group, groupIndex) => {
     const childConditions = getGroupChildConditions(group);
-    childConditions.forEach((child, childIndex) => {
+    childConditions.forEach((child: Record<string, any>, childIndex: number) => {
       const condition = child.condition ?? child;
       if (!condition) return;
 
@@ -107,9 +111,12 @@ export const buildConditionDisplayRows = (
         return;
       }
 
+      const innerConnector = (group.connector || 'and').toUpperCase();
+      const outerConnector = (where.connector || 'and').toUpperCase();
+
       rows.push({
-        showInnerConnector: childIndex > 0,
-        innerConnector: (group.connector || 'and').toUpperCase(),
+        showInnerConnector: childIndex > 0 || groupIndex > 0,
+        innerConnector: childIndex > 0 ? innerConnector : outerConnector,
         fieldLabel,
         operatorLabel,
         values,
@@ -119,34 +126,36 @@ export const buildConditionDisplayRows = (
   return rows;
 };
 
+export const assignConditionFormToWhereDisplay = (
+  form: AssignConditionForm,
+  getFieldLabel: (fieldName: string) => string,
+): RuleWhereDisplay => ({
+  connector: form.connector,
+  conditions: form.groups.map(group => ({
+    connector: group.connector,
+    conditions: group.conditions
+      .filter(row => row.field)
+      .map(row => ({
+        condition: {
+          field: {
+            field_name: getFieldLabel(row.field),
+          },
+          operator: row.operator,
+          filter: row.value,
+        },
+      })),
+  })).filter(group => group.conditions.length),
+});
+
 export const dispatchConditionsToWhere = (
-  conditions: Record<string, any> | undefined,
+  conditions: Record<string, any> | AssignConditionForm | undefined,
   getFieldLabel: (fieldName: string) => string,
 ): RuleWhereDisplay => {
-  if (!conditions?.conditions?.length) {
+  const form = dispatchToAssignConditionForm(conditions);
+  if (!form.groups.some(group => group.conditions.some(row => row.field))) {
     return emptyWhere();
   }
-  return {
-    connector: conditions.connector || 'and',
-    conditions: [{
-      connector: 'and',
-      conditions: conditions.conditions.map((item: Record<string, any>) => {
-        const cond = item.condition ?? item;
-        const fieldName = typeof cond.field === 'string'
-          ? cond.field
-          : (cond.field?.raw_name || cond.field?.field_name || '');
-        return {
-          condition: {
-            field: {
-              field_name: getFieldLabel(fieldName),
-            },
-            operator: cond.operator,
-            filter: cond.filter ?? cond.filters?.[0],
-          },
-        };
-      }),
-    }],
-  };
+  return assignConditionFormToWhereDisplay(form, getFieldLabel);
 };
 
 const toStrategyRecord = (data: StrategyModel | Record<string, any>): Record<string, any> => {

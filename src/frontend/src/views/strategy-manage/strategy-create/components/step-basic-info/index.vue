@@ -137,11 +137,6 @@
         </bk-button> -->
         <bk-button
           class="ml8"
-          @click="handleSaveDraft">
-          {{ t('保存草稿') }}
-        </bk-button>
-        <bk-button
-          class="ml8"
           @click="handleCancel">
           {{ t('取消') }}
         </bk-button>
@@ -217,7 +212,6 @@
   interface Emits {
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: Record<string, any>): void;
-    (e: 'saveDraft', params: IFormData): void;
   }
   interface Props {
     editData: StrategyModel
@@ -545,11 +539,6 @@
     }
   };
 
-  const handleSaveDraft = () => {
-    const params = buildStepParams();
-    emits('saveDraft', params);
-  };
-
   // 下一步
   const handleNext = () => {
     const doValidate = () => {
@@ -599,7 +588,7 @@
       ...baseParams,
       ...fields,
     };
-    return params;
+    return params as IFormData;
   };
 
   // 提交（编辑态）：校验后提交，效果与「其他配置」的提交一致

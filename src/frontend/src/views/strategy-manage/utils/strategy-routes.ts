@@ -111,10 +111,17 @@ export const getStrategyBindingScope = (route?: Pick<RouteLocationNormalizedLoad
   };
 };
 
-/** 列表/标签等接口的作用域参数（兼容旧调用） */
+/**
+ * 列表/标签等接口的作用域参数（兼容旧调用）
+ * - 全局策略：binding_type=platform_binding
+ * - 审计策略：binding_type 传空，仅传 scene_id
+ */
 export const getStrategyListScopeParams = (route?: Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null) => {
-  const { binding_type: bindingType, scene_id: sceneId } = getStrategyBindingScope(route);
-  return { binding_type: bindingType, scene_id: sceneId };
+  const { binding_type: bindingType, scene_id: sceneId, isPlatform } = getStrategyBindingScope(route);
+  if (isPlatform) {
+    return { binding_type: bindingType, scene_id: sceneId };
+  }
+  return { binding_type: '', scene_id: sceneId };
 };
 
 /**

@@ -260,6 +260,28 @@ export default {
   },
 
   /**
+   * @desc 确认风险
+   */
+  confirmRisk(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return RiskManageSource.confirmRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 确认为误报
+   */
+  confirmAsMisreport(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return RiskManageSource.confirmAsMisreport(params)
+      .then(({ data }) => data);
+  },
+
+  /**
    * @desc 批量确认风险单
    */
   batchConfirmRisk(params: {

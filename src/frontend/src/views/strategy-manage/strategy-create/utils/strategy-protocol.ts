@@ -16,6 +16,137 @@ type FlatCondition = {
   value?: string;
 };
 
+type DispatchConditions = Record<string, any> | FlatCondition[] | AssignConditionForm | undefined;
+
+export type AssignConditionRow = {
+  field: string;
+  operator: string;
+  value: string;
+};
+
+export type AssignConditionGroup = {
+  connector: 'and' | 'or';
+  conditions: AssignConditionRow[];
+};
+
+export type AssignConditionForm = {
+  connector: 'and' | 'or';
+  groups: AssignConditionGroup[];
+};
+
+export const createDefaultAssignConditionForm = (): AssignConditionForm => ({
+  connector: 'and',
+  groups: [{
+    connector: 'and',
+    conditions: [{ field: '', operator: 'eq', value: '' }],
+  }],
+});
+
+export const isAssignConditionForm = (value: unknown): value is AssignConditionForm => (
+  !!value
+  && typeof value === 'object'
+  && Array.isArray((value as AssignConditionForm).groups)
+);
+
+const parseDispatchConditionRow = (node: Record<string, any>): AssignConditionRow => {
+  const condition = node.condition ?? node;
+  return {
+    field: condition.field ?? '',
+    operator: condition.operator ?? 'eq',
+    value: condition.filter ?? condition.filters?.[0] ?? condition.value ?? '',
+  };
+};
+
+export const dispatchToAssignConditionForm = (conditions: DispatchConditions): AssignConditionForm => {
+  if (isAssignConditionForm(conditions)) {
+    return {
+      connector: conditions.connector,
+      groups: conditions.groups.map(group => ({
+        connector: group.connector,
+        conditions: group.conditions.map(row => ({ ...row })),
+      })),
+    };
+  }
+  if (!conditions) {
+    return createDefaultAssignConditionForm();
+  }
+  if (Array.isArray(conditions)) {
+    const rows = conditions.length
+      ? conditions.map(item => parseDispatchConditionRow(item))
+      : [{ field: '', operator: 'eq', value: '' }];
+    return {
+      connector: 'and',
+      groups: [{ connector: 'and', conditions: rows }],
+    };
+  }
+  const outerConnector = (conditions.connector || 'and') as 'and' | 'or';
+  const list = conditions.conditions ?? [];
+  if (!list.length) {
+    return createDefaultAssignConditionForm();
+  }
+  const isNestedGroups = list.some((item: Record<string, any>) => Array.isArray(item.conditions));
+  if (isNestedGroups) {
+    return {
+      connector: outerConnector,
+      groups: list.map((group: Record<string, any>) => {
+        const rows = (group.conditions ?? []).map(parseDispatchConditionRow);
+        return {
+          connector: (group.connector || 'and') as 'and' | 'or',
+          conditions: rows.length ? rows : [{ field: '', operator: 'eq', value: '' }],
+        };
+      }),
+    };
+  }
+  const rows = list.map(parseDispatchConditionRow);
+  return {
+    connector: outerConnector,
+    groups: [{
+      connector: outerConnector,
+      conditions: rows.length ? rows : [{ field: '', operator: 'eq', value: '' }],
+    }],
+  };
+};
+
+export const assignConditionFormToDispatch = (form: AssignConditionForm | undefined) => {
+  if (!form?.groups?.length) return {};
+  const groups = form.groups
+    .map(group => ({
+      connector: group.connector,
+      conditions: group.conditions
+        .filter(row => row.field && row.operator)
+        .map(row => ({
+          condition: {
+            field: row.field,
+            operator: row.operator,
+            filter: row.value,
+          },
+        })),
+    }))
+    .filter(group => group.conditions.length);
+  if (!groups.length) return {};
+
+  if (groups.length === 1) {
+    const [onlyGroup] = groups;
+    return {
+      connector: onlyGroup.connector,
+      conditions: onlyGroup.conditions,
+    };
+  }
+
+  return {
+    connector: form.connector,
+    conditions: groups.map(group => ({
+      connector: group.connector,
+      conditions: group.conditions,
+    })),
+  };
+};
+
+export const hasValidAssignCondition = (form: AssignConditionForm | unknown) => {
+  if (!isAssignConditionForm(form)) return false;
+  return form.groups.some(group => group.conditions.some(row => row.field && row.operator));
+};
+
 type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
 export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined) => {
@@ -25,7 +156,10 @@ export const isEmptyDispatchConditions = (conditions: Record<string, any> | null
   return !conditions.conditions?.length;
 };
 
-export const toDispatchConditions = (flat: FlatCondition[] | Record<string, any> | undefined) => {
+export const toDispatchConditions = (flat: FlatCondition[] | AssignConditionForm | Record<string, any> | undefined) => {
+  if (isAssignConditionForm(flat)) {
+    return assignConditionFormToDispatch(flat);
+  }
   if (!flat) return {};
   if (!Array.isArray(flat)) {
     if (flat.connector || Array.isArray(flat.conditions)) {
@@ -47,29 +181,9 @@ export const toDispatchConditions = (flat: FlatCondition[] | Record<string, any>
   };
 };
 
-type DispatchConditions = Record<string, any> | FlatCondition[] | undefined;
-
 export const fromDispatchConditions = (conditions: DispatchConditions): FlatCondition[] => {
-  if (!conditions) return [{ field: '', operator: 'eq', value: '' }];
-  if (Array.isArray(conditions)) {
-    return conditions.length
-      ? conditions.map(item => ({
-        field: item.field ?? '',
-        operator: item.operator ?? 'eq',
-        value: item.value ?? '',
-      }))
-      : [{ field: '', operator: 'eq', value: '' }];
-  }
-  const list = conditions.conditions ?? [];
-  if (!list.length) return [{ field: '', operator: 'eq', value: '' }];
-  return list.map((item: any) => {
-    const condition = item.condition ?? item;
-    return {
-      field: condition.field ?? '',
-      operator: condition.operator ?? 'eq',
-      value: condition.filter ?? condition.filters?.[0] ?? condition.value ?? '',
-    };
-  });
+  const form = dispatchToAssignConditionForm(conditions);
+  return form.groups.flatMap(group => group.conditions);
 };
 
 const mapAssignModeToDispatch = (mode?: string) => (mode === 'direct' ? 'direct' : 'after_confirm');
@@ -332,7 +446,7 @@ export const buildStrategyCreatePayload = (
 
 const fromDispatchRuleToForm = (rule: Record<string, any>) => ({
   name: rule.rule_name || rule.name,
-  conditions: fromDispatchConditions(rule.conditions),
+  conditions: dispatchToAssignConditionForm(rule.conditions),
   scene_ids: rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== ''
     ? [rule.target_scene_id]
     : (rule.scene_ids ?? []),
