@@ -147,6 +147,21 @@ class SidebarRequestSerializerTest(TestCase):
         self.assertTrue(root_move.is_valid(), root_move.errors)
         self.assertTrue(group_move.is_valid(), group_move.errors)
 
+    def test_move_accepts_after_anchor(self):
+        serializer = SidebarMoveRequestSerializer(
+            data={
+                "source_node_type": SidebarNodeType.CONVERSATION,
+                "source_node_uid": self.source_uid,
+                "target_node_type": SidebarNodeType.GROUP,
+                "target_node_uid": self.target_uid,
+                "after_node_type": SidebarNodeType.CONVERSATION,
+                "after_node_uid": self.anchor_uid,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(str(serializer.validated_data["after_node_uid"]), self.anchor_uid)
+
     def test_move_requires_paired_target_and_anchor_fields(self):
         base = {
             "source_node_type": SidebarNodeType.CONVERSATION,
@@ -157,10 +172,27 @@ class SidebarRequestSerializerTest(TestCase):
             {"target_node_uid": self.target_uid},
             {"before_node_type": SidebarNodeType.CONVERSATION},
             {"before_node_uid": self.anchor_uid},
+            {"after_node_type": SidebarNodeType.CONVERSATION},
+            {"after_node_uid": self.anchor_uid},
         ):
             with self.subTest(extra=extra):
                 serializer = SidebarMoveRequestSerializer(data={**base, **extra})
                 self.assertFalse(serializer.is_valid())
+
+    def test_move_rejects_before_and_after_anchor_together(self):
+        serializer = SidebarMoveRequestSerializer(
+            data={
+                "source_node_type": SidebarNodeType.CONVERSATION,
+                "source_node_uid": self.source_uid,
+                "before_node_type": SidebarNodeType.CONVERSATION,
+                "before_node_uid": self.anchor_uid,
+                "after_node_type": SidebarNodeType.CONVERSATION,
+                "after_node_uid": self.target_uid,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("params_error", serializer.errors)
 
     def test_move_rejects_conversation_container_and_nested_group(self):
         conversation_target = SidebarMoveRequestSerializer(
@@ -184,18 +216,20 @@ class SidebarRequestSerializerTest(TestCase):
         self.assertFalse(nested_group.is_valid())
 
     def test_group_container_only_accepts_conversation_anchor(self):
-        serializer = SidebarMoveRequestSerializer(
-            data={
-                "source_node_type": SidebarNodeType.CONVERSATION,
-                "source_node_uid": self.source_uid,
-                "target_node_type": SidebarNodeType.GROUP,
-                "target_node_uid": self.target_uid,
-                "before_node_type": SidebarNodeType.GROUP,
-                "before_node_uid": self.anchor_uid,
-            }
-        )
+        for anchor_prefix in ("before", "after"):
+            with self.subTest(anchor_prefix=anchor_prefix):
+                serializer = SidebarMoveRequestSerializer(
+                    data={
+                        "source_node_type": SidebarNodeType.CONVERSATION,
+                        "source_node_uid": self.source_uid,
+                        "target_node_type": SidebarNodeType.GROUP,
+                        "target_node_uid": self.target_uid,
+                        f"{anchor_prefix}_node_type": SidebarNodeType.GROUP,
+                        f"{anchor_prefix}_node_uid": self.anchor_uid,
+                    }
+                )
 
-        self.assertFalse(serializer.is_valid())
+                self.assertFalse(serializer.is_valid())
 
     def test_pin_only_accepts_conversation_node(self):
         valid = SidebarPinRequestSerializer(

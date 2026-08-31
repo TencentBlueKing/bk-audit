@@ -178,6 +178,30 @@ class ConversationResourceTest(TestCase):
         self.assertEqual(group_node["conversation_count"], 1)
         self.assertEqual(group_node["unpinned_conversation_count"], 0)
 
+    def test_move_resource_supports_after_anchor(self, _username):
+        first = CreateConversation().request({"title": "first"})
+        second = CreateConversation().request({"title": "second"})
+        third = CreateConversation().request({"title": "third"})
+
+        moved = MoveConversationSidebarNode().request(
+            {
+                "source_node_type": SidebarNodeType.CONVERSATION,
+                "source_node_uid": first["uid"],
+                "after_node_type": SidebarNodeType.CONVERSATION,
+                "after_node_uid": third["uid"],
+            }
+        )
+        root_nodes = SidebarNodeResponseSerializer(
+            ListConversationSidebarNodes().request({}),
+            many=True,
+        ).data
+
+        self.assertEqual(moved["node_uid"], first["uid"])
+        self.assertEqual(
+            [node["node_uid"] for node in root_nodes],
+            [third["uid"], first["uid"], second["uid"]],
+        )
+
     def test_delete_group_soft_deletes_nested_conversation(self, _username):
         group = CreateConversationGroup().request({"name": "待删除"})
         conversation = CreateConversation().request({})
