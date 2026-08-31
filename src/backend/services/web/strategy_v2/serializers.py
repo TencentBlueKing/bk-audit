@@ -788,8 +788,10 @@ class DispatchRuleSerializer(serializers.Serializer):
     confirmer = serializers.ListField(
         label=gettext_lazy("Confirmer"),
         child=serializers.IntegerField(label=gettext_lazy("Confirmer Group")),
-        required=True,
-        help_text=gettext_lazy("确认人通知组 ID 列表（全局策略用，通知组须属于目标场景）"),
+        required=False,
+        default=list,
+        allow_empty=True,
+        help_text=gettext_lazy("确认人通知组 ID 列表（仅 dispatch_mode=after_confirm 时必填，直接分派无需确认人）"),
     )
     dispatch_mode = serializers.ChoiceField(
         label=gettext_lazy("Dispatch Mode"), choices=DispatchMode.choices, default=DispatchMode.DIRECT
@@ -919,12 +921,20 @@ class MultiRuleValidateMixin:
                 rule["is_default"] = is_default
                 if is_default:
                     default_count += 1
-                # 处理人/关注人/确认人均必填
-                for list_field in ("processor", "follower", "confirmer"):
+                # 处理人/关注人必填
+                for list_field in ("processor", "follower"):
                     if not rule.get(list_field):
                         raise serializers.ValidationError(
                             gettext("分派规则[%s]的%s不能为空") % (rule.get("rule_name"), list_field)
                         )
+                # 确认人仅"确认后分派"必填；直接分派无需确认人，清空避免脏数据
+                if rule.get("dispatch_mode") == DispatchMode.AFTER_CONFIRM:
+                    if not rule.get("confirmer"):
+                        raise serializers.ValidationError(
+                            gettext("分派规则[%s]的confirmer不能为空（确认后分派需配置确认人）") % rule.get("rule_name")
+                        )
+                else:
+                    rule["confirmer"] = []
                 # 目标场景存在性（软删过滤）
                 if not Scene.objects.filter(scene_id=rule.get("target_scene_id"), is_deleted=False).exists():
                     raise serializers.ValidationError(
