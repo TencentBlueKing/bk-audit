@@ -62,6 +62,8 @@ export interface AiSystemFieldItem {
   nl_name: string;
   description: string;
   allow_operators: string[];
+  field_type?: string;
+  options?: Array<{ id: string; name: string }> | null;
   sample_value?: any;
 }
 
