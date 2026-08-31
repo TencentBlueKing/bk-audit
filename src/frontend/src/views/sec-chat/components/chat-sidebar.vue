@@ -192,7 +192,12 @@
                   @enter="(_val, evt) => handleEditConvEnter(conv.id, evt)" />
               </template>
               <template v-else>
-                <span class="conv-title">{{ conv.title }}</span>
+                <show-tooltips-text
+                  class="conv-title"
+                  :data="conv.title"
+                  :line="1"
+                  placement="right"
+                  theme="dark" />
               </template>
               <div
                 class="conv-actions"
@@ -410,7 +415,12 @@
                     @enter="(_val, evt) => handleEditConvEnter(conv.id, evt)" />
                 </template>
                 <template v-else>
-                  <span class="conv-title">{{ conv.title }}</span>
+                  <show-tooltips-text
+                    class="conv-title"
+                    :data="conv.title"
+                    :line="1"
+                    placement="right"
+                    theme="dark" />
                 </template>
                 <div
                   class="conv-actions"
@@ -860,6 +870,7 @@
 
   import ScrollFaker from '@components/scroll-faker/index.vue';
   import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import aiAddIcon from '@images/ai-add.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
