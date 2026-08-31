@@ -42,6 +42,9 @@ import {
 const MESSAGE_POLL_INTERVAL_MS = 2000;
 const CHILD_LOG_RETRY_TIMES = 3;
 const CHILD_LOG_RETRY_DELAY_MS = 500;
+const DEFAULT_CONVERSATION_TITLE = '新对话';
+const TITLE_REFRESH_TIMES = 5;
+const TITLE_REFRESH_INTERVAL_MS = 2000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
@@ -71,6 +74,8 @@ const pollTimers = new Map<string, ReturnType<typeof setInterval>>();
 const messageLoadInflight = new Map<string, Promise<void>>();
 /** 同一分组子节点拉取进行中的 Promise，避免并发叠打 */
 const groupLoadInflight = new Map<string, Promise<void>>();
+/** 同一会话标题刷新进行中的 Promise，避免并发叠打 */
+const titleRefreshInflight = new Map<string, Promise<void>>();
 
 const activeConversation = computed(() => {
   if (draftConversation.value && activeConversationId.value === draftConversation.value.id) {
@@ -90,7 +95,7 @@ const isGroupNode = (node: AiSidebarNode): node is AiSidebarGroupNode => (
 const mapConversationNode = (node: AiSidebarConversationNode, pinned = false): Conversation => (
   createEmptyConversation({
     id: node.node_uid,
-    title: node.title || '新对话',
+    title: node.title || DEFAULT_CONVERSATION_TITLE,
     pinned: pinned || Boolean(node.pinned),
     groupName: node.group_name || undefined,
     sceneType: 'log',
@@ -172,7 +177,62 @@ const fetchChildLogSearch = async (conversationId: string, nlUid: string) => {
   return null;
 };
 
+const findStoredConversation = (conversationId: string) => (
+  conversations.value.find(c => c.id === conversationId)
+  || (draftConversation.value?.id === conversationId ? draftConversation.value : null)
+);
+
+/**
+ * 后端在首条检索后异步写入 AI 标题。创建时仍是「新对话」，
+ * 成功后短轮询会话详情；用户已手改过则不覆盖。
+ */
+const refreshConversationTitle = async (conversationId: string) => {
+  const seed = findStoredConversation(conversationId);
+  if (!seed || seed.isDraft || seed.title !== DEFAULT_CONVERSATION_TITLE) return;
+
+  const existing = titleRefreshInflight.get(conversationId);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const task = (async () => {
+    for (let attempt = 0; attempt < TITLE_REFRESH_TIMES; attempt += 1) {
+      const current = findStoredConversation(conversationId);
+      if (!current || current.title !== DEFAULT_CONVERSATION_TITLE) return;
+      try {
+        const detail = await AiAssistantManageService.fetchConversation({
+          conversation_uid: conversationId,
+        });
+        const nextTitle = (detail.title || '').trim();
+        const latest = findStoredConversation(conversationId);
+        if (!latest || latest.title !== DEFAULT_CONVERSATION_TITLE) return;
+        if (nextTitle && nextTitle !== DEFAULT_CONVERSATION_TITLE) {
+          latest.title = nextTitle;
+          return;
+        }
+      } catch {
+        // 标题刷新失败不打断检索，下一次继续
+      }
+      if (attempt < TITLE_REFRESH_TIMES - 1) {
+        await sleep(TITLE_REFRESH_INTERVAL_MS);
+      }
+    }
+  })();
+
+  titleRefreshInflight.set(conversationId, task);
+  try {
+    await task;
+  } finally {
+    titleRefreshInflight.delete(conversationId);
+  }
+};
+
 const handleNlTerminalStatus = async (conversationId: string, detail: AiMessage) => {
+  if (detail.status === 'SUCCESS'
+    && (detail.message_type === 'NATURAL_LANGUAGE_SEARCH' || detail.message_type === 'LOG_SEARCH')) {
+    void refreshConversationTitle(conversationId);
+  }
   if (detail.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
   if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
     await fetchChildLogSearch(conversationId, detail.uid);
@@ -468,7 +528,7 @@ export function useSecChatStore() {
     if (!conv) {
       conv = createEmptyConversation({
         id: conversationId,
-        title: '新对话',
+        title: DEFAULT_CONVERSATION_TITLE,
         pinned: false,
         sceneType: 'log',
         createdAt: Date.now(),
@@ -796,7 +856,7 @@ export function useSecChatStore() {
     const displayText = prompt === '请帮我检索审计日志' ? '审计日志检索' : prompt;
     const conversation = createEmptyConversation({
       id,
-      title: '新对话',
+      title: DEFAULT_CONVERSATION_TITLE,
       pinned: false,
       sceneType: 'log',
       isDraft: true,
@@ -854,7 +914,7 @@ export function useSecChatStore() {
 
     if (conv.isDraft) {
       const created = await AiAssistantManageService.createConversation({
-        title: conv.title || '新对话',
+        title: conv.title || DEFAULT_CONVERSATION_TITLE,
       });
       const realId = created.uid;
       const systemMessage = await postSystemSelection(realId);
@@ -862,7 +922,7 @@ export function useSecChatStore() {
       const nextMessages = conv.messages.filter(item => item.id !== msg.id);
       const realConversation = createEmptyConversation({
         id: realId,
-        title: created.title || conv.title || '新对话',
+        title: created.title || conv.title || DEFAULT_CONVERSATION_TITLE,
         pinned: false,
         sceneType: 'log',
         systemIds: [...systemIds],
@@ -972,6 +1032,9 @@ export function useSecChatStore() {
       message_type: 'LOG_SEARCH',
       input_data: { condition },
     });
+    if (message.status === 'SUCCESS') {
+      void refreshConversationTitle(conv.id);
+    }
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };
