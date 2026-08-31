@@ -74,6 +74,46 @@ export const createDefaultDatetimeOrigin = () => ([
   'now',
 ]);
 
+const DATETIME_SHORTCUT_CONFIGS = [
+  { days: 1, origin: 'now-1d' },
+  { days: 3, origin: 'now-3d' },
+  { days: 7, origin: 'now-7d' },
+  { days: 14, origin: 'now-14d' },
+  { days: 30, origin: 'now-1M' },
+  { days: 90, origin: 'now-3M' },
+  { days: 182, origin: 'now-6M' },
+  { days: 365, origin: 'now-12M' },
+];
+
+/** 根据 start/end 推断 datetime_origin，避免回显固定为「近1天」 */
+export const inferDatetimeOrigin = (startTime?: string, endTime?: string): string[] => {
+  const start = dayjs(startTime);
+  const end = dayjs(endTime);
+  if (!start.isValid() || !end.isValid()) {
+    return createDefaultDatetimeOrigin();
+  }
+
+  const formatted = [
+    start.format('YYYY-MM-DD HH:mm:ss'),
+    end.format('YYYY-MM-DD HH:mm:ss'),
+  ];
+
+  const now = dayjs();
+  if (Math.abs(end.diff(now, 'minute')) > 5) {
+    return formatted;
+  }
+
+  const diffMinutes = end.diff(start, 'minute');
+  const matched = DATETIME_SHORTCUT_CONFIGS.find(
+    item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2,
+  );
+  if (matched) {
+    return [matched.origin, 'now'];
+  }
+
+  return formatted;
+};
+
 const toIsoTime = (value: string) => {
   const parsed = dayjs(value);
   if (!parsed.isValid()) return value;
@@ -143,6 +183,72 @@ export const getSecondaryFieldNames = (extensionFields: SystemFieldRow[] = []) =
     return field.rawName;
   }).filter(Boolean)
 );
+
+const fieldCatalogKey = (rawName: string, keys: string[] = []) => (
+  keys.length ? `${rawName}.${keys.join('.')}` : rawName
+);
+
+const fromIsoTime = (value?: string) => {
+  if (!value) return '';
+  const parsed = dayjs(value);
+  if (!parsed.isValid()) return String(value);
+  return parsed.format('YYYY-MM-DD HH:mm:ss');
+};
+
+/** 将 AiSearchCondition 中的字段项映射到 fieldConfig 的 key */
+export const resolveConditionFieldKey = (
+  rawName: string,
+  keys: string[] = [],
+  fieldConfig: Record<string, IFieldConfig> = {},
+): string | null => {
+  const exactKey = fieldCatalogKey(rawName, keys);
+  if (fieldConfig[exactKey]) return exactKey;
+
+  const matched = Object.entries(fieldConfig).find(([, config]) => {
+    const meta = (config as IFieldConfig & { fieldMeta?: SystemFieldRow }).fieldMeta;
+    if (!meta) return false;
+    const metaKey = fieldCatalogKey(meta.rawName, meta.keys || []);
+    return metaKey === exactKey || meta.rawName === rawName;
+  });
+  if (matched) return matched[0];
+  if (fieldConfig[rawName]) return rawName;
+  return null;
+};
+
+/** 将 AiSearchCondition 转为条件筛选 searchModel（与 buildAiSearchCondition 互逆） */
+export const parseAiSearchConditionToSearchModel = (
+  condition: AiSearchCondition,
+  fieldConfig: Record<string, IFieldConfig>,
+): Record<string, any> => {
+  const searchModel: Record<string, any> = {
+    datetime: [
+      fromIsoTime(condition.start_time),
+      fromIsoTime(condition.end_time),
+    ],
+    datetime_origin: inferDatetimeOrigin(condition.start_time, condition.end_time),
+  };
+
+  (condition.conditions || []).forEach((item) => {
+    const rawName = String(item?.field?.raw_name || '');
+    const keys = Array.isArray(item?.field?.keys) ? item.field.keys.map(String) : [];
+    const fieldKey = resolveConditionFieldKey(rawName, keys, fieldConfig);
+    if (!fieldKey) return;
+
+    const config = fieldConfig[fieldKey];
+    const filters = Array.isArray(item.filters)
+      ? item.filters.filter(v => v !== undefined && v !== null && v !== '')
+      : [];
+    if (!filters.length) return;
+
+    if (config.type === 'user-selector' || config.type === 'select') {
+      searchModel[fieldKey] = filters;
+    } else {
+      searchModel[fieldKey] = filters.length === 1 ? filters[0] : filters.join(',');
+    }
+  });
+
+  return searchModel;
+};
 
 /**
  * 将条件筛选表单转为文档同构的 AiSearchCondition。
