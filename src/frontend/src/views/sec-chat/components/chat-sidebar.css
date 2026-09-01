@@ -562,6 +562,7 @@
         background: #f5f7fa;
 
         .conv-actions {
+          pointer-events: auto;
           opacity: 100%;
         }
       }
@@ -578,6 +579,7 @@
         background: #f5f7fa;
 
         .conv-actions {
+          pointer-events: auto;
           opacity: 100%;
         }
       }
@@ -628,15 +630,17 @@
       }
 
       .conv-actions {
+        position: absolute;
+        right: 8px;
         display: flex;
-        margin-left: auto;
+        pointer-events: none;
         opacity: 0%;
-        transition: opacity .2s;
+        transition: opacity .15s;
         align-items: center;
         flex-shrink: 0;
 
         .more-dropdown {
-          display: flex;
+          display: block;
           line-height: 0;
         }
 
