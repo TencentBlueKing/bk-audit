@@ -230,6 +230,8 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.confirm_as_mis_report, endpoint="confirm_as_misreport", pk_field="risk_id"),
         # 批量确认风险
         ResourceRoute("POST", resource.risk.batch_confirm_risk, endpoint="batch_confirm"),
+        # 批量确认为误报
+        ResourceRoute("POST", resource.risk.batch_confirm_as_mis_report, endpoint="batch_confirm_as_misreport"),
     ]
 
 
