@@ -3,7 +3,7 @@ import json
 from unittest import mock
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from api.bk_paas.default import UniAppsQuery
 
@@ -31,8 +31,8 @@ class TestPaaSV3BuildHeader(SimpleTestCase):
         """多租户模式：注入应用凭证头 + 租户头（不依赖 admin 身份替换）"""
         resource = UniAppsQuery()
 
-        with mock.patch("core.bk_api_base.use_multi_tenant_mode", return_value=True), mock.patch.object(
-            settings, "BK_TENANT_ID", "tenant-1", create=True
+        with mock.patch("core.bk_api_base.use_multi_tenant_mode", return_value=True), override_settings(
+            BK_TENANT_ID="tenant-1"
         ):
             headers = resource.build_header({})
 
@@ -52,7 +52,7 @@ class TestPaaSV3BuildHeader(SimpleTestCase):
 
         with mock.patch("core.bk_api_base.use_multi_tenant_mode", return_value=True), mock.patch(
             "core.bk_api_base.get_admin_username", return_value="bk_admin"
-        ), mock.patch.object(settings, "BK_TENANT_ID", "tenant-2", create=True):
+        ), override_settings(BK_TENANT_ID="tenant-2"):
             headers = resource.build_header({})
 
         auth = json.loads(headers["x-bkapi-authorization"])
