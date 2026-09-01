@@ -47,6 +47,7 @@
             <!-- 内联选择系统卡片 -->
             <select-system-card
               v-else-if="msg.type === 'select-system' && msg.status === 'pending'"
+              :confirming="confirmingSystemMessageId === msg.id"
               :model-value="msg.systemIds || []"
               @close="$emit('close-select-system', msg.id)"
               @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
@@ -188,6 +189,8 @@
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
     systems?: SelectedSystem[];
+    /** 正在确认系统选择的消息 ID，用于禁用确认按钮 */
+    confirmingSystemMessageId?: string | null;
   }>(), {
     conversationId: undefined,
     hasBeforeMessages: false,
@@ -197,6 +200,7 @@
     standardFields: () => [],
     extensionFields: () => [],
     systems: () => [],
+    confirmingSystemMessageId: null,
   });
 
   const emit = defineEmits<{
