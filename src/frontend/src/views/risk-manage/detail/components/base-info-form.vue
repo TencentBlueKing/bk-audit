@@ -194,7 +194,7 @@
 
   import { RISK_STATUS_THEME_MAP } from '@views/risk-manage/constants';
 
-  import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+  import { findStrategyLabel, formatStrategyNameWithId } from '@utils/format-strategy-name';
 
   import RenderInfoItem from './render-info-item.vue';
 
@@ -204,7 +204,7 @@
     data: RiskManageModel & StrategyInfo
     strategyList: Array<{
       label: string,
-      value: number
+      value: number | string
     }>,
     riskStatusCommon: Array<{
       id: string,
@@ -305,11 +305,12 @@
   };
   const strategyDisplayText = computed(() => {
     const { data } = props;
-    const item = props.strategyList.find(item => item.value === data.strategy_id);
-    if (!item?.label && !data.strategy_id) {
+    const strategyName = findStrategyLabel(props.strategyList, data.strategy_id)
+      || String((data as RiskManageModel & StrategyInfo & { strategy_name?: string }).strategy_name || '').trim();
+    if (!strategyName && !data.strategy_id && data.strategy_id !== 0) {
       return '';
     }
-    return formatStrategyNameWithId(item?.label, data.strategy_id);
+    return formatStrategyNameWithId(strategyName, data.strategy_id);
   });
 
   const riskRule = computed(() => {

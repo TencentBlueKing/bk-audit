@@ -109,7 +109,8 @@
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import addRisk from './add-risk/index.vue';
   import AllRiskExportButton from './components/all-risk-export-button.vue';
@@ -329,6 +330,14 @@
   });
 
   const tableColumns = computed(() => {
+    touchRiskColumnDeps({
+      levelData,
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
     const baseColumns = buildBaseTableColumns();
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
@@ -453,12 +462,7 @@
       }));
     },
   });
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('all');
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {

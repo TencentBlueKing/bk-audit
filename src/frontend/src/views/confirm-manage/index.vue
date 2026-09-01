@@ -20,7 +20,7 @@
       :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
-      risk-view-type="pending_confirm"
+      risk-view-type="confirm"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
       @parsing="handleParsing" />
@@ -65,6 +65,7 @@
 <script setup lang='tsx'>
   import {
     computed,
+    onActivated,
     onMounted,
     onUnmounted,
     ref,
@@ -98,7 +99,8 @@
 
   import NlSearchBox from '@views/risk-manage/list/components/nl-search-box/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import BatchConfirmDialog from './components/batch-confirm-dialog.vue';
   import FieldConfig from './components/config';
@@ -142,16 +144,21 @@
     ),
   };
 
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'confirmManageDetail',
-        appendColumns: [actionColumn],
-      });
-    }
+    touchRiskColumnDeps({
+      levelData,
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const initTableColumns = useRiskColumns({
+      t,
+      deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'confirmManageDetail',
+      appendColumns: [actionColumn],
+    });
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -209,6 +216,7 @@
   const listRef = ref();
   const searchBoxRef = ref();
   const batchConfirmRef = ref();
+  const hasActivatedOnce = ref(false);
   const searchModel = ref<Record<string, any>>({});
   const fieldConfigKey = ref(0);
   const isParsing = ref(false);
@@ -234,7 +242,7 @@
   } = useRiskBatchExport({
     listRef,
     searchBoxRef,
-    riskViewType: 'pending_confirm',
+    riskViewType: 'confirm',
     selectionMeta,
     isExportEnabled,
   });
@@ -350,12 +358,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('confirm');
 
   const {
     run: getRiskTags,
@@ -404,6 +407,7 @@
   onMounted(() => {
     getEventFields();
     getRiskTags({
+      risk_view_type: 'confirm',
       scope_id: getSceneSystemParams().scope_id,
       scope_type: getSceneSystemParams().scope_type,
     });
@@ -412,6 +416,14 @@
       settingsVersion.value += 1;
       fetchList();
     });
+  });
+
+  onActivated(() => {
+    if (!hasActivatedOnce.value) {
+      hasActivatedOnce.value = true;
+      return;
+    }
+    fetchList();
   });
 
   onUnmounted(() => {

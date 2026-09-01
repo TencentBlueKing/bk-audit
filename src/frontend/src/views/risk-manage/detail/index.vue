@@ -113,7 +113,6 @@
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
@@ -125,6 +124,11 @@
   import {
     execCopy,
   } from '@utils/assist';
+
+  import {
+    getRiskViewTypeByDetailRoute,
+    useRiskListStrategyList,
+  } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import BaseInfo from './components/base-info.vue';
   import EditEventReport from './components/event-report/edit-event-report.vue';
@@ -169,12 +173,9 @@
   let syncedActiveTabRiskId: string | undefined;
 
   const {
-    loading: strategyLoading,
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+    strategyList,
+    strategyLoading,
+  } = useRiskListStrategyList(getRiskViewTypeByDetailRoute(String(route.name || '')));
 
   const {
     data: riskStatusCommon,

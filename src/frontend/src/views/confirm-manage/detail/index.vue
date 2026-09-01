@@ -98,7 +98,6 @@
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
@@ -108,6 +107,8 @@
   import useRouterBack from '@hooks/use-router-back';
 
   import { execCopy } from '@utils/assist';
+
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import ConfirmRiskHandle from '../components/confirm-risk-handle/index.vue';
   import BaseInfo from '@views/risk-manage/detail/components/base-info.vue';
@@ -141,12 +142,9 @@
   let syncedActiveTabRiskId: string | undefined;
 
   const {
-    loading: strategyLoading,
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+    strategyList,
+    strategyLoading,
+  } = useRiskListStrategyList('confirm');
 
   const {
     data: riskStatusCommon,

@@ -1,4 +1,4 @@
-export type RiskViewType = 'all' | 'scene' | 'todo' | 'watch' | 'processed' | 'pending_confirm';
+export type RiskViewType = 'all' | 'scene' | 'todo' | 'watch' | 'processed' | 'confirm';
 
 /** 与 ListRiskBaseRequestSerializer + RiskScopeQuerySerializer 一致的 filters 字段 */
 export const RISK_LIST_FILTER_KEYS = [

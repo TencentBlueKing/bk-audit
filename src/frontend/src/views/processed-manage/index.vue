@@ -79,7 +79,8 @@
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import FieldConfig from './components/config';
 
@@ -153,16 +154,21 @@
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'processedManageDetail',
-        appendColumns: [actionColumn],
-      });
-    }
+    touchRiskColumnDeps({
+      levelData,
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const initTableColumns = useRiskColumns({
+      t,
+      deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'processedManageDetail',
+      appendColumns: [actionColumn],
+    });
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -346,12 +352,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('processed');
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
