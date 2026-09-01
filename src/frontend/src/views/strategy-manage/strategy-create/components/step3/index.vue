@@ -151,7 +151,6 @@
 
   import SceneManageService from '@service/scene-manage';
 
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import AssignConditionRows from './components/assign-condition-rows.vue';
@@ -202,7 +201,6 @@
   interface Props {
     editData: StrategyModel;
     formData?: Record<string, any>;
-    select?: Array<DatabaseTableFieldModel>;
     strategyType?: string;
   }
 

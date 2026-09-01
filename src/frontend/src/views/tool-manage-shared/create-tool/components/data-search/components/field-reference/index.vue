@@ -925,9 +925,30 @@
     deep: true,
   });
 
-  watch(() => props.allToolsData, (data) => {
+  const syncToolCascaderList = () => {
+    if (!props.tagData?.length) {
+      return;
+    }
     isToolLoading.value = false;
-    buildToolCascaderList(data);
+    buildToolCascaderList(props.allToolsData || []);
+  };
+
+  watch(
+    () => [props.allToolsData, props.tagData] as const,
+    () => {
+      syncToolCascaderList();
+    },
+    { immediate: true, deep: true },
+  );
+
+  watch(showEditSql, (isShow) => {
+    if (!isShow) {
+      return;
+    }
+    syncToolCascaderList();
+    if (!props.tagData?.length) {
+      refreshToolList();
+    }
   });
 
   defineExpose<Expose>({
