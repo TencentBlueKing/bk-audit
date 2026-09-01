@@ -29,6 +29,8 @@ import type {
 import type {
   Conversation,
   Group,
+  RootReorderPayload,
+  RootSidebarItem,
   SelectedSystem,
 } from '../types';
 import {
@@ -65,6 +67,10 @@ const olderMessagesLoading = ref(false);
 
 const groups = ref<Group[]>([]);
 const conversations = ref<Conversation[]>([]);
+/** 根层侧栏节点顺序（分组与会话混排，与 nodes/ 返回一致） */
+const rootSidebarOrder = ref<RootSidebarItem[]>([]);
+const sidebarSearchResults = ref<Conversation[]>([]);
+const sidebarSearchLoading = ref(false);
 
 /** 草稿会话（确认系统前的本地态） */
 const draftConversation = ref<Conversation | null>(null);
@@ -453,7 +459,7 @@ export function useSecChatStore() {
   };
 
   /**
-   * 初始化 / 刷新侧栏根节点（未分组会话 + 分组元信息）。
+   * 初始化 / 刷新侧栏根节点（分组与会话按服务端顺序混排）。
    * 分组内会话仅在展开 / 搜索时按需加载。
    * 已加载过的分组子节点在刷新时保留，避免展开组「先空再补拉」闪屏。
    * 置顶能力本期不开放，不请求 pinned/。
@@ -463,6 +469,14 @@ export function useSecChatStore() {
     try {
       const rootPage = await AiAssistantManageService.fetchSidebarNodes({ page: 1, page_size: 100 });
       const rootNodes = rootPage.results || [];
+      rootSidebarOrder.value = rootNodes.reduce<RootSidebarItem[]>((acc, node) => {
+        if (isGroupNode(node)) {
+          acc.push({ kind: 'group', id: node.node_uid });
+        } else if (isConversationNode(node)) {
+          acc.push({ kind: 'conversation', id: node.node_uid });
+        }
+        return acc;
+      }, []);
       const groupNodes = rootNodes.filter(isGroupNode);
       const rootConversations = rootNodes
         .filter(isConversationNode)
@@ -693,21 +707,29 @@ export function useSecChatStore() {
     }));
   };
 
+  const resolveNodeType = (kind: 'group' | 'conversation') => (
+    kind === 'group' ? 'GROUP' as const : 'CONVERSATION' as const
+  );
+
   /**
-   * 同容器内会话排序（未分组根列表 / 某一分组内）。
-   * beforeId：插到该会话前；toEnd：移到容器末尾（协议只有 before/最前，末尾用两次 move 对齐）。
+   * 侧栏节点排序：根层混排 / 组内会话 / 分组间。
+   * beforeKind + beforeId：插到锚点前；toEnd：after 锚点为容器末项时移到末尾。
    */
-  const reorderConversation = async (
-    id: string,
-    options: { groupName?: string; beforeId?: string; toEnd?: boolean },
+  const reorderRootNode = async (
+    sourceKind: 'group' | 'conversation',
+    sourceId: string,
+    options: { groupName?: string } & RootReorderPayload = {},
   ) => {
-    const conv = conversations.value.find(c => c.id === id);
-    if (!conv || conv.isDraft) return;
+    if (sourceKind === 'conversation') {
+      const conv = conversations.value.find(c => c.id === sourceId);
+      if (!conv || conv.isDraft) return;
+    } else if (!groups.value.find(g => g.id === sourceId)) {
+      return;
+    }
 
     const targetGroup = options.groupName
       ? groups.value.find(g => g.name === options.groupName)
       : undefined;
-    // 根容器省略 target；组内排序必须带上 GROUP，避免被挪到根
     const targetParams = targetGroup
       ? {
         target_node_type: 'GROUP' as const,
@@ -715,44 +737,73 @@ export function useSecChatStore() {
       }
       : {};
 
-    const moveBefore = async (sourceUid: string, beforeUid?: string) => {
+    const moveNode = async (
+      nodeKind: 'group' | 'conversation',
+      nodeUid: string,
+      anchor?: {
+        uid: string;
+        kind: 'group' | 'conversation';
+        position: 'before' | 'after';
+      },
+    ) => {
       await AiAssistantManageService.moveSidebarNode({
-        source_node_type: 'CONVERSATION',
-        source_node_uid: sourceUid,
+        source_node_type: resolveNodeType(nodeKind),
+        source_node_uid: nodeUid,
         ...targetParams,
-        ...(beforeUid ? {
-          before_node_type: 'CONVERSATION' as const,
-          before_node_uid: beforeUid,
+        ...(anchor?.position === 'before' ? {
+          before_node_type: resolveNodeType(anchor.kind),
+          before_node_uid: anchor.uid,
+        } : {}),
+        ...(anchor?.position === 'after' ? {
+          after_node_type: resolveNodeType(anchor.kind),
+          after_node_uid: anchor.uid,
         } : {}),
       });
     };
 
     if (options.toEnd) {
-      const siblings = conversations.value.filter(c => (
-        c.id !== id
-        && !c.isDraft
-        && (options.groupName ? c.groupName === options.groupName : !c.groupName)
-      ));
-      const last = siblings[siblings.length - 1];
-      if (!last) {
-        await moveBefore(id);
+      const lastSibling = targetGroup
+        ? conversations.value.filter(c => (
+          c.id !== sourceId
+          && !c.isDraft
+          && c.groupName === options.groupName
+        )).at(-1)
+        : rootSidebarOrder.value.filter(item => !(
+          item.kind === sourceKind && item.id === sourceId
+        )).at(-1);
+      if (lastSibling) {
+        const anchor = 'kind' in lastSibling
+          ? { uid: lastSibling.id, kind: lastSibling.kind, position: 'after' as const }
+          : { uid: lastSibling.id, kind: 'conversation' as const, position: 'after' as const };
+        await moveNode(sourceKind, sourceId, anchor);
       } else {
-        await moveBefore(id, last.id);
-        await moveBefore(last.id, id);
+        await moveNode(sourceKind, sourceId);
       }
-    } else if (options.beforeId) {
-      await moveBefore(id, options.beforeId);
+    } else if (options.beforeId && options.beforeKind) {
+      await moveNode(sourceKind, sourceId, {
+        uid: options.beforeId,
+        kind: options.beforeKind,
+        position: 'before',
+      });
     } else {
-      await moveBefore(id);
+      await moveNode(sourceKind, sourceId);
     }
+
     await initSidebar();
-    // 组内排序：保留子节点避免闪屏，再静默重拉该组以同步顺序（加载期间仍展示旧列表）
     if (targetGroup) {
       const latest = groups.value.find(g => g.id === targetGroup.id);
       if (latest) {
         await loadGroupConversations(latest.id, { force: true });
       }
     }
+  };
+
+  /** @deprecated 使用 reorderRootNode；保留别名供现有调用 */
+  const reorderConversation = async (
+    id: string,
+    options: { groupName?: string; beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean },
+  ) => {
+    await reorderRootNode('conversation', id, options);
   };
 
   const updateConversationTitle = async (id: string, title: string) => {
@@ -777,42 +828,60 @@ export function useSecChatStore() {
     return group;
   };
 
-  /**
-   * 根列表分组排序。beforeId：插到该分组前；toEnd：移到末尾（协议只有 before/最前，末尾用两次 move 对齐）。
-   */
+  /** @deprecated 使用 reorderRootNode；保留别名供现有调用 */
   const reorderGroup = async (
     id: string,
-    options: { beforeId?: string; toEnd?: boolean },
+    options: RootReorderPayload,
   ) => {
-    const group = groups.value.find(g => g.id === id);
-    if (!group) return;
+    await reorderRootNode('group', id, options);
+  };
 
-    const moveBefore = async (sourceUid: string, beforeUid?: string) => {
-      await AiAssistantManageService.moveSidebarNode({
-        source_node_type: 'GROUP',
-        source_node_uid: sourceUid,
-        ...(beforeUid ? {
-          before_node_type: 'GROUP' as const,
-          before_node_uid: beforeUid,
-        } : {}),
-      });
-    };
-
-    if (options.toEnd) {
-      const siblings = groups.value.filter(g => g.id !== id);
-      const last = siblings[siblings.length - 1];
-      if (!last) {
-        await moveBefore(id);
-      } else {
-        await moveBefore(id, last.id);
-        await moveBefore(last.id, id);
-      }
-    } else if (options.beforeId) {
-      await moveBefore(id, options.beforeId);
-    } else {
-      await moveBefore(id);
+  /** 侧栏搜索：走 search/ 接口定位会话，不改变侧栏排序 */
+  const searchSidebarConversations = async (keyword: string) => {
+    const trimmed = keyword.trim();
+    if (!trimmed) {
+      sidebarSearchResults.value = [];
+      sidebarSearchLoading.value = false;
+      return;
     }
-    await initSidebar();
+
+    sidebarSearchLoading.value = true;
+    try {
+      const nodes = await AiAssistantManageService.searchSidebar({ keyword: trimmed });
+      const mapped = nodes
+        .filter(isConversationNode)
+        .map(node => mapConversationNode(node));
+      const messageCache = snapshotMessageCache();
+      sidebarSearchResults.value = mergeConversationCache(mapped, messageCache);
+
+      // 搜索结果可能含分组内会话，合并进缓存便于打开
+      const existingIds = new Set(conversations.value.map(c => c.id));
+      const extras = sidebarSearchResults.value.filter(c => !existingIds.has(c.id));
+      if (extras.length) {
+        conversations.value = dedupeConversations([
+          ...conversations.value,
+          ...extras,
+        ]);
+      }
+
+      // 协议：搜索需覆盖未展开分组，按需拉取命中分组子节点
+      const hitGroupIds = new Set(
+        nodes
+          .filter(isConversationNode)
+          .map(node => node.group_uid)
+          .filter((uid): uid is string => Boolean(uid)),
+      );
+      await Promise.all([...hitGroupIds].map(groupId => loadGroupConversations(groupId, { force: true })));
+    } catch {
+      sidebarSearchResults.value = [];
+    } finally {
+      sidebarSearchLoading.value = false;
+    }
+  };
+
+  const clearSidebarSearch = () => {
+    sidebarSearchResults.value = [];
+    sidebarSearchLoading.value = false;
   };
 
   const renameGroup = async (groupId: string, name: string) => {
@@ -1076,17 +1145,23 @@ export function useSecChatStore() {
     activeConversationId,
     groups,
     conversations,
+    rootSidebarOrder,
+    sidebarSearchResults,
+    sidebarSearchLoading,
     draftConversation,
     activeConversation,
     toggleSidebar,
     initSidebar,
     loadGroupConversations,
+    searchSidebarConversations,
+    clearSidebarSearch,
     setActiveConversation,
     loadConversationMessages,
     loadOlderMessages,
     deleteConversation,
     updateConversationGroup,
     reorderConversation,
+    reorderRootNode,
     updateConversationTitle,
     createGroup,
     reorderGroup,
