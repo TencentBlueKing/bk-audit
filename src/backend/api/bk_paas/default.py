@@ -18,21 +18,35 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
-from typing import Dict
 
 import requests
-from bk_resource import BkApiResource
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import BK_PAAS_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class PaaSV3BaseResource(BkApiResource, abc.ABC):
-    base_url = BK_PAAS_API_URL
+class PaaSV3BaseResource(AuditBkApiResource, abc.ABC):
     bkapi_header_authorization = False
     bkapi_data_authorization = False
     module_name = "paasv3"
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_PAAS_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_PAAS_API_URL
+
+    def build_header(self, validated_request_data: dict) -> dict:
+        """构造 PaaS 应用态凭证请求头"""
+        headers = super().build_header(validated_request_data)
+        headers["x-bkapi-authorization"] = json.dumps(
+            {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+        )
+        return headers
 
 
 class UniAppsQuery(PaaSV3BaseResource):
@@ -44,14 +58,3 @@ class UniAppsQuery(PaaSV3BaseResource):
     def parse_response(self, response: requests.Response):
         results = super().parse_response(response)
         return [result for result in results if result]
-
-    def build_header(self, validated_request_data: dict) -> Dict[str, str]:
-        """
-        构造Header
-        """
-
-        return {
-            "x-bkapi-authorization": json.dumps(
-                {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
-            )
-        }
