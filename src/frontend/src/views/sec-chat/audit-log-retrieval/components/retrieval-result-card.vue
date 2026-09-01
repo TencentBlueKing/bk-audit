@@ -225,8 +225,13 @@
                   <td
                     v-for="col in displayResult.columns"
                     :key="`${col.rawName}-${index}`"
+                    :class="{ 'result-code-cell': isResultCodeColumn(col) }"
                     :style="getColumnStyle(col)">
+                    <render-result
+                      v-if="isResultCodeColumn(col) && hasResultCodeValue(row)"
+                      :data="row" />
                     <show-tooltips-text
+                      v-else
                       class="cell-tip"
                       :data="formatCell(row[col.rawName])"
                       :max-width="480" />
@@ -413,6 +418,7 @@
 
   import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
   import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
+  import RenderResult from '@views/analysis-manage/list/components/search-result-table/components/render-field/result.vue';
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import aiSvg from '@images/ai.svg';
@@ -736,6 +742,13 @@
   });
 
   const formatNumber = (num: number) => num.toLocaleString('en-US');
+
+  const isResultCodeColumn = (col: { rawName: string }) => col.rawName === 'result_code';
+
+  const hasResultCodeValue = (row: Record<string, any>) => {
+    const value = row.result_code;
+    return value !== undefined && value !== null && value !== '';
+  };
 
   const formatCell = (value: any) => {
     if (value === undefined || value === null || value === '') return '—';
@@ -1189,6 +1202,10 @@
       max-width: 100%;
       line-height: 20px;
       vertical-align: middle;
+    }
+
+    .result-code-cell {
+      overflow: visible;
     }
 
     .empty-cell {
