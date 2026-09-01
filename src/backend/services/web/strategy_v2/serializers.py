@@ -875,7 +875,10 @@ class MultiRuleValidateMixin:
         if not configs:
             raise serializers.ValidationError(gettext("携带发现规则（rules）时必须同时携带策略配置（configs）"))
         select_fields = configs.get("select") or []
-        aggregate_names = {f.get("display_name") for f in select_fields if f.get("aggregate")}
+        # 聚合字段身份集合：(table, raw_name, aggregate)，用于 having 条件引用的字段身份匹配
+        aggregate_identities = {
+            (f.get("table"), f.get("raw_name"), f.get("aggregate")) for f in select_fields if f.get("aggregate")
+        }
 
         for rule in rules:
             conditions = rule.get("conditions") or {}
@@ -898,7 +901,8 @@ class MultiRuleValidateMixin:
                     raise serializers.ValidationError(
                         gettext("规则[%s]的having条件字段[%s]必须为聚合字段") % (rule.get("rule_name"), field_name)
                     )
-                if field_name not in aggregate_names:
+                field_identity = (field.get("table"), field.get("raw_name"), field.get("aggregate"))
+                if field_identity not in aggregate_identities:
                     raise serializers.ValidationError(
                         gettext("规则[%s]的having条件字段[%s]不存在于策略级select的聚合字段中") % (rule.get("rule_name"), field_name)
                     )
@@ -911,7 +915,7 @@ class MultiRuleValidateMixin:
                     )
 
         # 行级配置（无聚合字段）时禁 having（having 无聚合字段可引用）
-        if not aggregate_names:
+        if not aggregate_identities:
             for rule in rules:
                 conditions = rule.get("conditions") or {}
                 if not self._condition_tree_is_empty(conditions.get("having")):
@@ -1080,6 +1084,25 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # 草稿：跳过业务校验，仅保留落库保底检查；提交转正式时走全量校验
+        if data.get("is_draft"):
+            # binding_type 归一化 + 联动检查：resource 建绑定依赖
+            binding_type = data.get("binding_type") or BindingType.SCENE_BINDING
+            if binding_type == BindingType.SCENE_BINDING and not data.get("scene_id"):
+                raise serializers.ValidationError(gettext("场景策略（binding_type=scene_binding）必须携带 scene_id"))
+            if binding_type == BindingType.PLATFORM_BINDING and data.get("scene_id"):
+                raise serializers.ValidationError(gettext("全局策略（binding_type=platform_binding）不允许携带 scene_id"))
+            data["binding_type"] = binding_type
+            # check name
+            if Strategy.objects.filter(strategy_name=data["strategy_name"]).exists():
+                raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
+            # 场景策略 scene_id 需真实存在（创建 ResourceBinding 依赖）
+            if (
+                binding_type == BindingType.SCENE_BINDING
+                and not Scene.objects.filter(scene_id=data["scene_id"], is_deleted=False).exists()
+            ):
+                raise serializers.ValidationError({"scene_id": gettext("Scene Not Exists")})
+            return data
         # check type
         self._validate_strategy_type(data)
         # scene_id 与 binding_type 联动：场景策略必带场景，全局策略不允许挂场景
@@ -1224,6 +1247,15 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # 草稿保存（is_draft=true）：跳过业务校验，仅保留重名检查；提交（is_draft=false）走全量校验
+        if data.get("is_draft") is True:
+            if (
+                Strategy.objects.filter(strategy_name=data["strategy_name"])
+                .exclude(strategy_id=data["strategy_id"])
+                .exists()
+            ):
+                raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
+            return data
         # check type
         self._validate_strategy_type(data)
         # binding_type 以数据库真实绑定为准（更新接口不接收该参数，不支持修改绑定类型），

@@ -330,6 +330,23 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             rule.save(update_fields=["rule_name", "is_deleted"])
 
     @staticmethod
+    def _dedupe_rule_names(rules_data: List[dict]) -> None:
+        """
+        草稿免业务校验：规则名兜底补默认值并去重，规避 (strategy, rule_name) 唯一约束
+        """
+        seen = set()
+        for idx, rule in enumerate(rules_data, start=1):
+            name = str(rule.get("rule_name") or "").strip() or f"rule_{idx}"
+            name = name[:64]
+            unique, suffix = name, 1
+            while unique in seen:
+                suffix += 1
+                tail = f"_{suffix}"
+                unique = f"{name[: 64 - len(tail)]}{tail}"
+            seen.add(unique)
+            rule["rule_name"] = unique
+
+    @staticmethod
     def _sync_strategy_rules(strategy: Strategy, rules_data: Optional[List[dict]]) -> None:
         """
         同步发现规则子表（软删缺失规则、更新/新建传入规则）
@@ -628,7 +645,8 @@ class CreateStrategy(StrategyV2Base):
         scene_id = validated_request_data.pop("scene_id", None)
         # 草稿：完整配置仅落库，不部署
         is_draft = validated_request_data.pop("is_draft", False)
-        self._check_source_type(validated_request_data)
+        if not is_draft:
+            self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
@@ -659,14 +677,23 @@ class CreateStrategy(StrategyV2Base):
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
             self._save_strategy_tools(strategy, validated_request_data)
-            # 同步发现规则 / 分派规则子表
+            # 同步发现规则 / 分派规则子表（草稿免业务校验，规则名兜底去重）
             if rules_data is not None:
+                if is_draft and rules_data:
+                    self._dedupe_rule_names(rules_data)
                 self._sync_strategy_rules(strategy, rules_data)
             if dispatch_rules_data is not None:
+                if is_draft and dispatch_rules_data:
+                    self._dedupe_rule_names(dispatch_rules_data)
                 self._sync_dispatch_rules(strategy, dispatch_rules_data)
-            # 全局策略可见场景派生自分派规则，需在规则落库后同步
-            self.sync_platform_binding_scenes(strategy)
-            if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
+            # 全局策略可见场景派生自分派规则，需在规则落库后同步（草稿跳过：目标场景可能未确定）
+            if not is_draft:
+                self.sync_platform_binding_scenes(strategy)
+            if (
+                strategy_type == StrategyType.RULE
+                and not is_draft
+                and not self.has_sql_override(validated_request_data)
+            ):
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
             # 更新enum
@@ -730,7 +757,10 @@ class UpdateStrategy(StrategyV2Base):
         is_draft_strategy = strategy.status == StrategyStatusChoices.DRAFT
         if is_draft and not is_draft_strategy:
             raise serializers.ValidationError(gettext("草稿仅适用于未提交的策略"))
-        self._check_source_type(validated_request_data)
+        # 草稿保存 = 显式 is_draft=True，或策略本身是草稿且未显式提交（is_draft=None 维持现状）
+        draft_save = is_draft_strategy and is_draft is not False
+        if not draft_save:
+            self._check_source_type(validated_request_data)
         # check strategy status
         if strategy.status in [
             StrategyStatusChoices.STARTING,
@@ -744,10 +774,16 @@ class UpdateStrategy(StrategyV2Base):
         # save origin data
         instance_origin_data = StrategyInfoSerializer(strategy).data
         # update db
-        need_update_remote = self.update_db(strategy=strategy, validated_request_data=validated_request_data)
+        need_update_remote = self.update_db(
+            strategy=strategy, validated_request_data=validated_request_data, draft_save=draft_save
+        )
         if is_draft_strategy:
             # 草稿策略：仅落库不部署；提交（is_draft=False）时走创建链路部署（草稿从未部署，无 flow_id）
             if is_draft is False:
+                # 草稿保存期跳过了 SQL 生成，提交部署前补齐
+                if strategy.strategy_type == StrategyType.RULE and not strategy.sql:
+                    strategy.sql = self.build_rule_audit_sql(strategy)
+                    strategy.save(update_fields=["sql"])
                 try:
                     call_controller(
                         BaseControl.create.__name__,
@@ -804,7 +840,7 @@ class UpdateStrategy(StrategyV2Base):
         return need_update_remote
 
     @transaction.atomic()
-    def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
+    def update_db(self, strategy: Strategy, validated_request_data: dict, draft_save: bool = False) -> bool:
         # 用于控制是否更新真实的监控策略或计算平台Flow
         need_update_remote = False
         has_manual_sql = self.has_sql_override(validated_request_data)
@@ -814,9 +850,10 @@ class UpdateStrategy(StrategyV2Base):
         dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
         # 计算更新前hash摘要
         origin_rules_digest = self.calc_rules_digest(strategy)
-        # check control
+        # check control（草稿跳过：允许未选定控件）
         if (
-            validated_request_data["strategy_type"] == StrategyType.MODEL
+            not draft_save
+            and validated_request_data["strategy_type"] == StrategyType.MODEL
             and strategy.control_id != validated_request_data["control_id"]
         ):
             raise ControlChangeError()
@@ -830,20 +867,25 @@ class UpdateStrategy(StrategyV2Base):
         strategy.save(update_fields=validated_request_data.keys())
         # 同步发现规则子表 + 摘要比较：规则集（含顺序/条件）变化 = SQL 变化 -> 触发 flow 重建
         if rules_data is not None:
+            if draft_save and rules_data:
+                self._dedupe_rule_names(rules_data)
             self._sync_strategy_rules(strategy, rules_data)
             new_rules_digest = self.calc_rules_digest(strategy)
             if new_rules_digest != origin_rules_digest:
                 need_update_remote = True
         # 同步分派规则子表 + 全局策略可见场景派生同步（可见性 = 分派规则目标场景并集）；
-        # 场景策略在 sync 内部直接跳过
+        # 场景策略在 sync 内部直接跳过；草稿保存跳过派生（目标场景可能未确定），提交时补
         if dispatch_rules_data is not None:
+            if draft_save and dispatch_rules_data:
+                self._dedupe_rule_names(dispatch_rules_data)
             self._sync_dispatch_rules(strategy, dispatch_rules_data)
-            self.sync_platform_binding_scenes(strategy)
+            if not draft_save:
+                self.sync_platform_binding_scenes(strategy)
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
-        # update rule audit sql
-        if need_update_remote and strategy.strategy_type == StrategyType.RULE and not has_manual_sql:
+        # update rule audit sql（草稿保存跳过生成：配置可能未成型；提交时在 perform_request 补齐）
+        if not draft_save and need_update_remote and strategy.strategy_type == StrategyType.RULE and not has_manual_sql:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # 更新enum
