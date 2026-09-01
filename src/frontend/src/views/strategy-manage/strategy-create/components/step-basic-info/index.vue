@@ -128,6 +128,11 @@
           @click="handleNext">
           {{ t('下一步') }}
         </bk-button>
+        <bk-button
+          class="ml8"
+          @click="handleSaveDraft">
+          {{ t('保存草稿') }}
+        </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
           class="ml8"
@@ -212,6 +217,7 @@
   interface Emits {
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: Record<string, any>): void;
+    (e: 'saveDraft', params: IFormData): void;
   }
   interface Props {
     editData: StrategyModel
@@ -563,6 +569,14 @@
       formData.value.configs = fields.configs;
     }
     doValidate();
+  };
+
+  const handleSaveDraft = () => {
+    if (formData.value.strategy_type && comRef.value?.getFields) {
+      const fields = comRef.value.getFields();
+      formData.value.configs = fields.configs;
+    }
+    emits('saveDraft', buildStepParams());
   };
 
   // 构建当前步骤提交参数（与下一步一致）

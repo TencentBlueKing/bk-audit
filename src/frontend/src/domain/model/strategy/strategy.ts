@@ -156,6 +156,9 @@ export default class Strategy {
     this.visibility = payload.visibility;
     this.scene_id = payload.scene_id;
   }
+  get isDraft() {
+    return this.status === 'draft';
+  }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {
       failed: 'failed',
@@ -181,6 +184,7 @@ export default class Strategy {
     const statusTagMap: Record<string, string> = {
       disabled: 'unknown',
       running: 'normal',
+      draft: 'warning',
       // 处理中
       pending: 'warning',
       starting: 'warning',

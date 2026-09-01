@@ -309,6 +309,11 @@
       </bk-button>
       <bk-button
         class="ml8"
+        @click="handleSaveDraft">
+        {{ t('保存草稿') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -384,6 +389,7 @@
   interface Emits {
     (e: 'nextStep', step: number, params: Record<string, any>): void;
     (e: 'previousStep', step: number, params: Record<string, any>): void;
+    (e: 'saveDraft', params: Record<string, any>): void;
   }
 
   const props = defineProps<Props>();
@@ -876,6 +882,10 @@
 
   const handleCancel = () => {
     router.push({ name: strategyRoutes.list });
+  };
+
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildStepParams());
   };
 
   const handleDocumentClick = () => {
