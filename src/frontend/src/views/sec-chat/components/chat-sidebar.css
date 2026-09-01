@@ -250,11 +250,10 @@
     }
 
 
-    /* 根层混排列表 */
+    /* 根层混排列表：会话 hover 宽度与分组 header 对齐 */
     .conv-section--mixed {
       .conv-item--root {
-        margin-right: 16px;
-        margin-left: 16px;
+        padding: 7px 22px;
       }
     }
 
@@ -320,13 +319,8 @@
       }
     }
 
-    /* 历史对话（未分组）条目：与 section-label 对齐左右间距 */
+    /* 历史对话（未分组）条目 */
     .history-conv-list {
-      .conv-item {
-        margin-right: 16px;
-        margin-left: 16px;
-      }
-
       .history-drop-placeholder {
         display: flex;
         height: 0;

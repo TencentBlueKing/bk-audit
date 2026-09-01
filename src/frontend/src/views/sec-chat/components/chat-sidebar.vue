@@ -254,14 +254,15 @@
                   @mousedown.stop>
                   <bk-dropdown
                     class="more-dropdown"
+                    :is-show="activeMenuId === item.conv.id"
                     placement="bottom-end"
                     :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
-                    trigger="click"
-                    @hide="hideMenu"
-                    @show="showMenu(item.conv.id)">
+                    trigger="manual"
+                    @hide="hideMenu">
                     <div
                       class="action-btn"
-                      :class="{ 'is-active': activeMenuId === item.conv.id }">
+                      :class="{ 'is-active': activeMenuId === item.conv.id }"
+                      @click.stop="toggleConvMenu(item.conv.id)">
                       <audit-icon type="more" />
                     </div>
                     <template #content>
@@ -369,16 +370,17 @@
                     </span>
                     <bk-dropdown
                       class="group-more-dropdown"
+                      :is-show="activeGroupMenuId === item.group.name"
                       placement="bottom-end"
                       :popover-options="{ extCls: 'chat-group-dropdown-pop' }"
-                      trigger="click"
+                      trigger="manual"
                       @click.stop
                       @hide="hideGroupMenu"
-                      @mousedown.stop
-                      @show="showGroupMenu(item.group.name)">
+                      @mousedown.stop>
                       <div
                         class="group-more"
-                        :class="{ 'is-active': activeGroupMenuId === item.group.name }">
+                        :class="{ 'is-active': activeGroupMenuId === item.group.name }"
+                        @click.stop="toggleGroupMenu(item.group.name)">
                         <audit-icon type="more" />
                       </div>
                       <template #content>
@@ -473,14 +475,15 @@
                       @mousedown.stop>
                       <bk-dropdown
                         class="more-dropdown"
+                        :is-show="activeMenuId === conv.id"
                         placement="bottom-end"
                         :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
-                        trigger="click"
-                        @hide="hideMenu"
-                        @show="showMenu(conv.id)">
+                        trigger="manual"
+                        @hide="hideMenu">
                         <div
                           class="action-btn"
-                          :class="{ 'is-active': activeMenuId === conv.id }">
+                          :class="{ 'is-active': activeMenuId === conv.id }"
+                          @click.stop="toggleConvMenu(conv.id)">
                           <audit-icon type="more" />
                         </div>
                         <template #content>
@@ -1710,6 +1713,17 @@
     handleDrop(e, 'group', groupName);
   };
 
+  const resolveDropPosition = (
+    position: 'top' | 'bottom' | 'inside' | null,
+    e: DragEvent,
+    targetRect: DOMRect,
+  ): 'top' | 'bottom' => {
+    if (position === 'top' || position === 'bottom') {
+      return position;
+    }
+    return e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom';
+  };
+
   const handleDrop = (
     e: DragEvent,
     targetType: 'group' | 'conversation' | 'history',
@@ -1775,18 +1789,14 @@
       const targetGroupItem = props.groups.find(g => g.name === targetId);
       if (movedGroup && targetGroupItem) {
         const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const dropPosition: 'top' | 'bottom' = position === 'top' || position === 'bottom'
-          ? position
-          : (e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom');
+        const dropPosition = resolveDropPosition(position, e, targetRect);
         emitRootReorder('group', movedGroup.id, 'group', targetGroupItem.id, dropPosition);
       }
     } else if (type === 'group' && targetType === 'conversation' && id && targetId) {
       const movedGroup = props.groups.find(g => g.name === id);
       if (movedGroup) {
         const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const dropPosition: 'top' | 'bottom' = position === 'top' || position === 'bottom'
-          ? position
-          : (e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom');
+        const dropPosition = resolveDropPosition(position, e, targetRect);
         emitRootReorder('group', movedGroup.id, 'conversation', targetId, dropPosition);
       }
     }
@@ -2157,16 +2167,16 @@
   const activeMenuId = ref<string | null>(null);
   const activeGroupMenuId = ref<string | null>(null);
 
-  const showMenu = (id: string) => {
-    activeMenuId.value = id;
+  const toggleConvMenu = (id: string) => {
+    activeMenuId.value = activeMenuId.value === id ? null : id;
+  };
+
+  const toggleGroupMenu = (name: string) => {
+    activeGroupMenuId.value = activeGroupMenuId.value === name ? null : name;
   };
 
   const hideMenu = () => {
     activeMenuId.value = null;
-  };
-
-  const showGroupMenu = (name: string) => {
-    activeGroupMenuId.value = name;
   };
 
   const hideGroupMenu = () => {
