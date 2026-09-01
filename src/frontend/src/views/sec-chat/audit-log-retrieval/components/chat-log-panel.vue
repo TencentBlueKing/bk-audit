@@ -59,7 +59,8 @@
               :historical-operations="msg.historicalOperations || []"
               :standard-fields="msg.standardFields || []"
               :systems="msg.systems || []"
-              @reselect="$emit('reselect-system')"
+              @open-condition-filter="handleOpenConditionFilter"
+              @reselect="handleReselectSystem"
               @select-suggestion="handleSelectSuggestion" />
 
             <!-- NL 处理中 -->
@@ -134,6 +135,19 @@
               :systems="systems"
               @regenerate="handleRegenerate(msg.content || '')" />
           </div>
+
+          <!-- 条件检索卡：固定在会话最底部，靠近输入框 -->
+          <div
+            v-if="conditionFilterVisible"
+            ref="conditionFilterRowRef"
+            class="message-row is-assistant condition-filter-row">
+            <condition-filter-card
+              ref="filterCardRef"
+              :extension-fields="extensionFields"
+              :standard-fields="standardFields"
+              :systems="systems"
+              @searched="handleConditionSearched" />
+          </div>
         </div>
       </div>
     </div>
@@ -158,6 +172,7 @@
   import errorSearchIcon from '@images/error-search.svg';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
+  import ConditionFilterCard from './condition-filter-card.vue';
   import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
   import type { ChatMessage, SelectedSystem, SystemFieldRow } from '../../types';
@@ -196,6 +211,11 @@
 
   const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
+  const filterCardRef = ref<{
+    addOrFocusField?:(fieldName: string, sample?: string) => Promise<void> | void
+  } | null>(null);
+  const conditionFilterRowRef = ref<HTMLElement | null>(null);
+  const conditionFilterVisible = ref(false);
   /** prepend 历史消息后用于恢复滚动位置 */
   const scrollAnchor = ref<{ height: number; top: number } | null>(null);
   /** 避免 scroll 事件在 loading 状态生效前重复触发 */
@@ -204,6 +224,7 @@
   const allowLoadOlder = ref(false);
 
   const SCROLL_LOAD_THRESHOLD = 80;
+  const CONDITION_FILTER_SCROLL_MS = 400;
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
@@ -255,6 +276,57 @@
 
   const handleRegenerate = (text: string) => {
     if (text) emit('send', text);
+  };
+
+  const handleOpenConditionFilter = async (payload: { fieldName: string; sample?: string }) => {
+    conditionFilterVisible.value = true;
+    // 先展示卡片并平滑滑向条件区，再填充字段，避免布局变化导致滚动跳跃
+    await scrollConditionFilterIntoView(true);
+    await filterCardRef.value?.addOrFocusField?.(payload.fieldName, payload.sample);
+  };
+
+  const handleConditionSearched = () => {
+    void scrollConditionFilterIntoView(true);
+  };
+
+  const handleReselectSystem = () => {
+    conditionFilterVisible.value = false;
+    emit('reselect-system');
+  };
+
+  const resetConditionFilterPanel = () => {
+    conditionFilterVisible.value = false;
+  };
+
+  /** 平滑滚动到条件检索卡，锚定卡片而非瞬间跳到底 */
+  const scrollConditionFilterIntoView = async (smooth = true): Promise<void> => {
+    allowLoadOlder.value = false;
+    await nextTick();
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        const row = conditionFilterRowRef.value;
+        if (!row) {
+          allowLoadOlder.value = true;
+          resolve();
+          return;
+        }
+        requestAnimationFrame(() => {
+          row.scrollIntoView({
+            behavior: smooth ? 'smooth' : 'auto',
+            block: 'end',
+          });
+          const enableLoadOlder = () => {
+            allowLoadOlder.value = true;
+            resolve();
+          };
+          if (smooth) {
+            window.setTimeout(enableLoadOlder, CONDITION_FILTER_SCROLL_MS);
+          } else {
+            enableLoadOlder();
+          }
+        });
+      });
+    });
   };
 
   const scrollToBottom = async (smooth = true): Promise<void> => {
@@ -336,6 +408,7 @@
     scrollAnchor.value = null;
     olderLoadTriggered.value = false;
     allowLoadOlder.value = false;
+    resetConditionFilterPanel();
     void scrollToBottom(false);
   });
 
@@ -448,6 +521,10 @@
         max-width: 100%;
         min-width: 0;
       }
+    }
+
+    &.condition-filter-row {
+      overflow: visible;
     }
   }
 
