@@ -202,6 +202,10 @@
   };
 </script>
 
+<style lang="postcss">
+  @import './styles/scrollbars.css';
+</style>
+
 <style lang="postcss" scoped>
   .sec-chat-page {
     display: flex;
