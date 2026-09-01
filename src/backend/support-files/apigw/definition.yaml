@@ -67,6 +67,20 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 Agent 专用 MCP 工具集"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -103,6 +117,20 @@ stages:
           - "risk"
         resource_names:
           - list_event_fields_by_strategy_brief
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 Agent 专用 MCP 工具集"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
         is_public: true
         status: 1
         protocol_type: "streamable_http"

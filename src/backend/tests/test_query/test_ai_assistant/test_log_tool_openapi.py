@@ -10,7 +10,26 @@ from django.test import SimpleTestCase, override_settings
 from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory
 
+from services.web.query.ai_assistant.exceptions import (
+    InvalidLogCondition,
+    LogQueryFailed,
+    LogQueryResponseTooLarge,
+    LogQueryTimeout,
+    SensitiveFieldPermissionDenied,
+    UnsupportedAggregation,
+    UnsupportedLogField,
+)
 from services.web.query.ai_assistant.log_tools.schemas import AggregateLogsRequest
+
+LOG_TOOL_ERROR_TYPES = (
+    InvalidLogCondition,
+    UnsupportedLogField,
+    UnsupportedAggregation,
+    SensitiveFieldPermissionDenied,
+    LogQueryTimeout,
+    LogQueryFailed,
+    LogQueryResponseTooLarge,
+)
 
 
 @override_settings(ROOT_URLCONF="urls")
@@ -68,6 +87,8 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         fields = search_request["properties"]["fields"]
         self.assertEqual(fields["minItems"], 1)
         self.assertEqual(fields["maxItems"], 20)
+        self.assertEqual(search_request["properties"]["sort"]["maxItems"], 3)
+        self.assertNotIn("maximum", search_request["properties"]["page"])
 
         aggregate = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
         aggregate_request = self._component(aggregate["requestBody"]["content"]["application/json"]["schema"])
@@ -88,12 +109,40 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         self.assertEqual(set(envelope["required"]), {"result", "code", "message", "request_id", "trace_id", "data"})
         payload = self._component(envelope["properties"]["data"])
         self.assertEqual(set(payload["required"]), {"fields", "sample_summary"})
+        truncated_description = payload["properties"]["sample_summary"]["properties"]["truncated"]["description"]
+        self.assertIn("协议无法表达", truncated_description)
+        self.assertIn("业务 data 载荷超限返回 413", truncated_description)
 
-    def test_parent_keys_unsafe_key_is_rejected_by_openapi_schema(self):
+    def test_openapi_documents_standard_error_envelope(self):
+        paths = (
+            "/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/",
+            "/api/v1/query/namespaces/{namespace}/mcp_user/logs/search/",
+            "/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                responses = self.schema["paths"][path]["post"]["responses"]
+                self.assertTrue({"400", "403", "413", "502", "504"}.issubset(responses))
+                for status_code in ("400", "403", "413", "502", "504"):
+                    envelope = responses[status_code]["content"]["application/json"]["schema"]
+                    self.assertEqual(
+                        set(envelope["required"]),
+                        {"result", "code", "message", "request_id", "trace_id", "data"},
+                    )
+                    self.assertIn("errors", envelope["properties"])
+                    code_description = envelope["properties"]["code"]["description"]
+                    for error_type in LOG_TOOL_ERROR_TYPES:
+                        error = error_type()
+                        self.assertIn(f"{error.code} {error_type.MESSAGE}", code_description)
+
+    def test_parent_field_openapi_allows_business_key_and_rejects_empty_key(self):
         operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/"]["post"]
         schema = operation["requestBody"]["content"]["application/json"]["schema"]
-        parent_key = schema["properties"]["parent_keys"]["items"]
-        self.assertEqual(parent_key["pattern"], "^[A-Za-z_][A-Za-z0-9_]*$")
+        parent_field = schema["properties"]["parent_field"]
+        parent_key = parent_field["properties"]["keys"]["items"]
+        self.assertEqual(parent_key["minLength"], 1)
+        self.assertEqual(parent_key["maxLength"], 128)
+        self.assertEqual(parent_key["pattern"], "^[^.]+$")
 
         payload = {
             "condition": {
@@ -101,8 +150,16 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
                 "start_time": "2026-08-13T00:00:00+08:00",
                 "end_time": "2026-08-14T00:00:00+08:00",
             },
-            "parent_keys": ["unsafe-key"],
+            "parent_field": {"raw_name": "extend_data", "keys": ["业务-字段"]},
         }
+        errors = list(jsonschema.Draft7Validator(self._openapi_json_schema(schema)).iter_errors(payload))
+        self.assertEqual(errors, [])
+
+        payload["parent_field"]["keys"] = [""]
+        errors = list(jsonschema.Draft7Validator(self._openapi_json_schema(schema)).iter_errors(payload))
+        self.assertTrue(errors)
+
+        payload["parent_field"]["keys"] = ["literal.dot"]
         errors = list(jsonschema.Draft7Validator(self._openapi_json_schema(schema)).iter_errors(payload))
         self.assertTrue(errors)
 
@@ -119,9 +176,33 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         self.assertEqual(condition_field["properties"]["keys"]["items"]["maxLength"], 128)
         self.assertIn("1024 bytes", condition_field["properties"]["keys"]["description"])
         self.assertIn("256 KiB", condition["description"])
-        self.assertIn("16 KiB", condition_item["properties"]["filters"]["description"])
+        filters = condition_item["properties"]["filters"]
+        self.assertIn("16 KiB", filters["description"])
+        self.assertEqual(
+            {item["type"] for item in filters["items"]["anyOf"]},
+            {"string", "integer", "number"},
+        )
 
-        parent_keys = request["properties"]["parent_keys"]
+        payload = {
+            "condition": {
+                "scope_id": "bk_log",
+                "start_time": "2026-08-13T00:00:00+08:00",
+                "end_time": "2026-08-14T00:00:00+08:00",
+                "conditions": [
+                    {
+                        "field": {"raw_name": "result_code"},
+                        "operator": "eq",
+                        "filters": [1],
+                    }
+                ],
+            }
+        }
+        validator = jsonschema.Draft7Validator(self._openapi_json_schema(request))
+        self.assertEqual(list(validator.iter_errors(payload)), [])
+        payload["condition"]["conditions"][0]["filters"] = [{"invalid": "object"}]
+        self.assertTrue(list(validator.iter_errors(payload)))
+
+        parent_keys = request["properties"]["parent_field"]["properties"]["keys"]
         self.assertEqual(parent_keys["maxItems"], 16)
         self.assertEqual(parent_keys["items"]["maxLength"], 128)
         self.assertIn("1024 bytes", parent_keys["description"])
@@ -135,7 +216,7 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         field_item = self._component(field_response["properties"]["fields"]["items"])
         self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
         self.assertIn(
-            "extend_data 根字段及其对象子字段",
+            "可见 JSON 根字段及其对象子字段",
             field_item["properties"]["is_expandable"]["description"],
         )
         self.assertIn("1 MiB", field_operation["description"])

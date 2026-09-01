@@ -92,14 +92,16 @@ def _scenario_events(instruction: str, attempt: int) -> list[dict[str, Any]]:
             {"type": "RUN_STARTED", "threadId": "thread-error", "runId": "run-error"},
             {"type": "RUN_ERROR", "threadId": "thread-error", "runId": "run-error", "message": "failed"},
         ]
-    if instruction == "disconnect":
-        return [{"type": "RUN_STARTED", "threadId": "thread-disconnect", "runId": "run-disconnect"}]
+    if instruction == "empty-artifact-eof":
+        return [{"type": "RUN_STARTED", "threadId": "thread-eof", "runId": "run-eof"}]
+    if instruction == "truncated-chunked":
+        return _complete_events("# 截断前完整结论")[:-1]
     if instruction == "id-mismatch":
-        events = _complete_events("# 不应落库")
+        events = _complete_events("# 跨层级 Run 结论")
         events[-1]["runId"] = "other-run"
         return events
     if instruction == "pre-start-text":
-        events = _complete_events("# 不应落库")
+        events = _complete_events("# 前导文本结论")
         return [*events[3:6], events[0], events[-1]]
     if instruction == "retry-once" and attempt == 1:
         return [
@@ -142,6 +144,8 @@ def _build_handler(agent: FakeLogAnalysisAgent):
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "close")
+            if instruction == "truncated-chunked":
+                self.send_header("Transfer-Encoding", "chunked")
             self.end_headers()
             if instruction == "timeout":
                 event = {"type": "RUN_STARTED", "threadId": "thread-timeout", "runId": "run-timeout"}
@@ -156,16 +160,22 @@ def _build_handler(agent: FakeLogAnalysisAgent):
                 raise TimeoutError("两个用户请求未并发进入 fake Agent")
             for index, event in enumerate(_scenario_events(instruction, attempt)):
                 frame = f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode()
+                if instruction == "truncated-chunked":
+                    frame = f"{len(frame):X}\r\n".encode() + frame + b"\r\n"
                 self.wfile.write(frame)
                 self.wfile.flush()
                 should_block = (
                     (instruction == "success" and index == 1)
-                    or (instruction in {"run-error", "disconnect", "id-mismatch"} and index == 0)
+                    or (instruction in {"run-error", "empty-artifact-eof", "id-mismatch"} and index == 0)
                     or (instruction in {"redelivery", "fencing"} and attempt == 1 and index == 1)
                 )
                 if should_block:
                     self.wfile.write((":" + "x" * 600 + "\n\n").encode())
                     self.wfile.flush()
+                    agent.mark_started(instruction)
+                    agent.wait_until_released(instruction, timeout=20)
+                if instruction == "truncated-chunked" and event["type"] == "TEXT_MESSAGE_END":
+                    # 等前端收到完整正文后才截断，故意不发送 HTTP 的 0 长度终止块。
                     agent.mark_started(instruction)
                     agent.wait_until_released(instruction, timeout=20)
             self.close_connection = True

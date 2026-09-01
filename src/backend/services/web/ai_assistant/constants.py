@@ -132,17 +132,6 @@ NL_PARSE_MAX_RETRIES = 2
 NL_PARSE_RETRY_INTERVAL_SECONDS = 2
 NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
 
-# 通用标题 Agent 的模块语义由调用方声明，避免各业务重复建设 Agent 客户端。
-# 配置只描述稳定业务语义；用户输入仍由调用时传入，不在配置或日志中保存。
-AI_TITLE_MODULE_CONFIGS = {
-    "log_analysis_attachment": {
-        "module_name": "AI审计日志分析",
-        "module_description": "根据日志检索条件和分析要求生成审计报告",
-        "module_object": "报告",
-        "max_length": AI_CONVERSATION_TITLE_MAX_LENGTH,
-    },
-}
-
 # 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
 AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
 DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"

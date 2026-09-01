@@ -180,7 +180,7 @@ class TestAggregateLogsRequest(AIAssistantTestCase):
         with self.assertRaises(PydanticValidationError):
             AggregateLogsRequest(
                 condition=condition,
-                metrics=[avg_extension_metric(key="duration;DROP")],
+                metrics=[avg_extension_metric(key="x" * 129)],
             )
 
     @override_settings(AI_LOG_AGGREGATION_MAX_LIMIT=1)

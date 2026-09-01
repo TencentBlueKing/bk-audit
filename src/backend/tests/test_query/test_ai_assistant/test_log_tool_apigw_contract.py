@@ -11,6 +11,15 @@ from django.test import SimpleTestCase, override_settings
 from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory
 
+from services.web.query.ai_assistant.exceptions import (
+    InvalidLogCondition,
+    LogQueryFailed,
+    LogQueryResponseTooLarge,
+    LogQueryTimeout,
+    SensitiveFieldPermissionDenied,
+    UnsupportedAggregation,
+    UnsupportedLogField,
+)
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregateLogsResponse,
@@ -22,11 +31,11 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     LogDetailColumn,
     LogFieldMetadataItem,
     LogFieldRef,
+    LogQueryExecutionSummary,
     LogSearchPagination,
     SearchLogsRequest,
     SearchLogsResponse,
 )
-from services.web.query.ai_assistant.schemas import QuerySummary
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 MCP_LOG_RESOURCES = {
@@ -48,6 +57,15 @@ REQUEST_MODELS = {
     "mcp_search_logs": SearchLogsRequest,
     "mcp_aggregate_logs": AggregateLogsRequest,
 }
+LOG_TOOL_ERROR_TYPES = (
+    InvalidLogCondition,
+    UnsupportedLogField,
+    UnsupportedAggregation,
+    SensitiveFieldPermissionDenied,
+    LogQueryTimeout,
+    LogQueryFailed,
+    LogQueryResponseTooLarge,
+)
 
 
 class TestMCPUserLogAPIGWContract(SimpleTestCase):
@@ -93,6 +111,21 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
                     },
                 )
 
+    def test_log_resources_document_standard_error_envelope(self):
+        code_description = self.resources["definitions"]["log_tool_error_response"]["properties"]["code"]["description"]
+        for error_type in LOG_TOOL_ERROR_TYPES:
+            error = error_type()
+            self.assertIn(f"{error.code} {error_type.MESSAGE}", code_description)
+        expected_statuses = {"400", "403", "413", "502", "504"}
+        for operation_id, (path, _) in MCP_LOG_RESOURCES.items():
+            with self.subTest(operation_id=operation_id):
+                responses = self.resources["paths"][path]["post"]["responses"]
+                self.assertTrue(expected_statuses.issubset(responses))
+                for status_code in expected_statuses:
+                    self.assertEqual(
+                        responses[status_code]["schema"], {"$ref": "#/definitions/log_tool_error_response"}
+                    )
+
     def test_operation_ids_are_unique_across_the_resource_file(self):
         operation_ids = [
             operation["operationId"]
@@ -119,12 +152,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
     def test_model_dump_envelopes_validate_against_yaml(self):
         field_ref = LogFieldRef(raw_name="start_time")
-        query_summary = QuerySummary(
-            scope_type="system",
-            scope_id="bk_log",
-            time_range={"start_time": "2026-08-13T00:00:00+08:00", "end_time": "2026-08-14T00:00:00+08:00"},
-            executed_at="2026-08-14T00:00:00+08:00",
-        )
+        query_summary = LogQueryExecutionSummary(took_ms=1, executed_at="2026-08-14T00:00:00+08:00")
         responses = {
             "mcp_get_log_field_metadata": GetLogFieldMetadataResponse(
                 fields=[LogFieldMetadataItem(field=field_ref, category="BASIC", type_source="DECLARED", options=None)],
@@ -133,13 +161,13 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
             "mcp_search_logs": SearchLogsResponse(
                 total=0,
                 columns=[LogDetailColumn(field=field_ref, key="start_time", options=None)],
-                pagination=LogSearchPagination(page=1, page_size=20, total=0, returned_count=0, has_more=False),
+                pagination=LogSearchPagination(page=1, page_size=20, returned_count=0, has_more=False),
                 query_summary=query_summary,
             ),
             "mcp_aggregate_logs": AggregateLogsResponse(
                 columns=[
                     AggregationColumn(
-                        id="count", name="count", role="METRIC", data_type="BIGINT", effective_time_interval=None
+                        id="count", name="count", role="METRIC", data_type="long", effective_time_interval=None
                     )
                 ],
                 rows=(),
@@ -163,6 +191,25 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         for operation_id in MCP_LOG_RESOURCES:
             response = self._response_schema(operation_id)
             self.assertEqual(response["required"], ["result", "code", "message", "request_id", "trace_id", "data"])
+
+    @override_settings(AI_LOG_SEARCH_MAX_PAGE=1, AI_LOG_SEARCH_MAX_SORT_FIELDS=3)
+    def test_large_page_and_three_root_sort_fields_match_runtime_and_apigw(self):
+        """旧页码配置不再限制请求，三项根字段排序同时满足静态与运行时契约。"""
+        payload = {
+            "condition": {
+                "scope_type": "system",
+                "scope_id": "bk_iam",
+                "start_time": "2026-08-13T00:00:00+08:00",
+                "end_time": "2026-08-14T00:00:00+08:00",
+                "conditions": [],
+            },
+            "page": 101,
+            "sort": [
+                {"field": {"raw_name": name}, "direction": "desc"} for name in ("start_time", "username", "system_id")
+            ],
+        }
+        self.assertEqual(SearchLogsRequest.model_validate(payload).page, 101)
+        self._validate(self._body_schema("mcp_search_logs"), payload)
 
     def test_request_required_defaults_and_nullable_match_pydantic_recursively(self):
         for operation_id, model in REQUEST_MODELS.items():
@@ -203,17 +250,20 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         self.assertIn("ASC", order["direction"]["description"])
         self.assertIn("DESC", order["direction"]["description"])
 
-    def test_parent_keys_unsafe_key_is_rejected_by_apigw_schema(self):
+    def test_parent_field_business_key_is_allowed_and_empty_key_is_rejected_by_apigw_schema(self):
         payload = {
             "condition": {
                 "scope_id": "bk_log",
                 "start_time": "2026-08-13T00:00:00+08:00",
                 "end_time": "2026-08-14T00:00:00+08:00",
             },
-            "parent_keys": ["unsafe-key"],
+            "parent_field": {"raw_name": "extend_data", "keys": ["业务-字段"]},
         }
         schema = self._body_schema("mcp_get_log_field_metadata")
         validator = jsonschema.Draft4Validator(schema, resolver=jsonschema.RefResolver.from_schema(self.json_schema))
+        self.assertEqual(list(validator.iter_errors(payload)), [])
+
+        payload["parent_field"]["keys"] = [""]
         self.assertTrue(list(validator.iter_errors(payload)))
 
     def test_shared_request_cost_limits_are_expressed_in_apigw_schema(self):
@@ -229,10 +279,16 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         self.assertIn("256 KiB", condition["description"])
         self.assertIn("16 KiB", item["properties"]["filters"]["description"])
 
-        request = self._raw_body_schema("mcp_get_log_field_metadata")
-        self.assertEqual(request["properties"]["parent_keys"]["maxItems"], 16)
-        self.assertEqual(request["properties"]["parent_keys"]["items"]["maxLength"], 128)
-        self.assertIn("1024 bytes", request["properties"]["parent_keys"]["description"])
+        field_ref = self.resources["definitions"]["log_tool_field_ref"]
+        self.assertEqual(field_ref["properties"]["keys"]["maxItems"], 16)
+        self.assertEqual(field_ref["properties"]["keys"]["items"]["maxLength"], 128)
+        self.assertIn("1024 bytes", field_ref["properties"]["keys"]["description"])
+
+        search_schema = self._body_schema("mcp_search_logs")
+        self.assertEqual(search_schema["properties"]["sort"]["maxItems"], 3)
+        self.assertEqual(search_schema["properties"]["page"]["minimum"], 1)
+        self.assertNotIn("maximum", search_schema["properties"]["page"])
+        self.assertEqual(search_schema["properties"]["page_size"]["maximum"], 100)
 
     def test_response_capacity_and_expandable_semantics_are_documented(self):
         field_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_get_log_field_metadata"][0]]["post"]
@@ -241,10 +297,13 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         field_item = field_response["properties"]["fields"]["items"]
         self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
         self.assertIn(
-            "extend_data 根字段及其对象子字段",
+            "可见 JSON 根字段及其对象子字段",
             field_item["properties"]["is_expandable"]["description"],
         )
         self.assertIn("1 MiB", field_operation["description"])
+        truncated_description = field_response["properties"]["sample_summary"]["properties"]["truncated"]["description"]
+        self.assertIn("协议无法表达", truncated_description)
+        self.assertIn("业务 data 载荷超限返回 413", truncated_description)
 
         aggregate_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_aggregate_logs"][0]]["post"]
         aggregate_response = aggregate_operation["responses"]["200"]["schema"]["properties"]["data"]
@@ -267,7 +326,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
         for keyword in ("maxItems", "description"):
             self.assertEqual(static_keys.get(keyword), dynamic_keys[keyword])
-        for keyword in ("maxLength", "pattern"):
+        for keyword in ("minLength", "maxLength"):
             self.assertEqual(static_keys["items"].get(keyword), dynamic_keys["items"][keyword])
 
     def test_aggregate_descriptions_match_pydantic_and_explain_runtime_combinations(self):
@@ -304,6 +363,15 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
             self.assertIn(metric_type, metric_type_description)
         self.assertIn("field/value_type/percentile", metric_type_description)
         self.assertIn("0 < percentile < 1", metric_type_description)
+
+    def test_static_filter_contract_documents_swagger2_scalar_limit(self):
+        """Swagger 2 无联合类型，静态契约通过说明声明运行时标量边界。"""
+
+        filters = self.resources["definitions"]["log_tool_condition"]["properties"]["conditions"]["items"][
+            "properties"
+        ]["filters"]
+        self.assertEqual(filters["items"], {})
+        self.assertIn("字符串、整数或浮点数", filters["description"])
 
     def test_aggregate_model_dump_with_explicit_nulls_validates_against_yaml(self):
         request = AggregateLogsRequest.model_validate(

@@ -3,6 +3,7 @@
 
 import json
 from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 import jsonschema
@@ -13,14 +14,27 @@ from drf_spectacular.views import SpectacularAPIView
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from api.bk_base.default import SafeQuerySyncResource
+from apps.meta.constants import SENSITIVE_REPLACE_VALUE, SensitiveResourceTypeEnum
+from apps.meta.models import SensitiveObject
 from core.exceptions import PermissionException
 from core.permissions import UserAPIGWPermission
+from services.web.query.ai_assistant.exceptions import (
+    InvalidLogCondition,
+    LogQueryFailed,
+    LogQueryResponseTooLarge,
+    LogQueryTimeout,
+    SensitiveFieldPermissionDenied,
+    UnsupportedAggregation,
+    UnsupportedLogField,
+)
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregateLogsResponse,
     AggregationQuerySummary,
     FieldSampleSummary,
     GetLogFieldMetadataResponse,
+    LogQueryExecutionSummary,
     LogSearchPagination,
     SearchLogsResponse,
 )
@@ -29,6 +43,7 @@ from services.web.query.ai_assistant.serializers import (
     GetLogFieldMetadataRequestSerializer,
     SearchLogsRequestSerializer,
 )
+from services.web.query.resources.ai_assistant import MCPSearchLogs
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 
@@ -62,6 +77,191 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         super().setUp()
         self.condition = self.make_condition()
 
+    def test_search_request_matches_sensitive_rules_before_masking_action(self):
+        """公开入口保留真实脱敏链路，校验私密、授权和不匹配规则。"""
+        first = SensitiveObject(
+            id=1,
+            system_id=self.target_system_id,
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "action_id"}],
+        )
+        secret_rule = SensitiveObject(
+            id=2,
+            system_id=self.target_system_id,
+            resource_type=SensitiveResourceTypeEnum.ACTION.value,
+            resource_id="view",
+            fields=[{"field_name": "extend_data.secret"}],
+        )
+        with (
+            mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.context.SearchLogPermission.has_system_search_permission",
+                return_value=True,
+            ),
+            mock.patch("services.web.query.ai_assistant.log_tools.context.System.objects") as systems,
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.context.CollectorPlugin.build_collector_rt",
+                return_value="test_table",
+            ),
+            mock.patch("services.web.query.search_data.SensitiveObject._objects") as private_objects,
+            mock.patch("services.web.query.search_data.SensitiveObject.objects") as public_objects,
+            mock.patch("services.web.query.search_data.PermissionService") as permissions,
+            mock.patch.object(SafeQuerySyncResource, "bulk_request") as query,
+        ):
+            systems.filter.return_value.exists.return_value = True
+            for private, authorized, matched in (
+                (True, False, True),
+                (True, True, True),
+                (False, False, True),
+                (False, True, True),
+                (True, False, False),
+            ):
+                for reverse in (False, True):
+                    with self.subTest(private=private, authorized=authorized, matched=matched, reverse=reverse):
+                        secret = deepcopy(secret_rule)
+                        secret.is_private = private
+                        secret.resource_id = "view" if matched else "other-action"
+                        private_objects.filter.return_value.filter.return_value = [secret] if private else []
+                        rules = [first] if private else ([secret, first] if reverse else [first, secret])
+                        public_objects.all.return_value.filter.return_value = rules
+                        permissions.return_value.get_sensitive_object_permissions.return_value = {
+                            "1": authorized,
+                            "2": authorized,
+                        }
+                        query.return_value = (
+                            {
+                                "list": [
+                                    {
+                                        "system_id": self.target_system_id,
+                                        "resource_type_id": "host",
+                                        "action_id": "view",
+                                        "extend_data": {"secret": "raw-secret", "public": "visible"},
+                                        "log": "payload raw-secret",
+                                    }
+                                ]
+                            },
+                            {"list": [{"count": 1}]},
+                        )
+
+                        result = MCPSearchLogs().request(
+                            namespace=self.namespace,
+                            condition=self.condition.model_dump(mode="json"),
+                            fields=[{"raw_name": name} for name in ("action_id", "extend_data", "log")],
+                        )
+
+                        expected_data = {"public": "visible"}
+                        if not matched or (authorized and not private):
+                            expected_data["secret"] = "raw-secret"
+                        elif not private:
+                            expected_data["secret"] = SENSITIVE_REPLACE_VALUE
+                        self.assertEqual(
+                            result["items"],
+                            [
+                                {
+                                    "action_id": "view" if authorized else SENSITIVE_REPLACE_VALUE,
+                                    "extend_data": expected_data,
+                                    "log": (
+                                        "payload raw-secret"
+                                        if authorized and not (private and matched)
+                                        else SENSITIVE_REPLACE_VALUE
+                                    ),
+                                }
+                            ],
+                        )
+                        self.assertEqual(result["total"], 1)
+                        self.assertEqual(
+                            result["pagination"],
+                            {"page": 1, "page_size": 20, "returned_count": 1, "has_more": False},
+                        )
+
+    def test_sensitive_precheck_uses_sql_normalized_condition_paths(self):
+        from services.web.query.resources.ai_assistant import (
+            MCPAggregateLogs,
+            MCPGetLogFieldMetadata,
+            MCPSearchLogs,
+        )
+
+        # 不 mock Context/序列化器/权限判定本身，只替换基础设施；验证公开入口到 SQL 前的路径。
+        sensitive_rule = mock.Mock(id=1, fields=[{"field_name": "extend_data. secret "}], is_private=True)
+        cases = (
+            ("extend_data", [" secret "], "eq"),
+            ("log", ["bypass"], "match_any"),
+        )
+        resources = (
+            (MCPSearchLogs, {}),
+            (MCPGetLogFieldMetadata, {"parent_field": {"raw_name": "extend_data", "keys": ["public"]}}),
+            (MCPAggregateLogs, {"metrics": [{"id": "total", "type": "COUNT"}]}),
+        )
+        with (
+            mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.context.SearchLogPermission.has_system_search_permission",
+                return_value=True,
+            ),
+            mock.patch("services.web.query.ai_assistant.log_tools.context.System.objects") as systems,
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.context.CollectorPlugin.build_collector_rt",
+                return_value="test_table",
+            ),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.sensitive.SensitiveObject._objects"
+            ) as sensitive_objects,
+            mock.patch.object(SafeQuerySyncResource, "bulk_request") as query,
+            mock.patch.object(SafeQuerySyncResource, "request") as single_query,
+        ):
+            systems.filter.return_value.exists.return_value = True
+            sensitive_objects.filter.return_value = [sensitive_rule]
+            for resource_class, extra in resources:
+                for raw_name, keys, operator in cases:
+                    condition = self.make_condition(
+                        conditions=[self.make_field_condition(raw_name=raw_name, keys=keys, operator=operator)]
+                    )
+                    with self.subTest(resource=resource_class.__name__, field=raw_name):
+                        with self.assertRaises(SensitiveFieldPermissionDenied):
+                            resource_class().request(
+                                namespace="default", condition=condition.model_dump(mode="json"), **extra
+                            )
+            query.assert_not_called()
+            single_query.assert_not_called()
+
+    def test_http_serializers_honor_optional_empty_list_defaults(self):
+        condition = self.condition.model_dump(mode="json")
+        condition["conditions"] = [{"field": {"raw_name": "extend_data"}, "operator": "isnull"}]
+        cases = (
+            (SearchLogsRequestSerializer, {"fields": [{"raw_name": "username"}]}),
+            (GetLogFieldMetadataRequestSerializer, {"parent_field": {"raw_name": "extend_data"}}),
+            (
+                AggregateLogsRequestSerializer,
+                {
+                    "dimensions": [{"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}}],
+                    "metrics": [{"id": "total", "type": "COUNT"}],
+                },
+            ),
+        )
+        for serializer_class, extra in cases:
+            with self.subTest(serializer=serializer_class.__name__):
+                serializer = serializer_class(data={"namespace": "default", "condition": condition, **extra})
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+                normalized = serializer.validated_data["condition"]["conditions"][0]
+                self.assertEqual(normalized["field"]["keys"], [])
+                self.assertEqual(normalized["filters"], [])
+
+    def test_request_serializers_keep_validated_data_json_shaped(self):
+        """DRF 层只完成 HTTP 适配，领域对象统一在 Resource 边界构造。"""
+
+        serializer = SearchLogsRequestSerializer(
+            data={
+                "namespace": "default",
+                "condition": self.condition.model_dump(mode="json"),
+                "fields": [{"raw_name": "username"}],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertIsInstance(serializer.validated_data["condition"], dict)
+        self.assertIsInstance(serializer.validated_data["fields"][0], dict)
+
     def test_field_metadata_uses_request_user_and_path_namespace(self):
         from services.web.query.resources.ai_assistant import MCPGetLogFieldMetadata
 
@@ -87,8 +287,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
 
         response_model = SearchLogsResponse(
             total=0,
-            pagination=LogSearchPagination(page=1, page_size=20, total=0, returned_count=0, has_more=False),
-            query_summary=self.make_query_summary(),
+            pagination=LogSearchPagination(page=1, page_size=20, returned_count=0, has_more=False),
+            query_summary=LogQueryExecutionSummary(took_ms=1, executed_at=self.end_time),
         )
         with (
             mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
@@ -144,7 +344,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 "services.web.query.ai_assistant.log_tools.aggregation.LogQueryContextService.build",
                 side_effect=permission_error,
             ),
-            mock.patch("services.web.query.ai_assistant.log_tools.aggregation.safe_query_sync") as query,
+            mock.patch.object(SafeQuerySyncResource, "bulk_request") as query,
         ):
             try:
                 MCPAggregateLogs().request(
@@ -167,7 +367,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 "apply_url": "https://iam.example/apply",
             },
         )
-        query.bulk_request.assert_not_called()
+        query.assert_not_called()
 
     def test_aggregate_http_accepts_model_dump_with_explicit_nulls(self):
         request_model = AggregateLogsRequest.model_validate(
@@ -288,10 +488,13 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 self.assertIn(forged_field, str(response.data))
                 service.assert_not_called()
 
-    def test_field_metadata_http_rejects_unsafe_parent_key(self):
+    def test_field_metadata_http_rejects_oversized_parent_key(self):
         request = APIRequestFactory().post(
             "/api/v1/query/namespaces/path-ns/mcp_user/logs/field_metadata/",
-            {"condition": self.condition.model_dump(mode="json"), "parent_keys": ["unsafe-key"]},
+            {
+                "condition": self.condition.model_dump(mode="json"),
+                "parent_field": {"raw_name": "extend_data", "keys": ["x" * 129]},
+            },
             format="json",
         )
         force_authenticate(request, user=type("User", (), {"username": "gateway-user", "is_authenticated": True})())
@@ -304,8 +507,255 @@ class TestMCPUserLogResources(AIAssistantTestCase):
             response = self._view("field_metadata")(request, namespace="path-ns")
 
         self.assertEqual(response.status_code, 400, response.data)
-        self.assertIn("parent_keys", str(response.data))
+        self.assertEqual(str(response.data["code"]), UnsupportedLogField().code)
         service.assert_not_called()
+
+    def test_public_http_maps_schema_errors_to_stable_domain_codes(self):
+        cases = (
+            (
+                "field_metadata",
+                {
+                    "condition": self.condition.model_dump(mode="json"),
+                    "parent_field": {"raw_name": "unknown", "keys": []},
+                },
+                UnsupportedLogField,
+            ),
+            (
+                "aggregate",
+                {
+                    "condition": self.condition.model_dump(mode="json"),
+                    "metrics": [{"id": "count", "type": "COUNT", "field": {"raw_name": "username"}}],
+                },
+                UnsupportedAggregation,
+            ),
+            (
+                "search",
+                {
+                    "condition": {
+                        **self.condition.model_dump(mode="json"),
+                        "conditions": [
+                            {
+                                "field": {"raw_name": "unknown", "keys": []},
+                                "operator": "eq",
+                                "filters": ["alice"],
+                            }
+                        ],
+                    }
+                },
+                UnsupportedLogField,
+            ),
+            (
+                "search",
+                {
+                    "condition": {
+                        **self.condition.model_dump(mode="json"),
+                        "conditions": [
+                            {
+                                "field": {"raw_name": "username", "keys": []},
+                                "operator": "unknown",
+                                "filters": ["alice"],
+                            }
+                        ],
+                    }
+                },
+                UnsupportedLogField,
+            ),
+            (
+                "search",
+                {
+                    "condition": {
+                        **self.condition.model_dump(mode="json"),
+                        "conditions": [
+                            {
+                                "field": {"raw_name": "username", "keys": []},
+                                "operator": "like",
+                                "filters": ["alice"],
+                            }
+                        ],
+                    }
+                },
+                UnsupportedLogField,
+            ),
+            (
+                "search",
+                {
+                    "condition": {
+                        **self.condition.model_dump(mode="json"),
+                        "conditions": [
+                            {
+                                "field": {"raw_name": "username", "keys": []},
+                                "operator": "eq",
+                                "filters": ["alice"],
+                            }
+                        ]
+                        * 101,
+                    }
+                },
+                InvalidLogCondition,
+            ),
+        )
+        for endpoint, payload, exception_type in cases:
+            with self.subTest(endpoint=endpoint):
+                request = APIRequestFactory().post(
+                    f"/api/v1/query/namespaces/path-ns/mcp_user/logs/{endpoint}/", payload, format="json"
+                )
+                force_authenticate(
+                    request, user=type("User", (), {"username": "gateway-user", "is_authenticated": True})()
+                )
+                with mock.patch("core.permissions.get_app_info"):
+                    response = self._view(endpoint)(request, namespace="path-ns")
+
+                self.assertEqual(response.status_code, exception_type.STATUS_CODE, response.data)
+                response.render()
+                body = json.loads(response.content)
+                self.assertEqual(str(body["code"]), exception_type().code)
+                self.assertEqual(body["message"], str(exception_type.MESSAGE))
+
+    def test_public_http_rejects_complex_filter_values_before_service(self):
+        """对象和数组过滤值必须在协议层失败，不能流入 SQL 构建。"""
+
+        for value in ({"nested": "value"}, ["nested"], True, None):
+            with self.subTest(value=value):
+                condition = self.condition.model_dump(mode="json")
+                condition["conditions"] = [
+                    {
+                        "field": {"raw_name": "username", "keys": []},
+                        "operator": "eq",
+                        "filters": [value],
+                    }
+                ]
+                request = APIRequestFactory().post(
+                    "/api/v1/query/namespaces/path-ns/mcp_user/logs/search/",
+                    {"condition": condition},
+                    format="json",
+                )
+                force_authenticate(
+                    request,
+                    user=type("User", (), {"username": "gateway-user", "is_authenticated": True})(),
+                )
+                with (
+                    mock.patch("core.permissions.get_app_info"),
+                    mock.patch(
+                        "services.web.query.ai_assistant.log_tools.search.LogDetailSearchService.search"
+                    ) as service,
+                ):
+                    response = self._view("search")(request, namespace="path-ns")
+
+                self.assertEqual(response.status_code, InvalidLogCondition.STATUS_CODE, response.data)
+                response.render()
+                body = json.loads(response.content)
+                self.assertEqual(str(body["code"]), InvalidLogCondition().code)
+                service.assert_not_called()
+
+    def test_real_error_envelopes_match_dynamic_and_apigw_schemas(self):
+        """真实 APIRenderer 响应必须同时满足代码与网关公开契约。"""
+
+        schema_response = SpectacularAPIView.as_view()(APIRequestFactory().get("/api/schema/"))
+        schema_response.render()
+        openapi = yaml.safe_load(schema_response.content)
+        operation = openapi["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/search/"]["post"]
+
+        backend_root = Path(__file__).resolve().parents[3]
+        apigw = yaml.safe_load((backend_root / "support-files/apigw/resources.yaml").read_text(encoding="utf-8"))
+        apigw_error_schema = self._openapi_json_schema(
+            {
+                "$ref": "#/definitions/log_tool_error_response",
+                "definitions": apigw["definitions"],
+            }
+        )
+        apigw_validator = jsonschema.Draft4Validator(apigw_error_schema)
+
+        def validate_response_body(status_code, body):
+            dynamic_schema = self._openapi_json_schema(
+                operation["responses"][str(status_code)]["content"]["application/json"]["schema"]
+            )
+            dynamic_errors = list(jsonschema.Draft7Validator(dynamic_schema).iter_errors(body))
+            static_errors = list(apigw_validator.iter_errors(body))
+            self.assertEqual(dynamic_errors, [], "\n".join(item.message for item in dynamic_errors))
+            self.assertEqual(static_errors, [], "\n".join(item.message for item in static_errors))
+
+        permission_error = PermissionException(
+            action_name="view_system",
+            permission={"system_id": self.condition.scope_id},
+            apply_url="https://iam.example/apply",
+        )
+        cases = (
+            InvalidLogCondition(),
+            SensitiveFieldPermissionDenied(),
+            permission_error,
+            LogQueryResponseTooLarge(),
+            LogQueryFailed(),
+            LogQueryTimeout(),
+        )
+        for error in cases:
+            with self.subTest(error=type(error).__name__):
+                request = APIRequestFactory().post(
+                    "/api/v1/query/namespaces/path-ns/mcp_user/logs/search/",
+                    {"condition": self.condition.model_dump(mode="json")},
+                    format="json",
+                )
+                force_authenticate(
+                    request,
+                    user=type("User", (), {"username": "gateway-user", "is_authenticated": True})(),
+                )
+                with (
+                    mock.patch("core.permissions.get_app_info"),
+                    mock.patch("query.resources.ai_assistant.get_request_username", return_value="gateway-user"),
+                    mock.patch(
+                        "services.web.query.ai_assistant.log_tools.search.LogDetailSearchService.search",
+                        side_effect=error,
+                    ),
+                ):
+                    response = self._view("search")(request, namespace="path-ns")
+
+                self.assertEqual(response.status_code, error.STATUS_CODE, response.data)
+                response.render()
+                body = json.loads(response.content)
+                self.assertEqual(str(body["code"]), error.code)
+                self.assertEqual(body["message"], str(error.message))
+                validate_response_body(error.STATUS_CODE, body)
+
+        request = APIRequestFactory().post(
+            "/api/v1/query/namespaces/path-ns/mcp_user/logs/search/",
+            {"condition": self.condition.model_dump(mode="json"), "unknown_field": True},
+            format="json",
+        )
+        force_authenticate(
+            request,
+            user=type("User", (), {"username": "gateway-user", "is_authenticated": True})(),
+        )
+        with mock.patch("core.permissions.get_app_info"):
+            response = self._view("search")(request, namespace="path-ns")
+
+        self.assertEqual(response.status_code, 400, response.data)
+        response.render()
+        validate_response_body(400, json.loads(response.content))
+
+    @override_settings(AI_LOG_SEARCH_MAX_PAGE_SIZE=20)
+    def test_public_http_maps_runtime_pagination_limits_to_invalid_condition(self):
+        for field_name, invalid_value in (("page", 0), ("page_size", 21)):
+            with self.subTest(field_name=field_name):
+                payload = {
+                    "condition": self.condition.model_dump(mode="json"),
+                    field_name: invalid_value,
+                }
+                request = APIRequestFactory().post(
+                    "/api/v1/query/namespaces/path-ns/mcp_user/logs/search/",
+                    payload,
+                    format="json",
+                )
+                force_authenticate(
+                    request,
+                    user=type("User", (), {"username": "gateway-user", "is_authenticated": True})(),
+                )
+                with mock.patch("core.permissions.get_app_info"):
+                    response = self._view("search")(request, namespace="path-ns")
+
+                self.assertEqual(response.status_code, InvalidLogCondition.STATUS_CODE, response.data)
+                response.render()
+                body = json.loads(response.content)
+                self.assertEqual(str(body["code"]), InvalidLogCondition().code)
+                self.assertEqual(body["message"], str(InvalidLogCondition.MESSAGE))
 
     def test_resource_request_rejects_oversized_shared_condition_before_service(self):
         from services.web.query.resources.ai_assistant import MCPAggregateLogs
@@ -321,7 +771,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         with mock.patch(
             "services.web.query.ai_assistant.log_tools.aggregation.LogAggregationService.aggregate"
         ) as service:
-            with self.assertRaises(ValidationError):
+            with self.assertRaises(InvalidLogCondition):
                 MCPAggregateLogs().request(
                     namespace="default",
                     condition=condition,
@@ -409,7 +859,11 @@ class TestMCPUserLogResources(AIAssistantTestCase):
 
     def test_raw_body_rejects_unknown_nested_request_fields(self):
         cases = (
-            ("field_metadata", {"condition": {**self.condition.model_dump(mode="json"), "sql": "select 1"}}),
+            (
+                "field_metadata",
+                {"condition": {**self.condition.model_dump(mode="json"), "sql": "select 1"}},
+                InvalidLogCondition,
+            ),
             (
                 "field_metadata",
                 {
@@ -424,6 +878,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                         ],
                     }
                 },
+                InvalidLogCondition,
             ),
             (
                 "search",
@@ -431,6 +886,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     "condition": self.condition.model_dump(mode="json"),
                     "fields": [{"raw_name": "start_time", "sql": "select 1"}],
                 },
+                UnsupportedLogField,
             ),
             (
                 "aggregate",
@@ -440,9 +896,10 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     "metrics": [{"id": "count", "type": "COUNT", "sql": "x"}],
                     "order_by": [{"target_id": "count", "direction": "DESC", "sql": "x"}],
                 },
+                UnsupportedAggregation,
             ),
         )
-        for endpoint, payload in cases:
+        for endpoint, payload, exception_type in cases:
             with self.subTest(endpoint=endpoint):
                 request = APIRequestFactory().post(
                     f"/api/v1/query/namespaces/path-ns/mcp_user/logs/{endpoint}/", payload, format="json"
@@ -455,7 +912,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     response = view(request, namespace="path-ns")
 
                 self.assertEqual(response.status_code, 400)
-                self.assertIn("sql", str(response.data))
+                self.assertEqual(str(response.data["code"]), exception_type().code)
+                self.assertNotIn("sql", str(response.data))
 
     @staticmethod
     def _view(endpoint):
@@ -467,10 +925,15 @@ class TestMCPUserLogResources(AIAssistantTestCase):
             return [cls._openapi_json_schema(item) for item in value]
         if not isinstance(value, dict):
             return value
-        result = {key: cls._openapi_json_schema(item) for key, item in deepcopy(value).items() if key != "nullable"}
-        if value.get("nullable") and isinstance(result.get("type"), str):
+        nullable = value.get("nullable") or value.get("x-nullable")
+        result = {
+            key: cls._openapi_json_schema(item)
+            for key, item in deepcopy(value).items()
+            if key not in {"nullable", "x-nullable"}
+        }
+        if nullable and isinstance(result.get("type"), str):
             result["type"] = [result["type"], "null"]
-        if value.get("nullable") and isinstance(result.get("enum"), list):
+        if nullable and isinstance(result.get("enum"), list):
             result["enum"] = [*result["enum"], None]
         return result
 

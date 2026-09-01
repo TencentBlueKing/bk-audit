@@ -7,6 +7,22 @@ info:
 schemes:
   - http
 definitions:
+  log_tool_error_response:
+    type: object
+    required: [result, code, message, request_id, trace_id, data]
+    properties:
+      result: {type: boolean}
+      code:
+        description: >-
+          日志工具稳定领域错误码：2926001 日志查询条件不合法、2926002 不支持的日志字段、
+          2926003 不支持的日志聚合方式、2926004 无敏感字段查询权限、2926005 日志查询超时，请稍后重试、
+          2926006 日志查询失败，请稍后重试、2926007 日志查询结果过大，请缩小字段或 page_size 后重试；
+          也可能返回 IAM 或平台通用错误码。
+      message: {type: string, x-nullable: true}
+      request_id: {type: string, x-nullable: true}
+      trace_id: {type: string, x-nullable: true}
+      data: {x-nullable: true}
+      errors: {x-nullable: true, description: 可选诊断信息，不应作为 Agent 分支判断依据。}
   log_tool_field_ref:
     type: object
     additionalProperties: false
@@ -15,21 +31,23 @@ definitions:
       raw_name:
         type: string
         minLength: 1
-        description: 已声明的标准字段，或 extend_data。
+        description: 当前日志检索可见的标准字段或 JSON 根字段。
       keys:
         type: array
         default: []
         maxItems: 16
         items:
           type: string
+          minLength: 1
           maxLength: 128
-          pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-        description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
+          pattern: '^[^.]+$'
+        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
         type: string
         default: null
         x-nullable: true
-        description: 可选声明类型，用于字段元信息或安全数值转换。
+        enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
+        description: 可选存储字段类型，取值与审计日志公共 FieldType 一致。
   log_tool_field_ref_response:
     type: object
     required: [raw_name, keys, field_type]
@@ -40,12 +58,14 @@ definitions:
         maxItems: 16
         items:
           type: string
+          minLength: 1
           maxLength: 128
-          pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-        description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
+          pattern: '^[^.]+$'
+        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
         type: string
         x-nullable: true
+        enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
   log_tool_condition_field:
     type: object
     additionalProperties: false
@@ -57,8 +77,8 @@ definitions:
         type: array
         default: []
         maxItems: 16
-        items: {type: string, maxLength: 128, pattern: '^[A-Za-z_][A-Za-z0-9_]*$'}
-        description: 最多 16 段 ASCII 安全子键；完整字段路径 UTF-8 最大 1024 bytes。
+        items: {type: string, minLength: 1, maxLength: 128, pattern: '^[^.]+$'}
+        description: 最多 16 段业务子键，允许 Unicode 和除点号外的标点；完整字段路径 UTF-8 最大 1024 bytes。
   log_tool_condition:
     type: object
     description: 单系统日志检索条件；服务端会按当前用户重新鉴权。最多 100 个条件，完整 condition 的 UTF-8 JSON 最大 256 KiB。
@@ -101,7 +121,7 @@ definitions:
               default: []
               maxItems: 1000
               items: {}
-              description: 最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。
+              description: 最多 1000 个字符串、整数或浮点数；单个值的 UTF-8 JSON 最大 16 KiB。
   log_tool_option:
     type: object
     required: [id, name]
@@ -110,15 +130,8 @@ definitions:
       name: {type: string}
   log_tool_query_summary:
     type: object
-    required: [scope_type, scope_id, time_range, condition_count, source, took_ms, executed_at]
+    required: [took_ms, executed_at]
     properties:
-      scope_type: {type: string, enum: [system]}
-      scope_id: {type: string}
-      time_range:
-        type: object
-        additionalProperties: {type: string}
-      condition_count: {type: integer}
-      source: {type: string, enum: [natural_language, field_condition]}
       took_ms: {type: integer}
       executed_at: {type: string}
 paths:
@@ -3057,7 +3070,7 @@ paths:
   /mcp/{namespace}/logs/field_metadata/:
     post:
       operationId: mcp_get_log_field_metadata
-      description: 探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；完整响应最大 1 MiB，字段或权限错误可修正参数后重试。
+      description: 探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；业务 data 最大 1 MiB，字段或权限错误可修正参数后重试。
       tags: []
       parameters:
         - in: path
@@ -3077,20 +3090,12 @@ paths:
               condition:
                 $ref: '#/definitions/log_tool_condition'
                 description: 单系统日志检索条件；服务端会按当前用户重新鉴权。
-              parent_keys:
-                type: array
-                default: []
-                maxItems: 16
-                items:
-                  type: string
-                  maxLength: 128
-                  pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-                description: 仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开，完整字段路径最大 1024 bytes。
-              field_scope:
-                type: string
-                enum: [ALL, BASIC, EXTENDED]
-                default: ALL
-                description: 返回范围；ALL 合并标准与拓展字段，样例最多来自 50 条脱敏日志。
+              parent_field:
+                allOf:
+                  - $ref: '#/definitions/log_tool_field_ref'
+                default: null
+                x-nullable: true
+                description: 待展开的 JSON 字段路径；先脱敏再探索，不因父字段敏感权限整体拒绝，查询条件权限仍在查询前校验；省略时返回全部可见根字段。
       responses:
         "200":
           description: 字段元信息
@@ -3119,10 +3124,10 @@ paths:
                         display_name: {type: string}
                         description: {type: string}
                         type_source: {type: string, enum: [DECLARED, INFERRED]}
-                        observed_types: {type: array, items: {type: string}}
+                        observed_types: {type: array, items: {type: string, enum: [boolean, integer, number, string, array, object, 'null']}}
                         allow_operators: {type: array, items: {type: string}}
                         options: {type: array, x-nullable: true, items: {$ref: '#/definitions/log_tool_option'}}
-                        is_expandable: {type: boolean, description: extend_data 根字段及其对象子字段可为 true；其他标准 JSON 字段当前协议不可下钻。}
+                        is_expandable: {type: boolean, description: 可见 JSON 根字段及其对象子字段可为 true，表示可继续探索下一层。}
                         sample_values: {type: array, maxItems: 3, items: {}, description: 最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。}
                         sampled_non_null_count: {type: integer}
                         coverage: {type: number, format: double}
@@ -3132,9 +3137,18 @@ paths:
                     properties:
                       sampled_count: {type: integer}
                       returned_field_count: {type: integer}
-                      truncated: {type: boolean}
+                      truncated:
+                        type: boolean
+                        description: >-
+                          是否因字段数量、扫描/解析预算或存在协议无法表达的字段而仅返回部分探索结果；
+                          业务 data 载荷超限返回 413。
         default:
           description: 平台标准错误响应
+        "400": {description: 请求参数不合法, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "403": {description: 无日志或敏感字段权限, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "502": {description: 日志查询失败, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "504": {description: 日志查询超时, schema: {$ref: '#/definitions/log_tool_error_response'}}
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -3156,7 +3170,7 @@ paths:
   /mcp/{namespace}/logs/search/:
     post:
       operationId: mcp_search_logs
-      description: 查询当前用户可访问的已脱敏日志明细。省略 fields 时使用紧凑默认列；显式列最多 20 个，页码和页大小最多 100，超时可缩小范围后重试。
+      description: 查询当前用户可访问的已脱敏日志明细。省略 fields 时使用紧凑默认列；显式列最多 20 个，页码和页大小最多 100，业务 data 载荷不超过 1 MiB，超时可缩小范围后重试。
       tags: []
       parameters:
         - in: path
@@ -3196,13 +3210,12 @@ paths:
                       type: string
                       enum: [asc, desc]
                       default: desc
-                description: 最多 3 项；一期仅支持 start_time，未提供时使用稳定默认排序。
+                description: 最多 3 个排序项，支持 COLLECT_SEARCH_CONFIG 中的非 JSON 根字段及 start_time；start_time 映射为物理列 dtEventTimeStamp，补齐采集器排序键。
               page:
                 type: integer
                 minimum: 1
-                maximum: 100
                 default: 1
-                description: 页码；运行配置只能进一步收紧最大值。
+                description: 从 1 开始的页码，不限制最大页码；全量导出应使用导出任务。
               page_size:
                 type: integer
                 minimum: 1
@@ -3243,16 +3256,20 @@ paths:
                     description: 已脱敏日志行，只含 columns 声明的稳定键。
                   pagination:
                     type: object
-                    required: [page, page_size, total, returned_count, has_more]
+                    required: [page, page_size, returned_count, has_more]
                     properties:
                       page: {type: integer}
                       page_size: {type: integer}
-                      total: {type: integer}
                       returned_count: {type: integer}
-                      has_more: {type: boolean}
+                      has_more: {type: boolean, description: 仅按真实 total 计算，即 page * page_size < total。}
                   query_summary: {$ref: '#/definitions/log_tool_query_summary'}
         default:
           description: 平台标准错误响应
+        "400": {description: 请求参数不合法, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "403": {description: 无日志或敏感字段权限, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "502": {description: 日志查询失败, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "504": {description: 日志查询超时, schema: {$ref: '#/definitions/log_tool_error_response'}}
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -3274,7 +3291,7 @@ paths:
   /mcp/{namespace}/logs/aggregate/:
     post:
       operationId: mcp_aggregate_logs
-      description: 对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回，完整响应最大 1 MiB。
+      description: 对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；时间桶使用物理时间列 dtEventTimeStamp，AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回，业务 data 最大 1 MiB。
       tags: []
       parameters:
         - in: path
@@ -3348,9 +3365,10 @@ paths:
                           maxItems: 16
                           items:
                             type: string
+                            minLength: 1
                             maxLength: 128
-                            pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-                          description: extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。
+                            pattern: '^[^.]+$'
+                          description: extend_data 的业务子路径；允许 Unicode 和除点号外的标点，标准字段必须为空数组，完整路径最大 1024 bytes。
                         field_type:
                           type: string
                           default: null
@@ -3416,7 +3434,7 @@ paths:
                         id: {type: string}
                         name: {type: string}
                         role: {type: string, enum: [DIMENSION, METRIC]}
-                        data_type: {type: string}
+                        data_type: {type: string, enum: [string, double, int, long, text, timestamp, float, datetime]}
                         effective_time_interval: {type: string, x-nullable: true, enum: [MINUTE, HOUR, DAY]}
                   rows:
                     type: array
@@ -3443,6 +3461,11 @@ paths:
                         conversion_failed_count: {type: integer}
         default:
           description: 平台标准错误响应
+        "400": {description: 请求参数不合法, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "403": {description: 无日志或敏感字段权限, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "502": {description: 日志查询失败, schema: {$ref: '#/definitions/log_tool_error_response'}}
+        "504": {description: 日志查询超时, schema: {$ref: '#/definitions/log_tool_error_response'}}
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true

@@ -8,6 +8,7 @@ from bk_resource.exceptions import APIRequestError
 from django.test import override_settings
 from requests.exceptions import Timeout as RequestsTimeout
 
+from api.bk_base.default import SafeQuerySyncResource
 from apps.meta.constants import SensitiveResourceTypeEnum, SensitiveUserData
 from apps.meta.models import SensitiveObject
 from core.exceptions import PermissionException
@@ -76,9 +77,11 @@ class TestLogAggregationService(TestCase):
         self.mock_context = self.enterContext(
             mock.patch(f"{AGGREGATION_MODULE}.LogQueryContextService.build", return_value=self.context)
         )
-        self.mock_query = self.enterContext(mock.patch(f"{AGGREGATION_MODULE}.safe_query_sync"))
-        self.mock_permissions = self.enterContext(mock.patch(f"{AGGREGATION_MODULE}.PermissionService"))
-        self.mock_query.bulk_request.return_value = (
+        self.mock_query = self.enterContext(mock.patch.object(SafeQuerySyncResource, "bulk_request"))
+        self.mock_permissions = self.enterContext(
+            mock.patch("services.web.query.ai_assistant.log_tools.sensitive.PermissionService")
+        )
+        self.mock_query.return_value = (
             {
                 "list": [
                     {"action": "view", "count": 3, "avg_duration": 1.5, "untrusted": "ignored"},
@@ -144,12 +147,12 @@ class TestLogAggregationService(TestCase):
         self.assertNotIn("test_rt.doris", result.model_dump_json())
         self.assertNotIn("SELECT", result.model_dump_json())
 
-        (requests,), _ = self.mock_query.bulk_request.call_args
+        (requests,), _ = self.mock_query.call_args
         self.assertEqual(len(requests), 2)
         self.assertIn("LIMIT 3", requests[0]["sql"])
 
     def _aggregate_payload_dimension(self, value, *, limit=2):
-        self.mock_query.bulk_request.return_value = ({"list": [{"payload": value, "count": 1}]},)
+        self.mock_query.return_value = ({"list": [{"payload": value, "count": 1}]},)
         return self._aggregate(
             dimensions=[
                 {
@@ -190,7 +193,7 @@ class TestLogAggregationService(TestCase):
         self.assertNotIn("secret-marker", str(raised.exception))
 
     def test_multiple_rows_are_rejected_when_cumulative_response_exceeds_budget(self):
-        self.mock_query.bulk_request.return_value = (
+        self.mock_query.return_value = (
             {"list": [{"payload": f"{index}-" + "x" * 11000, "count": 1} for index in range(100)]},
         )
 
@@ -209,13 +212,13 @@ class TestLogAggregationService(TestCase):
             )
 
     def test_no_conversion_metric_uses_one_bulk_item_and_no_quality_result(self):
-        self.mock_query.bulk_request.return_value = ({"list": [{"action": "view", "count": 1}]},)
+        self.mock_query.return_value = ({"list": [{"action": "view", "count": 1}]},)
 
         result = self._aggregate(metrics=[{"id": "count", "type": "COUNT"}])
 
         self.assertEqual(result.rows, ({"action": "view", "count": 1},))
         self.assertEqual(result.data_quality, ())
-        (requests,), _ = self.mock_query.bulk_request.call_args
+        (requests,), _ = self.mock_query.call_args
         self.assertEqual(len(requests), 1)
 
     def test_service_never_uses_row_desensitization_for_grouped_output(self):
@@ -239,7 +242,7 @@ class TestLogAggregationService(TestCase):
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate()
         self.assertTrue(private.pk)
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
         private.delete()
         permitted = SensitiveObject.objects.create(
@@ -253,7 +256,7 @@ class TestLogAggregationService(TestCase):
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate()
         self.mock_permissions.return_value.get_sensitive_object_permissions.assert_called_once_with([permitted.id])
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
     def test_count_star_condition_field_is_included_in_sensitive_precheck(self):
         sensitive = SensitiveObject.objects.create(
@@ -269,12 +272,13 @@ class TestLogAggregationService(TestCase):
                 self.make_field_condition(raw_name="extend_data", keys=["ssn"], operator="eq", filters=["candidate"])
             ]
         )
-        self.mock_query.bulk_request.return_value = ({"list": []},)
+        self.context.condition.conditions = self.condition.conditions
+        self.mock_query.return_value = ({"list": []},)
 
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], order_by=[])
 
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
     def test_sensitive_path_matches_ancestors_and_descendants_by_segments(self):
         cases = (
@@ -294,7 +298,7 @@ class TestLogAggregationService(TestCase):
                 self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {
                     str(sensitive.id): False
                 }
-                self.mock_query.bulk_request.return_value = ({"list": []},)
+                self.mock_query.return_value = ({"list": []},)
 
                 with self.assertRaises(SensitiveFieldPermissionDenied):
                     self._aggregate(
@@ -309,7 +313,7 @@ class TestLogAggregationService(TestCase):
                         order_by=[],
                     )
 
-                self.mock_query.bulk_request.assert_not_called()
+                self.mock_query.assert_not_called()
 
     def test_private_sensitive_ancestor_is_rejected_without_permission_lookup(self):
         SensitiveObject.objects.create(
@@ -320,7 +324,7 @@ class TestLogAggregationService(TestCase):
             fields=[{"field_name": "extend_data.credentials"}],
             is_private=True,
         )
-        self.mock_query.bulk_request.return_value = ({"list": []},)
+        self.mock_query.return_value = ({"list": []},)
 
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate(
@@ -336,7 +340,7 @@ class TestLogAggregationService(TestCase):
             )
 
         self.mock_permissions.assert_not_called()
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
     def test_similar_sensitive_path_prefix_does_not_match_another_segment(self):
         SensitiveObject.objects.create(
@@ -346,7 +350,7 @@ class TestLogAggregationService(TestCase):
             resource_id="host",
             fields=[{"field_name": "extend_data.credential"}],
         )
-        self.mock_query.bulk_request.return_value = ({"list": [{"credentials": "safe", "count": 1}]},)
+        self.mock_query.return_value = ({"list": [{"credentials": "safe", "count": 1}]},)
 
         result = self._aggregate(
             dimensions=[
@@ -362,7 +366,7 @@ class TestLogAggregationService(TestCase):
 
         self.assertEqual(result.rows, ({"credentials": "safe", "count": 1},))
         self.mock_permissions.assert_not_called()
-        self.mock_query.bulk_request.assert_called_once()
+        self.mock_query.assert_called_once()
 
     def test_system_permission_exception_is_preserved_before_doris_mapping(self):
         permission_error = PermissionException(
@@ -386,7 +390,7 @@ class TestLogAggregationService(TestCase):
             raised.data,
             json.dumps({"permission": {"system_id": self.target_system_id}, "apply_url": "https://iam.example/apply"}),
         )
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
     def test_global_sensitive_rule_is_checked_and_count_star_does_not_trigger_field_precheck(self):
         global_sensitive = SensitiveObject.objects.create(
@@ -399,16 +403,16 @@ class TestLogAggregationService(TestCase):
         self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {global_sensitive.id: False}
         with self.assertRaises(SensitiveFieldPermissionDenied):
             self._aggregate(metrics=[{"id": "count", "type": "COUNT"}])
-        self.mock_query.bulk_request.assert_not_called()
+        self.mock_query.assert_not_called()
 
         self.mock_permissions.reset_mock()
-        self.mock_query.bulk_request.return_value = ({"list": [{"count": 4}]},)
+        self.mock_query.return_value = ({"list": [{"count": 4}]},)
         result = self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}])
         self.assertEqual(result.rows, ({"count": 4},))
         self.mock_permissions.return_value.get_sensitive_object_permissions.assert_not_called()
 
     def test_zero_rows_and_backend_failures_have_controlled_semantics(self):
-        self.mock_query.bulk_request.return_value = (
+        self.mock_query.return_value = (
             {"list": []},
             {
                 "list": [
@@ -427,12 +431,12 @@ class TestLogAggregationService(TestCase):
 
         timeout = APIRequestError(result="gateway failed")
         timeout.__cause__ = RequestsTimeout("upstream timeout")
-        self.mock_query.bulk_request.side_effect = timeout
+        self.mock_query.side_effect = timeout
         with self.assertRaises(LogQueryTimeout) as raised:
             self._aggregate()
         self.assertIs(raised.exception.__cause__, timeout)
 
-        self.mock_query.bulk_request.side_effect = RuntimeError("SELECT secret FROM audit")
+        self.mock_query.side_effect = RuntimeError("SELECT secret FROM audit")
         with self.assertRaises(LogQueryFailed) as raised:
             self._aggregate()
         self.assertNotIn("SELECT secret", str(raised.exception))
@@ -480,12 +484,12 @@ class TestLogAggregationService(TestCase):
         )
         for responses in invalid_responses:
             with self.subTest(responses=responses):
-                self.mock_query.bulk_request.return_value = responses
+                self.mock_query.return_value = responses
                 with self.assertRaises(LogQueryFailed):
                     self._aggregate()
 
     def test_columns_use_server_declared_types_not_request_field_type(self):
-        self.mock_query.bulk_request.return_value = (
+        self.mock_query.return_value = (
             {
                 "list": [
                     {
@@ -517,13 +521,13 @@ class TestLogAggregationService(TestCase):
                 {
                     "id": "bucket",
                     "type": "TIME_BUCKET",
-                    "field": {"raw_name": "start_time", "field_type": "injected"},
+                    "field": {"raw_name": "start_time", "field_type": "string"},
                     "interval": "HOUR",
                 },
                 {
                     "id": "extension",
                     "type": "FIELD",
-                    "field": {"raw_name": "extend_data", "keys": ["duration"], "field_type": "injected"},
+                    "field": {"raw_name": "extend_data", "keys": ["duration"], "field_type": "string"},
                 },
             ],
             metrics=[
@@ -531,7 +535,7 @@ class TestLogAggregationService(TestCase):
                 {
                     "id": "distinct",
                     "type": "DISTINCT_COUNT",
-                    "field": {"raw_name": "username", "field_type": "injected"},
+                    "field": {"raw_name": "username", "field_type": "string"},
                 },
                 {
                     "id": "avg",
@@ -546,7 +550,7 @@ class TestLogAggregationService(TestCase):
                     "value_type": "LONG",
                     "percentile": 0.95,
                 },
-                {"id": "min_access", "type": "MIN", "field": {"raw_name": "access_type", "field_type": "injected"}},
+                {"id": "min_access", "type": "MIN", "field": {"raw_name": "access_type", "field_type": "string"}},
             ],
         )
 
@@ -563,7 +567,7 @@ class TestLogAggregationService(TestCase):
             },
         )
 
-        self.mock_query.bulk_request.return_value = (
+        self.mock_query.return_value = (
             {"list": [{"sum_access": 1, "sum_duration": 1.0}]},
             {
                 "list": [
@@ -579,7 +583,7 @@ class TestLogAggregationService(TestCase):
             dimensions=[],
             order_by=[],
             metrics=[
-                {"id": "sum_access", "type": "SUM", "field": {"raw_name": "access_type", "field_type": "injected"}},
+                {"id": "sum_access", "type": "SUM", "field": {"raw_name": "access_type", "field_type": "string"}},
                 {
                     "id": "sum_duration",
                     "type": "SUM",

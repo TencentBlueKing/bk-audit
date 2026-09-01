@@ -48,6 +48,7 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
         "search": (SearchLogsRequest, SearchLogsResponse),
         "aggregate": (AggregateLogsRequest, AggregateLogsResponse),
     }
+    _ERROR_STATUS_CODES = (400, 403, 413, 502, 504)
 
     def get_operation_id(self):
         return self._OPERATION_IDS.get(self.view.action, super().get_operation_id())
@@ -71,6 +72,11 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
         self._mark_model_dump_fields_required(response_schema)
         operation["requestBody"]["content"]["application/json"]["schema"] = request_schema
         operation["responses"]["200"]["content"]["application/json"]["schema"] = self._envelope_schema(response_schema)
+        for status_code in self._ERROR_STATUS_CODES:
+            operation["responses"][str(status_code)] = {
+                "description": "平台标准错误响应",
+                "content": {"application/json": {"schema": self._error_envelope_schema()}},
+            }
         return operation
 
     @classmethod
@@ -107,7 +113,9 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                     result.update(cls._inline_pydantic_schema(non_null[0], definitions))
                     result["nullable"] = True
                 else:
-                    result["oneOf"] = [cls._inline_pydantic_schema(item, definitions) for item in value]
+                    # anyOf 的分支可能重叠，例如整数同时属于 JSON Schema 的 integer
+                    # 和 number；改成 oneOf 会让 OpenAPI 拒绝 Pydantic 接受的合法值。
+                    result["anyOf"] = [cls._inline_pydantic_schema(item, definitions) for item in value]
                 continue
             if isinstance(value, dict):
                 result[key] = cls._inline_pydantic_schema(value, definitions)
@@ -133,6 +141,33 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                 "request_id": {"type": "string", "nullable": True},
                 "trace_id": {"type": "string", "nullable": True},
                 "data": data_schema,
+            },
+        }
+
+    @staticmethod
+    def _error_envelope_schema() -> Dict[str, Any]:
+        """声明 APIRenderer 的标准错误响应；errors 为兼容诊断字段，不作为必填契约。"""
+
+        return {
+            "type": "object",
+            "required": ["result", "code", "message", "request_id", "trace_id", "data"],
+            "properties": {
+                "result": {"type": "boolean"},
+                "code": {
+                    "oneOf": [{"type": "integer"}, {"type": "string"}],
+                    "description": (
+                        "日志工具稳定领域错误码：2926001 日志查询条件不合法、2926002 不支持的日志字段、"
+                        "2926003 不支持的日志聚合方式、2926004 无敏感字段查询权限、"
+                        "2926005 日志查询超时，请稍后重试、2926006 日志查询失败，请稍后重试、"
+                        "2926007 日志查询结果过大，请缩小字段或 page_size 后重试；"
+                        "也可能返回 IAM 或平台通用错误码。"
+                    ),
+                },
+                "message": {"type": "string", "nullable": True},
+                "request_id": {"type": "string", "nullable": True},
+                "trace_id": {"type": "string", "nullable": True},
+                "data": {"nullable": True},
+                "errors": {"nullable": True},
             },
         }
 

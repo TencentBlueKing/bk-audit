@@ -20,12 +20,14 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationValueType,
     LogFieldRef,
 )
+from services.web.query.constants import TIMESTAMP_PARTITION_FIELD
 from services.web.query.utils.doris import BaseDorisSQLBuilder
 
 # LONG 限制为 18 位，避免文本值进入 Doris LARGEINT 时产生溢出或方言差异。
 LONG_LITERAL_REGEXP = r"^-?[0-9]{1,18}$"
 # DOUBLE 只接受有限十进制；不开放指数、无限长度或末尾小数点，确保 CAST 语义固定。
-DOUBLE_LITERAL_REGEXP = r"^-?(?:[0-9]{1,15}(?:\.[0-9]{1,15})?|\.[0-9]{1,15})$"
+# 字符类避免 SQL 字符串再次解释反斜杠，兼容 Doris 的不同 sql_mode。
+DOUBLE_LITERAL_REGEXP = r"^-?(?:[0-9]{1,15}(?:[.][0-9]{1,15})?|[.][0-9]{1,15})$"
 NUMERIC_LITERAL_REGEXPS = {
     AggregationValueType.LONG: LONG_LITERAL_REGEXP,
     AggregationValueType.DOUBLE: DOUBLE_LITERAL_REGEXP,
@@ -66,11 +68,6 @@ class ProjectedLogSQLBuilder(BaseDorisSQLBuilder):
         terms = [self.get_pypika_field(field.raw_name, field.keys) for field in validated_fields]
         query = self._build_order_by(self._build_where(self.query.select(*terms)))
         return str(query.limit(self.page_size).offset(self.page_size * (self.page - 1)))
-
-    def build_count_sql(self) -> str:
-        """基于与数据查询相同的已验证条件统计总数。"""
-
-        return str(self._build_where(self.query).select(Count("*").as_("count")).limit(1))
 
 
 class LogAggregationSQLBuilder(BaseDorisSQLBuilder):
@@ -160,9 +157,12 @@ class LogAggregationSQLBuilder(BaseDorisSQLBuilder):
         return str(self._build_where(self.query.select(*terms)))
 
     def _dimension_term(self, dimension):
-        field = self._field(dimension.field)
+        """普通维度保留原字段，时间桶使用与 Web 统计一致的物理时间戳。"""
+
         if dimension.type != AggregationDimensionType.TIME_BUCKET:
-            return field
+            return self._field(dimension.field)
+        # start_time 与采集时间戳数值相同；仅时间桶统一物理字段，不改变 WHERE 和普通投影。
+        field = self.get_pypika_field(TIMESTAMP_PARTITION_FIELD.lower())
         return DateTrunc(FromUnixTime(field / 1000), self.effective_time_intervals[dimension.id].value)
 
     def _metric_term(self, metric: AggregationMetric):
@@ -170,9 +170,7 @@ class LogAggregationSQLBuilder(BaseDorisSQLBuilder):
             return Count("*")
         field = self._numeric_field(metric) if metric.is_numeric else self._field(metric.field)
         if metric.type == AggregationMetricType.DISTINCT_COUNT:
-            count = Count(field)
-            count._distinct = True
-            return count
+            return Count(field).distinct()
         if metric.type == AggregationMetricType.MIN:
             return Min(field)
         if metric.type == AggregationMetricType.MAX:

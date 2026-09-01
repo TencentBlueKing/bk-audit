@@ -15,6 +15,8 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
+import re
 from typing import Any, Iterator, List, Optional, Union
 
 from pymysql.converters import escape_string
@@ -174,9 +176,15 @@ class DorisVariantField(DorisField):
 
 
 class DorisJsonTypeExtractFunction(Function):
+    """Doris JSON 字段提取函数。
+
+    普通路径段保留 ``$.key`` 形式；包含空格、点号或其他标点的业务 key 使用
+    Doris 支持的 ``$."key"`` 形式。JSON 路径先按 JSON 字符串规则转义，随后仍由
+    PyPika 作为 SQL 常量转义，两个层次不可相互替代。例如业务 key ``*``
+    必须生成 ``$."*"``，否则 ``$.*`` 会被 JSONPath 解释为通配符。
     """
-    Doris json类型字段检索支持
-    """
+
+    _SIMPLE_JSON_PATH_KEY = re.compile(r"^\w+$", flags=re.UNICODE)
 
     json_extract_functions = {
         FieldType.STRING: 'JSON_EXTRACT_STRING',
@@ -194,4 +202,16 @@ class DorisJsonTypeExtractFunction(Function):
         self.name = self.json_extract_functions.get(
             self.target_field_type, self.json_extract_functions[FieldType.STRING]
         )
-        self.args = [self.wrap_constant(param) for param in (field, f"$.{'.'.join(keys)}")]
+        self.args = [self.wrap_constant(param) for param in (field, self._format_json_path(keys))]
+
+    @classmethod
+    def _format_json_path(cls, keys: List[str]) -> str:
+        """将业务子键编码为 JSONPath 字面路径，避免标点被解释为路径语法。"""
+
+        path_segments = (
+            key if cls._SIMPLE_JSON_PATH_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False) for key in keys
+        )
+        path = f"$.{'.'.join(path_segments)}"
+        # JSONPath 自身用反斜杠转义引号、控制字符和字面反斜杠；该路径随后还会
+        # 进入 Doris SQL 字符串，因此需要再转义一层，避免 SQL 解析提前消费。
+        return path.replace("\\", "\\\\")

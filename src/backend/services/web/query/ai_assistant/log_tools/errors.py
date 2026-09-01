@@ -16,7 +16,8 @@ def map_log_query_error(error: BaseException) -> LogToolException:
     if isinstance(error, LogToolException):
         return error
     if isinstance(error, (RequestsTimeout, TimeoutError)) or (
-        isinstance(error, APIRequestError) and has_timeout_in_chain(error)
+        isinstance(error, APIRequestError)
+        and (getattr(error, "status_code", None) in {408, 504} or has_timeout_in_chain(error))
     ):
         return LogQueryTimeout()
     return LogQueryFailed()

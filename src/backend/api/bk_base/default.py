@@ -18,13 +18,18 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import traceback
+from collections.abc import Mapping
+from typing import Any
 
 from bk_resource import BkApiResource
+from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.translation import gettext_lazy
+from requests import Response
+from requests.exceptions import HTTPError
 
 from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
@@ -421,6 +426,63 @@ class QuerySyncResource(BkBaseResource):
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+
+class SafeQuerySyncResource(QuerySyncResource):
+    """日志工具使用的 QuerySync 变体，只记录 SQL 并隔离远端错误正文。
+
+    默认 ResourceRequestLog 会同时记录请求 SQL 和完整查询结果，日志工具不能让
+    原始日志行进入普通观测链路。因此关闭默认采集，在请求阶段单独记录 SQL；失败
+    响应只保留状态码和 request_id，供排查链路问题而不回显远端正文。
+    """
+
+    support_data_collect = False
+    _ERROR_MESSAGE = "query sync request failed"
+
+    def before_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """记录最终提交的 SQL，响应正文仍由安全解析逻辑隔离。"""
+
+        request_data = kwargs.get("json") or kwargs.get("data") or {}
+        if isinstance(request_data, Mapping):
+            logger.info("[SafeQuerySyncResource] SQL => %s", request_data.get("sql", ""))
+        return super().before_request(kwargs)
+
+    def parse_response(self, response: Response) -> Any:
+        """保持 QuerySync 成功契约，失败时不传播远端 message/content。"""
+
+        try:
+            result = response.json()
+        except Exception:  # noqa: BLE001
+            raise self._safe_error(response) from None
+
+        try:
+            response.raise_for_status()
+        except HTTPError:
+            raise self._safe_error(response) from None
+
+        if not isinstance(result, dict):
+            raise self._safe_error(response)
+        if not result.get("result", True) and result.get("code") != 0:
+            raise self._safe_error(response)
+        return result.get("data")
+
+    def _safe_error(self, response: Response) -> APIRequestError:
+        """构造只包含低敏传输元信息的统一 API 异常。"""
+
+        status_code = getattr(response, "status_code", None)
+        if not isinstance(status_code, int):
+            status_code = None
+        headers = getattr(response, "headers", {})
+        request_id = headers.get("x-bkapi-request-id", "") if isinstance(headers, Mapping) else ""
+        result = {"message": self._ERROR_MESSAGE}
+        if isinstance(request_id, str) and request_id:
+            result["request_id"] = request_id
+        return APIRequestError(
+            module_name=self.module_name,
+            url=self.action,
+            status_code=status_code,
+            result=result,
+        )
 
 
 class DebugQuerySyncResource(DebugBkBaseResource):

@@ -22,6 +22,23 @@ from tests.test_ai_assistant.production_handler_contracts import (
 
 
 class AIAnalysisSchemaTest(SimpleTestCase):
+    def test_default_input_snapshot_roundtrip(self):
+        input_data = AIAnalysisInputSchema(analysis_mode=AnalysisMode.DEFAULT)
+        self.assertEqual(AIAnalysisInputSchema.model_validate(input_data.model_dump(mode="json")), input_data)
+        self.assertEqual(AIAnalysisInputSchema.model_validate_json(input_data.model_dump_json()), input_data)
+        self.assertEqual(input_data.model_dump(mode="json"), {"analysis_mode": AnalysisMode.DEFAULT})
+
+    def test_input_json_schema_preserves_fields_after_custom_serialization(self):
+        # wrap serializer 只调整 DEFAULT 的输出字段，不得把 Swagger 协议退化为任意字典。
+        for mode in ("validation", "serialization"):
+            with self.subTest(mode=mode):
+                schema = AIAnalysisInputSchema.model_json_schema(mode=mode)
+                self.assertEqual(set(schema["properties"]), {"analysis_mode", "instruction"})
+                self.assertEqual(schema["required"], ["analysis_mode"])
+                instruction_types = schema["properties"]["instruction"]["anyOf"]
+                string_schema = next(item for item in instruction_types if item["type"] == "string")
+                self.assertEqual(string_schema["maxLength"], settings.AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH)
+
     def test_default_mode_rejects_any_explicit_client_instruction(self):
         for instruction in (None, "", "   ", "自行覆盖默认标准"):
             with self.subTest(instruction=instruction), self.assertRaises(ValidationError):

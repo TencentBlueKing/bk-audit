@@ -50,6 +50,11 @@ APPLICATION_TOOL_RESOURCES = (
     ("/{namespace}/tools/{uid}/execute/", "post"),
     ("/tools/detail_by_name/", "get"),
 )
+LOG_ANALYSIS_MCP_RESOURCES = {
+    "mcp_get_log_field_metadata",
+    "mcp_search_logs",
+    "mcp_aggregate_logs",
+}
 
 
 class TestMCPUserAPIGWConfig(SimpleTestCase):
@@ -154,6 +159,17 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
         for stage in definition["stages"]:
             server = next(server for server in stage["mcp_servers"] if server["name"] == "audit-report")
             self.assertEqual(set(server["resource_names"]), set(EXPECTED_MCP_RESOURCES))
+
+    def test_all_log_analysis_servers_expose_only_log_analysis_resources(self):
+        definition = self._load_definition()
+
+        for stage in definition["stages"]:
+            server = next(
+                (server for server in stage["mcp_servers"] if server["name"] == "audit-log-analysis"),
+                None,
+            )
+            self.assertIsNotNone(server, stage["name"])
+            self.assertEqual(set(server["resource_names"]), LOG_ANALYSIS_MCP_RESOURCES)
 
     def test_mcp_servers_are_public(self):
         definition = self._load_definition()

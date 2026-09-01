@@ -50,16 +50,23 @@ AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = int(
 AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES", 1024 * 1024))
 
 # ============== 审计 AI 日志明细查询配置 ==============
-# 限制 Agent 单次明细查询的投影、排序与翻页成本；均可通过 BKAPP_ 环境变量调小。
+# 限制单次查询投影、排序与响应大小；累计读取预算由调用方控制，不截断可访问页码。
 AI_LOG_SEARCH_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_FIELDS", 20))
 AI_LOG_SEARCH_MAX_SORT_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_SORT_FIELDS", 3))
-AI_LOG_SEARCH_MAX_PAGE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE", 100))
+# page_size 的公开默认值属于固定接口契约；运行上限只能在 20 至协议硬上限之间收紧。
+AI_LOG_SEARCH_DEFAULT_PAGE_SIZE = 20
 AI_LOG_SEARCH_MAX_PAGE_SIZE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE", 100))
-# 完整 Agent 响应的 UTF-8 字节预算；协议硬上限在 log_tools.schemas 中，环境变量只能收紧。
+if AI_LOG_SEARCH_MAX_PAGE_SIZE < AI_LOG_SEARCH_DEFAULT_PAGE_SIZE:
+    raise ImproperlyConfigured("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20")
+# Agent 工具业务 data 的 UTF-8 字节预算；标准响应 envelope 由 renderer 额外封装。
 AI_LOG_SEARCH_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_SEARCH_RESPONSE_MAX_BYTES", 1024 * 1024))
 
-# 聚合只返回 TopN 分组；协议硬上限在 log_tools.schemas 中，环境变量只能收紧。
+# 聚合限制返回分组数；默认按维度排序，显式按指标排序才表示 TopN。
+# 公开默认值属于固定接口契约，运行上限不能低于默认值。
+AI_LOG_AGGREGATION_DEFAULT_LIMIT = 20
 AI_LOG_AGGREGATION_MAX_LIMIT = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_LIMIT", 100))
+if AI_LOG_AGGREGATION_MAX_LIMIT < AI_LOG_AGGREGATION_DEFAULT_LIMIT:
+    raise ImproperlyConfigured("AI_LOG_AGGREGATION_MAX_LIMIT 不能小于公开默认值 20")
 AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES", 1024 * 1024))
 
 # Agent 日志工具公共请求成本；代码中的冻结硬上限仍会阻止环境配置放大。
@@ -85,7 +92,6 @@ if not 0 < AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT < AI_ASSISTANT_LOG_ANALYSI
     raise ImproperlyConfigured(
         "AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT 必须大于 0 且小于 " "AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT"
     )
-
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))
 ANALYSE_REPORT_AI_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_ANALYSE_REPORT_AI_TITLE_MAX_LENGTH", 20))

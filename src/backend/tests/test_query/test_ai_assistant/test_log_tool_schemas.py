@@ -3,10 +3,13 @@
 
 import ast
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from django.conf import settings
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError as PydanticValidationError
 
 from services.web.query.ai_assistant.exceptions import (
@@ -21,15 +24,54 @@ from services.web.query.ai_assistant.exceptions import (
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     GetLogFieldMetadataRequest,
+    JSONValueType,
     LogFieldRef,
+    LogFieldType,
     SearchLogsRequest,
 )
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
+from services.web.query.ai_assistant.schemas import SearchCondition
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 LOG_TOOL_EXCEPTIONS = Path("services/web/query/ai_assistant/exceptions.py")
 PRODUCTION_SOURCE_DIRECTORIES = ("api", "apps", "blueking", "core", "services")
+
+
+class TestLogToolSettings(SimpleTestCase):
+    """部署配置不能破坏公开请求的固定默认值。"""
+
+    def test_page_size_limit_below_public_default_fails_at_startup(self):
+        environment = os.environ.copy()
+        environment["BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE"] = "19"
+
+        completed = subprocess.run(
+            [sys.executable, "-c", "import services.web.settings"],
+            cwd=BACKEND_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20", completed.stderr)
+
+    def test_aggregation_limit_below_public_default_fails_at_startup(self):
+        environment = os.environ.copy()
+        environment["BKAPP_AI_LOG_AGGREGATION_MAX_LIMIT"] = "19"
+
+        completed = subprocess.run(
+            [sys.executable, "-c", "import services.web.settings"],
+            cwd=BACKEND_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("AI_LOG_AGGREGATION_MAX_LIMIT 不能小于公开默认值 20", completed.stderr)
 
 
 def _module_code_owners(module_code: str):
@@ -80,12 +122,13 @@ def _log_tool_exception_hierarchy():
 
 
 class TestLogFieldRef(AIAssistantTestCase):
-    """字段引用只允许既有查询白名单或 extend_data 子路径。"""
+    """字段引用只允许现有日志检索可见字段及其 JSON 子路径。"""
 
     def test_standard_field_without_keys_is_allowed(self):
         field = LogFieldRef(raw_name="username", field_type="string")
 
         self.assertEqual(field.model_dump(), {"raw_name": "username", "keys": [], "field_type": "string"})
+        self.assertEqual(field.field_type, LogFieldType.STRING)
 
     def test_start_time_is_the_only_extra_projection_field_needed_by_default_columns(self):
         field = LogFieldRef(raw_name="start_time")
@@ -108,9 +151,9 @@ class TestLogFieldRef(AIAssistantTestCase):
                 with self.assertRaises(PydanticValidationError):
                     LogFieldRef(raw_name=raw_name)
 
-    def test_extend_data_supports_empty_and_multilevel_keys(self):
+    def test_all_visible_json_fields_support_multilevel_keys(self):
         container = LogFieldRef(raw_name="extend_data")
-        nested = LogFieldRef(raw_name="extend_data", keys=["ticket", "detail", "id"])
+        nested = LogFieldRef(raw_name="instance_data", keys=["ticket", "detail", "id"])
 
         self.assertEqual(container.keys, [])
         self.assertEqual(nested.keys, ["ticket", "detail", "id"])
@@ -123,19 +166,58 @@ class TestLogFieldRef(AIAssistantTestCase):
         with self.assertRaises(PydanticValidationError):
             LogFieldRef(raw_name="username", keys=["bypass"])
 
-    def test_extend_data_rejects_empty_or_dangerous_keys(self):
-        for key in ("", " ", "123field", "中文", "bad-key", "x`y", "x']; SELECT 1; --"):
+    def test_extend_data_accepts_business_defined_unicode_and_punctuation_keys(self):
+        for key in ("中文字段", "123field", "bad-key", "x`y", "带 空格", "x']; SELECT 1; --"):
             with self.subTest(key=key):
-                with self.assertRaises(PydanticValidationError):
-                    LogFieldRef(raw_name="extend_data", keys=[key])
+                field = LogFieldRef(raw_name="extend_data", keys=[key])
+                self.assertEqual(field.keys, [key])
+
+    def test_extend_data_rejects_literal_dot_in_path_segment(self):
+        """点号是跨模块路径分隔符，不能同时作为无转义的字面 key。"""
+
+        with self.assertRaises(PydanticValidationError):
+            LogFieldRef(raw_name="extend_data", keys=["a.b"])
+
+    def test_extend_data_rejects_empty_key(self):
+        with self.assertRaises(PydanticValidationError):
+            LogFieldRef(raw_name="extend_data", keys=[""])
+
+    def test_observed_json_types_are_explicit_enums(self):
+        self.assertEqual(JSONValueType.OBJECT, "object")
+        self.assertEqual(JSONValueType.NULL, "null")
 
 
 class TestGetLogFieldMetadataRequest(AIAssistantTestCase):
-    """字段探索父路径必须复用安全子路径约束。"""
+    """字段探索位置使用完整字段引用，不再隐式绑定 extend_data。"""
 
-    def test_parent_keys_reject_unsafe_key(self):
+    def test_parent_field_accepts_any_visible_json_path(self):
+        request = GetLogFieldMetadataRequest(
+            condition=self.make_condition(),
+            parent_field={"raw_name": "instance_data", "keys": ["风险-详情"]},
+        )
+        self.assertEqual(request.parent_field.raw_name, "instance_data")
+        self.assertEqual(request.parent_field.keys, ["风险-详情"])
+
+    def test_parent_field_rejects_non_json_field_and_empty_key(self):
         with self.assertRaises(PydanticValidationError):
-            GetLogFieldMetadataRequest(condition=self.make_condition(), parent_keys=["unsafe-key"])
+            GetLogFieldMetadataRequest(condition=self.make_condition(), parent_field={"raw_name": "username"})
+        with self.assertRaises(PydanticValidationError):
+            GetLogFieldMetadataRequest(
+                condition=self.make_condition(),
+                parent_field={"raw_name": "extend_data", "keys": [""]},
+            )
+
+
+class TestSearchConditionTimeRange(AIAssistantTestCase):
+    """检索条件模型统一保证时间顺序，避免调用方重复补充校验。"""
+
+    def test_reversed_time_range_is_rejected_by_schema(self):
+        with self.assertRaises(PydanticValidationError):
+            SearchCondition(
+                scope_id=self.target_system_id,
+                start_time="2026-08-14T00:00:00+08:00",
+                end_time="2026-08-13T00:00:00+08:00",
+            )
 
 
 class TestAgentLogToolRequestCostBoundaries(AIAssistantTestCase):
@@ -196,6 +278,14 @@ class TestAgentLogToolRequestCostBoundaries(AIAssistantTestCase):
             with self.subTest(count=count):
                 self._validate_all(self._condition(conditions=[self._field_condition(filters=["x"] * count)]))
         self._reject_all(self._condition(conditions=[self._field_condition(filters=["x"] * 1001)]))
+
+    def test_filter_values_accept_only_string_integer_and_float(self):
+        """复杂 JSON 值没有稳定的 SQL 比较语义，必须在 Agent 协议入口拒绝。"""
+
+        self._validate_all(self._condition(conditions=[self._field_condition(filters=["alice", 1, -2, 3.5])]))
+        for value in ({"nested": "value"}, ["nested"], True, None, float("nan"), float("inf")):
+            with self.subTest(value=value):
+                self._reject_all(self._condition(conditions=[self._field_condition(filters=[value])]))
 
     def test_single_filter_utf8_size_accepts_limit_minus_one_and_limit_but_rejects_plus_one(self):
         limit = 16 * 1024
@@ -340,6 +430,19 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         self.assertIn("LIMIT 25", sql)
         self.assertIn("OFFSET 25", sql)
         self.assertNotIn("SELECT *", sql)
+
+    def test_unicode_and_quote_keys_are_escaped_by_json_sql_builder(self):
+        sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=["中文字段", "x']; SELECT 1; --"])])
+
+        self.assertIn("中文字段", sql)
+        self.assertIn("'$.中文字段.\"x'']; SELECT 1; --\"'", sql)
+        self.assertNotIn("'$.中文字段.\"x']; SELECT 1; --\"'", sql)
+
+    def test_quote_and_backslash_key_keeps_json_path_escaping_after_sql_parsing(self):
+        sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=['quoted"key', r"path\key"])])
+
+        self.assertIn(r'quoted\\"key', sql)
+        self.assertIn(r"path\\\\key", sql)
 
     def test_rejects_non_field_reference(self):
         with self.assertRaises(TypeError):
