@@ -48,7 +48,7 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeType
-from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
+from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS, EventMappingFields
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import (
     BindingType,
@@ -87,7 +87,10 @@ from services.web.strategy_v2.exceptions import (
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
-from services.web.strategy_v2.handlers.dispatch import DispatchConditionNode
+from services.web.strategy_v2.handlers.dispatch import (
+    EVENT_DATA_PREFIX,
+    DispatchConditionNode,
+)
 from services.web.strategy_v2.models import (
     DispatchRule,
     LinkTable,
@@ -875,9 +878,12 @@ class MultiRuleValidateMixin:
         if not configs:
             raise serializers.ValidationError(gettext("携带发现规则（rules）时必须同时携带策略配置（configs）"))
         select_fields = configs.get("select") or []
-        # 聚合字段身份集合：(table, raw_name, aggregate)，用于 having 条件引用的字段身份匹配
+        # 聚合字段身份集合：(table, raw_name, aggregate, keys)，与构造层
+        # aggregate_field_identity 口径一致（含下钻 keys，避免校验通过、构造 500）
         aggregate_identities = {
-            (f.get("table"), f.get("raw_name"), f.get("aggregate")) for f in select_fields if f.get("aggregate")
+            (f.get("table"), f.get("raw_name"), f.get("aggregate"), tuple(f.get("keys") or []))
+            for f in select_fields
+            if f.get("aggregate")
         }
 
         for rule in rules:
@@ -901,7 +907,12 @@ class MultiRuleValidateMixin:
                     raise serializers.ValidationError(
                         gettext("规则[%s]的having条件字段[%s]必须为聚合字段") % (rule.get("rule_name"), field_name)
                     )
-                field_identity = (field.get("table"), field.get("raw_name"), field.get("aggregate"))
+                field_identity = (
+                    field.get("table"),
+                    field.get("raw_name"),
+                    field.get("aggregate"),
+                    tuple(field.get("keys") or []),
+                )
                 if field_identity not in aggregate_identities:
                     raise serializers.ValidationError(
                         gettext("规则[%s]的having条件字段[%s]不存在于策略级select的聚合字段中") % (rule.get("rule_name"), field_name)
@@ -949,12 +960,9 @@ class MultiRuleValidateMixin:
                 rule["is_default"] = is_default
                 if is_default:
                     default_count += 1
-                # 处理人/关注人必填
-                for list_field in ("processor", "follower"):
-                    if not rule.get(list_field):
-                        raise serializers.ValidationError(
-                            gettext("分派规则[%s]的%s不能为空") % (rule.get("rule_name"), list_field)
-                        )
+                # 处理人必填
+                if not rule.get("processor"):
+                    raise serializers.ValidationError(gettext("分派规则[%s]的processor不能为空") % rule.get("rule_name"))
                 # 确认人仅"确认后分派"必填；直接分派无需确认人，清空避免脏数据
                 if rule.get("dispatch_mode") == DispatchMode.AFTER_CONFIRM:
                     if not rule.get("confirmer"):
@@ -975,7 +983,48 @@ class MultiRuleValidateMixin:
                 self._validate_notice_groups("dispatch_rules", notice_group_ids, rule.get("target_scene_id"))
             if default_count != 1:
                 raise serializers.ValidationError(gettext("全局策略必须且仅能有一条默认分派规则（conditions 为空）"))
+            # 分派条件字段归一化（select display_name 裸名 -> event_data.xxx）
+            self._normalize_dispatch_condition_fields(attrs)
         return attrs
+
+    @staticmethod
+    def _normalize_dispatch_condition_fields(attrs: dict) -> None:
+        """
+        分派条件字段归一化：前端按 select 字段的 display_name 裸名传参，
+        后端统一改写为 event_data.{display_name}（分派求值器的词表形式）。
+
+        - 裸名命中 select display_name -> 改写加前缀
+        - 已是 event_data.{display_name} 规范形式 -> 原样保留
+        - 事件标准字段 / 命中规则实例化字段（ctx 顶层引用，如 risk_level）-> 原样透传
+        - 其余 -> 400（不在可选范围，报出可用字段清单）
+        """
+        configs = attrs.get("configs") or {}
+        select_names = {f.get("display_name") for f in configs.get("select") or [] if f.get("display_name")}
+        if not select_names:
+            # 非规则审计策略或未携带 configs（如部分更新场景）：无 select 词表，不做归一化
+            return
+        passthrough = {f.field_name for f in EventMappingFields().fields} | {
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+        }
+        prefix = EVENT_DATA_PREFIX
+        for rule in attrs.get("dispatch_rules") or []:
+            for leaf in MultiRuleValidateMixin._walk_tree_leaves(rule.get("conditions")):
+                field_name = (leaf or {}).get("field")
+                if not field_name:
+                    continue
+                if field_name in select_names:
+                    leaf["field"] = f"{prefix}{field_name}"
+                elif field_name.startswith(prefix) and field_name[len(prefix) :] in select_names:
+                    continue
+                elif field_name in passthrough:
+                    continue
+                else:
+                    raise serializers.ValidationError(
+                        gettext("分派规则[%s]的条件字段[%s]不在可选范围内，可选字段：%s")
+                        % (rule.get("rule_name"), field_name, ",".join(sorted(select_names | passthrough)))
+                    )
 
 
 class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin, serializers.ModelSerializer):
@@ -2643,6 +2692,15 @@ class RuleAuditSerializer(serializers.Serializer):
 
         attrs["where"] = self._normalize_empty_clause(attrs.get("where"))
         attrs["having"] = self._normalize_empty_clause(attrs.get("having"))
+
+        # display_name 是输出字段的全域标识（SQL 列名 md5 源、event_data 的 JSON 键、
+        # 事件映射/having 身份锚点），重复会导致同名列冲突与 event_data 键覆盖，必须唯一
+        display_names = [field["display_name"] for field in attrs["select"]]
+        duplicated = {name for name in display_names if display_names.count(name) > 1}
+        if duplicated:
+            raise serializers.ValidationError(
+                gettext("select 字段 display_name 必须唯一，重复字段：%s") % ",".join(sorted(duplicated))
+            )
 
         # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
         # 1. 日志需要指定 rt_id,system_ids

@@ -564,8 +564,21 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             binding_type=BindingType.PLATFORM_BINDING,
         ).first()
         if binding is None:
-            # 场景策略无平台绑定，无需同步
-            return
+            # 无平台绑定：先判断是否场景策略（已有 scene binding），是则无需平台绑定直接返回；
+            # 否则为全局策略草稿首次提交（草稿期未创建平台绑定），在此补建 PLATFORM_BINDING
+            has_scene_binding = ResourceBindingScene.objects.filter(
+                binding__resource_type=ResourceVisibilityType.STRATEGY,
+                binding__resource_id=str(strategy.strategy_id),
+            ).exists()
+            if has_scene_binding:
+                # 场景策略无平台绑定，无需同步
+                return
+            binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy.strategy_id),
+                binding_type=BindingType.PLATFORM_BINDING,
+                visibility_type=VisibilityScope.SPECIFIC_SCENES,
+            )
         target_scene_ids = set(
             strategy.dispatch_rules.filter(is_deleted=False).values_list("target_scene_id", flat=True)
         )
@@ -593,8 +606,12 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         assert_binding_relation_integrity(binding)
 
     @staticmethod
-    def ensure_active_scene_binding_or_404(strategy_id: int) -> None:
+    def ensure_active_scene_binding_or_404(strategy_id: int, allow_draft: bool = False) -> None:
         # 确保策略有有效的绑定关系
+        # allow_draft=True 时，草稿策略允许“无绑定”（草稿期全局策略尚未创建平台绑定，
+        # 由提交时 sync_platform_binding_scenes 补建），不视其为非法状态
+        if allow_draft:
+            return
         has_scene_binding = ResourceBindingScene.objects.filter(
             scene__is_deleted=False,
             binding__resource_type=ResourceVisibilityType.STRATEGY,
@@ -660,15 +677,16 @@ class CreateStrategy(StrategyV2Base):
             # 创建 ResourceBinding 关联：按 binding_type 区分全局/场景策略
             if binding_type == BindingType.PLATFORM_BINDING:
                 # 全局策略：平台级绑定；可见场景由分派规则目标场景派生（sync_platform_binding_scenes），
-                # 不再接收前端 visibility 配置
-                ResourceBinding.objects.create(
-                    resource_type=ResourceVisibilityType.STRATEGY,
-                    resource_id=str(strategy.strategy_id),
-                    binding_type=BindingType.PLATFORM_BINDING,
-                    visibility_type=VisibilityScope.SPECIFIC_SCENES,
-                )
+                # 不再接收前端 visibility 配置。
+                if not is_draft:
+                    ResourceBinding.objects.create(
+                        resource_type=ResourceVisibilityType.STRATEGY,
+                        resource_id=str(strategy.strategy_id),
+                        binding_type=BindingType.PLATFORM_BINDING,
+                        visibility_type=VisibilityScope.SPECIFIC_SCENES,
+                    )
             else:
-                # 场景策略：与场景绑定
+                # 场景策略：与场景绑定（草稿也创建，保证 ensure_active_scene_binding_or_404 不 404）
                 BindingMetadataHelper.create_resource_binding(
                     resource_id=str(strategy.strategy_id),
                     resource_type=ResourceVisibilityType.STRATEGY,
@@ -749,7 +767,10 @@ class UpdateStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # load strategy
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data.pop("strategy_id", int()))
-        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿策略可能无平台绑定（草稿期不创建），放行 404
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
         validated_request_data.pop("binding_type", None)
         validated_request_data.pop("scene_id", None)
         # 草稿参数：None=维持现状；true=保存草稿更新；false=提交为正式策略（仅草稿策略可传）
@@ -928,7 +949,10 @@ class DeleteStrategy(StrategyV2Base):
     @transaction.atomic()
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
-        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿策略可能无平台绑定（草稿期不创建），放行 404
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
         # delete tags
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
         StrategyTool.objects.filter(strategy=strategy).delete()
@@ -1219,7 +1243,10 @@ class ToggleStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
-        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿策略可能无平台绑定（草稿期不创建），放行 404
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
         # 草稿未部署，无启停语义
         if strategy.status == StrategyStatusChoices.DRAFT:
             raise serializers.ValidationError(gettext("草稿策略未部署，不支持启停操作"))
@@ -1241,7 +1268,10 @@ class RetryStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # load strategy
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
-        self.ensure_active_scene_binding_or_404(strategy.strategy_id)
+        # 草稿策略可能无平台绑定（草稿期不创建），放行 404
+        self.ensure_active_scene_binding_or_404(
+            strategy.strategy_id, allow_draft=(strategy.status == StrategyStatusChoices.DRAFT)
+        )
         # 草稿未部署无远端资源，无重试语义
         if strategy.status == StrategyStatusChoices.DRAFT:
             raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))

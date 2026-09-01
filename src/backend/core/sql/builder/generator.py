@@ -198,6 +198,15 @@ class SQLGenerator:
             columns.append(self._rule_guard_alias(idx))
         return columns
 
+    @staticmethod
+    def aggregate_field_identity(field: Field) -> tuple:
+        """
+        聚合字段身份：(table, raw_name, aggregate, keys)。
+        display_name 由前端拼接（如 事件ID_COUNT(event_id)），select 与 having 两处可能不一致，
+        不作为关联锚点；身份元组与校验层 _check_rules 的 aggregate_identities 口径一致。
+        """
+        return (field.table, field.raw_name, field.aggregate, tuple(field.keys or []))
+
     def _build_rule_mode_select(self, query: QueryBuilder) -> QueryBuilder:
         """多规则模式 SELECT：非聚合列原样 + 聚合列按规则展开（全 CASE WHEN）+ 守卫列（每规则一条）"""
         self.rule_alias_map: Dict[tuple, str] = {}
@@ -211,7 +220,7 @@ class SQLGenerator:
             pypika_field = self._get_pypika_field(field)
             for idx in range(1, len(self.config.rules) + 1):
                 alias = self._rule_agg_alias(field.display_name, idx)
-                self.rule_alias_map[(field.display_name, idx)] = alias
+                self.rule_alias_map[(self.aggregate_field_identity(field), idx)] = alias
                 # CASE 无 ELSE：且不匹配 -> NULL -> 聚合忽略（COUNT/SUM 跳过 NULL）
                 conditional = pypika_terms.Case().when(self.rule_criterions[idx], pypika_field)
                 query = query.select(self._build_aggregate_term(field, conditional).as_(alias))
@@ -267,8 +276,8 @@ class SQLGenerator:
         """
         field = condition.field
         if field.aggregate:
-            # 聚合字段：直接使用 display_name（已经是 md5 别名）查找 rule_alias_map
-            alias = self.rule_alias_map.get((field.display_name, rule_idx))
+            # 聚合字段：按身份元组查找 rule_alias_map（display_name 前端两处拼接可能不一致）
+            alias = self.rule_alias_map.get((self.aggregate_field_identity(field), rule_idx))
             if alias is None:
                 raise InvalidRuleConfigError(f"规则 having 引用的聚合字段 {field.display_name} 不在策略级 select 中")
             pypika_field = pypika_terms.Field(alias)

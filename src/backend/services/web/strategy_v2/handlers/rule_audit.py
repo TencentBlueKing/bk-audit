@@ -403,13 +403,14 @@ class RuleAuditSQLBuilder:
         """
         聚合字段按命中规则取值：CASE strategy_rule_id WHEN r1 THEN u__r1 ... END。
 
-        字段引用使用 md5 后的别名
+        列查找按聚合身份元组（与 L1 注册 / L2 having 同一锚点）；alias 仅用于报错提示
         """
         alias = alias or field.display_name
+        identity = generator.aggregate_field_identity(field)
         rule_hit_field = sub_table.field(generator.RULE_HIT_FIELD)
         case = pypika_terms.Case()
         for idx, rule in enumerate(generator.config.rules, start=1):
-            rule_alias = generator.rule_alias_map.get((alias, idx))
+            rule_alias = generator.rule_alias_map.get((identity, idx))
             if rule_alias is None:
                 # generator 对每个聚合 select 字段 × 每条规则都会注册别名，miss 即上游数据不一致
                 raise RuleAuditSqlGeneratorError(
