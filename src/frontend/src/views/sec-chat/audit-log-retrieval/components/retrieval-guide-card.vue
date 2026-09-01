@@ -210,27 +210,14 @@
         </div>
       </div>
     </div>
-
-    <div
-      v-if="filterCardShow"
-      ref="filterCardAnchorRef"
-      class="condition-filter-slot">
-      <condition-filter-card
-        ref="filterCardRef"
-        :extension-fields="extensionFields"
-        :standard-fields="standardFields"
-        :systems="systems"
-        @searched="scrollFilterCardIntoView" />
-    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { computed, nextTick, ref } from 'vue';
+  import { computed, ref } from 'vue';
 
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
-  import ConditionFilterCard from './condition-filter-card.vue';
   import { formatSampleValue } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
@@ -252,6 +239,7 @@
   const emit = defineEmits<{
     reselect: [];
     'select-suggestion': [text: string];
+    'open-condition-filter': [payload: { fieldName: string; sample?: string }];
   }>();
 
   interface FieldRow {
@@ -273,11 +261,6 @@
   const systemsExpanded = ref(true);
   const fieldExpanded = ref(true);
   const fieldTab = ref<'common' | 'extend'>('common');
-  const filterCardShow = ref(false);
-  const filterCardRef = ref<{
-    addOrFocusField?:(fieldName: string, sample?: string) => Promise<void> | void
-  } | null>(null);
-  const filterCardAnchorRef = ref<HTMLElement | null>(null);
 
   const fallbackCommonSuggestions = [
     '查询「替换为实际用户」近7天的删除操作',
@@ -312,22 +295,12 @@
     fieldTab.value === 'common' ? commonFields.value : extendFields.value
   ));
 
-  const scrollFilterCardIntoView = async () => {
-    await nextTick();
-    requestAnimationFrame(() => {
-      filterCardAnchorRef.value?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'end',
-      });
-    });
-  };
-
-  const handleFieldSearch = async (row: FieldRow, mode: 'nl' | 'filter') => {
+  const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
-      filterCardShow.value = true;
-      await nextTick();
-      await filterCardRef.value?.addOrFocusField?.(row.rawName || row.name, row.sample);
-      scrollFilterCardIntoView();
+      emit('open-condition-filter', {
+        fieldName: row.rawName || row.name,
+        sample: row.sample,
+      });
       return;
     }
     const sampleText = row.sample || '替换为实际值';
@@ -342,13 +315,7 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    flex-direction: column;
-    gap: 16px;
     box-sizing: border-box;
-  }
-
-  .condition-filter-slot {
-    width: 100%;
   }
 
   .retrieval-guide-card {
