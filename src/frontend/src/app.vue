@@ -52,6 +52,7 @@
           class="ml24">
           <scene-system-selector
             v-model="selectedScene"
+            :is-all-secen="!route.meta?.hideAllScenes"
             :list-scope="['scene']"
             :popover-width="400"
             scene-permission="view_scene"
