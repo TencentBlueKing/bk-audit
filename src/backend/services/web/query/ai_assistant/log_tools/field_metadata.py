@@ -1,13 +1,18 @@
-"""日志字段元信息探索：受控采样、脱敏后统计当前 extend_data 层。"""
+"""日志字段元信息探索：声明根字段与按需 JSON 子字段采样。
+
+根字段直接复用现有日志检索配置，不访问 Doris。调用方指定可见 JSON 父字段后，
+服务才执行最小列采样，先预检条件字段权限，再逐行脱敏后推断下一层字段元信息。
+"""
 
 import json
 from typing import Any, Dict, Iterable, List, Tuple
 
+from bk_resource import api
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
-from apps.meta.utils.fields import EXTEND_DATA
+from apps.meta.utils.fields import START_TIME
 from services.web.query.ai_assistant.constants import EXTENSION_FIELD_DEFAULT_OPERATORS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
 from services.web.query.ai_assistant.log_tools.context import (
@@ -15,7 +20,6 @@ from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
-from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_FIELD_METADATA_MAX_FIELDS,
     LOG_FIELD_METADATA_RESPONSE_MAX_BYTES,
@@ -26,10 +30,16 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     FieldSampleSummary,
     GetLogFieldMetadataRequest,
     GetLogFieldMetadataResponse,
+    JSONValueType,
+    LogFieldCategory,
     LogFieldMetadataItem,
     LogFieldMetadataTypeSource,
     LogFieldRef,
-    LogFieldScope,
+    LogFieldType,
+)
+from services.web.query.ai_assistant.log_tools.sensitive import (
+    SensitiveLogFieldPermissionService,
+    prepare_sensitive_query_fields,
 )
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
 from services.web.query.ai_assistant.schemas import SelectionFieldOption
@@ -43,55 +53,70 @@ from services.web.query.utils.field_map import FieldMapHandler
 
 
 class LogFieldMetadataService:
-    """为已授权查询范围返回声明字段和一层拓展字段的样本观察。
+    """返回用户可见根字段，或探索一个可见 JSON 字段的下一层。
 
-    设计意图：查询只取脱敏器和 extend_data 探索必需的列；统计必须在
-    SearchDataParser 完成当前用户脱敏之后进行，避免样例或类型归纳旁路权限边界。
+    根字段范围与 WEB 日志检索配置同源。JSON 子字段样本统一通过 SearchDataParser，
+    条件字段单独预检权限，确保类型与样例不旁路现有权限和脱敏逻辑。
     """
 
-    _SAMPLE_FIELDS = (
-        LogFieldRef(raw_name="system_id"),
-        LogFieldRef(raw_name="resource_type_id"),
-        LogFieldRef(raw_name="action_id"),
-        LogFieldRef(raw_name=EXTEND_DATA.field_name),
-    )
-    _JSON_TYPE_ORDER = ("boolean", "integer", "number", "string", "array", "object", "null")
+    _JSON_TYPE_ORDER = tuple(JSONValueType)
 
     @classmethod
     def get_metadata(
-        cls, *, username: str, namespace: str, request: GetLogFieldMetadataRequest
+        cls,
+        *,
+        username: str,
+        namespace: str,
+        request: GetLogFieldMetadataRequest,
     ) -> GetLogFieldMetadataResponse:
-        """构建严格 Context 后探索字段，不返回任何原始命中或 SQL。"""
+        """完成类型复验和鉴权后，按根字段或子字段路径组装元信息。"""
 
-        context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
+        request = GetLogFieldMetadataRequest.model_validate(request.model_dump())
+        context = LogQueryContextService.build(
+            username=username,
+            namespace=namespace,
+            condition=request.condition,
+        )
+        sampled_count = 0
+        scan_truncated = False
         try:
-            rows = cls._query_samples(context)
-            # 脱敏必须先于 JSON 下钻和样例去重，否则受限字段可能经汇总链路泄露。
-            safe_rows = SearchDataParser().parse_data(rows, username=username)
+            if request.parent_field is None:
+                fields = cls._build_basic_fields(namespace=namespace)
+            else:
+                parent_field = request.parent_field
+                # 父对象可能混有无权子字段，不整体拒绝探索；由逐行脱敏负责遮罩和私密删除。
+                # 条件会影响样本命中，无法靠结果脱敏补救，仍须在查询前校验。
+                SensitiveLogFieldPermissionService.ensure_access(
+                    username=username,
+                    system_id=request.condition.scope_id,
+                    fields=SensitiveLogFieldPermissionService.collect_field_paths(
+                        condition.field for condition in context.condition.conditions
+                    ),
+                )
+                rows = cls._query_samples(context, parent_field)
+                safe_rows = SearchDataParser().parse_data(
+                    rows,
+                    username=username,
+                    system_id=request.condition.scope_id,
+                )
+                sampled_count = len(safe_rows)
+                fields, scan_truncated = cls._build_extended_fields(
+                    parent_field=parent_field,
+                    rows=safe_rows,
+                )
         except Exception as err:  # noqa: BLE001
             mapped_error = map_log_query_error(err)
             if mapped_error is err:
                 raise
             raise mapped_error from err
 
-        fields: List[LogFieldMetadataItem] = []
-        scan_truncated = False
-        if request.field_scope != LogFieldScope.EXTENDED:
-            fields.extend(cls._build_basic_fields(namespace=namespace, rows=safe_rows))
-        if request.field_scope != LogFieldScope.BASIC:
-            extended_fields, scan_truncated = cls._build_extended_fields(
-                parent_keys=request.parent_keys, rows=safe_rows
-            )
-            fields.extend(extended_fields)
-
-        configured_max_fields = getattr(settings, "AI_LOG_FIELD_METADATA_MAX_FIELDS", LOG_FIELD_METADATA_MAX_FIELDS)
-        max_fields = min(LOG_FIELD_METADATA_MAX_FIELDS, max(0, configured_max_fields))
+        max_fields = cls._effective_limit(settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0)
         truncated = scan_truncated or len(fields) > max_fields
         fields = fields[:max_fields]
         response = GetLogFieldMetadataResponse(
             fields=fields,
             sample_summary=FieldSampleSummary(
-                sampled_count=len(safe_rows),
+                sampled_count=sampled_count,
                 returned_field_count=len(fields),
                 truncated=truncated,
             ),
@@ -100,31 +125,36 @@ class LogFieldMetadataService:
         return response
 
     @classmethod
-    def _query_samples(cls, context: LogQueryContext) -> List[dict]:
-        """执行最小字段投影采样；Doris 失败统一映射到受控工具异常。"""
+    def _query_samples(cls, context: LogQueryContext, parent_field: LogFieldRef) -> List[dict]:
+        """只投影待探索 JSON 根字段和脱敏身份列。"""
 
+        query_fields = prepare_sensitive_query_fields((parent_field,))
         builder = ProjectedLogSQLBuilder(
             table=context.table,
             conditions=list(context.conditions),
             sort_list=DEFAULT_COLLECTOR_SORT_LIST,
             page=1,
-            page_size=min(
+            page_size=cls._effective_limit(
+                settings.AI_ASSISTANT_FIELD_SAMPLE_ROWS,
                 LOG_FIELD_METADATA_SAMPLE_ROWS,
-                max(0, getattr(settings, "AI_ASSISTANT_FIELD_SAMPLE_ROWS", LOG_FIELD_METADATA_SAMPLE_ROWS)),
+                0,
             ),
         )
-        records = safe_query_sync(
-            sql=builder.build_data_sql(cls._SAMPLE_FIELDS),
+        records = api.bk_base.safe_query_sync(
+            sql=builder.build_data_sql(query_fields),
             prefer_storage=StorageType.DORIS.value,
         )
         return records.get("list") or []
 
     @classmethod
-    def _build_basic_fields(cls, *, namespace: str, rows: List[dict]) -> List[LogFieldMetadataItem]:
-        """标准字段只使用现有检索配置定义，不从样本推断其可查询契约。"""
+    def _build_basic_fields(cls, *, namespace: str) -> List[LogFieldMetadataItem]:
+        """从 WEB 日志检索配置构造全部可见根字段，不依赖样本。"""
 
-        configured_path_depth = getattr(settings, "AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", LOG_TOOL_MAX_FIELD_PATH_DEPTH)
-        max_path_depth = min(LOG_TOOL_MAX_FIELD_PATH_DEPTH, max(0, configured_path_depth))
+        max_path_depth = cls._effective_limit(
+            settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+            LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+            0,
+        )
         options_map = FieldMapHandler(
             fields=[config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs],
             timedelta=DEFAULT_TIMEDELTA,
@@ -133,52 +163,68 @@ class LogFieldMetadataService:
         fields = []
         for config in COLLECT_SEARCH_CONFIG.field_configs:
             field = config.field
-            values = [
-                row[field.field_name] if field.field_name in row else row[field.field_name.lower()]
-                for row in rows
-                if field.field_name in row or field.field_name.lower() in row
-            ]
             fields.append(
                 cls._build_item(
                     field_ref=LogFieldRef(raw_name=field.field_name, field_type=field.field_type),
-                    category=LogFieldScope.BASIC,
+                    category=LogFieldCategory.BASIC,
                     display_name=str(field.description or field.alias_name or field.field_name),
                     description=str(field.description or ""),
                     type_source=LogFieldMetadataTypeSource.DECLARED,
                     allow_operators=[operator.value for operator in config.allow_operators],
                     options=options_map.get(field.field_name),
-                    values=values,
-                    sampled_count=len(rows),
-                    is_expandable=field.field_name == EXTEND_DATA.field_name and max_path_depth > 0,
+                    values=[],
+                    sampled_count=0,
+                    is_expandable=bool(field.is_json and max_path_depth > 0),
                 )
             )
+        # start_time 可用于投影、排序和聚合，但时间过滤通过 SearchCondition 的顶层字段表达，
+        # 因此它不在 COLLECT_SEARCH_CONFIG 条件列中，需要在字段发现响应中显式补充。
+        fields.append(
+            cls._build_item(
+                field_ref=LogFieldRef(raw_name=START_TIME.field_name, field_type=START_TIME.field_type),
+                category=LogFieldCategory.BASIC,
+                display_name=str(START_TIME.description or START_TIME.alias_name),
+                description=str(START_TIME.description or ""),
+                type_source=LogFieldMetadataTypeSource.DECLARED,
+                allow_operators=[],
+                options=None,
+                values=[],
+                sampled_count=0,
+                is_expandable=False,
+            )
+        )
         return fields
 
     @classmethod
     def _build_extended_fields(
-        cls, *, parent_keys: List[str], rows: List[dict]
+        cls,
+        *,
+        parent_field: LogFieldRef,
+        rows: List[dict],
     ) -> Tuple[List[LogFieldMetadataItem], bool]:
-        """只展开父路径的下一层，并跳过不能由 LogFieldRef 表达的发现 key。"""
+        """从脱敏样本中发现指定父路径的下一层字段。"""
 
         values_by_keys: Dict[Tuple[str, ...], List[Any]] = {}
         scan_truncated = False
-        configured_max_fields = getattr(settings, "AI_LOG_FIELD_METADATA_MAX_FIELDS", LOG_FIELD_METADATA_MAX_FIELDS)
-        max_fields = min(LOG_FIELD_METADATA_MAX_FIELDS, max(0, configured_max_fields))
+        max_fields = cls._effective_limit(settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0)
         for row in rows:
-            container, sample_truncated = cls._resolve_parent(row.get(EXTEND_DATA.field_name), parent_keys)
+            root_value = row.get(parent_field.raw_name, row.get(parent_field.raw_name.lower()))
+            container, sample_truncated = cls._resolve_parent(root_value, parent_field.keys)
             scan_truncated = scan_truncated or sample_truncated
             if not isinstance(container, dict):
                 continue
-            inspected_keys = 0
-            for key, value in container.items():
-                inspected_keys += 1
-                if inspected_keys == max_fields + 1:
+            for inspected_count, (key, value) in enumerate(container.items(), start=1):
+                if inspected_count > max_fields:
                     scan_truncated = True
                     break
                 try:
-                    field_ref = LogFieldRef(raw_name=EXTEND_DATA.field_name, keys=[*parent_keys, key])
+                    field_ref = LogFieldRef(
+                        raw_name=parent_field.raw_name,
+                        keys=[*parent_field.keys, key],
+                    )
                 except PydanticValidationError:
-                    # 首期协议无法安全表达的 key 只跳过该 key，不能中断整批字段发现。
+                    # 协议无法表达的业务 key 被跳过时，必须告知 Agent 探索结果并不完整。
+                    scan_truncated = True
                     continue
                 field_keys = tuple(field_ref.keys)
                 if field_keys in values_by_keys:
@@ -188,15 +234,22 @@ class LogFieldMetadataService:
                 else:
                     scan_truncated = True
 
-        configured_path_depth = getattr(settings, "AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", LOG_TOOL_MAX_FIELD_PATH_DEPTH)
-        max_path_depth = min(LOG_TOOL_MAX_FIELD_PATH_DEPTH, max(0, configured_path_depth))
+        max_path_depth = cls._effective_limit(
+            settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+            LOG_TOOL_MAX_FIELD_PATH_DEPTH,
+            0,
+        )
         fields = []
         for keys in sorted(values_by_keys):
             values = values_by_keys[keys]
             fields.append(
                 cls._build_item(
-                    field_ref=LogFieldRef(raw_name=EXTEND_DATA.field_name, keys=list(keys), field_type="string"),
-                    category=LogFieldScope.EXTENDED,
+                    field_ref=LogFieldRef(
+                        raw_name=parent_field.raw_name,
+                        keys=list(keys),
+                        field_type=LogFieldType.STRING,
+                    ),
+                    category=LogFieldCategory.EXTENDED,
                     display_name=keys[-1],
                     description="",
                     type_source=LogFieldMetadataTypeSource.INFERRED,
@@ -204,7 +257,7 @@ class LogFieldMetadataService:
                     options=None,
                     values=values,
                     sampled_count=len(rows),
-                    is_expandable="object" in cls._observed_types(values) and len(keys) < max_path_depth,
+                    is_expandable=JSONValueType.OBJECT in cls._observed_types(values) and len(keys) < max_path_depth,
                 )
             )
         return fields, scan_truncated
@@ -214,7 +267,7 @@ class LogFieldMetadataService:
         cls,
         *,
         field_ref: LogFieldRef,
-        category: LogFieldScope,
+        category: LogFieldCategory,
         display_name: str,
         description: str,
         type_source: LogFieldMetadataTypeSource,
@@ -224,7 +277,7 @@ class LogFieldMetadataService:
         sampled_count: int,
         is_expandable: bool,
     ) -> LogFieldMetadataItem:
-        """将已脱敏值转换为稳定、受限的字段观察。"""
+        """把声明信息和脱敏观察值转换为稳定响应。"""
 
         non_null_values = [value for value in values if value is not None]
         return LogFieldMetadataItem(
@@ -244,21 +297,20 @@ class LogFieldMetadataService:
 
     @staticmethod
     def _resolve_parent(value: Any, parent_keys: List[str]) -> Tuple[Any, bool]:
-        """解析 extend_data 后按请求父路径下钻；不递归枚举更深层字段。"""
+        """解析 JSON 字符串并按父路径下钻，不递归枚举更深层字段。"""
 
         current = value
         for key in [None, *parent_keys]:
             if isinstance(current, str):
-                configured_limit = getattr(
-                    settings,
-                    "AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES",
+                json_limit = LogFieldMetadataService._effective_limit(
+                    settings.AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES,
                     LOG_FIELD_METADATA_RESPONSE_MAX_BYTES,
+                    0,
                 )
-                json_string_limit = min(LOG_FIELD_METADATA_RESPONSE_MAX_BYTES, max(0, configured_limit))
-                if len(current) > json_string_limit:
+                if len(current) > json_limit:
                     return None, True
                 try:
-                    if len(current.encode("utf-8")) > json_string_limit:
+                    if len(current.encode("utf-8")) > json_limit:
                         return None, True
                     current = json.loads(current)
                 except UnicodeEncodeError:
@@ -272,35 +324,38 @@ class LogFieldMetadataService:
         return current, False
 
     @classmethod
-    def _observed_types(cls, values: List[Any]) -> List[str]:
-        observed = {cls._json_type(value) for value in values}
-        return [type_name for type_name in cls._JSON_TYPE_ORDER if type_name in observed] + sorted(
-            observed.difference(cls._JSON_TYPE_ORDER)
-        )
+    def _observed_types(cls, values: List[Any]) -> List[JSONValueType]:
+        observed = {value_type for value in values if (value_type := cls._json_type(value)) is not None}
+        return [value_type for value_type in cls._JSON_TYPE_ORDER if value_type in observed]
 
     @staticmethod
-    def _json_type(value: Any) -> str:
+    def _json_type(value: Any) -> JSONValueType | None:
         if value is None:
-            return "null"
+            return JSONValueType.NULL
         if isinstance(value, bool):
-            return "boolean"
+            return JSONValueType.BOOLEAN
         if isinstance(value, int):
-            return "integer"
+            return JSONValueType.INTEGER
         if isinstance(value, float):
-            return "number"
+            return JSONValueType.NUMBER
         if isinstance(value, str):
-            return "string"
+            return JSONValueType.STRING
         if isinstance(value, list):
-            return "array"
+            return JSONValueType.ARRAY
         if isinstance(value, dict):
-            return "object"
-        return type(value).__name__.lower()
+            return JSONValueType.OBJECT
+        return None
 
     @classmethod
     def _stable_sample_values(cls, values: List[Any]) -> List[Any]:
-        """只保留字节受限的标量样例，防止当前层字段泄露下一层 JSON 内容。"""
+        """只保留受限标量样例，避免父对象泄露下一层 JSON 内容。"""
 
         unique_values = {}
+        max_bytes = cls._effective_limit(
+            settings.AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES,
+            LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES,
+            0,
+        )
         for value in values:
             if not cls._is_scalar(value):
                 continue
@@ -308,33 +363,34 @@ class LogFieldMetadataService:
                 serialized_value = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
                 serialized_bytes = serialized_value.encode("utf-8")
             except (UnicodeEncodeError, TypeError, ValueError, OverflowError):
-                # 样例是可选提示；不能严格序列化的单值不得中断字段发现或改变统计口径。
                 continue
-            configured_max_bytes = getattr(
-                settings,
-                "AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES",
-                LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES,
-            )
-            max_bytes = min(LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES, max(0, configured_max_bytes))
             if len(serialized_bytes) > max_bytes:
                 continue
             unique_values.setdefault(serialized_value, value)
-        configured_sample_limit = getattr(
-            settings, "AI_LOG_FIELD_METADATA_SAMPLE_VALUES", LOG_FIELD_METADATA_SAMPLE_VALUES
+        sample_limit = cls._effective_limit(
+            settings.AI_LOG_FIELD_METADATA_SAMPLE_VALUES,
+            LOG_FIELD_METADATA_SAMPLE_VALUES,
+            0,
         )
-        sample_limit = min(LOG_FIELD_METADATA_SAMPLE_VALUES, max(0, configured_sample_limit))
         return [unique_values[key] for key in sorted(unique_values)[:sample_limit]]
 
     @staticmethod
     def _ensure_response_within_budget(response: GetLogFieldMetadataResponse) -> None:
-        """完整字段响应超限时稳定返回 413，不回显或部分截断样例值。"""
+        """业务 data 载荷超限时显式失败，不返回部分 JSON。"""
 
-        configured_limit = getattr(
-            settings, "AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES", LOG_FIELD_METADATA_RESPONSE_MAX_BYTES
+        response_limit = LogFieldMetadataService._effective_limit(
+            settings.AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES,
+            LOG_FIELD_METADATA_RESPONSE_MAX_BYTES,
+            0,
         )
-        response_limit = min(LOG_FIELD_METADATA_RESPONSE_MAX_BYTES, max(0, configured_limit))
         if len(response.model_dump_json().encode("utf-8")) > response_limit:
             raise LogQueryResponseTooLarge()
+
+    @staticmethod
+    def _effective_limit(configured_limit: int, hard_limit: int, minimum: int) -> int:
+        """环境配置只能收紧代码冻结的协议上限。"""
+
+        return min(hard_limit, max(minimum, configured_limit))
 
     @staticmethod
     def _is_scalar(value: Any) -> bool:

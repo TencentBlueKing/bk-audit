@@ -21,6 +21,7 @@ from services.web.ai_assistant.exceptions import (
     AttachmentSnapshotValidationError,
     InvalidAttachmentPreparation,
     InvalidAttachmentSource,
+    UnsupportedLogAnalysisCondition,
 )
 from services.web.ai_assistant.exporters import MarkdownDocumentExporter
 from services.web.ai_assistant.handlers.attachment import (
@@ -43,6 +44,7 @@ from services.web.ai_assistant.schemas.audit_search import (
     LogSearchOutputSchema,
 )
 from services.web.ai_assistant.tasks.audit_analysis import execute_log_analysis
+from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
 
 
 class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisContextSchema, AIAnalysisOutputSchema]):
@@ -93,13 +95,20 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
             log_context=log_context,
             log_output=log_output,
         )
+        # LOG_SEARCH 可承载比 Agent 工具更宽的历史条件；分析创建前必须确认该快照可被工具重放。
+        search_condition = parse_snapshot(
+            AgentSearchCondition,
+            log_input.condition.model_dump(mode="json"),
+            field_name="source_message.input_data.condition",
+            error_type=UnsupportedLogAnalysisCondition,
+        )
 
         effective_instruction = self._resolve_instruction(input_data)
         return AttachmentPreparation(
             title=DEFAULT_AI_ANALYSIS_TITLE,
             context_data=AIAnalysisContextSchema(
                 effective_instruction=effective_instruction,
-                search_condition=log_input.condition,
+                search_condition=search_condition,
                 query_summary=AIAnalysisQuerySummary(
                     total=log_output.total,
                     took_ms=log_output.query_summary.took_ms,
@@ -107,6 +116,7 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
                 ),
                 username=user,
                 namespace=log_context.namespace,
+                # 当前请求链路尚无可信用户偏好，先固化部署默认值；后续接入用户配置时只改此处。
                 timezone=settings.TIME_ZONE,
                 language=settings.LANGUAGE_CODE,
             ),

@@ -292,3 +292,11 @@ class LogAnalysisTimeout(AIAssistantException):
 
     MESSAGE = gettext_lazy("日志分析超时，请重试")
     ERROR_CODE = "043"
+
+
+class UnsupportedLogAnalysisCondition(AIAssistantException):
+    """来源检索成功，但其条件超出当前日志分析 Agent 的安全重放协议。"""
+
+    MESSAGE = gettext_lazy("当前日志检索条件暂不支持智能分析，请调整检索条件后重试")
+    ERROR_CODE = "044"
+    STATUS_CODE = 400

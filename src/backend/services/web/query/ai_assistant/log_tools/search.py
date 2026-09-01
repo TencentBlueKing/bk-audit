@@ -4,11 +4,13 @@ import re
 import time
 from typing import Any, Dict, Iterable, List, Sequence
 
+from bk_resource import api
 from bk_resource.base import Empty
 from django.conf import settings
 from django.utils import timezone
 
 from api.bk_base.constants import StorageType
+from apps.meta.utils.fields import START_TIME
 from core.utils.data import extract_nested_value
 from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
@@ -17,18 +19,26 @@ from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
-from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_SEARCH_RESPONSE_MAX_BYTES,
     LogDetailColumn,
     LogFieldRef,
+    LogQueryExecutionSummary,
     LogSearchPagination,
     SearchLogsRequest,
     SearchLogsResponse,
 )
+from services.web.query.ai_assistant.log_tools.sensitive import (
+    SensitiveLogFieldPermissionService,
+    prepare_sensitive_query_fields,
+)
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
-from services.web.query.ai_assistant.schemas import QuerySummary, SelectionFieldOption
-from services.web.query.constants import DEFAULT_COLLECTOR_SORT_LIST, DEFAULT_TIMEDELTA
+from services.web.query.ai_assistant.schemas import SelectionFieldOption
+from services.web.query.constants import (
+    DEFAULT_COLLECTOR_SORT_LIST,
+    DEFAULT_TIMEDELTA,
+    CollectorSortFieldChoices,
+)
 from services.web.query.search_data import SearchDataParser
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS_MAP
 from services.web.query.utils.field_map import FieldMapHandler
@@ -41,11 +51,6 @@ class LogDetailSearchService:
     三列，并将完整行交给 SearchDataParser；投影发生在脱敏之后，辅助列永不外泄。
     """
 
-    _SENSITIVE_HELPER_FIELDS = (
-        LogFieldRef(raw_name="system_id"),
-        LogFieldRef(raw_name="resource_type_id"),
-        LogFieldRef(raw_name="action_id"),
-    )
     _DEFAULT_FIELDS = tuple(LogFieldRef(raw_name=raw_name) for raw_name, _display_name in SNAPSHOT_DEFAULT_COLUMNS)
 
     @classmethod
@@ -56,12 +61,31 @@ class LogDetailSearchService:
         request = SearchLogsRequest.model_validate(request.model_dump())
         context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
         requested_fields = tuple(request.fields) if request.fields is not None else cls._DEFAULT_FIELDS
-        query_fields = cls._with_helpers(requested_fields)
+        query_fields = prepare_sensitive_query_fields(requested_fields)
         try:
+            # 返回列会逐行脱敏，但命中数和排序顺序也可泄露敏感值，必须提前校验使用字段。
+            SensitiveLogFieldPermissionService.ensure_access(
+                username=username,
+                system_id=request.condition.scope_id,
+                fields=SensitiveLogFieldPermissionService.collect_field_paths(
+                    (
+                        *[condition.field for condition in context.condition.conditions],
+                        *[item.field for item in request.sort],
+                    )
+                ),
+            )
             data_response, count_response, took_ms = cls._query(context=context, request=request, fields=query_fields)
             rows = data_response["list"]
             total = cls._parse_total(count_response)
-            safe_rows = SearchDataParser().parse_data(rows, username=username) if rows else []
+            safe_rows = (
+                SearchDataParser().parse_data(
+                    rows,
+                    username=username,
+                    system_id=request.condition.scope_id,
+                )
+                if rows
+                else []
+            )
             columns = cls._build_columns(namespace=namespace, fields=requested_fields)
             items = tuple(cls._project_item(row, requested_fields) for row in safe_rows)
             # took_ms 只覆盖紧邻的 Doris bulk_request；executed_at 在响应组装完成后记录。
@@ -72,15 +96,10 @@ class LogDetailSearchService:
                 pagination=LogSearchPagination(
                     page=request.page,
                     page_size=request.page_size,
-                    total=total,
                     returned_count=len(items),
                     has_more=request.page * request.page_size < total,
                 ),
-                query_summary=QuerySummary(
-                    scope_type=request.condition.scope_type,
-                    scope_id=request.condition.scope_id,
-                    time_range={"start_time": request.condition.start_time, "end_time": request.condition.end_time},
-                    condition_count=len(request.condition.conditions),
+                query_summary=LogQueryExecutionSummary(
                     took_ms=took_ms,
                     executed_at="",
                 ),
@@ -98,10 +117,19 @@ class LogDetailSearchService:
     def _query(
         cls, *, context: LogQueryContext, request: SearchLogsRequest, fields: Sequence[LogFieldRef]
     ) -> tuple[dict, dict, int]:
-        """以同一授权条件批量执行数据和计数查询，且不记录 SQL 或条件值。"""
+        """以同一授权条件批量执行数据和计数查询。SQL 由公共查询 Resource 按排障策略记录。"""
 
         if request.sort:
-            sort_list = [{"order_field": item.field.raw_name, "order_type": item.direction} for item in request.sort]
+            # 业务时间与采集时间数值一致，复用 Collector 物理列，避免重复时间排序。
+            sort_list = [
+                {
+                    "order_field": CollectorSortFieldChoices.DT_EVENT_TIME_STAMP.value
+                    if item.field.raw_name == START_TIME.field_name
+                    else item.field.raw_name,
+                    "order_type": item.direction,
+                }
+                for item in request.sort
+            ]
             sorted_fields = {item["order_field"] for item in sort_list}
             # 用户排序在前；采集器唯一序列键补在后面，保证 OFFSET 分页稳定。
             sort_list.extend(item for item in DEFAULT_COLLECTOR_SORT_LIST if item["order_field"] not in sorted_fields)
@@ -115,7 +143,7 @@ class LogDetailSearchService:
             page_size=request.page_size,
         )
         started_at = time.perf_counter()
-        responses = safe_query_sync.bulk_request(
+        responses = api.bk_base.safe_query_sync.bulk_request(
             [
                 {"sql": builder.build_data_sql(fields), "prefer_storage": StorageType.DORIS.value},
                 {"sql": builder.build_count_sql(), "prefer_storage": StorageType.DORIS.value},
@@ -137,21 +165,6 @@ class LogDetailSearchService:
         if isinstance(count, str) and re.fullmatch(r"[0-9]+", count):
             return int(count)
         raise ValueError("invalid count")
-
-    @classmethod
-    def _with_helpers(cls, fields: Sequence[LogFieldRef]) -> tuple[LogFieldRef, ...]:
-        """补齐脱敏身份列和 JSON 根列，避免子字段请求绕过敏感规则。"""
-
-        required = [*fields, *cls._SENSITIVE_HELPER_FIELDS]
-        required.extend(LogFieldRef(raw_name=field.raw_name) for field in fields if field.keys)
-        unique_fields = []
-        seen = set()
-        for field in required:
-            marker = (field.raw_name, tuple(field.keys))
-            if marker not in seen:
-                seen.add(marker)
-                unique_fields.append(field)
-        return tuple(unique_fields)
 
     @classmethod
     def _build_columns(cls, *, namespace: str, fields: Sequence[LogFieldRef]) -> List[LogDetailColumn]:
@@ -193,9 +206,8 @@ class LogDetailSearchService:
 
     @staticmethod
     def _ensure_response_within_budget(response: SearchLogsResponse) -> None:
-        """检查一次完整响应的 UTF-8 大小；超限显式失败而不截断或改写字段值。"""
+        """检查业务 data 的 UTF-8 大小；超限显式失败而不截断或改写字段值。"""
 
-        configured_limit = getattr(settings, "AI_LOG_SEARCH_RESPONSE_MAX_BYTES", LOG_SEARCH_RESPONSE_MAX_BYTES)
-        response_limit = min(LOG_SEARCH_RESPONSE_MAX_BYTES, max(0, configured_limit))
+        response_limit = min(LOG_SEARCH_RESPONSE_MAX_BYTES, max(0, settings.AI_LOG_SEARCH_RESPONSE_MAX_BYTES))
         if len(response.model_dump_json().encode("utf-8")) > response_limit:
             raise LogQueryResponseTooLarge()

@@ -112,6 +112,14 @@ class SearchCondition(BaseModel):
             raise ValueError("invalid datetime value") from err
         return v
 
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        """统一校验检索时间顺序，调用方无需在服务层重复比较。"""
+
+        if parse_datetime(self.start_time) > parse_datetime(self.end_time):
+            raise ValueError("start_time must not exceed end_time")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # SYSTEM_SELECTION（协议 §3）

@@ -7,8 +7,10 @@ from bk_resource.exceptions import APIRequestError
 from django.test import SimpleTestCase
 from requests.exceptions import HTTPError
 
+from api.bk_base.default import SafeQuerySyncResource
 from core.observability import _run_with_api_resource_span
-from services.web.query.ai_assistant.log_tools.query_sync import SafeQuerySyncResource
+from services.web.query.ai_assistant.exceptions import LogQueryTimeout
+from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 
 
 class TestSafeQuerySyncResource(SimpleTestCase):
@@ -31,13 +33,17 @@ class TestSafeQuerySyncResource(SimpleTestCase):
 
         self.assertEqual(resource.parse_response(response), {"list": [{"count": 1}]})
 
-    def test_client_call_does_not_emit_sdk_request_log_with_sql(self):
+    def test_client_logs_sql_without_resource_response_body(self):
         resource = SafeQuerySyncResource()
-        with mock.patch.object(SafeQuerySyncResource, "request", return_value={"list": []}), mock.patch(
-            "bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER"
-        ) as request_log_handler:
-            self.assertEqual(resource(sql=self.sentinel, prefer_storage="doris"), {"list": []})
+        response = self._response(payload={"result": True, "code": 0, "data": {"list": []}})
+        with (
+            mock.patch.object(resource.session, "request", return_value=response),
+            mock.patch("api.bk_base.default.logger.info") as info,
+            mock.patch("bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER") as request_log_handler,
+        ):
+            self.assertEqual(resource.request(sql=self.sentinel, prefer_storage="doris"), {"list": []})
 
+        info.assert_any_call("[SafeQuerySyncResource] SQL => %s", self.sentinel)
         request_log_handler.assert_not_called()
 
     def test_remote_failure_body_is_absent_from_exception_logs_and_span_status(self):
@@ -79,3 +85,16 @@ class TestSafeQuerySyncResource(SimpleTestCase):
                     resource.parse_response(response)
                 self.assertNotIn(self.sentinel, str(raised.exception))
                 self.assertNotIn(self.sentinel, repr(raised.exception.data))
+
+    def test_http_timeout_status_is_mapped_to_log_query_timeout(self):
+        resource = SafeQuerySyncResource()
+        for status_code in (408, 504):
+            response = self._response(
+                payload={"result": False, "message": self.sentinel},
+                http_error=HTTPError("remote timeout"),
+            )
+            response.status_code = status_code
+            with self.subTest(status_code=status_code), self.assertRaises(APIRequestError) as raised:
+                resource.parse_response(response)
+
+            self.assertIsInstance(map_log_query_error(raised.exception), LogQueryTimeout)

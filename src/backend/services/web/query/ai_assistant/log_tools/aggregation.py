@@ -2,25 +2,20 @@
 
 import re
 import time
-from typing import Dict, Set
+from typing import Dict
 
+from bk_resource import api
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
-from apps.meta.constants import SensitiveUserData
-from apps.meta.models import SensitiveObject
-from apps.permission.handlers.service import PermissionService
 from services.web.query.ai_assistant.exceptions import (
     LogQueryResponseTooLarge,
-    SensitiveFieldPermissionDenied,
     UnsupportedAggregation,
 )
 from services.web.query.ai_assistant.log_tools.context import LogQueryContextService
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
-from services.web.query.ai_assistant.log_tools.query_sync import safe_query_sync
 from services.web.query.ai_assistant.log_tools.schemas import (
     AGGREGATION_RESPONSE_MAX_BYTES,
     AGGREGATION_STANDARD_FIELD_TYPES,
@@ -31,6 +26,10 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationDataQuality,
     AggregationMetricType,
     AggregationQuerySummary,
+    AggregationResultDataType,
+)
+from services.web.query.ai_assistant.log_tools.sensitive import (
+    SensitiveLogFieldPermissionService,
 )
 from services.web.query.ai_assistant.log_tools.sql import LogAggregationSQLBuilder
 
@@ -40,7 +39,7 @@ class LogAggregationService:
 
     @classmethod
     def aggregate(cls, *, username: str, namespace: str, request: AggregateLogsRequest) -> AggregateLogsResponse:
-        """以当前用户和单系统 Context 执行限量聚合，不记录 SQL、条件或原始行。"""
+        """执行限量聚合。SQL 由公共查询 Resource 按排障策略记录，业务层不额外记录原始行。"""
 
         try:
             request = AggregateLogsRequest.model_validate(request.model_dump())
@@ -51,10 +50,13 @@ class LogAggregationService:
         # 仅 Doris 执行及其响应解析进入日志工具异常映射。
         context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
         try:
-            cls._ensure_fields_aggregatable(
+            field_refs = [item.field for item in request.dimensions]
+            field_refs.extend(item.field for item in request.metrics)
+            field_refs.extend(item.field for item in context.condition.conditions)
+            SensitiveLogFieldPermissionService.ensure_access(
                 username=username,
                 system_id=request.condition.scope_id,
-                fields=cls._requested_field_paths(request),
+                fields=SensitiveLogFieldPermissionService.collect_field_paths(field_refs),
             )
             builder = LogAggregationSQLBuilder.from_request(context, request)
             responses, took_ms = cls._query(builder)
@@ -80,67 +82,14 @@ class LogAggregationService:
                 raise
             raise mapped_error from err
 
-    @classmethod
-    def _ensure_fields_aggregatable(cls, *, username: str, system_id: str, fields: Set[str]) -> None:
-        """拒绝目标系统和全局用户数据中任何可能命中的未授权敏感字段。"""
-
-        if not fields:
-            return
-        sensitive_objects = list(
-            SensitiveObject._objects.filter(is_deleted=False).filter(
-                Q(system_id=system_id)
-                | Q(system_id=SensitiveUserData.SYSTEM_ID, resource_id=SensitiveUserData.RESOURCE_ID)
-            )
-        )
-        matched = [
-            sensitive_object
-            for sensitive_object in sensitive_objects
-            if any(
-                cls._field_paths_overlap(sensitive_path, requested_path)
-                for sensitive_path in cls._sensitive_field_names(sensitive_object)
-                for requested_path in fields
-            )
-        ]
-        if any(item.is_private for item in matched):
-            raise SensitiveFieldPermissionDenied()
-        if not matched:
-            return
-        permissions = PermissionService(username=username).get_sensitive_object_permissions(
-            [item.id for item in matched]
-        )
-        if any(not permissions.get(str(item.id), False) for item in matched):
-            raise SensitiveFieldPermissionDenied()
-
-    @staticmethod
-    def _sensitive_field_names(sensitive_object: SensitiveObject) -> Set[str]:
-        return {
-            item["field_name"]
-            for item in sensitive_object.fields
-            if isinstance(item, dict) and isinstance(item.get("field_name"), str)
-        }
-
-    @staticmethod
-    def _requested_field_paths(request: AggregateLogsRequest) -> Set[str]:
-        fields = [item.field for item in request.dimensions]
-        fields.extend(item.field for item in request.metrics if item.field is not None)
-        fields.extend(item.field for item in request.condition.conditions)
-        return {".".join((field.raw_name, *field.keys)) for field in fields if field is not None}
-
-    @staticmethod
-    def _field_paths_overlap(left: str, right: str) -> bool:
-        """按字段段判断双向祖先/后代，避免相似字符串前缀造成误判。"""
-
-        left_parts = tuple(left.split("."))
-        right_parts = tuple(right.split("."))
-        shared_length = min(len(left_parts), len(right_parts))
-        return left_parts[:shared_length] == right_parts[:shared_length]
-
     @staticmethod
     def _ensure_response_within_budget(response: AggregateLogsResponse) -> None:
-        """聚合结果按完整 UTF-8 响应计费，超限不返回原始维度值。"""
+        """聚合业务 data 按 UTF-8 JSON 计费，超限不返回原始维度值。"""
 
-        configured_limit = getattr(settings, "AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES", AGGREGATION_RESPONSE_MAX_BYTES)
-        response_limit = min(AGGREGATION_RESPONSE_MAX_BYTES, max(0, configured_limit))
+        response_limit = min(
+            AGGREGATION_RESPONSE_MAX_BYTES,
+            max(0, settings.AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES),
+        )
         if len(response.model_dump_json().encode("utf-8")) > response_limit:
             raise LogQueryResponseTooLarge()
 
@@ -150,7 +99,7 @@ class LogAggregationService:
         if any(metric.needs_conversion for metric in builder.request.metrics):
             requests.append({"sql": builder.build_quality_sql(), "prefer_storage": StorageType.DORIS.value})
         started_at = time.perf_counter()
-        responses = safe_query_sync.bulk_request(requests)
+        responses = api.bk_base.safe_query_sync.bulk_request(requests)
         took_ms = int((time.perf_counter() - started_at) * 1000)
         if not isinstance(responses, (tuple, list)) or len(responses) != len(requests):
             raise ValueError("invalid aggregation bulk response")
@@ -237,22 +186,26 @@ class LogAggregationService:
         return dimensions + metrics
 
     @staticmethod
-    def _dimension_data_type(dimension, builder: LogAggregationSQLBuilder) -> str:
+    def _dimension_data_type(dimension, builder: LogAggregationSQLBuilder) -> AggregationResultDataType:
         if dimension.id in builder.effective_time_intervals:
-            return "datetime"
+            return AggregationResultDataType.DATETIME
         if dimension.field.keys:
-            return "string"
-        return AGGREGATION_STANDARD_FIELD_TYPES[dimension.field.raw_name]
+            return AggregationResultDataType.STRING
+        return AggregationResultDataType(AGGREGATION_STANDARD_FIELD_TYPES[dimension.field.raw_name])
 
     @staticmethod
-    def _metric_data_type(metric) -> str:
+    def _metric_data_type(metric) -> AggregationResultDataType:
         if metric.type in {AggregationMetricType.COUNT, AggregationMetricType.DISTINCT_COUNT}:
-            return "long"
+            return AggregationResultDataType.LONG
         if metric.type in {AggregationMetricType.AVG, AggregationMetricType.PERCENTILE_APPROX}:
-            return "double"
+            return AggregationResultDataType.DOUBLE
         if metric.needs_conversion:
-            return metric.value_type.value.lower()
+            return AggregationResultDataType(metric.value_type.value.lower())
         field_type = AGGREGATION_STANDARD_FIELD_TYPES[metric.field.raw_name]
         if metric.type == AggregationMetricType.SUM:
-            return "double" if field_type in {"float", "double"} else "long"
-        return field_type
+            return (
+                AggregationResultDataType.DOUBLE
+                if field_type in {AggregationResultDataType.FLOAT, AggregationResultDataType.DOUBLE}
+                else AggregationResultDataType.LONG
+            )
+        return AggregationResultDataType(field_type)

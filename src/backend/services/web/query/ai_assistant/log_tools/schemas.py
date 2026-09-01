@@ -1,25 +1,38 @@
-"""日志工具共享的 Pydantic 协议。"""
+"""日志工具共享的 Pydantic 协议与成本边界。
+
+模型同时服务业务代码校验和 OpenAPI schema 生成。拓展字段路径允许业务定义的
+Unicode 与标点 key，但点号保留为现有跨模块路径分隔符；SQL 转义统一由查询构建层完成。
+"""
 
 import json
-import re
 from enum import StrEnum
-from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AllowInfNan,
+    BaseModel,
+    ConfigDict,
+    Field,
+    Strict,
+    StrictInt,
+    StrictStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from rest_framework import serializers
 
 from apps.meta.utils.fields import EXTEND_DATA, STANDARD_FIELDS, START_TIME
 from services.web.query.ai_assistant.schemas import (
     Condition,
     ConditionField,
-    QuerySummary,
     SearchCondition,
     SelectionFieldOption,
 )
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.utils.search_config import QueryConditionOperator
 
-FIELD_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 LOG_TOOL_MAX_CONDITIONS = 100
 LOG_TOOL_MAX_FILTERS_PER_CONDITION = 1000
 LOG_TOOL_MAX_CONDITION_BYTES = 256 * 1024
@@ -30,11 +43,14 @@ LOG_TOOL_MAX_FIELD_PATH_BYTES = 1024
 LOG_TOOL_MAX_SCOPE_ID_LENGTH = 255
 LogFieldKey = Annotated[
     str,
-    Field(pattern=FIELD_KEY_PATTERN.pattern, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
+    Field(min_length=1, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH, pattern=r"^[^.]+$"),
 ]
+# SQL 条件值只支持具备明确比较语义的标量。Strict 类型可避免 bool 被当作 int，
+# 也避免 Pydantic 将对象等异常输入隐式转换成字符串后流入查询构建层。
+LogFilterFloat = Annotated[float, Strict(), AllowInfNan(False)]
+LogFilterValue = StrictStr | StrictInt | LogFilterFloat
 LOG_SEARCH_MAX_FIELDS = 20
 LOG_SEARCH_MAX_SORT_FIELDS = 3
-LOG_SEARCH_MAX_PAGE = 100
 LOG_SEARCH_MAX_PAGE_SIZE = 100
 LOG_SEARCH_RESPONSE_MAX_BYTES = 1024 * 1024
 LOG_FIELD_METADATA_MAX_FIELDS = 100
@@ -44,7 +60,16 @@ LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = 1024
 LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = 1024 * 1024
 # 字段展示元信息可覆盖 WEB 列，但 Agent 投影只能使用条件白名单和默认列必需的 start_time。
 LOG_TOOL_ALLOWED_FIELD_NAMES = frozenset((*COLLECT_SEARCH_CONFIG.query_field_map, START_TIME.field_name))
-LOG_TOOL_SORTABLE_FIELD_NAMES = frozenset((START_TIME.field_name,))
+LOG_TOOL_NESTED_FIELD_NAMES = frozenset(
+    config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs if config.field.is_json
+)
+# 复用现有字段声明；JSON 排序需要另行约定混合类型语义，不接受客户端类型猜测。
+LOG_TOOL_SORTABLE_FIELD_NAMES = frozenset(
+    (
+        START_TIME.field_name,
+        *(config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs if not config.field.is_json),
+    )
+)
 # 聚合和明细查询的风险模型不同：聚合无法逐行脱敏，因此只允许这一组经过
 # 成本评估的字段。它刻意不以 LogFieldRef 的允许集作为聚合白名单。
 AGGREGATION_DIMENSION_FIELD_NAMES = frozenset(
@@ -61,10 +86,10 @@ AGGREGATION_MAX_LIMIT = 100
 AGGREGATION_RESPONSE_MAX_BYTES = 1024 * 1024
 
 
-def _bounded_limit(setting_name: str, hard_limit: int, minimum: int) -> int:
+def _bounded_limit(configured_limit: int, hard_limit: int, minimum: int) -> int:
     """运行环境只能收紧冻结协议上限，不能放大 Agent 工具成本。"""
 
-    return min(hard_limit, max(minimum, getattr(settings, setting_name, hard_limit)))
+    return min(hard_limit, max(minimum, configured_limit))
 
 
 def _json_size(value: Any) -> int:
@@ -78,12 +103,16 @@ def _json_size(value: Any) -> int:
 
 
 def _validate_field_path(raw_name: str, keys: List[str]) -> None:
-    if len(keys) > _bounded_limit("AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", LOG_TOOL_MAX_FIELD_PATH_DEPTH, 0):
+    """校验动态字段路径成本，并保留点号作为无歧义路径分隔符。"""
+
+    if any("." in key for key in keys):
+        raise ValueError("field key must not contain the path separator '.'")
+    if len(keys) > _bounded_limit(settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH, LOG_TOOL_MAX_FIELD_PATH_DEPTH, 0):
         raise ValueError("field path is too deep")
-    key_limit = _bounded_limit("AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH", LOG_TOOL_MAX_FIELD_KEY_LENGTH, 0)
+    key_limit = _bounded_limit(settings.AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH, LOG_TOOL_MAX_FIELD_KEY_LENGTH, 0)
     if any(len(key) > key_limit for key in keys):
         raise ValueError("field key is too long")
-    path_limit = _bounded_limit("AI_LOG_TOOL_MAX_FIELD_PATH_BYTES", LOG_TOOL_MAX_FIELD_PATH_BYTES, 1)
+    path_limit = _bounded_limit(settings.AI_LOG_TOOL_MAX_FIELD_PATH_BYTES, LOG_TOOL_MAX_FIELD_PATH_BYTES, 1)
     if len(".".join((raw_name, *keys)).encode("utf-8")) > path_limit:
         raise ValueError("field path is too long")
 
@@ -94,48 +123,72 @@ class AgentConditionField(ConditionField):
     keys: Annotated[
         List[LogFieldKey],
         serializers.ListField(
-            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
+            child=serializers.CharField(
+                allow_blank=False,
+                trim_whitespace=False,
+                max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH,
+            ),
             allow_empty=True,
+            default=list,
             max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
         ),
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-        description="最多 16 段 ASCII 安全子键；完整字段路径 UTF-8 最大 1024 bytes。",
+        description="最多 16 段业务子键，允许 Unicode 和除点号外的标点；完整字段路径 UTF-8 最大 1024 bytes。",
     )
 
     @model_validator(mode="after")
     def validate_agent_field_path(self):
+        if self.raw_name not in LOG_TOOL_ALLOWED_FIELD_NAMES:
+            raise ValueError("unsupported log field")
+        # 与现有 WEB 日志检索保持一致：普通字段误带 keys 时忽略子路径，JSON 字段才保留。
+        if self.keys and self.raw_name not in LOG_TOOL_NESTED_FIELD_NAMES:
+            self.keys = []
         _validate_field_path(self.raw_name, self.keys)
         return self
 
 
 class AgentCondition(Condition):
-    """Agent 工具单条件，限制过滤值数量与单值 JSON 字节。"""
+    """Agent 工具单条件，只允许标量比较值并限制请求成本。"""
 
     field: AgentConditionField
     filters: Annotated[
-        List[Any],
+        List[LogFilterValue],
         serializers.ListField(
             child=serializers.JSONField(),
             allow_empty=True,
+            default=list,
             max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
-            help_text="最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。",
+            help_text="最多 1000 个字符串、整数或浮点数；单个值的 UTF-8 JSON 最大 16 KiB。",
         ),
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
-        description="最多 1000 个比较值；单个值的 UTF-8 JSON 最大 16 KiB。",
+        description="最多 1000 个字符串、整数或浮点数；单个值的 UTF-8 JSON 最大 16 KiB。",
     )
+
+    @field_validator("operator")
+    @classmethod
+    def validate_agent_operator(cls, operator: str, info: ValidationInfo) -> str:
+        """复用现有日志检索配置校验操作符，避免 Agent 工具形成第二套字段语义。"""
+
+        allowed_operators = {value for value, _label in QueryConditionOperator.choices}
+        field = info.data.get("field")
+        if operator not in allowed_operators or (
+            field is not None and not COLLECT_SEARCH_CONFIG.judge_operator(field.raw_name, field.keys, operator)
+        ):
+            raise ValueError("unsupported log field operator")
+        return operator
 
     @model_validator(mode="after")
     def validate_agent_filter_cost(self):
         filter_count_limit = _bounded_limit(
-            "AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION", LOG_TOOL_MAX_FILTERS_PER_CONDITION, 0
+            settings.AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION, LOG_TOOL_MAX_FILTERS_PER_CONDITION, 0
         )
         if len(self.filters) > filter_count_limit:
             raise ValueError("too many condition filters")
-        filter_bytes_limit = _bounded_limit("AI_LOG_TOOL_MAX_FILTER_BYTES", LOG_TOOL_MAX_FILTER_BYTES, 1)
+        filter_bytes_limit = _bounded_limit(settings.AI_LOG_TOOL_MAX_FILTER_BYTES, LOG_TOOL_MAX_FILTER_BYTES, 1)
         if any(_json_size(value) > filter_bytes_limit for value in self.filters):
             raise ValueError("condition filter is too large")
         return self
@@ -153,13 +206,15 @@ class AgentSearchCondition(SearchCondition):
 
     @model_validator(mode="after")
     def validate_agent_condition_cost(self):
-        scope_limit = _bounded_limit("AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH", LOG_TOOL_MAX_SCOPE_ID_LENGTH, 1)
+        scope_limit = _bounded_limit(settings.AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH, LOG_TOOL_MAX_SCOPE_ID_LENGTH, 1)
         if len(self.scope_id) > scope_limit:
             raise ValueError("scope_id is too long")
-        condition_count_limit = _bounded_limit("AI_LOG_TOOL_MAX_CONDITIONS", LOG_TOOL_MAX_CONDITIONS, 0)
+        condition_count_limit = _bounded_limit(settings.AI_LOG_TOOL_MAX_CONDITIONS, LOG_TOOL_MAX_CONDITIONS, 0)
         if len(self.conditions) > condition_count_limit:
             raise ValueError("too many conditions")
-        condition_bytes_limit = _bounded_limit("AI_LOG_TOOL_MAX_CONDITION_BYTES", LOG_TOOL_MAX_CONDITION_BYTES, 1)
+        condition_bytes_limit = _bounded_limit(
+            settings.AI_LOG_TOOL_MAX_CONDITION_BYTES, LOG_TOOL_MAX_CONDITION_BYTES, 1
+        )
         if _json_size(self.model_dump(mode="json")) > condition_bytes_limit:
             raise ValueError("condition is too large")
         return self
@@ -183,56 +238,62 @@ class AgentLogToolRequest(BaseModel):
         return condition
 
 
-class LogFieldRef(BaseModel):
-    """受控日志字段引用，仅允许白名单字段或 extend_data 的安全子路径。
+class LogFieldType(StrEnum):
+    """日志检索可见字段的存储类型，兼容 BKBase JSON 与索引字段类型。"""
 
-    一期仅支持 JSONPath helper 可无歧义表达的 ASCII 标识符子键；这不是 SQL
-    注入的唯一防线。Task 3 字段发现必须复用本模型过滤，不能返回不可消费的子键。
+    STRING = "string"
+    DOUBLE = "double"
+    INT = "int"
+    LONG = "long"
+    TEXT = "text"
+    TIMESTAMP = "timestamp"
+    FLOAT = "float"
+    OBJECT = "object"
+    NESTED = "nested"
+    KEYWORD = "keyword"
+
+
+class LogFieldRef(BaseModel):
+    """受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。
+
+    JSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及
+    路径成本；Doris JSON SQL 构建器负责统一转义。
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    raw_name: str = Field(..., min_length=1, description="已声明的标准字段，或 extend_data。")
+    raw_name: str = Field(..., min_length=1, description="当前日志检索可见的标准字段或 JSON 根字段。")
     keys: Annotated[
         List[LogFieldKey],
         serializers.ListField(
-            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
+            child=serializers.CharField(
+                allow_blank=False,
+                trim_whitespace=False,
+                max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH,
+            ),
             allow_empty=True,
+            default=list,
             max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-            help_text="extend_data 的安全子路径；标准字段必须为空数组。",
+            help_text="可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组。",
         ),
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-        description="extend_data 的安全子路径；标准字段必须为空数组，完整字段路径最大 1024 bytes。",
+        description="可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。",
     )
-    field_type: Optional[str] = Field(default=None, description="可选声明类型，仅用于字段元信息或安全数值转换。")
-
-    @field_validator("keys")
-    @classmethod
-    def validate_keys(cls, keys: List[str]) -> List[str]:
-        for key in keys:
-            if not FIELD_KEY_PATTERN.fullmatch(key):
-                raise ValueError("invalid field key")
-        return keys
+    field_type: Optional[LogFieldType] = Field(
+        default=None,
+        description="可选存储字段类型，取值与审计日志公共 FieldType 一致。",
+    )
 
     @model_validator(mode="after")
     def validate_field_reference(self):
         if self.raw_name not in LOG_TOOL_ALLOWED_FIELD_NAMES:
             raise ValueError("unsupported log field")
-        # 当前工具只允许动态 extend_data 下钻，避免将任意 JSON 容器暴露给 Agent。
-        if self.keys and self.raw_name != EXTEND_DATA.field_name:
-            raise ValueError("nested keys are only supported for extend_data")
+        if self.keys and self.raw_name not in LOG_TOOL_NESTED_FIELD_NAMES:
+            raise ValueError("nested keys are only supported for visible JSON fields")
         _validate_field_path(self.raw_name, self.keys)
         return self
-
-
-class LogFieldScope(StrEnum):
-    """字段探索范围；ALL 仅用于请求，返回字段分类只使用 BASIC/EXTENDED。"""
-
-    ALL = "ALL"
-    BASIC = "BASIC"
-    EXTENDED = "EXTENDED"
 
 
 class LogFieldCategory(StrEnum):
@@ -249,49 +310,55 @@ class LogFieldMetadataTypeSource(StrEnum):
     INFERRED = "INFERRED"
 
 
+class JSONValueType(StrEnum):
+    """JSON 样本中的值类型，避免调用方解释任意类型字符串。"""
+
+    BOOLEAN = "boolean"
+    INTEGER = "integer"
+    NUMBER = "number"
+    STRING = "string"
+    ARRAY = "array"
+    OBJECT = "object"
+    NULL = "null"
+
+
+class LogSortDirection(StrEnum):
+    """日志明细排序方向。"""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
 class GetLogFieldMetadataRequest(AgentLogToolRequest):
-    """字段元信息探索请求，父路径复用可消费的 extend_data 路径约束。"""
+    """字段元信息探索请求；省略父字段时列出根字段，否则探索下一层。"""
 
-    parent_keys: Annotated[
-        List[LogFieldKey],
-        serializers.ListField(
-            child=serializers.RegexField(regex=FIELD_KEY_PATTERN, max_length=LOG_TOOL_MAX_FIELD_KEY_LENGTH),
-            allow_empty=True,
-            max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-            required=False,
-            help_text="仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开。",
-        ),
-    ] = Field(
-        default_factory=list,
-        max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-        description=("仅探索 extend_data 的下一层路径；空数组表示第一层，不会递归展开，" "完整字段路径最大 1024 bytes。"),
-    )
-    field_scope: LogFieldScope = Field(
-        default=LogFieldScope.ALL,
-        description="返回范围：BASIC 标准字段、EXTENDED 拓展字段或 ALL；样例最多来自 50 行脱敏数据。",
+    parent_field: Optional[LogFieldRef] = Field(
+        default=None,
+        description="待展开的可见 JSON 字段路径；省略时返回全部可见根字段。",
     )
 
-    @field_validator("parent_keys")
+    @field_validator("parent_field")
     @classmethod
-    def validate_parent_keys(cls, parent_keys: List[str]) -> List[str]:
-        LogFieldRef(raw_name=EXTEND_DATA.field_name, keys=parent_keys)
-        return parent_keys
+    def validate_parent_field(cls, parent_field: Optional[LogFieldRef]) -> Optional[LogFieldRef]:
+        if parent_field is not None and parent_field.raw_name not in LOG_TOOL_NESTED_FIELD_NAMES:
+            raise ValueError("parent_field must reference a visible JSON field")
+        return parent_field
 
 
 class LogFieldMetadataItem(BaseModel):
     """单个可查询字段的声明元信息与当前样本观察。"""
 
-    field: LogFieldRef
-    category: LogFieldCategory
-    display_name: str = ""
-    description: str = ""
-    type_source: LogFieldMetadataTypeSource
-    observed_types: List[str] = Field(default_factory=list)
-    allow_operators: List[str] = Field(default_factory=list)
-    options: Optional[List[SelectionFieldOption]] = None
+    field: LogFieldRef = Field(..., description="Agent 后续查询可直接复用的字段引用。")
+    category: LogFieldCategory = Field(..., description="根字段为 BASIC，JSON 子字段为 EXTENDED。")
+    display_name: str = Field(default="", description="面向用户和 Agent 的字段展示名。")
+    description: str = Field(default="", description="字段业务含义；动态子字段可能为空。")
+    type_source: LogFieldMetadataTypeSource = Field(..., description="字段类型来自声明还是样本推断。")
+    observed_types: List[JSONValueType] = Field(default_factory=list, description="脱敏样本中观察到的 JSON 类型。")
+    allow_operators: List[str] = Field(default_factory=list, description="现有日志检索支持的操作符。")
+    options: Optional[List[SelectionFieldOption]] = Field(default=None, description="枚举字段的可选值。")
     is_expandable: bool = Field(
         default=False,
-        description="extend_data 根字段及其对象子字段可为 true；其他标准 JSON 字段当前协议不可下钻。",
+        description="可见 JSON 根字段及其对象子字段可为 true，表示可继续探索下一层。",
     )
     sample_values: Annotated[
         List[Any],
@@ -306,16 +373,19 @@ class LogFieldMetadataItem(BaseModel):
         max_length=LOG_FIELD_METADATA_SAMPLE_VALUES,
         description="最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。",
     )
-    sampled_non_null_count: int = 0
-    coverage: float = 0.0
+    sampled_non_null_count: int = Field(default=0, description="脱敏样本中该字段的非空值数量。")
+    coverage: float = Field(default=0.0, description="非空样本数占本次采样日志数的比例。")
 
 
 class FieldSampleSummary(BaseModel):
     """字段探索的有界采样摘要。"""
 
-    sampled_count: int = 0
-    returned_field_count: int = 0
-    truncated: bool = False
+    sampled_count: int = Field(default=0, description="本次探索实际参与类型推断的脱敏日志数。")
+    returned_field_count: int = Field(default=0, description="本次返回字段数量。")
+    truncated: bool = Field(
+        default=False,
+        description=("是否因字段数量、扫描/解析预算或存在协议无法表达的字段而仅返回部分探索结果；" "业务 data 载荷超限返回 413。"),
+    )
 
 
 class GetLogFieldMetadataResponse(BaseModel):
@@ -324,7 +394,7 @@ class GetLogFieldMetadataResponse(BaseModel):
     fields: List[LogFieldMetadataItem] = Field(
         default_factory=list,
         max_length=LOG_FIELD_METADATA_MAX_FIELDS,
-        description="最多返回 100 个字段；完整响应 UTF-8 JSON 最大 1 MiB。",
+        description="最多返回 100 个字段；业务 data 的 UTF-8 JSON 最大 1 MiB。",
     )
     sample_summary: FieldSampleSummary
 
@@ -335,12 +405,12 @@ class LogSortItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     field: LogFieldRef
-    direction: Literal["asc", "desc"] = "desc"
+    direction: LogSortDirection = LogSortDirection.DESC
 
     @model_validator(mode="after")
     def validate_sort_field(self):
         if self.field.raw_name not in LOG_TOOL_SORTABLE_FIELD_NAMES or self.field.keys:
-            raise ValueError("sort only supports start_time")
+            raise ValueError("sort requires a non-JSON log field")
         return self
 
 
@@ -356,15 +426,28 @@ class SearchLogsRequest(AgentLogToolRequest):
     sort: List[LogSortItem] = Field(
         default_factory=list,
         max_length=LOG_SEARCH_MAX_SORT_FIELDS,
-        description="最多 3 个排序项；一期仅支持 start_time，未提供时使用稳定默认排序。",
+        description="最多 3 个排序项，支持日志配置中的非 JSON 根字段；start_time 映射为采集时间列，补齐采集器排序键。",
     )
-    page: int = Field(default=1, ge=1, le=LOG_SEARCH_MAX_PAGE, description="页码，最大 100；运行配置只能进一步收紧。")
+    page: int = Field(
+        default=1,
+        ge=1,
+        validate_default=True,
+        description="从 1 开始的页码，不限制最大页码；全量导出应使用导出任务。",
+    )
     page_size: int = Field(
-        default=20,
+        default=settings.AI_LOG_SEARCH_DEFAULT_PAGE_SIZE,
         ge=1,
         le=LOG_SEARCH_MAX_PAGE_SIZE,
+        validate_default=True,
         description="每页条数，最大 100；运行配置只能进一步收紧。",
     )
+
+    @field_validator("page_size")
+    @classmethod
+    def validate_page_size_limit(cls, value: int) -> int:
+        if value > _bounded_limit(settings.AI_LOG_SEARCH_MAX_PAGE_SIZE, LOG_SEARCH_MAX_PAGE_SIZE, 1):
+            raise ValueError("page_size exceeds maximum")
+        return value
 
     @model_validator(mode="after")
     def validate_limits(self):
@@ -374,18 +457,14 @@ class SearchLogsRequest(AgentLogToolRequest):
             field_keys = [(field.raw_name, tuple(field.keys)) for field in self.fields]
             if len(field_keys) != len(set(field_keys)):
                 raise ValueError("duplicate fields are not allowed")
-            if len(self.fields) > _bounded_limit("AI_LOG_SEARCH_MAX_FIELDS", LOG_SEARCH_MAX_FIELDS, 0):
+            if len(self.fields) > _bounded_limit(settings.AI_LOG_SEARCH_MAX_FIELDS, LOG_SEARCH_MAX_FIELDS, 0):
                 raise ValueError("too many fields")
 
         sort_keys = [(item.field.raw_name, tuple(item.field.keys)) for item in self.sort]
         if len(sort_keys) != len(set(sort_keys)):
             raise ValueError("duplicate sort fields are not allowed")
-        if len(self.sort) > _bounded_limit("AI_LOG_SEARCH_MAX_SORT_FIELDS", LOG_SEARCH_MAX_SORT_FIELDS, 0):
+        if len(self.sort) > _bounded_limit(settings.AI_LOG_SEARCH_MAX_SORT_FIELDS, LOG_SEARCH_MAX_SORT_FIELDS, 0):
             raise ValueError("too many sort fields")
-        if self.page > _bounded_limit("AI_LOG_SEARCH_MAX_PAGE", LOG_SEARCH_MAX_PAGE, 1):
-            raise ValueError("page exceeds maximum")
-        if self.page_size > _bounded_limit("AI_LOG_SEARCH_MAX_PAGE_SIZE", LOG_SEARCH_MAX_PAGE_SIZE, 1):
-            raise ValueError("page_size exceeds maximum")
         return self
 
 
@@ -402,11 +481,17 @@ class LogDetailColumn(BaseModel):
 class LogSearchPagination(BaseModel):
     """明细分页结果。"""
 
-    page: int
-    page_size: int
-    total: int
-    returned_count: int
-    has_more: bool
+    page: int = Field(description="当前页码。")
+    page_size: int = Field(description="当前请求的每页条数。")
+    returned_count: int = Field(description="当前页实际返回条数。")
+    has_more: bool = Field(description="根据本次计数结果，当前页之后是否还有匹配日志。")
+
+
+class LogQueryExecutionSummary(BaseModel):
+    """查询执行摘要，仅保留 Agent 判断成本所需的非敏感信息。"""
+
+    took_ms: int
+    executed_at: str
 
 
 class SearchLogsResponse(BaseModel):
@@ -419,7 +504,7 @@ class SearchLogsResponse(BaseModel):
         serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="脱敏后的日志行"),
     ] = Field(default=(), description="脱敏后的日志行，仅含 columns 声明的稳定 key。")
     pagination: LogSearchPagination
-    query_summary: QuerySummary
+    query_summary: LogQueryExecutionSummary
 
 
 class AggregationDimensionType(StrEnum):
@@ -477,6 +562,19 @@ class AggregationColumnRole(StrEnum):
 
     DIMENSION = "DIMENSION"
     METRIC = "METRIC"
+
+
+class AggregationResultDataType(StrEnum):
+    """聚合列对外声明的数据类型。"""
+
+    STRING = "string"
+    DOUBLE = "double"
+    INT = "int"
+    LONG = "long"
+    TEXT = "text"
+    TIMESTAMP = "timestamp"
+    FLOAT = "float"
+    DATETIME = "datetime"
 
 
 class AggregationDimension(BaseModel):
@@ -625,7 +723,7 @@ class AggregateLogsRequest(AgentLogToolRequest):
     )
     order_by: Tuple[AggregationOrder, ...] = Field(default=(), description="可选排序，只能引用已声明的维度或指标 ID。")
     limit: int = Field(
-        default=20,
+        default=settings.AI_LOG_AGGREGATION_DEFAULT_LIMIT,
         ge=1,
         le=AGGREGATION_MAX_LIMIT,
         description="返回分组数，最大 100；运行配置只能进一步收紧，服务通过多取一行计算 has_more。",
@@ -648,7 +746,7 @@ class AggregateLogsRequest(AgentLogToolRequest):
             raise ValueError("duplicate order targets are not allowed")
         if len(order_ids) > len(ids) or any(item not in ids for item in order_ids):
             raise ValueError("order_by must reference declared ids")
-        if self.limit > _bounded_limit("AI_LOG_AGGREGATION_MAX_LIMIT", AGGREGATION_MAX_LIMIT, 1):
+        if self.limit > _bounded_limit(settings.AI_LOG_AGGREGATION_MAX_LIMIT, AGGREGATION_MAX_LIMIT, 1):
             raise ValueError("aggregation limit exceeds maximum")
         return self
 
@@ -659,26 +757,24 @@ class AggregationColumn(BaseModel):
     id: str
     name: str
     role: AggregationColumnRole
-    data_type: str
+    data_type: AggregationResultDataType
     effective_time_interval: Optional[AggregationEffectiveTimeInterval] = None
 
 
 class AggregationDataQuality(BaseModel):
-    """一个安全转换指标的输入质量计数。"""
+    """一个安全转换指标在完整检索范围内的输入质量计数。"""
 
-    metric_id: str
-    non_empty_count: int
-    converted_count: int
-    conversion_failed_count: int
+    metric_id: str = Field(description="需要数值转换的指标 ID。")
+    non_empty_count: int = Field(description="完整检索范围内参与转换的非空值数量。")
+    converted_count: int = Field(description="完整检索范围内成功转换为目标数值类型的数量。")
+    conversion_failed_count: int = Field(description="完整检索范围内非空但转换失败的数量。")
 
 
-class AggregationQuerySummary(BaseModel):
+class AggregationQuerySummary(LogQueryExecutionSummary):
     """聚合执行摘要，仅保留非敏感运行元数据。"""
 
-    returned_count: int
-    has_more: bool
-    took_ms: int
-    executed_at: str
+    returned_count: int = Field(description="本次实际返回的分组数。")
+    has_more: bool = Field(description="是否还有未返回的聚合分组。")
 
 
 class AggregateLogsResponse(BaseModel):
@@ -691,12 +787,15 @@ class AggregateLogsResponse(BaseModel):
             child=serializers.JSONField(),
             allow_empty=True,
             max_length=AGGREGATION_MAX_LIMIT,
-            help_text="最多 100 行声明列对应的聚合结果；完整响应最大 1 MiB。",
+            help_text="最多 100 行声明列对应的聚合结果；业务 data 最大 1 MiB。",
         ),
     ] = Field(
         ...,
         max_length=AGGREGATION_MAX_LIMIT,
-        description="最多 100 行声明列对应的聚合结果；完整响应 UTF-8 JSON 最大 1 MiB。",
+        description="最多 100 行声明列对应的聚合结果；业务 data 的 UTF-8 JSON 最大 1 MiB。",
     )
     query_summary: AggregationQuerySummary
-    data_quality: Tuple[AggregationDataQuality, ...] = ()
+    data_quality: Tuple[AggregationDataQuality, ...] = Field(
+        default=(),
+        description="按指标返回完整检索范围的数值转换质量，不是 rows 中各分组的逐组统计。",
+    )

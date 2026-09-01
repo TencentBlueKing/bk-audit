@@ -7,17 +7,22 @@ from datetime import timedelta
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
+from core.constants import OrderTypeChoices
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregationMetric,
     AggregationMetricType,
+    LogFieldRef,
 )
 from services.web.query.ai_assistant.log_tools.sql import (
     DOUBLE_LITERAL_REGEXP,
     LONG_LITERAL_REGEXP,
     LogAggregationSQLBuilder,
+    ProjectedLogSQLBuilder,
 )
+from services.web.query.serializers import CollectorSearchAllReqSerializer
+from services.web.query.utils.doris import DorisQuerySQLBuilder
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 
@@ -72,6 +77,85 @@ class TestLogAggregationSQLBuilder(AIAssistantTestCase):
         self.assertIn("LIMIT 6", sql)
         self.assertIn("`system_id` IN ('s1')", sql)
 
+    def test_complete_bucket_data_and_quality_sql_preserve_physical_scope(self):
+        """完整 SQL 固定物理时间范围、系统隔离、时间桶和质量统计的共同口径。"""
+        condition = self.make_condition()
+        context = LogQueryContext(
+            username=self.username,
+            namespace=self.namespace,
+            condition=condition,
+            table="test_rt.doris",
+            conditions=(
+                *self.context.conditions,
+                *CollectorSearchAllReqSerializer._build_time_conditions(condition.model_dump()),
+            ),
+        )
+        request = _request(
+            self,
+            dimensions=[
+                {"id": "bucket", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": "HOUR"},
+                {"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}},
+            ],
+        )
+        builder = LogAggregationSQLBuilder.from_request(context, request)
+        where = (
+            " FROM test_rt.doris WHERE `system_id` IN ('s1')"
+            " AND `thedate`>='20260813' AND `thedate`<='20260814'"
+            " AND `dtEventTimeStamp`>=1786550400000 AND `dtEventTimeStamp`<=1786636800000"
+        )
+        bucket = "DATE_TRUNC(FROM_UNIXTIME(`dteventtimestamp`/1000),'HOUR')"
+        field = "JSON_EXTRACT_STRING(`extend_data`,'$.duration')"
+        valid = f"{field} REGEXP '{DOUBLE_LITERAL_REGEXP}'"
+        self.assertEqual(
+            builder.build_data_sql(),
+            f"SELECT {bucket} `bucket`,`action_id` `action`,COUNT(*) `count`,"
+            f"AVG(CASE WHEN {valid} THEN CAST({field} AS DOUBLE) END) `avg_duration`"
+            f"{where} GROUP BY {bucket},`action_id` ORDER BY `count` DESC LIMIT 6",
+        )
+        self.assertEqual(
+            builder.build_quality_sql(),
+            f"SELECT COUNT(CASE WHEN {field} IS NOT NULL AND {field}<>'' THEN 1 END)"
+            " `avg_duration_non_empty_count`,"
+            f"COUNT(CASE WHEN {field} IS NOT NULL AND {field}<>'' AND {valid} THEN 1 END)"
+            " `avg_duration_converted_count`,"
+            f"COUNT(CASE WHEN {field} IS NOT NULL AND {field}<>'' AND NOT {valid} THEN 1 END)"
+            f" `avg_duration_conversion_failed_count`{where}",
+        )
+
+    def test_projected_data_and_inherited_count_preserve_query_contract(self):
+        """复用计数不应改变投影字段、分页排序或给计数引入分页偏移。"""
+        builder = ProjectedLogSQLBuilder(
+            table=self.context.table,
+            conditions=list(self.context.conditions),
+            sort_list=[{"order_field": "start_time", "order_type": OrderTypeChoices.DESC.value}],
+            page=2,
+            page_size=5,
+        )
+        self.assertEqual(
+            builder.build_data_sql([LogFieldRef(raw_name="start_time"), LogFieldRef(raw_name="username")]),
+            "SELECT `start_time`,`username` FROM test_rt.doris WHERE `system_id` IN ('s1')"
+            " ORDER BY `start_time` DESC LIMIT 5 OFFSET 5",
+        )
+        self.assertEqual(
+            builder.build_count_sql(),
+            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `system_id` IN ('s1') LIMIT 1",
+        )
+        web_builder = DorisQuerySQLBuilder(
+            table=self.context.table,
+            conditions=list(self.context.conditions),
+            sort_list=[{"order_field": "start_time", "order_type": OrderTypeChoices.DESC.value}],
+            page=2,
+            page_size=5,
+        )
+        self.assertEqual(
+            web_builder.build_data_sql(),
+            "SELECT * FROM test_rt.doris WHERE `system_id` IN ('s1')" " ORDER BY `start_time` DESC LIMIT 5 OFFSET 5",
+        )
+        self.assertEqual(
+            web_builder.build_count_sql(),
+            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `system_id` IN ('s1') LIMIT 1",
+        )
+
     def test_overall_aggregate_has_no_group_by_and_uses_count_star(self):
         request = _request(self, dimensions=[])
         sql = LogAggregationSQLBuilder.from_request(self.context, request).build_data_sql()
@@ -114,9 +198,12 @@ class TestLogAggregationSQLBuilder(AIAssistantTestCase):
         )
 
         sql = LogAggregationSQLBuilder.from_request(self.context, request).build_data_sql()
-        self.assertIn("GROUP BY `action_id`,`resource_type_id`", sql)
-        self.assertIn("SUM(`access_type`) `sum_access`", sql)
-        self.assertIn("ORDER BY `action` ASC,`resource` ASC", sql)
+        self.assertEqual(
+            sql,
+            "SELECT `action_id` `action`,`resource_type_id` `resource`,COUNT(*) `count`,"
+            "SUM(`access_type`) `sum_access` FROM test_rt.doris WHERE `system_id` IN ('s1')"
+            " GROUP BY `action_id`,`resource_type_id` ORDER BY `action` ASC,`resource` ASC LIMIT 6",
+        )
 
     def test_time_bucket_auto_selection_is_stable_and_reported_by_builder(self):
         intervals = (
@@ -178,6 +265,10 @@ class TestLogAggregationSQLBuilder(AIAssistantTestCase):
         for value in ("", "-", "1.", "1e3", "+1", "1234567890123456", "1.1234567890123456"):
             with self.subTest(value=value):
                 self.assertIsNone(re.fullmatch(DOUBLE_LITERAL_REGEXP, value))
+
+    def test_numeric_regexp_does_not_depend_on_sql_backslash_mode(self):
+        # 正则进入 SQL 字符串还有一层转义；用字符类表达小数点，不依赖 sql_mode。
+        self.assertNotIn("\\", DOUBLE_LITERAL_REGEXP)
 
     def test_long_conversion_uses_long_criterion_for_data_and_quality(self):
         request = _request(

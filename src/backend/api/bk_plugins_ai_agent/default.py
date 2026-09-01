@@ -21,7 +21,6 @@ import json
 import os
 import threading
 from contextvars import ContextVar
-from enum import StrEnum
 from typing import Any, Callable
 
 from bk_resource import BkApiResource
@@ -31,64 +30,11 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
-from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser, AGUIStreamResponse
+from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
 from api.bk_plugins_ai_agent.constants import AI_THINKING_PLACEHOLDERS
-from api.bk_plugins_ai_agent.exceptions import (
-    AGUIStreamCapacityExceeded,
-    AGUIStreamProtocolError,
-)
+from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
-
-
-class _AGUIRunState(StrEnum):
-    WAITING = "WAITING"
-    RUNNING = "RUNNING"
-    TERMINAL = "TERMINAL"
-
-
-class _AGUIRunLifecycle:
-    """以唯一 RUN_STARTED 开启副作用；RUNNING 后不限制合法过程事件。"""
-
-    def __init__(self):
-        self.state = _AGUIRunState.WAITING
-        self.thread_id = ""
-        self.run_id = ""
-
-    @staticmethod
-    def _identity(event: dict[str, Any]) -> tuple[str, str]:
-        thread_id = event.get("threadId")
-        run_id = event.get("runId")
-        if not isinstance(thread_id, str) or not thread_id.strip():
-            raise AGUIStreamProtocolError("AG-UI RUN 事件缺少 threadId")
-        if not isinstance(run_id, str) or not run_id.strip():
-            raise AGUIStreamProtocolError("AG-UI RUN 事件缺少 runId")
-        return thread_id, run_id
-
-    def consume(self, event: dict[str, Any]) -> bool:
-        event_type = event["type"]
-        if event_type == "RUN_STARTED":
-            if self.state != _AGUIRunState.WAITING:
-                raise AGUIStreamProtocolError("AG-UI 流重复收到 RUN_STARTED")
-            self.thread_id, self.run_id = self._identity(event)
-            self.state = _AGUIRunState.RUNNING
-            return False
-
-        if self.state == _AGUIRunState.WAITING:
-            raise AGUIStreamProtocolError("AG-UI RUN_STARTED 前收到过程事件")
-        if event_type not in {"RUN_FINISHED", "RUN_ERROR"}:
-            return False
-        thread_id, run_id = self._identity(event)
-        if (thread_id, run_id) != (self.thread_id, self.run_id):
-            raise AGUIStreamProtocolError("AG-UI RUN 终态身份不匹配")
-        self.state = _AGUIRunState.TERMINAL
-        return True
-
-    def ensure_terminal(self) -> None:
-        if self.state == _AGUIRunState.WAITING:
-            raise AGUIStreamProtocolError("AG-UI 流未收到有效 RUN_STARTED")
-        if self.state != _AGUIRunState.TERMINAL:
-            raise AGUIStreamProtocolError("AG-UI 连接结束时未收到 RUN 终态")
 
 
 class AIAgentBase(BkApiResource, abc.ABC):
@@ -177,6 +123,9 @@ class AIAgentBase(BkApiResource, abc.ABC):
 class ChatCompletion(AIAgentBase):
     """通用 AI Agent 对话接口，通过 agent_code 参数路由到不同智能体。
 
+    传入 on_event 时逐条交付 JSON 对象，消费到 EOF 后返回 None；不解释 AG-UI 业务语义。
+    不传回调时沿用最终正文解析，兼容已有 Agent 调用方。
+
     Agent 输入和响应可能包含审计日志、用户提示词及分析结论，因此禁止
     ``ResourceRequestLog`` 采集正文；请求规模、路由和响应元信息仍由本类的
     结构化日志及 OpenTelemetry span 记录。
@@ -186,6 +135,8 @@ class ChatCompletion(AIAgentBase):
     method = "POST"
     action = "/bk_plugin/openapi/agent/chat_completion/"
     support_data_collect = False
+    # Resource 是进程级单例；回调必须按当前请求隔离，不写到实例属性或上游请求中。
+    _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("chat_on_event", default=None)
 
     def build_url(self, validated_request_data):
         agent_code = validated_request_data.pop("agent_code", None)
@@ -199,10 +150,14 @@ class ChatCompletion(AIAgentBase):
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
     def perform_request(self, validated_request_data):
-        # 请求结束后清理线程内 agent 状态，避免残留影响同线程后续请求（如审计报告等无 agent 的资源）
+        """绑定请求内的事件回调；调用方传入的字典仍可复用。"""
+        request_data = dict(validated_request_data)
+        on_event = request_data.pop("on_event", None)
+        callback_token = self._on_event_context.set(on_event)
         try:
-            return super().perform_request(validated_request_data)
+            return super().perform_request(request_data)
         finally:
+            self._on_event_context.reset(callback_token)
             self._current_agent_code = None
 
     def build_header(self, validated_request_data):
@@ -430,6 +385,12 @@ class ChatCompletion(AIAgentBase):
         return final_content
 
     def parse_response(self, response):
+        on_event = self._on_event_context.get()
+        if on_event is not None:
+            content_type = (response.headers.get("Content-Type") or response.headers.get("content-type") or "").lower()
+            if content_type and "text/event-stream" not in content_type:
+                return self._reject_non_stream_callback_response(response)
+            return self._relay_stream_response(response, on_event)
         is_stream_response = self._is_stream_response(response)
         self._log_response_received(response, is_stream_response=is_stream_response)
         if is_stream_response:
@@ -469,6 +430,17 @@ class ChatCompletion(AIAgentBase):
                         return delta["content"]
         return data
 
+    def _reject_non_stream_callback_response(self, response) -> None:
+        """保留 Agent 的标准错误；成功的非 SSE 响应按传输协议错误处理。"""
+
+        try:
+            self._log_response_received(response, is_stream_response=False)
+            self._raise_standard_error_without_logging(response)
+            response.raise_for_status()
+            raise AGUIStreamProtocolError("Agent 未按约定返回 SSE 事件流")
+        finally:
+            response.close()
+
     @staticmethod
     def _log_response_received(response, *, is_stream_response: bool) -> None:
         """记录响应传输元数据，禁止读取或输出业务正文。"""
@@ -492,20 +464,22 @@ class ChatCompletion(AIAgentBase):
         # 此时交由父类的 raise_for_status() 维持原有 HTTP 错误处理语义。
         if not isinstance(status_code, int):
             return
-        # 与 requests.Response.raise_for_status() 保持一致，仅 4xx/5xx
-        # 由父类按 HTTP 错误处理，其余状态仍需在此拦截标准业务错误正文。
-        if 400 <= status_code < 600:
-            return
         try:
             result_json = response.json()
         except Exception:
             return
         if not isinstance(result_json, dict):
             return
-        if result_json.get("result", True) or result_json.get("code") == 0:
-            return
-        # IAM 无权限响应由 BkApiResource 转换为 IAMNoPermission，并保留 permission/data 契约。
+        # IAM 错误可能使用 HTTP 200 或 403，必须先于通用 HTTP 错误分支识别。
+        # BkApiResource 的专用转换会合并 permission/data 并直接抛出 IAMNoPermission。
         if str(result_json.get("code")) == IAMNoPermission().code:
+            super().parse_response(response)
+            return
+        # 与 requests.Response.raise_for_status() 保持一致，仅 4xx/5xx
+        # 由父类按 HTTP 错误处理，其余状态仍需在此拦截标准业务错误正文。
+        if 400 <= status_code < 600:
+            return
+        if result_json.get("result", True) or result_json.get("code") == 0:
             return
         # 对齐父类异常协议，仅移除其本就不会放入 result 的 request_id。
         error_result = dict(result_json)
@@ -516,97 +490,31 @@ class ChatCompletion(AIAgentBase):
             result=error_result,
         )
 
+    def _relay_stream_response(self, response, on_event: Callable[[dict[str, Any]], None]) -> None:
+        """拆除 SSE 外壳后交付 JSON 对象；业务方自行归档并提取最终结果。
 
-class AGUIChatCompletion(ChatCompletion):
-    """AG-UI 专用流式资源：透传过程事件并返回完整结果。
-
-    Resource 是进程级单例，回调仅通过 ContextVar 在当前请求上下文传播，避免 gevent
-    并发调用之间相互覆盖。事件正文和工具参数不写入普通日志。
-    """
-
-    name = gettext_lazy("AG-UI 智能体流式对话")
-    _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("agui_on_event", default=None)
-
-    def perform_request(self, validated_request_data):
-        # bk_resource 允许调用方复用请求字典；回调只能从本次调用副本中剥离。
-        request_data = dict(validated_request_data)
-        token = self._on_event_context.set(request_data.pop("on_event", None))
+        Agent 约定每条 data 行为一个完整 JSON 对象，不在此校验事件类型或生命周期。
+        不另存事件副本，也不在 RUN_FINISHED 提前退出，以免丢弃上游尾部事件。
+        """
+        event_count = 0
         try:
-            return super().perform_request(request_data)
-        finally:
-            self._on_event_context.reset(token)
-
-    def parse_response(self, response):
-        self._log_response_received(response, is_stream_response=True)
-        response.raise_for_status()
-        result = self._parse_agui_stream_response(response, on_event=self._on_event_context.get())
-        logger.info(
-            "AI AG-UI response parsed: event_count=%s, final_content_size=%s, final_result_type=%s",
-            len(result.events),
-            len(result.final_content),
-            type(result.final_result).__name__,
-        )
-        return result
-
-    @staticmethod
-    def _parse_event(raw_line) -> dict[str, Any] | None:
-        """解析单行 SSE data 帧，只接受含非空 type 的 AG-UI 对象事件。"""
-        if isinstance(raw_line, (bytes, bytearray)):
-            line = raw_line.decode("utf-8", errors="replace")
-        else:
-            line = raw_line
-        if not line or not line.startswith("data:"):
-            return None
-        try:
-            event = json.loads(line[len("data:") :].strip())
-        except (TypeError, json.JSONDecodeError) as error:
-            raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象") from error
-        if not isinstance(event, dict) or not isinstance(event.get("type"), str) or not event["type"]:
-            raise AGUIStreamProtocolError("AG-UI 事件缺少 type")
-        return event
-
-    def _parse_agui_stream_response(self, response, on_event=None) -> AGUIStreamResponse:
-        """解析完整 AG-UI 流，并在通过形态与容量校验后同步回调每个事件。"""
-        events: list[dict[str, Any]] = []
-        final_message_parser = AGUIFinalMessageParser()
-        lifecycle = _AGUIRunLifecycle()
-        # 容量上限约束返回的完整 JSON 数组，初始即包含空数组的 `[]`。
-        serialized_bytes = 2
-        run_finished = False
-        final_result = None
-
-        for raw_line in response.iter_lines(decode_unicode=False):
-            event = self._parse_event(raw_line)
-            if event is None:
-                continue
-
-            # 生命周期是所有事件副作用的前置门禁，非法事件不得进入归档、正文解析或业务回调。
-            terminal = lifecycle.consume(event)
-            event_count = len(events) + 1
-            serialized_bytes += len(json.dumps(event, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-            if events:
-                serialized_bytes += 1
-            if event_count > settings.AI_ASSISTANT_STREAM_MAX_EVENTS:
-                raise AGUIStreamCapacityExceeded("AG-UI 事件数超过上限")
-            if serialized_bytes > settings.AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES:
-                raise AGUIStreamCapacityExceeded("AG-UI 事件体积超过上限")
-
-            events.append(event)
-            final_message_parser.consume(event)
-            if on_event is not None:
+            self._log_response_received(response, is_stream_response=True)
+            response.raise_for_status()
+            # 两种传输形态均复用库默认块大小。接受非 chunked 小事件等待缓冲或 EOF，
+            # 避免逐字节读取造成长行反复拼接、扫描；EOF 前必须消费完整响应。
+            for raw_line in response.iter_lines(decode_unicode=False):
+                line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                if not line or not line.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(line[len("data:") :])
+                except (TypeError, json.JSONDecodeError) as error:
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象") from error
+                if not isinstance(event, dict):
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象")
                 on_event(event)
-
-            if event["type"] == "RUN_ERROR":
-                raise AGUIStreamProtocolError("AG-UI 上游执行失败")
-            if terminal:
-                run_finished = True
-                final_result = event.get("result")
-                break
-
-        lifecycle.ensure_terminal()
-        if not run_finished:
-            raise AGUIStreamProtocolError("AG-UI 流未收到 RUN_FINISHED")
-        final_content = final_message_parser.get_final_content()
-        if not final_content:
-            raise AGUIStreamProtocolError(final_message_parser.error_reason)
-        return AGUIStreamResponse(events=tuple(events), final_content=final_content, final_result=final_result)
+                event_count += 1
+            logger.info("AI agent stream relayed: event_count=%s", event_count)
+        finally:
+            # HTTP、协议或业务回调失败均需释放连接；请求上下文由 perform_request 清理。
+            response.close()

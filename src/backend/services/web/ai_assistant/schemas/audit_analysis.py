@@ -7,11 +7,18 @@ SQL 或数据库内部 ID。历史附件的有效指令固化在 Context，不�
 from typing import Annotated
 
 from django.conf import settings
-from pydantic import Field, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 from rest_framework import serializers
 
 from services.web.ai_assistant.constants import AnalysisMode
 from services.web.ai_assistant.schemas.message import MessageSchema
+from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
 from services.web.query.ai_assistant.schemas import SearchCondition
 
 _NestedObjectField = serializers.DictField()
@@ -41,6 +48,18 @@ class AIAnalysisInputSchema(MessageSchema):
             raise ValueError("DEFAULT 模式不允许提供 instruction")
         return self
 
+    @model_serializer(mode="wrap")
+    def serialize_input(self, handler: SerializerFunctionWrapHandler):
+        """默认模式不写入 instruction，保证快照回读遵守与创建相同的协议。
+
+        不声明新的返回 schema，避免 Pydantic 将原有字段协议替换为任意字典。
+        """
+
+        data = handler(self)
+        if self.analysis_mode == AnalysisMode.DEFAULT:
+            data.pop("instruction", None)
+        return data
+
 
 class AIAnalysisQuerySummary(MessageSchema):
     """Agent 可用的轻量检索摘要，不包含任何日志样例。"""
@@ -54,12 +73,21 @@ class AIAnalysisContextSchema(MessageSchema):
     """Worker 使用的不对外执行快照。"""
 
     effective_instruction: str = Field(min_length=1, description="创建时已固化的有效分析指令。")
-    search_condition: Annotated[SearchCondition, _NestedObjectField]
+    search_condition: Annotated[AgentSearchCondition, _NestedObjectField]
     query_summary: AIAnalysisQuerySummary
     username: str = Field(min_length=1, description="Agent 及工具调用使用的用户身份。")
     namespace: str = Field(min_length=1, description="检索消息固化的 namespace，不由前端提交。")
-    timezone: str = Field(min_length=1, description="报告时间语义使用的时区。")
-    language: str = Field(min_length=1, description="报告默认输出语言。")
+    timezone: str = Field(min_length=1, description="创建报告时固化的部署默认时区。")
+    language: str = Field(min_length=1, description="创建报告时固化的部署默认语言。")
+
+    @field_validator("search_condition", mode="before")
+    @classmethod
+    def normalize_search_condition(cls, value):
+        """兼容平台内部传入公共条件实例，并统一固化为 Agent 工具条件。"""
+
+        if isinstance(value, SearchCondition):
+            return value.model_dump(mode="json")
+        return value
 
 
 class AIAnalysisOutputSchema(MessageSchema):

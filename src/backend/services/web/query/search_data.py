@@ -6,6 +6,9 @@
 
 from typing import List
 
+from django.db.models import Q
+
+from apps.meta.constants import SensitiveUserData
 from apps.meta.models import SensitiveObject
 from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
@@ -38,11 +41,21 @@ class SearchDataParser:
         for sensitive_obj in sensitive_objs:
             setattr(sensitive_obj, "_has_permission", permissions.get(str(sensitive_obj.id), False))
 
-    def parse_data(self, data: List[dict], username: str = None) -> list:
-        """按显式身份或当前请求身份返回脱敏后的日志列表。"""
+    def parse_data(self, data: List[dict], username: str = None, system_id: str = None) -> list:
+        """按显式身份返回脱敏日志；可将规则收敛到目标系统及全局用户字段。"""
 
-        private_sensitive_objs = list(SensitiveObject._objects.filter(is_private=True))
-        sensitive_objs = list(SensitiveObject.objects.all())
+        private_queryset = SensitiveObject._objects.filter(is_deleted=False, is_private=True)
+        sensitive_queryset = SensitiveObject.objects.all()
+        if system_id:
+            scope = Q(system_id=system_id) | Q(
+                system_id=SensitiveUserData.SYSTEM_ID,
+                resource_id=SensitiveUserData.RESOURCE_ID,
+            )
+            private_queryset = private_queryset.filter(scope)
+            sensitive_queryset = sensitive_queryset.filter(scope)
+
+        private_sensitive_objs = list(private_queryset)
+        sensitive_objs = list(sensitive_queryset)
         if sensitive_objs:
             self.mark_sensitive_permissions(sensitive_objs, username or self._request_username())
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]

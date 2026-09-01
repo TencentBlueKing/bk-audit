@@ -2,6 +2,7 @@
 
 import json
 import time
+from unittest import mock
 
 import pytest
 import requests
@@ -33,7 +34,9 @@ def attachment_service(user: str):
 
 @pytest.fixture(autouse=True)
 def cleanup_log_analysis_streams():
-    yield
+    # 本专项只验证正文流；标题旁路由独立测试覆盖，创建时不向真实标题 Agent 投递任务。
+    with mock.patch("services.web.ai_assistant.tasks.audit_analysis.generate_log_analysis_title.delay"):
+        yield
     for attachment in Attachment.objects.filter(status=ExecutionStatus.PROCESSING):
         wait_for_terminal(attachment)
     for task_id in Attachment.objects.exclude(task_id="").values_list("task_id", flat=True):
@@ -119,8 +122,10 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
 
 
-@pytest.mark.parametrize("instruction", ["run-error", "disconnect", "id-mismatch"])
+@pytest.mark.parametrize("instruction", ["run-error", "empty-artifact-eof", "truncated-chunked"])
 def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instruction):
+    """区分业务错误、无产物正常 EOF 和完整正文后的真实 HTTP 截断。"""
+
     attachment = log_analysis_stack.create_attachment(
         user=log_analysis_stack.username,
         instruction=instruction,
@@ -146,15 +151,16 @@ def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instructio
         terminal_event=PlatformStreamEvent.STREAM_END,
     )
     deadline = time.monotonic() + settings.CELERY_TEST_TASK_TIMEOUT
+    expected_live_type = "TEXT_MESSAGE_END" if instruction == "truncated-chunked" else "RUN_STARTED"
     try:
         while time.monotonic() < deadline:
-            if any(frame.data.get("type") == "RUN_STARTED" for frame in frames if isinstance(frame.data, dict)):
+            if any(frame.data.get("type") == expected_live_type for frame in frames if isinstance(frame.data, dict)):
                 break
             if done.is_set():
-                raise AssertionError(f"SSE 在收到 RUN_STARTED 前关闭: frames={frames}, errors={errors}")
+                raise AssertionError(f"SSE 在收到 {expected_live_type} 前关闭: frames={frames}, errors={errors}")
             time.sleep(0.05)
         else:
-            raise AssertionError(f"SSE 未实时收到 RUN_STARTED: frames={frames}, errors={errors}")
+            raise AssertionError(f"SSE 未实时收到 {expected_live_type}: frames={frames}, errors={errors}")
         log_analysis_stack.agent.release(instruction)
         assert done.wait(settings.CELERY_TEST_TASK_TIMEOUT)
     finally:
@@ -178,11 +184,40 @@ def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instructio
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
     if instruction == "run-error":
         assert any(event["data"].get("type") == "RUN_ERROR" for event in completed.stream_archive[:-1])
-    if instruction == "id-mismatch":
-        assert not any(event["data"].get("type") == "RUN_FINISHED" for event in completed.stream_archive[:-1])
+    elif instruction == "empty-artifact-eof":
+        assert [event["data"].get("type") for event in completed.stream_archive[:-1]] == ["RUN_STARTED"]
+    else:
+        assert [event["data"].get("type") for event in completed.stream_archive[:-1]] == [
+            "RUN_STARTED",
+            "TOOL_CALL_START",
+            "TOOL_CALL_END",
+            "TEXT_MESSAGE_START",
+            "TEXT_MESSAGE_CONTENT",
+            "TEXT_MESSAGE_END",
+        ]
+        assert completed.stream_archive[3]["data"]["role"] == "assistant"
+        assert completed.stream_archive[4]["data"]["delta"] == "# 截断前完整结论"
+        assert [(frame.event, frame.data) for frame in frames] == [
+            (event["event"], event["data"]) for event in completed.stream_archive
+        ]
 
 
-def test_log_analysis_rejects_text_before_run_started_without_archiving_it(log_analysis_stack):
+def test_log_analysis_accepts_cross_layer_run_id(log_analysis_stack):
+    attachment = log_analysis_stack.create_attachment(
+        user=log_analysis_stack.username,
+        instruction="id-mismatch",
+    )
+
+    log_analysis_stack.agent.wait_until_started("id-mismatch", timeout=settings.CELERY_TEST_TASK_TIMEOUT)
+    log_analysis_stack.agent.release("id-mismatch")
+    completed = wait_for_terminal(attachment)
+
+    assert completed.status == ExecutionStatus.SUCCESS
+    assert completed.output_data == {"markdown": "# 跨层级 Run 结论"}
+    assert any(event["data"].get("type") == "RUN_FINISHED" for event in completed.stream_archive[:-1])
+
+
+def test_log_analysis_accepts_complete_text_before_run_started(log_analysis_stack):
     attachment = log_analysis_stack.create_attachment(
         user=log_analysis_stack.username,
         instruction="pre-start-text",
@@ -191,14 +226,14 @@ def test_log_analysis_rejects_text_before_run_started_without_archiving_it(log_a
     completed = wait_for_terminal(attachment)
     snapshot = get_stream_snapshot(log_analysis_stack, completed)
 
-    assert completed.status == ExecutionStatus.FAILED
-    assert completed.output_data is None
-    assert completed.stream_archive == [
-        {
-            "event": PlatformStreamEvent.STREAM_END,
-            "stream_id": None,
-            "data": {"status": ExecutionStatus.FAILED},
-        }
+    assert completed.status == ExecutionStatus.SUCCESS
+    assert completed.output_data == {"markdown": "# 前导文本结论"}
+    assert [event["data"].get("type") for event in completed.stream_archive[:-1]] == [
+        "TEXT_MESSAGE_START",
+        "TEXT_MESSAGE_CONTENT",
+        "TEXT_MESSAGE_END",
+        "RUN_STARTED",
+        "RUN_FINISHED",
     ]
     assert snapshot["events"] == completed.stream_archive
 
