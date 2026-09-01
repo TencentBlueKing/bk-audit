@@ -1598,6 +1598,39 @@
       && dragOverState.value.position === 'bottom',
   });
 
+  const getGroupItemElement = (el: HTMLElement | null): HTMLElement | null => (
+    el?.closest('.group-item') ?? null
+  );
+
+  /**
+   * 未分组会话拖到展开分组：上下边沿为根层排序（插到分组前/后），中间区域为归入分组。
+   * 跨组 / 折叠分组仍固定为 inside。
+   */
+  const resolveConvGroupDropPosition = (
+    e: DragEvent,
+    groupName: string,
+  ): 'top' | 'bottom' | 'inside' | null => {
+    if (dragState.value.type !== 'conversation') return null;
+    if (dragState.value.sourceGroup === groupName) return null;
+
+    if (dragState.value.sourceGroup || collapsedGroups.value.has(groupName)) {
+      return 'inside';
+    }
+
+    const groupItemEl = getGroupItemElement(e.currentTarget as HTMLElement);
+    if (!groupItemEl) return 'inside';
+
+    const rect = groupItemEl.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const edge = Math.min(24, Math.max(12, rect.height * 0.12));
+    if (rect.height <= edge * 2 + 8) {
+      return e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom';
+    }
+    if (offsetY <= edge) return 'top';
+    if (offsetY >= rect.height - edge) return 'bottom';
+    return 'inside';
+  };
+
   // 拖拽处理
   const handleDragStart = (e: DragEvent, type: 'group' | 'conversation', id: string, sourceGroup?: string) => {
     const resolvedSourceGroup = sourceGroup
@@ -1650,13 +1683,8 @@
       }
     } else if (dragState.value.type === 'conversation' && type === 'group') {
       if (dragState.value.sourceGroup !== id) {
-        // 跨组 / 折叠分组：拖入分组；未分组且展开时保留上下边根层排序
-        if (dragState.value.sourceGroup || collapsedGroups.value.has(id)) {
-          dragOverState.value = { type, id, position: 'inside' };
-        } else {
-          const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          const midY = targetRect.top + targetRect.height / 2;
-          const position = e.clientY < midY ? 'top' : 'bottom';
+        const position = resolveConvGroupDropPosition(e, id);
+        if (position) {
           dragOverState.value = { type, id, position };
         }
       }
@@ -1678,13 +1706,16 @@
     dragOverState.value = { type: null, id: null, position: null };
   };
 
-  // 分组标题：未分组/跨组会话拖入时固定为 inside（折叠分组仅有 header 可投放）
+  // 分组标题：跨组/折叠时归入分组；未分组且展开时按整项边沿区分根层排序与归入分组
   const onGroupHeaderDragOver = (e: DragEvent, groupName: string) => {
     if (dragState.value.type !== 'conversation') return;
     if (dragState.value.sourceGroup === groupName) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    dragOverState.value = { type: 'group', id: groupName, position: 'inside' };
+    const position = resolveConvGroupDropPosition(e, groupName);
+    if (position) {
+      dragOverState.value = { type: 'group', id: groupName, position };
+    }
   };
 
   // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
@@ -1699,7 +1730,8 @@
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    dragOverState.value = { type: 'group', id: groupName, position: 'inside' };
+    const position = resolveConvGroupDropPosition(e, groupName) ?? 'inside';
+    dragOverState.value = { type: 'group', id: groupName, position };
   };
 
   const onGroupChildrenDrop = (e: DragEvent, groupName: string) => {
@@ -1773,10 +1805,11 @@
     } else if (type === 'conversation' && targetType === 'group') {
       if (sourceGroup !== targetId) {
         const isCollapsedTarget = collapsedGroups.value.has(targetId);
-        if (!sourceGroup && position && position !== 'inside' && !isCollapsedTarget) {
+        const dropPosition = resolveConvGroupDropPosition(e, targetId) ?? position;
+        if (!sourceGroup && dropPosition && dropPosition !== 'inside' && !isCollapsedTarget) {
           const targetGroupItem = props.groups.find(g => g.name === targetId);
           if (targetGroupItem) {
-            emitRootReorder('conversation', id!, 'group', targetGroupItem.id, position);
+            emitRootReorder('conversation', id!, 'group', targetGroupItem.id, dropPosition);
           }
         } else {
           emit('update-group', id!, targetId);
