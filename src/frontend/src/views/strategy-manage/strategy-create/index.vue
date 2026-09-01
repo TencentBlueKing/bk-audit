@@ -41,6 +41,7 @@
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
       @save-current-step="handleSaveCurrentStep"
+      @save-draft="handleSaveDraft"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
   </keep-alive>
@@ -60,7 +61,7 @@
         size="small"
         theme="primary" />
       <div class="save-dialog-text">
-        {{ isEditMode ? t('更新中,请稍后...') : t('创建中,请稍后...') }}
+        {{ saveDialogText }}
       </div>
     </div>
     <template #footer />
@@ -381,20 +382,51 @@
   // 保存中的 Dialog 显示状态，等接口请求结束后再关闭
   const showSaveDialog = ref(false);
   const saveDialogOpenedByDoSave = ref(false);
+  const isSavingDraft = ref(false);
+  // 新建/克隆态首次保存草稿成功后，后续走更新接口
+  const hasCreatedDraft = ref(false);
+  const saveDialogText = computed(() => {
+    if (isSavingDraft.value) {
+      return t('保存草稿中,请稍后...');
+    }
+    return isEditMode ? t('更新中,请稍后...') : t('创建中,请稍后...');
+  });
   // 是否在保存成功后停留在当前页，仅刷新本页数据（不返回列表）
   const stayOnPageAfterSave = ref(false);
   // 从「下一步」弹窗触发保存时，保存成功后需要前往的目标步骤
   const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | 5 | null>(null);
 
+  const resolveSaveRequest = (payload: Record<string, any>) => {
+    const strategyId = payload.strategy_id;
+    const shouldUpdate = !!(strategyId && (isEditMode || hasCreatedDraft.value));
+    if (shouldUpdate) {
+      return StrategyManageService.updateStrategy(payload as StrategyModel);
+    }
+    const createPayload = { ...payload };
+    delete createPayload.strategy_id;
+    return StrategyManageService.saveStrategy(createPayload);
+  };
+
   // 保存接口
   const {
     run: saveStrategy,
     loading: isSaveLoading,
-  } = useRequest(isEditMode
-    ? StrategyManageService.updateStrategy
-    : StrategyManageService.saveStrategy, {
+  } = useRequest(resolveSaveRequest, {
     defaultValue: {},
     onSuccess: (data) => {
+      if (isSavingDraft.value) {
+        isSavingDraft.value = false;
+        window.changeConfirm = false;
+        if (data?.strategy_id) {
+          formData.value.strategy_id = data.strategy_id;
+          hasCreatedDraft.value = true;
+        }
+        if (initialFormData.value) {
+          initialFormData.value = _.cloneDeep(formData.value);
+        }
+        messageSuccess(t('保存草稿成功'));
+        return;
+      }
       // 编辑态：来自「下一步」弹窗的保存，要求不返回列表，只刷新当前页数据
       if (isEditMode && stayOnPageAfterSave.value) {
         stayOnPageAfterSave.value = false;
@@ -506,15 +538,27 @@
   //   return _.mergeWith(base, patch, (_objValue, srcValue) => (Array.isArray(srcValue) ? srcValue : undefined));
   // };
 
-  const doSave = async () => {
+  const doSave = async ({ isDraft = false }: { isDraft?: boolean } = {}) => {
     await ensureTagMapLoaded();
     const params = normalizeSubmitParams(formData.value);
-    if (isCloneMode) {
+    if (isCloneMode && !hasCreatedDraft.value) {
       delete params.strategy_id;
     }
+    isSavingDraft.value = isDraft;
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
-    saveStrategy(buildStrategyCreatePayload(params, route));
+    const payload = buildStrategyCreatePayload(params, route);
+    if (isDraft) {
+      payload.is_draft = true;
+    }
+    saveStrategy(payload);
+  };
+
+  const handleSaveDraft = (params?: Record<string, any>) => {
+    if (params) {
+      Object.assign(formData.value, params);
+    }
+    doSave({ isDraft: true });
   };
 
   // 提交

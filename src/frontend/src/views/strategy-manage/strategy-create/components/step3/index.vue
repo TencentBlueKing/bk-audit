@@ -26,54 +26,80 @@
         </div>
 
         <div class="assign-rule-list">
-          <div
-            v-for="(rule, index) in assignRules"
-            :key="rule.id"
-            class="assign-rule-item"
-            :class="{ 'is-collapsed': rule.collapsed }">
-            <div class="assign-rule-item-header">
-              <audit-icon
-                class="collapse-icon"
-                :class="{ 'is-collapsed': rule.collapsed }"
-                type="angle-line-down"
-                @click="() => toggleCollapse(index)" />
-              <span class="rule-name">{{ rule.name }}</span>
-              <div class="header-actions">
-                <audit-icon
-                  v-bk-tooltips="t('克隆')"
-                  class="action-icon"
-                  type="copy"
-                  @click="() => handleCloneRule(index)" />
-                <audit-icon
-                  v-bk-tooltips="t('删除')"
-                  class="action-icon action-delete"
-                  type="delete"
-                  @click="() => handleDeleteRule(index)" />
-              </div>
-            </div>
-
-            <div
-              v-show="!rule.collapsed"
-              class="assign-rule-item-content">
-              <div class="form-section">
-                <div class="form-label is-required">
-                  {{ t('命中条件') }}
+          <vuedraggable
+            class="assign-rule-draggable"
+            ghost-class="assign-rule-item-ghost"
+            handle=".rule-drag-handle"
+            item-key="id"
+            :list="assignRules">
+            <template #item="{ element: rule, index }">
+              <div
+                class="assign-rule-item"
+                :class="{ 'is-collapsed': rule.collapsed }">
+                <div class="assign-rule-item-header">
+                  <span
+                    class="rule-drag-handle"
+                    title="拖拽排序">
+                    <audit-icon type="move" />
+                  </span>
+                  <audit-icon
+                    class="collapse-icon"
+                    :class="{ 'is-collapsed': rule.collapsed }"
+                    type="angle-line-down"
+                    @click="() => toggleCollapse(index)" />
+                  <template v-if="rule.editingName">
+                    <input
+                      v-model="rule.name"
+                      class="rule-name-input"
+                      type="text"
+                      @blur="() => stopEditName(index)"
+                      @keydown.enter="() => stopEditName(index)">
+                  </template>
+                  <template v-else>
+                    <span class="rule-name">{{ rule.name }}</span>
+                    <audit-icon
+                      class="rule-name-edit-icon"
+                      type="edit-fill"
+                      @click="() => startEditName(index)" />
+                  </template>
+                  <div class="header-actions">
+                    <audit-icon
+                      v-bk-tooltips="t('克隆')"
+                      class="action-icon"
+                      type="copy"
+                      @click="() => handleCloneRule(index)" />
+                    <audit-icon
+                      v-bk-tooltips="t('删除')"
+                      class="action-icon action-delete"
+                      type="delete"
+                      @click="() => handleDeleteRule(index)" />
+                  </div>
                 </div>
-                <assign-condition-rows
-                  v-model="rule.conditions"
-                  :field-options="fieldOptions" />
+
+                <div
+                  v-show="!rule.collapsed"
+                  class="assign-rule-item-content">
+                  <div class="form-section">
+                    <div class="form-label is-required">
+                      {{ t('命中条件') }}
+                    </div>
+                    <assign-condition-rows
+                      v-model="rule.conditions"
+                      :field-options="fieldOptions" />
+                  </div>
+                  <assign-rule-fields
+                    :model-value="rule"
+                    :scene-options="sceneOptions"
+                    @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
+                </div>
               </div>
-              <assign-rule-fields
-                :model-value="rule"
-                :scene-options="sceneOptions"
-                @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
-            </div>
-          </div>
+            </template>
+          </vuedraggable>
 
           <!-- 默认分派规则 -->
           <div
             class="assign-rule-item default-rule"
-            :class="{ 'is-collapsed': defaultRule.collapsed }">
+            :class="{ 'is-collapsed': defaultRule.collapsed, 'has-assign-rules': assignRules.length }">
             <div class="assign-rule-item-header">
               <audit-icon
                 class="collapse-icon"
@@ -106,6 +132,11 @@
       </bk-button>
       <bk-button
         class="ml8"
+        @click="handleSaveDraft">
+        {{ t('保存草稿') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -116,6 +147,7 @@
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
+  import Vuedraggable from 'vuedraggable';
 
   import SceneManageService from '@service/scene-manage';
 
@@ -144,6 +176,7 @@
     id: number;
     name: string;
     collapsed: boolean;
+    editingName: boolean;
     conditions: AssignConditionForm;
     scene_ids: Array<string | number>;
     processors: Array<string | number>;
@@ -154,7 +187,7 @@
 
   interface IFormData {
     assign_rules: AssignRuleItem[];
-    default_assign_rule: Omit<AssignRuleItem, 'id' | 'name' | 'conditions'>;
+    default_assign_rule: Omit<AssignRuleItem, 'id' | 'name' | 'conditions' | 'editingName'>;
     processor_groups: Array<any>;
     notice_groups: Array<any>;
   }
@@ -162,6 +195,7 @@
   interface Emits {
     (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveDraft', params: IFormData): void;
     (e: 'submitData'): void;
   }
   interface Props {
@@ -201,6 +235,7 @@
       id,
       name: overrides.name ?? `规则${id}`,
       collapsed: false,
+      editingName: false,
       conditions: createConditionForm(),
       scene_ids: [],
       processors: [],
@@ -284,11 +319,27 @@
     assignRules.value[index].collapsed = !assignRules.value[index].collapsed;
   };
 
+  const startEditName = (index: number) => {
+    assignRules.value[index].editingName = true;
+    nextTick(() => {
+      const container = document.querySelector('.assign-rule-draggable');
+      const inputs = container?.querySelectorAll<HTMLInputElement>('.rule-name-input');
+      inputs?.[index]?.focus();
+    });
+  };
+
+  const stopEditName = (index: number) => {
+    assignRules.value[index].editingName = false;
+    if (!assignRules.value[index].name.trim()) {
+      assignRules.value[index].name = `规则${index + 1}`;
+    }
+  };
+
   const handleAddRule = () => {
     const rule = createRule({ name: `规则${assignRules.value.length + 1}` });
     assignRules.value.push(rule);
     nextTick(() => {
-      document.querySelector('.assign-rule-item:last-of-type')
+      document.querySelector('.assign-rule-draggable .assign-rule-item:last-of-type')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
@@ -378,6 +429,10 @@
     if (!validateRules()) return;
     emits('nextStep', 5, buildStepParams());
     emits('submitData');
+  };
+
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildStepParams());
   };
 
   const applyEchoData = (data: Record<string, any>) => {
@@ -501,11 +556,26 @@
     padding: 0 24px 24px;
   }
 
+  .assign-rule-draggable {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .assign-rule-item-ghost {
+    opacity: 0.5;
+    background: #f0f5ff;
+  }
+
   .assign-rule-item {
     margin-bottom: 8px;
     background: #fff;
     border: 1px solid #dcdee5;
     border-radius: 2px;
+
+    &.default-rule.has-assign-rules {
+      margin-top: 8px;
+    }
 
     &:last-child {
       margin-bottom: 0;
@@ -520,6 +590,17 @@
       border-bottom: 1px solid #dcdee5;
       gap: 8px;
 
+      .rule-drag-handle {
+        font-size: 14px;
+        color: #c4c6cc;
+        cursor: grab;
+        flex-shrink: 0;
+
+        &:active {
+          cursor: grabbing;
+        }
+      }
+
       .collapse-icon {
         font-size: 14px;
         color: #63656e;
@@ -533,9 +614,37 @@
 
       .rule-name {
         flex: 1;
+        min-width: 0;
+        overflow: hidden;
         font-size: 14px;
         font-weight: 600;
         color: #313238;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rule-name-input {
+        flex: 1;
+        min-width: 0;
+        height: 28px;
+        padding: 0 8px;
+        font-size: 14px;
+        color: #313238;
+        background: #fff;
+        border: 1px solid #3a84ff;
+        border-radius: 2px;
+        outline: none;
+      }
+
+      .rule-name-edit-icon {
+        font-size: 14px;
+        color: #979ba5;
+        cursor: pointer;
+        flex-shrink: 0;
+
+        &:hover {
+          color: #3a84ff;
+        }
       }
 
       .header-actions {
