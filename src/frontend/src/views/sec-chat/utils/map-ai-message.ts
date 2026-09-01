@@ -205,6 +205,9 @@ export const mapLogSearchOutputToResult = (
     columns.forEach((col) => {
       row[col.rawName] = sample?.[col.rawName] ?? '';
     });
+    if (sample?.result_content !== undefined && sample?.result_content !== null && sample?.result_content !== '') {
+      row.result_content = sample.result_content;
+    }
     return row;
   });
 
