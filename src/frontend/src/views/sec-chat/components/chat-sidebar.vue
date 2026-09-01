@@ -144,67 +144,67 @@
             @drop="handleDrop($event, 'history', 'history')">
             <div class="section-label">
               <span class="label-text">{{ historySectionLabel }}</span>
-            <bk-popover
-              arrow
-              :auto-visibility="false"
-              boundary="body"
-              ext-cls="add-group-popover"
-              hide-ignore-reference
-              :is-show="addGroupDialog.show"
-              placement="right-start"
-              theme="light"
-              trigger="manual"
-              :width="260"
-              @after-show="handleAddGroupPopoverShow"
-              @clickoutside="onAddGroupClickOutside"
-              @update:is-show="onAddGroupShowChange">
-              <span
-                class="label-action"
-                :class="{ 'is-active': addGroupDialog.show }"
-                @click.stop="toggleAddGroupPopover"
-                @mousedown.stop="prepareAddGroupToggle">
-                <plus />
-              </span>
-              <template #content>
-                <div
-                  class="add-group-popover-content"
-                  @click.stop>
-                  <div class="add-group-title">
-                    新建分组
+              <bk-popover
+                arrow
+                :auto-visibility="false"
+                boundary="body"
+                ext-cls="add-group-popover"
+                hide-ignore-reference
+                :is-show="addGroupDialog.show"
+                placement="right-start"
+                theme="light"
+                trigger="manual"
+                :width="260"
+                @after-show="handleAddGroupPopoverShow"
+                @clickoutside="onAddGroupClickOutside"
+                @update:is-show="onAddGroupShowChange">
+                <span
+                  class="label-action"
+                  :class="{ 'is-active': addGroupDialog.show }"
+                  @click.stop="toggleAddGroupPopover"
+                  @mousedown.stop="prepareAddGroupToggle">
+                  <plus />
+                </span>
+                <template #content>
+                  <div
+                    class="add-group-popover-content"
+                    @click.stop>
+                    <div class="add-group-title">
+                      新建分组
+                    </div>
+                    <bk-input
+                      ref="addGroupInputRef"
+                      v-model="addGroupDialog.name"
+                      placeholder="请输入分组名称"
+                      @enter="confirmAddGroup" />
+                    <div class="add-group-footer">
+                      <bk-button
+                        theme="primary"
+                        @click="confirmAddGroup">
+                        确定
+                      </bk-button>
+                      <bk-button @click="closeAddGroupPopover">
+                        取消
+                      </bk-button>
+                    </div>
                   </div>
-                  <bk-input
-                    ref="addGroupInputRef"
-                    v-model="addGroupDialog.name"
-                    placeholder="请输入分组名称"
-                    @enter="confirmAddGroup" />
-                  <div class="add-group-footer">
-                    <bk-button
-                      theme="primary"
-                      @click="confirmAddGroup">
-                      确定
-                    </bk-button>
-                    <bk-button @click="closeAddGroupPopover">
-                      取消
-                    </bk-button>
-                  </div>
-                </div>
-              </template>
-            </bk-popover>
-          </div>
+                </template>
+              </bk-popover>
+            </div>
 
-          <div
-            class="history-conv-list"
-            :class="{ 'is-drop-zone-active': showHistoryDropPlaceholder }">
-            <!-- 全部已分组时：拖入历史区域才展开投放位 -->
             <div
-              class="history-drop-placeholder"
-              :class="{ 'is-visible': showHistoryDropPlaceholder }"
-              @dragover.prevent="onHistoryListDragOver"
-              @drop.prevent="handleDrop($event, 'history', 'history')">
-              拖放到此处移出分组
+              class="history-conv-list"
+              :class="{ 'is-drop-zone-active': showHistoryDropPlaceholder }">
+              <!-- 全部已分组时：拖入历史区域才展开投放位 -->
+              <div
+                class="history-drop-placeholder"
+                :class="{ 'is-visible': showHistoryDropPlaceholder }"
+                @dragover.prevent="onHistoryListDragOver"
+                @drop.prevent="handleDrop($event, 'history', 'history')">
+                拖放到此处移出分组
+              </div>
             </div>
           </div>
-        </div>
 
           <!-- 根层混排：分组与会话按后端 nodes/ 顺序 -->
           <div class="conv-section conv-section--mixed">
@@ -338,7 +338,9 @@
                   draggable="true"
                   @click="handleGroupHeaderClick(item.group.name)"
                   @dragend="handleDragEnd"
-                  @dragstart="handleDragStart($event, 'group', item.group.name)">
+                  @dragover.stop="onGroupHeaderDragOver($event, item.group.name)"
+                  @dragstart="handleDragStart($event, 'group', item.group.name)"
+                  @drop.stop="handleDrop($event, 'group', item.group.name)">
                   <img
                     v-if="collapsedGroups.has(item.group.name)"
                     alt=""
@@ -1645,10 +1647,15 @@
       }
     } else if (dragState.value.type === 'conversation' && type === 'group') {
       if (dragState.value.sourceGroup !== id) {
-        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const midY = targetRect.top + targetRect.height / 2;
-        const position = e.clientY < midY ? 'top' : 'bottom';
-        dragOverState.value = { type, id, position: dragState.value.sourceGroup ? 'inside' : position };
+        // 跨组 / 折叠分组：拖入分组；未分组且展开时保留上下边根层排序
+        if (dragState.value.sourceGroup || collapsedGroups.value.has(id)) {
+          dragOverState.value = { type, id, position: 'inside' };
+        } else {
+          const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const midY = targetRect.top + targetRect.height / 2;
+          const position = e.clientY < midY ? 'top' : 'bottom';
+          dragOverState.value = { type, id, position };
+        }
       }
     } else if (dragState.value.type === 'group' && type === 'group') {
       const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -1668,6 +1675,15 @@
     dragOverState.value = { type: null, id: null, position: null };
   };
 
+  // 分组标题：未分组/跨组会话拖入时固定为 inside（折叠分组仅有 header 可投放）
+  const onGroupHeaderDragOver = (e: DragEvent, groupName: string) => {
+    if (dragState.value.type !== 'conversation') return;
+    if (dragState.value.sourceGroup === groupName) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverState.value = { type: 'group', id: groupName, position: 'inside' };
+  };
+
   // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
   const onGroupChildrenDragOver = (e: DragEvent, groupName: string) => {
     if (dragState.value.type !== 'conversation') return;
@@ -1677,7 +1693,10 @@
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       return;
     }
-    handleDragOver(e, 'group', groupName);
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverState.value = { type: 'group', id: groupName, position: 'inside' };
   };
 
   const onGroupChildrenDrop = (e: DragEvent, groupName: string) => {
@@ -1739,7 +1758,8 @@
       }
     } else if (type === 'conversation' && targetType === 'group') {
       if (sourceGroup !== targetId) {
-        if (!sourceGroup && position && position !== 'inside') {
+        const isCollapsedTarget = collapsedGroups.value.has(targetId);
+        if (!sourceGroup && position && position !== 'inside' && !isCollapsedTarget) {
           const targetGroupItem = props.groups.find(g => g.name === targetId);
           if (targetGroupItem) {
             emitRootReorder('conversation', id!, 'group', targetGroupItem.id, position);
