@@ -480,6 +480,8 @@
       );
       if (matchedItem && !isSceneLocked(matchedItem)) {
         targetItem = matchedItem;
+      } else if (!matchedItem && urlMatchId === 'allSecen' && !props.isAllSecen) {
+        // 当前页面不支持「我的所有场景」，回退到具体场景
       } else if (matchedItem && isSceneLocked(matchedItem)) {
         // URL 指向仅使用权限场景：应用内进入时兜底第一个可管理场景（外链由路由守卫跳转申请页）
         if (unlockedSceneItems.length > 0) {
@@ -659,6 +661,24 @@
       trySelectFromRoute();
     },
   });
+
+  const applySceneListAggregate = () => {
+    const pureScenes = sceneList.value.filter(item => item.id !== 'allSecen');
+    sceneList.value = props.isAllSecen
+      ? [{ id: 'allSecen', name: t('我的所有场景'), type: 'aggregate' }, ...pureScenes]
+      : pureScenes;
+  };
+
+  watch(() => props.isAllSecen, () => {
+    if (!sceneList.value.length) {
+      return;
+    }
+    applySceneListAggregate();
+    if (!props.isAllSecen && selectedItem.value?.id === 'allSecen') {
+      trySelectFromRoute();
+    }
+  });
+
   // 监听外部值变化
   watch(() => props.modelValue, (newVal) => {
     selectedItem.value = newVal;
