@@ -159,24 +159,36 @@
                 <td class="col-name">
                   <show-tooltips-text
                     class="cell-text"
-                    :data="row.name || ''" />
+                    :data="row.name || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
                 </td>
                 <td class="col-desc">
                   <show-tooltips-text
                     class="cell-text"
-                    :data="row.desc || ''" />
+                    :data="row.desc || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
                 </td>
                 <td class="col-sample">
                   <show-tooltips-text
                     class="cell-text"
-                    :data="row.sample || ''" />
+                    :data="row.sample || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
                 </td>
                 <td
                   v-if="fieldTab === 'extend'"
                   class="col-system">
                   <show-tooltips-text
                     class="cell-text"
-                    :data="row.system || ''" />
+                    :data="row.system || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
                 </td>
                 <td class="col-actions">
                   <button
@@ -219,6 +231,7 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import ConditionFilterCard from './condition-filter-card.vue';
+  import { formatSampleValue } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
   import wenhaoIcon from '@images/wenhao.svg';
@@ -252,6 +265,10 @@
   }
 
   const SUGGESTION_LIMIT = 4;
+  /** 按字段检索表格 tooltip：限制宽度与高度，长 JSON 内容区内滚动 */
+  const FIELD_TABLE_TOOLTIP_MAX_WIDTH = 480;
+  const FIELD_TABLE_TOOLTIP_MAX_HEIGHT = '400px';
+  const FIELD_TABLE_TOOLTIP_CONTENT_CLASS = 'show-tooltips-text-popup';
 
   const systemsExpanded = ref(true);
   const fieldExpanded = ref(true);
@@ -281,9 +298,7 @@
   const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
     name: field.displayName || field.rawName,
     desc: field.description || '',
-    sample: field.sampleValue === undefined || field.sampleValue === null
-      ? ''
-      : String(field.sampleValue),
+    sample: formatSampleValue(field.sampleValue),
     system: field.systemName || field.systemId,
     rawName: field.rawName,
     nlName: field.nlName || field.displayName || field.rawName,
