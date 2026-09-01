@@ -43,6 +43,11 @@
       </bk-button>
       <bk-button
         class="ml8"
+        @click="handleSaveDraft">
+        {{ t('保存草稿') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
         @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
@@ -82,6 +87,7 @@
     (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'showPreview'): void;
+    (e: 'saveDraft', params: IFormData): void;
   }
   interface Props {
     editData: StrategyModel,
@@ -144,6 +150,10 @@
     eventRef.value.getValue().then(() => {
       emits('nextStep', 4, buildStepParams());
     });
+  };
+
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildStepParams());
   };
 
   const cleanDrillConfig = (item: IFormData['event_basic_field_configs'][0]) => {

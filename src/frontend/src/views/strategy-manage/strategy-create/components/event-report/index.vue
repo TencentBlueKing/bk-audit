@@ -131,6 +131,11 @@
           @click="handleNext">
           {{ primaryActionText }}
         </bk-button>
+        <bk-button
+          class="ml8"
+          @click="handleSaveDraft">
+          {{ t('保存草稿') }}
+        </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
           class="ml8"
@@ -203,6 +208,7 @@
     (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: Partial<IFormData>): void;
+    (e: 'saveDraft', params: Partial<IFormData>): void;
     (e: 'submitData'): void;
   }
 
@@ -434,6 +440,25 @@
     }
     // 审计策略：第 4 步为最后一步，直接提交
     emits('saveCurrentStep', stepParams);
+  };
+
+  const buildReportStepParams = () => {
+    if (isEnvent.value) {
+      reportInfo.value.enabled = true;
+      reportInfo.value.config = buildReportConfig();
+    } else {
+      reportInfo.value.enabled = false;
+      reportInfo.value.config = buildReportConfig();
+    }
+    return {
+      report_enabled: reportInfo.value.enabled,
+      report_config: reportInfo.value.config,
+      report_auto_render: isAutoGetReports.value,
+    };
+  };
+
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildReportStepParams());
   };
 
   // 提交（编辑态）：效果与「其他配置」的提交一致

@@ -119,6 +119,7 @@
             {{ t('编辑') }}
           </auth-button>
           <auth-button
+            v-if="!strategyItem.isDraft"
             v-bk-tooltips="{
               content: t('处理中，不能克隆'),
               disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
@@ -154,7 +155,7 @@
               {{ t('删除') }}
             </bk-button>
           </auth-component>
-          <span>
+          <span v-if="!strategyItem.isDraft">
             <span
               class="mr8"
               style="margin-left: 24px;font-size: 14px;color: #63656e;">
@@ -701,19 +702,39 @@
       minWidth: 220,
       render: ({ data }: { data: StrategyModel}) => {
         const isNew = isNewData(data);
-        return isNew
-          ? <div style='display: flex;align-items: center;'>
-          <a onClick={() => handleDetail(data)}>
+        const nameLink = (
+          <a onClick={() => (data.isDraft ? handleEdit(data) : handleDetail(data))}>
             <Tooltips data={data.strategy_name} />
           </a>
-          <img
-              class='table-new-tip'
-              src={getAssetsFile('new-tip.png')}/>
-          </div>
-          :  <a onClick={() => handleDetail(data)}>
-            <Tooltips data={data.strategy_name} />
-          </a>
-        ;
+        );
+        const draftTag = data.isDraft ? (
+          <bk-tag
+            size="small"
+            style="margin-left: 6px; flex-shrink: 0;"
+            theme="warning">
+            {t('草稿')}
+          </bk-tag>
+        ) : null;
+        if (isNew) {
+          return (
+            <div style='display: flex;align-items: center;'>
+              {nameLink}
+              <img
+                class='table-new-tip'
+                src={getAssetsFile('new-tip.png')}/>
+              {draftTag}
+            </div>
+          );
+        }
+        if (draftTag) {
+          return (
+            <div style='display: flex; align-items: center;'>
+              {nameLink}
+              {draftTag}
+            </div>
+          );
+        }
+        return nameLink;
       },
     },
     {
@@ -760,6 +781,17 @@
         btnReset: t('重置'),
       },
       render: ({ data }: { data: StrategyModel }) => {
+        if (data.isDraft) {
+          return (
+            <p style='display: flex; align-items: center;'>
+              <audit-icon
+                svg
+                class='mr4'
+                type={data.statusTag} />
+              {t('编辑中')}
+            </p>
+          );
+        }
         if (!data.isFailed) {
           if (data.isPending) {
             return <p
@@ -872,7 +904,7 @@
             strategy_id: data.strategy_id,
           },
         } : null;
-        return riskCount && to ? <router-link to = {to} target='_blank'>
+        return riskCount && to && !data.isDraft ? <router-link to = {to} target='_blank'>
           <span v-bk-tooltips={{
             content: t('近6个月此策略产生风险单总数，点击查看'),
             disabled: !riskCount,
@@ -908,6 +940,21 @@
         btnReset: t('重置'),
       },
       render: ({ data }: { data: StrategyModel }) => {
+        if (data.isDraft) {
+          return (
+            <auth-switch
+              action-id="edit_strategy"
+              disabled
+              permission={data.permission.edit_strategy}
+              size="small"
+              resource={data.strategy_id}
+              theme="primary"
+              v-bk-tooltips={{
+                content: t('草稿策略不支持启停'),
+              }}
+            />
+          );
+        }
         if (data.isPending || data.isFailed) {
           return <auth-switch
           action-id="edit_strategy"
@@ -963,7 +1010,31 @@
       fixed: 'right',
       label: () => t('操作'),
       width: '120px',
-      render: ({ data }: { data: StrategyModel }) => <>
+      render: ({ data }: { data: StrategyModel }) => {
+        if (data.isDraft) {
+          return <>
+            <auth-button
+              actionId="edit_strategy"
+              permission={data.permission.edit_strategy}
+              resource={data.strategy_id}
+              theme="primary"
+              text
+              onClick={() => handleEdit(data)}>
+              {t('编辑')}
+            </auth-button>
+            <auth-button
+              actionId="delete_strategy"
+              class="ml8"
+              permission={data.permission.delete_strategy}
+              resource={data.strategy_id}
+              theme="primary"
+              text
+              onClick={() => handleDelete(data)}>
+              {t('删除')}
+            </auth-button>
+          </>;
+        }
+        return <>
       {
         data.isPending
           ? <bk-button
@@ -1064,7 +1135,8 @@
           ),
         }}
       </bk-dropdown>
-    </>,
+    </>;
+      },
     },
   ] as any[]);
 
@@ -1407,6 +1479,10 @@
 
   // 详情
   const handleDetail = (data: StrategyModel) => {
+    if (data.isDraft) {
+      handleEdit(data);
+      return;
+    }
     const strategyId = Number(data?.strategy_id);
     if (!strategyId) return;
     recordPageParams();
@@ -1417,6 +1493,7 @@
 
   // 运行记录
   const handleRecord = (data: StrategyModel) => {
+    if (data.isDraft) return;
     strategyItem.value = data;
     showRecords.value = true;
   };
@@ -1463,7 +1540,7 @@
 
   // 克隆
   const handleClone = (data: StrategyModel) => {
-    if (data.isPending || pendingStatusIdList.value.includes(data.strategy_id)) return;
+    if (data.isDraft || data.isPending || pendingStatusIdList.value.includes(data.strategy_id)) return;
     recordPageParams();
     router.push({
       name: strategyRoutes.clone,
@@ -1561,6 +1638,9 @@
   };
   // 启停
   const handleChange = (data: StrategyModel) => {
+    if (data.isDraft) {
+      return Promise.resolve();
+    }
     const { status } = data;
     switchSuccessMap.value[data.strategy_id] = false;
     switchStrategyParams.value = {
