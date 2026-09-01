@@ -39,7 +39,7 @@ const formatDisplayDateTime = (value?: string | null) => {
   return parsed.format('YYYY-MM-DD HH:mm:ss');
 };
 
-const formatSampleValue = (value: any): string => {
+export const formatSampleValue = (value: any): string => {
   if (value === undefined || value === null) return '';
   if (typeof value === 'object') {
     try {
