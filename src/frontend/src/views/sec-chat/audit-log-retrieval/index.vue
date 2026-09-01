@@ -27,6 +27,7 @@
       :nl-suggestions="panelConversation.commonOperations || []"
       :standard-fields="panelConversation.standardFields || []"
       :systems="panelConversation.systems || []"
+      :confirming-system-message-id="confirmingSystemMessageId"
       @attach="handleAttach"
       @close-select-system="handleCloseSelectSystem"
       @confirm-system="handleConfirmSystem"
@@ -65,6 +66,8 @@
 
   /** keep-alive 失活后 route 已是其他页，禁止再 replace 抢导航（否则点工具广场会先被拉回会话首页） */
   const isPageActive = ref(true);
+  /** 系统选择确认请求进行中，防止重复点击 */
+  const confirmingSystemMessageId = ref<string | null>(null);
 
   const panelConversation = computed(() => activeConversation.value);
 
@@ -128,6 +131,8 @@
     systemIds: string[],
     systems: SelectedSystem[],
   ) => {
+    if (confirmingSystemMessageId.value) return;
+    confirmingSystemMessageId.value = messageId;
     const wasDraft = Boolean(activeConversation.value?.isDraft);
     try {
       const result = await confirmSystem(messageId, systemIds, systems);
@@ -139,6 +144,8 @@
       }
     } catch {
       // 创建失败留在选系统页，提示由全局 request 中间件处理
+    } finally {
+      confirmingSystemMessageId.value = null;
     }
   };
 

@@ -53,7 +53,8 @@
       <div class="card-actions">
         <bk-button
           class="confirm-btn"
-          :disabled="!selectedId"
+          :disabled="!selectedId || confirming"
+          :loading="confirming"
           theme="primary"
           @click="handleConfirm">
           确认选择
@@ -82,10 +83,13 @@
 
   interface Props {
     modelValue?: string[];
+    /** 确认选择请求进行中，禁用按钮防止重复提交 */
+    confirming?: boolean;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     modelValue: () => [],
+    confirming: false,
   });
 
   const emit = defineEmits<{
@@ -159,6 +163,7 @@
       messageWarn('请选择系统');
       return;
     }
+    if (props.confirming) return;
     const system = selectedSystem.value || { id: selectedId.value, name: selectedId.value };
     emit('confirm', [system.id], [system]);
   };
