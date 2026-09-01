@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
 
 import requests
 from django.conf import settings
@@ -38,6 +39,14 @@ class PaaSV3BaseResource(AuditBkApiResource, abc.ABC):
         if self.use_multi_tenant_mode():
             return get_endpoint(settings.BK_PAAS_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_PAAS_API_URL
+
+    def build_header(self, validated_request_data: dict) -> dict:
+        """构造 PaaS 应用态凭证请求头"""
+        headers = super().build_header(validated_request_data)
+        headers["x-bkapi-authorization"] = json.dumps(
+            {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+        )
+        return headers
 
 
 class UniAppsQuery(PaaSV3BaseResource):
