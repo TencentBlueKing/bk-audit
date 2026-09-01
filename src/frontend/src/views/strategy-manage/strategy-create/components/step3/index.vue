@@ -165,6 +165,7 @@
   import useRequest from '@/hooks/use-request';
   import {
     type AssignConditionForm,
+    buildStrategyEventFieldOptions,
     createDefaultAssignConditionForm,
     dispatchToAssignConditionForm,
     hasValidAssignCondition,
@@ -202,6 +203,7 @@
     editData: StrategyModel;
     formData?: Record<string, any>;
     select?: Array<DatabaseTableFieldModel>;
+    strategyType?: string;
   }
 
   const props = defineProps<Props>();
@@ -272,33 +274,12 @@
   const assignRules = ref<AssignRuleItem[]>([]);
   const defaultRule = ref(createDefaultRule());
 
-  const getFieldOptionId = (field: DatabaseTableFieldModel) => {
-    const aliasField = field as DatabaseTableFieldModel & { value?: string };
-    return field.raw_name || aliasField.value || '';
-  };
-
-  const getFieldOptionLabel = (field: DatabaseTableFieldModel) => {
-    const aliasField = field as DatabaseTableFieldModel & { alias?: string; label?: string; value?: string };
-    if (aliasField.alias && aliasField.label) {
-      return `${aliasField.label}(${aliasField.value})`;
-    }
-    if (field.display_name && field.raw_name) {
-      return `${field.display_name}(${field.raw_name})`;
-    }
-    return field.display_name || field.raw_name || '';
-  };
-
-  const fieldOptions = computed(() => {
-    const fields: DatabaseTableFieldModel[] = props.select?.length
-      ? props.select
-      : (props.formData?.configs?.table_fields || []);
-    return fields
-      .map((item: DatabaseTableFieldModel) => ({
-        id: getFieldOptionId(item),
-        name: getFieldOptionLabel(item),
-      }))
-      .filter((item: { id: string; name: string }) => item.id);
-  });
+  const fieldOptions = computed(() => buildStrategyEventFieldOptions({
+    event_basic_field_configs: props.formData?.event_basic_field_configs,
+    event_data_field_configs: props.formData?.event_data_field_configs,
+    event_evidence_field_configs: props.formData?.event_evidence_field_configs,
+    strategy_type: props.strategyType,
+  }));
 
   const {
     data: sceneList,

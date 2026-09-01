@@ -103,6 +103,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
+  import { buildStrategyEventOutputFields } from '../../../../utils/strategy-protocol';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -178,29 +179,12 @@
       event_evidence_field_configs: t('事件证据'),
     }));
 
-  const outputFields = computed(() => {
-    const basicFields = tableData.value.event_basic_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'basic',
-    }));
-    const dataFields = tableData.value.event_data_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'data',
-    }));
-    const evidenceFields = props.strategyType === 'rule'
-      ? tableData.value.event_evidence_field_configs.map(item => ({
-        raw_name: item.field_name,
-        display_name: item.display_name,
-        description: item.description,
-        target_field_type: 'evidence',
-      }))
-      : [];
-    return basicFields.concat(dataFields, evidenceFields);
-  });
+  const outputFields = computed(() => buildStrategyEventOutputFields({
+    event_basic_field_configs: tableData.value.event_basic_field_configs,
+    event_data_field_configs: tableData.value.event_data_field_configs,
+    event_evidence_field_configs: tableData.value.event_evidence_field_configs,
+    strategy_type: props.strategyType,
+  }));
 
 
   const buildToolListParams = () => getToolListScopeParams({ status: 'published' });

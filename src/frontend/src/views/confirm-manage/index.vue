@@ -451,6 +451,10 @@
 
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
+  position: relative;
+  padding-bottom: 44px;
+  overflow-x: hidden;
+
   .risk-manage-list {
     padding: 5px 20px;
     margin-top: 16px;

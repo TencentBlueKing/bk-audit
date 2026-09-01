@@ -147,6 +147,75 @@ export const hasValidAssignCondition = (form: AssignConditionForm | unknown) => 
   return form.groups.some(group => group.conditions.some(row => row.field && row.operator));
 };
 
+type EventFieldConfigLike = {
+  field_name?: string;
+  display_name?: string;
+  description?: string;
+};
+
+export type StrategyEventOutputField = {
+  raw_name: string;
+  display_name: string;
+  description: string;
+  target_field_type: 'basic' | 'data' | 'evidence';
+};
+
+export type StrategyEventFieldOption = {
+  id: string;
+  name: string;
+};
+
+/** 与单据展示（step2 event-table）outputFields 保持一致 */
+export const buildStrategyEventOutputFields = (params: {
+  event_basic_field_configs?: EventFieldConfigLike[];
+  event_data_field_configs?: EventFieldConfigLike[];
+  event_evidence_field_configs?: EventFieldConfigLike[];
+  strategy_type?: string;
+}): StrategyEventOutputField[] => {
+  const mapField = (
+    item: EventFieldConfigLike,
+    targetFieldType: StrategyEventOutputField['target_field_type'],
+  ): StrategyEventOutputField => ({
+    raw_name: item.field_name || '',
+    display_name: item.display_name || '',
+    description: item.description || '',
+    target_field_type: targetFieldType,
+  });
+
+  const basicFields = (params.event_basic_field_configs || []).map(item => mapField(item, 'basic'));
+  const dataFields = (params.event_data_field_configs || []).map(item => mapField(item, 'data'));
+  const evidenceFields = params.strategy_type === 'rule'
+    ? (params.event_evidence_field_configs || []).map(item => mapField(item, 'evidence'))
+    : [];
+
+  return basicFields
+    .concat(dataFields, evidenceFields)
+    .filter(field => field.raw_name);
+};
+
+export const buildStrategyEventFieldOptions = (params: {
+  event_basic_field_configs?: EventFieldConfigLike[];
+  event_data_field_configs?: EventFieldConfigLike[];
+  event_evidence_field_configs?: EventFieldConfigLike[];
+  strategy_type?: string;
+}): StrategyEventFieldOption[] => {
+  const seen = new Set<string>();
+  return buildStrategyEventOutputFields(params).reduce<StrategyEventFieldOption[]>((acc, field) => {
+    if (seen.has(field.raw_name)) {
+      return acc;
+    }
+    seen.add(field.raw_name);
+    const label = field.display_name && field.display_name !== field.raw_name
+      ? `${field.display_name}(${field.raw_name})`
+      : (field.display_name || field.raw_name);
+    acc.push({
+      id: field.raw_name,
+      name: label,
+    });
+    return acc;
+  }, []);
+};
+
 type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
 export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined) => {

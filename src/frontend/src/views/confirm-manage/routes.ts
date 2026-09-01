@@ -24,6 +24,7 @@ export default {
   meta: {
     navName: 'auditRiskManage',
     isShowSceneSelector: true,
+    hideAllScenes: true,
   },
   children: [
     {
