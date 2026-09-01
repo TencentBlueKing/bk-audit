@@ -29,6 +29,15 @@ export interface UseRiskColumnsOptions {
   excludeColumns?: string[];
   appendColumns?: any[];
 }
+
+/** 建立列配置对异步依赖的响应式追踪，避免策略/场景等元数据加载后表格不刷新 */
+export const touchRiskColumnDeps = (deps: RiskColumnDeps) => {
+  void deps.strategyList.value;
+  void deps.sceneList.value;
+  void deps.riskStatusCommon.value;
+  void deps.levelData.value;
+  void deps.strategyTagMap.value;
+};
 export const useRiskColumns = (options: UseRiskColumnsOptions) => {
   const { t, deps, detailRouteName, overrides, excludeColumns, appendColumns } = options;
   const baseColumns = createBaseRiskColumns(deps, t);

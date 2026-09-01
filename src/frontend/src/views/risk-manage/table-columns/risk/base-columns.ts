@@ -14,7 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import type { Ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import { h, resolveComponent, resolveDirective, withDirectives } from 'vue';
 
 import type RiskManageModel from '@model/risk/risk';
@@ -25,14 +25,14 @@ import Tooltips from '@components/show-tooltips-text/index.vue';
 import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
 import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
-import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+import { findStrategyLabel, formatStrategyNameWithId } from '@utils/format-strategy-name';
 
 export type RiskColumnTranslate = (key: string, ...args: any[]) => string;
 
 export interface RiskColumnDeps {
   levelData: Ref<Record<string, any>>;
   strategyTagMap: Ref<Record<string, string>>;
-  strategyList: Ref<Array<{ value: number; label: string }>>;
+  strategyList: Ref<Array<{ value: number | string; label: string }>> | ComputedRef<Array<{ value: number | string; label: string }>>;
   riskStatusCommon: Ref<Array<{ id: string; name: string }>>;
   sceneList: Ref<Array<{ scene_id: number; name: string }>>;
   handleToDetail: (row: RiskManageModel, needToRiskContent?: boolean) => void;
@@ -194,18 +194,19 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
       width: 200,
       ellipsis: true,
       cell: (_h: any, { row }: { row: RiskManageModel }) => {
+        if (!row.strategy_id && row.strategy_id !== 0) {
+          return h('span', '--');
+        }
         const RouterLink = resolveComponent('router-link');
         const to = {
           name: 'strategyList',
           query: { strategy_id: row.strategy_id, scope_id: row.scene_id, scope_type: 'scene' },
         };
-        const strategyName = strategyList.value
-          .find((item: any) => item.value === row.strategy_id)?.label;
-        return strategyName
-          ? h(RouterLink as any, { to, target: '_blank' }, () => [
-            h('span', formatStrategyNameWithId(strategyName, row.strategy_id)),
-          ])
-          : h('span', '--');
+        const strategyName = findStrategyLabel(strategyList.value, row.strategy_id);
+        const displayText = formatStrategyNameWithId(strategyName, row.strategy_id);
+        return h(RouterLink as any, { to, target: '_blank' }, () => [
+          h('span', displayText),
+        ]);
       },
     },
     {
