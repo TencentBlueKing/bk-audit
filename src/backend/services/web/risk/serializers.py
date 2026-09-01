@@ -2047,3 +2047,23 @@ class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
         default="",
         allow_blank=True,
     )
+
+
+class BatchConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """批量确认为误报请求"""
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("风险 ID 列表"),
+        child=serializers.CharField(),
+        min_length=1,
+        required=True,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
+        return sorted(list(set(risk_ids)))
