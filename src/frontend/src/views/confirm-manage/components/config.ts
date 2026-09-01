@@ -40,7 +40,7 @@ export default {
     valName: 'value',
     formatLabel: formatStrategyOptionLabel,
     defaultParams: {
-      risk_view_type: 'pending_confirm',
+      risk_view_type: 'confirm',
       isNeedSceneParams: true,
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
@@ -52,7 +52,7 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
-      risk_view_type: 'pending_confirm',
+      risk_view_type: 'confirm',
       scope_id: getSceneSystemParams().scope_id,
       scope_type: getSceneSystemParams().scope_type,
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),

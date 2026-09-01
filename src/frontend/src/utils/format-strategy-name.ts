@@ -1,3 +1,27 @@
+export type StrategyOptionLike = {
+  value?: string | number | null;
+  label?: string | null;
+  name?: string | null;
+  strategy_name?: string | null;
+  id?: string | number | null;
+  strategy_id?: string | number | null;
+};
+
+export const findStrategyLabel = (
+  strategyList: StrategyOptionLike[],
+  strategyId?: string | number | null,
+) => {
+  if (strategyId === undefined || strategyId === null || strategyId === '') {
+    return '';
+  }
+  const strategyIdText = String(strategyId);
+  const matched = strategyList.find((item) => {
+    const value = item.value ?? item.id ?? item.strategy_id;
+    return value !== undefined && value !== null && String(value) === strategyIdText;
+  });
+  return String(matched?.label || matched?.name || matched?.strategy_name || '').trim();
+};
+
 export const formatStrategyNameWithId = (
   name?: string | null,
   id?: string | number | null,

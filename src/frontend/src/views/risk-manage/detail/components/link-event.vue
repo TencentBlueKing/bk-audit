@@ -480,7 +480,7 @@
   import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import { execCopy } from '@utils/assist';
-  import { formatStrategyNameWithId } from '@utils/format-strategy-name';
+  import { formatStrategyNameWithId, findStrategyLabel } from '@utils/format-strategy-name';
 
   import addEvent from '../add-event/index.vue';
 
@@ -526,7 +526,7 @@
   interface Props {
     strategyList: Array<{
       label: string,
-      value: number
+      value: number | string
     }>,
     data: RiskManageModel & StrategyInfo,
     /** 是否展示内容区「关联事件列表」标题（有 Tab 页签时传 false，避免与页签文案重复） */
@@ -562,9 +562,9 @@
     if (strategyId === undefined || strategyId === null || strategyId === '') {
       return '';
     }
-    const normalizedId = Number(strategyId);
-    const label = props.strategyList.find(item => item.value === normalizedId)?.label;
-    return formatStrategyNameWithId(label, strategyId);
+    const strategyName = findStrategyLabel(props.strategyList, strategyId)
+      || String((props.data as RiskManageModel & StrategyInfo & { strategy_name?: string }).strategy_name || '').trim();
+    return formatStrategyNameWithId(strategyName, strategyId);
   };
 
   let timeout: number| undefined = undefined;
