@@ -656,3 +656,273 @@ class RiskStatusPreCheckTest(TicketTest):
             # ConfirmAsMisReport 应阻止已关闭状态
             with self.assertRaises(RiskStatusInvalid):
                 ConfirmAsMisReport(risk_id=risk.risk_id, operator=operator).run(username=operator)
+
+
+class BatchConfirmRiskResourceTest(TicketTest):
+    """测试 BatchConfirmRisk Resource"""
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.ConfirmRiskResource.bulk_request",
+        mock.Mock(return_value=[{"success": True}, {"success": True}]),
+    )
+    def test_batch_confirm_success(self):
+        """
+        测试批量确认风险成功
+        关键验证：批量操作成功
+        """
+        from services.web.risk.resources.risk import BatchConfirmRiskResource
+
+        # 创建多个风险（RiskContext.__init__ 会清空所有 Risk，两个实例不能共存，
+        # 这里直接用 Risk.objects.create 创建两条）
+        risk1 = Risk.objects.create(
+            **{
+                **RISK_INFO,
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        )
+        risk2 = Risk.objects.create(
+            **{
+                **RISK_INFO,
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        )
+        try:
+            # 调用批量确认接口
+            result = BatchConfirmRiskResource().perform_request({"risk_ids": [risk1.risk_id, risk2.risk_id]})
+            self.assertTrue(result["success"])
+        finally:
+            risk1.delete()
+            risk2.delete()
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="wrong_user"),
+    )
+    def test_batch_confirm_permission_denied(self):
+        """
+        测试批量确认风险权限拒绝
+        关键验证：PermissionDenied 异常
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        from services.web.risk.resources.risk import BatchConfirmRiskResource
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            with self.assertRaises(PermissionDenied) as context:
+                BatchConfirmRiskResource().perform_request({"risk_ids": [risk.risk_id]})
+            self.assertIn("非确认人", str(context.exception))
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    def test_batch_confirm_invalid_status(self):
+        """
+        测试批量确认风险状态错误
+        关键验证：ValidationError 异常
+        """
+        from rest_framework.exceptions import ValidationError
+
+        from services.web.risk.resources.risk import BatchConfirmRiskResource
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.NEW,
+                "display_status": RiskDisplayStatus.NEW,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            with self.assertRaises(ValidationError) as context:
+                BatchConfirmRiskResource().perform_request({"risk_ids": [risk.risk_id]})
+            self.assertIn("风险状态不是待确认", str(context.exception))
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    def test_batch_confirm_non_existent_risk(self):
+        """
+        测试批量确认风险不存在的风险 ID
+        关键验证：ValidationError 异常
+        """
+        from rest_framework.exceptions import ValidationError
+
+        from services.web.risk.resources.risk import BatchConfirmRiskResource
+
+        with self.assertRaises(ValidationError) as context:
+            BatchConfirmRiskResource().perform_request({"risk_ids": ["non_existent_risk_id"]})
+        self.assertIn("存在不存在的风险 ID", str(context.exception))
+
+
+class BatchConfirmAsMisReportResourceTest(TicketTest):
+    """测试 BatchConfirmAsMisReport Resource"""
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.ConfirmAsMisReportResource.bulk_request",
+        mock.Mock(return_value=[{"success": True}, {"success": True}]),
+    )
+    def test_batch_confirm_as_misreport_success(self):
+        """
+        测试批量确认为误报成功
+        关键验证：批量操作成功
+        """
+        from services.web.risk.resources.risk import BatchConfirmAsMisReportResource
+
+        # 创建多个风险（注意：RiskContext.__init__ 会 Risk.objects.all().delete()，
+        # 两个 RiskContext 不能共存，这里直接用 Risk.objects.create 创建两条）
+        risk1 = Risk.objects.create(
+            **{
+                **RISK_INFO,
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        )
+        risk2 = Risk.objects.create(
+            **{
+                **RISK_INFO,
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        )
+        try:
+            # 调用批量确认为误报接口
+            result = BatchConfirmAsMisReportResource().perform_request(
+                {"risk_ids": [risk1.risk_id, risk2.risk_id], "description": "测试批量误报"}
+            )
+            self.assertTrue(result["success"])
+        finally:
+            risk1.delete()
+            risk2.delete()
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="wrong_user"),
+    )
+    def test_batch_confirm_as_misreport_permission_denied(self):
+        """
+        测试批量确认为误报权限拒绝
+        关键验证：PermissionDenied 异常
+        """
+        from rest_framework.exceptions import PermissionDenied
+
+        from services.web.risk.resources.risk import BatchConfirmAsMisReportResource
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            with self.assertRaises(PermissionDenied) as context:
+                BatchConfirmAsMisReportResource().perform_request({"risk_ids": [risk.risk_id]})
+            self.assertIn("非确认人", str(context.exception))
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    def test_batch_confirm_as_misreport_invalid_status(self):
+        """
+        测试批量确认为误报状态错误
+        关键验证：ValidationError 异常
+        """
+        from rest_framework.exceptions import ValidationError
+
+        from services.web.risk.resources.risk import BatchConfirmAsMisReportResource
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.NEW,
+                "display_status": RiskDisplayStatus.NEW,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            with self.assertRaises(ValidationError) as context:
+                BatchConfirmAsMisReportResource().perform_request({"risk_ids": [risk.risk_id]})
+            self.assertIn("风险状态不是待确认", str(context.exception))
+
+
+class BatchConfirmRequestSerializerTest(TicketTest):
+    """测试批量确认请求 Serializer"""
+
+    def test_batch_confirm_request_serializer_valid(self):
+        """测试有效的批量确认请求"""
+        from services.web.risk.serializers import BatchConfirmRiskRequestSerializer
+
+        serializer = BatchConfirmRiskRequestSerializer(data={"risk_ids": ["risk1", "risk2"]})
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(len(serializer.validated_data["risk_ids"]), 2)
+
+    def test_batch_confirm_request_serializer_empty(self):
+        """测试空的 risk_ids"""
+        from services.web.risk.serializers import BatchConfirmRiskRequestSerializer
+
+        serializer = BatchConfirmRiskRequestSerializer(data={"risk_ids": []})
+        self.assertFalse(serializer.is_valid())
+
+    def test_batch_confirm_request_serializer_duplicate(self):
+        """测试重复的 risk_ids（应去重）"""
+        from services.web.risk.serializers import BatchConfirmRiskRequestSerializer
+
+        serializer = BatchConfirmRiskRequestSerializer(data={"risk_ids": ["risk1", "risk1", "risk2"]})
+        self.assertTrue(serializer.is_valid())
+        # validate_risk_ids 会去重并排序
+        self.assertEqual(len(serializer.validated_data["risk_ids"]), 2)
+
+
+class BatchConfirmAsMisReportRequestSerializerTest(TicketTest):
+    """测试批量确认为误报请求 Serializer"""
+
+    def test_batch_confirm_as_misreport_serializer_valid(self):
+        """测试有效的批量确认为误报请求"""
+        from services.web.risk.serializers import (
+            BatchConfirmAsMisReportRequestSerializer,
+        )
+
+        serializer = BatchConfirmAsMisReportRequestSerializer(
+            data={
+                "risk_ids": ["risk1", "risk2"],
+                "description": "测试批量误报",
+            }
+        )
+        self.assertTrue(serializer.is_valid())
+
+    def test_batch_confirm_as_misreport_serializer_empty_description(self):
+        """测试空描述的批量确认为误报请求"""
+        from services.web.risk.serializers import (
+            BatchConfirmAsMisReportRequestSerializer,
+        )
+
+        serializer = BatchConfirmAsMisReportRequestSerializer(data={"risk_ids": ["risk1", "risk2"]})
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(serializer.validated_data["description"], "")
+
+    def test_batch_confirm_as_misreport_serializer_empty_risk_ids(self):
+        """测试空的 risk_ids"""
+        from services.web.risk.serializers import (
+            BatchConfirmAsMisReportRequestSerializer,
+        )
+
+        serializer = BatchConfirmAsMisReportRequestSerializer(data={"risk_ids": []})
+        self.assertFalse(serializer.is_valid())
