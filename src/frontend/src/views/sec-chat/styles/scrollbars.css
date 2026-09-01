@@ -1,0 +1,78 @@
+/*
+  AI 对话滚动条（Chrome 152 / Windows）：
+  1. 必须对滚动容器设置 ::-webkit-scrollbar 宽高，才会启用 webkit 自定义滚动条（否则走系统经典样式带箭头）
+  2. 伪元素选择器需写成 .parent *::-webkit-scrollbar-button，不能写成 .parent ::-webkit-scrollbar-button
+*/
+.sec-chat-page *,
+.show-tooltips-text-popup {
+  scrollbar-width: thin;
+  scrollbar-color: #dcdee5 transparent;
+}
+
+.sec-chat-page *::-webkit-scrollbar,
+.show-tooltips-text-popup::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.sec-chat-page *::-webkit-scrollbar-track,
+.show-tooltips-text-popup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sec-chat-page *::-webkit-scrollbar-thumb,
+.show-tooltips-text-popup::-webkit-scrollbar-thumb {
+  background: #dcdee5;
+  border-radius: 4px;
+}
+
+.sec-chat-page *::-webkit-scrollbar-thumb:hover,
+.show-tooltips-text-popup::-webkit-scrollbar-thumb:hover {
+  background: #c4c6cc;
+}
+
+.sec-chat-page *::-webkit-scrollbar-button,
+.sec-chat-page *::-webkit-scrollbar-button:single-button,
+.sec-chat-page *::-webkit-scrollbar-button:vertical:start:decrement,
+.sec-chat-page *::-webkit-scrollbar-button:vertical:start:increment,
+.sec-chat-page *::-webkit-scrollbar-button:vertical:end:decrement,
+.sec-chat-page *::-webkit-scrollbar-button:vertical:end:increment,
+.sec-chat-page *::-webkit-scrollbar-button:single-button:vertical:decrement,
+.sec-chat-page *::-webkit-scrollbar-button:single-button:vertical:increment,
+.sec-chat-page *::-webkit-scrollbar-button:horizontal:start:decrement,
+.sec-chat-page *::-webkit-scrollbar-button:horizontal:start:increment,
+.sec-chat-page *::-webkit-scrollbar-button:horizontal:end:decrement,
+.sec-chat-page *::-webkit-scrollbar-button:horizontal:end:increment,
+.sec-chat-page *::-webkit-scrollbar-corner,
+.show-tooltips-text-popup::-webkit-scrollbar-button,
+.show-tooltips-text-popup::-webkit-scrollbar-button:single-button,
+.show-tooltips-text-popup::-webkit-scrollbar-button:vertical:start:decrement,
+.show-tooltips-text-popup::-webkit-scrollbar-button:vertical:start:increment,
+.show-tooltips-text-popup::-webkit-scrollbar-button:vertical:end:decrement,
+.show-tooltips-text-popup::-webkit-scrollbar-button:vertical:end:increment,
+.show-tooltips-text-popup::-webkit-scrollbar-button:single-button:vertical:decrement,
+.show-tooltips-text-popup::-webkit-scrollbar-button:single-button:vertical:increment,
+.show-tooltips-text-popup::-webkit-scrollbar-button:horizontal:start:decrement,
+.show-tooltips-text-popup::-webkit-scrollbar-button:horizontal:start:increment,
+.show-tooltips-text-popup::-webkit-scrollbar-button:horizontal:end:decrement,
+.show-tooltips-text-popup::-webkit-scrollbar-button:horizontal:end:increment,
+.show-tooltips-text-popup::-webkit-scrollbar-corner {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  appearance: none !important;
+}
+
+/* tooltip 深色背景：覆盖通用 thumb 色 */
+.show-tooltips-text-popup {
+  scrollbar-color: rgb(255 255 255 / 35%) transparent;
+}
+
+.show-tooltips-text-popup::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 35%);
+}
+
+.show-tooltips-text-popup::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 55%);
+}

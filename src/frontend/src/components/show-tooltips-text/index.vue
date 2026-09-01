@@ -28,8 +28,11 @@
     </span>
     <div
       ref="templateRef"
-      style="display: none;max-height: 90vh;overflow: auto;">
-      <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
+      style="display: none;">
+      <div
+        class="show-tooltips-text-template"
+        :class="tooltipContentClass"
+        :style="tooltipContentStyle">
         {{ props.tip || data }}
       </div>
     </div>
@@ -42,6 +45,7 @@
     type SingleTarget,
   } from 'tippy.js';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -55,6 +59,10 @@
     placement?: Placement,
     isShow?: boolean,
     maxWidth?: string | number,
+    /** tooltip 内容区最大高度，超出滚动 */
+    tooltipMaxHeight?: string,
+    /** tooltip 内容区额外 class，用于定制滚动条等样式 */
+    tooltipContentClass?: string,
     line?: number,  // 行数控制属性
     tip?: string,   // 自定义 tooltip 提示内容（有值时 tooltip 显示此内容，不影响文本溢出判断）
   }
@@ -64,9 +72,18 @@
     placement: 'top',
     isShow: true,
     maxWidth: 'none',
+    tooltipMaxHeight: '90vh',
+    tooltipContentClass: '',
     line: 1,
     tip: '',
   });
+
+  const tooltipContentStyle = computed(() => ({
+    maxHeight: props.tooltipMaxHeight,
+    overflow: 'auto',
+    wordBreak: 'break-all',
+    whiteSpace: 'pre-wrap',
+  }));
 
   const rootRef = ref();
   const templateRef = ref<HTMLElement | null>(null);
@@ -99,7 +116,7 @@
     });
   };
 
-  watch(() => [props.data, props.maxWidth], () => {
+  watch(() => [props.data, props.maxWidth, props.tooltipMaxHeight, props.tooltipContentClass], () => {
     initTippy();
   }, {
     deep: true,
@@ -157,5 +174,29 @@
   .text-content {
     word-break: break-all;
     white-space: pre-wrap;
+  }
+
+  /* tooltip 弹出层：窄滚动条 + 透明轨道（tippy append 到 body，需全局样式） */
+  .show-tooltips-text-popup {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 35%) transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgb(255 255 255 / 35%);
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgb(255 255 255 / 55%);
+    }
   }
 </style>
