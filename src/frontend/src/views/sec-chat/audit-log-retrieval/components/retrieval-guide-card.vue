@@ -149,7 +149,9 @@
                 <th v-if="fieldTab === 'extend'">
                   所属系统
                 </th>
-                <th>检索方式</th>
+                <th class="col-actions">
+                  检索方式
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -322,12 +324,8 @@
     display: flex;
     width: 100%;
     max-width: 100%;
-    /* 撑满消息区剩余视口，减少卡片与输入框之间的大片空白 */
-    height: calc(100vh - 160px);
-    max-height: calc(100vh - 160px);
-    min-height: 620px;
     padding: 20px 24px 24px;
-    overflow: hidden;
+    overflow: visible;
     font-size: 14px;
     line-height: 22px;
     color: #63656e;
@@ -485,9 +483,8 @@
   .field-section {
     display: flex;
     margin-top: 16px;
-    min-height: 0;
-    flex: 1;
     flex-direction: column;
+    flex-shrink: 0;
   }
 
   .field-divider {
@@ -590,12 +587,10 @@
   }
 
   .field-table-wrap {
-    flex: 1;
-    min-height: 0;
     margin-top: 12px;
+    max-height: min(504px, calc(100vh - 360px));
     overflow: auto;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    border-bottom: 1px solid #dcdee5;
     scrollbar-width: thin;
     scrollbar-color: #dcdee5 transparent;
 
@@ -623,7 +618,6 @@
       line-height: 20px;
       text-align: left;
       vertical-align: middle;
-      border-bottom: 1px solid #dcdee5;
       box-sizing: border-box;
     }
 
@@ -635,20 +629,18 @@
       font-weight: 400;
       color: #313238;
       background: #fafbfd;
+      border-bottom: 1px solid #dcdee5;
     }
 
     td {
       height: 42px;
       color: #63656e;
       background: #fff;
+      border-bottom: none;
     }
 
     tbody tr:nth-child(even) td {
       background: #fafbfd;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: none;
     }
 
     .cell-text {
@@ -676,8 +668,17 @@
       width: 14%;
     }
 
+    th.col-actions {
+      text-align: left;
+    }
+
+    td.col-actions {
+      padding-right: 32px;
+      text-align: right;
+    }
+
     .col-actions {
-      width: 20%;
+      width: 18%;
       overflow: visible;
       white-space: nowrap;
     }
@@ -693,10 +694,6 @@
 
       .col-sample {
         width: 24%;
-      }
-
-      .col-actions {
-        width: 18%;
       }
     }
   }
