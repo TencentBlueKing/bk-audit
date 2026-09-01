@@ -767,10 +767,10 @@ export function useSecChatStore() {
           c.id !== sourceId
           && !c.isDraft
           && c.groupName === options.groupName
-        )).at(-1)
+        )).slice(-1)[0]
         : rootSidebarOrder.value.filter(item => !(
           item.kind === sourceKind && item.id === sourceId
-        )).at(-1);
+        )).slice(-1)[0];
       if (lastSibling) {
         const anchor = 'kind' in lastSibling
           ? { uid: lastSibling.id, kind: lastSibling.kind, position: 'after' as const }

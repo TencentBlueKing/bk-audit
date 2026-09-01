@@ -51,6 +51,7 @@
     onMounted,
     ref,
     watch,
+    type CSSProperties,
   } from 'vue';
 
   interface Props {
@@ -78,7 +79,7 @@
     tip: '',
   });
 
-  const tooltipContentStyle = computed(() => ({
+  const tooltipContentStyle = computed((): CSSProperties => ({
     maxHeight: props.tooltipMaxHeight,
     overflow: 'auto',
     wordBreak: 'break-all',
