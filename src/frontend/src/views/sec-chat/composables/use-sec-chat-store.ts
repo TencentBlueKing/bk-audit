@@ -865,12 +865,10 @@ export function useSecChatStore() {
       }
 
       // 协议：搜索需覆盖未展开分组，按需拉取命中分组子节点
-      const hitGroupIds = new Set(
-        nodes
-          .filter(isConversationNode)
-          .map(node => node.group_uid)
-          .filter((uid): uid is string => Boolean(uid)),
-      );
+      const hitGroupIds = new Set(nodes
+        .filter(isConversationNode)
+        .map(node => node.group_uid)
+        .filter((uid): uid is string => Boolean(uid)));
       await Promise.all([...hitGroupIds].map(groupId => loadGroupConversations(groupId, { force: true })));
     } catch {
       sidebarSearchResults.value = [];
