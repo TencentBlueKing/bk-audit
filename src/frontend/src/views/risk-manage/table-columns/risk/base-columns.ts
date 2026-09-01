@@ -32,7 +32,9 @@ export type RiskColumnTranslate = (key: string, ...args: any[]) => string;
 export interface RiskColumnDeps {
   levelData: Ref<Record<string, any>>;
   strategyTagMap: Ref<Record<string, string>>;
-  strategyList: Ref<Array<{ value: number | string; label: string }>> | ComputedRef<Array<{ value: number | string; label: string }>>;
+  strategyList:
+    | Ref<Array<{ value: number | string; label: string }>>
+    | ComputedRef<Array<{ value: number | string; label: string }>>;
   riskStatusCommon: Ref<Array<{ id: string; name: string }>>;
   sceneList: Ref<Array<{ scene_id: number; name: string }>>;
   handleToDetail: (row: RiskManageModel, needToRiskContent?: boolean) => void;

@@ -714,7 +714,7 @@
             theme="warning">
             {t('草稿')}
           </bk-tag>
-        ) : null;
+          ) : null;
         if (isNew) {
           return (
             <div style='display: flex;align-items: center;'>
