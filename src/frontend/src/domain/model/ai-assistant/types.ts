@@ -253,9 +253,12 @@ export interface AiSidebarMoveParams {
   /** 省略表示移到根容器 */
   target_node_type?: AiSidebarNodeType;
   target_node_uid?: string;
-  /** 省略表示放到目标容器最前 */
+  /** 与 after_* 不可同时传；省略且未传 after_* 时表示放到目标容器最前 */
   before_node_type?: AiSidebarNodeType;
   before_node_uid?: string;
+  /** 与 before_* 不可同时传；锚点已在容器物理末尾时，source 进入容器末尾 */
+  after_node_type?: AiSidebarNodeType;
+  after_node_uid?: string;
 }
 
 /**

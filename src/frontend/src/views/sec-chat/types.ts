@@ -149,6 +149,18 @@ export interface Group {
   childrenLoading?: boolean;
 }
 
+/** 侧栏根层节点顺序项（与后端 nodes/ 返回顺序一致） */
+export type RootSidebarItem =
+  | { kind: 'conversation'; id: string }
+  | { kind: 'group'; id: string };
+
+/** 根层拖拽排序锚点 */
+export interface RootReorderPayload {
+  beforeId?: string;
+  beforeKind?: 'group' | 'conversation';
+  toEnd?: boolean;
+}
+
 export interface SelectPromptPayload {
   prompt: string;
   sceneType?: ChatSceneType;
