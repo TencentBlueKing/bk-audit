@@ -22,6 +22,9 @@
       :collapsed="sidebarCollapsed"
       :conversations="conversations"
       :groups="groups"
+      :root-sidebar-order="rootSidebarOrder"
+      :search-loading="sidebarSearchLoading"
+      :search-results="sidebarSearchResults"
       @add-group="handleAddGroup"
       @clear-all="handleClearAll"
       @delete="handleDeleteConversation"
@@ -30,6 +33,7 @@
       @rename-group="handleRenameGroup"
       @reorder-conversation="handleReorderConversation"
       @reorder-group="handleReorderGroup"
+      @reorder-root="handleReorderRoot"
       @select="handleSelectConversation"
       @toggle="toggleSidebar"
       @update-conv-title="handleUpdateConvTitle"
@@ -69,12 +73,16 @@
     activeConversationId,
     groups,
     conversations,
+    rootSidebarOrder,
+    sidebarSearchResults,
+    sidebarSearchLoading,
     toggleSidebar,
     initSidebar,
     setActiveConversation,
     deleteConversation,
     updateConversationGroup,
     reorderConversation,
+    reorderRootNode,
     updateConversationTitle,
     createGroup,
     reorderGroup,
@@ -153,16 +161,24 @@
 
   const handleReorderConversation = (
     id: string,
-    payload: { groupName?: string; beforeId?: string; toEnd?: boolean },
+    payload: { groupName?: string; beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean },
   ) => {
     void reorderConversation(id, payload);
   };
 
   const handleReorderGroup = (
     id: string,
-    payload: { beforeId?: string; toEnd?: boolean },
+    payload: { beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean },
   ) => {
     void reorderGroup(id, payload);
+  };
+
+  const handleReorderRoot = (
+    kind: 'group' | 'conversation',
+    id: string,
+    payload: { groupName?: string; beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean },
+  ) => {
+    void reorderRootNode(kind, id, payload);
   };
 
   const handleAddGroup = (name: string) => {
