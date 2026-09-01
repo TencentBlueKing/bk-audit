@@ -250,6 +250,44 @@
     }
 
 
+    /* 根层混排列表 */
+    .conv-section--mixed {
+      .conv-item--root {
+        margin-right: 16px;
+        margin-left: 16px;
+      }
+    }
+
+    /* 搜索模式 */
+    .conv-section--search {
+      .search-results-loading,
+      .search-results-empty {
+        padding: 8px 16px;
+        font-size: 12px;
+        line-height: 20px;
+        color: #979ba5;
+      }
+
+      .search-results-list {
+        .conv-item--search {
+          margin-right: 16px;
+          margin-left: 16px;
+        }
+
+        .conv-group-tag {
+          flex-shrink: 0;
+          max-width: 96px;
+          margin-left: 8px;
+          overflow: hidden;
+          font-size: 12px;
+          line-height: 20px;
+          color: #979ba5;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+    }
+
     /* 历史对话（未分组）：整块可接收「从分组拖出」 */
     .conv-section--history {
       &.is-drag-target {
