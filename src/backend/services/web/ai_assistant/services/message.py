@@ -100,6 +100,7 @@ class MessageService:
             parent_message=parent_message,
         )
         message = self.create_prepared(conversation=conversation, prepared=prepared)
+        self._maybe_dispatch_field_condition_title(message)
         logger.info(
             "AI 助手消息创建完成",
             extra={
@@ -110,6 +111,62 @@ class MessageService:
             },
         )
         return message
+
+    def _maybe_dispatch_field_condition_title(self, message: Message) -> None:
+        """条件检索消息创建成功后派发会话标题生成（与自然语言链路对齐；失败静默不阻塞消息创建）。
+
+        仅 source=field_condition（用户直接发起条件检索）触发：自然语言续链的
+        LOG_SEARCH 子消息（source=natural_language）已由父 NL 消息成功链路派发过；
+        NL 链路的派发见 NLSearchExecutionTask._dispatch_title_generation。
+        """
+
+        if message.message_type != MessageType.LOG_SEARCH:
+            return
+        if (message.context_data or {}).get("source") != "field_condition":
+            return
+        try:
+            # 延迟导入：避免 services ↔ tasks 加载期循环依赖
+            from services.web.ai_assistant.services.title_agent import (
+                build_condition_title_input,
+            )
+            from services.web.ai_assistant.tasks.conversation import (
+                generate_conversation_title,
+            )
+
+            generate_conversation_title.delay(
+                conversation_id=message.conversation_id,
+                query_text=build_condition_title_input(
+                    message.input_data or {},
+                    extension_fields=self._extract_parent_extension_fields(message.parent_message),
+                ),
+                source="field_condition",
+            )
+        except Exception:
+            logger.exception(
+                "[MessageService] dispatch field condition title generation failed, message_id=%s",
+                message.id,
+            )
+
+    @staticmethod
+    def _extract_parent_extension_fields(parent: Message | None) -> list[dict[str, Any]]:
+        """从父消息（系统选择/自然语言）的系统选择快照提取拓展字段元数据。
+
+        拓展子键的展示名不在检索条件快照内，需回到父消息的系统选择快照取
+        extension_fields（SelectionFieldMeta dict 形态：raw_name + keys + display_name）。
+        """
+
+        if parent is None:
+            return []
+        if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
+            systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
+        else:
+            systems = (parent.output_data or {}).get("systems") or []
+        fields: list[dict[str, Any]] = []
+        for system in systems:
+            for field in (system or {}).get("extension_fields") or []:
+                if isinstance(field, dict):
+                    fields.append(field)
+        return fields
 
     def prepare_initial(
         self,
