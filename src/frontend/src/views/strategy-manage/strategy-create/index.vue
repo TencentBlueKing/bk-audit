@@ -85,6 +85,7 @@
   import {
     computed,
     onMounted,
+    provide,
     ref,
     // toRaw,
     watch } from 'vue';
@@ -114,10 +115,12 @@
   import {
     getStrategyBindingScope,
     getStrategyRouteNames,
+    isDraftStrategyStatus,
     isPlatformStrategyRoute,
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from './composables/use-strategy-config-lock';
 
 
   interface IFormData {
@@ -211,6 +214,13 @@
   let isSwitchSuccess = false;
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const isDraftStrategyEdit = computed(() => (
+    isEditMode && isDraftStrategyStatus(formData.value.status)
+  ));
+  const showSaveDraftButton = computed(() => (
+    !isEditMode || isDraftStrategyEdit.value
+  ));
+  provide(STRATEGY_SHOW_SAVE_DRAFT_KEY, showSaveDraftButton);
 
   const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
@@ -430,8 +440,9 @@
         });
         return;
       }
+      const treatAsCreate = !isEditMode;
       // 编辑态：来自「下一步」弹窗的保存，要求不返回列表，只刷新当前页数据
-      if (isEditMode && stayOnPageAfterSave.value) {
+      if (isEditMode && !treatAsCreate && stayOnPageAfterSave.value) {
         stayOnPageAfterSave.value = false;
         window.changeConfirm = false;
         // 更新进入编辑时的快照为当前已保存的数据，后续对比以新快照为准
@@ -446,7 +457,7 @@
         messageSuccess(t('保存成功'));
         return;
       }
-      if (isEditMode && formData.value.status === 'running') {
+      if (isEditMode && !treatAsCreate && formData.value.status === 'running') {
         window.changeConfirm = false;
         router.push({
           name: strategyRoutes.list,
@@ -455,7 +466,7 @@
         return;
       }
       const SendSwitchStrategy = (toggle: boolean) => {
-        messageSuccess(isEditMode ? t('编辑成功') : t('新建成功'));
+        messageSuccess(treatAsCreate ? t('新建成功') : t('编辑成功'));
         fetchSwitchStrategy({
           strategy_id: data.strategy_id,
           toggle,
@@ -468,7 +479,7 @@
         });
       };
       // 常规策略
-      if (controlTypeId.value === 'BKM' && (!isEditMode || !(formData.value.status === 'running'))) {
+      if (controlTypeId.value === 'BKM' && (treatAsCreate || !(formData.value.status === 'running'))) {
         isSwitchSuccess = false;
         InfoBox({
           title: t('是否启用该策略'),
@@ -486,12 +497,15 @@
           },
         });
       } else {
-        messageSuccess(isEditMode ? t('编辑成功') : t('新建成功'));
+        messageSuccess(treatAsCreate ? t('新建成功') : t('编辑成功'));
         window.changeConfirm = false;
         router.push({
           name: strategyRoutes.list,
         });
       }
+    },
+    onFinally: () => {
+      isSavingDraft.value = false;
     },
   });
 
@@ -553,6 +567,8 @@
     const payload = buildStrategyCreatePayload(params, route);
     if (isDraft) {
       payload.is_draft = true;
+    } else if (isDraftStrategyEdit.value) {
+      payload.is_draft = false;
     }
     saveStrategy(payload);
   };
@@ -566,11 +582,14 @@
 
   // 提交
   const handleSubmit = () => {
+    const submitAsCreate = !isEditMode;
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
         title: t('策略提交确认'),
-        subTitle: isEditMode ? t('本次将提交所有已修改的内容') : t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。'),
+        subTitle: submitAsCreate
+          ? t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。')
+          : t('本次将提交所有已修改的内容'),
         confirmText: t('提交'),
         cancelText: t('取消'),
         headerAlign: 'center',

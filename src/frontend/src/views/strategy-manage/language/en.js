@@ -537,6 +537,7 @@ export default {
     保存草稿成功: 'Draft saved successfully',
     '保存草稿中,请稍后...': 'Saving draft, please wait...',
     草稿: 'Draft',
+    全局: 'Global',
     编辑中: 'Editing',
     草稿策略不支持启停: 'Draft strategies cannot be enabled or disabled',
     保存成功: 'Saved successfully',

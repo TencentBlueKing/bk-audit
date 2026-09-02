@@ -132,6 +132,7 @@
           {{ primaryActionText }}
         </bk-button>
         <bk-button
+          v-if="showSaveDraftButton"
           class="ml8"
           @click="handleSaveDraft">
           {{ t('保存草稿') }}
@@ -158,7 +159,7 @@
 </template>
 <script setup lang="ts">
   import dayjs from 'dayjs';
-  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+  import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -179,6 +180,7 @@
     isStrategyCreateRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface IFormData {
     processor_groups?: Array<any>,
@@ -228,6 +230,7 @@
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
   const isCreateeMode = isStrategyCreateRoute(route.name);
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
   // 全局策略有第 5 步风险分派；审计策略在本步直接提交
   const hasAssignStep = isPlatformStrategyRoute(route.name);
   const primaryActionText = computed(() => {

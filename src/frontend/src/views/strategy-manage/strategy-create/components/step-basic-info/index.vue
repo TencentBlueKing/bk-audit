@@ -129,6 +129,7 @@
           {{ t('下一步') }}
         </bk-button>
         <bk-button
+          v-if="showSaveDraftButton"
           class="ml8"
           @click="handleSaveDraft">
           {{ t('保存草稿') }}
@@ -154,6 +155,7 @@
   import {
     computed,
     h,
+    inject,
     onBeforeUnmount,
     onMounted,
     provide,
@@ -192,6 +194,7 @@
     isStrategyListRoute,
     isStrategyUpgradeRoute,
   } from '../../../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   type ItemType = {
     label: string,
@@ -240,6 +243,7 @@
   const isStrategyWayDisabled = computed(() => (
     isStockData.value || (isEditMode && formData.value.status !== 'draft')
   ));
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
   const isModelWayDisabled = computed(() => !isEditMode && !isCloneMode);
 
   const strategyWayComMap: Record<string, any> = {

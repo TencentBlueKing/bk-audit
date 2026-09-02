@@ -395,6 +395,10 @@
   const sceneNameMap = ref<Record<string, string>>({});
   const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
 
+  const isGlobalStrategy = (data: StrategyModel) => (
+    data.visibility?.binding_type === 'platform_binding'
+  );
+
   const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
     const sceneIds = data.visibility?.scene_ids;
     if (Array.isArray(sceneIds) && sceneIds.length) {
@@ -719,38 +723,54 @@
       render: ({ data }: { data: StrategyModel}) => {
         const isNew = isNewData(data);
         const nameLink = (
-          <a onClick={() => (data.isDraft ? handleEdit(data) : handleDetail(data))}>
+          <a
+            class="strategy-name-link"
+            onClick={() => (data.isDraft ? handleEdit(data) : handleDetail(data))}>
             <Tooltips data={data.strategy_name} />
           </a>
         );
         const draftTag = data.isDraft ? (
           <bk-tag
             size="small"
-            style="margin-left: 6px; flex-shrink: 0;"
             theme="warning">
             {t('草稿')}
           </bk-tag>
-          ) : null;
+        ) : null;
+        const globalTag = !isPlatformList.value && isGlobalStrategy(data) ? (
+          <bk-tag
+            class="strategy-name-global-tag"
+            radius="2px"
+            size="small">
+            {t('全局')}
+          </bk-tag>
+        ) : null;
+        const suffixTags = [globalTag, draftTag].filter(Boolean);
+        const renderCell = (extraNodes: any[] = []) => (
+          <span class="strategy-name-cell">
+            {nameLink}
+            {extraNodes}
+            {suffixTags.length ? (
+              <span class="strategy-name-tags">
+                {suffixTags}
+              </span>
+            ) : null}
+          </span>
+        );
         if (isNew) {
-          return (
-            <div style='display: flex;align-items: center;'>
-              {nameLink}
-              <img
-                class='table-new-tip'
-                src={getAssetsFile('new-tip.png')}/>
-              {draftTag}
-            </div>
-          );
+          return renderCell([
+            <img
+              class='table-new-tip'
+              src={getAssetsFile('new-tip.png')} />,
+          ]);
         }
-        if (draftTag) {
-          return (
-            <div style='display: flex; align-items: center;'>
-              {nameLink}
-              {draftTag}
-            </div>
-          );
+        if (suffixTags.length) {
+          return renderCell();
         }
-        return nameLink;
+        return (
+          <span class="strategy-name-cell">
+            {nameLink}
+          </span>
+        );
       },
     },
     {
@@ -1981,11 +2001,53 @@
 <style lang="postcss">
 .table-new-tip {
   height: 14px;
+  flex-shrink: 0;
+  margin-left: 0;
+}
 
-  /* position: absolute; */
+.strategy-name-cell {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
+}
 
-  /* right: 0; */
-  margin-left: 8px;
+.strategy-name-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+
+  :deep(.show-tooltips-text) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.strategy-name-tags {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+:deep(.strategy-name-global-tag.bk-tag) {
+  flex-shrink: 0;
+  margin: 0;
+  color: #63656e;
+  background-color: #f0f1f5;
+  border: none;
+
+  &:hover {
+    color: #63656e;
+    background-color: #f0f1f5;
+  }
 }
 
 .mr4 {
@@ -1999,6 +2061,11 @@
 .strategy-manage {
   display: flex;
   margin: -20px -24px 0;
+
+  :deep(.audit-highlight-table .bk-table-body td .cell:has(.strategy-name-cell)) {
+    overflow: hidden;
+    white-space: nowrap;
+  }
 
   .edit-badge {
     .bk-badge.pinned.top-right {

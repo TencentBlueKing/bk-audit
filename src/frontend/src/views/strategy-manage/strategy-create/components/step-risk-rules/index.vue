@@ -308,6 +308,7 @@
         {{ t('下一步') }}
       </bk-button>
       <bk-button
+        v-if="showSaveDraftButton"
         class="ml8"
         @click="handleSaveDraft">
         {{ t('保存草稿') }}
@@ -323,6 +324,7 @@
 <script setup lang="ts">
   import {
     computed,
+    inject,
     nextTick,
     onActivated,
     onDeactivated,
@@ -359,6 +361,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface RuleItem {
     id: number;
@@ -403,6 +406,7 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
   const showRuleNoticeGroups = !isPlatformStrategyRoute(route.name);
 
   const {

@@ -131,6 +131,7 @@
         {{ t('提交') }}
       </bk-button>
       <bk-button
+        v-if="showSaveDraftButton"
         class="ml8"
         @click="handleSaveDraft">
         {{ t('保存草稿') }}
@@ -144,7 +145,7 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, inject, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
@@ -171,6 +172,7 @@
     dispatchToAssignConditionForm,
     hasValidAssignCondition,
   } from '../../utils/strategy-protocol';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   import useMessage from '@/hooks/use-message';
 
@@ -217,6 +219,7 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
 
   let ruleIdSeq = 1;
 
