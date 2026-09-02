@@ -10,7 +10,7 @@
       class="strategy-way-card"
       :class="{
         'is-active': modelValue === item.value,
-        'is-disabled': disabled,
+        'is-disabled': disabled || item.disabled,
       }"
       @click="handleSelect(item.value)">
       <div class="strategy-way-card-icon">
@@ -38,6 +38,7 @@
     value: string;
     icon: string;
     tips?: string;
+    disabled?: boolean;
   }
 
   interface Props {
@@ -55,7 +56,8 @@
   const emits = defineEmits<Emits>();
 
   const handleSelect = (value: string) => {
-    if (props.disabled || props.modelValue === value) {
+    const option = props.options.find(item => item.value === value);
+    if (props.disabled || option?.disabled || props.modelValue === value) {
       return;
     }
     emits('update:modelValue', value);

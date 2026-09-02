@@ -104,13 +104,19 @@
         <div style="margin-left: auto;">
           <auth-button
             v-bk-tooltips="{
-              content: t('处理中，不能编辑'),
-              disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
+              content: isModelStrategy(strategyItem.strategy_type)
+                ? modelStrategyDisabledTip()
+                : t('处理中，不能编辑'),
+              disabled: !(strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="edit_strategy"
             class="w88"
             :class="{
-              'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
+              'is-disabled': strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type)
             }"
             :permission="strategyItem.permission?.edit_strategy"
             :resource="strategyItem.strategy_id"
@@ -121,13 +127,19 @@
           <auth-button
             v-if="!strategyItem.isDraft"
             v-bk-tooltips="{
-              content: t('处理中，不能克隆'),
-              disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
+              content: isModelStrategy(strategyItem.strategy_type)
+                ? modelStrategyDisabledTip()
+                : t('处理中，不能克隆'),
+              disabled: !(strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="create_strategy_v2"
             class="ml8"
             :class="{
-              'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
+              'is-disabled': strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type)
             }"
             :permission="permissionCheckData"
             resource-is-scene
@@ -653,6 +665,10 @@
     rule: t('自定义规则审计'),
     model: t('引入模型审计'),
   } as Record<string, string>;
+  const isModelStrategy = (strategyType?: string) => (
+    strategyType === 'model' || strategyType === 'referenceModel'
+  );
+  const modelStrategyDisabledTip = () => t('功能暂未开放，敬请期待');
   const initEnableFilterList = [
     {
       text: t('运行中'),
@@ -1012,6 +1028,26 @@
       width: '120px',
       render: ({ data }: { data: StrategyModel }) => {
         if (data.isDraft) {
+          if (isModelStrategy(data.strategy_type)) {
+            return <>
+              <bk-button
+                text
+                class="is-disabled"
+                v-bk-tooltips={modelStrategyDisabledTip()}>
+                {t('编辑')}
+              </bk-button>
+              <auth-button
+                actionId="delete_strategy"
+                class="ml8"
+                permission={data.permission.delete_strategy}
+                resource={data.strategy_id}
+                theme="primary"
+                text
+                onClick={() => handleDelete(data)}>
+                {t('删除')}
+              </auth-button>
+            </>;
+          }
           return <>
             <auth-button
               actionId="edit_strategy"
@@ -1043,7 +1079,14 @@
             v-bk-tooltips={t('处理中，不能编辑')}>
             {t('编辑')}
           </bk-button>
-          : <bk-badge
+          : isModelStrategy(data.strategy_type)
+            ? <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={modelStrategyDisabledTip()}>
+              {t('编辑')}
+            </bk-button>
+            : <bk-badge
             class='edit-badge'
             position="top-right"
             theme="danger"
@@ -1078,7 +1121,14 @@
             v-bk-tooltips={t('处理中，不能克隆')}>
             {t('克隆')}
           </bk-button>
-          : <auth-button
+          : isModelStrategy(data.strategy_type)
+            ? <bk-button
+              text
+              class="is-disabled ml8"
+              v-bk-tooltips={modelStrategyDisabledTip()}>
+              {t('克隆')}
+            </bk-button>
+            : <auth-button
             actionId="create_strategy_v2"
             permission={permissionCheckData.value}
             resource-is-scene
@@ -1525,7 +1575,7 @@
 
   // 编辑
   const handleEdit = (data: StrategyModel) => {
-    if (data.isPending) return;
+    if (data.isPending || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
     router.push({
       name: strategyRoutes.edit,
@@ -1540,7 +1590,10 @@
 
   // 克隆
   const handleClone = (data: StrategyModel) => {
-    if (data.isDraft || data.isPending || pendingStatusIdList.value.includes(data.strategy_id)) return;
+    if (data.isDraft
+      || data.isPending
+      || pendingStatusIdList.value.includes(data.strategy_id)
+      || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
     router.push({
       name: strategyRoutes.clone,
