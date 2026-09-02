@@ -119,20 +119,9 @@
         </div>
       </div>
 
-      <!-- 重新检索 loading：隐藏旧结果，避免用户误以为数据未刷新 -->
-      <div
-        v-if="resubmitLoading"
-        aria-label="检索中"
-        class="result-loading-panel">
-        <span class="loading-dot" />
-        <span class="loading-dot" />
-        <span class="loading-dot" />
-        <span class="loading-text">正在检索…</span>
-      </div>
-
       <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
       <div
-        v-else-if="isEmpty"
+        v-if="isEmpty"
         class="status-panel is-empty">
         <img
           alt=""
@@ -470,9 +459,9 @@
     regenerate: [];
   }>();
 
-  const { sendConditionSearch } = useSecChatStore();
+  const { appendConditionSearch } = useSecChatStore();
 
-  /** 当前卡片展示的结果（重新检索后原地更新，不追加新消息） */
+  /** 当前卡片展示的结果；二次检索会追加新消息卡，本卡保持原结果不变 */
   const displayResult = ref<RetrievalResultPayload>({ ...props.result });
   const displayMessageUid = ref(props.messageUid || '');
 
@@ -643,24 +632,13 @@
 
     resubmitLoading.value = true;
     try {
-      const chatMessage = await sendConditionSearch(condition);
+      const chatMessage = await appendConditionSearch(condition);
       if (chatMessage.apiStatus === 'FAILED') {
         messageError(chatMessage.errorMessage || '检索失败');
         return;
       }
-      if (chatMessage.result) {
-        displayResult.value = chatMessage.result;
-        displayMessageUid.value = chatMessage.id;
-        if (chatMessage.result.rawCondition) {
-          searchModel.value = parseAiSearchConditionToSearchModel(
-            chatMessage.result.rawCondition,
-            fieldConfig.value,
-          );
-        }
-        currentPage.value = 1;
-        feedback.value = '';
-        reportItems.value = [];
-      }
+      // 新卡已追加；旧卡条件还原为本卡原始结果，避免展示与表格不一致的新条件
+      syncSearchModelFromResult();
     } catch (error: any) {
       messageError(error?.message || '检索失败，请稍后重试');
     } finally {
@@ -1010,59 +988,6 @@
     font-size: 12px;
     line-height: 20px;
     color: #c4c6cc;
-  }
-
-  .result-loading-panel {
-    display: flex;
-    margin-top: 12px;
-    margin-bottom: 8px;
-    min-height: 200px;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    box-sizing: border-box;
-  }
-
-  .loading-dot {
-    width: 6px;
-    height: 6px;
-    background: #3a84ff;
-    border-radius: 50%;
-    opacity: 40%;
-    animation: result-loading-dot 1s ease-in-out infinite;
-  }
-
-  .loading-dot:nth-child(1) {
-    animation-delay: 0s;
-  }
-
-  .loading-dot:nth-child(2) {
-    animation-delay: .15s;
-  }
-
-  .loading-dot:nth-child(3) {
-    animation-delay: .3s;
-  }
-
-  .loading-text {
-    margin-left: 4px;
-    font-size: 14px;
-    line-height: 22px;
-    color: #63656e;
-  }
-
-  @keyframes result-loading-dot {
-    0%,
-    100% {
-      opacity: 40%;
-      transform: scale(1);
-    }
-
-    50% {
-      opacity: 100%;
-      transform: scale(1.15);
-    }
   }
 
   .status-panel {
