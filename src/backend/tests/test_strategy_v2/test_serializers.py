@@ -540,6 +540,12 @@ class TestReportConfigValidation(TestCase):
             risk_level=RiskLevel.HIGH.value,
             risk_title="risk",
         )
+        # 创建 ResourceBinding，避免 binding_type 被默认设为 PLATFORM_BINDING
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene_id,
+        )
 
         payload = self._build_base_payload()
         payload["strategy_id"] = strategy.strategy_id

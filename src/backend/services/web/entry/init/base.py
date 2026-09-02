@@ -68,8 +68,7 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import DEFAULT_SCENE_NAME
-from services.web.scene.models import Scene
+from services.web.scene.constants import BindingType
 from services.web.strategy_v2.models import Strategy
 
 
@@ -394,6 +393,7 @@ class SystemInitHandler:
             "event_data_field_configs",
             "event_evidence_field_configs",
             "risk_meta_field_config",
+            "rules",
         ]
         params = {field: config.get(field) for field in required_fields if field in config}
         params.setdefault("namespace", settings.DEFAULT_NAMESPACE)
@@ -402,10 +402,7 @@ class SystemInitHandler:
         params.setdefault("tags", [])
         params.setdefault("notice_groups", [])
         params.setdefault("processor_groups", [])
-        default_scene = Scene.objects.filter(name=DEFAULT_SCENE_NAME).order_by("scene_id").first()
-        if not default_scene:
-            return {}
-        params["scene_id"] = default_scene.scene_id
+        params["binding_type"] = BindingType.PLATFORM_BINDING
         configs = params.get("configs")
         if not configs:
             return {}
