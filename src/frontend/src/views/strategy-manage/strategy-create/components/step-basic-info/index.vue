@@ -240,6 +240,7 @@
   const isStrategyWayDisabled = computed(() => (
     isStockData.value || (isEditMode && formData.value.status !== 'draft')
   ));
+  const isModelWayDisabled = computed(() => !isEditMode && !isCloneMode);
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -443,7 +444,10 @@
     label: item.label,
     value: item.value,
     icon: item.value === 'rule' ? editWayIcon : modelWayIcon,
-    tips: item.config?.tips,
+    tips: item.value === 'model' && isModelWayDisabled.value
+      ? t('功能暂未开放，敬请期待')
+      : item.config?.tips,
+    disabled: item.value === 'model' && isModelWayDisabled.value,
   })));
   const controlDetail = ref<ControlModel | null>(null);
 
