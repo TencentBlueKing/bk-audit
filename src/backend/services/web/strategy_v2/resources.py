@@ -789,8 +789,8 @@ class UpdateStrategy(StrategyV2Base):
             StrategyStatusChoices.STOPPING,
         ]:
             raise StrategyPendingError()
-        # 不允许修改策略类型
-        if validated_request_data["strategy_type"] != strategy.strategy_type:
+        # 不允许修改策略类型（草稿保存允许变更：草稿期类型未锁定，提交时再锁定）
+        if not draft_save and validated_request_data["strategy_type"] != strategy.strategy_type:
             raise StrategyTypeCanNotChange()
         # save origin data
         instance_origin_data = StrategyInfoSerializer(strategy).data
@@ -878,6 +878,8 @@ class UpdateStrategy(StrategyV2Base):
             and strategy.control_id != validated_request_data["control_id"]
         ):
             raise ControlChangeError()
+        # 捕获切换前的策略类型（setattr 会覆盖 strategy.strategy_type，需提前记录）
+        original_type = strategy.strategy_type
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
@@ -886,6 +888,35 @@ class UpdateStrategy(StrategyV2Base):
                 need_update_remote = True
             setattr(strategy, key, val)
         strategy.save(update_fields=validated_request_data.keys())
+        # 草稿跨类型切换：清理旧类型专属子表/字段，避免残留脏数据
+        # 前端切到新类型后通常不传旧类型 rules（rules_data=None），_sync_strategy_rules 会直接跳过，
+        # 导致旧发现规则与 sql 残留；此处显式清理对方专属数据，主表 JSON 字段由前端传值覆盖。
+        new_type = validated_request_data.get("strategy_type")
+        if draft_save and new_type and new_type != original_type:
+            # 联表信息两型均可能残留，切换时统一置空（RULE 的 LINK_TABLE 会由前端重新写入）
+            strategy.link_table_uid = None
+            strategy.link_table_version = None
+            if original_type == StrategyType.RULE:
+                # 离开 RULE 型：软删全部发现规则、清空规则专属字段
+                StrategyV2Base._soft_delete_rules(list(strategy.rules.filter(is_deleted=False)))
+                strategy.sql = None
+                strategy.event_basic_field_configs = []
+            else:
+                # 离开 MODEL 型：清空模型控制信息（control 字段为 MODEL 专属，RULE 型不需要）
+                strategy.control_id = None
+                strategy.control_version = None
+                strategy.configs = {}
+            strategy.save(
+                update_fields=[
+                    "link_table_uid",
+                    "link_table_version",
+                    "sql",
+                    "event_basic_field_configs",
+                    "control_id",
+                    "control_version",
+                    "configs",
+                ]
+            )
         # 同步发现规则子表 + 摘要比较：规则集（含顺序/条件）变化 = SQL 变化 -> 触发 flow 重建
         if rules_data is not None:
             if draft_save and rules_data:
@@ -1022,7 +1053,22 @@ class ListStrategy(StrategyV2Base):
         queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # CompositeScopeFilter：binding_type + scene_id/system_id 组合过滤
         # 当三个参数都为空时，返回所有策略（不做过滤）
-        if binding_type or scene_id or system_id:
+        if binding_type == BindingType.PLATFORM_BINDING and not (scene_id or system_id):
+            platform_resource_ids = set(
+                ResourceBinding.objects.filter(
+                    resource_type=ResourceVisibilityType.STRATEGY,
+                    binding_type=BindingType.PLATFORM_BINDING,
+                ).values_list("resource_id", flat=True)
+            )
+            # 草稿策略在列表中可见
+            draft_resource_ids = set(
+                str(s.strategy_id)
+                for s in Strategy.objects.filter(
+                    namespace=validated_request_data["namespace"], status=StrategyStatusChoices.DRAFT
+                )
+            )
+            queryset = queryset.filter(strategy_id__in=platform_resource_ids | draft_resource_ids)
+        elif binding_type or scene_id or system_id:
             queryset = CompositeScopeFilter.filter_queryset(
                 queryset=queryset,
                 binding_type=binding_type,
