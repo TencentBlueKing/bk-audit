@@ -399,7 +399,10 @@ class CloseRisk(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
-        return
+        # 待确认状态禁止关单（仅 ConfirmRisk 和 ConfirmAsMisReport 允许）
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行关单操作")
+        super().pre_check(*args, **kwargs)
 
     def process(self, description: str, *args, **kwargs) -> dict:
         return {}
@@ -888,32 +891,39 @@ class ConfirmRisk(RiskFlowBaseHandler):
 
             raise PermissionDenied("非确认人，无权确认风险")
 
-    def process(self, *args, **kwargs) -> dict:
-        # 确认后分派：按固化的分派规则建 RISK 场景绑定
-        # 分派规则可能已被编辑/软删（分派后改策略），绕过软删过滤读取固化引用的规则行
-        from services.web.scene.filters import BindingMetadataHelper
-        from services.web.strategy_v2.models import DispatchRule
-
-        dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
-        if dispatch_rule:
-            BindingMetadataHelper.create_risk_scene_binding(self.risk.risk_id, dispatch_rule.target_scene_id)
+    def process(self, description: str = "", *args, **kwargs) -> dict:
+        # 事务内使用 select_for_update 重新校验状态，防止并发确认
+        with transaction.atomic():
+            risk = Risk.objects.select_for_update().get(risk_id=self.risk.risk_id)
+            if risk.status != RiskStatus.PENDING_CONFIRM:
+                raise RiskStatusInvalid(message=f"风险状态已变更，当前状态：{risk.status}")
+            # 更新状态
+            risk.status = RiskStatus.NEW
+            risk.display_status = RiskDisplayStatus.NEW
+            risk.save(update_fields=["status", "display_status"])
         return {}
 
     def update_status(self, process_result: dict, *args, **kwargs) -> None:
-        # 确认后将状态从 PENDING_CONFIRM 转为 NEW
-        self.risk.status = RiskStatus.NEW
-        self.risk.display_status = RiskDisplayStatus.NEW
-        self.risk.save(update_fields=["status", "display_status"])
+        pass
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         pass
 
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
+        # 外部任务与通知放到事务提交后执行，保证数据已落库
+        transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
+
+    def _post_confirm_tasks(self, description: str = "") -> None:
+        """事务提交后执行的任务：流转、渲染、通知"""
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
         # 触发渲染任务
         RiskHandler().trigger_render_task(self.risk)
         # 通知关注人
         RiskHandler().send_risk_notice(self.risk)
+
+    def build_history(self, process_result: dict, *args, **kwargs) -> dict:
+        # 记录确认说明，供历史展示（与 ConfirmAsMisReport 保持一致）
+        return {"description": kwargs.get("description", "")}
 
 
 class ConfirmAsMisReport(RiskFlowBaseHandler):
@@ -939,18 +949,19 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
             raise PermissionDenied("非确认人，无权确认误报")
 
     def process(self, description: str = "", *args, **kwargs) -> dict:
-        # 标记误报
-        self.risk.risk_label = RiskLabel.MISREPORT
-        # 状态将在 update_status 中保存
-
+        with transaction.atomic():
+            risk = Risk.objects.select_for_update().get(risk_id=self.risk.risk_id)
+            if risk.status != RiskStatus.PENDING_CONFIRM:
+                raise RiskStatusInvalid(message=f"风险状态已变更，当前状态：{risk.status}")
+            # 标记误报并关闭
+            risk.risk_label = RiskLabel.MISREPORT
+            risk.status = RiskStatus.CLOSED
+            risk.display_status = RiskDisplayStatus.CLOSED
+            risk.save(update_fields=["status", "display_status", "risk_label"])
         return {}
 
     def update_status(self, process_result: dict, *args, **kwargs) -> None:
-        # 确认为误报后直接关闭
-        self.risk.status = RiskStatus.CLOSED
-        self.risk.display_status = RiskDisplayStatus.CLOSED
-        self.risk.risk_label = RiskLabel.MISREPORT
-        self.risk.save(update_fields=["status", "display_status", "risk_label"])
+        pass
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         # 关单后清空处理人
