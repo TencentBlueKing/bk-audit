@@ -20,7 +20,7 @@
                 placement: 'top-start'
               }"
               class="risk-rules-tip-icon"
-              type="attention" />
+              type="info-fill" />
             <span class="risk-rules-tip-text">
               {{ t('当一条数据源数据同时命中多条规则时，将采用自上而下的优先级匹配，仅最先匹配到的规则生效。') }}
             </span>
@@ -158,7 +158,7 @@
                           class="list-item-input">
                           <input
                             :ref="(el: any) => setTitleInputRef(el, index)"
-                            v-model.trim="rule.riskTitleInputValue"
+                            v-model="rule.riskTitleInputValue"
                             class="title-input"
                             type="text"
                             @keydown="(e) => handleTitleKeyDown(e, index)">
@@ -506,14 +506,22 @@
   ];
 
   const getDisplayRiskTitle = (riskTitle: string) => {
-    const arr = riskTitle.match(/\{\{[^{}]*}}|./g);
+    const arr = riskTitle.match(/\{\{[^{}]*}}|./gs);
     if (!arr) return [];
-    return arr.reduce<Array<{ value: string; isVariable: boolean }>>((acc, item) => {
-      if (item.startsWith('{{') && item.endsWith('}}')) {
-        return acc.concat(Array.from(item).map(char => ({ value: char, isVariable: true })));
-      }
-      return acc.concat({ value: item, isVariable: false });
-    }, []);
+    return arr.map(item => ({
+      value: item,
+      isVariable: item.startsWith('{{') && item.endsWith('}}'),
+    }));
+  };
+
+  const getRiskTitleCharIndex = (
+    display: Array<{ value: string }>,
+    liIndex: number,
+  ) => {
+    if (liIndex < 0) {
+      return display.reduce((sum, item) => sum + item.value.length, 0);
+    }
+    return display.slice(0, liIndex).reduce((sum, item) => sum + item.value.length, 0);
   };
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -614,15 +622,14 @@
       rule.showVariablePanel = true;
       rule.variableInputActive = true;
       const display = getDisplayRiskTitle(rule.risk_title);
+      const cursorPos = getRiskTitleCharIndex(display, rule.clickLiIndex);
       if (display.length) {
         rule.riskTitleInputValue = display.map(item => item.value).join('');
         rule.risk_title = '';
       }
       nextTick(() => {
-        if (rule.clickLiIndex !== -1) {
-          titleInputRefs.value[index]?.setSelectionRange(rule.clickLiIndex, rule.clickLiIndex);
-          rule.clickLiIndex = -1;
-        }
+        titleInputRefs.value[index]?.setSelectionRange(cursorPos, cursorPos);
+        rule.clickLiIndex = -1;
         titleInputRefs.value[index]?.focus();
       });
     }
@@ -1208,8 +1215,10 @@
       .variable-input-content {
         display: flex;
         align-items: center;
+        width: 100%;
+        min-width: 0;
         min-height: 32px;
-        padding-left: 5px;
+        padding: 0 8px;
         font-size: 12px;
         color: #63656e;
         cursor: pointer;
@@ -1218,17 +1227,31 @@
         border-right: none;
         border-radius: 2px 0 0 2px;
         flex: 1;
+        box-sizing: border-box;
 
         &.active {
           cursor: text;
           border-color: #3a84ff;
           border-right: none;
+
+          .variable-input-list {
+            width: 100%;
+            flex: 1;
+          }
+
+          .list-item-input {
+            width: 100%;
+            min-width: 0;
+            flex: 1;
+          }
         }
 
         .variable-input-list {
           display: flex;
+          width: 100%;
           max-width: 100%;
           flex-wrap: wrap;
+          align-items: center;
           list-style: none;
           padding: 0;
           margin: 0;
@@ -1239,8 +1262,10 @@
           }
 
           .is-variable {
-            padding: 5px 0;
+            padding: 2px 4px;
+            margin: 0 1px;
             background-color: #f2f3f6;
+            border-radius: 2px;
           }
 
           .list-item-input {
@@ -1248,9 +1273,12 @@
 
             .title-input {
               width: 100%;
+              min-width: 0;
+              padding: 0;
               border: none;
               outline: none;
               font-size: 12px;
+              line-height: 30px;
               color: #313238;
               background: transparent;
             }

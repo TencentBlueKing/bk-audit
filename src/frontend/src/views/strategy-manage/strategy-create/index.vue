@@ -425,6 +425,9 @@
           initialFormData.value = _.cloneDeep(formData.value);
         }
         messageSuccess(t('保存草稿成功'));
+        router.push({
+          name: strategyRoutes.list,
+        });
         return;
       }
       // 编辑态：来自「下一步」弹窗的保存，要求不返回列表，只刷新当前页数据

@@ -165,7 +165,7 @@
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
             class="source-type-radio-group"
-            :disabled="isEditMode"
+            :disabled="isStrategyConfigLocked"
             @change="handleSourceTypeChange">
             <bk-radio
               v-bk-tooltips="{
@@ -184,9 +184,11 @@
                 placement: 'top-start',
               }"
               :style="{
-                color: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                color: (isStrategyConfigLocked
+                  || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isStrategyConfigLocked
+                  || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
                   ? '#c4c6cc' : '#979ba5'}`,
                 marginLeft: '6px',
                 lineHeight: '12px',
@@ -207,9 +209,11 @@
                 placement: 'top-start',
               }"
               :style="{
-                color: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                color: (isStrategyConfigLocked
+                  || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isStrategyConfigLocked
+                  || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
                   ? '#c4c6cc' : '#979ba5'}`,
                 marginLeft: '6px',
                 lineHeight: '12px',
@@ -294,6 +298,7 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
   import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
   import {
     getStrategyResourceSceneParams,
@@ -384,6 +389,8 @@
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
   const isPlatformMode = isPlatformStrategyRoute(route.name);
+  const strategyStatus = computed(() => props.editData?.status);
+  const { isStrategyConfigLocked } = useStrategyConfigLock(strategyStatus);
   const strategySceneParams = computed(() => getStrategyResourceSceneParams(route));
   const strategySystemScopeParams = computed(() => getStrategySystemScopeParams(route));
 
@@ -525,13 +532,13 @@
 
   const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
     // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate，或者是编辑模式
-    if (isEditMode
+    if (isStrategyConfigLocked.value
       || !sourceType.value.support_source_types.includes(type)
       || (type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate))) {
       return {
         disabled: true,
         // eslint-disable-next-line no-nested-ternary
-        tips: isEditMode
+        tips: isStrategyConfigLocked.value
           ? t('编辑状态下不能编辑调度方式')
           : !sourceType.value.support_source_types.includes(type)
             ? t('不可选择，如仍需使用此数据，请联系系统管理员')
@@ -828,7 +835,17 @@
   }));
 
   // 选择tableid后，获取表字段
+  const resolveRtId = (rtId: string | string[] | undefined) => {
+    if (Array.isArray(rtId)) {
+      return rtId.length ? String(_.last(rtId)) : '';
+    }
+    return rtId ? String(rtId) : '';
+  };
+
   const fetDatabaseTableFields = (rtId: string) => {
+    if (!rtId) {
+      return;
+    }
     StrategyManageService.fetchTableRtFields({
       table_id: rtId,
     }).then((data) => {
@@ -845,6 +862,9 @@
     const idArr = Array.from(new Set(rtIdArr.reduce((acc, curr) => acc.concat(curr), [])));
     // 别名
     const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
+    if (!idArr.length) {
+      return;
+    }
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
     }).then((data) => {
@@ -1240,16 +1260,22 @@
     // 转换tableid,反显
     await changeTableId();
     if (formData.value.configs.config_type === 'LinkTable') {
-      fetchLinkDataSheetDetail({
-        uid: formData.value.configs.data_source.link_table.uid,
-        version: formData.value.configs.data_source.link_table.version,
-      });
+      const linkTable = formData.value.configs.data_source.link_table;
+      if (linkTable?.uid) {
+        fetchLinkDataSheetDetail({
+          uid: linkTable.uid,
+          version: linkTable.version,
+        });
+      }
     } else {
-      fetDatabaseTableFields(formData.value.configs.data_source.rt_id as string);
-      fetchSourceType({
-        config_type: formData.value.configs.config_type,
-        rt_id: formData.value.configs.data_source.rt_id as string,
-      });
+      const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+      if (rtId) {
+        fetDatabaseTableFields(rtId);
+        fetchSourceType({
+          config_type: formData.value.configs.config_type,
+          rt_id: rtId,
+        });
+      }
     }
   };
 
