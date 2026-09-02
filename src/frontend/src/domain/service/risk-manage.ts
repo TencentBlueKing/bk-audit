@@ -293,6 +293,17 @@ export default {
   },
 
   /**
+   * @desc 批量标记误报
+   */
+  batchConfirmAsMisreport(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return RiskManageSource.batchConfirmAsMisreport(params)
+      .then(({ data }) => data);
+  },
+
+  /**
    * @desc 批量导出
    */
   batchExport(params: Omit<RiskExportSubmitParams, 'async'>) {
