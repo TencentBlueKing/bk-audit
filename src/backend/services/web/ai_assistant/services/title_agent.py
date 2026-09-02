@@ -26,6 +26,11 @@ from typing import Any, Mapping, Sequence
 from bk_resource import api
 
 from api.constants import AIAgentCode
+from services.web.query.constants import (
+    AccessTypeChoices,
+    ResultCodeChoices,
+    UserIdentifyTypeChoices,
+)
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS_MAP
 
 logger = logging.getLogger(__name__)
@@ -34,6 +39,17 @@ logger = logging.getLogger(__name__)
 AI_TITLE_INPUT_TEMPLATE = '用户自然语言检索描述: "{input_text}"'
 # 条件检索（非自然语言）来源的标题素材：label 区分来源，仍保持单行 label 前缀格式
 AI_TITLE_CONDITION_INPUT_TEMPLATE = '用户条件检索描述: "{input_text}"'
+
+# 枚举字段值 → 展示值（标题素材给人类可读文案，智能体才能生成「WebUI操作」而非「操作途径审计」；
+# 检索查询侧仍用原始值，两套口径互不影响；非枚举字段/未知值回退原文）
+ENUM_FIELD_VALUE_LABELS: dict[str, dict[str, str]] = {
+    field_name: {str(value): str(label) for value, label in choices.choices}
+    for field_name, choices in (
+        ("access_type", AccessTypeChoices),
+        ("result_code", ResultCodeChoices),
+        ("user_identify_type", UserIdentifyTypeChoices),
+    )
+}
 
 # 条件检索标题素材：操作符中文描述（Operator 元数据为 SQL 符号，标题素材用中文更利于智能体概括；
 # 覆盖 core.sql.constants.Operator 全部取值，未知操作符回退原文）
@@ -71,6 +87,8 @@ def build_condition_title_input(
       与条件筛选回传前端的字段描述同源（field_context 构建逻辑一致），新增字段自动适配；
     - 拓展子键：展示名取父消息系统选择快照的 extension_fields[].display_name，
       缺元数据回退子键名；操作符中文见 CONDITION_OPERATOR_LABELS；
+    - 枚举字段值翻译为展示值（操作途径 0 → WebUI 等，见 ENUM_FIELD_VALUE_LABELS）；
+    - 时间取日期级（同日单值 / 跨日区间），避免冗长 ISO 时间戳挤占素材信息密度；
     - 未知字段/操作符回退原文；空条件仅保留系统与时间；整体截断到 max_length。
     """
 
@@ -87,9 +105,9 @@ def build_condition_title_input(
     parts: list[str] = []
     if condition.get("scope_id"):
         parts.append(f"系统 {condition['scope_id']}")
-    start_time, end_time = condition.get("start_time"), condition.get("end_time")
-    if start_time and end_time:
-        parts.append(f"时间 {start_time} 至 {end_time}")
+    time_part = _format_time_range(condition.get("start_time"), condition.get("end_time"))
+    if time_part:
+        parts.append(time_part)
     for cond in condition.get("conditions") or []:
         field_meta = (cond or {}).get("field") or {}
         raw_name = field_meta.get("raw_name") or ""
@@ -105,10 +123,32 @@ def build_condition_title_input(
             field_label = str(meta.description) if meta is not None else raw_name
         operator = (cond or {}).get("operator") or ""
         operator_label = CONDITION_OPERATOR_LABELS.get(operator, operator)
-        filters = ",".join(str(value) for value in (cond or {}).get("filters") or [] if value not in (None, ""))
+        enum_value_labels = ENUM_FIELD_VALUE_LABELS.get(raw_name) or {}
+        filters = ",".join(
+            enum_value_labels.get(str(value), str(value))
+            for value in (cond or {}).get("filters") or []
+            if value not in (None, "")
+        )
         if filters:
             parts.append(f"{field_label} {operator_label} {filters}")
     return "，".join(parts)[:max_length]
+
+
+def _format_time_range(start_time: Any, end_time: Any) -> str:
+    """时间范围取日期级表述：同日单值（时间 2026-09-01）、跨日区间（时间 2026-09-01 至 2026-09-02）。
+
+    取 ISO 时间戳的日期部分；缺任一边界返回空串（不产生时间片段）。
+    """
+
+    start_date = str(start_time or "").split("T")[0] if start_time else ""
+    end_date = str(end_time or "").split("T")[0] if end_time else ""
+    if not start_date and not end_date:
+        return ""
+    if start_date == end_date:
+        return f"时间 {start_date}" if start_date else ""
+    if start_date and end_date:
+        return f"时间 {start_date} 至 {end_date}"
+    return f"时间 {start_date or end_date}"
 
 
 class TitleAgentService:
