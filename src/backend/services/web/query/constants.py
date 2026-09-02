@@ -57,8 +57,10 @@ from core.choices import TextChoices, register_choices
 from core.constants import OrderTypeChoices
 from core.sql.constants import FieldType
 from core.sql.model import BaseField
+from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.utils.field import (
     LOG_SEARCH_ALL_FIELDS,
+    LOG_SEARCH_ALL_FIELDS_MAP,
     LOG_SEARCH_SNAPSHOT_FIELDS,
     LOG_SEARCH_SNAPSHOT_FIELDS_MAP,
     LOG_SEARCH_STANDARD_FIELDS,
@@ -266,6 +268,8 @@ class LogExportFieldScope(TextChoices):
     STANDARD = "standard", gettext_lazy("标准字段")
     SNAPSHOT = "snapshot", gettext_lazy("快照字段")
     SPECIFIED = "specified", gettext_lazy("指定字段")
+    # AI 助手日志检索专用：字段集合 = 快照默认展示列（与预览导出/前端列表一致）
+    AI_STANDARD = "ai_standard", gettext_lazy("AI助手标准字段")
 
     @classmethod
     def get_fields(cls, scope: str) -> List[Field]:
@@ -278,6 +282,8 @@ class LogExportFieldScope(TextChoices):
             cls.STANDARD.value: LOG_SEARCH_STANDARD_FIELDS,
             cls.SNAPSHOT.value: LOG_SEARCH_SNAPSHOT_FIELDS,
             cls.SPECIFIED.value: [],
+            # AI 助手标准字段 = 快照默认展示列（顺序与集合以 SNAPSHOT_DEFAULT_COLUMNS 为单一来源）
+            cls.AI_STANDARD.value: [LOG_SEARCH_ALL_FIELDS_MAP[raw_name] for raw_name, _ in SNAPSHOT_DEFAULT_COLUMNS],
         }.get(scope)
 
 
