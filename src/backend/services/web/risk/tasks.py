@@ -219,8 +219,7 @@ def manual_add_event(data: list):
                 event_time=event_time,
                 event_source=payload.get("event_source"),
                 operator=payload.get("operator"),
-                # 保存 strategy_rule
-                strategy_rule=strategy_rule_id,
+                strategy_rule_id=strategy_rule_id,
                 # 保存风险元信息快照
                 risk_level=risk_level,
                 risk_hazard=risk_hazard,

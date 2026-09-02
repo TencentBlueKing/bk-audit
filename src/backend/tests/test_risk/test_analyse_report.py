@@ -1747,9 +1747,12 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
         self.assertEqual(serializer.validated_data["total"], 2)
 
     def test_apigw_list_report_risks_allows_empty_risk_level(self):
-        """APIGW响应兼容旧策略风险等级为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        """APIGW响应兼容旧风险风险等级为空的数据（快照字段为空）"""
+        # 风险等级已快照化，直接清空 Risk 自身快照字段，不再依赖关联策略
+        self.risk1.risk_level = None
+        self.risk1.save(update_fields=["risk_level"])
+        self.risk2.risk_level = None
+        self.risk2.save(update_fields=["risk_level"])
 
         result = self.request_apigw_resource()
 
@@ -1758,8 +1761,9 @@ class TestListAnalyseReportRiskAPIGW(AnalyseReportTestBase):
 
     def test_apigw_list_report_risks_allows_nullable_base_fields(self):
         """APIGW响应兼容旧风险基础字段为空的数据"""
-        self.strategy.risk_level = None
-        self.strategy.save(update_fields=["risk_level"])
+        # 风险等级已快照化，直接清空 Risk 自身快照字段
+        self.risk1.risk_level = None
+        self.risk1.save(update_fields=["risk_level"])
         self.risk1.title = None
         self.risk1.event_end_time = None
         self.risk1.operator = None

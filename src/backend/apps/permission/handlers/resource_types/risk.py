@@ -43,18 +43,8 @@ class Risk(ResourceTypeMeta):
     def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
         from services.web.risk.models import Risk as RiskModel
 
-        risks = RiskModel.objects.filter(risk_id__in=instance_ids).distinct().order_by().only("risk_id", "strategy_id")
+        risks = RiskModel.objects.filter(risk_id__in=instance_ids).distinct().order_by().only("risk_id", "scene_id")
         risk_map = {risk.risk_id: risk for risk in risks}
-
-        # 收集所有 risk 对应的 strategy_id，通过策略绑定的场景反查 scene_id
-        strategy_ids = {str(risk.strategy_id) for risk in risks if risk.strategy_id}
-        scene_bindings = ResourceBindingScene.objects.filter(
-            scene__is_deleted=False,
-            binding__resource_type=ResourceVisibilityType.STRATEGY,
-            binding__resource_id__in=list(strategy_ids),
-        ).values_list("binding__resource_id", "scene_id")
-        # strategy_id → scene_id 映射（业务约束：一个策略只绑定一个场景）
-        strategy_scene_map = {rid: str(sid) for rid, sid in scene_bindings}
 
         resources = []
         for instance_id in instance_ids:
@@ -63,10 +53,8 @@ class Risk(ResourceTypeMeta):
             risk = risk_map.get(instance_id)
             if risk:
                 instance_name = risk.risk_id
-            # 通过策略找到场景：risk.strategy_id → strategy_scene_map
-            scene_id = ""
-            if risk and risk.strategy_id:
-                scene_id = strategy_scene_map.get(str(risk.strategy_id), "")
+            # 风险场景归属已固化到 Risk.scene_id，直接取模型字段
+            scene_id = str(risk.scene_id) if risk and risk.scene_id is not None else ""
             resource.attribute = {
                 "id": str(resource.id),
                 "name": instance_name,

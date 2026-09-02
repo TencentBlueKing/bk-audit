@@ -7,9 +7,6 @@ from django.db.models import Q
 from iam.contrib.converter.queryset import PathEqDjangoQuerySetConverter
 from iam.eval.constants import KEYWORD_BK_IAM_PATH, OP
 
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.models import ResourceBindingScene
-
 # IAM 路径中场景前缀标识
 _SCENE_PATH_PREFIX = "/scene,"
 
@@ -63,23 +60,13 @@ class RiskPathEqDjangoQuerySetConverter(PathEqDjangoQuerySetConverter):
             return reduce(operator.or_, [self._convert_path(v) for v in value])
 
         if value.startswith(_SCENE_PATH_PREFIX):
-            # /scene,{scene_id}/ → 通过策略绑定反查 strategy_id
+            # /scene,{scene_id}/ → 风险场景归属已固化到 Risk.scene_id，直接按模型字段过滤
             scene_id = _parse_resource_id(value)
-            bound_strategy_ids = list(
-                ResourceBindingScene.objects.filter(
-                    binding__resource_type=ResourceVisibilityType.STRATEGY,
-                    scene_id=scene_id,
-                    scene__is_deleted=False,
-                ).values_list("binding__resource_id", flat=True)
-            )
-            # 将 str → int 以匹配 Risk.strategy_id（ForeignKey int）
-            int_ids = []
-            for sid in bound_strategy_ids:
-                try:
-                    int_ids.append(int(sid))
-                except (TypeError, ValueError):
-                    continue
-            return Q(strategy_id__in=int_ids)
+            try:
+                scene_id_int = int(scene_id)
+            except (TypeError, ValueError):
+                return Q(pk__in=[])
+            return Q(scene_id=scene_id_int)
 
         # 兼容旧路径：/strategy,{strategy_id}/
         strategy_id = _parse_resource_id(value)

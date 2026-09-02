@@ -128,6 +128,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-db",
             raw_event_id="raw",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
@@ -189,6 +190,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-another-scene",
             raw_event_id="raw-another-scene",
             strategy=another_strategy,
+            scene_id=another_scene.scene_id,
             status=RiskStatus.NEW,
             title="another",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -240,6 +242,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-multi-scene",
             raw_event_id="raw-multi-scene",
             strategy=another_strategy,
+            scene_id=another_scene.scene_id,
             status=RiskStatus.NEW,
             title="multi",
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -804,6 +807,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-bkbase-full",
             raw_event_id="raw-full",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title="bkbase-full-title",
             event_time=datetime.datetime(2025, 6, 1, tzinfo=datetime.timezone.utc),
@@ -862,6 +866,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-closed-display",
             raw_event_id="raw-closed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             title=self.bkbase_title,
@@ -910,6 +915,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-closed-db",
             raw_event_id="raw-closed-db",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             title="closed-risk",
@@ -971,6 +977,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-manual-unsynced",
             raw_event_id="raw-manual",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
@@ -1030,6 +1037,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-manual-unsynced-event-filter",
             raw_event_id="raw-manual",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
@@ -1099,6 +1107,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-mid",
             raw_event_id="raw-mid",
             strategy=strategy_mid,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -1110,6 +1119,7 @@ class TestListRiskResource(TestCase):
             risk_id="risk-low",
             raw_event_id="raw-low",
             strategy=strategy_low,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
@@ -1334,11 +1344,11 @@ class TestListRiskResource(TestCase):
                 for query in queries.captured_queries
                 if "from" in query["sql"].lower()
                 and "scene_scene" in query["sql"].lower()
-                and "scene_resourcebindingscene" in query["sql"].lower()
+                and "risk_risk" not in query["sql"].lower()
             ]
             self.assertTrue(scene_queries)
             self.assertNotIn("risk_risk", scene_queries[-1])
-            self.assertNotIn("risk_ticketpermission", scene_queries[-1])
+            self.assertNotIn("scene_resourcebindingscene", scene_queries[-1])
 
     def test_list_risk_scenes_without_view_type_reuses_strategy_scope(self):
         """未传 risk_view_type 时沿用 ListRiskStrategy 的全量策略逻辑"""
@@ -1387,6 +1397,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-owned",
             raw_event_id="raw-owned",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
@@ -1400,6 +1411,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-noticed",
             raw_event_id="raw-noticed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
@@ -1413,6 +1425,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-owned-without-permission",
             raw_event_id="raw-owned-without-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
@@ -1426,6 +1439,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-noticed-without-permission",
             raw_event_id="raw-noticed-without-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
@@ -1439,6 +1453,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-operator-permission-but-not-current",
             raw_event_id="raw-operator-permission-but-not-current",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=["other_user"],
@@ -1452,6 +1467,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-notice-permission-but-not-noticed",
             raw_event_id="raw-notice-permission-but-not-noticed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
@@ -1519,6 +1535,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-fresh-permission",
             raw_event_id="raw-fresh-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
@@ -1542,6 +1559,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-old-permission",
             raw_event_id="raw-old-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
@@ -1640,6 +1658,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-fresh-notice-permission",
             raw_event_id="raw-fresh-notice-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
@@ -1663,6 +1682,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-old-notice-permission",
             raw_event_id="raw-old-notice-permission",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[],
@@ -1724,6 +1744,7 @@ class TestListMineAndNoticingRisk(TestCase):
             risk_id="risk-owned-low",
             raw_event_id="raw-owned-low",
             strategy=strategy_low,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             title=self.bkbase_title,
             current_operator=[self.username],
@@ -1888,7 +1909,9 @@ class TestRetrieveRiskDetail(TestCase):
         from services.web.scene.models import Scene
 
         scene = Scene.objects.create(name="risk-detail-scene")
-        bind_strategy_to_scene(self.strategy.strategy_id, scene.scene_id)
+        # 风险场景归属已固化到 Risk.scene_id，直接为风险单设置场景
+        self.risk.scene_id = scene.scene_id
+        self.risk.save(update_fields=["scene_id"])
 
         data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
 
@@ -2326,6 +2349,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-PAST",
             title="past-processed",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
@@ -2345,6 +2369,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-CURRENT",
             title="current-processing",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.AWAIT_PROCESS,
             display_status=RiskDisplayStatus.AWAIT_PROCESS,
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -2361,6 +2386,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-NOTICED",
             title="noticed-only",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
@@ -2373,6 +2399,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-OPEN",
             title="open-past",
             strategy=self.strategy,
+            scene_id=self.scene_id,
             status=RiskStatus.NEW,
             display_status=RiskDisplayStatus.NEW,
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
@@ -2398,6 +2425,7 @@ class TestListProcessedRisk(TestCase):
             risk_id="R-PAST-LOW",
             title="past-processed-low",
             strategy=self.strategy_low,
+            scene_id=self.scene_id,
             status=RiskStatus.CLOSED,
             display_status=RiskDisplayStatus.CLOSED,
             event_time=datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc),
