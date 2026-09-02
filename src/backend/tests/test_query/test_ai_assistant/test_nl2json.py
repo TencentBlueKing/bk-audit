@@ -210,7 +210,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
 
     def test_default_time_window(self, mock_chat):
-        """D2 默认实现：AI 未输出时间时后端补最近 7 天窗口"""
+        """D2 默认实现：AI 未输出时间时后端补默认窗口（与采样窗口对齐，30 天）"""
         output = dict(VALID_AI_OUTPUT)
         output["start_time"] = None
         output["end_time"] = None
@@ -515,11 +515,11 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
         self.assertEqual((end_dt - start_dt).days, 0)
 
     def test_vague_intent_default_window(self, mock_chat):
-        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 7 天窗口 → 放行"""
+        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 30 天窗口 → 放行"""
         mock_chat.return_value = json.dumps(
             {
                 "conditions": [],
-                "start_time": "2026-08-21T18:00:00+08:00",
+                "start_time": "2026-07-29T18:00:00+08:00",
                 "end_time": "2026-08-28T18:00:00+08:00",
             }
         )
