@@ -125,10 +125,10 @@
       isSubmitting.value = true;
       try {
         if (formData.value.confirm_result === 'misreport') {
-          await Promise.all(riskIds.value.map(riskId => RiskManageService.confirmAsMisreport({
-            risk_id: riskId,
+          await RiskManageService.batchConfirmAsMisreport({
+            risk_ids: riskIds.value,
             description: formData.value.description,
-          })));
+          });
         } else {
           await RiskManageService.batchConfirmRisk({
             risk_ids: riskIds.value,

@@ -273,6 +273,15 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 批量标记误报
+  batchConfirmAsMisreport(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/batch_confirm_as_misreport/`, {
+      params,
+    });
+  }
   // 批量导出
   batchExport(params: {
     risk_view_type: string,
