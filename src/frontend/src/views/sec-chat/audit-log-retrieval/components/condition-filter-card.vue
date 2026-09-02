@@ -50,7 +50,7 @@
     </div>
 
     <div
-      v-if="searchState !== 'loading'"
+      v-if="!isSearching"
       class="card-actions">
       <bk-button
         class="search-btn"
@@ -154,17 +154,25 @@
     searched: [];
   }>();
 
-  const { sendConditionSearch } = useSecChatStore();
+  const { sendConditionSearch, appendConditionSearch } = useSecChatStore();
 
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const searchState = ref<'idle' | 'loading' | 'empty' | 'failed' | 'done'>('idle');
   const searchError = ref('');
   const inlineResult = ref<RetrievalResultPayload | null>(null);
   const resultMessageUid = ref('');
+  /** 是否已完成过至少一次检索；再次检索追加新结果卡，避免覆盖当前卡 */
+  const hasSearchedOnce = ref(false);
+  /** 二次检索 loading，不改 searchState，避免隐藏首次内嵌结果 */
+  const resubmitLoading = ref(false);
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),
     datetime_origin: createDefaultDatetimeOrigin(),
   });
+
+  const isSearching = computed(() => (
+    searchState.value === 'loading' || resubmitLoading.value
+  ));
 
   const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
     props.standardFields,
@@ -249,10 +257,12 @@
     searchError.value = '';
     inlineResult.value = null;
     resultMessageUid.value = '';
+    hasSearchedOnce.value = false;
+    resubmitLoading.value = false;
   };
 
   const handleSearch = async () => {
-    if (searchState.value === 'loading') return;
+    if (isSearching.value) return;
 
     const scopeId = props.systems[0]?.id;
     const condition = buildAiSearchCondition({
@@ -263,39 +273,64 @@
     if (!condition) {
       searchState.value = 'failed';
       searchError.value = scopeId ? '请至少选择时间范围' : '请先选择系统';
-      inlineResult.value = null;
-      resultMessageUid.value = '';
+      if (!hasSearchedOnce.value) {
+        inlineResult.value = null;
+        resultMessageUid.value = '';
+      }
       return;
     }
 
-    searchState.value = 'loading';
-    searchError.value = '';
-    inlineResult.value = null;
-    resultMessageUid.value = '';
+    const isResubmit = hasSearchedOnce.value;
+
+    if (isResubmit) {
+      resubmitLoading.value = true;
+    } else {
+      searchState.value = 'loading';
+      searchError.value = '';
+      inlineResult.value = null;
+      resultMessageUid.value = '';
+    }
 
     try {
-      const chatMessage = await sendConditionSearch(condition);
+      const chatMessage = isResubmit
+        ? await appendConditionSearch(condition)
+        : await sendConditionSearch(condition);
+      hasSearchedOnce.value = true;
+
       if (chatMessage.apiStatus === 'FAILED') {
-        searchState.value = 'failed';
-        searchError.value = chatMessage.errorMessage || '检索失败';
+        if (!isResubmit) {
+          searchState.value = 'failed';
+          searchError.value = chatMessage.errorMessage || '检索失败';
+        }
         emit('searched');
         return;
       }
+
+      if (isResubmit) {
+        // 二次检索：新结果卡已写入消息列表，条件卡保持首次内嵌结果
+        emit('searched');
+        return;
+      }
+
       const { result } = chatMessage;
       if (!result || result.totalHit === 0) {
         searchState.value = 'empty';
         emit('searched');
         return;
       }
-      // 按设计稿：结果内嵌在当前条件卡，不追加消息列表卡片
+      // 首次：结果内嵌在当前条件卡
       inlineResult.value = result;
       resultMessageUid.value = chatMessage.id;
       searchState.value = 'done';
       emit('searched');
     } catch (error: any) {
-      searchState.value = 'failed';
-      searchError.value = error?.message || '请检查网络是否通畅或联系管理员';
+      if (!isResubmit) {
+        searchState.value = 'failed';
+        searchError.value = error?.message || '请检查网络是否通畅或联系管理员';
+      }
       emit('searched');
+    } finally {
+      resubmitLoading.value = false;
     }
   };
 
