@@ -9,6 +9,7 @@ import {
 } from '../../utils/strategy-routes';
 
 export const STRATEGY_DRAFT_EDIT_KEY = Symbol('strategyDraftEdit');
+export const STRATEGY_SHOW_SAVE_DRAFT_KEY = Symbol('strategyShowSaveDraft');
 
 export function useStrategyConfigLock(strategyStatus?: Ref<string | undefined>) {
   const route = useRoute();

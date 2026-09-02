@@ -42,6 +42,7 @@
         {{ t('下一步') }}
       </bk-button>
       <bk-button
+        v-if="showSaveDraftButton"
         class="ml8"
         @click="handleSaveDraft">
         {{ t('保存草稿') }}
@@ -61,7 +62,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { ref } from 'vue';
+  import { computed, inject, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -75,6 +76,7 @@
   import StrategyTable from './components/strategy-table/index.vue';
 
   import { getStrategyRouteNames } from '../../../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface IFormData {
     event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
@@ -104,6 +106,7 @@
   const route = useRoute();
   const strategyRoutes = getStrategyRouteNames(route);
   const { t } = useI18n();
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
 
   const eventRef = ref();
   const strategyTableRef = ref();
