@@ -54,7 +54,6 @@ from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
 from services.web.scene.constants import BindingType, ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBinding, ResourceBindingScene
 from services.web.strategy_v2.constants import DispatchMode, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy, StrategyRule
@@ -313,13 +312,13 @@ class RiskHandler:
             if dispatch_result is not None:
                 # 将分派结果（dispatch_rule/confirmer）固化到风险单，后续分派规则编辑不影响已产生单据
                 self._apply_dispatch(risk, dispatch_result)
-                if dispatch_result.dispatch_mode == DispatchMode.DIRECT:
-                    # direct：建单时即建 RISK 场景绑定（after_confirm 延迟到确认时建，仅绑定时机不同）
-                    BindingMetadataHelper.create_risk_scene_binding(risk.risk_id, dispatch_result.target_scene_id)
+                risk.scene_id = dispatch_result.target_scene_id
+                risk.save(update_fields=["scene_id"])
             else:
                 # 场景策略
                 scene_id = self._get_strategy_scene_id(event["strategy_id"])
-                BindingMetadataHelper.create_risk_scene_binding(risk.risk_id, scene_id)
+                risk.scene_id = scene_id
+                risk.save(update_fields=["scene_id"])
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
 
         if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:

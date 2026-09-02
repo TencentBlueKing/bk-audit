@@ -315,7 +315,8 @@ class RiskInfoSerializer(serializers.ModelSerializer):
         return obj.get_tag_ids()
 
     def get_scene_id(self, obj: Risk) -> int | None:
-        return get_strategy_scene_id(obj.strategy_id)
+        # 风险场景归属已固化到 Risk.scene_id，直接读模型字段
+        return obj.scene_id
 
     class Meta:
         model = Risk
@@ -1025,7 +1026,7 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        if data["risk_label"] == RiskLabel.MISREPORT and not attrs.get("description"):
+        if data["risk_label"] == RiskLabel.MISREPORT and not data.get("description"):
             raise serializers.ValidationError(gettext("Misreport Description Not Set"))
         return data
 
@@ -1988,7 +1989,8 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not isinstance(instance, dict):
-            data["risk_level"] = getattr(instance.strategy, "risk_level", None)
+            # 风险等级已快照化，直接读 Risk 自身字段，不再关联策略
+            data["risk_level"] = getattr(instance, "risk_level", None)
         if self.context.get("with_detail"):
             data["detail"] = RiskInfoWithoutReportSerializer(instance).data
         else:
@@ -2015,6 +2017,12 @@ class ConfirmRiskRequestSerializer(serializers.Serializer):
     """确认风险请求"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
 
 
 class BatchConfirmRiskRequestSerializer(serializers.Serializer):

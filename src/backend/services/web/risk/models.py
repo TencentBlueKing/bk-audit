@@ -226,6 +226,13 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         verbose_name=gettext_lazy("Dispatch Rule"),
         help_text=gettext_lazy("命中的分派规则（仅全局策略）"),
     )
+    scene_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=gettext_lazy("Scene ID"),
+        help_text=gettext_lazy("风险归属场景（固化到风险单，作为列表/权限/IAM/Provider 的唯一场景来源）"),
+    )
     risk_level = models.CharField(
         gettext_lazy("Risk Level"),
         max_length=16,
