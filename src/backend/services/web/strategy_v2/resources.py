@@ -1060,13 +1060,21 @@ class ListStrategy(StrategyV2Base):
                     binding_type=BindingType.PLATFORM_BINDING,
                 ).values_list("resource_id", flat=True)
             )
-            # 草稿策略在列表中可见
-            draft_resource_ids = set(
+            # 全局草稿在列表中可见：草稿期未创建平台绑定；
+            # 场景草稿已有场景绑定（场景列表可见），需排除，避免泄漏进平台视角列表
+            scene_bound_resource_ids = set(
+                ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.STRATEGY,
+                    binding__binding_type=BindingType.SCENE_BINDING,
+                ).values_list("binding__resource_id", flat=True)
+            )
+            draft_resource_ids = {
                 str(s.strategy_id)
                 for s in Strategy.objects.filter(
                     namespace=validated_request_data["namespace"], status=StrategyStatusChoices.DRAFT
                 )
-            )
+                if str(s.strategy_id) not in scene_bound_resource_ids
+            }
             queryset = queryset.filter(strategy_id__in=platform_resource_ids | draft_resource_ids)
         elif binding_type or scene_id or system_id:
             queryset = CompositeScopeFilter.filter_queryset(

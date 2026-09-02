@@ -601,6 +601,41 @@ def get_manual_event_strategy_config(rt_id):
                 "duplicate_field": False,
             },
         ],
+        # 多规则改造后，RULE 型策略必须至少携带一条发现规则（_check_rules 强制校验）。
+        # 手动新建风险是"全量命中"语义，此处用一条 NOTNULL 恒真条件承载（无恒真算子，
+        # 以必有字段 id 的 notnull 表达"所有事件都命中"），条件树非空即通过校验。
+        "rules": [
+            {
+                "rule_name": "系统初始化默认规则",
+                "risk_title": "Dummy",
+                "risk_level": "LOW",
+                "risk_hazard": "自定义",
+                "risk_guidance": "自定义",
+                "conditions": {
+                    "where": {
+                        "index": 0,
+                        "connector": "and",
+                        "conditions": [
+                            {
+                                "index": 0,
+                                "connector": "and",
+                                "condition": {
+                                    "field": {
+                                        "table": rt_id,
+                                        "raw_name": "id",
+                                        "display_name": "ID",
+                                        "field_type": "long",
+                                    },
+                                    "operator": "notnull",
+                                    "filter": "",
+                                },
+                            }
+                        ],
+                    },
+                    "having": None,
+                },
+            }
+        ],
         "is_formal": True,
         "source": "system",
     }

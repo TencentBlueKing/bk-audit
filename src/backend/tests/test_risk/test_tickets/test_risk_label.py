@@ -76,6 +76,42 @@ class RiskLabelTest(TicketTest):
 
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value="confirmer_user"),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_misreport_pending_confirm(self):
+        """
+        回归测试：通过 risk_label 接口在待确认状态下确认为误报。
+
+        关键验证：确认人应为当前请求用户（confirmer_user），不应误判为非确认人。
+        修复前 UpdateRiskLabel 引用了不存在的 self.request，导致确认为误报时
+        ConfirmAsMisReportResource 取到错误的用户名并抛出"非确认人，无权确认误报"。
+        """
+
+        with RiskContext(
+            risk_info={
+                "status": RiskStatus.PENDING_CONFIRM,
+                "display_status": RiskDisplayStatus.PENDING_CONFIRM,
+                "confirmer": ["confirmer_user"],
+            }
+        ) as risk:
+            resource.risk.update_risk_label(
+                risk_id=risk.risk_id, risk_label=RiskLabel.MISREPORT, description=uuid.uuid1().hex
+            )
+            risk.refresh_from_db()
+            # 验证关单
+            self.assertEquals(risk.status, RiskStatus.CLOSED.value)
+            self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
+            # MisReport→CloseRisk: display_status 同步为 CLOSED
+            self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
+
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
         mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
     )
     @mock.patch(

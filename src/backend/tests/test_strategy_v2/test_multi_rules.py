@@ -271,6 +271,34 @@ class CheckRulesTest(TestCase):
         result = self.mixin._check_rules(attrs)
         self.assertEqual(result, attrs)
 
+    def test_manual_sql_rejects_multi_rules(self):
+        """多条发现规则禁止携带手写 SQL（SQL 不保证输出 strategy_rule_id，风险侧回退首规则会破坏归因语义）"""
+        attrs = {
+            "strategy_type": StrategyType.RULE.value,
+            "configs": self.valid_configs,
+            "sql": "SELECT 1 AS event_data, 1 AS strategy_id",
+            "rules": [
+                {"rule_name": "rule_high", "conditions": {"where": self.valid_where}},
+                {"rule_name": "rule_low", "conditions": {"where": self.valid_where}},
+            ],
+        }
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin._check_rules(attrs)
+        self.assertIn("手写 SQL", str(cm.exception))
+
+    def test_manual_sql_allows_single_rule(self):
+        """单条发现规则可携带手写 SQL"""
+        attrs = {
+            "strategy_type": StrategyType.RULE.value,
+            "configs": self.valid_configs,
+            "sql": "SELECT 1 AS event_data, 1 AS strategy_id",
+            "rules": [
+                {"rule_name": "rule_only", "conditions": {"where": self.valid_where}},
+            ],
+        }
+        result = self.mixin._check_rules(attrs)
+        self.assertEqual(result, attrs)
+
 
 class CheckDispatchRulesTest(TestCase):
     """_check_dispatch_rules: 分派规则校验测试"""

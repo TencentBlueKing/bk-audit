@@ -968,6 +968,7 @@ class UpdateRiskLabel(RiskMeta):
     RequestSerializer = UpdateRiskLabelReqSerializer
     ResponseSerializer = RiskInfoSerializer
     audit_action = ActionEnum.PROCESS_RISK
+    bind_request = True
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -989,7 +990,7 @@ class UpdateRiskLabel(RiskMeta):
                     {
                         "risk_id": risk.risk_id,
                         "description": validated_request_data.get("description", ""),
-                        "_request": self.request,
+                        "_request": validated_request_data.get("_request"),
                     }
                 )
             else:

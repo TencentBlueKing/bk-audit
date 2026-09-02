@@ -868,6 +868,12 @@ class MultiRuleValidateMixin:
         if not rules:
             raise serializers.ValidationError(gettext("规则审计策略（strategy_type=rule）必须至少配置一条发现规则"))
 
+        # 手写 SQL 不保证输出 strategy_rule_id，多条发现规则时风险侧会回退到首规则归因，
+        # 破坏 first-match 与规则快照语义，因此多条发现规则禁止携带手写 SQL，由系统生成
+        sql_value = attrs.get("sql")
+        if sql_value and len(rules) > 1:
+            raise serializers.ValidationError(gettext("策略配置了多条发现规则，不支持携带手写 SQL（sql），请移除后由系统自动生成"))
+
         # rule_name 策略内唯一
         names = [r.get("rule_name") for r in rules]
         if len(names) != len(set(names)):
@@ -1309,15 +1315,22 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         self._validate_strategy_type(data)
         # binding_type 以数据库真实绑定为准（更新接口不接收该参数，不支持修改绑定类型），
         # 供下游多规则/分派规则校验（_check_rules / _check_dispatch_rules）使用
-        data["binding_type"] = (
+        # 注意：全局策略草稿保存时不创建平台绑定记录，提交时 ResourceBinding 表查不到，
+        # 不能武断默认 SCENE_BINDING（会误触发“分派规则仅全局策略可配置”校验失败）。
+        # 场景策略草稿也建有 SCENE_BINDING，反查能直接命中，不会走到 is None 分支；
+        # 因此 ResourceBinding 查不到（db_binding_type is None）在数据正确时只可能是全局草稿策略，
+        # 直接视为 PLATFORM_BINDING 即可。
+        db_binding_type = (
             ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.STRATEGY,
                 resource_id=str(data["strategy_id"]),
             )
             .values_list("binding_type", flat=True)
             .first()
-            or BindingType.SCENE_BINDING
         )
+        if db_binding_type is None:
+            db_binding_type = BindingType.PLATFORM_BINDING
+        data["binding_type"] = db_binding_type
         # 模型策略必须配置processor_groups
         strategy_type = data.get("strategy_type")
         if strategy_type == StrategyType.MODEL.value and not data.get("processor_groups"):

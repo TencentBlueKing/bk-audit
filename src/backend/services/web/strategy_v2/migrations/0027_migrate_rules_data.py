@@ -3,21 +3,16 @@
 数据迁移：将现有单规则策略迁移到 StrategyRule 表，并回填 Risk/ManualEvent 元信息。
 
 迁移内容：
-1. 为每个 rule 策略生成 1 条 StrategyRule（幂等，跳过已迁移策略）
-2. 回填 Risk 表的元信息字段（strategy_rule, risk_level, risk_hazard, risk_guidance, confirmer）
-3. 回填 ManualEvent 表的元信息字段（strategy_rule, risk_level, risk_hazard, risk_guidance）
-4. 更新 Strategy.rule_order
+1. 为每个活动 rule 策略生成 1 条 StrategyRule（幂等，跳过已迁移策略），并更新 Strategy.rule_order
+2. 回填 Risk 表元信息（覆盖全部策略，不区分类型与状态）：risk_level/risk_hazard/risk_guidance；
+   关联到规则的活动 RULE 策略额外回填 strategy_rule_id
+3. 回填 ManualEvent 表元信息（覆盖全部策略）：同 Risk
 
 注意：
 - 当前迁移只处理场景策略（scene_binding），尚未有全局策略
 - processor_groups/notice_groups 迁移到 StrategyRule.processor/follower
-- confirmer 为空列表（无全局策略）
-- dispatch_rule 为 null（无全局策略）
+- 已软删 RULE 与 MODEL 策略不创建 StrategyRule，仅回填元信息
 
-【不可逆声明】本数据迁移为不可逆迁移。回滚（backwards）不做任何数据清理：
-无法可靠识别"仍保持迁移原样"的记录（StrategyRule.created_by 在用户编辑后不变），
-按 created_by 回滚会误删用户已编辑的规则、清空 rule_order 并留下 Risk/ManualEvent
-的 strategy_rule 悬空引用。如需回退请走人工数据订正流程。
 """
 
 from django.db import migrations
@@ -35,15 +30,15 @@ def forwards(apps, schema_editor):
 
     print("[forwards] 开始数据迁移", flush=True)
 
-    # -------- 第一步：为每个 rule 策略生成 StrategyRule --------
+    # -------- 第一步：为活动 rule 策略创建 StrategyRule --------
     print("[forwards] 第一步：迁移策略规则", flush=True)
 
-    # 只处理 rule 类型的策略（排除已软删策略，避免为其创建孤儿规则行）
+    # 只处理活动 rule 类型的策略（排除已软删策略，避免为其创建孤儿规则行）
     rule_strategies = Strategy.objects.filter(strategy_type="rule", is_deleted=False)
     strategy_count = rule_strategies.count()
-    print(f"[forwards] 共有 {strategy_count} 个 rule 策略需要迁移", flush=True)
+    print(f"[forwards] 共有 {strategy_count} 个活动 rule 策略需要迁移", flush=True)
 
-    # strategy_id -> (strategy_rule_id, risk_level, risk_hazard, risk_guidance)
+    # strategy_id -> strategy_rule_id
     strategy_rule_map = {}
 
     for strategy in rule_strategies:
@@ -51,22 +46,18 @@ def forwards(apps, schema_editor):
         existing_rule = StrategyRule.objects.filter(strategy=strategy).first()
         if existing_rule:
             if not (strategy.rule_order or []):
-                active_rule_ids = list(StrategyRule.objects.filter(strategy=strategy).values_list("rule_id", flat=True))
+                active_rule_ids = list(
+                    StrategyRule.objects.filter(strategy=strategy, is_deleted=False).values_list("rule_id", flat=True)
+                )
                 Strategy.objects.filter(pk=strategy.strategy_id).update(rule_order=active_rule_ids)
-            strategy_rule_map[strategy.strategy_id] = (
-                existing_rule.rule_id,
-                strategy.risk_level,
-                strategy.risk_hazard,
-                strategy.risk_guidance,
-            )
+            strategy_rule_map[strategy.strategy_id] = existing_rule.rule_id
             print(
                 f"[forwards] 策略 {strategy.strategy_id} 已有规则 {existing_rule.rule_id}，跳过创建",
                 flush=True,
             )
             continue
 
-        # configs 必须为 dict（含 select/where/having）；非 dict（历史遗留的 list 事件字段映射等）
-        # 视为格式异常，跳过迁移并告警，留待人工确认后重新配置规则
+        # configs 必须为 dict
         if not isinstance(strategy.configs, dict):
             print(
                 f"[forwards] 策略 {strategy.strategy_id} configs 为非 dict "
@@ -105,12 +96,7 @@ def forwards(apps, schema_editor):
             updated_by=MIGRATION_CREATED_BY,
         )
 
-        strategy_rule_map[strategy.strategy_id] = (
-            strategy_rule.rule_id,
-            strategy.risk_level,
-            strategy.risk_hazard,
-            strategy.risk_guidance,
-        )
+        strategy_rule_map[strategy.strategy_id] = strategy_rule.rule_id
 
         # 更新 Strategy.rule_order
         Strategy.objects.filter(pk=strategy.strategy_id).update(rule_order=[strategy_rule.rule_id])
@@ -120,41 +106,47 @@ def forwards(apps, schema_editor):
             flush=True,
         )
 
-    print(f"[forwards] 第一步完成，共处理 {len(strategy_rule_map)} 个策略", flush=True)
+    print(f"[forwards] 第一步完成，共 {len(strategy_rule_map)} 个活动 rule 策略关联到规则", flush=True)
 
-    # -------- 第二步：按策略分组批量回填 Risk 表 --------
-    print("[forwards] 第二步：分组回填 Risk 表", flush=True)
+    # 全量策略快照（活动/已软删 × RULE/MODEL），供第二/三步统一回填
+    all_strategies = list(Strategy.objects.all())
+
+    # -------- 第二步：回填全部策略的 Risk 元信息 --------
+    print("[forwards] 第二步：回填 Risk 表", flush=True)
 
     total_updated = 0
-    for strategy_id, (rule_id, risk_level, risk_hazard, risk_guidance) in strategy_rule_map.items():
-        updated = Risk.objects.filter(strategy_id=strategy_id, strategy_rule__isnull=True,).update(
-            strategy_rule_id=rule_id,
-            risk_level=risk_level,
-            risk_hazard=risk_hazard,
-            risk_guidance=risk_guidance,
-            # 无全局策略，confirmer 保持空列表
-            confirmer=[],
-        )
+    for strategy in all_strategies:
+        update_params = {
+            "risk_level": strategy.risk_level,
+            "risk_hazard": strategy.risk_hazard,
+            "risk_guidance": strategy.risk_guidance,
+        }
+        # 关联到规则的活动 RULE 策略：回填规则关联，使历史风险归属到具体规则
+        rule_id = strategy_rule_map.get(strategy.strategy_id)
+        if rule_id:
+            update_params.update(strategy_rule_id=rule_id)
+        updated = Risk.objects.filter(strategy_id=strategy.strategy_id).update(**update_params)
         if updated:
             total_updated += updated
-            print(f"[forwards] Risk strategy={strategy_id} 回填 {updated} 条", flush=True)
 
     print(f"[forwards] 第二步完成，共回填 {total_updated} 条风险", flush=True)
 
-    # -------- 第三步：按策略分组批量回填 ManualEvent 表 --------
-    print("[forwards] 第三步：分组回填 ManualEvent 表", flush=True)
+    # -------- 第三步：回填全部策略的 ManualEvent 元信息 --------
+    print("[forwards] 第三步：回填 ManualEvent 表", flush=True)
 
     total_me_updated = 0
-    for strategy_id, (rule_id, risk_level, risk_hazard, risk_guidance) in strategy_rule_map.items():
-        updated = ManualEvent.objects.filter(strategy_id=strategy_id, strategy_rule__isnull=True,).update(
-            strategy_rule_id=rule_id,
-            risk_level=risk_level,
-            risk_hazard=risk_hazard,
-            risk_guidance=risk_guidance,
-        )
+    for strategy in all_strategies:
+        update_params = {
+            "risk_level": strategy.risk_level,
+            "risk_hazard": strategy.risk_hazard,
+            "risk_guidance": strategy.risk_guidance,
+        }
+        rule_id = strategy_rule_map.get(strategy.strategy_id)
+        if rule_id:
+            update_params.update(strategy_rule_id=rule_id)
+        updated = ManualEvent.objects.filter(strategy_id=strategy.strategy_id).update(**update_params)
         if updated:
             total_me_updated += updated
-            print(f"[forwards] ManualEvent strategy={strategy_id} 回填 {updated} 条", flush=True)
 
     print(f"[forwards] 第三步完成，共回填 {total_me_updated} 条手工事件", flush=True)
 
