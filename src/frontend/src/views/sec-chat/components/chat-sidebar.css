@@ -414,6 +414,7 @@
       }
 
       .group-header {
+        position: relative;
         display: flex;
         padding: 7px 22px;
         color: #63656e;
@@ -466,12 +467,14 @@
 
         .group-more-dropdown {
           position: absolute;
+          top: 50%;
           right: 8px;
+          z-index: 1;
           display: block;
-          margin-left: 8px;
           pointer-events: none;
           opacity: 0%;
           transition: opacity .15s;
+          transform: translateY(-50%);
         }
 
         .group-more {
@@ -585,6 +588,7 @@
       }
 
       &--indent {
+        padding-right: 22px;
         padding-left: 8px;
 
         &::before {
@@ -618,10 +622,10 @@
       }
 
       .conv-title.show-tooltips-text {
-        display: inline-block;
-        width: 100%;
+        display: block;
+        min-width: 0;
         max-width: 100%;
-        vertical-align: middle;
+        flex: 1;
       }
 
       .conv-title-input {
@@ -631,11 +635,14 @@
 
       .conv-actions {
         position: absolute;
+        top: 50%;
         right: 8px;
+        z-index: 1;
         display: flex;
         pointer-events: none;
         opacity: 0%;
         transition: opacity .15s;
+        transform: translateY(-50%);
         align-items: center;
         flex-shrink: 0;
 
