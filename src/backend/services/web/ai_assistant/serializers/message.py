@@ -103,7 +103,10 @@ class MessageFullExportRequestSerializer(serializers.Serializer):
     export_config = serializers.JSONField(
         required=False,
         default=dict,
-        help_text="导出列配置（field_scope/fields），不影响检索数据范围",
+        help_text=(
+            "导出列配置（field_scope/fields/flatten_extension/extension_keys）；"
+            "field_scope 支持 ai_standard（AI助手标准展示列，与预览导出一致），不影响检索数据范围"
+        ),
     )
 
 

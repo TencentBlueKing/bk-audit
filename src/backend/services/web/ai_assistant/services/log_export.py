@@ -21,6 +21,7 @@ from services.web.ai_assistant.schemas.audit_search import (
     LogSearchOutputSchema,
 )
 from services.web.ai_assistant.services.message import MessageService
+from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
@@ -33,6 +34,7 @@ from services.web.query.ai_assistant.services.export import (
     PreviewExportFile,
     PreviewExportService,
 )
+from services.web.query.constants import LogExportFieldScope
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,15 @@ class MessageExportService:
             raise InvalidMessageSnapshot() from error
         namespace = str((message.context_data or {}).get("namespace") or "")
         export_config = dict(export_config or {})
+        # AI 助手「标准字段」scope：翻译为 SPECIFIED + 快照默认展示列（与预览导出同构，
+        # display_name 沿用产品文案），常规导出链路（白名单校验/ExportConfig）仅见 SPECIFIED，
+        # 原检索页 standard（全量标准字段集）语义不变
+        if export_config.get("field_scope") == LogExportFieldScope.AI_STANDARD.value:
+            export_config["field_scope"] = LogExportFieldScope.SPECIFIED.value
+            export_config["fields"] = [
+                {"raw_name": raw_name, "display_name": display_name, "keys": []}
+                for raw_name, display_name in SNAPSHOT_DEFAULT_COLUMNS
+            ]
         # 扩展字段平铺开启且调用方未显式给子键清单时，从父消息的系统选择快照自动聚合
         # （前端只需传 flatten_extension 开关，无需感知子键清单）
         if export_config.get("flatten_extension") and not export_config.get("extension_keys"):
@@ -85,8 +96,7 @@ class MessageExportService:
             if extension_keys:
                 export_config["extension_keys"] = extension_keys
                 logger.info(
-                    "[MessageExportService] auto inject extension_keys for flatten export, "
-                    "message_id=%s, keys=%s",
+                    "[MessageExportService] auto inject extension_keys for flatten export, " "message_id=%s, keys=%s",
                     message.id,
                     extension_keys,
                 )

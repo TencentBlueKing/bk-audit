@@ -17,6 +17,7 @@ from services.web.ai_assistant.services.operation import (
     CommonQueryStore,
     OperationContextService,
 )
+from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
@@ -248,6 +249,35 @@ class TestMessageExport(AIAssistantPlatformTestCase):
         _, kwargs = mock_create.call_args
         self.assertEqual(kwargs["export_config"]["extension_keys"], ["custom_key"])
 
+    def test_full_export_ai_standard_scope_translated(self):
+        """ai_standard scope：翻译为 SPECIFIED + 快照默认展示列（与预览导出字段一致），flatten 照常注入"""
+
+        nl_parent = self._make_nl_parent_with_extension_fields(
+            [{"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单ID"}]
+        )
+        message = self.create_log_search_message(parent=nl_parent)
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value={"id": 1, "status": "PENDING"},
+        ) as mock_create:
+            self.service.create_full_export(
+                message_uid=str(message.uid),
+                export_config={"field_scope": "ai_standard", "flatten_extension": True, "fields": []},
+            )
+        _, kwargs = mock_create.call_args
+        export_config = kwargs["export_config"]
+        # ① 翻译为 SPECIFIED：fields = 快照默认展示列（raw_name + 产品文案），与预览导出同构
+        self.assertEqual(export_config["field_scope"], "specified")
+        self.assertEqual(
+            export_config["fields"],
+            [
+                {"raw_name": raw_name, "display_name": display_name, "keys": []}
+                for raw_name, display_name in SNAPSHOT_DEFAULT_COLUMNS
+            ],
+        )
+        # ② flatten 开启：extension_keys 从父消息自动聚合注入（平铺列替换 extend_data 单列）
+        self.assertEqual(export_config["extension_keys"], ["ticket_id"])
+
     def test_full_export_no_flatten_no_injection(self):
         """flatten 未开启：不聚合不注入（原检索页语义零变化）"""
 
@@ -270,7 +300,6 @@ class TestMessageExport(AIAssistantPlatformTestCase):
         """父为系统选择消息：走 output_data.systems 路径同样聚合"""
 
         from services.web.query.ai_assistant.schemas import SelectionFieldMeta
-
         from tests.test_ai_assistant.base import make_selection_output
 
         selection_output = make_selection_output()
