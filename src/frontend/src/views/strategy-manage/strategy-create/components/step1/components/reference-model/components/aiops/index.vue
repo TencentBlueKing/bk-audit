@@ -34,7 +34,7 @@
             <bk-radio-group
               v-model="formData.configs.config_type"
               class="strategy-radio-group"
-              :disabled="isEditMode || isCloneMode || isUpgradeMode"
+              :disabled="isStrategyConfigLocked || isUpgradeMode"
               @change="handleDataSourceType">
               <bk-radio-button
                 v-for="item in commonData.table_type"
@@ -171,11 +171,9 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
-  import { getStrategyResourceSceneParams,
-           isStrategyCloneRoute,
-           isStrategyEditRoute,
-           isStrategyUpgradeRoute,
-  } from '../../../../../../../utils/strategy-routes';
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
+
+  import { getStrategyResourceSceneParams } from '../../../../../../../utils/strategy-routes';
 
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
@@ -224,9 +222,8 @@
   const route = useRoute();
   const strategySceneParams = () => getStrategyResourceSceneParams(route);
   let isInit = false;
-  const isEditMode = isStrategyEditRoute(route.name);
-  const isCloneMode = isStrategyCloneRoute(route.name);
-  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
+  const { isUpgradeMode, isStrategyConfigLocked } = useStrategyConfigLock();
+  const shouldUseCreateDefaults = !isUpgradeMode && !isStrategyConfigLocked.value;
   const { t } = useI18n();
   const tableTypeTip: Record<string, string> = {
     EventLog: t('各应用系统按照审计中心规范上报的系统操作日志'),
@@ -254,7 +251,7 @@
   });
   const sourceTypeMap = ref<Record<string, string>>({});
 
-  if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+  if (shouldUseCreateDefaults) {
     isInit = true;
     emits('updateDataSource', formData.value.configs.data_source);
     emits('updateConfigType', formData.value.configs.config_type);
@@ -268,7 +265,7 @@
     defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
-      if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+      if (shouldUseCreateDefaults) {
         formData.value.configs.config_type = data.table_type[0].value;
         fetchTable({
           table_type: formData.value.configs.config_type,

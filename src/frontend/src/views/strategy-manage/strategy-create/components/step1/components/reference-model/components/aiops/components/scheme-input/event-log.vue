@@ -97,11 +97,7 @@
   import TableComponent from '../components/render-table.vue';
 
   import { getStrategySystemScopeParams } from '@/views/strategy-manage/utils/strategy-routes';
-  import {
-    isStrategyCloneRoute,
-    isStrategyEditRoute,
-    isStrategyUpgradeRoute,
-  } from '../../../../../../../../../utils/strategy-routes';
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
 
 
   interface Props{
@@ -141,9 +137,8 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const route = useRoute();
-  const isEditMode = isStrategyEditRoute(route.name);
-  const isCloneMode = isStrategyCloneRoute(route.name);
-  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
+  const { isUpgradeMode, isStrategyConfigLocked } = useStrategyConfigLock();
+  const shouldUseCreateDefaults = !isUpgradeMode && !isStrategyConfigLocked.value;
   let isInit = false;
   let isInitFields = false;
   const { t } = useI18n();
@@ -160,7 +155,7 @@
   });
   const statusSystems = ref<Array<Record<string, any>>>([]);
 
-  if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+  if (shouldUseCreateDefaults) {
     isInit = true;
   }
 

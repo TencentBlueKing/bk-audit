@@ -162,9 +162,11 @@
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
   import useRequest from '@/hooks/use-request';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
   import {
     type AssignConditionForm,
-    buildStrategyEventFieldOptions,
+    buildStrategySelectFieldOptions,
     createDefaultAssignConditionForm,
     dispatchToAssignConditionForm,
     hasValidAssignCondition,
@@ -201,7 +203,7 @@
   interface Props {
     editData: StrategyModel;
     formData?: Record<string, any>;
-    strategyType?: string;
+    select?: Array<DatabaseTableFieldModel>;
   }
 
   const props = defineProps<Props>();
@@ -272,12 +274,18 @@
   const assignRules = ref<AssignRuleItem[]>([]);
   const defaultRule = ref(createDefaultRule());
 
-  const fieldOptions = computed(() => buildStrategyEventFieldOptions({
-    event_basic_field_configs: props.formData?.event_basic_field_configs,
-    event_data_field_configs: props.formData?.event_data_field_configs,
-    event_evidence_field_configs: props.formData?.event_evidence_field_configs,
-    strategy_type: props.strategyType,
-  }));
+  const selectFields = computed(() => {
+    if (props.select?.length) {
+      return props.select;
+    }
+    const select = props.formData?.configs?.select;
+    if (Array.isArray(select) && select.length) {
+      return select;
+    }
+    return props.formData?.configs?.table_fields || [];
+  });
+
+  const fieldOptions = computed(() => buildStrategySelectFieldOptions(selectFields.value));
 
   const {
     data: sceneList,

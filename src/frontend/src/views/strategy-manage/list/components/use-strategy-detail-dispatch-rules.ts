@@ -37,16 +37,17 @@ const buildFieldLabelMap = (fields: Array<Record<string, any>> = []) => {
   const map: Record<string, string> = {};
   fields.forEach((field) => {
     const rawName = field.raw_name || field.value;
-    if (!rawName) return;
-    if (field.display_name && field.raw_name) {
-      map[rawName] = `${field.display_name}(${field.raw_name})`;
-      return;
+    const displayName = field.display_name || field.label;
+    if (!rawName && !displayName) return;
+    const label = displayName && rawName && displayName !== rawName
+      ? `${displayName}(${rawName})`
+      : (displayName || rawName || '');
+    if (displayName) {
+      map[displayName] = label;
     }
-    if (field.label && field.value) {
-      map[rawName] = `${field.label}(${field.value})`;
-      return;
+    if (rawName) {
+      map[rawName] = label;
     }
-    map[rawName] = rawName;
   });
   return map;
 };

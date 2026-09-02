@@ -216,6 +216,30 @@ export const buildStrategyEventFieldOptions = (params: {
   }, []);
 };
 
+type SelectFieldLike = {
+  raw_name?: string;
+  display_name?: string;
+};
+
+/** 分派规则命中条件：仅使用风险发现规则中的预期结果字段（configs.select） */
+export const buildStrategySelectFieldOptions = (select: SelectFieldLike[] = []): StrategyEventFieldOption[] => {
+  const seen = new Set<string>();
+  return select.reduce<StrategyEventFieldOption[]>((acc, field) => {
+    const rawName = field.raw_name || '';
+    const displayName = field.display_name || rawName;
+    const id = displayName || rawName;
+    if (!id || seen.has(id)) {
+      return acc;
+    }
+    seen.add(id);
+    const label = displayName && rawName && displayName !== rawName
+      ? `${displayName}(${rawName})`
+      : (displayName || rawName);
+    acc.push({ id, name: label });
+    return acc;
+  }, []);
+};
+
 type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
 export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined) => {

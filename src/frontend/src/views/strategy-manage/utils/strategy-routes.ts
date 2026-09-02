@@ -85,6 +85,14 @@ export const isStrategyUpgradeRoute = (routeName: RouteNameInput): boolean => (
   [SCENE_ROUTE_NAMES.upgrade, PLATFORM_ROUTE_NAMES.upgrade].includes(toRouteName(routeName))
 );
 
+export const isDraftStrategyStatus = (status?: string) => status === 'draft';
+
+/** 编辑态是否锁定方案/数据源等配置（草稿除外） */
+export const isLockedStrategyEditRoute = (
+  routeName: RouteNameInput,
+  status?: string,
+) => isStrategyEditRoute(routeName) && !isDraftStrategyStatus(status);
+
 /**
  * 列表/标签/创建提交共用的绑定作用域：
  * - 全局策略（平台）：binding_type=platform_binding，scene_id 为空

@@ -29,7 +29,7 @@
           :control-list="controlList"
           :cur-version="(formData.control_version as number)"
           :default-value="formData.control_id"
-          :disabled="isEditMode || isCloneMode"
+          :disabled="isPlanSelectDisabled"
           style="width: 100%;"
           @change="onControlIdChange">
           <span
@@ -67,7 +67,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, provide, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -82,7 +82,9 @@
   import PlanSelect from './components/plan-select.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { STRATEGY_DRAFT_EDIT_KEY } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
   import {
+    isDraftStrategyStatus,
     getStrategyRouteNames,
     isStrategyCloneRoute,
     isStrategyEditRoute,
@@ -133,6 +135,13 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const isDraftStrategyEdit = computed(() => (
+    isEditMode && isDraftStrategyStatus(props.editData.status)
+  ));
+  const isPlanSelectDisabled = computed(() => (
+    isCloneMode || (isEditMode && !isDraftStrategyEdit.value)
+  ));
+  provide(STRATEGY_DRAFT_EDIT_KEY, isDraftStrategyEdit);
   const comMap: Record<string, any> = {
     BKM: NormalCondition,
     AIOps: AiopsCondition,
@@ -149,6 +158,7 @@
   const timeType = ref('minute');
 
   const isShowUpgradeTip = computed(() => isEditMode
+    && !isDraftStrategyEdit.value
     && maxVersionMap.value[formData.value.control_id] > (formData.value.control_version as number));
   const shouldRenderSubComponent = computed(() => {
     if (!controlTypeId.value) return false;

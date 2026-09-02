@@ -94,7 +94,7 @@
                   :label="t('配置方式')"
                   property="strategy_type">
                   <strategy-way-selector
-                    :disabled="isStockData || isEditMode"
+                    :disabled="isStrategyWayDisabled"
                     :model-value="formData.strategy_type"
                     :options="strategyWayOptions"
                     @change="handleStrategyWay" />
@@ -237,6 +237,9 @@
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
+  const isStrategyWayDisabled = computed(() => (
+    isStockData.value || (isEditMode && formData.value.status !== 'draft')
+  ));
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -460,7 +463,9 @@
     if (!editData.strategy_type) {
       isStockData.value = true;
     }
-    formData.value.strategy_type = editData.strategy_type || 'referenceModel';
+    formData.value.strategy_type = editData.strategy_type === 'referenceModel'
+      ? 'model'
+      : (editData.strategy_type || 'rule');
   };
 
   // 获取标签列表
