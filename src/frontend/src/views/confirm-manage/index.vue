@@ -329,6 +329,7 @@
   };
 
   const handleBatchConfirmSuccess = () => {
+    window.changeConfirm = false;
     fetchList();
   };
 
@@ -387,6 +388,7 @@
   });
 
   const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
+    window.changeConfirm = false;
     if (!results.length) return;
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),

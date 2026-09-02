@@ -23,8 +23,7 @@
     theme="primary"
     :title="t('批量确认风险单')"
     width="720"
-    @closed="handleClosed"
-    @confirm="handleConfirm">
+    @closed="handleClosed">
     <audit-form
       ref="formRef"
       form-type="vertical"
@@ -53,6 +52,20 @@
           :max-len="1000" />
       </bk-form-item>
     </audit-form>
+    <template #footer>
+      <bk-button
+        :disabled="isSubmitting"
+        @click="handleCancel">
+        {{ t('取消') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        :loading="isSubmitting"
+        theme="primary"
+        @click="handleConfirm">
+        {{ t('确定') }}
+      </bk-button>
+    </template>
   </bk-dialog>
 </template>
 
@@ -112,36 +125,47 @@
     isShow.value = true;
   };
 
+  const handleCancel = () => {
+    if (isSubmitting.value) {
+      return;
+    }
+    isShow.value = false;
+  };
+
   const handleClosed = () => {
     resetForm();
     riskIds.value = [];
   };
 
-  const handleConfirm = () => {
-    formRef.value?.validate?.().then(async () => {
-      if (!riskIds.value.length) {
-        return;
+  const handleConfirm = async () => {
+    try {
+      await formRef.value?.validate?.();
+    } catch {
+      return;
+    }
+    if (!riskIds.value.length) {
+      return;
+    }
+    isSubmitting.value = true;
+    try {
+      if (formData.value.confirm_result === 'misreport') {
+        await RiskManageService.batchConfirmAsMisreport({
+          risk_ids: riskIds.value,
+          description: formData.value.description,
+        });
+      } else {
+        await RiskManageService.batchConfirmRisk({
+          risk_ids: riskIds.value,
+          description: formData.value.description,
+        });
       }
-      isSubmitting.value = true;
-      try {
-        if (formData.value.confirm_result === 'misreport') {
-          await RiskManageService.batchConfirmAsMisreport({
-            risk_ids: riskIds.value,
-            description: formData.value.description,
-          });
-        } else {
-          await RiskManageService.batchConfirmRisk({
-            risk_ids: riskIds.value,
-            description: formData.value.description,
-          });
-        }
-        messageSuccess(t('操作成功'));
-        isShow.value = false;
-        emit('success');
-      } finally {
-        isSubmitting.value = false;
-      }
-    });
+      window.changeConfirm = false;
+      messageSuccess(t('操作成功'));
+      isShow.value = false;
+      emit('success');
+    } finally {
+      isSubmitting.value = false;
+    }
   };
 
   defineExpose({
