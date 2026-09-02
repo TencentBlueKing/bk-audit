@@ -149,13 +149,56 @@ class TitleAgentServiceTest(AIAssistantPlatformTestCase):
 
         # 标准字段（username=操作人用户名）、系统字段（log=原始数据内容）、
         # 对象字段（instance_origin_data=实例变更前内容）、快照字段（snapshot_resource_type_info=资源类型快照）
-        # 均动态取 Field.description；未知字段/操作符回退原文
+        # 均动态取 Field.description；未知字段/操作符回退原文；时间为日期级（同日单值）
         self.assertEqual(
             summary,
-            "系统 bk-audit，时间 2026-09-01T00:00:00+08:00 至 2026-09-01T23:59:59+08:00，"
+            "系统 bk-audit，时间 2026-09-01，"
             "操作人用户名 等于 admin，操作ID 包含 login,logout，"
             "原始数据内容 任一包含 登录，实例变更前内容 包含 v1，"
             "资源类型快照 等于 host，custom_field weird_op v1",
+        )
+
+    def test_build_condition_title_input_enum_values_translated(self):
+        """枚举字段值翻译为展示值：操作途径 0→WebUI、操作结果 -1→其他、账号类型 1→平台账号；
+        非枚举字段值不变；跨日时间为区间表述"""
+
+        summary = build_condition_title_input(
+            {
+                "condition": {
+                    "scope_id": "bk-audit",
+                    "start_time": "2026-09-01T00:00:00+08:00",
+                    "end_time": "2026-09-02T23:59:59+08:00",
+                    "conditions": [
+                        {
+                            "field": {"raw_name": "access_type", "keys": [], "field_type": "int"},
+                            "operator": "include",
+                            "filters": [0, 2],  # int 形态（DRF 归一后）
+                        },
+                        {
+                            "field": {"raw_name": "result_code", "keys": [], "field_type": "int"},
+                            "operator": "eq",
+                            "filters": ["-1"],  # str 形态
+                        },
+                        {
+                            "field": {"raw_name": "user_identify_type", "keys": [], "field_type": "int"},
+                            "operator": "eq",
+                            "filters": [1],
+                        },
+                        {
+                            "field": {"raw_name": "username", "keys": [], "field_type": "string"},
+                            "operator": "eq",
+                            "filters": ["admin"],
+                        },
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "系统 bk-audit，时间 2026-09-01 至 2026-09-02，"
+            "操作途径 包含 WebUI,Console，操作结果 等于 其他，"
+            "操作人账号类型 等于 平台账号，操作人用户名 等于 admin",
         )
 
     def test_build_condition_title_input_extension_subkey(self):
