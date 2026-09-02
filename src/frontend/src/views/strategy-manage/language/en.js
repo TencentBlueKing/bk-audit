@@ -248,6 +248,7 @@ export default {
     引入模型审计: 'Model',
     自定义规则审计: 'Rule',
     配置方式: 'Configuration',
+    暂不支持此配置方式: 'This configuration mode is not supported yet',
     '指根据目前审计中可用的日志、资产数据，直接配置规则，得到审计结果的方式。适用于大部分复杂程度不高的场景策略。': 'Refers to the method of directly configuring rules and obtaining audit results based on the logs and asset data currently available in the audit. It is suitable for most scenarios with low complexity.',
     '指先通过蓝鲸 BKBase 的 AIOps 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。': 'Refers to the method of first developing a scenario model in AIops of Blue Whale BKBase, and then configuring the field mapping generation strategy in the audit center. It is suitable for situations where you have data development capabilities in AIOps and need to implement a more complex audit solution.',
     规则配置: 'Rule Configuration',

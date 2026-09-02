@@ -668,7 +668,7 @@
   const isModelStrategy = (strategyType?: string) => (
     strategyType === 'model' || strategyType === 'referenceModel'
   );
-  const modelStrategyDisabledTip = () => t('功能暂未开放，敬请期待');
+  const modelStrategyDisabledTip = () => t('暂不支持此配置方式');
   const initEnableFilterList = [
     {
       text: t('运行中'),
