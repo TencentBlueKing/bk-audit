@@ -70,6 +70,14 @@ flowchart LR
   由具体 Handler 在 `prepare()` 中决定。平台不做第二次业务校验。
 - 手动重试复用原 Message/Attachment，生成新 `task_id`，不重新执行 `prepare()`；业务 Task
   需要自行重新校验易变权限或外部条件。
+- 编辑重跑通过 `PATCH /api/v1/ai_assistant/messages/{message_uid}/` 提交完整 `input_data`，
+  重新调用原类型 Handler 的 `prepare()`，沿用原父消息绑定构造上下文，覆盖当前消息的输入、
+  上下文、输出和执行状态；UID、创建时间及历史位置保持不变。仅 `SUCCESS` / `FAILED` 可编辑。
+  同步准备或执行失败时原内容不变；异步准备成功后清空旧输出和错误、生成新 `task_id`，
+  返回 `PROCESSING`，继续轮询原消息。并发编辑冲突返回 `InvalidMessageState`。
+- 编辑重跑保留已有子消息、附件和反馈，不重算它们的快照；自然语言消息仍按新输入中的
+  `auto_execute` 决定是否新增日志检索子消息。例如请求体
+  `{"input_data":{"query_text":"查询 bob 的操作日志","auto_execute":true}}`。
 - 会话历史是快照。权限变化不重算存量消息内容，敏感字段必须在首次查询结果进入快照前处理。
 
 ## 5. 侧栏与查询

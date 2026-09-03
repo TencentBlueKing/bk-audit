@@ -8,7 +8,10 @@ from django.test import TransactionTestCase
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
+    AttachmentType,
     ExecutionStatus,
+    FeedbackSourceType,
+    FeedbackType,
     MessageErrorCode,
     MessageType,
 )
@@ -24,7 +27,7 @@ from services.web.ai_assistant.handlers import (
     MessagePreparation,
     message_handler_registry,
 )
-from services.web.ai_assistant.models import Conversation, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.message_execution import finish_message_failure
 from tests.base import TestCase
@@ -562,6 +565,160 @@ class MessageServiceTest(TestCase):
         self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
         self.assertNotEqual(retried.task_id, failed_task_id)
 
+    def test_update_rebuilds_sync_snapshots_and_preserves_related_objects(self):
+        message = self.create_parent()
+        child = self.create_failed_async_message(parent_message=message)
+        attachment = Attachment.objects.create(
+            source_message=message,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            output_data={"analysis": "old result"},
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        feedback = Feedback.objects.create(
+            source_type=FeedbackSourceType.MESSAGE,
+            source_id=message.id,
+            feedback_type=FeedbackType.LIKE,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        related_before = [
+            type(item).objects.filter(pk=item.pk).values().get() for item in (child, attachment, feedback)
+        ]
+
+        updated = self.service.update(message_uid=str(message.uid), input_data={"text": "edited"})
+
+        self.assertEqual(updated.uid, message.uid)
+        self.assertEqual(updated.created_at, message.created_at)
+        self.assertEqual(updated.message_type, message.message_type)
+        self.assertEqual(updated.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(updated.input_data, {"text": "edited"})
+        self.assertEqual(updated.context_data, {"prefix": "alice:sync"})
+        self.assertEqual(updated.output_data, {"content": "alice:sync:edited"})
+        self.assertIsNone(updated.task_id)
+        self.assertIsNone(updated.queued_at)
+        self.assertIsNone(updated.started_at)
+        self.assertIsNotNone(updated.finished_at)
+        self.assertEqual(updated.last_activity_at, updated.finished_at)
+        self.assertEqual(Message.objects.count(), 2)
+        for item, before in zip((child, attachment, feedback), related_before):
+            self.assertEqual(type(item).objects.filter(pk=item.pk).values().get(), before)
+
+    def test_update_async_replaces_snapshots_and_rejects_old_task_results(self):
+        handler = self.register_async_handler()
+        parent = self.create_parent()
+        old_time = timezone.now() - timedelta(minutes=10)
+        for status in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            with self.subTest(status=status):
+                message = self.create_failed_async_message(
+                    status=status,
+                    parent_message=parent,
+                    context_data={"prefix": "obsolete"},
+                    queued_at=old_time,
+                    started_at=old_time,
+                    last_activity_at=old_time,
+                    finished_at=old_time,
+                )
+                with mock.patch.object(handler.async_task, "apply_async") as dispatch:
+                    with self.captureOnCommitCallbacks(execute=True):
+                        updated = self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
+                        dispatch.assert_not_called()
+                self.assertEqual(updated.uid, message.uid)
+                self.assertEqual(updated.parent_message_id, parent.id)
+                self.assertEqual(updated.input_data, {"text": "new"})
+                self.assertEqual(updated.context_data, {"prefix": "async"})
+                self.assertIsNone(updated.output_data)
+                self.assertEqual(updated.error_code, "")
+                self.assertEqual(updated.error_message, "")
+                self.assertEqual(updated.status, ExecutionStatus.PROCESSING)
+                self.assertNotEqual(updated.task_id, message.task_id)
+                self.assertGreater(updated.queued_at, old_time)
+                self.assertEqual(updated.last_activity_at, updated.queued_at)
+                self.assertIsNone(updated.started_at)
+                self.assertIsNone(updated.finished_at)
+                dispatch.assert_called_once_with(
+                    kwargs={"message_id": updated.id, "task_id": updated.task_id},
+                    task_id=updated.task_id,
+                )
+                self.assertFalse(
+                    finish_message_failure(
+                        message_id=message.id,
+                        task_id=message.task_id,
+                        exception=RuntimeError("old execution"),
+                    )
+                )
+                self.assertFalse(
+                    Message.finish_processing(
+                        instance_id=message.id,
+                        task_id=message.task_id,
+                        status=ExecutionStatus.SUCCESS,
+                        output_data={"content": "stale"},
+                        error_code="",
+                        error_message="",
+                    )
+                )
+                updated.refresh_from_db()
+                self.assertIsNone(updated.output_data)
+                self.assertEqual(updated.status, ExecutionStatus.PROCESSING)
+
+    def test_update_invalid_input_or_sync_failure_keeps_original_snapshots(self):
+        message = self.create_parent()
+        before = Message.objects.filter(pk=message.pk).values().get()
+        with self.assertRaises(MessageSnapshotValidationError):
+            self.service.update(message_uid=str(message.uid), input_data={"invalid": True})
+        self.assertEqual(Message.objects.filter(pk=message.pk).values().get(), before)
+        register_test_message_handler(FailingSyncHandler())
+        with self.assertRaises(RuntimeError):
+            self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
+        self.assertEqual(Message.objects.filter(pk=message.pk).values().get(), before)
+
+    def test_update_processing_message_is_rejected_before_prepare(self):
+        message = self.create_parent(status=ExecutionStatus.PROCESSING)
+        with mock.patch.object(self.sync_handler, "prepare", side_effect=AssertionError("must not prepare")):
+            with self.assertRaises(InvalidMessageState):
+                self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
+
+    def test_update_hides_foreign_deleted_and_missing_messages(self):
+        foreign = self.create_parent(user="bob")
+        deleted = self.create_parent()
+        self.conversation.delete()
+        for uid in (str(foreign.uid), str(deleted.uid), str(uuid4()), "invalid"):
+            with self.subTest(uid=uid), self.assertRaises(MessageNotFound):
+                self.service.update(message_uid=uid, input_data={"text": "new"})
+
+    def test_update_rechecks_conversation_after_prepare(self):
+        message = self.create_parent()
+        prepare = self.sync_handler.prepare
+
+        def delete_after_prepare(**kwargs):
+            prepared = prepare(**kwargs)
+            self.conversation.delete()
+            return prepared
+
+        with mock.patch.object(self.sync_handler, "prepare", side_effect=delete_after_prepare):
+            with self.assertRaises(InvalidParentMessage):
+                self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
+        message.refresh_from_db()
+        self.assertEqual(message.input_data, {"text": "parent"})
+
+    def test_update_dispatch_failure_keeps_new_input_for_retry(self):
+        handler = self.register_async_handler()
+        message = self.create_failed_async_message(context_data={"prefix": "obsolete"})
+        with mock.patch.object(handler.async_task, "apply_async", side_effect=RuntimeError("broker secret")):
+            with self.captureOnCommitCallbacks(execute=True):
+                updated = self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
+        self.assertEqual(updated.status, ExecutionStatus.FAILED)
+        self.assertEqual(updated.error_code, MessageErrorCode.TASK_DISPATCH_FAILED)
+        self.assertEqual(updated.input_data, {"text": "new"})
+        self.assertEqual(updated.context_data, {"prefix": "async"})
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = self.service.retry(message_uid=str(updated.uid))
+        self.assertEqual(retried.input_data, {"text": "new"})
+        self.assertEqual(retried.context_data, {"prefix": "async"})
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+
 
 class MessageServiceConcurrencyTest(TransactionTestCase):
     """使用独立数据库连接验证共享旧快照下只有一个重试 CAS 成功。"""
@@ -641,6 +798,48 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
         self.assertEqual(self.message.status, ExecutionStatus.PROCESSING)
         self.assertEqual(self.message.task_id, results[0].task_id)
         self.assertNotEqual(self.message.task_id, "task-old")
+
+    def test_update_concurrent_sync_and_async_requests_only_one_wins(self):
+        for message_type, task_id in (
+            (MessageType.NATURAL_LANGUAGE_SEARCH, "task-old"),
+            (MessageType.SYSTEM_SELECTION, None),
+        ):
+            with self.subTest(message_type=message_type):
+                if message_type == MessageType.SYSTEM_SELECTION:
+                    saved = message_handler_registry.unregister(message_type)
+                    register_test_message_handler(EchoSyncHandler())
+                    if saved is not None:
+                        self.addCleanup(register_test_message_handler, saved)
+                    self.addCleanup(message_handler_registry.unregister, message_type)
+                Message.objects.filter(pk=self.message.pk).update(
+                    message_type=message_type,
+                    task_id=task_id,
+                    status=ExecutionStatus.SUCCESS,
+                )
+                barrier = threading.Barrier(2)
+                original_get = MessageService.get
+
+                def synchronized_get(service, *, message_uid):
+                    loaded = original_get(service, message_uid=message_uid)
+                    barrier.wait(timeout=5)
+                    return loaded
+
+                def update_once():
+                    return MessageService(user=self.user).update(
+                        message_uid=str(self.message.uid),
+                        input_data={"text": threading.current_thread().name},
+                    )
+
+                with mock.patch.object(MessageService, "get", autospec=True, side_effect=synchronized_get):
+                    with mock.patch.object(MessageService, "_dispatch") as dispatch:
+                        threads, results, errors = self.run_threads(update_once, update_once)
+                self.assertFalse(any(thread.is_alive() for thread in threads))
+                self.assertEqual(len(results), 1)
+                self.assertEqual(len(errors), 1)
+                self.assertIsInstance(errors[0], InvalidMessageState)
+                self.message.refresh_from_db()
+                self.assertEqual(self.message.input_data, results[0].input_data)
+                self.assertEqual(dispatch.call_count, int(message_type == MessageType.NATURAL_LANGUAGE_SEARCH))
 
     def test_retry_rechecks_conversation_after_delete(self):
         retry_paused = threading.Event()

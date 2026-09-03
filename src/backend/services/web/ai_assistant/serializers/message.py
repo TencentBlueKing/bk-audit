@@ -84,6 +84,12 @@ class MessageDetailRequestSerializer(serializers.Serializer):
     message_uid = serializers.UUIDField(help_text="消息对外 UUID")
 
 
+class MessageUpdateRequestSerializer(MessageDetailRequestSerializer):
+    """编辑重跑只替换完整业务输入，上下文与输出由服务端重新生成。"""
+
+    input_data = MessageInputDataField(help_text="完整的新业务输入，由原消息类型对应的输入模型校验")
+
+
 class MessagePreviewExportRequestSerializer(serializers.Serializer):
     message_uid = serializers.UUIDField(help_text="成功日志检索消息对外 UUID")
     export_config = serializers.JSONField(

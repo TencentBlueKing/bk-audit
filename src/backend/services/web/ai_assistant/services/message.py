@@ -308,6 +308,57 @@ class MessageService:
             include_content=include_content,
         )
 
+    def update(self, *, message_uid: str, input_data: Mapping[str, Any]) -> Message:
+        """以新输入重建当前消息快照，保留 UID、父消息和所有关联产物。
+
+        准备与同步执行在事务外完成，失败时保留原内容；最终写入比较读取时的
+        状态、任务 ID 和更新时间，防止较慢的编辑请求覆盖已完成的新一轮执行。
+        """
+
+        message = self.get(message_uid=message_uid)
+        if message.status not in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            raise InvalidMessageState()
+        handler = message_handler_registry.require(message.message_type)
+        prepared = self._prepare(
+            conversation=message.conversation,
+            handler=handler,
+            input_data=input_data,
+            parent_message=message.parent_message,
+        )
+        if (prepared.parent_message.pk if prepared.parent_message else None) != message.parent_message_id:
+            raise InvalidParentMessage(message="编辑消息不能变更父消息")
+
+        is_async = prepared.execution_mode == ExecutionMode.ASYNC
+        now = timezone.now()
+        with transaction.atomic():
+            self._lock_active_conversation(conversation=message.conversation)
+            updated = Message.objects.filter(
+                id=message.id,
+                status=message.status,
+                task_id=message.task_id,
+                updated_at=message.updated_at,
+            ).update(
+                input_data=prepared.input_data,
+                context_data=prepared.context_data,
+                output_data=prepared.output_data,
+                status=ExecutionStatus.PROCESSING if is_async else ExecutionStatus.SUCCESS,
+                task_id=str(uuid4()) if is_async else None,
+                error_code="",
+                error_message="",
+                queued_at=now if is_async else None,
+                started_at=None,
+                last_activity_at=now,
+                finished_at=None if is_async else now,
+                updated_by=self.user,
+                updated_at=now,
+            )
+            if not updated:
+                raise InvalidMessageState()
+            message.refresh_from_db()
+            if is_async:
+                transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
+        return message
+
     def retry(self, *, message_uid: str) -> Message:
         """复用失败异步消息的原快照，并以旧 task_id 原子抢占一次重试。"""
 

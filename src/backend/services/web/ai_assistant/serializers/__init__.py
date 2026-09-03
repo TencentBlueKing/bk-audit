@@ -31,6 +31,7 @@ from services.web.ai_assistant.serializers.message import (
     MessageDetailRequestSerializer,
     MessageListRequestSerializer,
     MessageResponseSerializer,
+    MessageUpdateRequestSerializer,
     MessageWindowResponseSerializer,
 )
 from services.web.ai_assistant.serializers.stream import (
@@ -67,5 +68,6 @@ __all__ = [
     "MessageDetailRequestSerializer",
     "MessageListRequestSerializer",
     "MessageResponseSerializer",
+    "MessageUpdateRequestSerializer",
     "MessageWindowResponseSerializer",
 ]

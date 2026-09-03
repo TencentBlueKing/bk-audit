@@ -14,7 +14,10 @@ from services.web.ai_assistant.schemas.audit_search import (
     NLSearchOutputSchema,
 )
 from services.web.ai_assistant.services.message import MessageService
-from services.web.ai_assistant.services.message_execution import MessageExecution
+from services.web.ai_assistant.services.message_execution import (
+    MessageExecution,
+    load_message_execution,
+)
 from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
@@ -28,6 +31,7 @@ from tests.test_ai_assistant.base import (
     AIAssistantPlatformTestCase,
     make_condition,
     make_log_search_output,
+    make_selection_output,
 )
 
 
@@ -91,6 +95,79 @@ class TestMessageCreation(AIAssistantPlatformTestCase):
                 message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
                 input_data={"query_text": "查一下 admin 的日志"},
             )
+
+    def test_edit_nl_rebuilds_original_parent_context_and_runs_new_input(self):
+        parent = self.create_selection_message()
+        message = self.create_nl_message(parent=parent, condition=make_condition())
+        old_child = self.create_log_search_message(parent=message)
+        old_child_snapshot = Message.objects.filter(pk=old_child.pk).values().get()
+        refreshed_selection = make_selection_output()
+        refreshed_selection.systems[0].name = "更新后的系统名称"
+        Message.objects.filter(pk=parent.pk).update(output_data=refreshed_selection.model_dump(mode="json"))
+        self.create_selection_message(output=make_selection_output(system_id="later-system"))
+
+        service = MessageService(user=self.user)
+        with mock.patch.object(execute_natural_language_search, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                updated = service.update(
+                    message_uid=str(message.uid),
+                    input_data={"query_text": "查 bob 的日志", "auto_execute": True},
+                )
+        self.assertEqual(updated.parent_message_id, parent.id)
+        self.assertEqual(updated.context_data["system_selection"], refreshed_selection.model_dump(mode="json"))
+        self.assertEqual(Message.objects.filter(pk=old_child.pk).values().get(), old_child_snapshot)
+        execution = load_message_execution(
+            message_id=updated.id,
+            task_id=updated.task_id,
+            celery_task_id=updated.task_id,
+        )
+        self.assertEqual(execution.input_data.query_text, "查 bob 的日志")
+        condition = make_condition()
+        condition.conditions[0].filters = ["bob"]
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            return_value=condition,
+        ), mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(total=7),
+        ), mock.patch.object(
+            execute_natural_language_search, "_dispatch_title_generation"
+        ):
+            output = execute_natural_language_search.run(execution)
+            execute_natural_language_search._finish_success(
+                execution=execution,
+                task_id=updated.task_id,
+                output_data=output,
+            )
+        updated.refresh_from_db()
+        self.assertEqual(updated.uid, message.uid)
+        self.assertEqual(updated.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(updated.output_data["condition"]["conditions"][0]["filters"], ["bob"])
+        self.assertEqual(updated.child_messages.count(), 2)
+        self.assertEqual(updated.child_messages.order_by("-id").first().output_data["total"], 7)
+        self.assertEqual(Message.objects.filter(pk=old_child.pk).values().get(), old_child_snapshot)
+
+    def test_edit_log_search_reexecutes_and_replaces_same_message(self):
+        parent = self.create_selection_message()
+        message = self.create_log_search_message(parent=parent)
+        Message.objects.filter(pk=message.pk).update(context_data={"obsolete": True})
+        condition = make_condition()
+        condition.conditions[0].filters = ["bob"]
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(total=7),
+        ):
+            updated = MessageService(user=self.user).update(
+                message_uid=str(message.uid),
+                input_data={"condition": condition.model_dump(mode="json")},
+            )
+        self.assertEqual(updated.uid, message.uid)
+        self.assertEqual(updated.input_data["condition"]["conditions"][0]["filters"], ["bob"])
+        self.assertEqual(updated.context_data["system_id"], TARGET_SYSTEM_ID)
+        self.assertEqual(updated.context_data["source"], "field_condition")
+        self.assertNotIn("obsolete", updated.context_data)
+        self.assertEqual(updated.output_data["total"], 7)
+        self.assertEqual(Message.objects.count(), 2)
 
 
 class TestNLExecutionChain(AIAssistantPlatformTestCase):
