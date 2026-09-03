@@ -17,20 +17,27 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 
-from bk_resource import BkApiResource
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import BK_ITSM_V4_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class BKITSMV4(BkApiResource, abc.ABC):
+class BKITSMV4(AuditBkApiResource, abc.ABC):
     """ITSM V4 接口基类"""
 
     module_name = "bk_itsm_v4"
-    base_url = BK_ITSM_V4_API_URL
     platform_authorization = True
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_CW_AITSM_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_ITSM_V4_API_URL
 
     def perform_request(self, validated_request_data):
         return Throttler(
