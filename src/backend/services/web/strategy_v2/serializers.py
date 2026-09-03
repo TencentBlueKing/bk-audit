@@ -1104,6 +1104,15 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     )
     # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集
 
+    def to_internal_value(self, data):
+        """草稿保存时跳过所有字段级校验（DRF 字段校验在 validate 之前执行）"""
+        if data.get("is_draft") is True:
+            # 只保留声明的字段 + 非模型写入字段（is_draft/binding_type/scene_id/rules/dispatch_rules），
+            # 过滤掉客户端误传的多余字段（如 visibility），避免 Strategy() 报 unexpected keyword arguments
+            allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
+            return {k: v for k, v in data.items() if k in allowed}
+        return super().to_internal_value(data)
+
     class Meta:
         model = Strategy
         fields = [
@@ -1263,6 +1272,15 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     )
     # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集（后端派生，
     # 见 StrategyV2Base.sync_platform_binding_scenes）；误传的 visibility 由 DRF 丢弃
+
+    def to_internal_value(self, data):
+        """草稿保存时跳过所有字段级校验（DRF 字段校验在 validate 之前执行）"""
+        if data.get("is_draft") is True:
+            # 只保留声明的字段 + 非模型写入字段（is_draft/binding_type/scene_id/rules/dispatch_rules），
+            # 过滤掉客户端误传的多余字段（如 visibility），避免 Strategy.objects.update() 报 unexpected keyword arguments
+            allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
+            return {k: v for k, v in data.items() if k in allowed}
+        return super().to_internal_value(data)
 
     class Meta:
         model = Strategy
