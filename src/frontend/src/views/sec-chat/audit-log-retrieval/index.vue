@@ -24,7 +24,6 @@
       :loading-older-messages="olderMessagesLoading"
       :message-loading="messageLoading"
       :messages="panelConversation.messages"
-      :nl-suggestions="panelConversation.commonOperations || []"
       :standard-fields="panelConversation.standardFields || []"
       :systems="panelConversation.systems || []"
       :confirming-system-message-id="confirmingSystemMessageId"
