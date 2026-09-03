@@ -14,19 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-"""会话标题自动生成（一期复刻 risk 调用方式）：input 拼接 + 共用智能体调用 + 清洗 + Celery 任务 + NL 触发链路。"""
+# 会话标题自动生成（一期复刻 risk 调用方式）：input 拼接 + 共用智能体调用 + 清洗 + Celery 任务 + NL/条件检索触发链路。
 
 from unittest import mock
 
 from api.constants import AIAgentCode
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
-from services.web.ai_assistant.models import Conversation, Message
+from services.web.ai_assistant.models import Conversation
 from services.web.ai_assistant.schemas import parse_snapshot
+from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
-from services.web.ai_assistant.services.title_agent import TitleAgentService
+from services.web.ai_assistant.services.title_agent import (
+    TitleAgentService,
+    build_condition_title_input,
+)
 from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
 from services.web.ai_assistant.tasks.conversation import generate_conversation_title
-from tests.test_ai_assistant.base import AIAssistantPlatformTestCase, make_condition
+from tests.test_ai_assistant.base import (
+    TARGET_SYSTEM_ID,
+    AIAssistantPlatformTestCase,
+    make_condition,
+    make_log_search_output,
+)
 
 TITLE_AGENT_MODULE = "services.web.ai_assistant.services.title_agent"
 
@@ -67,6 +76,190 @@ class TitleAgentServiceTest(AIAssistantPlatformTestCase):
         self.assertEqual(TitleAgentService.normalize_title('```""```', 20), "")
         self.assertEqual(TitleAgentService.normalize_title(object(), 20), "")
 
+    def test_generate_title_condition_source_uses_condition_template(self):
+        """条件检索来源：label 换为「用户条件检索描述」，仍为单行 label 前缀格式"""
+
+        with mock.patch(f"{TITLE_AGENT_MODULE}.api.bk_plugins_ai_agent.chat_completion") as mock_chat:
+            mock_chat.return_value = "admin登录操作记录"
+            title = TitleAgentService.generate_title(
+                input_text="系统 bk-audit，操作人 等于 admin",
+                username=self.user,
+                max_length=20,
+                source="field_condition",
+            )
+
+        self.assertEqual(title, "admin登录操作记录")
+        mock_chat.assert_called_once_with(
+            agent_code=AIAgentCode.ALS_TITLE_SUM,
+            user=self.user,
+            input='用户条件检索描述: "系统 bk-audit，操作人 等于 admin"',
+            chat_history=[],
+            execute_kwargs={"stream": False},
+        )
+
+    def test_build_condition_title_input_full_summary(self):
+        """条件快照 → 单行中文摘要：系统 + 时间 + 逐条件「字段 操作符 值」；
+        字段中文名动态取自字段元数据（与条件筛选回传前端同源）；未知字段/操作符回退原文"""
+
+        summary = build_condition_title_input(
+            {
+                "condition": {
+                    "scope_type": "system",
+                    "scope_id": "bk-audit",
+                    "start_time": "2026-09-01T00:00:00+08:00",
+                    "end_time": "2026-09-01T23:59:59+08:00",
+                    "conditions": [
+                        {
+                            "field": {"raw_name": "username", "keys": [], "field_type": "string"},
+                            "operator": "eq",
+                            "filters": ["admin"],
+                        },
+                        {
+                            "field": {"raw_name": "action_id", "keys": [], "field_type": "string"},
+                            "operator": "include",
+                            "filters": ["login", "logout"],
+                        },
+                        {
+                            "field": {"raw_name": "log", "keys": [], "field_type": "string"},
+                            "operator": "match_any",
+                            "filters": ["登录"],
+                        },
+                        {
+                            "field": {"raw_name": "instance_origin_data", "keys": [], "field_type": "string"},
+                            "operator": "include",
+                            "filters": ["v1"],
+                        },
+                        {
+                            "field": {"raw_name": "snapshot_resource_type_info", "keys": [], "field_type": "string"},
+                            "operator": "eq",
+                            "filters": ["host"],
+                        },
+                        {
+                            "field": {"raw_name": "custom_field", "keys": [], "field_type": "string"},
+                            "operator": "weird_op",
+                            "filters": ["v1"],
+                        },
+                        # 空 filters / 缺 raw_name：跳过不产生片段
+                        {"field": {"raw_name": "log"}, "operator": "match_any", "filters": []},
+                        {"field": {"raw_name": ""}, "operator": "eq", "filters": ["x"]},
+                    ],
+                }
+            }
+        )
+
+        # 标准字段（username=操作人用户名）、系统字段（log=原始数据内容）、
+        # 对象字段（instance_origin_data=实例变更前内容）、快照字段（snapshot_resource_type_info=资源类型快照）
+        # 均动态取 Field.description；未知字段/操作符回退原文；时间为日期级（同日单值）
+        self.assertEqual(
+            summary,
+            "系统 bk-audit，时间 2026-09-01，"
+            "操作人用户名 等于 admin，操作ID 包含 login,logout，"
+            "原始数据内容 任一包含 登录，实例变更前内容 包含 v1，"
+            "资源类型快照 等于 host，custom_field weird_op v1",
+        )
+
+    def test_build_condition_title_input_enum_values_translated(self):
+        """枚举字段值翻译为展示值：操作途径 0→WebUI、操作结果 -1→其他、账号类型 1→平台账号；
+        非枚举字段值不变；跨日时间为区间表述"""
+
+        summary = build_condition_title_input(
+            {
+                "condition": {
+                    "scope_id": "bk-audit",
+                    "start_time": "2026-09-01T00:00:00+08:00",
+                    "end_time": "2026-09-02T23:59:59+08:00",
+                    "conditions": [
+                        {
+                            "field": {"raw_name": "access_type", "keys": [], "field_type": "int"},
+                            "operator": "include",
+                            "filters": [0, 2],  # int 形态（DRF 归一后）
+                        },
+                        {
+                            "field": {"raw_name": "result_code", "keys": [], "field_type": "int"},
+                            "operator": "eq",
+                            "filters": ["-1"],  # str 形态
+                        },
+                        {
+                            "field": {"raw_name": "user_identify_type", "keys": [], "field_type": "int"},
+                            "operator": "eq",
+                            "filters": [1],
+                        },
+                        {
+                            "field": {"raw_name": "username", "keys": [], "field_type": "string"},
+                            "operator": "eq",
+                            "filters": ["admin"],
+                        },
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            "系统 bk-audit，时间 2026-09-01 至 2026-09-02，"
+            "操作途径 包含 WebUI,Console，操作结果 等于 其他，"
+            "操作人账号类型 等于 平台账号，操作人用户名 等于 admin",
+        )
+
+    def test_build_condition_title_input_extension_subkey(self):
+        """拓展子键条件：展示名取父消息快照 extension_fields 的 display_name；缺元数据回退子键名"""
+
+        condition_input = {
+            "condition": {
+                "scope_id": "bk-audit",
+                "conditions": [
+                    {
+                        "field": {"raw_name": "extend_data", "keys": ["ticket_id"], "field_type": "string"},
+                        "operator": "eq",
+                        "filters": ["TICKET-1"],
+                    },
+                    {
+                        "field": {"raw_name": "extend_data", "keys": ["unknown_sub"], "field_type": "string"},
+                        "operator": "like",
+                        "filters": ["abc"],
+                    },
+                ],
+            }
+        }
+        # 提供父消息拓展字段元数据：ticket_id → 工单ID
+        summary = build_condition_title_input(
+            condition_input,
+            extension_fields=[
+                {"raw_name": "extend_data", "keys": ["ticket_id"], "display_name": "工单ID"},
+                {"raw_name": "instance_data", "keys": ["name"], "display_name": "非拓展容器忽略"},
+            ],
+        )
+        self.assertEqual(summary, "系统 bk-audit，工单ID 等于 TICKET-1，unknown_sub 模糊匹配 abc")
+
+        # 无元数据：子键名回退
+        self.assertEqual(
+            build_condition_title_input(condition_input),
+            "系统 bk-audit，ticket_id 等于 TICKET-1，unknown_sub 模糊匹配 abc",
+        )
+
+    def test_build_condition_title_input_empty_and_truncate(self):
+        """空条件 → 空串；超长条件截断到上限"""
+
+        self.assertEqual(build_condition_title_input({}), "")
+        self.assertEqual(build_condition_title_input({"condition": {}}), "")
+        long_summary = build_condition_title_input(
+            {
+                "condition": {
+                    "scope_id": "bk-audit",
+                    "start_time": "2026-09-01T00:00:00+08:00",
+                    "end_time": "2026-09-01T23:59:59+08:00",
+                    "conditions": [
+                        {
+                            "field": {"raw_name": "log"},
+                            "operator": "match_any",
+                            "filters": ["超长关键词" * 60],
+                        }
+                    ],
+                }
+            }
+        )
+        self.assertEqual(len(long_summary), 200)
+
     def test_normalize_title_handles_request_context_payload(self):
         """bk_resource chat_completion 在 bkop 返回 RequestContext：payload 字符串化 tuple，
         含错误响应（error_code）→ 空串；正常响应 → 解析后清洗"""
@@ -106,9 +299,7 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
     def test_task_updates_default_title(self):
         """默认标题"新对话"被 AI 标题替换"""
 
-        with mock.patch.object(
-            TitleAgentService, "generate_title", return_value="张三王五登录失败记录"
-        ) as mock_generate:
+        with mock.patch.object(TitleAgentService, "generate_title", return_value="张三王五登录失败记录") as mock_generate:
             result = generate_conversation_title.run(self.conversation.id, "查一下张三和王五的登录失败")
 
         self.assertEqual(result["title"], "张三王五登录失败记录")
@@ -132,9 +323,7 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
     def test_task_agent_failure_silent(self):
         """智能体异常 → 静默降级保持默认标题（标题非关键路径）"""
 
-        with mock.patch.object(
-            TitleAgentService, "generate_title", side_effect=RuntimeError("agent down")
-        ):
+        with mock.patch.object(TitleAgentService, "generate_title", side_effect=RuntimeError("agent down")):
             result = generate_conversation_title.run(self.conversation.id, "查一下张三的日志")
 
         self.assertTrue(result["skipped"])
@@ -150,6 +339,18 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
         self.assertTrue(result["skipped"])
         self.conversation.refresh_from_db()
         self.assertEqual(self.conversation.title, "新对话")
+
+    def test_task_passes_source_to_agent(self):
+        """source 透传：条件检索来源任务把 field_condition 传给标题生成服务"""
+
+        with mock.patch.object(TitleAgentService, "generate_title", return_value="admin操作记录") as mock_generate:
+            result = generate_conversation_title.run(
+                self.conversation.id, "系统 bk-audit，操作人 等于 admin", source="field_condition"
+            )
+
+        self.assertEqual(result["title"], "admin操作记录")
+        _, kwargs = mock_generate.call_args
+        self.assertEqual(kwargs["source"], "field_condition")
 
 
 class NLTitleDispatchTest(AIAssistantPlatformTestCase):
@@ -181,9 +382,7 @@ class NLTitleDispatchTest(AIAssistantPlatformTestCase):
         with mock.patch(
             "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
             return_value=make_condition(),
-        ), mock.patch(
-            "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay"
-        ) as mock_delay:
+        ), mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
             execute_natural_language_search._finish_success(
                 execution=execution,
                 task_id="task-1",
@@ -217,3 +416,71 @@ class NLTitleDispatchTest(AIAssistantPlatformTestCase):
         nl_message.refresh_from_db()
         self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
         self.assertTrue(result)
+
+
+class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
+    """条件检索消息创建成功后触发标题任务派发（与 NL 链路对齐；不阻塞消息创建）"""
+
+    def test_field_condition_log_search_dispatches_title(self):
+        """用户直接发起条件检索（source=field_condition）：派发标题任务，素材=条件中文摘要"""
+
+        self.create_selection_message()
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(),
+        ), mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
+            message = MessageService(user=self.user).create(
+                conversation=self.conversation,
+                message_type=MessageType.LOG_SEARCH,
+                input_data={"condition": make_condition().model_dump(mode="json")},
+            )
+
+        mock_delay.assert_called_once_with(
+            conversation_id=self.conversation.id,
+            query_text=build_condition_title_input(
+                message.input_data,
+                extension_fields=MessageService._extract_parent_extension_fields(message.parent_message),
+            ),
+            source="field_condition",
+        )
+        # 素材内容：系统 + 时间 + 条件摘要（字段中文名动态取字段元数据，与条件筛选回传前端同源）
+        dispatched_text = mock_delay.call_args.kwargs["query_text"]
+        self.assertIn(f"系统 {TARGET_SYSTEM_ID}", dispatched_text)
+        self.assertIn("操作人用户名 等于 admin", dispatched_text)
+
+    def test_nl_chained_log_search_not_dispatched(self):
+        """NL 续链子消息（source=natural_language）：标题由父 NL 消息链路派发，此处不重复"""
+
+        selection = self.create_selection_message()
+        nl_message = self.create_nl_message(query_text="查一下 admin 的日志", parent=selection)
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(),
+        ), mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
+            MessageService(user=self.user).create(
+                conversation=self.conversation,
+                message_type=MessageType.LOG_SEARCH,
+                input_data={"condition": make_condition().model_dump(mode="json")},
+                parent_message_uid=str(nl_message.uid),
+            )
+
+        mock_delay.assert_not_called()
+
+    def test_dispatch_failure_does_not_break_creation(self):
+        """标题任务派发异常不影响条件检索消息创建（静默吞掉）"""
+
+        self.create_selection_message()
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(),
+        ), mock.patch(
+            "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay",
+            side_effect=RuntimeError("broker down"),
+        ):
+            message = MessageService(user=self.user).create(
+                conversation=self.conversation,
+                message_type=MessageType.LOG_SEARCH,
+                input_data={"condition": make_condition().model_dump(mode="json")},
+            )
+
+        self.assertEqual(message.status, ExecutionStatus.SUCCESS)

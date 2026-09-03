@@ -30,6 +30,7 @@ from services.web.query.ai_assistant.exceptions import (
 )
 from services.web.query.ai_assistant.schemas import ResultColumn
 from services.web.query.ai_assistant.services.export import (
+    LOG_EXPORT_FIELD_WHITELIST,
     FullExportService,
     PreviewExportService,
 )
@@ -414,3 +415,32 @@ class TestExportConfigFlattenIsolation(AIAssistantTestCase):
         config = ExportConfig(task=self._make_task({"field_scope": "all", "fields": [], "flatten_extension": True}))
         full_keys = [field.full_key for field in config.export_fields]
         self.assertIn("extend_data", full_keys)
+
+
+class TestAIStandardFieldScope(AIAssistantTestCase):
+    """ai_standard scope：字段集合 = 快照默认展示列（get_fields 兜底；AI 链路主路径为 SPECIFIED 翻译）"""
+
+    def test_get_fields_returns_snapshot_default_columns(self):
+        """get_fields(ai_standard)：顺序与集合 = SNAPSHOT_DEFAULT_COLUMNS（单一来源，防漂移）"""
+        from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
+        from services.web.query.constants import LogExportFieldScope
+
+        fields = LogExportFieldScope.get_fields(LogExportFieldScope.AI_STANDARD.value)
+        self.assertEqual(
+            [field.field_name for field in fields],
+            [raw_name for raw_name, _ in SNAPSHOT_DEFAULT_COLUMNS],
+        )
+
+    def test_ai_standard_fields_all_in_whitelist(self):
+        """ai_standard 字段全部在导出白名单内（翻译为 SPECIFIED 后可过白名单校验）"""
+        from services.web.query.constants import LogExportFieldScope
+
+        fields = LogExportFieldScope.get_fields(LogExportFieldScope.AI_STANDARD.value)
+        for field in fields:
+            self.assertIn(field.field_name, LOG_EXPORT_FIELD_WHITELIST)
+
+    def test_ai_standard_scope_accepted_by_validate(self):
+        """ai_standard 为合法 field_scope：不在 AI 入口翻译的调用路径下也不被白名单校验拒绝"""
+        from services.web.query.constants import LogExportFieldScope
+
+        self.assertIn(LogExportFieldScope.AI_STANDARD.value, LogExportFieldScope.values)
