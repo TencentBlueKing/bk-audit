@@ -21,6 +21,7 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
@@ -67,13 +68,18 @@ class NoticeGroupsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["list"]:
-            return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.LIST_NOTICE_GROUP],
-                    resource_meta=ResourceEnum.SCENE,
-                    get_instance_id=self.get_scene_id,
-                ),
-            ]
+            scene_id = get_value_by_request(self.request, "scene_id")
+            if scene_id:
+                return [
+                    InstanceActionPermission(
+                        actions=[ActionEnum.LIST_NOTICE_GROUP],
+                        resource_meta=ResourceEnum.SCENE,
+                        get_instance_id=self.get_scene_id,
+                    ),
+                ]
+            else:
+                # 不传 scene_id 时，需要平台管理员权限
+                return [IAMPermission(actions=[ActionEnum.MANAGE_PLATFORM])]
         if self.action in ["retrieve"]:
             return [
                 InstanceActionPermission(
