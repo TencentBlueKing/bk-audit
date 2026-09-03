@@ -418,6 +418,7 @@
 
   .suggest-section {
     margin-bottom: 8px;
+    min-width: 0;
     flex-shrink: 0;
   }
 
@@ -431,8 +432,15 @@
 
   .suggest-columns {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 16px 24px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .suggest-column {
+    min-width: 0;
+    overflow: hidden;
   }
 
   .column-label {
@@ -446,6 +454,8 @@
   .suggest-item {
     display: block;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     margin-bottom: 8px;
     padding: 8px 12px;
     overflow: hidden;
@@ -472,7 +482,10 @@
     }
 
     .suggest-text {
+      display: block;
       width: 100%;
+      max-width: 100%;
+      overflow: hidden;
       color: inherit;
     }
   }
