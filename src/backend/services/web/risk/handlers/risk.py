@@ -250,8 +250,7 @@ class RiskHandler:
             )
             return False, None
 
-        # 构建建单参数（含发现规则归因），查重键与建单参数共用同一 strategy_rule_id，
-        # 避免旧 SQL 未重建窗口期事件因规则 ID 为空导致去重错位、重复建单
+        # 构建建单参数，避免旧 SQL 未重建窗口期事件因规则 ID 为空导致去重错位、重复建单
         create_params = self.gen_risk_create_params(event)
 
         # 检查是否有已存在的

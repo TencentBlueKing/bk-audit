@@ -97,7 +97,8 @@ DEFAULT_AI_PRACTICES = {"ai_summary": "http://example.com/wiki/"}
 def get_manual_event_strategy_config(rt_id):
     """
     基于最新模板生成风险策略配置字典。
-    保留所有字段数据，并将 rt_id 动态填入 SQL、DataSource、Select 配置以及 Where 条件中。
+    保留所有字段数据，并将 rt_id 动态填入 DataSource、Select 配置以及 Where 条件中。
+    策略 SQL 由系统根据 rules 自动生成（见 init_system_rule_audit 的多规则模式）。
 
     Args:
         rt_id (str): 实时表ID (例如: '5000448_asset_bk_audit_risk')
@@ -106,33 +107,7 @@ def get_manual_event_strategy_config(rt_id):
         dict: 完整的配置字典
     """
 
-    # 1. 动态构建 SQL 语句
-    # 新版 SQL 使用了反引号 (`) 包裹表名和别名，我们需要在 f-string 中正确处理
-    # 逻辑：子查询中 SELECT 的字段前缀、FROM 表名、WHERE 条件均需替换
-    sql_statement = (
-        f"SELECT `sub_table`.`u_020bf1f3c0b7812374031309d27c1e73` `event_data`,"
-        f"`sub_table`.`u_e6ffe079ce9be342f287be948340991b` `strategy_id`,"
-        f"`sub_table`.`u_2f606c22a8b8bec4d47242c235f8d2d9` `raw_event_id`,"
-        f"`sub_table`.`u_0c5b77a14834daae88b98bacd7ce29db` `operator`,"
-        f"`sub_table`.`u_46a4b7f4986ca8845bd00b56233756d7` `event_source`,"
-        f"`sub_table`.`u_d76255b2e8d52f3c4af2ad50a692e1e2` `event_content`,"
-        f"`sub_table`.`u_f974c8465fb8f678cf37a1be67f94e6e` `event_type`,"
-        f"`sub_table`.`u_manual_event_id` `manual_event_id` "
-        f"FROM (SELECT "
-        f"`{rt_id}`.`event_content` `u_d76255b2e8d52f3c4af2ad50a692e1e2`,"
-        f"`{rt_id}`.`raw_event_id` `u_2f606c22a8b8bec4d47242c235f8d2d9`,"
-        f"`{rt_id}`.`strategy_id` `u_e6ffe079ce9be342f287be948340991b`,"
-        f"`{rt_id}`.`event_evidence` `u_012fc82ec23cb93da97d18755de7aad9`,"
-        f"`{rt_id}`.`event_type` `u_f974c8465fb8f678cf37a1be67f94e6e`,"
-        f"`{rt_id}`.`event_data` `u_020bf1f3c0b7812374031309d27c1e73`,"
-        f"`{rt_id}`.`event_time` `u_95a9c636484ff20d38642e088df195ca`,"
-        f"`{rt_id}`.`event_source` `u_46a4b7f4986ca8845bd00b56233756d7`,"
-        f"`{rt_id}`.`operator` `u_0c5b77a14834daae88b98bacd7ce29db`,"
-        f"`{rt_id}`.`id` `u_manual_event_id` "
-        f"FROM {rt_id} `{rt_id}` WHERE `{rt_id}`.`manual_synced` = 'false') `sub_table`"
-    )
-
-    # 2. 构建完整字典
+    # 构建完整字典
     return {
         "tools": [],
         "created_by": "admin",
@@ -248,7 +223,6 @@ def get_manual_event_strategy_config(rt_id):
                 "display_name": rt_id,  # 变量替换
             },
         },
-        "sql": sql_statement,  # 填入动态生成的 SQL
         "link_table_uid": None,
         "link_table_version": None,
         "status": "disabled",
@@ -331,6 +305,17 @@ def get_manual_event_strategy_config(rt_id):
                 "description": "",
                 "is_priority": True,
                 "display_name": "事件类型",
+                "drill_config": [],
+                "enum_mappings": {"mappings": []},
+                "duplicate_field": False,
+            },
+            {
+                "is_show": True,
+                "field_name": "manual_event_id",
+                "map_config": {"source_field": "ID"},
+                "description": "手工事件ID",
+                "is_priority": True,
+                "display_name": "手工事件ID",
                 "drill_config": [],
                 "enum_mappings": {"mappings": []},
                 "duplicate_field": False,
@@ -600,41 +585,6 @@ def get_manual_event_strategy_config(rt_id):
                 "enum_mappings": {"mappings": []},
                 "duplicate_field": False,
             },
-        ],
-        # 多规则改造后，RULE 型策略必须至少携带一条发现规则（_check_rules 强制校验）。
-        # 手动新建风险是"全量命中"语义，此处用一条 NOTNULL 恒真条件承载（无恒真算子，
-        # 以必有字段 id 的 notnull 表达"所有事件都命中"），条件树非空即通过校验。
-        "rules": [
-            {
-                "rule_name": "系统初始化默认规则",
-                "risk_title": "Dummy",
-                "risk_level": "LOW",
-                "risk_hazard": "自定义",
-                "risk_guidance": "自定义",
-                "conditions": {
-                    "where": {
-                        "index": 0,
-                        "connector": "and",
-                        "conditions": [
-                            {
-                                "index": 0,
-                                "connector": "and",
-                                "condition": {
-                                    "field": {
-                                        "table": rt_id,
-                                        "raw_name": "id",
-                                        "display_name": "ID",
-                                        "field_type": "long",
-                                    },
-                                    "operator": "notnull",
-                                    "filter": "",
-                                },
-                            }
-                        ],
-                    },
-                    "having": None,
-                },
-            }
         ],
         "is_formal": True,
         "source": "system",
