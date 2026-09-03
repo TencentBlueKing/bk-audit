@@ -283,7 +283,8 @@
   };
 
   const createConditionFilterCardId = () => (
-    `cf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    `cf-${Date.now()}-${Math.random().toString(36)
+      .slice(2, 8)}`
   );
 
   const handleOpenConditionFilter = async (payload: { fieldName: string; sample?: string }) => {
