@@ -23,13 +23,13 @@ import type {
   AiFullExportResult,
   AiMessage,
   AiMessageHistoryParams,
+  AiMessageWindow,
   AiSidebarMoveParams,
   AiSidebarNode,
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
   AiUpdateMessageParams,
-  AiMessageWindow,
 } from '@model/ai-assistant/types';
 
 import Request, {

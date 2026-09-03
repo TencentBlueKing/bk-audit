@@ -145,7 +145,7 @@
             class="conv-section conv-section--history"
             :class="getHistoryDropClass()"
             @dragleave="handleHistoryDragLeave"
-            @dragover="handleDragOver($event, 'history', 'history')"
+            @dragover="handleDragOver($event)"
             @drop="handleDrop($event, 'history', 'history')">
             <div class="section-label">
               <span class="label-text">{{ historySectionLabel }}</span>
@@ -231,7 +231,7 @@
                 :draggable="editingConvId !== item.conv.id"
                 @click="$emit('select', item.conv.id)"
                 @dragend="handleDragEnd"
-                @dragover.stop="handleDragOver($event, 'conversation', item.conv.id)"
+                @dragover.stop="handleDragOver($event)"
                 @dragstart="handleDragStart($event, 'conversation', item.conv.id)"
                 @drop.stop="handleDrop($event, 'conversation', item.conv.id)">
                 <span class="conv-dot">•</span>
@@ -335,7 +335,7 @@
                 :class="getGroupItemDragClass(item.group.name)"
                 :data-node-id="item.group.name"
                 data-node-kind="group"
-                @dragover="handleDragOver($event, 'group', item.group.name)"
+                @dragover="handleDragOver($event)"
                 @drop="handleDrop($event, 'group', item.group.name)">
                 <div
                   class="group-header"
@@ -346,7 +346,7 @@
                   :draggable="editingGroup !== item.group.name"
                   @click="handleGroupHeaderClick(item.group.name)"
                   @dragend="handleDragEnd"
-                  @dragover.stop="onGroupHeaderDragOver($event, item.group.name)"
+                  @dragover.stop="onGroupHeaderDragOver($event)"
                   @dragstart="handleDragStart($event, 'group', item.group.name)"
                   @drop.stop="handleDrop($event, 'group', item.group.name)">
                   <img
@@ -433,7 +433,7 @@
                 <div
                   v-show="!collapsedGroups.has(item.group.name)"
                   class="group-children"
-                  @dragover="onGroupChildrenDragOver($event, item.group.name)"
+                  @dragover="onGroupChildrenDragOver($event)"
                   @drop="onGroupChildrenDrop($event, item.group.name)">
                   <div
                     v-if="item.group.childrenLoading && !filteredGroupedHistory[item.group.name]?.length"
@@ -457,7 +457,7 @@
                     :draggable="editingConvId !== conv.id"
                     @click="$emit('select', conv.id)"
                     @dragend="handleDragEnd"
-                    @dragover.stop="handleDragOver($event, 'conversation', conv.id, item.group.name)"
+                    @dragover.stop="handleDragOver($event)"
                     @dragstart.stop="handleDragStart($event, 'conversation', conv.id, item.group.name)"
                     @drop.stop="handleDrop($event, 'conversation', conv.id, item.group.name)">
                     <span class="conv-dot">•</span>
@@ -1595,7 +1595,7 @@
 
   const onHistoryListDragOver = (e: DragEvent) => {
     if (!isDraggingGroupedConv.value) return;
-    handleDragOver(e, 'history', 'history');
+    handleDragOver(e);
   };
 
   // 在历史区子节点间移动时不要清空高亮（relatedTarget 仍在区内）
@@ -1835,12 +1835,7 @@
   };
 
   // 条目 dragover 只记录落点，插入线在下一帧按最终光标位置刷新，避免沿途轨迹追赶
-  const handleDragOver = (
-    e: DragEvent,
-    _type?: 'group' | 'conversation' | 'history',
-    _id?: string,
-    _targetGroup?: string,
-  ) => {
+  const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
@@ -1853,7 +1848,7 @@
   };
 
   // 分组标题：跨组/折叠时归入分组；未分组且展开时按整项边沿区分根层排序与归入分组
-  const onGroupHeaderDragOver = (e: DragEvent, _groupName: string) => {
+  const onGroupHeaderDragOver = (e: DragEvent) => {
     if (dragState.value.type !== 'conversation') return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -1861,7 +1856,7 @@
   };
 
   // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
-  const onGroupChildrenDragOver = (e: DragEvent, _groupName: string) => {
+  const onGroupChildrenDragOver = (e: DragEvent) => {
     if (dragState.value.type !== 'conversation') return;
     e.preventDefault();
     e.stopPropagation();
