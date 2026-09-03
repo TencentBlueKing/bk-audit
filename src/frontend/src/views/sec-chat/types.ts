@@ -105,8 +105,6 @@ export interface ChatMessage {
     message: string;
   };
   parentMessageUid?: string | null;
-  /** 条件修改后重新检索的消息，需在列表展示（区别于条件卡内嵌检索） */
-  showInMessageList?: boolean;
 }
 
 export interface Conversation {

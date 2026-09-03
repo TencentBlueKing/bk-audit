@@ -107,9 +107,9 @@
               </div>
             </div>
 
-            <!-- NL / LOG 失败（条件检索失败在条件卡内展示） -->
+            <!-- NL / LOG 失败 -->
             <div
-              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED' && !isConditionLogResult(msg)"
+              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
               class="result-status-card is-failed">
               <div class="status-title">
                 检索失败
@@ -126,9 +126,9 @@
               </bk-button>
             </div>
 
-            <!-- 查询后的结构化结果卡片；条件检索根 LOG 不在此渲染（内嵌于条件卡） -->
+            <!-- 查询后的结构化结果卡片 -->
             <retrieval-result-card
-              v-else-if="msg.type === 'retrieval-result' && msg.result && !isConditionLogResult(msg)"
+              v-else-if="msg.type === 'retrieval-result' && msg.result"
               :extension-fields="extensionFields"
               :message-uid="msg.id"
               :result="msg.result"
@@ -269,11 +269,6 @@
 
   const showRecognitionSuggestions = (code: string) => code === 'QUERY_NOT_RECOGNIZED';
 
-  /** 条件筛选产生的根 LOG_SEARCH（无 parent），结果在条件卡内嵌展示 */
-  const isConditionLogResult = (msg: ChatMessage) => (
-    msg.messageType === 'LOG_SEARCH' && !msg.parentMessageUid && !msg.showInMessageList
-  );
-
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);
   };
@@ -289,8 +284,12 @@
     await filterCardRef.value?.addOrFocusField?.(payload.fieldName, payload.sample);
   };
 
-  const handleConditionSearched = () => {
-    void scrollConditionFilterIntoView(true);
+  const handleConditionSearched = (success: boolean) => {
+    if (success) {
+      // 检索成功后收起底部输入框；二次检索改在结果卡上操作
+      conditionFilterVisible.value = false;
+    }
+    void scrollToBottom(true);
   };
 
   const handleReselectSystem = () => {
