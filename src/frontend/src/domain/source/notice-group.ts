@@ -37,15 +37,21 @@ class NoticeGroup extends ModuleBase {
 
   // 获取通知组列表
   getGroupList(params: {
-    page: number,
-    page_size: number
-    scene_id?: string | number;
+    page?: number,
+    page_size?: number
+    /** 传 null/空字符串表示不传 scene_id（全局策略等） */
+    scene_id?: string | number | null;
   }, payload = {} as IRequestPayload) {
-    // 如果有场景id直接用，没有则用场景系统参数getSceneSystemParams().scope_id
-    const paramsInfo = {
+    const paramsInfo: Record<string, any> = {
       ...params,
-      scene_id: params.scene_id || getSceneSystemParams().scope_id,
     };
+    if (params.scene_id === null || params.scene_id === '') {
+      // 显式不传场景
+      delete paramsInfo.scene_id;
+    } else if (params.scene_id === undefined) {
+      // 未传时回退当前场景
+      paramsInfo.scene_id = getSceneSystemParams().scope_id;
+    }
     return Request.get<IRequestResponsePaginationData<NoticeGroupsModel>>(`${this.module}/`, {
       params: paramsInfo,
       payload,

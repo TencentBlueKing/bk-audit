@@ -203,12 +203,16 @@
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
+  // 未配置预期结果时不使用字段别名，display_name 与字段名一致
   const fieldSelectOptions = computed(() => {
     const select = formData.value.configs?.select;
     if (Array.isArray(select) && select.length) {
       return select;
     }
-    return formData.value.configs?.table_fields || [];
+    return (formData.value.configs?.table_fields || []).map((item: Record<string, any>) => ({
+      ...item,
+      display_name: item.raw_name,
+    }));
   });
 
   let isSwitchSuccess = false;

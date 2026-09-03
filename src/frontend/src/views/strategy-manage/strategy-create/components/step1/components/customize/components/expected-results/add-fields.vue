@@ -175,10 +175,10 @@
                   <th style="width: 250px;">
                     <span
                       v-bk-tooltips="{
-                        content: t('sql示例：`字段名` AS `显示名`')
+                        content: t('字段别名类似 SQL 中的 `字段名 AS 字段别名`，设置后将改变数据入库后的原始字段名，请谨慎使用')
                       }"
                       style="border-bottom: 1px dashed #979ba5;">
-                      {{ t('显示名') }}
+                      {{ t('字段别名') }}
                     </span>
                   </th>
                 </tr>
@@ -477,10 +477,6 @@
 
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
-    if ('textValue' in field) {
-      // eslint-disable-next-line no-param-reassign
-      field.display_name =  field.textValue  as string;
-    }
     // 创建新对象避免参数修改
     const processedField = {
       ...field,
@@ -499,11 +495,18 @@
         ?? NO_AGGREGATE_VALUE;
     }
 
-    // 处理显示名称 - 编辑模式下不添加聚合算法后缀
-    const displayName = isEdit.value ? processedField.display_name
-      : `${processedField.display_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+    // 字段别名：编辑保留已有值；新增默认用字段名（raw_name），不用中文名
+    let displayName: string;
+    if (isEdit.value) {
+      if ('textValue' in field) {
+        processedField.display_name = field.textValue as string;
+      }
+      displayName = processedField.display_name;
+    } else {
+      displayName = `${processedField.raw_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+    }
 
-    // 统计重复显示名(包含已存在的和当前已选的)
+    // 统计重复别名(包含已存在的和当前已选的)
     const allDisplayNames = [
       ...props.expectedResultList,
       ...tableData.value,
@@ -518,7 +521,7 @@
       {},
     );
 
-    // 生成最终显示名
+    // 生成最终字段别名
     if (props.configType === 'LinkTable') {
       processedField.display_name = `${processedField.table}.${displayName}`;
     } else {
