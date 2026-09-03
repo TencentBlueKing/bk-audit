@@ -38,9 +38,9 @@
       <node-select
         :aggregate-list="aggregateList"
         :condition="condition"
-        :conditions="conditions"
         :config-data="localTableFields"
         :config-type="configType"
+        :loading="tableFieldsLoading"
         @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
     </bk-form-item>
     <!-- 连接条件 -->
@@ -184,6 +184,7 @@
 
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    tableFieldsLoading?: boolean,
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>,
     conditions: {
@@ -214,7 +215,9 @@
     children?: Array<DataType>;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    tableFieldsLoading: false,
+  });
 
   const emits = defineEmits<Emits>();
 
