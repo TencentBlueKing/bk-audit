@@ -354,8 +354,16 @@
     });
   };
 
+  /** 自然语言字段检索：向输入框末尾追加，多个以逗号区隔 */
+  const appendInputValue = (text: string, separator = '，') => {
+    const current = inputValue.value.trimEnd();
+    const next = current ? `${current}${separator}${text}` : text;
+    setInputValue(next);
+  };
+
   defineExpose({
     setInputValue,
+    appendInputValue,
   });
 </script>
 

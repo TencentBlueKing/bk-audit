@@ -239,6 +239,8 @@
   const emit = defineEmits<{
     reselect: [];
     'select-suggestion': [text: string];
+    /** 自然语言字段检索：向输入框追加字段值 */
+    'append-nl-field': [text: string];
     'open-condition-filter': [payload: { fieldName: string; sample?: string }];
   }>();
 
@@ -293,6 +295,7 @@
 
   const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
+      // 条件筛选：每次点击产出条件卡；未检索时由父级覆盖草稿，不向已有卡追加字段
       emit('open-condition-filter', {
         fieldName: row.rawName || row.name,
         sample: row.sample,
@@ -300,8 +303,8 @@
       return;
     }
     const sampleText = row.sample || '替换为实际值';
-    // 文档：自然语言用 nl_name + sample_value → `{nl_name}为{sample_value}`
-    emit('select-suggestion', `${row.nlName}为${sampleText}`);
+    // 文档：自然语言用 nl_name + sample_value → `{nl_name}为{sample_value}`，多选向输入框追加
+    emit('append-nl-field', `${row.nlName}为${sampleText}`);
   };
 </script>
 

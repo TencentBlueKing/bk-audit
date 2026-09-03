@@ -59,6 +59,7 @@
               :historical-operations="msg.historicalOperations || []"
               :standard-fields="msg.standardFields || []"
               :systems="msg.systems || []"
+              @append-nl-field="handleAppendNlField"
               @open-condition-filter="handleOpenConditionFilter"
               @reselect="handleReselectSystem"
               @select-suggestion="handleSelectSuggestion" />
@@ -136,17 +137,19 @@
               @regenerate="handleRegenerate(msg.content || '')" />
           </div>
 
-          <!-- 条件检索卡：固定在会话最底部，靠近输入框 -->
+          <!-- 条件检索卡：未检索时覆盖草稿；已检索后再点则新建，固定在会话底部 -->
           <div
-            v-if="conditionFilterVisible"
-            ref="conditionFilterRowRef"
+            v-for="card in conditionFilterCards"
+            :id="`condition-filter-${card.id}`"
+            :key="card.id"
             class="message-row is-assistant condition-filter-row">
             <condition-filter-card
-              ref="filterCardRef"
               :extension-fields="extensionFields"
+              :initial-field-name="card.fieldName"
+              :initial-sample="card.sample"
               :standard-fields="standardFields"
               :systems="systems"
-              @searched="handleConditionSearched" />
+              @searched="(success) => handleConditionSearched(card.id, success)" />
           </div>
         </div>
       </div>
@@ -209,13 +212,17 @@
     attach: [];
   }>();
 
-  const chatInputRef = ref<{ setInputValue:(text: string) => void } | null>(null);
-  const panelBodyRef = ref<HTMLElement | null>(null);
-  const filterCardRef = ref<{
-    addOrFocusField?:(fieldName: string, sample?: string) => Promise<void> | void
+  const chatInputRef = ref<{
+    setInputValue:(text: string) => void
+    appendInputValue:(text: string, separator?: string) => void
   } | null>(null);
-  const conditionFilterRowRef = ref<HTMLElement | null>(null);
-  const conditionFilterVisible = ref(false);
+  const panelBodyRef = ref<HTMLElement | null>(null);
+  /** 引导卡条件筛选：未检索最多 1 张草稿（再点覆盖）；检索成功收起后再点则新建 */
+  const conditionFilterCards = ref<Array<{
+    id: string
+    fieldName: string
+    sample?: string
+  }>>([]);
   /** prepend 历史消息后用于恢复滚动位置 */
   const scrollAnchor = ref<{ height: number; top: number } | null>(null);
   /** 避免 scroll 事件在 loading 状态生效前重复触发 */
@@ -266,41 +273,54 @@
     chatInputRef.value?.setInputValue(text);
   };
 
+  /** 自然语言字段检索：多选向输入框末尾追加，逗号区隔 */
+  const handleAppendNlField = (text: string) => {
+    chatInputRef.value?.appendInputValue(text);
+  };
+
   const handleRegenerate = (text: string) => {
     if (text) emit('send', text);
   };
 
+  const createConditionFilterCardId = () => (
+    `cf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  );
+
   const handleOpenConditionFilter = async (payload: { fieldName: string; sample?: string }) => {
-    conditionFilterVisible.value = true;
-    // 先展示卡片并平滑滑向条件区，再填充字段，避免布局变化导致滚动跳跃
-    await scrollConditionFilterIntoView(true);
-    await filterCardRef.value?.addOrFocusField?.(payload.fieldName, payload.sample);
+    const cardId = createConditionFilterCardId();
+    // 未检索：用新 id 覆盖当前草稿（强制重挂载重置条件）；已检索后列表为空则视为新建
+    conditionFilterCards.value = [{
+      id: cardId,
+      fieldName: payload.fieldName,
+      sample: payload.sample,
+    }];
+    await scrollConditionFilterIntoView(cardId, true);
   };
 
-  const handleConditionSearched = (success: boolean) => {
+  const handleConditionSearched = (cardId: string, success: boolean) => {
     if (success) {
-      // 检索成功后收起底部输入框；二次检索改在结果卡上操作
-      conditionFilterVisible.value = false;
+      // 检索成功后收起该条件卡；二次检索改在结果卡上操作
+      conditionFilterCards.value = conditionFilterCards.value.filter(item => item.id !== cardId);
     }
     void scrollToBottom(true);
   };
 
   const handleReselectSystem = () => {
-    conditionFilterVisible.value = false;
+    conditionFilterCards.value = [];
     emit('reselect-system');
   };
 
   const resetConditionFilterPanel = () => {
-    conditionFilterVisible.value = false;
+    conditionFilterCards.value = [];
   };
 
-  /** 平滑滚动到条件检索卡，锚定卡片而非瞬间跳到底 */
-  const scrollConditionFilterIntoView = async (smooth = true): Promise<void> => {
+  /** 平滑滚动到指定条件检索卡，锚定卡片而非瞬间跳到底 */
+  const scrollConditionFilterIntoView = async (cardId: string, smooth = true): Promise<void> => {
     allowLoadOlder.value = false;
     await nextTick();
     return new Promise((resolve) => {
       requestAnimationFrame(() => {
-        const row = conditionFilterRowRef.value;
+        const row = document.getElementById(`condition-filter-${cardId}`);
         if (!row) {
           allowLoadOlder.value = true;
           resolve();
