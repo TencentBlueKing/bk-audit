@@ -53,6 +53,7 @@
             :configs-data="formData.configs"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
+            :table-fields-loading="tableFieldsLoading"
             @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -69,6 +70,7 @@
         :configs-data="formData.configs"
         :expected-result="formData.configs.select"
         :table-fields="tableFields"
+        :table-fields-loading="tableFieldsLoading"
         @show-structure-preview="handleShowStructureView"
         @update-where="handleUpdateWhere" />
     </div>
@@ -94,6 +96,7 @@
         <bk-loading :loading="typeTableLoading">
           <div class="select-group">
             <data-source-picker
+              ref="dataSourcePickerRef"
               v-model="tableId"
               :decode-type-biz-id="decodeTypeBizId"
               :list="allConfigTypeTable"
@@ -101,7 +104,8 @@
               :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
               :system-ids="formData.configs.data_source.system_ids"
               @change="handleChangeTable"
-              @event-log-commit="handleEventLogCommit" />
+              @event-log-commit="handleEventLogCommit"
+              @update:system-ids="handleSystemIdsUpdate" />
           </div>
         </bk-loading>
       </bk-form-item>
@@ -385,6 +389,7 @@
   const route = useRoute();
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
+  const dataSourcePickerRef = ref<{ flushEventLogSelection?:() => void } | null>(null);
 
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
@@ -417,6 +422,8 @@
   let isInitFromParent = false;
   // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
   let tableIdEchoSeq = 0;
+  // 回显写 tableId 期间忽略 change，避免把 system_ids 等已回填字段清空
+  let isEchoingTableId = false;
 
   const formData = ref<IFormData>({
     configs: {
@@ -451,6 +458,7 @@
   }>>([]);
   const aggregateList = ref<Array<Record<string, any>>>([]);
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
+  const tableFieldsLoading = ref(false);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
   const typeTableLoading = ref(false);
@@ -846,11 +854,15 @@
     if (!rtId) {
       return;
     }
+    tableFieldsLoading.value = true;
     StrategyManageService.fetchTableRtFields({
       table_id: rtId,
     }).then((data) => {
       tableFields.value = setTableFields(data, rtId);
-    });
+    })
+      .finally(() => {
+        tableFieldsLoading.value = false;
+      });
   };
 
   // 选择tableid后，获取联表表字段
@@ -865,6 +877,7 @@
     if (!idArr.length) {
       return;
     }
+    tableFieldsLoading.value = true;
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
     }).then((data) => {
@@ -872,7 +885,10 @@
       data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
-    });
+    })
+      .finally(() => {
+        tableFieldsLoading.value = false;
+      });
   };
 
   // 获取关联表详情
@@ -1020,6 +1036,10 @@
     value: Array<string>,
     options?: { systemIds?: string[] },
   ) => {
+    // 回显写值触发的 change 不处理，否则会把已回填的 system_ids 等清掉
+    if (isEchoingTableId) {
+      return;
+    }
     // 用户主动选择时作废进行中的编辑回显，防止异步回写覆盖
     tableIdEchoSeq += 1;
     const systemIdsBackup = [...(formData.value.configs.data_source.system_ids || [])];
@@ -1044,6 +1064,11 @@
         return;
       }
 
+      // 操作日志无 systemIds 时禁止变更（由 eventLogCommit 提交），避免只写 rt_id 或误 reset
+      if (configType === 'EventLog' && !options?.systemIds?.length) {
+        return;
+      }
+
       // 有填写预期结果、风险发现规则，重置
       if (hasData.value) {
         resetDataSource();
@@ -1054,11 +1079,13 @@
         // 路径：[EventLog, pluginId]；系统多选随 options.systemIds 提交
         const pluginId = nextValue[1] || '';
         formData.value.configs.data_source.rt_id = pluginId;
-        formData.value.configs.data_source.link_table.uid = '';
-        formData.value.configs.data_source.link_table.version = 0;
-        formData.value.configs.data_source.system_ids = options?.systemIds
-          ? [...options.systemIds]
-          : [];
+        if (!formData.value.configs.data_source.link_table) {
+          formData.value.configs.data_source.link_table = { uid: '', version: 0 };
+        } else {
+          formData.value.configs.data_source.link_table.uid = '';
+          formData.value.configs.data_source.link_table.version = 0;
+        }
+        formData.value.configs.data_source.system_ids = [...(options?.systemIds || [])];
         if (pluginId) {
           fetDatabaseTableFields(pluginId);
           fetchSourceType({ config_type: configType, rt_id: pluginId });
@@ -1117,9 +1144,50 @@
     }));
   };
 
+  // 操作日志系统多选即时回写（防止只靠关面板提交时被空值冲掉）
+  const handleSystemIdsUpdate = (systemIds: string[]) => {
+    if (!formData.value.configs.data_source) {
+      formData.value.configs.data_source = {
+        system_ids: [],
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+      };
+    }
+    formData.value.configs.data_source.system_ids = [...(systemIds || [])];
+  };
+
   // 操作日志：关闭面板时提交插件 + 系统多选
   const handleEventLogCommit = (payload: { path: string[]; systemIds: string[] }) => {
-    handleChangeTable(payload.path, { systemIds: payload.systemIds });
+    const { path, systemIds } = payload;
+    if (path[0] !== 'EventLog' || !path[1] || !systemIds?.length) {
+      return;
+    }
+    // 用户确认选择：作废进行中的回显锁，强制写入（否则选中的 system_ids 会被静默丢掉）
+    tableIdEchoSeq += 1;
+    isEchoingTableId = false;
+
+    if (!formData.value.configs.data_source) {
+      formData.value.configs.data_source = {
+        system_ids: [],
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+      };
+    }
+    // 先写 system_ids，避免后续字段赋值触发的中间态把展示冲成「仅插件」
+    formData.value.configs.data_source.system_ids = [...systemIds];
+    formData.value.configs.config_type = 'EventLog';
+    const [, pluginId] = path;
+    formData.value.configs.data_source.rt_id = pluginId;
+    formData.value.configs.data_source.link_table = {
+      uid: '',
+      version: 0,
+    };
+    previousTableId.value = [...path];
+    tableId.value = [...path];
+    fetDatabaseTableFields(pluginId);
+    fetchSourceType({ config_type: 'EventLog', rt_id: pluginId });
   };
 
   // 更新预期数据
@@ -1160,66 +1228,79 @@
     tableIdEchoSeq += 1;
     const echoSeq = tableIdEchoSeq;
     const isEchoValid = () => echoSeq === tableIdEchoSeq;
+    isEchoingTableId = true;
 
-    const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
-    if (!tableItem) return;
-    // 操作日志：插件路径回显，系统多选走 system_ids
-    if (tableItem.value === 'EventLog') {
-      if (!isEchoValid()) return;
-      const pluginId = formData.value.configs.data_source.rt_id as string;
-      await loadEventLogSystems();
-      if (!isEchoValid()) return;
-      tableId.value = [formData.value.configs.config_type, pluginId];
-      previousTableId.value = tableId.value;
-    } else if (tableItem.value === 'LinkTable') {
-      if (!isEchoValid()) return;
-      tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.link_table.uid];
-      previousTableId.value = tableId.value ;
-    } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
-      const rtId = formData.value.configs.data_source.rt_id as string;
-      const bizId = extractBizIdFromRtId(rtId);
-      if (!bizId) return;
-      // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
-      const children = await loadBizTableChildren(tableItem.value, bizId);
-      if (!isEchoValid()) return;
-      const matchedChild = children.find((item) => {
-        const realValue = decodeTypeBizId(MINE_BIZ_RT_TYPE, item.value);
-        return realValue === rtId
-          || realValue === `${bizId}_${rtId}`
-          || realValue.endsWith(`_${rtId}`)
-          || item.label === rtId;
-      });
-      const selectedRtId = matchedChild?.value
-        || encodeTypeBizId(MINE_BIZ_RT_TYPE, rtId);
-      // 用接口返回的子表替换进树，确保展开时是「我的授权结果表」完整三级路径
-      replaceMineBizRtTree(bizId, children);
-      const echoPath = [
-        formData.value.configs.config_type,
-        encodeTypeBizId(MINE_BIZ_RT_TYPE, bizId),
-        selectedRtId,
-      ];
-      previousTableId.value = [...echoPath];
-      // 先清空再设值，避免旧路径干扰
-      tableId.value = [];
+    try {
+      const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
+      if (!tableItem) return;
+      // 操作日志：插件路径回显，系统多选走 system_ids
+      if (tableItem.value === 'EventLog') {
+        if (!isEchoValid()) return;
+        const pluginId = formData.value.configs.data_source.rt_id as string;
+        await loadEventLogSystems();
+        if (!isEchoValid()) return;
+        // 先记 previous，再写 tableId，避免误判为「路径变更」清空 system_ids
+        const echoPath = [formData.value.configs.config_type, pluginId];
+        previousTableId.value = [...echoPath];
+        tableId.value = echoPath;
+      } else if (tableItem.value === 'LinkTable') {
+        if (!isEchoValid()) return;
+        const echoPath = [
+          formData.value.configs.config_type,
+          formData.value.configs.data_source.link_table.uid,
+        ];
+        previousTableId.value = [...echoPath];
+        tableId.value = echoPath;
+      } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
+        const rtId = formData.value.configs.data_source.rt_id as string;
+        const bizId = extractBizIdFromRtId(rtId);
+        if (!bizId) return;
+        // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
+        const children = await loadBizTableChildren(tableItem.value, bizId);
+        if (!isEchoValid()) return;
+        const matchedChild = children.find((item) => {
+          const realValue = decodeTypeBizId(MINE_BIZ_RT_TYPE, item.value);
+          return realValue === rtId
+            || realValue === `${bizId}_${rtId}`
+            || realValue.endsWith(`_${rtId}`)
+            || item.label === rtId;
+        });
+        const selectedRtId = matchedChild?.value
+          || encodeTypeBizId(MINE_BIZ_RT_TYPE, rtId);
+        // 用接口返回的子表替换进树，确保展开时是「我的授权结果表」完整三级路径
+        replaceMineBizRtTree(bizId, children);
+        const echoPath = [
+          formData.value.configs.config_type,
+          encodeTypeBizId(MINE_BIZ_RT_TYPE, bizId),
+          selectedRtId,
+        ];
+        previousTableId.value = [...echoPath];
+        // 先清空再设值，避免旧路径干扰
+        tableId.value = [];
+        await nextTick();
+        if (!isEchoValid()) return;
+        tableId.value = echoPath;
+        await nextTick();
+      } else {
+        // 资产和其他数据还需要获取二级父id
+        tableItem.children.forEach((item) => {
+          if (item.children && item.children.length) {
+            item.children.forEach((cItem) => {
+              if (decodeTypeBizId(tableItem.value, cItem.value)
+                === formData.value.configs.data_source.rt_id) {
+                const echoPath = [formData.value.configs.config_type, item.value, cItem.value];
+                if (!isEchoValid()) return;
+                previousTableId.value = [...echoPath];
+                tableId.value = echoPath;
+              }
+            });
+          }
+        });
+      }
       await nextTick();
-      if (!isEchoValid()) return;
-      tableId.value = echoPath;
-      await nextTick();
-    } else {
-      // 资产和其他数据还需要获取二级父id
-      tableItem.children.forEach((item) => {
-        if (item.children && item.children.length) {
-          item.children.forEach((cItem) => {
-            if (decodeTypeBizId(tableItem.value, cItem.value)
-              === formData.value.configs.data_source.rt_id) {
-              const id = [item.value, cItem.value];
-              if (!isEchoValid()) return;
-              tableId.value = [formData.value.configs.config_type, ...id];
-              previousTableId.value = tableId.value ;
-            }
-          });
-        }
-      });
+    } finally {
+      // 无论回显是否被用户操作作废，都必须释放锁，否则后续选系统会全部被忽略
+      isEchoingTableId = false;
     }
   };
 
@@ -1254,10 +1335,24 @@
       }
     }
     if (editData.configs.data_source) {
-      formData.value.configs.data_source = editData.configs.data_source;
+      // 深拷贝，避免后续切换数据源时改到 editData / 详情原始对象
+      const dataSource = _.cloneDeep(editData.configs.data_source);
+      formData.value.configs.data_source = {
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+        ...dataSource,
+        system_ids: [...(dataSource.system_ids || [])],
+      };
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
     }
     // 转换tableid,反显
+    // 回显期间提前进入 loading，避免命中条件下拉先闪空态
+    const willLoadFields = formData.value.configs.config_type === 'LinkTable'
+      || !!resolveRtId(formData.value.configs.data_source?.rt_id);
+    if (willLoadFields) {
+      tableFieldsLoading.value = true;
+    }
     await changeTableId();
     if (formData.value.configs.config_type === 'LinkTable') {
       const linkTable = formData.value.configs.data_source.link_table;
@@ -1266,6 +1361,8 @@
           uid: linkTable.uid,
           version: linkTable.version,
         });
+      } else {
+        tableFieldsLoading.value = false;
       }
     } else {
       const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
@@ -1275,6 +1372,8 @@
           config_type: formData.value.configs.config_type,
           rt_id: rtId,
         });
+      } else {
+        tableFieldsLoading.value = false;
       }
     }
   };
@@ -1347,6 +1446,8 @@
   defineExpose<Expose>({
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
+      // 下一步/保存前先把操作日志面板里未落盘的系统选择写入表单
+      dataSourcePickerRef.value?.flushEventLogSelection?.();
       const params = _.cloneDeep(formData.value);
       // 预期结果为空等价 select *，但接口 select 不能为空：下一步/提交时自动选中数据源全部字段（不回显到预期结果 UI）
       params.configs.table_fields = _.cloneDeep(tableFields.value);
