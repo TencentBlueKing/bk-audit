@@ -119,177 +119,177 @@
           </div>
 
           <template v-else>
-        <!-- 结果摘要 -->
-        <div class="summary-section">
-          <div class="summary-main">
-            <h3 class="summary-title">
-              {{ displayResult.title }}
-            </h3>
-            <p class="summary-desc">
-              <template v-if="displayResult.showPreviewHint">
-                共命中
-                <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
-                条日志，数据量较大，已展示前
-                <span class="summary-num">{{ displayResult.previewCount }}</span>
-                条预览
-              </template>
-              <template v-else>
-                共命中
-                <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
-                条日志
-              </template>
-            </p>
-          </div>
-          <bk-dropdown
-            class="export-dropdown"
-            :disabled="!canExport || exporting || resubmitLoading"
-            placement="bottom-start"
-            trigger="click">
-            <bk-button
-              class="export-btn"
-              :disabled="!canExport"
-              :loading="exporting">
-              <audit-icon
-                class="export-icon"
-                type="download" />
-              {{ exporting ? '导出中…' : '导出' }}
-            </bk-button>
-            <template #content>
-              <bk-dropdown-menu>
-                <bk-dropdown-item
-                  :disabled="exporting"
-                  @click="handleExport('preview')">
-                  导出前 {{ displayResult.previewCount }} 条数据
-                </bk-dropdown-item>
-                <bk-dropdown-item
-                  :disabled="exporting"
-                  @click="handleExport('all')">
-                  导出全量数据
-                </bk-dropdown-item>
-              </bk-dropdown-menu>
-            </template>
-          </bk-dropdown>
-        </div>
+            <!-- 结果摘要 -->
+            <div class="summary-section">
+              <div class="summary-main">
+                <h3 class="summary-title">
+                  {{ displayResult.title }}
+                </h3>
+                <p class="summary-desc">
+                  <template v-if="displayResult.showPreviewHint">
+                    共命中
+                    <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
+                    条日志，数据量较大，已展示前
+                    <span class="summary-num">{{ displayResult.previewCount }}</span>
+                    条预览
+                  </template>
+                  <template v-else>
+                    共命中
+                    <span class="summary-num">{{ formatNumber(displayResult.totalHit) }}</span>
+                    条日志
+                  </template>
+                </p>
+              </div>
+              <bk-dropdown
+                class="export-dropdown"
+                :disabled="!canExport || exporting || resubmitLoading"
+                placement="bottom-start"
+                trigger="click">
+                <bk-button
+                  class="export-btn"
+                  :disabled="!canExport"
+                  :loading="exporting">
+                  <audit-icon
+                    class="export-icon"
+                    type="download" />
+                  {{ exporting ? '导出中…' : '导出' }}
+                </bk-button>
+                <template #content>
+                  <bk-dropdown-menu>
+                    <bk-dropdown-item
+                      :disabled="exporting"
+                      @click="handleExport('preview')">
+                      导出前 {{ displayResult.previewCount }} 条数据
+                    </bk-dropdown-item>
+                    <bk-dropdown-item
+                      :disabled="exporting"
+                      @click="handleExport('all')">
+                      导出全量数据
+                    </bk-dropdown-item>
+                  </bk-dropdown-menu>
+                </template>
+              </bk-dropdown>
+            </div>
 
-        <!-- 数据预览表 -->
-        <div class="table-section">
-          <div class="table-scroll">
-            <table
-              class="result-table"
-              :style="{ minWidth: tableMinWidth }">
-              <thead>
-                <tr>
-                  <th
-                    v-for="col in displayResult.columns"
-                    :key="col.rawName"
-                    :style="getColumnStyle(col)">
-                    <show-tooltips-text
-                      class="cell-tip"
-                      :data="col.displayName"
-                      :max-width="360" />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(row, index) in pageRows"
-                  :key="`row-${index}`">
-                  <td
-                    v-for="col in displayResult.columns"
-                    :key="`${col.rawName}-${index}`"
-                    :class="{ 'result-code-cell': isResultCodeColumn(col) }"
-                    :style="getColumnStyle(col)">
-                    <render-result
-                      v-if="isResultCodeColumn(col) && hasResultCodeValue(row)"
-                      :data="row" />
-                    <show-tooltips-text
-                      v-else
-                      class="cell-tip"
-                      :data="formatCell(row[col.rawName])"
-                      :max-width="480" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="table-pagination">
-            <bk-pagination
-              v-model="currentPage"
-              align="right"
-              :count="displayResult.rows.length"
-              :layout="['total', 'limit', 'list']"
-              :limit="pageSize"
-              :limit-list="[10, 20, 50]"
-              location="right"
-              size="small"
-              @change="handlePageChange"
-              @limit-change="handleLimitChange" />
-          </div>
-        </div>
+            <!-- 数据预览表 -->
+            <div class="table-section">
+              <div class="table-scroll">
+                <table
+                  class="result-table"
+                  :style="{ minWidth: tableMinWidth }">
+                  <thead>
+                    <tr>
+                      <th
+                        v-for="col in displayResult.columns"
+                        :key="col.rawName"
+                        :style="getColumnStyle(col)">
+                        <show-tooltips-text
+                          class="cell-tip"
+                          :data="col.displayName"
+                          :max-width="360" />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, index) in pageRows"
+                      :key="`row-${index}`">
+                      <td
+                        v-for="col in displayResult.columns"
+                        :key="`${col.rawName}-${index}`"
+                        :class="{ 'result-code-cell': isResultCodeColumn(col) }"
+                        :style="getColumnStyle(col)">
+                        <render-result
+                          v-if="isResultCodeColumn(col) && hasResultCodeValue(row)"
+                          :data="row" />
+                        <show-tooltips-text
+                          v-else
+                          class="cell-tip"
+                          :data="formatCell(row[col.rawName])"
+                          :max-width="480" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-pagination">
+                <bk-pagination
+                  v-model="currentPage"
+                  align="right"
+                  :count="displayResult.rows.length"
+                  :layout="['total', 'limit', 'list']"
+                  :limit="pageSize"
+                  :limit-list="[10, 20, 50]"
+                  location="right"
+                  size="small"
+                  @change="handlePageChange"
+                  @limit-change="handleLimitChange" />
+              </div>
+            </div>
 
-        <!-- 后续操作：本期先禁用智能分析 / 数据统计 -->
-        <div class="action-section">
-          <bk-button
-            class="analyze-btn"
-            disabled
-            outline
-            title="暂未开放"
-            @click="analyzeDialogShow = true">
-            <img
-              alt=""
-              class="ai-agent-ai"
-              height="14"
-              :src="aiSvg"
-              width="24">
-            智能分析
-          </bk-button>
-          <bk-button
-            class="statistics-btn"
-            disabled
-            outline
-            title="暂未开放"
-            @click="handleStatistics">
-            <audit-icon
-              class="action-icon"
-              type="shujutongji" />
-            数据统计
-          </bk-button>
-        </div>
-
-        <!-- 报告生成状态 -->
-        <div
-          v-if="reportItems.length"
-          class="report-status-section"
-          :class="{ 'is-done': hasDoneReport }">
-          <div
-            v-for="item in reportItems"
-            :key="item.id"
-            class="report-status-row">
-            <template v-if="item.status === 'loading'">
-              <audit-icon
-                class="status-icon is-loading"
-                type="loading" />
-              <span class="status-text">{{ item.title }}生成中...</span>
-            </template>
-            <template v-else>
-              <audit-icon
-                class="status-icon is-success"
-                type="success" />
-              <span class="status-text">{{ item.title }}已生成</span>
-              <span class="status-time">{{ item.createdAt }}</span>
-              <button
-                class="view-report-btn"
-                type="button"
-                @click="openReport(item)">
+            <!-- 后续操作：本期先禁用智能分析 / 数据统计 -->
+            <div class="action-section">
+              <bk-button
+                class="analyze-btn"
+                disabled
+                outline
+                title="暂未开放"
+                @click="analyzeDialogShow = true">
+                <img
+                  alt=""
+                  class="ai-agent-ai"
+                  height="14"
+                  :src="aiSvg"
+                  width="24">
+                智能分析
+              </bk-button>
+              <bk-button
+                class="statistics-btn"
+                disabled
+                outline
+                title="暂未开放"
+                @click="handleStatistics">
                 <audit-icon
-                  class="view-icon"
-                  type="help-document-fill" />
-                查看报告
-              </button>
-            </template>
-          </div>
-        </div>
-        </template>
+                  class="action-icon"
+                  type="shujutongji" />
+                数据统计
+              </bk-button>
+            </div>
+
+            <!-- 报告生成状态 -->
+            <div
+              v-if="reportItems.length"
+              class="report-status-section"
+              :class="{ 'is-done': hasDoneReport }">
+              <div
+                v-for="item in reportItems"
+                :key="item.id"
+                class="report-status-row">
+                <template v-if="item.status === 'loading'">
+                  <audit-icon
+                    class="status-icon is-loading"
+                    type="loading" />
+                  <span class="status-text">{{ item.title }}生成中...</span>
+                </template>
+                <template v-else>
+                  <audit-icon
+                    class="status-icon is-success"
+                    type="success" />
+                  <span class="status-text">{{ item.title }}已生成</span>
+                  <span class="status-time">{{ item.createdAt }}</span>
+                  <button
+                    class="view-report-btn"
+                    type="button"
+                    @click="openReport(item)">
+                    <audit-icon
+                      class="view-icon"
+                      type="help-document-fill" />
+                    查看报告
+                  </button>
+                </template>
+              </div>
+            </div>
+          </template>
         </div>
       </bk-loading>
 

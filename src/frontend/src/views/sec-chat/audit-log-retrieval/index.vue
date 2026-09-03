@@ -18,6 +18,7 @@
   <div class="audit-log-retrieval-page">
     <chat-log-panel
       v-if="panelConversation"
+      :confirming-system-message-id="confirmingSystemMessageId"
       :conversation-id="panelConversation.id"
       :extension-fields="panelConversation.extensionFields || []"
       :has-before-messages="panelConversation.hasBeforeMessages"
@@ -26,7 +27,6 @@
       :messages="panelConversation.messages"
       :standard-fields="panelConversation.standardFields || []"
       :systems="panelConversation.systems || []"
-      :confirming-system-message-id="confirmingSystemMessageId"
       @attach="handleAttach"
       @close-select-system="handleCloseSelectSystem"
       @confirm-system="handleConfirmSystem"
