@@ -90,7 +90,7 @@
 
 <script lang="ts" setup>
   import dayjs from 'dayjs';
-  import { computed, nextTick, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
 
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
@@ -117,10 +117,15 @@
     systems?: SelectedSystem[];
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
+    /** 引导卡点条件筛选时预填的字段 */
+    initialFieldName?: string;
+    initialSample?: string;
   }>(), {
     systems: () => [],
     standardFields: () => [],
     extensionFields: () => [],
+    initialFieldName: '',
+    initialSample: undefined,
   });
 
   const emit = defineEmits<{
@@ -271,6 +276,12 @@
 
     await handleAddField(fieldName, config, sampleToValue(config, sample));
   };
+
+  onMounted(async () => {
+    if (!props.initialFieldName) return;
+    await nextTick();
+    await addOrFocusField(props.initialFieldName, props.initialSample);
+  });
 
   defineExpose({
     addOrFocusField,
