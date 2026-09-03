@@ -84,13 +84,14 @@ class ListNoticeGroup(NoticeMeta):
         scene_id = validated_request_data.pop("scene_id", None)
         # 获取所有数据
         notice_groups = NoticeGroup.objects.all()
-        # 按场景过滤（通过 ResourceBinding）
-        notice_groups = SceneScopeFilter.filter_queryset(
-            queryset=notice_groups,
-            scene_id=scene_id,
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            pk_field="group_id",
-        )
+        # 按场景过滤（通过 ResourceBinding），scene_id 为空时返回全部
+        if scene_id is not None:
+            notice_groups = SceneScopeFilter.filter_queryset(
+                queryset=notice_groups,
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                pk_field="group_id",
+            )
         # 筛选
         keyword = validated_request_data.get("keyword")
         if keyword:

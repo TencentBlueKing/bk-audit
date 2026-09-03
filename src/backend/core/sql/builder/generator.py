@@ -185,8 +185,6 @@ class SQLGenerator:
         """
         L1 全部输出列名（维度列 + 每聚合字段×每规则的展开列 + 守卫列），按生成顺序。供 L2 以显式列引用构建 SELECT
         """
-        if not getattr(self, "_rule_mode_ready", False):
-            raise ValueError("get_rule_mode_output_columns must be called after generate_rule_mode")
         columns = []
         for field in self.config.select_fields or []:
             if not field.aggregate:
@@ -202,8 +200,6 @@ class SQLGenerator:
     def aggregate_field_identity(field: Field) -> tuple:
         """
         聚合字段身份：(table, raw_name, aggregate, keys)。
-        display_name 由前端拼接（如 事件ID_COUNT(event_id)），select 与 having 两处可能不一致，
-        不作为关联锚点；身份元组与校验层 _check_rules 的 aggregate_identities 口径一致。
         """
         return (field.table, field.raw_name, field.aggregate, tuple(field.keys or []))
 
