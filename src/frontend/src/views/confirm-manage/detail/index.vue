@@ -34,7 +34,6 @@
         </bk-tab>
       </div>
       <risk-handle-dock
-        :key="`confirm-handle-dock-${route.fullPath}`"
         :current-stage-name="t('风险确认')"
         :default-expanded="shouldExpandHandleDock">
         <confirm-risk-handle
