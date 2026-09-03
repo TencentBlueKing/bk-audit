@@ -85,35 +85,40 @@
         </div>
       </div>
 
-      <!-- 过程信息：仅展示思考耗时，不可折叠 -->
-      <div
-        v-if="!embedded"
-        class="process-section">
-        <div class="process-row">
-          <audit-icon
-            class="process-arrow"
-            type="angle-line-down" />
-          <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
-        </div>
-      </div>
+      <!-- 二次检索等待：覆盖过程信息 / 空态 / 表格，条件区保持可见 -->
+      <bk-loading
+        class="result-body-loading"
+        :loading="resubmitLoading">
+        <div class="result-body">
+          <!-- 过程信息：仅展示思考耗时，不可折叠 -->
+          <div
+            v-if="!embedded"
+            class="process-section">
+            <div class="process-row">
+              <audit-icon
+                class="process-arrow"
+                type="angle-line-down" />
+              <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
+            </div>
+          </div>
 
-      <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
-      <div
-        v-if="isEmpty"
-        class="status-panel is-empty">
-        <img
-          alt=""
-          class="empty-icon"
-          :src="emptySearchIcon">
-        <div class="status-title">
-          检索结果为空
-        </div>
-        <div class="status-desc">
-          可以尝试修改或减少检索条件
-        </div>
-      </div>
+          <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
+          <div
+            v-if="isEmpty"
+            class="status-panel is-empty">
+            <img
+              alt=""
+              class="empty-icon"
+              :src="emptySearchIcon">
+            <div class="status-title">
+              检索结果为空
+            </div>
+            <div class="status-desc">
+              可以尝试修改或减少检索条件
+            </div>
+          </div>
 
-      <template v-else>
+          <template v-else>
         <!-- 结果摘要 -->
         <div class="summary-section">
           <div class="summary-main">
@@ -137,7 +142,7 @@
           </div>
           <bk-dropdown
             class="export-dropdown"
-            :disabled="!canExport || exporting"
+            :disabled="!canExport || exporting || resubmitLoading"
             placement="bottom-start"
             trigger="click">
             <bk-button
@@ -284,7 +289,9 @@
             </template>
           </div>
         </div>
-      </template>
+        </template>
+        </div>
+      </bk-loading>
 
       <!-- 反馈操作：本期先不做，后续再开放 -->
       <div
@@ -437,9 +444,9 @@
     regenerate: [];
   }>();
 
-  const { appendConditionSearch } = useSecChatStore();
+  const { rerunLogSearch } = useSecChatStore();
 
-  /** 当前卡片展示的结果；二次检索会追加新消息卡，本卡保持原结果不变 */
+  /** 当前卡片展示的结果；二次检索 PATCH 同 uid 覆盖，不追加新卡 */
   const displayResult = ref<RetrievalResultPayload>({ ...props.result });
   const displayMessageUid = ref(props.messageUid || '');
 
@@ -518,13 +525,13 @@
   };
 
   watch(
-    () => props.messageUid,
+    () => [props.messageUid, props.result] as const,
     () => {
       displayResult.value = props.result;
       displayMessageUid.value = props.messageUid || '';
       syncSearchModelFromResult();
     },
-    { immediate: true },
+    { immediate: true, deep: true },
   );
 
   watch(
@@ -597,6 +604,12 @@
   const handleResubmit = async () => {
     if (resubmitLoading.value) return;
 
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn('缺少结果消息，请重新发起检索');
+      return;
+    }
+
     const scopeId = displayResult.value.rawCondition?.scope_id || props.systems[0]?.id || '';
     const condition = buildAiSearchCondition({
       scopeId,
@@ -610,13 +623,17 @@
 
     resubmitLoading.value = true;
     try {
-      const chatMessage = await appendConditionSearch(condition);
+      const chatMessage = await rerunLogSearch(messageUid, condition);
       if (chatMessage.apiStatus === 'FAILED') {
         messageError(chatMessage.errorMessage || '检索失败');
         return;
       }
-      // 新卡已追加；旧卡条件还原为本卡原始结果，避免展示与表格不一致的新条件
-      syncSearchModelFromResult();
+      // 同 uid 覆盖：用返回结果刷新本卡；条件区保持用户刚提交的条件
+      if (chatMessage.result) {
+        displayResult.value = chatMessage.result;
+        displayMessageUid.value = chatMessage.id;
+        syncSearchModelFromResult();
+      }
     } catch (error: any) {
       messageError(error?.message || '检索失败，请稍后重试');
     } finally {
@@ -873,6 +890,14 @@
 
   .condition-section {
     margin-bottom: 16px;
+  }
+
+  .result-body-loading {
+    min-height: 160px;
+  }
+
+  .result-body {
+    min-height: 160px;
   }
 
   .condition-header {

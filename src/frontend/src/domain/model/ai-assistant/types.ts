@@ -232,6 +232,14 @@ export interface AiCreateMessageParams {
   input_data?: Record<string, any>;
 }
 
+/** PATCH 编辑并重新执行消息（覆盖当前消息快照） */
+export interface AiUpdateMessageParams {
+  message_uid: string;
+  input_data: {
+    condition: AiSearchCondition;
+  };
+}
+
 export interface AiMessageHistoryParams {
   conversation_uid: string;
   anchor_uid?: string;
