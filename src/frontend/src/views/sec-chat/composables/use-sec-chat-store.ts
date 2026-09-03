@@ -268,9 +268,13 @@ const startMessagePoll = (conversationId: string, messageUid: string) => {
 
 const resumeProcessingPolls = (conversationId: string, messages: AiMessage[]) => {
   messages.forEach((message) => {
-    // 文档：仅自然语言消息会出现 PROCESSING
+    // NL 识别 / LOG_SEARCH 二次覆盖重跑都可能处于 PROCESSING
     if (message.status === 'PROCESSING'
-      && (message.message_type === 'NATURAL_LANGUAGE_SEARCH' || !message.message_type)) {
+      && (
+        message.message_type === 'NATURAL_LANGUAGE_SEARCH'
+        || message.message_type === 'LOG_SEARCH'
+        || !message.message_type
+      )) {
       startMessagePoll(conversationId, message.uid);
     }
   });
@@ -634,7 +638,10 @@ export function useSecChatStore() {
 
     conv.messages.forEach((message) => {
       if (message.apiStatus === 'PROCESSING'
-        && message.messageType === 'NATURAL_LANGUAGE_SEARCH') {
+        && (
+          message.messageType === 'NATURAL_LANGUAGE_SEARCH'
+          || message.messageType === 'LOG_SEARCH'
+        )) {
         startMessagePoll(id, message.id);
       }
     });
@@ -1087,6 +1094,7 @@ export function useSecChatStore() {
 
   /**
    * 条件筛选检索：POST LOG_SEARCH，写入消息列表，顺序跟随后端返回。
+   * 引导卡「条件筛选」首次检索走此路径（不传已有 uid，生成新卡）。
    */
   const sendConditionSearch = async (condition: AiSearchCondition) => {
     const conv = activeConversation.value;
@@ -1106,8 +1114,30 @@ export function useSecChatStore() {
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };
 
-  /** 修改条件后重新检索，与首次检索共用同一写入路径 */
-  const appendConditionSearch = sendConditionSearch;
+  /**
+   * 结果卡二次修改条件：PATCH 已有 LOG_SEARCH uid，覆盖同条消息快照，不新建卡。
+   */
+  const rerunLogSearch = async (messageUid: string, condition: AiSearchCondition) => {
+    const conv = activeConversation.value;
+    if (!conv || conv.isDraft) {
+      throw new Error('请先选择系统并创建会话');
+    }
+    if (!messageUid) {
+      throw new Error('缺少结果消息 uid，无法覆盖检索');
+    }
+    const message = await AiAssistantManageService.updateMessage({
+      message_uid: messageUid,
+      input_data: { condition },
+    });
+    upsertConversationMessage(conv.id, message);
+    if (message.status === 'PROCESSING') {
+      startMessagePoll(conv.id, message.uid);
+    } else if (message.status === 'SUCCESS') {
+      void refreshConversationTitle(conv.id);
+    }
+    const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
+    return mapAiMessageToChatMessage(message, { fieldCatalog });
+  };
 
   const retryMessage = async (messageUid: string) => {
     const conv = activeConversation.value;
@@ -1158,7 +1188,7 @@ export function useSecChatStore() {
     reselectSystem,
     sendLogQuery,
     sendConditionSearch,
-    appendConditionSearch,
+    rerunLogSearch,
     retryMessage,
     stopAllMessagePolls,
   };

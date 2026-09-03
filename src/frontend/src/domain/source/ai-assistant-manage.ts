@@ -23,12 +23,13 @@ import type {
   AiFullExportResult,
   AiMessage,
   AiMessageHistoryParams,
-  AiMessageWindow,
   AiSidebarMoveParams,
   AiSidebarNode,
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
+  AiUpdateMessageParams,
+  AiMessageWindow,
 } from '@model/ai-assistant/types';
 
 import Request, {
@@ -153,6 +154,18 @@ class AiAssistantManage extends ModuleBase {
   createMessage(params: AiCreateMessageParams, payload = {} as IRequestPayload) {
     return Request.post<AiMessage>(`${this.module}/messages/`, {
       params,
+      payload,
+    });
+  }
+
+  /**
+   * 编辑并重新执行消息：覆盖当前消息快照，uid 不变。
+   * 用于结果卡二次修改条件后原地刷新。
+   */
+  updateMessage(params: AiUpdateMessageParams, payload = {} as IRequestPayload) {
+    const { message_uid: messageUid, ...body } = params;
+    return Request.patch<AiMessage>(`${this.module}/messages/${messageUid}/`, {
+      params: body,
       payload,
     });
   }
