@@ -12,6 +12,10 @@ from services.web.ai_assistant.resources.attachment import (
     RetryAttachment,
     UpdateAttachment,
 )
+from services.web.ai_assistant.resources.column import (
+    ApplyColumnConfig,
+    ListColumnConfig,
+)
 from services.web.ai_assistant.resources.conversation import (
     ClearConversations,
     CreateConversation,
@@ -27,7 +31,6 @@ from services.web.ai_assistant.resources.conversation import (
     UpdateConversation,
     UpdateConversationGroup,
 )
-from services.web.ai_assistant.resources.column import ApplyColumnConfig, ListColumnConfig
 from services.web.ai_assistant.resources.feedback import DeleteFeedback, UpsertFeedback
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
@@ -36,6 +39,7 @@ from services.web.ai_assistant.resources.message import (
     ListMessages,
     PreviewExportMessage,
     RetryMessage,
+    UpdateMessage,
 )
 from services.web.ai_assistant.resources.stream import (
     GetAttachmentStream,
@@ -121,6 +125,7 @@ class MessagesViewSet(ResourceViewSet):
         ResourceRoute("POST", CreateMessage),
         ResourceRoute("GET", ListMessages),
         ResourceRoute("GET", GetMessage, pk_field="message_uid"),
+        ResourceRoute("PATCH", UpdateMessage, pk_field="message_uid"),
         ResourceRoute("POST", RetryMessage, endpoint="retry", pk_field="message_uid"),
         ResourceRoute("POST", CreateAttachment, endpoint="attachments", pk_field="message_uid"),
         ResourceRoute("GET", PreviewExportMessage, endpoint="preview-export", pk_field="message_uid"),
