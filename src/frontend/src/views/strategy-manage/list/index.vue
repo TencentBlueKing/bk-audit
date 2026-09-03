@@ -1326,12 +1326,17 @@
 
 
   // 获取策略新建权限：审计策略走 IAM check；全局策略走 my_role_permissions.manage_platform
-  useRequest(async () => {
+  useRequest(async (): Promise<{
+    fromRolePermission: boolean;
+    manage_platform: boolean;
+    create_strategy_v2: boolean;
+  }> => {
     if (isPlatformStrategyRoute(route.name)) {
       const data = await RootManageService.getUserPermission();
       return {
         fromRolePermission: true,
         manage_platform: Boolean(data.manage_platform),
+        create_strategy_v2: false,
       };
     }
     const data = await IamManageService.check({
@@ -1340,7 +1345,8 @@
     });
     return {
       fromRolePermission: false,
-      create_strategy_v2: data.create_strategy_v2,
+      manage_platform: false,
+      create_strategy_v2: Boolean(data.create_strategy_v2),
     };
   }, {
     defaultValue: {
