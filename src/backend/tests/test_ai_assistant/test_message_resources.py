@@ -38,6 +38,7 @@ from services.web.ai_assistant.resources.message import (
     GetMessage,
     ListMessages,
     RetryMessage,
+    UpdateMessage,
 )
 from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
@@ -48,6 +49,7 @@ from services.web.ai_assistant.serializers.message import (
     MessageDetailRequestSerializer,
     MessageListRequestSerializer,
     MessageResponseSerializer,
+    MessageUpdateRequestSerializer,
     MessageWindowResponseSerializer,
     _message_schema_mapping,
     _message_schema_models,
@@ -86,6 +88,30 @@ class MessageRequestSerializerTest(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["conversation_uid"], UUID(self.conversation_uid))
+
+    def test_update_requires_complete_input_and_ignores_server_owned_fields(self):
+        missing = MessageUpdateRequestSerializer(data={"message_uid": self.message_uid})
+        self.assertFalse(missing.is_valid())
+        serializer = MessageUpdateRequestSerializer(
+            data={
+                "message_uid": self.message_uid,
+                "input_data": {"text": "edited"},
+                "conversation_uid": self.conversation_uid,
+                "parent_message_uid": str(uuid4()),
+                "message_type": MessageType.LOG_SEARCH,
+                "context_data": {"forged": True},
+                "output_data": {"forged": True},
+                "status": ExecutionStatus.SUCCESS,
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(
+            serializer.validated_data,
+            {
+                "message_uid": UUID(self.message_uid),
+                "input_data": {"text": "edited"},
+            },
+        )
 
     def test_create_request_rejects_missing_input_and_ignores_internal_fields(self):
         missing_input = MessageCreateRequestSerializer(
@@ -355,6 +381,70 @@ class MessageResourceTest(TestCase):
         message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
         attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+
+    def test_update_message_returns_replaced_content_with_existing_feedback_and_attachment(self, _username):
+        message = MessageService(user="alice").create(
+            conversation=self.conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            input_data={"text": "old"},
+        )
+        Attachment.objects.create(
+            source_message=message,
+            attachment_type=AttachmentType.FIELD_STATISTICS,
+            status=ExecutionStatus.SUCCESS,
+            created_by="alice",
+            updated_by="alice",
+        )
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.MESSAGE,
+            source_id=message.id,
+            feedback_type=FeedbackType.LIKE,
+            created_by="alice",
+            updated_by="alice",
+        )
+        before = GetMessage().request({"message_uid": str(message.uid)})
+
+        response = UpdateMessage().request({"message_uid": str(message.uid), "input_data": {"text": "new"}})
+
+        self.assertEqual(response["uid"], before["uid"])
+        self.assertEqual(response["input_data"], {"text": "new"})
+        self.assertEqual(response["output_data"], {"content": "system:new"})
+        self.assertEqual(response["status"], ExecutionStatus.SUCCESS)
+        self.assertEqual(response["attachments"], before["attachments"])
+        self.assertEqual(response["feedback"], before["feedback"])
+        self.assertNotIn("context_data", response)
+        self.assertNotIn("task_id", response)
+        self.assertEqual(GetMessage().request({"message_uid": str(message.uid)}), response)
+        self.assertEqual(Message.objects.count(), 1)
+
+    def test_update_resource_rejects_invalid_typed_input(self, _username):
+        message = MessageService(user="alice").create(
+            conversation=self.conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            input_data={"text": "old"},
+        )
+        with self.assertRaises(MessageSnapshotValidationError):
+            UpdateMessage().request({"message_uid": str(message.uid), "input_data": {"unknown": "new"}})
+        message.refresh_from_db()
+        self.assertEqual(message.input_data, {"text": "old"})
+
+    def test_update_async_resource_returns_processing_for_original_uid(self, _username):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"text": "old"},
+            output_data={"content": "old"},
+            created_by="alice",
+            updated_by="alice",
+        )
+        with mock.patch.object(self.async_handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = UpdateMessage().request({"message_uid": str(message.uid), "input_data": {"text": "new"}})
+        self.assertEqual(response["uid"], str(message.uid))
+        self.assertEqual(response["status"], ExecutionStatus.PROCESSING)
+        self.assertEqual(response["input_data"], {"text": "new"})
+        self.assertIsNone(response["output_data"])
 
     def test_create_sync_message_returns_success_without_internal_fields(self, _username):
         response = CreateMessage().request(
