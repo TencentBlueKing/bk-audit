@@ -12,6 +12,7 @@ from services.web.ai_assistant.serializers.message import (
     MessageListRequestSerializer,
     MessagePreviewExportRequestSerializer,
     MessageResponseSerializer,
+    MessageUpdateRequestSerializer,
     MessageWindowResponseSerializer,
 )
 from services.web.ai_assistant.services import ConversationService, MessageService
@@ -77,6 +78,20 @@ class GetMessage(AIAssistantResource):
 
         return MessageService(user=get_request_username()).get(
             message_uid=str(validated_request_data["message_uid"]),
+        )
+
+
+class UpdateMessage(AIAssistantResource):
+    """编辑已有消息输入并重建上下文执行，覆盖当前消息快照，保留关联产物。"""
+
+    name = gettext_lazy("编辑并重新执行消息")
+    RequestSerializer = MessageUpdateRequestSerializer
+    ResponseSerializer = MessageResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        return MessageService(user=get_request_username()).update(
+            message_uid=str(validated_request_data["message_uid"]),
+            input_data=validated_request_data["input_data"],
         )
 
 
