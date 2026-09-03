@@ -227,12 +227,10 @@
 
   const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
-    commonOperations?: string[];
     historicalOperations?: string[];
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
   }>(), {
-    commonOperations: () => [],
     historicalOperations: () => [],
     standardFields: () => [],
     extensionFields: () => [],
@@ -264,17 +262,13 @@
   const fieldExpanded = ref(true);
   const fieldTab = ref<'common' | 'extend'>('common');
 
-  const fallbackCommonSuggestions = [
+  /** 常用操作：前端固定文案，不依赖后端 */
+  const commonSuggestions = [
     '查询「替换为实际用户」近7天的删除操作',
     '查询「替换为实际安装包」近7天的下载操作',
     '查询「替换为实际安装包」近7天的成功操作',
-    '查询「替换为实际用户」近30天的API操作',
+    '查询「替换为实际用户」近30天API操作',
   ];
-
-  const commonSuggestions = computed(() => (
-    (props.commonOperations.length ? props.commonOperations : fallbackCommonSuggestions)
-      .slice(0, SUGGESTION_LIMIT)
-  ));
 
   const historySuggestions = computed(() => (
     props.historicalOperations.slice(0, SUGGESTION_LIMIT)

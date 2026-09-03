@@ -55,7 +55,6 @@
             <!-- 确认选择后的检索引导卡片 -->
             <retrieval-guide-card
               v-else-if="msg.type === 'retrieval-guide'"
-              :common-operations="msg.commonOperations || []"
               :extension-fields="msg.extensionFields || []"
               :historical-operations="msg.historicalOperations || []"
               :standard-fields="msg.standardFields || []"
@@ -97,7 +96,7 @@
                   试试这样说：
                 </div>
                 <button
-                  v-for="(item, index) in displaySuggestions"
+                  v-for="(item, index) in FIXED_SUGGESTIONS"
                   :key="`nl-suggest-${index}`"
                   class="suggest-item"
                   type="button"
@@ -166,7 +165,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, nextTick, onActivated, ref, watch } from 'vue';
+  import { nextTick, onActivated, ref, watch } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
@@ -184,8 +183,6 @@
     hasBeforeMessages?: boolean;
     loadingOlderMessages?: boolean;
     messageLoading?: boolean;
-    /** 识别失败时展示的建议问法（来自 SYSTEM_SELECTION） */
-    nlSuggestions?: string[];
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
     systems?: SelectedSystem[];
@@ -196,7 +193,6 @@
     hasBeforeMessages: false,
     loadingOlderMessages: false,
     messageLoading: false,
-    nlSuggestions: () => [],
     standardFields: () => [],
     extensionFields: () => [],
     systems: () => [],
@@ -248,16 +244,13 @@
     PERMISSION_DENIED: '请联系管理员申请目标系统的日志检索权限',
   };
 
-  const FALLBACK_SUGGESTIONS = [
+  /** 检索异常「试试这样说」：前端固定文案，不依赖后端 */
+  const FIXED_SUGGESTIONS = [
     '查询「替换为实际用户」近7天的删除操作',
     '查询「替换为实际安装包」近7天的下载操作',
     '查询「替换为实际安装包」近7天的成功操作',
-    '查询「替换为实际用户」近30天的API操作',
+    '查询「替换为实际用户」近30天API操作',
   ];
-
-  const displaySuggestions = computed(() => (
-    (props.nlSuggestions.length ? props.nlSuggestions : FALLBACK_SUGGESTIONS).slice(0, 4)
-  ));
 
   const getRecognitionTitle = (code: string) => (
     NL_RECOGNITION_TITLES[code] || '未能完成检索'
