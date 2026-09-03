@@ -44,6 +44,7 @@
           :config-type="configType"
           :expected-result="expectedResult"
           :table-fields="tableFields"
+          :table-fields-loading="tableFieldsLoading"
           @handle-update-local-conditions="handleUpdateLocalConditions"
           @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
@@ -104,6 +105,7 @@
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    tableFieldsLoading?: boolean,
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>
     configType: string,
@@ -113,7 +115,9 @@
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
-  defineProps<Props>();
+  withDefaults(defineProps<Props>(), {
+    tableFieldsLoading: false,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 

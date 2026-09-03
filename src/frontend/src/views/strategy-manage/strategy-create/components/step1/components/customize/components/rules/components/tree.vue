@@ -8,15 +8,27 @@
     display-key="name"
     filterable
     id-key="id"
+    :loading="isListLoading"
     multiple
     :popover-options="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select', placement: 'top-start' }"
     @search-change="handleSearch"
     @toggle="handleToggle">
+    <div
+      v-if="isListLoading"
+      class="field-list-loading">
+      <bk-loading
+        loading
+        mode="spin"
+        size="small"
+        theme="primary" />
+      <span class="field-list-loading-text">{{ t('加载中') }}...</span>
+    </div>
     <bk-tree
+      v-else
       ref="treeRef"
       children="children"
       :data="treeData"
-      empty-text=" "
+      :empty-text="t('暂无数据')"
       label="raw_name"
       :node-content-action="['click']"
       :show-node-type-icon="false"
@@ -31,7 +43,7 @@
               style="margin-right: 4px;font-size: 14px;"
               svg
               :type="data.spec_field_type" />
-            <span v-if="props.configType === 'LinkTable'">
+            <span v-if="configType === 'LinkTable'">
               <span style=" color: #3a84ff;">{{ data.table }}.</span>
               <span
                 v-if="'self_name' in data"
@@ -137,7 +149,7 @@
                   style="margin-right: 4px;font-size: 14px;"
                   svg
                   :type="data.spec_field_type" />
-                <span v-if="props.configType === 'LinkTable'">
+                <span v-if="configType === 'LinkTable'">
                   <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
                   <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
                     `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
@@ -207,7 +219,14 @@
   </bk-select>
 </template>
 <script setup lang="tsx">
-  import { onMounted, onUnmounted, ref, watch } from 'vue';
+  import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    ref,
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
@@ -226,9 +245,11 @@
     configType: string,
     aggregateList: Array<Record<string, any>>,
     condition: Record<string, any>,
-    conditions: Record<string, any>,
+    loading?: boolean,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
 
   const emits = defineEmits<Emits>();
 
@@ -242,6 +263,16 @@
 
   const treeData = ref<Record<string, any>[]>([]);
   const storageTreeData = ref<Record<string, any>[]>([]);
+  const popoverOpen = ref(false);
+  // 下拉打开且列表未就绪时展示加载态，避免先闪空态
+  const isListLoading = computed(() => {
+    if (props.loading) return true;
+    // 有源数据但树尚未构建完
+    if (popoverOpen.value && !treeData.value.length && (props.configData?.length ?? 0) > 0) {
+      return true;
+    }
+    return false;
+  });
   const newItem = {
     aggregate: null,
     parent_aggregate: null,
@@ -267,13 +298,35 @@
   const selectedValue = ref();
   const selectRef = ref(null);
 
-  const handleToggle = (isToggle: boolean) => {
-    if (isToggle) {
+  const buildTreeData = (configData: any[]) => {
+    const initTreeData = JSON.parse(JSON.stringify(configData || []));
+    if (isStrategyEditRoute(route.name)) {
+      return transformData(initTreeData).map((e) => {
+        if ((props.condition?.condition?.field?.parent_raw_name === e.raw_name) && !('from' in e)) {
+          e.children.push({ ...props.condition.condition.field, isStrategyEdit: true });
+        }
+        return e;
+      });
+    }
+    return transformData(initTreeData);
+  };
+
+  const handleToggle = async (isToggle: boolean) => {
+    popoverOpen.value = isToggle;
+    if (!isToggle) return;
+    // 打开时优先用最新 configData 重建，避免 sessionStorage 空数据盖住真实列表
+    if (props.configData?.length) {
+      treeData.value = buildTreeData(props.configData);
+      storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+      sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
+    } else if (!props.loading) {
       const haveTreeData = sessionStorage.getItem('rule-tree-data');
       if (haveTreeData) {
-        treeData.value = JSON.parse(sessionStorage.getItem('rule-tree-data') || '[]');
+        treeData.value = JSON.parse(haveTreeData || '[]');
+        storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
       }
     }
+    await nextTick();
   };
   // 取消
   const handleAddFieldClose = (val: Record<string, any>) => {
@@ -445,29 +498,33 @@
       raw_name: item.raw_name,
     };
   });
-  // 改造数据
-  watch(() => props, (newData) => {
-    const haveTreeData = sessionStorage.getItem('rule-tree-data');
-    if (haveTreeData) {
-      treeData.value = JSON.parse(sessionStorage.getItem('rule-tree-data') || '[]');
-    } else {
-      const initTreeData = JSON.parse(JSON.stringify(newData.configData));
-
-      if (isStrategyEditRoute(route.name)) {
-        // 编辑时手动插入数据回显
-        const initData = transformData(initTreeData).map((e) => {
-          if ((newData.condition.condition.field.parent_raw_name === e.raw_name) && !('from' in e)) {
-            e.children.push({ ...newData.condition.condition.field, isStrategyEdit: true });
-          }
-          return e;
-        });
-        treeData.value = initData;
+  // 改造数据：优先用最新 configData，避免 sessionStorage 空数组盖住真实字段列表
+  watch(() => [props.configData, props.condition, props.loading] as const, () => {
+    if (props.configData?.length) {
+      treeData.value = buildTreeData(props.configData);
+      storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+      sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
+    } else if (!props.loading) {
+      const haveTreeData = sessionStorage.getItem('rule-tree-data');
+      if (haveTreeData) {
+        const cached = JSON.parse(haveTreeData || '[]');
+        // 仅当缓存非空时使用，空缓存不覆盖
+        if (cached.length) {
+          treeData.value = cached;
+          storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+        } else {
+          treeData.value = [];
+          storageTreeData.value = [];
+        }
       } else {
-        treeData.value = transformData(initTreeData);
+        treeData.value = [];
+        storageTreeData.value = [];
       }
     }
-    storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
-    selectedValue.value = 'self_name' in newData.condition.condition.field ? `${newData.condition.condition.field.self_name}/${newData.condition.condition.field.self_key_name}` : newData.condition.condition.field.display_name;
+    const field = props.condition?.condition?.field;
+    selectedValue.value = field && ('self_name' in field)
+      ? `${field.self_name}/${field.self_key_name}`
+      : (field?.display_name || '');
   }, {
     deep: true,
     immediate: true,
@@ -493,6 +550,21 @@
   });
 </script>
 <style scoped lang="postcss">
+.field-list-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  height: 340px;
+  min-height: 200px;
+}
+
+.field-list-loading-text {
+  font-size: 12px;
+  color: #979ba5;
+}
+
 .field {
   display: flex;
   width: 100%;

@@ -467,6 +467,10 @@
     formData.value.risk_hazard = editData.risk_hazard;
     formData.value.risk_guidance = editData.risk_guidance;
     formData.value.risk_level = editData.risk_level;
+    // 同步 configs，避免 Customize 尚未回填时保存草稿丢掉 data_source
+    if (editData.configs && Object.keys(editData.configs).length) {
+      formData.value.configs = JSON.parse(JSON.stringify(editData.configs));
+    }
     // 存量数据
     if (!editData.strategy_type) {
       isStockData.value = true;
@@ -558,6 +562,40 @@
     }
   };
 
+  /** 合并 configs，避免 Customize 回写时丢掉 data_source.system_ids 等已有字段 */
+  const mergeConfigsPreserveDataSource = (
+    baseConfigs: Record<string, any> = {},
+    nextConfigs: Record<string, any> = {},
+  ) => {
+    const merged = {
+      ...baseConfigs,
+      ...nextConfigs,
+    };
+    if (baseConfigs.data_source || nextConfigs.data_source) {
+      merged.data_source = {
+        ...(baseConfigs.data_source || {}),
+        ...(nextConfigs.data_source || {}),
+      };
+      if (
+        merged.config_type === 'EventLog'
+        && !merged.data_source.system_ids?.length
+        && baseConfigs.data_source?.system_ids?.length
+      ) {
+        merged.data_source.system_ids = [...baseConfigs.data_source.system_ids];
+      }
+      if (!merged.data_source.rt_id && baseConfigs.data_source?.rt_id) {
+        merged.data_source.rt_id = baseConfigs.data_source.rt_id;
+      }
+      if (!merged.data_source.source_type && baseConfigs.data_source?.source_type) {
+        merged.data_source.source_type = baseConfigs.data_source.source_type;
+      }
+      if (!merged.data_source.link_table?.uid && baseConfigs.data_source?.link_table?.uid) {
+        merged.data_source.link_table = { ...baseConfigs.data_source.link_table };
+      }
+    }
+    return merged;
+  };
+
   // 下一步
   const handleNext = () => {
     const doValidate = () => {
@@ -579,7 +617,10 @@
     // （解决 audit-user-selector 等 bk-select 封装组件的值同步链路断裂问题）
     if (formData.value.strategy_type && comRef.value?.getFields) {
       const fields = comRef.value.getFields({ forValidate: true });
-      formData.value.configs = fields.configs;
+      formData.value.configs = mergeConfigsPreserveDataSource(
+        formData.value.configs,
+        fields.configs,
+      );
     }
     doValidate();
   };
@@ -587,7 +628,10 @@
   const handleSaveDraft = () => {
     if (formData.value.strategy_type && comRef.value?.getFields) {
       const fields = comRef.value.getFields();
-      formData.value.configs = fields.configs;
+      formData.value.configs = mergeConfigsPreserveDataSource(
+        formData.value.configs,
+        fields.configs,
+      );
     }
     emits('saveDraft', buildStepParams());
   };
@@ -603,17 +647,22 @@
     }
     // 获取审计参数（自定义规则审计、引入模型审计）
     const fields = comRef.value?.getFields?.() ?? { configs: formData.value.configs };
+    const mergedConfigs = mergeConfigsPreserveDataSource(
+      formData.value.configs,
+      fields.configs,
+    );
     // 非联表不需要link_table参数
-    if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
-      fields.configs.data_source.link_table = null;
+    if (mergedConfigs.config_type !== 'LinkTable' && mergedConfigs.data_source) {
+      mergedConfigs.data_source.link_table = null;
     }
     // 非周期不需要schedule_config
-    if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
-      fields.configs.schedule_config = undefined;
+    if (mergedConfigs.data_source && mergedConfigs.data_source.source_type !== 'batch_join_source') {
+      mergedConfigs.schedule_config = undefined;
     }
     const params: Record<string, any> = {
       ...baseParams,
       ...fields,
+      configs: mergedConfigs,
     };
     return params as IFormData;
   };

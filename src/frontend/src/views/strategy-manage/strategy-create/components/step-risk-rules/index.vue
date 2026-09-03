@@ -699,8 +699,28 @@
     if (!fieldsConfigs.config_type && parent.config_type) {
       merged.config_type = parent.config_type;
     }
-    if (!fieldsConfigs.data_source?.rt_id?.length && parent.data_source?.rt_id?.length) {
-      merged.data_source = parent.data_source;
+    // data_source 按字段合并，避免后续步骤回写时丢掉 system_ids 等关键字段
+    if (parent.data_source || fieldsConfigs.data_source) {
+      merged.data_source = {
+        ...(parent.data_source || {}),
+        ...(fieldsConfigs.data_source || {}),
+      };
+      if (
+        merged.config_type === 'EventLog'
+        && !merged.data_source.system_ids?.length
+        && parent.data_source?.system_ids?.length
+      ) {
+        merged.data_source.system_ids = [...parent.data_source.system_ids];
+      }
+      if (!merged.data_source.rt_id && parent.data_source?.rt_id) {
+        merged.data_source.rt_id = parent.data_source.rt_id;
+      }
+      if (!merged.data_source.source_type && parent.data_source?.source_type) {
+        merged.data_source.source_type = parent.data_source.source_type;
+      }
+      if (!merged.data_source.link_table?.uid && parent.data_source?.link_table?.uid) {
+        merged.data_source.link_table = { ...parent.data_source.link_table };
+      }
     }
     if (!fieldsConfigs.schedule_config?.count_freq && parent.schedule_config) {
       merged.schedule_config = parent.schedule_config;

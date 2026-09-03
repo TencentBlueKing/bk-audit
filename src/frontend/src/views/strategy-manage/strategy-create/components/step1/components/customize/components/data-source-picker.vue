@@ -290,6 +290,8 @@
   const rightLoading = ref(false);
   const lazyChildrenMap = ref<Record<string, PickerNode[]>>({});
   const selectedSystemIds = ref<string[]>([]);
+  /** 最近一次成功提交的系统选择，防止关面板后被空 props 冲掉展示 */
+  const lastCommittedSystemIds = ref<string[]>([]);
 
   const decodeId = (tableType: string, value: string | number) => {
     if (props.decodeTypeBizId) {
@@ -450,9 +452,15 @@
     const eventLogPath = useEventLogDraft
       ? ['EventLog', selectedLeftValue.value]
       : path;
+    let resolvedSystemIds = lastCommittedSystemIds.value;
+    if (props.systemIds?.length) {
+      resolvedSystemIds = props.systemIds;
+    } else if (selectedSystemIds.value.length) {
+      resolvedSystemIds = selectedSystemIds.value;
+    }
     const eventLogSystemIds = useEventLogDraft
       ? selectedSystemIds.value
-      : ((props.systemIds?.length ? props.systemIds : selectedSystemIds.value) || []);
+      : (resolvedSystemIds || []);
 
     if (eventLogPath[0] === 'EventLog' && eventLogPath.length >= 2) {
       const typeItem = props.list.find(item => item.value === 'EventLog');
@@ -561,7 +569,7 @@
     emit('change', path);
   };
 
-  /** 关闭面板时提交操作日志：插件 + 系统多选一次性生效 */
+  /** 提交操作日志：插件 + 系统多选 */
   const commitEventLogSelection = () => {
     if (activeTab.value !== 'EventLog') {
       return false;
@@ -569,21 +577,70 @@
     if (!selectedLeftValue.value || selectedSystemIds.value.length === 0) {
       return false;
     }
+    const path = ['EventLog', selectedLeftValue.value];
+    const systemIds = [...selectedSystemIds.value];
+    lastCommittedSystemIds.value = systemIds;
+    // 先写 systemIds，再写 path，减少父级只收到 rt_id、系统仍为空的中间态
+    emit('update:systemIds', systemIds);
+    emit('changeSystemIds', systemIds);
     emit('eventLogCommit', {
-      path: ['EventLog', selectedLeftValue.value],
-      systemIds: [...selectedSystemIds.value],
+      path,
+      systemIds,
     });
+    emit('update:modelValue', path);
     return true;
+  };
+
+  const applySystemIdsFromProps = (ids?: string[]) => {
+    const next = [...(ids || [])];
+    if (next.length) {
+      selectedSystemIds.value = next;
+      lastCommittedSystemIds.value = next;
+      return;
+    }
+    // 外部空值不要清掉本地/刚提交的选择，否则关面板后展示会退化成「仅插件」
+    if (selectedSystemIds.value.length || lastCommittedSystemIds.value.length) {
+      return;
+    }
+    selectedSystemIds.value = [];
   };
 
   const closePanel = () => {
     if (!panelVisible.value) return;
-    panelVisible.value = false;
+    const snapshotSystems = [...selectedSystemIds.value];
+    const snapshotLeft = selectedLeftValue.value;
+    // 先提交再关面板，避免关面板后的 sync 把本地已选 systemIds 清掉
     const committed = commitEventLogSelection();
-    if (!committed && isEventLogTab.value) {
+    panelVisible.value = false;
+    if (committed) {
+      // 提交成功后保留本地勾选，等父级 props 回写；避免空数组 sync 把展示冲掉
+      selectedSystemIds.value = snapshotSystems;
+      selectedLeftValue.value = snapshotLeft;
+      return;
+    }
+    if (isEventLogTab.value) {
       // 未选完系统则回滚本地草稿
-      selectedSystemIds.value = [...(props.systemIds || [])];
+      selectedSystemIds.value = [...(props.systemIds?.length
+        ? props.systemIds
+        : lastCommittedSystemIds.value)];
       syncFromModelValue();
+    }
+  };
+
+  /** 供父组件在下一步/保存前强制落盘当前操作日志选择 */
+  const flushEventLogSelection = () => {
+    if (panelVisible.value) {
+      closePanel();
+      return;
+    }
+    // 面板已关，但本地仍有未同步到表单的系统选择
+    if (
+      isEventLogTab.value
+      && selectedLeftValue.value
+      && selectedSystemIds.value.length
+      && !(props.systemIds?.length)
+    ) {
+      commitEventLogSelection();
     }
   };
 
@@ -644,6 +701,7 @@
     // 操作日志：仅本地选中插件并加载系统，关闭面板时再统一提交
     if (isEventLogTab.value && pluginChanged) {
       setLocalSystemIds([]);
+      lastCommittedSystemIds.value = [];
     }
   };
 
@@ -659,6 +717,10 @@
       ? selectedSystemIds.value.filter(id => id !== item.value)
       : [...selectedSystemIds.value, item.value];
     setLocalSystemIds(next);
+    // 勾选即落盘，避免只依赖关面板提交时被 sync 冲掉
+    if (next.length) {
+      commitEventLogSelection();
+    }
   };
 
   const handleToggleAllSystems = () => {
@@ -668,6 +730,7 @@
       return;
     }
     setLocalSystemIds(rightList.value.map(item => item.value));
+    commitEventLogSelection();
   };
 
   const PANEL_WIDTH = 640;
@@ -704,7 +767,7 @@
 
   const syncFromModelValue = async () => {
     const path = props.modelValue || [];
-    selectedSystemIds.value = [...(props.systemIds || [])];
+    applySystemIdsFromProps(props.systemIds);
     if (!path.length) {
       if (!activeTab.value && props.list.length) {
         activeTab.value = props.list[0].value;
@@ -752,7 +815,9 @@
   }, { deep: true });
 
   watch(() => props.systemIds, (ids) => {
-    selectedSystemIds.value = [...(ids || [])];
+    // 面板打开时用户正在勾选系统，不能被外部空值回写冲掉
+    if (panelVisible.value) return;
+    applySystemIdsFromProps(ids);
   }, { deep: true });
 
   watch(panelVisible, async (visible) => {
@@ -778,6 +843,10 @@
     window.removeEventListener('resize', handleWindowChange);
     document.querySelector('#auditNavigationContent .scroll-faker-content')
       ?.removeEventListener('scroll', handleWindowChange);
+  });
+
+  defineExpose({
+    flushEventLogSelection,
   });
 </script>
 

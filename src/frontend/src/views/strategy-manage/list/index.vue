@@ -735,7 +735,7 @@
             theme="warning">
             {t('草稿')}
           </bk-tag>
-        ) : null;
+          ) : null;
         const globalTag = !isPlatformList.value && isGlobalStrategy(data) ? (
           <bk-tag
             class="strategy-name-global-tag"
@@ -743,7 +743,7 @@
             size="small">
             {t('全局')}
           </bk-tag>
-        ) : null;
+          ) : null;
         const suffixTags = [globalTag, draftTag].filter(Boolean);
         const renderCell = (extraNodes: any[] = []) => (
           <span class="strategy-name-cell">
@@ -1092,21 +1092,24 @@
         }
         return <>
       {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled"
-            v-bk-tooltips={t('处理中，不能编辑')}>
-            {t('编辑')}
-          </bk-button>
-          : isModelStrategy(data.strategy_type)
-            ? <bk-button
+        (() => {
+          if (data.isPending) {
+            return <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={t('处理中，不能编辑')}>
+              {t('编辑')}
+            </bk-button>;
+          }
+          if (isModelStrategy(data.strategy_type)) {
+            return <bk-button
               text
               class="is-disabled"
               v-bk-tooltips={modelStrategyDisabledTip()}>
               {t('编辑')}
-            </bk-button>
-            : <bk-badge
+            </bk-button>;
+          }
+          return <bk-badge
             class='edit-badge'
             position="top-right"
             theme="danger"
@@ -1131,24 +1134,28 @@
               onClick={() => handleEdit(data)}>
               {t('编辑')} {data.link_table_version >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)}
             </auth-button>
-          </bk-badge>
+          </bk-badge>;
+        })()
       }
       {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled ml8"
-            v-bk-tooltips={t('处理中，不能克隆')}>
-            {t('克隆')}
-          </bk-button>
-          : isModelStrategy(data.strategy_type)
-            ? <bk-button
+        (() => {
+          if (data.isPending) {
+            return <bk-button
+              text
+              class="is-disabled ml8"
+              v-bk-tooltips={t('处理中，不能克隆')}>
+              {t('克隆')}
+            </bk-button>;
+          }
+          if (isModelStrategy(data.strategy_type)) {
+            return <bk-button
               text
               class="is-disabled ml8"
               v-bk-tooltips={modelStrategyDisabledTip()}>
               {t('克隆')}
-            </bk-button>
-            : <auth-button
+            </bk-button>;
+          }
+          return <auth-button
             actionId="create_strategy_v2"
             permission={permissionCheckData.value}
             resource-is-scene
@@ -1157,7 +1164,8 @@
             onClick={() => handleClone(data)}
             text>
             {t('克隆')}
-          </auth-button>
+          </auth-button>;
+        })()
       }
 
       <bk-dropdown
