@@ -273,7 +273,7 @@ export interface AiSidebarPinParams {
 }
 
 /** 全量导出字段范围 */
-export type AiExportFieldScope = 'all' | 'standard' | 'snapshot' | 'specified';
+export type AiExportFieldScope = 'all' | 'standard' | 'ai_standard' | 'snapshot' | 'specified';
 
 export interface AiExportField {
   raw_name: string;
