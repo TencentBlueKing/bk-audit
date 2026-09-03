@@ -7,10 +7,10 @@
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at http://opensource.org/licenses/MIT
   Unless required by applicable law or agreed to in writing,
-    software distributed under the License is distributed on
-    an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-    either express or implied. See the License for the
-    specific language governing permissions and limitations under the License.
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
@@ -72,22 +72,7 @@
     </div>
 
     <div
-      v-if="searchState === 'empty'"
-      class="status-panel is-empty">
-      <img
-        alt=""
-        class="empty-icon"
-        :src="emptySearchIcon">
-      <div class="status-title">
-        检索结果为空
-      </div>
-      <div class="status-desc">
-        可以尝试修改或减少检索条件
-      </div>
-    </div>
-
-    <div
-      v-else-if="searchState === 'failed'"
+      v-if="searchState === 'failed'"
       class="status-panel is-failed">
       <img
         alt=""
@@ -99,15 +84,6 @@
       <div class="status-desc">
         {{ searchError || '请检查网络是否通畅或联系管理员' }}
       </div>
-    </div>
-
-    <div
-      v-else-if="inlineResult && searchState === 'done'"
-      class="inline-result">
-      <retrieval-result-card
-        embedded
-        :message-uid="resultMessageUid"
-        :result="inlineResult" />
     </div>
   </div>
 </template>
@@ -121,11 +97,10 @@
   import AddCondition from '@views/risk-manage/list/components/nl-search-box/components/add-condition.vue';
   import ConditionTags from '@views/risk-manage/list/components/nl-search-box/components/condition-tags.vue';
 
-  import emptySearchIcon from '@images/empty-search.svg';
   import errorSearchIcon from '@images/error-search.svg';
 
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
-  import type { RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
+  import type { SelectedSystem, SystemFieldRow } from '../../types';
   import {
     buildAiSearchCondition,
     appendSearchModelField,
@@ -138,8 +113,6 @@
     sampleToConditionValue,
   } from '../config/condition-fields';
 
-  import RetrievalResultCard from './retrieval-result-card.vue';
-
   const props = withDefaults(defineProps<{
     systems?: SelectedSystem[];
     standardFields?: SystemFieldRow[];
@@ -151,28 +124,20 @@
   });
 
   const emit = defineEmits<{
-    searched: [];
+    searched: [success: boolean];
   }>();
 
-  const { sendConditionSearch, appendConditionSearch } = useSecChatStore();
+  const { sendConditionSearch } = useSecChatStore();
 
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
-  const searchState = ref<'idle' | 'loading' | 'empty' | 'failed' | 'done'>('idle');
+  const searchState = ref<'idle' | 'loading' | 'failed'>('idle');
   const searchError = ref('');
-  const inlineResult = ref<RetrievalResultPayload | null>(null);
-  const resultMessageUid = ref('');
-  /** 是否已完成过至少一次检索；再次检索追加新结果卡，避免覆盖当前卡 */
-  const hasSearchedOnce = ref(false);
-  /** 二次检索 loading，不改 searchState，避免隐藏首次内嵌结果 */
-  const resubmitLoading = ref(false);
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),
     datetime_origin: createDefaultDatetimeOrigin(),
   });
 
-  const isSearching = computed(() => (
-    searchState.value === 'loading' || resubmitLoading.value
-  ));
+  const isSearching = computed(() => searchState.value === 'loading');
 
   const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
     props.standardFields,
@@ -255,10 +220,6 @@
     };
     searchState.value = 'idle';
     searchError.value = '';
-    inlineResult.value = null;
-    resultMessageUid.value = '';
-    hasSearchedOnce.value = false;
-    resubmitLoading.value = false;
   };
 
   const handleSearch = async () => {
@@ -273,64 +234,28 @@
     if (!condition) {
       searchState.value = 'failed';
       searchError.value = scopeId ? '请至少选择时间范围' : '请先选择系统';
-      if (!hasSearchedOnce.value) {
-        inlineResult.value = null;
-        resultMessageUid.value = '';
-      }
       return;
     }
 
-    const isResubmit = hasSearchedOnce.value;
-
-    if (isResubmit) {
-      resubmitLoading.value = true;
-    } else {
-      searchState.value = 'loading';
-      searchError.value = '';
-      inlineResult.value = null;
-      resultMessageUid.value = '';
-    }
+    searchState.value = 'loading';
+    searchError.value = '';
 
     try {
-      const chatMessage = isResubmit
-        ? await appendConditionSearch(condition)
-        : await sendConditionSearch(condition);
-      hasSearchedOnce.value = true;
+      const chatMessage = await sendConditionSearch(condition);
 
       if (chatMessage.apiStatus === 'FAILED') {
-        if (!isResubmit) {
-          searchState.value = 'failed';
-          searchError.value = chatMessage.errorMessage || '检索失败';
-        }
-        emit('searched');
-        return;
-      }
-
-      if (isResubmit) {
-        // 二次检索：新结果卡已写入消息列表，条件卡保持首次内嵌结果
-        emit('searched');
-        return;
-      }
-
-      const { result } = chatMessage;
-      if (!result || result.totalHit === 0) {
-        searchState.value = 'empty';
-        emit('searched');
-        return;
-      }
-      // 首次：结果内嵌在当前条件卡
-      inlineResult.value = result;
-      resultMessageUid.value = chatMessage.id;
-      searchState.value = 'done';
-      emit('searched');
-    } catch (error: any) {
-      if (!isResubmit) {
         searchState.value = 'failed';
-        searchError.value = error?.message || '请检查网络是否通畅或联系管理员';
+        searchError.value = chatMessage.errorMessage || '检索失败';
+        emit('searched', false);
+        return;
       }
-      emit('searched');
-    } finally {
-      resubmitLoading.value = false;
+
+      searchState.value = 'idle';
+      emit('searched', true);
+    } catch (error: any) {
+      searchState.value = 'failed';
+      searchError.value = error?.message || '请检查网络是否通畅或联系管理员';
+      emit('searched', false);
     }
   };
 
@@ -470,28 +395,6 @@
     box-sizing: border-box;
   }
 
-  .status-panel.is-empty {
-    .empty-icon {
-      display: block;
-      width: 98px;
-      height: 88px;
-    }
-
-    .status-title {
-      margin-top: 8px;
-      font-size: 14px;
-      line-height: 22px;
-      color: #313238;
-    }
-
-    .status-desc {
-      font-size: 12px;
-      line-height: 18px;
-      color: #4D4F56;
-      text-align: center;
-    }
-  }
-
   .status-panel.is-failed {
     .failed-icon {
       display: block;
@@ -512,10 +415,6 @@
       color: #4D4F56;
       text-align: center;
     }
-  }
-
-  .inline-result {
-    margin-top: 24px;
   }
 </style>
 <style lang="postcss">

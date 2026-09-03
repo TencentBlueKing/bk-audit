@@ -1086,8 +1086,7 @@ export function useSecChatStore() {
   };
 
   /**
-   * 条件筛选同步检索：POST LOG_SEARCH，响应当最终态。
-   * 结果在条件卡内嵌展示，不写入消息列表，避免底部再追加一张结果卡。
+   * 条件筛选检索：POST LOG_SEARCH，写入消息列表，顺序跟随后端返回。
    */
   const sendConditionSearch = async (condition: AiSearchCondition) => {
     const conv = activeConversation.value;
@@ -1102,26 +1101,13 @@ export function useSecChatStore() {
     if (message.status === 'SUCCESS') {
       void refreshConversationTitle(conv.id);
     }
+    upsertConversationMessage(conv.id, message);
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };
 
-  /**
-   * 修改已识别条件后重新检索：POST LOG_SEARCH 并追加到消息列表。
-   */
-  const appendConditionSearch = async (condition: AiSearchCondition) => {
-    const chatMessage = await sendConditionSearch(condition);
-    const conv = activeConversation.value;
-    if (!conv || conv.isDraft) return chatMessage;
-    const messageForList = { ...chatMessage, showInMessageList: true };
-    const existIdx = conv.messages.findIndex(item => item.id === chatMessage.id);
-    if (existIdx >= 0) {
-      conv.messages.splice(existIdx, 1, messageForList);
-    } else {
-      conv.messages.push(messageForList);
-    }
-    return messageForList;
-  };
+  /** 修改条件后重新检索，与首次检索共用同一写入路径 */
+  const appendConditionSearch = sendConditionSearch;
 
   const retryMessage = async (messageUid: string) => {
     const conv = activeConversation.value;

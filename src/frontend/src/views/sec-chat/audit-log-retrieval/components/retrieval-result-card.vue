@@ -85,24 +85,10 @@
         </div>
       </div>
 
-      <!-- 过程信息 -->
+      <!-- 过程信息（本期先隐藏「已调用工具」及描述） -->
       <div
         v-if="!embedded"
         class="process-section">
-        <div
-          class="process-row"
-          @click="toolsExpanded = !toolsExpanded">
-          <audit-icon
-            class="process-arrow"
-            :class="{ 'is-collapsed': !toolsExpanded }"
-            type="angle-line-down" />
-          <span>已调用 {{ displayResult.toolCount }} 个工具</span>
-        </div>
-        <div
-          v-if="toolsExpanded"
-          class="process-detail">
-          已调用检索解析、权限校验、日志查询工具
-        </div>
         <div
           class="process-row"
           @click="thinkExpanded = !thinkExpanded">
@@ -661,7 +647,6 @@
     + 'c.2-.2.3-.5.2-.8l-.6-2.4h2.4V1.5H4.1c-.7 0-1.3.5-1.4 1.2L2 6.9'
     + 'c-.1.7.4 1.4 1.2 1.4h-.6z';
 
-  const toolsExpanded = ref(false);
   const thinkExpanded = ref(false);
   const currentPage = ref(1);
   const pageSize = ref(10);
