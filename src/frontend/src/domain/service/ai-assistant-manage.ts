@@ -158,7 +158,7 @@ export default {
    * 预览导出（xlsx blob，中间件会触发下载）
    */
   previewExport(
-    params: { message_uid: string; export_config?: Pick<AiExportConfig, 'flatten_extension'> },
+    params: { message_uid: string; export_config?: AiExportConfig },
     options?: { catchError?: boolean },
   ) {
     return AiAssistantManageSource.previewExport(params, {
