@@ -7,18 +7,21 @@
 -->
 
 <template>
-  <teleport to="body">
+  <!--
+    keep-alive 停用时 disable teleport，把 Dock 收回组件树，
+    避免缓存实例留在 body 上叠出第二个「工单处理」。
+  -->
+  <teleport
+    :disabled="!isDockActive"
+    to="body">
     <div
-
       class="risk-handle-dock"
-
       :class="{
         'is-expanded': isExpanded,
         'is-resizing': isResizing,
         'is-resize-hover': showResizeBar,
         'is-editor-boosted': isEditorBoosted,
       }"
-
       :style="dockStyle">
       <div
 
@@ -91,7 +94,9 @@
 
   import {
     computed,
+    onActivated,
     onBeforeUnmount,
+    onDeactivated,
     onMounted,
     provide,
     ref,
@@ -145,6 +150,7 @@
 
 
   const isExpanded = ref(props.defaultExpanded);
+  const isDockActive = ref(true);
   const panelHeight = ref(getDefaultExpandedHeight());
   const isResizing = ref(false);
   const showResizeBar = ref(false);
@@ -368,6 +374,7 @@
 
 
   onMounted(() => {
+    isDockActive.value = true;
     updateDockPosition();
 
     window.addEventListener('resize', handleResize);
@@ -387,6 +394,19 @@
     });
   });
 
+  onActivated(() => {
+    isDockActive.value = true;
+    updateDockPosition();
+    updateContentPadding(isExpanded.value ? panelHeight.value : COLLAPSED_HEIGHT);
+  });
+
+  onDeactivated(() => {
+    isDockActive.value = false;
+    const scrollContent = getScrollContent();
+    if (scrollContent) {
+      scrollContent.style.paddingBottom = '';
+    }
+  });
 
   onBeforeUnmount(() => {
     window.removeEventListener('resize', handleResize);
