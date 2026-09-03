@@ -2,7 +2,7 @@
   <div
     ref="sidebarRootRef"
     class="chat-sidebar"
-    :class="{ 'is-collapsed': collapsed }">
+    :class="{ 'is-collapsed': collapsed, 'is-sidebar-dragging': !!dragState.type }">
     <template v-if="!collapsed">
       <!-- 场景选择 -->
       <div class="sidebar-project">
@@ -91,7 +91,12 @@
       </div>
 
       <!-- 对话列表 -->
-      <div class="conversation-list">
+      <div
+        ref="conversationListRef"
+        class="conversation-list"
+        :class="{ 'is-dnd-active': !!dragState.type }"
+        @dragleave="handleListDragLeave"
+        @dragover="onConversationListDragOver">
         <!-- 搜索模式：走 search/ 接口，不改变侧栏排序 -->
         <div
           v-if="isSearchActive"
@@ -221,10 +226,11 @@
                     'is-menu-open': activeMenuId === item.conv.id,
                   },
                 ]"
-                draggable="true"
+                :data-node-id="item.conv.id"
+                data-node-kind="conversation"
+                :draggable="editingConvId !== item.conv.id"
                 @click="$emit('select', item.conv.id)"
                 @dragend="handleDragEnd"
-                @dragleave="handleDragLeave"
                 @dragover.stop="handleDragOver($event, 'conversation', item.conv.id)"
                 @dragstart="handleDragStart($event, 'conversation', item.conv.id)"
                 @drop.stop="handleDrop($event, 'conversation', item.conv.id)">
@@ -250,8 +256,7 @@
                 </template>
                 <div
                   class="conv-actions"
-                  @click.stop
-                  @mousedown.stop>
+                  @click.stop>
                   <bk-dropdown
                     class="more-dropdown"
                     :is-show="activeMenuId === item.conv.id"
@@ -262,7 +267,8 @@
                     <div
                       class="action-btn"
                       :class="{ 'is-active': activeMenuId === item.conv.id }"
-                      @click.stop="toggleConvMenu(item.conv.id)">
+                      @click.stop="toggleConvMenu(item.conv.id)"
+                      @mousedown.stop>
                       <audit-icon type="more" />
                     </div>
                     <template #content>
@@ -327,7 +333,8 @@
                 v-else
                 class="group-item"
                 :class="getGroupItemDragClass(item.group.name)"
-                @dragleave="handleDragLeave"
+                :data-node-id="item.group.name"
+                data-node-kind="group"
                 @dragover="handleDragOver($event, 'group', item.group.name)"
                 @drop="handleDrop($event, 'group', item.group.name)">
                 <div
@@ -336,7 +343,7 @@
                     getGroupHeaderDragClass(item.group.name),
                     { 'is-menu-open': activeGroupMenuId === item.group.name },
                   ]"
-                  draggable="true"
+                  :draggable="editingGroup !== item.group.name"
                   @click="handleGroupHeaderClick(item.group.name)"
                   @dragend="handleDragEnd"
                   @dragover.stop="onGroupHeaderDragOver($event, item.group.name)"
@@ -346,11 +353,13 @@
                     v-if="collapsedGroups.has(item.group.name)"
                     alt=""
                     class="group-icon"
+                    draggable="false"
                     :src="folderEmptyIcon">
                   <img
                     v-else
                     alt=""
                     class="group-icon"
+                    draggable="false"
                     :src="folderIcon">
 
                   <template v-if="editingGroup === item.group.name">
@@ -442,10 +451,12 @@
                         'is-menu-open': activeMenuId === conv.id,
                       },
                     ]"
-                    draggable="true"
+                    :data-node-group="item.group.name"
+                    :data-node-id="conv.id"
+                    data-node-kind="conversation"
+                    :draggable="editingConvId !== conv.id"
                     @click="$emit('select', conv.id)"
                     @dragend="handleDragEnd"
-                    @dragleave="handleDragLeave"
                     @dragover.stop="handleDragOver($event, 'conversation', conv.id, item.group.name)"
                     @dragstart.stop="handleDragStart($event, 'conversation', conv.id, item.group.name)"
                     @drop.stop="handleDrop($event, 'conversation', conv.id, item.group.name)">
@@ -471,8 +482,7 @@
                     </template>
                     <div
                       class="conv-actions"
-                      @click.stop
-                      @mousedown.stop>
+                      @click.stop>
                       <bk-dropdown
                         class="more-dropdown"
                         :is-show="activeMenuId === conv.id"
@@ -483,7 +493,8 @@
                         <div
                           class="action-btn"
                           :class="{ 'is-active': activeMenuId === conv.id }"
-                          @click.stop="toggleConvMenu(conv.id)">
+                          @click.stop="toggleConvMenu(conv.id)"
+                          @mousedown.stop>
                           <audit-icon type="more" />
                         </div>
                         <template #content>
@@ -1539,10 +1550,35 @@
   ));
 
   const historySectionRef = ref<HTMLElement | null>(null);
+  const conversationListRef = ref<HTMLElement | null>(null);
+
+  const DRAG_SCROLL_EDGE = 56;
+  const DRAG_SCROLL_MAX_SPEED = 720;
+  const lastDragPoint = { x: 0, y: 0 };
+  let dragScrollRaf = 0;
+  let dragScrollSpeed = 0;
+  let dragScrollLastTs = 0;
+  let dropSyncRaf = 0;
+  let documentDragOverHandler: ((e: DragEvent) => void) | null = null;
+  let listDragLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const setDragOverState = (next: {
+    type: 'group' | 'conversation' | 'history' | null;
+    id: string | null;
+    position: 'top' | 'bottom' | 'inside' | null;
+  }) => {
+    const cur = dragOverState.value;
+    if (cur.type === next.type && cur.id === next.id && cur.position === next.position) return;
+    dragOverState.value = next;
+  };
 
   const activateHistoryDropZone = () => {
     if (!isHistoryListEmpty.value || !isDraggingGroupedConv.value) return;
-    dragOverState.value = { type: 'history', id: 'history', position: 'inside' };
+    const alreadyActive = dragOverState.value.type === 'history'
+      && dragOverState.value.id === 'history'
+      && dragOverState.value.position === 'inside';
+    setDragOverState({ type: 'history', id: 'history', position: 'inside' });
+    if (alreadyActive) return;
     void nextTick(() => {
       historySectionRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
@@ -1587,6 +1623,7 @@
       && dragOverState.value.id === groupName
       && dragOverState.value.position === 'inside'
       && dragState.value.sourceGroup !== groupName,
+    'is-dragging-source': dragState.value.type === 'group' && dragState.value.id === groupName,
   });
 
   const getConvItemDragClass = (convId: string) => ({
@@ -1596,6 +1633,7 @@
     'is-drag-over-bottom': dragOverState.value.type === 'conversation'
       && dragOverState.value.id === convId
       && dragOverState.value.position === 'bottom',
+    'is-dragging-source': dragState.value.type === 'conversation' && dragState.value.id === convId,
   });
 
   const getGroupItemElement = (el: HTMLElement | null): HTMLElement | null => (
@@ -1607,7 +1645,7 @@
    * 跨组 / 折叠分组仍固定为 inside。
    */
   const resolveConvGroupDropPosition = (
-    e: DragEvent,
+    e: { clientX: number; clientY: number; currentTarget: EventTarget | null },
     groupName: string,
   ): 'top' | 'bottom' | 'inside' | null => {
     if (dragState.value.type !== 'conversation') return null;
@@ -1631,6 +1669,152 @@
     return 'inside';
   };
 
+  const applyDragOverAt = (
+    currentTarget: HTMLElement,
+    type: 'group' | 'conversation' | 'history',
+    id: string,
+    targetGroup?: string,
+  ) => {
+    const fakeEvent = {
+      clientX: lastDragPoint.x,
+      clientY: lastDragPoint.y,
+      currentTarget,
+    };
+
+    if (dragState.value.type === 'conversation' && type === 'conversation') {
+      const sameContainer = (dragState.value.sourceGroup || undefined) === (targetGroup || undefined);
+      if (!sameContainer) {
+        if (targetGroup) {
+          setDragOverState({ type: 'group', id: targetGroup, position: 'inside' });
+        } else if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+          activateHistoryDropZone();
+        }
+        return;
+      }
+      if (dragState.value.id === id) return;
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type, id, position });
+      return;
+    }
+
+    if (dragState.value.type === 'conversation' && type === 'history') {
+      if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+        activateHistoryDropZone();
+      }
+      return;
+    }
+
+    if (dragState.value.type === 'conversation' && type === 'group') {
+      if (dragState.value.sourceGroup === id) return;
+      const position = resolveConvGroupDropPosition(fakeEvent, id);
+      if (position) {
+        setDragOverState({ type, id, position });
+      }
+      return;
+    }
+
+    if (dragState.value.type === 'group' && type === 'group') {
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type, id, position });
+      return;
+    }
+
+    if (dragState.value.type === 'group' && type === 'conversation' && !targetGroup) {
+      if (dragState.value.id === id) return;
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type: 'conversation', id, position });
+    }
+  };
+
+  const applyDropTargetFromPoint = () => {
+    if (!dragState.value.type) return;
+    const list = conversationListRef.value;
+    if (!list) return;
+    const hits = document.elementsFromPoint(lastDragPoint.x, lastDragPoint.y);
+    const hit = hits.find((node): node is HTMLElement => (
+      node instanceof HTMLElement && list.contains(node)
+    ));
+    if (!hit) return;
+
+    const convEl = hit.closest<HTMLElement>('.conv-item[data-node-id]');
+    if (convEl && list.contains(convEl)) {
+      const groupName = convEl.dataset.nodeGroup || undefined;
+      if (dragState.value.type === 'conversation' || !groupName) {
+        applyDragOverAt(
+          convEl,
+          'conversation',
+          convEl.dataset.nodeId as string,
+          groupName,
+        );
+        return;
+      }
+    }
+
+    const groupItem = hit.closest<HTMLElement>('.group-item[data-node-id]');
+    const groupChildren = hit.closest<HTMLElement>('.group-children');
+    if (dragState.value.type === 'conversation' && groupChildren && groupItem?.dataset.nodeId) {
+      const groupName = groupItem.dataset.nodeId;
+      if (dragState.value.sourceGroup === groupName) return;
+      const position = resolveConvGroupDropPosition({
+        clientX: lastDragPoint.x,
+        clientY: lastDragPoint.y,
+        currentTarget: groupChildren,
+      }, groupName) ?? 'inside';
+      setDragOverState({ type: 'group', id: groupName, position });
+      return;
+    }
+
+    const groupHeader = hit.closest<HTMLElement>('.group-header');
+    if (dragState.value.type === 'conversation' && groupHeader && groupItem?.dataset.nodeId) {
+      const groupName = groupItem.dataset.nodeId;
+      if (dragState.value.sourceGroup === groupName) return;
+      const position = resolveConvGroupDropPosition({
+        clientX: lastDragPoint.x,
+        clientY: lastDragPoint.y,
+        currentTarget: groupHeader,
+      }, groupName);
+      if (position) {
+        setDragOverState({ type: 'group', id: groupName, position });
+      }
+      return;
+    }
+
+    if (groupItem?.dataset.nodeId) {
+      applyDragOverAt(groupItem, 'group', groupItem.dataset.nodeId);
+      return;
+    }
+
+    if (hit.closest('.conv-section--history')) {
+      applyDragOverAt(historySectionRef.value || list, 'history', 'history');
+    }
+  };
+
+  const scheduleDropTargetSync = () => {
+    if (dropSyncRaf) return;
+    dropSyncRaf = requestAnimationFrame(() => {
+      dropSyncRaf = 0;
+      applyDropTargetFromPoint();
+    });
+  };
+
+  const cancelDropTargetSync = () => {
+    if (!dropSyncRaf) return;
+    cancelAnimationFrame(dropSyncRaf);
+    dropSyncRaf = 0;
+  };
+
+  const noteDragPoint = (e: DragEvent) => {
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    scheduleDropTargetSync();
+  };
+
   // 拖拽处理
   const handleDragStart = (e: DragEvent, type: 'group' | 'conversation', id: string, sourceGroup?: string) => {
     const resolvedSourceGroup = sourceGroup
@@ -1641,105 +1825,192 @@
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', JSON.stringify({ type, id, sourceGroup: resolvedSourceGroup }));
     }
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
     dragState.value = { type, id, sourceGroup: resolvedSourceGroup };
     if (type === 'group') {
       suppressGroupHeaderClick.value = false;
     }
+    bindSidebarDragWatch();
   };
 
+  // 条目 dragover 只记录落点，插入线在下一帧按最终光标位置刷新，避免沿途轨迹追赶
   const handleDragOver = (
     e: DragEvent,
-    type: 'group' | 'conversation' | 'history',
-    id: string,
-    targetGroup?: string,
+    _type?: 'group' | 'conversation' | 'history',
+    _id?: string,
+    _targetGroup?: string,
   ) => {
     e.preventDefault();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
     }
-
-    if (dragState.value.type === 'conversation' && type === 'conversation') {
-      // 同列表（根层混排 / 组内互排）用上下插入线；跨容器落到会话上时沿用拖入/拖出分组样式
-      const sameContainer = (dragState.value.sourceGroup || undefined) === (targetGroup || undefined);
-      if (!sameContainer) {
-        if (targetGroup) {
-          dragOverState.value = { type: 'group', id: targetGroup, position: 'inside' };
-        } else if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
-          activateHistoryDropZone();
-        }
-        return;
-      }
-      if (dragState.value.id === id) {
-        return;
-      }
-      const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = targetRect.top + targetRect.height / 2;
-      const position = e.clientY < midY ? 'top' : 'bottom';
-      dragOverState.value = { type, id, position };
-    } else if (dragState.value.type === 'conversation' && type === 'history') {
-      // 拖入历史区域：根层无未分组会话时才展开投放位
-      if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
-        activateHistoryDropZone();
-      }
-    } else if (dragState.value.type === 'conversation' && type === 'group') {
-      if (dragState.value.sourceGroup !== id) {
-        const position = resolveConvGroupDropPosition(e, id);
-        if (position) {
-          dragOverState.value = { type, id, position };
-        }
-      }
-    } else if (dragState.value.type === 'group' && type === 'group') {
-      const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = targetRect.top + targetRect.height / 2;
-      const position = e.clientY < midY ? 'top' : 'bottom';
-      dragOverState.value = { type, id, position };
-    } else if (dragState.value.type === 'group' && type === 'conversation' && !targetGroup) {
-      if (dragState.value.id === id) return;
-      const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const midY = targetRect.top + targetRect.height / 2;
-      const position = e.clientY < midY ? 'top' : 'bottom';
-      dragOverState.value = { type: 'conversation', id, position };
-    }
+    noteDragPoint(e);
   };
 
   const handleDragLeave = () => {
-    dragOverState.value = { type: null, id: null, position: null };
+    setDragOverState({ type: null, id: null, position: null });
   };
 
   // 分组标题：跨组/折叠时归入分组；未分组且展开时按整项边沿区分根层排序与归入分组
-  const onGroupHeaderDragOver = (e: DragEvent, groupName: string) => {
+  const onGroupHeaderDragOver = (e: DragEvent, _groupName: string) => {
     if (dragState.value.type !== 'conversation') return;
-    if (dragState.value.sourceGroup === groupName) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    const position = resolveConvGroupDropPosition(e, groupName);
-    if (position) {
-      dragOverState.value = { type: 'group', id: groupName, position };
-    }
+    noteDragPoint(e);
   };
 
   // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
-  const onGroupChildrenDragOver = (e: DragEvent, groupName: string) => {
+  const onGroupChildrenDragOver = (e: DragEvent, _groupName: string) => {
     if (dragState.value.type !== 'conversation') return;
-    if (dragState.value.sourceGroup === groupName) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-      return;
-    }
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    const position = resolveConvGroupDropPosition(e, groupName) ?? 'inside';
-    dragOverState.value = { type: 'group', id: groupName, position };
+    noteDragPoint(e);
+  };
+
+  const stopDragAutoScroll = () => {
+    dragScrollSpeed = 0;
+    dragScrollLastTs = 0;
+    if (dragScrollRaf) {
+      cancelAnimationFrame(dragScrollRaf);
+      dragScrollRaf = 0;
+    }
+  };
+
+  const tickDragAutoScroll = (ts: number) => {
+    const list = conversationListRef.value;
+    if (!list || !dragState.value.type || dragScrollSpeed === 0) {
+      dragScrollRaf = 0;
+      return;
+    }
+    const last = dragScrollLastTs || ts;
+    const dt = Math.min(32, ts - last);
+    dragScrollLastTs = ts;
+    const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+    list.scrollTop = Math.max(0, Math.min(maxScroll, list.scrollTop + (dragScrollSpeed * dt) / 1000));
+    applyDropTargetFromPoint();
+    dragScrollRaf = requestAnimationFrame(tickDragAutoScroll);
+  };
+
+  const updateDragAutoScroll = (clientX: number, clientY: number) => {
+    const list = conversationListRef.value;
+    const sidebar = sidebarRootRef.value;
+    if (!list || !dragState.value.type) {
+      stopDragAutoScroll();
+      return;
+    }
+    if (list.scrollHeight <= list.clientHeight) {
+      stopDragAutoScroll();
+      return;
+    }
+    const sidebarRect = sidebar?.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const left = (sidebarRect?.left ?? listRect.left) - 32;
+    const right = (sidebarRect?.right ?? listRect.right) + 32;
+    if (clientX < left || clientX > right) {
+      stopDragAutoScroll();
+      return;
+    }
+
+    if (clientY < listRect.top + DRAG_SCROLL_EDGE) {
+      const intensity = clientY < listRect.top
+        ? 1
+        : (listRect.top + DRAG_SCROLL_EDGE - clientY) / DRAG_SCROLL_EDGE;
+      dragScrollSpeed = -Math.max(80, intensity * DRAG_SCROLL_MAX_SPEED);
+    } else if (clientY > listRect.bottom - DRAG_SCROLL_EDGE) {
+      const intensity = clientY > listRect.bottom
+        ? 1
+        : (clientY - (listRect.bottom - DRAG_SCROLL_EDGE)) / DRAG_SCROLL_EDGE;
+      dragScrollSpeed = Math.max(80, intensity * DRAG_SCROLL_MAX_SPEED);
+    } else {
+      stopDragAutoScroll();
+      return;
+    }
+
+    if (!dragScrollRaf) {
+      dragScrollLastTs = 0;
+      dragScrollRaf = requestAnimationFrame(tickDragAutoScroll);
+    }
+  };
+
+  const onDocumentDragOver = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    if (listDragLeaveTimer) {
+      clearTimeout(listDragLeaveTimer);
+      listDragLeaveTimer = null;
+    }
+    const sidebar = sidebarRootRef.value;
+    if (sidebar) {
+      const rect = sidebar.getBoundingClientRect();
+      if (
+        e.clientX >= rect.left - 32
+        && e.clientX <= rect.right + 32
+        && e.clientY >= rect.top - 8
+        && e.clientY <= rect.bottom + 8
+      ) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      }
+    }
+    updateDragAutoScroll(e.clientX, e.clientY);
+    scheduleDropTargetSync();
+  };
+
+  const bindSidebarDragWatch = () => {
+    if (documentDragOverHandler) return;
+    document.body.classList.add('is-chat-sidebar-dragging');
+    documentDragOverHandler = onDocumentDragOver;
+    document.addEventListener('dragover', documentDragOverHandler, true);
+  };
+
+  const stopSidebarDragWatch = () => {
+    document.body.classList.remove('is-chat-sidebar-dragging');
+    stopDragAutoScroll();
+    cancelDropTargetSync();
+    if (listDragLeaveTimer) {
+      clearTimeout(listDragLeaveTimer);
+      listDragLeaveTimer = null;
+    }
+    if (documentDragOverHandler) {
+      document.removeEventListener('dragover', documentDragOverHandler, true);
+      documentDragOverHandler = null;
+    }
+  };
+
+  onUnmounted(() => {
+    stopSidebarDragWatch();
+  });
+
+  const onConversationListDragOver = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    noteDragPoint(e);
+  };
+
+  const handleListDragLeave = () => {
+    if (listDragLeaveTimer) clearTimeout(listDragLeaveTimer);
+    listDragLeaveTimer = setTimeout(() => {
+      const list = conversationListRef.value;
+      if (!list || !dragState.value.type) return;
+      const rect = list.getBoundingClientRect();
+      const { x, y } = lastDragPoint;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        setDragOverState({ type: null, id: null, position: null });
+      }
+    }, 50);
   };
 
   const onGroupChildrenDrop = (e: DragEvent, groupName: string) => {
     if (dragState.value.type === 'conversation' && dragState.value.sourceGroup === groupName) {
       e.preventDefault();
       e.stopPropagation();
+      stopSidebarDragWatch();
       dragState.value = { type: null, id: null };
-      dragOverState.value = { type: null, id: null, position: null };
+      setDragOverState({ type: null, id: null, position: null });
       return;
     }
     handleDrop(e, 'group', groupName);
@@ -1764,6 +2035,10 @@
   ) => {
     e.preventDefault();
     e.stopPropagation();
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    cancelDropTargetSync();
+    applyDropTargetFromPoint();
     const { type, id, sourceGroup } = dragState.value;
     const { position } = dragOverState.value;
     const wasGroupDrag = type === 'group';
@@ -1834,8 +2109,9 @@
       }
     }
 
+    stopSidebarDragWatch();
     dragState.value = { type: null, id: null };
-    dragOverState.value = { type: null, id: null, position: null };
+    setDragOverState({ type: null, id: null, position: null });
     // drop 后仍可能补发 header click，需吞掉
     if (wasGroupDrag) {
       suppressGroupHeaderClick.value = true;
@@ -1847,8 +2123,9 @@
 
   const handleDragEnd = () => {
     const wasGroupDrag = dragState.value.type === 'group';
+    stopSidebarDragWatch();
     dragState.value = { type: null, id: null };
-    dragOverState.value = { type: null, id: null, position: null };
+    setDragOverState({ type: null, id: null, position: null });
     // 未落到可 drop 区域时只有 dragend；同样可能补发 click
     if (wasGroupDrag) {
       suppressGroupHeaderClick.value = true;
@@ -2615,6 +2892,9 @@
   };
 
   onDeactivated(() => {
+    stopSidebarDragWatch();
+    dragState.value = { type: null, id: null };
+    setDragOverState({ type: null, id: null, position: null });
     closeKeepAliveOverlays();
   });
 
