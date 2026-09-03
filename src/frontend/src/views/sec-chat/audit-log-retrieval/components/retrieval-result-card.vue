@@ -85,23 +85,15 @@
         </div>
       </div>
 
-      <!-- 过程信息（本期先隐藏「已调用工具」及描述） -->
+      <!-- 过程信息：仅展示思考耗时，不可折叠 -->
       <div
         v-if="!embedded"
         class="process-section">
-        <div
-          class="process-row"
-          @click="thinkExpanded = !thinkExpanded">
+        <div class="process-row">
           <audit-icon
             class="process-arrow"
-            :class="{ 'is-collapsed': !thinkExpanded }"
             type="angle-line-down" />
           <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
-        </div>
-        <div
-          v-if="thinkExpanded"
-          class="process-detail">
-          已根据自然语言意图匹配字段并生成检索条件
         </div>
       </div>
 
@@ -647,7 +639,6 @@
     + 'c.2-.2.3-.5.2-.8l-.6-2.4h2.4V1.5H4.1c-.7 0-1.3.5-1.4 1.2L2 6.9'
     + 'c-.1.7.4 1.4 1.2 1.4h-.6z';
 
-  const thinkExpanded = ref(false);
   const currentPage = ref(1);
   const pageSize = ref(10);
   const feedback = ref<'up' | 'down' | ''>('');
@@ -949,30 +940,12 @@
     font-size: 12px;
     line-height: 28px;
     color: #979ba5;
-    cursor: pointer;
     align-items: center;
     gap: 4px;
-    user-select: none;
-
-    &:hover {
-      color: #63656e;
-    }
 
     .process-arrow {
       font-size: 14px;
-      transition: transform .2s;
-
-      &.is-collapsed {
-        transform: rotate(-90deg);
-      }
     }
-  }
-
-  .process-detail {
-    padding: 4px 0 8px 18px;
-    font-size: 12px;
-    line-height: 20px;
-    color: #c4c6cc;
   }
 
   .status-panel {
