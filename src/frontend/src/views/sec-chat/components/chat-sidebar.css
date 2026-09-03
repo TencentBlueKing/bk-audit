@@ -88,6 +88,19 @@
     }
   }
 
+  &.is-sidebar-dragging {
+    cursor: grabbing;
+
+    .show-tooltips-text,
+    .conv-dot,
+    .group-icon,
+    .group-name,
+    .conv-actions,
+    .group-more-dropdown {
+      pointer-events: none !important;
+    }
+  }
+
   .sidebar-project {
     width: 100%;
     padding: 16px 16px 12px;
@@ -236,8 +249,9 @@
 
   /* 对话列表 */
   .conversation-list {
-    padding: 0 8px 16px;
+    padding: 0 8px 24px;
     overflow-y: auto;
+    overflow-anchor: none;
     flex: 1;
 
     &::-webkit-scrollbar {
@@ -247,6 +261,10 @@
     &::-webkit-scrollbar-thumb {
       background: #e6e9f0;
       border-radius: 2px;
+    }
+
+    &.is-dnd-active {
+      cursor: grabbing;
     }
 
 
@@ -271,6 +289,9 @@
         .conv-item--search {
           margin-right: 16px;
           margin-left: 16px;
+          cursor: pointer;
+          user-select: auto;
+          -webkit-user-drag: none;
         }
 
         .conv-group-tag {
@@ -420,11 +441,17 @@
         color: #63656e;
         cursor: grab;
         border-radius: 4px;
-        transition: background .15s;
+        transition: background .15s, opacity .15s;
+        user-select: none;
+        -webkit-user-drag: element;
         align-items: center;
 
         &:active {
           cursor: grabbing;
+        }
+
+        &.is-dragging-source {
+          opacity: 45%;
         }
 
         &:hover,
@@ -448,6 +475,8 @@
           margin-right: 6px;
           flex-shrink: 0;
           color: unset;
+          pointer-events: none;
+          -webkit-user-drag: none;
         }
 
         .group-name {
@@ -456,6 +485,8 @@
           font-size: 14px;
           text-overflow: ellipsis;
           white-space: nowrap;
+          pointer-events: none;
+          -webkit-user-drag: none;
           flex: 1;
 
           .group-count {
@@ -533,11 +564,17 @@
       margin-bottom: 2px;
       cursor: grab;
       border-radius: 4px;
-      transition: background .15s;
+      transition: background .15s, opacity .15s;
+      user-select: none;
+      -webkit-user-drag: element;
       align-items: center;
 
       &:active {
         cursor: grabbing;
+      }
+
+      &.is-dragging-source {
+        opacity: 45%;
       }
 
       /* 同列表排序插入线（用 ::after，避免与分组树 ::before 冲突） */
@@ -607,6 +644,7 @@
         font-size: 16px;
         line-height: 1;
         color: #c4c6cc;
+        pointer-events: none;
         flex-shrink: 0;
       }
 
@@ -618,6 +656,7 @@
         color: #313238;
         text-overflow: ellipsis;
         white-space: nowrap;
+        -webkit-user-drag: none;
         flex: 1;
       }
 
@@ -631,6 +670,8 @@
       .conv-title-input {
         flex: 1;
         margin-right: 8px;
+        pointer-events: auto;
+        user-select: text;
       }
 
       .conv-actions {
@@ -942,6 +983,11 @@
   /* &:hover {
     background: #e1ecff !important;
   } */
+}
+
+body.is-chat-sidebar-dragging .tippy-box {
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .chat-conv-dropdown-pop {
