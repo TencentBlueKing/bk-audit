@@ -72,7 +72,11 @@ export const exportLogSearchPreview = async (messageUid: string) => {
   try {
     await AiAssistantManageService.previewExport({
       message_uid: messageUid,
-      export_config: { flatten_extension: true },
+      export_config: {
+        field_scope: 'ai_standard',
+        flatten_extension: true,
+        fields: [],
+      },
     }, { catchError: true });
   } catch (error: any) {
     throw new Error(await resolveExportErrorMessage(error, '预览导出失败，请稍后重试'));
@@ -84,7 +88,7 @@ export const exportLogSearchPreview = async (messageUid: string) => {
  */
 export const exportLogSearchFull = async (
   messageUid: string,
-  exportConfig: AiExportConfig = { field_scope: 'all', flatten_extension: true, fields: [] },
+  exportConfig: AiExportConfig = { field_scope: 'ai_standard', flatten_extension: true, fields: [] },
 ): Promise<AiFullExportResult> => {
   try {
     const created = await AiAssistantManageService.fullExport({
