@@ -25,6 +25,7 @@ import type {
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
+  AiUpdateMessageParams,
 } from '@model/ai-assistant/types';
 
 import AiAssistantManageSource from '../source/ai-assistant-manage';
@@ -136,6 +137,12 @@ export default {
 
   createMessage(params: AiCreateMessageParams) {
     return AiAssistantManageSource.createMessage(params)
+      .then(({ data }) => data);
+  },
+
+  /** 编辑并重新执行消息（覆盖当前消息快照） */
+  updateMessage(params: AiUpdateMessageParams) {
+    return AiAssistantManageSource.updateMessage(params)
       .then(({ data }) => data);
   },
 
