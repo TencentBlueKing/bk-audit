@@ -24,7 +24,6 @@ export default {
   meta: {
     navName: 'auditRiskManage',
     isShowSceneSelector: true,
-    hideAllScenes: true,
   },
   children: [
     {
@@ -44,6 +43,7 @@ export default {
         title: '风险详情',
         isShowSceneSelector: false,
         routerBackName: 'confirmManageList',
+        keepAlive: false,
       },
     },
   ],
