@@ -181,14 +181,18 @@ class AiAssistantManage extends ModuleBase {
    * Query: export_config 为 JSON 字符串（paramsSerializer 自动序列化对象）。
    */
   previewExport(
-    params: { message_uid: string; export_config?: Pick<AiExportConfig, 'flatten_extension'> },
+    params: { message_uid: string; export_config?: AiExportConfig },
     payload = {} as IRequestPayload,
   ) {
     const { message_uid: messageUid, export_config: exportConfig } = params;
     return Request.get(`${this.module}/messages/${messageUid}/preview-export/`, {
       responseType: 'blob',
       params: {
-        export_config: exportConfig || { flatten_extension: true },
+        export_config: exportConfig || {
+          field_scope: 'ai_standard',
+          flatten_extension: true,
+          fields: [],
+        },
       },
       payload,
     });
@@ -205,7 +209,7 @@ class AiAssistantManage extends ModuleBase {
     return Request.post<AiFullExportResult>(`${this.module}/messages/${messageUid}/full-export/`, {
       params: {
         export_config: exportConfig || {
-          field_scope: 'all',
+          field_scope: 'ai_standard',
           flatten_extension: true,
           fields: [],
         },
