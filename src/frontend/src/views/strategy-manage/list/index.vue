@@ -118,7 +118,7 @@
                 || pendingStatusIdList.includes(strategyItem.strategy_id)
                 || isModelStrategy(strategyItem.strategy_type)
             }"
-            :permission="strategyItem.permission?.edit_strategy"
+            :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
             :resource="strategyItem.strategy_id"
             theme="primary"
             @click="handleEdit(strategyItem)">
@@ -158,7 +158,7 @@
           <auth-component
             v-else
             action-id="delete_strategy"
-            :permission="strategyItem.permission?.delete_strategy"
+            :permission="resolveStrategyPermission(strategyItem.permission?.delete_strategy)"
             :resource="strategyItem.strategy_id">
             <bk-button
               class="ml8"
@@ -184,13 +184,13 @@
               action-id="edit_strategy"
               disabled
               :model-value="strategyItem.status === 'running'"
-              :permission="strategyItem.permission?.edit_strategy"
+              :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
               :resource="strategyItem.strategy_id"
               theme="primary" />
             <auth-component
               v-else
               action-id="edit_strategy"
-              :permission="strategyItem.permission?.edit_strategy"
+              :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
               :resource="strategyItem.strategy_id">
               <audit-popconfirm
                 class="ml8"
@@ -297,6 +297,7 @@
   import IamManageService from '@service/iam-manage';
   import LinkDataManageService from '@service/link-data-manage';
   import NoticeGroupManageService from '@service/notice-group';
+  import RootManageService from '@service/root-manage';
   import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
@@ -392,6 +393,11 @@
   const route = useRoute();
   const strategyRoutes = getStrategyRouteNames(route);
   const isPlatformList = computed(() => isPlatformStrategyRoute(route.name));
+  /** 全局策略：以 my_role_permissions.manage_platform 判定管理员权限 */
+  const hasManagePlatform = ref(false);
+  const resolveStrategyPermission = (permission?: boolean) => (
+    isPlatformList.value ? hasManagePlatform.value : permission
+  );
   const sceneNameMap = ref<Record<string, string>>({});
   const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
 
@@ -981,7 +987,7 @@
             <auth-switch
               action-id="edit_strategy"
               disabled
-              permission={data.permission.edit_strategy}
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
               size="small"
               resource={data.strategy_id}
               theme="primary"
@@ -994,7 +1000,7 @@
         if (data.isPending || data.isFailed) {
           return <auth-switch
           action-id="edit_strategy"
-          permission={data.permission.edit_strategy}
+          permission={resolveStrategyPermission(data.permission.edit_strategy)}
           size="small"
           resource={data.strategy_id}
           theme="primary"
@@ -1012,7 +1018,7 @@
         confirmHandler={() => handleChange(data)}>
         <auth-switch
           action-id="edit_strategy"
-          permission={data.permission.edit_strategy}
+          permission={resolveStrategyPermission(data.permission.edit_strategy)}
           size="small"
           model-value={data.status === 'running'}
           resource={data.strategy_id}
@@ -1059,7 +1065,7 @@
               <auth-button
                 actionId="delete_strategy"
                 class="ml8"
-                permission={data.permission.delete_strategy}
+                permission={resolveStrategyPermission(data.permission.delete_strategy)}
                 resource={data.strategy_id}
                 theme="primary"
                 text
@@ -1071,7 +1077,7 @@
           return <>
             <auth-button
               actionId="edit_strategy"
-              permission={data.permission.edit_strategy}
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
               resource={data.strategy_id}
               theme="primary"
               text
@@ -1081,7 +1087,7 @@
             <auth-button
               actionId="delete_strategy"
               class="ml8"
-              permission={data.permission.delete_strategy}
+              permission={resolveStrategyPermission(data.permission.delete_strategy)}
               resource={data.strategy_id}
               theme="primary"
               text
@@ -1121,7 +1127,7 @@
           >
             <auth-button
               actionId="edit_strategy"
-              permission={data.permission.edit_strategy}
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
               resource={data.strategy_id}
               v-bk-tooltips={{
                 content: data.strategy_type === 'rule' ? t('策略使用的联表，有新版本待升级') : t('策略使用的方案，有新版本待升级'),
@@ -1201,7 +1207,7 @@
                     <auth-button
                       style="width: 100%;"
                       actionId="delete_strategy"
-                      permission={data.permission.delete_strategy}
+                      permission={resolveStrategyPermission(data.permission.delete_strategy)}
                       resource={data.strategy_id}
                       onClick={() => handleDelete(data)}
                       text>
@@ -1319,15 +1325,36 @@
   });
 
 
-  // 获取策略新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
+  // 获取策略新建权限：审计策略走 IAM check；全局策略走 my_role_permissions.manage_platform
+  useRequest(async () => {
+    if (isPlatformStrategyRoute(route.name)) {
+      const data = await RootManageService.getUserPermission();
+      return {
+        fromRolePermission: true,
+        manage_platform: Boolean(data.manage_platform),
+      };
+    }
+    const data = await IamManageService.check({
       action_ids: 'create_strategy_v2',
       resources: getSceneSystemParams().scope_id,
+    });
+    return {
+      fromRolePermission: false,
+      create_strategy_v2: data.create_strategy_v2,
+    };
+  }, {
+    defaultValue: {
+      fromRolePermission: false,
+      create_strategy_v2: false,
+      manage_platform: false,
     },
-    defaultValue: {},
     manual: true,
     onSuccess: (data) => {
+      if (data.fromRolePermission) {
+        hasManagePlatform.value = Boolean(data.manage_platform);
+        permissionCheckData.value = Boolean(data.manage_platform);
+        return;
+      }
       permissionCheckData.value = data.create_strategy_v2;
     },
   });
@@ -1759,9 +1786,11 @@
   let initialListFetchScheduled = false;
   const handleRequestSuccess = (data: Strategy) => {
     hasListLoadedOnce.value = true;
-    // 先检验策略列表权限再获取通知组
+    // 先检验策略列表权限再获取通知组；全局策略不传场景 id
     if (!groupList.value.results.length) {
-      fetchGroupList();
+      fetchGroupList(isPlatformList.value
+        ? { scene_id: null }
+        : {});
     }
     if (!isRequest) {
       Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {

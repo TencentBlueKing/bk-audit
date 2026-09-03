@@ -35,9 +35,9 @@ export default {
    * @desc 获取通知组列表
    */
   fetchGroupList(params: {
-    page: number,
-    page_size : number,
-    scene_id?: string | number;
+    page?: number,
+    page_size?: number,
+    scene_id?: string | number | null;
   }) {
     return NoticeGroupSource.getGroupList(
       params,

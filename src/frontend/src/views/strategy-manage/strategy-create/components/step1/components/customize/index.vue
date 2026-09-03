@@ -1450,9 +1450,13 @@
       dataSourcePickerRef.value?.flushEventLogSelection?.();
       const params = _.cloneDeep(formData.value);
       // 预期结果为空等价 select *，但接口 select 不能为空：下一步/提交时自动选中数据源全部字段（不回显到预期结果 UI）
+      // 未配置预期结果时不要使用字段别名：display_name 与字段名保持一致
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {
-        params.configs.select = _.cloneDeep(tableFields.value);
+        params.configs.select = _.cloneDeep(tableFields.value).map(item => ({
+          ...item,
+          display_name: item.raw_name,
+        }));
       }
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
