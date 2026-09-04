@@ -16,14 +16,14 @@
 -->
 <template>
   <span
-    v-if="riskLevelMap[levelData[data.strategy_id]?.risk_level]"
+    v-if="riskLevelMap[data.risk_level]"
     :style="{
-      'background-color': riskLevelMap[levelData[data.strategy_id].risk_level].color,
+      'background-color': riskLevelMap[data.risk_level].color,
       padding: '3px 8px',
       'border-radius': '3px',
       color: 'white'
     }">
-    {{ riskLevelMap[levelData[data.strategy_id].risk_level].label }}
+    {{ riskLevelMap[data.risk_level].label }}
   </span>
   <span v-else>--</span>
 </template>
@@ -37,24 +37,13 @@
   import type RiskManageModel from '@model/risk/risk';
 
   interface RiskItem {
-    current_operator: Array<string>;
-    event_end_time: string;
-    event_time: string;
-    operator: Array<string>;
-    risk_id: string;
-    risk_label: string;
-    risk_level: string
-    status: string;
-    strategy_id: number;
-    title: string;
+    risk_id: string | number;
+    risk_level?: string;
+    strategy_id?: number;
+    title?: string;
   }
 
   interface Props{
-    levelData: {
-      [key: string]: {
-        risk_level: string
-      }
-    },
     data: RiskManageModel | RiskItem,
   }
 
