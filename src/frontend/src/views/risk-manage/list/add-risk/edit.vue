@@ -42,7 +42,7 @@
                   v-model="formData.strategy_id"
                   class="bk-select"
                   filterable
-                  @select="handleSelect">
+                  @change="handleStrategyChange">
                   <bk-option
                     v-for="item in strategyResults"
                     :id="item.strategy_id"
@@ -65,13 +65,72 @@
                       </template>
                     </bk-popover>
                     <span v-else>
-
                       {{ `${item.strategy_name} (${item.strategy_id})` }}
                     </span>
                   </bk-option>
                 </bk-select>
               </bk-form-item>
 
+              <bk-form-item
+                class="base-item"
+                :label="t('风险发现规则')"
+                property="strategy_rule_id"
+                required>
+                <bk-select
+                  v-model="formData.strategy_rule_id"
+                  class="bk-select"
+                  :disabled="!formData.strategy_id"
+                  filterable
+                  :loading="strategyDetailLoading"
+                  :placeholder="formData.strategy_id ? t('请选择') : t('请先选择审计策略')"
+                  @change="handleRuleChange">
+                  <bk-option
+                    v-for="item in ruleOptions"
+                    :id="item.id"
+                    :key="item.id"
+                    :name="item.name" />
+                </bk-select>
+              </bk-form-item>
+            </div>
+
+            <div
+              v-if="selectedRule"
+              class="rule-detail">
+              <div class="rule-field-row">
+                <span class="rule-field-label">{{ t('命中条件') }}:</span>
+                <div class="rule-field-value">
+                  <rule-condition-display
+                    :operator-map="operatorMap"
+                    :where="selectedRule.where" />
+                </div>
+              </div>
+              <div class="rule-field-row">
+                <span class="rule-field-label">{{ t('风险单标题') }}:</span>
+                <span class="rule-field-value">{{ selectedRule.risk_title || '--' }}</span>
+              </div>
+              <div class="rule-field-row">
+                <span class="rule-field-label">{{ t('命中等级') }}:</span>
+                <span class="rule-field-value">
+                  <span
+                    v-if="selectedRule.risk_level && riskLevelMap[selectedRule.risk_level]"
+                    class="risk-level-tag"
+                    :style="{ backgroundColor: riskLevelMap[selectedRule.risk_level].color }">
+                    {{ riskLevelMap[selectedRule.risk_level].label }}
+                  </span>
+                  <span v-else>--</span>
+                </span>
+              </div>
+              <div class="rule-field-row">
+                <span class="rule-field-label">{{ t('风险危害') }}:</span>
+                <span class="rule-field-value">{{ selectedRule.risk_hazard || '--' }}</span>
+              </div>
+              <div class="rule-field-row">
+                <span class="rule-field-label">{{ t('处理指引') }}:</span>
+                <span class="rule-field-value">{{ selectedRule.risk_guidance || '--' }}</span>
+              </div>
+            </div>
+
+            <div class="base-form-item">
               <bk-form-item
                 class="base-item"
                 :label="t('事件发生时间')"
@@ -93,8 +152,17 @@
       :show-icon="false"
       :title="t('事件数据')">
       <template #content>
-        <div v-if="eventList.length === 0">
-          {{ t('暂无数据') }}
+        <div
+          v-if="!formData.strategy_id || eventList.length === 0"
+          class="event-empty">
+          <bk-exception
+            scene="part"
+            type="empty">
+            <div>{{ t('暂无数据') }}</div>
+            <div class="event-empty-tip">
+              {{ formData.strategy_id ? t('该策略暂无事件数据字段') : t('请先选择审计策略') }}
+            </div>
+          </bk-exception>
         </div>
         <div
           v-else
@@ -125,9 +193,6 @@
             </div>
             <div
               class="table-label border-right field-type-box">
-              <!-- <span
-                v-if="item?.field_type"
-                class="field-type">{{ item?.field_type }}</span> -->
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -148,21 +213,12 @@
               </span>
             </div>
             <div class="table-type border-right">
-              <!-- {{ item.typeValue }} {{ item.field_type }} -->
               <bk-select
                 v-model="item.typeValue"
                 behavior="simplicity"
                 class="field-type-list"
                 :filterable="false"
                 style=" height: 100%;background-color: #fff;">
-                <!-- <template #trigger="{ selected }">
-                  <div class="trigger">
-                    {{ selected[0]?.label }}
-                    <audit-icon
-                      class="table-info-fill"
-                      type="angle-line-down" />
-                  </div>
-                </template> -->
                 <bk-option
                   v-for="type in item.fieldTypeList"
                   :id="type.typeValue"
@@ -186,12 +242,22 @@
 </template>
 
   <script lang="ts" setup>
-  import { nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
+
+  import useRequest from '@hooks/use-request';
+
   import CardPartVue from '../../../scene-config/tool-manege/create-tool/components/card-part.vue';
+  import RuleConditionDisplay from '../../../strategy-manage/list/components/rule-condition-display.vue';
+  import {
+    getRuleWhere,
+    type RuleDisplayItem,
+  } from '../../../strategy-manage/list/components/use-strategy-detail-rules';
+  import { parseStrategyDetailToForm } from '../../../strategy-manage/strategy-create/utils/strategy-protocol';
 
   import fieldCom from './field-components.vue';
 
@@ -220,15 +286,67 @@
 
   const { t } = useI18n();
   const formData = ref({
-    strategy_id: '',
+    strategy_id: '' as string | number,
+    strategy_rule_id: '' as string | number,
     event_time: new Date(),
   });
-  const rules = ref();
+  const rules = {
+    strategy_id: [{
+      required: true,
+      message: t('请选择审计策略'),
+      trigger: 'change',
+    }],
+    strategy_rule_id: [{
+      required: true,
+      message: t('请选择风险发现规则'),
+      trigger: 'change',
+    }],
+    event_time: [{
+      required: true,
+      message: t('请选择事件发生时间'),
+      trigger: 'change',
+    }],
+  };
   const formRef = ref();
   const fieldComRef = ref();
-  const selectedValue = ref('');
   const eventList = ref<Array<Record<string, any>>>([]);
-  const selectedRiskValue = ref();
+  const selectedRiskValue = ref<Record<string, any>>();
+  const ruleOptions = ref<RuleDisplayItem[]>([]);
+  const strategyDetailLoading = ref(false);
+
+  const riskLevelMap: Record<string, { label: string; color: string }> = {
+    HIGH: {
+      label: t('高'),
+      color: '#ea3636',
+    },
+    MIDDLE: {
+      label: t('中'),
+      color: '#ff9c01',
+    },
+    LOW: {
+      label: t('低'),
+      color: '#979ba5',
+    },
+  };
+
+  const {
+    data: commonData,
+    run: fetchStrategyCommon,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+  });
+
+  const operatorMap = computed(() => (
+    commonData.value.rule_audit_condition_operator || []
+  ).reduce((res, item) => {
+    res[item.value] = item.label;
+    return res;
+  }, {} as Record<string, string>));
+
+  const selectedRule = computed(() => ruleOptions.value.find(item => (
+    String(item.id) === String(formData.value.strategy_rule_id)
+  )));
 
   const buildEventList = (strategy: Record<string, any>) => {
     eventList.value = strategy?.event_data_field_configs?.map((item: Record<string, any>) => {
@@ -255,25 +373,82 @@
     }).filter((e: Record<string, any>) => e.is_show) || [];
   };
 
-  const applySelectedStrategy = (strategy: Record<string, any> | undefined) => {
-    selectedRiskValue.value = strategy;
-    buildEventList(strategy || {});
+  const resolveRuleOptions = (strategy: Record<string, any>): RuleDisplayItem[] => {
+    const parsed = parseStrategyDetailToForm(strategy);
+    let ruleList: Array<Record<string, any>> = [];
+    if (parsed.rules?.length) {
+      ruleList = parsed.rules;
+    } else if (Array.isArray(strategy.rules)) {
+      ruleList = strategy.rules;
+    }
+    return ruleList.map((rule: Record<string, any>, index: number) => {
+      const realId = rule.id ?? rule.rule_id ?? rule.strategy_rule_id;
+      return {
+        id: realId ?? `temp_${index}`,
+        name: rule.rule_name || rule.name || `${t('规则')}${index + 1}`,
+        where: getRuleWhere(rule),
+        risk_title: rule.risk_title ?? strategy.risk_title ?? '',
+        risk_level: rule.risk_level ?? strategy.risk_level ?? '',
+        risk_hazard: rule.risk_hazard ?? strategy.risk_hazard ?? '',
+        risk_guidance: rule.risk_guidance ?? strategy.risk_guidance ?? '',
+        processor: rule.processor ?? [],
+        follower: rule.follower ?? [],
+      };
+    });
   };
 
-  const handleSelect = (value: string) => {
-    selectedValue.value = value;
-    if (props.useAllStrategyList) {
-      StrategyManageService.fetchStrategyInfo({ strategy_id: Number(value) }).then((strategy) => {
-        if (strategy) {
-          applySelectedStrategy(strategy);
-        }
-      });
+  const applySelectedStrategy = (strategy: Record<string, any> | undefined, keepRuleId = false) => {
+    selectedRiskValue.value = strategy;
+    buildEventList(strategy || {});
+    ruleOptions.value = strategy ? resolveRuleOptions(strategy) : [];
+    if (!keepRuleId) {
+      formData.value.strategy_rule_id = '';
+    }
+    if (keepRuleId && formData.value.strategy_rule_id) {
+      syncSelectedRuleToStrategy();
+    }
+  };
+
+  const syncSelectedRuleToStrategy = () => {
+    if (!selectedRiskValue.value || !selectedRule.value) {
       return;
     }
-    const matchedStrategy = strategyResults.value
-      .find((item: Record<string, any>) => String(item.strategy_id) === String(value));
-    applySelectedStrategy(matchedStrategy);
+    selectedRiskValue.value = {
+      ...selectedRiskValue.value,
+      risk_title: selectedRule.value.risk_title,
+      risk_level: selectedRule.value.risk_level,
+      risk_hazard: selectedRule.value.risk_hazard,
+      risk_guidance: selectedRule.value.risk_guidance,
+    };
   };
+
+  const loadStrategyDetail = async (strategyId: string | number, keepRuleId = false) => {
+    strategyDetailLoading.value = true;
+    try {
+      const strategy = await StrategyManageService.fetchStrategyInfo({
+        strategy_id: Number(strategyId),
+      });
+      applySelectedStrategy(strategy, keepRuleId);
+    } finally {
+      strategyDetailLoading.value = false;
+    }
+  };
+
+  const handleStrategyChange = (value: string | number) => {
+    formData.value.strategy_rule_id = '';
+    ruleOptions.value = [];
+    eventList.value = [];
+    selectedRiskValue.value = undefined;
+    if (!value) {
+      return;
+    }
+    loadStrategyDetail(value);
+  };
+
+  const handleRuleChange = () => {
+    syncSelectedRuleToStrategy();
+  };
+
   const typeList = ref([
     {
       label: t('输入框'),
@@ -364,6 +539,7 @@
 
   onMounted(() => {
     loadStrategyList();
+    fetchStrategyCommon();
   });
 
   defineExpose<Exposes>({
@@ -373,26 +549,23 @@
         formData: { ...formData.value, event_time: convertGMTTimeToStandard(formData.value.event_time)  },
         eventData: eventList.value,
         selectedRiskValue: selectedRiskValue.value,
+        selectedRule: selectedRule.value,
       };
     },
     // 回显数据
     handlerReturnData(data: any) {
       nextTick(() => {
-        selectedValue.value = data.formData.strategy_id;
-        formData.value = data.formData;
-        eventList.value = data.eventData;
-        if (props.useAllStrategyList) {
-          loadStrategyList().then(() => StrategyManageService.fetchStrategyInfo({
-            strategy_id: Number(data.formData.strategy_id),
-          }).then((strategy) => {
-            selectedRiskValue.value = strategy;
-          }));
-          return;
-        }
-        loadStrategyList().then(() => {
-          selectedRiskValue.value = strategyResults.value
-            .find((item: any) => item.strategy_id === data.formData.strategy_id);
-        });
+        formData.value = {
+          ...data.formData,
+          strategy_rule_id: data.formData.strategy_rule_id ?? '',
+        };
+        const cachedEventData = data.eventData;
+        selectedRiskValue.value = data.selectedRiskValue;
+        loadStrategyList().then(() => loadStrategyDetail(data.formData.strategy_id, true).then(() => {
+          if (cachedEventData?.length) {
+            eventList.value = cachedEventData;
+          }
+        }));
       });
     },
     validate() {
@@ -424,6 +597,58 @@
 
         /* 可选，增加文字和虚线间距 */
         border-bottom: 1px dashed #c4c6cc;
+      }
+    }
+
+    .rule-detail {
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      background: #f5f7fa;
+      border-radius: 2px;
+
+      .rule-field-row {
+        display: flex;
+        margin-bottom: 12px;
+        line-height: 22px;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+
+      .rule-field-label {
+        flex: 0 0 80px;
+        min-width: 80px;
+        color: #979ba5;
+        text-align: right;
+      }
+
+      .rule-field-value {
+        flex: 1;
+        padding-left: 14px;
+        color: #63656e;
+        word-break: break-all;
+      }
+
+      .risk-level-tag {
+        display: inline-block;
+        min-width: 24px;
+        padding: 2px 8px;
+        font-size: 12px;
+        line-height: 18px;
+        color: #fff;
+        text-align: center;
+        border-radius: 2px;
+      }
+    }
+
+    .event-empty {
+      padding: 24px 0;
+
+      .event-empty-tip {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #979ba5;
       }
     }
 

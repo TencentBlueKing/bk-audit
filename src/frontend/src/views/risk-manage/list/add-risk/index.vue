@@ -168,10 +168,16 @@
       ...acc,
       [item.field_name]: item.value,
     }), {});
+    const ruleId = editData.value.formData.strategy_rule_id;
+    const strategyRuleId = ruleId !== '' && ruleId !== null && ruleId !== undefined
+      && !String(ruleId).startsWith('temp_')
+      ? Number(ruleId)
+      : null;
     const params = {
       events: [
         {
           strategy_id: editData.value.formData.strategy_id,
+          strategy_rule_id: Number.isFinite(strategyRuleId as number) ? strategyRuleId : null,
           event_data: eventDataParams,
           event_time: convertToTimestamp(editData.value.formData.event_time),
         },
