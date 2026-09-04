@@ -78,7 +78,7 @@ class SceneStrategyNotDisabled(SceneException):
 
 
 class SceneDispatchRuleNotDisabled(SceneException):
-    MESSAGE = gettext_lazy("场景被启用的分派规则引用，请先停用对应策略或移除分派规则后再删除")
+    MESSAGE = gettext_lazy("被策略的分派规则引用的场景不可删除，请先停用对应策略或移除分派规则后再删除")
     ERROR_CODE = "009"
 
     def __init__(
@@ -97,7 +97,6 @@ class SceneDispatchRuleNotDisabled(SceneException):
         if not strategy_ids:
             return str(cls.MESSAGE)
         return f"{cls.MESSAGE}：{', '.join(str(strategy_id) for strategy_id in strategy_ids[:10])}"
-
 
 class PanelNotExist(SceneException):
     MESSAGE = gettext_lazy("报表不存在")

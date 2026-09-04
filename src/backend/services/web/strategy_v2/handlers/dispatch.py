@@ -26,7 +26,7 @@ from services.web.strategy_v2.models import DispatchRule, Strategy
 """
 分派规则匹配器: Python 内存求值
 
-字段词表（可引用字段，"分派规则字段词表"契约的具体内容）：
+字段词表（可引用字段）：
 - 事件输出字段：EventMappingFields 定义的全部字段（strategy_id/strategy_rule_id/event_data/
   event_type/event_time/event_source/operator/raw_event_id/event_content...）
 - 规则实例化字段：risk_level、risk_hazard / risk_guidance
