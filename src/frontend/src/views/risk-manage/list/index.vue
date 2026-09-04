@@ -231,7 +231,7 @@
 
   const buildBaseTableColumns = () => useRiskColumns({
     t,
-    deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+    deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
     detailRouteName: 'riskManageDetail',
     overrides: {
       // risk_id 列：stand_by 状态不可点击
@@ -332,7 +332,6 @@
 
   const tableColumns = computed(() => {
     touchRiskColumnDeps({
-      levelData,
       strategyTagMap,
       strategyList,
       riskStatusCommon,
@@ -504,12 +503,6 @@
     scene_id: Number(item.scene_id || item.id),
     name: item.name,
   })) || []);
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
 
   const {
     run: fetchRiskList,
@@ -534,10 +527,6 @@
       return;
     }
 
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
     if (results.some(item => item.status === 'stand_by')) {
       // 执行定时器
       safeSetTimeout(() => {

@@ -30,7 +30,6 @@ import { findStrategyLabel, formatStrategyNameWithId } from '@utils/format-strat
 export type RiskColumnTranslate = (key: string, ...args: any[]) => string;
 
 export interface RiskColumnDeps {
-  levelData: Ref<Record<string, any>>;
   strategyTagMap: Ref<Record<string, string>>;
   strategyList:
     | Ref<Array<{ value: number | string; label: string }>>
@@ -69,7 +68,7 @@ export const createRiskIdColumn = (routeName: string, t: RiskColumnTranslate) =>
 
 export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTranslate) => {
   const statusToMap = RISK_STATUS_TAG_MAP;
-  const { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail } = deps;
+  const { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail } = deps;
 
   return [
     // 多选列
@@ -104,7 +103,6 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
       sortType: 'all',
       sorter: true,
       cell: (_h: any, { row }: { row: RiskManageModel }) => h(RiskLevel, {
-        levelData: levelData.value,
         data: row,
       }),
     },

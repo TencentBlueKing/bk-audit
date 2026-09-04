@@ -81,7 +81,6 @@
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
@@ -146,7 +145,6 @@
 
   const tableColumns = computed(() => {
     touchRiskColumnDeps({
-      levelData,
       strategyTagMap,
       strategyList,
       riskStatusCommon,
@@ -155,7 +153,7 @@
     });
     const initTableColumns = useRiskColumns({
       t,
-      deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
       detailRouteName: 'confirmManageDetail',
       appendColumns: [actionColumn],
     });
@@ -380,19 +378,8 @@
     defaultValue: [],
   });
 
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
+  const handleRequestSuccess = () => {
     window.changeConfirm = false;
-    if (!results.length) return;
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
   };
 
   const handleModelValueWatch = (val: any) => {
