@@ -832,7 +832,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "event_data",
             "tags",
             "risk_label",
-            "experiences",
+            "risk_level",
             "last_operate_time",
             "title",
             "has_report",
@@ -1599,6 +1599,14 @@ class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
         default="",
         help_text=gettext_lazy("会话标识，用于多轮对话。不传则每次生成新的。"),
     )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("当前搜索所属的风险视图类型（如 all/scene/confirm），用于记录搜索历史。"),
+    )
 
 
 class NL2RiskFilterResponseSerializer(serializers.Serializer):
@@ -1614,6 +1622,14 @@ class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+    )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按风险视图类型过滤搜索历史，如 all/scene/confirm。"),
     )
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
@@ -1632,6 +1648,7 @@ class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
             "query",
             "response_data",
             "status",
+            "risk_view_type",
         ]
 
 

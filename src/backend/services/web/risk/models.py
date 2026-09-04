@@ -53,6 +53,7 @@ from services.web.risk.constants import (
     RiskLabel,
     RiskReportStatus,
     RiskStatus,
+    RiskViewType,
     TicketNodeStatus,
 )
 from services.web.strategy_v2.models import (
@@ -1063,6 +1064,14 @@ class NL2RiskFilterLog(OperateRecordModel):
         db_index=True,
     )
     error_message = models.TextField(gettext_lazy("错误信息"), blank=True, default="")
+    risk_view_type = models.CharField(
+        gettext_lazy("风险视图类型"),
+        max_length=32,
+        choices=RiskViewType.choices,
+        blank=True,
+        default="",
+        db_index=True,
+    )
 
     @staticmethod
     def build_query_hash(query: str) -> str:
@@ -1086,6 +1095,7 @@ class NL2RiskFilterLog(OperateRecordModel):
         response_data: Optional[dict] = None,
         status: str = NL2RiskFilterLogStatus.SUCCESS,
         error_message: str = "",
+        risk_view_type: str = "",
         result: Optional[str] = None,
         message: str = "",
     ) -> None:
@@ -1109,6 +1119,7 @@ class NL2RiskFilterLog(OperateRecordModel):
                 response_data=payload,
                 status=status,
                 error_message=(error_message or "")[:65535],
+                risk_view_type=risk_view_type,
                 created_by=username,
                 updated_by=username,
             )
