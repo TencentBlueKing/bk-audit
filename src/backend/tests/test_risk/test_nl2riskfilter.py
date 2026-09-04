@@ -9,7 +9,7 @@ from unittest.mock import patch
 from django.test import override_settings
 from django.utils import timezone
 
-from services.web.risk.constants import NL2RiskFilterLogStatus
+from services.web.risk.constants import NL2RiskFilterLogStatus, RiskViewType
 from services.web.risk.exceptions import NL2RiskFilterServiceError
 from services.web.risk.handlers.nl2riskfilter import (
     build_nl2risk_user_message,
@@ -23,6 +23,7 @@ from services.web.risk.resources.risk import (
 )
 from services.web.risk.serializers import (
     ListNL2RiskFilterLogRequestSerializer,
+    NL2RiskFilterLogResponseSerializer,
     NL2RiskFilterRequestSerializer,
 )
 from tests.base import TestCase
@@ -87,6 +88,24 @@ class NL2RiskFilterRequestSerializerTest(TestCase):
         serializer = NL2RiskFilterRequestSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertIn("tags", serializer.errors)
+
+    def test_risk_view_type_optional_default_empty(self):
+        """risk_view_type 可选，默认空字符串"""
+        serializer = NL2RiskFilterRequestSerializer(data={"query": "查询风险"})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["risk_view_type"], "")
+
+    def test_risk_view_type_accepts_valid_choice(self):
+        """合法 risk_view_type 通过校验"""
+        serializer = NL2RiskFilterRequestSerializer(data={"query": "确认风险", "risk_view_type": RiskViewType.CONFIRM})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["risk_view_type"], RiskViewType.CONFIRM)
+
+    def test_risk_view_type_rejects_invalid_choice(self):
+        """非法 risk_view_type 被拒绝"""
+        serializer = NL2RiskFilterRequestSerializer(data={"query": "查询风险", "risk_view_type": "invalid_type"})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("risk_view_type", serializer.errors)
 
 
 class BuildNL2RiskUserMessageTest(TestCase):
@@ -501,6 +520,30 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
         query_hashes = set(NL2RiskFilterLog.objects.values_list("query_hash", flat=True))
         self.assertEqual(len(query_hashes), 2)
 
+    def test_save_persists_risk_view_type(self):
+        """保存日志时 risk_view_type 被正确落库"""
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query="确认风险",
+            request_params={"query": "确认风险", "risk_view_type": RiskViewType.CONFIRM},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            risk_view_type=RiskViewType.CONFIRM,
+        )
+        log = NL2RiskFilterLog.objects.first()
+        self.assertEqual(log.risk_view_type, RiskViewType.CONFIRM)
+
+    def test_save_default_risk_view_type_empty(self):
+        """不传 risk_view_type 时默认为空字符串"""
+        NL2RiskFilterLog.save_nl2risk_filter_log(
+            username="admin",
+            query="普通查询",
+            request_params={},
+            response_data={},
+        )
+        log = NL2RiskFilterLog.objects.first()
+        self.assertEqual(log.risk_view_type, "")
+
 
 class NL2RiskFilterWithLoggingTest(TestCase):
     """NL2RiskFilter Resource 日志记录集成测试"""
@@ -553,6 +596,34 @@ class NL2RiskFilterWithLoggingTest(TestCase):
         call_kwargs = mock_save_log.call_args[1]
         self.assertEqual(call_kwargs["status"], NL2RiskFilterLogStatus.API_ERROR)
         self.assertIn("Connection refused", call_kwargs["error_message"])
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_success_passes_risk_view_type(self, mock_chat, mock_user, mock_save_log):
+        """成功路径：risk_view_type 透传给日志保存，并写入 request_params"""
+        mock_chat.return_value = '{"filter_conditions": {"level": "high"}}'
+
+        self.resource.request({"query": "确认风险", "risk_view_type": RiskViewType.CONFIRM})
+
+        mock_save_log.assert_called_once()
+        call_kwargs = mock_save_log.call_args[1]
+        self.assertEqual(call_kwargs["risk_view_type"], RiskViewType.CONFIRM)
+        self.assertEqual(call_kwargs["request_params"]["risk_view_type"], RiskViewType.CONFIRM)
+
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_api_error_passes_risk_view_type(self, mock_chat, mock_user, mock_save_log):
+        """异常路径：risk_view_type 同样透传给日志保存"""
+        mock_chat.side_effect = Exception("Connection refused")
+
+        with self.assertRaises(NL2RiskFilterServiceError):
+            self.resource.request({"query": "测试", "risk_view_type": RiskViewType.SCENE})
+
+        mock_save_log.assert_called_once()
+        call_kwargs = mock_save_log.call_args[1]
+        self.assertEqual(call_kwargs["risk_view_type"], RiskViewType.SCENE)
 
     @patch("services.web.risk.resources.risk.NL2RiskFilterFailedEvent")
     @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
@@ -644,6 +715,38 @@ class ListNL2RiskFilterLogRequestSerializerTest(TestCase):
         ser = ListNL2RiskFilterLogRequestSerializer(data={"status": "invalid_status"})
         self.assertFalse(ser.is_valid())
 
+    def test_risk_view_type_optional_default_empty(self):
+        """risk_view_type 可选，默认空字符串"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={})
+        self.assertTrue(ser.is_valid(), ser.errors)
+        self.assertEqual(ser.validated_data["risk_view_type"], "")
+
+    def test_risk_view_type_accepts_valid_choice(self):
+        """合法 risk_view_type 通过校验"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={"risk_view_type": RiskViewType.SCENE})
+        self.assertTrue(ser.is_valid(), ser.errors)
+        self.assertEqual(ser.validated_data["risk_view_type"], RiskViewType.SCENE)
+
+    def test_invalid_risk_view_type(self):
+        """非法 risk_view_type 被拒绝"""
+        ser = ListNL2RiskFilterLogRequestSerializer(data={"risk_view_type": "invalid_type"})
+        self.assertFalse(ser.is_valid())
+        self.assertIn("risk_view_type", ser.errors)
+
+    def test_response_includes_risk_view_type(self):
+        """响应序列化器包含 risk_view_type 字段"""
+        log = NL2RiskFilterLog.objects.create(
+            query="q",
+            request_params={},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            risk_view_type=RiskViewType.CONFIRM,
+            created_by="admin",
+            updated_by="admin",
+        )
+        data = NL2RiskFilterLogResponseSerializer(log).data
+        self.assertEqual(data["risk_view_type"], RiskViewType.CONFIRM)
+
 
 class ListNL2RiskFilterLogResourceTest(TestCase):
     """ListNL2RiskFilterLog Resource 测试
@@ -716,6 +819,61 @@ class ListNL2RiskFilterLogResourceTest(TestCase):
         results = self.resource.request({"status": NL2RiskFilterLogStatus.PARSE_FAILED})
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["status"], NL2RiskFilterLogStatus.PARSE_FAILED)
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_risk_view_type_filter(self, mock_user):
+        """按 risk_view_type 过滤搜索历史"""
+        NL2RiskFilterLog.objects.create(
+            query="confirm_query",
+            request_params={"query": "confirm_query"},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            risk_view_type=RiskViewType.CONFIRM,
+            created_by="admin",
+            updated_by="admin",
+        )
+        NL2RiskFilterLog.objects.create(
+            query="scene_query",
+            request_params={"query": "scene_query"},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            risk_view_type=RiskViewType.SCENE,
+            created_by="admin",
+            updated_by="admin",
+        )
+
+        results = self.resource.request({"risk_view_type": RiskViewType.CONFIRM})
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_view_type"], RiskViewType.CONFIRM)
+        self.assertEqual(results[0]["query"], "confirm_query")
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    def test_risk_view_type_and_status_combined_filter(self, mock_user):
+        """risk_view_type 与 status 可组合过滤"""
+        NL2RiskFilterLog.objects.create(
+            query="confirm_success",
+            request_params={},
+            response_data={},
+            status=NL2RiskFilterLogStatus.SUCCESS,
+            risk_view_type=RiskViewType.CONFIRM,
+            created_by="admin",
+            updated_by="admin",
+        )
+        NL2RiskFilterLog.objects.create(
+            query="confirm_failed",
+            request_params={},
+            response_data={},
+            status=NL2RiskFilterLogStatus.PARSE_FAILED,
+            risk_view_type=RiskViewType.CONFIRM,
+            created_by="admin",
+            updated_by="admin",
+        )
+
+        results = self.resource.request(
+            {"risk_view_type": RiskViewType.CONFIRM, "status": NL2RiskFilterLogStatus.SUCCESS}
+        )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["query"], "confirm_success")
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
     def test_returns_full_queryset(self, mock_user):

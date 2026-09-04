@@ -1637,6 +1637,7 @@ class NL2RiskFilter(RiskMeta):
         scope_id = validated_request_data.get(ScopeQueryField.SCOPE_ID)
         input_thread_id = validated_request_data.get("thread_id")
         thread_id = input_thread_id or str(uuid.uuid4())
+        risk_view_type = validated_request_data.get("risk_view_type", "")
         username = get_request_username()
         metric_started_at = time.perf_counter()
 
@@ -1661,6 +1662,7 @@ class NL2RiskFilter(RiskMeta):
                 "scope_type": scope_type,
                 "scope_id": scope_id,
                 "thread_id": thread_id,
+                "risk_view_type": risk_view_type,
             }
             user_message = build_nl2risk_user_message(
                 query=query,
@@ -1698,6 +1700,7 @@ class NL2RiskFilter(RiskMeta):
                     response_data={},
                     status=NL2RiskFilterLogStatus.API_ERROR,
                     error_message=str(e),
+                    risk_view_type=risk_view_type,
                 )
                 NL2RiskFilterFailedEvent(
                     target="nl2risk_filter",
@@ -1754,6 +1757,7 @@ class NL2RiskFilter(RiskMeta):
                 request_params=request_params,
                 response_data=response_data,
                 status=status,
+                risk_view_type=risk_view_type,
                 result=raw_text,
                 message=message,
             )
@@ -1872,6 +1876,11 @@ class ListNL2RiskFilterLog(RiskMeta):
         status = validated_request_data.get("status")
         if status:
             queryset = queryset.filter(status=status)
+
+        # 风险视图类型过滤
+        risk_view_type = validated_request_data.get("risk_view_type")
+        if risk_view_type:
+            queryset = queryset.filter(risk_view_type=risk_view_type)
 
         # 时间范围过滤
         start_time = validated_request_data.get("start_time")
