@@ -19,6 +19,7 @@
     <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      risk-view-type="all"
       :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"

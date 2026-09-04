@@ -359,6 +359,7 @@ class RiskManage extends ModuleBase {
     scenes?: Array<{ id: number; name: string }>,
     scope_type?: string,
     scope_id?: string,
+    risk_view_type?: string,
   }) {
     return Request.post<{
       filter_conditions: Record<string, any>,
@@ -367,22 +368,29 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
-  // 获取AI分析列表
+  // 获取搜索历史
   getNl2RiskFilterLog(params: {
     end_time?: string,
     page: number,
     page_size: number,
+    risk_view_type?: string,
     start_time?: string,
     status?: string,
   }) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return;
+      }
+      query.append(key, String(value));
+    });
+    const qs = query.toString();
     return Request.get<IRequestResponsePaginationData<{
       id: number,
       query: string,
       response_data: string,
       status: string,
-    }>>(`${this.module}/nl2risk_filter_log/`, {
-      params,
-    });
+    }>>(`${this.module}/nl2risk_filter_log/${qs ? `?${qs}` : ''}`);
   }
   getAiAnalyseList() {
     return Request.get(`${this.api}/analyse_report/scenarios/`);
