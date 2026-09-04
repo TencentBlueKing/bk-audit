@@ -98,6 +98,7 @@ class SceneDispatchRuleNotDisabled(SceneException):
             return str(cls.MESSAGE)
         return f"{cls.MESSAGE}：{', '.join(str(strategy_id) for strategy_id in strategy_ids[:10])}"
 
+
 class PanelNotExist(SceneException):
     MESSAGE = gettext_lazy("报表不存在")
     ERROR_CODE = "004"
