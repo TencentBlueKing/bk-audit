@@ -125,6 +125,7 @@
   interface Props {
     historyRefreshKey?: number;
     loading?: boolean;
+    riskViewType?: string;
   }
 
   interface Emits {
@@ -134,6 +135,7 @@
   const props = withDefaults(defineProps<Props>(), {
     historyRefreshKey: 0,
     loading: false,
+    riskViewType: 'all',
   });
   const emit = defineEmits<Emits>();
 
@@ -167,7 +169,14 @@
       num_pages: 1,
       total: 0,
     },
+    // 本项目 useRequest：manual=true 会在 onMounted 用 defaultParams 自动请求
     manual: true,
+    defaultParams: {
+      page: 1,
+      page_size: 6,
+      status: 'success',
+      risk_view_type: props.riskViewType || 'all',
+    },
     onSuccess(data) {
       historyList.value = (data?.results || []).slice(0, 6);
       hasLoadedHistory.value = true;
@@ -178,6 +187,7 @@
     page: 1,
     page_size: 6,
     status: 'success',
+    risk_view_type: props.riskViewType || 'all',
   });
 
   const getPanelItemKey = (type: 'recommendation' | 'history', index: number) => `${type}-${index}`;
@@ -201,6 +211,9 @@
   };
 
   const openPanel = () => {
+    if (props.loading) {
+      return;
+    }
     isPanelVisible.value = true;
     if (!hasLoadedHistory.value) {
       loadHistory();
@@ -248,6 +261,20 @@
 
   watch(() => props.historyRefreshKey, () => {
     loadHistory();
+  });
+
+  watch(() => props.riskViewType, () => {
+    hasLoadedHistory.value = false;
+    if (isPanelVisible.value) {
+      loadHistory();
+    }
+  });
+
+  // 列表/智能搜索 loading 时关闭示例框，避免被表格 loading 遮罩盖住
+  watch(() => props.loading, (loading) => {
+    if (loading) {
+      closePanel();
+    }
   });
 
   watch(historyList, () => {
@@ -308,7 +335,7 @@
 
   .nl-search-input {
     position: relative;
-    z-index: 110;
+    z-index: 510;
     padding: 16px 24px 10px;
 
     .nl-input-wrapper {
@@ -408,7 +435,7 @@
       position: absolute;
       top: 68px;
       left: 24px;
-      z-index: 120;
+      z-index: 520;
       width: min(790px, calc(100% - 48px));
       overflow: hidden;
       background: #fff;

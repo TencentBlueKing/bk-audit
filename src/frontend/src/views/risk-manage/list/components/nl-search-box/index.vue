@@ -29,6 +29,7 @@
       ref="nlInputRef"
       :history-refresh-key="historyRefreshKey"
       :loading="isNLSearching"
+      :risk-view-type="riskViewType"
       @submit="handleNLSubmit" />
 
     <!-- NLP 解析结果提示（未识别搜索条件时的红色警告提示） -->
@@ -116,11 +117,6 @@
   import type { INLSearchBoxExposes } from './types';
   import type { RiskExportDataOptions } from '@hooks/use-risk-export-types';
 
-  const props = defineProps<Props>();
-
-  const emit = defineEmits<Emits>();
-
-
   interface Emits {
     (e: 'change', value: Record<string, any>, otherValue?: any, isClear?: boolean): void;
     (e: 'sync', value: Record<string, any>, otherValue?: any): void;
@@ -134,6 +130,15 @@
     scenes?: Array<{ scene_id: number; name: string }>;
     riskViewType?: string;
   }
+
+  const props = withDefaults(defineProps<Props>(), {
+    scenes: undefined,
+    riskViewType: 'all',
+  });
+
+  const emit = defineEmits<Emits>();
+
+  const riskViewType = computed(() => props.riskViewType || 'all');
 
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -668,7 +673,7 @@
   const getNlParseOptions = () => {
     const [startTime, endTime] = searchModel.value.datetime || [];
     return {
-      risk_view_type: props.riskViewType || urlSearchParams.risk_view_type || 'all',
+      risk_view_type: riskViewType.value || urlSearchParams.risk_view_type || 'all',
       start_time: startTime,
       end_time: endTime,
       scope_type: urlSearchParams.scope_type,
@@ -1119,7 +1124,7 @@
 <style lang="postcss">
   .nl-search-box {
     position: relative;
-    z-index: 100;
+    z-index: 500;
     overflow: visible;
     background: linear-gradient(90deg, #edeeff 54.99%, #ebe7ff 94.25%);
     border-radius: 8px;
