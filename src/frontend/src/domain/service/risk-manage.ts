@@ -413,6 +413,7 @@ export default {
     end_time?: string,
     page: number,
     page_size: number,
+    risk_view_type?: string,
     start_time?: string,
     status?: string,
   }) {
