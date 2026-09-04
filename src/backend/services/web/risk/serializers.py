@@ -832,12 +832,13 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "event_data",
             "tags",
             "risk_label",
-            "risk_level",
+            "experiences",
             "last_operate_time",
             "title",
             "has_report",
             "report_enabled",
             "report_auto_render",
+            "risk_level",
         ]
 
 
