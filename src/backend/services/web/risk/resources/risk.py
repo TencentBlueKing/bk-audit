@@ -57,7 +57,7 @@ from rest_framework.settings import api_settings
 
 from api.constants import AIAgentCode
 from apps.audit.resources import AuditMixinResource
-from apps.itsm.constants import TicketOperate, TicketStatus
+from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, Tag
 from apps.permission.handlers.actions import ActionEnum
@@ -133,6 +133,7 @@ from services.web.risk.handlers.ticket import (
     ReOpenMisReport,
     RiskExperienceRecord,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     ManualEvent,
@@ -1195,18 +1196,17 @@ class ForceRevokeApproveTicket(RiskMeta):
         node = get_object_or_404(TicketNode, risk_id=risk.risk_id, id=validated_request_data["node_id"])
         if node.action != ForApprove.__name__:
             raise RiskStatusInvalid(message=gettext("节点类型异常 => %s") % node.action)
-        sn = node.process_result["ticket"]["sn"]
+        ticket_id = node.process_result["ticket"]["id"]
         # 判断单据状态
-        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+        status = get_itsm_ticket_status(ticket_id)
         if status["current_status"] in TicketStatus.get_finished_status():
             sync_auto_result(node_id=node.id)
             return
-        # 关单
-        api.bk_itsm.operate_ticket(
-            sn=sn,
+        # 关单（强制撤销审批单据，对应 V4 终止工单 terminate，工单级操作无需 task_id/节点）
+        api.bk_itsm_v4.ticket_handle(
+            ticket_id=ticket_id,
             operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
-            action_type=TicketOperate.WITHDRAW,
-            action_message=str(TicketOperate.WITHDRAW.label),
+            action={"method": "terminate", "params": {}},
         )
         sync_auto_result(node_id=node.id)
         setattr(risk, "instance_origin_data", origin_data)

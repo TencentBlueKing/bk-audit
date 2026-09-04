@@ -63,3 +63,44 @@ class TicketLogs(BKITSMV4):
     name = gettext_lazy("V4-查询工单操作日志")
     method = "GET"
     action = "/api/v1/ticket/logs/"
+
+
+class SystemWorkflowList(BKITSMV4):
+    # 对应 itsm 的 GetServices（服务列表查询）
+    name = gettext_lazy("V4-系统流程列表")
+    method = "GET"
+    action = "/api/v1/system_workflow/list/"
+
+
+class Workflows(BKITSMV4):
+    # 对应 itsm 的 GetServiceDetail（获取服务详情）
+    name = gettext_lazy("V4-获取流程的启用版本详情")
+    method = "GET"
+    action = "/api/v1/workflows/"
+
+
+class GetTicketDetail(BKITSMV4):
+    # 对应 itsm 的 GetTicketStatus（单据状态查询）,itsm 的查询审批结果用这个查，返回字段有 approve_result
+    name = gettext_lazy("V4-单据详情")
+    method = "GET"
+    action = "/api/v1/ticket/detail/"
+
+
+class ApprovalTasks(BKITSMV4):
+    # 对应 itsm 的 TicketApproveResult（查询审批结果），但是返回结果缺少必要的字段 approve_result，废弃
+    name = gettext_lazy("V4-获取审批节点任务列表")
+    method = "POST"
+    action = "/api/v1/approval_tasks/"
+
+
+class TicketHandle(BKITSMV4):
+    # 对应 itsm 的 OperateTicket（操作单据）
+    name = gettext_lazy("V4-操作单据")
+    method = "POST"
+    action = "/api/v1/ticket/handle/"
+
+
+class FullTextSearch(BKITSMV4):
+    name = gettext_lazy("V4-查订单列表")
+    method = "POST"
+    action = "/api/v1/ticket_search/full_text_search/"
