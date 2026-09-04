@@ -1637,7 +1637,7 @@ class NL2RiskFilter(RiskMeta):
         scope_id = validated_request_data.get(ScopeQueryField.SCOPE_ID)
         input_thread_id = validated_request_data.get("thread_id")
         thread_id = input_thread_id or str(uuid.uuid4())
-        risk_view_type = validated_request_data.get("risk_view_type", "")
+        risk_view_type = validated_request_data.get("risk_view_type", RiskViewType.ALL)
         username = get_request_username()
         metric_started_at = time.perf_counter()
 

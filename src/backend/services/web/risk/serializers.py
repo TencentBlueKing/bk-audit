@@ -1605,7 +1605,7 @@ class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
         choices=RiskViewType.choices,
         required=False,
         allow_blank=True,
-        default="",
+        default=RiskViewType.ALL,
         help_text=gettext_lazy("当前搜索所属的风险视图类型（如 all/scene/confirm），用于记录搜索历史。"),
     )
 
