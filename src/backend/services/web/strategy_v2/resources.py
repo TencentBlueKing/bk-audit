@@ -511,7 +511,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
     def attach_binding_visibility(strategies: List[Strategy]) -> None:
         """
         将策略的ResourceBinding信息读取并存入属性visibility中，并将该属性绑定到strategy实例上
-        供列表/详情响应序列化器输出
+        供列表/详情响应序列化器输出，用于在列表中展示分派场景/全局tag
         """
         strategy_ids = [str(s.strategy_id) for s in strategies]
         if not strategy_ids:
@@ -550,13 +550,11 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
     @staticmethod
     def sync_platform_binding_scenes(strategy: Strategy) -> None:
         """
-        同步全局策略可见场景（派生数据，写时物化到 ResourceBinding）
+        创建/更新策略时同步全局策略的可见场景
 
         语义：全局策略对平台管理员（MANAGE_PLATFORM）和分派规则的目标场景可见，
         可见场景集合 = 未软删分派规则的 target_scene_id 并集（含默认规则）；
-        visibility_type 固定 SPECIFIC_SCENES，系统维度不再使用。
-        分派规则仅可通过创建/更新策略变更，两个写入点在 _sync_dispatch_rules 之后
-        调用本函数保证派生数据与规则一致。
+        visibility_type=SPECIFIC_SCENES
         """
         binding = ResourceBinding.objects.filter(
             resource_type=ResourceVisibilityType.STRATEGY,
@@ -565,7 +563,6 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         ).first()
         if binding is None:
             # 无平台绑定：先判断是否场景策略（已有 scene binding），是则无需平台绑定直接返回；
-            # 否则为全局策略草稿首次提交（草稿期未创建平台绑定），在此补建 PLATFORM_BINDING
             has_scene_binding = ResourceBindingScene.objects.filter(
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
                 binding__resource_id=str(strategy.strategy_id),
@@ -573,6 +570,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             if has_scene_binding:
                 # 场景策略无平台绑定，无需同步
                 return
+            # 全局策略草稿首次提交（草稿期未创建平台绑定），在此补建 PLATFORM_BINDING
             binding = ResourceBinding.objects.create(
                 resource_type=ResourceVisibilityType.STRATEGY,
                 resource_id=str(strategy.strategy_id),
@@ -583,8 +581,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             strategy.dispatch_rules.filter(is_deleted=False).values_list("target_scene_id", flat=True)
         )
         if not target_scene_ids:
-            # 保存门禁保证全局策略必有分派规则；空集仅可能来自并发编辑/存量脏数据，
-            # 保留现状仅告警（清空会让 binding 违反 specific_scenes 完整性约束且场景侧不可见）
+            # 保证全局策略必有分派规则；空集仅可能来自并发编辑/存量脏数据，
             logger.warning(
                 "[SyncPlatformVisibility] strategy %s has no active dispatch rule, keep binding scenes unchanged",
                 strategy.strategy_id,
@@ -592,7 +589,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             return
         binding.visibility_type = VisibilityScope.SPECIFIC_SCENES
         binding.save(update_fields=["visibility_type"])
-        # 幂等 diff：移除多余场景关联、补建缺失；系统维度不再使用，统一清理
+        # 移除多余场景关联、补建缺失
         current_scene_ids = set(binding.binding_scenes.values_list("scene_id", flat=True))
         binding.binding_scenes.filter(scene_id__in=(current_scene_ids - target_scene_ids)).delete()
         binding.binding_systems.all().delete()
@@ -674,10 +671,9 @@ class CreateStrategy(StrategyV2Base):
             dispatch_rules_data = validated_request_data.pop("dispatch_rules", None)
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
-            # 创建 ResourceBinding 关联：按 binding_type 区分全局/场景策略
+            # 全局策略
             if binding_type == BindingType.PLATFORM_BINDING:
-                # 全局策略：平台级绑定；可见场景由分派规则目标场景派生（sync_platform_binding_scenes），
-                # 不再接收前端 visibility 配置。
+                # 草稿策略暂不创建ResourceBinding记录，避免绑定完整性校验失败
                 if not is_draft:
                     ResourceBinding.objects.create(
                         resource_type=ResourceVisibilityType.STRATEGY,
@@ -686,7 +682,7 @@ class CreateStrategy(StrategyV2Base):
                         visibility_type=VisibilityScope.SPECIFIC_SCENES,
                     )
             else:
-                # 场景策略：与场景绑定（草稿也创建，保证 ensure_active_scene_binding_or_404 不 404）
+                # 场景策略（草稿也创建）
                 BindingMetadataHelper.create_resource_binding(
                     resource_id=str(strategy.strategy_id),
                     resource_type=ResourceVisibilityType.STRATEGY,
@@ -888,9 +884,8 @@ class UpdateStrategy(StrategyV2Base):
                 need_update_remote = True
             setattr(strategy, key, val)
         strategy.save(update_fields=validated_request_data.keys())
-        # 草稿跨类型切换：清理旧类型专属子表/字段，避免残留脏数据
-        # 前端切到新类型后通常不传旧类型 rules（rules_data=None），_sync_strategy_rules 会直接跳过，
-        # 导致旧发现规则与 sql 残留；此处显式清理对方专属数据，主表 JSON 字段由前端传值覆盖。
+
+        # 草稿切换策略类型：清理旧类型专属子表/字段，避免残留脏数据
         new_type = validated_request_data.get("strategy_type")
         if draft_save and new_type and new_type != original_type:
             # 联表信息两型均可能残留，切换时统一置空（RULE 的 LINK_TABLE 会由前端重新写入）
@@ -917,6 +912,7 @@ class UpdateStrategy(StrategyV2Base):
                     "configs",
                 ]
             )
+
         # 同步发现规则子表 + 摘要比较：规则集（含顺序/条件）变化 = SQL 变化 -> 触发 flow 重建
         if rules_data is not None:
             if draft_save and rules_data:
@@ -926,7 +922,7 @@ class UpdateStrategy(StrategyV2Base):
             if new_rules_digest != origin_rules_digest:
                 need_update_remote = True
         # 同步分派规则子表 + 全局策略可见场景派生同步（可见性 = 分派规则目标场景并集）；
-        # 场景策略在 sync 内部直接跳过；草稿保存跳过派生（目标场景可能未确定），提交时补
+        # 场景策略在 sync 内部直接跳过；草稿保存跳过派生（目标场景未确定），提交时补
         if dispatch_rules_data is not None:
             if draft_save and dispatch_rules_data:
                 self._dedupe_rule_names(dispatch_rules_data)

@@ -145,10 +145,10 @@ class StrategyResourcesTest(TestCase):
             source=StrategySource.SYSTEM,
         )
 
-        # 不传 scope_type 和 scope_id，默认返回平台级策略
-        result = self.resource.strategy_v2.list_strategy_all()
+        # 传 binding_type=PLATFORM_BINDING，仅返回平台级策略（需要创建 ResourceBinding）
+        result = self.resource.strategy_v2.list_strategy_all(binding_type=BindingType.PLATFORM_BINDING)
 
-        # 默认返回平台级策略，需要创建 ResourceBinding
+        # 未创建 PLATFORM_BINDING 资源，应返回空列表
         self.assertEqual(result, [])
 
     @mock.patch("services.web.strategy_v2.resources.get_local_request")
@@ -426,13 +426,9 @@ class StrategyResourcesTest(TestCase):
         self.assertEqual(result, [{"bk_biz_name": "biz", "bk_biz_id": "rt"}])
 
     def test_list_tables_eventlog_missing_scene_id_raises_error(self):
-        """测试EventLog类型缺少scene_id时应该抛出参数校验错误"""
-        # 框架在 request() 阶段会先通过 RequestSerializer 校验，
-        # ListTablesRequestSerializer.validate() 要求 EventLog 必须提供 scene_id，故抛出参数校验错误
-        # 注意：scene_id 现在是可选字段（全局策略不传返回平台视角全量），所以不会抛出异常
-        result = ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
-        # 验证返回结果不为空（实际会调用 list_tables 逻辑）
-        self.assertIsNotNone(result)
+        """测试EventLog类型缺少scene_id时应抛出参数校验错误"""
+        with self.assertRaises(TypeError):
+            ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")

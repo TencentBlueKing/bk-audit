@@ -88,19 +88,23 @@ class TableHandler:
 
 
 class EventLogTableHandler(TableHandler):
-    def __init__(self, table_type: str, namespace: str, scene_id: str = None, *args, **kwargs):
+    def __init__(self, table_type: str, namespace: str, scene_id: str):
         super().__init__(table_type)
         self.namespace = namespace
         self.scene_id = scene_id
 
     def list_tables(self) -> List[dict]:
         # 检查场景是否有授权系统
-        # 场景视角（携带 scene_id）：查该场景授权系统；平台视角（全局策略，无 scene_id）：不按 scope 过滤，查全部系统
+        # 场景视角（携带 scene_id）：查该场景授权系统；平台视角（全局策略，无 scene_id）：查全部系统
         try:
-            request_kwargs = {"namespace": settings.DEFAULT_NAMESPACE}
             if self.scene_id:
-                request_kwargs.update(scope_type=ScopeType.SCENE, scope_id=self.scene_id)
-            authorized_systems = SystemListAllResource().request(**request_kwargs)
+                authorized_systems = SystemListAllResource().request(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    scope_type=ScopeType.SCENE,
+                    scope_id=self.scene_id,
+                )
+            else:
+                authorized_systems = System.objects.all()
             # 如果没有授权系统，返回空列表
             if not authorized_systems:
                 return []

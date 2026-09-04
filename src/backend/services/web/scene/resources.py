@@ -542,8 +542,7 @@ class DeleteScene(SceneResource):
         if active_strategy_ids:
             raise SceneStrategyNotDisabled(strategy_ids=active_strategy_ids)
 
-        # 检查是否有启用策略的活动分派规则引用该场景作为目标场景。
-        # 全局策略 direct / after_confirm 的分派结果会把 Risk 绑定到 DispatchRule.target_scene，
+        # 检查是否有启用策略的分派规则引用该场景
         dispatch_strategy_ids = list(
             DispatchRule.objects.filter(
                 target_scene=scene,

@@ -415,12 +415,9 @@ class CompositeScopeFilter:
         visible_ids = set()
 
         for binding in platform_bindings:
-            # 过滤掉没有完整绑定记录的策略（如草稿策略没有 scene 记录）
+            # 让草稿全局策略跳过绑定完整性校验（此时ResourceBindingScene记录还未创建）
             if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES and binding.scene_count == 0:
                 continue
-            if binding.visibility_type == VisibilityScope.SPECIFIC_SYSTEMS and binding.system_count == 0:
-                continue
-            # 验证绑定关系完整性
             assert_binding_relation_integrity(
                 binding, scene_count=binding.scene_count, system_count=binding.system_count
             )

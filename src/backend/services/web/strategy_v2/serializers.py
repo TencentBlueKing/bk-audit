@@ -883,6 +883,7 @@ class MultiRuleValidateMixin:
         configs = attrs.get("configs")
         if not configs:
             raise serializers.ValidationError(gettext("携带发现规则（rules）时必须同时携带策略配置（configs）"))
+
         select_fields = configs.get("select") or []
         # 聚合字段身份集合：(table, raw_name, aggregate, keys)，与构造层
         # aggregate_field_identity 口径一致（含下钻 keys，避免校验通过、构造 500）
@@ -998,11 +999,6 @@ class MultiRuleValidateMixin:
         """
         分派条件字段归一化：前端按 select 字段的 display_name 裸名传参，
         后端统一改写为 event_data.{display_name}（分派求值器的词表形式）。
-
-        - 裸名命中 select display_name -> 改写加前缀
-        - 已是 event_data.{display_name} 规范形式 -> 原样保留
-        - 事件标准字段 / 命中规则实例化字段（ctx 顶层引用，如 risk_level）-> 原样透传
-        - 其余 -> 400（不在可选范围，报出可用字段清单）
         """
         configs = attrs.get("configs") or {}
         select_names = {f.get("display_name") for f in configs.get("select") or [] if f.get("display_name")}
@@ -1105,10 +1101,9 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集
 
     def to_internal_value(self, data):
-        """草稿保存时跳过所有字段级校验（DRF 字段校验在 validate 之前执行）"""
+        """草稿保存时跳过所有字段级校验"""
         if data.get("is_draft") is True:
-            # 只保留声明的字段 + 非模型写入字段（is_draft/binding_type/scene_id/rules/dispatch_rules），
-            # 过滤掉客户端误传的多余字段（如 visibility），避免 Strategy() 报 unexpected keyword arguments
+            # 只保留声明的字段，过滤掉客户端误传的多余字段
             allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
             return {k: v for k, v in data.items() if k in allowed}
         return super().to_internal_value(data)
@@ -1148,42 +1143,24 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # 草稿：跳过业务校验，仅保留落库保底检查；提交转正式时走全量校验
-        if data.get("is_draft"):
-            # binding_type 归一化 + 联动检查：resource 建绑定依赖
-            binding_type = data.get("binding_type") or BindingType.SCENE_BINDING
-            if binding_type == BindingType.SCENE_BINDING and not data.get("scene_id"):
-                raise serializers.ValidationError(gettext("场景策略（binding_type=scene_binding）必须携带 scene_id"))
-            if binding_type == BindingType.PLATFORM_BINDING and data.get("scene_id"):
-                raise serializers.ValidationError(gettext("全局策略（binding_type=platform_binding）不允许携带 scene_id"))
-            data["binding_type"] = binding_type
-            # check name
-            if Strategy.objects.filter(strategy_name=data["strategy_name"]).exists():
-                raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
-            # 场景策略 scene_id 需真实存在（创建 ResourceBinding 依赖）
-            if (
-                binding_type == BindingType.SCENE_BINDING
-                and not Scene.objects.filter(scene_id=data["scene_id"], is_deleted=False).exists()
-            ):
-                raise serializers.ValidationError({"scene_id": gettext("Scene Not Exists")})
-            return data
-        # check type
-        self._validate_strategy_type(data)
-        # scene_id 与 binding_type 联动：场景策略必带场景，全局策略不允许挂场景
+        # binding_type 归一化 + 联动检查
         binding_type = data.get("binding_type") or BindingType.SCENE_BINDING
         if binding_type == BindingType.SCENE_BINDING and not data.get("scene_id"):
             raise serializers.ValidationError(gettext("场景策略（binding_type=scene_binding）必须携带 scene_id"))
         if binding_type == BindingType.PLATFORM_BINDING and data.get("scene_id"):
             raise serializers.ValidationError(gettext("全局策略（binding_type=platform_binding）不允许携带 scene_id"))
         data["binding_type"] = binding_type
-        # processor_groups 条件必填：模型策略必须配置
-        strategy_type = data.get("strategy_type")
-        processor_groups = data.get("processor_groups")
-        if strategy_type == StrategyType.MODEL.value and not processor_groups:
-            raise serializers.ValidationError(gettext("模型策略（strategy_type=model）必须配置 processor_groups"))
-        # check name
-        if Strategy.objects.filter(strategy_name=attrs["strategy_name"]).exists():
+        # 重名检查
+        if Strategy.objects.filter(strategy_name=data["strategy_name"]).exists():
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
+        # 草稿：额外校验 scene_id 存在性后返回
+        if data.get("is_draft"):
+            if binding_type == BindingType.SCENE_BINDING:
+                if not Scene.objects.filter(scene_id=data["scene_id"], is_deleted=False).exists():
+                    raise serializers.ValidationError({"scene_id": gettext("Scene Not Exists")})
+            return data
+        # 正式提交：全量校验
+        self._validate_strategy_type(data)
         # check configs
         self._validate_configs(data)
         # check scene resources
@@ -1215,9 +1192,6 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
     Update Strategy
     """
 
-    # 更新接口不接收 binding_type / scene_id：绑定类型与场景归属不支持修改，
-    # 校验统一以数据库真实绑定/反查场景为准（见 validate / get_scene_id）；
-    # 客户端误传的这两个参数由 DRF 按未声明字段直接丢弃
     sql = serializers.CharField(
         label=gettext_lazy("Rule Audit SQL"),
         required=False,
@@ -1270,14 +1244,11 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         write_only=True,
         help_text=gettext_lazy("仅草稿策略可传：true=保存草稿更新（不部署），false=提交为正式策略（触发部署）；不传=维持现状"),
     )
-    # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集（后端派生，
-    # 见 StrategyV2Base.sync_platform_binding_scenes）；误传的 visibility 由 DRF 丢弃
 
     def to_internal_value(self, data):
-        """草稿保存时跳过所有字段级校验（DRF 字段校验在 validate 之前执行）"""
+        """草稿保存时跳过所有字段级校验"""
         if data.get("is_draft") is True:
-            # 只保留声明的字段 + 非模型写入字段（is_draft/binding_type/scene_id/rules/dispatch_rules），
-            # 过滤掉客户端误传的多余字段（如 visibility），避免 Strategy.objects.update() 报 unexpected keyword arguments
+            # 只保留声明的字段，过滤掉客户端误传的多余字段
             allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
             return {k: v for k, v in data.items() if k in allowed}
         return super().to_internal_value(data)
@@ -1331,13 +1302,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
             return data
         # check type
         self._validate_strategy_type(data)
-        # binding_type 以数据库真实绑定为准（更新接口不接收该参数，不支持修改绑定类型），
-        # 供下游多规则/分派规则校验（_check_rules / _check_dispatch_rules）使用
-        # 注意：全局策略草稿保存时不创建平台绑定记录，提交时 ResourceBinding 表查不到，
-        # 不能武断默认 SCENE_BINDING（会误触发“分派规则仅全局策略可配置”校验失败）。
-        # 场景策略草稿也建有 SCENE_BINDING，反查能直接命中，不会走到 is None 分支；
-        # 因此 ResourceBinding 查不到（db_binding_type is None）在数据正确时只可能是全局草稿策略，
-        # 直接视为 PLATFORM_BINDING 即可。
+        # 因此 ResourceBinding 查不到，视为 PLATFORM_BINDING的草稿策略提交，其他情况都会有ResourceBinding记录
         db_binding_type = (
             ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.STRATEGY,
@@ -1349,10 +1314,6 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         if db_binding_type is None:
             db_binding_type = BindingType.PLATFORM_BINDING
         data["binding_type"] = db_binding_type
-        # 模型策略必须配置processor_groups
-        strategy_type = data.get("strategy_type")
-        if strategy_type == StrategyType.MODEL.value and not data.get("processor_groups"):
-            raise serializers.ValidationError(gettext("模型策略（strategy_type=model）必须配置 processor_groups"))
         # check name
         if (
             Strategy.objects.filter(strategy_name=attrs["strategy_name"])
