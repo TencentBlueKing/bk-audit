@@ -79,20 +79,20 @@ class RiskLabelTest(TicketTest):
         mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
     )
     @mock.patch(
-        "services.web.risk.resources.risk.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.resources.risk.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
         "services.web.risk.resources.risk.sync_auto_result",
         mock.Mock(return_value=None),
     )
     @mock.patch(
-        "services.web.risk.resources.risk.api.bk_itsm.operate_ticket",
+        "services.web.risk.resources.risk.api.bk_itsm_v4.ticket_handle",
         mock.Mock(return_value=None),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)

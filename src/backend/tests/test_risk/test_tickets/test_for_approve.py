@@ -36,8 +36,8 @@ from tests.test_risk.test_tickets.constants import (
 
 class ForApproveTest(TicketTest):
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
@@ -75,8 +75,8 @@ class ForApproveTest(TicketTest):
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
 
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
@@ -112,8 +112,13 @@ class ForApproveTest(TicketTest):
                 # 检测单据号一致
                 self.assertEquals(risk.last_history.process_result["ticket"]["sn"], APPROVE_TICKET_DETAIL["sn"])
                 with mock.patch(
-                    "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-                    mock.Mock(return_value=[{**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FINISHED.value}]),
+                    "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+                    mock.Mock(
+                        return_value={
+                            **APPROVE_TICKET_STATUS,
+                            "current_status": TicketStatus.FINISHED.value,
+                        }
+                    ),
                 ):
                     # 再次执行审批节点
                     ForApprove(risk_id=risk.risk_id, operator=operator).run()
@@ -124,8 +129,8 @@ class ForApproveTest(TicketTest):
                 self.assertEquals(risk.display_status, RiskDisplayStatus.AUTO_PROCESS)
 
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[{**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FAILED.value}]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value={**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FAILED.value}),
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)

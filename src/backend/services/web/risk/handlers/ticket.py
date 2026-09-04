@@ -384,10 +384,10 @@ class ForApprove(RiskFlowBaseHandler):
         """
 
         # 获取单据ID
-        sn = self.load_approve_sn()
+        ticket_id = self.load_approve_ticket_id()
         # 已发起则获取单据状态
-        if sn:
-            return {"status": api.bk_itsm.ticket_approve_result(sn=[sn])[0]}
+        if ticket_id:
+            return {"status": get_itsm_ticket_status(ticket_id)}
         # 手动传入处理套餐需要重新初始化处理套餐
         if pa_config:
             self.init_process_application(pa_config["pa_id"])
@@ -434,7 +434,7 @@ class ForApprove(RiskFlowBaseHandler):
             creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
             fields=fields,
         )
-        status = api.bk_itsm.ticket_approve_result(sn=[ticket["sn"]])[0]
+        status = get_itsm_ticket_status(ticket["id"])
         return {"ticket": ticket, "status": status}
 
     def update_operator(self, process_result: dict, **kwargs) -> None:
@@ -450,6 +450,9 @@ class ForApprove(RiskFlowBaseHandler):
         else:
             self.risk.current_operator = []
         self.risk.save(update_fields=["current_operator"])
+
+    def load_approve_ticket_id(self) -> str:
+        return self.risk.last_history.process_result.get("ticket", {}).get("id", "")
 
     def load_approve_sn(self) -> str:
         return self.risk.last_history.process_result.get("ticket", {}).get("sn", "")
@@ -485,6 +488,37 @@ class ForApprove(RiskFlowBaseHandler):
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return kwargs
+
+
+# V4 ITSM 工单状态标识（小写）与旧 ITSM TicketStatus（大写）的映射
+ITSM_V4_STATUS_MAPPING = {
+    "running": TicketStatus.RUNNING.value,
+    "finished": TicketStatus.FINISHED.value,
+    "termination": TicketStatus.TERMINATED.value,
+    "failed": TicketStatus.FAILED.value,
+    "revoked": TicketStatus.REVOKED.value,
+    "suspend": TicketStatus.SUSPEND.value,
+    "receiving": TicketStatus.RECEIVING.value,
+    "distributing": TicketStatus.DISTRIBUTING.value,
+    "wait": TicketStatus.WAIT.value,
+}
+
+
+def get_itsm_ticket_status(ticket_id: str) -> dict:
+    """
+    通过 ITSM V4 的 ticket_detail 接口获取工单审批状态。
+
+    新接口返回的 status 为小写标识（如 finished/termination），
+    此处统一归一化为旧接口的结构（current_status 大写枚举 + approve_result），
+    以兼容下游基于 TicketStatus 的状态机判断逻辑。
+    """
+    detail = api.bk_itsm_v4.ticket_detail(id=ticket_id)
+    current_status = ITSM_V4_STATUS_MAPPING.get((detail.get("status") or "").lower(), detail.get("status"))
+    return {
+        "sn": detail.get("sn"),
+        "current_status": current_status,
+        "approve_result": detail.get("approve_result"),
+    }
 
 
 class AutoProcess(RiskFlowBaseHandler):
