@@ -65,7 +65,9 @@ class ListNoticeGroupRequestSerializer(serializers.Serializer):
     通知组列表
     """
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="按场景过滤通知组，不传时返回全部通知组")
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="按场景过滤通知组，不传时返回全部通知组"
+    )
     keyword = serializers.CharField(label=gettext_lazy("关键字"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False)
     order_type = serializers.CharField(label=gettext_lazy("排序方式"), required=False)
