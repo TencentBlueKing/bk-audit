@@ -1201,7 +1201,7 @@ class ListStrategyAll(StrategyV2Base):
         )
 
     def perform_request(self, validated_request_data):
-        strategies: QuerySet[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
+        strategies: QuerySet[Strategy] = Strategy.objects.filter(is_deleted=False).exclude(source=StrategySource.SYSTEM)
         strategies = self.filter_queryset_by_scope_relation(strategies, validated_request_data)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
@@ -1454,7 +1454,7 @@ class ListStrategyTags(StrategyV2Base):
             # 无任何过滤参数：默认平台视角（仅全局策略的标签聚合）
             binding_type = BindingType.PLATFORM_BINDING
         strategies = CompositeScopeFilter.filter_queryset(
-            queryset=Strategy.objects.exclude(source=StrategySource.SYSTEM),
+            queryset=Strategy.objects.filter(is_deleted=False).exclude(source=StrategySource.SYSTEM),
             binding_type=binding_type,
             scene_id=scene_id,
             system_id=system_id,
