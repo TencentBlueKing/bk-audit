@@ -15,6 +15,7 @@ export interface RuleWhereDisplay {
 }
 
 export interface RuleDisplayItem {
+  id?: string | number;
   name: string;
   where: RuleWhereDisplay;
   risk_title: string;
@@ -198,6 +199,8 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
     current: Record<string, any>,
     rules: Array<Record<string, any>>,
   ) => rules.map((rule: Record<string, any>, index: number) => ({
+    id: rule.id ?? rule.rule_id ?? rule.strategy_rule_id,
+    rule_id: rule.rule_id ?? rule.id ?? rule.strategy_rule_id,
     name: rule.rule_name || rule.name || `${t('规则')}${index + 1}`,
     rule_name: rule.rule_name || rule.name,
     risk_title: rule.risk_title ?? current.risk_title ?? '',
@@ -231,6 +234,7 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
       return [];
     }
     return ruleList.map((rule: Record<string, any>, index: number) => ({
+      id: rule.id ?? rule.rule_id ?? rule.strategy_rule_id,
       name: rule.rule_name || rule.name || `${t('规则')}${index + 1}`,
       where: getRuleWhere(rule),
       risk_title: rule.risk_title ?? '',

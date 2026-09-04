@@ -565,6 +565,8 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
   }
 
   const rules = (d.rules?.length ? d.rules : null)?.map((rule: Record<string, any>, index: number) => ({
+    id: rule.id ?? rule.rule_id ?? rule.strategy_rule_id,
+    rule_id: rule.rule_id ?? rule.id ?? rule.strategy_rule_id,
     name: rule.rule_name || rule.name || `规则${index + 1}`,
     rule_name: rule.rule_name || rule.name,
     risk_title: rule.risk_title ?? d.risk_title ?? '',
