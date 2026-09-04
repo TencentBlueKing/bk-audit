@@ -35,7 +35,6 @@ export const touchRiskColumnDeps = (deps: RiskColumnDeps) => {
   void deps.strategyList.value;
   void deps.sceneList.value;
   void deps.riskStatusCommon.value;
-  void deps.levelData.value;
   void deps.strategyTagMap.value;
 };
 export const useRiskColumns = (options: UseRiskColumnsOptions) => {

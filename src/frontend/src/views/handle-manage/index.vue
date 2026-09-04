@@ -101,7 +101,6 @@
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
@@ -197,7 +196,6 @@
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
   const tableColumns = computed(() => {
     touchRiskColumnDeps({
-      levelData,
       strategyTagMap,
       strategyList,
       riskStatusCommon,
@@ -206,7 +204,7 @@
     });
     const initTableColumns = useRiskColumns({
       t,
-      deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
       detailRouteName: 'handleManageDetail',
       appendColumns: [actionColumn],
     });
@@ -376,20 +374,7 @@
     manual: true,
     defaultValue: [],
   });
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
-  };
+  const handleRequestSuccess = () => {};
 
 
   const handleSettingChange = (setting: ISettings) => {

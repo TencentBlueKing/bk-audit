@@ -62,7 +62,6 @@
 
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import type RiskManageModel from '@model/risk/risk';
 
@@ -102,7 +101,6 @@
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
   const tableColumns = computed(() => {
     touchRiskColumnDeps({
-      levelData,
       strategyTagMap,
       strategyList,
       riskStatusCommon,
@@ -111,7 +109,7 @@
     });
     const baseColumns = useRiskColumns({
       t,
-      deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
       detailRouteName: 'attentionManageDetail',
     });
     const columnMap = new Map(baseColumns.map((col: any) => [col.colKey || col.type, col]));
@@ -244,22 +242,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  // 记录轮训的数据
-  // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
-  };
+  const handleRequestSuccess = () => {};
   // 开始轮训
   // const startPolling = (results: Array<RiskManageModel>) => {
   //   clearTimeout(timeout);
