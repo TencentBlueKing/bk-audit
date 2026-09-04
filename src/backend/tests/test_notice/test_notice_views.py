@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from iam.eval.constants import KEYWORD_BK_IAM_PATH
+from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.notice.models import NoticeGroup
@@ -20,7 +21,7 @@ class TestNoticeGroupViewPermissions(TestCase):
         self.view = NoticeGroupsViewSet()
 
     def test_get_permissions_list_uses_scene_permission(self):
-        request = self.factory.get("/notice_group/", {"scene_id": 1})
+        request = Request(self.factory.get("/notice_group/", {"scene_id": 1}))
         self.view.request = request
         self.view.kwargs = {}
         self.view.action = "list"

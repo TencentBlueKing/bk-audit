@@ -217,8 +217,8 @@ class SystemInitRuleAuditTests(TestCase):
 
         mock_create.assert_called_once()
         params = mock_create.call_args.kwargs
-        self.assertEqual(params["binding_type"], BindingType.PLATFORM_BINDING)
-        self.assertNotIn("scene_id", params)
+        self.assertEqual(params["binding_type"], BindingType.SCENE_BINDING)
+        self.assertIn("scene_id", params)
         self.assertEqual(params["configs"]["data_source"]["rt_id"], snapshot.bkbase_table_id)
         self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
 
