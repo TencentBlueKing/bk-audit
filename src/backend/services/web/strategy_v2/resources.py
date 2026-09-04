@@ -1152,9 +1152,9 @@ class ListStrategyAll(StrategyV2Base):
         """
         按 scope 关联关系过滤策略
 
-            - 都不传：默认平台视角（仅全局策略），与 ListToolAll 默认行为一致
+            - 都不传：返回全部策略（全局+场景）
             - scope_type + scope_id：scene/cross_scene 展开为 scene_id 列表，system/cross_system 展开为 system_id 列表
-            - 无 scope + binding_type：按 binding_type 过滤（scene_binding 单独传 = 全部场景策略）
+            - 无 scope + binding_type：按 binding_type 过滤（platform_binding=全局策略，scene_binding=全部场景策略）
         """
         from services.web.common.constants import ScopeType
 
@@ -1165,13 +1165,14 @@ class ListStrategyAll(StrategyV2Base):
         if scope_type == ScopeType.SCENE and not scope_id:
             raise serializers.ValidationError(gettext("scope_type=scene 时必须传 scope_id 参数"))
         if not scope_type:
-            # 无 scope 时按 binding_type 过滤；不传默认平台视角（仅全局策略）
-            binding_filter = binding_type or BindingType.PLATFORM_BINDING
+            # 无 scope 时按 binding_type 过滤；不传返回全部策略
+            if not binding_type:
+                return queryset
             strategy_ids = ResourceBinding.objects.filter(
                 resource_type=ResourceVisibilityType.STRATEGY,
-                binding_type=binding_filter,
+                binding_type=binding_type,
             ).values_list("resource_id", flat=True)
-            if binding_filter == BindingType.SCENE_BINDING:
+            if binding_type == BindingType.SCENE_BINDING:
                 # 场景级绑定需排除已软删场景的关联
                 strategy_ids = ResourceBindingScene.objects.filter(
                     binding__resource_type=ResourceVisibilityType.STRATEGY,
