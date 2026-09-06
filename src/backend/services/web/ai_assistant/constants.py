@@ -47,6 +47,10 @@ class MessageType(TextChoices):
     """平台首期支持的消息类型。"""
 
     SYSTEM_SELECTION = "SYSTEM_SELECTION", gettext_lazy("系统选择")
+    # 用户意图识别（User Intent Recognition）：统一自然语言入口，任务内完成意图识别
+    # （选系统/日志检索/无法识别）与条件识别；NATURAL_LANGUAGE_SEARCH 保留仅为存量消息
+    # 渲染与重试兼容，不再新建（一期设计方案 v6 §二）
+    USER_INTENT = "USER_INTENT", gettext_lazy("用户意图识别")
     NATURAL_LANGUAGE_SEARCH = "NATURAL_LANGUAGE_SEARCH", gettext_lazy("自然语言检索")
     LOG_SEARCH = "LOG_SEARCH", gettext_lazy("日志检索")
 

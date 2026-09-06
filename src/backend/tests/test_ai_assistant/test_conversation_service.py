@@ -83,8 +83,8 @@ class ConversationServiceTest(TestCase):
         )
 
         self.assertEqual(result.initial_message.conversation, result.conversation)
-        self.assertEqual(result.initial_message.status, ExecutionStatus.SUCCESS)
-        self.assertEqual(result.initial_message.output_data, {"content": "system:system-a"})
+        # 一期全异步化：初始化消息创建即 PROCESSING（终态由任务收敛，前端轮询）
+        self.assertEqual(result.initial_message.status, ExecutionStatus.PROCESSING)
 
     def test_create_conversation_supports_async_initial_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)

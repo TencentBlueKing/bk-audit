@@ -84,16 +84,12 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 {{ field_context_json }}
 
 ## 输出要求
-1. 只输出一个 JSON 对象，不要输出其他任何内容：
-{
-  "conditions": [
-    {"raw_name": "字段名", "keys": [], "field_type": "string", "operator": "操作符", "filters": ["值"]}
-  ],
-  "start_time": "...",
-  "end_time": "..."
-}
-2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键——字段上下文已列出的照抄，未列出但用户明确指定的按用户描述的子键名生成；检索范围由「目标系统」唯一指定，禁止输出 system_id 字段条件，用户提及系统名或其他系统时不映射该字段
-3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
+1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容：
+{{ output_schema_json }}
+2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键——
+   字段上下文已列出的照抄，未列出但用户明确指定的按用户描述的子键名生成；检索范围由「目标系统」唯一指定，禁止输出 system_id 字段条件，用户提及系统名或其他系统时不映射该字段
+3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；
+   filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
 4. 同一字段的多个取值（如多个操作人、多个资源类型）输出为单个条件：filters 放全部值、operator 用 include（排除语义用 exclude）；禁止拆成多个同字段条件，也禁止把多个值塞进 eq
 5. 值必须是原始查询值（如 result_code 用 0 而不是 "成功(0)"），形态参照字段上下文 sample_value
 6. 时间按「当前时间」推算为 ISO8601 带时区的绝对时间：
@@ -103,9 +99,11 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
    - 具体日期区间（如"8月1日到8月15日"）→ 按给出的起止边界换算
    - 用户有检索意图（想查日志）但未提任何时间 → 输出最近 30 天（一个月）滚动窗口
    - 仅当用户输入与日志检索完全无关（寒暄/闲聊）时才输出 null
-7. 关键词全文检索用 log 字段的 match_all/match_any 操作符表达：多个关键词需同时满足用 match_all，任一满足用 match_any；当用户以中文或口语描述操作类型、资源类型等，而字段上下文的 options 与 sample_value 均无法确定该字段确切取值时，禁止猜测字段值，改用 log 的 match_any 表达该关键词需求
+7. 关键词全文检索用 log 字段的 match_all/match_any 操作符表达：多个关键词需同时满足用 match_all，任一满足用 match_any；
+   当用户以中文或口语描述操作类型、资源类型等，而字段上下文的 options 与 sample_value 均无法确定该字段确切取值时，禁止猜测字段值，改用 log 的 match_any 表达该关键词需求
 8. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
-9. 时间范围本身就是有效检索需求：仅含时间的查询（如"帮我查下最近七天的日志"）必须输出空 conditions 与换算后的 start_time/end_time；仅当输入与日志检索完全无关（寒暄/闲聊）时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
+9. 时间范围本身就是有效检索需求：仅含时间的查询（如"帮我查下最近七天的日志"）必须输出空 conditions 与换算后的 start_time/end_time；
+   仅当输入与日志检索完全无关（寒暄/闲聊）时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
 # 数值比较操作符（仅数值类型字段可用）
 NUMERIC_OPERATORS = {
@@ -172,6 +170,8 @@ class NL2JSONService:
     def _build_user_message(cls, query_text: str, selection: SystemSelectionOutput, scope_id: str) -> str:
         # autoescape=False：Context 默认开启 HTML 转义，会把用户输入与字段上下文 JSON 中的
         # & < > " ' 转成 &amp; 等实体注入 prompt，扭曲检索语义
+        # output_schema_json：AIConditionPayload.model_json_schema()（single source of truth，
+        # 同一份模型用于 schema 注入与 model_validate 校验，字段含义见其 Field description）
         return Template(NL2JSON_USER_MESSAGE_TEMPLATE).render(
             Context(
                 {
@@ -179,6 +179,7 @@ class NL2JSONService:
                     "current_time": timezone.localtime().isoformat(),
                     "scope_id": scope_id,
                     "field_context_json": cls._serialize_field_context(selection),
+                    "output_schema_json": json.dumps(AIConditionPayload.model_json_schema(), ensure_ascii=False),
                 },
                 autoescape=False,
             )
@@ -401,9 +402,7 @@ class NL2JSONService:
         start_time = cls._safe_parse_time(payload.start_time) or (end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS))
         if start_time > end_time:
             # 防御：AI 时间换算倒置（LLM 常见笔误），Doris 链路无倒置校验、SQL 恒假零命中，交换保窗口有效
-            logger.warning(
-                f"[NL2JSONService] swapped reversed time window from AI output: {start_time} ~ {end_time}"
-            )
+            logger.warning(f"[NL2JSONService] swapped reversed time window from AI output: {start_time} ~ {end_time}")
             start_time, end_time = end_time, start_time
         return SearchCondition(
             scope_type="system",
