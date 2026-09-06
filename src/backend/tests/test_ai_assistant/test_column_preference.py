@@ -14,18 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-"""
-展示字段偏好（AI 日志检索列自定义）：服务层 + 检索快照列 + 用户隔离。
-"""
+# 展示字段偏好（AI 日志检索列自定义）：服务层 + 检索快照列 + 用户隔离。
 
 from unittest import mock
 
 from services.web.ai_assistant.models import UserColumnPreference
-from services.web.ai_assistant.resources.column import ApplyColumnConfig, ListColumnConfig
-from services.web.ai_assistant.services.column_preference import (
-    LOCKED_COLUMN_NAMES,
-    ColumnPreferenceService,
+from services.web.ai_assistant.resources.column import (
+    ApplyColumnConfig,
+    ListColumnConfig,
 )
+from services.web.ai_assistant.services.column_preference import ColumnPreferenceService
 from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from tests.test_ai_assistant.base import AIAssistantPlatformTestCase
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -111,9 +109,7 @@ class ColumnPreferenceSearchTest(AIAssistantTestCase):
             {"system_id": self.target_system_id, "name": self.target_system_name, "extra_field": "x"}
         ]
 
-    def test_search_columns_follow_preference(
-        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
-    ):
+    def test_search_columns_follow_preference(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
         """有偏好：快照 columns = 九列 + 自选列，samples 按列裁剪输出自选值"""
 
         hits = [
@@ -163,18 +159,14 @@ class ColumnConfigResourceTest(AIAssistantPlatformTestCase):
     """展示字段配置接口（查询 + 应用）"""
 
     def test_list_resource(self):
-        with mock.patch(
-            "services.web.ai_assistant.resources.column.get_request_username", return_value=self.user
-        ):
+        with mock.patch("services.web.ai_assistant.resources.column.get_request_username", return_value=self.user):
             config = ListColumnConfig().perform_request({})
 
         self.assertEqual(config["selected_fields"], EXPECTED_DEFAULT_COLUMNS)
         self.assertTrue(any(field["is_locked"] for field in config["available_fields"]))
 
     def test_apply_resource(self):
-        with mock.patch(
-            "services.web.ai_assistant.resources.column.get_request_username", return_value=self.user
-        ):
+        with mock.patch("services.web.ai_assistant.resources.column.get_request_username", return_value=self.user):
             result = ApplyColumnConfig().perform_request({"fields": ["request_id"]})
 
         self.assertEqual(result["selected_fields"], EXPECTED_DEFAULT_COLUMNS + ["request_id"])

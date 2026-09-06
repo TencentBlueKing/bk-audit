@@ -14,23 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-"""
-用户展示字段偏好服务（AI 日志检索列自定义）。
-
-产品口径：
-- 九个固定列（SNAPSHOT_DEFAULT_COLUMNS）锁死不可增减、顺序固定在前；
-- 其余字段（与日志检索页字段清单同源 LOG_SEARCH_ALL_FIELDS）用户自主增减；
-- 偏好按用户隔离持久化，跨设备同步；检索快照执行时按偏好输出 columns 并固化。
-"""
+# 用户展示字段偏好服务（AI 日志检索列自定义）。
+#
+# 产品口径：
+# - 九个固定列（SNAPSHOT_DEFAULT_COLUMNS）锁死不可增减、顺序固定在前；
+# - 其余字段（与日志检索页字段清单同源 LOG_SEARCH_ALL_FIELDS）用户自主增减；
+# - 偏好按用户隔离持久化，跨设备同步；检索快照执行时按偏好输出 columns 并固化。
 
 import logging
 from typing import Dict, List
 
-from django.db.models import Q
-
 from services.web.ai_assistant.models import UserColumnPreference
 from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
-from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS, LOG_SEARCH_ALL_FIELDS_MAP
+from services.web.query.utils.field import (
+    LOG_SEARCH_ALL_FIELDS,
+    LOG_SEARCH_ALL_FIELDS_MAP,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -14,9 +14,7 @@ class ColumnConfigResponseSerializer(serializers.Serializer):
     """展示字段配置：可选字段 + 当前用户已选字段。"""
 
     available_fields = ColumnConfigFieldSerializer(many=True, label=gettext_lazy("可选字段"))
-    selected_fields = serializers.ListField(
-        child=serializers.CharField(), label=gettext_lazy("已选字段")
-    )
+    selected_fields = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("已选字段"))
 
 
 class ColumnConfigApplyRequestSerializer(serializers.Serializer):
@@ -32,6 +30,4 @@ class ColumnConfigApplyRequestSerializer(serializers.Serializer):
 class ColumnConfigApplyResponseSerializer(serializers.Serializer):
     """应用后返回规范化结果（固定列在前 + 自选列按提交顺序）。"""
 
-    selected_fields = serializers.ListField(
-        child=serializers.CharField(), label=gettext_lazy("已选字段")
-    )
+    selected_fields = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("已选字段"))
