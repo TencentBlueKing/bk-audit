@@ -60,3 +60,7 @@ AGENTS.md
 *debug*
 .worktrees/
 .playwright-cli
+
+# 本地提交流程临时文件（UTF-8 message 载体与 lint 报告，按需重建）
+src/backend/commit_msg.txt
+src/flake8_report.tmp.txt
