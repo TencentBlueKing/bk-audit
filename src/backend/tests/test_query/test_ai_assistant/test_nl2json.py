@@ -61,6 +61,15 @@ class TestNL2JSONService(AIAssistantTestCase):
 
         condition = self._convert()
 
+        # User Message 注入 AIConditionPayload.model_json_schema()（single source of truth：
+        # 结构约束来自校验模型本身，含字段 description，不再手写 JSON 示例）
+        _, kwargs = mock_chat.call_args
+        user_message = kwargs["input"]
+        self.assertIn('"conditions"', user_message)
+        self.assertIn('"start_time"', user_message)
+        self.assertIn("检索条件列表，无字段条件时为空数组", user_message)
+        self.assertIn("操作符，必须在该字段 allow_operators 内", user_message)
+
         # scope 取入参（不信任 AI）
         self.assertEqual(condition.scope_id, self.target_system_id)
         self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
@@ -72,7 +81,6 @@ class TestNL2JSONService(AIAssistantTestCase):
         # field_type 由服务端按元数据补全
         self.assertEqual(cond.field.field_type, "string")
         # 非流式调用 + 显式 user
-        _, kwargs = mock_chat.call_args
         self.assertEqual(kwargs["user"], self.username)
         self.assertFalse(kwargs["execute_kwargs"]["stream"])
 
@@ -156,9 +164,7 @@ class TestNL2JSONService(AIAssistantTestCase):
     def test_extension_user_specified_invalid_operator_rejected(self, mock_chat):
         """未采样发现的子键：操作符仍按拓展字段默认集合校验（gt 数值比较拒绝）"""
         output = dict(VALID_AI_OUTPUT)
-        output["conditions"] = [
-            {"raw_name": "extend_data", "keys": ["not_exist"], "operator": "gt", "filters": ["1"]}
-        ]
+        output["conditions"] = [{"raw_name": "extend_data", "keys": ["not_exist"], "operator": "gt", "filters": ["1"]}]
         mock_chat.return_value = json.dumps(output)
         with self.assertRaises(AIOutputInvalidError):
             self._convert()
@@ -166,9 +172,7 @@ class TestNL2JSONService(AIAssistantTestCase):
     def test_extension_keys_on_non_json_field_rejected(self, mock_chat):
         """容器白名单保留：非 JSON 容器字段带下钻 keys 仍拒绝（防编造容器）"""
         output = dict(VALID_AI_OUTPUT)
-        output["conditions"] = [
-            {"raw_name": "username", "keys": ["hijack"], "operator": "eq", "filters": ["x"]}
-        ]
+        output["conditions"] = [{"raw_name": "username", "keys": ["hijack"], "operator": "eq", "filters": ["x"]}]
         mock_chat.return_value = json.dumps(output)
         with self.assertRaises(AIOutputInvalidError):
             self._convert()

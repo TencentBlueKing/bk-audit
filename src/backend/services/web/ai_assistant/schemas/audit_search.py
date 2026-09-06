@@ -35,6 +35,10 @@ __all__ = [
     "SystemSelectionContextSchema",
     "SystemSelectionInputSchema",
     "SystemSelectionOutputSchema",
+    "UserIntentContextSchema",
+    "UserIntentErrorSchema",
+    "UserIntentInputSchema",
+    "UserIntentOutputSchema",
 ]
 
 # 嵌套 query 模型 / 宽松集合的统一 DRF 表达（运行时校验仍走 Pydantic 嵌套模型）
@@ -105,6 +109,50 @@ class NLSearchOutputSchema(MessageSchema):
 
         if (self.condition is None) == (self.error is None):
             raise ValueError("NL 检索输出必须且只能携带 condition 或 error 之一")
+        return self
+
+
+class UserIntentInputSchema(MessageSchema):
+    """USER_INTENT 输入：与 NL 输入同构（前端提交参数零变化，仅 message_type 不同）。"""
+
+    query_text: str = Field(min_length=1, max_length=2048)
+    auto_execute: bool = True
+
+
+class UserIntentContextSchema(MessageSchema):
+    """USER_INTENT 上下文：意图识别前系统未定，无 system_selection（任务内按路由结果加载）。"""
+
+    username: str
+    namespace: str
+
+
+class UserIntentErrorSchema(MessageSchema):
+    """USER_INTENT 结构化错误协议：与 NL error 同构（error_code + AI 动态 error_message）
+    + 候选系统清单（SYSTEM_REQUIRED 引导补系统时携带）。"""
+
+    error_code: str  # UNRECOGNIZED_INTENT / SYSTEM_REQUIRED / QUERY_NOT_RECOGNIZED
+    error_message: str
+    candidates: Annotated[list, _NestedListField] = Field(default_factory=list)
+
+
+class UserIntentOutputSchema(MessageSchema):
+    """USER_INTENT 输出：condition/error 与 NL 输出同构（前端卡片渲染复用 NL 逻辑），
+    附加意图扩展字段（intent/system_id/message/子消息锚点，前端渐进增强）。"""
+
+    intent: str = ""
+    system_id: str = ""
+    message: str = ""
+    condition: Annotated[SearchCondition | None, _NestedObjectOrNullField] = None
+    error: UserIntentErrorSchema | None = None
+    selection_message_uid: str = ""
+    log_search_message_uid: str = ""
+
+    @model_validator(mode="after")
+    def _validate_payload_exclusive(self) -> "UserIntentOutputSchema":
+        """condition 与 error 互斥：意图与条件均识别成功带 condition，否则带错误协议。"""
+
+        if (self.condition is None) == (self.error is None):
+            raise ValueError("USER_INTENT 输出必须且只能携带 condition 或 error 之一")
         return self
 
 
