@@ -467,7 +467,7 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
         mock_delay.assert_not_called()
 
     def test_dispatch_failure_does_not_break_creation(self):
-        """标题任务派发异常不影响条件检索消息创建（静默吞掉）"""
+        """标题任务派发异常不影响条件检索消息创建（静默吞掉；异步化后创建即 PROCESSING）。"""
 
         self.create_selection_message()
         with mock.patch(
@@ -483,4 +483,4 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
                 input_data={"condition": make_condition().model_dump(mode="json")},
             )
 
-        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(message.status, ExecutionStatus.PROCESSING)

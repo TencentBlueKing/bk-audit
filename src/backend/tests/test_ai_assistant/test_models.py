@@ -41,7 +41,7 @@ class AIAssistantConstantsTest(SimpleTestCase):
         self.assertEqual(set(ExecutionObjectType.values), {"MESSAGE", "ATTACHMENT"})
         self.assertEqual(
             set(MessageType.values),
-            {"SYSTEM_SELECTION", "NATURAL_LANGUAGE_SEARCH", "LOG_SEARCH"},
+            {"SYSTEM_SELECTION", "USER_INTENT", "NATURAL_LANGUAGE_SEARCH", "LOG_SEARCH"},
         )
         self.assertEqual(
             set(AttachmentType.values),

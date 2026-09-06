@@ -95,13 +95,10 @@ class ExportConfig:
         # 扩展字段平铺：把 extend_data 单列替换为每个子键单独一列
         if self.flatten_extension and self.extension_keys:
             ordered_fields = [
-                field
-                for field in ordered_fields
-                if not (field.raw_name == "extend_data" and not field.keys)
+                field for field in ordered_fields if not (field.raw_name == "extend_data" and not field.keys)
             ]
             ordered_fields.extend(
-                LogExportField(raw_name="extend_data", display_name=key, keys=[key])
-                for key in self.extension_keys
+                LogExportField(raw_name="extend_data", display_name=key, keys=[key]) for key in self.extension_keys
             )
 
         return ordered_fields

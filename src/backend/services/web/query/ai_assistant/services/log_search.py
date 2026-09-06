@@ -59,7 +59,10 @@ from services.web.query.ai_assistant.schemas import (
     ResultColumn,
     SearchCondition,
 )
-from services.web.query.constants import COLLECT_SEARCH_CONFIG, DEFAULT_COLLECTOR_SORT_LIST
+from services.web.query.constants import (
+    COLLECT_SEARCH_CONFIG,
+    DEFAULT_COLLECTOR_SORT_LIST,
+)
 from services.web.query.resources.base import SearchDataParser
 from services.web.query.serializers import CollectorSearchAllReqSerializer
 from services.web.query.utils.doris import DorisQuerySQLBuilder

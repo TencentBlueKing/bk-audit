@@ -41,11 +41,15 @@ from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIPermissionDeniedError,
 )
-from services.web.query.ai_assistant.schemas import LogSearchOutput, ResultColumn, SearchCondition
+from services.web.query.ai_assistant.schemas import (
+    LogSearchOutput,
+    ResultColumn,
+    SearchCondition,
+)
 from services.web.query.constants import (
     DEFAULT_COLLECTOR_SORT_LIST,
-    FieldCategoryEnum,
     LOG_FIELD_KEY_JOIN_CHAR,
+    FieldCategoryEnum,
     LogExportFieldScope,
 )
 from services.web.query.export.data_processor import DataProcessor
@@ -159,17 +163,14 @@ class PreviewExportService:
 
         # ② 构造展平后的列：移除 extend_data 单列；为每个子键添加 ResultColumn
         flat_columns: List[ResultColumn] = [
-            column
-            for column in output.columns
-            if not (column.raw_name == "extend_data" and not column.keys)
+            column for column in output.columns if not (column.raw_name == "extend_data" and not column.keys)
         ]
         for key in keys:
             flat_columns.append(ResultColumn(raw_name="extend_data", keys=[key], display_name=key))
 
         # ③ 内存态 LogExportTask 走 SPECIFIED 形态
         export_fields = [
-            {"raw_name": column.full_key, "display_name": column.display_name, "keys": []}
-            for column in flat_columns
+            {"raw_name": column.full_key, "display_name": column.display_name, "keys": []} for column in flat_columns
         ]
         task_stub = LogExportTask(
             export_config={

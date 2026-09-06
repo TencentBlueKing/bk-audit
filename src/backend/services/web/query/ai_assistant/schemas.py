@@ -177,19 +177,43 @@ class NLSearchOutput(BaseModel):
 class AIConditionItem(BaseModel):
     """AI 生成的单条条件（AIDev 返回契约，不进 output_data）"""
 
-    raw_name: str = Field(..., min_length=1)
-    keys: List[str] = Field(default_factory=list)
-    field_type: Optional[str] = None
-    operator: str = Field(..., min_length=1)
-    filters: List[Any] = Field(default_factory=list)
+    raw_name: str = Field(..., min_length=1, description="字段名，必须来自字段上下文 standard_fields/extension_fields")
+    keys: List[str] = Field(default_factory=list, description="下钻子键，仅 JSON 容器字段使用，通用字段为空数组")
+    field_type: Optional[str] = Field(None, description="字段类型，可缺省由服务端按字段元数据补全")
+    operator: str = Field(..., min_length=1, description="操作符，必须在该字段 allow_operators 内")
+    filters: List[Any] = Field(default_factory=list, description="原始查询值列表，形态匹配操作符")
 
 
 class AIConditionPayload(BaseModel):
-    """AIDev 返回的 JSON 契约：条件 + 时间（scope 不生成，取自上下文）"""
+    """AIDev 返回的 JSON 契约：条件 + 时间（scope 不生成，取自上下文）。
 
-    conditions: List[AIConditionItem] = Field(default_factory=list)
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    作为输出契约的 single source of truth：model_json_schema() 注入 Prompt 约束 AI 输出结构，
+    model_validate 校验输出，同一份模型两用（详见一期设计方案 §5.3）。
+    """
+
+    conditions: List[AIConditionItem] = Field(default_factory=list, description="检索条件列表，无字段条件时为空数组")
+    start_time: Optional[str] = Field(None, description="开始时间，ISO 8601 带时区")
+    end_time: Optional[str] = Field(None, description="结束时间，ISO 8601 带时区")
+
+
+class IntentPayload(BaseModel):
+    """用户意图识别 Agent 返回的 JSON 契约（一期两类行为 + 无法识别兜底）。
+
+    single source of truth：model_json_schema() 注入 Prompt 约束输出结构，
+    model_validate 校验输出（详见一期设计方案 v6 §三/§五）。
+    """
+
+    intent: Literal["select_system", "log_search", "unrecognized"] = Field(
+        description="意图分类：选系统（含同时要检索）/ 当前系统日志检索 / 无法识别"
+    )
+    system_id: str = Field(
+        default="",
+        description="select_system 时必填，必须来自候选系统列表；log_search/unrecognized 时留空",
+    )
+    message: str = Field(
+        default="",
+        description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",
+    )
 
 
 # ---------------------------------------------------------------------------

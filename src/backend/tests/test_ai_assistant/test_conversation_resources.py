@@ -108,8 +108,8 @@ class ConversationResourceTest(TestCase):
 
         self.assertEqual(created["title"], "新对话")
         self.assertEqual(created["initial_message"]["conversation_uid"], created["uid"])
-        self.assertEqual(created["initial_message"]["status"], ExecutionStatus.SUCCESS)
-        self.assertEqual(created["initial_message"]["output_data"], {"content": "system:system-a"})
+        # 一期全异步化：初始化消息创建即 PROCESSING（终态由任务收敛，前端轮询）
+        self.assertEqual(created["initial_message"]["status"], ExecutionStatus.PROCESSING)
 
     def test_sidebar_list_pin_move_and_search(self, _username):
         group = CreateConversationGroup().request({"name": "目标分组"})

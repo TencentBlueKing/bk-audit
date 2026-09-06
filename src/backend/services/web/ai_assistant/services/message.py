@@ -195,35 +195,76 @@ class MessageService:
         return prepared
 
     def create_prepared(self, *, conversation: Conversation, prepared: PreparedMessage) -> Message:
-        """持久化已准备的消息；异步消息在事务提交后投递业务 Task。"""
+        """持久化已准备的消息；统一异步（事务提交后投递业务任务，前端轮询终态）。
+
+        一期全异步化：所有消息类型创建即返回 PROCESSING；
+        任务内编排（NL 续链 / 意图识别子链）请使用 create_executed（同步执行保证时序）。
+        """
 
         self._validate_conversation(conversation=conversation)
         with transaction.atomic():
             # prepare 可能较慢，最终写入前再锁定会话，与删除/清空串行化。
             self._lock_active_conversation(conversation=conversation)
-            if prepared.execution_mode == ExecutionMode.ASYNC:
-                handler = message_handler_registry.require(prepared.message_type)
-                return self._create_async(
-                    conversation=conversation,
-                    handler=handler,
-                    parent_message=prepared.parent_message,
-                    input_snapshot=prepared.input_data,
-                    context_snapshot=prepared.context_data,
-                )
-            now = timezone.now()
-            return Message.objects.create(
+            handler = message_handler_registry.require(prepared.message_type)
+            return self._create_async(
                 conversation=conversation,
+                handler=handler,
                 parent_message=prepared.parent_message,
-                message_type=prepared.message_type,
+                input_snapshot=prepared.input_data,
+                context_snapshot=prepared.context_data,
+            )
+
+    def create_executed(
+        self,
+        *,
+        conversation: Conversation,
+        message_type: str | MessageType,
+        input_data: Mapping[str, Any],
+        parent_message: Message | None = None,
+    ) -> Message:
+        """任务内编排专用：同步执行业务并直接落库成功消息（不经 Celery 派发）。
+
+        用于异步任务内创建子消息（NL 续链 / 意图识别子链的 SELECTION 与 LOG_SEARCH），
+        保证父消息收敛时整条链完成（时序一致）；对外创建一律走 create（全异步）。
+        """
+
+        # 编排场景父消息可能刚收敛终态（内存实例仍是 PROCESSING），刷新后校验
+        if parent_message is not None:
+            parent_message.refresh_from_db()
+        handler = message_handler_registry.require(message_type)
+        parsed_input = parse_snapshot(handler.input_model, input_data, field_name="input_data")
+        preparation = handler.prepare(
+            user=self.user,
+            conversation=conversation,
+            parent_message=parent_message,
+            input_data=parsed_input,
+        )
+        parsed_context = parse_snapshot(
+            handler.context_model,
+            preparation.context_data,
+            field_name="context_data",
+        )
+        output_data = handler.execute(input_data=parsed_input, context_data=parsed_context)
+        output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
+        with transaction.atomic():
+            self._validate_conversation(conversation=conversation)
+            self._lock_active_conversation(conversation=conversation)
+            now = timezone.now()
+            message = Message.objects.create(
+                conversation=conversation,
+                parent_message=preparation.parent_message,
+                message_type=handler.message_type,
                 status=ExecutionStatus.SUCCESS,
-                input_data=prepared.input_data,
-                context_data=prepared.context_data,
-                output_data=prepared.output_data,
+                input_data=parsed_input.model_dump(mode="json"),
+                context_data=parsed_context.model_dump(mode="json"),
+                output_data=output_snapshot,
                 last_activity_at=now,
                 finished_at=now,
                 created_by=self.user,
                 updated_by=self.user,
             )
+        self._maybe_dispatch_field_condition_title(message)
+        return message
 
     def get(self, *, message_uid: str) -> Message:
         """按外部 UID 获取当前用户有效会话中的一条消息。"""
@@ -491,7 +532,7 @@ class MessageService:
         input_data: Mapping[str, Any] | MessageSchema,
         parent_message: Message | None,
     ) -> PreparedMessage:
-        """统一构造输入和上下文快照；同步 Handler 在此直接生成输出。"""
+        """统一构造输入和上下文快照（SYNC Handler 就地执行供编辑链路复用；创建链路全异步忽略输出）。"""
 
         parsed_input = parse_snapshot(handler.input_model, input_data, field_name="input_data")
         preparation = handler.prepare(
@@ -507,6 +548,7 @@ class MessageService:
         )
         output_snapshot = None
         if handler.execution_mode == ExecutionMode.SYNC:
+            # raja 编辑链路语义：同步消息编辑就地执行立即产出（创建链路全异步不消费该字段）
             output_data = handler.execute(input_data=parsed_input, context_data=parsed_context)
             output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
         return PreparedMessage(

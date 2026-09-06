@@ -36,13 +36,21 @@ from services.web.ai_assistant.schemas.audit_search import (
     SystemSelectionContextSchema,
     SystemSelectionInputSchema,
     SystemSelectionOutputSchema,
+    UserIntentContextSchema,
+    UserIntentInputSchema,
+    UserIntentOutputSchema,
 )
 from services.web.ai_assistant.services.column_preference import ColumnPreferenceService
 from services.web.ai_assistant.services.operation import (
     OperationContextService,
     extract_system_ids,
 )
-from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
+from services.web.ai_assistant.tasks.audit_search import (
+    execute_log_search,
+    execute_natural_language_search,
+    execute_system_selection,
+    execute_user_intent,
+)
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
 from services.web.query.ai_assistant.schemas import (
     SearchCondition,
@@ -97,6 +105,11 @@ def extract_selection_system_ids(message: Message) -> set[str]:
     if message.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
         context_data = message.context_data if isinstance(message.context_data, dict) else {}
         systems = (context_data.get("system_selection") or {}).get("systems") or []
+    elif message.message_type == MessageType.USER_INTENT:
+        # 意图识别消息：路由结果系统在 output_data.system_id（条件识别即按该系统组装）
+        output_data = message.output_data if isinstance(message.output_data, dict) else {}
+        system_id = str(output_data.get("system_id") or "")
+        return {system_id} if system_id else set()
     else:
         output_data = message.output_data if isinstance(message.output_data, dict) else {}
         systems = output_data.get("systems") or []
@@ -106,13 +119,18 @@ def extract_selection_system_ids(message: Message) -> set[str]:
 class SystemSelectionHandler(
     MessageTypeHandler[SystemSelectionInputSchema, SystemSelectionContextSchema, SystemSelectionOutputSchema]
 ):
-    """系统选择消息：同步构建字段上下文与操作上下文（根消息）。"""
+    """系统选择消息：构建字段上下文与操作上下文（根消息）。
+
+    一期全异步化：对外创建即返回 PROCESSING（前端轮询终态）；
+    任务内编排（意图识别子链）经 MessageService.create_executed 同步执行保证时序。
+    """
 
     message_type = MessageType.SYSTEM_SELECTION
-    execution_mode = ExecutionMode.SYNC
+    execution_mode = ExecutionMode.ASYNC
     input_model = SystemSelectionInputSchema
     context_model = SystemSelectionContextSchema
     output_model = SystemSelectionOutputSchema
+    async_task = execute_system_selection
 
     def prepare(
         self,
@@ -147,6 +165,40 @@ class SystemSelectionHandler(
             systems=selection.systems,
             common_operations=common_operations,
             historical_operations=historical_operations,
+        )
+
+
+class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentContextSchema, UserIntentOutputSchema]):
+    """用户意图识别消息：统一自然语言入口（新会话/中途均可，无父消息）。
+
+    任务内完成意图识别（选系统 / 日志检索 / 无法识别）→ 按需建/复用系统选择 →
+    条件识别 → 续链日志检索；上下文不含 system_selection（意图识别前系统未定，
+    任务内按路由结果加载，详见 execute_user_intent）。
+    """
+
+    message_type = MessageType.USER_INTENT
+    execution_mode = ExecutionMode.ASYNC
+    input_model = UserIntentInputSchema
+    context_model = UserIntentContextSchema
+    output_model = UserIntentOutputSchema
+    # 与自然语言消息对齐：仅成功消息支持反馈
+    supports_feedback = True
+    async_task = execute_user_intent
+
+    def prepare(
+        self,
+        *,
+        user: str,
+        conversation: Conversation,
+        parent_message: Message | None,
+        input_data: UserIntentInputSchema,
+    ) -> MessagePreparation[UserIntentContextSchema]:
+        # 入口消息无父：系统选择由任务内按意图识别结果创建/复用，prepare 阶段不做系统绑定
+        if parent_message is not None:
+            raise InvalidParentMessage(message="用户意图识别是入口消息，不能引用父消息")
+        return MessagePreparation(
+            parent_message=None,
+            context_data=UserIntentContextSchema(username=user, namespace=settings.DEFAULT_NAMESPACE),
         )
 
 
@@ -189,13 +241,18 @@ class NaturalLanguageSearchHandler(
 
 
 class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContextSchema, LogSearchOutputSchema]):
-    """日志检索消息：同步执行；父消息为系统选择或自然语言消息。"""
+    """日志检索消息：父消息为系统选择、自然语言或用户意图消息。
+
+    一期全异步化：对外创建即返回 PROCESSING（前端轮询终态）；
+    任务内编排（NL / 意图识别续链）经 MessageService.create_executed 同步执行保证时序。
+    """
 
     message_type = MessageType.LOG_SEARCH
-    execution_mode = ExecutionMode.SYNC
+    execution_mode = ExecutionMode.ASYNC
     input_model = LogSearchInputSchema
     context_model = LogSearchContextSchema
     output_model = LogSearchOutputSchema
+    async_task = execute_log_search
 
     def prepare(
         self,
@@ -207,7 +264,13 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
     ) -> MessagePreparation[LogSearchContextSchema]:
         parent = self._resolve_parent(user=user, conversation=conversation, parent_message=parent_message)
         self._validate_scope(parent=parent, condition=input_data.condition)
-        source = "natural_language" if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH else "field_condition"
+        # 自然语言来源 = NL 或意图识别消息续链（条件由 AI 识别，非用户手选条件表单）；
+        # field_condition 仅用户直接发起的条件检索（其标题走条件摘要派发）
+        source = (
+            "natural_language"
+            if parent.message_type in (MessageType.NATURAL_LANGUAGE_SEARCH, MessageType.USER_INTENT)
+            else "field_condition"
+        )
         return MessagePreparation(
             parent_message=parent,
             context_data=LogSearchContextSchema(
@@ -232,11 +295,15 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
         return LogSearchOutputSchema.from_query_output(output)
 
     def _resolve_parent(self, *, user: str, conversation: Conversation, parent_message: Message | None) -> Message:
-        """显式父消息须为成功的系统选择或自然语言消息；省略时兜底解析最新成功选择。"""
+        """显式父消息须为成功的系统选择、自然语言或用户意图消息；省略时兜底解析最新成功选择。"""
 
         if parent_message is not None:
-            if parent_message.message_type not in (MessageType.SYSTEM_SELECTION, MessageType.NATURAL_LANGUAGE_SEARCH):
-                raise InvalidParentMessage(message="日志检索的父消息必须是系统选择或自然语言检索消息")
+            if parent_message.message_type not in (
+                MessageType.SYSTEM_SELECTION,
+                MessageType.NATURAL_LANGUAGE_SEARCH,
+                MessageType.USER_INTENT,
+            ):
+                raise InvalidParentMessage(message="日志检索的父消息必须是系统选择、自然语言或用户意图消息")
             if parent_message.status != ExecutionStatus.SUCCESS:
                 raise InvalidParentMessage(message="父消息必须执行成功")
             return parent_message
@@ -252,5 +319,6 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
 
 
 message_handler_registry.register(SystemSelectionHandler())
+message_handler_registry.register(UserIntentHandler())
 message_handler_registry.register(NaturalLanguageSearchHandler())
 message_handler_registry.register(LogSearchHandler())

@@ -15,11 +15,17 @@ from services.web.ai_assistant.constants import (
     NL_PARSE_MAX_RETRIES,
     NL_PARSE_RETRY_INTERVAL_SECONDS,
     NL_PARSE_RETRY_TIMEOUT_SECONDS,
+    ExecutionStatus,
     MessageType,
 )
+from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchOutputSchema,
     NLSearchErrorSchema,
     NLSearchOutputSchema,
+    SystemSelectionOutputSchema,
+    UserIntentErrorSchema,
+    UserIntentOutputSchema,
 )
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
@@ -27,10 +33,12 @@ from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
+    AIOutputInvalidError,
     AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
 )
+from services.web.query.ai_assistant.services.intent import IntentRecognitionService
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 
 logger = logging.getLogger(__name__)
@@ -58,28 +66,8 @@ class NLSearchExecutionTask(MessageExecutionTask):
                 execution.message.id,
                 task_id,
             )
-        self._dispatch_title_generation(execution=execution)
+        _dispatch_title_generation(execution=execution, log_prefix="[NLSearchExecutionTask]")
         return result
-
-    @staticmethod
-    def _dispatch_title_generation(*, execution: MessageExecution) -> None:
-        """自然语言消息成功后异步生成会话标题（识别失败的结构化协议同样触发；失败静默不阻塞消息终态）。"""
-
-        try:
-            # 延迟导入：避免 tasks ↔ services 加载期循环依赖
-            from services.web.ai_assistant.tasks.conversation import (
-                generate_conversation_title,
-            )
-
-            generate_conversation_title.delay(
-                conversation_id=execution.message.conversation_id,
-                query_text=execution.input_data.query_text,
-            )
-        except Exception:
-            logger.exception(
-                "[NLSearchExecutionTask] dispatch title generation failed, message_id=%s",
-                execution.message.id,
-            )
 
     @staticmethod
     def _create_auto_log_search(*, execution: MessageExecution, output_data: NLSearchOutputSchema) -> None:
@@ -91,16 +79,227 @@ class NLSearchExecutionTask(MessageExecutionTask):
         if output_data.condition is None:
             # 识别失败（结构化 error 协议）无检索条件，不续链
             return
-        MessageService(user=message.created_by).create(
+        MessageService(user=message.created_by).create_executed(
             conversation=message.conversation,
             message_type=MessageType.LOG_SEARCH,
             input_data={"condition": output_data.condition.model_dump(mode="json")},
-            parent_message_uid=str(message.uid),
+            parent_message=message,
         )
         logger.info(
             "[NLSearchExecutionTask] auto log search created, parent_message_id=%s",
             message.id,
         )
+
+
+@celery_app.task(bind=True, base=MessageExecutionTask)
+def execute_system_selection(self, execution: MessageExecution) -> SystemSelectionOutputSchema:  # noqa: N805
+    """系统选择消息任务（一期全异步化）：构建字段上下文与操作上下文（原 SYNC execute 原样移入）。"""
+
+    from services.web.ai_assistant.handlers import message_handler_registry
+
+    handler = message_handler_registry.require(MessageType.SYSTEM_SELECTION)
+    return handler.execute(input_data=execution.input_data, context_data=execution.context_data)
+
+
+@celery_app.task(bind=True, base=MessageExecutionTask)
+def execute_log_search(self, execution: MessageExecution) -> LogSearchOutputSchema:  # noqa: N805
+    """日志检索消息任务（一期全异步化）：执行检索并产出快照（原 SYNC execute 原样移入）。
+
+    执行失败直接抛出异常（平台收敛 FAILED，用户可重试），与原同步语义一致；
+    成功后平台自动收敛 SUCCESS。
+    """
+
+    from services.web.ai_assistant.handlers import message_handler_registry
+
+    handler = message_handler_registry.require(MessageType.LOG_SEARCH)
+    return handler.execute(input_data=execution.input_data, context_data=execution.context_data)
+
+
+class UserIntentExecutionTask(MessageExecutionTask):
+    """用户意图识别任务：意图识别 → 按意图建/复用系统选择 → 条件识别 → 续链检索。
+
+    预期内失败（unrecognized / SYSTEM_REQUIRED / 条件识别失败）同样收敛 SUCCESS
+    并携带结构化 error 协议（error_message 由 AI 动态生成或后端拼接候选引导）；
+    条件识别成功且 auto_execute 时续链 LOG_SEARCH（失败不影响终态，对齐 NL 模式）；
+    unrecognized（闲聊类话语）不派发标题生成。
+    """
+
+    abstract = True
+
+    def _finish_success(
+        self, *, execution: MessageExecution, task_id: str, output_data: UserIntentOutputSchema
+    ) -> dict:
+        result = super()._finish_success(execution=execution, task_id=task_id, output_data=output_data)
+        if output_data.condition is not None:
+            try:
+                self._create_log_search(execution=execution, output_data=output_data)
+            except Exception:
+                # 续链失败不回滚消息终态（识别成功保留 condition，子消息不创建）
+                logger.exception(
+                    "[UserIntentExecutionTask] auto log search failed, message_id=%s, task_id=%s",
+                    execution.message.id,
+                    task_id,
+                )
+        if output_data.intent != "unrecognized":
+            _dispatch_title_generation(execution=execution, log_prefix="[UserIntentExecutionTask]")
+        return result
+
+    @staticmethod
+    def _create_log_search(*, execution: MessageExecution, output_data: UserIntentOutputSchema) -> None:
+        """以意图识别消息为父消息同步创建日志检索子消息（复用 NL 续链模式）。"""
+
+        message = execution.message
+        if not execution.input_data.auto_execute:
+            return
+        MessageService(user=message.created_by).create_executed(
+            conversation=message.conversation,
+            message_type=MessageType.LOG_SEARCH,
+            input_data={"condition": output_data.condition.model_dump(mode="json")},
+            parent_message=message,
+        )
+        logger.info(
+            "[UserIntentExecutionTask] auto log search created, parent_message_id=%s",
+            message.id,
+        )
+
+
+def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) -> None:
+    """消息成功后异步生成会话标题（NL 与意图识别链路共用；失败静默不阻塞消息终态）。"""
+
+    try:
+        # 延迟导入：避免 tasks ↔ services 加载期循环依赖
+        from services.web.ai_assistant.tasks.conversation import (
+            generate_conversation_title,
+        )
+
+        generate_conversation_title.delay(
+            conversation_id=execution.message.conversation_id,
+            query_text=execution.input_data.query_text,
+        )
+    except Exception:
+        logger.exception(
+            "%s dispatch title generation failed, message_id=%s",
+            log_prefix,
+            execution.message.id,
+        )
+
+
+@celery_app.task(bind=True, base=UserIntentExecutionTask)
+def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSchema:  # noqa: N805
+    """用户意图识别：意图（选系统/日志检索/无法识别）→ 按需系统选择 → 条件识别 → 结构化输出。
+
+    解析失败（非合法 JSON / 形态不合契约）预算内自动重试（次数 + 总时长双约束），
+    超限冒泡收敛 FAILED（手动重试恢复预算）；越权 system_id 与 AIDev 暂态故障直接冒泡；
+    unrecognized（AI 判定无法归类）与 SYSTEM_REQUIRED（检索意图明确但会话无系统，
+    平台守门）收敛 SUCCESS + 结构化 error（error_message 动态）。
+    """
+
+    # 延迟导入：handlers 依赖本模块的任务函数，反向引用需运行期加载
+    from services.web.ai_assistant.handlers.audit_search import load_selection_snapshot
+
+    context_data = execution.context_data
+    query_text = execution.input_data.query_text
+    candidates = IntentRecognitionService.load_candidates(context_data.namespace, context_data.username)
+    # 会话当前系统 = 最新成功 SYSTEM_SELECTION（切换/复用判定依据）
+    current_selection = (
+        Message.objects.filter(
+            conversation=execution.message.conversation,
+            created_by=context_data.username,
+            message_type=MessageType.SYSTEM_SELECTION,
+            status=ExecutionStatus.SUCCESS,
+        )
+        .order_by("-id")
+        .first()
+    )
+    current_system_id = ""
+    if current_selection is not None:
+        systems = (current_selection.output_data or {}).get("systems") or []
+        current_system_id = str((systems[0] or {}).get("system_id") or "") if systems else ""
+    # ① 意图识别（仅解析失败预算重试，对齐 NL 模式；越权/暂态直接冒泡）
+    deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
+    try:
+        for attempt in range(NL_PARSE_MAX_RETRIES + 1):
+            try:
+                payload = IntentRecognitionService.recognize(
+                    query_text=query_text,
+                    candidates=candidates,
+                    current_system_id=current_system_id,
+                    username=context_data.username,
+                )
+            except AIOutputParseFailedError:
+                # 解析失败具随机性：预算内自动重试；超次数或超时长即结束并冒泡 FAILED
+                if attempt >= NL_PARSE_MAX_RETRIES or time.monotonic() >= deadline:
+                    logger.error(
+                        "[execute_user_intent] intent parse retry budget exhausted, message_id=%s, attempt=%s",
+                        execution.message.id,
+                        attempt + 1,
+                    )
+                    raise
+                time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
+            else:
+                break
+    except (AITimeoutError, AIServiceError, AIOutputParseFailedError, AIOutputInvalidError):
+        logger.exception("[execute_user_intent] intent recognition failed, message_id=%s", execution.message.id)
+        raise
+    # ② 无法识别：AI 动态说明为什么不行
+    if payload.intent == "unrecognized":
+        return UserIntentOutputSchema(
+            intent="unrecognized",
+            error=UserIntentErrorSchema(
+                error_code="UNRECOGNIZED_INTENT",
+                error_message=payload.message or "未能理解您的需求，请描述要查询的系统或日志内容",
+            ),
+        )
+    # ③ 系统路由：select_system 命中新系统（或会话无系统）→ 建新 SELECTION（切换/首建）；
+    #    命中当前系统 → 复用不重建；log_search 校验会话已有系统（平台守门）
+    selection_message = current_selection
+    system_id = current_system_id
+    if payload.intent == "select_system":
+        system_id = payload.system_id
+        if system_id != current_system_id or current_selection is None:
+            selection_message = MessageService(user=context_data.username).create_executed(
+                conversation=execution.message.conversation,
+                message_type=MessageType.SYSTEM_SELECTION,
+                input_data={"system_ids": [system_id]},
+            )
+    elif not current_system_id:
+        # 检索意图明确但缺会话系统状态（非识别失败）：AI 动态引导 + 候选清单
+        return UserIntentOutputSchema(
+            intent="log_search",
+            error=UserIntentErrorSchema(
+                error_code="SYSTEM_REQUIRED",
+                error_message="请先告诉我要查哪个系统的日志，您有权限的系统：" + "、".join(c["name"] for c in candidates),
+                candidates=candidates,
+            ),
+        )
+    # ④ 条件识别（field_context 来自目标系统选择快照；确定性失败走结构化 error，
+    #    SELECTION 已建则保留——系统切换不被检索失败阻塞）
+    selection = load_selection_snapshot(selection_message)
+    try:
+        condition = NL2JSONService.convert(
+            query_text=query_text,
+            selection=selection,
+            scope_id=system_id,
+            username=context_data.username,
+        )
+    except AIAssistantError as error:
+        logger.warning(
+            "[execute_user_intent] condition not recognized, message_id=%s, error_code=%s",
+            execution.message.id,
+            error.error_code,
+        )
+        return UserIntentOutputSchema(
+            intent=payload.intent,
+            system_id=system_id,
+            error=UserIntentErrorSchema(error_code=error.error_code, error_message=error.message),
+        )
+    return UserIntentOutputSchema(
+        intent=payload.intent,
+        system_id=system_id,
+        message=payload.message,
+        condition=condition,
+        selection_message_uid=str(selection_message.uid) if selection_message is not None else "",
+    )
 
 
 @celery_app.task(bind=True, base=NLSearchExecutionTask)

@@ -11,6 +11,9 @@ MESSAGE_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
     MessageType.SYSTEM_SELECTION: HandlerContractSpec(
         test_case_path="tests.test_ai_assistant.production_handler_contract_cases.SystemSelectionHandlerContract"
     ),
+    MessageType.USER_INTENT: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.production_handler_contract_cases.UserIntentHandlerContract"
+    ),
     MessageType.NATURAL_LANGUAGE_SEARCH: HandlerContractSpec(
         test_case_path="tests.test_ai_assistant.production_handler_contract_cases.NaturalLanguageSearchHandlerContract"
     ),

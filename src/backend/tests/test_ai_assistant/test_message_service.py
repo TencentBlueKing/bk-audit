@@ -146,6 +146,8 @@ class MessageServiceTest(TestCase):
         self.assertIsNone(unsaved_conversation.pk)
 
     def test_create_prepared_does_not_execute_handler_again(self):
+        """一期全异步化：create_prepared 统一落 PROCESSING 并派发任务，不再预执行 Handler。"""
+
         unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
         prepared = self.service.prepare_initial(
             conversation=unsaved_conversation,
@@ -160,12 +162,8 @@ class MessageServiceTest(TestCase):
                 prepared=prepared,
             )
 
-        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
-        self.assertEqual(message.output_data, {"content": "alice:sync:hello"})
-        self.assertIsNone(message.queued_at)
-        self.assertIsNone(message.started_at)
-        self.assertIsNotNone(message.finished_at)
-        self.assertEqual(message.last_activity_at, message.finished_at)
+        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
+        self.assertTrue(message.task_id)
 
     def test_prepare_initial_only_accepts_owned_unsaved_system_selection(self):
         parent = self.create_parent()
@@ -205,7 +203,9 @@ class MessageServiceTest(TestCase):
             )
 
     def test_sync_create_validates_and_saves_all_snapshots(self):
-        message = self.service.create(
+        """全异步化后快照语义由 create_executed 承载（任务内编排同步执行路径）。"""
+
+        message = self.service.create_executed(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "hello"},
@@ -221,11 +221,13 @@ class MessageServiceTest(TestCase):
         self.assertIsInstance(self.sync_handler.executed_context, EchoContext)
 
     def test_sync_execute_failure_does_not_create_message(self):
+        """执行失败在 create_executed 冒泡且不落库（任务内编排的失败语义）。"""
+
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         register_test_message_handler(FailingSyncHandler())
 
         with self.assertRaises(RuntimeError):
-            self.service.create(
+            self.service.create_executed(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -234,11 +236,13 @@ class MessageServiceTest(TestCase):
         self.assertFalse(Message.objects.exists())
 
     def test_sync_invalid_output_does_not_create_message(self):
+        """全异步化后非法输出校验在 create_executed 冒泡且不落库（任务内编排失败语义）。"""
+
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         register_test_message_handler(InvalidOutputSyncHandler())
 
         with self.assertRaises(MessageSnapshotValidationError):
-            self.service.create(
+            self.service.create_executed(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},

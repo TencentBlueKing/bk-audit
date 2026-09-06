@@ -343,7 +343,7 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertEqual(
             [item["$ref"] for item in schema["oneOf"]],
-            ["#/components/schemas/MessageSchema"],
+            ["#/components/schemas/MessageSchema", "#/components/schemas/UserIntentInputSchema"],
         )
 
     def test_openapi_deduplicates_schema_shared_by_multiple_handlers(self):
@@ -359,7 +359,11 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertEqual(
             [item["$ref"] for item in schema["oneOf"]],
-            ["#/components/schemas/EchoInput", "#/components/schemas/MessageSchema"],
+            [
+                "#/components/schemas/EchoInput",
+                "#/components/schemas/UserIntentInputSchema",
+                "#/components/schemas/MessageSchema",
+            ],
         )
 
 
@@ -387,6 +391,10 @@ class MessageResourceTest(TestCase):
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "old"},
+        )
+        # 全异步化：create 返回 PROCESSING，编辑前置收敛为成功终态（模拟任务完成）
+        Message.objects.filter(pk=message.pk).update(
+            status=ExecutionStatus.SUCCESS, output_data={"content": "system:old"}
         )
         Attachment.objects.create(
             source_message=message,
@@ -423,6 +431,8 @@ class MessageResourceTest(TestCase):
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "old"},
         )
+        # 全异步化：create 返回 PROCESSING，编辑前置收敛为成功终态（模拟任务完成）
+        Message.objects.filter(pk=message.pk).update(status=ExecutionStatus.SUCCESS)
         with self.assertRaises(MessageSnapshotValidationError):
             UpdateMessage().request({"message_uid": str(message.uid), "input_data": {"unknown": "new"}})
         message.refresh_from_db()
@@ -447,6 +457,8 @@ class MessageResourceTest(TestCase):
         self.assertIsNone(response["output_data"])
 
     def test_create_sync_message_returns_success_without_internal_fields(self, _username):
+        """一期全异步化：创建即返回 PROCESSING（终态由任务收敛，前端轮询）。"""
+
         response = CreateMessage().request(
             {
                 "conversation_uid": str(self.conversation.uid),
@@ -455,14 +467,12 @@ class MessageResourceTest(TestCase):
             }
         )
 
-        self.assertEqual(response["status"], ExecutionStatus.SUCCESS)
+        self.assertEqual(response["status"], ExecutionStatus.PROCESSING)
         self.assertEqual(response["input_data"], {"text": "system-a"})
         self.assertNotIn("context_data", response)
-        self.assertEqual(response["output_data"], {"content": "system:system-a"})
+        self.assertIsNone(response["output_data"])
         self.assertIsNone(response["parent_message_uid"])
         self.assertEqual(response["attachments"], [])
-        self.assertTrue(response["supports_feedback"])
-        self.assertIsNone(response["feedback"])
         for internal_field in ("id", "task_id", "stream_config", "stream_archive"):
             self.assertNotIn(internal_field, response)
 
@@ -552,7 +562,8 @@ class MessageResourceTest(TestCase):
         self.assertEqual(window["first_uid"], created["uid"])
         self.assertEqual(window["last_uid"], created["uid"])
         item = window["results"][0]
-        self.assertEqual(item["status"], ExecutionStatus.SUCCESS)
+        # 一期全异步化：创建即 PROCESSING（隐藏内容但保留状态与附件摘要的核心断言不变）
+        self.assertEqual(item["status"], ExecutionStatus.PROCESSING)
         self.assertNotIn("input_data", item)
         self.assertNotIn("context_data", item)
         self.assertNotIn("output_data", item)
