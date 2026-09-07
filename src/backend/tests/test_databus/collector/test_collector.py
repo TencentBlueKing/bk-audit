@@ -32,6 +32,7 @@ from services.web.databus.constants import (
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     ContainerCollectorType,
+    JoinDataType,
     SnapshotReportStatus,
     SnapshotRunningStatus,
 )
@@ -252,6 +253,49 @@ class CollectorTest(TestCase):
     def test_collector_etl(self):
         """CollectorEtlResource"""
         self.resource.databus.collector.collector_etl(**CREATE_COLLECTOR_ETL_DATA)
+
+    @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=STORAGE_LIST))
+    @mock.patch(
+        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
+    )
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    def test_collector_etl_does_not_join_asset_snapshot(self):
+        """资产快照不能作为日志清洗的通用关联结果表。"""
+        Snapshot.objects.create(
+            system_id=self.system_id,
+            resource_type_id=RESOURCE_TYPE_ID,
+            join_data_type=JoinDataType.ASSET.value,
+            bkbase_table_id="2_asset_bk_audit_system",
+        )
+
+        self.resource.databus.collector.collector_etl(**CREATE_COLLECTOR_ETL_DATA)
+
+        self.collector.refresh_from_db()
+        self.assertIsNone(self.collector.join_data_rt)
+
+    @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=STORAGE_LIST))
+    @mock.patch(
+        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
+    )
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    def test_collector_etl_joins_basic_snapshot(self):
+        """日志清洗仅自动关联当前系统的通用关联结果表。"""
+        Snapshot.objects.create(
+            system_id=self.system_id,
+            resource_type_id=RESOURCE_TYPE_ID,
+            join_data_type=JoinDataType.BASIC.value,
+            bkbase_table_id="2_bkaudit_bk_audit_system",
+        )
+
+        self.resource.databus.collector.collector_etl(**CREATE_COLLECTOR_ETL_DATA)
+
+        self.collector.refresh_from_db()
+        expected_rt = f"{settings.DEFAULT_BK_BIZ_ID}_bkaudit_bk_audit_system"
+        self.assertEqual(self.collector.join_data_rt, expected_rt)
 
     def test_etl_preview(self):
         """EtlPreviewResource"""
