@@ -18,6 +18,19 @@ evals/
 │   ├── tests/                  # 测试用例（按场景分文件）
 │   └── output/                 # 评估结果（.gitignore）
 │
+├── audit-log-search/           # 审计 AI 日志检索评估项目
+│   ├── promptfooconfig.yaml
+│   ├── providers/
+│   ├── assertions/
+│   ├── tests/
+│   └── output/
+│
+├── intent-recognition/         # AI 用户意图判断评估项目
+│   ├── promptfooconfig.yaml
+│   ├── providers/
+│   ├── tests/
+│   └── output/
+│
 └── <其他AI能力>/               # 未来扩展
     └── ...
 ```
@@ -64,3 +77,5 @@ evals/
 | 项目 | 用例数 | 说明 |
 |------|--------|------|
 | `nl2riskfilter/` | 45 | 自然语言转风险筛选条件（NL2JSON） |
+| `audit-log-search/` | 45 | 审计日志自然语言转受控检索条件（NL2JSON，含复杂语言场景与稳定性验证） |
+| `intent-recognition/` | 44 | AI 用户意图判断（选系统/日志检索/无法识别三分类 + 系统路由 + 动态消息 + 线上事故回归） |
