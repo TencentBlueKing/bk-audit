@@ -17,10 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from textwrap import dedent
 
 from django.test import SimpleTestCase
 from django.utils import timezone
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 from services.web.common.constants import ScopeType
 from services.web.risk.constants import (
@@ -387,10 +388,191 @@ class TestBkBaseEventOrdering(SimpleTestCase):
         return resolver, data_query
 
     def _extract_order_alias(self, select_expression: exp.Select) -> exp.Alias:
-        for expression in select_expression.expressions or []:
-            if isinstance(expression, exp.Alias) and expression.alias_or_name == "__order_event_field":
-                return expression
+        for node in select_expression.walk():
+            if isinstance(node, exp.Alias) and node.alias_or_name == "__order_event_field":
+                return node
         raise AssertionError("order field alias not found")
+
+    def _build_count_and_data_query(
+        self,
+        *,
+        event_filters,
+        order_fields=None,
+        duplicate_field_map=None,
+        limit=20,
+        offset=0,
+    ):
+        order_fields = order_fields or []
+        resolver = BkBaseFieldResolver(
+            order_fields=order_fields,
+            event_filters=event_filters,
+            duplicate_field_map=duplicate_field_map or {},
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+            exp.column("last_operate_time", table="risk"),
+        ).from_("risk")
+        components = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map=duplicate_field_map or {},
+            thedate_range=None,
+            table_name="risk_event",
+        ).build(base_expression)
+        assembler = FinalSelectAssembler(resolver)
+        count_query = assembler.assemble_count_query(components.base_query, components.matched_event)
+        data_query = assembler.assemble_data_query(
+            components.base_query,
+            components.matched_event,
+            order_fields=order_fields,
+            limit=limit,
+            offset=offset,
+        )
+        return count_query, data_query
+
+    @staticmethod
+    def _normalize_sql(sql: str) -> str:
+        return " ".join(dedent(sql).replace("`", "").split())
+
+    def _assert_sql(self, query: exp.Expression, expected: str) -> None:
+        actual_pretty = query.sql(dialect="mysql", pretty=True)
+        actual = self._canonical_sql(query.sql(dialect="mysql"))
+        expected_sql = self._canonical_sql(expected)
+        self.assertEqual(actual, expected_sql, msg=f"\nactual SQL:\n{actual_pretty}")
+
+    @classmethod
+    def _canonical_sql(cls, sql: str) -> str:
+        parsed = parse_one(cls._normalize_sql(sql), read="mysql")
+        return cls._normalize_sql(parsed.sql(dialect="mysql"))
+
+    @staticmethod
+    def _risk_subquery_sql() -> str:
+        return """
+        (
+          SELECT
+            risk.risk_id,
+            risk.strategy_id,
+            risk.raw_event_id,
+            risk.event_time,
+            risk.event_end_time,
+            risk.last_operate_time
+          FROM risk
+        ) AS base_query
+        """
+
+    @staticmethod
+    def _default_event_partition_sql() -> str:
+        return """
+        PARTITION BY matched_event_src_filtered.strategy_id,
+          COALESCE(
+            matched_event_src_filtered.raw_event_id,
+            CAST(matched_event_src_filtered.dteventtimestamp AS CHAR)
+          )
+        """
+
+    @staticmethod
+    def _duplicate_event_partition_sql() -> str:
+        return """
+        PARTITION BY matched_event_src_filtered.strategy_id,
+          CASE
+            WHEN matched_event_src_filtered.strategy_id = 1001
+            THEN CONCAT_WS(
+              '||',
+              COALESCE(CAST(JSON_EXTRACT_STRING(matched_event_src_filtered.event_data, '$.user_id') AS CHAR), ''),
+              COALESCE(CAST(JSON_EXTRACT_STRING(matched_event_src_filtered.event_data, '$.group_name') AS CHAR), '')
+            )
+            ELSE COALESCE(
+              matched_event_src_filtered.raw_event_id,
+              CAST(matched_event_src_filtered.dteventtimestamp AS CHAR)
+            )
+          END
+        """
+
+    @classmethod
+    def _matched_event_join_sql(cls, *, where_sql: str, partition_sql: str) -> str:
+        return f"""
+        INNER JOIN (
+          SELECT
+            matched_event_src_ranked.strategy_id,
+            matched_event_src_ranked.raw_event_id,
+            matched_event_src_ranked.event_data,
+            matched_event_src_ranked.dteventtimestamp
+          FROM (
+            SELECT
+              matched_event_src_filtered.strategy_id,
+              matched_event_src_filtered.raw_event_id,
+              matched_event_src_filtered.event_data,
+              matched_event_src_filtered.dteventtimestamp,
+              ROW_NUMBER() OVER (
+                {partition_sql}
+                ORDER BY matched_event_src_filtered.dteventtimestamp DESC,
+                  matched_event_src_filtered.raw_event_id DESC
+              ) AS _row_number
+            FROM (
+              SELECT
+                matched_event_src.strategy_id,
+                matched_event_src.raw_event_id,
+                matched_event_src.event_data,
+                matched_event_src.dteventtimestamp
+              FROM risk_event AS matched_event_src
+              WHERE {where_sql}
+            ) AS matched_event_src_filtered
+          ) AS matched_event_src_ranked
+          WHERE matched_event_src_ranked._row_number = 1
+        ) AS matched_event
+          ON (
+            (
+              matched_event.strategy_id = base_query.strategy_id
+              AND matched_event.raw_event_id = base_query.raw_event_id
+            )
+            AND matched_event.dteventtimestamp >= UNIX_TIMESTAMP(base_query.event_time) * 1000
+          )
+          AND matched_event.dteventtimestamp < UNIX_TIMESTAMP(base_query.event_end_time + INTERVAL 1 SECOND) * 1000
+        """
+
+    @classmethod
+    def _expected_join_count_sql(cls, *, where_sql: str, partition_sql: str) -> str:
+        return f"""
+        SELECT COUNT(*) AS count
+        FROM (
+          SELECT DISTINCT base_query.risk_id
+          FROM {cls._risk_subquery_sql()}
+          {cls._matched_event_join_sql(where_sql=where_sql, partition_sql=partition_sql)}
+        ) AS risk_count
+        LIMIT 1
+        """
+
+    @classmethod
+    def _expected_join_data_sql(
+        cls,
+        *,
+        where_sql: str,
+        partition_sql: str,
+        risk_window_sql: str,
+        select_extras_sql: str = "",
+        outer_order_sql: str = "",
+        limit_sql: str = "LIMIT 20",
+    ) -> str:
+        extras = f", {select_extras_sql}" if select_extras_sql else ""
+        outer_order = f" ORDER BY {outer_order_sql}" if outer_order_sql else ""
+        return f"""
+        SELECT *
+        FROM (
+          SELECT
+            base_query.*,
+            matched_event.event_data AS __matched_event_data,
+            matched_event.dteventtimestamp AS dteventtimestamp{extras},
+            ROW_NUMBER() OVER ({risk_window_sql}) AS _risk_row_number
+          FROM {cls._risk_subquery_sql()}
+          {cls._matched_event_join_sql(where_sql=where_sql, partition_sql=partition_sql)}
+        ) AS ranked_risk
+        WHERE ranked_risk._risk_row_number = 1
+        {outer_order}
+        {limit_sql}
+        """
 
     def test_numeric_filters_cast_order_field(self):
         resolver, select_expr = self._build_final_query(
@@ -482,6 +664,177 @@ class TestBkBaseEventOrdering(SimpleTestCase):
         )
         components = components_builder.build(base_expression)
         self.assertIsNone(components.matched_event)
+
+    def test_count_query_distincts_risk_id_after_event_join(self):
+        """JOIN 事件后 count 应按 risk_id 去重，避免把同一风险的多条匹配事件算进 total。"""
+        event_filters = [
+            {
+                "field": "latency",
+                "display_name": "Latency",
+                "operator": EventFilterOperator.EQUAL.value,
+                "value": "1",
+            }
+        ]
+        count_query, _ = self._build_count_and_data_query(event_filters=event_filters)
+        self._assert_sql(
+            count_query,
+            self._expected_join_count_sql(
+                where_sql="JSON_EXTRACT_STRING(matched_event_src.event_data, '$.latency') = '1'",
+                partition_sql=self._default_event_partition_sql(),
+            ),
+        )
+
+    def test_count_query_without_event_join_keeps_row_count(self):
+        """无事件 JOIN 时 count / data 都不走风险去重。"""
+        count_query, data_query = self._build_count_and_data_query(
+            event_filters=[],
+            order_fields=["-last_operate_time", "-risk_id"],
+        )
+        self._assert_sql(
+            count_query,
+            f"""
+            SELECT COUNT(*) AS count
+            FROM (
+              SELECT 1 AS __dummy
+              FROM {self._risk_subquery_sql()}
+            ) AS risk_count
+            LIMIT 1
+            """,
+        )
+        self._assert_sql(
+            data_query,
+            f"""
+            SELECT *
+            FROM {self._risk_subquery_sql()}
+            ORDER BY base_query.last_operate_time DESC, base_query.risk_id DESC
+            LIMIT 20
+            """,
+        )
+
+    def test_data_query_dedupes_by_risk_id_before_limit(self):
+        """分页 LIMIT 必须作用在按 risk_id 去重之后，否则首页会被同一风险占满。"""
+        event_filters = [
+            {
+                "field": "dept",
+                "display_name": "Dept",
+                "operator": EventFilterOperator.CONTAINS.value,
+                "value": "ops-dept",
+            }
+        ]
+        count_query, data_query = self._build_count_and_data_query(
+            event_filters=event_filters,
+            order_fields=["-last_operate_time", "-risk_id"],
+            duplicate_field_map={1001: {"data": ["user_id", "group_name"]}},
+            limit=20,
+            offset=0,
+        )
+        where_sql = "JSON_EXTRACT_STRING(matched_event_src.event_data, '$.dept') LIKE '%ops-dept%'"
+        partition_sql = self._duplicate_event_partition_sql()
+        self._assert_sql(
+            count_query,
+            self._expected_join_count_sql(where_sql=where_sql, partition_sql=partition_sql),
+        )
+        self._assert_sql(
+            data_query,
+            self._expected_join_data_sql(
+                where_sql=where_sql,
+                partition_sql=partition_sql,
+                risk_window_sql=(
+                    "PARTITION BY base_query.risk_id "
+                    "ORDER BY base_query.last_operate_time DESC, base_query.risk_id DESC, "
+                    "matched_event.dteventtimestamp DESC"
+                ),
+                outer_order_sql="ranked_risk.last_operate_time DESC, ranked_risk.risk_id DESC",
+                limit_sql="LIMIT 20",
+            ),
+        )
+
+    def test_data_query_applies_offset_after_risk_dedupe(self):
+        """第二页 OFFSET 必须作用在按 risk_id 去重之后。"""
+        event_filters = [
+            {
+                "field": "dept",
+                "display_name": "Dept",
+                "operator": EventFilterOperator.CONTAINS.value,
+                "value": "ops-dept",
+            }
+        ]
+        _, data_query = self._build_count_and_data_query(
+            event_filters=event_filters,
+            order_fields=["-last_operate_time", "-risk_id"],
+            limit=20,
+            offset=20,
+        )
+        self._assert_sql(
+            data_query,
+            self._expected_join_data_sql(
+                where_sql="JSON_EXTRACT_STRING(matched_event_src.event_data, '$.dept') LIKE '%ops-dept%'",
+                partition_sql=self._default_event_partition_sql(),
+                risk_window_sql=(
+                    "PARTITION BY base_query.risk_id "
+                    "ORDER BY base_query.last_operate_time DESC, base_query.risk_id DESC, "
+                    "matched_event.dteventtimestamp DESC"
+                ),
+                outer_order_sql="ranked_risk.last_operate_time DESC, ranked_risk.risk_id DESC",
+                limit_sql="LIMIT 20 OFFSET 20",
+            ),
+        )
+
+    def test_data_query_dedupes_without_order_fields(self):
+        """未指定排序时，LIMIT 前仍须按 risk_id 去重。"""
+        event_filters = [
+            {
+                "field": "latency",
+                "display_name": "Latency",
+                "operator": EventFilterOperator.EQUAL.value,
+                "value": "1",
+            }
+        ]
+        _, data_query = self._build_count_and_data_query(
+            event_filters=event_filters,
+            order_fields=[],
+            limit=10,
+        )
+        self._assert_sql(
+            data_query,
+            self._expected_join_data_sql(
+                where_sql="JSON_EXTRACT_STRING(matched_event_src.event_data, '$.latency') = '1'",
+                partition_sql=self._default_event_partition_sql(),
+                risk_window_sql="PARTITION BY base_query.risk_id ORDER BY matched_event.dteventtimestamp DESC",
+                limit_sql="LIMIT 10",
+            ),
+        )
+
+    def test_window_order_uses_json_extract_not_select_alias(self):
+        """窗口 ORDER BY 与 SELECT 别名同层，必须用 JSON_EXTRACT 而不能引用 __order_event_field。"""
+        _, data_query = self._build_count_and_data_query(
+            event_filters=[
+                {
+                    "field": "latency",
+                    "display_name": "Latency",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "slow",
+                }
+            ],
+            order_fields=["-event_data.latency"],
+            limit=0,
+            offset=0,
+        )
+        self._assert_sql(
+            data_query,
+            self._expected_join_data_sql(
+                where_sql="JSON_EXTRACT_STRING(matched_event_src.event_data, '$.latency') = 'slow'",
+                partition_sql=self._default_event_partition_sql(),
+                select_extras_sql="JSON_EXTRACT_STRING(matched_event.event_data, '$.latency') AS __order_event_field",
+                risk_window_sql=(
+                    "PARTITION BY base_query.risk_id "
+                    "ORDER BY JSON_EXTRACT_STRING(matched_event.event_data, '$.latency') DESC, "
+                    "matched_event.dteventtimestamp DESC"
+                ),
+                outer_order_sql="ranked_risk.__order_event_field DESC, ranked_risk.dteventtimestamp DESC",
+                limit_sql="",
+            ),
+        )
 
 
 class TestListRiskRequestSerializerHasReport(SimpleTestCase):
