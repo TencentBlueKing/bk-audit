@@ -27,6 +27,13 @@ from services.web.ai_assistant.schemas.audit_search import (
     UserIntentErrorSchema,
     UserIntentOutputSchema,
 )
+
+# 导入契约：MessageService 必须保持模块级导入，禁止改成延迟导入——曾发生"仅给部分
+# 调用点补局部导入"的事故（漏改 _create_log_search 与 execute_user_intent 的
+# select_system 分支），产生 NameError / flake8 F821，且前者位于 _finish_success
+# 的静默兜底内极难察觉（续链子消息悄悄不创建）。若确需规避循环依赖，应在引入反向
+# 依赖的一侧（services/handlers 对本模块的引用）做函数内延迟导入，
+# 写法对齐 services/message.py 的标题派发延迟导入。
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.operation import OperationContextService

@@ -119,6 +119,12 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertIsNotNone(output.condition)
         self.assertEqual(self._selection_count(), 1)
         self.assertEqual(output.selection_message_uid, str(selection.uid))
+        # 续链产物必须真实存在：_create_log_search 的异常会被 _finish_success
+        # 静默吞掉（续链失败不回滚终态），不断言子消息则该调用点破损无法被发现
+        log_search = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
+        ).first()
+        self.assertIsNotNone(log_search)
 
     def test_log_search_without_selection_requires_system(self):
         """场景②无系统变体：SYSTEM_REQUIRED 守门（AI 动态引导 + 候选清单），不建子消息不派发标题"""

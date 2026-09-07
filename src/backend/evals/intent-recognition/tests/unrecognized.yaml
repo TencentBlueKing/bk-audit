@@ -1,0 +1,32 @@
+# 无法识别：闲聊/无关输入 → intent=unrecognized 且 message 为 AI 动态引导
+- description: '寒暄问候'
+  vars:
+    query: '你好'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "unrecognized" && d.system_id === ""'
+
+- description: '无关闲聊（天气）'
+  vars:
+    query: '今天天气怎么样'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "unrecognized" && d.system_id === ""'
+
+- description: '无关请求（写代码，与日志检索/系统选择无关）'
+  vars:
+    query: '帮我写一个 Python 快速排序'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "unrecognized" && d.system_id === ""'
+
+- description: '无法识别时 message 为 AI 动态引导话术（非空）'
+  vars:
+    query: '讲个笑话听听'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "unrecognized" && typeof d.message === "string" && d.message.trim().length > 0'
