@@ -392,7 +392,11 @@
     scope_type: string,
     scope_id: string,
   }) => {
-    if (!scope.scope_type || !scope.scope_id) {
+    const isCrossScope = scope.scope_type === 'cross_scene' || scope.scope_type === 'cross_system';
+    const needsScopeId = scope.scope_type === 'scene' || scope.scope_type === 'system';
+
+    // cross_scene / cross_system 的 scope_id 为空是合法协议，仍需拉取 vision_id
+    if (!scope.scope_type || (needsScopeId && !scope.scope_id)) {
       return {
         vision_id: '',
         default_value_override: {} as Record<string, any>,
@@ -402,7 +406,7 @@
       const detail = await ReportConfigService.fetchPanelDetail({
         panel_id: String(route.params.id),
         scope_type: scope.scope_type,
-        scope_id: String(scope.scope_id),
+        ...(isCrossScope ? {} : { scope_id: String(scope.scope_id) }),
       });
       return {
         vision_id: detail?.vision_id || '',
@@ -580,8 +584,8 @@
       const panelDetail = await fetchPanelDetailWithOverride(scopeConstants);
       if (seq !== initSeq) return;
 
-      // share_uid：优先平台配置的 vision_id，否则用路由 panel id
-      const shareUid = panelDetail.vision_id || String(route.params.id);
+      // share_uid 必须是 BKVision vision_id，不能用 panel_id 兜底
+      const shareUid = panelDetail.vision_id;
       const {
         variableFlags,
         filterFlags,
