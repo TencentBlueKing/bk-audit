@@ -20,13 +20,20 @@ from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
     NaturalLanguageSearchHandler,
     SystemSelectionHandler,
+    UserIntentHandler,
 )
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
     LogSearchInputSchema,
     NLSearchInputSchema,
+    UserIntentInputSchema,
 )
-from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
+from services.web.ai_assistant.tasks.audit_search import (
+    execute_log_search,
+    execute_natural_language_search,
+    execute_system_selection,
+    execute_user_intent,
+)
 from tests.test_ai_assistant.base import (
     AIAssistantPlatformTestCase,
     ensure_business_handlers_registered,
@@ -43,19 +50,86 @@ from tests.test_ai_assistant.test_handlers import (
 )
 
 
-class SystemSelectionHandlerContract(AIAssistantPlatformTestCase):
-    """SYSTEM_SELECTION（SYNC）契约：成功执行 + 非正常输出收敛为稳定错误。"""
+class AsyncTaskContractMixin:
+    """ASYNC 契约通用：业务 Retry 保持 PROCESSING + 陈旧投递拦截为 Ignore。
+
+    任务投递基础设施与 NL 契约同一模式（task.push_request + called_directly=False）。
+    """
+
+    task = None  # 各契约类指定绑定的业务任务
+
+    def create_processing_message(self, *, task_id: str = "task-contract") -> Message:
+        raise NotImplementedError
+
+    def test_retry_contract(self):
+        """业务 Retry 时消息保持 PROCESSING 并刷新平台活动时间。"""
+
+        message = self.create_processing_message()
+        with mock.patch.object(self.task, "run", side_effect=Retry("temporary retry")):
+            with self.assertRaises(Retry):
+                self.invoke(self.task, message=message)
+        message.refresh_from_db()
+        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
+        self.assertIsNotNone(message.last_activity_at)
+
+    def test_stale_task_contract(self):
+        """终态消息的陈旧投递被平台拦截为 Ignore。"""
+
+        message = self.create_processing_message()
+        Message.objects.filter(id=message.id).update(status=ExecutionStatus.SUCCESS)
+        message.refresh_from_db()
+        with self.assertRaises(Ignore):
+            self.invoke(self.task, message=message)
+        message.refresh_from_db()
+        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
+
+    @staticmethod
+    def invoke(task, *, message: Message):
+        task_kwargs = {"message_id": message.id, "task_id": message.task_id}
+        task.push_request(
+            id=message.task_id,
+            retries=0,
+            called_directly=False,
+            is_eager=True,
+            args=(),
+            kwargs=task_kwargs,
+        )
+        try:
+            return task(**task_kwargs)
+        finally:
+            task.pop_request()
+
+
+class SystemSelectionHandlerContract(AsyncTaskContractMixin, AIAssistantPlatformTestCase):
+    """SYSTEM_SELECTION（一期全异步化）契约：成功/失败 + 平台任务重试/陈旧投递。"""
+
+    task = execute_system_selection
 
     def setUp(self):
         super().setUp()
         self.handler = SystemSelectionHandler()
 
     test_success_contract = TestSystemSelectionHandler.test_execute_assembles_fields_and_operations
-    test_invalid_output_contract = TestSystemSelectionHandler.test_execute_permission_denied_converted
+    test_failure_contract = TestSystemSelectionHandler.test_execute_permission_denied_converted
+
+    def create_processing_message(self, *, task_id: str = "task-contract") -> Message:
+        return Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            status=ExecutionStatus.PROCESSING,
+            task_id=task_id,
+            input_data={"system_ids": ["contract-system"]},
+            context_data={"username": self.user, "namespace": "bkaudit"},
+            output_data=None,
+            created_by=self.user,
+            updated_by=self.user,
+        )
 
 
-class LogSearchHandlerContract(AIAssistantPlatformTestCase):
-    """LOG_SEARCH（SYNC）契约：成功检索 + 非法输入收敛为稳定错误。"""
+class LogSearchHandlerContract(AsyncTaskContractMixin, AIAssistantPlatformTestCase):
+    """LOG_SEARCH（一期全异步化）契约：成功/失败 + 平台任务重试/陈旧投递。"""
+
+    task = execute_log_search
 
     def setUp(self):
         super().setUp()
@@ -72,7 +146,71 @@ class LogSearchHandlerContract(AIAssistantPlatformTestCase):
         )
 
     test_success_contract = TestLogSearchHandler.test_execute_calls_search_service
-    test_invalid_output_contract = TestLogSearchHandler.test_prepare_rejects_scope_mismatch
+    test_failure_contract = TestLogSearchHandler.test_prepare_rejects_scope_mismatch
+
+    def create_processing_message(self, *, task_id: str = "task-contract") -> Message:
+        return Message.objects.create(
+            conversation=self.conversation,
+            parent_message=self.create_selection_message(),
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.PROCESSING,
+            task_id=task_id,
+            input_data={"condition": make_condition().model_dump(mode="json")},
+            context_data={"username": self.user, "namespace": "bkaudit", "system_id": "contract-system"},
+            output_data=None,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+
+class UserIntentHandlerContract(AsyncTaskContractMixin, AIAssistantPlatformTestCase):
+    """USER_INTENT（ASYNC，一期新增）契约：成功/失败 + 平台任务重试/陈旧投递。"""
+
+    task = execute_user_intent
+
+    def setUp(self):
+        super().setUp()
+        self.handler = UserIntentHandler()
+        self.input = UserIntentInputSchema(query_text="看审计中心最近七天的操作记录")
+
+    def test_success_contract(self):
+        """prepare 成功：入口消息无父，上下文仅身份与命名空间（系统在任务内路由）。"""
+
+        preparation = self.handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=self.input,
+        )
+        self.assertIsNone(preparation.parent_message)
+        self.assertEqual(preparation.context_data.username, self.user)
+
+    def test_failure_contract(self):
+        """prepare 拒绝父消息（入口消息语义）。"""
+
+        from services.web.ai_assistant.exceptions import InvalidParentMessage
+
+        selection = self.create_selection_message()
+        with self.assertRaises(InvalidParentMessage):
+            self.handler.prepare(
+                user=self.user,
+                conversation=self.conversation,
+                parent_message=selection,
+                input_data=self.input,
+            )
+
+    def create_processing_message(self, *, task_id: str = "task-contract") -> Message:
+        return Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.USER_INTENT,
+            status=ExecutionStatus.PROCESSING,
+            task_id=task_id,
+            input_data={"query_text": "看审计中心最近七天的操作记录", "auto_execute": False},
+            context_data={"username": self.user, "namespace": "bkaudit"},
+            output_data=None,
+            created_by=self.user,
+            updated_by=self.user,
+        )
 
 
 class NaturalLanguageSearchHandlerContract(AIAssistantPlatformTestCase):
