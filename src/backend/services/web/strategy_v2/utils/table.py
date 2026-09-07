@@ -88,7 +88,7 @@ class TableHandler:
 
 
 class EventLogTableHandler(TableHandler):
-    def __init__(self, table_type: str, namespace: str, scene_id: str):
+    def __init__(self, table_type: str, namespace: str, scene_id: str = None):
         super().__init__(table_type)
         self.namespace = namespace
         self.scene_id = scene_id
