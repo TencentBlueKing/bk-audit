@@ -1,0 +1,57 @@
+# 场景③：选系统+检索 / 场景①：纯选系统 / 命中当前系统复用
+# 期望：intent=select_system 且 system_id 命中候选内目标系统
+- description: '选系统+日志检索（新对话，完整意图）'
+  vars:
+    query: '我要看审计中心近七天 hermit 的操作记录'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system"'
+
+- description: '选系统+日志检索（中途切换，已选审计中心说蓝盾）'
+  vars:
+    query: '我现在要看蓝盾 zhangsan 近七天的操作id是123的日志'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system"'
+
+- description: '纯选系统（切系统不带检索内容）'
+  vars:
+    query: '帮我切换到配置平台'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_config_system"'
+
+- description: '纯选系统（首次选择，口语化）'
+  vars:
+    query: '我想查一下监控平台的东西'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_monitor_system"'
+
+- description: '话语命中当前系统（应判 select_system 且命中当前，复用由平台处理）'
+  vars:
+    query: '看下审计中心最近的操作记录'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system"'
+
+- description: '系统名口语变体（用系统英文名/别名表达）'
+  vars:
+    query: '帮我在 bcs 上看看最近的发布日志'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system"'
+
+- description: '选系统意图成功时 message 非空（AI 动态说明）'
+  vars:
+    query: '我要看审计中心近三天的日志'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && typeof d.message === "string" && d.message.trim().length > 0'

@@ -1,0 +1,214 @@
+# 复杂语言场景：长句多重条件、倒装、错别字、方言、隐含语义、省略追问、口语时段、中英混合、冗余修饰。
+# 固定时钟 2026-08-31T18:00:00+08:00（周一）。
+
+- description: 'X1-长句多重条件：四条件 + 口语修饰噪音'
+  vars:
+    query: '麻烦帮我看一下上周张三和李四两个人在Web控制台上做的那些失败的操作，日志内容里最好也带点权限相关的东西'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+      - raw_name: 'access_type'
+        keys: []
+        operator: 'include'
+        filters: ['WEB']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: ['-1']
+    allow_extra_conditions: 'true'
+    expected_log_keywords: '["权限"]'
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:log_keyword_contains'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X2-倒装口语序：条件前置 + 补充主句'
+  vars:
+    query: '失败的，张三做的，上周的日志，帮我查一下'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: ['-1']
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X3-错别字容忍：操做（操作）'
+  vars:
+    query: '查一下张三昨天的操做日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-30T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X4-隐含语义：乱动权限应提取全文关键词'
+  vars:
+    query: '最近有人乱动权限，帮我看看'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_log_keywords: '["权限"]'
+    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:log_keyword_contains'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X5-方言时间词：上礼拜 + 语气词'
+  vars:
+    query: '帮咱瞅瞅上礼拜张三都干了啥'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X6-省略式追问（单轮设计边界，观察）'
+  vars:
+    query: '那李四的呢'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: '单轮设计无 chat_history，指代省略话术属产品边界；观察模型是否猜出 username=李四或稳定拒绝'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+- description: 'X7-口语时段：昨天半夜（起止边界弹性，范围断言）'
+  vars:
+    query: '查一下昨天半夜有没有人操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions: []
+    window_start_floor: '2026-08-29T20:00:00+08:00'
+    window_start_ceiling: '2026-08-30T03:00:00+08:00'
+    window_end_floor: '2026-08-30T04:00:00+08:00'
+    window_end_ceiling: '2026-08-30T09:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:time_window_within_bounds'
+
+- description: 'X8-否定排除：除了张三之外（username 白名单无 exclude，观察）'
+  vars:
+    query: '查下除了张三之外其他人上周的失败操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: 'username 白名单仅 eq/include（无 neq/exclude），否定排除语义已知边界；观察模型编造否定被拒/忽略/全文兜底三种降级'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+- description: 'X9-中英混合长句：check/last week/log/permission'
+  vars:
+    query: '帮我 check 一下张三 last week 的失败操作，顺便看下 log 里有没有 permission 相关的'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: ['-1']
+    allow_extra_conditions: 'true'
+    expected_log_keywords: '["permission", "权限"]'
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:log_keyword_contains'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'X10-冗余修饰口语：多重语气词与填充词'
+  vars:
+    query: '哦对了帮我查一下就是那个张三他昨天做的那些就是失败了的操作吧'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: ['-1']
+    expected_start_time: '2026-08-30T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
