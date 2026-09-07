@@ -354,15 +354,19 @@ class RuleAuditSQLBuilder:
                 fields.append(sub_table.field(field.display_name))
         json_obj_args = dict(zip(display_names, fields))
         # 3. 最外层 select 列表
-        #    3.1 JSON_OBJECT(...) => event_data
-        #    3.2 strategy_id => strategy_id
-        #    3.3 strategy_rule_id => 命中规则标识
+        #    3.1 event_data => map_config 映射优先（来源表列直传），否则 UDF 拼装全部 select 字段
+        #    3.2 strategy_id => map_config 映射优先（来源表列），否则取策略自身ID
+        #    3.3 strategy_rule_id => map_config 映射优先（来源表列），否则取命中规则标识
         #    3.4 其他字段 => 来自 field_mapping
-        select_fields = [
-            make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
-            ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
-            sub_table.field(generator.RULE_HIT_FIELD).as_(EventMappingFields.STRATEGY_RULE_ID.field_name),
-        ]
+        select_fields = []
+        if EventMappingFields.EVENT_DATA.field_name not in field_mapping:
+            select_fields.append(make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name))
+        if EventMappingFields.STRATEGY_ID.field_name not in field_mapping:
+            select_fields.append(ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name))
+        if EventMappingFields.STRATEGY_RULE_ID.field_name not in field_mapping:
+            select_fields.append(
+                sub_table.field(generator.RULE_HIT_FIELD).as_(EventMappingFields.STRATEGY_RULE_ID.field_name)
+            )
         for display_name, map_config in field_mapping.items():
             if map_config.target_value:
                 select_fields.append(ValueWrapper(map_config.target_value, display_name))
