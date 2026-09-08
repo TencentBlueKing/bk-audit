@@ -1021,6 +1021,25 @@ body.is-chat-sidebar-dragging .tippy-box {
   }
 }
 
+.is-dropdown-disabled {
+  color: #c4c6cc !important;
+  cursor: not-allowed !important;
+  user-select: none;
+
+  .dropdown-sub-trigger {
+    cursor: not-allowed !important;
+  }
+
+  .sub-icon {
+    color: #c4c6cc !important;
+  }
+
+  &:hover {
+    color: #c4c6cc !important;
+    background: transparent !important;
+  }
+}
+
 /* 配置下拉「导出会话」行：不再套一层 padding，与下方选项对齐 */
 .config-item-row {
   display: flex;
