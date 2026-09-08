@@ -101,6 +101,7 @@
     width: 100%;
     padding: 8px 16px;
     margin-top: 8px;
+    margin-bottom: 4px;
     background-color: #f5f7fa;
 
     .title {
