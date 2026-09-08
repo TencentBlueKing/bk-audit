@@ -737,7 +737,7 @@
     if (isPlatformList.value) {
       next.push({
         name: t('分派场景'),
-        id: 'scene_ids',
+        id: 'dispatch_scene_id',
         multiple: true,
         placeholder: t('请选择分派场景'),
         children: buildSceneSearchChildren(),
@@ -1589,7 +1589,7 @@
       tag: '',
       status: '',
       report_status: '',
-      scene_ids: '',
+      dispatch_scene_id: '',
       updated_by: '',
     } as Record<string, any>;
 
@@ -1835,7 +1835,7 @@
       tag: '',
       status: '',
       report_status: '',
-      scene_ids: '',
+      dispatch_scene_id: '',
       updated_by: '',
     } as Record<string, any>;
     searchKey.value = [];
@@ -2016,7 +2016,7 @@
       || urlSearch.tag
       || urlSearch.status
       || urlSearch.report_status
-      || urlSearch.scene_ids
+      || urlSearch.dispatch_scene_id
       || urlSearch.updated_by);
     if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
       return;
