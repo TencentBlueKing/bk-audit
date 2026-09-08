@@ -40,7 +40,7 @@
           class="field">
           <div class="field-left">
             <audit-icon
-              style="margin-right: 4px;font-size: 14px;"
+              class="field-type-icon"
               svg
               :type="data.spec_field_type" />
             <span v-if="configType === 'LinkTable'">
@@ -146,7 +146,7 @@
                 v-if="data.spec_field_type !== ''"
                 class="field-type">
                 <audit-icon
-                  style="margin-right: 4px;font-size: 14px;"
+                  class="field-type-icon"
                   svg
                   :type="data.spec_field_type" />
                 <span v-if="configType === 'LinkTable'">
@@ -568,27 +568,42 @@
 .field {
   display: flex;
   width: 100%;
+  align-items: center;
   justify-content: space-between;
   padding-right: 10px;
+  min-height: 32px;
 
   .field-left {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+
+    .field-type-icon {
+      flex-shrink: 0;
+      margin-right: 4px;
+      font-size: 14px;
+      line-height: 1;
+    }
+
     .field-type-span {
       font-size: 12px;
+      line-height: 20px;
       color: #63656e;
-      text-align: center;
     }
   }
 
   .field-right {
-    margin-top: 3px;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
     margin-left: 10px;
-
   }
 
   .field-type-span {
     font-size: 12px;
+    line-height: 20px;
     color: #49bb07;
-    text-align: center;
   }
 }
 
@@ -608,14 +623,24 @@
 
   .field-edit-left {
     display: flex;
+    align-items: center;
 
     .field-type {
-      .field-type-span {
-        font-size: 12px;
-        color: #63656e;
-        text-align: center;
+      display: flex;
+      align-items: center;
+
+      .field-type-icon {
+        flex-shrink: 0;
+        margin-right: 4px;
+        font-size: 14px;
+        line-height: 1;
       }
 
+      .field-type-span {
+        font-size: 12px;
+        line-height: 20px;
+        color: #63656e;
+      }
     }
 
     .edit-input {
@@ -632,12 +657,14 @@
 }
 
 .subscript {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 10px;
-  height: 28px;
-  padding-bottom: 2px;
+  height: 16px;
   margin-right: 5px;
   margin-left: 5px;
+  vertical-align: middle;
   background-color: #e3ecfd;
   border-radius: 2px;
 }

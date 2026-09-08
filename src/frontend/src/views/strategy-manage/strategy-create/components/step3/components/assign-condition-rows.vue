@@ -61,12 +61,12 @@
             @update:model-value="(val: string) => handleValueChange(groupIndex, index, val)" />
           <div class="icon-group">
             <audit-icon
-              style="margin-right: 10px; cursor: pointer;"
+              class="expr-action-icon"
               type="add-fill"
               @click="handleAddRow(groupIndex, index)" />
             <audit-icon
               v-if="group.conditions.length > 1"
-              style="cursor: pointer;"
+              class="expr-action-icon"
               type="reduce-fill"
               @click="handleRemoveRow(groupIndex, index)" />
           </div>
@@ -358,6 +358,7 @@
     display: grid;
     grid-template-columns: 300px 180px 1fr minmax(65px, auto);
     gap: 8px;
+    align-items: center;
 
     .inner-row-line {
       position: absolute;
@@ -379,9 +380,19 @@
 
     .icon-group {
       display: flex;
+      gap: 10px;
       align-items: center;
+      height: 32px;
       font-size: 14px;
+      line-height: 1;
       color: #c4c6cc;
+
+      .expr-action-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
     }
   }
 

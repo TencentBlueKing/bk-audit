@@ -46,7 +46,6 @@
           :table-fields="tableFields"
           :table-fields-loading="tableFieldsLoading"
           @handle-update-local-conditions="handleUpdateLocalConditions"
-          @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
@@ -112,7 +111,6 @@
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;
-    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
   withDefaults(defineProps<Props>(), {
@@ -153,10 +151,6 @@
       return '55px';
     }
     return '16px';
-  };
-
-  const handleShowStructurePreview = (table: string | Array<string>, currentViewField: string) => {
-    emits('show-structure-preview', table, currentViewField);
   };
 
   const handleDelete = (index: number) => {

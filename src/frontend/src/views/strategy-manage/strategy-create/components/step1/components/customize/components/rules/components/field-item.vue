@@ -134,18 +134,12 @@
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
-        v-if="condition.condition.field.display_name"
-        v-bk-tooltips="t('预览当前字段格式与最新值')"
-        class="view-icon"
-        type="view"
-        @click="dataStructurePreview(condition.condition.field)" />
-      <audit-icon
-        style="margin-right: 10px; cursor: pointer;"
+        class="expr-action-icon"
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
         v-if="localConditions.conditions.length > 1"
-        style="cursor: pointer;"
+        class="expr-action-icon"
         type="reduce-fill"
         @click="() => handleDelete(index)" />
     </div>
@@ -206,7 +200,6 @@
     (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
-    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
     (e: 'handleUpdateLocalConditions', conditionsIndex: number, value: any): void;
   }
   interface DataType{
@@ -325,10 +318,6 @@
   });
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
-
-  const dataStructurePreview = (value: DatabaseTableFieldModel) => {
-    emits('show-structure-preview', value.table, value.display_name);
-  };
 
   useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
@@ -547,6 +536,7 @@
   display: grid;
   grid-template-columns: 300px 180px 1fr minmax(65px, auto);
   gap: 8px;
+  align-items: center;
 
   :deep(.bk-form-error) {
     display: none;
@@ -595,13 +585,19 @@
   }
 
   .icon-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    height: 32px;
     font-size: 14px;
+    line-height: 1;
     color: #c4c6cc;
 
-    .view-icon {
-      margin-right: 10px;
-      color: #3a84ff;
-      cursor: pointer
+    .expr-action-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
     }
   }
 }

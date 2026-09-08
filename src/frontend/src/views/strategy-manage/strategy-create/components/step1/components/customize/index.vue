@@ -54,7 +54,6 @@
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
             :table-fields-loading="tableFieldsLoading"
-            @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
       </div>
@@ -71,7 +70,6 @@
         :expected-result="formData.configs.select"
         :table-fields="tableFields"
         :table-fields-loading="tableFieldsLoading"
-        @show-structure-preview="handleShowStructureView"
         @update-where="handleUpdateWhere" />
     </div>
     <div
@@ -1310,6 +1308,62 @@
   };
 
   // 编辑
+  const pendingWhereEditData = ref<any>(null);
+
+  const applyRulesWhere = (editData: any) => {
+    if (!editData?.configs || !rulesComponentRef.value) {
+      return false;
+    }
+    const rawWhere = editData.configs.where;
+    const rawHaving = editData.configs.having;
+    const where = rawWhere
+      ? normalizeWhereForDisplay(_.cloneDeep(rawWhere)) as Where
+      : undefined;
+    const having = rawHaving
+      ? normalizeWhereForDisplay(_.cloneDeep(rawHaving)) as Where
+      : undefined;
+    const hasWhere = Boolean(where?.conditions?.length);
+    const hasHaving = Boolean(having?.conditions?.length);
+    if (!hasWhere && !hasHaving) {
+      // 组件已挂载且确实无条件：结束 pending；否则保留等待有效 where
+      if (rulesComponentRef.value) {
+        pendingWhereEditData.value = null;
+      }
+      return Boolean(rulesComponentRef.value);
+    }
+    if (isEditMode) {
+      originalEditWhere.value = _.cloneDeep(rawWhere);
+      originalEditHaving.value = rawHaving ? _.cloneDeep(rawHaving) : undefined;
+      isWhereModified.value = false;
+    }
+    isWhereSettingUp.value = true;
+    if (where) {
+      formData.value.configs.where = where;
+    }
+    if (having) {
+      formData.value.configs.having = having;
+    }
+    rulesComponentRef.value.setWhere(where, having);
+    nextTick(() => {
+      isWhereSettingUp.value = false;
+    });
+    pendingWhereEditData.value = null;
+    return true;
+  };
+
+  const scheduleApplyRulesWhere = async (editData: any) => {
+    pendingWhereEditData.value = editData;
+    if (applyRulesWhere(editData)) {
+      return;
+    }
+    await nextTick();
+    if (applyRulesWhere(editData)) {
+      return;
+    }
+    await nextTick();
+    applyRulesWhere(editData);
+  };
+
   const setFormData = async (editData: any) => {
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
@@ -1324,21 +1378,8 @@
         : undefined;
       isWhereModified.value = false;
     }
-    if (rulesComponentRef.value) {
-      const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
-      const having = editData.configs.having
-        ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
-        : undefined;
-      const hasWhere = Boolean(where?.conditions?.length);
-      const hasHaving = Boolean(having?.conditions?.length);
-      if (hasWhere || hasHaving) {
-        isWhereSettingUp.value = true;
-        rulesComponentRef.value.setWhere(where, having);
-        nextTick(() => {
-          isWhereSettingUp.value = false;
-        });
-      }
-    }
+    // 命中条件子组件可能尚未挂载，需延迟重试 setWhere，否则编辑回显会一直为空
+    await scheduleApplyRulesWhere(editData);
     if (editData.configs.data_source) {
       // 深拷贝，避免后续切换数据源时改到 editData / 详情原始对象
       const dataSource = _.cloneDeep(editData.configs.data_source);
@@ -1423,6 +1464,31 @@
       }
     },
     { immediate: true, deep: true },
+  );
+
+  // rules-only：父级稍后才带上 where 时补一次回显（仅当前为空且用户未改过）
+  watch(
+    () => [
+      props.editData?.configs?.where,
+      props.editData?.configs?.having,
+    ],
+    async ([where, having]) => {
+      if (props.stepMode !== 'rules' && props.stepMode !== 'rules-only') {
+        return;
+      }
+      const hasIncoming = Boolean((where as Where | undefined)?.conditions?.length
+        || (having as Where | undefined)?.conditions?.length);
+      if (!hasIncoming || isWhereModified.value) {
+        return;
+      }
+      const currentEmpty = !formData.value.configs.where?.conditions?.length
+        && !formData.value.configs.having?.conditions?.length;
+      if (!currentEmpty) {
+        return;
+      }
+      await scheduleApplyRulesWhere(props.editData);
+    },
+    { deep: true },
   );
 
   watch(
@@ -1565,6 +1631,11 @@
   });
   onMounted(() => {
     sessionStorage.removeItem('storage-tree-data'); // 清除数据
+    if (pendingWhereEditData.value) {
+      nextTick(() => {
+        applyRulesWhere(pendingWhereEditData.value);
+      });
+    }
   });
 </script>
 <style scoped lang="postcss">
