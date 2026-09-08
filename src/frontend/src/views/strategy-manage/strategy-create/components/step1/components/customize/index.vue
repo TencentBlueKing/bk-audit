@@ -597,23 +597,28 @@
   const mapTableChildren = (
     data: Array<Record<string, any>>,
     tableType: string,
-  ): ConfigTypeTableItem['children'] => data.map(tableItem => ({
-    label: String(tableItem.label ?? ''),
-    // 第二/三列 value 加 tableType 前缀，避免 getNodeById 跨类型串选
-    value: tableType === 'EventLog'
-      ? String(tableItem.value)
-      : encodeTypeBizId(tableType, tableItem.value),
-    // 操作日志：点插件后再懒加载系统列表，与我的授权结果表一致
-    leaf: tableType === 'EventLog'
-      ? false
-      : !(tableItem.children && tableItem.children.length),
-    disabled: !(tableItem.children && tableItem.children.length) && tableType !== 'EventLog',
-    children: tableItem.children?.map((child: Record<string, any>) => ({
-      label: String(child.label ?? ''),
-      value: encodeTypeBizId(tableType, child.value),
-      leaf: !(child.children && child.children.length),
-    })),
-  }));
+  ): ConfigTypeTableItem['children'] => data
+    // 无可用子项的系统视为禁用：与审计策略一致，不进入列表（不展示灰置项）
+    .filter(tableItem => (
+      tableType === 'EventLog'
+      || (Array.isArray(tableItem.children) && tableItem.children.length > 0)
+    ))
+    .map(tableItem => ({
+      label: String(tableItem.label ?? ''),
+      // 第二/三列 value 加 tableType 前缀，避免 getNodeById 跨类型串选
+      value: tableType === 'EventLog'
+        ? String(tableItem.value)
+        : encodeTypeBizId(tableType, tableItem.value),
+      // 操作日志：点插件后再懒加载系统列表，与我的授权结果表一致
+      leaf: tableType === 'EventLog'
+        ? false
+        : !(tableItem.children && tableItem.children.length),
+      children: tableItem.children?.map((child: Record<string, any>) => ({
+        label: String(child.label ?? ''),
+        value: encodeTypeBizId(tableType, child.value),
+        leaf: !(child.children && child.children.length),
+      })),
+    }));
 
   const getBizChildrenCacheKey = (tableType: string, bizId: string | number) => (
     `${tableType}_${bizId}`
