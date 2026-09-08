@@ -839,6 +839,13 @@ class UpdateStrategy(StrategyV2Base):
                     sorted(new_value, key=lambda x: x.get(EVENT_BASIC_CONFIG_SORT_FIELD)),
                 )
             )
+        # configs 字段规范化比较：缺失的可选 key 与 null 等价，避免误触发 flow 重建
+        elif key == "configs" and isinstance(origin_value, dict) and isinstance(new_value, dict):
+            optional_keys = {"where", "having"}
+            clean_origin = {**{k: None for k in optional_keys}, **origin_value}
+            clean_new = {**{k: None for k in optional_keys}, **new_value}
+            if clean_origin != clean_new:
+                need_update_remote = True
         # 如果两个值都为空，则不需要更新，避免 None 和 空值 的比较异常
         elif not origin_value and not new_value:
             need_update_remote = False
