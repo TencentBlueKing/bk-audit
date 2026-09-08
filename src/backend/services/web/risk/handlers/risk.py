@@ -53,8 +53,8 @@ from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
-from services.web.scene.constants import BindingType, ResourceVisibilityType
-from services.web.scene.models import ResourceBinding, ResourceBindingScene
+from services.web.scene.constants import BindingType, ResourceVisibilityType, SceneStatus
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import DispatchMode, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy, StrategyRule
 
@@ -253,8 +253,21 @@ class RiskHandler:
         # 构建建单参数，避免旧 SQL 未重建窗口期事件因规则 ID 为空导致去重错位、重复建单
         create_params = self.gen_risk_create_params(event)
 
+        # 手动创建事件在建单前即标记同步/录入中状态（与场景解析顺序无关，提前固化）
+        if manual:
+            create_params["manual_synced"] = False
+            create_params["display_status"] = RiskDisplayStatus.STAND_BY
+
+        # 全局策略走分派匹配（未命中规则会直接 raise，视为配置错误，不建单）；
+        # 场景策略取策略绑定场景（场景固定，不会跨场景）。
+        dispatch_result = self._match_dispatch(event, create_params)
+        if dispatch_result is not None:
+            target_scene_id = dispatch_result.target_scene_id
+        else:
+            target_scene_id = self._get_strategy_scene_id(event["strategy_id"])
+
         # 检查是否有已存在的
-        # 策略ID相同，原始事件ID相同，命中发现规则相同，不为关单状态或事件时间小于最后发现时间
+        # 策略ID相同，原始事件ID相同，命中发现规则相同，场景相同，不为关单状态或事件时间小于最后发现时间
         # 若未关单，则不创建新风险
         # 若事件时间小于最后发现时间，则应当收敛风险
         risk = (
@@ -264,6 +277,7 @@ class RiskHandler:
                         strategy_id=event["strategy_id"],
                         raw_event_id=event["raw_event_id"],
                         strategy_rule_id=create_params["strategy_rule_id"],
+                        scene_id=target_scene_id,
                     )
                     & Q(
                         ~Q(status=RiskStatus.CLOSED)
@@ -297,27 +311,36 @@ class RiskHandler:
             if event.get("operator") and risk.operator != event["operator"]:
                 risk.operator = self.parse_operator(event.get("operator"))
                 risk.save(update_fields=["operator"])
+            # 场景归一
+            if risk.scene_id != target_scene_id:
+                risk.scene_id = target_scene_id
+                risk.save(update_fields=["scene_id"])
             return False, risk
 
         # 不存在则创建
-        if manual:
-            create_params["manual_synced"] = False
-            create_params["display_status"] = RiskDisplayStatus.STAND_BY
-        # 获取分派条件命中结果
-        dispatch_result = self._match_dispatch(event, create_params)
         # 建单 + 分派信息固化 + 场景绑定需保持原子：中途失败整体回滚
         with transaction.atomic():
+            # fail-closed：事务内锁定并校验目标场景存在且未删除、可用，
+            # 避免场景删除/禁用与建单并发时提交无效或无场景 Risk（列表/IAM/Provider 将失效）
+            if not target_scene_id:
+                raise ValueError(
+                    gettext("风险归属场景为空（策略[%s]未绑定场景或分派规则未命中场景），拒绝建单")
+                    % event["strategy_id"]
+                )
+            scene = (
+                Scene.objects.select_for_update().filter(pk=target_scene_id, is_deleted=False).first()
+            )
+            if scene is None:
+                raise ValueError(gettext("风险归属场景[%s]不存在或已删除，拒绝建单") % target_scene_id)
+            if getattr(scene, "status", None) != SceneStatus.ENABLED:
+                raise ValueError(gettext("风险归属场景[%s]已禁用，拒绝建单") % target_scene_id)
+
             risk: Risk = Risk.objects.create(**create_params)
+            risk.scene_id = target_scene_id
+            risk.save(update_fields=["scene_id"])
             if dispatch_result is not None:
                 # 将分派结果（dispatch_rule/confirmer）固化到风险单，后续分派规则编辑不影响已产生单据
                 self._apply_dispatch(risk, dispatch_result)
-                risk.scene_id = dispatch_result.target_scene_id
-                risk.save(update_fields=["scene_id"])
-            else:
-                # 场景策略
-                scene_id = self._get_strategy_scene_id(event["strategy_id"])
-                risk.scene_id = scene_id
-                risk.save(update_fields=["scene_id"])
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
 
         if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
@@ -394,16 +417,31 @@ class RiskHandler:
         risk.save(update_fields=update_fields)
 
     def _get_strategy_scene_id(self, strategy_id) -> Optional[int]:
-        """策略绑定的场景 ID（场景策略）"""
-        return (
+        """
+        策略绑定的场景 ID（场景策略）。
+
+        fail-closed：场景策略必须有且仅有一个未删除的绑定场景；
+        0 个（未绑定/已删）或多于 1 个（配置异常）均返回 None，
+        交由 create_risk 建单事务内的场景校验统一拒绝建单，避免静默提交无场景/错场景 Risk。
+        """
+        scene_ids = list(
             ResourceBindingScene.objects.filter(
                 scene__is_deleted=False,
                 binding__resource_type=ResourceVisibilityType.STRATEGY,
                 binding__resource_id=str(strategy_id),
             )
             .values_list("scene_id", flat=True)
-            .first()
+            .distinct()
         )
+        if len(scene_ids) != 1:
+            logger.error(
+                "[SceneResolve] strategy %s bound to %d scenes (expected 1): %s",
+                strategy_id,
+                len(scene_ids),
+                scene_ids,
+            )
+            return None
+        return scene_ids[0]
 
     def _send_confirm_notice(self, risk: Risk, confirmer: List[str]) -> None:
         """

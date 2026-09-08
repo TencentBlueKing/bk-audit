@@ -42,17 +42,14 @@ def forwards(apps, schema_editor):
     strategy_rule_map = {}
 
     for strategy in rule_strategies:
-        # 幂等：已有规则的策略跳过
-        existing_rule = StrategyRule.objects.filter(strategy=strategy).first()
+        # 幂等：已有【活动】规则的策略跳过（仅认 is_deleted=False，避免软删旧规则被误判为已有规则）
+        existing_rule = StrategyRule.objects.filter(strategy=strategy, is_deleted=False).first()
         if existing_rule:
             if not (strategy.rule_order or []):
-                active_rule_ids = list(
-                    StrategyRule.objects.filter(strategy=strategy, is_deleted=False).values_list("rule_id", flat=True)
-                )
-                Strategy.objects.filter(pk=strategy.strategy_id).update(rule_order=active_rule_ids)
+                Strategy.objects.filter(pk=strategy.strategy_id).update(rule_order=[existing_rule.rule_id])
             strategy_rule_map[strategy.strategy_id] = existing_rule.rule_id
             print(
-                f"[forwards] 策略 {strategy.strategy_id} 已有规则 {existing_rule.rule_id}，跳过创建",
+                f"[forwards] 策略 {strategy.strategy_id} 已有活动规则 {existing_rule.rule_id}，跳过创建",
                 flush=True,
             )
             continue
