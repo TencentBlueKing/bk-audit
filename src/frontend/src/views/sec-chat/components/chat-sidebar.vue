@@ -1062,6 +1062,7 @@
 
   let documentMouseDownHandler: ((e: MouseEvent) => void) | null = null;
   let documentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  let documentSidebarMenuMouseDownHandler: ((e: MouseEvent) => void) | null = null;
 
   watch(isCollapsedSearchOpen, (open) => {
     if (open) {
@@ -1087,6 +1088,9 @@
   onUnmounted(() => {
     if (documentMouseDownHandler) document.removeEventListener('mousedown', documentMouseDownHandler);
     if (documentKeydownHandler) window.removeEventListener('keydown', documentKeydownHandler);
+    if (documentSidebarMenuMouseDownHandler) {
+      document.removeEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+    }
   });
 
   const normalizeSearchText = (value: string) => value.trim().toLocaleLowerCase();
@@ -1099,8 +1103,7 @@
 
   const collapsedFilteredHistoryList = computed(() => {
     const keyword = normalizeSearchText(collapsedSearchKeyword.value);
-    const source = canonicalConversations.value.filter(conv => fuzzyIncludes(conv.title, keyword));
-    return source.slice(0, 10);
+    return canonicalConversations.value.filter(conv => fuzzyIncludes(conv.title, keyword));
   });
 
   const COLLAPSED_SEARCH_ITEM_HEIGHT = 32;
@@ -2423,12 +2426,45 @@
   const activeMenuId = ref<string | null>(null);
   const activeGroupMenuId = ref<string | null>(null);
 
+  const isSidebarMenuInteractiveArea = (target: EventTarget | null) => {
+    const el = target instanceof HTMLElement ? target : null;
+    if (!el) return false;
+    return !!(el.closest('.chat-conv-dropdown-pop')
+      || el.closest('.chat-group-dropdown-pop')
+      || el.closest('.action-btn')
+      || el.closest('.group-more'));
+  };
+
+  watch(
+    () => [activeMenuId.value, activeGroupMenuId.value],
+    ([menuId, groupMenuId]) => {
+      const hasOpenMenu = Boolean(menuId || groupMenuId);
+      if (hasOpenMenu) {
+        if (!documentSidebarMenuMouseDownHandler) {
+          documentSidebarMenuMouseDownHandler = (e: MouseEvent) => {
+            if (isSidebarMenuInteractiveArea(e.target)) return;
+            activeMenuId.value = null;
+            activeGroupMenuId.value = null;
+          };
+        }
+        document.addEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+        return;
+      }
+
+      if (documentSidebarMenuMouseDownHandler) {
+        document.removeEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+      }
+    },
+  );
+
   const toggleConvMenu = (id: string) => {
     activeMenuId.value = activeMenuId.value === id ? null : id;
+    activeGroupMenuId.value = null;
   };
 
   const toggleGroupMenu = (name: string) => {
     activeGroupMenuId.value = activeGroupMenuId.value === name ? null : name;
+    activeMenuId.value = null;
   };
 
   const hideMenu = () => {
