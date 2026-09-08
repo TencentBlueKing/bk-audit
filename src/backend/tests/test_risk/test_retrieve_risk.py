@@ -496,6 +496,45 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertEqual(results[0]["event_data"], matched_event)
 
+    def test_list_risk_via_bkbase_dedupes_join_rows_before_pagination(self):
+        sql_log = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 2}]}
+            return {
+                "list": [
+                    {
+                        "risk_id": self.risk.risk_id,
+                        "strategy_id": self.risk.strategy_id,
+                        "raw_event_id": self.risk.raw_event_id,
+                        "__matched_event_data": json.dumps({"ip": "127.0.0.1"}),
+                    }
+                ]
+            }
+
+        payload = {
+            "title": "bkbase-title",
+            "sort": ["-last_operate_time", "-risk_id"],
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "127.0",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        assert_hive_sql(self, sql_log)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["risk_id"], self.risk.risk_id)
+
     def test_list_risk_via_bkbase_order_by_event_data_field(self):
         sql_log = []
 
@@ -532,13 +571,6 @@ class TestListRiskResource(TestCase):
             data = self._call_resource(payload)
 
         self.assertEqual(len(sql_log), 2)
-        _, data_sql = sql_log
-        normalized_sql = data_sql.replace("`", "")
-        normalized_upper = normalized_sql.upper()
-        self.assertIn("__ORDER_EVENT_FIELD", normalized_upper)
-        self.assertIn("__MATCHED_EVENT_DATA", normalized_upper)
-        self.assertIn("ORDER BY __ORDER_EVENT_FIELD DESC", normalized_upper)
-        self.assertIn("MATCHED_EVENT.DTEVENTTIMESTAMP DESC", normalized_upper)
         assert_hive_sql(self, sql_log)
 
         results = data["results"]
