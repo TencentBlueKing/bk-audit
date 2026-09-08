@@ -575,8 +575,8 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
     risk_guidance: rule.risk_guidance ?? d.risk_guidance ?? '',
     processor: rule.processor ?? [],
     follower: rule.follower ?? [],
-    conditions: rule.conditions ?? {
-      where: rule.configs?.where ?? (index === 0 ? d.configs?.where : null),
+    conditions: {
+      where: rule.conditions?.where ?? rule.configs?.where ?? (index === 0 ? d.configs?.where : null),
       having: rule.conditions?.having ?? rule.configs?.having ?? (index === 0 ? d.configs?.having : null),
     },
     configs: {

@@ -59,18 +59,20 @@
             <div
               class="rule-item-card"
               :class="{ 'is-collapsed': rule.collapsed }">
-              <!-- 规则卡片头部 -->
-              <div class="rule-item-header">
+              <!-- 规则卡片头部：点击空白栏展开/收起 -->
+              <div
+                class="rule-item-header"
+                @click="() => toggleCollapse(index)">
                 <span
                   class="rule-drag-handle"
-                  title="拖拽排序">
+                  title="拖拽排序"
+                  @click.stop>
                   <audit-icon type="move" />
                 </span>
                 <audit-icon
                   class="rule-collapse-icon"
                   :class="{ 'is-collapsed': rule.collapsed }"
-                  type="angle-line-down"
-                  @click="() => toggleCollapse(index)" />
+                  type="angle-line-down" />
 
                 <!-- 规则名称（可编辑） -->
                 <template v-if="rule.editingName">
@@ -80,28 +82,41 @@
                     class="rule-name-input"
                     type="text"
                     @blur="() => stopEditName(index)"
+                    @click.stop
                     @keydown.enter="() => stopEditName(index)">
                 </template>
                 <template v-else>
-                  <span class="rule-name">{{ rule.name }}</span>
-                  <audit-icon
-                    class="rule-name-edit-icon"
-                    type="edit-fill"
-                    @click="() => startEditName(index)" />
+                  <div class="rule-name-wrap">
+                    <span class="rule-name">{{ rule.name }}</span>
+                    <audit-icon
+                      class="rule-name-edit-icon"
+                      type="edit-fill"
+                      @click.stop="() => startEditName(index)" />
+                  </div>
                 </template>
 
                 <!-- 头部右侧操作 -->
-                <div class="rule-header-actions">
+                <div
+                  class="rule-header-actions"
+                  @click.stop>
                   <audit-icon
                     v-bk-tooltips="t('克隆')"
                     class="rule-action-icon"
                     type="copy"
                     @click="() => handleCloneRule(index)" />
-                  <audit-icon
-                    v-bk-tooltips="t('删除')"
-                    class="rule-action-icon rule-action-delete"
-                    type="delete"
-                    @click="() => handleDeleteRule(index)" />
+                  <audit-popconfirm
+                    v-if="ruleItems.length > 1"
+                    :cancel-text="t('取消')"
+                    :confirm-handler="() => handleDeleteRule(index)"
+                    :confirm-text="t('删除')"
+                    :content="t('确认删除「{name}」？删除后不可恢复。', { name: rule.name })"
+                    placement="bottom-end"
+                    :title="t('确认删除该规则？')">
+                    <audit-icon
+                      v-bk-tooltips="t('删除')"
+                      class="rule-action-icon rule-action-delete"
+                      type="delete" />
+                  </audit-popconfirm>
                 </div>
               </div>
 
@@ -113,7 +128,14 @@
                 <!-- 命中条件 -->
                 <div class="rule-section">
                   <div class="rule-section-label is-required">
-                    {{ t('命中条件') }}
+                    <span
+                      v-bk-tooltips="{
+                        content: t('命中匹配条件的数据记录将生成一条审计风险工单'),
+                        placement: 'top-start',
+                      }"
+                      class="rule-section-label-tip">
+                      {{ t('命中条件') }}
+                    </span>
                   </div>
                   <div class="rule-section-body rule-section-body--condition">
                     <audit-form
@@ -141,7 +163,7 @@
                     <div
                       class="variable-input-content"
                       :class="[rule.variableInputActive ? 'active' : '']"
-                      @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
+                      @click.stop="() => activateRiskTitleEdit(index)">
                       <ul class="variable-input-list">
                         <template v-if="!rule.variableInputActive">
                           <li
@@ -161,6 +183,7 @@
                             v-model="rule.riskTitleInputValue"
                             class="title-input"
                             type="text"
+                            @click.stop
                             @keydown="(e) => handleTitleKeyDown(e, index)">
                         </li>
                       </ul>
@@ -177,11 +200,11 @@
                       placement="bottom-end"
                       theme="light"
                       trigger="manual"
-                      width="490">
+                      width="520">
                       <bk-button
                         class="reference-variable-btn"
                         size="small"
-                        @click.stop="(e) => handleRiskTitleClick(e, index, 'origin')">
+                        @click.stop="(e) => handleReferenceVariableClick(e, index)">
                         <audit-icon
                           style="margin-right: 4px;"
                           type="insert" />
@@ -229,8 +252,10 @@
                     <div class="rule-section-body">
                       <bk-input
                         v-model="rule.risk_hazard"
+                        class="rule-resize-textarea"
                         :maxlength="100"
                         :placeholder="t('请输入')"
+                        resize
                         :rows="3"
                         show-word-limit
                         type="textarea" />
@@ -243,8 +268,10 @@
                     <div class="rule-section-body">
                       <bk-input
                         v-model="rule.risk_guidance"
+                        class="rule-resize-textarea"
                         :maxlength="100"
                         :placeholder="t('请输入')"
+                        resize
                         :rows="3"
                         show-word-limit
                         type="textarea" />
@@ -336,6 +363,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
+  import _ from 'lodash';
 
   import IamManageService from '@service/iam-manage';
   import NoticeManageService from '@service/notice-group';
@@ -553,26 +581,44 @@
 
   const handleCloneRule = (index: number) => {
     const source = ruleItems.value[index];
+    const com = comRefs.value[index];
+    const fields = com?.getFields?.({ forValidate: true })
+      ?? { configs: source.formData?.configs ?? {} };
+    const configs = _.cloneDeep(fields.configs ?? source.formData?.configs ?? {});
+    if (!configs.where && source.conditions?.where) {
+      configs.where = _.cloneDeep(source.conditions.where);
+    }
+    if (!configs.having && source.conditions?.having) {
+      configs.having = _.cloneDeep(source.conditions.having);
+    }
+
     const cloned = createRule({
       name: `${source.name}_复制`,
-      risk_title: source.risk_title,
+      risk_title: `${source.risk_title || ''}${source.riskTitleInputValue || ''}`,
       risk_level: source.risk_level,
       risk_hazard: source.risk_hazard,
       risk_guidance: source.risk_guidance,
       processor: [...(source.processor ?? [])],
       follower: [...(source.follower ?? [])],
+      conditions: {
+        where: _.cloneDeep(configs.where),
+        having: _.cloneDeep(configs.having),
+      },
+      formData: { configs },
     });
     ruleItems.value.splice(index + 1, 0, cloned);
+    comRefs.value.splice(index + 1, 0, null);
+    titleInputRefs.value.splice(index + 1, 0, null);
   };
 
   const handleDeleteRule = (index: number) => {
-    if (ruleItems.value.length === 1) {
-      // 保持至少一条规则
-      return;
+    if (ruleItems.value.length <= 1) {
+      return Promise.resolve();
     }
     ruleItems.value.splice(index, 1);
     comRefs.value.splice(index, 1);
     titleInputRefs.value.splice(index, 1);
+    return Promise.resolve();
   };
 
   const reorderRefArray = <T, >(items: T[], oldIndex: number, newIndex: number) => {
@@ -606,37 +652,62 @@
     }
   };
 
-  const handleRiskTitleClick = (e: Event, index: number, origin?: 'origin') => {
-    const rule = ruleItems.value[index];
-    if (origin && !rule.isVariableCopy) {
-      ruleItems.value.forEach((_, i) => {
-        if (i === index) return;
-        const current = ruleItems.value[i];
-        if (current.showVariablePanel && !current.isVariableCopy) {
-          ruleItems.value[i].showVariablePanel = false;
-          ruleItems.value[i].variableInputActive = false;
-          if (current.riskTitleInputValue) {
-            ruleItems.value[i].risk_title += current.riskTitleInputValue;
-            ruleItems.value[i].riskTitleInputValue = '';
-          }
-        }
-        ruleItems.value[i].isVariableCopy = false;
-      });
-
-      rule.showVariablePanel = true;
-      rule.variableInputActive = true;
-      const display = getDisplayRiskTitle(rule.risk_title);
-      const cursorPos = getRiskTitleCharIndex(display, rule.clickLiIndex);
-      if (display.length) {
-        rule.riskTitleInputValue = display.map(item => item.value).join('');
-        rule.risk_title = '';
-      }
-      nextTick(() => {
-        titleInputRefs.value[index]?.setSelectionRange(cursorPos, cursorPos);
-        rule.clickLiIndex = -1;
-        titleInputRefs.value[index]?.focus();
-      });
+  const commitRiskTitleEdit = (index: number) => {
+    const current = ruleItems.value[index];
+    if (current.riskTitleInputValue) {
+      ruleItems.value[index].risk_title += current.riskTitleInputValue;
+      ruleItems.value[index].riskTitleInputValue = '';
     }
+    ruleItems.value[index].variableInputActive = false;
+    ruleItems.value[index].showVariablePanel = false;
+    ruleItems.value[index].isVariableCopy = false;
+  };
+
+  const closeOtherRiskTitleEditors = (index: number) => {
+    ruleItems.value.forEach((_, i) => {
+      if (i === index) return;
+      const current = ruleItems.value[i];
+      if (current.variableInputActive || current.showVariablePanel) {
+        if (!current.isVariableCopy) {
+          commitRiskTitleEdit(i);
+        }
+      }
+      ruleItems.value[i].isVariableCopy = false;
+    });
+  };
+
+  /** 进入标题编辑，不自动打开引用变量弹窗 */
+  const activateRiskTitleEdit = (index: number) => {
+    const rule = ruleItems.value[index];
+    // 已在编辑态：勿重置选区，否则光标会跳回行首
+    if (rule.variableInputActive) {
+      return;
+    }
+    closeOtherRiskTitleEditors(index);
+    rule.variableInputActive = true;
+    const display = getDisplayRiskTitle(rule.risk_title);
+    const cursorPos = getRiskTitleCharIndex(display, rule.clickLiIndex);
+    if (display.length) {
+      rule.riskTitleInputValue = display.map(item => item.value).join('');
+      rule.risk_title = '';
+    }
+    nextTick(() => {
+      const input = titleInputRefs.value[index];
+      input?.focus();
+      input?.setSelectionRange(cursorPos, cursorPos);
+      rule.clickLiIndex = -1;
+    });
+  };
+
+  /** 仅点击「引用变量」时打开/关闭弹窗 */
+  const handleReferenceVariableClick = (e: Event, index: number) => {
+    e.stopPropagation();
+    const rule = ruleItems.value[index];
+    closeOtherRiskTitleEditors(index);
+    if (!rule.variableInputActive) {
+      activateRiskTitleEdit(index);
+    }
+    rule.showVariablePanel = !rule.showVariablePanel;
   };
 
   const handleClickTitleLi = (ruleIndex: number, liIndex: number) => {
@@ -661,6 +732,7 @@
   const handleTitleKeyDown = (e: KeyboardEvent, index: number) => {
     const rule = ruleItems.value[index];
     if (e.code === 'Enter') {
+      e.preventDefault();
       rule.showVariablePanel = false;
       rule.isVariableCopy = false;
       rule.variableInputActive = false;
@@ -681,7 +753,31 @@
   };
 
   const updateRuleFormData = (data: Record<string, any>, index: number) => {
-    ruleItems.value[index].formData = { ...ruleItems.value[index].formData, ...data };
+    const prev = ruleItems.value[index];
+    const nextConfigs = {
+      ...(prev.formData?.configs || {}),
+      ...(data.configs || {}),
+    };
+    // 子组件初始化会回传空 where，不能覆盖已同步的命中条件
+    const prevWhere = prev.conditions?.where;
+    const prevHaving = prev.conditions?.having;
+    if (!hasConditionGroups(nextConfigs.where) && hasConditionGroups(prevWhere)) {
+      nextConfigs.where = _.cloneDeep(prevWhere);
+    }
+    if (!hasConditionGroups(nextConfigs.having) && hasConditionGroups(prevHaving)) {
+      nextConfigs.having = _.cloneDeep(prevHaving);
+    }
+    if (hasConditionGroups(nextConfigs.where) || hasConditionGroups(nextConfigs.having)) {
+      ruleItems.value[index].conditions = {
+        where: nextConfigs.where,
+        having: nextConfigs.having,
+      };
+    }
+    ruleItems.value[index].formData = {
+      ...prev.formData,
+      ...data,
+      configs: nextConfigs,
+    };
   };
 
   const mergeRuleConfigs = (fieldsConfigs: Record<string, any> = {}) => {
@@ -772,15 +868,33 @@
     };
   };
 
+  const hasConditionGroups = (where?: { conditions?: unknown[] } | null) => (
+    Boolean(where?.conditions?.length)
+  );
+
+  const pickConditionWhere = (...candidates: Array<{ conditions?: unknown[] } | null | undefined>) => (
+    candidates.find(item => hasConditionGroups(item))
+  );
+
   const getRuleEditData = (index: number) => {
     const base = getMergedSourceData();
+    const localRule = ruleItems.value[index];
     const formRule = props.formData?.rules?.[index] ?? {};
-    const where = formRule.conditions?.where
-      ?? formRule.configs?.where
-      ?? (index === 0 ? base.configs?.where : undefined);
-    const having = formRule.conditions?.having
-      ?? formRule.configs?.having
-      ?? (index === 0 ? base.configs?.having : undefined);
+    // 注意：customize 初始化会回写空 where（conditions: []），不能优先生效，否则会盖住真实命中条件
+    const where = pickConditionWhere(
+      localRule?.conditions?.where,
+      formRule.conditions?.where,
+      formRule.configs?.where,
+      localRule?.formData?.configs?.where,
+      index === 0 ? base.configs?.where : undefined,
+    );
+    const having = pickConditionWhere(
+      localRule?.conditions?.having,
+      formRule.conditions?.having,
+      formRule.configs?.having,
+      localRule?.formData?.configs?.having,
+      index === 0 ? base.configs?.having : undefined,
+    );
     return {
       ...base,
       configs: {
@@ -814,17 +928,29 @@
   const applyRuleItems = (data: Record<string, any>) => {
     ruleIdSeq = 1;
     if (data.rules?.length) {
-      ruleItems.value = data.rules.map((r: any, i: number) => createRule({
-        name: r.rule_name || r.name || `规则${i + 1}`,
-        risk_title: r.risk_title || '',
-        risk_level: r.risk_level || 'HIGH',
-        risk_hazard: r.risk_hazard || '',
-        risk_guidance: r.risk_guidance || '',
-        processor: r.processor ?? [],
-        follower: r.follower ?? [],
-        conditions: r.conditions,
-        formData: r.configs ? { configs: r.configs } : {},
-      }));
+      ruleItems.value = data.rules.map((r: any, i: number) => {
+        const where = r.conditions?.where ?? r.configs?.where;
+        const having = r.conditions?.having ?? r.configs?.having;
+        const configs = {
+          ...(r.configs || {}),
+          ...(where ? { where: _.cloneDeep(where) } : {}),
+          ...(having ? { having: _.cloneDeep(having) } : {}),
+        };
+        return createRule({
+          name: r.rule_name || r.name || `规则${i + 1}`,
+          risk_title: r.risk_title || '',
+          risk_level: r.risk_level || 'HIGH',
+          risk_hazard: r.risk_hazard || '',
+          risk_guidance: r.risk_guidance || '',
+          processor: r.processor ?? [],
+          follower: r.follower ?? [],
+          conditions: {
+            where: configs.where,
+            having: configs.having,
+          },
+          formData: { configs },
+        });
+      });
     } else {
       ruleItems.value = [createRule({
         name: '规则1',
@@ -842,7 +968,23 @@
 
     const data = getMergedSourceData();
     const strategyId = data.strategy_id;
-    if (!strategyId || syncedEditStrategyId.value === strategyId) return;
+    if (!strategyId) return;
+
+    const rules = data.rules ?? [];
+    const incomingHasConditions = rules.some((r: any) => (
+      hasConditionGroups(r?.conditions?.where)
+      || hasConditionGroups(r?.configs?.where)
+    ));
+    // 只看当前 UI 使用的 formData，避免 conditions 有值但 formData 已被空 where 覆盖时误判
+    const localHasConditions = ruleItems.value.some(r => (
+      hasConditionGroups(r?.formData?.configs?.where)
+    ));
+
+    // 已同步过且本地 UI 已有条件，或接口本身无条件时，不再覆盖
+    if (syncedEditStrategyId.value === strategyId
+      && (localHasConditions || !incomingHasConditions)) {
+      return;
+    }
 
     syncStepFormMeta(data);
     applyRuleItems(data);
@@ -867,6 +1009,12 @@
       props.formData?.risk_title,
       props.formData?.risk_hazard,
       props.formData?.risk_guidance,
+      props.formData?.rules?.length,
+      props.formData?.rules?.map((r: any) => (
+        r?.conditions?.where?.conditions?.length
+        || r?.configs?.where?.conditions?.length
+        || 0
+      )).join(','),
       props.formData?.configs?.where?.conditions?.length,
     ],
     () => {
@@ -922,16 +1070,12 @@
   const handleDocumentClick = () => {
     ruleItems.value.forEach((_, i) => {
       const current = ruleItems.value[i];
-      if (!current.showVariablePanel) return;
-      if (!current.isVariableCopy) {
-        ruleItems.value[i].showVariablePanel = false;
-        ruleItems.value[i].variableInputActive = false;
-        if (current.riskTitleInputValue) {
-          ruleItems.value[i].risk_title += current.riskTitleInputValue;
-          ruleItems.value[i].riskTitleInputValue = '';
-        }
+      if (!current.showVariablePanel && !current.variableInputActive) return;
+      if (current.isVariableCopy) {
+        ruleItems.value[i].isVariableCopy = false;
+        return;
       }
-      ruleItems.value[i].isVariableCopy = false;
+      commitRiskTitleEdit(i);
     });
   };
 
@@ -1047,6 +1191,7 @@
       align-items: center;
       height: 48px;
       padding: 0 16px;
+      cursor: pointer;
       background: #f5f6fa;
       border-radius: 2px 2px 0 0;
       border-bottom: 1px solid #dcdee5;
@@ -1075,13 +1220,20 @@
         }
       }
 
+      .rule-name-wrap {
+        display: flex;
+        flex: 1;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+      }
+
       .rule-name {
+        min-width: 0;
+        overflow: hidden;
         font-size: 14px;
         font-weight: 600;
         color: #313238;
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1157,6 +1309,11 @@
             text-align: center;
             content: '*';
           }
+
+          .rule-section-label-tip {
+            cursor: pointer;
+            border-bottom: 1px dashed #979ba5;
+          }
         }
 
         .rule-section-body {
@@ -1177,10 +1334,20 @@
       .rule-section-two-col {
         display: flex;
         gap: 12px;
+        align-items: flex-start;
 
         .rule-section-col {
           flex: 1;
           min-width: 0;
+        }
+
+        /* 文档：resize=true 时可拖拽调高；覆盖可能被吃掉的样式 */
+        :deep(.rule-resize-textarea.bk-textarea) {
+          width: 100%;
+          min-height: 72px;
+          max-height: 360px;
+          overflow: auto !important;
+          resize: vertical !important;
         }
       }
 
@@ -1237,6 +1404,7 @@
 
       /* 风险单标题输入 */
       .variable-input-content {
+        position: relative;
         display: flex;
         align-items: center;
         width: 100%;
@@ -1310,8 +1478,13 @@
         }
 
         .variable-input-placeholder {
+          position: absolute;
+          top: 50%;
+          left: 8px;
           color: #c4c6cc;
+          white-space: nowrap;
           pointer-events: none;
+          transform: translateY(-50%);
         }
       }
 

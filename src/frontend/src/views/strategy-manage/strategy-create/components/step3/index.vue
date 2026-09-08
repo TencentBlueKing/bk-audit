@@ -36,43 +36,57 @@
               <div
                 class="assign-rule-item"
                 :class="{ 'is-collapsed': rule.collapsed }">
-                <div class="assign-rule-item-header">
+                <div
+                  class="assign-rule-item-header"
+                  @click="() => toggleCollapse(index)">
                   <span
                     class="rule-drag-handle"
-                    title="拖拽排序">
+                    title="拖拽排序"
+                    @click.stop>
                     <audit-icon type="move" />
                   </span>
                   <audit-icon
                     class="collapse-icon"
                     :class="{ 'is-collapsed': rule.collapsed }"
-                    type="angle-line-down"
-                    @click="() => toggleCollapse(index)" />
+                    type="angle-line-down" />
                   <template v-if="rule.editingName">
                     <input
                       v-model="rule.name"
                       class="rule-name-input"
                       type="text"
                       @blur="() => stopEditName(index)"
+                      @click.stop
                       @keydown.enter="() => stopEditName(index)">
                   </template>
                   <template v-else>
-                    <span class="rule-name">{{ rule.name }}</span>
-                    <audit-icon
-                      class="rule-name-edit-icon"
-                      type="edit-fill"
-                      @click="() => startEditName(index)" />
+                    <div class="rule-name-wrap">
+                      <span class="rule-name">{{ rule.name }}</span>
+                      <audit-icon
+                        class="rule-name-edit-icon"
+                        type="edit-fill"
+                        @click.stop="() => startEditName(index)" />
+                    </div>
                   </template>
-                  <div class="header-actions">
+                  <div
+                    class="header-actions"
+                    @click.stop>
                     <audit-icon
                       v-bk-tooltips="t('克隆')"
                       class="action-icon"
                       type="copy"
                       @click="() => handleCloneRule(index)" />
-                    <audit-icon
-                      v-bk-tooltips="t('删除')"
-                      class="action-icon action-delete"
-                      type="delete"
-                      @click="() => handleDeleteRule(index)" />
+                    <audit-popconfirm
+                      :cancel-text="t('取消')"
+                      :confirm-handler="() => handleDeleteRule(index)"
+                      :confirm-text="t('删除')"
+                      :content="t('确认删除「{name}」？删除后不可恢复。', { name: rule.name })"
+                      placement="bottom-end"
+                      :title="t('确认删除该规则？')">
+                      <audit-icon
+                        v-bk-tooltips="t('删除')"
+                        class="action-icon action-delete"
+                        type="delete" />
+                    </audit-popconfirm>
                   </div>
                 </div>
 
@@ -100,12 +114,13 @@
           <div
             class="assign-rule-item default-rule"
             :class="{ 'is-collapsed': defaultRule.collapsed, 'has-assign-rules': assignRules.length }">
-            <div class="assign-rule-item-header">
+            <div
+              class="assign-rule-item-header"
+              @click="defaultRule.collapsed = !defaultRule.collapsed">
               <audit-icon
                 class="collapse-icon"
                 :class="{ 'is-collapsed': defaultRule.collapsed }"
-                type="angle-line-down"
-                @click="defaultRule.collapsed = !defaultRule.collapsed" />
+                type="angle-line-down" />
               <span class="rule-name">{{ t('默认分派规则') }}</span>
             </div>
             <div
@@ -350,6 +365,7 @@
 
   const handleDeleteRule = (index: number) => {
     assignRules.value.splice(index, 1);
+    return Promise.resolve();
   };
 
   const buildStepParams = (): IFormData => ({
@@ -576,6 +592,7 @@
       align-items: center;
       height: 48px;
       padding: 0 16px;
+      cursor: pointer;
       background: #f5f6fa;
       border-bottom: 1px solid #dcdee5;
       gap: 8px;
@@ -602,8 +619,15 @@
         }
       }
 
-      .rule-name {
+      .rule-name-wrap {
+        display: flex;
         flex: 1;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .rule-name {
         min-width: 0;
         overflow: hidden;
         font-size: 14px;
