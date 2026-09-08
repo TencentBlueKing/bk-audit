@@ -25,11 +25,23 @@
       <div
         v-if="!embedded"
         class="condition-section">
+        <selected-systems-panel
+          v-if="systems.length"
+          action-placement="header"
+          action-text="重新选择"
+          class="result-systems-section"
+          :default-expanded="false"
+          :systems="systems"
+          :title="`已选 ${systems.length} 个系统`"
+          @action="$emit('reselectSystem')" />
+
         <div class="condition-header">
-          <audit-icon
-            class="condition-icon"
-            type="search1" />
-          <span>{{ conditionHeaderText }}</span>
+          <div class="condition-header-main">
+            <audit-icon
+              class="condition-icon"
+              type="search1" />
+            <span>{{ conditionHeaderText }}</span>
+          </div>
         </div>
 
         <!-- 可编辑：复用条件检索组件 -->
@@ -76,7 +88,7 @@
           v-else
           class="condition-tags">
           <span
-            v-for="(item, index) in displayResult.conditions"
+            v-for="(item, index) in visibleConditions"
             :key="`${item.field}-${index}`"
             class="condition-tag">
             <span class="tag-label">{{ item.field }}：</span>
@@ -140,35 +152,37 @@
                   </template>
                 </p>
               </div>
-              <bk-dropdown
-                class="export-dropdown"
-                :disabled="!canExport || exporting || resubmitLoading"
-                placement="bottom-start"
-                trigger="click">
-                <bk-button
-                  class="export-btn"
-                  :disabled="!canExport"
-                  :loading="exporting">
-                  <audit-icon
-                    class="export-icon"
-                    type="download" />
-                  {{ exporting ? '导出中…' : '导出' }}
-                </bk-button>
-                <template #content>
-                  <bk-dropdown-menu>
-                    <bk-dropdown-item
-                      :disabled="exporting"
-                      @click="handleExport('preview')">
-                      导出前 {{ displayResult.previewCount }} 条数据
-                    </bk-dropdown-item>
-                    <bk-dropdown-item
-                      :disabled="exporting"
-                      @click="handleExport('all')">
-                      导出全量数据
-                    </bk-dropdown-item>
-                  </bk-dropdown-menu>
-                </template>
-              </bk-dropdown>
+              <div class="summary-actions">
+                <bk-dropdown
+                  class="export-dropdown"
+                  :disabled="!canExport || exporting || resubmitLoading"
+                  placement="bottom-start"
+                  trigger="click">
+                  <bk-button
+                    class="export-btn"
+                    :disabled="!canExport"
+                    :loading="exporting">
+                    <audit-icon
+                      class="export-icon"
+                      type="download" />
+                    {{ exporting ? '导出中…' : '导出' }}
+                  </bk-button>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item
+                        :disabled="exporting"
+                        @click="handleExport('preview')">
+                        导出前 {{ displayResult.previewCount }} 条数据
+                      </bk-dropdown-item>
+                      <bk-dropdown-item
+                        :disabled="exporting"
+                        @click="handleExport('all')">
+                        导出全量数据
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
+              </div>
             </div>
 
             <!-- 数据预览表 -->
@@ -420,6 +434,7 @@
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
   import LogStatisticsDialog from './log-statistics-dialog.vue';
   import LogStatisticsDrawer from './log-statistics-drawer.vue';
+  import SelectedSystemsPanel from './selected-systems-panel.vue';
 
   const props = withDefaults(defineProps<{
     result: RetrievalResultPayload;
@@ -442,6 +457,7 @@
     analyze: [];
     statistics: [];
     regenerate: [];
+    reselectSystem: [];
   }>();
 
   const { rerunLogSearch } = useSecChatStore();
@@ -488,23 +504,33 @@
     datetime_origin: createDefaultDatetimeOrigin(),
   });
 
-  const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
-    props.standardFields,
-    props.extensionFields,
+  const fieldConfig = computed(() => {
+    const nextConfig = createConditionFieldConfigFromSystemFields(
+      props.standardFields,
+      props.extensionFields,
+    );
+    delete nextConfig.system_id;
+    return nextConfig;
+  });
+  const commonFieldKeys = computed(() => (
+    getPrimaryFieldNames(props.standardFields).filter(key => key !== 'system_id')
   ));
-  const commonFieldKeys = computed(() => getPrimaryFieldNames(props.standardFields));
   const extendFieldKeys = computed(() => getSecondaryFieldNames(props.extensionFields));
   const selectedFieldNames = computed(() => Object.keys(searchModel.value)
-    .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
+    .filter(key => key !== 'datetime_origin' && key !== 'system_id' && fieldConfig.value[key]));
 
   const conditionEditable = computed(() => (
     Boolean(displayResult.value.rawCondition)
     && Object.keys(fieldConfig.value).length > 1
   ));
 
+  const visibleConditions = computed(() => (
+    displayResult.value.conditions.filter(item => item.field !== '来源系统')
+  ));
+
   const activeConditionCount = computed(() => (
     Object.keys(searchModel.value).filter(key => (
-      key !== 'datetime_origin' && key !== 'sort' && fieldConfig.value[key]
+      key !== 'datetime_origin' && key !== 'sort' && key !== 'system_id' && fieldConfig.value[key]
     )).length
   ));
 
@@ -512,16 +538,20 @@
     if (conditionEditable.value) {
       return `已识别到 ${activeConditionCount.value} 个筛选条件，可修改后重新检索`;
     }
-    return `已识别到 ${displayResult.value.conditions.length} 个筛选条件进行检索`;
+    return `已识别到 ${visibleConditions.value.length} 个筛选条件进行检索`;
   });
 
   const syncSearchModelFromResult = () => {
     const { rawCondition } = displayResult.value;
     if (!rawCondition) return;
-    searchModel.value = parseAiSearchConditionToSearchModel(
+    const nextSearchModel = parseAiSearchConditionToSearchModel(
       rawCondition,
       fieldConfig.value,
     );
+    if ('system_id' in nextSearchModel) {
+      delete nextSearchModel.system_id;
+    }
+    searchModel.value = nextSearchModel;
   };
 
   watch(
@@ -892,6 +922,12 @@
     margin-bottom: 16px;
   }
 
+  .result-systems-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
+  }
+
   .result-body-loading {
     min-height: 160px;
   }
@@ -903,6 +939,13 @@
   .condition-header {
     display: flex;
     margin-bottom: 12px;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .condition-header-main {
+    display: flex;
+    min-width: 0;
     font-size: 14px;
     line-height: 22px;
     color: #313238;
@@ -952,6 +995,11 @@
     .tag-value {
       font-weight: 700;
       color: #313238;
+    }
+
+    &.is-fixed {
+      background: #f0f5ff;
+      border-color: #c5d8ff;
     }
   }
 
@@ -1038,6 +1086,13 @@
       font-weight: 700;
       color: #313238;
     }
+  }
+
+  .summary-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
   }
 
   .export-dropdown {
@@ -1316,9 +1371,25 @@
 <style lang="postcss">
   /* 结果卡内可编辑条件：与条件筛选卡视觉对齐 */
   .retrieval-result-card .condition-editor {
+    .nl-condition-tags {
+      flex: 1;
+      min-width: 0;
+    }
+
     .nl-condition-tags-first-row,
     .nl-condition-tags-content {
       align-items: center;
+    }
+
+    .nl-condition-tags-first-row {
+      .nl-add-condition-trigger {
+        order: 999;
+      }
+
+      .condition-clear-btn {
+        order: 1000;
+        margin-left: 8px;
+      }
     }
 
     .condition-tag-item {
