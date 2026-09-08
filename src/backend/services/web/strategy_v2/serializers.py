@@ -926,6 +926,14 @@ class MultiRuleValidateMixin:
                     )
             # where 叶子校验：操作符合法
             for leaf in self._walk_tree_leaves(where_tree):
+                # 聚合字段只能出现在 having 中
+                field = (leaf or {}).get("field") or {}
+                field_name = field.get("display_name") or field.get("field_name")
+                if field.get("aggregate"):
+                    raise serializers.ValidationError(
+                        gettext("规则[%s]的where条件字段[%s]不能为聚合字段（聚合字段仅允许在having中使用）")
+                        % (rule.get("rule_name"), field_name)
+                    )
                 operator = (leaf or {}).get("operator")
                 if operator and operator not in RuleAuditConditionOperator.values:
                     raise serializers.ValidationError(
@@ -1393,6 +1401,17 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     )
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
+    dispatch_scene_id = serializers.IntegerField(
+        label=gettext_lazy("分派场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("按分派场景过滤，返回对该场景可见的全局策略"),
+    )
+    updated_by = serializers.CharField(
+        label=gettext_lazy("更新人"),
+        required=False,
+        allow_blank=True,
+    )
 
     def validate_report_status(self, value: str) -> str:
         if not value:
@@ -1407,7 +1426,8 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         # split into array
         for key, val in data.items():
-            if key in ["namespace", "order_field", "order_type", "scene_id", "system_id", "binding_type"]:
+            if key in ["namespace", "order_field", "order_type", "scene_id", "system_id", "binding_type",
+                        "dispatch_scene_id", "updated_by"]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
         # order

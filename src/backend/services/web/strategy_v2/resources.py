@@ -1081,6 +1081,18 @@ class ListStrategy(StrategyV2Base):
                 resource_type=ResourceVisibilityType.STRATEGY,
                 pk_field="strategy_id",
             )
+        # 按分派场景过滤（仅全局策略）
+        dispatch_scene_id = validated_request_data.pop("dispatch_scene_id", None)
+        if dispatch_scene_id is not None:
+            platform_ids = CompositeScopeFilter._get_visible_platform_ids(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                scene_id=dispatch_scene_id,
+            )
+            queryset = queryset.filter(strategy_id__in=platform_ids)
+        # 按更新人过滤
+        updated_by = validated_request_data.pop("updated_by", None)
+        if updated_by:
+            queryset = queryset.filter(updated_by=updated_by)
         # 排序
         queryset = queryset.order_by(order_field)
 
