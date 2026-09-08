@@ -86,6 +86,7 @@ export interface ChatMessage {
   type: 'text' | 'select-system' | 'retrieval-guide' | 'retrieval-result';
   content?: string;
   status?: 'pending' | 'confirmed' | 'closed';
+  selectionReason?: 'initial' | 'reselect' | 'disambiguate';
   systemIds?: string[];
   systems?: SelectedSystem[];
   /** SYSTEM_SELECTION 推荐问法 */
@@ -104,6 +105,11 @@ export interface ChatMessage {
     code: string;
     message: string;
   };
+  intent?: string;
+  aiMessage?: string;
+  candidateSystems?: SelectedSystem[];
+  /** 是否展示引导卡；可仅缓存 SYSTEM_SELECTION 上下文而不展示 */
+  showGuide?: boolean;
   parentMessageUid?: string | null;
 }
 

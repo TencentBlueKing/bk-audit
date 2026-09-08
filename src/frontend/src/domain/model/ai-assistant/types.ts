@@ -21,6 +21,7 @@ export type AiMessageStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED';
 /** 消息类型 */
 export type AiMessageType =
   | 'SYSTEM_SELECTION'
+  | 'USER_INTENT'
   | 'NATURAL_LANGUAGE_SEARCH'
   | 'LOG_SEARCH'
   | string;
@@ -106,11 +107,33 @@ export type AiNlRecognitionErrorCode =
 export interface AiNlRecognitionError {
   error_code: AiNlRecognitionErrorCode;
   error_message: string;
+  candidates?: AiSystemInfo[] | null;
 }
 
 export interface AiNaturalLanguageSearchOutput {
   condition: AiSearchCondition | null;
   error?: AiNlRecognitionError | null;
+}
+
+export type AiUserIntentType =
+  | 'select_system'
+  | 'log_search'
+  | 'unrecognized'
+  | string;
+
+export interface AiUserIntentInput {
+  query_text: string;
+  auto_execute?: boolean;
+}
+
+export interface AiUserIntentOutput {
+  intent?: AiUserIntentType;
+  system_id?: string;
+  message?: string;
+  condition?: AiSearchCondition | null;
+  error?: AiNlRecognitionError | null;
+  log_search_message_uid?: string;
+  selection_message_uid?: string;
 }
 
 export interface AiLogSearchInput {

@@ -22,6 +22,7 @@ import type {
   AiSearchCondition,
   AiSystemFieldItem,
   AiSystemInfo,
+  AiUserIntentOutput,
 } from '@model/ai-assistant/types';
 
 import type {
@@ -105,6 +106,17 @@ const pickOperations = (list?: Array<{ query_text?: string }> | null): string[] 
     .map(item => String(item?.query_text || '').trim())
     .filter(Boolean)
     .slice(0, 10);
+};
+
+const pickCandidateSystems = (message: AiMessage): SelectedSystem[] => {
+  const candidates = message.output_data?.error?.candidates;
+  if (!Array.isArray(candidates)) return [];
+  return candidates
+    .map((item: any) => ({
+      id: String(item?.system_id ?? item?.id ?? ''),
+      name: String(item?.name ?? item?.system_name ?? item?.system_id ?? item?.id ?? ''),
+    }))
+    .filter((item: SelectedSystem) => item.id);
 };
 
 const pickSystemFields = (output?: Record<string, any> | null) => {
@@ -234,12 +246,13 @@ export const mapLogSearchOutputToResult = (
 export interface MapAiMessageOptions {
   /** 来自 SYSTEM_SELECTION 的字段表，用于条件标签中文映射 */
   fieldCatalog?: SystemFieldRow[];
+  /** 指定哪些 SYSTEM_SELECTION 仅用于补充上下文，不展示 guide */
+  hiddenGuideMessageIds?: Set<string>;
 }
 
 /** NL 消息在 SUCCESS 时若 output_data.error 非空，表示识别失败（非任务 FAILED） */
 export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError | null => {
-  if (message.message_type !== 'NATURAL_LANGUAGE_SEARCH') return null;
-  if (message.status !== 'SUCCESS') return null;
+  if (message.message_type !== 'NATURAL_LANGUAGE_SEARCH' && message.message_type !== 'USER_INTENT') return null;
   const error = message.output_data?.error;
   if (!error || typeof error !== 'object') return null;
   const errorCode = String(error.error_code || '').trim();
@@ -247,6 +260,7 @@ export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError 
   return {
     error_code: errorCode,
     error_message: String(error.error_message || '').trim(),
+    candidates: Array.isArray(error.candidates) ? error.candidates as AiSystemInfo[] : null,
   };
 };
 
@@ -258,6 +272,7 @@ export const mapAiMessageToChatMessage = (
   options: MapAiMessageOptions = {},
 ): ChatMessage => {
   const fieldCatalog = options.fieldCatalog || [];
+  const hiddenGuideMessageIds = options.hiddenGuideMessageIds || new Set<string>();
   const outputSystems = pickSystems(message.output_data);
   const systems = outputSystems.length ? outputSystems : pickSystems(message.input_data);
   const systemIds = systems.map(item => item.id);
@@ -270,12 +285,14 @@ export const mapAiMessageToChatMessage = (
   };
 
   if (message.message_type === 'SYSTEM_SELECTION') {
+    const showGuide = !hiddenGuideMessageIds.has(message.uid);
     if (message.status === 'SUCCESS' && (systems.length || message.output_data)) {
       const { standardFields, extensionFields } = pickSystemFields(message.output_data);
       return {
         id: message.uid,
         role: 'assistant',
         type: 'retrieval-guide',
+        showGuide,
         systems,
         systemIds,
         commonOperations: pickOperations(message.output_data?.common_operations),
@@ -290,6 +307,7 @@ export const mapAiMessageToChatMessage = (
       role: 'assistant',
       type: 'select-system',
       status: message.status === 'FAILED' ? 'closed' : 'pending',
+      showGuide,
       systems,
       systemIds,
       ...baseMeta,
@@ -320,6 +338,65 @@ export const mapAiMessageToChatMessage = (
       content: queryText,
       // NL SUCCESS 的表格在子 LOG_SEARCH；此处不填 result，避免双卡
       result: undefined,
+      ...baseMeta,
+    };
+  }
+
+  if (message.message_type === 'USER_INTENT') {
+    const queryText = String(message.input_data?.query_text ?? '');
+    const output = ((message.output_data || {}) as AiUserIntentOutput);
+    const recognitionError = getNlRecognitionError(message);
+    const candidateSystems = pickCandidateSystems(message);
+    const resolvedSystemId = String(output.system_id || '').trim();
+    const shouldPromptSystemSelection = (
+      recognitionError?.error_code === 'SYSTEM_REQUIRED'
+      || (output.intent === 'select_system' && !resolvedSystemId)
+    );
+
+    if (shouldPromptSystemSelection) {
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'select-system',
+        status: 'pending',
+        selectionReason: 'disambiguate',
+        systems: candidateSystems,
+        systemIds: candidateSystems.map(item => item.id),
+        candidateSystems,
+        content: queryText,
+        aiMessage: output.message ? String(output.message) : undefined,
+        intent: output.intent,
+        ...baseMeta,
+      };
+    }
+
+    if (recognitionError) {
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'retrieval-result',
+        content: queryText,
+        result: undefined,
+        aiMessage: output.message ? String(output.message) : undefined,
+        intent: output.intent,
+        candidateSystems,
+        recognitionError: {
+          code: recognitionError.error_code,
+          message: recognitionError.error_message,
+        },
+        ...baseMeta,
+      };
+    }
+
+    return {
+      id: message.uid,
+      role: 'assistant',
+      type: 'retrieval-result',
+      content: queryText,
+      result: undefined,
+      aiMessage: output.message ? String(output.message) : undefined,
+      intent: output.intent,
+      candidateSystems,
       ...baseMeta,
     };
   }
