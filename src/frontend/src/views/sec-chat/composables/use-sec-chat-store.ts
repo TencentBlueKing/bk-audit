@@ -371,7 +371,15 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
   if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
     const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
     if (selectionMessageUid) {
-      await fetchSelectionMessage(conversationId, selectionMessageUid, { showGuide: false });
+      const existingSelectionMessage = findStoredConversation(conversationId)?.messages.find(item => (
+        item.id === selectionMessageUid
+        && (item.type === 'retrieval-guide' || item.type === 'select-system')
+      ));
+      await fetchSelectionMessage(
+        conversationId,
+        selectionMessageUid,
+        existingSelectionMessage ? undefined : { showGuide: false },
+      );
     }
     await fetchChildLogSearch(conversationId, detail.uid);
   }
@@ -425,16 +433,6 @@ const applyMessageWindow = (conv: Conversation, windowData: {
   const fieldCatalog = latestSystemInWindow
     ? extractFieldCatalogFromSystemMessage(latestSystemInWindow)
     : buildFieldCatalog(conv.standardFields, conv.extensionFields);
-  const windowHiddenGuideIds = new Set<string>();
-  windowData.results.forEach((message) => {
-    if (message.message_type !== 'USER_INTENT' && message.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
-    const selectionMessageUid = String(message.output_data?.selection_message_uid || '').trim();
-    if (selectionMessageUid) {
-      windowHiddenGuideIds.add(selectionMessageUid);
-      hiddenGuideMessageIds.add(selectionMessageUid);
-    }
-  });
-
   const mapped: ReturnType<typeof mapAiMessageToChatMessage>[] = [];
   windowData.results.forEach((message) => {
     if ((message.message_type === 'USER_INTENT' || message.message_type === 'NATURAL_LANGUAGE_SEARCH')
@@ -448,7 +446,7 @@ const applyMessageWindow = (conv: Conversation, windowData: {
     }
     mapped.push(mapAiMessageToChatMessage(message, {
       fieldCatalog,
-      hiddenGuideMessageIds: windowHiddenGuideIds,
+      hiddenGuideMessageIds,
     }));
   });
   /* eslint-disable no-param-reassign -- 原地更新会话消息窗口与系统上下文 */
@@ -479,7 +477,7 @@ const applyMessageWindow = (conv: Conversation, windowData: {
   // 仅在替换/追加更新「当前系统」；向前翻历史不应回退到更早的 SYSTEM_SELECTION
   if (mode !== 'prepend' && latestSystemInWindow) {
     applySystemSelectionContext(conv, mapAiMessageToChatMessage(latestSystemInWindow, {
-      hiddenGuideMessageIds: windowHiddenGuideIds,
+      hiddenGuideMessageIds,
     }));
   }
   /* eslint-enable no-param-reassign */
