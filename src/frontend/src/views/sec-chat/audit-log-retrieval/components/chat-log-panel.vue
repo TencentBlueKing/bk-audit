@@ -44,34 +44,51 @@
               {{ msg.content }}
             </div>
 
+            <!-- 系统确认/引导异步处理中 -->
+            <div
+              v-else-if="msg.messageType === 'SYSTEM_SELECTION'
+                && msg.apiStatus === 'PROCESSING'"
+              class="result-status-card is-loading">
+              <span class="loading-dot" />
+              <span class="loading-dot" />
+              <span class="loading-dot" />
+              <span class="status-text">
+                {{ msg.showGuide === false ? '正在理解检索意图…' : '正在准备系统检索范围…' }}
+              </span>
+            </div>
+
             <!-- 内联选择系统卡片 -->
             <select-system-card
-              v-else-if="msg.type === 'select-system' && msg.status === 'pending'"
+              v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false"
+              :candidate-systems="msg.candidateSystems || []"
               :confirming="confirmingSystemMessageId === msg.id"
               :model-value="msg.systemIds || []"
+              :selection-reason="msg.selectionReason || 'initial'"
+              :tip-message="msg.aiMessage || ''"
               @close="$emit('close-select-system', msg.id)"
               @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
 
-            <!-- 确认选择后的检索引导卡片 -->
+            <!-- 显式选系统后的检索引导卡片 -->
             <retrieval-guide-card
-              v-else-if="msg.type === 'retrieval-guide'"
+              v-else-if="msg.type === 'retrieval-guide' && msg.showGuide !== false"
+              :confirming-system="confirmingSystemMessageId === msg.id"
               :extension-fields="msg.extensionFields || []"
               :historical-operations="msg.historicalOperations || []"
               :standard-fields="msg.standardFields || []"
               :systems="msg.systems || []"
               @append-nl-field="handleAppendNlField"
+              @confirm-system="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)"
               @open-condition-filter="handleOpenConditionFilter"
-              @reselect="handleReselectSystem"
               @select-suggestion="handleSelectSuggestion" />
 
             <!-- NL 处理中 -->
             <div
-              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'PROCESSING'"
+              v-else-if="shouldShowRetrievalLoading(msg)"
               class="result-status-card is-loading">
               <span class="loading-dot" />
               <span class="loading-dot" />
               <span class="loading-dot" />
-              <span class="status-text">正在理解检索意图…</span>
+              <span class="status-text">{{ getRetrievalLoadingText(msg) }}</span>
             </div>
 
             <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
@@ -87,7 +104,9 @@
                   {{ getRecognitionTitle(msg.recognitionError.code) }}
                 </div>
                 <div class="status-desc">
-                  {{ msg.recognitionError.message || getRecognitionFallback(msg.recognitionError.code) }}
+                  {{
+                    msg.aiMessage || msg.recognitionError.message || getRecognitionFallback(msg.recognitionError.code)
+                  }}
                 </div>
               </div>
               <div
@@ -115,10 +134,10 @@
                 检索失败
               </div>
               <div class="status-desc">
-                {{ msg.errorMessage || '请稍后重试或改用条件筛选' }}
+                {{ msg.aiMessage || msg.errorMessage || '请稍后重试或改用条件筛选' }}
               </div>
               <bk-button
-                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH'"
+                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
                 size="small"
                 theme="primary"
                 @click="$emit('retry-message', msg.id)">
@@ -134,7 +153,8 @@
               :result="msg.result"
               :standard-fields="standardFields"
               :systems="systems"
-              @regenerate="handleRegenerate(msg.content || '')" />
+              @regenerate="handleRegenerate(msg.content || '')"
+              @reselect-system="handleReselectSystem" />
           </div>
 
           <!-- 条件检索卡：未检索时覆盖草稿；已检索后再点则新建，固定在会话底部 -->
@@ -234,6 +254,8 @@
   const CONDITION_FILTER_SCROLL_MS = 400;
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
+    SYSTEM_REQUIRED: '需要补充系统信息',
+    UNRECOGNIZED_INTENT: '未能理解当前意图',
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
     AI_OUTPUT_PARSE_FAILED: '检索条件解析失败',
     AI_OUTPUT_INVALID: '检索条件无效',
@@ -243,6 +265,8 @@
   };
 
   const NL_RECOGNITION_FALLBACKS: Record<string, string> = {
+    SYSTEM_REQUIRED: '请选择目标系统后继续检索',
+    UNRECOGNIZED_INTENT: '请换一种描述方式重新发送',
     QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
     AI_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
     AI_OUTPUT_INVALID: '请修改描述后重试',
@@ -268,6 +292,35 @@
   );
 
   const showRecognitionSuggestions = (code: string) => code === 'QUERY_NOT_RECOGNIZED';
+
+  const getProcessingText = (messageType?: string) => {
+    if (messageType === 'LOG_SEARCH') return '正在检索日志…';
+    return '正在理解检索意图…';
+  };
+
+  const hasChildRetrievalMessage = (messageId: string) => (
+    props.messages.some(item => item.parentMessageUid === messageId && item.type === 'retrieval-result')
+  );
+
+  const shouldShowRetrievalLoading = (msg: ChatMessage) => {
+    if (msg.type !== 'retrieval-result' || msg.recognitionError || msg.result) return false;
+    if (msg.apiStatus === 'PROCESSING') return true;
+    if (msg.apiStatus !== 'SUCCESS') return false;
+    return (
+      (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+      && !hasChildRetrievalMessage(msg.id)
+    );
+  };
+
+  const getRetrievalLoadingText = (msg: ChatMessage) => {
+    if (
+      msg.apiStatus === 'SUCCESS'
+      && (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+    ) {
+      return '正在检索日志…';
+    }
+    return getProcessingText(msg.messageType);
+  };
 
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);

@@ -59,6 +59,17 @@ const createEmptyConversation = (partial: Omit<Conversation, 'systemIds' | 'syst
   ...partial,
 });
 
+const createPendingSelectSystemMessage = (conversationId: string) => ({
+  id: `${conversationId}-select-system-${Date.now()}`,
+  role: 'assistant' as const,
+  type: 'select-system' as const,
+  status: 'pending' as const,
+  selectionReason: 'initial' as const,
+  systems: [],
+  systemIds: [],
+  candidateSystems: [],
+});
+
 const sidebarCollapsed = ref(false);
 const activeConversationId = ref<string | null>(null);
 const sidebarLoading = ref(false);
@@ -82,6 +93,10 @@ const messageLoadInflight = new Map<string, Promise<void>>();
 const groupLoadInflight = new Map<string, Promise<void>>();
 /** 同一会话标题刷新进行中的 Promise，避免并发叠打 */
 const titleRefreshInflight = new Map<string, Promise<void>>();
+/** 异步 SYSTEM_SELECTION 成功后补发原始 NL 查询 */
+const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
+/** NL 隐式识别到系统时，SYSTEM_SELECTION 仅用于补上下文，不展示 guide */
+const hiddenGuideMessageIds = new Set<string>();
 
 const activeConversation = computed(() => {
   if (draftConversation.value && activeConversationId.value === draftConversation.value.id) {
@@ -136,13 +151,27 @@ const applySystemSelectionContext = (conv: Conversation, chatMessage: ReturnType
   /* eslint-enable no-param-reassign */
 };
 
-const upsertConversationMessage = (conversationId: string, message: AiMessage) => {
+const upsertConversationMessage = (
+  conversationId: string,
+  message: AiMessage,
+  options?: { showGuide?: boolean },
+) => {
   const conv = conversations.value.find(c => c.id === conversationId)
     || (draftConversation.value?.id === conversationId ? draftConversation.value : null);
   if (!conv) return;
 
   const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
-  const chatMessage = mapAiMessageToChatMessage(message, { fieldCatalog });
+  if (message.message_type === 'SYSTEM_SELECTION') {
+    if (options?.showGuide === false) {
+      hiddenGuideMessageIds.add(message.uid);
+    } else if (options?.showGuide === true) {
+      hiddenGuideMessageIds.delete(message.uid);
+    }
+  }
+  const chatMessage = mapAiMessageToChatMessage(message, {
+    fieldCatalog,
+    hiddenGuideMessageIds,
+  });
   const idx = conv.messages.findIndex(item => item.id === message.uid);
   if (idx >= 0) {
     conv.messages.splice(idx, 1, chatMessage);
@@ -171,6 +200,9 @@ const fetchChildLogSearch = async (conversationId: string, nlUid: string) => {
       ));
       if (child) {
         upsertConversationMessage(conversationId, child);
+        if (child.status === 'PROCESSING') {
+          startMessagePoll(conversationId, child.uid);
+        }
         return child;
       }
     } catch {
@@ -181,6 +213,24 @@ const fetchChildLogSearch = async (conversationId: string, nlUid: string) => {
     }
   }
   return null;
+};
+
+const fetchSelectionMessage = async (
+  conversationId: string,
+  messageUid?: string | null,
+  options?: { showGuide?: boolean },
+) => {
+  if (!messageUid) return null;
+  try {
+    const detail = await AiAssistantManageService.fetchMessage({ message_uid: messageUid });
+    upsertConversationMessage(conversationId, detail, options);
+    if (detail.status === 'PROCESSING') {
+      startMessagePoll(conversationId, detail.uid);
+    }
+    return detail;
+  } catch {
+    return null;
+  }
 };
 
 const findStoredConversation = (conversationId: string) => (
@@ -234,13 +284,95 @@ const refreshConversationTitle = async (conversationId: string) => {
   }
 };
 
-const handleNlTerminalStatus = async (conversationId: string, detail: AiMessage) => {
-  if (detail.status === 'SUCCESS'
-    && (detail.message_type === 'NATURAL_LANGUAGE_SEARCH' || detail.message_type === 'LOG_SEARCH')) {
-    void refreshConversationTitle(conversationId);
+const sendLogQueryForConversation = async (
+  conversationId: string,
+  content: string,
+  options?: { appendUserMessage?: boolean },
+) => {
+  const conv = findStoredConversation(conversationId);
+  if (!conv || conv.isDraft) return;
+  const text = content.trim();
+  if (!text) return;
+
+  const stamp = Date.now();
+  if (options?.appendUserMessage !== false) {
+    conv.messages.push({
+      id: `${conv.id}-query-${stamp}`,
+      role: 'user',
+      type: 'text',
+      content: text,
+    });
   }
-  if (detail.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
+
+  try {
+    const message = await AiAssistantManageService.createMessage({
+      conversation_uid: conv.id,
+      message_type: 'USER_INTENT',
+      input_data: {
+        query_text: text,
+        auto_execute: true,
+      },
+    });
+    upsertConversationMessage(conv.id, message);
+    if (message.status === 'PROCESSING') {
+      startMessagePoll(conv.id, message.uid);
+    } else {
+      await handleMessageTerminalStatus(conv.id, message);
+    }
+  } catch {
+    // 033 未选系统等由全局中间件提示；补一条失败占位便于感知
+    conv.messages.push({
+      id: `${conv.id}-nl-error-${stamp}`,
+      role: 'assistant',
+      type: 'retrieval-result',
+      content: text,
+      apiStatus: 'FAILED',
+      messageType: 'USER_INTENT',
+      errorMessage: '发送失败，请稍后重试',
+    });
+  }
+};
+
+const flushPendingSelectionQuery = async (detail: AiMessage) => {
+  const pending = pendingSelectionQueries.get(detail.uid);
+  if (!pending) return;
+  pendingSelectionQueries.delete(detail.uid);
+  await sendLogQueryForConversation(pending.conversationId, pending.queryText, {
+    appendUserMessage: false,
+  });
+};
+
+const handleMessageTerminalStatus = async (conversationId: string, detail: AiMessage) => {
+  if (detail.status === 'SUCCESS'
+    && (
+      detail.message_type === 'SYSTEM_SELECTION'
+      || detail.message_type === 'USER_INTENT'
+      || detail.message_type === 'NATURAL_LANGUAGE_SEARCH'
+      || detail.message_type === 'LOG_SEARCH'
+    )
+  ) {
+    if (detail.message_type !== 'SYSTEM_SELECTION') {
+      void refreshConversationTitle(conversationId);
+    }
+  }
+
+  if (detail.message_type === 'SYSTEM_SELECTION') {
+    if (detail.status === 'SUCCESS') {
+      await flushPendingSelectionQuery(detail);
+    } else if (detail.status === 'FAILED') {
+      pendingSelectionQueries.delete(detail.uid);
+    }
+    return;
+  }
+
+  if (detail.message_type !== 'USER_INTENT' && detail.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
+  const mapped = mapAiMessageToChatMessage(detail);
+  if (mapped.type === 'select-system') return;
   if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
+    const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
+    if (selectionMessageUid) {
+      await fetchSelectionMessage(conversationId, selectionMessageUid, { showGuide: false });
+    }
     await fetchChildLogSearch(conversationId, detail.uid);
   }
 };
@@ -254,7 +386,7 @@ const startMessagePoll = (conversationId: string, messageUid: string) => {
       upsertConversationMessage(conversationId, detail);
       if (detail.status !== 'PROCESSING') {
         stopMessagePoll(messageUid);
-        await handleNlTerminalStatus(conversationId, detail);
+        await handleMessageTerminalStatus(conversationId, detail);
       }
     } catch {
       // 轮询失败不打断，下一次继续
@@ -268,10 +400,12 @@ const startMessagePoll = (conversationId: string, messageUid: string) => {
 
 const resumeProcessingPolls = (conversationId: string, messages: AiMessage[]) => {
   messages.forEach((message) => {
-    // NL 识别 / LOG_SEARCH 二次覆盖重跑都可能处于 PROCESSING
+    // USER_INTENT / SYSTEM_SELECTION / LOG_SEARCH 二次续链都可能处于 PROCESSING
     if (message.status === 'PROCESSING'
       && (
-        message.message_type === 'NATURAL_LANGUAGE_SEARCH'
+        message.message_type === 'SYSTEM_SELECTION'
+        || message.message_type === 'USER_INTENT'
+        || message.message_type === 'NATURAL_LANGUAGE_SEARCH'
         || message.message_type === 'LOG_SEARCH'
         || !message.message_type
       )) {
@@ -291,10 +425,20 @@ const applyMessageWindow = (conv: Conversation, windowData: {
   const fieldCatalog = latestSystemInWindow
     ? extractFieldCatalogFromSystemMessage(latestSystemInWindow)
     : buildFieldCatalog(conv.standardFields, conv.extensionFields);
+  const windowHiddenGuideIds = new Set<string>();
+  windowData.results.forEach((message) => {
+    if (message.message_type !== 'USER_INTENT' && message.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
+    const selectionMessageUid = String(message.output_data?.selection_message_uid || '').trim();
+    if (selectionMessageUid) {
+      windowHiddenGuideIds.add(selectionMessageUid);
+      hiddenGuideMessageIds.add(selectionMessageUid);
+    }
+  });
 
   const mapped: ReturnType<typeof mapAiMessageToChatMessage>[] = [];
   windowData.results.forEach((message) => {
-    if (message.message_type === 'NATURAL_LANGUAGE_SEARCH' && message.input_data?.query_text) {
+    if ((message.message_type === 'USER_INTENT' || message.message_type === 'NATURAL_LANGUAGE_SEARCH')
+      && message.input_data?.query_text) {
       mapped.push({
         id: `${message.uid}-user`,
         role: 'user',
@@ -302,7 +446,10 @@ const applyMessageWindow = (conv: Conversation, windowData: {
         content: String(message.input_data.query_text),
       });
     }
-    mapped.push(mapAiMessageToChatMessage(message, { fieldCatalog }));
+    mapped.push(mapAiMessageToChatMessage(message, {
+      fieldCatalog,
+      hiddenGuideMessageIds: windowHiddenGuideIds,
+    }));
   });
   /* eslint-disable no-param-reassign -- 原地更新会话消息窗口与系统上下文 */
   if (mode === 'replace') {
@@ -331,7 +478,9 @@ const applyMessageWindow = (conv: Conversation, windowData: {
 
   // 仅在替换/追加更新「当前系统」；向前翻历史不应回退到更早的 SYSTEM_SELECTION
   if (mode !== 'prepend' && latestSystemInWindow) {
-    applySystemSelectionContext(conv, mapAiMessageToChatMessage(latestSystemInWindow));
+    applySystemSelectionContext(conv, mapAiMessageToChatMessage(latestSystemInWindow, {
+      hiddenGuideMessageIds: windowHiddenGuideIds,
+    }));
   }
   /* eslint-enable no-param-reassign */
 
@@ -339,9 +488,11 @@ const applyMessageWindow = (conv: Conversation, windowData: {
 
   // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次（识别失败除外）
   windowData.results.forEach((message) => {
-    if (message.message_type === 'NATURAL_LANGUAGE_SEARCH'
+    if ((message.message_type === 'USER_INTENT' || message.message_type === 'NATURAL_LANGUAGE_SEARCH')
       && message.status === 'SUCCESS'
       && !getNlRecognitionError(message)) {
+      const mappedMessage = mapAiMessageToChatMessage(message);
+      if (mappedMessage.type === 'select-system') return;
       const hasChild = windowData.results.some(item => (
         item.message_type === 'LOG_SEARCH' && item.parent_message_uid === message.uid
       )) || conv.messages.some(item => (
@@ -639,7 +790,8 @@ export function useSecChatStore() {
     conv.messages.forEach((message) => {
       if (message.apiStatus === 'PROCESSING'
         && (
-          message.messageType === 'NATURAL_LANGUAGE_SEARCH'
+          message.messageType === 'USER_INTENT'
+          || message.messageType === 'NATURAL_LANGUAGE_SEARCH'
           || message.messageType === 'LOG_SEARCH'
         )) {
         startMessagePoll(id, message.id);
@@ -923,38 +1075,25 @@ export function useSecChatStore() {
   };
 
   /**
-   * 懒创建：只进入本地选系统草稿，确认系统后再 POST /conversations/
+   * 新协议下首页先创建真实会话，再按需发送 USER_INTENT。
    */
-  const createLogConversation = (prompt: string) => {
-    const id = `draft-${Date.now()}`;
-    const displayText = prompt === '请帮我检索审计日志' ? '审计日志检索' : prompt;
-    const conversation = createEmptyConversation({
-      id,
+  const createLogConversation = async (options?: { showInitialSelectSystem?: boolean }) => {
+    const created = await AiAssistantManageService.createConversation({
       title: DEFAULT_CONVERSATION_TITLE,
+    });
+    const conversation = createEmptyConversation({
+      id: created.uid,
+      title: created.title || DEFAULT_CONVERSATION_TITLE,
       pinned: false,
       sceneType: 'log',
-      isDraft: true,
+      messages: options?.showInitialSelectSystem === false ? [] : [createPendingSelectSystemMessage(created.uid)],
       messagesHydrated: true,
-      createdAt: Date.now(),
-      messages: [
-        {
-          id: `${id}-user`,
-          role: 'user',
-          type: 'text',
-          content: displayText,
-        },
-        {
-          id: `${id}-select-system`,
-          role: 'assistant',
-          type: 'select-system',
-          status: 'pending',
-          systemIds: [],
-          systems: [],
-        },
-      ],
+      createdAt: created.created_at ? Date.parse(created.created_at) || Date.now() : Date.now(),
     });
-    draftConversation.value = conversation;
-    activeConversationId.value = id;
+    draftConversation.value = null;
+    conversations.value.unshift(conversation);
+    activeConversationId.value = conversation.id;
+    await initSidebar();
     return conversation;
   };
 
@@ -974,7 +1113,10 @@ export function useSecChatStore() {
     if (!conv) return null;
 
     const msg = findSelectSystemMessage(conv, messageId);
-    if (!msg) return null;
+    const sourceMessage = conv.messages.find(item => item.id === messageId);
+    if (!msg && !sourceMessage) return null;
+    const pendingQueryText = msg?.messageType === 'USER_INTENT' ? msg.content?.trim() : '';
+    const shouldHideGuide = Boolean(pendingQueryText);
 
     const postSystemSelection = async (conversationUid: string) => (
       AiAssistantManageService.createMessage({
@@ -993,7 +1135,7 @@ export function useSecChatStore() {
       const realId = created.uid;
       const systemMessage = await postSystemSelection(realId);
 
-      const nextMessages = conv.messages.filter(item => item.id !== msg.id);
+      const nextMessages = conv.messages.filter(item => item.id !== (msg?.id || sourceMessage?.id));
       const realConversation = createEmptyConversation({
         id: realId,
         title: created.title || conv.title || DEFAULT_CONVERSATION_TITLE,
@@ -1009,16 +1151,46 @@ export function useSecChatStore() {
       draftConversation.value = null;
       conversations.value.unshift(realConversation);
       activeConversationId.value = realId;
-      upsertConversationMessage(realId, systemMessage);
+      upsertConversationMessage(realId, systemMessage, {
+        showGuide: shouldHideGuide ? false : undefined,
+      });
 
       await initSidebar();
+      if (systemMessage.status === 'PROCESSING') {
+        if (pendingQueryText) {
+          pendingSelectionQueries.set(systemMessage.uid, {
+            conversationId: realId,
+            queryText: pendingQueryText,
+          });
+        }
+        startMessagePoll(realId, systemMessage.uid);
+      } else if (pendingQueryText) {
+        await sendLogQueryForConversation(realId, pendingQueryText, { appendUserMessage: false });
+      }
       return realConversation;
     }
 
     // 已有会话切系统：落库新的 SYSTEM_SELECTION
-    conv.messages = conv.messages.filter(item => item.id !== msg.id);
+    conv.messages = conv.messages.filter((item) => {
+      if (item.id === (msg?.id || sourceMessage?.id)) return false;
+      if (!msg && item.type === 'select-system') return false;
+      return true;
+    });
     const systemMessage = await postSystemSelection(conv.id);
-    upsertConversationMessage(conv.id, systemMessage);
+    upsertConversationMessage(conv.id, systemMessage, {
+      showGuide: shouldHideGuide ? false : undefined,
+    });
+    if (systemMessage.status === 'PROCESSING') {
+      if (pendingQueryText) {
+        pendingSelectionQueries.set(systemMessage.uid, {
+          conversationId: conv.id,
+          queryText: pendingQueryText,
+        });
+      }
+      startMessagePoll(conv.id, systemMessage.uid);
+    } else if (pendingQueryText) {
+      await sendLogQueryForConversation(conv.id, pendingQueryText, { appendUserMessage: false });
+    }
     return conv;
   };
 
@@ -1037,59 +1209,24 @@ export function useSecChatStore() {
     if (!conv) return;
     conv.messages = conv.messages.filter(item => item.type !== 'retrieval-guide' && item.type !== 'select-system');
     conv.messages.push({
-      id: `${conv.id}-select-system-${Date.now()}`,
-      role: 'assistant',
-      type: 'select-system',
-      status: 'pending',
+      ...createPendingSelectSystemMessage(conv.id),
+      selectionReason: 'reselect',
       systemIds: [...conv.systemIds],
       systems: [...conv.systems],
+      candidateSystems: [],
     });
   };
 
   /**
    * 自然语言检索：POST NL → PROCESSING 轮询 → SUCCESS 后 AFTER 拉子 LOG_SEARCH。
    */
-  const sendLogQuery = async (content: string) => {
+  const sendLogQuery = async (
+    content: string,
+    options?: { appendUserMessage?: boolean },
+  ) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) return;
-    const text = content.trim();
-    if (!text) return;
-
-    const stamp = Date.now();
-    conv.messages.push({
-      id: `${conv.id}-query-${stamp}`,
-      role: 'user',
-      type: 'text',
-      content: text,
-    });
-
-    try {
-      const message = await AiAssistantManageService.createMessage({
-        conversation_uid: conv.id,
-        message_type: 'NATURAL_LANGUAGE_SEARCH',
-        input_data: {
-          query_text: text,
-          auto_execute: true,
-        },
-      });
-      upsertConversationMessage(conv.id, message);
-      if (message.status === 'PROCESSING') {
-        startMessagePoll(conv.id, message.uid);
-      } else {
-        await handleNlTerminalStatus(conv.id, message);
-      }
-    } catch {
-      // 033 未选系统等由全局中间件提示；补一条失败占位便于感知
-      conv.messages.push({
-        id: `${conv.id}-nl-error-${stamp}`,
-        role: 'assistant',
-        type: 'retrieval-result',
-        content: text,
-        apiStatus: 'FAILED',
-        messageType: 'NATURAL_LANGUAGE_SEARCH',
-        errorMessage: '发送失败，请确认已选择系统后重试',
-      });
-    }
+    await sendLogQueryForConversation(conv.id, content, options);
   };
 
   /**
@@ -1147,7 +1284,7 @@ export function useSecChatStore() {
     if (message.status === 'PROCESSING') {
       startMessagePoll(conv.id, message.uid);
     } else {
-      await handleNlTerminalStatus(conv.id, message);
+      await handleMessageTerminalStatus(conv.id, message);
     }
   };
 

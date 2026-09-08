@@ -20,38 +20,49 @@
       <!-- 已选系统 -->
       <div class="systems-section">
         <div
-          class="systems-header"
-          @click="systemsExpanded = !systemsExpanded">
-          <div class="systems-title">
-            <img
-              alt=""
-              class="title-icon"
-              :src="wenhaoIcon">
-            <span>已选系统</span>
-          </div>
-          <audit-icon
-            class="expand-icon"
-            :class="{ 'is-collapsed': !systemsExpanded }"
-            type="angle-line-down" />
-        </div>
-        <template v-if="systemsExpanded">
-          <div class="system-tags">
-            <span
-              v-for="item in systems"
+          v-if="isEditingSystem"
+          class="system-edit-panel">
+          <bk-select
+            v-model="editingSystemId"
+            class="guide-system-picker"
+            clearable
+            filterable
+            :input-search="false"
+            :loading="systemListLoading"
+            placeholder="请选择系统"
+            :popover-options="selectPopoverOptions"
+            :scroll-height="280">
+            <bk-option
+              v-for="item in displaySystemList"
               :key="item.id"
-              class="system-tag">
-              {{ item.name }}({{ item.id }})
-            </span>
+              :label="`${item.name}(${item.id})`"
+              :value="item.id" />
+          </bk-select>
+          <div class="system-edit-actions">
+            <bk-button
+              class="confirm-btn"
+              :disabled="!editingSystemId
+                || confirmingSystem
+                || editingSystemId === currentSystemId"
+              :loading="confirmingSystem"
+              theme="primary"
+              @click.stop="handleConfirmSystem">
+              确认修改
+            </bk-button>
+            <bk-button
+              :disabled="confirmingSystem"
+              @click.stop="handleCancelEditSystem">
+              取消
+            </bk-button>
           </div>
-          <div
-            class="reselect-link"
-            @click.stop="$emit('reselect')">
-            <audit-icon
-              class="reselect-icon"
-              type="refresh" />
-            <span>重新选择</span>
-          </div>
-        </template>
+        </div>
+        <selected-systems-panel
+          v-else
+          action-placement="header"
+          action-text="重新选择"
+          :systems="systems"
+          title="已选系统"
+          @action="handleStartEditSystem" />
       </div>
 
       <!-- 建议操作 -->
@@ -216,28 +227,35 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
+  import { useRoute } from 'vue-router';
 
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+  import MetaManageService from '@service/meta-manage';
+  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import { formatSampleValue } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
-  import wenhaoIcon from '@images/wenhao.svg';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import SelectedSystemsPanel from './selected-systems-panel.vue';
 
   const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
     historicalOperations?: string[];
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
+    confirmingSystem?: boolean;
   }>(), {
     historicalOperations: () => [],
     standardFields: () => [],
     extensionFields: () => [],
+    confirmingSystem: false,
   });
 
   const emit = defineEmits<{
-    reselect: [];
+    confirmSystem: [systemIds: string[], systems: SelectedSystem[]];
     'select-suggestion': [text: string];
     /** 自然语言字段检索：向输入框追加字段值 */
     'append-nl-field': [text: string];
@@ -260,9 +278,12 @@
   const FIELD_TABLE_TOOLTIP_MAX_HEIGHT = '400px';
   const FIELD_TABLE_TOOLTIP_CONTENT_CLASS = 'show-tooltips-text-popup';
 
-  const systemsExpanded = ref(true);
   const fieldExpanded = ref(true);
   const fieldTab = ref<'common' | 'extend'>('common');
+  const isEditingSystem = ref(false);
+  const editingSystemId = ref('');
+  const route = useRoute();
+  const { messageWarn } = useMessage();
 
   /** 常用操作：前端固定文案，不依赖后端 */
   const commonSuggestions = [
@@ -292,6 +313,105 @@
   const currentFieldRows = computed(() => (
     fieldTab.value === 'common' ? commonFields.value : extendFields.value
   ));
+
+  const currentSystemId = computed(() => props.systems[0]?.id || '');
+
+  const {
+    loading: systemListLoading,
+    data: systemList,
+    run: fetchSystemList,
+  } = useRequest(() => {
+    const params = getSceneSystemParams();
+    return MetaManageService.fetchSystemWithAction({
+      scope_id: params.scope_id || '',
+      scope_type: params.scope_type || '',
+      audit_status__in: 'accessed',
+    });
+  }, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const fetchedSystemList = computed(() => (systemList.value || []).map(item => ({
+    id: String(item.id),
+    name: item.name,
+  })));
+
+  const displaySystemList = computed(() => {
+    const selectedMap = new Map(props.systems.map(item => [item.id, item]));
+    fetchedSystemList.value.forEach((item) => {
+      if (!selectedMap.has(item.id)) {
+        selectedMap.set(item.id, item);
+      }
+    });
+    return [...selectedMap.values()];
+  });
+
+  const selectPopoverOptions = {
+    extCls: 'sec-chat-system-select-popover',
+    boundary: 'body',
+    placement: 'bottom-start',
+    autoPlacement: true,
+    zIndex: 9999,
+  } as const;
+
+  watch(() => currentSystemId.value, (value) => {
+    if (!isEditingSystem.value) {
+      editingSystemId.value = value;
+    }
+  }, { immediate: true });
+
+  watch(
+    () => [
+      String(route.query.scene_id || ''),
+      String(route.query.scope_id || ''),
+      String(route.query.scope_type || ''),
+    ].join('|'),
+    () => {
+      if (!isEditingSystem.value) return;
+      fetchSystemList().then((list) => {
+        const ids = (list || []).map(item => String(item.id));
+        if (
+          editingSystemId.value
+          && editingSystemId.value !== currentSystemId.value
+          && !ids.includes(editingSystemId.value)
+        ) {
+          editingSystemId.value = '';
+        }
+      });
+    },
+  );
+
+  const handleStartEditSystem = () => {
+    isEditingSystem.value = true;
+    editingSystemId.value = currentSystemId.value;
+    fetchSystemList();
+  };
+
+  const handleCancelEditSystem = () => {
+    isEditingSystem.value = false;
+    editingSystemId.value = currentSystemId.value;
+  };
+
+  const handleConfirmSystem = () => {
+    if (!editingSystemId.value) {
+      messageWarn('请选择系统');
+      return;
+    }
+    if (editingSystemId.value === currentSystemId.value) {
+      isEditingSystem.value = false;
+      return;
+    }
+    const system = displaySystemList.value.find(item => item.id === editingSystemId.value)
+      || { id: editingSystemId.value, name: editingSystemId.value };
+    emit('confirmSystem', [system.id], [system]);
+  };
+
+  watch(() => props.confirmingSystem, (loading) => {
+    if (!loading) {
+      isEditingSystem.value = false;
+    }
+  });
 
   const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
@@ -339,80 +459,22 @@
     flex-shrink: 0;
   }
 
-  .systems-header {
+  .system-edit-panel {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    user-select: none;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .systems-title {
+  .guide-system-picker {
+    width: 100%;
+  }
+
+  .system-edit-actions {
     display: flex;
-    align-items: center;
     gap: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 22px;
-    color: #313238;
 
-    .title-icon {
-      display: block;
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-    }
-  }
-
-  .expand-icon {
-    font-size: 14px;
-    color: #979ba5;
-    transition: transform .2s;
-
-    &.is-collapsed {
-      transform: rotate(-90deg);
-    }
-  }
-
-  .system-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 12px;
-    background: #f0f5ff;
-    border-radius: 4px;
-  }
-
-  .system-tag {
-    display: inline-flex;
-    max-width: 100%;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 12px;
-    line-height: 22px;
-    color: #63656e;
-    letter-spacing: 0;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
-    box-sizing: border-box;
-  }
-
-  .reselect-link {
-    display: inline-flex;
-    margin-top: 12px;
-    color: #3a84ff;
-    cursor: pointer;
-    align-items: center;
-    gap: 4px;
-
-    &:hover {
-      opacity: .85;
-    }
-
-    .reselect-icon {
-      font-size: 14px;
+    :deep(.bk-button) {
+      min-width: 88px;
     }
   }
 
@@ -735,5 +797,10 @@
     .field-table {
       table-layout: auto;
     }
+  }
+</style>
+<style lang="postcss">
+  .sec-chat-system-select-popover {
+    z-index: 9999 !important;
   }
 </style>
