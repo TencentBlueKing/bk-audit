@@ -114,6 +114,98 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertNotIn("sample_value_display", user_message)
         self.assertNotIn("管理员(展示值)", user_message)
 
+    def test_multi_value_rules_injected_into_prompt(self, mock_chat):
+        """多值规则注入 User Message：海量值完整性/分隔形态/原样保持/泛指不猜（复杂语句解析约束）"""
+
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
+        self._convert()
+
+        _, kwargs = mock_chat.call_args
+        user_message = kwargs["input"]
+        # 完整提取：禁止截断/抽样/遗漏（N 个值 → filters 恰好 N 个）
+        self.assertIn("值数量再多也必须完整提取", user_message)
+        self.assertIn("禁止截断、抽样、遗漏任何一个", user_message)
+        # 高数量自检（A5 十二人漏一稳定性修复）
+        self.assertIn("逐项自检", user_message)
+        # 分隔形态不限：顿号/逗号/空格/连词混排
+        self.assertIn("分隔形态不限", user_message)
+        # 值保持原样：不转写不翻译不串字段
+        self.assertIn("不得串字段", user_message)
+        # 泛指集合禁止猜测展开
+        self.assertIn("泛指集合", user_message)
+        self.assertIn("禁止猜测展开", user_message)
+        # 英文时间词同义换算（S14 last week 稳定性修复）
+        self.assertIn("last week=上周", user_message)
+        self.assertIn("非当前时刻前推7天", user_message)
+        # 安全审计动作词优先（S1 关键词抖动修复）
+        self.assertIn("动作动词", user_message)
+        self.assertIn("不得只提取修饰性宾语", user_message)
+
+    def test_multi_value_single_include_condition(self, mock_chat):
+        """多值合规输出：单条件 include 放全部值（10 人梯度零丢失）"""
+
+        usernames = [f"用户{index}" for index in range(1, 11)]
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "include", "filters": usernames}]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        self.assertEqual(len(condition.conditions), 1)
+        cond = condition.conditions[0]
+        self.assertEqual(cond.operator, "include")
+        self.assertEqual(cond.filters, usernames)
+
+    def test_multi_value_split_eq_conditions_pass_through(self, mock_chat):
+        """AI 违规拆多条同字段 eq（prompt 明令禁止）→ NL2JSON 层原样透传校验放行；
+
+        归一合并（多条同字段 eq → 单条 include）是检索执行层 LogSearchService
+        _normalize_condition 的职责（纵深兜底，test_log_search 已覆盖），
+        条件识别层不重复做——两层职责分离。
+        """
+
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]},
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["李四"]},
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["王五"]},
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        # 条件识别层透传 3 条（检索执行层归一）
+        self.assertEqual(len(condition.conditions), 3)
+        self.assertEqual(
+            [(cond.field.raw_name, cond.operator, cond.filters) for cond in condition.conditions],
+            [("username", "eq", ["张三"]), ("username", "eq", ["李四"]), ("username", "eq", ["王五"])],
+        )
+
+    def test_multi_value_and_single_value_fields_not_crossed(self, mock_chat):
+        """多字段混合：多值字段 include 与单值字段 eq 并存互不干扰（不串字段）"""
+
+        selection = self.make_selection(
+            standard_fields=[
+                self.make_standard_field(raw_name="username"),
+                self.make_standard_field(raw_name="result_code"),
+                self.make_standard_field(raw_name="access_source_ip"),
+            ]
+        )
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "username", "keys": [], "operator": "include", "filters": ["张三", "李四", "王五"]},
+            {"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]},
+            {"raw_name": "access_source_ip", "keys": [], "operator": "eq", "filters": ["192.0.2.10"]},
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+
+        by_name = {cond.field.raw_name: cond for cond in condition.conditions}
+        self.assertEqual(by_name["username"].filters, ["张三", "李四", "王五"])
+        self.assertEqual(by_name["result_code"].filters, [-1])
+        self.assertEqual(by_name["access_source_ip"].filters, ["192.0.2.10"])
+
     def test_parse_fenced_json(self, mock_chat):
         mock_chat.return_value = f"```json\n{json.dumps(VALID_AI_OUTPUT)}\n```"
         condition = self._convert()
