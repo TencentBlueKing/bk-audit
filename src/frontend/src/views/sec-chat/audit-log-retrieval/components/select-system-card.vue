@@ -23,7 +23,7 @@
           class="tip-icon"
           :src="wenhaoIcon">
         <span>
-          先选择要查询的系统<span class="tip-extra">（仅限有权限的系统）</span>
+          {{ tipText }}<span class="tip-extra">（仅限有权限的系统）</span>
         </span>
       </p>
       <div class="field-block">
@@ -85,11 +85,17 @@
     modelValue?: string[];
     /** 确认选择请求进行中，禁用按钮防止重复提交 */
     confirming?: boolean;
+    candidateSystems?: SelectedSystem[];
+    selectionReason?: 'initial' | 'reselect' | 'disambiguate';
+    tipMessage?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     modelValue: () => [],
     confirming: false,
+    candidateSystems: () => [],
+    selectionReason: 'initial',
+    tipMessage: '',
   });
 
   const emit = defineEmits<{
@@ -118,10 +124,21 @@
     manual: true,
   });
 
-  const displaySystemList = computed(() => (systemList.value || []).map(item => ({
+  const fetchedSystemList = computed(() => (systemList.value || []).map(item => ({
     id: String(item.id),
     name: item.name,
   })));
+
+  const displaySystemList = computed(() => (
+    props.candidateSystems.length ? props.candidateSystems : fetchedSystemList.value
+  ));
+
+  const tipText = computed(() => {
+    if (props.tipMessage) return props.tipMessage;
+    if (props.selectionReason === 'reselect') return '先选择要查询的系统';
+    if (props.candidateSystems.length) return '未识别到唯一系统，请补充选择系统';
+    return '先选择要查询的系统';
+  });
 
   const selectedSystem = computed(() => {
     if (!selectedId.value) return null;
