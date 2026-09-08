@@ -188,7 +188,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { nextTick, onActivated, ref, watch } from 'vue';
+  import { computed, nextTick, onActivated, ref, watch } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
@@ -321,6 +321,29 @@
     }
     return getProcessingText(msg.messageType);
   };
+
+  const visibleMessageSignature = computed(() => props.messages.map((msg) => {
+    const visibleKind = (() => {
+      if (msg.role === 'user' && msg.type === 'text') return 'user-text';
+      if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return 'system-selection-loading';
+      if (msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false) return 'select-system-card';
+      if (msg.type === 'retrieval-guide' && msg.showGuide !== false) return 'retrieval-guide-card';
+      if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
+      if (msg.type === 'retrieval-result' && msg.recognitionError) return `recognition-error:${msg.recognitionError.code || ''}`;
+      if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') return `retrieval-failed:${msg.messageType || ''}`;
+      if (msg.type === 'retrieval-result' && msg.result) return 'retrieval-result-card';
+      return 'hidden';
+    })();
+
+    return [
+      msg.id,
+      visibleKind,
+      msg.status || '',
+      msg.apiStatus || '',
+      msg.showGuide === false ? 'hidden-guide' : 'show-guide',
+      msg.systems?.map(item => item.id).join(',') || '',
+    ].join(':');
+  }).join('|'));
 
   const handleSelectSuggestion = (text: string) => {
     chatInputRef.value?.setInputValue(text);
@@ -472,6 +495,11 @@
     if (newLen > oldLen) {
       await scrollToBottom(oldLen !== 0);
     }
+  });
+
+  watch(visibleMessageSignature, async (next, prev) => {
+    if (!prev || next === prev || scrollAnchor.value) return;
+    await scrollToBottom(true);
   });
 
   watch(() => props.conversationId, () => {
