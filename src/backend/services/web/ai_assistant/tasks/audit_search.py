@@ -278,7 +278,13 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
             selection_message = MessageService(user=context_data.username).create_executed(
                 conversation=execution.message.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
-                input_data={"system_ids": [system_id]},
+                # 透传 session scope（前端左上角场景过滤器当前选择）：
+                # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄
+                input_data={
+                    "system_ids": [system_id],
+                    "scope_type": context_data.scope_type,
+                    "scope_id": context_data.scope_id,
+                },
             )
     elif not current_system_id:
         # 检索意图明确但缺会话系统状态（非识别失败）：AI 动态引导 + 候选清单

@@ -85,7 +85,7 @@
     query: '最近有人乱动权限，帮我看看'
     current_time: '2026-08-31T18:00:00+08:00'
     expected_log_keywords: '["权限"]'
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python

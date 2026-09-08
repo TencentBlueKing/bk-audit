@@ -43,7 +43,7 @@
         keys: []
         operator: 'eq'
         filters: ['张三']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -141,12 +141,12 @@
     - type: python
       value: 'file://assertions/check_conditions.py:exact_time_window_match'
 
-- description: 'T9-模糊意图：帮我看看最近的情况（默认7天窗口）'
+- description: 'T9-模糊意图：帮我看看最近的情况（默认30天窗口）'
   vars:
     query: '帮我看看最近的情况'
     current_time: '2026-08-31T18:00:00+08:00'
     expected_conditions: []
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python

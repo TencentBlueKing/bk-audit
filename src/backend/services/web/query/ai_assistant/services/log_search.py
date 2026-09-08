@@ -81,6 +81,8 @@ class LogSearchService:
         username: str,
         source: str = "field_condition",
         column_fields: List[str] = None,
+        session_scope_type: str = "",
+        session_scope_id: str = "",
     ) -> LogSearchOutput:
         """
         :param condition: 统一条件结构（NL 输出或前端字段条件构造，同构）
@@ -88,19 +90,31 @@ class LogSearchService:
         :param username: 操作人（显式传入，不依赖请求上下文）
         :param source: 条件来源 natural_language / field_condition
         :param column_fields: 展示列偏好（平台层按用户读取注入；缺省为九个固定列）
+        :param session_scope_type: session 级 scope 类型（AI 助手消息链透传的前端场景过滤器
+            当前选择）；与 condition.scope_id 的"system 维度权限校验"不同——session_scope
+            严格按"用户当前具体场景"过滤 system_id，防止 AI 助手在检索链路绕过场景过滤越权
+        :param session_scope_id: session 级 scope 实例 ID
         :return: LogSearchOutput（零命中也是成功态：total=0 + samples=[]）
         :raises AIOutputInvalidError: 条件整体校验失败（字段白名单/操作符/形态）
         """
         span = trace.get_current_span()
         span.set_attribute("ai.log_search.scope_id", condition.scope_id)
         span.set_attribute("ai.log_search.source", source)
+        span.set_attribute("ai.log_search.session_scope_type", session_scope_type or "(none)")
 
         # ⓪ 条件归一（字段筛选多选 / NL 多值拆分统一聚合为 IN/NOT IN）
         condition = cls._normalize_condition(condition)
         # ① DRF 校验（字段白名单/操作符/keys + 4 条时间条件注入，全复用）
         validated = cls._validate_condition(condition, namespace)
-        # ② 权限注入（显式 username）
-        validated["conditions"] = cls._inject_permission(validated["conditions"], condition, username)
+        # ② 权限注入（显式 username）：优先 session scope（AI 助手场景内），
+        # 兜底 condition.scope_id 的 system 维度（与检索页同口径）
+        validated["conditions"] = cls._inject_permission(
+            validated["conditions"],
+            condition,
+            username,
+            session_scope_type=session_scope_type,
+            session_scope_id=session_scope_id,
+        )
         # ③ Doris 检索（固化 page=1 / size=100 / 最新排序）
         data = cls._execute_query(namespace, validated)
         # ④ 展示化 + 脱敏（显式身份，D1）
@@ -198,12 +212,35 @@ class LogSearchService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _inject_permission(cls, conditions: List[dict], condition: SearchCondition, username: str) -> List[dict]:
-        authorized_systems = SearchLogPermission.get_scope_auth_systems(
-            scope_type=condition.scope_type,
-            scope_id=condition.scope_id,
-            username=username,
-        )
+    def _inject_permission(
+        cls,
+        conditions: List[dict],
+        condition: SearchCondition,
+        username: str,
+        session_scope_type: str = "",
+        session_scope_id: str = "",
+    ) -> List[dict]:
+        """权限注入：优先 session scope（AI 助手场景内）→ 兜底 condition 维度的 system 权限。
+
+        session_scope 来自 AI 助手消息链（前端左上角场景过滤器当前选择），与检索页
+        场景过滤同口径严格收窄 system_id；condition.scope_id 的 system 维度校验
+        "用户对 system=condition.scope_id 在 system 方向有权限"——对 AI 助手而言
+        太宽（用户对 bk-audit 在 system 方向有权限即可，但当前场景可能没 bk-audit），
+        仅作非 AI 链路（field_condition 手工）的兜底。
+        """
+
+        if session_scope_type:
+            authorized_systems = SearchLogPermission.get_scope_auth_systems(
+                scope_type=session_scope_type,
+                scope_id=session_scope_id,
+                username=username,
+            )
+        else:
+            authorized_systems = SearchLogPermission.get_scope_auth_systems(
+                scope_type=condition.scope_type,
+                scope_id=condition.scope_id,
+                username=username,
+            )
         # 无权限时 authorized_systems 为 [""]，SQL system_id IN ("") 自然零命中，无需 short-circuit
         return [
             {

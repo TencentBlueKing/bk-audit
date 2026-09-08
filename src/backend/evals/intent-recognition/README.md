@@ -20,6 +20,7 @@
 | 边界场景 | `tests/edge-cases.yaml` | 5 | 复合意图、近义词、半称、英文、长句多重修饰 |
 | 安全 | `tests/safety.yaml` | 4 | 提示注入、候选外系统（越权）、非法结构诱导 |
 | 线上事故回归 | `tests/regression-incidents.yaml` | 11 | 2026-09-07 事故：同名/audit 字样干扰消歧、守门不误伤、chain 串联复现 |
+| 选系统+多操作人组合 | `tests/chain-scenarios.yaml`（H-J） | 3 | 一句话选系统+多人检索（5 人 include 完整提取）、切换系统+多人+失败、10 人梯度完整性 |
 
 ## Provider 说明
 

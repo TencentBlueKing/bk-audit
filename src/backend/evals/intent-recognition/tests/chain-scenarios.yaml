@@ -89,3 +89,31 @@
   assert:
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.condition !== null && Array.isArray(d.condition.conditions) && d.condition.conditions.length === 0 && d.condition.start_time.startsWith("2026-08-28") && d.condition.end_time.startsWith("2026-09-04")'
+
+# ---- 场景H-J：选系统 + 多操作人组合（一句话完整复杂意图）----
+- description: 'chain-选系统+多操作人（新会话：审计中心+5人 include 完整提取）'
+  vars:
+    query: '查一下审计中心近七天张三、李四、王五、赵六和钱七的操作记录'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 5 && ["张三","李四","王五","赵六","钱七"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: 'chain-切换系统+多人+失败（蓝盾+2人+result_code=-1）'
+  vars:
+    query: '我要看蓝盾上周张三和李四的失败操作'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 2 && c.filters.includes("张三") && c.filters.includes("李四")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.includes(-1)) && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: 'chain-选系统+海量多值（审计中心+10人梯度完整性）'
+  vars:
+    query: '帮我看下审计中心最近三天张三、李四、王五、赵六、钱七、孙八、周九、吴十、郑一、王二这十个人的操作日志'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 10 && ["张三","李四","王五","赵六","钱七","孙八","周九","吴十","郑一","王二"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-09-01")'
