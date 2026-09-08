@@ -27,13 +27,14 @@ def create_intent_message(testcase, query_text="看审计中心近七天 hermit 
     """构造 PROCESSING 状态的 USER_INTENT 消息与其执行上下文。
 
     scope_extra：场景过滤参数（{scope_type, scope_id}），同时写入输入与上下文快照，
-    模拟前端发起对话时携带左上角场景过滤器当前选择。
+    模拟前端发起对话时携带左上角场景过滤器当前选择；缺省 cross_system
+    （宽松语义，单元测试不关心具体场景）。
     """
+    scope = scope_extra or {"scope_type": "cross_system"}
     input_data = {"query_text": query_text, "auto_execute": True}
+    input_data.update(scope)
     context_data = {"username": testcase.user, "namespace": "bkaudit"}
-    if scope_extra:
-        input_data.update(scope_extra)
-        context_data.update(scope_extra)
+    context_data.update(scope)
     message = Message.objects.create(
         conversation=testcase.conversation,
         parent_message=None,
@@ -82,6 +83,10 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             f"{HANDLERS_MODULE}.FieldContextService.build_selection", return_value=make_selection_output()
         ), mock.patch(
             f"{HANDLERS_MODULE}.OperationContextService.build", return_value=([], [])
+        ), mock.patch(
+            # session scope 校验：建 SELECTION 时 system_id 必须在 scope 候选内
+            f"{HANDLERS_MODULE}.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
         ), mock.patch(
             TITLE_DELAY
         ) as mock_delay:
@@ -215,21 +220,24 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
                 user=self.user,
                 conversation=self.conversation,
                 parent_message=selection,
-                input_data=handler.input_model(query_text="查日志"),
+                input_data=handler.input_model(query_text="查日志", scope_type="cross_system"),
             )
 
     def test_scope_input_validation(self):
-        """scope 协议校验：scene/system 必填 scope_id；scope_id 不可单独出现；合法值固化到上下文"""
+        """scope 协议校验：scope_type 必填且为合法枚举；scene/system 必填 scope_id；合法值固化到上下文"""
 
         from pydantic import ValidationError as PydanticValidationError
 
         handler = message_handler_registry.require(MessageType.USER_INTENT)
-        # scene/system 缺 scope_id 拒绝
+        # 不传 scope_type 拒绝（必填）
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志")
+        # scene 缺 scope_id 拒绝
         with self.assertRaises(PydanticValidationError):
             handler.input_model(query_text="查日志", scope_type="scene")
-        # scope_id 单独出现拒绝
+        # system 缺 scope_id 拒绝
         with self.assertRaises(PydanticValidationError):
-            handler.input_model(query_text="查日志", scope_id="1")
+            handler.input_model(query_text="查日志", scope_type="system")
         # 非法 scope_type 拒绝
         with self.assertRaises(PydanticValidationError):
             handler.input_model(query_text="查日志", scope_type="hack_scope")
@@ -251,15 +259,6 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
         )
         self.assertEqual(preparation_cross.context_data.scope_type, "cross_scene")
         self.assertEqual(preparation_cross.context_data.scope_id, "")
-        # 不传 scope：上下文为空串（保持既有全量候选行为）
-        preparation_none = handler.prepare(
-            user=self.user,
-            conversation=self.conversation,
-            parent_message=None,
-            input_data=handler.input_model(query_text="查日志"),
-        )
-        self.assertEqual(preparation_none.context_data.scope_type, "")
-        self.assertEqual(preparation_none.context_data.scope_id, "")
 
     def test_log_search_parent_whitelist_accepts_user_intent(self):
         """LOG_SEARCH 父消息白名单接受 USER_INTENT（续链合法性：父须已成功）"""
@@ -319,6 +318,10 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
             f"{HANDLERS_MODULE}.FieldContextService.build_selection", return_value=make_selection_output()
         ), mock.patch(
             f"{HANDLERS_MODULE}.OperationContextService.build", return_value=([], [])
+        ), mock.patch(
+            # session scope 校验：建 SELECTION 时 system_id 必须在 scope 候选内
+            f"{HANDLERS_MODULE}.SearchLogPermission.get_scope_auth_systems",
+            return_value=[c["system_id"] for c in candidates] or [TARGET_SYSTEM_ID],
         ), mock.patch(
             TITLE_DELAY
         ):
@@ -392,6 +395,14 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
         # 重建选择：旧（scope 外）+ 新（scope 内）各一条
         self.assertEqual(self._selection_count(), 2)
         self.assertIsNotNone(output.condition)
+        # 新建的 SELECTION 子消息透传 session scope（续链继承同一场景）
+        new_selection = (
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION)
+            .order_by("-id")
+            .first()
+        )
+        self.assertEqual((new_selection.context_data or {}).get("scope_type"), self.SCOPE["scope_type"])
+        self.assertEqual((new_selection.context_data or {}).get("scope_id"), self.SCOPE["scope_id"])
 
     def _selection_count(self):
         return Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION).count()

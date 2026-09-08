@@ -27,6 +27,11 @@ from tests.test_ai_assistant.base import (
     make_selection_output,
 )
 
+# 测试默认 scope：cross_system 是宽松语义，单元测试不关心具体场景，
+# 仅校验 SystemSelectionInputSchema 的协议形态（scope 必填校验）
+DEFAULT_SCOPE_TYPE = "cross_system"
+DEFAULT_SCOPE_ID = ""
+
 
 class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
     def setUp(self):
@@ -42,7 +47,10 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 user=self.user,
                 conversation=self.conversation,
                 parent_message=parent,
-                input_data=SystemSelectionInputSchema(system_ids=[TARGET_SYSTEM_ID]),
+                input_data=SystemSelectionInputSchema(
+                    system_ids=[TARGET_SYSTEM_ID],
+                    scope_type=DEFAULT_SCOPE_TYPE,
+                ),
             )
 
     def test_prepare_builds_server_context(self):
@@ -50,11 +58,16 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
             user=self.user,
             conversation=self.conversation,
             parent_message=None,
-            input_data=SystemSelectionInputSchema(system_ids=[TARGET_SYSTEM_ID]),
+            input_data=SystemSelectionInputSchema(
+                system_ids=[TARGET_SYSTEM_ID],
+                scope_type=DEFAULT_SCOPE_TYPE,
+            ),
         )
         self.assertIsNone(preparation.parent_message)
         self.assertEqual(preparation.context_data.username, self.user)
         self.assertTrue(preparation.context_data.namespace)
+        # session scope 随消息快照固化
+        self.assertEqual(preparation.context_data.scope_type, DEFAULT_SCOPE_TYPE)
 
     def test_execute_assembles_fields_and_operations(self):
         """execute 组装字段上下文 + 常见/历史操作。"""
@@ -64,15 +77,43 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
         with self.patch_field_context() as mock_build, self.patch_operation_context(
             return_common=[CommonQuerySchema(query_text="查登录失败")],
             return_historical=[CommonQuerySchema(query_text="查 admin 删除")],
+        ), mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
         ):
             output = self.handler.execute(
-                input_data=SystemSelectionInputSchema(system_ids=[TARGET_SYSTEM_ID]),
-                context_data=SystemSelectionHandler.context_model(username=self.user, namespace="bkaudit"),
+                input_data=SystemSelectionInputSchema(
+                    system_ids=[TARGET_SYSTEM_ID],
+                    scope_type=DEFAULT_SCOPE_TYPE,
+                ),
+                context_data=SystemSelectionHandler.context_model(
+                    username=self.user,
+                    namespace="bkaudit",
+                    scope_type=DEFAULT_SCOPE_TYPE,
+                ),
             )
         mock_build.assert_called_once()
         self.assertEqual(output.systems[0].system_id, TARGET_SYSTEM_ID)
         self.assertEqual(output.common_operations[0].query_text, "查登录失败")
         self.assertEqual(output.historical_operations[0].query_text, "查 admin 删除")
+
+    def test_execute_scope_rejects_out_of_scope_system(self):
+        """session scope 校验：system_ids 不在 scope 候选内时拒绝（防 AI 跨场景越权）"""
+
+        with self.assertRaises(SystemSelectionPermissionDenied):
+            self.handler.execute(
+                input_data=SystemSelectionInputSchema(
+                    system_ids=["other_system"],
+                    scope_type="scene",
+                    scope_id="1",
+                ),
+                context_data=SystemSelectionHandler.context_model(
+                    username=self.user,
+                    namespace="bkaudit",
+                    scope_type="scene",
+                    scope_id="1",
+                ),
+            )
 
     def test_execute_permission_denied_converted(self):
         """所选系统均无检索权限时转为平台稳定错误（403），不误报为 AI 识别失败。"""
@@ -85,8 +126,15 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
         ):
             with self.assertRaises(SystemSelectionPermissionDenied):
                 self.handler.execute(
-                    input_data=SystemSelectionInputSchema(system_ids=["no_perm_system"]),
-                    context_data=SystemSelectionHandler.context_model(username=self.user, namespace="bkaudit"),
+                    input_data=SystemSelectionInputSchema(
+                        system_ids=["no_perm_system"],
+                        scope_type=DEFAULT_SCOPE_TYPE,
+                    ),
+                    context_data=SystemSelectionHandler.context_model(
+                        username=self.user,
+                        namespace="bkaudit",
+                        scope_type=DEFAULT_SCOPE_TYPE,
+                    ),
                 )
 
 
@@ -149,6 +197,20 @@ class TestNaturalLanguageSearchHandler(AIAssistantPlatformTestCase):
         self.assertEqual(context.system_selection.systems[0].system_id, TARGET_SYSTEM_ID)
         self.assertEqual(len(context.system_selection.systems[0].extension_fields), 1)
 
+    def test_prepare_inherits_session_scope_from_selection(self):
+        """session scope 从父 SELECTION 继承：NL 续链按同一场景收窄（防跨场景越权）。"""
+
+        self.create_selection_message()
+        preparation = self.handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=self.input,
+        )
+        context = preparation.context_data
+        self.assertEqual(context.session_scope_type, self.default_scope_type)
+        self.assertEqual(context.session_scope_id, self.default_scope_id)
+
     def test_prepare_with_empty_output_snapshot_rejected(self):
         """父选择消息输出缺失时拒绝（快照损坏防御）。"""
 
@@ -185,6 +247,8 @@ class TestLogSearchHandler(AIAssistantPlatformTestCase):
         self.assertEqual(preparation.parent_message.id, selection.id)
         self.assertEqual(preparation.context_data.source, "field_condition")
         self.assertEqual(preparation.context_data.system_id, TARGET_SYSTEM_ID)
+        # session scope 从父消息继承（场景内工具链路一致性）
+        self.assertEqual(preparation.context_data.session_scope_type, self.default_scope_type)
 
     def test_prepare_with_nl_parent(self):
         """NL 续链：自然语言父消息，source=natural_language。"""
@@ -233,11 +297,16 @@ class TestLogSearchHandler(AIAssistantPlatformTestCase):
                     namespace="bkaudit",
                     system_id=TARGET_SYSTEM_ID,
                     source="field_condition",
+                    # session scope 从父消息继承（场景内工具的强约束）
+                    session_scope_type="scene",
+                    session_scope_id="1",
                 ),
             )
         mock_search.assert_called_once()
         _, kwargs = mock_search.call_args
         self.assertEqual(kwargs["source"], "field_condition")
         self.assertEqual(kwargs["username"], self.user)
+        self.assertEqual(kwargs["session_scope_type"], "scene")
+        self.assertEqual(kwargs["session_scope_id"], "1")
         self.assertEqual(output.total, 3)
         self.assertEqual(len(output.samples), 3)

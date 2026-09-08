@@ -54,9 +54,24 @@ class CommonQuerySchema(MessageSchema):
 
 
 class SystemSelectionInputSchema(MessageSchema):
-    """系统选择输入：协议按集合表达，一期限定单系统。"""
+    """系统选择输入：协议按集合表达，一期限定单系统。
+
+    scope_type/scope_id 必填：AI 助手必须和前端左上角场景过滤器保持一致，
+    前端选系统下拉时已经按 scope 过滤可见系统，scope 随消息快照固化后
+    后续 NL/LOG_SEARCH 链路继承同一 session scope。
+    """
 
     system_ids: list[str] = Field(min_length=1, max_length=1)
+    scope_type: Literal["cross_scene", "cross_system", "scene", "system"]
+    scope_id: str = Field(default="", max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> "SystemSelectionInputSchema":
+        """scope 协议约束：scene/system 必填 scope_id（与 ScopeContext 同源）。"""
+
+        if self.scope_type in ("scene", "system") and not self.scope_id:
+            raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
+        return self
 
 
 class SystemSelectionContextSchema(MessageSchema):
@@ -64,6 +79,9 @@ class SystemSelectionContextSchema(MessageSchema):
 
     username: str
     namespace: str
+    # session scope 随消息快照固化（重试/编辑复用）；后续 NL/LOG_SEARCH 继承
+    scope_type: str = ""
+    scope_id: str = ""
 
 
 class SystemSelectionOutputSchema(MessageSchema):
@@ -88,6 +106,9 @@ class NLSearchContextSchema(MessageSchema):
     namespace: str
     scope_id: str
     system_selection: Annotated[SystemSelectionOutput, _NestedObjectField]
+    # session scope（从父 SELECTION 继承）固化到上下文：LOG_SEARCH 续链按此过滤
+    session_scope_type: str = ""
+    session_scope_id: str = ""
 
 
 class NLSearchErrorSchema(MessageSchema):
@@ -113,23 +134,22 @@ class NLSearchOutputSchema(MessageSchema):
 
 
 class UserIntentInputSchema(MessageSchema):
-    """USER_INTENT 输入：与 NL 输入同构（前端提交参数零变化，仅 message_type 不同）。"""
+    """USER_INTENT 输入：与 NL 输入同构（前端提交参数零变化，仅 message_type 不同）。
+
+    scope_type/scope_id 必填：与前端左上角场景过滤器保持一致（场景已选时 AI 只能在该
+    场景授权系统内路由）；不传 → pydantic 校验 400 拒绝（AI 助手是场景内工具，
+    必须明确场景才能工作）。
+    """
 
     query_text: str = Field(min_length=1, max_length=2048)
     auto_execute: bool = True
-    # 前端左上角场景过滤器当前选择（与检索页 scope 协议同名同义）：
-    # 传入后意图识别候选系统限定为该 scope 下授权的系统；不传保持既有全量权限行为
-    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
-    scope_id: str | None = Field(default=None, max_length=64)
+    scope_type: Literal["cross_scene", "cross_system", "scene", "system"]
+    scope_id: str = Field(default="", max_length=64)
 
     @model_validator(mode="after")
     def _validate_scope(self) -> "UserIntentInputSchema":
-        """scope 协议约束与 ScopeContext 同源：scene/system 必填 scope_id，scope_id 不可单独出现。"""
+        """scope 协议约束与 ScopeContext 同源：scene/system 必填 scope_id。"""
 
-        if self.scope_type is None:
-            if self.scope_id is not None:
-                raise ValueError("scope_id 需与 scope_type 同时传入")
-            return self
         if self.scope_type in ("scene", "system") and not self.scope_id:
             raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
         return self
@@ -140,7 +160,9 @@ class UserIntentContextSchema(MessageSchema):
 
     username: str
     namespace: str
-    # 场景过滤上下文（空串 = 未指定，候选系统不过滤）
+    # session scope（前端左上角场景过滤器当前选择）随消息快照固化：
+    # 任务内 SYSTEM_REQUIRED 引导、select_system 路由校验、按需建 SYSTEM_SELECTION
+    # 都按此 scope 收窄，与前端 UI 可见系统保持一致
     scope_type: str = ""
     scope_id: str = ""
 
@@ -188,6 +210,9 @@ class LogSearchContextSchema(MessageSchema):
     namespace: str
     system_id: str
     source: Literal["natural_language", "field_condition"] = "field_condition"
+    # session scope（从父消息继承）固化到上下文：LogSearchService 按此过滤 system_id
+    session_scope_type: str = ""
+    session_scope_id: str = ""
 
 
 class LogSearchOutputSchema(MessageSchema):

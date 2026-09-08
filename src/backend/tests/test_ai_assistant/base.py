@@ -122,6 +122,10 @@ class AIAssistantPlatformTestCase(TestCase):
     """平台消息链路测试基类。"""
 
     namespace = "bkaudit"
+    # 测试默认 session scope（cross_system 宽松语义；前端进 AI 页时左上角场景选择器默认有值，
+    # 真实请求必有 scope，测试用宽松值聚焦各用例自身逻辑）
+    default_scope_type = "cross_system"
+    default_scope_id = ""
 
     def setUp(self):
         ensure_business_handlers_registered()
@@ -135,7 +139,7 @@ class AIAssistantPlatformTestCase(TestCase):
     # ---------- 消息工厂 ----------
 
     def create_selection_message(self, output: SystemSelectionOutput | None = None) -> Message:
-        """创建成功的系统选择消息（根消息）。"""
+        """创建成功的系统选择消息（根消息，含 session scope）。"""
 
         selection = output or make_selection_output()
         return Message.objects.create(
@@ -143,8 +147,17 @@ class AIAssistantPlatformTestCase(TestCase):
             parent_message=None,
             message_type=MessageType.SYSTEM_SELECTION,
             status=ExecutionStatus.SUCCESS,
-            input_data={"system_ids": [TARGET_SYSTEM_ID]},
-            context_data={"username": self.user, "namespace": "bkaudit"},
+            input_data={
+                "system_ids": [TARGET_SYSTEM_ID],
+                "scope_type": self.default_scope_type,
+                "scope_id": self.default_scope_id,
+            },
+            context_data={
+                "username": self.user,
+                "namespace": "bkaudit",
+                "scope_type": self.default_scope_type,
+                "scope_id": self.default_scope_id,
+            },
             output_data=selection.model_dump(mode="json"),
             created_by=self.user,
             updated_by=self.user,
@@ -169,6 +182,8 @@ class AIAssistantPlatformTestCase(TestCase):
             "namespace": "bkaudit",
             "scope_id": TARGET_SYSTEM_ID,
             "system_selection": snapshot_selection.model_dump(mode="json"),
+            "session_scope_type": self.default_scope_type,
+            "session_scope_id": self.default_scope_id,
         }
         output_data = None
         if condition is not None:
@@ -209,6 +224,8 @@ class AIAssistantPlatformTestCase(TestCase):
                 "namespace": "bkaudit",
                 "system_id": snapshot_condition.scope_id,
                 "source": source,
+                "session_scope_type": self.default_scope_type,
+                "session_scope_id": self.default_scope_id,
             },
             output_data=snapshot_output.model_dump(mode="json"),
             created_by=self.user,

@@ -44,15 +44,24 @@ class TestMessageCreation(AIAssistantPlatformTestCase):
     def test_create_system_selection_success(self):
         """一期全异步化：创建即落库 PROCESSING 并派发任务（终态由任务收敛，前端轮询）。"""
 
-        with self.patch_field_context(), self.patch_operation_context():
+        with self.patch_field_context(), self.patch_operation_context(), mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
+        ):
             message = MessageService(user=self.user).create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
-                input_data={"system_ids": [TARGET_SYSTEM_ID]},
+                input_data={
+                    "system_ids": [TARGET_SYSTEM_ID],
+                    "scope_type": self.default_scope_type,
+                    "scope_id": self.default_scope_id,
+                },
             )
         self.assertEqual(message.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(message.parent_message)
         self.assertTrue(message.task_id)
+        # session scope 固化到消息快照（后续链路继承）
+        self.assertEqual((message.context_data or {}).get("scope_type"), self.default_scope_type)
 
     def test_create_log_search_failure_no_message(self):
         """异步化后创建即落库 PROCESSING；检索失败由任务收敛 FAILED（不再同步冒泡不落库）。"""

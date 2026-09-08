@@ -97,6 +97,37 @@ class TestLogSearchService(AIAssistantTestCase):
         (bulk_params,), _ = mock_query_sync.bulk_request.call_args
         return bulk_params[0]["sql"]
 
+    def test_search_session_scope_takes_priority(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """session scope 优先过滤：AI 助手链路按用户当前具体场景（前端左上角场景选择器）
+        过滤 system_id，而非 condition.scope_id 的 system 维度权限——后者对 AI 助手过宽
+        （用户对目标系统在 system 方向有权限即放行，但当前场景可能未授权该系统）。
+        """
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        self._search(session_scope_type="scene", session_scope_id="1")
+
+        # 权限注入按 session scope 维度（非 condition 的 system 维度）
+        mock_get_authed.assert_called_once_with(scope_type="scene", scope_id="1", username=self.username)
+        # system_id 过滤条件仍注入 SQL
+        self.assertIn("system_id", self._data_sql(mock_query_sync))
+
+    def test_search_without_session_scope_falls_back_to_condition(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """未传 session scope（非 AI 链路 / 历史消息）：兜底 condition 维度的 system 权限（原行为）。"""
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        condition = self.make_condition()
+        self._search(condition=condition)
+
+        mock_get_authed.assert_called_once_with(
+            scope_type=condition.scope_type, scope_id=condition.scope_id, username=self.username
+        )
+
     def test_search_success(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
         self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
 
@@ -275,6 +306,26 @@ class TestLogSearchService(AIAssistantTestCase):
         data_sql = self._data_sql(mock_query_sync)
         self.assertIn("`username` IN ('zhang','wang')", data_sql)
         self.assertIn("`action_id`='delete'", data_sql)
+
+    def test_massive_split_eq_conditions_merged_without_loss(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """海量多值拆分归一（10 人梯度）：合并为单条 IN 且零丢失零重复"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        usernames = [f"user{index:02d}" for index in range(1, 11)]
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=[name]) for name in usernames
+            ]
+        )
+
+        normalized = LogSearchService._normalize_condition(condition)
+
+        self.assertEqual(len(normalized.conditions), 1)
+        cond = normalized.conditions[0]
+        self.assertEqual(cond.field.raw_name, "username")
+        self.assertEqual(cond.operator, "include")
+        self.assertEqual(cond.filters, usernames)
 
     def test_same_field_eq_conditions_deduplicated(
         self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
