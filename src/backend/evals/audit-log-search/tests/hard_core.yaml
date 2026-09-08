@@ -1,0 +1,129 @@
+# 精准回归子集：只含历史失败/优化目标用例（镜像自 multi_values.yaml 与 scenario_combinations.yaml，源头修改须同步本文件）。
+# 固定时钟 2026-08-31T18:00:00+08:00（周一）。用于 prompt 调优的分钟级快速验证，全量回归用 promptfooconfig.yaml。
+
+# ---- A5：多值完整性上限（v2 漏 1 人 → 规则 4 逐项自检验证目标）----
+- description: 'A5-多值梯度12人：混合分隔（顿号+逗号+以及+还有）+ 上周'
+  vars:
+    query: '张三、李四，王五以及赵六，还有钱七、孙八、周九、吴十、郑一、王二、冯三、陈四上周的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '郑一', '王二', '冯三', '陈四']
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- S14：英文周词换算（v2 偏移 2 天 → 规则 6 英文同义换算验证目标）----
+- description: 'S14-中英混合业务话术：check/last week/failed/API'
+  vars:
+    query: '帮我 check 一下张三 last week 通过 API 做的 failed 操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+      - raw_name: 'access_type'
+        keys: []
+        operator: 'include'
+        filters: ['API']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- S1：安全审计动作词抖动（三轮三种行为 → 已降级观察，记录 AIDev 迭代依据）----
+- description: 'S1-安全审计：删除行为（动作词提取不稳定，观察）'
+  vars:
+    query: '上周有没有人删除了什么重要的东西，帮我查一下'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: '安全审计口语话术（删除了什么重要的东西）的动作词提取在 删除/重要/重要的东西 间抖动（v2-v4 三轮三种行为），User Message 动作词优先规则增强后仍不稳定；属模型能力边界，观察并作为 AIDev System Prompt 迭代输入'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+# ---- S5：开放区间终点弹性（v4 暴露 → alts 验证）----
+- description: 'S5-非工作时间：昨天晚上十一点以后（开放终点弹性）'
+  vars:
+    query: '昨天晚上十一点以后张三做的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-30T23:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+    expected_end_time_alts: '["2026-08-31T18:00:00+08:00"]'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- S16：长句周界 ±1 天弹性（v4 暴露 → 范围断言验证）----
+- description: 'S16-极限长句压力：多人+多资源+访问类型+结果+关键词+上周（六维 100 字）'
+  vars:
+    query: '麻烦帮我查一下上周张三、李四、王五、赵六、钱七、孙八这六个人在Web控制台和API两个渠道上对host和app两类资源做的失败操作，日志里带点权限变更关键词'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四', '王五', '赵六', '钱七', '孙八']
+      - raw_name: 'access_type'
+        keys: []
+        operator: 'include'
+        filters: ['WEB', 'API']
+      - raw_name: 'resource_type_id'
+        keys: []
+        operator: 'include'
+        filters: ['host', 'app']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    allow_extra_conditions: 'true'
+    expected_log_keywords: '["权限"]'
+    window_start_floor: '2026-08-23T00:00:00+08:00'
+    window_start_ceiling: '2026-08-24T00:00:00+08:00'
+    window_end_floor: '2026-08-29T23:59:59+08:00'
+    window_end_ceiling: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:log_keyword_contains'
+    - type: python
+      value: 'file://assertions/check_conditions.py:time_window_within_bounds'

@@ -34,7 +34,7 @@
         keys: []
         operator: 'include'
         filters: ['张三', '李四']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -55,7 +55,7 @@
         keys: []
         operator: 'match_all'
         filters: ['权限变更', '权限回收']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -76,7 +76,7 @@
         keys: []
         operator: 'match_any'
         filters: ['登录']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -101,7 +101,7 @@
         keys: []
         operator: 'eq'
         filters: ['张三']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -122,7 +122,7 @@
         keys: []
         operator: 'include'
         filters: ['0']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -143,7 +143,7 @@
         keys: []
         operator: 'eq'
         filters: ['10001']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -164,7 +164,7 @@
         keys: []
         operator: 'like'
         filters: ['test-vm']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -185,7 +185,7 @@
         keys: []
         operator: 'eq'
         filters: ['192.0.2.10']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -206,7 +206,7 @@
         keys: []
         operator: 'eq'
         filters: ['request-001']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -227,7 +227,7 @@
         keys: []
         operator: 'include'
         filters: ['create', 'delete']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -248,7 +248,7 @@
         keys: []
         operator: 'match_any'
         filters: ['权限变更', '权限回收']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python

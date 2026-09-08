@@ -10,7 +10,7 @@
         operator: 'eq'
         filters: ['张三']
     allow_extra_conditions: 'true'
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -31,7 +31,7 @@
         keys: ['app_name']
         operator: 'eq'
         filters: ['portal']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -52,7 +52,7 @@
         keys: []
         operator: 'include'
         filters: ['API']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -99,7 +99,7 @@
         keys: []
         operator: 'eq'
         filters: ['张三']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
@@ -142,7 +142,7 @@
         keys: ['ticket_id']
         operator: 'neq'
         filters: ['Story-3000']
-    expected_start_time: '2026-08-24T18:00:00+08:00'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
     expected_end_time: '2026-08-31T18:00:00+08:00'
   assert:
     - type: python
