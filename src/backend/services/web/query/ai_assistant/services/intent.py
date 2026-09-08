@@ -19,13 +19,14 @@ to the current version of the project delivered to anyone in the future.
 
 复用现有 AUDIT_LOG_SEARCH agent（意图识别任务指令在 User Message 完整自述）；
 输出契约 IntentPayload 为 single source of truth（schema 注入与校验同模型）；
-候选系统 = 用户权限内系统（无权限系统不进候选，AI 无法越权）。
+候选系统 = 用户权限内系统（无权限系统不进候选，AI 无法越权），
+前端传场景过滤 scope 时与检索页同口径收窄候选（防意图识别绕过场景过滤）。
 """
 
 import json
 import logging
 
-from bk_resource import api
+from bk_resource import api, resource
 from django.template import Context, Template
 from django.utils import timezone
 from pydantic import ValidationError
@@ -191,19 +192,30 @@ class IntentRecognitionService:
             )
 
     @staticmethod
-    def load_candidates(namespace: str, username: str) -> list[dict]:
-        """组装候选系统清单：全量系统 ∩ 用户检索权限（无权限系统不进候选）。
+    def load_candidates(namespace: str, username: str, scope_type: str = "", scope_id: str = "") -> list[dict]:
+        """组装候选系统清单：全量系统 ∩ 用户检索权限（无权限系统不进候选，AI 无法越权）。
 
-        供 Celery 任务等无请求上下文场景使用（SearchLogPermission.get_auth_systems
-        依赖请求上下文取用户名，此处走显式 username 的参数化版本）。
+        传 scope_type 时与检索页场景过滤同源（SearchLogPermission.get_scope_auth_systems，
+        即 ``_build_system_conditions`` 同一权限口径）：候选限定为该场景/scope 下授权的系统，
+        意图识别无法路由到场景外系统；未传时保持既有行为（系统方向 ∪ 场景方向权限并集，
+        旧前端兼容）。
+
+        供 Celery 任务等无请求上下文场景使用（权限组件依赖请求上下文取用户名，
+        此处走显式 username 的参数化版本）。
         """
 
         from apps.meta.permissions import SearchLogPermission
 
-        systems, authorized_system_ids = SearchLogPermission.get_auth_systems_by_username(namespace, username)
-        authorized = set(authorized_system_ids)
+        if scope_type:
+            # get_scope_auth_systems 无权限时返回 [""]（ES filter 兜底语义），候选清单置空
+            allowed_ids = set(SearchLogPermission.get_scope_auth_systems(scope_type, scope_id, username))
+            allowed_ids.discard("")
+            systems = resource.meta.system_list_all(namespace=namespace)
+        else:
+            systems, authorized_system_ids = SearchLogPermission.get_auth_systems_by_username(namespace, username)
+            allowed_ids = set(authorized_system_ids)
         return [
             {"system_id": str(system["id"]), "name": str(system.get("name") or system["id"])}
             for system in systems
-            if str(system["id"]) in authorized
+            if str(system["id"]) in allowed_ids
         ]

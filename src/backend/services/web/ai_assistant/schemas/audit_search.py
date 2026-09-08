@@ -117,6 +117,22 @@ class UserIntentInputSchema(MessageSchema):
 
     query_text: str = Field(min_length=1, max_length=2048)
     auto_execute: bool = True
+    # 前端左上角场景过滤器当前选择（与检索页 scope 协议同名同义）：
+    # 传入后意图识别候选系统限定为该 scope 下授权的系统；不传保持既有全量权限行为
+    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
+    scope_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_scope(self) -> "UserIntentInputSchema":
+        """scope 协议约束与 ScopeContext 同源：scene/system 必填 scope_id，scope_id 不可单独出现。"""
+
+        if self.scope_type is None:
+            if self.scope_id is not None:
+                raise ValueError("scope_id 需与 scope_type 同时传入")
+            return self
+        if self.scope_type in ("scene", "system") and not self.scope_id:
+            raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
+        return self
 
 
 class UserIntentContextSchema(MessageSchema):
@@ -124,6 +140,9 @@ class UserIntentContextSchema(MessageSchema):
 
     username: str
     namespace: str
+    # 场景过滤上下文（空串 = 未指定，候选系统不过滤）
+    scope_type: str = ""
+    scope_id: str = ""
 
 
 class UserIntentErrorSchema(MessageSchema):

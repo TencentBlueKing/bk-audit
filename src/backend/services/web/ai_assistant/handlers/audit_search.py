@@ -198,7 +198,13 @@ class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentCont
             raise InvalidParentMessage(message="用户意图识别是入口消息，不能引用父消息")
         return MessagePreparation(
             parent_message=None,
-            context_data=UserIntentContextSchema(username=user, namespace=settings.DEFAULT_NAMESPACE),
+            context_data=UserIntentContextSchema(
+                username=user,
+                namespace=settings.DEFAULT_NAMESPACE,
+                # 前端左上角场景过滤随消息快照固化：重试/编辑复用同一 scope 语义
+                scope_type=input_data.scope_type or "",
+                scope_id=input_data.scope_id or "",
+            ),
         )
 
 

@@ -23,16 +23,25 @@ TITLE_DELAY = "services.web.ai_assistant.tasks.conversation.generate_conversatio
 CONVERT_MOCK = "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
 
 
-def create_intent_message(testcase, query_text="看审计中心近七天 hermit 的操作记录"):
-    """构造 PROCESSING 状态的 USER_INTENT 消息与其执行上下文。"""
+def create_intent_message(testcase, query_text="看审计中心近七天 hermit 的操作记录", scope_extra=None):
+    """构造 PROCESSING 状态的 USER_INTENT 消息与其执行上下文。
+
+    scope_extra：场景过滤参数（{scope_type, scope_id}），同时写入输入与上下文快照，
+    模拟前端发起对话时携带左上角场景过滤器当前选择。
+    """
+    input_data = {"query_text": query_text, "auto_execute": True}
+    context_data = {"username": testcase.user, "namespace": "bkaudit"}
+    if scope_extra:
+        input_data.update(scope_extra)
+        context_data.update(scope_extra)
     message = Message.objects.create(
         conversation=testcase.conversation,
         parent_message=None,
         message_type=MessageType.USER_INTENT,
         status=ExecutionStatus.PROCESSING,
         task_id="task-1",
-        input_data={"query_text": query_text, "auto_execute": True},
-        context_data={"username": testcase.user, "namespace": "bkaudit"},
+        input_data=input_data,
+        context_data=context_data,
         created_by=testcase.user,
         updated_by=testcase.user,
     )
@@ -209,6 +218,49 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
                 input_data=handler.input_model(query_text="查日志"),
             )
 
+    def test_scope_input_validation(self):
+        """scope 协议校验：scene/system 必填 scope_id；scope_id 不可单独出现；合法值固化到上下文"""
+
+        from pydantic import ValidationError as PydanticValidationError
+
+        handler = message_handler_registry.require(MessageType.USER_INTENT)
+        # scene/system 缺 scope_id 拒绝
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_type="scene")
+        # scope_id 单独出现拒绝
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_id="1")
+        # 非法 scope_type 拒绝
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_type="hack_scope")
+        # 合法组合：prepare 将 scope 固化到上下文（重试/编辑复用同一 scope 语义）
+        preparation = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=handler.input_model(query_text="查日志", scope_type="scene", scope_id="1"),
+        )
+        self.assertEqual(preparation.context_data.scope_type, "scene")
+        self.assertEqual(preparation.context_data.scope_id, "1")
+        # cross_scene 无需 scope_id
+        preparation_cross = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=handler.input_model(query_text="查日志", scope_type="cross_scene"),
+        )
+        self.assertEqual(preparation_cross.context_data.scope_type, "cross_scene")
+        self.assertEqual(preparation_cross.context_data.scope_id, "")
+        # 不传 scope：上下文为空串（保持既有全量候选行为）
+        preparation_none = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=handler.input_model(query_text="查日志"),
+        )
+        self.assertEqual(preparation_none.context_data.scope_type, "")
+        self.assertEqual(preparation_none.context_data.scope_id, "")
+
     def test_log_search_parent_whitelist_accepts_user_intent(self):
         """LOG_SEARCH 父消息白名单接受 USER_INTENT（续链合法性：父须已成功）"""
 
@@ -231,3 +283,115 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
                 parent_message_uid=str(message.uid),
             )
         self.assertEqual(child.parent_message.id, message.id)
+
+
+class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
+    """场景过滤（scope）：候选收窄 + scope 外当前系统失效 + 空候选引导
+
+    前端发起对话时携带左上角场景过滤器当前选择（scope_type/scope_id），
+    意图识别的候选系统与检索页同口径收窄，AI 无法路由到场景外系统。
+    """
+
+    SCOPE = {"scope_type": "scene", "scope_id": "1"}
+
+    def _run_with_scope(self, payload, candidates, with_selection=False):
+        """带 scope 上下文执行意图任务，返回 (message, output, load_candidates_mock)。"""
+
+        if with_selection:
+            self.create_selection_message()
+        message, execution = create_intent_message(
+            self,
+            query_text="看下最近的操作日志",
+            scope_extra=self.SCOPE,
+        )
+        load_candidates_mock = mock.MagicMock(return_value=candidates)
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            load_candidates_mock,
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(return_value=payload),
+        ), mock.patch(
+            CONVERT_MOCK, mock.MagicMock(return_value=make_condition())
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.LogSearchService.search", return_value=make_log_search_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.FieldContextService.build_selection", return_value=make_selection_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.OperationContextService.build", return_value=([], [])
+        ), mock.patch(
+            TITLE_DELAY
+        ):
+            output = execute_user_intent.run(execution)
+        return message, output, load_candidates_mock
+
+    def test_scope_passed_to_load_candidates(self):
+        """scope 透传候选组装：与检索页场景过滤同口径"""
+
+        _, _, load_mock = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        )
+        load_mock.assert_called_once_with("bkaudit", self.user, scope_type="scene", scope_id="1")
+
+    def test_scope_out_current_selection_invalidated(self):
+        """scope 外当前系统失效：log_search 不复用旧系统，走 SYSTEM_REQUIRED 引导场景内重选"""
+
+        selection = self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            # scope 候选不含当前会话系统（TARGET_SYSTEM_ID）
+            candidates=[{"system_id": "other-system", "name": "其他系统"}],
+        )
+
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertEqual(output.error.candidates, [{"system_id": "other-system", "name": "其他系统"}])
+        # 不新建选择、不复用 scope 外选择
+        self.assertEqual(self._selection_count(), 1)
+        self.assertNotEqual(output.selection_message_uid, str(selection.uid))
+        self.assertFalse(output.selection_message_uid)
+
+    def test_scope_in_current_selection_reused(self):
+        """scope 内当前系统：正常复用不失效"""
+
+        selection = self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        )
+
+        self.assertIsNotNone(output.condition)
+        self.assertEqual(output.selection_message_uid, str(selection.uid))
+        self.assertEqual(self._selection_count(), 1)
+
+    def test_scope_empty_candidates_message(self):
+        """场景内无授权系统：SYSTEM_REQUIRED 专属文案 + 空候选清单"""
+
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[],
+        )
+
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertIn("暂无可检索的系统", output.error.error_message)
+        self.assertEqual(output.error.candidates, [])
+
+    def test_scope_out_select_system_rebuilds_selection(self):
+        """scope 外当前系统 + select_system：按 scope 候选重建选择（不命中旧系统）"""
+
+        self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="select_system", system_id="other-system", message="已为您切换"),
+            candidates=[{"system_id": "other-system", "name": "其他系统"}],
+        )
+
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, "other-system")
+        # 重建选择：旧（scope 外）+ 新（scope 内）各一条
+        self.assertEqual(self._selection_count(), 2)
+        self.assertIsNotNone(output.condition)
+
+    def _selection_count(self):
+        return Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION).count()

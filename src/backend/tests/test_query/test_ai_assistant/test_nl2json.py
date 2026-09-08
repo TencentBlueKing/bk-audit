@@ -84,6 +84,36 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(kwargs["user"], self.username)
         self.assertFalse(kwargs["execute_kwargs"]["stream"])
 
+    def test_sample_value_display_excluded_from_prompt(self, mock_chat):
+        """sample_value_display（前端展示映射）不注入 AI prompt：防 AI 照抄展示值构造 filters"""
+
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
+        selection = self.make_selection(
+            standard_fields=[
+                self.make_standard_field(
+                    raw_name="username",
+                    sample_value="admin",
+                    sample_value_display="管理员(展示值)",
+                    options=[{"id": "admin", "name": "管理员"}],
+                )
+            ]
+        )
+
+        NL2JSONService.convert(
+            query_text="查一下 admin 的操作日志",
+            selection=selection,
+            scope_id=self.target_system_id,
+            username=self.username,
+        )
+
+        _, kwargs = mock_chat.call_args
+        user_message = kwargs["input"]
+        # 原始查询值注入（AI 形态参照），展示映射排除（options 本身正常注入）
+        self.assertIn('"sample_value": "admin"', user_message)
+        self.assertIn('"name": "管理员"', user_message)
+        self.assertNotIn("sample_value_display", user_message)
+        self.assertNotIn("管理员(展示值)", user_message)
+
     def test_parse_fenced_json(self, mock_chat):
         mock_chat.return_value = f"```json\n{json.dumps(VALID_AI_OUTPUT)}\n```"
         condition = self._convert()
