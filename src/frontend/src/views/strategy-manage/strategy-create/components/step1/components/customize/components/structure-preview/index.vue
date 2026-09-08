@@ -91,7 +91,7 @@
           :border="['outer']"
           :columns="columns"
           :data="rtMeta.formatted_fields"
-          :max-height="650"
+          :max-height="tableMaxHeight"
           :row-class="(row: RtMetaModel['formatted_fields'][0]) => handleRowClass(row)" />
       </div>
     </bk-loading>
@@ -99,7 +99,7 @@
 </template>
 <script setup lang="ts">
   import type { Table } from 'bkui-vue';
-  import { watch } from 'vue';
+  import { computed, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RootManageService from '@service/root-manage';
@@ -147,6 +147,24 @@
     }
     return '';
   };
+
+  // 按行数自适应；上限跟随视口，尽量占满侧滑剩余空间
+  const TABLE_HEADER_HEIGHT = 42;
+  const TABLE_ROW_HEIGHT = 42;
+  // 侧滑标题 + 基础信息 + 「资源数据结构」标题 + 内边距
+  const TABLE_VIEWPORT_RESERVED = 360;
+  const getTableCeiling = () => Math.max(720, window.innerHeight - TABLE_VIEWPORT_RESERVED);
+  const tableMaxHeight = computed(() => {
+    const rowCount = rtMeta.value.formatted_fields?.length || 0;
+    const ceiling = getTableCeiling();
+    if (!rowCount) {
+      return TABLE_HEADER_HEIGHT + TABLE_ROW_HEIGHT;
+    }
+    return Math.min(
+      ceiling,
+      TABLE_HEADER_HEIGHT + rowCount * TABLE_ROW_HEIGHT,
+    );
+  });
 
   const columns = [
     {

@@ -345,11 +345,13 @@
   });
 
   const filteredLeftList = computed(() => {
+    // 禁用项不展示（与审计策略一致）
+    const availableList = leftList.value.filter(item => !item.disabled);
     const keyword = leftKeyword.value.trim().toLowerCase();
     if (!keyword) {
-      return leftList.value;
+      return availableList;
     }
-    return leftList.value.filter((item) => {
+    return availableList.filter((item) => {
       const label = String(item.label || '').toLowerCase();
       const value = decodeId(activeTab.value, item.value).toLowerCase();
       return label.includes(keyword) || value.includes(keyword);
@@ -418,11 +420,13 @@
   });
 
   const filteredRightList = computed(() => {
+    // 禁用项不展示（与审计策略一致）
+    const availableList = rightList.value.filter(item => !item.disabled);
     const keyword = rightKeyword.value.trim().toLowerCase();
     if (!keyword) {
-      return rightList.value;
+      return availableList;
     }
-    return rightList.value.filter((item) => {
+    return availableList.filter((item) => {
       const label = String(item.label || '').toLowerCase();
       const value = decodeId(activeTab.value, item.value).toLowerCase();
       return label.includes(keyword) || value.includes(keyword);
