@@ -1626,6 +1626,10 @@
         margin-bottom: 16px;
       }
 
+      > :deep(.expected-result-form-item) {
+        margin-top: 16px;
+      }
+
       :deep(.data-source-form-item .bk-form-content) {
         min-height: 0;
         line-height: normal;

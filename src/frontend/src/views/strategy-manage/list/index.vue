@@ -50,7 +50,8 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('策略ID、策略名称、配置方式、标签、状态、事件调查报告')"
+            :get-menu-list="getMenuList"
+            :placeholder="searchPlaceholder"
             unique-select
             :validate-values="validateValues"
             value-split-code=","
@@ -296,6 +297,7 @@
   import ControlManageService from '@service/control-manage';
   import IamManageService from '@service/iam-manage';
   import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
   import NoticeGroupManageService from '@service/notice-group';
   import RootManageService from '@service/root-manage';
   import SceneManageService from '@service/scene-manage';
@@ -372,6 +374,7 @@
     placeholder?: string;
     multiple?: boolean;
     onlyRecommendChildren?: boolean,
+    async?: boolean,
   }
   interface ISettings{
     checked: Array<string>,
@@ -447,7 +450,11 @@
     render: ({ data }: { data: StrategyModel }) => {
       const labels = getDispatchSceneLabels(data);
       return labels.length
-        ? <EditTag data={labels} key={`dispatch-scenes-${data.strategy_id}`} showCopy={false} />
+        ? <EditTag
+            data={labels}
+            key={`dispatch-scenes-${data.strategy_id}-${labels.join('|')}`}
+            showCopy={false}
+          />
         : <span>--</span>;
     },
   });
@@ -527,69 +534,6 @@
     return true;
   };
 
-  const defaultSearchData = [
-    {
-      name: t('策略ID'),
-      id: 'strategy_id',
-      placeholder: t('请输入策略ID (只允许输入整数)'),
-    },
-    {
-      name: t('策略名称'),
-      id: 'strategy_name',
-      placeholder: t('请输入策略名称'),
-    },
-    {
-      name: t('配置方式'),
-      id: 'strategy_type',
-      children: [{
-        name: t('自定义规则审计'),
-        id: 'rule',
-        placeholder: t('请选择配置方式'),
-      }, {
-        name: t('引入模型审计'),
-        id: 'model',
-        placeholder: t('请选择配置方式'),
-      }],
-      placeholder: t('请选择配置方式'),
-      onlyRecommendChildren: true,
-    },
-  ];
-  let searchData: SearchData[] = [
-    ...defaultSearchData,
-    {
-      name: t('状态'),
-      id: 'status',
-      multiple: true,
-      placeholder: t('请选择状态'),
-      onlyRecommendChildren: true,
-    },
-    {
-      name: t('标签'),
-      id: 'tag',
-      placeholder: t('请选择标签'),
-      onlyRecommendChildren: true,
-    },
-    {
-      name: t('事件调查报告'),
-      id: 'report_status',
-      placeholder: t('请选择事件调查报告'),
-      children: [{
-        name: t('手动生成'),
-        id: 'manual',
-        placeholder: t('请选择事件调查报告'),
-      }, {
-        name: t('自动生成'),
-        id: 'auto',
-        placeholder: t('请选择事件调查报告'),
-      }, {
-        name: t('未开启'),
-        id: 'disabled',
-        placeholder: t('请选择事件调查报告'),
-      }],
-      onlyRecommendChildren: true,
-    },
-  ] as { name: string, id: string, placeholder: string, children?: any[] }[];
-
   const getScopeKey = () => {
     const { scene_id: sceneId } = getStrategyListScopeParams(route);
     return sceneId !== undefined && sceneId !== null && sceneId !== ''
@@ -655,6 +599,10 @@
       value: 'delete_failed',
     },
     {
+      text: t('编辑中'),
+      value: 'draft',
+    },
+    {
       text: t('启动中'),
       value: 'starting',
     },
@@ -713,6 +661,150 @@
       value: 'disabled',
     },
   ];
+
+  const defaultSearchData: SearchData[] = [
+    {
+      name: t('策略ID'),
+      id: 'strategy_id',
+      placeholder: t('请输入策略ID (只允许输入整数)'),
+    },
+    {
+      name: t('策略名称'),
+      id: 'strategy_name',
+      placeholder: t('请输入策略名称'),
+    },
+    {
+      name: t('配置方式'),
+      id: 'strategy_type',
+      children: initTypeFilterList.map(item => ({
+        name: item.text,
+        id: item.value,
+        placeholder: t('请选择配置方式'),
+      })),
+      placeholder: t('请选择配置方式'),
+      onlyRecommendChildren: true,
+    },
+  ];
+
+  // 与表头状态枚举顺序保持一致（含「编辑中」）
+  const buildStatusSearchChildren = (): SearchData[] => initStatusFilterList.map(item => ({
+    name: statusMap.value[item.value] || item.text,
+    id: item.value,
+    placeholder: t('请选择状态'),
+  }));
+
+  const buildReportStatusSearchChildren = (): SearchData[] => initReportStatusFilterList.map(item => ({
+    name: item.text,
+    id: item.value,
+    placeholder: t('请选择事件调查报告'),
+  }));
+
+  const buildTagSearchChildren = (): SearchData[] => strategyLabelList.value.map(item => ({
+    name: item.tag_name,
+    id: item.tag_id,
+    placeholder: t('请选择标签'),
+  }));
+
+  const buildSceneSearchChildren = (): SearchData[] => Object.entries(sceneNameMap.value).map(([id, name]) => ({
+    name: `${name}(${id})`,
+    id,
+    placeholder: t('请选择分派场景'),
+  }));
+
+  /**
+   * 搜索字段顺序对齐列表字段：
+   * 策略ID → 策略名称 → 配置方式 → 标签 → 状态 → 分派场景(全局) → 事件调查报告 → 最近更新人
+   */
+  const buildSearchData = (): SearchData[] => {
+    const next: SearchData[] = [
+      ...defaultSearchData,
+      {
+        name: t('标签'),
+        id: 'tag',
+        placeholder: t('请选择标签'),
+        children: buildTagSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+      {
+        name: t('状态'),
+        id: 'status',
+        multiple: true,
+        placeholder: t('请选择状态'),
+        children: buildStatusSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+    ];
+    if (isPlatformList.value) {
+      next.push({
+        name: t('分派场景'),
+        id: 'scene_ids',
+        multiple: true,
+        placeholder: t('请选择分派场景'),
+        children: buildSceneSearchChildren(),
+        onlyRecommendChildren: true,
+      });
+    }
+    next.push(
+      {
+        name: t('事件调查报告'),
+        id: 'report_status',
+        placeholder: t('请选择事件调查报告'),
+        children: buildReportStatusSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+      {
+        name: t('最近更新人'),
+        id: 'updated_by',
+        placeholder: t('请输入最近更新人'),
+        async: true,
+        children: [],
+      },
+    );
+    return next;
+  };
+
+  const searchData = ref<SearchData[]>(buildSearchData());
+
+  // 审计策略（场景）不含分派场景；仅全局策略展示
+  const searchPlaceholder = computed(() => (
+    isPlatformList.value
+      ? t('策略ID、策略名称、配置方式、标签、状态、分派场景、事件调查报告、最近更新人')
+      : t('策略ID、策略名称、配置方式、标签、状态、事件调查报告、最近更新人')
+  ));
+
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 最近更新人：远程人员列表（与工具管理「更新人」一致）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchData.value;
+    const searchItem = searchData.value.find(s => s.id === item?.id);
+    if (!searchItem) return [];
+
+    if (item.id === 'updated_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+      return searchItem.children;
+    }
+
+    return searchItem.children || [];
+  };
+
+  const refreshSearchData = () => {
+    searchData.value = buildSearchData();
+  };
+
   const tableColumn = ref([
     {
       label: () => t('策略ID'),
@@ -804,10 +896,16 @@
     {
       label: () => t('标签'),
       field: () => 'tags',
-      width: 120,
+      minWidth: 160,
+      width: 220,
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={data.strategy_id} />;
+        return (
+          <EditTag
+            data={tags}
+            key={`tags-${data.strategy_id}-${tags.join('|')}`}
+          />
+        );
       },
     },
     {
@@ -1312,6 +1410,7 @@
         map[String(item.scene_id)] = item.name;
       });
       sceneNameMap.value = map;
+      refreshSearchData();
     },
   });
 
@@ -1411,7 +1510,6 @@
   });
   const {
     run: fetchStrategyCommon,
-    data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
     onSuccess(data) {
@@ -1422,6 +1520,7 @@
         res[item.value] = item.label;
         return res;
       }, {});
+      refreshSearchData();
     },
   });
 
@@ -1490,6 +1589,8 @@
       tag: '',
       status: '',
       report_status: '',
+      scene_ids: '',
+      updated_by: '',
     } as Record<string, any>;
 
     keyword.forEach((item: SearchKey, index) => {
@@ -1497,7 +1598,7 @@
         const value = item.values.map(item => item.id).join(',');
         search[item.id] = value;
       } else {
-        // 默认输入字段后匹配套餐名字
+        // 默认输入字段后匹配策略名称
         const list = search.strategy_name.split(',').filter((item: string) => !!item);
         list.push(item.id);
         _.uniq(list);
@@ -1734,6 +1835,8 @@
       tag: '',
       status: '',
       report_status: '',
+      scene_ids: '',
+      updated_by: '',
     } as Record<string, any>;
     searchKey.value = [];
     renderLabelRef.value.resetAllLabel();
@@ -1800,51 +1903,7 @@
     }
     if (!isRequest) {
       Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {
-        searchData = [
-          ...defaultSearchData,
-          {
-            name: t('状态'),
-            id: 'status',
-            placeholder: t('请选择状态'),
-            multiple: true,
-            children: commonData.value.strategy_status.map((item: { label: string; value: string }) => ({
-              name: item.label,
-              id: item.value,
-              placeholder: t('请选择状态'),
-            })),
-            onlyRecommendChildren: true,
-          },
-          {
-            name: t('标签'),
-            id: 'tag',
-            placeholder: t('请选择标签'),
-            children: strategyLabelList.value.map(item => ({
-              name: item.tag_name,
-              id: item.tag_id,
-              placeholder: t('请选择标签'),
-            })),
-            onlyRecommendChildren: true,
-          },
-          {
-            name: t('事件调查报告'),
-            id: 'report_status',
-            placeholder: t('请选择事件调查报告'),
-            children: [{
-              name: t('手动生成'),
-              id: 'manual',
-              placeholder: t('请选择事件调查报告'),
-            }, {
-              name: t('自动生成'),
-              id: 'auto',
-              placeholder: t('请选择事件调查报告'),
-            }, {
-              name: t('未开启'),
-              id: 'disabled',
-              placeholder: t('请选择事件调查报告'),
-            }],
-            onlyRecommendChildren: true,
-          },
-        ];
+        refreshSearchData();
         setSearchKey();
       });
       isRequest = true;
@@ -1890,7 +1949,7 @@
     searchKey.value = [];
     const params = getSearchParams();
     const recordParams = getRecordPageParams();
-    searchData.forEach((item) => {
+    searchData.value.forEach((item) => {
       const { id, name } = item;
       if (!params[id] && (!recordParams || !recordParams[id])) return;
       const content = params[id] || recordParams[id];
@@ -1956,7 +2015,9 @@
       || urlSearch.strategy_type
       || urlSearch.tag
       || urlSearch.status
-      || urlSearch.report_status);
+      || urlSearch.report_status
+      || urlSearch.scene_ids
+      || urlSearch.updated_by);
     if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
       return;
     }
@@ -2011,6 +2072,7 @@
     () => route.name,
     () => {
       syncPlatformTableColumns();
+      refreshSearchData();
       if (isPlatformList.value) {
         fetchSceneAll({ status: 'enabled' });
       }
@@ -2132,7 +2194,7 @@
       margin-bottom: 20px;
 
       .search-input {
-        width: 480px;
+        width: 720px;
         margin-left: auto;
       }
     }

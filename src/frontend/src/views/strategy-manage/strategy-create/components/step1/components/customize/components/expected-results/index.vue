@@ -49,6 +49,11 @@
         :expected-result-list="expectedResultList"
         :table-fields="localTableFields"
         @add-expected-result="handleAdd" />
+      <span
+        v-if="!expectedResultList.length"
+        class="expected-result-placeholder">
+        {{ t('未配置时，默认查询语句为 select *') }}
+      </span>
       <div
         v-if="expectedResultList.length"
         v-bk-tooltips="t('清空选项')"
@@ -226,6 +231,13 @@
     background: #eaebf0;
     border-radius: 2px;
     justify-content: center;
+  }
+
+  .expected-result-placeholder {
+    margin-left: 8px;
+    font-size: 12px;
+    line-height: 26px;
+    color: #c4c6cc;
   }
 }
 </style>
