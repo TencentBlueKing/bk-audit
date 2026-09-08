@@ -28,15 +28,22 @@
 
   const route = useRoute();
   const router = useRouter();
-  const { createLogConversation } = useSecChatStore();
+  const { createLogConversation, sendLogQuery } = useSecChatStore();
+  const LOG_SHORTCUT_PROMPT = '请帮我检索审计日志';
 
-  const handleSelectPrompt = (payload: SelectPromptPayload) => {
+  const handleSelectPrompt = async (payload: SelectPromptPayload) => {
     if (payload.sceneType !== 'log') return;
-    const conversation = createLogConversation(payload.prompt);
-    router.push({
+    const isLogShortcutEntry = payload.prompt.trim() === LOG_SHORTCUT_PROMPT;
+    const conversation = await createLogConversation({
+      showInitialSelectSystem: isLogShortcutEntry,
+    });
+    await router.push({
       name: 'secChatAuditLog',
       params: { conversationId: conversation.id },
       query: preserveSecChatQuery(route.query as Record<string, unknown>),
     });
+    if (payload.prompt.trim() && !isLogShortcutEntry) {
+      await sendLogQuery(payload.prompt);
+    }
   };
 </script>
