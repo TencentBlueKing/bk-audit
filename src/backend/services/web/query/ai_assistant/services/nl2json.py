@@ -187,15 +187,25 @@ class NL2JSONService:
 
     @staticmethod
     def _serialize_field_context(selection: SystemSelectionOutput) -> str:
-        """字段上下文序列化注入（与前端字段行同源，含 nl_name）"""
+        """字段上下文序列化注入（与前端字段行同源，含 nl_name）。
+
+        sample_value_display 为前端展示映射（如 0 → "成功"），刻意排除：
+        防止 AI 照抄展示值构造 filters（sample_value 已给原始查询值参照）。
+        """
         systems = []
         for system in selection.systems:
             systems.append(
                 {
                     "system_id": system.system_id,
                     "name": system.name,
-                    "standard_fields": [field.model_dump(exclude_none=True) for field in system.standard_fields],
-                    "extension_fields": [field.model_dump(exclude_none=True) for field in system.extension_fields],
+                    "standard_fields": [
+                        field.model_dump(exclude_none=True, exclude={"sample_value_display"})
+                        for field in system.standard_fields
+                    ],
+                    "extension_fields": [
+                        field.model_dump(exclude_none=True, exclude={"sample_value_display"})
+                        for field in system.extension_fields
+                    ],
                 }
             )
         return json.dumps(systems, ensure_ascii=False)
