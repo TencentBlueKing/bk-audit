@@ -9,6 +9,7 @@
 from django.conf import settings
 from pydantic import ValidationError
 
+from apps.meta.permissions import SearchLogPermission
 from services.web.ai_assistant.constants import (
     ExecutionMode,
     ExecutionStatus,
@@ -58,6 +59,18 @@ from services.web.query.ai_assistant.schemas import (
 )
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.ai_assistant.services.log_search import LogSearchService
+
+
+def resolve_session_scope(parent: Message) -> tuple[str, str]:
+    """从父消息（SYSTEM_SELECTION / USER_INTENT / NL）继承 session scope。
+
+    session scope 随消息快照固化在 context_data（重试/编辑复用），
+    NL/LOG_SEARCH 续链必须按此收窄 system_id 过滤——与前端左上角场景过滤器
+    当前选择保持一致，AI 助手是场景内工具不能跨场景路由。
+    """
+
+    context = parent.context_data if isinstance(parent.context_data, dict) else {}
+    return str(context.get("scope_type") or ""), str(context.get("scope_id") or "")
 
 
 def resolve_selection_parent(*, user: str, conversation: Conversation, parent_message: Message | None) -> Message:
@@ -144,10 +157,29 @@ class SystemSelectionHandler(
             raise InvalidParentMessage(message="系统选择是根消息，不能引用父消息")
         return MessagePreparation(
             parent_message=None,
-            context_data=SystemSelectionContextSchema(username=user, namespace=settings.DEFAULT_NAMESPACE),
+            context_data=SystemSelectionContextSchema(
+                username=user,
+                namespace=settings.DEFAULT_NAMESPACE,
+                # session scope 随消息快照固化（前端左上角场景过滤器当前选择），
+                # 后续 NL/LOG_SEARCH 子链继承同一 scope，防 AI 跨场景越权
+                scope_type=input_data.scope_type or "",
+                scope_id=input_data.scope_id or "",
+            ),
         )
 
     def execute(self, *, input_data: SystemSelectionInputSchema, context_data: SystemSelectionContextSchema):
+        # ① 严格按 session scope 收窄（与前端场景过滤器保持一致）：
+        # 即便 has_system_search_permission 在 system 方向任一授权即通过（并集过宽），
+        # 也必须校验 system_id 在 session scope 候选内——这是 AI 助手"场景内工具"的语义边界
+        if context_data.scope_type:
+            scoped_ids = set(
+                SearchLogPermission.get_scope_auth_systems(
+                    context_data.scope_type, context_data.scope_id, context_data.username
+                )
+            )
+            scoped_ids.discard("")  # ES filter 兜底空串
+            if not all(sid in scoped_ids for sid in input_data.system_ids):
+                raise SystemSelectionPermissionDenied()
         try:
             selection = FieldContextService.build_selection(
                 namespace=context_data.namespace,
@@ -235,6 +267,9 @@ class NaturalLanguageSearchHandler(
         system_ids = [system.system_id for system in selection.systems]
         if not system_ids:
             raise InvalidMessageSnapshot()
+        # 从父 SELECTION 继承 session scope：LOG_SEARCH 续链按此过滤 system_id，
+        # 防 AI 在 NL 链路绕过 session scope 越权
+        session_scope_type, session_scope_id = resolve_session_scope(parent)
         return MessagePreparation(
             parent_message=parent,
             context_data=NLSearchContextSchema(
@@ -242,6 +277,8 @@ class NaturalLanguageSearchHandler(
                 namespace=settings.DEFAULT_NAMESPACE,
                 scope_id=system_ids[0],
                 system_selection=selection,
+                session_scope_type=session_scope_type,
+                session_scope_id=session_scope_id,
             ),
         )
 
@@ -270,6 +307,10 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
     ) -> MessagePreparation[LogSearchContextSchema]:
         parent = self._resolve_parent(user=user, conversation=conversation, parent_message=parent_message)
         self._validate_scope(parent=parent, condition=input_data.condition)
+        # 从父消息（SYSTEM_SELECTION / NL / USER_INTENT）继承 session scope：
+        # LogSearchService 按此过滤 system_id（覆盖 condition 维度的 system 校验），
+        # 防 AI 助手在检索链路绕过 session scope 越权
+        session_scope_type, session_scope_id = resolve_session_scope(parent)
         # 自然语言来源 = NL 或意图识别消息续链（条件由 AI 识别，非用户手选条件表单）；
         # field_condition 仅用户直接发起的条件检索（其标题走条件摘要派发）
         source = (
@@ -284,6 +325,8 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
                 namespace=settings.DEFAULT_NAMESPACE,
                 system_id=input_data.condition.scope_id,
                 source=source,
+                session_scope_type=session_scope_type,
+                session_scope_id=session_scope_id,
             ),
         )
 
@@ -297,6 +340,10 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
             source=context_data.source,
             # 展示列按用户偏好注入（九列固定 + 自选列，跨设备同步）
             column_fields=ColumnPreferenceService(username=context_data.username).get_selected_fields(),
+            # session scope 透传给 LogSearchService：按此过滤 system_id，
+            # 不再以 condition.scope_id 的 system 维度权限为兜底（避免跨场景越权）
+            session_scope_type=context_data.session_scope_type,
+            session_scope_id=context_data.session_scope_id,
         )
         return LogSearchOutputSchema.from_query_output(output)
 
