@@ -240,6 +240,26 @@ class TestFieldContextService(AIAssistantTestCase):
         for field in by_name.values():
             self.assertEqual(field.nl_name, field.display_name)
 
+    def test_l1_override_sample_value_display(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
+        """L1 人工配置的枚举字段 sample_value 同样自动映射展示值（L2 关闭路径）"""
+
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {
+            "systems": {
+                self.target_system_id: {
+                    "fields": {"result_code": {"sample_value": 0}},
+                }
+            }
+        }
+        mock_system_list.return_value = []
+
+        output = self._build()
+        result_code_field = next(
+            field for field in output.systems[0].standard_fields if field.raw_name == "result_code"
+        )
+        self.assertEqual(result_code_field.sample_value, 0)
+        self.assertEqual(result_code_field.sample_value_display, "成功")
+
 
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.CollectorPlugin.build_collector_rt")
 @mock.patch(f"{FIELD_CONTEXT_MODULE}.api.bk_base.query_sync")
@@ -343,3 +363,56 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         for field in output.systems[0].standard_fields:
             self.assertIsNone(field.sample_value)
         self.assertEqual(output.systems[0].extension_fields, [])
+
+    @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
+    def test_l2_sample_value_display_mapping(
+        self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
+    ):
+        """枚举字段自动映射展示值（result_code 0 → "成功"）；非枚举字段与拓展字段 display 为 None"""
+
+        mock_build_rt.return_value = "test_rt.doris"
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {}
+        mock_system_list.return_value = []
+        mock_query_sync.return_value = {"list": [dict(self.SAMPLE_ROW, result_code=0, user_identify_type=0)]}
+
+        output = FieldContextService.build_selection(
+            namespace=self.namespace, system_ids=[self.target_system_id], username=self.username
+        )
+
+        system = output.systems[0]
+        # 枚举字段：sample_value 保持原始查询值（AI 构造 filters 依据），display 给展示映射
+        result_code_field = next(field for field in system.standard_fields if field.raw_name == "result_code")
+        self.assertEqual(result_code_field.sample_value, 0)
+        self.assertEqual(result_code_field.sample_value_display, "成功")
+        user_identify_field = next(field for field in system.standard_fields if field.raw_name == "user_identify_type")
+        self.assertEqual(user_identify_field.sample_value_display, "个人账号")
+        # 非枚举字段不产出展示映射（前端直接展示 sample_value）
+        username_field = next(field for field in system.standard_fields if field.raw_name == "username")
+        self.assertEqual(username_field.sample_value, "admin")
+        self.assertIsNone(username_field.sample_value_display)
+        # 拓展字段一期恒无 options，不产出展示映射
+        for ext in system.extension_fields:
+            self.assertIsNone(ext.sample_value_display)
+
+    @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
+    def test_l2_sample_value_display_fallback(
+        self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
+    ):
+        """采样值不在枚举 options 内（脏数据/枚举未同步）：display 透出原始值字符串兜底"""
+
+        mock_build_rt.return_value = "test_rt.doris"
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {}
+        mock_system_list.return_value = []
+        mock_query_sync.return_value = {"list": [dict(self.SAMPLE_ROW, result_code=999)]}
+
+        output = FieldContextService.build_selection(
+            namespace=self.namespace, system_ids=[self.target_system_id], username=self.username
+        )
+
+        result_code_field = next(
+            field for field in output.systems[0].standard_fields if field.raw_name == "result_code"
+        )
+        self.assertEqual(result_code_field.sample_value, 999)
+        self.assertEqual(result_code_field.sample_value_display, "999")

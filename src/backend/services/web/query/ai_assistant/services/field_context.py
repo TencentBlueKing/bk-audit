@@ -23,7 +23,8 @@ F1 字段上下文服务（SYSTEM_SELECTION 消息核心组件）
 - L2 采样：Doris 最新 N 条采样——最新一条回填 sample_value，多条融合发现拓展字段
 
 nl_name 规则（D-G）：通用字段缺省 = display_name；拓展字段缺省 = extend.{display_name}。
-sample_value 给原始查询值（0/-1），不给展示值（"成功(0)"），防止 AI 照抄展示值构造查询。
+sample_value 给原始查询值（0/-1），不给展示值（"成功(0)"），防止 AI 照抄展示值构造查询；
+sample_value_display 为展示映射值（枚举字段 options id → name），仅前端渲染用，不进 AI prompt。
 """
 
 import json
@@ -139,6 +140,10 @@ class FieldContextService:
 
         # L1：人工配置的拓展字段（L2 关闭时的唯一来源；与 L2 结果按 (raw_name, keys) 去重合并）
         extension_fields = cls._merge_extension_fields(extension_fields, cls._l1_extension_fields(system_id, sys_cfg))
+
+        # 枚举字段 sample_value 展示映射回填（sample_value 确定后统一计算，前端渲染用）
+        cls._fill_sample_display_values(standard_fields)
+        cls._fill_sample_display_values(extension_fields)
 
         return SelectionSystem(
             system_id=system_id,
@@ -258,6 +263,26 @@ class FieldContextService:
             value = row.get(item.raw_name, row.get(item.raw_name.lower()))
             if value is not None:
                 item.sample_value = value
+
+    @staticmethod
+    def _fill_sample_display_values(fields: List[SelectionFieldMeta]) -> None:
+        """枚举字段回填 sample_value 的展示映射值（options 按 id 匹配 name，前端渲染用）。
+
+        sample_value 保持原始查询值（AI 构造 filters 的形态参照，防照抄展示值"成功(0)"）；
+        展示映射仅供前端渲染（原始值 0/-1 对用户不友好），由 nl2json 序列化时排除。
+        非枚举字段（options 为空，含全部拓展字段）不产出；采样值不在枚举 options 内时
+        透出原始值字符串兜底（脏数据/枚举未同步不至于空白）。
+        """
+        for item in fields:
+            if item.sample_value is None or not item.options:
+                continue
+            raw_value = str(item.sample_value)
+            for option in item.options:
+                if option.id == raw_value:
+                    item.sample_value_display = option.name
+                    break
+            else:
+                item.sample_value_display = raw_value
 
     @classmethod
     def _discover_extension_fields(cls, system_id: str, rows: List[dict]) -> List[SelectionFieldMeta]:

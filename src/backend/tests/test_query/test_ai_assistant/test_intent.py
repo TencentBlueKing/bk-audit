@@ -144,3 +144,53 @@ class LoadCandidatesTest(AIAssistantTestCase):
         ):
             candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
         self.assertEqual(candidates, CANDIDATES)
+
+    def test_load_candidates_with_scope(self):
+        """传 scope：候选与检索页场景过滤同口径（get_scope_auth_systems），仅保留场景授权系统"""
+
+        all_systems = [
+            {"id": "bk-audit", "name": "审计中心"},
+            {"id": "bcs", "name": "蓝盾"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+            return_value=["bk-audit"],
+        ) as mock_scope, mock.patch(
+            f"{INTENT_MODULE}.resource.meta.system_list_all",
+            return_value=all_systems,
+        ) as mock_list:
+            candidates = IntentRecognitionService.load_candidates(
+                "bkaudit", self.username, scope_type="scene", scope_id="1"
+            )
+        self.assertEqual(candidates, [{"system_id": "bk-audit", "name": "审计中心"}])
+        mock_scope.assert_called_once_with("scene", "1", self.username)
+        mock_list.assert_called_once_with(namespace="bkaudit")
+
+    def test_load_candidates_with_scope_no_permission(self):
+        """scope 无权限：get_scope_auth_systems 的 [""] 兜底（ES filter 语义）被剔除，候选为空"""
+
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+            return_value=[""],
+        ), mock.patch(
+            f"{INTENT_MODULE}.resource.meta.system_list_all",
+            return_value=[{"id": "bk-audit", "name": "审计中心"}],
+        ):
+            candidates = IntentRecognitionService.load_candidates(
+                "bkaudit", self.username, scope_type="scene", scope_id="1"
+            )
+        self.assertEqual(candidates, [])
+
+    def test_load_candidates_without_scope_keeps_legacy(self):
+        """不传 scope：保持既有并集口径（旧前端兼容），不走场景过滤分支"""
+
+        all_systems = [{"id": "bk-audit", "name": "审计中心"}]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["bk-audit"]),
+        ), mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
+        ) as mock_scope:
+            candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
+        self.assertEqual(candidates, CANDIDATES[:1])
+        mock_scope.assert_not_called()

@@ -206,7 +206,12 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
 
     context_data = execution.context_data
     query_text = execution.input_data.query_text
-    candidates = IntentRecognitionService.load_candidates(context_data.namespace, context_data.username)
+    candidates = IntentRecognitionService.load_candidates(
+        context_data.namespace,
+        context_data.username,
+        scope_type=context_data.scope_type,
+        scope_id=context_data.scope_id,
+    )
     # 会话当前系统 = 最新成功 SYSTEM_SELECTION（切换/复用判定依据）
     current_selection = (
         Message.objects.filter(
@@ -222,6 +227,12 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
     if current_selection is not None:
         systems = (current_selection.output_data or {}).get("systems") or []
         current_system_id = str((systems[0] or {}).get("system_id") or "") if systems else ""
+    # 场景过滤守门：会话当前系统不在当前 scope 候选内时视为未选系统（防跨场景复用，
+    # 如用户切换左上角场景后继续对话）；select_system 将按候选重建选择、log_search 走 SYSTEM_REQUIRED
+    if context_data.scope_type and current_system_id:
+        if current_system_id not in {candidate["system_id"] for candidate in candidates}:
+            current_selection = None
+            current_system_id = ""
     # ① 意图识别（仅解析失败预算重试，对齐 NL 模式；越权/暂态直接冒泡）
     deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
     try:
@@ -271,11 +282,16 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
             )
     elif not current_system_id:
         # 检索意图明确但缺会话系统状态（非识别失败）：AI 动态引导 + 候选清单
+        if candidates:
+            error_message = "请先告诉我要查哪个系统的日志，您有权限的系统：" + "、".join(candidate["name"] for candidate in candidates)
+        else:
+            # 场景过滤后无任何可检索系统（如切换到未授权场景）：引导切换场景/申请权限
+            error_message = "当前场景下您暂无可检索的系统，请切换场景或联系管理员开通系统权限"
         return UserIntentOutputSchema(
             intent="log_search",
             error=UserIntentErrorSchema(
                 error_code="SYSTEM_REQUIRED",
-                error_message="请先告诉我要查哪个系统的日志，您有权限的系统：" + "、".join(c["name"] for c in candidates),
+                error_message=error_message,
                 candidates=candidates,
             ),
         )
