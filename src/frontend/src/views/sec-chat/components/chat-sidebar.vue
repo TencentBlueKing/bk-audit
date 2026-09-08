@@ -256,29 +256,14 @@
                           </template>
                         </bk-dropdown>
                       </bk-dropdown-item>
-                      <bk-dropdown-item ext-cls="sub-menu-item">
-                        <bk-dropdown
-                          placement="right-start"
-                          style="width: 100%"
-                          trigger="hover">
-                          <div class="dropdown-sub-trigger">
-                            <span>导出</span>
-                            <angle-right class="sub-icon" />
-                          </div>
-                          <template #content>
-                            <bk-dropdown-menu>
-                              <bk-dropdown-item @click="showExportDialog('json')">
-                                导出 JSON
-                              </bk-dropdown-item>
-                              <bk-dropdown-item @click="showExportDialog('markdown')">
-                                导出 Markdown
-                              </bk-dropdown-item>
-                              <bk-dropdown-item @click="showExportDialog('pdf')">
-                                导出 PDF
-                              </bk-dropdown-item>
-                            </bk-dropdown-menu>
-                          </template>
-                        </bk-dropdown>
+                      <bk-dropdown-item
+                        ext-cls="sub-menu-item is-dropdown-disabled"
+                        @click.stop.prevent="onDisabledConfigClick"
+                        @mousedown.stop.prevent>
+                        <div class="dropdown-sub-trigger">
+                          <span>导出</span>
+                          <angle-right class="sub-icon" />
+                        </div>
                       </bk-dropdown-item>
                       <bk-dropdown-item @click="handleDelete(item.conv)">
                         删除
@@ -356,29 +341,14 @@
                         <bk-dropdown-item @click="startEditGroup(item.group.name)">
                           重命名
                         </bk-dropdown-item>
-                        <bk-dropdown-item ext-cls="sub-menu-item">
-                          <bk-dropdown
-                            placement="right-start"
-                            style="width: 100%"
-                            trigger="hover">
-                            <div class="dropdown-sub-trigger">
-                              <span>导出会话</span>
-                              <angle-right class="sub-icon" />
-                            </div>
-                            <template #content>
-                              <bk-dropdown-menu>
-                                <bk-dropdown-item @click="showGroupExportDialog('json', item.group.name)">
-                                  导出 JSON
-                                </bk-dropdown-item>
-                                <bk-dropdown-item @click="showGroupExportDialog('markdown', item.group.name)">
-                                  导出 Markdown
-                                </bk-dropdown-item>
-                                <bk-dropdown-item @click="showGroupExportDialog('pdf', item.group.name)">
-                                  导出 PDF
-                                </bk-dropdown-item>
-                              </bk-dropdown-menu>
-                            </template>
-                          </bk-dropdown>
+                        <bk-dropdown-item
+                          ext-cls="sub-menu-item is-dropdown-disabled"
+                          @click.stop.prevent="onDisabledConfigClick"
+                          @mousedown.stop.prevent>
+                          <div class="dropdown-sub-trigger">
+                            <span>导出会话</span>
+                            <angle-right class="sub-icon" />
+                          </div>
                         </bk-dropdown-item>
                         <bk-dropdown-item @click="showDeleteGroup(item.group.name)">
                           删除分组
@@ -486,29 +456,14 @@
                               </template>
                             </bk-dropdown>
                           </bk-dropdown-item>
-                          <bk-dropdown-item ext-cls="sub-menu-item">
-                            <bk-dropdown
-                              placement="right-start"
-                              style="width: 100%"
-                              trigger="hover">
-                              <div class="dropdown-sub-trigger">
-                                <span>导出</span>
-                                <angle-right class="sub-icon" />
-                              </div>
-                              <template #content>
-                                <bk-dropdown-menu>
-                                  <bk-dropdown-item @click="showExportDialog('json')">
-                                    导出 JSON
-                                  </bk-dropdown-item>
-                                  <bk-dropdown-item @click="showExportDialog('markdown')">
-                                    导出 Markdown
-                                  </bk-dropdown-item>
-                                  <bk-dropdown-item @click="showExportDialog('pdf')">
-                                    导出 PDF
-                                  </bk-dropdown-item>
-                                </bk-dropdown-menu>
-                              </template>
-                            </bk-dropdown>
+                          <bk-dropdown-item
+                            ext-cls="sub-menu-item is-dropdown-disabled"
+                            @click.stop.prevent="onDisabledConfigClick"
+                            @mousedown.stop.prevent>
+                            <div class="dropdown-sub-trigger">
+                              <span>导出</span>
+                              <angle-right class="sub-icon" />
+                            </div>
                           </bk-dropdown-item>
                           <bk-dropdown-item @click="handleDelete(conv)">
                             删除
@@ -619,56 +574,6 @@
     </div>
 
     <!-- 删除分组弹窗：通过 InfoBox 复用同类删除确认样式 -->
-
-    <!-- 导出会话弹窗 -->
-    <bk-dialog
-      v-model:is-show="exportDialog.show"
-      class="session-select-dialog"
-      ext-cls="session-select-dialog"
-      title="导出会话"
-      :width="480"
-      @after-show="closeSidebarPopovers"
-      @closed="closeExportDialog"
-      @confirm="confirmExport">
-      <div class="export-dialog-content">
-        <div class="export-list">
-          <div class="export-item select-all-item">
-            <bk-checkbox
-              v-model="isAllExportSelected"
-              :indeterminate="exportIndeterminate"
-              @change="handleSelectAllExport">
-              <span class="select-all-text">
-                全选 ( {{ exportDialog.selectedIds.length }}/{{ props.conversations.length }} )
-              </span>
-            </bk-checkbox>
-          </div>
-          <div
-            v-for="conv in props.conversations"
-            :key="conv.id"
-            class="export-item">
-            <bk-checkbox
-              :model-value="exportDialog.selectedIds.includes(conv.id)"
-              @change="(val) => handleSelectExport(val, conv.id)">
-              <span class="conv-name">{{ conv.title }}</span>
-              <span class="conv-count">( {{ conv.messages?.length || 0 }}条消息 )</span>
-            </bk-checkbox>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div class="dialog-footer">
-          <bk-button
-            :disabled="exportDialog.selectedIds.length === 0"
-            theme="primary"
-            @click="confirmExport">
-            确认导出
-          </bk-button>
-          <bk-button @click="closeExportDialog">
-            取消
-          </bk-button>
-        </div>
-      </template>
-    </bk-dialog>
 
     <!-- 导入会话弹窗 -->
     <bk-dialog
@@ -955,7 +860,6 @@
     'rename-group': [groupId: string, name: string];
     'delete-group': [groupName: string, keepConversations: boolean];
     'clear-all': [];
-    'export': [type: string, ids: string[]];
     'import': [ids: string[]];
     'update-conv-title': [id: string, title: string];
   }>();
@@ -2485,72 +2389,6 @@
     showDeleteConversationDialog(conv);
   };
 
-  // 导出对话逻辑
-  const exportDialog = ref({
-    show: false,
-    type: '',
-    selectedIds: [] as string[],
-  });
-
-  const isAllExportSelected = computed({
-    get: () => {
-      if (props.conversations.length === 0) return false;
-      return exportDialog.value.selectedIds.length === props.conversations.length;
-    },
-    set: (val) => {
-      if (val) {
-        exportDialog.value.selectedIds = props.conversations.map(c => c.id);
-      } else {
-        exportDialog.value.selectedIds = [];
-      }
-    },
-  });
-
-  const exportIndeterminate = computed(() => {
-    const selectedCount = exportDialog.value.selectedIds.length;
-    return selectedCount > 0 && selectedCount < props.conversations.length;
-  });
-
-  const showExportDialog = (type: string, ids?: string[]) => {
-    exportDialog.value.type = type;
-    exportDialog.value.selectedIds = ids ? [...ids] : [];
-    exportDialog.value.show = true;
-    closeSidebarPopovers();
-    hideMenu();
-    hideGroupMenu();
-  };
-
-  const showGroupExportDialog = async (type: string, groupName: string) => {
-    const group = props.groups.find(g => g.name === groupName);
-    if (group) await loadGroupConversations(group.id);
-    const ids = props.conversations
-      .filter(c => c.groupName === groupName)
-      .map(c => c.id);
-    showExportDialog(type, ids);
-  };
-
-  const handleSelectAllExport = (val: boolean) => {
-    isAllExportSelected.value = val;
-  };
-
-  const handleSelectExport = (val: boolean, id: string) => {
-    if (val) {
-      exportDialog.value.selectedIds.push(id);
-    } else {
-      exportDialog.value.selectedIds = exportDialog.value.selectedIds.filter(i => i !== id);
-    }
-  };
-
-  const closeExportDialog = () => {
-    exportDialog.value.show = false;
-  };
-
-  const confirmExport = () => {
-    if (exportDialog.value.selectedIds.length === 0) return;
-    emit('export', exportDialog.value.type, exportDialog.value.selectedIds);
-    closeExportDialog();
-  };
-
   // 导入对话逻辑
   const importDialog = ref({
     show: false,
@@ -2593,9 +2431,9 @@
   void showReportList;
 
   watch(
-    () => [exportDialog.value.show, importDialog.value.show],
-    ([exportShow, importShow]) => {
-      if (exportShow || importShow) {
+    () => importDialog.value.show,
+    (importShow) => {
+      if (importShow) {
         nextTick(() => {
           closeSidebarPopovers();
         });
@@ -2867,7 +2705,6 @@
     closeCollapsedSearch();
     addGroupDialog.value.show = false;
     addGroupDialog.value.name = '';
-    exportDialog.value.show = false;
     importDialog.value.show = false;
     isReportDetailShow.value = false;
     isReportListShow.value = false;
