@@ -40,6 +40,12 @@ const formatDisplayDateTime = (value?: string | null) => {
   return parsed.format('YYYY-MM-DD HH:mm:ss');
 };
 
+/** 空对象 / 空数组文案与空值一致，表格侧会展示为 -- */
+const isBlankSampleText = (text: string) => {
+  const trimmed = text.trim();
+  return !trimmed || trimmed === '{}' || trimmed === '[]';
+};
+
 export const formatSampleValue = (value: any): string => {
   if (value === undefined || value === null) return '';
   if (typeof value === 'object') {
@@ -51,7 +57,8 @@ export const formatSampleValue = (value: any): string => {
       return String(value);
     }
   }
-  return String(value);
+  const text = String(value);
+  return isBlankSampleText(text) ? '' : text;
 };
 
 /** 解析字段「最近一条数据」展示文案：优先 sample_value_display，其次 options，最后回退原始值 */
@@ -61,7 +68,7 @@ export const resolveFieldSampleDisplay = (field: {
   options?: Array<{ id: string; name: string }>;
 }): string => {
   const display = field.sampleValueDisplay;
-  if (display !== undefined && display !== null && String(display).trim() !== '') {
+  if (display !== undefined && display !== null && !isBlankSampleText(String(display))) {
     return String(display);
   }
 
