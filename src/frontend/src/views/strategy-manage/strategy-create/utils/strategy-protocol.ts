@@ -532,6 +532,8 @@ type SelectFieldLike = {
   label?: string;
   alias?: string;
   field_name?: string;
+  field_type?: string;
+  spec_field_type?: string;
   property?: {
     sub_keys?: SelectFieldLike[];
   };
@@ -612,6 +614,38 @@ export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) 
 const formatSelectFieldLabel = (displayName: string, rawName: string) => (
   formatFieldDisplayLabel(displayName, rawName)
 );
+
+/** 用数据源字段回填中文名和类型图标（编辑回显的 select 不含 spec_field_type） */
+export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
+  fields: T[] = [],
+  tableFields: SelectFieldLike[] = [],
+): T[] => {
+  const displayNameByRaw = collectFieldDisplayNames(tableFields);
+  return fields.map((field) => {
+    const rawName = pickFieldRawName(field);
+    if (!rawName) {
+      return { ...field };
+    }
+    const schema = findTableFieldByRaw(rawName, tableFields as Array<Record<string, any>>);
+    const subKeys = field.property?.sub_keys;
+    const hasSubKeys = Array.isArray(subKeys) && subKeys.length > 0;
+    return {
+      ...field,
+      display_name: resolveSelectFieldDisplayName(
+        rawName,
+        pickFieldDisplayName(field),
+        displayNameByRaw,
+      ),
+      spec_field_type: field.spec_field_type
+        || schema?.spec_field_type
+        || schema?.field_type
+        || field.field_type
+        || '',
+      field_type: field.field_type || schema?.field_type || '',
+      property: hasSubKeys ? field.property : (schema?.property || field.property),
+    };
+  });
+};
 
 /** 分派规则命中条件：仅使用风险发现规则中的预期结果字段（configs.select）
  * 展示格式与风险发现规则一致：中文名(raw_name)；值为 raw_name，便于搜索中英文
@@ -905,10 +939,14 @@ export const buildStrategyCreatePayload = (
   if (isRuleStrategy) {
     next.rules = buildRules(next, isScene);
     next.configs = stripConfigs(next.configs);
-    delete next.risk_level;
-    delete next.risk_hazard;
-    delete next.risk_guidance;
-    delete next.risk_title;
+    // 风险详情 / 列表 / 导出仍读取策略级字段，需与发现规则保持一致
+    const firstRule = next.rules[0];
+    if (firstRule) {
+      next.risk_title = firstRule.risk_title ?? next.risk_title ?? '';
+      next.risk_level = firstRule.risk_level ?? next.risk_level ?? 'HIGH';
+      next.risk_hazard = firstRule.risk_hazard ?? next.risk_hazard ?? '';
+      next.risk_guidance = firstRule.risk_guidance ?? next.risk_guidance ?? '';
+    }
   }
 
   next.dispatch_rules = buildDispatchRules(next, scope.isPlatform);

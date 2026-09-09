@@ -34,7 +34,7 @@
         </bk-tab>
       </div>
       <risk-handle-dock
-        :current-stage-name="t('风险确认')"
+        :current-stage-name="currentStageName"
         :default-expanded="shouldExpandHandleDock">
         <confirm-risk-handle
           :key="`confirm-handle-${riskData.risk_id}`"
@@ -94,6 +94,7 @@
   import {
     useRoute,
     useRouter,
+    onBeforeRouteLeave,
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
@@ -195,6 +196,14 @@
   });
 
   const shouldExpandHandleDock = computed(() => route.query.tab === 'handleRisk');
+
+  const CONFIRMED_HISTORY_ACTIONS = ['ConfirmRisk', 'ConfirmAsMisreport', 'ConfirmAsMisReport'];
+
+  const currentStageName = computed(() => {
+    const history = riskData.value?.ticket_history || [];
+    const confirmed = history.some(item => CONFIRMED_HISTORY_ACTIONS.includes(item.action));
+    return confirmed ? t('待处理') : t('风险确认');
+  });
 
   const pageLoading = computed(() => (
     (!riskData.value.risk_id && loading.value)
@@ -306,6 +315,10 @@
         handleGenerateReport();
       }
     });
+  });
+
+  onBeforeRouteLeave(() => {
+    window.changeConfirm = false;
   });
 
   onBeforeUnmount(() => {

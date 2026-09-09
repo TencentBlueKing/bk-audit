@@ -99,10 +99,10 @@
             </span>
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_hazard'">
-            {{ data.risk_hazard === '' ? '--' : data.risk_hazard }}
+            {{ displayEmptyText(data.risk_hazard) }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_guidance'">
-            {{ data.risk_guidance=== '' ? '--' : data.risk_guidance }}
+            {{ displayEmptyText(data.risk_guidance) }}
           </template>
           <template v-else-if="fieldItem.field_name === 'status'">
             <template v-if="statusToMap[data.status]">
@@ -395,6 +395,13 @@
   const isFullRowField = (fieldName: string) => (
     ['notice_users', 'risk_guidance', 'risk_hazard', 'event_content'].includes(fieldName)
   );
+
+  const displayEmptyText = (value: unknown) => {
+    if (value === '' || value === undefined || value === null) {
+      return '--';
+    }
+    return value;
+  };
 
   // 获取标签列表
   const {

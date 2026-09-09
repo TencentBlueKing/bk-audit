@@ -451,6 +451,11 @@
     if (urlSearchParams[searchFieldName] === undefined
       || urlSearchParams[searchFieldName] === null
       || urlSearchParams[searchFieldName] === '') return;
+    // 场景选择器写入的 allSecen/allSystem 不是「所属场景」筛选
+    if (searchFieldName === 'scene_id') {
+      const sceneId = String(urlSearchParams.scene_id);
+      if (sceneId === 'allSecen' || sceneId === 'allSystem') return;
+    }
     if (config.type !== 'string') {
       searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
     } else {

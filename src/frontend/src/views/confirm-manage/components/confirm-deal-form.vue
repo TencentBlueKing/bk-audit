@@ -87,10 +87,12 @@
   import {
     computed,
     inject,
+    onBeforeUnmount,
     ref,
     type Ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { onBeforeRouteLeave } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
 
@@ -161,6 +163,7 @@
   } = useRequest(RiskManageService.confirmRisk, {
     defaultValue: null,
     onSuccess: () => {
+      window.changeConfirm = false;
       messageSuccess(t('操作成功'));
       emits('update');
     },
@@ -172,12 +175,21 @@
   } = useRequest(RiskManageService.confirmAsMisreport, {
     defaultValue: null,
     onSuccess: () => {
+      window.changeConfirm = false;
       messageSuccess(t('操作成功'));
       emits('update');
     },
   });
 
   const isSubmitting = computed(() => confirmLoading.value || misreportLoading.value);
+
+  const hasSubstantialInput = () => isRichTextNotEmpty(formData.value.description);
+
+  const clearLeaveConfirmIfEmpty = () => {
+    if (!hasSubstantialInput()) {
+      window.changeConfirm = false;
+    }
+  };
 
   const handleEditorExpandChange = (expanded: boolean) => {
     dockEditorExpand(expanded);
@@ -206,10 +218,19 @@
   };
 
   const handleCancel = () => {
+    clearLeaveConfirmIfEmpty();
     handleEditorExpandChange(false);
     resetForm();
     dockCollapse?.();
   };
+
+  onBeforeRouteLeave(() => {
+    clearLeaveConfirmIfEmpty();
+  });
+
+  onBeforeUnmount(() => {
+    window.changeConfirm = false;
+  });
 </script>
 
 <style scoped lang="postcss">

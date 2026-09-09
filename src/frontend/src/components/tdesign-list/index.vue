@@ -243,7 +243,7 @@
   import type { IRequestResponsePaginationData } from '@utils/request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getSceneSystemParams, isSceneSelectorSentinelId } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
     count: number;
@@ -589,6 +589,11 @@
       ...(isNeedSceneParams ? sceneParams : {}),
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
     };
+    const sceneIdKey = props.sceneIdKey || 'scene_id';
+    // 跨场景时不传选择器占位 scene_id（allSecen/allSystem）
+    if (isSceneSelectorSentinelId(rawParams[sceneIdKey])) {
+      delete rawParams[sceneIdKey];
+    }
     Object.keys(rawParams).forEach((key) => {
       const value = rawParams[key];
       if (value === '' || value === undefined || value === null) {

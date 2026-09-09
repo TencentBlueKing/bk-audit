@@ -110,6 +110,21 @@
     || isConfirmRiskHistoryNode(node)
   );
 
+  const isConfirmDescriptionNotEmpty = (description?: string) => {
+    if (!description) return false;
+    return description.replace(/<[^>]+>/g, '').trim().length > 0;
+  };
+
+  const pickConfirmHistory = (
+    historyList: RiskManageModel['ticket_history'],
+  ): RiskManageModel['ticket_history'][number] | undefined => {
+    const confirmItems = historyList.filter(item => CONFIRM_HISTORY_ACTIONS.includes(item.action));
+    const withDescription = [...confirmItems]
+      .reverse()
+      .find(item => isConfirmDescriptionNotEmpty(item.description));
+    return withDescription || confirmItems[confirmItems.length - 1] || confirmItems[0];
+  };
+
   const canShowConfirmForm = (data: RiskManageModel) => {
     if (['closed'].includes(data.status)) {
       return false;
@@ -179,9 +194,7 @@
     });
 
     if (confirmed) {
-      const confirmHistory = [...historyList]
-        .reverse()
-        .find(item => CONFIRM_HISTORY_ACTIONS.includes(item.action));
+      const confirmHistory = pickConfirmHistory(historyList);
       if (confirmHistory) {
         nodes.push({
           type: 'history',
@@ -213,12 +226,16 @@
       });
     });
 
-    timelineList.value = nodes.map((node, index) => ({
+    const currentNodes = nodes.filter(node => node.type === 'confirm');
+    const historyNodes = nodes.filter(node => node.type !== 'confirm').reverse();
+    const orderedNodes = [...currentNodes, ...historyNodes];
+
+    timelineList.value = orderedNodes.map((node, index) => ({
       tag: renderTimelineTag(node.title, node.time, index),
       content: shouldRenderTimelineContent(node) ? '<template/>' : '',
       icon: () => renderTimelineIcon(node.action, node.type === 'confirm'),
     }));
-    timelineNodes.value = nodes.map((node, index) => ({
+    timelineNodes.value = orderedNodes.map((node, index) => ({
       ...node,
       tag: timelineList.value[index].tag,
     }));
@@ -421,21 +438,35 @@
   :deep(.bk-timeline-content .approve-wrap > .mis-content),
   :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content),
   :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
+    display: grid;
+    grid-template-columns: max-content auto minmax(0, 1fr);
+    row-gap: 8px;
+    align-items: start;
     padding: 12px 8px 12px 12px;
     margin-top: 0;
     background: #f5f7fa;
     border-radius: 2px;
 
+    .render-info-item {
+      display: contents;
+    }
+
     .render-info-item .info-label {
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
+      line-height: 20px;
       text-align: left;
-      flex: 0 0 auto !important;
+      flex: none !important;
+    }
+
+    .render-info-item .info-colon {
+      line-height: 20px;
     }
 
     .render-info-item .info-value {
       padding-left: 4px;
+      line-height: 20px;
     }
   }
 }
