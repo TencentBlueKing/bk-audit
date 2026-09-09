@@ -38,11 +38,8 @@
             v-for="item in promptCards"
             :key="item.title"
             class="prompt-card"
-            :class="{
-              'is-disabled': item.disabled || entering,
-              'is-entering': isCardEntering && !item.disabled,
-            }"
-            :title="item.disabled ? '暂未开放' : (isCardEntering ? '正在进入…' : undefined)"
+            :class="{ 'is-disabled': item.disabled || entering }"
+            :title="item.disabled ? '暂未开放' : undefined"
             @click="handleCardClick(item)">
             <div class="card-icon">
               <img
@@ -59,7 +56,7 @@
                 {{ item.title }}
               </div>
               <div class="card-desc">
-                {{ isCardEntering && !item.disabled ? '正在进入会话…' : item.desc }}
+                {{ item.desc }}
               </div>
             </div>
           </div>
@@ -70,8 +67,8 @@
     <div class="welcome-footer">
       <div class="welcome-column">
         <chat-input
-          hide-shortcuts
           :disabled="entering"
+          hide-shortcuts
           @attach="$emit('attach')"
           @send="handleInputSend" />
       </div>
@@ -80,8 +77,6 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref, watch } from 'vue';
-
   import ChatInput from './chat-input.vue';
   import type { ChatSceneType, SelectPromptPayload } from '../types';
 
@@ -100,15 +95,6 @@
     'select-prompt': [payload: SelectPromptPayload];
     attach: [];
   }>();
-
-  /** 仅卡片入口进入时展示「正在进入会话…」 */
-  const isCardEntering = ref(false);
-
-  watch(() => props.entering, (entering) => {
-    if (!entering) {
-      isCardEntering.value = false;
-    }
-  });
 
   const promptCards = [
     {
@@ -162,7 +148,6 @@
 
   const handleCardClick = (item: typeof promptCards[0]) => {
     if (item.disabled || props.entering) return;
-    isCardEntering.value = true;
     emit('select-prompt', {
       prompt: item.prompt,
       sceneType: item.sceneType,
@@ -276,17 +261,7 @@
 
       &.is-disabled {
         cursor: not-allowed;
-      }
-
-      &.is-entering {
-        cursor: wait;
-        opacity: .72;
         pointer-events: none;
-        box-shadow: 0 0 0 1px #3a84ff inset;
-
-        .card-desc {
-          color: #3a84ff;
-        }
       }
 
       .card-icon {
