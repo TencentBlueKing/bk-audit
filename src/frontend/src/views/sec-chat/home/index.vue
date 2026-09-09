@@ -15,10 +15,13 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <chat-welcome @select-prompt="handleSelectPrompt" />
+  <chat-welcome
+    :entering="isEntering"
+    @select-prompt="handleSelectPrompt" />
 </template>
 
 <script lang="ts" setup>
+  import { ref } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
   import ChatWelcome from '../components/chat-welcome.vue';
@@ -30,20 +33,26 @@
   const router = useRouter();
   const { createLogConversation, sendLogQuery } = useSecChatStore();
   const LOG_SHORTCUT_PROMPT = '请帮我检索审计日志';
+  const isEntering = ref(false);
 
   const handleSelectPrompt = async (payload: SelectPromptPayload) => {
-    if (payload.sceneType !== 'log') return;
-    const isLogShortcutEntry = payload.prompt.trim() === LOG_SHORTCUT_PROMPT;
-    const conversation = await createLogConversation({
-      showInitialSelectSystem: isLogShortcutEntry,
-    });
-    await router.push({
-      name: 'secChatAuditLog',
-      params: { conversationId: conversation.id },
-      query: preserveSecChatQuery(route.query as Record<string, unknown>),
-    });
-    if (payload.prompt.trim() && !isLogShortcutEntry) {
-      await sendLogQuery(payload.prompt);
+    if (payload.sceneType !== 'log' || isEntering.value) return;
+    isEntering.value = true;
+    try {
+      const isLogShortcutEntry = payload.prompt.trim() === LOG_SHORTCUT_PROMPT;
+      const conversation = await createLogConversation({
+        showInitialSelectSystem: isLogShortcutEntry,
+      });
+      await router.push({
+        name: 'secChatAuditLog',
+        params: { conversationId: conversation.id },
+        query: preserveSecChatQuery(route.query as Record<string, unknown>),
+      });
+      if (payload.prompt.trim() && !isLogShortcutEntry) {
+        await sendLogQuery(payload.prompt);
+      }
+    } finally {
+      isEntering.value = false;
     }
   };
 </script>

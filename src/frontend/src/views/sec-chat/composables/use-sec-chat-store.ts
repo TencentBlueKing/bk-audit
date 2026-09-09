@@ -132,6 +132,8 @@ const titleRefreshInflight = new Map<string, Promise<void>>();
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
 /** NL 隐式识别到系统时，SYSTEM_SELECTION 仅用于补上下文，不展示 guide */
 const hiddenGuideMessageIds = new Set<string>();
+/** 首页建会话进行中的 Promise，避免连点重复创建 */
+let createLogConversationInflight: Promise<Conversation> | null = null;
 
 const activeConversation = computed(() => {
   if (draftConversation.value && activeConversationId.value === draftConversation.value.id) {
@@ -1117,25 +1119,34 @@ export function useSecChatStore() {
 
   /**
    * 新协议下首页先创建真实会话，再按需发送 USER_INTENT。
+   * 进行中复用同一 Promise，避免欢迎页连点重复建会话。
    */
   const createLogConversation = async (options?: { showInitialSelectSystem?: boolean }) => {
-    const created = await AiAssistantManageService.createConversation({
-      title: DEFAULT_CONVERSATION_TITLE,
+    if (createLogConversationInflight) {
+      return createLogConversationInflight;
+    }
+    createLogConversationInflight = (async () => {
+      const created = await AiAssistantManageService.createConversation({
+        title: DEFAULT_CONVERSATION_TITLE,
+      });
+      const conversation = createEmptyConversation({
+        id: created.uid,
+        title: created.title || DEFAULT_CONVERSATION_TITLE,
+        pinned: false,
+        sceneType: 'log',
+        messages: options?.showInitialSelectSystem === false ? [] : [createPendingSelectSystemMessage(created.uid)],
+        messagesHydrated: true,
+        createdAt: created.created_at ? Date.parse(created.created_at) || Date.now() : Date.now(),
+      });
+      draftConversation.value = null;
+      conversations.value.unshift(conversation);
+      activeConversationId.value = conversation.id;
+      await initSidebar();
+      return conversation;
+    })().finally(() => {
+      createLogConversationInflight = null;
     });
-    const conversation = createEmptyConversation({
-      id: created.uid,
-      title: created.title || DEFAULT_CONVERSATION_TITLE,
-      pinned: false,
-      sceneType: 'log',
-      messages: options?.showInitialSelectSystem === false ? [] : [createPendingSelectSystemMessage(created.uid)],
-      messagesHydrated: true,
-      createdAt: created.created_at ? Date.parse(created.created_at) || Date.now() : Date.now(),
-    });
-    draftConversation.value = null;
-    conversations.value.unshift(conversation);
-    activeConversationId.value = conversation.id;
-    await initSidebar();
-    return conversation;
+    return createLogConversationInflight;
   };
 
   const findSelectSystemMessage = (conv: Conversation, messageId?: string) => {
