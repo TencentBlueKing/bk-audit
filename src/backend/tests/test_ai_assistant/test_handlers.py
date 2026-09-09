@@ -115,6 +115,50 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 ),
             )
 
+    def test_execute_operation_ranking_filtered_by_scope(self):
+        """操作榜单按 session scope 候选系统集过滤（切换场景榜单随场景变化）"""
+
+        with self.patch_field_context(), self.patch_operation_context() as mock_build, mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
+            # scope 候选含所选系统（校验通过）+ 场景内其他系统 + ES 兜底空串
+            return_value=["sys_b", TARGET_SYSTEM_ID, "sys_a", ""],
+        ):
+            self.handler.execute(
+                input_data=SystemSelectionInputSchema(
+                    system_ids=[TARGET_SYSTEM_ID],
+                    scope_type="scene",
+                    scope_id="1",
+                ),
+                context_data=SystemSelectionHandler.context_model(
+                    username=self.user,
+                    namespace="bkaudit",
+                    scope_type="scene",
+                    scope_id="1",
+                ),
+            )
+        # 榜单收到的是 scope 候选系统集（排序去空串），而非仅所选系统
+        _, build_kwargs = mock_build.call_args
+        self.assertEqual(build_kwargs["system_ids"], ["bk_log", "sys_a", "sys_b"])
+
+    def test_execute_operation_ranking_falls_back_without_scope(self):
+        """无 scope（历史消息兜底）：榜单沿用所选系统（原行为）"""
+
+        with self.patch_field_context(), self.patch_operation_context() as mock_build:
+            self.handler.execute(
+                input_data=SystemSelectionInputSchema(
+                    system_ids=[TARGET_SYSTEM_ID],
+                    scope_type="cross_system",
+                ),
+                context_data=SystemSelectionHandler.context_model(
+                    username=self.user,
+                    namespace="bkaudit",
+                    scope_type="",
+                    scope_id="",
+                ),
+            )
+        _, build_kwargs = mock_build.call_args
+        self.assertEqual(build_kwargs["system_ids"], [TARGET_SYSTEM_ID])
+
     def test_execute_permission_denied_converted(self):
         """所选系统均无检索权限时转为平台稳定错误（403），不误报为 AI 识别失败。"""
 
