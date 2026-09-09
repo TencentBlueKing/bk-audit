@@ -415,9 +415,9 @@ export const mapAiMessageToChatMessage = (
         candidateSystems,
         content: queryText,
         // SYSTEM_REQUIRED 不透出 error_message 作 tip（后端文案过长，走选系统卡默认提示）
-        aiMessage: isSystemRequired
-          ? undefined
-          : (output.message ? String(output.message) : undefined),
+        aiMessage: (!isSystemRequired && output.message)
+          ? String(output.message)
+          : undefined,
         intent: output.intent,
         ...baseMeta,
       };

@@ -28,8 +28,6 @@ import type {
   AiUserIntentInput,
 } from '@model/ai-assistant/types';
 
-import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
-
 import type {
   Conversation,
   Group,
@@ -44,6 +42,8 @@ import {
   getNlRecognitionError,
   mapAiMessageToChatMessage,
 } from '../utils/map-ai-message';
+
+import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
 
 /** 组装 USER_INTENT input_data（附带当前场景选择器 scope） */
 const buildUserIntentInputData = (queryText: string): AiUserIntentInput => {

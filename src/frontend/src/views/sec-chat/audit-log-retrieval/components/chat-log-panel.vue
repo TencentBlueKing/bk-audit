@@ -24,7 +24,7 @@
         v-if="showMessageLoading"
         class="message-area-loading"
         color="transparent"
-        :loading="true"
+        loading
         :opacity="0"
         size="small"
         title="加载消息…">
