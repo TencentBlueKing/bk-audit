@@ -357,17 +357,18 @@
       const selected = String(node.selectedValue || '');
       return rawName.includes(text) || displayName.includes(text) || selected.includes(text);
     };
-    const searchInTree = (nodes: Record<string, any>[]): Record<string, any>[] => (
-      nodes.reduce((result, node) => {
+    const searchInTree = (nodes: Record<string, any>[]): Record<string, any>[] => {
+      const result: Record<string, any>[] = [];
+      nodes.forEach((node) => {
         if (matchNode(node)) {
           result.push(node);
         }
-        if (node.children?.length) {
+        if (Array.isArray(node.children) && node.children.length) {
           result.push(...searchInTree(node.children));
         }
-        return result;
-      }, [] as Record<string, any>[])
-    );
+      });
+      return result;
+    };
 
     treeData.value = searchInTree(storageTreeData.value);
   };
