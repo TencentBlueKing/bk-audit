@@ -448,6 +448,7 @@
     systems?: SelectedSystem[];
   }>(), {
     messageUid: '',
+    apiStatus: undefined,
     embedded: false,
     standardFields: () => [],
     extensionFields: () => [],
