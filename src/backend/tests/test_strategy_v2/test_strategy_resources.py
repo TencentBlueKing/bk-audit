@@ -425,10 +425,13 @@ class StrategyResourcesTest(TestCase):
         mock_table_handler.assert_called_once_with(table_type="BizRt", namespace=self.namespace)
         self.assertEqual(result, [{"bk_biz_name": "biz", "bk_biz_id": "rt"}])
 
-    def test_list_tables_eventlog_missing_scene_id_raises_error(self):
-        """测试EventLog类型缺少scene_id时应抛出参数校验错误"""
-        with self.assertRaises(TypeError):
-            ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
+    @mock.patch("services.web.strategy_v2.resources.TableHandler")
+    def test_list_tables_eventlog_missing_scene_id_succeeds(self, mock_table_handler):
+        """测试EventLog类型不传scene_id时走平台视角，不抛异常"""
+        handler_instance = mock_table_handler.return_value
+        handler_instance.list_tables.return_value = []
+        result = ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
+        self.assertEqual(result, [])
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")

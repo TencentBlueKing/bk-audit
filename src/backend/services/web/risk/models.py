@@ -292,6 +292,13 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
                 fields=["display_status", "is_deleted", "last_operate_time"],
                 name="idx_risk_dstatus_isdel_time",
             ),
+            # 场景 ID 等值 + 软删除等值 + 时间范围查询（个人视图/场景视图基础列表）
+            models.Index(fields=['scene_id', 'is_deleted', 'event_time'], name='idx_risk_scene_isdel_time'),
+            # 场景 ID 等值 + 展示状态等值 + 时间范围查询（带状态过滤的场景列表）
+            models.Index(fields=['scene_id', 'display_status', 'event_time'], name='idx_risk_scene_status_time'),
+            models.Index(
+                fields=['scene_id', 'is_deleted', 'display_status', 'event_time'], name='idx_risk_scene_del_status_time'
+            ),
         ]
 
     # ──── 单一权限 ────

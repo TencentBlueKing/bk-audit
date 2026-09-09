@@ -914,15 +914,15 @@ class ConfirmRisk(RiskFlowBaseHandler):
         transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
 
     def _post_confirm_tasks(self, description: str = "") -> None:
-        """事务提交后执行的任务：流转、渲染、通知"""
+        """事务提交后执行的任务：流转、渲染、通知、记录历史"""
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
+        self.record_history({})
         # 触发渲染任务
         RiskHandler().trigger_render_task(self.risk)
         # 通知关注人
         RiskHandler().send_risk_notice(self.risk)
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
-        # 记录确认说明，供历史展示（与 ConfirmAsMisReport 保持一致）
         return {"description": kwargs.get("description", "")}
 
 
@@ -972,19 +972,12 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         self.risk.display_status = RiskDisplayStatus.CLOSED
 
     def record_history(self, process_result: dict, *args, **kwargs) -> None:
-        # 记录历史
-        TicketNode.objects.create(
-            risk_id=self.risk.risk_id,
-            operator=self.operator,
-            current_operator=self.risk.current_operator,
-            action=self.__class__.__name__,
-            timestamp=datetime.datetime.now().timestamp(),
-            time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
-            process_result=process_result,
-            extra={
-                "description": kwargs.get("description", ""),
-                "from_status": RiskStatus.PENDING_CONFIRM,
-                "to_status": RiskStatus.CLOSED,
-            },
-        )
-        self.risk.save(update_fields=["last_operate_time"])
+        super().record_history(process_result=process_result, *args, **kwargs)
+
+    def build_history(self, process_result: dict, *args, **kwargs) -> dict:
+        # 记录确认说明和状态变更，供历史展示
+        return {
+            "description": kwargs.get("description", ""),
+            "from_status": RiskStatus.PENDING_CONFIRM,
+            "to_status": RiskStatus.CLOSED,
+        }

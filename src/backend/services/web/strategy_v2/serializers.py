@@ -87,10 +87,6 @@ from services.web.strategy_v2.exceptions import (
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
-from services.web.strategy_v2.handlers.dispatch import (
-    EVENT_DATA_PREFIX,
-    DispatchConditionNode,
-)
 from services.web.strategy_v2.models import (
     DispatchRule,
     LinkTable,
@@ -776,7 +772,7 @@ class DispatchRuleSerializer(serializers.Serializer):
         label=gettext_lazy("Conditions"),
         required=False,
         allow_null=True,
-        help_text=gettext_lazy("WhereCondition 条件树"),
+        help_text=gettext_lazy("WhereCondition 条件树（field 为字段对象，结构同发现规则 where），空 dict = 默认兜底规则"),
     )
     target_scene_id = serializers.IntegerField(label=gettext_lazy("Target Scene ID"), help_text=gettext_lazy("分派目标场景"))
     processor = serializers.ListField(
@@ -931,8 +927,7 @@ class MultiRuleValidateMixin:
                 field_name = field.get("display_name") or field.get("field_name")
                 if field.get("aggregate"):
                     raise serializers.ValidationError(
-                        gettext("规则[%s]的where条件字段[%s]不能为聚合字段（聚合字段仅允许在having中使用）")
-                        % (rule.get("rule_name"), field_name)
+                        gettext("规则[%s]的where条件字段[%s]不能为聚合字段（聚合字段仅允许在having中使用）") % (rule.get("rule_name"), field_name)
                     )
                 operator = (leaf or {}).get("operator")
                 if operator and operator not in RuleAuditConditionOperator.values:
@@ -968,8 +963,8 @@ class MultiRuleValidateMixin:
 
             default_count = 0
             for rule in dispatch_rules:
-                # 分派条件树结构校验（connector/field/operator/filter 类型与必填），前移 Pydantic 校验
-                self._validate_condition_tree(rule.get("conditions"), DispatchConditionNode, "dispatch_conditions")
+                # 分派条件树结构校验（connector/field/operator/filter 类型与必填，field 为对象结构，同发现规则 where）
+                self._validate_condition_tree(rule.get("conditions"), WhereCondition, "dispatch_conditions")
                 # is_default 由 conditions 推导同步
                 is_default = self._condition_tree_is_empty(rule.get("conditions"))
                 rule["is_default"] = is_default
@@ -998,43 +993,37 @@ class MultiRuleValidateMixin:
                 self._validate_notice_groups("dispatch_rules", notice_group_ids, rule.get("target_scene_id"))
             if default_count != 1:
                 raise serializers.ValidationError(gettext("全局策略必须且仅能有一条默认分派规则（conditions 为空）"))
-            # 分派条件字段归一化（select display_name 裸名 -> event_data.xxx）
-            self._normalize_dispatch_condition_fields(attrs)
+            # 分派条件字段合法域校验（select 字段 / 直连字段词表）
+            self._check_dispatch_condition_fields(attrs)
         return attrs
 
     @staticmethod
-    def _normalize_dispatch_condition_fields(attrs: dict) -> None:
+    def _check_dispatch_condition_fields(attrs: dict) -> None:
         """
-        分派条件字段归一化：前端按 select 字段的 display_name 裸名传参，
-        后端统一改写为 event_data.{display_name}（分派求值器的词表形式）。
+        分派条件字段合法域校验（field 为对象结构，同发现规则 where）：
+        - select 字段：display_name 命中策略级 select（求值时从 event_data 按该键取值）
+        - 直连字段：raw_name ∈ 事件输出字段 ∪ 规则实例化字段（求值时直接从分派上下文读取）
         """
         configs = attrs.get("configs") or {}
         select_names = {f.get("display_name") for f in configs.get("select") or [] if f.get("display_name")}
         if not select_names:
-            # 非规则审计策略或未携带 configs（如部分更新场景）：无 select 词表，不做归一化
+            # 非规则审计策略或未携带 configs（如部分更新场景）：无 select 词表，不做校验
             return
         passthrough = {f.field_name for f in EventMappingFields().fields} | {
             "risk_level",
             "risk_hazard",
             "risk_guidance",
         }
-        prefix = EVENT_DATA_PREFIX
         for rule in attrs.get("dispatch_rules") or []:
             for leaf in MultiRuleValidateMixin._walk_tree_leaves(rule.get("conditions")):
-                field_name = (leaf or {}).get("field")
-                if not field_name:
+                field = (leaf or {}).get("field") or {}
+                display_name, raw_name = field.get("display_name"), field.get("raw_name")
+                if display_name in select_names or raw_name in passthrough:
                     continue
-                if field_name in select_names:
-                    leaf["field"] = f"{prefix}{field_name}"
-                elif field_name.startswith(prefix) and field_name[len(prefix) :] in select_names:
-                    continue
-                elif field_name in passthrough:
-                    continue
-                else:
-                    raise serializers.ValidationError(
-                        gettext("分派规则[%s]的条件字段[%s]不在可选范围内，可选字段：%s")
-                        % (rule.get("rule_name"), field_name, ",".join(sorted(select_names | passthrough)))
-                    )
+                raise serializers.ValidationError(
+                    gettext("分派规则[%s]的条件字段[%s]不在可选范围内，可选字段：%s")
+                    % (rule.get("rule_name"), display_name or raw_name, ",".join(sorted(select_names | passthrough)))
+                )
 
 
 class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin, serializers.ModelSerializer):
@@ -1426,8 +1415,16 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         # split into array
         for key, val in data.items():
-            if key in ["namespace", "order_field", "order_type", "scene_id", "system_id", "binding_type",
-                        "dispatch_scene_id", "updated_by"]:
+            if key in [
+                "namespace",
+                "order_field",
+                "order_type",
+                "scene_id",
+                "system_id",
+                "binding_type",
+                "dispatch_scene_id",
+                "updated_by",
+            ]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
         # order
