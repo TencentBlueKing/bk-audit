@@ -109,7 +109,7 @@
                       form-type="vertical"
                       :model="getAssignFormModel(rule)">
                       <rules-component
-                        :ref="(el) => setWhereRef(el, index)"
+                        :ref="(el: unknown) => setWhereRef(el, index)"
                         :aggregate-list="aggregateList"
                         :config-type="configType"
                         :expected-result="expectedResult"
@@ -187,6 +187,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import AssignRuleFields from './components/assign-rule-fields.vue';
@@ -350,8 +351,8 @@
     },
   });
 
-  const setWhereRef = (el: any, index: number) => {
-    whereRefs.value[index] = el;
+  const setWhereRef = (el: unknown, index: number) => {
+    whereRefs.value[index] = el as typeof whereRefs.value[number];
   };
 
   const applyWhereToComponents = () => {

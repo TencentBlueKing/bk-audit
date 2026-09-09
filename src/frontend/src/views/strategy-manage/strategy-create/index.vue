@@ -763,15 +763,16 @@
   //     return !isSameByCommonFields(currentVal, snapshotVal);
   //   });
   // };
-  const getDataSourceKey = (configs?: Record<string, any>) => JSON.stringify({
-    type: configs?.config_type || '',
-    rt: Array.isArray(configs?.data_source?.rt_id)
-      ? configs.data_source.rt_id.filter(Boolean).join('/')
-      : (configs?.data_source?.rt_id || ''),
-    link: configs?.data_source?.link_table?.uid || '',
-    systems: [...(configs?.data_source?.system_ids || [])].map(String).sort()
-      .join(','),
-  });
+  const getDataSourceKey = (configs?: Record<string, any>) => {
+    const rtId = configs?.data_source?.rt_id;
+    return JSON.stringify({
+      type: configs?.config_type || '',
+      rt: Array.isArray(rtId) ? rtId.filter(Boolean).join('/') : (rtId || ''),
+      link: configs?.data_source?.link_table?.uid || '',
+      systems: [...(configs?.data_source?.system_ids || [])].map(String).sort()
+        .join(','),
+    });
+  };
 
   const emptyDiscoveryWhere = () => ({ connector: 'and', conditions: [] });
 
