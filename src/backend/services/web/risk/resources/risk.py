@@ -867,6 +867,7 @@ class ListMineRisk(ListRisk):
                 RiskDisplayStatus.PROCESSING,
                 RiskDisplayStatus.FOR_APPROVE,
                 RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
             ],
         ).distinct()
 
