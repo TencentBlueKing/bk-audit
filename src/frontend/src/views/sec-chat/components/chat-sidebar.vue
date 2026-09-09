@@ -9,6 +9,8 @@
         <scene-system-selector
           ref="sceneSelectorRef"
           v-model="selectedScene"
+          :is-all-secen="false"
+          :is-all-system="false"
           :popover-width="237"
           scene-permission="view_scene"
           system-permission="view_system"
