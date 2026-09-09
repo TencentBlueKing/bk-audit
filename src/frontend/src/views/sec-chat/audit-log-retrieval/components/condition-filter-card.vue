@@ -16,6 +16,16 @@
 -->
 <template>
   <div class="condition-filter-card">
+    <selected-systems-panel
+      v-if="systems.length"
+      action-placement="header"
+      action-text="重新选择"
+      class="filter-systems-section"
+      :default-expanded="false"
+      :systems="systems"
+      :title="`已选 ${systems.length} 个系统`"
+      @action="$emit('reselectSystem')" />
+
     <div class="card-title-row">
       <audit-icon
         class="title-icon"
@@ -113,6 +123,8 @@
     sampleToConditionValue,
   } from '../config/condition-fields';
 
+  import SelectedSystemsPanel from './selected-systems-panel.vue';
+
   const props = withDefaults(defineProps<{
     systems?: SelectedSystem[];
     standardFields?: SystemFieldRow[];
@@ -130,6 +142,7 @@
 
   const emit = defineEmits<{
     searched: [success: boolean];
+    reselectSystem: [];
   }>();
 
   const { sendConditionSearch } = useSecChatStore();
@@ -144,16 +157,23 @@
 
   const isSearching = computed(() => searchState.value === 'loading');
 
-  const fieldConfig = computed(() => createConditionFieldConfigFromSystemFields(
-    props.standardFields,
-    props.extensionFields,
-  ));
+  /** 与结果卡一致：系统改选只走「重新选择」，不在条件 tag 中编辑来源系统 */
+  const fieldConfig = computed(() => {
+    const nextConfig = createConditionFieldConfigFromSystemFields(
+      props.standardFields,
+      props.extensionFields,
+    );
+    delete nextConfig.system_id;
+    return nextConfig;
+  });
 
-  const commonFieldKeys = computed(() => getPrimaryFieldNames(props.standardFields));
+  const commonFieldKeys = computed(() => (
+    getPrimaryFieldNames(props.standardFields).filter(key => key !== 'system_id')
+  ));
   const extendFieldKeys = computed(() => getSecondaryFieldNames(props.extensionFields));
 
   const selectedFieldNames = computed(() => Object.keys(searchModel.value)
-    .filter(key => key !== 'datetime_origin' && fieldConfig.value[key]));
+    .filter(key => key !== 'datetime_origin' && key !== 'system_id' && fieldConfig.value[key]));
 
   const getDefaultValue = (config: IFieldConfig) => getConditionDefaultValue(config);
 
@@ -303,6 +323,12 @@
     border-radius: 16px;
     box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
     box-sizing: border-box;
+  }
+
+  .filter-systems-section {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
   }
 
   .card-title-row {

@@ -93,6 +93,18 @@ const createPendingSelectSystemMessage = (conversationId: string) => ({
   candidateSystems: [],
 });
 
+/**
+ * 空会话且尚未选定系统时补本地选系统卡。
+ * 新建时选系统卡未落库，刷新后再进会拉到空历史，需恢复与首次进入一致的引导。
+ */
+const ensureBootstrapSelectSystem = (conv: Conversation) => {
+  if (conv.isDraft) return;
+  if (conv.messages.length > 0) return;
+  if (conv.systemIds.length > 0 || conv.systems.length > 0) return;
+  /* eslint-disable-next-line no-param-reassign -- 原地补齐引导消息 */
+  conv.messages = [createPendingSelectSystemMessage(conv.id)];
+};
+
 const sidebarCollapsed = ref(false);
 const activeConversationId = ref<string | null>(null);
 const sidebarLoading = ref(false);
@@ -759,6 +771,7 @@ export function useSecChatStore() {
         conv.title = detail.title || conv.title;
         applyMessageWindow(conv, windowData, 'replace');
         conv.messagesHydrated = true;
+        ensureBootstrapSelectSystem(conv);
       } catch (error) {
         const idx = conversations.value.findIndex(c => c.id === conversationId);
         if (idx >= 0 && conversations.value[idx].messages.length === 0) {
@@ -1233,7 +1246,10 @@ export function useSecChatStore() {
   const reselectSystem = () => {
     const conv = activeConversation.value;
     if (!conv) return;
-    conv.messages = conv.messages.filter(item => item.type !== 'retrieval-guide' && item.type !== 'select-system');
+    // 保留历史引导卡；只移除未完成的选系统卡，避免叠多个「重新选择」入口
+    conv.messages = conv.messages.filter(item => !(
+      item.type === 'select-system' && item.status === 'pending'
+    ));
     conv.messages.push({
       ...createPendingSelectSystemMessage(conv.id),
       selectionReason: 'reselect',
