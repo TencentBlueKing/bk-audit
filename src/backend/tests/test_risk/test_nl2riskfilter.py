@@ -90,10 +90,10 @@ class NL2RiskFilterRequestSerializerTest(TestCase):
         self.assertIn("tags", serializer.errors)
 
     def test_risk_view_type_optional_default_empty(self):
-        """risk_view_type 可选，默认空字符串"""
+        """risk_view_type 可选，默认 RiskViewType.ALL"""
         serializer = NL2RiskFilterRequestSerializer(data={"query": "查询风险"})
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["risk_view_type"], "")
+        self.assertEqual(serializer.validated_data["risk_view_type"], RiskViewType.ALL)
 
     def test_risk_view_type_accepts_valid_choice(self):
         """合法 risk_view_type 通过校验"""
@@ -534,7 +534,7 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
         self.assertEqual(log.risk_view_type, RiskViewType.CONFIRM)
 
     def test_save_default_risk_view_type_empty(self):
-        """不传 risk_view_type 时默认为空字符串"""
+        """不传 risk_view_type 时默认为 RiskViewType.ALL"""
         NL2RiskFilterLog.save_nl2risk_filter_log(
             username="admin",
             query="普通查询",
@@ -542,7 +542,7 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
             response_data={},
         )
         log = NL2RiskFilterLog.objects.first()
-        self.assertEqual(log.risk_view_type, "")
+        self.assertEqual(log.risk_view_type, RiskViewType.ALL)
 
 
 class NL2RiskFilterWithLoggingTest(TestCase):

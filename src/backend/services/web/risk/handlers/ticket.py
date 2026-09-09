@@ -909,14 +909,20 @@ class ConfirmRisk(RiskFlowBaseHandler):
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         pass
 
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        # 跳过 run() 中的记录，留待 _post_confirm_tasks() 中在 NewRisk 之后记录
+        # 确保"风险确认"节点时间戳晚于"风险产生"，使前端展示时"风险确认"在上方
+        pass
+
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         # 外部任务与通知放到事务提交后执行，保证数据已落库
         transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
 
     def _post_confirm_tasks(self, description: str = "") -> None:
         """事务提交后执行的任务：流转、渲染、通知、记录历史"""
+        # 1. 先流转 NewRisk，记录"风险产生"节点
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
-        self.record_history({})
+        super().record_history(process_result={}, description=description)
         # 触发渲染任务
         RiskHandler().trigger_render_task(self.risk)
         # 通知关注人
@@ -971,8 +977,24 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
     def sync_display_status(self) -> None:
         self.risk.display_status = RiskDisplayStatus.CLOSED
 
+    def post_process(self, process_result: dict, *args, **kwargs) -> None:
+        # 外部任务放到事务提交后执行，保证数据已落库
+        transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
+
+    def _post_confirm_tasks(self, description: str = "") -> None:
+        """事务提交后执行的任务：记录风险产生、误报确认、风险关闭"""
+        # 1. 先流转 NewRisk，记录"风险单产生"节点
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
+        # 2. 调用父类方法记录"误报确认"节点
+        super().record_history(process_result={}, description=description)
+        # 3. 关单并记录"风险单关闭"节点
+        CloseRisk(risk_id=self.risk.risk_id, operator=self.operator).run(
+            description=gettext("%s 标记误报，系统自动关单") % self.operator
+        )
+
     def record_history(self, process_result: dict, *args, **kwargs) -> None:
-        super().record_history(process_result=process_result, *args, **kwargs)
+        # 跳过 run() 中的记录，留待 _post_confirm_tasks() 中在 NewRisk 之后记录
+        pass
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         # 记录确认说明和状态变更，供历史展示
