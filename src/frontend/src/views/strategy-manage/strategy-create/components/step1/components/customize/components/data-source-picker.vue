@@ -20,7 +20,11 @@
     class="data-source-picker">
     <div
       class="dsp-trigger"
-      :class="{ 'is-active': panelVisible, 'is-empty': !displayLabel }"
+      :class="{
+        'is-active': panelVisible,
+        'is-empty': !displayLabel,
+        'is-disabled': disabled,
+      }"
       @click="togglePanel">
       <span
         class="dsp-trigger-text"
@@ -249,6 +253,7 @@
       leaf: boolean;
     }>>;
     decodeTypeBizId?: (tableType: string, value: string | number) => string;
+    disabled?: boolean;
   }
 
   interface Emits {
@@ -264,6 +269,7 @@
     mineBizRtType: 'MineBizRt',
     loadChildren: undefined,
     decodeTypeBizId: undefined,
+    disabled: false,
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -759,6 +765,7 @@
   };
 
   const togglePanel = () => {
+    if (props.disabled) return;
     if (panelVisible.value) {
       closePanel();
       return;
@@ -882,6 +889,18 @@
   &.is-active,
   &:hover {
     border-color: #3a84ff;
+  }
+
+  &.is-disabled {
+    color: #c4c6cc;
+    cursor: not-allowed;
+    background: #fafbfd;
+    border-color: #dcdee5;
+
+    &:hover,
+    &.is-active {
+      border-color: #dcdee5;
+    }
   }
 }
 

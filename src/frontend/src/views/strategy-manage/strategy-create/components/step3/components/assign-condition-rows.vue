@@ -33,10 +33,13 @@
             v-if="index < group.conditions.length - 1"
             class="inner-column-line" />
           <bk-select
+            :key="`${item.uid}-${fieldOptionsSign}`"
             filterable
+            :input-search="false"
             :model-value="item.field"
             :placeholder="t('请选择字段')"
             :popover-options="{ placement: 'top-start' }"
+            :search-placeholder="t('请输入关键字')"
             @change="(val: string) => handleFieldChange(groupIndex, index, val)">
             <bk-option
               v-for="field in fieldOptions"
@@ -102,7 +105,7 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import {
@@ -141,6 +144,9 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const fieldOptionsSign = computed(() => props.fieldOptions
+    .map(field => `${field.id}:${field.name}`)
+    .join('|'));
 
   const operatorOptions = [
     { label: '= 等于', value: 'eq' },

@@ -6,7 +6,7 @@
   <div class="risk-dispatch-rules">
     <template v-if="!detailLoading && displayRules.length">
       <div
-        v-for="(rule, ruleIndex) in displayRules"
+        v-for="(rule, ruleIndex) in displayRulesWithTags"
         :key="ruleIndex"
         class="rule-item-card">
         <div class="rule-item-header">
@@ -31,15 +31,31 @@
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('风险单处理人') }}:</span>
-            <span class="rule-field-value">
-              {{ resolveDispatchNoticeGroupNames(rule.processors) }}
-            </span>
+            <div class="rule-field-value notice-group-tags">
+              <template v-if="rule.processorTags.length">
+                <bk-tag
+                  v-for="item in rule.processorTags"
+                  :key="`processor-${item.id}`"
+                  class="notice-group-tag">
+                  {{ item.name }}
+                </bk-tag>
+              </template>
+              <span v-else>--</span>
+            </div>
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('关注人') }}:</span>
-            <span class="rule-field-value">
-              {{ resolveDispatchNoticeGroupNames(rule.followers) }}
-            </span>
+            <div class="rule-field-value notice-group-tags">
+              <template v-if="rule.followerTags.length">
+                <bk-tag
+                  v-for="item in rule.followerTags"
+                  :key="`follower-${item.id}`"
+                  class="notice-group-tag">
+                  {{ item.name }}
+                </bk-tag>
+              </template>
+              <span v-else>--</span>
+            </div>
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('风险单分派方式') }}:</span>
@@ -51,9 +67,17 @@
             v-if="rule.dispatchMode !== 'direct'"
             class="rule-field-row">
             <span class="rule-field-label">{{ t('确认人') }}:</span>
-            <span class="rule-field-value">
-              {{ resolveDispatchNoticeGroupNames(rule.confirmers) }}
-            </span>
+            <div class="rule-field-value notice-group-tags">
+              <template v-if="rule.confirmerTags.length">
+                <bk-tag
+                  v-for="item in rule.confirmerTags"
+                  :key="`confirmer-${item.id}`"
+                  class="notice-group-tag">
+                  {{ item.name }}
+                </bk-tag>
+              </template>
+              <span v-else>--</span>
+            </div>
           </div>
         </div>
       </div>
@@ -82,6 +106,7 @@
 
   import RuleConditionDisplay from './rule-condition-display.vue';
   import { useStrategyDetailDispatchRules } from './use-strategy-detail-dispatch-rules';
+  import { resolveNoticeGroupTags } from './use-strategy-detail-rules';
 
   interface Props {
     data: StrategyModel,
@@ -146,13 +171,12 @@
     noticeGroupNameMap.value = map;
   };
 
-  const resolveDispatchNoticeGroupNames = (ids: Array<string | number>) => {
-    if (!ids?.length) return '--';
-    const names = ids
-      .map(id => noticeGroupNameMap.value[String(id)] || `${id}`)
-      .filter(Boolean);
-    return names.length ? names.join('、') : '--';
-  };
+  const displayRulesWithTags = computed(() => displayRules.value.map(rule => ({
+    ...rule,
+    processorTags: resolveNoticeGroupTags(rule.processors, noticeGroupNameMap.value),
+    followerTags: resolveNoticeGroupTags(rule.followers, noticeGroupNameMap.value),
+    confirmerTags: resolveNoticeGroupTags(rule.confirmers, noticeGroupNameMap.value),
+  })));
 
   watch(displayRules, loadNoticeGroupNames, { immediate: true, deep: true });
 
@@ -221,6 +245,17 @@
     padding-left: 14px;
     color: #63656e;
     word-break: break-all;
+  }
+
+  .notice-group-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .notice-group-tag {
+    max-width: 220px;
+    margin: 0 4px 4px 0;
   }
 
   .risk-dispatch-rules-empty {

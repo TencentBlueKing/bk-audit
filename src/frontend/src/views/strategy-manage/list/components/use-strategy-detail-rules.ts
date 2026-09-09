@@ -6,6 +6,7 @@ import type StrategyModel from '@model/strategy/strategy';
 import {
   type AssignConditionForm,
   dispatchToAssignConditionForm,
+  formatFieldDisplayLabel,
   parseStrategyDetailToForm,
 } from '../../strategy-create/utils/strategy-protocol';
 
@@ -43,10 +44,7 @@ export const getConditionFieldLabel = (field: Record<string, any> | undefined) =
   if (!field) return '';
   const displayName = field.display_name || field.field_name || '';
   const rawName = field.raw_name || field.field_name || '';
-  if (displayName && rawName && displayName !== rawName) {
-    return `${displayName}(${rawName})`;
-  }
-  return displayName || rawName;
+  return formatFieldDisplayLabel(displayName, rawName);
 };
 
 const getGroupChildConditions = (group: Record<string, any>) => {
@@ -154,6 +152,11 @@ export const dispatchConditionsToWhere = (
 ): RuleWhereDisplay => {
   const form = dispatchToAssignConditionForm(conditions);
   if (!form.groups.some(group => group.conditions.some(row => row.field))) {
+    // 已是风险发现规则 where 结构时，直接用于展示
+    if (conditions && typeof conditions === 'object' && Array.isArray((conditions as Record<string, any>).conditions)
+      && !Array.isArray((conditions as AssignConditionForm).groups)) {
+      return conditions as RuleWhereDisplay;
+    }
     return emptyWhere();
   }
   return assignConditionFormToWhereDisplay(form, getFieldLabel);
@@ -207,8 +210,8 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
     risk_level: rule.risk_level ?? current.risk_level ?? 'HIGH',
     risk_hazard: rule.risk_hazard ?? current.risk_hazard ?? '',
     risk_guidance: rule.risk_guidance ?? current.risk_guidance ?? '',
-    processor: rule.processor ?? [],
-    follower: rule.follower ?? [],
+    processor: toNoticeGroupIds(rule.processor),
+    follower: toNoticeGroupIds(rule.follower),
     conditions: rule.conditions ?? {
       where: rule.configs?.where ?? (index === 0 ? current.configs?.where : null),
       having: rule.conditions?.having ?? rule.configs?.having ?? (index === 0 ? current.configs?.having : null),
@@ -241,31 +244,70 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
       risk_level: rule.risk_level ?? '',
       risk_hazard: rule.risk_hazard ?? '',
       risk_guidance: rule.risk_guidance ?? '',
-      processor: rule.processor ?? [],
-      follower: rule.follower ?? [],
+      processor: toNoticeGroupIds(rule.processor),
+      follower: toNoticeGroupIds(rule.follower),
     }));
   });
-
-  const resolveGroupNames = (
-    ids: Array<string | number>,
-    userGroupList: Array<{ id: number; name: string }>,
-  ) => resolveNoticeGroupNames(ids, userGroupList);
 
   return {
     displayRules,
     riskLevelMap,
     getConditionFieldLabel,
-    resolveGroupNames,
   };
 };
 
+export type NoticeGroupOption = { id: string | number; name: string };
+
+export const toNoticeGroupIds = (value: unknown): Array<string | number> => {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .map((item) => {
+      if (item === undefined || item === null || item === '') {
+        return null;
+      }
+      if (typeof item === 'object') {
+        const rec = item as Record<string, unknown>;
+        const id = rec.id ?? rec.group_id;
+        if (id === undefined || id === null || id === '') {
+          return null;
+        }
+        return id as string | number;
+      }
+      return item as string | number;
+    })
+    .filter((id): id is string | number => id !== null);
+};
+
+export const resolveNoticeGroupTags = (
+  ids: unknown,
+  groups: Array<NoticeGroupOption> | Record<string, string>,
+): Array<{ id: string; name: string }> => {
+  const idList = toNoticeGroupIds(ids);
+  if (!idList.length) {
+    return [];
+  }
+  const getName = (key: string) => {
+    if (Array.isArray(groups)) {
+      return groups.find(item => `${item.id}` === key)?.name;
+    }
+    return groups[key];
+  };
+  return idList.map((id) => {
+    const key = String(id);
+    return {
+      id: key,
+      name: getName(key) || key,
+    };
+  });
+};
+
 export const resolveNoticeGroupNames = (
-  ids: Array<string | number>,
-  userGroupList: Array<{ id: number; name: string }>,
+  ids: unknown,
+  userGroupList: Array<NoticeGroupOption>,
 ) => {
-  if (!ids?.length) return '--';
-  const names = ids
-    .map(id => userGroupList.find(item => item.id === id || `${item.id}` === `${id}`)?.name || `${id}`)
-    .filter(Boolean);
-  return names.length ? names.join('、') : '--';
+  const tags = resolveNoticeGroupTags(ids, userGroupList);
+  return tags.length ? tags.map(item => item.name).join('、') : '--';
 };

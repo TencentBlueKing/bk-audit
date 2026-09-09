@@ -31,6 +31,14 @@ const filtersToFilterString = (filters: string[]) => (
  * 编辑回填：eq 取 filter 并清空 filters；非 eq 取 filters 并清空 filter
  */
 export const normalizeConditionValueForDisplay = (c: ConditionFilterValue) => {
+  if (!c || typeof c !== 'object') {
+    return {
+      operator: '',
+      filter: '',
+      filters: [] as string[],
+      field: {},
+    };
+  }
   const { operator } = c;
   if (!operator || ['isnull', 'notnull'].includes(operator)) {
     return c;
