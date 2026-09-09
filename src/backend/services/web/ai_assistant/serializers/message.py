@@ -196,12 +196,26 @@ class MessageResponseSerializer(serializers.Serializer):
     feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对消息的反馈")
     created_at = serializers.DateTimeField(help_text="消息创建时间")
     updated_at = serializers.DateTimeField(help_text="消息最后更新时间")
+    duration_seconds = serializers.FloatField(
+        allow_null=True,
+        read_only=True,
+        help_text="端到端耗时（秒，终态 = 结束-创建，含排队/LLM 编排/检索全过程）；执行中为 null",
+    )
+    queued_at = serializers.DateTimeField(allow_null=True, help_text="排队时间（用户发送时刻）")
+    started_at = serializers.DateTimeField(allow_null=True, help_text="Worker 开始执行时间")
+    finished_at = serializers.DateTimeField(allow_null=True, help_text="终态收敛时间")
 
     def to_representation(self, instance):
         """读取 JSONField 时重新执行类型校验，避免损坏快照扩散到前端。"""
 
         handler = message_handler_registry.require(instance.message_type)
         supports_feedback = handler.supports_feedback
+        # 端到端耗时：终态用 finished_at - created_at（含排队与 LLM 编排全链路）；
+        # 不用 query_summary.took_ms——那只计最终 Doris SQL 检索（约 1s），
+        # 与用户体感（意图识别 + 条件识别两段 LLM + 检索）严重不符
+        duration_seconds = None
+        if instance.finished_at is not None:
+            duration_seconds = round((instance.finished_at - instance.created_at).total_seconds(), 1)
         data = {
             "uid": str(instance.uid),
             "conversation_uid": str(instance.conversation.uid),
@@ -219,6 +233,10 @@ class MessageResponseSerializer(serializers.Serializer):
             ),
             "created_at": instance.created_at,
             "updated_at": instance.updated_at,
+            "duration_seconds": duration_seconds,
+            "queued_at": instance.queued_at,
+            "started_at": instance.started_at,
+            "finished_at": instance.finished_at,
         }
         if self.context.get("include_content", True):
             input_data = parse_snapshot(

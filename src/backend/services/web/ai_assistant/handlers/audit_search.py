@@ -193,8 +193,21 @@ class SystemSelectionHandler(
         except AIPermissionDeniedError as error:
             # 所选系统均无检索权限：转为平台稳定错误（403），不误报为 AI 识别失败
             raise SystemSelectionPermissionDenied() from error
+        # 操作榜单按 session scope 候选系统集过滤（与前端左上角场景过滤器一致）：
+        # 场景内所有授权系统的历史/常用操作均可复用，不仅限当前所选系统——
+        # 切换场景后榜单随场景变化；无 scope（历史消息兜底）沿用所选系统
+        ranking_system_ids = list(input_data.system_ids)
+        if context_data.scope_type:
+            scoped_ids = set(
+                SearchLogPermission.get_scope_auth_systems(
+                    context_data.scope_type, context_data.scope_id, context_data.username
+                )
+            )
+            scoped_ids.discard("")  # ES filter 兜底空串
+            if scoped_ids:
+                ranking_system_ids = sorted(scoped_ids)
         common_operations, historical_operations = OperationContextService.build(
-            system_ids=input_data.system_ids,
+            system_ids=ranking_system_ids,
             username=context_data.username,
         )
         return SystemSelectionOutputSchema(
