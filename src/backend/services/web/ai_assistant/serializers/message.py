@@ -212,10 +212,14 @@ class MessageResponseSerializer(serializers.Serializer):
         supports_feedback = handler.supports_feedback
         # 端到端耗时：终态用 finished_at - created_at（含排队与 LLM 编排全链路）；
         # 不用 query_summary.took_ms——那只计最终 Doris SQL 检索（约 1s），
-        # 与用户体感（意图识别 + 条件识别两段 LLM + 检索）严重不符
+        # 与用户体感（意图识别 + 条件识别两段 LLM + 检索）严重不符。
+        # 语义边界：仅对外异步消息（USER_INTENT/NL/LOG_SEARCH 直建）有真实值；
+        # 任务内编排（create_executed）同步落库的子消息耗时≈0（LLM 时间计入父消息），
+        # 且 finished_at 取样早于 auto_now_add 的 created_at（微秒倒挂）——max 钳位
+        # 消除 -0.0，展示 0.0
         duration_seconds = None
         if instance.finished_at is not None:
-            duration_seconds = round((instance.finished_at - instance.created_at).total_seconds(), 1)
+            duration_seconds = round(max((instance.finished_at - instance.created_at).total_seconds(), 0), 1)
         data = {
             "uid": str(instance.uid),
             "conversation_uid": str(instance.conversation.uid),
