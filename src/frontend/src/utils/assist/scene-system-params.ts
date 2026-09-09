@@ -72,6 +72,11 @@ const isRecentSceneSwitch = () => {
 /** 用户刚手动切换场景（10s 内优先选中项，避免 stale URL 覆盖） */
 export const isRecentManualSceneSwitch = isRecentSceneSwitch;
 
+/** 场景选择器占位 ID，不能作为列表查询的 scene_id */
+export const isSceneSelectorSentinelId = (id: unknown) => (
+  id === 'allSecen' || id === 'allSystem'
+);
+
 const getSelectionSceneKey = (params: SceneSystemParams) => {
   if (params.scope_type === 'cross_scene') return 'allSecen';
   if (params.scope_type === 'cross_system') return 'allSystem';

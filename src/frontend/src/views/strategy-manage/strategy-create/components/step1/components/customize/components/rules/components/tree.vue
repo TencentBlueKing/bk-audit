@@ -47,7 +47,7 @@
             <audit-icon
               class="field-type-icon"
               svg
-              :type="data.spec_field_type" />
+              :type="getFieldTypeIcon(data)" />
             <span v-if="configType === 'LinkTable'">
               <span style=" color: #3a84ff;">{{ data.table }}.</span>
               <span
@@ -152,7 +152,7 @@
                 <audit-icon
                   class="field-type-icon"
                   svg
-                  :type="data.spec_field_type" />
+                  :type="getFieldTypeIcon(data)" />
                 <span v-if="configType === 'LinkTable'">
                   <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
                   <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
@@ -458,6 +458,10 @@
   };
 
 
+  const getFieldTypeIcon = (data: Record<string, any>) => (
+    data.spec_field_type || data.field_type || ''
+  );
+
   const getAggregateName = (element: Record<string, any>) => {
     // 添加的子项
     if ('parent_aggregate' in element) {
@@ -536,8 +540,14 @@
     const field = props.condition?.condition?.field;
     if (field && typeof field === 'object' && ('self_name' in field)) {
       selectedValue.value = `${field.self_name}/${field.self_key_name}`;
-    } else if (field?.display_name && field?.raw_name && field.display_name !== field.raw_name) {
-      selectedValue.value = formatFieldDisplayLabel(field.display_name, field.raw_name);
+    } else if (field?.raw_name) {
+      const matched = (props.configData || []).find((item: Record<string, any>) => (
+        item.raw_name === field.raw_name
+      ));
+      selectedValue.value = formatFieldDisplayLabel(
+        matched?.display_name || field.display_name,
+        field.raw_name,
+      );
     } else {
       selectedValue.value = field?.display_name || '';
     }

@@ -78,11 +78,11 @@
       :rules="[
         { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: any) => handleValidate(value) },
       ]">
-      <!-- 日志表特有，dict字典下拉 -->
+      <!-- 日志表特有，dict字典下拉（action_id / resource_type_id 使用普通输入框） -->
       <bk-cascader
         v-if="dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id' &&
+          !isPlainTextValueField(condition.condition.field.raw_name) &&
           props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         class="consition-value"
@@ -118,7 +118,8 @@
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="(condition.condition.field.raw_name !== 'action_id' && props.configType === 'EventLog') ?
+        :list="(!isPlainTextValueField(condition.condition.field.raw_name)
+          && props.configType === 'EventLog') ?
           dicts[condition.condition.field && condition.condition.field.raw_name] :
           []"
         :loading="fieldLoading"
@@ -171,6 +172,7 @@
 
   import { normalizeConditionValueForDisplay } from '@utils/assist/normalize-condition-filter';
   import { splitAndMerge } from '@utils/assist/split-and-merge';
+  import { enrichFieldDisplayNames } from '../../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
 
@@ -230,6 +232,11 @@
   const localTableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
   const tagInput = ['include', 'exclude'];
+  const PLAIN_TEXT_VALUE_FIELDS = ['action_id', 'resource_type_id'];
+
+  const isPlainTextValueField = (rawName?: string) => (
+    !!rawName && PLAIN_TEXT_VALUE_FIELDS.includes(rawName)
+  );
 
   type ConditionItem = Props['conditions']['conditions'][0];
 
@@ -455,7 +462,7 @@
       dicts.value[item.condition.field.raw_name] = [];
     });
     Object.keys(dicts.value).forEach((key) => {
-      if (key) {
+      if (key && !isPlainTextValueField(key)) {
         fetchStrategyFieldValue({
           field_name: key,
         }).then((data) => {
@@ -485,7 +492,11 @@
   ) => {
     const expected = (expectedResult || []).filter(item => item?.raw_name || item?.display_name);
     const source = expected.length ? expected : (tableFields || []);
-    localTableFields.value = source.map(item => ({ ...item }));
+    // select * 时 display_name 会被写成 raw_name，下拉需用数据源中文名回填
+    localTableFields.value = enrichFieldDisplayNames(
+      source.map(item => ({ ...item })),
+      tableFields || [],
+    );
   };
 
   const tableFieldsSign = computed(() => localTableFields.value
