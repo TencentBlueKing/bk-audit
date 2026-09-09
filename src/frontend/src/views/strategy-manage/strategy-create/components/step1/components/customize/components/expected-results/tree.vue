@@ -411,45 +411,40 @@
   });
 
 
-  // 改造数据
+  // 改造数据：数据源变化时必须用最新 configData，不能被 sessionStorage 旧字段盖住
   watch(
     () => props,
     (newData) => {
       checkBoxMode.value = {};
-      const haveTreeData = sessionStorage.getItem('storage-tree-data');
-      if (haveTreeData) {
-        treeData.value = JSON.parse(sessionStorage.getItem('storage-tree-data') || '[]');
-      } else {
-        const initTreeData = JSON.parse(JSON.stringify(newData.configData));
-        if (isStrategyEditRoute(route.name)) {
-          // 编辑时手动插入数据回显
-          const initData = transformData(initTreeData);
-          newData.expectedResultList.forEach((e) => {
-            initData.forEach((item) => {
-              if ('keys' in e && e?.keys.length >= 1 && (e.raw_name === item.raw_name)) {
-                const addItem = JSON.parse(JSON.stringify(newItem));
-                addItem.parent_display_name = item.display_name;
-                addItem.parent_aggregate = item.aggregate;
-                addItem.parent_raw_name = item.raw_name;
-                addItem.aggregateList = item.aggregateList;
-                addItem.parent_table = item.table;
-                addItem.field_type = item.field_type;
-                addItem.isDuplicate = item.isDuplicate;
-                addItem.isOpen = false;
-                addItem.isEdit = false;
-                addItem.table = item.table;
-                addItem.spec_field_type = item.field_type;
-                addItem.check_box_mode_name = `${e.raw_name}-${e.display_name}-${e.keys.join('/')}`;
-                item.children.push({ ...addItem, ...e });
-              }
-            });
+      const initTreeData = JSON.parse(JSON.stringify(newData.configData || []));
+      if (isStrategyEditRoute(route.name)) {
+        // 编辑时手动插入数据回显
+        const initData = transformData(initTreeData);
+        newData.expectedResultList.forEach((e) => {
+          initData.forEach((item) => {
+            if ('keys' in e && e?.keys.length >= 1 && (e.raw_name === item.raw_name)) {
+              const addItem = JSON.parse(JSON.stringify(newItem));
+              addItem.parent_display_name = item.display_name;
+              addItem.parent_aggregate = item.aggregate;
+              addItem.parent_raw_name = item.raw_name;
+              addItem.aggregateList = item.aggregateList;
+              addItem.parent_table = item.table;
+              addItem.field_type = item.field_type;
+              addItem.isDuplicate = item.isDuplicate;
+              addItem.isOpen = false;
+              addItem.isEdit = false;
+              addItem.table = item.table;
+              addItem.spec_field_type = item.field_type;
+              addItem.check_box_mode_name = `${e.raw_name}-${e.display_name}-${e.keys.join('/')}`;
+              item.children.push({ ...addItem, ...e });
+            }
           });
-          treeData.value = initData;
-          storageTreeData.value = initData;
-        } else {
-          treeData.value = transformData(initTreeData);
-          storageTreeData.value = transformData(treeData.value);
-        }
+        });
+        treeData.value = initData;
+        storageTreeData.value = initData;
+      } else {
+        treeData.value = transformData(initTreeData);
+        storageTreeData.value = transformData(treeData.value);
       }
       // 遍历treeData.value并为每个节点添加checkBoxMode属性
       const traverseAndSetCheckboxMode = (nodes: any[]) => {

@@ -41,7 +41,7 @@
           :all-tools-data="allToolsData"
           :event-item-arr="tableData"
           event-item-key="event_basic_field_configs"
-          :output-fields="[]"
+          :output-fields="outputFields"
           :select="select"
           :strategy-name="strategyName"
           :strategy-type="strategyType"
@@ -64,7 +64,7 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -86,6 +86,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
+  import { buildStrategyEventOutputFields } from '../../../../utils/strategy-protocol';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -134,6 +135,41 @@
   });
 
   const tableData = ref<StrategyFieldEvent['risk_meta_field_config']>([]);
+  const eventFieldConfigs = ref({
+    event_basic_field_configs: [] as StrategyFieldEvent['event_basic_field_configs'],
+    event_data_field_configs: [] as StrategyFieldEvent['event_data_field_configs'],
+    event_evidence_field_configs: [] as StrategyFieldEvent['event_evidence_field_configs'],
+  });
+
+  const outputFields = computed(() => {
+    const riskFields = tableData.value
+      .filter(item => item.field_name)
+      .map(item => ({
+        raw_name: item.field_name,
+        display_name: item.display_name || '',
+        description: item.description || '',
+        target_field_type: 'basic' as const,
+      }));
+    const eventFields = buildStrategyEventOutputFields({
+      ...eventFieldConfigs.value,
+      strategy_type: props.strategyType,
+    });
+    const selectDataFields = (props.select || [])
+      .map(item => ({
+        raw_name: item.display_name || item.raw_name || '',
+        display_name: item.display_name || item.raw_name || '',
+        description: '',
+        target_field_type: 'data' as const,
+      }))
+      .filter(item => item.raw_name);
+    const seen = new Set(riskFields.map(item => item.raw_name));
+    eventFields.forEach(item => seen.add(item.raw_name));
+    return [
+      ...riskFields,
+      ...eventFields.filter(item => !riskFields.some(risk => risk.raw_name === item.raw_name)),
+      ...selectDataFields.filter(item => !seen.has(item.raw_name)),
+    ];
+  });
 
   useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
@@ -142,6 +178,11 @@
     },
     manual: true,
     onSuccess: (data) => {
+      eventFieldConfigs.value = {
+        event_basic_field_configs: data.event_basic_field_configs || [],
+        event_data_field_configs: data.event_data_field_configs || [],
+        event_evidence_field_configs: data.event_evidence_field_configs || [],
+      };
       tableData.value = data.risk_meta_field_config.map(item => ({
         ...item,
         is_priority: disabledList.concat(isPriorityList).includes(item.field_name) ? true : item.is_priority,

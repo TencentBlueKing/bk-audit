@@ -105,17 +105,21 @@
         <div style="margin-left: auto;">
           <auth-button
             v-bk-tooltips="{
-              content: isModelStrategy(strategyItem.strategy_type)
-                ? modelStrategyDisabledTip()
-                : t('处理中，不能编辑'),
-              disabled: !(strategyItem.isPending
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : isModelStrategy(strategyItem.strategy_type)
+                  ? modelStrategyDisabledTip()
+                  : t('处理中，不能编辑'),
+              disabled: !(isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id)
                 || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="edit_strategy"
             class="w88"
             :class="{
-              'is-disabled': strategyItem.isPending
+              'is-disabled': isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id)
                 || isModelStrategy(strategyItem.strategy_type)
             }"
@@ -128,17 +132,21 @@
           <auth-button
             v-if="!strategyItem.isDraft"
             v-bk-tooltips="{
-              content: isModelStrategy(strategyItem.strategy_type)
-                ? modelStrategyDisabledTip()
-                : t('处理中，不能克隆'),
-              disabled: !(strategyItem.isPending
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : isModelStrategy(strategyItem.strategy_type)
+                  ? modelStrategyDisabledTip()
+                  : t('处理中，不能克隆'),
+              disabled: !(isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id)
                 || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="create_strategy_v2"
             class="ml8"
             :class="{
-              'is-disabled': strategyItem.isPending
+              'is-disabled': isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id)
                 || isModelStrategy(strategyItem.strategy_type)
             }"
@@ -149,9 +157,13 @@
             {{ t('克隆') }}
           </auth-button>
           <bk-button
-            v-if="strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)"
+            v-if="isSceneGlobalStrategy(strategyItem)
+              || strategyItem.isPending
+              || pendingStatusIdList.includes(strategyItem.strategy_id)"
             v-bk-tooltips="{
-              content: t('处理中，不能删除'),
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : t('处理中，不能删除'),
             }"
             class="is-disabled ml8">
             {{ t('删除') }}
@@ -175,12 +187,15 @@
               {{ t('启/停') }}
             </span>
             <auth-switch
-              v-if="strategyItem.isPending
+              v-if="isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id) || strategyItem.isFailed"
               v-bk-tooltips="{
-                content: strategyItem.isFailed
-                  ? t('策略状态异常，不能启停')
-                  : t('处理中，不支持启停'),
+                content: isSceneGlobalStrategy(strategyItem)
+                  ? globalStrategyDisabledTip()
+                  : strategyItem.isFailed
+                    ? t('策略状态异常，不能启停')
+                    : t('处理中，不支持启停'),
               }"
               action-id="edit_strategy"
               disabled
@@ -407,6 +422,11 @@
   const isGlobalStrategy = (data: StrategyModel) => (
     data.visibility?.binding_type === 'platform_binding'
   );
+  /** 审计策略列表中展示的全局策略：仅可查看，不可操作 */
+  const isSceneGlobalStrategy = (data: StrategyModel) => (
+    !isPlatformList.value && isGlobalStrategy(data)
+  );
+  const globalStrategyDisabledTip = () => t('全局策略不可操作');
 
   const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
     const sceneIds = data.visibility?.scene_ids;
@@ -984,12 +1004,21 @@
             </span>
             <p>
               <span>, </span>
-              <bk-button
-                text
-                theme='primary'
-                onClick={() => retryRequest(data.strategy_id)}>
-                {t('重试')}
-              </bk-button>
+              {isSceneGlobalStrategy(data) ? (
+                <bk-button
+                  text
+                  class="is-disabled"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  {t('重试')}
+                </bk-button>
+              ) : (
+                <bk-button
+                  text
+                  theme='primary'
+                  onClick={() => retryRequest(data.strategy_id)}>
+                  {t('重试')}
+                </bk-button>
+              )}
             </p>
             <p class='err-underline' />
             <audit-icon
@@ -1010,12 +1039,21 @@
           <span>{statusMap.value[data.status] || data.status}</span>
           <p>
             <span>, </span>
-            <bk-button
-              text
-              theme='primary'
-              onClick={() => retryRequest(data.strategy_id)}>
-              {t('重试')}
-            </bk-button>
+            {isSceneGlobalStrategy(data) ? (
+              <bk-button
+                text
+                class="is-disabled"
+                v-bk-tooltips={globalStrategyDisabledTip()}>
+                {t('重试')}
+              </bk-button>
+            ) : (
+              <bk-button
+                text
+                theme='primary'
+                onClick={() => retryRequest(data.strategy_id)}>
+                {t('重试')}
+              </bk-button>
+            )}
           </p>
           <audit-icon
             v-bk-tooltips={{
@@ -1080,6 +1118,18 @@
         btnReset: t('重置'),
       },
       render: ({ data }: { data: StrategyModel }) => {
+        if (isSceneGlobalStrategy(data)) {
+          return (
+            <span v-bk-tooltips={globalStrategyDisabledTip()}>
+              <bk-switcher
+                disabled
+                size="small"
+                model-value={data.status === 'running'}
+                theme="primary"
+              />
+            </span>
+          );
+        }
         if (data.isDraft) {
           return (
             <auth-switch
@@ -1151,6 +1201,43 @@
       label: () => t('操作'),
       width: '120px',
       render: ({ data }: { data: StrategyModel }) => {
+        if (isSceneGlobalStrategy(data)) {
+          return <>
+            <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={globalStrategyDisabledTip()}>
+              {t('编辑')}
+            </bk-button>
+            {data.isDraft ? (
+              <bk-button
+                text
+                class="is-disabled ml8"
+                v-bk-tooltips={globalStrategyDisabledTip()}>
+                {t('删除')}
+              </bk-button>
+            ) : (
+              <>
+                <bk-button
+                  text
+                  class="is-disabled ml8"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  {t('克隆')}
+                </bk-button>
+                <span
+                  class="ml8"
+                  style="display: inline-flex;"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  <bk-button
+                    text
+                    class="is-disabled">
+                    <audit-icon type="more" />
+                  </bk-button>
+                </span>
+              </>
+            )}
+          </>;
+        }
         if (data.isDraft) {
           if (isModelStrategy(data.strategy_type)) {
             return <>
@@ -1332,6 +1419,7 @@
     return t('未开启');
   };
   const handleDelete = (data: StrategyModel) => {
+    if (isSceneGlobalStrategy(data)) return;
     isShowDeleteDialog.value = true;
     deleteName.value = data.strategy_name;
     deleteId.value = Number(data.strategy_id);
@@ -1737,7 +1825,7 @@
 
   // 编辑
   const handleEdit = (data: StrategyModel) => {
-    if (data.isPending || isModelStrategy(data.strategy_type)) return;
+    if (isSceneGlobalStrategy(data) || data.isPending || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
     router.push({
       name: strategyRoutes.edit,
@@ -1752,7 +1840,8 @@
 
   // 克隆
   const handleClone = (data: StrategyModel) => {
-    if (data.isDraft
+    if (isSceneGlobalStrategy(data)
+      || data.isDraft
       || data.isPending
       || pendingStatusIdList.value.includes(data.strategy_id)
       || isModelStrategy(data.strategy_type)) return;
@@ -1855,7 +1944,7 @@
   };
   // 启停
   const handleChange = (data: StrategyModel) => {
-    if (data.isDraft) {
+    if (data.isDraft || isSceneGlobalStrategy(data)) {
       return Promise.resolve();
     }
     const { status } = data;
@@ -1898,8 +1987,8 @@
     // 先检验策略列表权限再获取通知组；全局策略不传场景 id
     if (!groupList.value.results.length) {
       fetchGroupList(isPlatformList.value
-        ? { scene_id: null }
-        : {});
+        ? { scene_id: null, page: 1, page_size: 1000 }
+        : { page: 1, page_size: 1000 });
     }
     if (!isRequest) {
       Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {
@@ -2197,6 +2286,11 @@
         width: 720px;
         margin-left: auto;
       }
+    }
+
+    .bk-button.is-disabled {
+      color: #c4c6cc;
+      cursor: not-allowed;
     }
 
     .label-box {

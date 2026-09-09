@@ -88,6 +88,7 @@
                 </div>
                 <node-select
                   v-else
+                  :key="tableFieldsSign"
                   ref="nodeSelectRef"
                   :config-data="localTableFields"
                   :config-type="configType"
@@ -367,6 +368,10 @@
   const fieldComplianceMap = ref<Map<string, boolean>>(new Map());
 
   const searchKey = useDebouncedRef('');
+
+  const tableFieldsSign = computed(() => (props.tableFields || [])
+    .map(item => `${item.raw_name || ''}:${item.table || ''}`)
+    .join('|'));
 
   // 检查是否有不合规的字段
   const hasInvalidFields = computed(() => Array.from(fieldComplianceMap.value.values()).some(isValid => !isValid));
@@ -665,6 +670,7 @@
     }
   }, {
     immediate: true,
+    deep: true,
   });
 
   watch(() => searchKey.value, (data) => {

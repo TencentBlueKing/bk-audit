@@ -100,6 +100,7 @@
                   ref="comRef"
                   :edit-data="editData"
                   step-mode="basic"
+                  @reset-hit-conditions="handleResetHitConditions"
                   @update-control-detail="updateControlDetail"
                   @update-form-data="updateFormData" />
               </div>
@@ -216,6 +217,7 @@
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: Record<string, any>): void;
     (e: 'saveDraft', params: IFormData): void;
+    (e: 'resetHitConditions'): void;
   }
   interface Props {
     editData: StrategyModel
@@ -543,6 +545,10 @@
   // 更新方案详情
   const updateControlDetail = (detail: ControlModel) => {
     controlDetail.value = detail;
+  };
+
+  const handleResetHitConditions = () => {
+    emits('resetHitConditions');
   };
 
   const updateFormData = (data: Record<string, any>) => {

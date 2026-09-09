@@ -1031,6 +1031,31 @@
     { immediate: true, deep: true },
   );
 
+  watch(
+    () => props.formData?.hit_conditions_reset_seq,
+    (seq) => {
+      if (!seq) return;
+      ruleItems.value = ruleItems.value.map(rule => ({
+        ...rule,
+        conditions: {
+          where: { connector: 'and', conditions: [] },
+          having: { connector: 'and', conditions: [] },
+        },
+        formData: {
+          ...rule.formData,
+          configs: {
+            ...(rule.formData?.configs || {}),
+            where: { connector: 'and', conditions: [] },
+            having: { connector: 'and', conditions: [] },
+          },
+        },
+      }));
+      nextTick(() => {
+        comRefs.value.forEach(com => com?.resetFormData?.());
+      });
+    },
+  );
+
   const handlePrevious = () => {
     emits('previousStep', 1, buildStepParams());
   };

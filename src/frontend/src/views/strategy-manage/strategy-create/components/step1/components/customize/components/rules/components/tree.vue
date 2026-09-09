@@ -23,6 +23,11 @@
         theme="primary" />
       <span class="field-list-loading-text">{{ t('加载中') }}...</span>
     </div>
+    <div
+      v-else-if="!treeData.length"
+      class="field-list-empty">
+      {{ t('暂无数据') }}
+    </div>
     <bk-tree
       v-else
       ref="treeRef"
@@ -54,9 +59,8 @@
               </span>
               <span
                 v-else
-                class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name }}{{ data.raw_name ?
-                  `(${data.raw_name})` : ``
-                }}
+                class="field-type-span">
+                {{ getAggregateName(data) }}{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}
                 <span
                   v-for="(field, fieldIndex) in data?.fieldTypeValueAr"
                   :key="fieldIndex">
@@ -88,7 +92,7 @@
                   {{ data.parent_display_name }}{{ data.parent_raw_name ?
                     `(${data.parent_raw_name})` : ``
                   }}</span>
-                <span v-else>{{ data.display_name }}{{ `(${data.raw_name})` }}</span>
+                <span v-else>{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}</span>
 
                 <span
                   v-for="(field, fieldIndex) in data?.keys"
@@ -235,6 +239,7 @@
   import useRequest from '@hooks/use-request';
 
   import { isStrategyEditRoute } from '../../../../../../../../utils/strategy-routes';
+  import { formatFieldDisplayLabel } from '../../../../../../../utils/strategy-protocol';
 
 
   interface Emits {
@@ -264,11 +269,15 @@
   const treeData = ref<Record<string, any>[]>([]);
   const storageTreeData = ref<Record<string, any>[]>([]);
   const popoverOpen = ref(false);
-  // 下拉打开且列表未就绪时展示加载态，避免先闪空态
+  // 下拉打开且列表未就绪时展示加载态，避免先闪空态；搜索无结果不算加载中
   const isListLoading = computed(() => {
     if (props.loading) return true;
-    // 有源数据但树尚未构建完
-    if (popoverOpen.value && !treeData.value.length && (props.configData?.length ?? 0) > 0) {
+    if (
+      popoverOpen.value
+      && !treeData.value.length
+      && !storageTreeData.value.length
+      && (props.configData?.length ?? 0) > 0
+    ) {
       return true;
     }
     return false;
@@ -320,11 +329,9 @@
       storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
       sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
     } else if (!props.loading) {
-      const haveTreeData = sessionStorage.getItem('rule-tree-data');
-      if (haveTreeData) {
-        treeData.value = JSON.parse(haveTreeData || '[]');
-        storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
-      }
+      treeData.value = [];
+      storageTreeData.value = [];
+      sessionStorage.removeItem('rule-tree-data');
     }
     await nextTick();
   };
@@ -339,20 +346,28 @@
   };
   // 搜索逻辑
   const handleSearch = (keyword: string) => {
-    // eslint-disable-next-line max-len
-    const searchInTree = (nodes: Record<string, any>) => nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
-      // 检查当前节点
-      if (node.raw_name.includes(keyword) || node.display_name.includes(keyword)) {
-        result.push(node);
-      }
-
-      // 如果有子节点，递归搜索
-      if (node.children && node.children.length > 0) {
-        result.push(...searchInTree(node.children));
-      }
-
-      return result;
-    }, []);
+    const text = (keyword || '').trim();
+    if (!text) {
+      treeData.value = storageTreeData.value;
+      return;
+    }
+    const matchNode = (node: Record<string, any>) => {
+      const rawName = String(node.raw_name || '');
+      const displayName = String(node.display_name || '');
+      const selected = String(node.selectedValue || '');
+      return rawName.includes(text) || displayName.includes(text) || selected.includes(text);
+    };
+    const searchInTree = (nodes: Record<string, any>[]): Record<string, any>[] => (
+      nodes.reduce((result, node) => {
+        if (matchNode(node)) {
+          result.push(node);
+        }
+        if (node.children?.length) {
+          result.push(...searchInTree(node.children));
+        }
+        return result;
+      }, [] as Record<string, any>[])
+    );
 
     treeData.value = searchInTree(storageTreeData.value);
   };
@@ -475,11 +490,13 @@
       return {
         ...item,
         isEdit: false,
-        selectedValue: ('alias' in item) ? `${JSON.stringify(item.display_name)}()` : `${item.display_name}(${item.raw_name})`,
+        selectedValue: ('alias' in item)
+          ? `${JSON.stringify(item.display_name)}()`
+          : formatFieldDisplayLabel(item.display_name, item.raw_name),
         children: transformData(item.property.sub_keys).map(child => ({
           ...child,
           raw_name: item.raw_name,
-          self_name: `${item.display_name}(${item.raw_name})`,
+          self_name: formatFieldDisplayLabel(item.display_name, item.raw_name),
           self_key_name: `${child.alias}(${child.value})`,
           table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
         })),
@@ -492,7 +509,9 @@
       ...item,
       isEdit: false,
       keys: 'alias' in item ? [item.value] : (item.keys || []),
-      selectedValue: ('alias' in item) ? `${item.label}(${item.value})` : `${item.display_name}(${item.raw_name})`,
+      selectedValue: ('alias' in item)
+        ? `${item.label}(${item.value})`
+        : formatFieldDisplayLabel(item.display_name, item.raw_name),
       children: [],
       display_name: 'alias' in item ? item.label : item.display_name,
       raw_name: item.raw_name,
@@ -502,29 +521,25 @@
   watch(() => [props.configData, props.condition, props.loading] as const, () => {
     if (props.configData?.length) {
       treeData.value = buildTreeData(props.configData);
-      storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
-      sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
-    } else if (!props.loading) {
-      const haveTreeData = sessionStorage.getItem('rule-tree-data');
-      if (haveTreeData) {
-        const cached = JSON.parse(haveTreeData || '[]');
-        // 仅当缓存非空时使用，空缓存不覆盖
-        if (cached.length) {
-          treeData.value = cached;
-          storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
-        } else {
-          treeData.value = [];
-          storageTreeData.value = [];
-        }
-      } else {
-        treeData.value = [];
-        storageTreeData.value = [];
+      try {
+        storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+        sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
+      } catch {
+        storageTreeData.value = treeData.value;
       }
+    } else if (!props.loading) {
+      treeData.value = [];
+      storageTreeData.value = [];
+      sessionStorage.removeItem('rule-tree-data');
     }
     const field = props.condition?.condition?.field;
-    selectedValue.value = field && ('self_name' in field)
-      ? `${field.self_name}/${field.self_key_name}`
-      : (field?.display_name || '');
+    if (field && typeof field === 'object' && ('self_name' in field)) {
+      selectedValue.value = `${field.self_name}/${field.self_key_name}`;
+    } else if (field?.display_name && field?.raw_name && field.display_name !== field.raw_name) {
+      selectedValue.value = formatFieldDisplayLabel(field.display_name, field.raw_name);
+    } else {
+      selectedValue.value = field?.display_name || '';
+    }
   }, {
     deep: true,
     immediate: true,
@@ -561,6 +576,16 @@
 }
 
 .field-list-loading-text {
+  font-size: 12px;
+  color: #979ba5;
+}
+
+.field-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 340px;
+  min-height: 200px;
   font-size: 12px;
   color: #979ba5;
 }
