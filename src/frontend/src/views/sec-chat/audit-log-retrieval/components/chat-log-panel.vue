@@ -148,6 +148,7 @@
             <!-- 查询后的结构化结果卡片 -->
             <retrieval-result-card
               v-else-if="msg.type === 'retrieval-result' && msg.result"
+              :api-status="msg.apiStatus"
               :extension-fields="extensionFields"
               :message-uid="msg.id"
               :result="msg.result"
@@ -302,6 +303,7 @@
     props.messages.some(item => item.parentMessageUid === messageId && item.type === 'retrieval-result')
   );
 
+  /** 无结果卡时才展示全局检索 loading；已有结果卡则由卡内 loading 承接二次检索 */
   const shouldShowRetrievalLoading = (msg: ChatMessage) => {
     if (msg.type !== 'retrieval-result' || msg.recognitionError || msg.result) return false;
     if (msg.apiStatus === 'PROCESSING') return true;
