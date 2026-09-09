@@ -435,6 +435,7 @@
   const isEditMode = isStrategyEditRoute(route.name);
   const isCloneMode = isStrategyCloneRoute(route.name);
   const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
+  // 审计策略才在发现规则里选处理人/关注人；全局策略这两项在分派规则维护，这里不请求通知组
   const showRuleNoticeGroups = !isPlatformStrategyRoute(route.name);
 
   const {
@@ -445,7 +446,7 @@
       resources: getSceneSystemParams().scope_id,
     },
     defaultValue: {},
-    manual: true,
+    manual: showRuleNoticeGroups,
   });
 
   const {
@@ -458,7 +459,7 @@
       page_size: 1000,
       page: 1,
     },
-    manual: true,
+    manual: showRuleNoticeGroups,
   });
 
   const refreshGroupList = () => {

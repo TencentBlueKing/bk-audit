@@ -111,6 +111,7 @@
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import addRisk from './add-risk/index.vue';
@@ -722,6 +723,8 @@
       timeout = undefined;
     }
   });
+
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   // 添加定时器执行前的组件状态检查
   const safeSetTimeout = (callback: () => void, delay: number) => {

@@ -31,7 +31,7 @@
           :disabled="!selectionMeta.count"
           theme="primary"
           @click="handleBatchConfirm">
-          {{ t('批量确认') }}
+          {{ t('批量处理') }}
         </bk-button>
         <risk-export-button
           :disabled="!isExportEnabled"
@@ -62,7 +62,6 @@
 <script setup lang='tsx'>
   import {
     computed,
-    onActivated,
     onMounted,
     ref,
   } from 'vue';
@@ -94,6 +93,7 @@
   import NlSearchBox from '@views/risk-manage/list/components/nl-search-box/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import BatchConfirmDialog from './components/batch-confirm-dialog.vue';
@@ -195,7 +195,6 @@
   const listRef = ref();
   const searchBoxRef = ref();
   const batchConfirmRef = ref();
-  const hasActivatedOnce = ref(false);
   const searchModel = ref<Record<string, any>>({});
   const isParsing = ref(false);
   const selectionMeta = ref({
@@ -387,13 +386,7 @@
     });
   });
 
-  onActivated(() => {
-    if (!hasActivatedOnce.value) {
-      hasActivatedOnce.value = true;
-      return;
-    }
-    fetchList();
-  });
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'confirmManageDetail') {

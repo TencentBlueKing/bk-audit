@@ -296,11 +296,22 @@
     isShowEditEventReport.value = true;
   };
 
+  const pickStrategyText = (...values: Array<string | null | undefined>) => (
+    values.find(item => item !== undefined && item !== null && item !== '') || ''
+  );
+
   // 合并数据（包含事件信息配置）
-  const detailData = computed(() => ({
-    ...riskData.value,
-    ...strategyInfoData.value,
-  }));
+  const detailData = computed(() => {
+    const risk = riskData.value;
+    const strategyInfo = strategyInfoData.value;
+    return {
+      ...risk,
+      ...strategyInfo,
+      risk_level: pickStrategyText(strategyInfo?.risk_level, risk?.risk_level),
+      risk_hazard: pickStrategyText(strategyInfo?.risk_hazard, risk?.risk_hazard),
+      risk_guidance: pickStrategyText(strategyInfo?.risk_guidance, risk?.risk_guidance),
+    };
+  });
 
   // 无调查报告时仅挂载「关联事件列表」panel，并隐藏页签头（由内容区展示区块标题）
   const visiblePanels = computed(() => (

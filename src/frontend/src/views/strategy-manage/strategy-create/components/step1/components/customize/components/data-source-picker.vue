@@ -497,23 +497,39 @@
     const typeItem = props.list.find(item => item.value === path[0]);
     if (!typeItem) return '';
     const tabLabel = typeItem.label;
+    const formatRtName = (raw: string) => {
+      const real = decodeId(path[0], raw);
+      if (!real) return '';
+      const bizId = real.split('_')[0];
+      if (/^\d+$/.test(bizId) && real.length > bizId.length + 1) {
+        return real.slice(bizId.length + 1);
+      }
+      return real;
+    };
 
     // 两级：联表等 → 联表数据 / 名称
     if (path.length === 2) {
       const leaf = typeItem.children?.find(item => item.value === path[1]);
-      return joinDisplayPath([tabLabel, leaf?.label || String(path[1] || '')]);
+      return joinDisplayPath([tabLabel, leaf?.label || formatRtName(path[1])]);
     }
 
     // 三级：资产数据 / 系统(id) / 资产；其他数据 / 业务(id) / 表 …
-    const left = typeItem.children?.find(item => item.value === path[1]);
-    if (!left) {
-      return joinDisplayPath([tabLabel, String(path[1] || '')]);
-    }
-    const leftId = decodeId(path[0], left.value);
-    const leftLabel = formatNodeNameId(left.label, leftId);
-    const right = left.children?.find(item => item.value === path[2])
+    const leftId = decodeId(path[0], path[1]);
+    const left = typeItem.children?.find(item => item.value === path[1])
+      || typeItem.children?.find(item => decodeId(path[0], item.value) === leftId)
+      || props.list
+        .flatMap(tab => (tab.children || []).map(item => ({ tab, item })))
+        .find(({ tab, item }) => (
+          item.value === path[1]
+          || decodeId(tab.value, item.value) === leftId
+        ))?.item;
+    const leftLabel = left
+      ? formatNodeNameId(left.label, decodeId(path[0], left.value) || leftId)
+      : leftId;
+    const right = left?.children?.find(item => item.value === path[2])
+      || left?.children?.find(item => decodeId(path[0], item.value) === decodeId(path[0], path[2]))
       || lazyChildrenMap.value[`${path[0]}_${path[1]}`]?.find(item => item.value === path[2]);
-    const rightLabel = right?.label || String(path[2] || '');
+    const rightLabel = right?.label || formatRtName(path[2]);
     return joinDisplayPath([tabLabel, leftLabel, rightLabel]);
   });
 
@@ -892,7 +908,7 @@
   }
 
   &.is-disabled {
-    color: #c4c6cc;
+    color: #63656e;
     cursor: not-allowed;
     background: #fafbfd;
     border-color: #dcdee5;
@@ -900,6 +916,10 @@
     &:hover,
     &.is-active {
       border-color: #dcdee5;
+    }
+
+    &.is-empty {
+      color: #c4c6cc;
     }
   }
 }

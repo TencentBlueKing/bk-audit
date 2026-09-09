@@ -716,21 +716,35 @@
   :deep(.bk-timeline-content .approve-wrap > .mis-content),
   :deep(.bk-timeline-content .reopen-mis-report-wrap > .mis-content),
   :deep(.bk-timeline-content .risk-experience-wrap > .mis-content) {
+    display: grid;
+    grid-template-columns: max-content auto minmax(0, 1fr);
+    row-gap: 8px;
+    align-items: start;
     padding: 12px 8px 12px 12px;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 2px;
 
+    .render-info-item {
+      display: contents;
+    }
+
     .render-info-item .info-label {
       width: auto !important;
       max-width: none !important;
       min-width: 0 !important;
+      line-height: 20px;
       text-align: left;
-      flex: 0 0 auto !important;
+      flex: none !important;
+    }
+
+    .render-info-item .info-colon {
+      line-height: 20px;
     }
 
     .render-info-item .info-value {
       padding-left: 4px;
+      line-height: 20px;
     }
   }
 

@@ -1248,7 +1248,104 @@
 
   const extractBizIdFromRtId = (rtId: string) => {
     if (!rtId) return '';
-    return rtId.split('_')[0];
+    const first = rtId.split('_')[0];
+    return /^\d+$/.test(first) ? first : '';
+  };
+
+  const isMatchedRtNode = (
+    tableType: string,
+    node: { label?: string; value: string },
+    rtId: string,
+  ) => {
+    if (!rtId) return false;
+    const realValue = decodeTypeBizId(tableType, node.value);
+    if (
+      realValue === rtId
+      || String(node.value) === rtId
+      || String(node.label || '') === rtId
+    ) {
+      return true;
+    }
+    const bizId = extractBizIdFromRtId(realValue) || extractBizIdFromRtId(rtId);
+    return Boolean(bizId && (
+      realValue === `${bizId}_${rtId}`
+      || rtId === `${bizId}_${realValue}`
+    ));
+  };
+
+  const applyEchoPath = (path: string[]) => {
+    if (!path.length) return;
+    previousTableId.value = [...path];
+    tableId.value = [...path];
+  };
+
+  const findEchoPathInTableItem = (
+    tableItem: ConfigTypeTableItem,
+    rtId: string,
+  ): string[] | null => {
+    const tableType = tableItem.value;
+    for (const item of tableItem.children || []) {
+      const matchedChild = (item.children || []).find(child => (
+        isMatchedRtNode(tableType, child, rtId)
+      ));
+      if (matchedChild) {
+        return [tableType, item.value, matchedChild.value];
+      }
+      if (item.leaf !== false && isMatchedRtNode(tableType, item, rtId)) {
+        return [tableType, item.value];
+      }
+    }
+    return null;
+  };
+
+  const findLeftNodeByBizId = (bizId: string) => {
+    for (const typeItem of allConfigTypeTable.value) {
+      const left = (typeItem.children || []).find(item => (
+        decodeTypeBizId(typeItem.value, item.value) === bizId
+      ));
+      if (left) {
+        return { typeItem, left };
+      }
+    }
+    return null;
+  };
+
+  const findEchoPathInAnyType = (
+    rtId: string,
+    preferred?: ConfigTypeTableItem,
+  ) => {
+    const others = allConfigTypeTable.value.filter(item => (
+      item.value !== preferred?.value
+      && item.value !== 'EventLog'
+      && item.value !== 'LinkTable'
+    ));
+    const ordered = [preferred, ...others].filter(Boolean) as ConfigTypeTableItem[];
+    for (const item of ordered) {
+      const path = findEchoPathInTableItem(item, rtId);
+      if (path) return path;
+    }
+    return null;
+  };
+
+  const buildFallbackEchoPath = (
+    tableItem: ConfigTypeTableItem,
+    rtId: string,
+  ) => {
+    const bizId = extractBizIdFromRtId(rtId);
+    if (!bizId) {
+      return [tableItem.value, encodeTypeBizId(tableItem.value, rtId)];
+    }
+    const found = findLeftNodeByBizId(bizId);
+    const typeItem = found?.typeItem || tableItem;
+    const left = found?.left;
+    const matchedChild = (left?.children || []).find(child => (
+      isMatchedRtNode(typeItem.value, child, rtId)
+    ));
+    return [
+      typeItem.value,
+      left?.value || encodeTypeBizId(typeItem.value, bizId),
+      matchedChild?.value || encodeTypeBizId(typeItem.value, rtId),
+    ];
   };
 
   const changeTableId = async () => {
@@ -1258,46 +1355,44 @@
     isEchoingTableId = true;
 
     try {
-      const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
+      const configType = formData.value.configs.config_type;
+      const tableItem = allConfigTypeTable.value.find(item => item.value === configType)
+        || allConfigTypeTable.value.find((item) => {
+          const rtId = resolveRtId(formData.value.configs.data_source?.rt_id);
+          return Boolean(rtId && findEchoPathInTableItem(item, rtId));
+        });
       if (!tableItem) return;
       // 操作日志：插件路径回显，系统多选走 system_ids
       if (tableItem.value === 'EventLog') {
         if (!isEchoValid()) return;
-        const pluginId = formData.value.configs.data_source.rt_id as string;
+        const pluginId = resolveRtId(formData.value.configs.data_source.rt_id);
         await loadEventLogSystems();
         if (!isEchoValid()) return;
         // 先记 previous，再写 tableId，避免误判为「路径变更」清空 system_ids
-        const echoPath = [formData.value.configs.config_type, pluginId];
-        previousTableId.value = [...echoPath];
-        tableId.value = echoPath;
+        applyEchoPath([tableItem.value, pluginId]);
       } else if (tableItem.value === 'LinkTable') {
         if (!isEchoValid()) return;
-        const echoPath = [
-          formData.value.configs.config_type,
+        applyEchoPath([
+          tableItem.value,
           formData.value.configs.data_source.link_table.uid,
-        ];
-        previousTableId.value = [...echoPath];
-        tableId.value = echoPath;
+        ]);
       } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
-        const rtId = formData.value.configs.data_source.rt_id as string;
+        const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
         const bizId = extractBizIdFromRtId(rtId);
-        if (!bizId) return;
+        if (!bizId) {
+          applyEchoPath(buildFallbackEchoPath(tableItem, rtId));
+          return;
+        }
         // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
         const children = await loadBizTableChildren(tableItem.value, bizId);
         if (!isEchoValid()) return;
-        const matchedChild = children.find((item) => {
-          const realValue = decodeTypeBizId(MINE_BIZ_RT_TYPE, item.value);
-          return realValue === rtId
-            || realValue === `${bizId}_${rtId}`
-            || realValue.endsWith(`_${rtId}`)
-            || item.label === rtId;
-        });
+        const matchedChild = children.find(item => isMatchedRtNode(MINE_BIZ_RT_TYPE, item, rtId));
         const selectedRtId = matchedChild?.value
           || encodeTypeBizId(MINE_BIZ_RT_TYPE, rtId);
         // 用接口返回的子表替换进树，确保展开时是「我的授权结果表」完整三级路径
         replaceMineBizRtTree(bizId, children);
         const echoPath = [
-          formData.value.configs.config_type,
+          tableItem.value,
           encodeTypeBizId(MINE_BIZ_RT_TYPE, bizId),
           selectedRtId,
         ];
@@ -1309,20 +1404,12 @@
         tableId.value = echoPath;
         await nextTick();
       } else {
-        // 资产和其他数据还需要获取二级父id
-        tableItem.children.forEach((item) => {
-          if (item.children && item.children.length) {
-            item.children.forEach((cItem) => {
-              if (decodeTypeBizId(tableItem.value, cItem.value)
-                === formData.value.configs.data_source.rt_id) {
-                const echoPath = [formData.value.configs.config_type, item.value, cItem.value];
-                if (!isEchoValid()) return;
-                previousTableId.value = [...echoPath];
-                tableId.value = echoPath;
-              }
-            });
-          }
-        });
+        // 资产 / 其他数据：优先用树里真实路径（业务名/系统名），避免回退成纯数字业务 ID
+        const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+        if (!rtId || !isEchoValid()) return;
+        const echoPath = findEchoPathInAnyType(rtId, tableItem)
+          || buildFallbackEchoPath(tableItem, rtId);
+        applyEchoPath(echoPath);
       }
       await nextTick();
     } finally {
@@ -1458,6 +1545,13 @@
       deep: true,
     },
   );
+
+  watch(() => props.editData?.strategy_id, (id, prevId) => {
+    if (id !== prevId) {
+      isInit = false;
+      isInitFromParent = false;
+    }
+  });
 
   watchEffect(() => {
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
