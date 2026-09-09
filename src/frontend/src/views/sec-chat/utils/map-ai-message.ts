@@ -180,26 +180,91 @@ const fieldCatalogKey = (rawName: string, keys: string[] = []) => (
   keys.length ? `${rawName}.${keys.join('.')}` : rawName
 );
 
-/** 用 SYSTEM_SELECTION 字段表把 raw_name 映射为中文展示名 */
+/**
+ * 动态 JSON 父字段中文名（与 meta STANDARD_FIELDS.description 对齐）。
+ * 日志检索添加条件亦用父 description + `/` + keys 区分同名子字段。
+ */
+export const DYNAMIC_PARENT_FIELD_LABEL_MAP: Record<string, string> = {
+  instance_data: '实例当前内容',
+  instance_origin_data: '实例变更前内容',
+  extend_data: '拓展数据',
+  snapshot_instance_data: '实例信息快照',
+};
+
+/** 从标准字段表补充/覆盖父字段展示名 */
+export const buildParentFieldLabelMap = (
+  standardFields: SystemFieldRow[] = [],
+): Record<string, string> => {
+  const map: Record<string, string> = { ...DYNAMIC_PARENT_FIELD_LABEL_MAP };
+  standardFields.forEach((field) => {
+    if (!field.rawName || field.keys?.length) return;
+    const label = field.displayName || field.nlName || field.description;
+    if (label) map[field.rawName] = label;
+  });
+  return map;
+};
+
+/**
+ * 嵌套字段展示名：有 keys 时为 `父中文名/key1/key2`（对齐 analysis-manage getCustomFieldLabel）。
+ * 无 keys 时回退 leafName / rawName。
+ */
+export const formatNestedFieldLabel = (
+  rawName: string,
+  keys: string[] = [],
+  options: {
+    leafName?: string;
+    parentLabelMap?: Record<string, string>;
+  } = {},
+): string => {
+  const leafName = options.leafName || '';
+  if (!keys.length) return leafName || rawName || '条件';
+  if (!rawName) return keys.join('/');
+
+  const parentMap = options.parentLabelMap || DYNAMIC_PARENT_FIELD_LABEL_MAP;
+  const parentLabel = parentMap[rawName] || rawName;
+  return `${parentLabel}/${keys.join('/')}`;
+};
+
+/** SystemFieldRow → 引导卡 / 条件 tag 展示名 */
+export const resolveSystemFieldDisplayLabel = (
+  field: Pick<SystemFieldRow, 'rawName' | 'keys' | 'displayName' | 'nlName'>,
+  parentLabelMap?: Record<string, string>,
+): string => formatNestedFieldLabel(field.rawName, field.keys || [], {
+  leafName: field.displayName || field.nlName || field.rawName,
+  parentLabelMap,
+});
+
+/** 用 SYSTEM_SELECTION 字段表把 raw_name[+keys] 映射为展示名 */
 export const resolveConditionFieldLabel = (
   rawName: string,
   keys: string[] = [],
   fieldCatalog: SystemFieldRow[] = [],
 ): string => {
-  if (!rawName) return keys.length ? keys.join('.') : '条件';
+  if (!rawName) return keys.length ? keys.join('/') : '条件';
+
+  const parentLabelMap = buildParentFieldLabelMap(
+    fieldCatalog.filter(field => !field.keys?.length),
+  );
+
+  if (keys.length) {
+    const exactKey = fieldCatalogKey(rawName, keys);
+    const exact = fieldCatalog.find((field) => {
+      const key = fieldCatalogKey(field.rawName, field.keys || []);
+      return key === exactKey;
+    });
+    return formatNestedFieldLabel(rawName, keys, {
+      leafName: exact?.displayName || exact?.nlName || keys.join('/'),
+      parentLabelMap,
+    });
+  }
+
   if (!fieldCatalog.length) return rawName;
 
-  const exactKey = fieldCatalogKey(rawName, keys);
-  const exact = fieldCatalog.find((field) => {
-    const key = fieldCatalogKey(field.rawName, field.keys || []);
-    return key === exactKey;
-  });
-  if (exact) return exact.displayName || exact.nlName || rawName;
-
-  const byRaw = fieldCatalog.find(field => field.rawName === rawName);
+  const byRaw = fieldCatalog.find(field => field.rawName === rawName && !field.keys?.length)
+    || fieldCatalog.find(field => field.rawName === rawName);
   if (byRaw) return byRaw.displayName || byRaw.nlName || rawName;
 
-  return rawName;
+  return parentLabelMap[rawName] || rawName;
 };
 
 export const mapConditionToFilterTags = (
