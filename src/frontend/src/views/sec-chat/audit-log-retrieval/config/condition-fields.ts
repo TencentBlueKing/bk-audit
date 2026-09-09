@@ -21,6 +21,10 @@ import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/typ
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
 import type { LogFieldConditionValue, SelectedSystem, SystemFieldRow } from '../../types';
+import {
+  buildParentFieldLabelMap,
+  resolveSystemFieldDisplayLabel,
+} from '../../utils/map-ai-message';
 
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
@@ -220,11 +224,15 @@ const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
   && 'operator' in value
 );
 
-const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
+const fieldConfigFromRow = (
+  field: SystemFieldRow,
+  parentLabelMap?: Record<string, string>,
+): ILogFieldConfig => {
   const operators = field.allowOperators || [];
   const options = field.options || [];
   const hasOptions = options.length > 0;
   const isUser = /user|username/i.test(field.rawName) || field.nlName.includes('操作人');
+  const label = resolveSystemFieldDisplayLabel(field, parentLabelMap);
   const metaExtras = {
     fieldMeta: field,
     allowOperators: operators,
@@ -233,7 +241,7 @@ const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
   // 扩展字段且允许多操作符 → 展示操作符徽章
   if (field.isExtension && operators.length > 1) {
     return {
-      label: field.displayName || field.rawName,
+      label,
       type: 'log-field',
       required: false,
       defaultOperator: pickDefaultOperator(operators),
@@ -244,7 +252,7 @@ const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
   // 标准字段：options 有值 → 下拉
   if (hasOptions) {
     return {
-      label: field.displayName || field.rawName,
+      label,
       type: 'select',
       required: false,
       service: () => Promise.resolve(options),
@@ -257,7 +265,7 @@ const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
 
   if (isUser) {
     return {
-      label: field.displayName || field.rawName,
+      label,
       type: 'user-selector',
       required: false,
       defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
@@ -267,7 +275,7 @@ const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
 
   // 扩展字段仅一个操作符 / 标准文本字段 → 输入框 + 冒号
   return {
-    label: field.displayName || field.rawName,
+    label,
     type: 'string',
     required: false,
     defaultOperator: pickDefaultOperator(operators),
@@ -291,12 +299,14 @@ export const createConditionFieldConfigFromSystemFields = (
     },
   };
 
+  const parentLabelMap = buildParentFieldLabelMap(standardFields);
+
   [...standardFields, ...extensionFields].forEach((field) => {
     if (!field.rawName || field.rawName === 'datetime') return;
     const key = field.keys?.length
       ? `${field.rawName}.${field.keys.join('.')}`
       : field.rawName;
-    config[key] = fieldConfigFromRow(field);
+    config[key] = fieldConfigFromRow(field, parentLabelMap);
   });
 
   return config;
