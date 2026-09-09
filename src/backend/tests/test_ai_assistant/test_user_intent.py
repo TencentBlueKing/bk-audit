@@ -224,21 +224,31 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
             )
 
     def test_scope_input_validation(self):
-        """scope 协议校验：scope_type 必填且为合法枚举；scene/system 必填 scope_id；合法值固化到上下文"""
+        """scope 双层校验：schema 层宽松（历史快照兼容）+ prepare 层必填；scene/system 必填 scope_id"""
 
         from pydantic import ValidationError as PydanticValidationError
 
+        from services.web.ai_assistant.exceptions import ScopeContextRequired
+
         handler = message_handler_registry.require(MessageType.USER_INTENT)
-        # 不传 scope_type 拒绝（必填）
-        with self.assertRaises(PydanticValidationError):
-            handler.input_model(query_text="查日志")
-        # scene 缺 scope_id 拒绝
+        # schema 层宽松：不传 scope_type 可解析（历史消息快照兼容，读取/重试不报错）
+        legacy_parsed = handler.input_model(query_text="查日志")
+        self.assertIsNone(legacy_parsed.scope_type)
+        # prepare 层强约束：外部创建不传 scope_type → 400（ScopeContextRequired）
+        with self.assertRaises(ScopeContextRequired):
+            handler.prepare(
+                user=self.user,
+                conversation=self.conversation,
+                parent_message=None,
+                input_data=legacy_parsed,
+            )
+        # scene 缺 scope_id 拒绝（schema 层）
         with self.assertRaises(PydanticValidationError):
             handler.input_model(query_text="查日志", scope_type="scene")
-        # system 缺 scope_id 拒绝
+        # system 缺 scope_id 拒绝（schema 层）
         with self.assertRaises(PydanticValidationError):
             handler.input_model(query_text="查日志", scope_type="system")
-        # 非法 scope_type 拒绝
+        # 非法 scope_type 拒绝（schema 层）
         with self.assertRaises(PydanticValidationError):
             handler.input_model(query_text="查日志", scope_type="hack_scope")
         # 合法组合：prepare 将 scope 固化到上下文（重试/编辑复用同一 scope 语义）
