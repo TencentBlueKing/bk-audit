@@ -1,8 +1,12 @@
 """常见/历史操作上下文（D3 定稿方案）。
 
 常见操作 = 当前用户常见的自然语言检索样例，按用户 × 系统维度缓存于 Redis list，
-由 Celery 定时任务从最近成功自然语言消息聚合刷新（仅本人消息，用户间互相隔离）；
+由 Celery 定时任务从最近成功检索消息聚合刷新（仅本人消息，用户间互相隔离）；
 历史操作 = 当前用户最近的自然语言检索，直接查询消息表（按系统过滤）。
+
+数据源覆盖 NATURAL_LANGUAGE_SEARCH 与 USER_INTENT（统一入口）两类消息：
+意图消息仅收录真正产出检索条件的（output 携带 condition + system_id），
+SYSTEM_REQUIRED / unrecognized 等引导性结果不进榜单。
 """
 
 import logging
@@ -93,34 +97,59 @@ class OperationContextService:
 
     @classmethod
     def build_historical(cls, *, system_ids: list[str], username: str) -> list[CommonQuerySchema]:
-        """查询当前用户最近自然语言消息（跨会话），按目标系统过滤后去重。"""
+        """查询当前用户最近自然语言检索（NL 与 USER_INTENT 统一入口），按目标系统过滤后去重。"""
 
         scan_limit = settings.AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT
         return_limit = settings.AI_ASSISTANT_HISTORICAL_QUERY_LIMIT
-        messages = (
-            Message.objects.filter(
-                created_by=username,
-                message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
-                status=ExecutionStatus.SUCCESS,
-            )
-            .order_by("-id")
-            .values_list("input_data", "context_data")[:scan_limit]
-        )
         allowed_system_ids = set(system_ids)
         results: list[CommonQuerySchema] = []
         seen: set[str] = set()
-        for input_data, context_data in messages:
-            message_system_ids = cls._extract_message_system_ids(context_data)
+        for query_text, message_system_ids, _created_by in cls._iter_recent_queries(scan_limit, username=username):
             if not allowed_system_ids.intersection(message_system_ids):
                 continue
-            query_text = (input_data or {}).get("query_text") or ""
-            if not query_text or query_text in seen:
+            if query_text in seen:
                 continue
             seen.add(query_text)
             results.append(CommonQuerySchema(query_text=query_text))
             if len(results) >= return_limit:
                 break
         return results
+
+    @classmethod
+    def _iter_recent_queries(cls, scan_limit: int, username: str | None = None):
+        """迭代最近成功检索样例（NL + USER_INTENT 统一入口），产出 (query_text, system_ids, created_by)。
+
+        - NL 消息：系统取 context_data.system_selection.systems
+        - USER_INTENT：系统取 output_data.system_id；仅 condition 非空（真正产出检索并续链）
+          才收录——SYSTEM_REQUIRED / unrecognized 等引导性输出不是检索，不进榜单
+        """
+
+        filters = {
+            "message_type__in": [MessageType.NATURAL_LANGUAGE_SEARCH, MessageType.USER_INTENT],
+            "status": ExecutionStatus.SUCCESS,
+        }
+        if username:
+            filters["created_by"] = username
+        messages = (
+            Message.objects.filter(**filters)
+            .order_by("-id")
+            .values_list("message_type", "input_data", "context_data", "output_data", "created_by")[:scan_limit]
+        )
+        for message_type, input_data, context_data, output_data, created_by in messages:
+            query_text = (input_data or {}).get("query_text") or ""
+            if not query_text:
+                continue
+            if message_type == MessageType.USER_INTENT:
+                output = output_data if isinstance(output_data, dict) else {}
+                system_id = str(output.get("system_id") or "")
+                if output.get("condition") is None or not system_id:
+                    continue
+                system_ids = {system_id}
+            else:
+                system_ids = cls._extract_message_system_ids(context_data)
+                if not system_ids:
+                    continue
+            yield query_text, system_ids, created_by
 
     @staticmethod
     def _extract_message_system_ids(context_data: dict | None) -> set[str]:
@@ -133,26 +162,17 @@ class OperationContextService:
 
     @classmethod
     def refresh_common_queries(cls) -> dict[str, int]:
-        """定时任务入口：聚合最近成功自然语言消息，按用户 × 系统刷新 Redis 缓存。"""
+        """定时任务入口：聚合最近成功检索消息（NL + USER_INTENT），按用户 × 系统刷新 Redis 缓存。"""
 
         scan_limit = settings.AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT
         store_limit = settings.AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT
-        messages = (
-            Message.objects.filter(
-                message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
-                status=ExecutionStatus.SUCCESS,
-            )
-            .order_by("-id")
-            .values_list("input_data", "context_data", "created_by")[:scan_limit]
-        )
         # 最近在前；同一用户同一样例只保留最新一次出现的顺位（用户间天然隔离）
         user_system_queries: dict[tuple[str, str], list[str]] = {}
         user_system_seen: dict[tuple[str, str], set[str]] = {}
-        for input_data, context_data, created_by in messages:
-            query_text = (input_data or {}).get("query_text") or ""
-            if not query_text:
-                continue
-            for system_id in cls._extract_message_system_ids(context_data):
+        scanned = 0
+        for query_text, system_ids, created_by in cls._iter_recent_queries(scan_limit):
+            scanned += 1
+            for system_id in system_ids:
                 key = (created_by, system_id)
                 seen = user_system_seen.setdefault(key, set())
                 if query_text in seen:
@@ -175,6 +195,6 @@ class OperationContextService:
         logger.info(
             "[OperationContextService] common queries refreshed, user_systems=%d, scanned=%d",
             refreshed,
-            len(messages),
+            scanned,
         )
-        return {"refreshed_systems": refreshed, "scanned_messages": len(messages)}
+        return {"refreshed_systems": refreshed, "scanned_messages": scanned}

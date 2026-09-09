@@ -133,6 +133,85 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, "other_user")), ["other-q"])
         self.assertEqual(result, {"refreshed_systems": 2, "scanned_messages": 3})
 
+    def _create_intent_message(self, *, query_text: str, output: dict, status: str = ExecutionStatus.SUCCESS):
+        """构造 USER_INTENT 消息（统一入口链路，成功检索输出含 condition + system_id）。"""
+        from services.web.ai_assistant.constants import MessageType
+        from services.web.ai_assistant.models import Message
+
+        return Message.objects.create(
+            conversation=self.conversation,
+            parent_message=None,
+            message_type=MessageType.USER_INTENT,
+            status=status,
+            task_id="" if status == ExecutionStatus.SUCCESS else "task-1",
+            input_data={"query_text": query_text, "auto_execute": True, "scope_type": "cross_system"},
+            context_data={"username": self.user, "namespace": "bkaudit", "scope_type": "cross_system"},
+            output_data=output,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_build_historical_includes_user_intent_queries(self):
+        """历史操作：USER_INTENT 统一入口的成功检索（output 带 condition + system_id）进榜单。"""
+
+        from services.web.query.ai_assistant.schemas import SearchCondition
+
+        condition = SearchCondition(
+            scope_type="system",
+            scope_id=TARGET_SYSTEM_ID,
+            start_time="2026-09-01T00:00:00+08:00",
+            end_time="2026-09-09T00:00:00+08:00",
+        ).model_dump(mode="json")
+        # 意图识别成功检索（select_system + condition）
+        self._create_intent_message(
+            query_text="查一下审计中心近七天的操作记录",
+            output={"intent": "select_system", "system_id": TARGET_SYSTEM_ID, "condition": condition},
+        )
+        # 引导性输出（SYSTEM_REQUIRED 无 condition）不是检索，不进榜单
+        self._create_intent_message(
+            query_text="查下最近七天的日志",
+            output={
+                "intent": "log_search",
+                "error": {"error_code": "SYSTEM_REQUIRED", "error_message": "x", "candidates": []},
+            },
+        )
+        # unrecognized 闲聊不进榜单
+        self._create_intent_message(
+            query_text="今天天气怎么样",
+            output={"intent": "unrecognized", "error": {"error_code": "UNRECOGNIZED_INTENT", "error_message": "x"}},
+        )
+
+        historical = OperationContextService.build_historical(system_ids=[TARGET_SYSTEM_ID], username=self.user)
+        query_texts = [item.query_text for item in historical]
+        self.assertEqual(query_texts, ["查一下审计中心近七天的操作记录"])
+        self.assertNotIn("查下最近七天的日志", query_texts)
+        self.assertNotIn("今天天气怎么样", query_texts)
+
+    def test_refresh_common_queries_includes_user_intent(self):
+        """定时刷新：USER_INTENT 成功检索同样聚合进用户 × 系统缓存。"""
+
+        self._create_intent_message(
+            query_text="intent-q1",
+            output={
+                "intent": "log_search",
+                "system_id": TARGET_SYSTEM_ID,
+                "condition": {"scope_type": "system", "scope_id": TARGET_SYSTEM_ID, "conditions": []},
+            },
+        )
+        self._create_intent_message(
+            query_text="intent-guidance",
+            output={
+                "intent": "log_search",
+                "error": {"error_code": "SYSTEM_REQUIRED", "error_message": "x", "candidates": []},
+            },
+        )
+        with mock.patch.object(CommonQueryStore, "replace") as mock_replace:
+            result = OperationContextService.refresh_common_queries()
+        replace_calls = {call.args[:2]: call.args[2] for call in mock_replace.call_args_list}
+        # 仅成功检索的意图消息进缓存（引导性输出不计）
+        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, self.user)), ["intent-q1"])
+        self.assertEqual(result["scanned_messages"], 1)
+
 
 class TestMessageExport(AIAssistantPlatformTestCase):
     def setUp(self):

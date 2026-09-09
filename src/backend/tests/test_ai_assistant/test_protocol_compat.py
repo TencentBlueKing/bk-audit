@@ -33,7 +33,54 @@ TITLE_DELAY = "services.web.ai_assistant.tasks.conversation.generate_conversatio
 CONVERT_MOCK = "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
 
 
-class LegacySnapshotParseTest(AIAssistantPlatformTestCase):
+class MessageDurationTest(AIAssistantPlatformTestCase):
+    """消息响应耗时字段：duration_seconds = finished_at - created_at（端到端，含排队与 LLM 编排）。"""
+
+    def _create_message(self, status: str) -> Message:
+        return Message.objects.create(
+            conversation=self.conversation,
+            parent_message=None,
+            message_type=MessageType.USER_INTENT,
+            status=status,
+            task_id="" if status == ExecutionStatus.SUCCESS else "task-1",
+            input_data={"query_text": "查日志", "auto_execute": True, "scope_type": "cross_system"},
+            context_data={"username": self.user, "namespace": "bkaudit", "scope_type": "cross_system"},
+            output_data=(
+                {
+                    "intent": "log_search",
+                    "error": {"error_code": "SYSTEM_REQUIRED", "error_message": "x", "candidates": []},
+                }
+                if status == ExecutionStatus.SUCCESS
+                else None
+            ),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_duration_seconds_on_success(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        message = self._create_message(ExecutionStatus.SUCCESS)
+        created = timezone.now() - timedelta(seconds=12.34)
+        finished = created + timedelta(seconds=12.34)
+        Message.objects.filter(id=message.id).update(created_at=created, queued_at=created, finished_at=finished)
+        message.refresh_from_db()
+
+        data = MessageResponseSerializer(message).data
+        # 端到端耗时（保留 1 位小数），含排队与 LLM 编排全过程
+        self.assertEqual(data["duration_seconds"], 12.3)
+        self.assertIsNotNone(data["finished_at"])
+        self.assertIsNotNone(data["queued_at"])
+
+    def test_duration_seconds_null_on_processing(self):
+        message = self._create_message(ExecutionStatus.PROCESSING)
+
+        data = MessageResponseSerializer(message).data
+        self.assertIsNone(data["duration_seconds"])
+        self.assertIsNone(data["finished_at"])
+
     """历史 input_data（无 scope 字段）的 schema 层宽松解析。"""
 
     def test_legacy_user_intent_input_parses(self):
