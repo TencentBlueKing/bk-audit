@@ -368,6 +368,31 @@ export const getToolListScopeParams = (extra?: {
   };
 };
 
+const AI_USER_INTENT_SCOPE_TYPES = new Set([
+  'cross_scene',
+  'cross_system',
+  'scene',
+  'system',
+]);
+
+/**
+ * AI 助手 USER_INTENT 的 scope 字段（与检索页 scope 协议一致）。
+ * - 不传 = 不过滤
+ * - scene / system 必须带 scope_id，否则省略整组避免 400
+ * - cross_* 只传 scope_type，不带空 scope_id
+ */
+export const buildAiUserIntentScopeFields = (): SceneSystemScopeParams => {
+  const { scope_type: scopeType, scope_id: scopeId } = getSceneSystemParams();
+  if (!scopeType || !AI_USER_INTENT_SCOPE_TYPES.has(scopeType)) {
+    return {};
+  }
+  if (scopeType === 'scene' || scopeType === 'system') {
+    if (!scopeId) return {};
+    return { scope_type: scopeType, scope_id: scopeId };
+  }
+  return { scope_type: scopeType };
+};
+
 /** 场景/系统维度需等 scope_id 就绪后再请求工具详情，避免先发无参请求 */
 export const isToolDetailScopeReady = (scopeParams?: SceneSystemScopeParams): boolean => {
   const scope = resolveToolDetailScopeParams(scopeParams);

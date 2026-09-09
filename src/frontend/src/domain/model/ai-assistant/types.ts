@@ -90,9 +90,15 @@ export interface AiSystemSelectionOutput {
   historical_operations?: AiOperationHint[];
 }
 
+/** 与检索页 scope 协议同名同义；不传 = 不过滤 */
+export type AiScopeType = 'cross_scene' | 'cross_system' | 'scene' | 'system';
+
 export interface AiNaturalLanguageSearchInput {
   query_text: string;
   auto_execute?: boolean;
+  scope_type?: AiScopeType;
+  /** scope_type 为 scene / system 时必填 */
+  scope_id?: string;
 }
 
 export type AiNlRecognitionErrorCode =
@@ -124,6 +130,10 @@ export type AiUserIntentType =
 export interface AiUserIntentInput {
   query_text: string;
   auto_execute?: boolean;
+  /** 与检索页 scope 协议一致；不传 = 不过滤 */
+  scope_type?: AiScopeType;
+  /** scope_type 为 scene / system 时必填 */
+  scope_id?: string;
 }
 
 export interface AiUserIntentOutput {
