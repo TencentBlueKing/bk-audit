@@ -95,11 +95,28 @@
                   class="assign-rule-item-content">
                   <div class="form-section">
                     <div class="form-label is-required">
-                      {{ t('命中条件') }}
+                      <span
+                        v-bk-tooltips="{
+                          content: t('命中条件的风险记录将分派至指定场景'),
+                          placement: 'top-start',
+                        }"
+                        class="form-label-tip">
+                        {{ t('命中条件') }}
+                      </span>
                     </div>
-                    <assign-condition-rows
-                      v-model="rule.conditions"
-                      :field-options="fieldOptions" />
+                    <bk-form
+                      class="assign-hit-condition-form"
+                      form-type="vertical"
+                      :model="getAssignFormModel(rule)">
+                      <rules-component
+                        :ref="(el) => setWhereRef(el, index)"
+                        :aggregate-list="aggregateList"
+                        :config-type="configType"
+                        :expected-result="expectedResult"
+                        :table-fields="assignTableFields"
+                        :table-fields-loading="schemaFieldsLoading"
+                        @update-where="(where) => handleUpdateWhere(index, where)" />
+                    </bk-form>
                   </div>
                   <assign-rule-fields
                     :model-value="rule"
@@ -165,12 +182,15 @@
   import { useRoute, useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
+  import LinkDataManageService from '@service/link-data-manage';
   import SceneManageService from '@service/scene-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
   import StrategyModel from '@model/strategy/strategy';
 
-  import AssignConditionRows from './components/assign-condition-rows.vue';
   import AssignRuleFields from './components/assign-rule-fields.vue';
+  import RulesComponent from '../step1/components/customize/components/rules/index.vue';
 
   import {
     getStrategyRouteNames,
@@ -178,14 +198,14 @@
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
   import useRequest from '@/hooks/use-request';
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import {
-    type AssignConditionForm,
-    buildStrategySelectFieldOptions,
-    createDefaultAssignConditionForm,
-    dispatchToAssignConditionForm,
+    type AssignWhere,
+    createEmptyAssignWhere,
+    enrichAssignWhereFields,
     hasValidAssignCondition,
+    isEmptyDispatchConditions,
+    toAssignWhere,
   } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
@@ -196,7 +216,7 @@
     name: string;
     collapsed: boolean;
     editingName: boolean;
-    conditions: AssignConditionForm;
+    conditions: AssignWhere;
     scene_ids: Array<string | number>;
     processors: Array<string | number>;
     notice_users: Array<string | number>;
@@ -238,15 +258,9 @@
 
   let ruleIdSeq = 1;
 
-  const createConditionForm = (): AssignConditionForm => createDefaultAssignConditionForm();
+  const createConditionForm = (): AssignWhere => createEmptyAssignWhere();
 
-  const cloneConditionForm = (form: AssignConditionForm): AssignConditionForm => ({
-    connector: form.connector,
-    groups: form.groups.map(group => ({
-      connector: group.connector,
-      conditions: group.conditions.map(row => ({ ...row })),
-    })),
-  });
+  const cloneConditionForm = (form: AssignWhere): AssignWhere => JSON.parse(JSON.stringify(form));
 
   const createRule = (overrides: Partial<AssignRuleItem> = {}): AssignRuleItem => {
     const id = ruleIdSeq;
@@ -291,19 +305,181 @@
 
   const assignRules = ref<AssignRuleItem[]>([]);
   const defaultRule = ref(createDefaultRule());
+  const whereRefs = ref<Array<{ setWhere?:(where: AssignWhere, having: AssignWhere) => void } | null>>([]);
+  const schemaTableFields = ref<Array<Record<string, any>>>([]);
+  const schemaFieldsLoading = ref(false);
+  const aggregateList = ref<Array<Record<string, any>>>([]);
 
-  const selectFields = computed(() => {
-    if (props.select?.length) {
-      return props.select;
-    }
+  const tableFields = computed(() => props.formData?.configs?.table_fields || []);
+  const configType = computed(() => props.formData?.configs?.config_type || '');
+  const expectedResult = computed(() => {
+    if (props.select?.length) return props.select;
     const select = props.formData?.configs?.select;
-    if (Array.isArray(select) && select.length) {
-      return select;
+    return Array.isArray(select) ? select : [];
+  });
+  const assignTableFields = computed(() => (
+    tableFields.value.length ? tableFields.value : schemaTableFields.value
+  ));
+
+  const resolveRtId = (rtId: unknown) => {
+    if (Array.isArray(rtId)) {
+      return rtId.length ? String(rtId[rtId.length - 1]) : '';
     }
-    return props.formData?.configs?.table_fields || [];
+    return rtId ? String(rtId) : '';
+  };
+
+  const mapRtFields = (
+    data: Array<Record<string, any>> = [],
+    table = '',
+  ) => data.map(item => ({
+    table,
+    raw_name: item.value || item.raw_name || '',
+    display_name: item.label || item.display_name || '',
+    field_type: item.field_type || '',
+    aggregate: null,
+    spec_field_type: item.spec_field_type || '',
+    remark: '',
+    property: item.property || {},
+  }));
+
+  const emptyHaving = (): AssignWhere => ({ connector: 'and', conditions: [] });
+
+  const getAssignFormModel = (rule: AssignRuleItem) => ({
+    configs: {
+      where: rule.conditions,
+    },
   });
 
-  const fieldOptions = computed(() => buildStrategySelectFieldOptions(selectFields.value));
+  const setWhereRef = (el: any, index: number) => {
+    whereRefs.value[index] = el;
+  };
+
+  const applyWhereToComponents = () => {
+    nextTick(() => {
+      assignRules.value.forEach((rule, index) => {
+        whereRefs.value[index]?.setWhere?.(rule.conditions, emptyHaving());
+      });
+    });
+  };
+
+  const enrichRuleConditions = () => {
+    const fields = assignTableFields.value;
+    if (!fields.length) return;
+    assignRules.value = assignRules.value.map(rule => ({
+      ...rule,
+      conditions: enrichAssignWhereFields(rule.conditions, fields),
+    }));
+    applyWhereToComponents();
+  };
+
+  let schemaFetchSeq = 0;
+  const loadSchemaTableFields = async () => {
+    const seq = schemaFetchSeq + 1;
+    schemaFetchSeq = seq;
+    const configs = props.formData?.configs || {};
+    if (Array.isArray(configs.table_fields) && configs.table_fields.length) {
+      schemaTableFields.value = configs.table_fields;
+      schemaFieldsLoading.value = false;
+      enrichRuleConditions();
+      return;
+    }
+    const dataSource = configs.data_source || {};
+    schemaFieldsLoading.value = true;
+    try {
+      if (configs.config_type === 'LinkTable') {
+        const uid = dataSource.link_table?.uid;
+        if (!uid) {
+          if (seq === schemaFetchSeq) {
+            schemaTableFields.value = [];
+            schemaFieldsLoading.value = false;
+          }
+          return;
+        }
+        const detail = await LinkDataManageService.fetchLinkDataDetail({
+          uid,
+          version: dataSource.link_table?.version ?? 0,
+        });
+        if (seq !== schemaFetchSeq) return;
+        const links = detail.config?.links || [];
+        const idArr = Array.from(new Set(links.flatMap((item: Record<string, any>) => [
+          resolveRtId(item.left_table?.rt_id),
+          resolveRtId(item.right_table?.rt_id),
+        ]).filter(Boolean)));
+        const displayArr = Array.from(new Set(links.flatMap((item: Record<string, any>) => [
+          item.left_table?.display_name,
+          item.right_table?.display_name,
+        ]).filter(Boolean)));
+        if (!idArr.length) {
+          schemaTableFields.value = [];
+          schemaFieldsLoading.value = false;
+          return;
+        }
+        const data = await StrategyManageService.fetchBatchTableRtFields({
+          table_ids: idArr.join(','),
+        });
+        if (seq !== schemaFetchSeq) return;
+        schemaTableFields.value = (data || []).flatMap((item: Record<string, any>, index: number) => (
+          mapRtFields(item.fields || [], displayArr[index] || '')
+        ));
+        schemaFieldsLoading.value = false;
+        enrichRuleConditions();
+        return;
+      }
+      const rtId = resolveRtId(dataSource.rt_id);
+      if (!rtId) {
+        if (seq === schemaFetchSeq) {
+          schemaTableFields.value = [];
+          schemaFieldsLoading.value = false;
+        }
+        return;
+      }
+      const data = await StrategyManageService.fetchTableRtFields({ table_id: rtId });
+      if (seq !== schemaFetchSeq) return;
+      schemaTableFields.value = mapRtFields(data || [], rtId);
+      schemaFieldsLoading.value = false;
+      enrichRuleConditions();
+    } catch {
+      if (seq === schemaFetchSeq) {
+        schemaTableFields.value = [];
+        schemaFieldsLoading.value = false;
+      }
+    }
+  };
+
+  watch(
+    () => JSON.stringify({
+      tableFieldsLen: props.formData?.configs?.table_fields?.length || 0,
+      configType: props.formData?.configs?.config_type,
+      rtId: resolveRtId(props.formData?.configs?.data_source?.rt_id),
+      linkUid: props.formData?.configs?.data_source?.link_table?.uid,
+      linkVersion: props.formData?.configs?.data_source?.link_table?.version,
+    }),
+    () => {
+      loadSchemaTableFields();
+    },
+    { immediate: true },
+  );
+
+  const {
+    data: commonData,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+    onSuccess() {
+      aggregateList.value = [
+        { label: t('不聚合'), value: null },
+        ...commonData.value.rule_audit_aggregate_type,
+      ];
+    },
+  });
+
+  const handleUpdateWhere = (index: number, where: AssignWhere) => {
+    const prev = assignRules.value[index]?.conditions;
+    if (!hasValidAssignCondition(where) && hasValidAssignCondition(prev)) {
+      return;
+    }
+    assignRules.value[index].conditions = where;
+  };
 
   const {
     data: sceneList,
@@ -361,6 +537,9 @@
       confirmers: [...source.confirmers],
     });
     assignRules.value.splice(index + 1, 0, cloned);
+    nextTick(() => {
+      whereRefs.value[index + 1]?.setWhere?.(cloned.conditions, emptyHaving());
+    });
   };
 
   const handleDeleteRule = (index: number) => {
@@ -442,21 +621,18 @@
   };
 
   const applyEchoData = (data: Record<string, any>) => {
-    const assignSource = data.assign_rules?.length
-      ? data.assign_rules
-      : (data.dispatch_rules || []).filter((item: any) => {
-        const { conditions } = item;
-        return Array.isArray(conditions)
-          ? conditions.some((c: any) => c.field)
-          : !!conditions?.conditions?.length;
-      });
-    if (assignSource?.length) {
-      ruleIdSeq = 1;
-      assignRules.value = assignSource.map((item: any, index: number) => {
-        const conditionForm = dispatchToAssignConditionForm(item.conditions);
-        return createRule({
+    try {
+      const assignSource = data.assign_rules?.length
+        ? data.assign_rules
+        : (data.dispatch_rules || []).filter((item: any) => !isEmptyDispatchConditions(item?.conditions));
+      if (assignSource?.length) {
+        ruleIdSeq = 1;
+        assignRules.value = assignSource.map((item: any, index: number) => createRule({
           name: item.rule_name || item.name || `分派规则${index + 1}`,
-          conditions: conditionForm,
+          conditions: enrichAssignWhereFields(
+            toAssignWhere(item?.conditions, assignTableFields.value),
+            assignTableFields.value,
+          ),
           scene_ids: normalizeSceneIds({
             ...item,
             scene_ids: item.scene_ids ?? (item.target_scene_id !== undefined ? [item.target_scene_id] : []),
@@ -465,32 +641,29 @@
           notice_users: item.notice_users ?? item.follower ?? [],
           assign_mode: item.assign_mode || (item.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
           confirmers: item.confirmers ?? item.confirmer ?? [],
-        });
-      });
-    }
-    const defaultSource = (data.default_assign_rule && Object.keys(data.default_assign_rule).length)
-      ? data.default_assign_rule
-      : (data.dispatch_rules || []).find((item: any) => {
-        const { conditions } = item;
-        if (Array.isArray(conditions)) {
-          return !conditions.some((c: any) => c.field);
-        }
-        return !conditions?.conditions?.length;
-      });
-    if (defaultSource) {
-      defaultRule.value = {
-        ...createDefaultRule(),
-        ...defaultSource,
-        scene_ids: normalizeSceneIds({
+        }));
+        applyWhereToComponents();
+      }
+      const defaultSource = (data.default_assign_rule && Object.keys(data.default_assign_rule).length)
+        ? data.default_assign_rule
+        : (data.dispatch_rules || []).find((item: any) => isEmptyDispatchConditions(item?.conditions));
+      if (defaultSource) {
+        defaultRule.value = {
+          ...createDefaultRule(),
           ...defaultSource,
-          scene_ids: defaultSource.scene_ids
-            ?? (defaultSource.target_scene_id !== undefined ? [defaultSource.target_scene_id] : []),
-        }),
-        processors: defaultSource.processors ?? defaultSource.processor ?? [],
-        notice_users: defaultSource.notice_users ?? defaultSource.follower ?? [],
-        confirmers: defaultSource.confirmers ?? defaultSource.confirmer ?? [],
-        assign_mode: defaultSource.assign_mode || (defaultSource.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
-      };
+          scene_ids: normalizeSceneIds({
+            ...defaultSource,
+            scene_ids: defaultSource.scene_ids
+              ?? (defaultSource.target_scene_id !== undefined ? [defaultSource.target_scene_id] : []),
+          }),
+          processors: defaultSource.processors ?? defaultSource.processor ?? [],
+          notice_users: defaultSource.notice_users ?? defaultSource.follower ?? [],
+          confirmers: defaultSource.confirmers ?? defaultSource.confirmer ?? [],
+          assign_mode: defaultSource.assign_mode || (defaultSource.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
+        };
+      }
+    } catch (e) {
+      console.error('[assign-rules] echo failed', e);
     }
   };
 
@@ -515,6 +688,18 @@
       }
     },
     { immediate: isEditMode || isCloneMode },
+  );
+
+  watch(
+    () => props.formData?.hit_conditions_reset_seq,
+    (seq) => {
+      if (!seq) return;
+      assignRules.value = assignRules.value.map(rule => ({
+        ...rule,
+        conditions: createEmptyAssignWhere(),
+      }));
+      applyWhereToComponents();
+    },
   );
 </script>
 <style lang="postcss" scoped>
@@ -695,6 +880,12 @@
       margin-bottom: 20px;
     }
 
+    .assign-hit-condition-form {
+      :deep(.bk-form-item) {
+        margin-bottom: 0;
+      }
+    }
+
     .form-label {
       margin-bottom: 8px;
       font-size: 12px;
@@ -706,6 +897,11 @@
         color: #ea3636;
         text-align: center;
         content: '*';
+      }
+
+      .form-label-tip {
+        cursor: pointer;
+        border-bottom: 1px dashed #979ba5;
       }
     }
   }

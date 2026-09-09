@@ -248,12 +248,16 @@
                             :check-strictly="false"
                             children="children"
                             :data="localOutputFields"
+                            expand-all
+                            label="name"
                             :selected="getTreeSelectedValue(Number(toolIndex), Number(index))"
                             @node-click="(data: LocalOutputFields) =>
                               handleTargetValueChange(data, Number(toolIndex), Number(index))">
-                            <template #nodeType="node">
-                              <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
-                                {{ getOutputFieldDisplayName(node) }}
+                            <template #default="{ data }">
+                              <span>
+                                {{ data.children?.length
+                                  ? (data.display_name || data.name || data.raw_name)
+                                  : getOutputFieldDisplayName(data) }}
                               </span>
                             </template>
                           </bk-tree>
@@ -342,6 +346,7 @@
   interface LocalOutputFields {
     raw_name: string;
     display_name: string;
+    name?: string;
     json_path?: string;
     target_field_type?: string;
     children?: LocalOutputFields[];
@@ -895,19 +900,51 @@
     buildToolCascaderList(props.allToolsData, searchValue);
   };
 
-  // 递归转换树形数据，保持树状结构
+  // 递归转换树形数据；策略单据字段按 target_field_type 分组，便于选择
   const transformOutputFields = (fields: Array<Record<string, any>>): LocalOutputFields[] => {
     if (!Array.isArray(fields)) {
       return [];
     }
-    return fields.map(item => ({
-      ...item,
-      raw_name: item.raw_name,
-      display_name: item.display_name,
-      description: item.description,
-      children: item.children && item.children.length > 0
-        ? transformOutputFields(item.children)
-        : undefined,
+
+    const toNode = (item: Record<string, any>): LocalOutputFields => {
+      const rawName = item.raw_name || '';
+      const displayName = item.display_name || '';
+      const name = displayName ? `${rawName}(${displayName})` : rawName;
+      return {
+        ...item,
+        raw_name: rawName,
+        display_name: displayName,
+        name,
+        children: item.children && item.children.length > 0
+          ? transformOutputFields(item.children)
+          : undefined,
+      };
+    };
+
+    const shouldGroup = fields.some(item => item.target_field_type && !item.children?.length);
+    if (!shouldGroup) {
+      return fields.map(toNode);
+    }
+
+    const groupLabelMap: Record<string, string> = {
+      basic: t('基本信息'),
+      data: t('事件内容'),
+      evidence: t('事件证据'),
+    };
+    const grouped = new Map<string, LocalOutputFields[]>();
+    fields.forEach((item) => {
+      const type = String(item.target_field_type || 'basic');
+      if (!grouped.has(type)) {
+        grouped.set(type, []);
+      }
+      grouped.get(type)?.push(toNode(item));
+    });
+
+    return [...grouped.entries()].map(([type, children]) => ({
+      raw_name: type,
+      display_name: groupLabelMap[type] || type,
+      name: groupLabelMap[type] || type,
+      children,
     }));
   };
 

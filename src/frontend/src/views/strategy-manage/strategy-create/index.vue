@@ -40,6 +40,7 @@
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
+      @reset-hit-conditions="handleResetHitConditions"
       @save-current-step="handleSaveCurrentStep"
       @save-draft="handleSaveDraft"
       @show-preview="showPreview = true"
@@ -110,6 +111,7 @@
   import useRequest from '@/hooks/use-request';
   import {
     buildStrategyCreatePayload,
+    createEmptyAssignWhere,
     parseStrategyDetailToForm,
   } from './utils/strategy-protocol';
   import {
@@ -153,6 +155,7 @@
     binding_type?: string,
     visibility?: Record<string, any>,
     scene_id?: string | number,
+    hit_conditions_reset_seq?: number,
   }
 
   const router = useRouter();
@@ -579,6 +582,7 @@
 
   const handleSaveDraft = (params?: Record<string, any>) => {
     if (params) {
+      maybeResetHitConditionsByDataSource(params.configs);
       Object.assign(formData.value, params);
     }
     doSave({ isDraft: true });
@@ -759,6 +763,58 @@
   //     return !isSameByCommonFields(currentVal, snapshotVal);
   //   });
   // };
+  const getDataSourceKey = (configs?: Record<string, any>) => JSON.stringify({
+    type: configs?.config_type || '',
+    rt: Array.isArray(configs?.data_source?.rt_id)
+      ? configs.data_source.rt_id.filter(Boolean).join('/')
+      : (configs?.data_source?.rt_id || ''),
+    link: configs?.data_source?.link_table?.uid || '',
+    systems: [...(configs?.data_source?.system_ids || [])].map(String).sort()
+      .join(','),
+  });
+
+  const emptyDiscoveryWhere = () => ({ connector: 'and', conditions: [] });
+
+  const applyHitConditionsReset = () => {
+    sessionStorage.removeItem('rule-tree-data');
+    sessionStorage.removeItem('storage-tree-data');
+    const nextForm = formData.value;
+    if (Array.isArray(nextForm.rules)) {
+      nextForm.rules = nextForm.rules.map((rule: Record<string, any>) => ({
+        ...rule,
+        conditions: {
+          where: emptyDiscoveryWhere(),
+          having: emptyDiscoveryWhere(),
+        },
+        configs: {
+          ...(rule.configs || {}),
+          where: emptyDiscoveryWhere(),
+          having: emptyDiscoveryWhere(),
+        },
+      }));
+    }
+    if (Array.isArray(nextForm.assign_rules)) {
+      nextForm.assign_rules = nextForm.assign_rules.map((rule: Record<string, any>) => ({
+        ...rule,
+        conditions: createEmptyAssignWhere(),
+      }));
+    }
+    nextForm.hit_conditions_reset_seq = (Number(nextForm.hit_conditions_reset_seq) || 0) + 1;
+  };
+
+  const handleResetHitConditions = () => {
+    if (isEditMode) return;
+    applyHitConditionsReset();
+  };
+
+  const maybeResetHitConditionsByDataSource = (nextConfigs?: Record<string, any>) => {
+    if (isEditMode) return;
+    const prevKey = getDataSourceKey(formData.value.configs);
+    const nextKey = getDataSourceKey(nextConfigs);
+    if (!formData.value.configs?.config_type || prevKey === nextKey) return;
+    applyHitConditionsReset();
+  };
+
   const handlePreviousStep = async (step: number, params: any) => {
     // 与下一步逻辑一致：对比"完整数据结构"中当前步骤回传字段的变化
     // await ensureTagMapLoaded();
@@ -794,6 +850,7 @@
     //   return;
     // }
 
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
@@ -831,12 +888,14 @@
     //   return;
     // }
 
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
 
   // 提交：合并当前步骤数据后提交，效果与「其他配置」的提交按钮一致
   const handleSaveCurrentStep = (params: any) => {
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     handleSubmit();
   };

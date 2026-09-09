@@ -6,7 +6,7 @@
   <div class="risk-discovery-rules">
     <template v-if="!detailLoading && displayRules.length">
       <div
-        v-for="(rule, ruleIndex) in displayRules"
+        v-for="(rule, ruleIndex) in displayRulesWithTags"
         :key="ruleIndex"
         class="rule-item-card">
         <div class="rule-item-header">
@@ -48,15 +48,31 @@
           <template v-if="showRuleNoticeGroups">
             <div class="rule-field-row">
               <span class="rule-field-label">{{ t('风险单处理人') }}:</span>
-              <span class="rule-field-value">
-                {{ resolveGroupNames(rule.processor, userGroupList) }}
-              </span>
+              <div class="rule-field-value notice-group-tags">
+                <template v-if="rule.processorTags.length">
+                  <bk-tag
+                    v-for="item in rule.processorTags"
+                    :key="`processor-${item.id}`"
+                    class="notice-group-tag">
+                    {{ item.name }}
+                  </bk-tag>
+                </template>
+                <span v-else>--</span>
+              </div>
             </div>
             <div class="rule-field-row">
               <span class="rule-field-label">{{ t('关注人') }}:</span>
-              <span class="rule-field-value">
-                {{ resolveGroupNames(rule.follower, userGroupList) }}
-              </span>
+              <div class="rule-field-value notice-group-tags">
+                <template v-if="rule.followerTags.length">
+                  <bk-tag
+                    v-for="item in rule.followerTags"
+                    :key="`follower-${item.id}`"
+                    class="notice-group-tag">
+                    {{ item.name }}
+                  </bk-tag>
+                </template>
+                <span v-else>--</span>
+              </div>
             </div>
           </template>
         </div>
@@ -76,6 +92,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
+  import NoticeGroupManageService from '@service/notice-group';
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
@@ -84,9 +101,13 @@
   import useRequest from '@hooks/use-request';
 
   import RuleConditionDisplay from './rule-condition-display.vue';
-  import { useStrategyDetailRules } from './use-strategy-detail-rules';
+  import {
+    type NoticeGroupOption,
+    resolveNoticeGroupTags,
+    useStrategyDetailRules,
+  } from './use-strategy-detail-rules';
 
-  import { isPlatformStrategyRoute } from '../../utils/strategy-routes';
+  import { getStrategyListScopeParams, isPlatformStrategyRoute } from '../../utils/strategy-routes';
 
   interface Props {
     data: StrategyModel,
@@ -98,13 +119,16 @@
   const { t } = useI18n();
   const route = useRoute();
 
-  const showRuleNoticeGroups = computed(() => !isPlatformStrategyRoute(route.name));
+  const showRuleNoticeGroups = computed(() => {
+    const isGlobal = props.data?.visibility?.binding_type === 'platform_binding'
+      || props.data?.binding_type === 'platform_binding';
+    return !isPlatformStrategyRoute(route.name) && !isGlobal;
+  });
 
   const strategyData = computed(() => props.data);
   const {
     displayRules,
     riskLevelMap,
-    resolveGroupNames,
   } = useStrategyDetailRules(strategyData);
 
   const {
@@ -113,6 +137,31 @@
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
   });
+
+  const {
+    data: selectGroupList,
+    run: fetchSelectGroupList,
+  } = useRequest(NoticeGroupManageService.fetchGroupSelectList, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const noticeGroupList = computed<NoticeGroupOption[]>(() => {
+    const map = new Map<string, NoticeGroupOption>();
+    (props.userGroupList || []).forEach((item) => {
+      map.set(String(item.id), item);
+    });
+    (selectGroupList.value || []).forEach((item) => {
+      map.set(String(item.id), item);
+    });
+    return Array.from(map.values());
+  });
+
+  const displayRulesWithTags = computed(() => displayRules.value.map(rule => ({
+    ...rule,
+    processorTags: resolveNoticeGroupTags(rule.processor, noticeGroupList.value),
+    followerTags: resolveNoticeGroupTags(rule.follower, noticeGroupList.value),
+  })));
 
   const operatorMap = computed(() => (
     commonData.value.rule_audit_condition_operator || []
@@ -123,6 +172,8 @@
 
   onMounted(() => {
     fetchStrategyCommon();
+    const { scene_id: sceneId } = getStrategyListScopeParams(route);
+    fetchSelectGroupList(sceneId ? { scene_id: sceneId } : undefined);
   });
 </script>
 <style scoped lang="postcss">
@@ -185,6 +236,17 @@
     padding-left: 14px;
     color: #63656e;
     word-break: break-all;
+  }
+
+  .notice-group-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .notice-group-tag {
+    max-width: 220px;
+    margin: 0 4px 4px 0;
   }
 
   .risk-level-tag {

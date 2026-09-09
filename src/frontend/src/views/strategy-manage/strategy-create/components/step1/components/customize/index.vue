@@ -92,11 +92,18 @@
           </span>
         </template>
         <bk-loading :loading="typeTableLoading">
-          <div class="select-group">
+          <div
+            v-bk-tooltips="{
+              content: t('审计策略不支持编辑数据源'),
+              disabled: !isEditMode,
+              placement: 'top',
+            }"
+            class="select-group">
             <data-source-picker
               ref="dataSourcePickerRef"
               v-model="tableId"
               :decode-type-biz-id="decodeTypeBizId"
+              :disabled="isEditMode"
               :list="allConfigTypeTable"
               :load-children="handlePickerLoadChildren"
               :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
@@ -367,10 +374,12 @@
   }
   interface Emits {
     (e: 'updateFormData', value: IFormData): void
+    (e: 'resetHitConditions'): void
   }
   interface Expose {
     getFields: (options?: { forValidate?: boolean }) => IFormData;
     typeTableLoading: boolean;
+    resetFormData: () => void;
   }
   interface Props {
     editData: any,
@@ -862,6 +871,7 @@
       table_id: rtId,
     }).then((data) => {
       tableFields.value = setTableFields(data, rtId);
+      formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
     })
       .finally(() => {
         tableFieldsLoading.value = false;
@@ -888,6 +898,7 @@
       data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
+      formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
     })
       .finally(() => {
         tableFieldsLoading.value = false;
@@ -975,6 +986,7 @@
   };
   const removeTreeData = () => {
     sessionStorage.removeItem('storage-tree-data');
+    sessionStorage.removeItem('rule-tree-data');
   };
   const createInfoBoxConfig = (overrides: {
     onConfirm: () => void
@@ -1031,7 +1043,13 @@
       connector: 'and',
       conditions: [],
     };
+    formData.value.configs.table_fields = [];
+    tableFields.value = [];
+    removeTreeData();
     [rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
+    if (!isEditMode) {
+      emits('resetHitConditions');
+    }
   };
 
   // 选择tableid和数据源类型
@@ -1072,8 +1090,8 @@
         return;
       }
 
-      // 有填写预期结果、风险发现规则，重置
-      if (hasData.value) {
+      // 有填写预期结果、风险发现规则，或从已有数据源切换，重置下游字段与命中条件
+      if (hasData.value || previousTableId.value.length) {
         resetDataSource();
       }
 
@@ -1127,8 +1145,8 @@
       handleTableChangeCore(value);
     };
 
-    // 首次初始化或没有配置数据，直接处理
-    if (!formData.value.configs.config_type || !hasData.value) {
+    // 首次选择数据源直接处理；已有数据源时弹窗确认
+    if (!previousTableId.value.length) {
       applyChange();
       return;
     }
@@ -1170,6 +1188,11 @@
     tableIdEchoSeq += 1;
     isEchoingTableId = false;
 
+    const pathChanged = previousTableId.value.join(',') !== path.join(',');
+    if (pathChanged && previousTableId.value.length) {
+      resetDataSource();
+    }
+
     if (!formData.value.configs.data_source) {
       formData.value.configs.data_source = {
         system_ids: [],
@@ -1196,6 +1219,7 @@
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     formData.value.configs.select = expectedResult;
+    sessionStorage.removeItem('rule-tree-data');
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
       formData.value.configs.data_source.source_type = '';
@@ -1495,8 +1519,10 @@
     () => props.parentConfigs,
     (configs) => {
       if (props.stepMode !== 'rules-only' || !configs) return;
-      if (configs.select?.length) {
-        formData.value.configs.select = _.cloneDeep(configs.select);
+      formData.value.configs.select = _.cloneDeep(configs.select || []);
+      if (Array.isArray(configs.table_fields)) {
+        tableFields.value = _.cloneDeep(configs.table_fields);
+        formData.value.configs.table_fields = _.cloneDeep(configs.table_fields);
       }
       if (configs.config_type) {
         formData.value.configs.config_type = configs.config_type;
@@ -1512,6 +1538,39 @@
       }
     },
     { immediate: true, deep: true },
+  );
+
+  let schemaSourceWatchReady = false;
+  watch(
+    () => [
+      formData.value.configs.config_type,
+      resolveRtId(formData.value.configs.data_source?.rt_id),
+      formData.value.configs.data_source?.link_table?.uid || '',
+    ].join('|'),
+    (next, prev) => {
+      if (props.stepMode === 'basic' || !prev || next === prev) return;
+      if (!schemaSourceWatchReady) {
+        schemaSourceWatchReady = true;
+        return;
+      }
+      removeTreeData();
+      tableFields.value = [];
+      formData.value.configs.table_fields = [];
+      if (formData.value.configs.config_type === 'LinkTable') {
+        const linkTable = formData.value.configs.data_source.link_table;
+        if (linkTable?.uid) {
+          fetchLinkDataSheetDetail({
+            uid: linkTable.uid,
+            version: linkTable.version ?? 0,
+          });
+        }
+        return;
+      }
+      const rtId = resolveRtId(formData.value.configs.data_source?.rt_id);
+      if (rtId) {
+        fetDatabaseTableFields(rtId);
+      }
+    },
   );
 
   defineExpose<Expose>({
@@ -1628,9 +1687,21 @@
     get typeTableLoading() {
       return typeTableLoading.value;
     },
+    resetFormData: () => {
+      formData.value.configs.where = {
+        connector: 'and',
+        conditions: [],
+      };
+      formData.value.configs.having = {
+        connector: 'and',
+        conditions: [],
+      };
+      rulesComponentRef.value?.resetFormData?.();
+    },
   });
   onMounted(() => {
-    sessionStorage.removeItem('storage-tree-data'); // 清除数据
+    sessionStorage.removeItem('storage-tree-data');
+    sessionStorage.removeItem('rule-tree-data');
     if (pendingWhereEditData.value) {
       nextTick(() => {
         applyRulesWhere(pendingWhereEditData.value);

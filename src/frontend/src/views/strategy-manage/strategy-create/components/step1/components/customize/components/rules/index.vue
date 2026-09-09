@@ -140,8 +140,8 @@
 
   // 是否有选中预期结果
   const hasSelectedExpectedResult = computed(() => where.value.conditions
-    .some(item => item.conditions
-      .some(condItem => condItem.condition.field?.aggregate)));
+    .some(item => item?.conditions
+      ?.some(condItem => condItem?.condition?.field?.aggregate)));
 
   const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
     const beforeArr = where.value.conditions.slice(0, index);

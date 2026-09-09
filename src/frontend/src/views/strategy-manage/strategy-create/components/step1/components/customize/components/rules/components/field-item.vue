@@ -36,6 +36,7 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required>
       <node-select
+        :key="tableFieldsSign"
         :aggregate-list="aggregateList"
         :condition="condition"
         :config-data="localTableFields"
@@ -98,7 +99,7 @@
 
       <!-- 日志表特有，人员选择器 -->
       <audit-user-selector-tenant
-        v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
+        v-else-if="condition.condition.field?.raw_name?.includes('username') && props.configType === 'EventLog'"
         allow-create
         :auto-focus="false"
         class="consition-value user-selector-value"
@@ -476,25 +477,29 @@
     });
   };
 
-  // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
-    // 检查是否已经选择了预期结果中的字段
-    const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
-
-    // 根据是否选择了预期结果字段来更新字段列表
-    localTableFields.value = hasSelectedExpectedResultField
-      ? [...filteredExpectedResult]
-      : [...tableFields, ...filteredExpectedResult];
-
-    localTableFields.value = localTableFields.value.map(item => ({ ...item }));
+  // 命中条件下拉：有预期结果时只用预期结果字段，否则回退数据源全部字段
+  const updateTableFields = (
+    _conditions: Props['conditions']['conditions'],
+    tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+  ) => {
+    const expected = (expectedResult || []).filter(item => item?.raw_name || item?.display_name);
+    const source = expected.length ? expected : (tableFields || []);
+    localTableFields.value = source.map(item => ({ ...item }));
   };
+
+  const tableFieldsSign = computed(() => localTableFields.value
+    .map(item => `${item.raw_name || ''}:${item.aggregate || ''}:${item.display_name || ''}`)
+    .join('|'));
   // 返回值
   const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
     // eslint-disable-next-line no-param-reassign
     condition.condition.field = { ...node };
-    // eslint-disable-next-line no-param-reassign
-    condition.condition.field.display_name = val;
+    // 下拉展示值可能已是「中文名(raw_name)」，不要写回 display_name，避免详情重复拼接
+    if (val && ('self_name' in node || 'fieldTypeValueAr' in node)) {
+      // eslint-disable-next-line no-param-reassign
+      condition.condition.field.display_name = val;
+    }
     if ('fieldTypeValueAr' in node) {
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.keys = node.fieldTypeValueAr;
@@ -510,10 +515,19 @@
   });
 
   watch(() => props.conditions, (data) => {
-    localConditions.value = JSON.parse(JSON.stringify(data));
-    localConditions.value.conditions = localConditions.value.conditions.map((cond: any) => ({
+    if (!data) return;
+    try {
+      localConditions.value = JSON.parse(JSON.stringify(data));
+    } catch {
+      localConditions.value = {
+        connector: data.connector || 'and',
+        index: data.index ?? 0,
+        conditions: Array.isArray(data.conditions) ? data.conditions.map(item => ({ ...item })) : [],
+      };
+    }
+    localConditions.value.conditions = (localConditions.value.conditions || []).map((cond: any) => ({
       ...cond,
-      condition: normalizeConditionValueForDisplay(cond.condition),
+      condition: normalizeConditionValueForDisplay(cond?.condition),
     }));
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉

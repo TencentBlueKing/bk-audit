@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n';
 
 import type StrategyModel from '@model/strategy/strategy';
 
-import { isEmptyDispatchConditions, parseStrategyDetailToForm } from '../../strategy-create/utils/strategy-protocol';
+import { formatFieldDisplayLabel, isEmptyDispatchConditions, parseStrategyDetailToForm } from '../../strategy-create/utils/strategy-protocol';
 
 import {
   dispatchConditionsToWhere,
@@ -39,9 +39,7 @@ const buildFieldLabelMap = (fields: Array<Record<string, any>> = []) => {
     const rawName = field.raw_name || field.value;
     const displayName = field.display_name || field.label;
     if (!rawName && !displayName) return;
-    const label = displayName && rawName && displayName !== rawName
-      ? `${displayName}(${rawName})`
-      : (displayName || rawName || '');
+    const label = formatFieldDisplayLabel(displayName, rawName);
     if (displayName) {
       map[displayName] = label;
     }
