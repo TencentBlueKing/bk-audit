@@ -108,6 +108,8 @@ export interface AiNaturalLanguageSearchInput {
 }
 
 export type AiNlRecognitionErrorCode =
+  | 'UNRECOGNIZED_INTENT'
+  | 'SYSTEM_REQUIRED'
   | 'QUERY_NOT_RECOGNIZED'
   | 'AI_OUTPUT_PARSE_FAILED'
   | 'AI_OUTPUT_INVALID'

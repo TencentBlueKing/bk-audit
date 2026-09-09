@@ -105,9 +105,19 @@
                 </div>
                 <div class="status-desc">
                   {{
-                    msg.aiMessage || msg.recognitionError.message || getRecognitionFallback(msg.recognitionError.code)
+                    msg.recognitionError.message
+                      || msg.aiMessage
+                      || getRecognitionFallback(msg.recognitionError.code)
                   }}
                 </div>
+                <bk-button
+                  v-if="showRecognitionResend(msg.recognitionError.code) && msg.content"
+                  class="recognition-resend-btn"
+                  size="small"
+                  theme="primary"
+                  @click="handleEditAndResend(msg.content || '')">
+                  编辑后重发
+                </bk-button>
               </div>
               <div
                 v-if="showRecognitionSuggestions(msg.recognitionError.code)"
@@ -311,7 +321,19 @@
     NL_RECOGNITION_FALLBACKS[code] || '请修改描述后重新发送'
   );
 
-  const showRecognitionSuggestions = (code: string) => code === 'QUERY_NOT_RECOGNIZED';
+  /** 意图不明 / 条件未识别 / 条件无效：展示固定「试试这样说」 */
+  const showRecognitionSuggestions = (code: string) => (
+    code === 'UNRECOGNIZED_INTENT'
+    || code === 'QUERY_NOT_RECOGNIZED'
+    || code === 'AI_OUTPUT_INVALID'
+  );
+
+  /** AI 瞬时失败：回填原句到输入框，由用户编辑后重发（不走 RetryMessage） */
+  const showRecognitionResend = (code: string) => (
+    code === 'AI_TIMEOUT'
+    || code === 'AI_SERVICE_ERROR'
+    || code === 'AI_OUTPUT_PARSE_FAILED'
+  );
 
   const getProcessingText = (messageType?: string) => {
     if (messageType === 'LOG_SEARCH') return '正在检索日志…';
@@ -367,6 +389,12 @@
   }).join('|'));
 
   const handleSelectSuggestion = (text: string) => {
+    chatInputRef.value?.setInputValue(text);
+  };
+
+  /** AI 瞬时失败：把原查询填回输入框，便于用户修改后重发 */
+  const handleEditAndResend = (text: string) => {
+    if (!text) return;
     chatInputRef.value?.setInputValue(text);
   };
 
@@ -721,6 +749,10 @@
       .status-title,
       .status-desc {
         text-align: center;
+      }
+
+      .recognition-resend-btn {
+        margin-top: 4px;
       }
     }
 
