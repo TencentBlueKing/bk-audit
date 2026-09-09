@@ -42,7 +42,10 @@ export interface SystemFieldRow {
   options?: SystemFieldOption[];
   /** 是否为扩展字段（keys 非空） */
   isExtension?: boolean;
+  /** 原始样本值，供条件筛选回填 */
   sampleValue?: any;
+  /** 样本展示文案，供引导卡 / 自然语言展示 */
+  sampleValueDisplay?: string | null;
   systemId?: string;
   systemName?: string;
 }
