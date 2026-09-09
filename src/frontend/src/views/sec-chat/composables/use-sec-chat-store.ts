@@ -24,7 +24,10 @@ import type {
   AiSidebarConversationNode,
   AiSidebarGroupNode,
   AiSidebarNode,
+  AiUserIntentInput,
 } from '@model/ai-assistant/types';
+
+import { buildAiUserIntentScopeFields } from '@/utils/assist/scene-system-params';
 
 import type {
   Conversation,
@@ -40,6 +43,13 @@ import {
   getNlRecognitionError,
   mapAiMessageToChatMessage,
 } from '../utils/map-ai-message';
+
+/** 组装 USER_INTENT input_data（附带当前场景选择器 scope） */
+const buildUserIntentInputData = (queryText: string): AiUserIntentInput => ({
+  query_text: queryText,
+  auto_execute: true,
+  ...buildAiUserIntentScopeFields(),
+});
 
 const MESSAGE_POLL_INTERVAL_MS = 2000;
 const CHILD_LOG_RETRY_TIMES = 3;
@@ -308,10 +318,7 @@ const sendLogQueryForConversation = async (
     const message = await AiAssistantManageService.createMessage({
       conversation_uid: conv.id,
       message_type: 'USER_INTENT',
-      input_data: {
-        query_text: text,
-        auto_execute: true,
-      },
+      input_data: buildUserIntentInputData(text),
     });
     upsertConversationMessage(conv.id, message);
     if (message.status === 'PROCESSING') {
