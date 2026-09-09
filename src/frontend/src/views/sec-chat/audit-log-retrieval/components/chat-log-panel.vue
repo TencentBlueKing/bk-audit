@@ -20,7 +20,19 @@
       ref="panelBodyRef"
       class="panel-body"
       @scroll="handlePanelScroll">
-      <div class="chat-surface">
+      <bk-loading
+        v-if="showMessageLoading"
+        class="message-area-loading"
+        color="transparent"
+        :loading="true"
+        :opacity="0"
+        size="small"
+        title="加载消息…">
+        <div class="message-area-loading-box" />
+      </bk-loading>
+      <div
+        v-else-if="!messageLoading"
+        class="chat-surface">
         <div
           v-if="hasBeforeMessages || loadingOlderMessages"
           class="history-loading-hint">
@@ -170,6 +182,7 @@
               :initial-sample="card.sample"
               :standard-fields="standardFields"
               :systems="systems"
+              @reselect-system="handleReselectSystem"
               @searched="(success) => handleConditionSearched(card.id, success)" />
           </div>
         </div>
@@ -189,7 +202,14 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, nextTick, onActivated, ref, watch } from 'vue';
+  import {
+    computed,
+    nextTick,
+    onActivated,
+    onBeforeUnmount,
+    ref,
+    watch,
+  } from 'vue';
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
@@ -250,9 +270,19 @@
   const olderLoadTriggered = ref(false);
   /** 首次滚到底完成前禁止触发上滑加载，避免 scrollTop=0 误触 BEFORE 请求 */
   const allowLoadOlder = ref(false);
+  /** 延迟展示消息区 loading，避免接口很快返回时闪一下 */
+  const showMessageLoading = ref(false);
+  let messageLoadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
   const SCROLL_LOAD_THRESHOLD = 80;
   const CONDITION_FILTER_SCROLL_MS = 400;
+  const MESSAGE_LOADING_DELAY_MS = 160;
+
+  const clearMessageLoadingDelay = () => {
+    if (!messageLoadingDelayTimer) return;
+    clearTimeout(messageLoadingDelayTimer);
+    messageLoadingDelayTimer = null;
+  };
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
     SYSTEM_REQUIRED: '需要补充系统信息',
@@ -513,14 +543,29 @@
   });
 
   watch(() => props.messageLoading, (loading, wasLoading) => {
-    if (wasLoading && !loading) {
-      void scrollToBottom(false);
+    clearMessageLoadingDelay();
+    if (!loading) {
+      showMessageLoading.value = false;
+      if (wasLoading) {
+        void scrollToBottom(false);
+      }
+      return;
     }
-  });
+    messageLoadingDelayTimer = setTimeout(() => {
+      messageLoadingDelayTimer = null;
+      if (props.messageLoading) {
+        showMessageLoading.value = true;
+      }
+    }, MESSAGE_LOADING_DELAY_MS);
+  }, { immediate: true });
 
   onActivated(() => {
     allowLoadOlder.value = false;
     void scrollToBottom(false);
+  });
+
+  onBeforeUnmount(() => {
+    clearMessageLoadingDelay();
   });
 </script>
 
@@ -584,6 +629,15 @@
     overflow: visible;
     flex-direction: column;
     gap: 24px;
+  }
+
+  .message-area-loading {
+    flex: 1;
+    min-height: 160px;
+  }
+
+  .message-area-loading-box {
+    min-height: 160px;
   }
 
   .history-loading-hint {
