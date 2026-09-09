@@ -24,6 +24,22 @@ from services.web.strategy_v2.serializers import (
 from tests.base import TestCase
 
 
+def make_dispatch_condition(field_name, operator="eq", filters=None, filter_val=""):
+    """构造分派条件叶子（field 为对象结构，同发现规则 where）"""
+    return {
+        "field": {
+            "table": "event",
+            "raw_name": field_name,
+            "display_name": field_name,
+            "field_type": "string",
+            "keys": [],
+        },
+        "operator": operator,
+        "filters": filters or [],
+        "filter": filter_val,
+    }
+
+
 class MultiRuleValidateMixinTest(TestCase):
     """MultiRuleValidateMixin 基础测试"""
 
@@ -358,7 +374,7 @@ class CheckDispatchRulesTest(TestCase):
             "dispatch_rules": [
                 {
                     "rule_name": "same_name",
-                    "conditions": {"condition": {"field": "f", "operator": "eq", "filters": ["v"]}},
+                    "conditions": {"condition": make_dispatch_condition("f", filters=["v"])},
                     "target_scene_id": self.scene.scene_id,
                     "processor": [self.notice_group.group_id],
                     "follower": [self.notice_group.group_id],
@@ -386,7 +402,7 @@ class CheckDispatchRulesTest(TestCase):
             "dispatch_rules": [
                 {
                     "rule_name": "r1",
-                    "conditions": {"condition": {"field": "f", "operator": "eq", "filters": ["v"]}},
+                    "conditions": {"condition": make_dispatch_condition("f", filters=["v"])},
                     "target_scene_id": self.scene.scene_id,
                     "processor": [self.notice_group.group_id],
                     "follower": [self.notice_group.group_id],
@@ -502,7 +518,7 @@ class CheckDispatchRulesTest(TestCase):
             "dispatch_rules": [
                 {
                     "rule_name": "high_risk",
-                    "conditions": {"condition": {"field": "risk_level", "operator": "eq", "filters": ["HIGH"]}},
+                    "conditions": {"condition": make_dispatch_condition("risk_level", filters=["HIGH"])},
                     "target_scene_id": self.scene.scene_id,
                     "processor": [self.notice_group.group_id],
                     "follower": [self.notice_group.group_id],
@@ -523,6 +539,141 @@ class CheckDispatchRulesTest(TestCase):
         # 验证 is_default 被自动设置
         self.assertFalse(result["dispatch_rules"][0]["is_default"])
         self.assertTrue(result["dispatch_rules"][1]["is_default"])
+
+    def test_dispatch_condition_with_frontend_field_extras(self):
+        """前端字段对象携带扩展属性（isEdit/selectedValue/children 等）时正常通过校验"""
+        attrs = {
+            "binding_type": BindingType.PLATFORM_BINDING,
+            "configs": {
+                "select": [
+                    {
+                        "table": "47_bklog_bkaudit_plugin_20250926_2ac1656e73",
+                        "raw_name": "action_id",
+                        "display_name": "操作ID(action_id)",
+                        "field_type": "string",
+                    }
+                ]
+            },
+            "dispatch_rules": [
+                {
+                    "rule_name": "查看风险列表",
+                    "conditions": {
+                        "connector": "and",
+                        "conditions": [
+                            {
+                                "condition": {
+                                    "field": {
+                                        "keys": [],
+                                        "table": "47_bklog_bkaudit_plugin_20250926_2ac1656e73",
+                                        "isEdit": False,
+                                        "remark": "",
+                                        "children": [],
+                                        "property": {},
+                                        "raw_name": "action_id",
+                                        "aggregate": None,
+                                        "field_type": "string",
+                                        "display_name": "操作ID(action_id)",
+                                        "selectedValue": "操作ID(action_id)",
+                                        "spec_field_type": "string",
+                                    },
+                                    "operator": "eq",
+                                    "filter": "list_risk_v2",
+                                }
+                            }
+                        ],
+                    },
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+                {
+                    "rule_name": "default",
+                    "conditions": {},
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+            ],
+        }
+        result = self.mixin._check_dispatch_rules(attrs)
+        self.assertEqual(result, attrs)
+        self.assertFalse(result["dispatch_rules"][0]["is_default"])
+        self.assertTrue(result["dispatch_rules"][1]["is_default"])
+
+    def test_dispatch_condition_field_not_in_vocabulary_rejected(self):
+        """分派条件字段不在词表内（非 select 字段且非直连字段）时拒绝"""
+        attrs = {
+            "binding_type": BindingType.PLATFORM_BINDING,
+            "configs": {
+                "select": [
+                    {
+                        "table": "47_bklog_bkaudit_plugin_20250926_2ac1656e73",
+                        "raw_name": "action_id",
+                        "display_name": "操作ID(action_id)",
+                        "field_type": "string",
+                    }
+                ]
+            },
+            "dispatch_rules": [
+                {
+                    "rule_name": "r1",
+                    "conditions": {"condition": make_dispatch_condition("not_exist_field")},
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+                {
+                    "rule_name": "default",
+                    "conditions": {},
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+            ],
+        }
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin._check_dispatch_rules(attrs)
+        self.assertIn("不在可选范围内", str(cm.exception))
+
+    def test_dispatch_condition_passthrough_field_allowed(self):
+        """直连字段（risk_level 等规则实例化字段）在词表内，select 非空时可通过校验"""
+        attrs = {
+            "binding_type": BindingType.PLATFORM_BINDING,
+            "configs": {
+                "select": [
+                    {
+                        "table": "47_bklog_bkaudit_plugin_20250926_2ac1656e73",
+                        "raw_name": "action_id",
+                        "display_name": "操作ID(action_id)",
+                        "field_type": "string",
+                    }
+                ]
+            },
+            "dispatch_rules": [
+                {
+                    "rule_name": "r1",
+                    "conditions": {"condition": make_dispatch_condition("risk_level", filters=["HIGH"])},
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+                {
+                    "rule_name": "default",
+                    "conditions": {},
+                    "target_scene_id": self.scene.scene_id,
+                    "processor": [self.notice_group.group_id],
+                    "follower": [self.notice_group.group_id],
+                    "confirmer": [self.notice_group.group_id],
+                },
+            ],
+        }
+        result = self.mixin._check_dispatch_rules(attrs)
+        self.assertEqual(result, attrs)
 
 
 class PlatformVsSceneBindingTest(TestCase):

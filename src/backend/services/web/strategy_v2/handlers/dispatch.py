@@ -16,47 +16,24 @@ limitations under the License.
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Union
 
-from pydantic import BaseModel as PydanticBaseModel
-from pydantic import Field as PydanticField
-
 from core.sql.constants import FilterConnector, Operator
+from core.sql.model import Condition
+from core.sql.model import Field as ConditionField
+from core.sql.model import WhereCondition
 from services.web.strategy_v2.constants import DispatchMode
 from services.web.strategy_v2.models import DispatchRule, Strategy
 
 """
 分派规则匹配器: Python 内存求值
 
-字段词表（可引用字段）：
-- 事件输出字段：EventMappingFields 定义的全部字段（strategy_id/strategy_rule_id/event_data/
-  event_type/event_time/event_source/operator/raw_event_id/event_content...）
-- 规则实例化字段：risk_level、risk_hazard / risk_guidance
-- event_data.* JSON 路径：覆盖策略级 select 的维度/聚合字段（如 event_data.resource_type），
-  resolve_field 按 '.' 分层下钻取值
+条件树结构：与发现规则 where 条件一致（core.sql.model.WhereCondition，field 为字段对象）
+
+字段词表（field 对象的求值来源，resolve_field 按此解析）：
+- select 字段：display_name 命中事件输出 event_data 的键（策略级 select 以 display_name 作为输出列名）
+- 直连字段：raw_name 直接读取——事件输出字段（EventMappingFields 定义，
+  如 strategy_id/strategy_rule_id/event_type/event_time/event_source/operator/raw_event_id/event_content...）
+  及规则实例化字段（risk_level、risk_hazard、risk_guidance）
 """
-
-
-class DispatchCondition(PydanticBaseModel):
-    """
-    一条规则的一个条件：字段表达式 + 操作符 + 筛选值。
-    """
-
-    field: str = PydanticField(description="字段表达式：事件输出字段 / risk_level / event_data.xxx")
-    operator: Operator
-    filters: List[Union[str, int, float]] = PydanticField(default_factory=list)  # 多值
-    filter: Union[str, int, float] = PydanticField(default="")  # 单值
-
-
-class DispatchConditionNode(PydanticBaseModel):
-    """
-    一个条件树，多个DispatchCondition和connector的组合
-    """
-
-    connector: FilterConnector = FilterConnector.AND
-    condition: Optional[DispatchCondition] = None
-    conditions: List["DispatchConditionNode"] = PydanticField(default_factory=list)
-
-
-DispatchConditionNode.model_rebuild()
 
 
 @dataclass
@@ -91,27 +68,18 @@ class DispatchResult:
         )
 
 
-# event_data 前缀：前缀命中后按 '.' 下钻
-EVENT_DATA_PREFIX = "event_data."
-
-
-def resolve_field(field_expr: str, ctx: dict) -> Any:
+def resolve_field(field: ConditionField, ctx: dict) -> Any:
     """
-    解析字段表达式的值。
-    - event_data.xxx.yyy：从 ctx 的 event_data dict 逐层下钻（覆盖策略级 select 字段）
-    - 其他：直接读取
+    解析条件字段对象的值（结构同发现规则 where 的 field 对象）：
+    - select 字段：display_name 命中 ctx.event_data 的键（策略级 select 以 display_name 作为输出列名）
+    - 直连字段：raw_name 直接读取（事件输出字段 / risk_level 等规则实例化字段）
     """
-    if not field_expr:
+    if field is None:
         return None
-    if field_expr.startswith(EVENT_DATA_PREFIX):
-        node: Any = ctx.get("event_data")
-        for key in field_expr[len(EVENT_DATA_PREFIX) :].split("."):
-            if isinstance(node, dict):
-                node = node.get(key)
-            else:
-                return None
-        return node
-    return ctx.get(field_expr)
+    event_data = ctx.get("event_data")
+    if isinstance(event_data, dict) and field.display_name in event_data:
+        return event_data[field.display_name]
+    return ctx.get(field.raw_name)
 
 
 def _stringify(value: Any) -> Optional[str]:
@@ -215,10 +183,10 @@ PY_OPERATORS = {
 }
 
 
-def apply_condition(condition: DispatchCondition, ctx: dict) -> bool:
+def apply_condition(condition: Condition, ctx: dict) -> bool:
     """
     原子条件求值：字段解析 + 操作符比较。
-    字段表达式直接取 condition.field（词表标准名或 event_data.xxx 路径）。
+    字段对象经 resolve_field 解析（select 字段按 display_name 取 event_data，直连字段按 raw_name 取 ctx）。
     """
     op_func = PY_OPERATORS.get(condition.operator)
     if op_func is None:
@@ -228,7 +196,7 @@ def apply_condition(condition: DispatchCondition, ctx: dict) -> bool:
     return op_func(actual, condition.filter, condition.filters)
 
 
-def evaluate(node: Optional[DispatchConditionNode], ctx: dict) -> bool:
+def evaluate(node: Optional[WhereCondition], ctx: dict) -> bool:
     """
     条件树求值（递归），返回最终布尔结果：
     - None / 空树 -> True（无条件匹配）
@@ -287,21 +255,18 @@ def match_dispatch_rule(
     return default_result if default_result is not None else DispatchResult.miss()
 
 
-def to_condition_tree(conditions: Union[dict, DispatchConditionNode]) -> DispatchConditionNode:
+def to_condition_tree(conditions: Union[dict, WhereCondition, None]) -> WhereCondition:
     """
-    DispatchRule.conditions（JSON dict）-> DispatchConditionNode（pydantic 对象）
+    DispatchRule.conditions（JSON dict）-> WhereCondition（pydantic 对象，结构同发现规则 where）
     """
-    if isinstance(conditions, DispatchConditionNode):
+    if isinstance(conditions, WhereCondition):
         return conditions
-    subs = [to_condition_tree(sub) for sub in conditions.get("conditions") or []]
-    return DispatchConditionNode(
-        connector=conditions.get("connector") or FilterConnector.AND,
-        conditions=subs,
-        condition=conditions.get("condition"),
-    )
+    if not conditions:
+        return WhereCondition()
+    return WhereCondition.model_validate(conditions)
 
 
-def evaluate_is_empty(conditions: Union[dict, DispatchConditionNode, None]) -> bool:
+def evaluate_is_empty(conditions: Union[dict, WhereCondition, None]) -> bool:
     """条件树是否为空树（无叶子且无有效子树）"""
     if conditions is None:
         return True
@@ -310,7 +275,7 @@ def evaluate_is_empty(conditions: Union[dict, DispatchConditionNode, None]) -> b
         if conditions.get("condition"):
             return False
         return all(evaluate_is_empty(sub) for sub in conditions.get("conditions") or [])
-    if isinstance(conditions, DispatchConditionNode):
+    if isinstance(conditions, WhereCondition):
         if conditions.condition:
             return False
         return all(evaluate_is_empty(sub) for sub in conditions.conditions)
