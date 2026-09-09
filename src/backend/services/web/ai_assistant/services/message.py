@@ -221,11 +221,16 @@ class MessageService:
         message_type: str | MessageType,
         input_data: Mapping[str, Any],
         parent_message: Message | None = None,
+        timeline_started_at=None,
     ) -> Message:
         """任务内编排专用：同步执行业务并直接落库成功消息（不经 Celery 派发）。
 
         用于异步任务内创建子消息（NL 续链 / 意图识别子链的 SELECTION 与 LOG_SEARCH），
         保证父消息收敛时整条链完成（时序一致）；对外创建一律走 create（全异步）。
+
+        :param timeline_started_at: 时间线起点（用户发问消息的 created_at）：回写为本消息
+            created_at，使 duration_seconds 表达「用户发问 → 本条 AI 输出完成」的真实耗时
+            （含此前所有 LLM 编排）；缺省为落库时刻（耗时≈0）。
         """
 
         # 编排场景父消息可能刚收敛终态（内存实例仍是 PROCESSING），刷新后校验
@@ -263,6 +268,10 @@ class MessageService:
                 created_by=self.user,
                 updated_by=self.user,
             )
+            if timeline_started_at is not None:
+                # auto_now_add 会覆盖显式传值，落库后回写时间线起点
+                Message.objects.filter(id=message.id).update(created_at=timeline_started_at)
+                message.created_at = timeline_started_at
         self._maybe_dispatch_field_condition_title(message)
         return message
 

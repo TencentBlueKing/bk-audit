@@ -81,6 +81,62 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
         self.assertIsNone(data["duration_seconds"])
         self.assertIsNone(data["finished_at"])
 
+    def test_duration_seconds_clamped_on_timestamp_inversion(self):
+        """时间戳微秒倒挂（create_executed 同步落库：finished_at 早于 created_at）钳位为 0.0。"""
+
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        message = self._create_message(ExecutionStatus.SUCCESS)
+        created = timezone.now()
+        Message.objects.filter(id=message.id).update(
+            created_at=created,
+            queued_at=created,
+            finished_at=created - timedelta(microseconds=400),  # 微秒级倒挂
+        )
+        message.refresh_from_db()
+
+        data = MessageResponseSerializer(message).data
+        # 不再出现 -0.0，钳位为 0.0（同步编排子消息耗时≈0 属正常）
+        self.assertEqual(data["duration_seconds"], 0.0)
+        self.assertNotEqual(str(data["duration_seconds"]), "-0.0")
+
+    def test_create_executed_timeline_started_at(self):
+        """任务内编排子消息：created_at 回写为用户发问时刻，duration = 全链真实耗时。"""
+
+        from datetime import timedelta
+
+        from django.utils import timezone as dj_timezone
+
+        from services.web.ai_assistant.constants import MessageType
+        from services.web.ai_assistant.handlers import message_handler_registry
+        from services.web.ai_assistant.schemas.audit_search import (
+            SystemSelectionOutputSchema,
+        )
+        from services.web.ai_assistant.services.message import MessageService
+
+        # 用户 9.8 秒前发问（父消息创建时刻即时间线起点）
+        origin = dj_timezone.now() - timedelta(seconds=9.8)
+        handler = message_handler_registry.require(MessageType.SYSTEM_SELECTION)
+        with mock.patch.object(
+            type(handler),
+            "execute",
+            return_value=SystemSelectionOutputSchema(systems=[], common_operations=[], historical_operations=[]),
+        ):
+            message = MessageService(user=self.user).create_executed(
+                conversation=self.conversation,
+                message_type=MessageType.SYSTEM_SELECTION,
+                input_data={"system_ids": [TARGET_SYSTEM_ID], "scope_type": "cross_system"},
+                timeline_started_at=origin,
+            )
+
+        # created_at 回写为发问时刻：duration ≈ 9.8s（含此前全部 LLM 编排等待）
+        self.assertEqual(message.created_at, origin)
+        data = MessageResponseSerializer(message).data
+        self.assertGreaterEqual(data["duration_seconds"], 9.0)
+        self.assertLess(data["duration_seconds"], 11.0)
+
     """历史 input_data（无 scope 字段）的 schema 层宽松解析。"""
 
     def test_legacy_user_intent_input_parses(self):

@@ -91,6 +91,8 @@ class NLSearchExecutionTask(MessageExecutionTask):
             message_type=MessageType.LOG_SEARCH,
             input_data={"condition": output_data.condition.model_dump(mode="json")},
             parent_message=message,
+            # 时间线起点=用户发问时刻（NL 消息创建即用户发问）：duration 为全链真实耗时
+            timeline_started_at=message.created_at,
         )
         logger.info(
             "[NLSearchExecutionTask] auto log search created, parent_message_id=%s",
@@ -163,6 +165,8 @@ class UserIntentExecutionTask(MessageExecutionTask):
             message_type=MessageType.LOG_SEARCH,
             input_data={"condition": output_data.condition.model_dump(mode="json")},
             parent_message=message,
+            # 时间线起点=用户发问时刻：检索结果消息的 duration_seconds 为全链真实耗时
+            timeline_started_at=message.created_at,
         )
         logger.info(
             "[UserIntentExecutionTask] auto log search created, parent_message_id=%s",
@@ -286,6 +290,8 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     "scope_type": context_data.scope_type or "cross_system",
                     "scope_id": context_data.scope_id,
                 },
+                # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
+                timeline_started_at=execution.message.created_at,
             )
     elif not current_system_id:
         # 检索意图明确但缺会话系统状态（非识别失败）：AI 动态引导 + 候选清单
