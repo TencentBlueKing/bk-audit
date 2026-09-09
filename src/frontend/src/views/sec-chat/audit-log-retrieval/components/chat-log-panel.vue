@@ -56,18 +56,11 @@
               {{ msg.content }}
             </div>
 
-            <!-- 系统确认/引导异步处理中 -->
-            <div
+            <!-- 系统确认/引导异步处理中：整条骨架占位，避免终态卡片突然撑开 -->
+            <retrieval-card-skeleton
               v-else-if="msg.messageType === 'SYSTEM_SELECTION'
                 && msg.apiStatus === 'PROCESSING'"
-              class="result-status-card is-loading">
-              <span class="loading-dot" />
-              <span class="loading-dot" />
-              <span class="loading-dot" />
-              <span class="status-text">
-                {{ msg.showGuide === false ? '正在理解检索意图…' : '正在准备系统检索范围…' }}
-              </span>
-            </div>
+              :status-text="msg.showGuide === false ? '正在理解检索意图…' : '正在加载检索引导…'" />
 
             <!-- 内联选择系统卡片 -->
             <select-system-card
@@ -93,15 +86,10 @@
               @open-condition-filter="handleOpenConditionFilter"
               @select-suggestion="handleSelectSuggestion" />
 
-            <!-- NL 处理中 -->
-            <div
+            <!-- NL 处理中：整条骨架占位，避免终态卡片突然撑开 -->
+            <retrieval-card-skeleton
               v-else-if="shouldShowRetrievalLoading(msg)"
-              class="result-status-card is-loading">
-              <span class="loading-dot" />
-              <span class="loading-dot" />
-              <span class="loading-dot" />
-              <span class="status-text">{{ getRetrievalLoadingText(msg) }}</span>
-            </div>
+              :status-text="getRetrievalLoadingText(msg)" />
 
             <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
             <div
@@ -216,6 +204,7 @@
   import errorSearchIcon from '@images/error-search.svg';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
+  import RetrievalCardSkeleton from './retrieval-card-skeleton.vue';
   import ConditionFilterCard from './condition-filter-card.vue';
   import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
@@ -708,13 +697,6 @@
     align-items: flex-start;
     gap: 8px;
 
-    &.is-loading {
-      flex-direction: row;
-      align-items: center;
-      gap: 6px;
-      color: #63656e;
-    }
-
     &.is-recognition-failed {
       align-items: stretch;
       gap: 16px;
@@ -791,12 +773,6 @@
       font-size: 12px;
       line-height: 18px;
       color: #979ba5;
-    }
-
-    .status-text {
-      margin-left: 4px;
-      font-size: 14px;
-      color: #63656e;
     }
   }
 
