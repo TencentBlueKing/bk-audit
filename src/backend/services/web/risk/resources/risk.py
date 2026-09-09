@@ -662,7 +662,6 @@ class ListRisk(RiskMeta):
             Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
             .filter(
                 q,
-                # 排除待确认状态（待确认有独立列表）
                 display_status__in=[
                     RiskDisplayStatus.NEW,
                     RiskDisplayStatus.PROCESSING,
@@ -671,6 +670,7 @@ class ListRisk(RiskMeta):
                     RiskDisplayStatus.AWAIT_PROCESS,
                     RiskDisplayStatus.CLOSED,
                     RiskDisplayStatus.STAND_BY,
+                    RiskDisplayStatus.PENDING_CONFIRM,
                 ],
             )
             .distinct()
