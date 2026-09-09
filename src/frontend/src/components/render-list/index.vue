@@ -287,11 +287,11 @@
             delete cleanedParams.order_field;
             delete cleanedParams.order_type;
           }
-          delete cleanedParams.scene_id;
           delete cleanedParams.scope_id;
           delete cleanedParams.scope_type;
-          if (props.sceneIdKey) {
-            delete cleanedParams[props.sceneIdKey];
+          if (isNeedSceneId) {
+            delete cleanedParams[props.sceneIdKey || 'scene_id'];
+            delete cleanedParams.scene_id;
           }
           const pageSize = Math.max(pagination.limit, 10);
           // 以 getSceneSystemParams 为准（含内存选中 + 地址栏），不用可能滞后的 route.query

@@ -143,7 +143,7 @@
   const {
     strategyList,
     strategyLoading,
-  } = useRiskListStrategyList('confirm');
+  } = useRiskListStrategyList('confirm', false);
 
   const {
     data: riskStatusCommon,
