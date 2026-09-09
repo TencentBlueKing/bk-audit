@@ -23,8 +23,6 @@ import type { IFieldConfig } from '@components/search-box/components/render-fiel
 
 import { formatStrategyOptionLabel } from '@utils/format-strategy-name';
 
-import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
-
 export default {
   risk_id: {
     label: '风险ID',
@@ -41,7 +39,8 @@ export default {
     formatLabel: formatStrategyOptionLabel,
     defaultParams: {
       risk_view_type: 'confirm',
-      isNeedSceneParams: true,
+      isNeedSceneParams: false,
+      scope_type: 'cross_scene',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -52,9 +51,9 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
+      noNeedSceneParams: true,
       risk_view_type: 'confirm',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
+      scope_type: 'cross_scene',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -85,6 +84,20 @@ export default {
     label: '风险描述',
     type: 'string',
     required: false,
+  },
+  scene_id: {
+    label: '所属场景',
+    type: 'select',
+    required: false,
+    service: RiskManageService.fetchRiskScenes,
+    defaultParams: {
+      risk_view_type: 'confirm',
+      isNeedSceneParams: false,
+      scope_type: 'cross_scene',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
+    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
   },
   risk_level: {
     label: '风险等级',

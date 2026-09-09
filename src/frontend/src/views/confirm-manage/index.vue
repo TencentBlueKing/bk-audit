@@ -17,15 +17,14 @@
 <template>
   <div class="risk-manage-list-page-wrap">
     <nl-search-box
-      :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
       risk-view-type="confirm"
+      scope-type="cross_scene"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
       @parsing="handleParsing" />
     <div
-      :key="fieldConfigKey"
       class="risk-manage-list">
       <div class="add-button">
         <bk-button
@@ -44,8 +43,6 @@
         :columns="tableColumns"
         :data-source="dataSource"
         enable-cross-page-select
-        is-need-scene-id
-        is-need-scene-params
         need-empty-search-tip
         row-key="risk_id"
         :search-params="searchModel"
@@ -67,7 +64,6 @@
     computed,
     onActivated,
     onMounted,
-    onUnmounted,
     ref,
   } from 'vue';
   import {
@@ -85,7 +81,6 @@
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
 
-  import useEventBus from '@hooks/use-event-bus';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useRiskBatchExport from '@hooks/use-risk-batch-export';
@@ -103,8 +98,6 @@
 
   import BatchConfirmDialog from './components/batch-confirm-dialog.vue';
   import FieldConfig from './components/config';
-
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface ISettings {
     checked: Array<string>,
@@ -179,10 +172,8 @@
   });
 
   const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
-  const settingsVersion = ref(0);
 
   const settings = computed(() => {
-    void settingsVersion.value;
     const jsonStr = localStorage.getItem('audit-confirm-risk-list-setting');
     let result: string[];
     if (jsonStr) {
@@ -198,16 +189,6 @@
     } else {
       result = defaultSettings;
     }
-    const sceneParams = getSceneSystemParams();
-    const isAllRisks = !sceneParams.scope_id
-      || sceneParams.scope_type === 'cross_scene'
-      || sceneParams.scope_type === 'cross_system';
-    if (isAllRisks && !result.includes('scene_id')) {
-      const idx = result.indexOf('event_time');
-      result.splice(idx + 1, 0, 'scene_id');
-    } else if (!isAllRisks) {
-      result = result.filter((key: string) => key !== 'scene_id');
-    }
     return result;
   });
 
@@ -216,7 +197,6 @@
   const batchConfirmRef = ref();
   const hasActivatedOnce = ref(false);
   const searchModel = ref<Record<string, any>>({});
-  const fieldConfigKey = ref(0);
   const isParsing = ref(false);
   const selectionMeta = ref({
     mode: '' as '' | 'page' | 'all',
@@ -291,6 +271,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: '',
@@ -307,7 +288,12 @@
     const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
+      // 无场景选择器：按「我的所有场景」范围查询
+      scope_type: 'cross_scene',
     };
+    if (dataParams.scene_id === 'allSecen' || dataParams.scene_id === 'allSystem') {
+      delete dataParams.scene_id;
+    }
     if (!dataParams.sort) {
       dataParams.sort = ['-last_operate_time', '-risk_id'];
     }
@@ -357,7 +343,7 @@
     defaultValue: [],
   });
 
-  const { strategyList } = useRiskListStrategyList('confirm');
+  const { strategyList } = useRiskListStrategyList('confirm', false);
 
   const {
     run: getRiskTags,
@@ -392,18 +378,12 @@
     }
   };
 
-  const { on, off } = useEventBus();
   onMounted(() => {
     getEventFields();
     getRiskTags({
+      noNeedSceneParams: true,
       risk_view_type: 'confirm',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-    });
-    on('scene-change', () => {
-      fieldConfigKey.value += 1;
-      settingsVersion.value += 1;
-      fetchList();
+      scope_type: 'cross_scene',
     });
   });
 
@@ -413,11 +393,6 @@
       return;
     }
     fetchList();
-  });
-
-  onUnmounted(() => {
-    off('scene-change');
-    fieldConfigKey.value = 0;
   });
 
   onBeforeRouteLeave((to, from, next) => {

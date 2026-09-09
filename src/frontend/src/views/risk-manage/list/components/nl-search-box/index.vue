@@ -129,11 +129,14 @@
     fieldConfig: Record<string, IFieldConfig>;
     scenes?: Array<{ scene_id: number; name: string }>;
     riskViewType?: string;
+    /** 固定场景范围，不随页面场景选择器变化 */
+    scopeType?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     scenes: undefined,
     riskViewType: 'all',
+    scopeType: '',
   });
 
   const emit = defineEmits<Emits>();
@@ -184,6 +187,11 @@
       if (urlSearchParams[searchFieldName] === undefined
         || urlSearchParams[searchFieldName] === null
         || urlSearchParams[searchFieldName] === '') return;
+      // 场景选择器写入的 scene_id（含 allSecen/allSystem、以及无选择器页的残留）不是「所属场景」筛选
+      if (searchFieldName === 'scene_id') {
+        const sceneId = String(urlSearchParams.scene_id);
+        if (sceneId === 'allSecen' || sceneId === 'allSystem' || props.scopeType) return;
+      }
       if (config.type !== 'string') {
         searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
       } else {
@@ -676,8 +684,8 @@
       risk_view_type: riskViewType.value || urlSearchParams.risk_view_type || 'all',
       start_time: startTime,
       end_time: endTime,
-      scope_type: urlSearchParams.scope_type,
-      scope_id: urlSearchParams.scope_id,
+      scope_type: props.scopeType || urlSearchParams.scope_type,
+      scope_id: props.scopeType ? '' : urlSearchParams.scope_id,
       scenes: props.scenes
         ?.filter((item: any) => item && item.scene_id && item.name)
         .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [],
@@ -868,10 +876,10 @@
   const handleRemoveEventField = (id: string) => {
     selectedItemList.value = selectedItemList.value.filter(item => item.id !== id);
     selectedVal.value = selectedItemList.value.map(item => item.id);
-    const EventFiltersParams = {
+    const EventFiltersParams = omitFixedScopeSearchParams({
       ...getSearchParams(),
       event_filters: eventFiltersParams.value,
-    };
+    });
     replaceSearchParams(EventFiltersParams);
     handleSubmit();
   };
@@ -883,6 +891,15 @@
       .map(item => (item === null ? '' : item.toString()))
       .filter(item => item !== '' && item !== allText)
   );
+
+  const omitFixedScopeSearchParams = (params: Record<string, any>) => {
+    if (!props.scopeType) return params;
+    const next = { ...params };
+    delete next.scene_id;
+    delete next.scope_id;
+    delete next.scope_type;
+    return next;
+  };
 
   const getSearchParams = () => {
     if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
@@ -949,7 +966,7 @@
     );
 
     const searchParams = getSearchParams();
-    const replaceUrl: Record<string, any> = { ...searchParams };
+    const replaceUrl: Record<string, any> = omitFixedScopeSearchParams({ ...searchParams });
     if (searchModel.value.datetime_origin) {
       const origin = searchModel.value.datetime_origin;
       if (Array.isArray(origin) && origin.length > 0) {
@@ -966,7 +983,7 @@
   const handleSubmit = (isClear = false) => {
     // 将搜索参数同步到 URL（刷新后可恢复）
     const searchParams = getSearchParams();
-    const replaceUrl: Record<string, any> = { ...searchParams };
+    const replaceUrl: Record<string, any> = omitFixedScopeSearchParams({ ...searchParams });
     // 同步 datetime_origin
     if (searchModel.value.datetime_origin) {
       const origin = searchModel.value.datetime_origin;
