@@ -17,45 +17,54 @@
 <template>
   <div class="retrieval-guide-wrap">
     <div class="retrieval-guide-card">
-      <!-- 已选系统 -->
+      <!-- 已选系统：编辑时保留标题，仅替换内容区 -->
       <div class="systems-section">
-        <div
-          v-if="isEditingSystem"
-          class="system-edit-panel">
-          <bk-select
-            v-model="editingSystemId"
-            class="guide-system-picker"
-            clearable
-            filterable
-            :input-search="false"
-            :loading="systemListLoading"
-            placeholder="请选择系统"
-            :popover-options="selectPopoverOptions"
-            :scroll-height="280">
-            <bk-option
-              v-for="item in displaySystemList"
-              :key="item.id"
-              :label="`${item.name}(${item.id})`"
-              :value="item.id" />
-          </bk-select>
-          <div class="system-edit-actions">
-            <bk-button
-              class="confirm-btn"
-              :disabled="!editingSystemId
-                || confirmingSystem
-                || editingSystemId === currentSystemId"
-              :loading="confirmingSystem"
-              theme="primary"
-              @click.stop="handleConfirmSystem">
-              确认修改
-            </bk-button>
-            <bk-button
-              :disabled="confirmingSystem"
-              @click.stop="handleCancelEditSystem">
-              取消
-            </bk-button>
+        <template v-if="isEditingSystem">
+          <div class="systems-edit-header">
+            <div class="systems-edit-title">
+              <img
+                alt=""
+                class="title-icon"
+                :src="wenhaoIcon">
+              <span>已选系统</span>
+            </div>
           </div>
-        </div>
+          <div class="system-edit-panel">
+            <bk-select
+              v-model="editingSystemId"
+              class="guide-system-picker"
+              clearable
+              filterable
+              :input-search="false"
+              :loading="systemListLoading"
+              placeholder="请选择系统"
+              :popover-options="selectPopoverOptions"
+              :scroll-height="280">
+              <bk-option
+                v-for="item in displaySystemList"
+                :key="item.id"
+                :label="`${item.name}(${item.id})`"
+                :value="item.id" />
+            </bk-select>
+            <div class="system-edit-actions">
+              <bk-button
+                class="confirm-btn"
+                :disabled="!editingSystemId
+                  || confirmingSystem
+                  || editingSystemId === currentSystemId"
+                :loading="confirmingSystem"
+                theme="primary"
+                @click.stop="handleConfirmSystem">
+                确认修改
+              </bk-button>
+              <bk-button
+                :disabled="confirmingSystem"
+                @click.stop="handleCancelEditSystem">
+                取消
+              </bk-button>
+            </div>
+          </div>
+        </template>
         <selected-systems-panel
           v-else
           action-placement="header"
@@ -238,6 +247,7 @@
   import { formatSampleValue, resolveFieldSampleDisplay } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
+  import wenhaoIcon from '@images/wenhao.svg';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
@@ -464,10 +474,36 @@
     flex-shrink: 0;
   }
 
+  .systems-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .systems-edit-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    color: #313238;
+
+    .title-icon {
+      display: block;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+  }
+
   .system-edit-panel {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    margin-top: 12px;
   }
 
   .guide-system-picker {
