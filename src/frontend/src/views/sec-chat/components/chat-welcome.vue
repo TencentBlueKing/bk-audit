@@ -38,8 +38,11 @@
             v-for="item in promptCards"
             :key="item.title"
             class="prompt-card"
-            :class="{ 'is-disabled': item.disabled }"
-            :title="item.disabled ? '暂未开放' : undefined"
+            :class="{
+              'is-disabled': item.disabled || entering,
+              'is-entering': isCardEntering && !item.disabled,
+            }"
+            :title="item.disabled ? '暂未开放' : (isCardEntering ? '正在进入…' : undefined)"
             @click="handleCardClick(item)">
             <div class="card-icon">
               <img
@@ -56,7 +59,7 @@
                 {{ item.title }}
               </div>
               <div class="card-desc">
-                {{ item.desc }}
+                {{ isCardEntering && !item.disabled ? '正在进入会话…' : item.desc }}
               </div>
             </div>
           </div>
@@ -68,6 +71,7 @@
       <div class="welcome-column">
         <chat-input
           hide-shortcuts
+          :disabled="entering"
           @attach="$emit('attach')"
           @send="handleInputSend" />
       </div>
@@ -76,6 +80,8 @@
 </template>
 
 <script lang="ts" setup>
+  import { ref, watch } from 'vue';
+
   import ChatInput from './chat-input.vue';
   import type { ChatSceneType, SelectPromptPayload } from '../types';
 
@@ -85,10 +91,24 @@
   import fengxianIcon from '@images/fengxian-icon.svg';
   import shiyongIcon from '@images/shiyong-icon.svg';
 
+  const props = defineProps<{
+    /** 正在创建会话并跳转，禁止重复提交 */
+    entering?: boolean;
+  }>();
+
   const emit = defineEmits<{
     'select-prompt': [payload: SelectPromptPayload];
     attach: [];
   }>();
+
+  /** 仅卡片入口进入时展示「正在进入会话…」 */
+  const isCardEntering = ref(false);
+
+  watch(() => props.entering, (entering) => {
+    if (!entering) {
+      isCardEntering.value = false;
+    }
+  });
 
   const promptCards = [
     {
@@ -141,7 +161,8 @@
   ];
 
   const handleCardClick = (item: typeof promptCards[0]) => {
-    if (item.disabled) return;
+    if (item.disabled || props.entering) return;
+    isCardEntering.value = true;
     emit('select-prompt', {
       prompt: item.prompt,
       sceneType: item.sceneType,
@@ -149,6 +170,7 @@
   };
 
   const handleInputSend = (prompt: string) => {
+    if (props.entering) return;
     // 当前仅开放审计日志检索，欢迎页发送一律进入该场景
     emit('select-prompt', {
       prompt,
@@ -248,12 +270,23 @@
       gap: 12px;
       box-sizing: border-box;
 
-      &:hover {
+      &:hover:not(.is-disabled) {
         box-shadow: 0 2px 10px 0 rgb(0 0 0 / 16%);
       }
 
       &.is-disabled {
         cursor: not-allowed;
+      }
+
+      &.is-entering {
+        cursor: wait;
+        opacity: .72;
+        pointer-events: none;
+        box-shadow: 0 0 0 1px #3a84ff inset;
+
+        .card-desc {
+          color: #3a84ff;
+        }
       }
 
       .card-icon {
