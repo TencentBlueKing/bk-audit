@@ -572,9 +572,15 @@
     }
 
     const memoWithoutScene = { ...paramsMemo };
-    delete memoWithoutScene.scene_id;
-    delete memoWithoutScene.scope_id;
-    delete memoWithoutScene.scope_type;
+    // 仅在由场景选择器注入范围时覆盖；否则保留页面传入的 scope_type（如待我确认的 cross_scene）
+    if (needSceneParams) {
+      delete memoWithoutScene.scope_id;
+      delete memoWithoutScene.scope_type;
+    }
+    // 场景选择器注入 scene_id 时才覆盖；否则保留搜索条件里的所属场景
+    if (isNeedSceneId) {
+      delete memoWithoutScene[props.sceneIdKey || 'scene_id'];
+    }
 
     const rawParams: Record<string, any> = {
       ...memoWithoutScene,
@@ -810,7 +816,12 @@
           isLoading.value = true;
           run(params);
           if (fetchSeq === latestFetchSeq) {
-            replaceSearchParams(params);
+            // 所属场景筛选不要写进场景选择器上下文（scene_id/scope_*）
+            const urlParams = { ...params };
+            delete urlParams.scene_id;
+            delete urlParams.scope_id;
+            delete urlParams.scope_type;
+            replaceSearchParams(urlParams);
           }
         }
       });

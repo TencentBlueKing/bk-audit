@@ -217,7 +217,7 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 用于在场景切换时强制刷新 settings 计算属性
   const settingsVersion = ref(0);
@@ -243,15 +243,14 @@
       result = defaultSettings;
     }
     // 选择具体场景时，默认不展示所属场景(scene_id)列；
-    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id
+    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id（放在风险描述后面）
     const sceneParams = getSceneSystemParams();
     const isAllRisks = !sceneParams.scope_id
       || sceneParams.scope_type === 'cross_scene'
       || sceneParams.scope_type === 'cross_system';
     if (isAllRisks && !result.includes('scene_id')) {
-      // 在 event_time 之后插入 scene_id，保持合理顺序
-      const idx = result.indexOf('event_time');
-      result.splice(idx + 1, 0, 'scene_id');
+      const idx = result.indexOf('event_content');
+      result.splice(idx >= 0 ? idx + 1 : result.length, 0, 'scene_id');
     } else if (!isAllRisks) {
       result = result.filter((key: string) => key !== 'scene_id');
     }
@@ -345,6 +344,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: '',

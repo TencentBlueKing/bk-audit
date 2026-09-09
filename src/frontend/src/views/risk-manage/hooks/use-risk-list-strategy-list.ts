@@ -58,7 +58,7 @@ const mergeStrategyOptions = (
 /**
  * 风险列表策略名称映射：合并全量策略与当前视图下的策略，用于表格列展示。
  */
-export const useRiskListStrategyList = (riskViewType: RiskViewType) => {
+export const useRiskListStrategyList = (riskViewType: RiskViewType, needSceneParams = true) => {
   const strategyMap = ref<Record<string, string>>({});
 
   const updateStrategyMap = (list: StrategyOption[]) => {
@@ -69,7 +69,8 @@ export const useRiskListStrategyList = (riskViewType: RiskViewType) => {
     risk_view_type: riskViewType,
     start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
     end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    isNeedSceneParams: true,
+    isNeedSceneParams: needSceneParams,
+    ...(needSceneParams ? {} : { scope_type: 'cross_scene' }),
   };
 
   const {

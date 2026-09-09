@@ -159,6 +159,14 @@
             {{ t('我的关注') }}
           </audit-menu-item>
           <audit-menu-item
+            v-if="hasAllRiskPermission && userRole.includes('saas_admin')"
+            index="confirmManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="gaojingshijian" />
+            {{ t('待我确认') }}
+          </audit-menu-item>
+          <audit-menu-item
             v-if="(userRole.includes('saas_admin') ||
               userRole.includes('scene_admin') || userRole.includes('scene_user'))"
             index="sceneRiskManage">
@@ -174,14 +182,6 @@
               class="menu-item-icon"
               type="gaojingshijian" />
             {{ t('所有风险') }}
-          </audit-menu-item>
-          <audit-menu-item
-            v-if="hasAllRiskPermission && userRole.includes('saas_admin')"
-            index="confirmManage">
-            <audit-icon
-              class="menu-item-icon"
-              type="gaojingshijian" />
-            {{ t('待我确认') }}
           </audit-menu-item>
         </template>
         <template v-else-if="curNavName === 'auditStatement'">

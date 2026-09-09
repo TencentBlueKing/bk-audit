@@ -211,6 +211,7 @@ export default {
     // list directory
     风险ID: 'Risk ID',
     风险描述: 'Risk Description',
+    所属场景: 'Belonging Scene',
     风险等级: 'Risk Level',
     处理状态: 'Processing Status',
     关注人: 'Followers',

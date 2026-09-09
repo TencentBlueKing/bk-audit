@@ -23,7 +23,7 @@ export default {
   },
   meta: {
     navName: 'auditRiskManage',
-    isShowSceneSelector: true,
+    isShowSceneSelector: false,
   },
   children: [
     {
@@ -33,6 +33,7 @@ export default {
       meta: {
         title: '待我确认',
         keepAlive: true,
+        isShowSceneSelector: false,
       },
     },
     {

@@ -122,6 +122,18 @@ export default {
     type: 'string',
     required: false,
   },
+  scene_id: {
+    label: '所属场景',
+    type: 'select',
+    required: false,
+    service: RiskManageService.fetchRiskScenes,
+    defaultParams: {
+      risk_view_type: 'all',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
+    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
+  },
   risk_level: {
     label: '风险等级',
     type: 'select',
@@ -155,17 +167,5 @@ export default {
         name: '未生成',
       },
     ]),
-  },
-  scene_id: {
-    label: '所属场景',
-    type: 'select',
-    required: false,
-    service: RiskManageService.fetchRiskScenes,
-    defaultParams: {
-      risk_view_type: 'all',
-      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-    },
-    formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
   },
 } as Record<string, IFieldConfig>;
