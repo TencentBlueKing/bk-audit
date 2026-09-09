@@ -18,6 +18,7 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidParentMessage,
+    ScopeContextRequired,
     SystemSelectionPermissionDenied,
     SystemSelectionRequired,
 )
@@ -155,6 +156,9 @@ class SystemSelectionHandler(
     ) -> MessagePreparation[SystemSelectionContextSchema]:
         if parent_message is not None:
             raise InvalidParentMessage(message="系统选择是根消息，不能引用父消息")
+        # 创建/编辑强约束（schema 层宽松仅为兼容历史消息快照的读取/重试）
+        if not input_data.scope_type:
+            raise ScopeContextRequired()
         return MessagePreparation(
             parent_message=None,
             context_data=SystemSelectionContextSchema(
@@ -228,6 +232,9 @@ class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentCont
         # 入口消息无父：系统选择由任务内按意图识别结果创建/复用，prepare 阶段不做系统绑定
         if parent_message is not None:
             raise InvalidParentMessage(message="用户意图识别是入口消息，不能引用父消息")
+        # 创建/编辑强约束（schema 层宽松仅为兼容历史消息快照的读取/重试）
+        if not input_data.scope_type:
+            raise ScopeContextRequired()
         return MessagePreparation(
             parent_message=None,
             context_data=UserIntentContextSchema(

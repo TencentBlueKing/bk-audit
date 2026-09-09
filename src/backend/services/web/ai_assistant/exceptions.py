@@ -272,3 +272,16 @@ class SystemSelectionPermissionDenied(AIAssistantException):
     MESSAGE = gettext_lazy("无所选系统的日志检索权限")
     ERROR_CODE = "041"
     STATUS_CODE = 403
+
+
+class ScopeContextRequired(AIAssistantException):
+    """创建/编辑消息缺少场景过滤上下文（scope_type）。
+
+    schema 层 scope_type 可选（宽松解析历史消息快照，协议升级前落库的
+    input_data 无该字段），创建/编辑路径在 Handler.prepare 强制必填——
+    与前端进入 AI 页时左上角场景选择器默认有值对齐。
+    """
+
+    MESSAGE = gettext_lazy("缺少场景过滤参数 scope_type，请携带当前场景后重试")
+    ERROR_CODE = "042"
+    STATUS_CODE = 400

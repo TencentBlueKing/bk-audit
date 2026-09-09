@@ -56,18 +56,19 @@ class CommonQuerySchema(MessageSchema):
 class SystemSelectionInputSchema(MessageSchema):
     """系统选择输入：协议按集合表达，一期限定单系统。
 
-    scope_type/scope_id 必填：AI 助手必须和前端左上角场景过滤器保持一致，
-    前端选系统下拉时已经按 scope 过滤可见系统，scope 随消息快照固化后
-    后续 NL/LOG_SEARCH 链路继承同一 session scope。
+    scope 双层校验：schema 层 scope_type 可选（宽松解析历史消息快照——协议
+    升级前落库的 input_data 无该字段，消息列表/详情/重试不能因协议升级报错）；
+    创建/编辑路径在 Handler.prepare 强制必填（AI 助手必须和前端左上角场景
+    过滤器保持一致，scope 随消息快照固化后 NL/LOG_SEARCH 链路继承同一 session scope）。
     """
 
     system_ids: list[str] = Field(min_length=1, max_length=1)
-    scope_type: Literal["cross_scene", "cross_system", "scene", "system"]
+    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
     scope_id: str = Field(default="", max_length=64)
 
     @model_validator(mode="after")
     def _validate_scope(self) -> "SystemSelectionInputSchema":
-        """scope 协议约束：scene/system 必填 scope_id（与 ScopeContext 同源）。"""
+        """scope 协议约束：scene/system 必填 scope_id（与 ScopeContext 同源；None 跳过）。"""
 
         if self.scope_type in ("scene", "system") and not self.scope_id:
             raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
@@ -136,19 +137,20 @@ class NLSearchOutputSchema(MessageSchema):
 class UserIntentInputSchema(MessageSchema):
     """USER_INTENT 输入：与 NL 输入同构（前端提交参数零变化，仅 message_type 不同）。
 
-    scope_type/scope_id 必填：与前端左上角场景过滤器保持一致（场景已选时 AI 只能在该
-    场景授权系统内路由）；不传 → pydantic 校验 400 拒绝（AI 助手是场景内工具，
-    必须明确场景才能工作）。
+    scope 双层校验：schema 层 scope_type 可选（宽松解析历史消息快照——协议
+    升级前落库的 input_data 无该字段）；创建/编辑路径在 Handler.prepare 强制
+    必填（不传 400），与前端左上角场景过滤器当前选择保持一致——AI 助手是
+    场景内工具，必须明确场景才能工作。
     """
 
     query_text: str = Field(min_length=1, max_length=2048)
     auto_execute: bool = True
-    scope_type: Literal["cross_scene", "cross_system", "scene", "system"]
+    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
     scope_id: str = Field(default="", max_length=64)
 
     @model_validator(mode="after")
     def _validate_scope(self) -> "UserIntentInputSchema":
-        """scope 协议约束与 ScopeContext 同源：scene/system 必填 scope_id。"""
+        """scope 协议约束：scene/system 必填 scope_id（None 跳过，历史快照兼容）。"""
 
         if self.scope_type in ("scene", "system") and not self.scope_id:
             raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")

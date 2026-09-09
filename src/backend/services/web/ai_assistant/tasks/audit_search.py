@@ -279,10 +279,11 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 conversation=execution.message.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 # 透传 session scope（前端左上角场景过滤器当前选择）：
-                # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄
+                # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄；
+                # 历史消息重试（scope 为空，协议升级前快照）补 cross_system 宽口径兜底（v1 行为）
                 input_data={
                     "system_ids": [system_id],
-                    "scope_type": context_data.scope_type,
+                    "scope_type": context_data.scope_type or "cross_system",
                     "scope_id": context_data.scope_id,
                 },
             )
