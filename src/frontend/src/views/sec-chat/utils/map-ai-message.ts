@@ -43,6 +43,8 @@ const formatDisplayDateTime = (value?: string | null) => {
 export const formatSampleValue = (value: any): string => {
   if (value === undefined || value === null) return '';
   if (typeof value === 'object') {
+    if (Array.isArray(value) && value.length === 0) return '';
+    if (!Array.isArray(value) && Object.keys(value).length === 0) return '';
     try {
       return JSON.stringify(value);
     } catch {
@@ -50,6 +52,29 @@ export const formatSampleValue = (value: any): string => {
     }
   }
   return String(value);
+};
+
+/** 解析字段「最近一条数据」展示文案：优先 sample_value_display，其次 options，最后回退原始值 */
+export const resolveFieldSampleDisplay = (field: {
+  sampleValue?: any;
+  sampleValueDisplay?: string | null;
+  options?: Array<{ id: string; name: string }>;
+}): string => {
+  const display = field.sampleValueDisplay;
+  if (display !== undefined && display !== null && String(display).trim() !== '') {
+    return String(display);
+  }
+
+  const rawText = formatSampleValue(field.sampleValue);
+  if (!rawText) return '';
+
+  const options = field.options || [];
+  if (options.length) {
+    const matched = options.find(opt => String(opt.id) === rawText);
+    if (matched?.name) return matched.name;
+  }
+
+  return rawText;
 };
 
 const mapFieldOptions = (options?: AiSystemFieldItem['options']) => {
@@ -77,6 +102,7 @@ const mapFieldItem = (
   options: mapFieldOptions(item.options),
   isExtension,
   sampleValue: item.sample_value,
+  sampleValueDisplay: item.sample_value_display ?? null,
   systemId: system?.system_id,
   systemName: system?.name,
 });
