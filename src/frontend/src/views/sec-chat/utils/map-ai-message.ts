@@ -350,6 +350,22 @@ export const mapAiMessageToChatMessage = (
   if (message.message_type === 'NATURAL_LANGUAGE_SEARCH') {
     const queryText = String(message.input_data?.query_text ?? '');
     const recognitionError = getNlRecognitionError(message);
+    if (recognitionError?.error_code === 'SYSTEM_REQUIRED') {
+      const candidateSystems = pickCandidateSystems(message);
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'select-system',
+        status: 'pending',
+        selectionReason: 'disambiguate',
+        systems: candidateSystems,
+        systemIds: candidateSystems.map(item => item.id),
+        candidateSystems,
+        content: queryText,
+        // SYSTEM_REQUIRED 不透出 error_message 作 tip（后端文案过长，走选系统卡默认提示）
+        ...baseMeta,
+      };
+    }
     if (recognitionError) {
       return {
         id: message.uid,
@@ -387,6 +403,7 @@ export const mapAiMessageToChatMessage = (
     );
 
     if (shouldPromptSystemSelection) {
+      const isSystemRequired = recognitionError?.error_code === 'SYSTEM_REQUIRED';
       return {
         id: message.uid,
         role: 'assistant',
@@ -397,7 +414,10 @@ export const mapAiMessageToChatMessage = (
         systemIds: candidateSystems.map(item => item.id),
         candidateSystems,
         content: queryText,
-        aiMessage: output.message ? String(output.message) : undefined,
+        // SYSTEM_REQUIRED 不透出 error_message 作 tip（后端文案过长，走选系统卡默认提示）
+        aiMessage: isSystemRequired
+          ? undefined
+          : (output.message ? String(output.message) : undefined),
         intent: output.intent,
         ...baseMeta,
       };
