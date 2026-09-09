@@ -24,10 +24,11 @@ import type {
   AiSidebarConversationNode,
   AiSidebarGroupNode,
   AiSidebarNode,
+  AiSystemSelectionInput,
   AiUserIntentInput,
 } from '@model/ai-assistant/types';
 
-import { buildAiUserIntentScopeFields } from '@/utils/assist/scene-system-params';
+import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
 
 import type {
   Conversation,
@@ -45,11 +46,23 @@ import {
 } from '../utils/map-ai-message';
 
 /** 组装 USER_INTENT input_data（附带当前场景选择器 scope） */
-const buildUserIntentInputData = (queryText: string): AiUserIntentInput => ({
-  query_text: queryText,
-  auto_execute: true,
-  ...buildAiUserIntentScopeFields(),
-});
+const buildUserIntentInputData = (queryText: string): AiUserIntentInput => {
+  const scope = buildAiAssistantScopeFields();
+  return {
+    query_text: queryText,
+    auto_execute: true,
+    ...(scope.scope_type ? scope : {}),
+  };
+};
+
+/** 组装 SYSTEM_SELECTION input_data（附带当前场景选择器 scope） */
+const buildSystemSelectionInputData = (systemIds: string[]): AiSystemSelectionInput => {
+  const scope = buildAiAssistantScopeFields();
+  return {
+    system_ids: systemIds,
+    ...(scope.scope_type ? scope : {}),
+  };
+};
 
 const MESSAGE_POLL_INTERVAL_MS = 2000;
 const CHILD_LOG_RETRY_TIMES = 3;
@@ -184,6 +197,16 @@ const upsertConversationMessage = (
   });
   const idx = conv.messages.findIndex(item => item.id === message.uid);
   if (idx >= 0) {
+    const prev = conv.messages[idx];
+    // 二次检索 PROCESSING 时保留上一份结果，避免结果卡被替换成全局「正在检索日志…」
+    if (
+      message.message_type === 'LOG_SEARCH'
+      && message.status === 'PROCESSING'
+      && !chatMessage.result
+      && prev.result
+    ) {
+      chatMessage.result = prev.result;
+    }
     conv.messages.splice(idx, 1, chatMessage);
   } else {
     conv.messages.push(chatMessage);
@@ -1127,9 +1150,7 @@ export function useSecChatStore() {
       AiAssistantManageService.createMessage({
         conversation_uid: conversationUid,
         message_type: 'SYSTEM_SELECTION',
-        input_data: {
-          system_ids: systemIds,
-        },
+        input_data: buildSystemSelectionInputData(systemIds),
       })
     );
 
@@ -1248,10 +1269,13 @@ export function useSecChatStore() {
       message_type: 'LOG_SEARCH',
       input_data: { condition },
     });
-    if (message.status === 'SUCCESS') {
+    upsertConversationMessage(conv.id, message);
+    // 与 rerunLogSearch 一致：异步检索需轮询至终态，否则页面会一直 loading
+    if (message.status === 'PROCESSING') {
+      startMessagePoll(conv.id, message.uid);
+    } else if (message.status === 'SUCCESS') {
       void refreshConversationTitle(conv.id);
     }
-    upsertConversationMessage(conv.id, message);
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };

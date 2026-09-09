@@ -235,7 +235,7 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import { formatSampleValue } from '../../utils/map-ai-message';
+  import { formatSampleValue, resolveFieldSampleDisplay } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -265,7 +265,10 @@
   interface FieldRow {
     name: string;
     desc: string;
+    /** 表格 / 自然语言展示文案 */
     sample: string;
+    /** 条件筛选回填用的原始值 */
+    sampleRaw: string;
     system?: string;
     rawName: string;
     nlName: string;
@@ -300,7 +303,8 @@
   const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
     name: field.displayName || field.rawName,
     desc: field.description || '',
-    sample: formatSampleValue(field.sampleValue),
+    sample: resolveFieldSampleDisplay(field),
+    sampleRaw: formatSampleValue(field.sampleValue),
     system: field.systemName || field.systemId,
     rawName: field.rawName,
     nlName: field.nlName || field.displayName || field.rawName,
@@ -416,14 +420,15 @@
   const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
       // 条件筛选：每次点击产出条件卡；未检索时由父级覆盖草稿，不向已有卡追加字段
+      // 回填必须用原始值，避免把展示文案写进筛选条件
       emit('open-condition-filter', {
         fieldName: row.rawName || row.name,
-        sample: row.sample,
+        sample: row.sampleRaw,
       });
       return;
     }
     const sampleText = row.sample || '替换为实际值';
-    // 文档：自然语言用 nl_name + sample_value → `{nl_name}为{sample_value}`，多选向输入框追加
+    // 文档：自然语言用 nl_name + 展示文案 → `{nl_name}为{sample_display}`，多选向输入框追加
     emit('append-nl-field', `${row.nlName}为${sampleText}`);
   };
 </script>
