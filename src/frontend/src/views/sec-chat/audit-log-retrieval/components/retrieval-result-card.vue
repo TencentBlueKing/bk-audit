@@ -75,7 +75,7 @@
           <div class="condition-actions">
             <bk-button
               class="resubmit-btn"
-              :loading="resubmitLoading"
+              :loading="bodyLoading"
               theme="primary"
               @click="handleResubmit">
               重新检索
@@ -100,7 +100,7 @@
       <!-- 二次检索等待：覆盖过程信息 / 空态 / 表格，条件区保持可见 -->
       <bk-loading
         class="result-body-loading"
-        :loading="resubmitLoading">
+        :loading="bodyLoading">
         <div class="result-body">
           <!-- 过程信息：仅展示思考耗时，不可折叠 -->
           <div
@@ -413,7 +413,7 @@
   import emptySearchIcon from '@images/empty-search.svg';
 
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
-  import type { RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
+  import type { AiUiMessageStatus, RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
   import {
     buildAiSearchCondition,
     appendSearchModelField,
@@ -440,6 +440,8 @@
     result: RetrievalResultPayload;
     /** LOG_SEARCH 成功消息 uid，导出接口必填 */
     messageUid?: string;
+    /** 消息后端状态；二次检索 PROCESSING 时由卡内 loading 承接 */
+    apiStatus?: AiUiMessageStatus;
     embedded?: boolean;
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
@@ -498,6 +500,10 @@
   const { messageSuccess, messageError, messageWarn } = useMessage();
   const exporting = ref(false);
   const resubmitLoading = ref(false);
+  /** 本地提交中或后端仍在 PROCESSING：统一走卡内 loading，避免切到全局检索 loading */
+  const bodyLoading = computed(() => (
+    resubmitLoading.value || props.apiStatus === 'PROCESSING'
+  ));
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const searchModel = ref<Record<string, any>>({
     datetime: createDefaultDatetime(),
@@ -555,11 +561,14 @@
   };
 
   watch(
-    () => [props.messageUid, props.result] as const,
+    () => [props.messageUid, props.result, props.apiStatus] as const,
     () => {
       displayResult.value = props.result;
       displayMessageUid.value = props.messageUid || '';
-      syncSearchModelFromResult();
+      // PROCESSING 时保留用户刚提交的条件，避免被旧结果回填覆盖
+      if (props.apiStatus !== 'PROCESSING') {
+        syncSearchModelFromResult();
+      }
     },
     { immediate: true, deep: true },
   );
@@ -632,7 +641,7 @@
   };
 
   const handleResubmit = async () => {
-    if (resubmitLoading.value) return;
+    if (bodyLoading.value) return;
 
     const messageUid = displayMessageUid.value || props.messageUid;
     if (!messageUid) {

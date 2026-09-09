@@ -66,6 +66,8 @@ export interface AiSystemFieldItem {
   field_type?: string;
   options?: Array<{ id: string; name: string }> | null;
   sample_value?: any;
+  /** 最近一条样本的展示文案；为空时前端回退 sample_value / options */
+  sample_value_display?: string | null;
 }
 
 /** SYSTEM_SELECTION 系统项 */
@@ -80,8 +82,15 @@ export interface AiOperationHint {
   query_text: string;
 }
 
+/** 与检索页 scope 协议同名同义；不传 = 不过滤 */
+export type AiScopeType = 'cross_scene' | 'cross_system' | 'scene' | 'system';
+
 export interface AiSystemSelectionInput {
   system_ids: string[];
+  /** 与检索页 / USER_INTENT scope 协议一致；不传 = 不过滤 */
+  scope_type?: AiScopeType;
+  /** scope_type 为 scene / system 时必填 */
+  scope_id?: string;
 }
 
 export interface AiSystemSelectionOutput {
@@ -89,9 +98,6 @@ export interface AiSystemSelectionOutput {
   common_operations?: AiOperationHint[];
   historical_operations?: AiOperationHint[];
 }
-
-/** 与检索页 scope 协议同名同义；不传 = 不过滤 */
-export type AiScopeType = 'cross_scene' | 'cross_system' | 'scene' | 'system';
 
 export interface AiNaturalLanguageSearchInput {
   query_text: string;
