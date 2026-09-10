@@ -297,6 +297,8 @@
 
   import { encodeRegexp } from '@utils/assist';
 
+  import { formatFieldDisplayLabel } from '../../../../../../utils/strategy-protocol';
+
   import nodeSelect from './tree.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
@@ -500,7 +502,7 @@
         ?? NO_AGGREGATE_VALUE;
     }
 
-    // 字段别名：编辑保留已有值；新增默认用字段名（raw_name），不用中文名
+    // 字段别名：编辑保留已有值；新增默认「中文名(raw_name)」
     let displayName: string;
     if (isEdit.value) {
       if ('textValue' in field) {
@@ -508,7 +510,11 @@
       }
       displayName = processedField.display_name;
     } else {
-      displayName = `${processedField.raw_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+      const formattedName = formatFieldDisplayLabel(
+        processedField.display_name,
+        processedField.raw_name,
+      );
+      displayName = `${formattedName}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
     }
 
     // 统计重复别名(包含已存在的和当前已选的)

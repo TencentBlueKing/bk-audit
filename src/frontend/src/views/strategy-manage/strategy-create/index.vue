@@ -113,6 +113,7 @@
     buildStrategyCreatePayload,
     createEmptyAssignWhere,
     parseStrategyDetailToForm,
+    enrichFieldDisplayNames,
   } from './utils/strategy-protocol';
   import {
     getStrategyBindingScope,
@@ -206,16 +207,12 @@
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
-  // 未配置预期结果时不使用字段别名，display_name 与字段名一致
+  // display_name 统一为「中文名(raw_name)」，与命中条件字段展示一致
   const fieldSelectOptions = computed(() => {
+    const tableFields = formData.value.configs?.table_fields || [];
     const select = formData.value.configs?.select;
-    if (Array.isArray(select) && select.length) {
-      return select;
-    }
-    return (formData.value.configs?.table_fields || []).map((item: Record<string, any>) => ({
-      ...item,
-      display_name: item.raw_name,
-    }));
+    const source = Array.isArray(select) && select.length ? select : tableFields;
+    return enrichFieldDisplayNames(source, tableFields);
   });
 
   let isSwitchSuccess = false;
@@ -546,7 +543,10 @@
     }
     // 接口 select 不能为空：未配置时用数据源全字段兜底
     if (next.configs && !next.configs.select?.length && next.configs.table_fields?.length) {
-      next.configs.select = next.configs.table_fields;
+      next.configs.select = enrichFieldDisplayNames(
+        next.configs.table_fields,
+        next.configs.table_fields,
+      );
     }
     // table_fields 仅前端临时字段，不提交后端
     if (next.configs?.table_fields) {

@@ -615,6 +615,30 @@ const formatSelectFieldLabel = (displayName: string, rawName: string) => (
   formatFieldDisplayLabel(displayName, rawName)
 );
 
+/** 标准字段统一成「中文名(raw_name)」；用户自定义别名保持原样 */
+const toStandardFieldDisplayName = (
+  rawName: string,
+  ownDisplayName: string,
+  displayNameByRaw: Map<string, string>,
+) => {
+  const resolved = resolveSelectFieldDisplayName(rawName, ownDisplayName, displayNameByRaw);
+  const lastSegment = rawName.split('.').pop() || '';
+  const schemaDisplay = displayNameByRaw.get(rawName)
+    || (lastSegment && lastSegment !== rawName ? displayNameByRaw.get(lastSegment) : '')
+    || '';
+  const formattedSchema = schemaDisplay
+    ? formatFieldDisplayLabel(schemaDisplay, rawName)
+    : '';
+  const isStandard = !resolved
+    || resolved === rawName
+    || resolved === schemaDisplay
+    || resolved === formattedSchema;
+  if (isStandard) {
+    return formatFieldDisplayLabel(schemaDisplay || resolved, rawName);
+  }
+  return resolved;
+};
+
 /** 用数据源字段回填中文名和类型图标（编辑回显的 select 不含 spec_field_type） */
 export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
   fields: T[] = [],
@@ -631,7 +655,7 @@ export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
     const hasSubKeys = Array.isArray(subKeys) && subKeys.length > 0;
     return {
       ...field,
-      display_name: resolveSelectFieldDisplayName(
+      display_name: toStandardFieldDisplayName(
         rawName,
         pickFieldDisplayName(field),
         displayNameByRaw,
@@ -727,11 +751,12 @@ const toTargetSceneId = (rule: Record<string, any>) => {
   return Number.isNaN(num) ? first : num;
 };
 
-const toDispatchRule = (rule: Record<string, any>, isDefault: boolean) => {
+const toDispatchRule = (rule: Record<string, any>, isDefault: boolean, isEdit = false) => {
   const conditions = isDefault
     ? {}
     : toDispatchConditions(rule.conditions);
   return {
+    ...(isEdit && rule.rule_id ? { rule_id: rule.rule_id } : {}),
     rule_name: rule.rule_name || rule.name || (isDefault ? '默认分派规则' : '分派规则'),
     conditions,
     target_scene_id: toTargetSceneId(rule),
@@ -747,20 +772,21 @@ const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) =>
   if (!isPlatform) {
     return [];
   }
+  const isEdit = !!params.strategy_id;
   if (Array.isArray(params.dispatch_rules) && params.dispatch_rules.length && !params.assign_rules?.length) {
     return params.dispatch_rules.map((rule: Record<string, any>) => (
-      toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)))
+      toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)), isEdit)
     ));
   }
   const list: Array<Record<string, any>> = [];
   (params.assign_rules || []).forEach((rule: Record<string, any>) => {
-    list.push(toDispatchRule(rule, false));
+    list.push(toDispatchRule(rule, false, isEdit));
   });
   if (params.default_assign_rule && Object.keys(params.default_assign_rule).length) {
     list.push(toDispatchRule({
       ...params.default_assign_rule,
       name: params.default_assign_rule.rule_name || params.default_assign_rule.name || '默认分派规则',
-    }, true));
+    }, true, isEdit));
   }
   return list;
 };
@@ -828,6 +854,78 @@ const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<str
   };
 };
 
+type WhereLike = {
+  connector?: string;
+  conditions?: Array<Record<string, any>> | unknown[];
+};
+
+const conditionGroupKey = (group: Record<string, any>) => {
+  const children = Array.isArray(group?.conditions) ? group.conditions : [];
+  const childKeys = children.map((child) => {
+    const condition = child?.condition ?? child ?? {};
+    const field = condition.field && typeof condition.field === 'object' ? condition.field : {};
+    return [
+      field.raw_name || '',
+      field.aggregate ?? '',
+      condition.operator || '',
+      condition.filter ?? '',
+      JSON.stringify(condition.filters ?? []),
+    ].join('|');
+  }).join(';');
+  return `${group?.index ?? ''}::${childKeys}`;
+};
+
+/** 展示用：把 having 合并进 where，已存在的条件组不重复追加 */
+export const mergeHavingIntoWhere = <T extends WhereLike>(
+  where?: T | null,
+  having?: T | null,
+): T => {
+  const connector = (where?.connector || having?.connector || 'and') as T['connector'];
+  const whereConditions = [...((where?.conditions ?? []) as Array<Record<string, any>>)];
+  const havingConditions = [...((having?.conditions ?? []) as Array<Record<string, any>>)];
+  if (!havingConditions.length) {
+    return {
+      ...(where || {}),
+      connector,
+      conditions: whereConditions,
+    } as T;
+  }
+  const seen = new Set(whereConditions.map(conditionGroupKey));
+  const merged = [...whereConditions];
+  havingConditions.forEach((group) => {
+    const key = conditionGroupKey(group);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(group);
+  });
+  merged.sort((a, b) => (Number(a?.index) || 0) - (Number(b?.index) || 0));
+  return {
+    ...(where || {}),
+    connector,
+    conditions: merged,
+  } as T;
+};
+
+/** 回显前把已混入 where 的 having 组拆回去，避免 setWhere 再合并一次变成三条 */
+export const excludeHavingFromWhere = <T extends WhereLike>(
+  where?: T | null,
+  having?: T | null,
+): T | null | undefined => {
+  if (!where?.conditions?.length || !having?.conditions?.length) {
+    return where;
+  }
+  const havingKeys = new Set(
+    (having.conditions as Array<Record<string, any>>).map(conditionGroupKey),
+  );
+  return {
+    ...where,
+    conditions: (where.conditions as Array<Record<string, any>>)
+      .filter(group => !havingKeys.has(conditionGroupKey(group))),
+  } as T;
+};
+
 const buildRules = (params: Record<string, any>, isScene: boolean) => {
   const source = params.rules?.length
     ? params.rules
@@ -841,6 +939,7 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
       processor: params.processor ?? params.processor_groups,
       follower: params.follower ?? params.notice_groups,
     }];
+  const isEdit = !!params.strategy_id;
 
   const fallbackProcessor = params.processor_groups?.length
     ? params.processor_groups
@@ -862,6 +961,7 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
       follower = rule.follower?.length ? rule.follower : fallbackFollower;
     }
     return {
+      ...(isEdit && rule.rule_id ? { rule_id: rule.rule_id } : {}),
       rule_name: rule.rule_name || rule.name || `规则${index + 1}`,
       conditions: {
         where,
@@ -970,6 +1070,7 @@ export const buildStrategyCreatePayload = (
 };
 
 const fromDispatchRuleToForm = (rule: Record<string, any> = {}) => ({
+  rule_id: rule.rule_id,
   name: rule.rule_name || rule.name,
   conditions: toAssignWhere(rule.conditions),
   scene_ids: rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== ''

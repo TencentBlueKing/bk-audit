@@ -389,10 +389,12 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
+  import { excludeHavingFromWhere } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface RuleItem {
     id: number;
+    rule_id?: number;
     name: string;
     collapsed: boolean;
     editingName: boolean;
@@ -832,6 +834,7 @@
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
       const mergedConfigs = mergeRuleConfigs(fields.configs);
       return {
+        ...(rule.rule_id ? { rule_id: rule.rule_id } : {}),
         name: rule.name,
         rule_name: rule.name,
         risk_title: rule.risk_title,
@@ -900,7 +903,7 @@
       ...base,
       configs: {
         ...(base.configs ?? {}),
-        where,
+        where: excludeHavingFromWhere(where, having),
         having,
       },
     };
@@ -938,6 +941,7 @@
           ...(having ? { having: _.cloneDeep(having) } : {}),
         };
         return createRule({
+          rule_id: r.rule_id,
           name: r.rule_name || r.name || `规则${i + 1}`,
           risk_title: r.risk_title || '',
           risk_level: r.risk_level || 'HIGH',

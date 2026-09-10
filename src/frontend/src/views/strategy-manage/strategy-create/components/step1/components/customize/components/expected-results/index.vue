@@ -76,6 +76,8 @@
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatFieldDisplayLabel } from '../../../../../../utils/strategy-protocol';
+
   import AddFields from './add-fields.vue';
 
   interface Expose {
@@ -132,7 +134,7 @@
       || ((element.aggregate === null || element.aggregate === undefined)
         && (item.value === null || item.value === undefined || item.value === ''))
     ));
-    return `[${item?.label || t('不聚合')}] ${element.display_name}`;
+    return `[${item?.label || t('不聚合')}] ${formatFieldDisplayLabel(element.display_name, element.raw_name)}`;
   };
 
   const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
