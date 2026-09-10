@@ -165,6 +165,11 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
         from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
 
         with mock.patch(
+            # scope 校验放行（system_ids 在 scope 候选内），让执行到达 build_selection；
+            # 不 mock 会真实调用 IAM 策略接口，CI 无外网时连接失败（AuthAPIError）
+            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
+            return_value=["no_perm_system"],
+        ), mock.patch(
             "services.web.ai_assistant.handlers.audit_search.FieldContextService.build_selection",
             side_effect=AIPermissionDeniedError(),
         ):

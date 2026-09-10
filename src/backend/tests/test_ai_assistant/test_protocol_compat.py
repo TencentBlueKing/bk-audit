@@ -242,7 +242,9 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
         ), mock.patch(
             "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
             mock.MagicMock(
-                return_value=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, message="ok")
+                return_value=IntentPayload(
+                    intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="ok"
+                )
             ),
         ), mock.patch(
             CONVERT_MOCK, mock.MagicMock(return_value=make_condition())

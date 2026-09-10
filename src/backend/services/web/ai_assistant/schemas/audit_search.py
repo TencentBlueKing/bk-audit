@@ -192,10 +192,12 @@ class UserIntentOutputSchema(MessageSchema):
 
     @model_validator(mode="after")
     def _validate_payload_exclusive(self) -> "UserIntentOutputSchema":
-        """condition 与 error 互斥：意图与条件均识别成功带 condition，否则带错误协议。"""
+        """condition 与 error 互斥且至多其一：均识别成功带 condition；识别失败带错误协议；
+        纯切换（select_system 无检索诉求，need_search=false）两者皆空，仅携带
+        message 与切换结果（selection_message_uid）。"""
 
-        if (self.condition is None) == (self.error is None):
-            raise ValueError("USER_INTENT 输出必须且只能携带 condition 或 error 之一")
+        if self.condition is not None and self.error is not None:
+            raise ValueError("USER_INTENT 输出不能同时携带 condition 和 error")
         return self
 
 

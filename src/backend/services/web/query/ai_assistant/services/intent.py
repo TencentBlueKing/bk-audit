@@ -77,6 +77,12 @@ INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
      b. 中文话语点名系统时，不得仅因某候选 system_id 含相近英文字样（如 audit）而选择它
      c. 多个候选 name 相同或高度相似时，优先选 system_id 更简洁规范的候选（无版本号/命名空间前缀，如「bk-audit」优于「iam_v4_bk-audit」）
    - 泛指词（如「平台」「系统」）不构成系统指向
+   - need_search 检索诉求判定（防纯切换被强绑检索：仅切换不检索时不得再解析检索条件）：
+     · 话语同时包含系统指向与日志检索诉求（如「我要看审计中心近七天的操作记录」「看看蓝盾最近的日志」）
+       → need_search=true（切换系统后继续执行检索）
+     · 话语仅表达切换/选择系统，不含任何检索诉求（如「帮我切换到蓝盾」「用蓝盾系统」「切换到 test0907」）
+       → need_search=false（仅切换系统，本轮不检索）
+     · intent=log_search 时 need_search 恒为 true；intent=unrecognized 时恒为 false
    - 用户话语为日志检索需求且未提及任何系统 → intent=log_search（system_id 留空）
    - 与日志检索和系统选择完全无关（寒暄/闲聊）→ intent=unrecognized
 3. system_id 必须严格来自候选系统列表，禁止编造。「无法确定具体系统」仅指话语中没有任何系统指向词、
