@@ -203,12 +203,13 @@
                     :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
                 </td>
                 <td class="col-sample">
-                  <show-tooltips-text
+                  <json-field-preview
                     class="cell-text"
-                    :data="row.sample || ''"
-                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :text="row.sample || ''"
                     :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
-                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT"
+                    :tooltip-max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :value="row.sampleValue" />
                 </td>
                 <td
                   v-if="fieldTab === 'extend'"
@@ -262,6 +263,7 @@
 
   import wenhaoIcon from '@images/wenhao.svg';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import JsonFieldPreview from './json-field-preview.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
   const props = withDefaults(defineProps<{
@@ -292,6 +294,8 @@
     sample: string;
     /** 条件筛选回填用的原始值 */
     sampleRaw: string;
+    /** 原始样本（对象时走 JSON 首对预览） */
+    sampleValue?: unknown;
     system?: string;
     rawName: string;
     nlName: string;
@@ -331,6 +335,7 @@
     desc: field.description || '',
     sample: resolveFieldSampleDisplay(field),
     sampleRaw: formatSampleValue(field.sampleValue),
+    sampleValue: field.sampleValue,
     system: field.systemName || field.systemId,
     rawName: field.rawName,
     nlName: field.nlName || field.displayName || field.rawName,
@@ -783,9 +788,13 @@
 
     .cell-text {
       display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      box-sizing: border-box;
     }
 
     .col-name {
