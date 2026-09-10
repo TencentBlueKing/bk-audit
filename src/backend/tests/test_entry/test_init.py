@@ -330,7 +330,7 @@ class SystemInitAgentConfigTests(TestCase):
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @override_settings(
         BKAPP_AGENT_AUTH_CONFIG=(
-            '{"agents": [{"code": "bp-ai-aud-rsk-srch", "ping_url": "https://agent.example.woa.com/ping/"}]}'
+            '{"agents": [{"code": "bp-ai-aud-rsk-srch", "ping_url": "https://agent.example.com/ping/"}]}'
         )
     )
     def test_init_agent_config_writes_validated_config(self, mock_set, _mock_get):
@@ -346,7 +346,7 @@ class SystemInitAgentConfigTests(TestCase):
                             {
                                 "code": "bp-ai-aud-rsk-srch",
                                 "enabled": True,
-                                "ping_url": "https://agent.example.woa.com/ping/",
+                                "ping_url": "https://agent.example.com/ping/",
                             }
                         ]
                     },
