@@ -86,7 +86,10 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
-  import { buildStrategyEventOutputFields } from '../../../../utils/strategy-protocol';
+  import {
+    buildStrategyEventOutputFields,
+    isSameSelectField,
+  } from '../../../../utils/strategy-protocol';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -168,18 +171,20 @@
     });
     const selectDataFields = (props.select || [])
       .map(item => ({
-        raw_name: item.display_name || item.raw_name || '',
+        raw_name: item.raw_name || item.display_name || '',
         display_name: item.display_name || item.raw_name || '',
         description: '',
         target_field_type: 'data' as const,
       }))
       .filter(item => item.raw_name);
-    const seen = new Set(riskFields.map(item => item.raw_name));
-    eventFields.forEach(item => seen.add(item.raw_name));
+    const mergedEventFields = eventFields.filter(item => !riskFields.some(risk => risk.raw_name === item.raw_name));
+    const existingFields = [...riskFields, ...mergedEventFields];
     return [
       ...riskFields,
-      ...eventFields.filter(item => !riskFields.some(risk => risk.raw_name === item.raw_name)),
-      ...selectDataFields.filter(item => !seen.has(item.raw_name)),
+      ...mergedEventFields,
+      ...selectDataFields.filter(item => !existingFields.some(field => (
+        isSameSelectField(item, field.raw_name) || isSameSelectField(item, field.display_name)
+      ))),
     ];
   });
 

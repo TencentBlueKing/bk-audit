@@ -34,6 +34,7 @@
 
     <bk-loading
       class="jump-scope-loading"
+      :class="{ 'is-loading': loading }"
       :loading="loading"
       size="small">
       <div class="report-jump-scope-menu">
@@ -187,7 +188,7 @@
     }
   }
 
-  .jump-scope-loading {
+  .jump-scope-loading.is-loading {
     min-height: 120px;
 
     :deep(.bk-loading-wrapper) {

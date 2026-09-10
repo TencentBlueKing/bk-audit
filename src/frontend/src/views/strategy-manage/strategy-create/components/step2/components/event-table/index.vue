@@ -103,7 +103,11 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
-  import { buildStrategyEventOutputFields } from '../../../../utils/strategy-protocol';
+  import {
+    buildStrategyEventOutputFields,
+    findSelectField,
+    isSameSelectField,
+  } from '../../../../utils/strategy-protocol';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -179,12 +183,28 @@
       event_evidence_field_configs: t('事件证据'),
     }));
 
-  const outputFields = computed(() => buildStrategyEventOutputFields({
-    event_basic_field_configs: tableData.value.event_basic_field_configs,
-    event_data_field_configs: tableData.value.event_data_field_configs,
-    event_evidence_field_configs: tableData.value.event_evidence_field_configs,
-    strategy_type: props.strategyType,
-  }));
+  const outputFields = computed(() => {
+    const eventFields = buildStrategyEventOutputFields({
+      event_basic_field_configs: tableData.value.event_basic_field_configs,
+      event_data_field_configs: tableData.value.event_data_field_configs,
+      event_evidence_field_configs: tableData.value.event_evidence_field_configs,
+      strategy_type: props.strategyType,
+    });
+    const selectDataFields = (props.select || [])
+      .map(item => ({
+        raw_name: item.raw_name || item.display_name || '',
+        display_name: item.display_name || item.raw_name || '',
+        description: '',
+        target_field_type: 'data' as const,
+      }))
+      .filter(item => item.raw_name);
+    return [
+      ...eventFields,
+      ...selectDataFields.filter(item => !eventFields.some(field => (
+        isSameSelectField(item, field.raw_name) || isSameSelectField(item, field.display_name)
+      ))),
+    ];
+  });
 
 
   const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
@@ -251,12 +271,16 @@
         tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
           if (item.map_config && !item.map_config.target_value) {
             const value = item.map_config.source_field || item.map_config.target_value;
-            if (!props.select.some(selectItem => selectItem.display_name === value)) {
+            const matched = findSelectField(props.select, value);
+            if (!matched) {
               // eslint-disable-next-line no-param-reassign
               item.map_config = {
                 source_field: undefined,
                 target_value: undefined,
               };
+            } else {
+              // eslint-disable-next-line no-param-reassign
+              item.map_config.source_field = matched.display_name;
             }
           }
           return item;
@@ -274,25 +298,20 @@
       break;
     case 'event_data_field_configs':
       if (props.select && props.select.length) {
-        // 保持原有顺序，只保留 props.select 中存在的字段
+        // 保持原有顺序，只保留 props.select 中存在的字段（兼容 raw_name / 中文名(raw_name)）
         tableData.value.event_data_field_configs = tableData.value.event_data_field_configs
-          .filter(fieldItem => props.select.some(item => item.display_name === fieldItem.field_name))
-          .map((fieldItem) => {
-            // 找到对应的 props.select 项
-            const selectItem = props.select.find(item => item.display_name === fieldItem.field_name);
-            if (selectItem) {
-              return {
-                ...fieldItem,
-                // 可以在这里添加需要更新的属性
-              };
-            }
-            return fieldItem;
-          });
+          .filter(fieldItem => props.select.some(item => (
+            isSameSelectField(item, fieldItem.field_name)
+            || isSameSelectField(item, fieldItem.display_name)
+          )));
 
         // 添加 props.select 中有但 tableData 中没有的新字段到末尾
         props.select.forEach((item) => {
           const existingField = tableData.value.event_data_field_configs
-            .find(fieldItem => fieldItem.field_name === item.display_name);
+            .find(fieldItem => (
+              isSameSelectField(item, fieldItem.field_name)
+              || isSameSelectField(item, fieldItem.display_name)
+            ));
 
           if (!existingField) {
             tableData.value.event_data_field_configs.push(createField(item));

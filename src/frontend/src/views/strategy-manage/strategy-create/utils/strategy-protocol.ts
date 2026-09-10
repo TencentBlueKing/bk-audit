@@ -611,6 +611,27 @@ export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) 
   return `${name}${suffix}`;
 };
 
+/** 预期结果字段可能是 raw_name、中文名或 中文名(raw_name)，编辑回显都要认 */
+export const isSameSelectField = (
+  selectItem: SelectFieldLike,
+  fieldKey?: string | null,
+) => {
+  if (fieldKey === undefined || fieldKey === null || fieldKey === '') return false;
+  const key = String(fieldKey);
+  const raw = pickFieldRawName(selectItem);
+  const display = pickFieldDisplayName(selectItem);
+  const formatted = formatFieldDisplayLabel(display, raw);
+  return key === raw
+    || key === display
+    || key === formatted
+    || (!!raw && (key.endsWith(`(${raw})`) || formatted === `${key}(${raw})`));
+};
+
+export const findSelectField = <T extends SelectFieldLike>(
+  select: T[] = [],
+  fieldKey?: string | null,
+) => select.find(item => isSameSelectField(item, fieldKey));
+
 const formatSelectFieldLabel = (displayName: string, rawName: string) => (
   formatFieldDisplayLabel(displayName, rawName)
 );

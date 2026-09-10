@@ -334,6 +334,9 @@
   } from '@utils/assist';
   import getAssetsFile from '@utils/getAssetsFile';
 
+  import ReportJumpScopeMenu, {
+    type JumpScopeItem,
+  } from '../../platform-manage/report-config/components/report-jump-scope-menu.vue';
   import StrategyDetail from './components/detail.vue';
   import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
@@ -418,6 +421,7 @@
   );
   const sceneNameMap = ref<Record<string, string>>({});
   const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
+  const activeRiskJumpStrategyId = ref<number | string | null>(null);
 
   const isGlobalStrategy = (data: StrategyModel) => (
     data.visibility?.binding_type === 'platform_binding'
@@ -428,24 +432,51 @@
   );
   const globalStrategyDisabledTip = () => t('全局策略不可操作');
 
+  const collectSceneIdsFromRule = (rule: Record<string, any>, ids: Set<string | number>) => {
+    if (rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== '') {
+      ids.add(rule.target_scene_id);
+    }
+    (rule.scene_ids || []).forEach((id: string | number) => {
+      if (id !== '' && id !== null && id !== undefined) {
+        ids.add(id);
+      }
+    });
+  };
+
   const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
     const sceneIds = data.visibility?.scene_ids;
     if (Array.isArray(sceneIds) && sceneIds.length) {
       return sceneIds;
     }
     const ids = new Set<string | number>();
-    (data.dispatch_rules || []).forEach((rule: Record<string, any>) => {
-      if (rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== '') {
-        ids.add(rule.target_scene_id);
-        return;
-      }
-      (rule.scene_ids || []).forEach((id: string | number) => {
-        if (id !== '' && id !== null && id !== undefined) {
-          ids.add(id);
-        }
-      });
-    });
+    (data.dispatch_rules || []).forEach((rule: Record<string, any>) => collectSceneIdsFromRule(rule, ids));
+    (data.assign_rules || []).forEach((rule: Record<string, any>) => collectSceneIdsFromRule(rule, ids));
+    if (data.default_assign_rule) {
+      collectSceneIdsFromRule(data.default_assign_rule, ids);
+    }
     return Array.from(ids);
+  };
+
+  const getRiskCountJumpScenes = (data: StrategyModel): JumpScopeItem[] => (
+    getDispatchSceneIds(data).map(id => ({
+      type: 'scene' as const,
+      id,
+      name: sceneNameMap.value[String(id)] || String(id),
+    }))
+  );
+
+  const buildRiskCountLink = (data: StrategyModel, sceneId: string | number) => ({
+    name: 'sceneRiskManageList',
+    query: {
+      scene_id: String(sceneId),
+      scope_type: 'scene',
+      strategy_id: data.strategy_id,
+    },
+  });
+
+  const openRiskCountLink = (data: StrategyModel, sceneId: string | number) => {
+    const routeData = router.resolve(buildRiskCountLink(data, sceneId));
+    window.open(routeData.href, '_blank');
   };
 
   const getDispatchSceneLabels = (data: StrategyModel) => getDispatchSceneIds(data).map((id) => {
@@ -1073,21 +1104,75 @@
       width: 120,
       render: ({ data }: { data: StrategyModel }) => {
         const riskCount = data.risk_count ?? 0;
+        if (!riskCount || data.isDraft) {
+          return <span>{riskCount}</span>;
+        }
+
+        const countNode = (
+          <span
+            class="strategy-risk-count-trigger"
+            v-bk-tooltips={{
+              content: t('近6个月此策略产生风险单总数，点击查看'),
+            }}>
+            <span>{riskCount}</span>
+            <audit-icon
+              class="strategy-risk-count-jump-icon"
+              type="jump-link" />
+          </span>
+        );
+
+        if (isPlatformList.value) {
+          const scenes = getRiskCountJumpScenes(data);
+          if (scenes.length >= 1) {
+            const isPopoverActive = activeRiskJumpStrategyId.value === data.strategy_id;
+            return (
+              <bk-popover
+                extCls="strategy-risk-jump-scope-popover"
+                placement="bottom-start"
+                theme="light"
+                trigger="click"
+                width="240"
+                onAfterShow={() => {
+                  activeRiskJumpStrategyId.value = data.strategy_id;
+                }}
+                onAfterHidden={() => {
+                  if (activeRiskJumpStrategyId.value === data.strategy_id) {
+                    activeRiskJumpStrategyId.value = null;
+                  }
+                }}>
+                {{
+                  default: () => (
+                    <span
+                      class={[
+                        'strategy-risk-count-link',
+                        { 'is-popover-active': isPopoverActive },
+                      ]}
+                      onClick={(e: Event) => e.stopPropagation()}>
+                      {countNode}
+                    </span>
+                  ),
+                  content: () => (
+                    <ReportJumpScopeMenu
+                      scenes={getRiskCountJumpScenes(data)}
+                      systems={[]}
+                      onSelect={(scope: JumpScopeItem) => openRiskCountLink(data, scope.id)} />
+                  ),
+                }}
+              </bk-popover>
+            );
+          }
+          const sceneId = scenes[0]?.id ?? getRiskCountLinkSceneId(data);
+          if (!sceneId) {
+            return <span>{riskCount}</span>;
+          }
+          return <router-link class="strategy-risk-count-link" to={buildRiskCountLink(data, sceneId)} target="_blank">{countNode}</router-link>;
+        }
+
         const sceneId = getRiskCountLinkSceneId(data);
-        const to = sceneId ? {
-          name: 'sceneRiskManageList',
-          query: {
-            scene_id: sceneId,
-            scope_type: 'scene',
-            strategy_id: data.strategy_id,
-          },
-        } : null;
-        return riskCount && to && !data.isDraft ? <router-link to = {to} target='_blank'>
-          <span v-bk-tooltips={{
-            content: t('近6个月此策略产生风险单总数，点击查看'),
-            disabled: !riskCount,
-          }}>{riskCount}</span>
-        </router-link> : <span>{riskCount}</span>;
+        if (!sceneId) {
+          return <span>{riskCount}</span>;
+        }
+        return <router-link class="strategy-risk-count-link" to={buildRiskCountLink(data, sceneId)} target="_blank">{countNode}</router-link>;
       },
     },
     {
@@ -2335,6 +2420,45 @@
 
 .strategy-operation-dropdown-pop {
   z-index: 2000 !important;
+}
+
+.strategy-risk-count-link {
+  display: inline-flex;
+  align-items: center;
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.strategy-risk-count-trigger {
+  display: inline-flex;
+  align-items: center;
+}
+
+.strategy-risk-count-jump-icon {
+  margin-left: 4px;
+  font-size: 14px;
+  color: #3a84ff;
+}
+
+.strategy-risk-jump-scope-popover.bk-popover.bk-pop2-content {
+  width: 240px !important;
+  max-width: 240px !important;
+  min-width: 240px !important;
+  height: auto !important;
+  padding: 0;
+  overflow: hidden;
+}
+
+.strategy-risk-jump-scope-popover.bk-popover.bk-pop2-content .bk-popover-content {
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.strategy-risk-jump-scope-popover .jump-scope-loading,
+.strategy-risk-jump-scope-popover .jump-scope-loading .bk-loading-wrapper {
+  min-height: 0 !important;
+  height: auto !important;
 }
 
 .alert-icon {
