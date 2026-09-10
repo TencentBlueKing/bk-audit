@@ -336,21 +336,21 @@
       sort,
     } = getSearchParams();
 
-    // 从详情/编辑返回：优先恢复 sessionStorage 中记录的分页
-    if (recordParams?.page_size) {
+    // 只恢复页码。page_size 可能是上次请求写进 URL/缓存的默认 10，
+    // 不能当成用户手选，否则会跳过按可视高度自适应。
+    if (recordParams?.page) {
       pagination.current = normalizePage(recordParams.page);
-      pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
-      pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
-      isUserSelectedPageSize.value = true;
     } else {
       const pageValue = isUnload.value ? 1 : page;
-      if (pageValue && pageSize) {
+      if (pageValue) {
         pagination.current = normalizePage(pageValue);
-        pagination.limit = (~~pageSize) < 10 ? 10 : (~~pageSize);
-        pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
-      } else {
-        isUserSelectedPageSize.value = false;
       }
+    }
+    if (pageSize) {
+      pagination.limitList = [...new Set([
+        ...pagination.limitList,
+        Math.max(Number(pageSize) || 10, 10),
+      ])].sort((a, b) => a - b);
     }
     // 优先使用新的 sort 数组格式，向后兼容旧的 order_field + order_type
     if (sort) {
@@ -370,7 +370,6 @@
       };
     }
     // 注意：默认排序应该在具体页面组件中设置，而不是在通用组件中
-    // 从URL参数初始化时：有 page_size 则已在上方标记为用户分页状态
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
@@ -461,10 +460,6 @@
     if (isUserSelectedPageSize.value) {
       return;
     }
-    const { page_size: urlPageSize } = getSearchParams();
-    if (urlPageSize || getRecordPageParams()?.page_size) {
-      return;
-    }
     const dimensions = calculateTableDimensions();
     const nextLimit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
     pagination.limit = nextLimit;
@@ -498,6 +493,14 @@
 
   // 计算表格尺寸信息
   const calculateTableDimensions = () => {
+    if (!rootRef.value) {
+      return {
+        tableHeaderHeight: 42,
+        paginationHeight: 60,
+        tableRowHeight: 42,
+        rowNum: 10,
+      };
+    }
     const { top } = getOffset(rootRef.value);
     const windowInnerHeight = window.innerHeight;
     const tableHeaderHeight = 42;
@@ -629,13 +632,10 @@
       }
       if (recordParams) {
         pagination.current = normalizePage(recordParams.page);
-        pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
-        // 从详情/编辑返回时恢复离开前的分页大小，避免被 calcTableHeight 重置为 10
-        isUserSelectedPageSize.value = true;
       } else {
-        // 重置用户选择标志，允许重新计算分页大小
         isUserSelectedPageSize.value = false;
       }
+      applyHeightBasedPageSize();
       isLoading.value = true;
       fetchListData();
     },
@@ -662,6 +662,7 @@
       pagination.current = 1;
       isUserSelectedPageSize.value = false;
       removePageParams();
+      applyHeightBasedPageSize();
       // 恢复列配置，并强制表格重挂载以清除表头排序/筛选高亮
       (props.columns || []).forEach((col: any) => {
         if (col?.sort) {
