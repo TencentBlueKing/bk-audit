@@ -208,7 +208,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
 
         from services.web.query.ai_assistant.exceptions import AITimeoutError
 
-        selection = self.create_selection_message()
+        self.create_selection_message()
         with self.assertRaises(AITimeoutError):
             self._run(
                 payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的"),
