@@ -937,9 +937,7 @@ export const excludeHavingFromWhere = <T extends WhereLike>(
   if (!where?.conditions?.length || !having?.conditions?.length) {
     return where;
   }
-  const havingKeys = new Set(
-    (having.conditions as Array<Record<string, any>>).map(conditionGroupKey),
-  );
+  const havingKeys = new Set((having.conditions as Array<Record<string, any>>).map(conditionGroupKey));
   return {
     ...where,
     conditions: (where.conditions as Array<Record<string, any>>)
