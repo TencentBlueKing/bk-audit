@@ -102,7 +102,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         """场景③ 选系统+检索：建 SELECTION → 条件识别 → 续链 LOG_SEARCH（父=意图消息）→ 派发标题"""
 
         message, output, mock_delay = self._run(
-            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, message="已为您选择审计中心"),
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您选择审计中心"
+            ),
         )
 
         self.assertEqual(output.intent, "select_system")
@@ -164,20 +166,50 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
 
         selection = self.create_selection_message()
         message, output, _ = self._run(
-            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, message="继续在审计中心查询"),
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="继续在审计中心查询"
+            ),
         )
 
         self.assertEqual(self._selection_count(), 1)
         self.assertEqual(output.selection_message_uid, str(selection.uid))
         self.assertIsNotNone(output.condition)
 
-    def test_pure_select_system_condition_not_recognized(self):
-        """场景① 纯选系统（"切到蓝盾"）：SELECTION 保留切换生效，条件识别失败走结构化 error"""
+    def test_pure_switch_without_search(self):
+        """报障回归：纯切换（"切换到 test0907"，need_search=false）——不调条件解析、不续链检索、无报错。
+
+        修复前：纯切换被强绑条件解析，「切换到X」类语句必然解析失败并误报
+        「未能理解检索需求」（切换其实已成功）；修复后切换即本轮终点。
+        """
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=False),
+        )
+
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
+        # 切换成功：无 error、无检索条件、文案面向用户
+        self.assertIsNone(output.error)
+        self.assertIsNone(output.condition)
+        self.assertIn("已为您切换到 审计中心", output.message)
+        # 仅 1 条 SELECTION（切换生效）、0 条 LOG_SEARCH（不追加检索）
+        self.assertEqual(self._selection_count(), 1)
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+        self.assertTrue(output.selection_message_uid)
+        # 意图成功仍派发标题
+        mock_delay.assert_called_once()
+
+    def test_select_system_with_search_condition_not_recognized(self):
+        """切换并检索（need_search=true）但条件识别失败：切换结果不被掩盖，文案前置切换成功事实"""
 
         from services.web.query.ai_assistant.exceptions import QueryNotRecognizedError
 
         message, output, mock_delay = self._run(
-            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, message="已为您切换"),
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您切换"
+            ),
             convert=QueryNotRecognizedError(),
         )
 
@@ -185,6 +217,8 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
         self.assertIsNone(output.condition)
         self.assertEqual(output.error.error_code, QueryNotRecognizedError().error_code)
+        # 兜底文案：检索失败不掩盖切换成功（修复前整句"未能理解检索需求"误导用户）
+        self.assertIn("已为您切换到 审计中心", output.error.error_message)
         # SELECTION 已建保留（切换不被检索失败阻塞），无 LOG_SEARCH 子消息
         self.assertEqual(self._selection_count(), 1)
         self.assertFalse(
@@ -396,7 +430,7 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
 
         self.create_selection_message()
         _, output, _ = self._run_with_scope(
-            payload=IntentPayload(intent="select_system", system_id="other-system", message="已为您切换"),
+            payload=IntentPayload(intent="select_system", system_id="other-system", need_search=True, message="已为您切换"),
             candidates=[{"system_id": "other-system", "name": "其他系统"}],
         )
 

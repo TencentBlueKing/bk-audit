@@ -481,6 +481,9 @@ class MessageServiceTest(TestCase):
         self.assertEqual(retried.error_code, "")
         self.assertEqual(retried.error_message, "")
         self.assertGreater(retried.queued_at, old_queued_at)
+        # 时间线起点随本轮重试重置：duration_seconds 从重试发起时刻起算，不累计首轮失败耗时
+        self.assertGreater(retried.created_at, old_queued_at)
+        self.assertEqual(retried.created_at, retried.queued_at)
         self.assertEqual(retried.last_activity_at, retried.queued_at)
         self.assertIsNone(retried.started_at)
         self.assertIsNone(retried.finished_at)
@@ -594,7 +597,9 @@ class MessageServiceTest(TestCase):
         updated = self.service.update(message_uid=str(message.uid), input_data={"text": "edited"})
 
         self.assertEqual(updated.uid, message.uid)
-        self.assertEqual(updated.created_at, message.created_at)
+        # 时间线起点随本轮编辑重置：sync 就地完成，created_at == finished_at（本轮发起时刻）
+        self.assertGreaterEqual(updated.created_at, message.created_at)
+        self.assertEqual(updated.created_at, updated.finished_at)
         self.assertEqual(updated.message_type, message.message_type)
         self.assertEqual(updated.status, ExecutionStatus.SUCCESS)
         self.assertEqual(updated.input_data, {"text": "edited"})
@@ -638,6 +643,9 @@ class MessageServiceTest(TestCase):
                 self.assertEqual(updated.status, ExecutionStatus.PROCESSING)
                 self.assertNotEqual(updated.task_id, message.task_id)
                 self.assertGreater(updated.queued_at, old_time)
+                # 时间线起点随本轮编辑重置：duration_seconds 从本轮发起时刻起算
+                self.assertGreater(updated.created_at, old_time)
+                self.assertEqual(updated.created_at, updated.queued_at)
                 self.assertEqual(updated.last_activity_at, updated.queued_at)
                 self.assertIsNone(updated.started_at)
                 self.assertIsNone(updated.finished_at)
@@ -665,6 +673,66 @@ class MessageServiceTest(TestCase):
                 updated.refresh_from_db()
                 self.assertIsNone(updated.output_data)
                 self.assertEqual(updated.status, ExecutionStatus.PROCESSING)
+
+    def test_update_resets_duration_timeline_for_rerun(self):
+        """回归：编辑重执行后耗时时间线重置，不累计首轮执行与编辑空闲时间。
+
+        用户报障场景——首轮检索 22s，修改条件重新检索后耗时在原基础上累计
+        （22s → 40s，差额为用户编辑条件的空闲时间）；根因是 timeline 回写机制
+        使 created_at 固定为发问时刻，update 未重置。修复后本轮 duration_seconds
+        只表达「本轮编辑发起 → 本轮完成」。
+        """
+
+        handler = self.register_async_handler()
+        message = self.create_failed_async_message(status=ExecutionStatus.SUCCESS)
+        # 模拟首轮已完成（timeline 回写：created_at=发问时刻，全链耗时 22s）
+        asked_at = timezone.now() - timedelta(minutes=30)
+        Message.objects.filter(id=message.id).update(
+            created_at=asked_at,
+            finished_at=asked_at + timedelta(seconds=22),
+        )
+        # 用户编辑条件重新检索：时间线起点必须重置为本轮发起时刻
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                updated = self.service.update(message_uid=str(message.uid), input_data={"text": "edited"})
+        self.assertGreater(updated.created_at, asked_at + timedelta(seconds=22))
+        self.assertEqual(updated.created_at, updated.queued_at)
+        # 本轮完成：duration = finished - created_at ≈ 本轮执行耗时（首轮 22s 与空闲时间不计入）
+        rerun_finished = updated.created_at + timedelta(seconds=6)
+        Message.objects.filter(id=updated.id).update(finished_at=rerun_finished)
+        updated.refresh_from_db()
+        self.assertAlmostEqual(
+            (updated.finished_at - updated.created_at).total_seconds(),
+            6.0,
+            delta=0.5,
+        )
+
+    def test_retry_resets_duration_timeline_for_rerun(self):
+        """回归：失败重试后耗时时间线重置，不累计首轮失败执行的耗时。"""
+
+        handler = self.register_async_handler()
+        message = self.create_failed_async_message()
+        # 模拟首轮已失败（创建于 30 分钟前，失败前执行了 22s）
+        first_started = timezone.now() - timedelta(minutes=30)
+        Message.objects.filter(id=message.id).update(
+            created_at=first_started,
+            queued_at=first_started,
+            finished_at=first_started + timedelta(seconds=22),
+        )
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = self.service.retry(message_uid=str(message.uid))
+        # 时间线起点重置为重试发起时刻：本轮 duration 不含首轮失败耗时与用户空闲
+        self.assertGreater(retried.created_at, first_started + timedelta(seconds=22))
+        self.assertEqual(retried.created_at, retried.queued_at)
+        rerun_finished = retried.created_at + timedelta(seconds=5)
+        Message.objects.filter(id=retried.id).update(finished_at=rerun_finished)
+        retried.refresh_from_db()
+        self.assertAlmostEqual(
+            (retried.finished_at - retried.created_at).total_seconds(),
+            5.0,
+            delta=0.5,
+        )
 
     def test_update_invalid_input_or_sync_failure_keeps_original_snapshots(self):
         message = self.create_parent()

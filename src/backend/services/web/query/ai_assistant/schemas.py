@@ -214,6 +214,12 @@ class IntentPayload(BaseModel):
         default="",
         description="select_system 时必填，必须来自候选系统列表；log_search/unrecognized 时留空",
     )
+    need_search: bool = Field(
+        default=False,
+        description="检索诉求判定：select_system 且话语同时包含日志检索诉求（如「查审计中心近七天的操作记录」）"
+        "为 true（切换系统后继续执行检索）；仅表达切换/选择系统（如「切换到蓝盾」「用蓝盾系统」）为 false"
+        "（仅切换不检索）；log_search 恒为 true，unrecognized 恒为 false",
+    )
     message: str = Field(
         default="",
         description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",

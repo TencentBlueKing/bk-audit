@@ -276,6 +276,7 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
     #    命中当前系统 → 复用不重建；log_search 校验会话已有系统（平台守门）
     selection_message = current_selection
     system_id = current_system_id
+    system_switched = False
     if payload.intent == "select_system":
         system_id = payload.system_id
         if system_id != current_system_id or current_selection is None:
@@ -292,6 +293,25 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 },
                 # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
                 timeline_started_at=execution.message.created_at,
+            )
+            system_switched = True
+        if not payload.need_search:
+            # 纯切换（无检索诉求）：不调条件解析、不续链检索——切换即本轮终点。
+            # 若强行把「切换到X」类语句交给条件解析必然失败，曾误报
+            # 「未能理解检索需求」让用户以为切换失败（阶段一报障修复；
+            # 通用 message_type+message_input 分发架构见迭代方案，届时由 LLM 直接决定是否派发检索）
+            candidate_name = next(
+                (str(candidate["name"]) for candidate in candidates if str(candidate.get("system_id")) == system_id),
+                system_id,
+            )
+            fallback_message = (
+                f"已为您切换到 {candidate_name}，如需检索日志请继续描述" if system_switched else f"当前系统已是 {candidate_name}，如需检索日志请继续描述"
+            )
+            return UserIntentOutputSchema(
+                intent="select_system",
+                system_id=system_id,
+                message=payload.message or fallback_message,
+                selection_message_uid=str(selection_message.uid) if selection_message is not None else "",
             )
     elif not current_system_id:
         # 检索意图明确但缺会话系统状态（非识别失败）：AI 动态引导 + 候选清单
@@ -324,10 +344,19 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
             execution.message.id,
             error.error_code,
         )
+        # 本轮发生系统切换时，检索条件识别失败不得掩盖切换结果：文案前置切换成功事实，
+        # 防整句「未能理解检索需求」让用户误以为切换也失败了（need_search 误判时的兜底）
+        error_message = error.message
+        if system_switched:
+            candidate_name = next(
+                (str(candidate["name"]) for candidate in candidates if str(candidate.get("system_id")) == system_id),
+                system_id,
+            )
+            error_message = f"已为您切换到 {candidate_name}，{error.message}"
         return UserIntentOutputSchema(
             intent=payload.intent,
             system_id=system_id,
-            error=UserIntentErrorSchema(error_code=error.error_code, error_message=error.message),
+            error=UserIntentErrorSchema(error_code=error.error_code, error_message=error_message),
         )
     return UserIntentOutputSchema(
         intent=payload.intent,
