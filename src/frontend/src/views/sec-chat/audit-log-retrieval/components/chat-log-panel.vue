@@ -136,29 +136,11 @@
               </div>
             </div>
 
-            <!-- NL / LOG 失败 -->
-            <div
-              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
-              class="result-status-card is-failed">
-              <div class="status-title">
-                检索失败
-              </div>
-              <div class="status-desc">
-                {{ msg.aiMessage || msg.errorMessage || '请稍后重试或改用条件筛选' }}
-              </div>
-              <bk-button
-                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
-                size="small"
-                theme="primary"
-                @click="$emit('retry-message', msg.id)">
-                重试
-              </bk-button>
-            </div>
-
-            <!-- 查询后的结构化结果卡片 -->
+            <!-- 查询后的结构化结果卡片（含 LOG_SEARCH FAILED：条件区 + 卡内失败态） -->
             <retrieval-result-card
               v-else-if="msg.type === 'retrieval-result' && msg.result"
               :api-status="msg.apiStatus"
+              :error-message="msg.errorMessage || msg.aiMessage || ''"
               :extension-fields="extensionFields"
               :message-uid="msg.id"
               :result="msg.result"
@@ -166,6 +148,30 @@
               :systems="systems"
               @regenerate="handleRegenerate(msg.content || '')"
               @reselect-system="handleReselectSystem" />
+
+            <!-- NL / 无条件任务失败：对齐条件检索失败态（居中图标 + 文案） -->
+            <div
+              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
+              class="result-status-card is-failed">
+              <img
+                alt=""
+                class="failed-icon"
+                :src="errorSearchIcon">
+              <div class="status-title">
+                检索失败
+              </div>
+              <div class="status-desc">
+                {{ msg.aiMessage || msg.errorMessage || '请检查网络是否通畅或联系管理员' }}
+              </div>
+              <bk-button
+                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
+                class="failed-retry-btn"
+                size="small"
+                theme="primary"
+                @click="$emit('retry-message', msg.id)">
+                重试
+              </bk-button>
+            </div>
           </div>
 
           <!-- 条件检索卡：未检索时覆盖草稿；已检索后再点则新建，固定在会话底部 -->
@@ -373,8 +379,10 @@
       if (msg.type === 'retrieval-guide' && msg.showGuide !== false) return 'retrieval-guide-card';
       if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
       if (msg.type === 'retrieval-result' && msg.recognitionError) return `recognition-error:${msg.recognitionError.code || ''}`;
+      if (msg.type === 'retrieval-result' && msg.result) {
+        return msg.apiStatus === 'FAILED' ? 'retrieval-result-failed' : 'retrieval-result-card';
+      }
       if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') return `retrieval-failed:${msg.messageType || ''}`;
-      if (msg.type === 'retrieval-result' && msg.result) return 'retrieval-result-card';
       return 'hidden';
     })();
 
@@ -756,6 +764,29 @@
       }
     }
 
+    &.is-failed {
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      gap: 8px;
+      text-align: center;
+
+      .failed-icon {
+        display: block;
+        width: 48px;
+        height: 48px;
+      }
+
+      .status-title,
+      .status-desc {
+        text-align: center;
+      }
+
+      .failed-retry-btn {
+        margin-top: 4px;
+      }
+    }
+
     .suggest-section {
       width: 100%;
       margin-top: 4px;
@@ -804,7 +835,7 @@
     .status-desc {
       font-size: 12px;
       line-height: 18px;
-      color: #979ba5;
+      color: #4d4f56;
     }
   }
 
