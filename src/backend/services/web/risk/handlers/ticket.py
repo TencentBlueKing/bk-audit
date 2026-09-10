@@ -915,11 +915,12 @@ class ConfirmRisk(RiskFlowBaseHandler):
         pass
 
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
-        # 外部任务与通知放到事务提交后执行，保证数据已落库
         transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
 
     def _post_confirm_tasks(self, description: str = "") -> None:
         """事务提交后执行的任务：流转、渲染、通知、记录历史"""
+
+        self.risk.refresh_from_db()
         # 1. 先流转 NewRisk，记录"风险产生"节点
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
         super().record_history(process_result={}, description=description)
