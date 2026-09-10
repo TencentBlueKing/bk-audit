@@ -325,13 +325,16 @@ export const mapLogSearchOutputToResult = (
   const previewCount = rows.length;
   const condition = (message.input_data?.condition || undefined) as AiSearchCondition | undefined;
   const conditionTags = mapConditionToFilterTags(condition, fieldCatalog);
-  const tookMs = Number(output.query_summary?.took_ms ?? 0);
+  const durationSeconds = message.duration_seconds;
+  const thinkSeconds = durationSeconds == null || Number.isNaN(Number(durationSeconds))
+    ? null
+    : Math.max(0, Math.round(Number(durationSeconds)));
 
   return {
     conditions: conditionTags,
     rawCondition: condition || undefined,
     toolCount: output.query_summary?.source === 'natural_language' ? 3 : 2,
-    thinkSeconds: tookMs > 0 ? Math.max(1, Math.round(tookMs / 1000)) : 1,
+    thinkSeconds,
     title: '审计日志检索结果',
     totalHit,
     previewCount,
