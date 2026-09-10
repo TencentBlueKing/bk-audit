@@ -201,6 +201,22 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         # 意图成功仍派发标题
         mock_delay.assert_called_once()
 
+    def test_condition_transient_failure_raises_for_retry(self):
+        """[review P2] 条件识别暂态故障（超时/服务异常/超预算解析失败）冒泡收敛 FAILED：
+        MessageService.retry 仅接受 FAILED——SUCCESS+error 协议会让用户无法重试这类
+        可恢复失败；确定性业务失败（未识别/输出非法）才走 SUCCESS+error。"""
+
+        from services.web.query.ai_assistant.exceptions import AITimeoutError
+
+        selection = self.create_selection_message()
+        with self.assertRaises(AITimeoutError):
+            self._run(
+                payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的"),
+                convert=AITimeoutError(),
+            )
+        # 暂态失败不产生结构化 error 输出（任务由平台收敛 FAILED，重试接口可用）
+        self.assertEqual(self._selection_count(), 1)
+
     def test_select_system_with_search_condition_not_recognized(self):
         """切换并检索（need_search=true）但条件识别失败：切换结果不被掩盖，文案前置切换成功事实"""
 

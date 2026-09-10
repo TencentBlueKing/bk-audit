@@ -107,7 +107,7 @@
     chain: true
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 2 && c.filters.includes("张三") && c.filters.includes("李四")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.includes(-1)) && d.condition.start_time.startsWith("2026-08-28")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 2 && c.filters.includes("张三") && c.filters.includes("李四")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.includes(-1)) && d.condition.start_time.startsWith("2026-08-24") && d.condition.end_time.startsWith("2026-08-30")'
 
 - description: 'chain-选系统+海量多值（审计中心+10人梯度完整性）'
   vars:

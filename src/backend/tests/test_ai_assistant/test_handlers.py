@@ -308,6 +308,18 @@ class TestLogSearchHandler(AIAssistantPlatformTestCase):
         self.assertEqual(preparation.parent_message.id, nl_message.id)
         self.assertEqual(preparation.context_data.source, "natural_language")
 
+    def test_prepare_inherits_session_scope_from_nl_parent(self):
+        """[review P2] NL 父消息的 session scope 继承：NL 上下文的 scope_id 是目标系统
+        （非 session scope），session scope 固化在 session_scope_* 字段——统一读
+        scope_type/scope_id 会得到 ("", 目标系统)：丢失场景范围回退 system 维度校验，
+        且目标系统被误当 scope 实例。"""
+
+        selection = self.create_selection_message()
+        nl_message = self.create_nl_message(parent=selection, condition=make_condition())
+        preparation = self._prepare(parent=nl_message)
+        self.assertEqual(preparation.context_data.session_scope_type, self.default_scope_type)
+        self.assertEqual(preparation.context_data.session_scope_id, self.default_scope_id)
+
     def test_prepare_resolves_latest_selection_fallback(self):
         """未传 parent 时兜底解析最新成功系统选择。"""
 

@@ -114,6 +114,48 @@ class TestLogSearchService(AIAssistantTestCase):
         # system_id 过滤条件仍注入 SQL
         self.assertIn("system_id", self._data_sql(mock_query_sync))
 
+    def test_search_session_scope_intersects_target_system(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[review P1] 查询范围收敛到目标系统：scope 授权集（可见边界）与
+        condition.scope_id（查询意图）取交集——scope 授权 [A,B] 而目标为 A 时
+        只查 A，结果与总数不混入 B。"""
+
+        self._setup_mocks(
+            mock_build_rt,
+            mock_get_authed,
+            mock_query_sync,
+            mock_system_list,
+            authed_systems=[self.target_system_id, "other_authorized_system"],
+        )
+
+        self._search(session_scope_type="cross_system", session_scope_id="")
+
+        # SQL 的 system_id 过滤只含目标系统，不含 scope 内其他授权系统
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn(self.target_system_id, data_sql)
+        self.assertNotIn("other_authorized_system", data_sql)
+
+    def test_search_session_scope_target_not_authorized_zero_hit(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[review P1] 目标系统不在 session scope 授权内：交集为空退化为 [""]，
+        SQL system_id IN ("") 自然零命中（权限拒绝语义，非越权放行）。"""
+
+        self._setup_mocks(
+            mock_build_rt,
+            mock_get_authed,
+            mock_query_sync,
+            mock_system_list,
+            authed_systems=["other_authorized_system"],
+        )
+
+        self._search(session_scope_type="scene", session_scope_id="1")
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertNotIn(self.target_system_id, data_sql)
+        self.assertIn("IN ('')", data_sql)
+
     def test_search_without_session_scope_falls_back_to_condition(
         self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
     ):
@@ -238,6 +280,62 @@ class TestLogSearchService(AIAssistantTestCase):
 
         output = self._search()
         self.assertEqual(len(output.samples[0]["username"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH)
+
+    def test_snapshot_raw_log_structured_as_object(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[前端需求] 原始数据内容（log）为合法 JSON 时解析为对象完整返回（不截断）：
+        前端识别 JSON 格式渲染样式（对齐拓展数据形态），截断字符串必非合法 JSON。"""
+
+        import json
+
+        raw_log = json.dumps(
+            {
+                "event_content": "获取策略详情",
+                "action_id": "list_strategy_v2",
+                "extend_data": '{"strategy_id": "259", "namespace": "default"}',
+            },
+            ensure_ascii=False,
+        )
+        hits = [dict(MOCK_HITS[0], log=raw_log)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        log_value = output.samples[0]["log"]
+        self.assertIsInstance(log_value, dict)
+        self.assertEqual(log_value["action_id"], "list_strategy_v2")
+        self.assertEqual(log_value["event_content"], "获取策略详情")
+
+    def test_snapshot_raw_log_non_json_keeps_truncated(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """非 JSON 纯文本日志：保持字符串并按常规上限截断（原行为不变）。"""
+
+        hits = [dict(MOCK_HITS[0], log="纯文本日志内容" * 500)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        self.assertIsInstance(output.samples[0]["log"], str)
+        self.assertEqual(len(output.samples[0]["log"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH)
+
+    def test_snapshot_raw_log_oversized_json_returns_complete(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """超大 JSON 也完整返回对象（口径对齐检索页无截断；审计事件上报侧自带大小约束）。"""
+
+        import json
+
+        raw_log = json.dumps({"data": "x" * (LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH * 8)})
+        hits = [dict(MOCK_HITS[0], log=raw_log)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        log_value = output.samples[0]["log"]
+        self.assertIsInstance(log_value, dict)
+        self.assertEqual(len(log_value["data"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH * 8)
 
     def test_snapshot_size_fixed(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
         """固化口径：page=1 / size=100 / 最新排序"""

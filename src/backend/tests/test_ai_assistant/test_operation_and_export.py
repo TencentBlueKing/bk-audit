@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """常见/历史操作与消息导出测试。"""
 
+from datetime import timedelta
 from unittest import mock
+
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import ExecutionStatus
 from services.web.ai_assistant.exceptions import (
@@ -11,6 +14,7 @@ from services.web.ai_assistant.exceptions import (
     LogExportPermissionDenied,
     MessageNotFound,
 )
+from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import CommonQuerySchema
 from services.web.ai_assistant.services.log_export import MessageExportService
 from services.web.ai_assistant.services.operation import (
@@ -35,29 +39,98 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
         store = CommonQueryStore(redis_client=mock.MagicMock(**client_behavior))
         return store
 
-    def test_list_reads_lrange(self):
-        store = self._make_store(**{"lrange.return_value": ["查登录失败", "查导出记录"]})
-        items = store.list(TARGET_SYSTEM_ID, self.user, limit=10)
-        self.assertEqual([item.query_text for item in items], ["查登录失败", "查导出记录"])
-        store.redis_client.lrange.assert_called_once_with(
-            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}:{self.user}", 0, 9
-        )
+    def test_replace_today_rebuilds_bucket_atomically(self):
+        """当天桶原子重建：delete + zadd（当日计数，频次降序）+ expire（窗口+2 天）一次 MULTI 执行"""
 
-    def test_list_redis_error_returns_empty(self):
-        import redis
-
-        store = self._make_store(**{"lrange.side_effect": redis.RedisError("down")})
-        self.assertEqual(store.list(TARGET_SYSTEM_ID, self.user, limit=10), [])
-
-    def test_replace_deletes_and_pushes(self):
         store = self._make_store()
-        store.replace(TARGET_SYSTEM_ID, self.user, ["q1", "q2", ""])
+        store.replace_today(system_id=TARGET_SYSTEM_ID, username=self.user, counts={"q1": 3, "q2": 1}, window_days=14)
         pipeline = store.redis_client.pipeline.return_value
         pipeline.delete.assert_called_once()
-        pipeline.rpush.assert_called_once_with(
-            f"bk_audit:ai_assistant:common_queries:{TARGET_SYSTEM_ID}:{self.user}", "q1", "q2"
+        zadd_key, mapping = pipeline.zadd.call_args[0]
+        self.assertEqual(mapping, {"q1": 3.0, "q2": 1.0})
+        self.assertEqual(
+            zadd_key,
+            f"bk_audit:ai_assistant:common_queries_v2:{TARGET_SYSTEM_ID}:{self.user}:d"
+            f"{timezone.localdate().strftime('%Y%m%d')}",
         )
+        pipeline.expire.assert_called_once_with(zadd_key, 16 * 86400)
         pipeline.execute.assert_called_once()
+
+    def test_replace_today_truncates_to_store_limit(self):
+        """单天桶容量截断：按频次降序仅保留 STORE_LIMIT 条（防单日异常刷量撑爆内存）"""
+
+        store = self._make_store()
+        store.replace_today(
+            system_id=TARGET_SYSTEM_ID,
+            username=self.user,
+            counts={"a": 5, "b": 9, "c": 1},
+            window_days=14,
+        )
+        with mock.patch("django.conf.settings.AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT", 2):
+            store.replace_today(
+                system_id=TARGET_SYSTEM_ID,
+                username=self.user,
+                counts={"a": 5, "b": 9, "c": 1},
+                window_days=14,
+            )
+        pipeline = store.redis_client.pipeline.return_value
+        mapping = pipeline.zadd.call_args[0][1]
+        self.assertEqual(mapping, {"b": 9.0, "a": 5.0})
+
+    def test_replace_today_empty_counts_keeps_deleted(self):
+        """当日无计数：仅清空当天桶（delete），不写 zadd/expire（空桶自然不占内存）"""
+
+        store = self._make_store()
+        store.replace_today(system_id=TARGET_SYSTEM_ID, username=self.user, counts={}, window_days=14)
+        pipeline = store.redis_client.pipeline.return_value
+        pipeline.delete.assert_called_once()
+        pipeline.zadd.assert_not_called()
+        pipeline.expire.assert_not_called()
+        pipeline.execute.assert_called_once()
+
+    def test_list_top_merges_with_decay(self):
+        """读路径：窗口内天桶线性衰减加权合并——高频在前，历史高频被衰减压低"""
+
+        store = self._make_store()
+        pipeline = store.redis_client.pipeline.return_value
+        # 单系统 14 天窗口 → 14 个 zrange 结果（顺序：今天 → 13 天前）
+        #   今天桶：today-q ×1（权重 1.0 → 1.0）
+        #   昨天桶：yesterday-q ×3（权重 13/14 → 2.786，频次胜出）
+        #   13 天前桶：old-q ×5（权重 1/14 → 0.357，历史高频被衰减压低）
+        pipeline.execute.return_value = (
+            [
+                [("today-q", 1.0)],
+                [("yesterday-q", 3.0)],
+            ]
+            + [[]] * 11
+            + [[("old-q", 5.0)]]
+        )
+        items = store.list_top(system_ids=[TARGET_SYSTEM_ID], username=self.user, window_days=14, limit=10)
+        self.assertEqual([item.query_text for item in items], ["yesterday-q", "today-q", "old-q"])
+
+    def test_list_top_merges_across_systems(self):
+        """跨系统同句合并频次（多系统查过 = 更常用），top K 截断"""
+
+        store = self._make_store()
+        pipeline = store.redis_client.pipeline.return_value
+        # 两系统 × 今天桶（第 1、2 个 zrange），第 3 个起为今天之后的天（昨天）
+        pipeline.execute.return_value = [[("q1", 1.0)], [("q1", 2.0)], []] + [[]] * 25
+        items = store.list_top(
+            system_ids=[TARGET_SYSTEM_ID, "other_system"], username=self.user, window_days=14, limit=10
+        )
+        self.assertEqual([item.query_text for item in items], ["q1"])
+        pipeline.zrange.assert_called_with(mock.ANY, 0, -1, withscores=True)
+        self.assertEqual(pipeline.zrange.call_count, 28)  # 2 系统 × 14 天
+
+    def test_list_top_redis_error_returns_empty(self):
+        """Redis 异常降级：返回空列表，不抛出（次要功能不阻断主流程）"""
+
+        import redis
+
+        store = self._make_store(**{"pipeline.return_value.execute.side_effect": redis.RedisError("down")})
+        self.assertEqual(
+            store.list_top(system_ids=[TARGET_SYSTEM_ID], username=self.user, window_days=14, limit=10), []
+        )
 
 
 class TestOperationContext(AIAssistantPlatformTestCase):
@@ -100,38 +173,44 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         self.assertNotIn("失败的不算", query_texts)
 
     def test_build_common_reads_only_current_user(self):
-        """常见操作：仅读取当前用户 × 系统的缓存，不串看其他用户样例。"""
+        """常见操作：仅读取当前用户 × 系统的高频缓存，不串看其他用户样例。"""
 
         with mock.patch.object(
             CommonQueryStore,
-            "list",
-            side_effect=lambda system_id, username, limit: (
-                [CommonQuerySchema(query_text=f"{username}-q")] if username == self.user else []
-            ),
-        ) as mock_list:
+            "list_top",
+            return_value=[CommonQuerySchema(query_text=f"{self.user}-q")],
+        ) as mock_list_top:
             common = OperationContextService.build_common(system_ids=[TARGET_SYSTEM_ID], username=self.user)
         self.assertEqual([item.query_text for item in common], [f"{self.user}-q"])
-        mock_list.assert_called_once_with(TARGET_SYSTEM_ID, self.user, limit=mock.ANY)
+        mock_list_top.assert_called_once_with(
+            system_ids=[TARGET_SYSTEM_ID], username=self.user, window_days=mock.ANY, limit=mock.ANY
+        )
 
-    def test_refresh_common_queries_aggregates(self):
-        """定时刷新：按用户 × 系统聚合最近样例并整表替换（用户间隔离）。"""
+    def test_refresh_common_queries_aggregates_today_counts(self):
+        """定时刷新：只聚合当天成功检索，按用户 × 系统计数重建当天桶（重复语句累计频次）。"""
 
         selection = self.create_selection_message()
         self.create_nl_message(query_text="q1", parent=selection)
+        self.create_nl_message(query_text="q1", parent=selection)  # 重复 → 当日频次 2
         self.create_nl_message(query_text="q2", parent=selection)
         # 其他用户的样例进入独立缓存，不与当前用户混合
         other_message = self.create_nl_message(query_text="other-q", parent=selection)
         other_message.created_by = "other_user"
         other_message.save(update_record=False, update_fields=["created_by"])
-        with mock.patch.object(CommonQueryStore, "replace") as mock_replace:
-            result = OperationContextService.refresh_common_queries()
-        replace_calls = {call.args[:2]: call.args[2] for call in mock_replace.call_args_list}
-        self.assertEqual(
-            replace_calls.get((TARGET_SYSTEM_ID, self.user)),
-            ["q2", "q1"],  # 最近在前
+        # 昨天的消息不进当天桶（滑动窗口由历史天桶承载，当天桶只算当天）
+        yesterday_message = self.create_nl_message(query_text="yesterday-q", parent=selection)
+        Message.objects.filter(id=yesterday_message.id).update(
+            created_at=timezone.localtime() - timedelta(days=1, hours=1)
         )
-        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, "other_user")), ["other-q"])
-        self.assertEqual(result, {"refreshed_systems": 2, "scanned_messages": 3})
+        with mock.patch.object(CommonQueryStore, "replace_today") as mock_replace:
+            result = OperationContextService.refresh_common_queries()
+        replace_calls = {
+            (call.kwargs["system_id"], call.kwargs["username"]): call.kwargs["counts"]
+            for call in mock_replace.call_args_list
+        }
+        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, self.user)), {"q1": 2, "q2": 1})
+        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, "other_user")), {"other-q": 1})
+        self.assertEqual(result, {"refreshed_systems": 2, "scanned_messages": 4})
 
     def _create_intent_message(self, *, query_text: str, output: dict, status: str = ExecutionStatus.SUCCESS):
         """构造 USER_INTENT 消息（统一入口链路，成功检索输出含 condition + system_id）。"""
@@ -205,11 +284,14 @@ class TestOperationContext(AIAssistantPlatformTestCase):
                 "error": {"error_code": "SYSTEM_REQUIRED", "error_message": "x", "candidates": []},
             },
         )
-        with mock.patch.object(CommonQueryStore, "replace") as mock_replace:
+        with mock.patch.object(CommonQueryStore, "replace_today") as mock_replace:
             result = OperationContextService.refresh_common_queries()
-        replace_calls = {call.args[:2]: call.args[2] for call in mock_replace.call_args_list}
-        # 仅成功检索的意图消息进缓存（引导性输出不计）
-        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, self.user)), ["intent-q1"])
+        replace_calls = {
+            (call.kwargs["system_id"], call.kwargs["username"]): call.kwargs["counts"]
+            for call in mock_replace.call_args_list
+        }
+        # 仅成功检索的意图消息进当天桶（引导性输出不计）
+        self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, self.user)), {"intent-q1": 1})
         self.assertEqual(result["scanned_messages"], 1)
 
 

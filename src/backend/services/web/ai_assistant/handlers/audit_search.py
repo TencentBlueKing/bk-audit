@@ -68,9 +68,15 @@ def resolve_session_scope(parent: Message) -> tuple[str, str]:
     session scope 随消息快照固化在 context_data（重试/编辑复用），
     NL/LOG_SEARCH 续链必须按此收窄 system_id 过滤——与前端左上角场景过滤器
     当前选择保持一致，AI 助手是场景内工具不能跨场景路由。
+
+    注意：NL 消息上下文的 scope_id 是目标系统（非 session scope），其 session scope
+    固化在 session_scope_type/session_scope_id 字段——按消息类型取字段，防把目标
+    系统误当 scope_id 读取（会丢失场景范围并回退 system 维度校验）。
     """
 
     context = parent.context_data if isinstance(parent.context_data, dict) else {}
+    if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
+        return str(context.get("session_scope_type") or ""), str(context.get("session_scope_id") or "")
     return str(context.get("scope_type") or ""), str(context.get("scope_id") or "")
 
 
