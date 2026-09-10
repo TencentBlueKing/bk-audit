@@ -78,6 +78,7 @@
               <!-- 显式选系统后的检索引导卡片 -->
               <retrieval-guide-card
                 v-else-if="msg.type === 'retrieval-guide' && msg.showGuide !== false"
+                :common-operations="msg.commonOperations || []"
                 :confirming-system="confirmingSystemMessageId === msg.id"
                 :extension-fields="msg.extensionFields || []"
                 :historical-operations="msg.historicalOperations || []"
@@ -122,13 +123,14 @@
                   </bk-button>
                 </div>
                 <div
-                  v-if="showRecognitionSuggestions(msg.recognitionError.code)"
+                  v-if="showRecognitionSuggestions(msg.recognitionError.code)
+                    && recognitionSuggestions.length"
                   class="suggest-section">
                   <div class="suggest-label">
                     试试这样说：
                   </div>
                   <button
-                    v-for="(item, index) in FIXED_SUGGESTIONS"
+                    v-for="(item, index) in recognitionSuggestions"
                     :key="`nl-suggest-${index}`"
                     class="suggest-item"
                     type="button"
@@ -235,6 +237,7 @@
     hasBeforeMessages?: boolean;
     loadingOlderMessages?: boolean;
     messageLoading?: boolean;
+    commonOperations?: string[];
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
     systems?: SelectedSystem[];
@@ -245,6 +248,7 @@
     hasBeforeMessages: false,
     loadingOlderMessages: false,
     messageLoading: false,
+    commonOperations: () => [],
     standardFields: () => [],
     extensionFields: () => [],
     systems: () => [],
@@ -314,13 +318,12 @@
     PERMISSION_DENIED: '请联系管理员申请目标系统的日志检索权限',
   };
 
-  /** 检索异常「试试这样说」：前端固定文案，不依赖后端 */
-  const FIXED_SUGGESTIONS = [
-    '查询「替换为实际用户」近7天的删除操作',
-    '查询「替换为实际安装包」近7天的下载操作',
-    '查询「替换为实际安装包」近7天的成功操作',
-    '查询「替换为实际用户」近30天API操作',
-  ];
+  const SUGGESTION_LIMIT = 4;
+
+  /** 「试试这样说」：复用会话里 SYSTEM_SELECTION 的常用操作 */
+  const recognitionSuggestions = computed(() => (
+    props.commonOperations.slice(0, SUGGESTION_LIMIT)
+  ));
 
   const getRecognitionTitle = (code: string) => (
     NL_RECOGNITION_TITLES[code] || '未能完成检索'
