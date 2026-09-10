@@ -1251,12 +1251,11 @@
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
       formData.value.configs.data_source.source_type = '';
-      return;
-    }
-    // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
-    if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
+    } else if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
+      // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
       formData.value.configs.data_source.source_type = originSourceType.value;
     }
+    emits('resetHitConditions');
   };
 
   // 更新风险规则
@@ -1626,6 +1625,9 @@
       if (props.stepMode !== 'rules' && props.stepMode !== 'rules-only') {
         return;
       }
+      if (Number(props.editData?.hit_conditions_reset_seq) > 0) {
+        return;
+      }
       const hasIncoming = Boolean((where as Where | undefined)?.conditions?.length
         || (having as Where | undefined)?.conditions?.length);
       if (!hasIncoming || isWhereModified.value) {
@@ -1829,6 +1831,13 @@
         connector: 'and',
         conditions: [],
       };
+      originalEditWhere.value = {
+        connector: 'and',
+        conditions: [],
+      };
+      originalEditHaving.value = undefined;
+      isWhereModified.value = true;
+      pendingWhereEditData.value = null;
       rulesComponentRef.value?.resetFormData?.();
     },
   });

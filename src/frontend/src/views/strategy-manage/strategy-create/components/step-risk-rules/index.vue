@@ -884,20 +884,31 @@
     const base = getMergedSourceData();
     const localRule = ruleItems.value[index];
     const formRule = props.formData?.rules?.[index] ?? {};
+    const hitConditionsReset = Number(props.formData?.hit_conditions_reset_seq) > 0;
+    const emptyWhere = { connector: 'and', conditions: [] };
     // 注意：customize 初始化会回写空 where（conditions: []），不能优先生效，否则会盖住真实命中条件
-    const where = pickConditionWhere(
+    // 预期结果变更后已主动清空：空条件也要生效，不能再回落到详情原始 where
+    const pickWhere = (
+      ...candidates: Array<{ conditions?: unknown[] } | null | undefined>
+    ) => {
+      if (hitConditionsReset) {
+        return candidates.find(item => item != null) ?? emptyWhere;
+      }
+      return pickConditionWhere(...candidates);
+    };
+    const where = pickWhere(
       localRule?.conditions?.where,
       formRule.conditions?.where,
       formRule.configs?.where,
       localRule?.formData?.configs?.where,
-      index === 0 ? base.configs?.where : undefined,
+      hitConditionsReset ? undefined : (index === 0 ? base.configs?.where : undefined),
     );
-    const having = pickConditionWhere(
+    const having = pickWhere(
       localRule?.conditions?.having,
       formRule.conditions?.having,
       formRule.configs?.having,
       localRule?.formData?.configs?.having,
-      index === 0 ? base.configs?.having : undefined,
+      hitConditionsReset ? undefined : (index === 0 ? base.configs?.having : undefined),
     );
     return {
       ...base,

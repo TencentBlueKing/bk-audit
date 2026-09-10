@@ -687,8 +687,13 @@
     (data) => {
       if (!(isEditMode || isCloneMode) || !data) return;
       const anyData = data as any;
-      if (anyData.assign_rules || anyData.default_assign_rule || anyData.dispatch_rules) {
-        applyEchoData(anyData);
+      // formData 覆盖详情：预期结果变更清空命中条件后，不能再用接口原始分派条件回填
+      const merged = {
+        ...anyData,
+        ...(props.formData || {}),
+      };
+      if (merged.assign_rules || merged.default_assign_rule || merged.dispatch_rules) {
+        applyEchoData(merged);
       }
     },
     { immediate: isEditMode || isCloneMode },
