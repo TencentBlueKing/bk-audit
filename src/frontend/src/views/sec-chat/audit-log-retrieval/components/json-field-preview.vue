@@ -48,9 +48,12 @@
               <audit-icon type="copy" />
             </button>
             <div class="json-field-preview-scroll">
+              <!-- eslint-disable vue/no-v-html -->
+              <!-- highlightHtml 由 getJsonHighlightHtml 生成，内容已 escapeHtml 转义 -->
               <pre
                 class="json-field-preview-code"
                 v-html="highlightHtml" />
+              <!-- eslint-enable vue/no-v-html -->
             </div>
           </div>
         </template>
