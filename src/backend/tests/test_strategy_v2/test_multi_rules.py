@@ -827,3 +827,59 @@ class PlatformVsSceneBindingTest(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["binding_type"], BindingType.SCENE_BINDING)
         self.assertEqual(serializer.validated_data["scene_id"], self.scene.scene_id)
+
+
+class PlatformBindingScenePermissionTest(TestCase):
+    """全局策略编辑时的场景维度校验跳过测试
+
+    背景：编辑全局策略时 get_scene_id 按 strategy_id 反查到的是分派目标场景（可见性派生），
+    若按其校验数据源系统授权会误报"系统不在场景授权范围内"（创建时无 scene_id 直接跳过）。
+    """
+
+    def setUp(self):
+        super().setUp()
+        from services.web.strategy_v2.serializers import UpdateStrategyRequestSerializer
+
+        self.serializer = UpdateStrategyRequestSerializer()
+
+    def _build_attrs(self, binding_type, scene_id=None):
+        attrs = {
+            "binding_type": binding_type,
+            "strategy_type": StrategyType.RULE.value,
+            "configs": {
+                "config_type": "EventLog",
+                "data_source": {
+                    "system_ids": ["bk_audit_unauthorized"],
+                    "source_type": "stream_source",
+                    "rt_id": "47_bklog_xxx",
+                },
+            },
+            "notice_groups": [],
+            "processor_groups": [],
+            "strategy_id": 123456,
+        }
+        if scene_id is not None:
+            attrs["scene_id"] = scene_id
+        return attrs
+
+    def test_platform_binding_skips_data_permission(self):
+        """全局策略：数据源系统不按分派场景校验授权（与创建行为对齐）"""
+        attrs = self._build_attrs(BindingType.PLATFORM_BINDING)
+        # 不抛"系统不在场景授权范围内"即通过（跳过校验，不会调用权限接口）
+        self.serializer._validate_strategy_data_permission(attrs)
+        self.serializer._validate_scene_resources(attrs)
+
+    def test_scene_binding_still_checks_data_permission(self):
+        """场景策略：仍按场景校验数据源系统授权（未被修复破坏）"""
+        from unittest import mock
+
+        from rest_framework import serializers as drf_serializers
+
+        attrs = self._build_attrs(BindingType.SCENE_BINDING, scene_id=99)
+        with mock.patch.object(self.serializer, "get_scene_id", return_value=99), mock.patch(
+            "apps.meta.resources.SystemListAllResource.request",
+            return_value=[{"system_id": "bk_audit_authorized"}],
+        ):
+            with self.assertRaises(drf_serializers.ValidationError) as cm:
+                self.serializer._validate_strategy_data_permission(attrs)
+        self.assertIn("不在场景", str(cm.exception))

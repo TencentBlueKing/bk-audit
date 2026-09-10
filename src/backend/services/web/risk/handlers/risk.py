@@ -53,7 +53,11 @@ from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
-from services.web.scene.constants import BindingType, ResourceVisibilityType, SceneStatus
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    SceneStatus,
+)
 from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import DispatchMode, StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy, StrategyRule
@@ -323,13 +327,8 @@ class RiskHandler:
             # fail-closed：事务内锁定并校验目标场景存在且未删除、可用，
             # 避免场景删除/禁用与建单并发时提交无效或无场景 Risk（列表/IAM/Provider 将失效）
             if not target_scene_id:
-                raise ValueError(
-                    gettext("风险归属场景为空（策略[%s]未绑定场景或分派规则未命中场景），拒绝建单")
-                    % event["strategy_id"]
-                )
-            scene = (
-                Scene.objects.select_for_update().filter(pk=target_scene_id, is_deleted=False).first()
-            )
+                raise ValueError(gettext("风险归属场景为空（策略[%s]未绑定场景或分派规则未命中场景），拒绝建单") % event["strategy_id"])
+            scene = Scene.objects.select_for_update().filter(pk=target_scene_id, is_deleted=False).first()
             if scene is None:
                 raise ValueError(gettext("风险归属场景[%s]不存在或已删除，拒绝建单") % target_scene_id)
             if getattr(scene, "status", None) != SceneStatus.ENABLED:
