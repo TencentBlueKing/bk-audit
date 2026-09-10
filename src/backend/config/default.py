@@ -222,6 +222,9 @@ AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
 AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
 AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
+# 单次智能体调用超时（秒）：默认 300 保持历史行为；NL 检索链路建议收紧到 60
+# （重试预算 deadline 无法中断进行中的调用，单次超时是链路总时长的实际闸门）
+AI_AGENT_API_TIMEOUT_SECONDS = int(os.getenv("BKAPP_AI_AGENT_API_TIMEOUT_SECONDS", "300"))
 
 # AI Audit Analyse (分析智能体)
 AI_AUDIT_ANALYSE_APIGW_NAME = os.getenv("BKAPP_AI_AUDIT_ANALYSE_APIGW_NAME", "bp-ai-audit-analyse")

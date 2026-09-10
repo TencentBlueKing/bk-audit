@@ -54,7 +54,11 @@ class AIAgentBase(BkApiResource, abc.ABC):
     base_url = ""
     platform_authorization = True
     tags = ["AIAgent"]
-    TIMEOUT = 300
+    # 单次智能体调用超时（秒）：默认 300 保持历史行为；环境可经 BKAPP_AI_AGENT_API_TIMEOUT_SECONDS
+    # 收紧（如 60）——NL 链路重试预算的 deadline 只能在两次调用之间检查，正在进行的
+    # 调用不可中断，单次超时是链路总时长的实际上限闸门（部署反馈：AIDev 慢时单次
+    # 调用可拖数分钟且无拦截）
+    TIMEOUT = getattr(settings, "AI_AGENT_API_TIMEOUT_SECONDS", 300)
     app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
     secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
     # 资源为进程级单例，agent 状态按线程隔离（gevent 部署下为 greenlet 隔离）
