@@ -18,6 +18,7 @@
   <div class="audit-log-retrieval-page">
     <chat-log-panel
       v-if="panelConversation"
+      :common-operations="panelConversation.commonOperations || []"
       :confirming-system-message-id="confirmingSystemMessageId"
       :conversation-id="panelConversation.id"
       :extension-fields="panelConversation.extensionFields || []"
