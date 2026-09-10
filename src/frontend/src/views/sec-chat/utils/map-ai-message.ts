@@ -342,6 +342,26 @@ export const mapLogSearchOutputToResult = (
   };
 };
 
+/** LOG_SEARCH FAILED：用 input 条件撑起结果卡，正文展示失败态（对齐条件检索失败） */
+export const mapLogSearchFailedToResult = (
+  message: AiMessage,
+  fieldCatalog: SystemFieldRow[] = [],
+): RetrievalResultPayload => {
+  const condition = (message.input_data?.condition || undefined) as AiSearchCondition | undefined;
+  return {
+    conditions: mapConditionToFilterTags(condition, fieldCatalog),
+    rawCondition: condition || undefined,
+    toolCount: 2,
+    thinkSeconds: null,
+    title: '审计日志检索结果',
+    totalHit: 0,
+    previewCount: 0,
+    showPreviewHint: false,
+    columns: [],
+    rows: [],
+  };
+};
+
 export interface MapAiMessageOptions {
   /** 来自 SYSTEM_SELECTION 的字段表，用于条件标签中文映射 */
   fieldCatalog?: SystemFieldRow[];
@@ -521,9 +541,12 @@ export const mapAiMessageToChatMessage = (
   }
 
   if (message.message_type === 'LOG_SEARCH') {
-    const result = message.status === 'SUCCESS'
-      ? mapLogSearchOutputToResult(message, fieldCatalog)
-      : undefined;
+    let result: RetrievalResultPayload | undefined;
+    if (message.status === 'SUCCESS') {
+      result = mapLogSearchOutputToResult(message, fieldCatalog);
+    } else if (message.status === 'FAILED') {
+      result = mapLogSearchFailedToResult(message, fieldCatalog);
+    }
     return {
       id: message.uid,
       role: 'assistant',
