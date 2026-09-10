@@ -395,6 +395,10 @@ class MessageService:
                 task_id=str(uuid4()) if is_async else None,
                 error_code="",
                 error_message="",
+                # 时间线起点随本轮编辑重置（auto 续链子消息继承重置后的 created_at）：
+                # duration_seconds 表达「本轮编辑发起 → 本轮完成」，不再累计首次执行
+                # 耗时与用户编辑条件的空闲时间；首次全链耗时语义由发问消息时间线承载
+                created_at=now,
                 queued_at=now if is_async else None,
                 started_at=None,
                 last_activity_at=now,
@@ -432,6 +436,10 @@ class MessageService:
                 old_task_id=old_task_id,
                 new_task_id=new_task_id,
                 extra_updates={
+                    # 时间线起点随本轮重试重置：duration_seconds 表达「重试发起 → 完成」，
+                    # 不累计首轮失败执行的耗时与用户重试前的空闲时间（附件不展示耗时，
+                    # 各自经 extra_updates 领域字段隔离，不影响共用基类）
+                    "created_at": now,
                     "updated_by": self.user,
                     "updated_at": now,
                 },
