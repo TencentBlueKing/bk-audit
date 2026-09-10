@@ -44,135 +44,138 @@
           </template>
         </div>
         <div class="message-list">
-          <div
+          <template
             v-for="msg in messages"
-            :key="msg.id"
-            class="message-row"
-            :class="`is-${msg.role}`">
-            <!-- 用户气泡 -->
+            :key="msg.id">
             <div
-              v-if="msg.role === 'user' && msg.type === 'text'"
-              class="user-bubble">
-              {{ msg.content }}
-            </div>
+              v-if="isMessageRowVisible(msg)"
+              class="message-row"
+              :class="`is-${msg.role}`">
+              <!-- 用户气泡 -->
+              <div
+                v-if="msg.role === 'user' && msg.type === 'text'"
+                class="user-bubble">
+                {{ msg.content }}
+              </div>
 
-            <!-- 系统确认/引导异步处理中：整条骨架占位，避免终态卡片突然撑开 -->
-            <retrieval-card-skeleton
-              v-else-if="msg.messageType === 'SYSTEM_SELECTION'
-                && msg.apiStatus === 'PROCESSING'"
-              :status-text="msg.showGuide === false ? '正在理解检索意图…' : '正在加载检索引导…'" />
+              <!-- 系统确认/引导异步处理中：整条骨架占位，避免终态卡片突然撑开 -->
+              <retrieval-card-skeleton
+                v-else-if="msg.messageType === 'SYSTEM_SELECTION'
+                  && msg.apiStatus === 'PROCESSING'"
+                :status-text="msg.showGuide === false ? '正在理解检索意图…' : '正在加载检索引导…'" />
 
-            <!-- 内联选择系统卡片 -->
-            <select-system-card
-              v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false"
-              :candidate-systems="msg.candidateSystems || []"
-              :confirming="confirmingSystemMessageId === msg.id"
-              :model-value="msg.systemIds || []"
-              :selection-reason="msg.selectionReason || 'initial'"
-              :tip-message="msg.aiMessage || ''"
-              @close="$emit('close-select-system', msg.id)"
-              @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
+              <!-- 内联选择系统卡片 -->
+              <select-system-card
+                v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false"
+                :candidate-systems="msg.candidateSystems || []"
+                :confirming="confirmingSystemMessageId === msg.id"
+                :model-value="msg.systemIds || []"
+                :selection-reason="msg.selectionReason || 'initial'"
+                :tip-message="msg.aiMessage || ''"
+                @close="$emit('close-select-system', msg.id)"
+                @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
 
-            <!-- 显式选系统后的检索引导卡片 -->
-            <retrieval-guide-card
-              v-else-if="msg.type === 'retrieval-guide' && msg.showGuide !== false"
-              :confirming-system="confirmingSystemMessageId === msg.id"
-              :extension-fields="msg.extensionFields || []"
-              :historical-operations="msg.historicalOperations || []"
-              :standard-fields="msg.standardFields || []"
-              :systems="msg.systems || []"
-              @append-nl-field="handleAppendNlField"
-              @confirm-system="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)"
-              @open-condition-filter="handleOpenConditionFilter"
-              @select-suggestion="handleSelectSuggestion" />
+              <!-- 显式选系统后的检索引导卡片 -->
+              <retrieval-guide-card
+                v-else-if="msg.type === 'retrieval-guide' && msg.showGuide !== false"
+                :confirming-system="confirmingSystemMessageId === msg.id"
+                :extension-fields="msg.extensionFields || []"
+                :historical-operations="msg.historicalOperations || []"
+                :standard-fields="msg.standardFields || []"
+                :systems="msg.systems || []"
+                @append-nl-field="handleAppendNlField"
+                @confirm-system="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)"
+                @open-condition-filter="handleOpenConditionFilter"
+                @select-suggestion="handleSelectSuggestion" />
 
-            <!-- NL 处理中：整条骨架占位，避免终态卡片突然撑开 -->
-            <retrieval-card-skeleton
-              v-else-if="shouldShowRetrievalLoading(msg)"
-              :status-text="getRetrievalLoadingText(msg)" />
+              <!-- NL 处理中：整条骨架占位，避免终态卡片突然撑开 -->
+              <retrieval-card-skeleton
+                v-else-if="shouldShowRetrievalLoading(msg)"
+                :status-text="getRetrievalLoadingText(msg)" />
 
-            <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
-            <div
-              v-else-if="msg.type === 'retrieval-result' && msg.recognitionError"
-              class="result-status-card is-recognition-failed">
-              <div class="recognition-error-header">
+              <!-- NL 识别失败（SUCCESS + output_data.error，不可 RetryMessage） -->
+              <div
+                v-else-if="msg.type === 'retrieval-result' && msg.recognitionError"
+                class="result-status-card is-recognition-failed">
+                <div class="recognition-error-header">
+                  <img
+                    alt=""
+                    class="failed-icon"
+                    :src="errorSearchIcon">
+                  <div class="status-title">
+                    {{ getRecognitionTitle(msg.recognitionError.code) }}
+                  </div>
+                  <div class="status-desc">
+                    {{
+                      msg.recognitionError.message
+                        || msg.aiMessage
+                        || getRecognitionFallback(msg.recognitionError.code)
+                    }}
+                  </div>
+                  <bk-button
+                    v-if="showRecognitionResend(msg.recognitionError.code) && msg.content"
+                    class="recognition-resend-btn"
+                    size="small"
+                    theme="primary"
+                    @click="handleEditAndResend(msg.content || '')">
+                    编辑后重发
+                  </bk-button>
+                </div>
+                <div
+                  v-if="showRecognitionSuggestions(msg.recognitionError.code)"
+                  class="suggest-section">
+                  <div class="suggest-label">
+                    试试这样说：
+                  </div>
+                  <button
+                    v-for="(item, index) in FIXED_SUGGESTIONS"
+                    :key="`nl-suggest-${index}`"
+                    class="suggest-item"
+                    type="button"
+                    @click="handleSelectSuggestion(item)">
+                    {{ item }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 查询后的结构化结果卡片（含 LOG_SEARCH FAILED：条件区 + 卡内失败态） -->
+              <retrieval-result-card
+                v-else-if="msg.type === 'retrieval-result' && msg.result"
+                :api-status="msg.apiStatus"
+                :error-message="msg.errorMessage || msg.aiMessage || ''"
+                :extension-fields="extensionFields"
+                :message-uid="msg.id"
+                :result="msg.result"
+                :standard-fields="standardFields"
+                :systems="systems"
+                @regenerate="handleRegenerate(msg.content || '')"
+                @reselect-system="handleReselectSystem" />
+
+              <!-- NL / 无条件任务失败：对齐条件检索失败态（居中图标 + 文案） -->
+              <div
+                v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
+                class="result-status-card is-failed">
                 <img
                   alt=""
                   class="failed-icon"
                   :src="errorSearchIcon">
                 <div class="status-title">
-                  {{ getRecognitionTitle(msg.recognitionError.code) }}
+                  检索失败
                 </div>
                 <div class="status-desc">
-                  {{
-                    msg.recognitionError.message
-                      || msg.aiMessage
-                      || getRecognitionFallback(msg.recognitionError.code)
-                  }}
+                  {{ msg.aiMessage || msg.errorMessage || '请检查网络是否通畅或联系管理员' }}
                 </div>
                 <bk-button
-                  v-if="showRecognitionResend(msg.recognitionError.code) && msg.content"
-                  class="recognition-resend-btn"
+                  v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
+                  class="failed-retry-btn"
                   size="small"
                   theme="primary"
-                  @click="handleEditAndResend(msg.content || '')">
-                  编辑后重发
+                  @click="$emit('retry-message', msg.id)">
+                  重试
                 </bk-button>
               </div>
-              <div
-                v-if="showRecognitionSuggestions(msg.recognitionError.code)"
-                class="suggest-section">
-                <div class="suggest-label">
-                  试试这样说：
-                </div>
-                <button
-                  v-for="(item, index) in FIXED_SUGGESTIONS"
-                  :key="`nl-suggest-${index}`"
-                  class="suggest-item"
-                  type="button"
-                  @click="handleSelectSuggestion(item)">
-                  {{ item }}
-                </button>
-              </div>
             </div>
-
-            <!-- 查询后的结构化结果卡片（含 LOG_SEARCH FAILED：条件区 + 卡内失败态） -->
-            <retrieval-result-card
-              v-else-if="msg.type === 'retrieval-result' && msg.result"
-              :api-status="msg.apiStatus"
-              :error-message="msg.errorMessage || msg.aiMessage || ''"
-              :extension-fields="extensionFields"
-              :message-uid="msg.id"
-              :result="msg.result"
-              :standard-fields="standardFields"
-              :systems="systems"
-              @regenerate="handleRegenerate(msg.content || '')"
-              @reselect-system="handleReselectSystem" />
-
-            <!-- NL / 无条件任务失败：对齐条件检索失败态（居中图标 + 文案） -->
-            <div
-              v-else-if="msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED'"
-              class="result-status-card is-failed">
-              <img
-                alt=""
-                class="failed-icon"
-                :src="errorSearchIcon">
-              <div class="status-title">
-                检索失败
-              </div>
-              <div class="status-desc">
-                {{ msg.aiMessage || msg.errorMessage || '请检查网络是否通畅或联系管理员' }}
-              </div>
-              <bk-button
-                v-if="msg.messageType === 'NATURAL_LANGUAGE_SEARCH' || msg.messageType === 'USER_INTENT'"
-                class="failed-retry-btn"
-                size="small"
-                theme="primary"
-                @click="$emit('retry-message', msg.id)">
-                重试
-              </bk-button>
-            </div>
-          </div>
+          </template>
 
           <!-- 条件检索卡：未检索时覆盖草稿；已检索后再点则新建，固定在会话底部 -->
           <div
@@ -369,6 +372,19 @@
       return '正在检索日志…';
     }
     return getProcessingText(msg.messageType);
+  };
+
+  /** 与模板渲染条件对齐；隐藏空行避免 flex gap 把上下间距撑成双倍 */
+  const isMessageRowVisible = (msg: ChatMessage) => {
+    if (msg.role === 'user' && msg.type === 'text') return true;
+    if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return true;
+    if (msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false) return true;
+    if (msg.type === 'retrieval-guide' && msg.showGuide !== false) return true;
+    if (shouldShowRetrievalLoading(msg)) return true;
+    if (msg.type === 'retrieval-result' && msg.recognitionError) return true;
+    if (msg.type === 'retrieval-result' && msg.result) return true;
+    if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') return true;
+    return false;
   };
 
   const visibleMessageSignature = computed(() => props.messages.map((msg) => {
