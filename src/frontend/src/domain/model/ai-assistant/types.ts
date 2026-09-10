@@ -209,6 +209,10 @@ export interface AiMessage {
   output_data?: Record<string, any> | null;
   error_code?: string | null;
   error_message?: string | null;
+  /** 任务耗时（秒）；PROCESSING 时为 null，SUCCESS 后有值 */
+  duration_seconds?: number | null;
+  started_at?: string | null;
+  finished_at?: string | null;
   created_at?: string;
   updated_at?: string;
   supports_feedback?: boolean;

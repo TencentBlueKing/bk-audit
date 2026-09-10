@@ -72,7 +72,8 @@ export interface RetrievalResultPayload {
   /** 原始结构化条件，供二次编辑后重新检索 */
   rawCondition?: AiSearchCondition;
   toolCount: number;
-  thinkSeconds: number;
+  /** 思考耗时（秒）；来自消息 duration_seconds，PROCESSING 时为 null */
+  thinkSeconds: number | null;
   title: string;
   totalHit: number;
   previewCount: number;
