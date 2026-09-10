@@ -174,8 +174,9 @@ class BindingMetadataHelper:
     ) -> None:
         """通过资源绑定关系回填单个 `scene_id`。
 
-        适用于“业务对象经由资源绑定关系回填 scene_id”的场景。
-        风险列表即按 `risk_id -> risk binding -> scene_id` 回填。
+        适用于“业务对象经由资源绑定关系回填 scene_id”的场景（如策略/规则/通知组等场景级资源）。
+        注意：Risk 的场景归属已固化到 `Risk.scene_id` 字段，是该维度唯一权威，不在此列，
+        不应再经 `risk_id -> risk binding -> scene_id` 反查。
 
         Args:
             objects: 需要回填的对象集合。
@@ -304,6 +305,12 @@ class SceneScopeFilter:
         """
         scene_ids = _normalize_scope_values(scene_id)
         if scene_ids:
+            # 风险场景归属已固化到 Risk.scene_id（唯一权威），直接按模型字段过滤，
+            # 不再经 ResourceBinding(RISK) 反查（该绑定不存在，会导致返回空集）。
+            if resource_type == ResourceVisibilityType.RISK:
+
+                return queryset.filter(scene_id__in=scene_ids)
+
             SceneScopeFilter._assert_scene_binding_integrity(resource_type)
             # 按场景列表过滤：通过 ResourceBindingScene 查找并取并集
             bound_ids = ResourceBindingScene.objects.filter(
@@ -329,13 +336,8 @@ class SceneScopeFilter:
         if resource_type == ResourceVisibilityType.RISK:
             from services.web.risk.models import Risk
 
-            SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
-            strategy_ids = ResourceBindingScene.objects.filter(
-                scene_id__in=scene_ids,
-                scene__is_deleted=False,
-                binding__resource_type=ResourceVisibilityType.STRATEGY,
-            ).values_list("binding__resource_id", flat=True)
-            return list(Risk.objects.filter(strategy_id__in=list(strategy_ids)).values_list("risk_id", flat=True))
+            # 风险场景归属已固化到 Risk.scene_id（唯一权威），直接按模型字段取并集，不依赖策略绑定反查
+            return list(Risk.objects.filter(scene_id__in=scene_ids).values_list("risk_id", flat=True))
 
         SceneScopeFilter._assert_scene_binding_integrity(resource_type)
         return list(

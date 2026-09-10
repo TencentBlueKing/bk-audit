@@ -22,12 +22,12 @@ def _backfill(apps, schema_editor):
 
 
 def _reverse_backfill(apps, schema_editor):
-    """回滚：将回填成 "all" 的记录重置为空（列定义由 AlterField 自动反向移除默认值）。"""
-    NL2RiskFilterLog = apps.get_model("risk", "NL2RiskFilterLog")
-
-    print("[backwards] 开始回滚 NL2RiskFilterLog.risk_view_type 回填数据", flush=True)
-    reset = NL2RiskFilterLog.objects.filter(risk_view_type=RISK_VIEW_TYPE_ALL).update(risk_view_type="")
-    print(f"[backwards] 重置 {reset} 条 NL2RiskFilterLog.risk_view_type = ''", flush=True)
+    """回滚数据回填设为 noop：无法区分“迁移回填置 all 的历史空值”与“迁移后业务真实写入的 all”，
+    全量重置会覆盖新数据。列默认值由 AlterField 反向自动处理，数据无需回滚。"""
+    print(
+        "[backwards] NL2RiskFilterLog.risk_view_type 回填数据保留（noop），不覆盖迁移后新写入的 all",
+        flush=True,
+    )
 
 
 class Migration(migrations.Migration):
