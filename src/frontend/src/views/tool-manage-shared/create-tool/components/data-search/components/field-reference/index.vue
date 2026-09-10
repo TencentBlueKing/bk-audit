@@ -235,7 +235,12 @@
                         v-if="item.target_value_type === 'field'">
                         <bk-select
                           :ref="(el: any) => setTargetValueSelectRef(el, Number(toolIndex), Number(index))"
-                          class="bk-select"
+                          v-bk-tooltips="{
+                            content: getSelectedFieldDisplayName(Number(toolIndex), Number(index)),
+                            disabled: !item.target_value,
+                            placement: 'top',
+                          }"
+                          class="bk-select field-target-select"
                           custom-content
                           display-key="label"
                           id-key="raw_name"
@@ -249,16 +254,15 @@
                             children="children"
                             :data="localOutputFields"
                             expand-all
-                            label="name"
                             :selected="getTreeSelectedValue(Number(toolIndex), Number(index))"
                             @node-click="(data: LocalOutputFields) =>
                               handleTargetValueChange(data, Number(toolIndex), Number(index))">
-                            <template #default="{ data }">
-                              <span>
-                                {{ data.children?.length
-                                  ? (data.display_name || data.name || data.raw_name)
-                                  : getOutputFieldDisplayName(data) }}
-                              </span>
+                            <template #nodeType="node">
+                              <show-tooltips-text
+                                v-if="(node.isChild && node.children.length === 0) || !node.isChild"
+                                class="field-target-node-text"
+                                :data="getOutputFieldDisplayName(node)"
+                                placement="top" />
                             </template>
                           </bk-tree>
                         </bk-select>
@@ -327,6 +331,7 @@
   // import AlternativeField from './alternative-field.vue';
   // import SelectMapValue from './select-map-value.vue';
   import AuditCollapsePanel from '@/components/audit-collapse-panel/index.vue';
+  import ShowTooltipsText from '@/components/show-tooltips-text/index.vue';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface SearchItem {
@@ -349,6 +354,7 @@
     name?: string;
     json_path?: string;
     target_field_type?: string;
+    description?: string;
     children?: LocalOutputFields[];
   }
 
@@ -900,30 +906,31 @@
     buildToolCascaderList(props.allToolsData, searchValue);
   };
 
-  // 递归转换树形数据；策略单据字段按 target_field_type 分组，便于选择
+  // 递归转换树形数据；策略字段按类型分组，展示对齐 main0909
   const transformOutputFields = (fields: Array<Record<string, any>>): LocalOutputFields[] => {
     if (!Array.isArray(fields)) {
       return [];
     }
-
-    const toNode = (item: Record<string, any>): LocalOutputFields => {
-      const rawName = item.raw_name || '';
-      const displayName = item.display_name || '';
-      const name = displayName ? `${rawName}(${displayName})` : rawName;
+    const toNode = (item: Record<string, any>, asGroupedLeaf = false): LocalOutputFields => {
+      const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+      let children: LocalOutputFields[] | undefined;
+      if (hasChildren) {
+        children = transformOutputFields(item.children);
+      } else if (asGroupedLeaf) {
+        children = [];
+      }
       return {
         ...item,
-        raw_name: rawName,
-        display_name: displayName,
-        name,
-        children: item.children && item.children.length > 0
-          ? transformOutputFields(item.children)
-          : undefined,
+        raw_name: item.raw_name,
+        display_name: item.display_name,
+        description: item.description,
+        children,
       };
     };
 
     const shouldGroup = fields.some(item => item.target_field_type && !item.children?.length);
     if (!shouldGroup) {
-      return fields.map(toNode);
+      return fields.map(item => toNode(item));
     }
 
     const groupLabelMap: Record<string, string> = {
@@ -937,13 +944,12 @@
       if (!grouped.has(type)) {
         grouped.set(type, []);
       }
-      grouped.get(type)?.push(toNode(item));
+      grouped.get(type)?.push(toNode(item, true));
     });
 
     return [...grouped.entries()].map(([type, children]) => ({
-      raw_name: type,
-      display_name: groupLabelMap[type] || type,
-      name: groupLabelMap[type] || type,
+      raw_name: groupLabelMap[type] || type,
+      display_name: '',
       children,
     }));
   };
@@ -954,6 +960,11 @@
       ? `${field.raw_name}(${field.display_name})`
       : field.raw_name
   );
+
+  const getSelectedFieldDisplayName = (toolIndex: number, configIndex: number): string => {
+    const field = getTreeSelectedValue(toolIndex, configIndex);
+    return field ? getOutputFieldDisplayName(field) : '';
+  };
 
   watch(() => props.outputFields, (val: Array<Record<string, any>>) => {
     localOutputFields.value = transformOutputFields(val || []);
@@ -1023,6 +1034,11 @@
       margin-bottom: 16px;
       background-color: #f5f7fa;
 
+      :deep(.collapse-panel) {
+        border: none;
+        background: transparent;
+      }
+
       .field-list {
         display: flex;
         padding-left: 20px;
@@ -1034,11 +1050,20 @@
         position: absolute;
         top: 0;
         right: 0;
+        display: flex;
+        align-items: center;
+        padding: 4px 2px;
+        background: transparent;
+        border: none;
 
         .field-title-icon-item {
           font-size: 13px;
           color: #c4c6cc;
           cursor: pointer;
+          background: transparent;
+          border: none;
+          outline: none;
+          box-shadow: none;
 
           &:hover {
             color: #3858ff;
@@ -1071,8 +1096,41 @@
             border-color: #979ba5;
           }
         }
+
+        .field-list-empty {
+          padding: 24px 0;
+          font-size: 12px;
+          color: #979ba5;
+          text-align: center;
+        }
       }
     }
+  }
+}
+
+.field-target-select {
+  :deep(.bk-select-empty),
+  :deep(.bk-select-content .bk-exception) {
+    display: none;
+  }
+
+  :deep(.bk-select-trigger .bk-input--text),
+  :deep(.bk-select-trigger input) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :deep(.bk-node-row),
+  :deep(.bk-node-content),
+  :deep(.bk-node-text) {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  :deep(.field-target-node-text) {
+    width: 100%;
+    min-width: 0;
   }
 }
 
