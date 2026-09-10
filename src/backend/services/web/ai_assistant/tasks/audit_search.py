@@ -278,29 +278,29 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 error_message=payload.message or "未能理解您的需求，请描述要查询的系统或日志内容",
             ),
         )
-    # ③ 系统路由：select_system 命中新系统（或会话无系统）→ 建新 SELECTION（切换/首建）；
-    #    命中当前系统 → 复用不重建；log_search 校验会话已有系统（平台守门）
+    # ③ 系统路由：select_system → 无条件创建新 SELECTION（产品决策：通用性优先，
+    #    不做「命中当前系统则复用」的特殊分支）——每次切换都有新消息/新卡片，
+    #    对话语义简单通用（复用分支曾引发重复切换「AI 回应消失」问题，复盘见
+    #    mydocs 重复切换系统消息消失问题复盘_2026-09-10）；log_search 校验会话
+    #    已有系统（平台守门）
     selection_message = current_selection
     system_id = current_system_id
-    system_switched = False
     if payload.intent == "select_system":
         system_id = payload.system_id
-        if system_id != current_system_id or current_selection is None:
-            selection_message = MessageService(user=context_data.username).create_executed(
-                conversation=execution.message.conversation,
-                message_type=MessageType.SYSTEM_SELECTION,
-                # 透传 session scope（前端左上角场景过滤器当前选择）：
-                # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄；
-                # 历史消息重试（scope 为空，协议升级前快照）补 cross_system 宽口径兜底（v1 行为）
-                input_data={
-                    "system_ids": [system_id],
-                    "scope_type": context_data.scope_type or "cross_system",
-                    "scope_id": context_data.scope_id,
-                },
-                # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
-                timeline_started_at=execution.message.created_at,
-            )
-            system_switched = True
+        selection_message = MessageService(user=context_data.username).create_executed(
+            conversation=execution.message.conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            # 透传 session scope（前端左上角场景过滤器当前选择）：
+            # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄；
+            # 历史消息重试（scope 为空，协议升级前快照）补 cross_system 宽口径兜底（v1 行为）
+            input_data={
+                "system_ids": [system_id],
+                "scope_type": context_data.scope_type or "cross_system",
+                "scope_id": context_data.scope_id,
+            },
+            # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
+            timeline_started_at=execution.message.created_at,
+        )
         if not payload.need_search:
             # 纯切换（无检索诉求）：不调条件解析、不续链检索——切换即本轮终点。
             # 若强行把「切换到X」类语句交给条件解析必然失败，曾误报
@@ -310,13 +310,13 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 (str(candidate["name"]) for candidate in candidates if str(candidate.get("system_id")) == system_id),
                 system_id,
             )
-            fallback_message = (
-                f"已为您切换到 {candidate_name}，如需检索日志请继续描述" if system_switched else f"当前系统已是 {candidate_name}，如需检索日志请继续描述"
-            )
+            # 对话不变式：每轮 SUCCESS 必有面向用户的非空 message（前端渲染的可见载体）；
+            # 本轮已无条件新建 SELECTION（真切换），LLM 切换话术语义成立
+            message = payload.message or f"已为您切换到 {candidate_name}，如需检索日志请继续描述"
             return UserIntentOutputSchema(
                 intent="select_system",
                 system_id=system_id,
-                message=payload.message or fallback_message,
+                message=message,
                 selection_message_uid=str(selection_message.uid) if selection_message is not None else "",
             )
     elif not current_system_id:
@@ -381,10 +381,11 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
             execution.message.id,
             error.error_code,
         )
-        # 本轮发生系统切换时，检索条件识别失败不得掩盖切换结果：文案前置切换成功事实，
-        # 防整句「未能理解检索需求」让用户误以为切换也失败了（need_search 误判时的兜底）
+        # 本轮发生系统切换（select_system 恒新建 SELECTION）时，检索条件识别失败
+        # 不得掩盖切换结果：文案前置切换成功事实，防整句「未能理解检索需求」
+        # 让用户误以为切换也失败了（need_search 误判时的兜底）
         error_message = error.message
-        if system_switched:
+        if payload.intent == "select_system":
             candidate_name = next(
                 (str(candidate["name"]) for candidate in candidates if str(candidate.get("system_id")) == system_id),
                 system_id,

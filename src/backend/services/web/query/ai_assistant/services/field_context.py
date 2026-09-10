@@ -284,10 +284,18 @@ class FieldContextService:
             else:
                 item.sample_value_display = raw_value
 
+    # L2 自动发现的容器范围：仅拓展数据（extend_data）——产品语义"拓展字段"专指
+    # extend_data 下钻；instance_data（实例当前内容）等其余 is_json 容器的子键
+    # 不属于拓展字段（曾把风险事件的实例子键全量捞出污染字段清单）
+    EXTENSION_DISCOVERY_CONTAINER = "extend_data"
+
     @classmethod
     def _discover_extension_fields(cls, system_id: str, rows: List[dict]) -> List[SelectionFieldMeta]:
-        """从 is_json 容器字段发现第一层子键（多行融合，跳过白名单已声明的 sub_keys）
+        """从拓展数据（extend_data）容器发现第一层子键（多行融合，跳过白名单已声明的 sub_keys）
 
+        仅发现 extend_data 容器（产品语义"拓展字段"专指拓展数据下钻）；其余 is_json
+        容器（instance_data 实例当前内容等）的子键不进 AI 拓展字段清单——需要下钻
+        时由 L1 人工配置显式声明。
         rows 按时间倒序：同一 (容器, 子键) 保留最新一行的采样值，多行并集提升拓展字段覆盖率。
         """
         discovered: Dict[Tuple[str, Tuple[str, ...]], SelectionFieldMeta] = {}
@@ -296,6 +304,8 @@ class FieldContextService:
                 if not cfg.field.is_json:
                     continue
                 raw_name = cfg.field.field_name
+                if raw_name != cls.EXTENSION_DISCOVERY_CONTAINER:
+                    continue
                 container = row.get(raw_name, row.get(raw_name.lower()))
                 if isinstance(container, str):
                     try:

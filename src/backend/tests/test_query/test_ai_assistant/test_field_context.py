@@ -312,6 +312,42 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         mock_query_sync.assert_called_once()
 
     @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
+    def test_l2_discovery_limited_to_extend_data(
+        self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
+    ):
+        """[review] L2 发现仅限拓展数据（extend_data）：其余 is_json 容器（instance_data
+        实例当前内容等）的子键不进 AI 拓展字段清单——曾把风险事件的实例子键
+        （risk_id/strategy_id/...）全量捞出污染字段区，产品语义"拓展字段"专指拓展数据下钻。"""
+
+        mock_build_rt.return_value = "test_rt.doris"
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {}
+        mock_system_list.return_value = []
+        mock_query_sync.return_value = {
+            "list": [
+                dict(
+                    self.SAMPLE_ROW,
+                    instance_data={"risk_id": "20260910142036426285", "strategy_id": 196, "status": "await_deal"},
+                    instance_origin_data={"old": "x"},
+                )
+            ]
+        }
+
+        output = FieldContextService.build_selection(
+            namespace=self.namespace, system_ids=[self.target_system_id], username=self.username
+        )
+
+        discovered = {(ext.raw_name, tuple(ext.keys)) for ext in output.systems[0].extension_fields}
+        # 拓展数据子键正常发现
+        self.assertIn(("extend_data", ("ticket_id",)), discovered)
+        self.assertIn(("extend_data", ("custom_key",)), discovered)
+        # 其余 is_json 容器的子键一律不进拓展字段
+        self.assertNotIn(("instance_data", ("risk_id",)), discovered)
+        self.assertNotIn(("instance_data", ("strategy_id",)), discovered)
+        self.assertNotIn(("instance_data", ("status",)), discovered)
+        self.assertNotIn(("instance_origin_data", ("old",)), discovered)
+
+    @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
     def test_l2_multi_row_sampling_merges_extension_fields(
         self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync, mock_build_rt
     ):

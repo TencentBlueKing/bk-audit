@@ -161,8 +161,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         # 检索意图明确（log_search）：仍派发标题（与 unrecognized 闲聊不同）
         mock_delay.assert_called_once()
 
-    def test_select_system_hit_current_reuses(self):
-        """select_system 命中当前系统：复用 SELECTION 不重建，仍续条件识别"""
+    def test_select_system_hit_current_creates_new(self):
+        """select_system 命中当前系统也新建 SELECTION（产品决策：通用性优先，无复用分支）——
+        每次切换都有新消息/新卡片（复用分支曾引发重复切换「AI 回应消失」问题）"""
 
         selection = self.create_selection_message()
         message, output, _ = self._run(
@@ -171,9 +172,44 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             ),
         )
 
-        self.assertEqual(self._selection_count(), 1)
-        self.assertEqual(output.selection_message_uid, str(selection.uid))
+        # 旧 1 条 + 新建 1 条；意图消息指向新建的 SELECTION
+        self.assertEqual(self._selection_count(), 2)
+        self.assertNotEqual(output.selection_message_uid, str(selection.uid))
         self.assertIsNotNone(output.condition)
+
+    def test_user_intent_success_output_always_has_message(self):
+        """对话不变式：USER_INTENT 任何 SUCCESS 输出必带非空 message（前端渲染的可见载体）。
+
+        select_system 无条件新建 SELECTION（真切换），LLM 切换话术语义成立；
+        重复切换同样新建新卡，AI 回应每轮都有可见载体——防"消息消失"类问题
+        （后端保证有话说，前端保证说出口：两侧各守一条不变式即可闭环此类缺陷）。
+        """
+
+        # 场景1：首次切换——LLM 无话术时 fallback 兜底
+        _, output_first, _ = self._run(
+            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=False),
+        )
+        self.assertTrue(output_first.message)
+        self.assertIn("已为您切换到 审计中心", output_first.message)
+
+        # 场景2：重复切换（当前已是目标系统）——同样新建 SELECTION（新卡片），LLM 话术语义成立
+        _, output_repeat, _ = self._run(
+            payload=IntentPayload(
+                intent="select_system",
+                system_id=TARGET_SYSTEM_ID,
+                need_search=False,
+                message="已为您切换到审计中心",
+            ),
+            with_selection=True,
+        )
+        self.assertEqual(output_repeat.intent, "select_system")
+        self.assertIsNone(output_repeat.error)
+        self.assertIsNone(output_repeat.condition)
+        self.assertIn("已为您切换到审计中心", output_repeat.message)
+        # 无复用分支：重复切换也产出新 SELECTION
+        # （场景1 新建 1 + 场景2 预置 1 + 场景2 任务内新建 1 = 3），意图消息指向新建条目
+        self.assertEqual(self._selection_count(), 3)
+        self.assertTrue(output_repeat.selection_message_uid)
 
     def test_pure_switch_without_search(self):
         """报障回归：纯切换（"切换到 test0907"，need_search=false）——不调条件解析、不续链检索、无报错。
