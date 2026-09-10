@@ -1036,16 +1036,15 @@ class TestRiskSceneFilter:
     """风险场景过滤测试（基于策略绑定）"""
 
     @pytest.mark.django_db
-    def test_filter_risk_by_strategy_scene(self, scene, another_scene):
-        """测试风险按策略绑定场景过滤"""
+    def test_filter_risk_by_scene_id(self, scene, another_scene):
+        """风险按 Risk.scene_id 过滤（场景归属已固化到 Risk 模型，不再经策略绑定反查）"""
         event_time = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
         strategy1 = Strategy.objects.create(strategy_name="场景1策略")
         strategy2 = Strategy.objects.create(strategy_name="场景2策略")
-        _bind_resource_to_scene(strategy1.strategy_id, ResourceVisibilityType.STRATEGY, scene.scene_id)
-        _bind_resource_to_scene(strategy2.strategy_id, ResourceVisibilityType.STRATEGY, another_scene.scene_id)
 
         risk1 = Risk.objects.create(
             strategy=strategy1,
+            scene_id=scene.scene_id,
             raw_event_id="raw-scene-1",
             event_time=event_time,
             event_end_time=event_time,
@@ -1054,6 +1053,7 @@ class TestRiskSceneFilter:
         )
         Risk.objects.create(
             strategy=strategy2,
+            scene_id=another_scene.scene_id,
             raw_event_id="raw-scene-2",
             event_time=event_time,
             event_end_time=event_time,

@@ -129,15 +129,18 @@ class RiskResourceProvider(IAMResourceProvider):
         return int_ids
 
     @staticmethod
-    def _get_risk_ids_by_scene(scene_id: str) -> List[str]:
-        """按 Risk.scene_id 反查 risk_id 列表（风险场景归属已固化到 Risk 模型）。"""
-        from services.web.risk.models import Risk
+    def _parse_scene_id(scene_id: Optional[str]) -> Optional[int]:
+        """将场景 ID 解析为整型；非法输入返回 None（交由调用方返回空集）。
 
+        注意：仅做类型解析，不提前物化 risk_id 列表。场景下的风险量大时，
+        物化全量 risk_id 再 risk_id__in 会触发 O(N) 内存与超长 IN 子句（命中
+        MySQL max_allowed_packet / PostgreSQL 参数上限），并绕过 scene_id 索引。
+        调用方应直接按 scene_id 走 idx_risk_scene_* 索引分页与 count。
+        """
         try:
-            scene_id_int = int(scene_id)
+            return int(scene_id)
         except (TypeError, ValueError):
-            return []
-        return list(Risk.objects.filter(scene_id=scene_id_int).values_list("risk_id", flat=True))
+            return None
 
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
         """
@@ -145,8 +148,10 @@ class RiskResourceProvider(IAMResourceProvider):
         """
         if parent_id:
             if resource_type == ResourceEnum.SCENE.id:
-                bound_risk_ids = self._get_risk_ids_by_scene(parent_id)
-                queryset: QuerySet[Risk] = Risk.objects.filter(risk_id__in=bound_risk_ids)
+                scene_id_int = self._parse_scene_id(parent_id)
+                queryset: QuerySet[Risk] = (
+                    Risk.objects.none() if scene_id_int is None else Risk.objects.filter(scene_id=scene_id_int)
+                )
             elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)
@@ -167,8 +172,10 @@ class RiskResourceProvider(IAMResourceProvider):
         """根据风险类型名称查询 ."""
         if parent_id:
             if resource_type == ResourceEnum.SCENE.id:
-                bound_risk_ids = self._get_risk_ids_by_scene(parent_id)
-                queryset: QuerySet[Risk] = Risk.objects.filter(risk_id__in=bound_risk_ids)
+                scene_id_int = self._parse_scene_id(parent_id)
+                queryset: QuerySet[Risk] = (
+                    Risk.objects.none() if scene_id_int is None else Risk.objects.filter(scene_id=scene_id_int)
+                )
             elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)

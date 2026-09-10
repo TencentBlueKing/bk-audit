@@ -8,11 +8,12 @@
 """
 
 from django.db import migrations, models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy
 
 
 def _build_strategy_scene_map(apps):
-    """策略场景绑定 ResourceBinding(STRATEGY) -> scene_id"""
+    """策略场景绑定 ResourceBinding(STRATEGY) -> scene_id。"""
     ResourceBindingScene = apps.get_model("scene", "ResourceBindingScene")
     result = {}
     for strategy_id, scene_id in ResourceBindingScene.objects.filter(
@@ -31,44 +32,58 @@ def forwards(apps, schema_editor):
     strategy_scene_map = _build_strategy_scene_map(apps)
 
     print(
-        f"[forwards] 来源规模：策略绑定={len(strategy_scene_map)}",
+        f"[forwards] 来源规模：已绑定场景策略={len(strategy_scene_map)}",
         flush=True,
     )
 
-    rows = Risk.objects.filter(scene_id__isnull=True, strategy_id__isnull=False).values_list("risk_id", "strategy_id")
+    # keyset 分批：按主键游标推进，避免一次性把整张表物化进内存（原实现用 list 累积全部 risk_id）。
+    batch_size = 2000
+    last_risk_id = ""
+    total_updated, total_skipped = 0, 0
+    while True:
+        rows = (
+            Risk.objects.filter(
+                scene_id__isnull=True,
+                strategy_id__isnull=False,
+                risk_id__gt=last_risk_id,
+            )
+            .order_by("risk_id")
+            .values_list("risk_id", "strategy_id")[:batch_size]
+        )
+        if not rows:
+            break
 
-    to_update = []
-    from_strategy, skipped = 0, 0
-    for risk_id, strategy_id in rows:
-        scene_id = strategy_scene_map.get(str(strategy_id))
-        if scene_id is None:
-            skipped += 1
-            continue
-        from_strategy += 1
-        to_update.append((risk_id, scene_id))
+        objs = []
+        batch_skipped = 0
+        for risk_id, strategy_id in rows:
+            scene_id = strategy_scene_map.get(str(strategy_id))
+            if scene_id is None:
+                # 策略未绑定场景（缺 ResourceBinding(STRATEGY)）：无法判定归属，保持 scene_id=NULL，
+                # 交由人工映射或风险事件/分派证据补充回填
+                batch_skipped += 1
+                continue
+            # 显式刷新 updated_at：bulk_update 不会触发 auto_now，而增量快照(Doris)以 updated_at 为游标，
+            # 不刷新会导致回填的 scene_id 无法同步到下游。
+            objs.append(Risk(risk_id=risk_id, scene_id=scene_id, updated_at=timezone.now()))
 
-    if to_update:
-        objs = [Risk(risk_id=rid, scene_id=sid) for rid, sid in to_update]
-        Risk.objects.bulk_update(objs, ["scene_id"], batch_size=2000)
+        if objs:
+            Risk.objects.bulk_update(objs, ["scene_id", "updated_at"], batch_size=batch_size)
+
+        last_risk_id = rows[-1][0]
+        total_updated += len(objs)
+        total_skipped += batch_skipped
+        print(f"[forwards] 进度：累计更新={total_updated}, 本批跳过={batch_skipped}", flush=True)
 
     print(
-        f"[forwards] 回填完成：更新={len(to_update)} " f"(策略绑定={from_strategy}), " f"无法判定跳过={skipped}",
+        f"[forwards] 回填完成：更新={total_updated}, 无法判定跳过={total_skipped}",
         flush=True,
     )
-    if skipped:
+    if total_skipped:
         print(
-            f"[forwards][WARN] {skipped} 条风险未能从策略绑定判定场景，保持 scene_id=NULL，" "请检查其策略配置或 ResourceBinding(STRATEGY) 是否缺失",
+            f"[forwards][WARN] {total_skipped} 条风险未能从策略绑定判定场景，保持 scene_id=NULL，"
+            "请检查其策略配置或 ResourceBinding(STRATEGY) 是否缺失",
             flush=True,
         )
-
-
-def backwards(apps, schema_editor):
-    """回滚：清空回填数据，恢复 scene_id 全部为空（列结构由 migrations.AddField 自动反向移除）"""
-    Risk = apps.get_model("risk", "Risk")
-
-    print("[backwards] 开始回滚 Risk.scene_id 回填数据", flush=True)
-    reset = Risk.objects.filter(scene_id__isnull=False).update(scene_id=None)
-    print(f"[backwards] 重置 {reset} 条 Risk.scene_id = NULL", flush=True)
 
 
 class Migration(migrations.Migration):
@@ -91,5 +106,5 @@ class Migration(migrations.Migration):
                 verbose_name=gettext_lazy("Scene ID"),
             ),
         ),
-        migrations.RunPython(forwards, backwards),
+        migrations.RunPython(forwards),
     ]
