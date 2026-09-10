@@ -888,27 +888,26 @@
     const emptyWhere = { connector: 'and', conditions: [] };
     // 注意：customize 初始化会回写空 where（conditions: []），不能优先生效，否则会盖住真实命中条件
     // 预期结果变更后已主动清空：空条件也要生效，不能再回落到详情原始 where
-    const pickWhere = (
-      ...candidates: Array<{ conditions?: unknown[] } | null | undefined>
-    ) => {
+    const pickWhere = (...candidates: Array<{ conditions?: unknown[] } | null | undefined>) => {
       if (hitConditionsReset) {
-        return candidates.find(item => item != null) ?? emptyWhere;
+        return candidates.find(item => item !== null && item !== undefined) ?? emptyWhere;
       }
       return pickConditionWhere(...candidates);
     };
+    const inheritBaseCondition = !hitConditionsReset && index === 0;
     const where = pickWhere(
       localRule?.conditions?.where,
       formRule.conditions?.where,
       formRule.configs?.where,
       localRule?.formData?.configs?.where,
-      hitConditionsReset ? undefined : (index === 0 ? base.configs?.where : undefined),
+      inheritBaseCondition ? base.configs?.where : undefined,
     );
     const having = pickWhere(
       localRule?.conditions?.having,
       formRule.conditions?.having,
       formRule.configs?.having,
       localRule?.formData?.configs?.having,
-      hitConditionsReset ? undefined : (index === 0 ? base.configs?.having : undefined),
+      inheritBaseCondition ? base.configs?.having : undefined,
     );
     return {
       ...base,
