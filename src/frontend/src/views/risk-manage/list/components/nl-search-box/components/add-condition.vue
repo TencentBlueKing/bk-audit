@@ -398,6 +398,7 @@
 
   watch(isShow, (value) => {
     if (value) {
+      searchKeyword.value = '';
       setTimeout(() => {
         document.addEventListener('mousedown', handleDocumentClick, true);
       });
