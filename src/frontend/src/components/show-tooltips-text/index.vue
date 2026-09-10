@@ -28,8 +28,10 @@
     </span>
     <div
       ref="templateRef"
-      style="display: none;max-height: 90vh;overflow: auto;">
-      <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
+      style="display: none;">
+      <div
+        :class="tooltipContentClass"
+        :style="tooltipContentStyle">
         {{ props.tip || displayText }}
       </div>
     </div>
