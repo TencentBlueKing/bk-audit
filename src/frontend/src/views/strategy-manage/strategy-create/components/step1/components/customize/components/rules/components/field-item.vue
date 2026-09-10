@@ -172,7 +172,7 @@
 
   import { normalizeConditionValueForDisplay } from '@utils/assist/normalize-condition-filter';
   import { splitAndMerge } from '@utils/assist/split-and-merge';
-  import { enrichFieldDisplayNames } from '../../../../../../../utils/strategy-protocol';
+  import { enrichFieldDisplayNames, formatFieldDisplayLabel } from '../../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
 
@@ -492,7 +492,7 @@
   ) => {
     const expected = (expectedResult || []).filter(item => item?.raw_name || item?.display_name);
     const source = expected.length ? expected : (tableFields || []);
-    // select * 时 display_name 会被写成 raw_name，下拉需用数据源中文名回填
+    // 回填数据源中文名，统一展示为「中文名(raw_name)」
     localTableFields.value = enrichFieldDisplayNames(
       source.map(item => ({ ...item })),
       tableFields || [],
@@ -506,10 +506,16 @@
   const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
     // eslint-disable-next-line no-param-reassign
     condition.condition.field = { ...node };
-    // 下拉展示值可能已是「中文名(raw_name)」，不要写回 display_name，避免详情重复拼接
+    // 标准字段统一存「中文名(raw_name)」；嵌套字段沿用下拉展示值
     if (val && ('self_name' in node || 'fieldTypeValueAr' in node)) {
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.display_name = val;
+    } else {
+      // eslint-disable-next-line no-param-reassign
+      condition.condition.field.display_name = formatFieldDisplayLabel(
+        node.display_name,
+        node.raw_name,
+      );
     }
     if ('fieldTypeValueAr' in node) {
       // eslint-disable-next-line no-param-reassign

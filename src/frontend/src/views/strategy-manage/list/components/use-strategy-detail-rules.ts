@@ -7,6 +7,7 @@ import {
   type AssignConditionForm,
   dispatchToAssignConditionForm,
   formatFieldDisplayLabel,
+  mergeHavingIntoWhere,
   parseStrategyDetailToForm,
 } from '../../strategy-create/utils/strategy-protocol';
 
@@ -67,23 +68,7 @@ const getConditionValues = (condition: Record<string, any>) => {
   return [];
 };
 
-export const mergeHavingIntoWhere = (
-  where?: RuleWhereDisplay | null,
-  having?: RuleWhereDisplay | null,
-): RuleWhereDisplay => {
-  const base = where?.conditions?.length
-    ? { connector: where.connector || 'and', conditions: [...where.conditions] }
-    : emptyWhere();
-  if (!having?.conditions?.length) {
-    return base;
-  }
-  const merged = [...base.conditions, ...having.conditions];
-  merged.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-  return {
-    connector: base.connector,
-    conditions: merged,
-  };
-};
+export { mergeHavingIntoWhere };
 
 export const getRuleWhere = (rule: Record<string, any>): RuleWhereDisplay => {
   const where = rule.conditions?.where ?? rule.configs?.where;

@@ -316,6 +316,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
+  import { enrichFieldDisplayNames, excludeHavingFromWhere } from '../../../../utils/strategy-protocol';
 
   interface Where {
     connector: 'and' | 'or'
@@ -854,6 +855,31 @@
     property: item.property || {},
   }));
 
+  const enrichWhereFieldDisplayNames = (where?: Where) => {
+    if (!where?.conditions?.length || !tableFields.value.length) {
+      return;
+    }
+    where.conditions.forEach((group) => {
+      group.conditions.forEach((item) => {
+        const field = item.condition?.field;
+        if (!field || typeof field === 'string' || !(field.raw_name || field.display_name)) {
+          return;
+        }
+        const [enriched] = enrichFieldDisplayNames([field], tableFields.value);
+        field.display_name = enriched.display_name;
+      });
+    });
+  };
+
+  const syncExpectedResultDisplayNames = () => {
+    if (!formData.value.configs.select?.length || !tableFields.value.length) {
+      return;
+    }
+    const enriched = enrichFieldDisplayNames(formData.value.configs.select, tableFields.value);
+    formData.value.configs.select = enriched;
+    expectedResultsRef.value?.setSelect?.(enriched);
+  };
+
   // 选择tableid后，获取表字段
   const resolveRtId = (rtId: string | string[] | undefined) => {
     if (Array.isArray(rtId)) {
@@ -872,6 +898,7 @@
     }).then((data) => {
       tableFields.value = setTableFields(data, rtId);
       formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
+      syncExpectedResultDisplayNames();
     })
       .finally(() => {
         tableFieldsLoading.value = false;
@@ -899,6 +926,7 @@
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
       formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
+      syncExpectedResultDisplayNames();
     })
       .finally(() => {
         tableFieldsLoading.value = false;
@@ -1427,11 +1455,14 @@
     }
     const rawWhere = editData.configs.where;
     const rawHaving = editData.configs.having;
-    const where = rawWhere
-      ? normalizeWhereForDisplay(_.cloneDeep(rawWhere)) as Where
-      : undefined;
     const having = rawHaving
       ? normalizeWhereForDisplay(_.cloneDeep(rawHaving)) as Where
+      : undefined;
+    const where = rawWhere
+      ? excludeHavingFromWhere(
+        normalizeWhereForDisplay(_.cloneDeep(rawWhere)) as Where,
+        having,
+      ) as Where
       : undefined;
     const hasWhere = Boolean(where?.conditions?.length);
     const hasHaving = Boolean(having?.conditions?.length);
@@ -1555,7 +1586,7 @@
 
   watchEffect(() => {
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
-      if (isInit) {
+      if (isInit || isInitFromParent) {
         return;
       }
       setFormData(props.editData);
@@ -1579,6 +1610,7 @@
           },
         });
         isInitFromParent = true;
+        isInit = true;
       }
     },
     { immediate: true, deep: true },
@@ -1630,6 +1662,7 @@
       if (configs.schedule_config) {
         formData.value.configs.schedule_config = _.cloneDeep(configs.schedule_config);
       }
+      syncExpectedResultDisplayNames();
     },
     { immediate: true, deep: true },
   );
@@ -1673,14 +1706,12 @@
       // 下一步/保存前先把操作日志面板里未落盘的系统选择写入表单
       dataSourcePickerRef.value?.flushEventLogSelection?.();
       const params = _.cloneDeep(formData.value);
-      // 预期结果为空等价 select *，但接口 select 不能为空：下一步/提交时自动选中数据源全部字段（不回显到预期结果 UI）
-      // 未配置预期结果时不要使用字段别名：display_name 与字段名保持一致
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {
-        params.configs.select = _.cloneDeep(tableFields.value).map(item => ({
-          ...item,
-          display_name: item.raw_name,
-        }));
+        params.configs.select = enrichFieldDisplayNames(
+          _.cloneDeep(tableFields.value),
+          tableFields.value,
+        );
       }
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
@@ -1697,6 +1728,12 @@
         : '') as string;
       if (props.stepMode === 'rules-only' && props.parentConfigs?.select?.length && !params.configs.select?.length) {
         params.configs.select = _.cloneDeep(props.parentConfigs.select);
+      }
+      if (params.configs.select?.length && tableFields.value.length) {
+        params.configs.select = enrichFieldDisplayNames(
+          params.configs.select,
+          tableFields.value,
+        );
       }
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
@@ -1775,6 +1812,8 @@
           params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
         }
       }
+      enrichWhereFieldDisplayNames(params.configs.where);
+      enrichWhereFieldDisplayNames(params.configs.having);
       return params;
     },
     // 暴露 typeTableLoading 状态

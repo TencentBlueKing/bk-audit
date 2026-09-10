@@ -214,6 +214,7 @@
 
   interface AssignRuleItem {
     id: number;
+    rule_id?: number;
     name: string;
     collapsed: boolean;
     editingName: boolean;
@@ -281,7 +282,7 @@
     };
   };
 
-  const createDefaultRule = () => ({
+  const createDefaultRule = (): IFormData['default_assign_rule'] => ({
     collapsed: false,
     scene_ids: [] as Array<string | number>,
     processors: [] as Array<string | number>,
@@ -305,7 +306,7 @@
   };
 
   const assignRules = ref<AssignRuleItem[]>([]);
-  const defaultRule = ref(createDefaultRule());
+  const defaultRule = ref<IFormData['default_assign_rule']>(createDefaultRule());
   const whereRefs = ref<Array<{ setWhere?:(where: AssignWhere, having: AssignWhere) => void } | null>>([]);
   const schemaTableFields = ref<Array<Record<string, any>>>([]);
   const schemaFieldsLoading = ref(false);
@@ -558,6 +559,7 @@
       confirmers: [...rule.confirmers],
     })),
     default_assign_rule: {
+      ...(defaultRule.value.rule_id ? { rule_id: defaultRule.value.rule_id } : {}),
       collapsed: defaultRule.value.collapsed,
       scene_ids: [...defaultRule.value.scene_ids],
       processors: [...defaultRule.value.processors],
@@ -629,6 +631,7 @@
       if (assignSource?.length) {
         ruleIdSeq = 1;
         assignRules.value = assignSource.map((item: any, index: number) => createRule({
+          rule_id: item.rule_id,
           name: item.rule_name || item.name || `分派规则${index + 1}`,
           conditions: enrichAssignWhereFields(
             toAssignWhere(item?.conditions, assignTableFields.value),
