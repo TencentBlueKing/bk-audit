@@ -163,10 +163,18 @@
             :class="{ 'is-extend': fieldTab === 'extend' }">
             <thead>
               <tr>
-                <th>字段名称</th>
-                <th>字段说明</th>
-                <th>最近一条数据</th>
-                <th v-if="fieldTab === 'extend'">
+                <th class="col-name">
+                  字段名称
+                </th>
+                <th class="col-desc">
+                  字段说明
+                </th>
+                <th class="col-sample">
+                  最近一条数据
+                </th>
+                <th
+                  v-if="fieldTab === 'extend'"
+                  class="col-system">
                   所属系统
                 </th>
                 <th class="col-actions">
@@ -815,15 +823,19 @@
 
     &.is-extend {
       .col-name {
-        width: 16%;
+        width: 26%;
       }
 
       .col-desc {
-        width: 26%;
+        width: 16%;
       }
 
       .col-sample {
         width: 24%;
+      }
+
+      .col-system {
+        width: 16%;
       }
     }
   }
