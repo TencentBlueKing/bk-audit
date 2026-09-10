@@ -355,10 +355,11 @@
         filters: [-1]
     allow_extra_conditions: 'true'
     expected_log_keywords: '["权限"]'
-    # 长句六维下"上周"偶发偏移 1 天（与 S14 同类周界特性）：范围断言容忍 ±1 天
-    window_start_floor: '2026-08-23T00:00:00+08:00'
+    # 自然周精确边界（oracle）：基准 2026-08-31（周一），上周 = 08-24（一）~ 08-30（日）；
+    # 不用 ±1 天容忍吸收模型周界计算错误——错误窗口（如 08-23~08-29）会多查一天、漏查一天
+    window_start_floor: '2026-08-24T00:00:00+08:00'
     window_start_ceiling: '2026-08-24T00:00:00+08:00'
-    window_end_floor: '2026-08-29T23:59:59+08:00'
+    window_end_floor: '2026-08-30T23:59:59+08:00'
     window_end_ceiling: '2026-08-30T23:59:59+08:00'
   assert:
     - type: python

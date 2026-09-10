@@ -249,8 +249,14 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     username=context_data.username,
                 )
             except AIOutputParseFailedError:
-                # 解析失败具随机性：预算内自动重试；超次数或超时长即结束并冒泡 FAILED
-                if attempt >= NL_PARSE_MAX_RETRIES or time.monotonic() >= deadline:
+                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
+                # 预算的前置检查——防 19s 失败 + 2s 等待后仍发起突破 20s 预算的下一轮）
+                # 即结束并冒泡 FAILED
+                if (
+                    attempt >= NL_PARSE_MAX_RETRIES
+                    or time.monotonic() >= deadline
+                    or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
+                ):
                     logger.error(
                         "[execute_user_intent] intent parse retry budget exhausted, message_id=%s, attempt=%s",
                         execution.message.id,
@@ -328,17 +334,48 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 candidates=candidates,
             ),
         )
-    # ④ 条件识别（field_context 来自目标系统选择快照；确定性失败走结构化 error，
+    # ④ 条件识别（field_context 来自目标系统选择快照；解析失败预算内重试，
+    #    暂态故障冒泡 FAILED 保留重试接口；确定性失败走结构化 error，
     #    SELECTION 已建则保留——系统切换不被检索失败阻塞）
     selection = load_selection_snapshot(selection_message)
+    deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
     try:
-        condition = NL2JSONService.convert(
-            query_text=query_text,
-            selection=selection,
-            scope_id=system_id,
-            username=context_data.username,
+        for attempt in range(NL_PARSE_MAX_RETRIES + 1):
+            try:
+                condition = NL2JSONService.convert(
+                    query_text=query_text,
+                    selection=selection,
+                    scope_id=system_id,
+                    username=context_data.username,
+                )
+            except AIOutputParseFailedError:
+                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
+                # 预算的前置检查）即结束并冒泡 FAILED
+                if (
+                    attempt >= NL_PARSE_MAX_RETRIES
+                    or time.monotonic() >= deadline
+                    or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
+                ):
+                    logger.error(
+                        "[execute_user_intent] condition parse retry budget exhausted, message_id=%s, attempt=%s",
+                        execution.message.id,
+                        attempt + 1,
+                    )
+                    raise
+                time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
+            else:
+                break
+    except (AITimeoutError, AIServiceError, AIOutputParseFailedError):
+        # 暂态基础设施故障 + 超预算解析失败：冒泡收敛 FAILED（MessageService.retry 仅
+        # 接受 FAILED，SUCCESS+error 协议会让用户无法重试这类可恢复失败），对齐 NL 任务语义
+        logger.exception(
+            "[execute_user_intent] condition recognition transient failure, message_id=%s",
+            execution.message.id,
         )
+        raise
     except AIAssistantError as error:
+        # 确定性业务失败（未识别/输出非法/权限拒绝）：SUCCESS + 结构化 error
+        # （重试同输入仍会失败，引导调整问法）
         logger.warning(
             "[execute_user_intent] condition not recognized, message_id=%s, error_code=%s",
             execution.message.id,
@@ -392,8 +429,13 @@ def execute_natural_language_search(self, execution: MessageExecution) -> NLSear
                     username=context_data.username,
                 )
             except AIOutputParseFailedError:
-                # 解析失败具随机性：预算内自动重试；超次数或超时长即结束并冒泡 FAILED
-                if attempt >= NL_PARSE_MAX_RETRIES or time.monotonic() >= deadline:
+                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
+                # 预算的前置检查——防失败 + 等待后仍发起突破预算的下一轮）即结束并冒泡 FAILED
+                if (
+                    attempt >= NL_PARSE_MAX_RETRIES
+                    or time.monotonic() >= deadline
+                    or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
+                ):
                     logger.error(
                         "[execute_natural_language_search] nl2json parse retry budget exhausted, "
                         "message_id=%s, attempt=%s",
