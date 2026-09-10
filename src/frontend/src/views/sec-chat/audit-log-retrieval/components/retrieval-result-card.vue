@@ -114,9 +114,25 @@
             </div>
           </div>
 
+          <!-- 检索失败：对齐条件检索失败态，条件区保持可改后重新检索 -->
+          <div
+            v-if="isFailed"
+            class="status-panel is-failed">
+            <img
+              alt=""
+              class="failed-icon"
+              :src="errorSearchIcon">
+            <div class="status-title">
+              检索失败
+            </div>
+            <div class="status-desc">
+              {{ errorMessage || '请检查网络是否通畅或联系管理员' }}
+            </div>
+          </div>
+
           <!-- 无命中：对齐条件检索空态，不展示空表/导出/分析 -->
           <div
-            v-if="isEmpty"
+            v-else-if="isEmpty"
             class="status-panel is-empty">
             <img
               alt=""
@@ -411,6 +427,7 @@
 
   import aiSvg from '@images/ai.svg';
   import emptySearchIcon from '@images/empty-search.svg';
+  import errorSearchIcon from '@images/error-search.svg';
 
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
   import type { AiUiMessageStatus, RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
@@ -442,6 +459,8 @@
     messageUid?: string;
     /** 消息后端状态；二次检索 PROCESSING 时由卡内 loading 承接 */
     apiStatus?: AiUiMessageStatus;
+    /** 任务失败文案（apiStatus=FAILED） */
+    errorMessage?: string;
     embedded?: boolean;
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
@@ -449,6 +468,7 @@
   }>(), {
     messageUid: '',
     apiStatus: undefined,
+    errorMessage: '',
     embedded: false,
     standardFields: () => [],
     extensionFields: () => [],
@@ -664,15 +684,16 @@
     resubmitLoading.value = true;
     try {
       const chatMessage = await rerunLogSearch(messageUid, condition);
-      if (chatMessage.apiStatus === 'FAILED') {
-        messageError(chatMessage.errorMessage || '检索失败');
-        return;
-      }
-      // 同 uid 覆盖：用返回结果刷新本卡；条件区保持用户刚提交的条件
+      // 同 uid 覆盖：成功/失败都刷新本卡；失败走卡内失败态，不再额外 toast
       if (chatMessage.result) {
         displayResult.value = chatMessage.result;
         displayMessageUid.value = chatMessage.id;
-        syncSearchModelFromResult();
+        if (chatMessage.apiStatus !== 'FAILED') {
+          syncSearchModelFromResult();
+        }
+      }
+      if (chatMessage.apiStatus === 'FAILED' && !chatMessage.result) {
+        messageError(chatMessage.errorMessage || '检索失败');
       }
     } catch (error: any) {
       messageError(error?.message || '检索失败，请稍后重试');
@@ -681,9 +702,11 @@
     }
   };
 
-  const isEmpty = computed(() => displayResult.value.totalHit <= 0);
+  const isFailed = computed(() => props.apiStatus === 'FAILED');
+  const isEmpty = computed(() => !isFailed.value && displayResult.value.totalHit <= 0);
   const canExport = computed(() => (
     Boolean(displayMessageUid.value)
+    && !isFailed.value
     && displayResult.value.totalHit > 0
   ));
 
@@ -1043,11 +1066,21 @@
     box-sizing: border-box;
   }
 
-  .status-panel.is-empty {
-    .empty-icon {
+  .status-panel.is-empty,
+  .status-panel.is-failed {
+    .empty-icon,
+    .failed-icon {
       display: block;
+    }
+
+    .empty-icon {
       width: 98px;
       height: 88px;
+    }
+
+    .failed-icon {
+      width: 48px;
+      height: 48px;
     }
 
     .status-title {
