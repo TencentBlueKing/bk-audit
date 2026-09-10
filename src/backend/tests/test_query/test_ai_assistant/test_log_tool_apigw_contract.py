@@ -182,7 +182,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
     def test_defaults_nullable_and_required_match_runtime_contract(self):
         search = self._body_schema("mcp_search_logs")
-        self.assertIsNone(search["properties"]["fields"]["default"])
+        self.assertNotIn("default", search["properties"]["fields"])
         self.assertIn("null", search["properties"]["fields"]["type"])
         self.assertEqual(search["properties"]["sort"]["default"], [])
         aggregate = self._body_schema("mcp_aggregate_logs")
@@ -408,6 +408,25 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         errors = sorted(validator.iter_errors(instance), key=lambda error: list(error.path))
         self.assertEqual(errors, [], "\n".join(error.message for error in errors))
 
+    def test_declared_defaults_validate_without_nullable_extension(self):
+        """网关导入会校验默认值；x-nullable 扩展不能保证 null 默认值被接受。"""
+
+        def check_defaults(value, path):
+            if isinstance(value, dict):
+                if "default" in value:
+                    with self.subTest(path=path):
+                        validator = jsonschema.Draft4Validator(
+                            value, resolver=jsonschema.RefResolver.from_schema(self.resources)
+                        )
+                        self.assertEqual(list(validator.iter_errors(value["default"])), [])
+                for key, child in value.items():
+                    check_defaults(child, f"{path}/{key}")
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    check_defaults(child, f"{path}/{index}")
+
+        check_defaults(self.resources, "")
+
     def _assert_request_shape(self, pydantic_schema, yaml_schema, pydantic_definitions, path):
         pydantic_schema = self._resolve_ref(pydantic_schema, pydantic_definitions)
         yaml_schema = self._resolve_ref(yaml_schema, self.resources["definitions"])
@@ -422,8 +441,12 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
         self.assertEqual(pydantic_nullable, bool(yaml_schema.get("x-nullable")), path)
         if "default" in pydantic_schema:
-            self.assertIn("default", yaml_schema, path)
-            self.assertEqual(pydantic_schema["default"], yaml_schema["default"], path)
+            # null 由后端缺省处理，不写入网关 schema；其他默认值仍要求精确一致。
+            if pydantic_schema["default"] is None:
+                self.assertNotIn("default", yaml_schema, path)
+            else:
+                self.assertIn("default", yaml_schema, path)
+                self.assertEqual(pydantic_schema["default"], yaml_schema["default"], path)
 
         for keyword in ("minLength", "maxLength", "minItems", "maxItems", "pattern"):
             if keyword in pydantic_schema:

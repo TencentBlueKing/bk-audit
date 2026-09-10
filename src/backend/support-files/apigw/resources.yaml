@@ -44,7 +44,6 @@ definitions:
         description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
         type: string
-        default: null
         x-nullable: true
         enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
         description: 可选存储字段类型，取值与审计日志公共 FieldType 一致。
@@ -72,7 +71,7 @@ definitions:
     required: [raw_name]
     properties:
       raw_name: {type: string, minLength: 1}
-      field_type: {type: string, default: null, x-nullable: true}
+      field_type: {type: string, x-nullable: true}
       keys:
         type: array
         default: []
@@ -3093,7 +3092,6 @@ paths:
               parent_field:
                 allOf:
                   - $ref: '#/definitions/log_tool_field_ref'
-                default: null
                 x-nullable: true
                 description: 待展开的 JSON 字段路径；先脱敏再探索，不因父字段敏感权限整体拒绝，查询条件权限仍在查询前校验；省略时返回全部可见根字段。
       responses:
@@ -3192,7 +3190,6 @@ paths:
                 type: array
                 minItems: 1
                 maxItems: 20
-                default: null
                 x-nullable: true
                 items: {$ref: '#/definitions/log_tool_field_ref'}
                 description: 可选受控投影列；省略时使用紧凑默认列。
@@ -3329,7 +3326,6 @@ paths:
                       description: FIELD 允许的根字段仅限 action_id、resource_type_id、username、result_code、access_type、start_time、extend_data，extend_data 必须带 keys；TIME_BUCKET 只能使用无 keys 的 start_time。
                     interval:
                       type: string
-                      default: null
                       x-nullable: true
                       enum: [AUTO, MINUTE, HOUR, DAY]
                       description: FIELD 必须省略；TIME_BUCKET 必填，可选 AUTO、MINUTE、HOUR、DAY；AUTO 由服务按时间范围选择实际粒度。
@@ -3350,7 +3346,6 @@ paths:
                       description: COUNT 仅 COUNT(*)，必须省略 field/value_type/percentile；DISTINCT_COUNT 必须传 field 且省略 value_type/percentile；MIN/MAX/AVG/SUM 必须传 field，按字段类型决定 value_type 且必须省略 percentile；PERCENTILE_APPROX 同数值指标并额外必须传 0 < percentile < 1。
                     field:
                       type: object
-                      default: null
                       x-nullable: true
                       additionalProperties: false
                       required: [raw_name]
@@ -3371,20 +3366,17 @@ paths:
                           description: extend_data 的业务子路径；允许 Unicode 和除点号外的标点，标准字段必须为空数组，完整路径最大 1024 bytes。
                         field_type:
                           type: string
-                          default: null
                           x-nullable: true
                           description: 可选声明类型，用于字段元信息或安全数值转换。
                       description: COUNT 必须省略；其余指标必须传。允许的根字段仅限 action_id、resource_type_id、username、result_code、access_type、start_time、extend_data；extend_data 必须带 keys。
                     value_type:
                       type: string
-                      default: null
                       x-nullable: true
                       enum: [LONG, DOUBLE]
                       description: COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 extend_data 数值聚合必须传 LONG 或 DOUBLE，标准数值字段必须省略。
                     percentile:
                       type: number
                       format: double
-                      default: null
                       x-nullable: true
                       exclusiveMinimum: true
                       minimum: 0
