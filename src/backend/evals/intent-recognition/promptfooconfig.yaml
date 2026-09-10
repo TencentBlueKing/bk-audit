@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'AI 用户意图判断能力评估'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'aid-log-intent'
+    config:
+      model: ''
+
+defaultTest:
+  assert:
+    - type: is-json
+
+tests:
+  - file://tests/select-system.yaml
+  - file://tests/log-search.yaml
+  - file://tests/unrecognized.yaml
+  - file://tests/edge-cases.yaml
+  - file://tests/safety.yaml
+  - file://tests/chain-scenarios.yaml
+  - file://tests/regression-incidents.yaml

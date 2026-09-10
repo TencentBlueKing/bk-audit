@@ -1,0 +1,119 @@
+# USER_INTENT 统一入口的串联编排场景（provider chain 模式，两段真实 LLM）：
+# 意图识别 → 系统路由 → SYSTEM_REQUIRED 守门 → 条件识别（NL2JSON + 合成字段上下文）
+# 时间基准 current_time=2026-09-04T18:00:00+08:00（近七天 → start_time 起于 2026-08-28）
+
+# ---- 场景A：系统 + 日志检索（一句话完整意图，新会话）----
+- description: 'chain-系统+检索一体（新会话：选审计中心+提取操作人条件+时间窗）'
+  vars:
+    query: '查一下审计中心近七天张三的操作记录'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.filters.includes("张三")) && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: 'chain-系统+检索一体（含执行结果语义：失败 → result_code=-1 原始值）'
+  vars:
+    query: '我要看审计中心最近三天的失败日志'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.includes(-1))'
+
+# ---- 场景B：已有系统 + 纯日志检索（复用当前系统）----
+- description: 'chain-已有系统纯检索（复用审计中心，不重建选择）'
+  vars:
+    query: '看下张三最近三天的操作日志'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username")'
+
+- description: 'chain-已有系统关键词检索（log 全文兜底路径）'
+  vars:
+    query: '搜一下权限变更相关的日志'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "log")'
+
+# ---- 场景C：切换系统 + 日志检索 ----
+- description: 'chain-切换系统+检索（已选审计中心，点名蓝盾）'
+  vars:
+    query: '我要看蓝盾近七天李四的操作日志'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.filters.includes("李四"))'
+
+# ---- 场景D：新会话纯检索（SYSTEM_REQUIRED 平台守门）----
+- description: 'chain-新会话纯检索（无系统 → SYSTEM_REQUIRED + 候选清单）'
+  vars:
+    query: '查一下最近七天的失败日志'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "" && d.condition === null && d.error !== null && d.error.error_code === "SYSTEM_REQUIRED" && Array.isArray(d.error.candidates) && d.error.candidates.length >= 4'
+
+# ---- 场景E：无法识别 ----
+- description: 'chain-闲聊话语（unrecognized 结构化协议）'
+  vars:
+    query: '今天天气怎么样'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "unrecognized" && d.condition === null && d.error !== null && d.error.error_code === "UNRECOGNIZED_INTENT"'
+
+# ---- 场景F：拓展字段下钻串联 ----
+- description: 'chain-拓展字段下钻（工单号 → extend_data.ticket_id 条件）'
+  vars:
+    query: '查一下工单号 Story-3000 相关的操作'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && c.field.keys.includes("ticket_id") && c.filters.includes("Story-3000"))'
+
+# ---- 场景G：时间推算串联（纯时间窗口 → 空 conditions）----
+- description: 'chain-纯时间窗口（仅时间的有效检索 → 空 conditions + 换算窗口）'
+  vars:
+    query: '帮我看下最近七天的日志'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.condition !== null && Array.isArray(d.condition.conditions) && d.condition.conditions.length === 0 && d.condition.start_time.startsWith("2026-08-28") && d.condition.end_time.startsWith("2026-09-04")'
+
+# ---- 场景H-J：选系统 + 多操作人组合（一句话完整复杂意图）----
+- description: 'chain-选系统+多操作人（新会话：审计中心+5人 include 完整提取）'
+  vars:
+    query: '查一下审计中心近七天张三、李四、王五、赵六和钱七的操作记录'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 5 && ["张三","李四","王五","赵六","钱七"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: 'chain-切换系统+多人+失败（蓝盾+2人+result_code=-1）'
+  vars:
+    query: '我要看蓝盾上周张三和李四的失败操作'
+    current_system_id: 'eval_audit_system'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 2 && c.filters.includes("张三") && c.filters.includes("李四")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.includes(-1)) && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: 'chain-选系统+海量多值（审计中心+10人梯度完整性）'
+  vars:
+    query: '帮我看下审计中心最近三天张三、李四、王五、赵六、钱七、孙八、周九、吴十、郑一、王二这十个人的操作日志'
+    current_system_id: ''
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 10 && ["张三","李四","王五","赵六","钱七","孙八","周九","吴十","郑一","王二"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-09-01")'

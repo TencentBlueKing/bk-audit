@@ -13,4 +13,5 @@ urlpatterns = [
     path("api/v1/", include("services.web.tool.urls")),
     path("api/v1/", include("services.web.blob_storage.urls")),
     path("api/v1/", include("services.web.scene.urls")),
+    path("api/v1/ai_assistant/", include("services.web.ai_assistant.urls")),
 ]

@@ -16,20 +16,18 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from unittest import TestCase
 from uuid import uuid4
 
-import pytest
 from bk_resource import resource
+from django.test import TestCase
 
 from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.scene.models import Scene
 from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
 
 
-@pytest.mark.django_db
 class TicketTest(TestCase):
-    ...
+    """为风险工单用例提供 Django 事务隔离，避免测试数据在用例间相互污染。"""
 
 
 class RiskContext:

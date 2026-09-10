@@ -1,0 +1,261 @@
+# 核心字段、组合和拓展字段：所有用例使用固定评估上下文，不访问真实日志。
+
+- description: 'C1-组合：张三昨天的失败操作'
+  vars:
+    query: '查一下张三昨天的失败操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: [-1]
+    expected_start_time: '2026-08-30T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C2-多值：张三和李四的操作'
+  vars:
+    query: '查一下张三和李四的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C3-全文 AND：同时包含两个关键词（关键词避开 result_code 枚举歧义）'
+  vars:
+    query: '查一下日志中同时包含权限变更和权限回收的记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'log'
+        keys: []
+        operator: 'match_all'
+        filters: ['权限变更', '权限回收']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C4-枚举不确定：登录操作退化为全文检索'
+  vars:
+    query: '查一下登录相关的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'log'
+        keys: []
+        operator: 'match_any'
+        filters: ['登录']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C5-拓展字段：工单号与操作人组合'
+  vars:
+    query: '查一下工单号为 Story-3000 的张三操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['ticket_id']
+        operator: 'eq'
+        filters: ['Story-3000']
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C6-枚举正向：成功的操作映射原始查询值 0'
+  vars:
+    query: '查一下成功的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'result_code'
+        keys: []
+        operator: 'include'
+        filters: ['0']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C7-实例ID精确：排障高频场景'
+  vars:
+    query: '查一下实例ID是10001的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'instance_id'
+        keys: []
+        operator: 'eq'
+        filters: ['10001']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C8-实例名模糊：like 白名单字段'
+  vars:
+    query: '查下资源名叫 test-vm 的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'instance_name'
+        keys: []
+        operator: 'like'
+        filters: ['test-vm']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C9-来源IP：安全审计场景'
+  vars:
+    query: '查一下来源IP是192.0.2.10的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'access_source_ip'
+        keys: []
+        operator: 'eq'
+        filters: ['192.0.2.10']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C10-请求ID：调用链排障场景'
+  vars:
+    query: '帮我查request_id是request-001的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'request_id'
+        keys: []
+        operator: 'eq'
+        filters: ['request-001']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C11-操作ID多值：用户显式指定字段值'
+  vars:
+    query: '查一下操作ID是 create 和 delete 的记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'action_id'
+        keys: []
+        operator: 'include'
+        filters: ['create', 'delete']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'C12-全文 OR：包含任一关键词（与 C3 的 AND 语义对照；关键词避开 result_code 枚举歧义）'
+  vars:
+    query: '查一下包含权限变更或者权限回收的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'log'
+        keys: []
+        operator: 'match_any'
+        filters: ['权限变更', '权限回收']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'

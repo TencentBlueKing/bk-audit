@@ -43,10 +43,18 @@ STATIC_URL = "/static/"
 # APP静态资源目录url
 REMOTE_STATIC_URL = "%sremote/" % STATIC_URL
 
-# Celery 消息队列设置 RabbitMQ
-# BROKER_URL = 'amqp://guest:guest@localhost:5672//'
-# Celery 消息队列设置 Redis
-BROKER_URL = "redis://localhost:6379/0"
+# 日常开发 Broker 与真实 Celery 测试 Broker 分离：普通本地任务可继续使用 Redis，
+# 集成测试只在受控上下文内临时切换到与生产一致的 RabbitMQ。
+BROKER_URL = os.getenv("BKAPP_CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_TEST_BROKER_URL = os.getenv(
+    "BKAPP_CELERY_TEST_BROKER_URL",
+    "amqp://guest:guest@127.0.0.1:5672//",
+)
+CELERY_TEST_QUEUE_PREFIX = os.getenv(
+    "BKAPP_CELERY_TEST_QUEUE_PREFIX",
+    f"{APP_CODE}_test",
+)
+CELERY_TEST_TASK_TIMEOUT = int(os.getenv("BKAPP_CELERY_TEST_TASK_TIMEOUT", "30"))
 
 DEBUG = True
 
@@ -69,6 +77,12 @@ DATABASES = {
         "PORT": os.getenv("MYSQL_PORT", "3306"),
         "OPTIONS": {
             "charset": "utf8mb4",
+        },
+        # pytest 会独立创建测试库，不能依赖业务库的字符集配置。
+        # 显式指定后可避免 MySQL 5.7 默认 latin1 导致中文迁移数据写入失败。
+        "TEST": {
+            "CHARSET": "utf8mb4",
+            "COLLATION": "utf8mb4_general_ci",
         },
     },
 }
