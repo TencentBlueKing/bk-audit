@@ -83,6 +83,8 @@
 
   import FieldItem from './components/field-item.vue';
 
+  import { mergeHavingIntoWhere } from '../../../../../../utils/strategy-protocol';
+
   interface Expose {
     resetFormData: () => void,
     setWhere: (whereData: Where, having: Where) => void;
@@ -239,12 +241,10 @@
       where.value = createEmptyWhere();
     },
     setWhere(whereData: Where, having: Where) {
-      where.value = isEmptyWhere(whereData) ? createEmptyWhere() : whereData;
-      if (having && having.conditions.length > 0) {
-        // 将having条件合并到where条件中, conditions根据item.index进行排序合并
-        where.value.conditions = where.value.conditions.concat(having.conditions);
-        where.value.conditions.sort((a, b) => a.index - b.index);
-      }
+      const base = isEmptyWhere(whereData) ? createEmptyWhere() : _.cloneDeep(whereData);
+      where.value = having?.conditions?.length
+        ? mergeHavingIntoWhere(base, _.cloneDeep(having))
+        : base;
     },
   });
 </script>
