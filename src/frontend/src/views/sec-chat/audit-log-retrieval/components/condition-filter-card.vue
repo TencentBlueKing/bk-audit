@@ -270,8 +270,9 @@
 
       if (chatMessage.apiStatus === 'FAILED') {
         searchState.value = 'failed';
-        searchError.value = chatMessage.errorMessage || '检索失败';
-        emit('searched', false);
+        searchError.value = chatMessage.errorMessage || '请检查网络是否通畅或联系管理员';
+        // 关闭条件草稿卡，由消息流中的结果卡承接失败态（条件区 + 居中失败）
+        emit('searched', true);
         return;
       }
 
