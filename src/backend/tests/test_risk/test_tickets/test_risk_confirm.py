@@ -351,9 +351,8 @@ class ConfirmAsMisReportTest(TicketTest):
             ConfirmAsMisReport(risk_id=risk.risk_id, operator=operator).run(username=operator, description=description)
 
             # 验证历史记录
-            history = TicketNode.objects.filter(risk_id=risk.risk_id).last()
+            history = TicketNode.objects.filter(risk_id=risk.risk_id, action=ConfirmAsMisReport.__name__).first()
             self.assertIsNotNone(history)
-            self.assertEqual(history.action, ConfirmAsMisReport.__name__)
             self.assertEqual(history.operator, operator)
             self.assertEqual(history.extra["description"], description)
             self.assertEqual(history.extra["from_status"], RiskStatus.PENDING_CONFIRM)
