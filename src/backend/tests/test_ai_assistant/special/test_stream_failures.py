@@ -30,6 +30,7 @@ from tests.test_ai_assistant.celery_integration import (
     wait_for_snapshot,
     wait_for_task_postrun,
 )
+from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.special_handlers import (
     SPECIAL_FAILURE_QUEUE,
     SpecialCheckpointFailOnceHandler,
@@ -99,7 +100,7 @@ class StreamFailureSpecialTest(TransactionTestCase):
         )
 
     def test_redis_append_failure_still_succeeds_with_degraded_archive(self):
-        attachment_handler_registry.register(SpecialRedisDegradedHandler())
+        use_attachment_handler(self, SpecialRedisDegradedHandler())
         with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("redis down")):
             attachment = self.create_attachment(text="redis")
             completed = wait_for_snapshot(
@@ -117,7 +118,7 @@ class StreamFailureSpecialTest(TransactionTestCase):
         self.assertTrue(all(event.get("stream_id") is None for event in completed.stream_archive))
 
     def test_checkpoint_first_failure_keeps_pending_and_finalizes_ordered_events(self):
-        attachment_handler_registry.register(SpecialCheckpointFailOnceHandler())
+        use_attachment_handler(self, SpecialCheckpointFailOnceHandler())
         fail_once = once_then_original(
             AttachmentArchiveStore.checkpoint,
             exc=DatabaseError("temporary checkpoint failure"),
@@ -140,7 +141,7 @@ class StreamFailureSpecialTest(TransactionTestCase):
         self.assertEqual(completed.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
 
     def test_finalize_first_failure_retries_with_new_execution(self):
-        attachment_handler_registry.register(SpecialFinalizeFailOnceHandler())
+        use_attachment_handler(self, SpecialFinalizeFailOnceHandler())
         fail_once = once_then_original(
             AttachmentArchiveStore.finalize,
             exc=DatabaseError("temporary finalize failure"),
@@ -173,7 +174,7 @@ class StreamFailureSpecialTest(TransactionTestCase):
         self.assertNotEqual(config.redis_key, old_redis_key)
 
     def test_manual_retry_fences_old_worker_and_keeps_new_execution(self):
-        handler = attachment_handler_registry.register(SpecialRetryRaceHandler())
+        handler = use_attachment_handler(self, SpecialRetryRaceHandler())
         attachment = self.create_attachment(text="race")
         old_task_id = attachment.task_id
         self.assertTrue(special_handlers.competition_hold.wait(timeout=settings.CELERY_TEST_TASK_TIMEOUT))

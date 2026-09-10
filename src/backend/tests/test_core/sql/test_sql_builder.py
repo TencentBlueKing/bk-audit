@@ -1266,15 +1266,10 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
         )
 
         sql = builder.build_data_sql()
-        print(sql)
-        self.assertIn("`snapshot_resource_type_info`['id']", sql)
-
-        # 2）确认是 LIKE 查询，并且前缀形如 LIKE '%foo...'
-        self.assertIn("LIKE '%foo", sql)
-
-        expected_sub = "foo''\\''''] !=0 or 1=1; --"
-        self.assertIn(
-            expected_sub,
+        # 字面反斜杠经过 LIKE 模式与 SQL 字符串两层转义，SQL 中应为四个反斜杠。
+        # 单引号仍由 PyPika 成对转义，完整断言同时约束字段路径与条件边界。
+        self.assertEqual(
             sql,
-            msg=f"\n原始 payload:\n{payload}\n" f"期望转义后片段:\n{expected_sub}\n" f"实际 SQL:\n{sql}",
+            "SELECT * FROM test_table WHERE `snapshot_resource_type_info`['id'] "
+            + r"LIKE '%foo''\\\\''''] !=0 or 1=1; --%' LIMIT 10",
         )

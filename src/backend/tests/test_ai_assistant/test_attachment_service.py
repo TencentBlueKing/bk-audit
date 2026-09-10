@@ -58,6 +58,7 @@ from tests.test_ai_assistant.handlers import (
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
+    preserve_attachment_handler_registry,
     use_attachment_handler,
 )
 
@@ -188,6 +189,7 @@ class EmptyObjectEditableAttachmentHandler(EditableAttachmentEchoHandler):
 
 class AttachmentServiceTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.user = "alice"
         self.other_user = "bob"
         self.service = AttachmentService(user=self.user)
@@ -206,6 +208,8 @@ class AttachmentServiceTest(TestCase):
 
     def register_async_handler(self, handler=None):
         handler = handler or RecordingAttachmentAsyncHandler()
+        # AI_ANALYSIS 已有生产 Handler；平台机制用例需要独占该类型注册测试替身。
+        attachment_handler_registry.unregister(handler.attachment_type)
         attachment_handler_registry.register(handler)
         return handler
 
@@ -986,6 +990,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.user = "alice"
         self.service = AttachmentService(user=self.user)
         self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
@@ -1000,7 +1005,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
             created_by=self.user,
             updated_by=self.user,
         )
-        attachment_handler_registry.register(RecordingAttachmentAsyncHandler())
+        use_attachment_handler(self, RecordingAttachmentAsyncHandler())
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:

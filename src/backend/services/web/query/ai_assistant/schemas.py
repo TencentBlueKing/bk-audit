@@ -28,9 +28,10 @@ full_key（raw_name 与 keys 以 LOG_FIELD_KEY_JOIN_CHAR 连接），与导出�
 """
 
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from rest_framework import serializers
 
 from core.utils.time import parse_datetime
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
@@ -54,6 +55,8 @@ NAIVE_DATETIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 class ConditionField(BaseModel):
     """条件字段（协议 §2.1 field；与 QuerySearchFieldSerializer 同构）"""
 
+    model_config = ConfigDict(extra="forbid")
+
     raw_name: str = Field(..., min_length=1)
     field_type: Optional[str] = None
     keys: List[str] = Field(default_factory=list)
@@ -62,9 +65,13 @@ class ConditionField(BaseModel):
 class Condition(BaseModel):
     """单条检索条件（协议 §2.1；与 QuerySearchConditionSerializer 同构）"""
 
+    model_config = ConfigDict(extra="forbid")
+
     field: ConditionField
     operator: str = Field(..., min_length=1)
-    filters: List[Any] = Field(default_factory=list)
+    filters: Annotated[
+        List[Any], serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="条件比较值列表")
+    ] = Field(default_factory=list, description="条件比较值列表，可包含字段支持的 JSON 标量值。")
 
     @model_validator(mode="after")
     def validate_filters_shape(self):
@@ -86,6 +93,8 @@ class SearchCondition(BaseModel):
     CollectorSearchAllReqSerializer 校验。
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     scope_type: Literal["system"] = "system"
     scope_id: str = Field(..., min_length=1)
     start_time: str = Field(..., min_length=1)
@@ -102,6 +111,14 @@ class SearchCondition(BaseModel):
         except Exception as err:
             raise ValueError("invalid datetime value") from err
         return v
+
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        """统一校验检索时间顺序，调用方无需在服务层重复比较。"""
+
+        if parse_datetime(self.start_time) > parse_datetime(self.end_time):
+            raise ValueError("start_time must not exceed end_time")
+        return self
 
 
 # ---------------------------------------------------------------------------

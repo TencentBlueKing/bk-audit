@@ -64,16 +64,18 @@ from tests.test_ai_assistant.handlers import (
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
     FeedbackAttachmentEchoHandler,
+    preserve_attachment_handler_registry,
     use_attachment_handler,
 )
 
 
 class AttachmentRequestSerializerTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.message_uid = str(uuid4())
         self.attachment_uid = str(uuid4())
-        attachment_handler_registry.register(EditableAttachmentEchoHandler())
-        attachment_handler_registry.register(EchoAttachmentAsyncHandler())
+        use_attachment_handler(self, EditableAttachmentEchoHandler())
+        use_attachment_handler(self, EchoAttachmentAsyncHandler())
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -496,13 +498,16 @@ def _map_attachment_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
 
 
 class AttachmentOpenAPIStartupContractTest(SimpleTestCase):
+    def setUp(self):
+        preserve_attachment_handler_registry(self)
+
     def tearDown(self):
         for attachment_type in AttachmentType.values:
             attachment_handler_registry.unregister(attachment_type)
 
     def test_first_openapi_generation_includes_registered_handlers_and_freezes(self):
-        attachment_handler_registry.register(StartupAlphaAttachmentHandler())
-        attachment_handler_registry.register(StartupBetaAttachmentHandler())
+        use_attachment_handler(self, StartupAlphaAttachmentHandler())
+        use_attachment_handler(self, StartupBetaAttachmentHandler())
         input_proxy = PolymorphicProxySerializer(
             component_name="AIAttachmentInputDataStartupGate",
             serializers=lambda: _unique_schema_models(_attachment_schema_mapping("input_model")),
@@ -526,7 +531,7 @@ class AttachmentOpenAPIStartupContractTest(SimpleTestCase):
 
         frozen_input = input_proxy.serializers
         frozen_output = output_proxy.serializers
-        attachment_handler_registry.register(StartupGammaAttachmentHandler())
+        use_attachment_handler(self, StartupGammaAttachmentHandler())
 
         self.assertIs(input_proxy.serializers, frozen_input)
         self.assertIs(output_proxy.serializers, frozen_output)
@@ -543,6 +548,7 @@ class EditableAnalysisAttachmentHandler(EditableAttachmentEchoHandler):
 @mock.patch("services.web.ai_assistant.resources.attachment.get_request_username", return_value="alice")
 class AttachmentResourceTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.conversation = Conversation.objects.create(
             title="查询用户登录日志",
             created_by="alice",
@@ -561,8 +567,8 @@ class AttachmentResourceTest(TestCase):
         )
         self.sync_handler = FeedbackAttachmentEchoHandler()
         self.async_handler = EchoAttachmentAsyncHandler()
-        attachment_handler_registry.register(self.sync_handler)
-        attachment_handler_registry.register(self.async_handler)
+        use_attachment_handler(self, self.sync_handler)
+        use_attachment_handler(self, self.async_handler)
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -945,6 +951,7 @@ class AttachmentResourceTransactionTest(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.conversation = Conversation.objects.create(
             title="查询用户登录日志",
             created_by="alice",
@@ -962,7 +969,7 @@ class AttachmentResourceTransactionTest(TransactionTestCase):
             updated_by="alice",
         )
         self.async_handler = EchoAttachmentAsyncHandler()
-        attachment_handler_registry.register(self.async_handler)
+        use_attachment_handler(self, self.async_handler)
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:

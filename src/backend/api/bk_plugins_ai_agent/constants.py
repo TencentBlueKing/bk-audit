@@ -16,5 +16,4 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-AI_STREAM_PREVIEW_LIMIT = 4096
 AI_THINKING_PLACEHOLDERS = ("正在思考...", "正在思考……")
