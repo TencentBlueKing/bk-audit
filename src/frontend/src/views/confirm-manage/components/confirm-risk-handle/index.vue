@@ -115,9 +115,7 @@
     return description.replace(/<[^>]+>/g, '').trim().length > 0;
   };
 
-  const pickConfirmHistory = (
-    historyList: RiskManageModel['ticket_history'],
-  ): RiskManageModel['ticket_history'][number] | undefined => {
+  const pickConfirmHistory = (historyList: RiskManageModel['ticket_history']): RiskManageModel['ticket_history'][number] | undefined => {
     const confirmItems = historyList.filter(item => CONFIRM_HISTORY_ACTIONS.includes(item.action));
     const withDescription = [...confirmItems]
       .reverse()
