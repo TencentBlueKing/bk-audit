@@ -141,6 +141,18 @@
     event_evidence_field_configs: [] as StrategyFieldEvent['event_evidence_field_configs'],
   });
 
+  const syncEventFieldConfigsFromEditData = () => {
+    eventFieldConfigs.value = {
+      event_basic_field_configs: props.data.event_basic_field_configs || [],
+      event_data_field_configs: props.data.event_data_field_configs || [],
+      event_evidence_field_configs: props.data.event_evidence_field_configs || [],
+    };
+    if (props.data.risk_meta_field_config?.length && !tableData.value.length) {
+      tableData.value = props.data.risk_meta_field_config.map(item => ({ ...item }));
+    }
+  };
+  syncEventFieldConfigsFromEditData();
+
   const outputFields = computed(() => {
     const riskFields = tableData.value
       .filter(item => item.field_name)
