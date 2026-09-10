@@ -213,7 +213,17 @@
                         v-for="col in displayResult.columns"
                         :key="col.rawName"
                         :style="getColumnStyle(col)">
+                        <span
+                          v-if="isJsonPreviewTipColumn(col)"
+                          v-bk-tooltips="{
+                            content: '点击单元格可查看或复制完整数据',
+                            placement: 'top',
+                          }"
+                          class="json-col-header">
+                          {{ col.displayName }}
+                        </span>
                         <show-tooltips-text
+                          v-else
                           class="cell-tip"
                           :data="col.displayName"
                           :max-width="360" />
@@ -232,11 +242,12 @@
                         <render-result
                           v-if="isResultCodeColumn(col) && hasResultCodeValue(row)"
                           :data="row" />
-                        <show-tooltips-text
+                        <json-field-preview
                           v-else
                           class="cell-tip"
-                          :data="formatCell(row[col.rawName])"
-                          :max-width="480" />
+                          :text="formatCell(row[col.rawName])"
+                          :tooltip-max-width="480"
+                          :value="row[col.rawName]" />
                       </td>
                     </tr>
                   </tbody>
@@ -446,7 +457,7 @@
     exportLogSearchFull,
     exportLogSearchPreview,
   } from '../utils/export-log-search';
-
+  import JsonFieldPreview from './json-field-preview.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
   import LogStatisticsDialog from './log-statistics-dialog.vue';
@@ -778,6 +789,12 @@
   const formatNumber = (num: number) => num.toLocaleString('en-US');
 
   const isResultCodeColumn = (col: { rawName: string }) => col.rawName === 'result_code';
+
+  /** 拓展数据 / 完整日志：表头 tip，单元格不再逐格提示 */
+  const isJsonPreviewTipColumn = (col: { displayName: string }) => {
+    const name = col.displayName || '';
+    return name.includes('拓展') || name.includes('完整日志');
+  };
 
   const hasResultCodeValue = (row: Record<string, any>) => {
     const value = row.result_code;
@@ -1199,15 +1216,32 @@
       line-height: 42px;
       color: #63656e;
       text-align: left;
+      vertical-align: middle;
       border: none;
       box-sizing: border-box;
     }
 
     .cell-tip {
+      display: block;
       width: 100%;
       max-width: 100%;
-      line-height: 20px;
-      vertical-align: middle;
+      min-width: 0;
+      overflow: hidden;
+      line-height: 42px;
+      box-sizing: border-box;
+    }
+
+    .json-col-header {
+      display: inline;
+      max-width: 100%;
+      overflow: hidden;
+      line-height: 42px;
+      color: inherit;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: help;
+      border-bottom: 1px dashed #979ba5;
+      box-sizing: border-box;
     }
 
     .result-code-cell {
