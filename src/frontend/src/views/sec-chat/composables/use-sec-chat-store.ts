@@ -40,6 +40,7 @@ import {
   extractFieldCatalogFromSystemMessage,
   findLatestSuccessSystemSelection,
   getNlRecognitionError,
+  isPureSystemSwitchIntent,
   mapAiMessageToChatMessage,
 } from '../utils/map-ai-message';
 
@@ -413,19 +414,29 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
   const mapped = mapAiMessageToChatMessage(detail);
   if (mapped.type === 'select-system') return;
   if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
+    const pureSystemSwitch = isPureSystemSwitchIntent(detail);
     const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
     if (selectionMessageUid) {
       const existingSelectionMessage = findStoredConversation(conversationId)?.messages.find(item => (
         item.id === selectionMessageUid
         && (item.type === 'retrieval-guide' || item.type === 'select-system')
       ));
+      // 纯切系统需要展示引导卡；切系统+检索仍隐藏引导，避免与结果卡抢视线
+      let selectionOptions: { showGuide?: boolean } | undefined;
+      if (pureSystemSwitch) {
+        selectionOptions = { showGuide: true };
+      } else if (!existingSelectionMessage) {
+        selectionOptions = { showGuide: false };
+      }
       await fetchSelectionMessage(
         conversationId,
         selectionMessageUid,
-        existingSelectionMessage ? undefined : { showGuide: false },
+        selectionOptions,
       );
     }
-    await fetchChildLogSearch(conversationId, detail.uid);
+    if (!pureSystemSwitch) {
+      await fetchChildLogSearch(conversationId, detail.uid);
+    }
   }
 };
 
@@ -528,11 +539,12 @@ const applyMessageWindow = (conv: Conversation, windowData: {
 
   resumeProcessingPolls(conv.id, windowData.results);
 
-  // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次（识别失败除外）
+  // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次（识别失败 / 纯切系统除外）
   windowData.results.forEach((message) => {
     if ((message.message_type === 'USER_INTENT' || message.message_type === 'NATURAL_LANGUAGE_SEARCH')
       && message.status === 'SUCCESS'
-      && !getNlRecognitionError(message)) {
+      && !getNlRecognitionError(message)
+      && !isPureSystemSwitchIntent(message)) {
       const mappedMessage = mapAiMessageToChatMessage(message);
       if (mappedMessage.type === 'select-system') return;
       const hasChild = windowData.results.some(item => (
