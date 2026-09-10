@@ -88,7 +88,7 @@
     - type: python
       value: 'file://assertions/check_conditions.py:exact_time_window_match'
 
-# ---- S16：长句周界 ±1 天弹性（v4 暴露 → 范围断言验证）----
+# ---- S16：长句周界精确边界（review 修正：±1 天容忍会接受错误自然周窗口）----
 - description: 'S16-极限长句压力：多人+多资源+访问类型+结果+关键词+上周（六维 100 字）'
   vars:
     query: '麻烦帮我查一下上周张三、李四、王五、赵六、钱七、孙八这六个人在Web控制台和API两个渠道上对host和app两类资源做的失败操作，日志里带点权限变更关键词'
@@ -112,9 +112,11 @@
         filters: [-1]
     allow_extra_conditions: 'true'
     expected_log_keywords: '["权限"]'
-    window_start_floor: '2026-08-23T00:00:00+08:00'
+    # 自然周精确边界（oracle）：基准 2026-08-31（周一），上周 = 08-24（一）~ 08-30（日）；
+    # 不用 ±1 天容忍吸收模型周界计算错误——错误窗口（如 08-23~08-29）会多查一天、漏查一天
+    window_start_floor: '2026-08-24T00:00:00+08:00'
     window_start_ceiling: '2026-08-24T00:00:00+08:00'
-    window_end_floor: '2026-08-29T23:59:59+08:00'
+    window_end_floor: '2026-08-30T23:59:59+08:00'
     window_end_ceiling: '2026-08-30T23:59:59+08:00'
   assert:
     - type: python

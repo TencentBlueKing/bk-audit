@@ -28,6 +28,7 @@ F3 检索快照服务（LOG_SEARCH 消息核心组件）
 快照语义：samples 是执行时刻固化的展示化结果（脱敏后），历史展示与预览导出都读快照。
 """
 
+import json
 import time
 from typing import Dict, List, Tuple
 
@@ -235,6 +236,11 @@ class LogSearchService:
                 scope_id=session_scope_id,
                 username=username,
             )
+            # 查询范围收敛到目标系统（condition.scope_id）：scope 授权集是"可见边界"，
+            # 目标系统才是"查询意图"，二者取交集——防 scope 内多系统授权时（如 cross_system
+            # 授权 A/B 而目标为 A）结果与总数混入非目标系统；目标系统不在授权内时
+            # 退化为 [""] 自然零命中（权限拒绝语义）
+            authorized_systems = [sid for sid in authorized_systems if sid == condition.scope_id] or [""]
         else:
             authorized_systems = SearchLogPermission.get_scope_auth_systems(
                 scope_type=condition.scope_type,
@@ -360,13 +366,17 @@ class LogSearchService:
         """
         单行快照：按 columns 裁剪取值（键名归一 + keys 下钻 + 截断）。
 
-        samples 字典键 = 列 full_key（标准列 = raw_name，拓展列 = raw_name/key/...）。
+        samples 字典键 = 列 full_key（标准列 = raw_name，拓展列 = raw_name/key/...）；
+        原始数据内容（log）为合法 JSON 时解析为对象返回（对齐拓展数据形态）。
         """
         sample = {}
         for column in columns:
             value = extract_nested_value(row.get(column.raw_name, row.get(column.raw_name.lower())), column.keys)
             if isinstance(value, Empty) or value is None:
                 continue
+            if cls._is_raw_log_column(column) and isinstance(value, str):
+                # 截断后的字符串必非合法 JSON：结构化必须在截断前尝试
+                value = cls._structure_raw_log(value)
             if isinstance(value, str) and len(value) > LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH:
                 value = value[:LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH]
             sample[column.full_key] = value
@@ -375,3 +385,26 @@ class LogSearchService:
         if isinstance(system_info, dict) and system_info:
             sample["system_info"] = {key: system_info.get(key) for key in SYSTEM_INFO_SNAPSHOT_KEYS}
         return sample
+
+    @staticmethod
+    def _is_raw_log_column(column: ResultColumn) -> bool:
+        """原始数据内容列（log，无下钻 keys）：Doris 存储为 JSON 字符串，快照结构化。"""
+
+        return column.raw_name == "log" and not column.keys
+
+    @staticmethod
+    def _structure_raw_log(value: str):
+        """原始数据内容结构化：合法 JSON 解析为对象（dict/list）完整返回——前端识别
+        JSON 格式渲染样式（对齐拓展数据形态，字符串截断后无法解析）。
+
+        口径对齐检索页（HitsFormatter 对 JSON_FORMAT 字段 loads 后无截断，
+        log 由前端自行 JSON.parse）：合法 JSON 不设大小上限（审计事件上报侧
+        自带大小约束）；非 JSON 纯文本保持字符串，由调用方按常规上限截断
+        （纯文本超长对渲染无增量价值，保留快照 DB 保护）。
+        """
+
+        try:
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            return value
+        return parsed if isinstance(parsed, (dict, list)) else value

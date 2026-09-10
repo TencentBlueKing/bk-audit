@@ -63,7 +63,8 @@ EXTENSION_FIELD_DEFAULT_OPERATORS = ("eq", "neq", "include", "exclude", "like")
 
 # 快照条数上限（协议：最多 100 条样例，固化 page=1 + 最新排序）
 LOG_SEARCH_SNAPSHOT_PAGE_SIZE = 100
-# 快照单值截断长度（待冻结 #3，按真实环境校准）
+# 快照单值截断长度（待冻结 #3，按真实环境校准）；原始数据内容（log）为合法 JSON 时
+# 解析为对象完整返回不截断（口径对齐检索页，见 LogSearchService._structure_raw_log）
 LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH = 1024
 # system_info 快照裁剪键（仅保留展示必要键）
 SYSTEM_INFO_SNAPSHOT_KEYS = ("system_id", "name")
