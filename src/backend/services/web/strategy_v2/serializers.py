@@ -423,6 +423,8 @@ class StrategySerializer(serializers.Serializer):
     def _validate_scene_resources(self, validated_request_data: dict) -> None:
         # 这里依赖 DRF 字段校验后的结构：新建策略直接取 scene_id，更新策略按 strategy_id 反查绑定场景。
         # 子资源只允许引用同场景资源，避免跨场景复用通知组、联表或下钻工具。
+        if validated_request_data.get("binding_type") == BindingType.PLATFORM_BINDING:
+            return
         scene_id = self.get_scene_id(validated_request_data)
         self._validate_notice_groups("notice_groups", validated_request_data.get("notice_groups", []), scene_id)
         self._validate_notice_groups("processor_groups", validated_request_data["processor_groups"], scene_id)
@@ -516,6 +518,8 @@ class StrategySerializer(serializers.Serializer):
         """
         校验策略配置中的系统和数据表是否在场景授权范围内
         """
+        if validated_request_data.get("binding_type") == BindingType.PLATFORM_BINDING:
+            return
 
         scene_id = self.get_scene_id(validated_request_data)
         if scene_id is None:
