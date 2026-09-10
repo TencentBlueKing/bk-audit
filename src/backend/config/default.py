@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import os
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -185,6 +186,9 @@ USE_APIGW = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 # ESB配置
 BK_COMPONENT_API_URL = os.getenv("BKAPP_BK_COMPONENT_API_URL", os.getenv("BK_COMPONENT_API_URL"))
 
+BK_CW_AITSM_APIGW_NAME = os.getenv("BKAPP_BK_CW_AITSM_APIGW_NAME", "cw-aitsm")
+BK_USER_APIGW_NAME = os.getenv("BKAPP_BK_USER_APIGW_NAME", "bk-user")
+BK_CMSI_APIGW_NAME = os.getenv("BKAPP_BK_CMSI_APIGW_NAME", "bk-cmsi")
 BK_IAM_APIGW_NAME = os.getenv("BKAPP_BK_IAM_APIGW_NAME", "bk-iam")
 LOG_APIGW_NAME = os.getenv("BKAPP_LOG_APIGW_NAME", "log-search")
 BK_PAAS_APIGW_NAME = os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3")
@@ -201,11 +205,7 @@ BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
@@ -346,6 +346,8 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    # AI 相关能力总开关：默认开启；多租户环境由 apps.feature.plugins.AiCapabilityPlugin 强制关闭
+    "ai_capability": os.getenv("BKAPP_FEATURE_AI_CAPABILITY", "available"),
 }
 
 # BkLog
@@ -455,8 +457,42 @@ BK_AUDIT_SETTINGS = {
 # 全局配置
 BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
 
-# 租户id
-BK_TENANT_ID = os.getenv("BKPAAS_APP_TENANT_ID") or "tencent"
+# 多租户配置
+# 多租户模式总开关（取值 1/true/yes/on 视为开启）
+BKPAAS_MULTI_TENANT_MODE = str(os.getenv("BKPAAS_MULTI_TENANT_MODE", "False")).lower() in ("1", "true", "yes", "on")
+
+# 实例绑定租户：由部署控制面注入，只读、非空
+# 多租户开启时必须设置；关闭时可留空（兼容模式）
+AUDIT_INSTANCE_TENANT_ID = os.getenv("BKAPP_AUDIT_INSTANCE_TENANT_ID", "").strip().lower()
+
+# 启动期 fail-fast：多租户模式下实例必须绑定目标租户
+if BKPAAS_MULTI_TENANT_MODE and not AUDIT_INSTANCE_TENANT_ID:
+    raise RuntimeError(
+        "多租户模式已开启（BKPAAS_MULTI_TENANT_MODE=true），但实例绑定租户未设置。"
+        "请在部署控制面注入 BKAPP_AUDIT_INSTANCE_TENANT_ID 后启动，"
+        "禁止回退到应用归属租户或默认值，以免破坏租户隔离。"
+    )
+
+# 外部调用 X-Bk-Tenant-Id Header 取值
+# 多租户模式 = AUDIT_INSTANCE_TENANT_ID（不可为空，已 fail-fast 校验）
+# 非多租户模式 = BKPAAS_APP_TENANT_ID
+BK_TENANT_ID = AUDIT_INSTANCE_TENANT_ID or os.getenv("BKPAAS_APP_TENANT_ID")
+
+# 租户前缀（共享资源命名空间化：队列/索引名等）
+# 非多租户模式为空字符串
+AUDIT_TENANT_PREFIX = f"{AUDIT_INSTANCE_TENANT_ID}_" if AUDIT_INSTANCE_TENANT_ID else ""
+
+# 非多租户模式下的应用态默认用户名（get_admin_username 回退）
+COMMON_USERNAME = os.getenv("BKAPP_COMMON_USERNAME", "admin")
+
+# 多租户 IAM 网关地址（覆盖默认 BK_IAM_API_URL）
+BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL", "")
+
+# APP_ID
+APP_ID = os.getenv("APP_ID", "")
+
+# APP_TOKEN
+APP_TOKEN = os.getenv("APP_TOKEN", "")
 
 # CORS 允许的 header
 CORS_ALLOW_HEADERS = [

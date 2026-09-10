@@ -20,6 +20,7 @@ from bk_resource import api
 
 from apps.notice.constants import MsgType
 from apps.notice.senders.base import Sender
+from core.bk_api_base import AuditBkApiResource
 
 
 class SMSSender(Sender):
@@ -30,10 +31,19 @@ class SMSSender(Sender):
     api_resource = api.bk_cmsi.send_msg
 
     def _build_params(self) -> dict:
+        if not AuditBkApiResource.use_multi_tenant_mode():
+            # 旧 ESB 统一接口：需指定 msg_type 与 title
+            return {
+                "msg_type": MsgType.SMS.value,
+                "receiver__username": self.receivers,
+                "title": self.title,
+                "content": self.content.to_string(),
+                **self.configs,
+            }
+
+        # v1 多租户接口：使用独立的 send_sms 端点，无需 msg_type/title
         return {
-            "msg_type": MsgType.SMS.value,
             "receiver__username": self.receivers,
-            "title": self.title,
             "content": self.content.to_string(),
             **self.configs,
         }

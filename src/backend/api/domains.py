@@ -22,9 +22,14 @@ from api.constants import AIAgentCode, APIProvider
 from api.utils import get_agent_base_url, get_endpoint
 
 APIGW_ENABLED = settings.USE_APIGW
+_TENANT_ENABLED = settings.BKPAAS_MULTI_TENANT_MODE
 
-# 权限中心
-BK_IAM_API_URL = get_endpoint(settings.BK_IAM_APIGW_NAME, stag="stage")
+# 权限中心地址
+BK_IAM_API_URL = (
+    get_endpoint(settings.BK_IAM_APIGW_NAME, stag="prod")
+    if _TENANT_ENABLED
+    else get_endpoint(settings.BK_IAM_APIGW_NAME, stag="stage")
+)
 
 # 日志平台
 BK_LOG_API_URL = (

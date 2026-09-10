@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:748bf6f7b4be6b9202552972f8e0c1e8861e2cb77bbed3cc00e6333e26adc72b"
+content_hash = "sha256:b59b69ce287044c56941f619112f0db3059e8f400cb91c8e29427d0c9137df75"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -225,18 +225,19 @@ files = [
 
 [[package]]
 name = "bk-iam"
-version = "1.3.2"
-requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, <4"
+version = "2.0.3"
+requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,<4,>3"
 summary = "bk-iam python sdk"
 groups = ["default"]
 dependencies = [
-    "cachetools==3.1.1",
+    "cachetools<6.0,>=3.1.1",
     "curlify==2.2.1",
-    "requests",
+    "requests>=2.16.0",
     "six>=1.11.0",
 ]
 files = [
-    {file = "bk-iam-1.3.2.tar.gz", hash = "sha256:b0202203baa4c85a5cf8422fda4e70df9e080244d551cc45dae7df0f71ff79cd"},
+    {file = "bk_iam-2.0.3-py2.py3-none-any.whl", hash = "sha256:0a388237d226151a3abe0d4e6e7f99d2c2809bb32a7ede475b7808cee9d100a5"},
+    {file = "bk_iam-2.0.3.tar.gz", hash = "sha256:28d025237bf8d6e43a143f55657f29e1ce778e585b89c1567ea554acb9a23a97"},
 ]
 
 [[package]]
