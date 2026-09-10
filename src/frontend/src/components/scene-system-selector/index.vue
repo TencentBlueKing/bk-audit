@@ -66,13 +66,9 @@
         </div>
         <!-- 审计场景分组 -->
         <div
-          v-if="listScope.includes('scene') && (
-            userRole.includes('scene_admin') || userRole.includes('scene_user') || userRole.includes('saas_admin')
-          )"
+          v-if="showSceneGroup && filteredSceneList.length > 0"
           class="dropdown-group">
-          <div
-            v-show="filteredSceneList.length > 0"
-            class="group-title">
+          <div class="group-title">
             {{ t('审计场景') }}
           </div>
 
@@ -110,7 +106,7 @@
 
         <!-- 接入系统分组 -->
         <div
-          v-if="listScope.includes('system') &&( userRole.includes('system_admin') || userRole.includes('saas_admin'))"
+          v-if="showSystemGroup && filteredSystemList.length > 0"
           class="dropdown-group">
           <div class="group-title">
             {{ t('接入系统') }}
@@ -134,6 +130,11 @@
                 placement="right" />
             </div>
           </div>
+        </div>
+        <div
+          v-if="isSearchEmpty"
+          class="dropdown-empty">
+          {{ t('无匹配数据') }}
         </div>
       </div>
     </template>
@@ -248,6 +249,28 @@
     if (!keyword) return systemList.value;
     return systemList.value.filter(item => item.name.toLowerCase().includes(keyword)
       || item.id.toLowerCase().includes(keyword));
+  });
+
+  const showSceneGroup = computed(() => (
+    props.listScope.includes('scene') && (
+      userRole.includes('scene_admin')
+      || userRole.includes('scene_user')
+      || userRole.includes('saas_admin')
+    )
+  ));
+
+  const showSystemGroup = computed(() => (
+    props.listScope.includes('system') && (
+      userRole.includes('system_admin')
+      || userRole.includes('saas_admin')
+    )
+  ));
+
+  const isSearchEmpty = computed(() => {
+    if (!sceneSearchKey.value.trim()) return false;
+    const sceneEmpty = !showSceneGroup.value || filteredSceneList.value.length === 0;
+    const systemEmpty = !showSystemGroup.value || filteredSystemList.value.length === 0;
+    return sceneEmpty && systemEmpty;
   });
 
   // 接入系统列表
@@ -968,6 +991,10 @@
       background: #3c4558;
     }
 
+    .dropdown-empty {
+      color: #63656e;
+    }
+
     .dropdown-group {
       .group-title {
         color: #63656e;
@@ -1043,6 +1070,14 @@
     padding: 0 12px 8px;
     background: #fff;
     align-items: center;
+  }
+
+  .dropdown-empty {
+    padding: 16px 12px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    text-align: center;
   }
 
   .dropdown-group {
