@@ -106,7 +106,7 @@ class TestPreviewExportService(AIAssistantTestCase):
             samples=[
                 {
                     "username": "admin",
-                    "extend_data": {"ticket_id": "Story-3000", "operator": "frodomei"},
+                    "extend_data": {"ticket_id": "Story-3000", "operator": "operator_a"},
                 },
                 {
                     "username": "zhangsan",
@@ -131,7 +131,7 @@ class TestPreviewExportService(AIAssistantTestCase):
         first_data_row = [cell.value for cell in sheet[4]]
         self.assertIn("admin", first_data_row)
         self.assertIn("Story-3000", first_data_row)
-        self.assertIn("frodomei", first_data_row)
+        self.assertIn("operator_a", first_data_row)
         # ④ 行 2：缺 operator 不报错，空值单元格（空字符串）
         second_data_row = [cell.value for cell in sheet[5]]
         self.assertIn("zhangsan", second_data_row)
