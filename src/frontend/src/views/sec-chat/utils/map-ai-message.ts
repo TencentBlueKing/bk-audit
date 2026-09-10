@@ -384,6 +384,21 @@ export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError 
 };
 
 /**
+ * 纯切系统：intent=select_system 且已解析 system_id，无检索条件 / 识别错误。
+ * 此类消息不会续链 LOG_SEARCH，不应进入检索 loading。
+ */
+export const isPureSystemSwitchIntent = (message: AiMessage): boolean => {
+  if (message.message_type !== 'USER_INTENT' || message.status !== 'SUCCESS') return false;
+  if (getNlRecognitionError(message)) return false;
+  const output = (message.output_data || {}) as AiUserIntentOutput;
+  return (
+    output.intent === 'select_system'
+    && Boolean(String(output.system_id || '').trim())
+    && !output.condition
+  );
+};
+
+/**
  * 将后端消息映射为当前 UI 卡片模型。
  */
 export const mapAiMessageToChatMessage = (
@@ -523,6 +538,18 @@ export const mapAiMessageToChatMessage = (
           code: recognitionError.error_code,
           message: recognitionError.error_message,
         },
+        ...baseMeta,
+      };
+    }
+
+    // 纯切系统：不渲染确认气泡；检索引导由 selection_message_uid 的 SYSTEM_SELECTION 承接
+    if (isPureSystemSwitchIntent(message)) {
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'text',
+        content: '',
+        intent: output.intent,
         ...baseMeta,
       };
     }
