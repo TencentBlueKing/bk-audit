@@ -102,9 +102,9 @@
         class="result-body-loading"
         :loading="bodyLoading">
         <div class="result-body">
-          <!-- 过程信息：仅展示思考耗时，不可折叠 -->
+          <!-- 过程信息：SUCCESS 时展示 duration_seconds，PROCESSING 为 null 不展示 -->
           <div
-            v-if="!embedded"
+            v-if="!embedded && displayResult.thinkSeconds != null"
             class="process-section">
             <div class="process-row">
               <audit-icon
