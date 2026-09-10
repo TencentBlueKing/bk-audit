@@ -174,8 +174,8 @@ class BindingMetadataHelper:
     ) -> None:
         """通过资源绑定关系回填单个 `scene_id`。
 
-        适用于“业务对象本身不直接绑定场景，而是经由另一类资源间接绑定场景”的场景。
-        当前风险列表即通过 `strategy_id -> strategy binding -> scene_id` 回填。
+        适用于“业务对象经由资源绑定关系回填 scene_id”的场景。
+        风险列表即按 `risk_id -> risk binding -> scene_id` 回填。
 
         Args:
             objects: 需要回填的对象集合。
@@ -304,14 +304,6 @@ class SceneScopeFilter:
         """
         scene_ids = _normalize_scope_values(scene_id)
         if scene_ids:
-            if resource_type == ResourceVisibilityType.RISK:
-                SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
-                strategy_ids = ResourceBindingScene.objects.filter(
-                    scene_id__in=scene_ids,
-                    scene__is_deleted=False,
-                    binding__resource_type=ResourceVisibilityType.STRATEGY,
-                ).values_list("binding__resource_id", flat=True)
-                return queryset.filter(strategy_id__in=list(strategy_ids))
             SceneScopeFilter._assert_scene_binding_integrity(resource_type)
             # 按场景列表过滤：通过 ResourceBindingScene 查找并取并集
             bound_ids = ResourceBindingScene.objects.filter(
@@ -423,6 +415,9 @@ class CompositeScopeFilter:
         visible_ids = set()
 
         for binding in platform_bindings:
+            # 让草稿全局策略跳过绑定完整性校验（此时ResourceBindingScene记录还未创建）
+            if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES and binding.scene_count == 0:
+                continue
             assert_binding_relation_integrity(
                 binding, scene_count=binding.scene_count, system_count=binding.system_count
             )

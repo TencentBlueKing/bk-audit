@@ -29,6 +29,7 @@ from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
+from core.sql.constants import Operator
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
@@ -68,13 +69,64 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import DEFAULT_SCENE_NAME
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 
 
 class SystemInitHelper:
     config_path = os.path.join(os.getcwd(), "support-files", "init-configs")
+
+    @staticmethod
+    def ensure_system_default_scene() -> Scene:
+        """确保系统默认场景存在"""
+        return Scene.objects.get_or_create(
+            name=DEFAULT_SCENE_NAME,
+            defaults={"description": "系统默认场景（存量资源迁移生成）"},
+        )[0]
+
+    @staticmethod
+    def ensure_admin_notice_group() -> None:
+        """确保系统管理员通知组存在"""
+        from apps.notice.constants import (
+            ADMIN_NOTICE_GROUP_ID,
+            ADMIN_NOTICE_GROUP_NAME,
+            get_default_notice_config,
+        )
+        from apps.notice.models import NoticeGroup
+        from core.utils.environ import get_env_or_raise
+
+        if NoticeGroup.objects.filter(group_id=ADMIN_NOTICE_GROUP_ID).exists():
+            return
+        NoticeGroup.objects.create(
+            group_id=ADMIN_NOTICE_GROUP_ID,
+            group_name=ADMIN_NOTICE_GROUP_NAME,
+            group_member=[u for u in get_env_or_raise("BKAPP_ADMIN_USERNAMES").split(",") if u],
+            notice_config=get_default_notice_config(),
+        )
+
+    @staticmethod
+    def ensure_admin_notice_group_in_scene(scene_id: int) -> None:
+        """
+        确保系统管理员通知组绑定到指定场景
+        """
+        from apps.notice.constants import ADMIN_NOTICE_GROUP_ID
+        from services.web.scene.constants import ResourceVisibilityType, VisibilityScope
+        from services.web.scene.models import ResourceBinding, ResourceBindingScene
+
+        resource_id = str(ADMIN_NOTICE_GROUP_ID)
+        binding = ResourceBinding.objects.filter(
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            resource_id=resource_id,
+        ).first()
+        if binding is None:
+            binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                resource_id=resource_id,
+                binding_type=BindingType.SCENE_BINDING,
+                visibility_type=VisibilityScope.SPECIFIC_SCENES,
+            )
+        ResourceBindingScene.objects.get_or_create(binding=binding, scene_id=scene_id)
 
     def __init__(self):
         self.es_config = self.get_es_config()
@@ -368,6 +420,39 @@ class SystemInitHandler:
         GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
         print("[InitAsset] Finished")
 
+    def _build_manual_event_rule(self, rt_id: str, config: dict) -> dict:
+        """
+        构造系统默认规则审计策略的发现规则。
+
+        将原手写 SQL 中的 WHERE `{rt_id}`.manual_synced = 'false' 迁移为规则级 where 条件，
+        并将风险信息（risk_*）下沉到规则级，交由系统根据 rules 自动生成 SQL。
+        """
+        return {
+            "rule_name": "默认发现规则",
+            "conditions": {
+                "where": {
+                    "connector": "and",
+                    "condition": {
+                        "field": {
+                            "table": rt_id,
+                            "raw_name": "manual_synced",
+                            "display_name": "manual_synced",
+                            "field_type": "string",
+                        },
+                        "operator": Operator.EQ.value,
+                        "filter": "false",
+                    },
+                },
+                "having": None,
+            },
+            "risk_title": config.get("risk_title"),
+            "risk_level": config.get("risk_level"),
+            "risk_hazard": config.get("risk_hazard"),
+            "risk_guidance": config.get("risk_guidance"),
+            "processor": config.get("processor_groups") or [],
+            "follower": config.get("notice_groups") or [],
+        }
+
     def _build_system_rule_audit_params(self, rt_id: str) -> dict:
         """
         使用 quick_run.py 的模板生成系统默认规则审计参数。
@@ -380,20 +465,16 @@ class SystemInitHandler:
             "control_id",
             "control_version",
             "strategy_type",
-            "sql",
             "configs",
             "tags",
             "notice_groups",
             "description",
-            "risk_level",
-            "risk_hazard",
-            "risk_guidance",
-            "risk_title",
             "processor_groups",
             "event_basic_field_configs",
             "event_data_field_configs",
             "event_evidence_field_configs",
             "risk_meta_field_config",
+            "source",
         ]
         params = {field: config.get(field) for field in required_fields if field in config}
         params.setdefault("namespace", settings.DEFAULT_NAMESPACE)
@@ -405,6 +486,7 @@ class SystemInitHandler:
         default_scene = Scene.objects.filter(name=DEFAULT_SCENE_NAME).order_by("scene_id").first()
         if not default_scene:
             return {}
+        params["binding_type"] = BindingType.SCENE_BINDING
         params["scene_id"] = default_scene.scene_id
         configs = params.get("configs")
         if not configs:
@@ -412,6 +494,7 @@ class SystemInitHandler:
         data_source = configs.setdefault("data_source", {})
         data_source["rt_id"] = rt_id
         data_source.setdefault("display_name", rt_id)
+        params["rules"] = [self._build_manual_event_rule(rt_id, config)]
         return params
 
     def init_system_rule_audit(self):
@@ -437,6 +520,10 @@ class SystemInitHandler:
             print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
             return
 
+        # 自愈：确保系统策略依赖的系统资源存在（默认场景/管理员通知组，幂等，缺啥补啥）
+        SystemInitHelper.ensure_system_default_scene()
+        SystemInitHelper.ensure_admin_notice_group()
+
         params = self._build_system_rule_audit_params(snapshot.bkbase_table_id)
         if not params:
             print("[InitSystemRuleAudit] Params Build Failed")
@@ -451,6 +538,9 @@ class SystemInitHandler:
             print(f"[InitSystemRuleAudit] Strategy Already Exists => {strategy_name}")
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
             return
+
+        # 系统策略处理人为管理员通知组：先确保其绑定默认场景（幂等），避免策略级通知组场景校验失败
+        SystemInitHelper.ensure_admin_notice_group_in_scene(params["scene_id"])
 
         try:
             resource.strategy_v2.create_strategy(**params)

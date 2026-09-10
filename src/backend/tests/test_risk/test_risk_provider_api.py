@@ -705,11 +705,12 @@ class RiskProviderSceneFilterTest(TestCase):
     def _create_strategy(self, name: str) -> Strategy:
         return Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name=name)
 
-    def _create_risk(self, risk_id: str, strategy: Strategy) -> Risk:
+    def _create_risk(self, risk_id: str, strategy: Strategy, scene_id=None) -> Risk:
         return Risk.objects.create(
             risk_id=risk_id,
             raw_event_id=f"raw-{risk_id}",
             strategy=strategy,
+            scene_id=scene_id,
             event_time=timezone.now(),
         )
 
@@ -720,7 +721,7 @@ class RiskProviderSceneFilterTest(TestCase):
         strategy_out = self._create_strategy("out-scene")
         _bind_strategy_to_scene(strategy_in.strategy_id, scene)
 
-        risk_in = self._create_risk("risk-in", strategy_in)
+        risk_in = self._create_risk("risk-in", strategy_in, scene.scene_id)
         risk_out = self._create_risk("risk-out", strategy_out)
 
         page = Page(50, 0)
@@ -739,7 +740,7 @@ class RiskProviderSceneFilterTest(TestCase):
         strategy_out = self._create_strategy("search-out")
         _bind_strategy_to_scene(strategy_in.strategy_id, scene)
 
-        risk_in = self._create_risk("srisk-in", strategy_in)
+        risk_in = self._create_risk("srisk-in", strategy_in, scene.scene_id)
         risk_out = self._create_risk("srisk-out", strategy_out)
 
         page = Page(50, 0)
@@ -778,6 +779,7 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
             risk_id="risk-parent-path",
             raw_event_id="raw-parent-path",
             strategy=strategy,
+            scene_id=scene.scene_id,
             event_time=timezone.now(),
         )
 
@@ -795,6 +797,7 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
             risk_id="risk-apply-data",
             raw_event_id="raw-apply-data",
             strategy=strategy,
+            scene_id=scene.scene_id,
             event_time=timezone.now(),
         )
 
@@ -807,11 +810,10 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
         self.assertEqual([node["type"] for node in instances[0]], [ResourceEnum.SCENE.id, ResourceEnum.RISK.id])
         self.assertEqual([node["id"] for node in instances[0]], [str(scene.scene_id), risk.risk_id])
 
-    def test_scene_path_converts_to_strategy_id_in(self):
-        """/scene,{scene_id}/ 路径应转换为 strategy_id__in 查询"""
+    def test_scene_path_converts_to_scene_id_eq(self):
+        """/scene,{scene_id}/ 路径应转换为 Risk.scene_id 等值查询"""
         scene = Scene.objects.create(name="converter-scene")
         strategy = self._create_strategy("conv-strat")
-        _bind_strategy_to_scene(strategy.strategy_id, scene)
 
         converter = RiskPathEqDjangoQuerySetConverter()
         expression = {
@@ -827,6 +829,7 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
             risk_id="conv-risk",
             raw_event_id="raw-conv",
             strategy=strategy,
+            scene_id=scene.scene_id,
             event_time=timezone.now(),
         )
         qs = Risk.objects.filter(q_filter)
@@ -843,6 +846,7 @@ class RiskPathEqDjangoQuerySetConverterTest(TestCase):
             risk_id="conv-risk-in",
             raw_event_id="raw-in",
             strategy=strategy_in,
+            scene_id=scene.scene_id,
             event_time=timezone.now(),
         )
         risk_out = Risk.objects.create(

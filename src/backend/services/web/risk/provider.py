@@ -128,14 +128,25 @@ class RiskResourceProvider(IAMResourceProvider):
                 continue
         return int_ids
 
+    @staticmethod
+    def _get_risk_ids_by_scene(scene_id: str) -> List[str]:
+        """按 Risk.scene_id 反查 risk_id 列表（风险场景归属已固化到 Risk 模型）。"""
+        from services.web.risk.models import Risk
+
+        try:
+            scene_id_int = int(scene_id)
+        except (TypeError, ValueError):
+            return []
+        return list(Risk.objects.filter(scene_id=scene_id_int).values_list("risk_id", flat=True))
+
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
         """
         根据过滤条件查询资源实例
         """
         if parent_id:
             if resource_type == ResourceEnum.SCENE.id:
-                bound_strategy_ids = self._get_strategy_ids_by_scene(parent_id)
-                queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id__in=bound_strategy_ids)
+                bound_risk_ids = self._get_risk_ids_by_scene(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(risk_id__in=bound_risk_ids)
             elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)
@@ -156,8 +167,8 @@ class RiskResourceProvider(IAMResourceProvider):
         """根据风险类型名称查询 ."""
         if parent_id:
             if resource_type == ResourceEnum.SCENE.id:
-                bound_strategy_ids = self._get_strategy_ids_by_scene(parent_id)
-                queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id__in=bound_strategy_ids)
+                bound_risk_ids = self._get_risk_ids_by_scene(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(risk_id__in=bound_risk_ids)
             elif resource_type == ResourceEnum.STRATEGY.id:
                 strategy_id = int(parent_id)
                 queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)

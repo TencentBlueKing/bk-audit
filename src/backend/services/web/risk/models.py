@@ -53,9 +53,15 @@ from services.web.risk.constants import (
     RiskLabel,
     RiskReportStatus,
     RiskStatus,
+    RiskViewType,
     TicketNodeStatus,
 )
-from services.web.strategy_v2.models import Strategy, StrategyTag
+from services.web.strategy_v2.models import (
+    DispatchRule,
+    Strategy,
+    StrategyRule,
+    StrategyTag,
+)
 
 
 def generate_risk_id() -> str:
@@ -73,6 +79,7 @@ def generate_risk_id() -> str:
 class UserType(models.TextChoices):
     OPERATOR = "operator"
     NOTICE_USER = "notice_user"
+    CONFIRMER = "confirmer"
 
 
 class StrategyTagMixin:
@@ -200,6 +207,58 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         db_index=True,
         help_text=gettext_lazy("任何流程为该风险生成报告后置为 True"),
     )
+    strategy_rule = models.ForeignKey(
+        StrategyRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="risks",
+        verbose_name=gettext_lazy("Strategy Rule"),
+        help_text=gettext_lazy("命中的发现规则"),
+    )
+    dispatch_rule = models.ForeignKey(
+        DispatchRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="risks",
+        verbose_name=gettext_lazy("Dispatch Rule"),
+        help_text=gettext_lazy("命中的分派规则（仅全局策略）"),
+    )
+    scene_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=gettext_lazy("Scene ID"),
+        help_text=gettext_lazy("风险归属场景（固化到风险单，作为列表/权限/IAM/Provider 的唯一场景来源）"),
+    )
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        max_length=16,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险等级（实例化）"),
+    )
+    risk_hazard = models.TextField(
+        gettext_lazy("Risk Hazard"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险危害描述（实例化）"),
+    )
+    risk_guidance = models.TextField(
+        gettext_lazy("Risk Guidance"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("处理指引（实例化）"),
+    )
+    confirmer = models.JSONField(
+        gettext_lazy("Confirmer"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("确认人用户名 列表"),
+    )
 
     def can_auto_generate_report(self) -> bool:
         """
@@ -226,6 +285,20 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
             # 软删除后修复覆盖索引失效：strategy_id 等值 + is_deleted 等值 + event_time 范围
             # 使 ListStrategy risk_count 子查询恢复 index-only scan（Using index）
             models.Index(fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"),
+            # 按发现规则筛选风险
+            models.Index(fields=["strategy_rule", "is_deleted", "event_time"], name="idx_risk_srule_isdel_time"),
+            # 二次确认可见性过滤：先命中 display_status 索引收敛到小范围再做 confirmer 包含判断
+            models.Index(
+                fields=["display_status", "is_deleted", "last_operate_time"],
+                name="idx_risk_dstatus_isdel_time",
+            ),
+            # 场景 ID 等值 + 软删除等值 + 时间范围查询（个人视图/场景视图基础列表）
+            models.Index(fields=['scene_id', 'is_deleted', 'event_time'], name='idx_risk_scene_isdel_time'),
+            # 场景 ID 等值 + 展示状态等值 + 时间范围查询（带状态过滤的场景列表）
+            models.Index(fields=['scene_id', 'display_status', 'event_time'], name='idx_risk_scene_status_time'),
+            models.Index(
+                fields=['scene_id', 'is_deleted', 'display_status', 'event_time'], name='idx_risk_scene_del_status_time'
+            ),
         ]
 
     # ──── 单一权限 ────
@@ -381,6 +454,35 @@ class ManualEvent(OperateRecordModel):
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
     manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=False)
+    strategy_rule = models.ForeignKey(
+        StrategyRule,
+        db_constraint=False,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        related_name="manual_events",
+        verbose_name=gettext_lazy("Strategy Rule"),
+        help_text=gettext_lazy("关联的发现规则"),
+    )
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"),
+        max_length=16,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险等级（实例化）"),
+    )
+    risk_hazard = models.TextField(
+        gettext_lazy("Risk Hazard"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("风险危害描述（实例化）"),
+    )
+    risk_guidance = models.TextField(
+        gettext_lazy("Risk Guidance"),
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("处理指引（实例化）"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("手动事件存储")
@@ -969,6 +1071,14 @@ class NL2RiskFilterLog(OperateRecordModel):
         db_index=True,
     )
     error_message = models.TextField(gettext_lazy("错误信息"), blank=True, default="")
+    risk_view_type = models.CharField(
+        gettext_lazy("风险视图类型"),
+        max_length=32,
+        choices=RiskViewType.choices,
+        blank=True,
+        default=RiskViewType.ALL,
+        db_index=True,
+    )
 
     @staticmethod
     def build_query_hash(query: str) -> str:
@@ -992,6 +1102,7 @@ class NL2RiskFilterLog(OperateRecordModel):
         response_data: Optional[dict] = None,
         status: str = NL2RiskFilterLogStatus.SUCCESS,
         error_message: str = "",
+        risk_view_type: str = RiskViewType.ALL,
         result: Optional[str] = None,
         message: str = "",
     ) -> None:
@@ -1015,6 +1126,7 @@ class NL2RiskFilterLog(OperateRecordModel):
                 response_data=payload,
                 status=status,
                 error_message=(error_message or "")[:65535],
+                risk_view_type=risk_view_type,
                 created_by=username,
                 updated_by=username,
             )

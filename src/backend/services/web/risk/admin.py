@@ -89,6 +89,9 @@ class RiskAdmin(admin.ModelAdmin):
         "risk_id",
         "title_short",
         "strategy",
+        "strategy_rule",
+        "dispatch_rule",
+        "confirmer_short",
         "operator_short",
         "event_time",
         "status",
@@ -102,7 +105,15 @@ class RiskAdmin(admin.ModelAdmin):
     # 支持按策略名搜索
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
-    list_filter = ["status", "display_status", "risk_label", "manual_synced", "auto_generate_report", StrategyFilter]
+    list_filter = [
+        "status",
+        "display_status",
+        "risk_label",
+        "manual_synced",
+        "auto_generate_report",
+        "risk_level",
+        StrategyFilter,
+    ]
     list_per_page = 50  # 减少每页数量以提升性能
 
     def get_queryset(self, request):
@@ -111,7 +122,9 @@ class RiskAdmin(admin.ModelAdmin):
         1. defer 所有不在 list_display 中直接使用的大字段
         2. 使用 select_related 避免 N+1 查询
         """
-        return Risk.objects.defer("event_content", "event_evidence", "event_data").select_related("strategy")
+        return Risk.objects.defer("event_content", "event_evidence", "event_data").select_related(
+            "strategy", "strategy_rule", "dispatch_rule"
+        )
 
     def _truncate_text_field(self, value: str, max_length: int = None) -> str:
         """截断 TextField 展示"""
@@ -153,6 +166,11 @@ class RiskAdmin(admin.ModelAdmin):
         return self._truncate_json_field(obj.notice_users)
 
     notice_users_short.short_description = _("关注人")
+
+    def confirmer_short(self, obj: Risk) -> str:
+        return self._truncate_json_field(obj.confirmer)
+
+    confirmer_short.short_description = _("确认人")
 
 
 @admin.register(ProcessApplication)

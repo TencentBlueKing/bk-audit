@@ -35,7 +35,6 @@ from services.web.common.constants import ScopeQueryField
 from services.web.common.serializers import OptionalScopeQuerySerializer
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
-    RISK_LEVEL_ORDER_FIELD,
     AnalyseReportStatus,
     AnalyseReportType,
     EventBasicField,
@@ -97,6 +96,9 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
+    strategy_rule_id = serializers.IntegerField(
+        label=EventMappingFields.STRATEGY_RULE_ID.description, required=False, allow_null=True, default=None
+    )
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
     event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(
@@ -313,7 +315,8 @@ class RiskInfoSerializer(serializers.ModelSerializer):
         return obj.get_tag_ids()
 
     def get_scene_id(self, obj: Risk) -> int | None:
-        return get_strategy_scene_id(obj.strategy_id)
+        # 风险场景归属已固化到 Risk.scene_id，直接读模型字段
+        return obj.scene_id
 
     class Meta:
         model = Risk
@@ -603,15 +606,13 @@ class ListRiskBaseRequestSerializer(serializers.Serializer):
 
     @staticmethod
     def _normalize_sort_to_order_fields(sort_list: list) -> list:
-        """将前端 sort 列表转换为 ORM 可用的 order_fields（如 risk_level → strategy__risk_level）。"""
+        """将前端 sort 列表转换为 ORM 可用的 order_fields（risk_level 直接使用快照字段排序）。"""
         order_fields = []
         for item in sort_list:
             bare = item.lstrip("-")
             if not bare:
                 continue
             prefix = "-" if item.startswith("-") else ""
-            if bare == Strategy.risk_level.field.name:
-                bare = RISK_LEVEL_ORDER_FIELD
             order_fields.append(f"{prefix}{bare}")
         return order_fields
 
@@ -837,6 +838,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "has_report",
             "report_enabled",
             "report_auto_render",
+            "risk_level",
         ]
 
 
@@ -1025,7 +1027,7 @@ class UpdateRiskLabelReqSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        if data["risk_label"] == RiskLabel.MISREPORT and not attrs.get("description"):
+        if data["risk_label"] == RiskLabel.MISREPORT and not data.get("description"):
             raise serializers.ValidationError(gettext("Misreport Description Not Set"))
         return data
 
@@ -1598,6 +1600,14 @@ class NL2RiskFilterRequestSerializer(OptionalScopeQuerySerializer):
         default="",
         help_text=gettext_lazy("会话标识，用于多轮对话。不传则每次生成新的。"),
     )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default=RiskViewType.ALL,
+        help_text=gettext_lazy("当前搜索所属的风险视图类型（如 all/scene/confirm），用于记录搜索历史。"),
+    )
 
 
 class NL2RiskFilterResponseSerializer(serializers.Serializer):
@@ -1613,6 +1623,14 @@ class ListNL2RiskFilterLogRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         default="",
+    )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"),
+        choices=RiskViewType.choices,
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=gettext_lazy("按风险视图类型过滤搜索历史，如 all/scene/confirm。"),
     )
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False, default=None)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False, default=None)
@@ -1631,6 +1649,7 @@ class NL2RiskFilterLogResponseSerializer(serializers.ModelSerializer):
             "query",
             "response_data",
             "status",
+            "risk_view_type",
         ]
 
 
@@ -1988,7 +2007,8 @@ class ListAnalyseReportRiskResponseSerializer(serializers.Serializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if not isinstance(instance, dict):
-            data["risk_level"] = getattr(instance.strategy, "risk_level", None)
+            # 风险等级已快照化，直接读 Risk 自身字段，不再关联策略
+            data["risk_level"] = getattr(instance, "risk_level", None)
         if self.context.get("with_detail"):
             data["detail"] = RiskInfoWithoutReportSerializer(instance).data
         else:
@@ -2009,3 +2029,67 @@ class ListAnalyseReportByRiskRequestSerializer(serializers.Serializer):
     """风险反查报告请求"""
 
     risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+
+
+class ConfirmRiskRequestSerializer(serializers.Serializer):
+    """确认风险请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+
+class BatchConfirmRiskRequestSerializer(serializers.Serializer):
+    """批量确认风险请求"""
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("风险 ID 列表"),
+        child=serializers.CharField(),
+        min_length=1,
+        required=True,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("确认说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
+        return sorted(list(set(risk_ids)))
+
+
+class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """确认为误报请求"""
+
+    risk_id = serializers.CharField(label=gettext_lazy("风险 ID"), required=True)
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+
+class BatchConfirmAsMisReportRequestSerializer(serializers.Serializer):
+    """批量确认为误报请求"""
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("风险 ID 列表"),
+        child=serializers.CharField(),
+        min_length=1,
+        required=True,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("描述"),
+        required=False,
+        default="",
+        allow_blank=True,
+    )
+
+    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
+        return sorted(list(set(risk_ids)))

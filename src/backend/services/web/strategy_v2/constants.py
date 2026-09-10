@@ -65,6 +65,9 @@ class StrategyStatusChoices(TextChoices):
     Strategy Status
     """
 
+    # 草稿
+    DRAFT = "draft", gettext_lazy("Draft")
+
     # 停用
     DISABLED = "disabled", gettext_lazy("Disabled")
 
@@ -196,6 +199,15 @@ class StrategyType(TextChoices):
 
     RULE = "rule", gettext_lazy("规则策略")
     MODEL = "model", gettext_lazy("模型策略")
+
+
+class DispatchMode(TextChoices):
+    """
+    分派规则的分派方式（仅全局策略使用）
+    """
+
+    DIRECT = "direct", gettext_lazy("直接分派")
+    AFTER_CONFIRM = "after_confirm", gettext_lazy("确认后分派")
 
 
 class StrategySource(TextChoices):

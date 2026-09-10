@@ -35,18 +35,7 @@ from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import (
-    Case,
-    CharField,
-    Count,
-    IntegerField,
-    Max,
-    Q,
-    QuerySet,
-    Subquery,
-    When,
-)
-from django.db.models.functions import Cast
+from django.db.models import Case, Count, IntegerField, Max, Q, QuerySet, Subquery, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -146,7 +135,11 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.serializers import (
+    BatchConfirmAsMisReportRequestSerializer,
+    BatchConfirmRiskRequestSerializer,
     BulkCustomTransRiskReqSerializer,
+    ConfirmAsMisReportRequestSerializer,
+    ConfirmRiskRequestSerializer,
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
@@ -191,9 +184,7 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
-from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
-from services.web.scene.models import ResourceBindingScene, Scene
+from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -365,12 +356,11 @@ class ListRisk(RiskMeta):
         if scope_type:
             scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
             scope_scene_ids = ScopePermission(get_request_username(request)).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
-            base_queryset = SceneScopeFilter.filter_queryset(
-                queryset=base_queryset,
-                scene_id=scope_scene_ids,
-                resource_type=ResourceVisibilityType.RISK,
-                pk_field="risk_id",
-            )
+            # 风险场景归属已固化到 Risk.scene_id，直接按模型字段过滤（不再经 ResourceBinding 反查）
+            if scope_scene_ids:
+                base_queryset = base_queryset.filter(scene_id__in=scope_scene_ids)
+            else:
+                base_queryset = base_queryset.none()
 
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
@@ -383,11 +373,6 @@ class ListRisk(RiskMeta):
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
-            BindingMetadataHelper.attach_scene_id_via_binding_resource(
-                paged_risks,
-                binding_resource_type=ResourceVisibilityType.STRATEGY,
-                binding_resource_id_attr="strategy_id",
-            )
             return BkBaseResponseAssembler(self, ListRiskResponseSerializer).build_response(
                 paged_risks, page, sql_statements
             )
@@ -399,12 +384,6 @@ class ListRisk(RiskMeta):
         experiences = self._fetch_experiences(risk_ids)
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
-        BindingMetadataHelper.attach_scene_id_via_binding_resource(
-            paged_risks,
-            binding_resource_type=ResourceVisibilityType.STRATEGY,
-            binding_resource_id_attr="strategy_id",
-        )
-
         response = page.get_paginated_response(
             data=ListRiskResponseSerializer(instance=paged_risks, many=True).data
         ).data
@@ -415,16 +394,8 @@ class ListRisk(RiskMeta):
         if not scene_ids:
             return queryset
 
-        strategy_ids = list(
-            ResourceBindingScene.objects.filter(
-                scene_id__in=scene_ids,
-                scene__is_deleted=False,
-                binding__resource_type=ResourceVisibilityType.STRATEGY,
-            ).values_list("binding__resource_id", flat=True)
-        )
-        if not strategy_ids:
-            return queryset.none()
-        return queryset.filter(strategy_id__in=strategy_ids)
+        # 风险场景归属已固化到 Risk.scene_id，直接按模型字段过滤（不再经 ResourceBinding 反查）
+        return queryset.filter(scene_id__in=scene_ids)
 
     def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
         end_dt = (
@@ -664,7 +635,7 @@ class ListRisk(RiskMeta):
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
         if risk_level:
-            q &= Q(strategy__risk_level__in=risk_level)
+            q &= Q(risk_level__in=risk_level)
 
         # 标签筛选条件
         if tag_filter := validated_request_data.pop("tag_objs__in", None):
@@ -687,7 +658,23 @@ class ListRisk(RiskMeta):
 
     def load_risks(self, validated_request_data: dict, username: str = None) -> QuerySet["Risk"]:
         q = self._build_filter_query(validated_request_data)
-        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
+        return (
+            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
+            .filter(
+                q,
+                display_status__in=[
+                    RiskDisplayStatus.NEW,
+                    RiskDisplayStatus.PROCESSING,
+                    RiskDisplayStatus.FOR_APPROVE,
+                    RiskDisplayStatus.AUTO_PROCESS,
+                    RiskDisplayStatus.AWAIT_PROCESS,
+                    RiskDisplayStatus.CLOSED,
+                    RiskDisplayStatus.STAND_BY,
+                    RiskDisplayStatus.PENDING_CONFIRM,
+                ],
+            )
+            .distinct()
+        )
 
     def load_filter_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
         """复用列表筛选、权限过滤和 DB/BKBase 检索分支，按指定用户加载风险 ID。"""
@@ -708,12 +695,11 @@ class ListRisk(RiskMeta):
         if scope_type:
             scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
             scope_scene_ids = ScopePermission(username).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
-            base_queryset = SceneScopeFilter.filter_queryset(
-                queryset=base_queryset,
-                scene_id=scope_scene_ids,
-                resource_type=ResourceVisibilityType.RISK,
-                pk_field="risk_id",
-            )
+            # 风险场景归属已固化到 Risk.scene_id，直接按模型字段过滤（不再经 ResourceBinding 反查）
+            if scope_scene_ids:
+                base_queryset = base_queryset.filter(scene_id__in=scope_scene_ids)
+            else:
+                base_queryset = base_queryset.none()
 
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
@@ -875,6 +861,14 @@ class ListMineRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             current_operator__contains=username,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
+            ],
         ).distinct()
 
 
@@ -894,6 +888,14 @@ class ListNoticingRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             notice_users__contains=username,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
+            ],
         ).distinct()
 
 
@@ -911,7 +913,40 @@ class ListProcessedRisk(ListRisk):
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
         ).values("risk_id")
-        return Risk.objects.filter(q, risk_id__in=processed_risk_ids).exclude(current_operator__contains=username)
+        return Risk.objects.filter(
+            q,
+            risk_id__in=processed_risk_ids,
+            # 排除待确认状态（待确认有独立列表）
+            display_status__in=[
+                RiskDisplayStatus.NEW,
+                RiskDisplayStatus.PROCESSING,
+                RiskDisplayStatus.FOR_APPROVE,
+                RiskDisplayStatus.AUTO_PROCESS,
+                RiskDisplayStatus.AWAIT_PROCESS,
+                RiskDisplayStatus.CLOSED,
+            ],
+        ).exclude(current_operator__contains=username)
+
+
+class ListPendingConfirmRisk(ListRisk):
+    """获取待我确认的风险列表"""
+
+    name = gettext_lazy("待我确认")
+
+    def load_risks(self, validated_request_data, username: str = None):
+        username = username or get_request_username()
+        q = self._build_filter_query(validated_request_data)
+
+        return (
+            Risk.objects.filter(
+                q,
+                display_status=RiskDisplayStatus.PENDING_CONFIRM,
+                confirmer__contains=username,  # 确认人包含当前用户
+                is_deleted=False,
+            )
+            .distinct()
+            .order_by("-event_time")
+        )
 
 
 class ListRiskFields(RiskMeta):
@@ -934,6 +969,7 @@ class UpdateRiskLabel(RiskMeta):
     RequestSerializer = UpdateRiskLabelReqSerializer
     ResponseSerializer = RiskInfoSerializer
     audit_action = ActionEnum.PROCESS_RISK
+    bind_request = True
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -949,10 +985,20 @@ class UpdateRiskLabel(RiskMeta):
             )
         # 误报需要登记误报，并关单
         elif new_risk_label == RiskLabel.MISREPORT:
-            MisReport(risk_id=risk.risk_id, operator=get_request_username()).run(
-                description=validated_request_data["description"],
-                revoke_process=validated_request_data["revoke_process"],
-            )
+
+            if risk.status == RiskStatus.PENDING_CONFIRM:
+                ConfirmAsMisReportResource().perform_request(
+                    {
+                        "risk_id": risk.risk_id,
+                        "description": validated_request_data.get("description", ""),
+                        "_request": validated_request_data.get("_request"),
+                    }
+                )
+            else:
+                MisReport(risk_id=risk.risk_id, operator=get_request_username()).run(
+                    description=validated_request_data["description"],
+                    revoke_process=validated_request_data["revoke_process"],
+                )
         risk.refresh_from_db()
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
@@ -985,6 +1031,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
         RiskViewType.PROCESSED.value: ListProcessedRisk,
+        RiskViewType.CONFIRM.value: ListPendingConfirmRisk,
     }
 
     @classmethod
@@ -1000,12 +1047,9 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
         if scene_ids is None:
             return risks
 
-        return SceneScopeFilter.filter_queryset(
-            queryset=risks,
-            scene_id=scene_ids,
-            resource_type=ResourceVisibilityType.RISK,
-            pk_field="risk_id",
-        )
+        if not scene_ids:
+            return risks.none()
+        return risks.filter(scene_id__in=scene_ids)
 
 
 class ListRiskTags(ListRiskMetaBase):
@@ -1080,19 +1124,23 @@ class ListRiskScenes(ListRiskStrategy):
     cache_type = CacheTypeItem(key="ListRiskScenes", timeout=60, user_related=True)
 
     def perform_request(self, validated_request_data):
-        strategies = super().perform_request(validated_request_data)
-        strategy_id_str_qs = (
-            strategies.order_by()
-            .annotate(strategy_id_str=Cast("strategy_id", output_field=CharField()))
-            .values("strategy_id_str")
-            .distinct()
-        )
-        scene_id_qs = ResourceBindingScene.objects.filter(
-            scene__is_deleted=False,
-            binding__resource_type=ResourceVisibilityType.STRATEGY,
-            binding__resource_id__in=strategy_id_str_qs,
-        ).values("scene_id")
-        return Scene.objects.filter(scene_id__in=scene_id_qs).only("scene_id", "name").distinct()
+        # 风险场景归属已固化到 Risk.scene_id，直接按模型字段取去重场景，不再经策略绑定反查
+        risk_view_type = validated_request_data.pop("risk_view_type", None)
+        scope_type = validated_request_data.pop("scope_type", None)
+        scope_id = validated_request_data.pop("scope_id", None)
+        scene_ids = None
+        if scope_type:
+            scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
+            scene_ids = ScopePermission(get_request_username()).get_scene_ids(scope, ActionEnum.VIEW_SCENE)
+        if risk_view_type:
+            risk_qs = self.load_risk_view_type_risks(risk_view_type, validated_request_data, scene_ids=scene_ids)
+        else:
+            # 未传 risk_view_type 时沿用全量策略逻辑：返回全部风险所属场景
+            risk_qs = Risk.objects.all()
+            if scene_ids:
+                risk_qs = risk_qs.filter(scene_id__in=scene_ids)
+        scene_id_qs = risk_qs.order_by().values_list("scene_id", flat=True).filter(scene_id__isnull=False).distinct()
+        return Scene.objects.filter(scene_id__in=list(scene_id_qs)).only("scene_id", "name").distinct()
 
 
 class CustomCloseRisk(RiskMeta):
@@ -1590,6 +1638,7 @@ class NL2RiskFilter(RiskMeta):
         scope_id = validated_request_data.get(ScopeQueryField.SCOPE_ID)
         input_thread_id = validated_request_data.get("thread_id")
         thread_id = input_thread_id or str(uuid.uuid4())
+        risk_view_type = validated_request_data.get("risk_view_type", RiskViewType.ALL)
         username = get_request_username()
         metric_started_at = time.perf_counter()
 
@@ -1614,6 +1663,7 @@ class NL2RiskFilter(RiskMeta):
                 "scope_type": scope_type,
                 "scope_id": scope_id,
                 "thread_id": thread_id,
+                "risk_view_type": risk_view_type,
             }
             user_message = build_nl2risk_user_message(
                 query=query,
@@ -1651,6 +1701,7 @@ class NL2RiskFilter(RiskMeta):
                     response_data={},
                     status=NL2RiskFilterLogStatus.API_ERROR,
                     error_message=str(e),
+                    risk_view_type=risk_view_type,
                 )
                 NL2RiskFilterFailedEvent(
                     target="nl2risk_filter",
@@ -1707,6 +1758,7 @@ class NL2RiskFilter(RiskMeta):
                 request_params=request_params,
                 response_data=response_data,
                 status=status,
+                risk_view_type=risk_view_type,
                 result=raw_text,
                 message=message,
             )
@@ -1826,6 +1878,11 @@ class ListNL2RiskFilterLog(RiskMeta):
         if status:
             queryset = queryset.filter(status=status)
 
+        # 风险视图类型过滤
+        risk_view_type = validated_request_data.get("risk_view_type")
+        if risk_view_type:
+            queryset = queryset.filter(risk_view_type=risk_view_type)
+
         # 时间范围过滤
         start_time = validated_request_data.get("start_time")
         end_time = validated_request_data.get("end_time")
@@ -1840,3 +1897,151 @@ class ListNL2RiskFilterLog(RiskMeta):
 
         # 分页由框架 enable_paginate 自动处理
         return queryset.order_by("-id")
+
+
+class ConfirmRiskResource(RiskMeta):
+    """确认风险"""
+
+    name = gettext_lazy("确认风险")
+    RequestSerializer = ConfirmRiskRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        description = validated_request_data.get("description", "")
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+
+        # 验证状态
+        if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("风险状态不是待确认")
+
+        # 验证权限
+        username = get_request_username(validated_request_data.get("_request"))
+        if username not in risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认")
+
+        # 执行确认
+        from services.web.risk.handlers.ticket import ConfirmRisk
+
+        ConfirmRisk(risk_id=risk_id, operator=username).run(username=username, description=description)
+        return {"success": True}
+
+
+class BatchConfirmRiskResource(RiskMeta):
+    """批量确认风险"""
+
+    name = gettext_lazy("批量确认风险")
+    RequestSerializer = BatchConfirmRiskRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        risk_ids = validated_request_data["risk_ids"]
+        description = validated_request_data.get("description", "")
+
+        # 查询所有风险
+        risks = Risk.objects.filter(risk_id__in=risk_ids)
+
+        # 校验存在性
+        if len(risks) != len(risk_ids):
+            missing_ids = set(risk_ids) - {r.risk_id for r in risks}
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
+
+        # 验证：当前用户必须是所有风险的确认人
+        for risk in risks:
+            if username not in risk.confirmer:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认")
+
+        # 4. 校验状态：所有风险必须是待确认状态
+        invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
+        if invalid_status_risks:
+            from rest_framework.exceptions import ValidationError
+
+            details = [f"{r.risk_id}({r.display_status})" for r in invalid_status_risks]
+            raise ValidationError(f"风险状态不是待确认：{', '.join(details)}")
+
+        bulk_req_params = [{"risk_id": risk_id, "description": description} for risk_id in risk_ids]
+
+        ConfirmRiskResource().bulk_request(bulk_req_params)
+        return {"success": True}
+
+
+class ConfirmAsMisReportResource(RiskMeta):
+    """确认为误报"""
+
+    name = gettext_lazy("确认为误报")
+    RequestSerializer = ConfirmAsMisReportRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_id = validated_request_data["risk_id"]
+        description = validated_request_data.get("description", "")
+
+        risk = get_object_or_404(Risk, risk_id=risk_id)
+
+        # 验证状态
+        if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("风险状态不是待确认")
+
+        # 验证权限
+        username = get_request_username(validated_request_data.get("_request"))
+        if username not in risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认误报")
+
+        # 执行误报确认
+        from services.web.risk.handlers.ticket import ConfirmAsMisReport
+
+        ConfirmAsMisReport(risk_id=risk_id, operator=username).run(username=username, description=description)
+        return {"success": True}
+
+
+class BatchConfirmAsMisReportResource(RiskMeta):
+    """批量确认为误报"""
+
+    name = gettext_lazy("批量确认为误报")
+    RequestSerializer = BatchConfirmAsMisReportRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        username = get_request_username()
+        risk_ids = validated_request_data["risk_ids"]
+        description = validated_request_data.get("description", "")
+
+        # 1. 查询所有风险
+        risks = Risk.objects.filter(risk_id__in=risk_ids)
+
+        # 2. 校验存在性
+        if len(risks) != len(risk_ids):
+            missing_ids = set(risk_ids) - {r.risk_id for r in risks}
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
+
+        # 3. 校验权限：当前用户必须是所有风险的确认人
+        for risk in risks:
+            if username not in risk.confirmer:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认为误报")
+
+        # 4. 校验状态：所有风险必须是待确认状态
+        invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
+        if invalid_status_risks:
+            from rest_framework.exceptions import ValidationError
+
+            details = [f"{r.risk_id}({r.display_status})" for r in invalid_status_risks]
+            raise ValidationError(f"风险状态不是待确认：{', '.join(details)}")
+
+        # 5. 执行批量确认为误报（不传入 username，让单个操作自己从 request 获取）
+        bulk_req_params = [{"risk_id": risk_id, "description": description} for risk_id in risk_ids]
+
+        ConfirmAsMisReportResource().bulk_request(bulk_req_params)
+        return {"success": True}

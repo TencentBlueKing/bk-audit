@@ -189,6 +189,30 @@ class StrategySerializersTest(TestCase):
             "risk_guidance": "",
             "risk_title": "risk",
             "processor_groups": [self.notice_group.group_id],
+            "rules": [
+                {
+                    "rule_name": "default_rule",
+                    "conditions": {
+                        "where": {
+                            "condition": {
+                                "field": {
+                                    "table": "table",
+                                    "raw_name": "event_type",
+                                    "display_name": "event_type",
+                                    "field_type": "string",
+                                },
+                                "operator": "eq",
+                                "filters": ["test"],
+                            }
+                        },
+                        "having": None,
+                    },
+                    "risk_level": RiskLevel.HIGH.value,
+                    "risk_hazard": "",
+                    "risk_guidance": "",
+                    "risk_title": "risk",
+                }
+            ],
             "event_basic_field_configs": [
                 {
                     "field_name": "raw_event_id",
@@ -516,6 +540,12 @@ class TestReportConfigValidation(TestCase):
             risk_level=RiskLevel.HIGH.value,
             risk_title="risk",
         )
+        # 创建 ResourceBinding，避免 binding_type 被默认设为 PLATFORM_BINDING
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=self.scene_id,
+        )
 
         payload = self._build_base_payload()
         payload["strategy_id"] = strategy.strategy_id
@@ -530,6 +560,8 @@ class TestReportConfigValidation(TestCase):
                 }
             ],
         }
+        # 移除 scene_id，避免校验错误
+        payload.pop("scene_id", None)
 
         serializer = UpdateStrategyRequestSerializer(data=payload)
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -553,6 +585,8 @@ class TestReportConfigValidation(TestCase):
         payload["strategy_name"] = "updated-strategy"
         payload["report_enabled"] = True
         payload["report_config"] = None
+        # 移除 scene_id，避免校验错误
+        payload.pop("scene_id", None)
 
         serializer = UpdateStrategyRequestSerializer(data=payload)
         self.assertFalse(serializer.is_valid())
@@ -584,6 +618,8 @@ class TestReportConfigValidation(TestCase):
         payload["strategy_id"] = strategy.strategy_id
         payload["strategy_name"] = "updated-strategy"
         payload["processor_groups"] = [self.another_notice_group.group_id]
+        # 移除 scene_id，避免校验错误
+        payload.pop("scene_id", None)
 
         serializer = UpdateStrategyRequestSerializer(data=payload)
 

@@ -17,13 +17,14 @@ to the current version of the project delivered to anyone in the future.
 """
 import json
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from bk_resource import api
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
+from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
 from api.bk_base.constants import UserAuthActionEnum
@@ -35,6 +36,7 @@ from apps.meta.serializers import (
 )
 from apps.notice.models import NoticeGroup
 from core.serializers import ChoiceListSerializer, OrderSerializer
+from core.sql.model import HavingCondition, WhereCondition
 from services.web.analyze.constants import (
     ControlTypeChoices,
     FilterConnector,
@@ -45,17 +47,23 @@ from services.web.analyze.constants import (
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
-from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
+from services.web.common.constants import ScopeType
+from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS, EventMappingFields
 from services.web.risk.report_config import ReportConfig
-from services.web.scene.constants import ResourceVisibilityType
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    VisibilityScope,
+)
 from services.web.scene.data_filter import SceneDataFilter
 from services.web.scene.filters import CompositeScopeFilter
-from services.web.scene.models import ResourceBindingScene
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
     STRATEGY_STATUS_DEFAULT_INTERVAL,
     ConnectorChoices,
+    DispatchMode,
     LinkTableJoinType,
     LinkTableTableType,
     ListLinkTableSortField,
@@ -79,7 +87,13 @@ from services.web.strategy_v2.exceptions import (
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
-from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
+from services.web.strategy_v2.models import (
+    DispatchRule,
+    LinkTable,
+    Strategy,
+    StrategyRule,
+    StrategyTool,
+)
 from services.web.tool.constants import DrillConfig, TargetValueTypeEnum
 from services.web.tool.models import Tool
 
@@ -409,6 +423,8 @@ class StrategySerializer(serializers.Serializer):
     def _validate_scene_resources(self, validated_request_data: dict) -> None:
         # 这里依赖 DRF 字段校验后的结构：新建策略直接取 scene_id，更新策略按 strategy_id 反查绑定场景。
         # 子资源只允许引用同场景资源，避免跨场景复用通知组、联表或下钻工具。
+        if validated_request_data.get("binding_type") == BindingType.PLATFORM_BINDING:
+            return
         scene_id = self.get_scene_id(validated_request_data)
         self._validate_notice_groups("notice_groups", validated_request_data.get("notice_groups", []), scene_id)
         self._validate_notice_groups("processor_groups", validated_request_data["processor_groups"], scene_id)
@@ -502,6 +518,8 @@ class StrategySerializer(serializers.Serializer):
         """
         校验策略配置中的系统和数据表是否在场景授权范围内
         """
+        if validated_request_data.get("binding_type") == BindingType.PLATFORM_BINDING:
+            return
 
         scene_id = self.get_scene_id(validated_request_data)
         if scene_id is None:
@@ -702,13 +720,334 @@ class StrategySerializer(serializers.Serializer):
                     raise serializers.ValidationError({"config": gettext("项目对数据表[%s]授权失败，请联系管理员") % ",".join(rt_ids)})
 
 
-class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
+class StrategyRuleSerializer(serializers.Serializer):
+    """
+    发现规则（StrategyRule）请求字段定义
+    conditions 结构：{"where": WhereCondition 树, "having": HavingCondition 树}
+    """
+
+    rule_id = serializers.IntegerField(label=gettext_lazy("Rule ID"), required=False, allow_null=True)
+    rule_name = serializers.CharField(
+        label=gettext_lazy("Rule Name"), max_length=64, help_text=gettext_lazy("规则名称，策略内唯一")
+    )
+    conditions = serializers.DictField(
+        label=gettext_lazy("Conditions"),
+        required=True,
+        help_text=gettext_lazy('{"where": {...}, "having": {...}}'),
+    )
+    risk_title = serializers.CharField(
+        label=gettext_lazy("Risk Title"), required=False, allow_null=True, allow_blank=True, max_length=255
+    )
+    risk_level = serializers.ChoiceField(
+        label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False, allow_null=True
+    )
+    risk_hazard = serializers.CharField(
+        label=gettext_lazy("Risk Hazard"), required=False, allow_null=True, allow_blank=True
+    )
+    risk_guidance = serializers.CharField(
+        label=gettext_lazy("Risk Guidance"), required=False, allow_null=True, allow_blank=True
+    )
+    processor = serializers.ListField(
+        label=gettext_lazy("Processor"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        required=False,
+        default=list,
+        help_text=gettext_lazy("处理人通知组 ID 列表（场景策略使用）"),
+    )
+    follower = serializers.ListField(
+        label=gettext_lazy("Follower"),
+        child=serializers.IntegerField(label=gettext_lazy("Follower Group")),
+        required=False,
+        default=list,
+        help_text=gettext_lazy("关注人通知组 ID 列表（场景策略使用）"),
+    )
+
+
+class DispatchRuleSerializer(serializers.Serializer):
+    """
+    分派规则（DispatchRule）请求字段定义——仅全局策略使用，场景策略无此概念
+    """
+
+    rule_id = serializers.IntegerField(label=gettext_lazy("Rule ID"), required=False, allow_null=True)
+    rule_name = serializers.CharField(
+        label=gettext_lazy("Rule Name"), max_length=64, help_text=gettext_lazy("规则名称，策略内唯一")
+    )
+    conditions = serializers.DictField(
+        label=gettext_lazy("Conditions"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("WhereCondition 条件树（field 为字段对象，结构同发现规则 where），空 dict = 默认兜底规则"),
+    )
+    target_scene_id = serializers.IntegerField(label=gettext_lazy("Target Scene ID"), help_text=gettext_lazy("分派目标场景"))
+    processor = serializers.ListField(
+        label=gettext_lazy("Processor"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        required=True,
+        help_text=gettext_lazy("处理人通知组 ID 列表（全局策略用，通知组须属于目标场景）"),
+    )
+    follower = serializers.ListField(
+        label=gettext_lazy("Follower"),
+        child=serializers.IntegerField(label=gettext_lazy("Follower Group")),
+        required=True,
+        help_text=gettext_lazy("关注人通知组 ID 列表（全局策略用，通知组须属于目标场景）"),
+    )
+    confirmer = serializers.ListField(
+        label=gettext_lazy("Confirmer"),
+        child=serializers.IntegerField(label=gettext_lazy("Confirmer Group")),
+        required=False,
+        default=list,
+        allow_empty=True,
+        help_text=gettext_lazy("确认人通知组 ID 列表（仅 dispatch_mode=after_confirm 时必填，直接分派无需确认人）"),
+    )
+    dispatch_mode = serializers.ChoiceField(
+        label=gettext_lazy("Dispatch Mode"), choices=DispatchMode.choices, default=DispatchMode.DIRECT
+    )
+    is_default = serializers.BooleanField(
+        label=gettext_lazy("Is Default"), required=False, default=False, help_text=gettext_lazy("是否为默认分派规则")
+    )
+
+
+class MultiRuleValidateMixin:
+    """
+    多规则校验 mixin：Create/Update 策略序列化器共用。
+
+    1. 发现规则仅 rule 策略；每条规则 where 必填
+    2. rule_name 策略内唯一
+    3. having 聚合字段必须存在于策略级 select 聚合字段（SQL 构造 L2 列引用依赖）
+    4. 分派规则仅全局策略（binding_type=platform_binding）可配；全局策略必须有默认分派规则（风险必有分派去处）
+    5. 分派默认规则唯一；is_default 由 conditions 推导同步
+    6. target_scene 存在且通知组属于目标场景
+    """
+
+    @staticmethod
+    def _condition_tree_is_empty(node: Optional[dict]) -> bool:
+        """条件树（dict 形态）递归判空：无叶子且子树全空"""
+        if not node:
+            return True
+        if node.get("condition"):
+            return False
+        return all(MultiRuleValidateMixin._condition_tree_is_empty(sub) for sub in node.get("conditions") or [])
+
+    @staticmethod
+    def _walk_tree_leaves(node: Optional[dict]):
+        """遍历条件树叶子（condition dict）"""
+        if not node:
+            return
+        if node.get("condition"):
+            yield node["condition"]
+        for sub in node.get("conditions") or []:
+            yield from MultiRuleValidateMixin._walk_tree_leaves(sub)
+
+    @staticmethod
+    def _validate_condition_tree(tree: Optional[dict], model_cls, label: str) -> None:
+        """
+        递归校验条件树结构（connector/field/operator/filter 类型与必填）
+        """
+        if not tree:
+            return
+        try:
+            model_cls.model_validate(tree)
+        except PydanticValidationError as exc:
+            first = exc.errors()[0] if exc.errors() else {}
+            loc = ".".join(str(item) for item in first.get("loc", []))
+            msg = first.get("msg", str(exc))
+            raise serializers.ValidationError(gettext("条件树[%s]结构非法（%s）：%s") % (label, loc, msg))
+
+    def _check_rules(self, attrs: dict) -> dict:
+        """校验发现规则集（attrs["rules"]）；由 Create/Update 序列化器在 validate() 中显式调用"""
+        rules = attrs.get("rules") or []
+        strategy_type = attrs.get("strategy_type")
+
+        # 模型策略不允许有发现规则
+        if strategy_type != StrategyType.RULE.value:
+            if rules:
+                raise serializers.ValidationError(gettext("发现规则仅支持规则审计策略（rule），模型策略无发现规则"))
+            return attrs
+
+        # 规则策略必须至少有一条发现规则
+        if not rules:
+            raise serializers.ValidationError(gettext("规则审计策略（strategy_type=rule）必须至少配置一条发现规则"))
+
+        # 手写 SQL 不保证输出 strategy_rule_id，多条发现规则时风险侧会回退到首规则归因，
+        # 破坏 first-match 与规则快照语义，因此多条发现规则禁止携带手写 SQL，由系统生成
+        sql_value = attrs.get("sql")
+        if sql_value and len(rules) > 1:
+            raise serializers.ValidationError(gettext("策略配置了多条发现规则，不支持携带手写 SQL（sql），请移除后由系统自动生成"))
+
+        # rule_name 策略内唯一
+        names = [r.get("rule_name") for r in rules]
+        if len(names) != len(set(names)):
+            raise serializers.ValidationError(gettext("发现规则名称在策略内必须唯一"))
+
+        # 策略级 select 的聚合字段集合（having 列引用的合法域）
+        configs = attrs.get("configs")
+        if not configs:
+            raise serializers.ValidationError(gettext("携带发现规则（rules）时必须同时携带策略配置（configs）"))
+
+        select_fields = configs.get("select") or []
+        # 聚合字段身份集合：(table, raw_name, aggregate, keys)，与构造层
+        # aggregate_field_identity 口径一致（含下钻 keys，避免校验通过、构造 500）
+        aggregate_identities = {
+            (f.get("table"), f.get("raw_name"), f.get("aggregate"), tuple(f.get("keys") or []))
+            for f in select_fields
+            if f.get("aggregate")
+        }
+
+        for rule in rules:
+            conditions = rule.get("conditions") or {}
+            where_tree = conditions.get("where")
+            having_tree = conditions.get("having")
+
+            # 条件树结构校验（connector/field/operator/filter 类型与必填），前移 Pydantic 校验
+            self._validate_condition_tree(where_tree, WhereCondition, "where")
+            self._validate_condition_tree(having_tree, HavingCondition, "having")
+
+            # 规则 where 必填
+            if self._condition_tree_is_empty(where_tree):
+                raise serializers.ValidationError(gettext("规则[%s]缺少where过滤条件（规则where必填）") % rule.get("rule_name"))
+
+            # having 叶子校验：字段必须带 aggregate 且存在于策略级 select 聚合字段
+            for leaf in self._walk_tree_leaves(having_tree):
+                field = (leaf or {}).get("field") or {}
+                field_name = field.get("display_name") or field.get("field_name")
+                if not field.get("aggregate"):
+                    raise serializers.ValidationError(
+                        gettext("规则[%s]的having条件字段[%s]必须为聚合字段") % (rule.get("rule_name"), field_name)
+                    )
+                field_identity = (
+                    field.get("table"),
+                    field.get("raw_name"),
+                    field.get("aggregate"),
+                    tuple(field.get("keys") or []),
+                )
+                if field_identity not in aggregate_identities:
+                    raise serializers.ValidationError(
+                        gettext("规则[%s]的having条件字段[%s]不存在于策略级select的聚合字段中") % (rule.get("rule_name"), field_name)
+                    )
+            # where 叶子校验：操作符合法
+            for leaf in self._walk_tree_leaves(where_tree):
+                # 聚合字段只能出现在 having 中
+                field = (leaf or {}).get("field") or {}
+                field_name = field.get("display_name") or field.get("field_name")
+                if field.get("aggregate"):
+                    raise serializers.ValidationError(
+                        gettext("规则[%s]的where条件字段[%s]不能为聚合字段（聚合字段仅允许在having中使用）") % (rule.get("rule_name"), field_name)
+                    )
+                operator = (leaf or {}).get("operator")
+                if operator and operator not in RuleAuditConditionOperator.values:
+                    raise serializers.ValidationError(
+                        gettext("规则[%s]的where条件操作符[%s]不合法") % (rule.get("rule_name"), operator)
+                    )
+
+        # 行级配置（无聚合字段）时禁 having（having 无聚合字段可引用）
+        if not aggregate_identities:
+            for rule in rules:
+                conditions = rule.get("conditions") or {}
+                if not self._condition_tree_is_empty(conditions.get("having")):
+                    raise serializers.ValidationError(
+                        gettext("策略select不含聚合字段（行级审计）时，规则[%s]不能配置having条件") % rule.get("rule_name")
+                    )
+        return attrs
+
+    def _check_dispatch_rules(self, attrs: dict) -> dict:
+        """校验分派规则集（attrs["dispatch_rules"]）；由 Create/Update 序列化器在 validate() 中显式调用"""
+        dispatch_rules = attrs.get("dispatch_rules") or []
+        binding_type = attrs.get("binding_type")
+
+        if dispatch_rules and binding_type != BindingType.PLATFORM_BINDING:
+            raise serializers.ValidationError(gettext("分派规则仅全局策略（binding_type=platform_binding）可配置"))
+
+        if binding_type == BindingType.PLATFORM_BINDING:
+            if not dispatch_rules:
+                raise serializers.ValidationError(gettext("全局策略必须至少配置一条分派规则（含默认兜底规则）"))
+
+            names = [r.get("rule_name") for r in dispatch_rules]
+            if len(names) != len(set(names)):
+                raise serializers.ValidationError(gettext("分派规则名称在策略内必须唯一"))
+
+            default_count = 0
+            for rule in dispatch_rules:
+                # 分派条件树结构校验（connector/field/operator/filter 类型与必填，field 为对象结构，同发现规则 where）
+                self._validate_condition_tree(rule.get("conditions"), WhereCondition, "dispatch_conditions")
+                # is_default 由 conditions 推导同步
+                is_default = self._condition_tree_is_empty(rule.get("conditions"))
+                rule["is_default"] = is_default
+                if is_default:
+                    default_count += 1
+                # 处理人必填
+                if not rule.get("processor"):
+                    raise serializers.ValidationError(gettext("分派规则[%s]的processor不能为空") % rule.get("rule_name"))
+                # 确认人仅"确认后分派"必填；直接分派无需确认人，清空避免脏数据
+                if rule.get("dispatch_mode") == DispatchMode.AFTER_CONFIRM:
+                    if not rule.get("confirmer"):
+                        raise serializers.ValidationError(
+                            gettext("分派规则[%s]的confirmer不能为空（确认后分派需配置确认人）") % rule.get("rule_name")
+                        )
+                else:
+                    rule["confirmer"] = []
+                # 目标场景存在性（软删过滤）
+                if not Scene.objects.filter(scene_id=rule.get("target_scene_id"), is_deleted=False).exists():
+                    raise serializers.ValidationError(
+                        gettext("分派规则[%s]的目标场景[%s]不存在") % (rule.get("rule_name"), rule.get("target_scene_id"))
+                    )
+                # 通知组属于目标场景（processor/follower/confirmer 三者同属通知组 ID，统一校验）
+                notice_group_ids = list(
+                    set((rule.get("processor") or []) + (rule.get("follower") or []) + (rule.get("confirmer") or []))
+                )
+                self._validate_notice_groups("dispatch_rules", notice_group_ids, rule.get("target_scene_id"))
+            if default_count != 1:
+                raise serializers.ValidationError(gettext("全局策略必须且仅能有一条默认分派规则（conditions 为空）"))
+            # 分派条件字段合法域校验（select 字段 / 直连字段词表）
+            self._check_dispatch_condition_fields(attrs)
+        return attrs
+
+    @staticmethod
+    def _check_dispatch_condition_fields(attrs: dict) -> None:
+        """
+        分派条件字段合法域校验（field 为对象结构，同发现规则 where）：
+        - select 字段：display_name 命中策略级 select（求值时从 event_data 按该键取值）
+        - 直连字段：raw_name ∈ 事件输出字段 ∪ 规则实例化字段（求值时直接从分派上下文读取）
+        """
+        configs = attrs.get("configs") or {}
+        select_names = {f.get("display_name") for f in configs.get("select") or [] if f.get("display_name")}
+        if not select_names:
+            # 非规则审计策略或未携带 configs（如部分更新场景）：无 select 词表，不做校验
+            return
+        passthrough = {f.field_name for f in EventMappingFields().fields} | {
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+        }
+        for rule in attrs.get("dispatch_rules") or []:
+            for leaf in MultiRuleValidateMixin._walk_tree_leaves(rule.get("conditions")):
+                field = (leaf or {}).get("field") or {}
+                display_name, raw_name = field.get("display_name"), field.get("raw_name")
+                if display_name in select_names or raw_name in passthrough:
+                    continue
+                raise serializers.ValidationError(
+                    gettext("分派规则[%s]的条件字段[%s]不在可选范围内，可选字段：%s")
+                    % (rule.get("rule_name"), display_name or raw_name, ",".join(sorted(select_names | passthrough)))
+                )
+
+
+class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin, serializers.ModelSerializer):
     """
     Create Strategy
     """
 
     scene_id = serializers.IntegerField(
-        label=gettext_lazy("场景ID"), required=True, help_text="场景ID，用于创建 ResourceBinding，不存入模型"
+        label=gettext_lazy("场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("场景ID（binding_type=scene_binding 时必填），用于创建 ResourceBinding，不存入模型"),
+    )
+    binding_type = serializers.ChoiceField(
+        label=gettext_lazy("绑定类型"),
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        default=BindingType.SCENE_BINDING,
+        help_text=gettext_lazy("策略绑定类型（scene_binding=场景策略 / platform_binding=全局策略），不存入模型"),
     )
     sql = serializers.CharField(
         label=gettext_lazy("Rule Audit SQL"),
@@ -734,17 +1073,41 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     risk_meta_field_config = serializers.ListField(
         label=gettext_lazy("Risk Meta Field Config"), child=EventBasicFieldSerializer(), default=list, allow_empty=True
     )
-    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
-    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    risk_level = serializers.ChoiceField(
+        label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False, allow_null=True
+    )
+    risk_title = serializers.CharField(
+        label=gettext_lazy("Risk Title"), required=False, allow_null=True, allow_blank=True
+    )
     source = serializers.ChoiceField(
         label=gettext_lazy("Strategy Source"), choices=StrategySource.choices, default=StrategySource.USER
     )
     processor_groups = serializers.ListField(
         label=gettext_lazy("Processor Groups"),
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
-        allow_empty=False,
+        required=False,
+        allow_empty=True,
+        default=list,
     )
     report_config = ReportConfigSerializer(required=False, allow_null=True)
+    rules = StrategyRuleSerializer(many=True, required=False, default=list)
+    dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
+    is_draft = serializers.BooleanField(
+        label=gettext_lazy("Is Draft"),
+        required=False,
+        default=False,
+        write_only=True,
+        help_text=gettext_lazy("是否保存为草稿（草稿不部署，仅本地保存完整配置）"),
+    )
+    # 可见范围不再由前端配置：全局策略可见场景 = 分派规则目标场景并集
+
+    def to_internal_value(self, data):
+        """草稿保存时跳过所有字段级校验"""
+        if data.get("is_draft") is True:
+            # 只保留声明的字段，过滤掉客户端误传的多余字段
+            allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
+            return {k: v for k, v in data.items() if k in allowed}
+        return super().to_internal_value(data)
 
     class Meta:
         model = Strategy
@@ -773,15 +1136,32 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "report_auto_render",
             "report_config",
             "scene_id",
+            "binding_type",
+            "rules",
+            "dispatch_rules",
+            "is_draft",
         ]
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
-        # check type
-        self._validate_strategy_type(data)
-        # check name
-        if Strategy.objects.filter(strategy_name=attrs["strategy_name"]).exists():
+        # binding_type 归一化 + 联动检查
+        binding_type = data.get("binding_type") or BindingType.SCENE_BINDING
+        if binding_type == BindingType.SCENE_BINDING and not data.get("scene_id"):
+            raise serializers.ValidationError(gettext("场景策略（binding_type=scene_binding）必须携带 scene_id"))
+        if binding_type == BindingType.PLATFORM_BINDING and data.get("scene_id"):
+            raise serializers.ValidationError(gettext("全局策略（binding_type=platform_binding）不允许携带 scene_id"))
+        data["binding_type"] = binding_type
+        # 重名检查
+        if Strategy.objects.filter(strategy_name=data["strategy_name"]).exists():
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
+        # 草稿：额外校验 scene_id 存在性后返回
+        if data.get("is_draft"):
+            if binding_type == BindingType.SCENE_BINDING:
+                if not Scene.objects.filter(scene_id=data["scene_id"], is_deleted=False).exists():
+                    raise serializers.ValidationError({"scene_id": gettext("Scene Not Exists")})
+            return data
+        # 正式提交：全量校验
+        self._validate_strategy_type(data)
         # check configs
         self._validate_configs(data)
         # check scene resources
@@ -792,6 +1172,9 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_report_config(data)
         # check strategy data permission (system & table authorization)
         self._validate_strategy_data_permission(data)
+        # 多规则校验（发现规则 / 分派规则）
+        self._check_rules(data)
+        self._check_dispatch_rules(data)
         return data
 
 
@@ -805,7 +1188,7 @@ class CreateStrategyResponseSerializer(serializers.ModelSerializer):
         fields = ["strategy_id", "strategy_name"]
 
 
-class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
+class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin, serializers.ModelSerializer):
     """
     Update Strategy
     """
@@ -835,17 +1218,41 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     risk_meta_field_config = serializers.ListField(
         label=gettext_lazy("Risk Meta Field Config"), child=EventBasicFieldSerializer(), default=list, allow_empty=True
     )
-    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    risk_title = serializers.CharField(
+        label=gettext_lazy("Risk Title"), required=False, allow_null=True, allow_blank=True
+    )
     source = serializers.ChoiceField(
         label=gettext_lazy("Strategy Source"), choices=StrategySource.choices, default=StrategySource.USER
     )
     processor_groups = serializers.ListField(
         label=gettext_lazy("Processor Groups"),
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
-        allow_empty=False,
+        required=False,
+        allow_empty=True,
+        default=list,
     )
-    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
+    risk_level = serializers.ChoiceField(
+        label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False, allow_null=True
+    )
     report_config = ReportConfigSerializer(required=False, allow_null=True)
+    rules = StrategyRuleSerializer(many=True, required=False, default=list)
+    dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
+    is_draft = serializers.BooleanField(
+        label=gettext_lazy("Is Draft"),
+        required=False,
+        allow_null=True,
+        default=None,
+        write_only=True,
+        help_text=gettext_lazy("仅草稿策略可传：true=保存草稿更新（不部署），false=提交为正式策略（触发部署）；不传=维持现状"),
+    )
+
+    def to_internal_value(self, data):
+        """草稿保存时跳过所有字段级校验"""
+        if data.get("is_draft") is True:
+            # 只保留声明的字段，过滤掉客户端误传的多余字段
+            allowed = set(self.Meta.fields) | {"is_draft", "binding_type", "scene_id", "rules", "dispatch_rules"}
+            return {k: v for k, v in data.items() if k in allowed}
+        return super().to_internal_value(data)
 
     class Meta:
         model = Strategy
@@ -875,6 +1282,9 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "report_enabled",
             "report_auto_render",
             "report_config",
+            "rules",
+            "dispatch_rules",
+            "is_draft",
         ]
 
     def get_scene_id(self, validated_request_data: dict) -> int | None:
@@ -882,8 +1292,29 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # 草稿保存（is_draft=true）：跳过业务校验，仅保留重名检查；提交（is_draft=false）走全量校验
+        if data.get("is_draft") is True:
+            if (
+                Strategy.objects.filter(strategy_name=data["strategy_name"])
+                .exclude(strategy_id=data["strategy_id"])
+                .exists()
+            ):
+                raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
+            return data
         # check type
         self._validate_strategy_type(data)
+        # 因此 ResourceBinding 查不到，视为 PLATFORM_BINDING的草稿策略提交，其他情况都会有ResourceBinding记录
+        db_binding_type = (
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(data["strategy_id"]),
+            )
+            .values_list("binding_type", flat=True)
+            .first()
+        )
+        if db_binding_type is None:
+            db_binding_type = BindingType.PLATFORM_BINDING
+        data["binding_type"] = db_binding_type
         # check name
         if (
             Strategy.objects.filter(strategy_name=attrs["strategy_name"])
@@ -901,6 +1332,9 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         self._validate_report_config(data)
         # check strategy(system & table authorization)
         self._validate_strategy_data_permission(data)
+        # 多规则校验（发现规则 / 分派规则）
+        self._check_rules(data)
+        self._check_dispatch_rules(data)
         return data
 
 
@@ -920,7 +1354,27 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     """
 
     namespace = serializers.CharField(label=gettext_lazy("Namespace"))
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤策略")
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("按场景过滤策略,可见范围为指定场景/全场景的全局策略"),
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("按系统过滤策略，可见范围为指定系统/全系统的全局策略"),
+    )
+    binding_type = serializers.ChoiceField(
+        label=gettext_lazy("绑定类型"),
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("筛选策略绑定类型（scene_binding=场景策略 / platform_binding=全局策略）"),
+    )
     strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
     strategy_name = serializers.CharField(label=gettext_lazy("Strategy Name"), required=False)
     tag = serializers.CharField(label=gettext_lazy("Tag"), required=False)
@@ -940,6 +1394,17 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     )
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
     strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
+    dispatch_scene_id = serializers.IntegerField(
+        label=gettext_lazy("分派场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("按分派场景过滤，返回对该场景可见的全局策略"),
+    )
+    updated_by = serializers.CharField(
+        label=gettext_lazy("更新人"),
+        required=False,
+        allow_blank=True,
+    )
 
     def validate_report_status(self, value: str) -> str:
         if not value:
@@ -954,7 +1419,16 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         # split into array
         for key, val in data.items():
-            if key in ["namespace", "order_field", "order_type", "scene_id", "system_id"]:
+            if key in [
+                "namespace",
+                "order_field",
+                "order_type",
+                "scene_id",
+                "system_id",
+                "binding_type",
+                "dispatch_scene_id",
+                "updated_by",
+            ]:
                 continue
             data[key] = [i for i in val.split(",") if i] if val else []
         # order
@@ -969,9 +1443,43 @@ class ListStrategyRequestSerializer(serializers.Serializer):
 
 
 class ListStrategyAllRequestSerializer(serializers.Serializer):
-    """策略 all 接口请求参数（可选按场景过滤）"""
+    """策略 all 接口请求参数（根据scope_type和scope_id过滤）"""
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
+    binding_type = serializers.ChoiceField(
+        label=gettext_lazy("绑定类型"),
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("可选：platform_binding=平台级，scene_binding=场景级；不传时默认平台级"),
+    )
+    scope_type = serializers.ChoiceField(
+        label=gettext_lazy("范围类型"),
+        choices=ScopeType.choices,
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("可选：scene=场景，cross_scene=跨场景，system=系统，cross_system=跨系统"),
+    )
+    scope_id = serializers.CharField(
+        label=gettext_lazy("范围ID"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=gettext_lazy("scope_type=scene/system 时必填，对应场景ID/系统ID"),
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        from services.web.common.constants import ScopeType
+
+        scope_type = attrs.get("scope_type")
+        scope_id = attrs.get("scope_id")
+        if not scope_type:
+            attrs.pop("scope_type", None)
+            attrs.pop("scope_id", None)
+            return attrs
+        if not scope_id and scope_type in {ScopeType.SCENE, ScopeType.SYSTEM}:
+            raise serializers.ValidationError({"scope_id": gettext("scope_type 为 scene/system 时必须携带 scope_id")})
+        return attrs
 
 
 class StrategyToolSerializer(serializers.ModelSerializer):
@@ -985,6 +1493,19 @@ class StrategyToolSerializer(serializers.ModelSerializer):
         ]
 
 
+class StrategyVisibilitySerializer(serializers.Serializer):
+    """策略绑定可见范围回显（只读；全局策略的可见场景由分派规则目标场景自动派生，不支持配置）"""
+
+    binding_type = serializers.ChoiceField(
+        choices=BindingType.choices, required=False, allow_null=True, label=gettext_lazy("绑定类型")
+    )
+    visibility_type = serializers.ChoiceField(
+        choices=VisibilityScope.choices, required=False, allow_null=True, label=gettext_lazy("可见范围类型")
+    )
+    scene_ids = serializers.ListField(child=serializers.IntegerField(), required=False, label=gettext_lazy("可见场景ID列表"))
+    system_ids = serializers.ListField(child=serializers.CharField(), required=False, label=gettext_lazy("可见系统ID列表"))
+
+
 class ListStrategyResponseSerializer(serializers.ModelSerializer):
     """
     List Strategy
@@ -996,6 +1517,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     report_status = serializers.SerializerMethodField(
         label=gettext_lazy("事件调查报告状态"),
     )
+    visibility = StrategyVisibilitySerializer(required=False, allow_null=True, label=gettext_lazy("可见范围"))
 
     def get_tags(self, obj):
         """
@@ -1052,6 +1574,46 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
         ]
 
 
+class StrategyRuleInfoSerializer(serializers.ModelSerializer):
+    """
+    发现规则只读回显序列化器（策略详情使用）
+    """
+
+    class Meta:
+        model = StrategyRule
+        fields = [
+            "rule_id",
+            "rule_name",
+            "conditions",
+            "risk_title",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "processor",
+            "follower",
+        ]
+
+
+class DispatchRuleInfoSerializer(serializers.ModelSerializer):
+    """
+    分派规则只读回显序列化器（策略详情使用）
+    """
+
+    class Meta:
+        model = DispatchRule
+        fields = [
+            "rule_id",
+            "rule_name",
+            "conditions",
+            "target_scene_id",
+            "processor",
+            "follower",
+            "confirmer",
+            "dispatch_mode",
+            "is_default",
+        ]
+
+
 class StrategyDetailSerializer(serializers.ModelSerializer):
     """
     策略详情序列化器
@@ -1062,12 +1624,33 @@ class StrategyDetailSerializer(serializers.ModelSerializer):
 
     tags = serializers.SerializerMethodField()
     tools = StrategyToolSerializer(many=True, read_only=True)
+    rules = serializers.SerializerMethodField()
+    dispatch_rules = serializers.SerializerMethodField()
+    visibility = StrategyVisibilitySerializer(required=False, allow_null=True, label=gettext_lazy("可见范围"))
 
     def get_tags(self, obj):
         """
         获取策略关联的 tag_id 列表
         """
         return list(obj.tags.values_list('tag_id', flat=True))
+
+    def get_rules(self, obj):
+        """
+        按 rule_order 顺序回显未软删的发现规则
+        """
+        rules = list(obj.rules.filter(is_deleted=False))
+        order_index = {rid: idx for idx, rid in enumerate(obj.rule_order or [])}
+        rules.sort(key=lambda r: order_index.get(r.rule_id, len(order_index)))
+        return StrategyRuleInfoSerializer(rules, many=True).data
+
+    def get_dispatch_rules(self, obj):
+        """
+        按 dispatch_rule_order 顺序回显未软删的分派规则
+        """
+        rules = list(obj.dispatch_rules.filter(is_deleted=False))
+        order_index = {rid: idx for idx, rid in enumerate(obj.dispatch_rule_order or [])}
+        rules.sort(key=lambda r: order_index.get(r.rule_id, len(order_index)))
+        return DispatchRuleInfoSerializer(rules, many=True).data
 
     class Meta:
         model = Strategy
@@ -1140,7 +1723,24 @@ class ListStrategyTagsResponseSerializer(serializers.Serializer):
 class ListStrategyTagsRequestSerializer(serializers.Serializer):
     """List Strategy Tags Request"""
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤策略标签")
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text=gettext_lazy("按场景过滤策略标签；平台视角不传")
+    )
+    system_id = serializers.CharField(
+        label=gettext_lazy("系统ID"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("按系统过滤策略标签（系统视角）"),
+    )
+    binding_type = serializers.ChoiceField(
+        label=gettext_lazy("绑定类型"),
+        choices=BindingType.choices,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("筛选策略绑定类型（scene_binding=场景策略 / platform_binding=全局策略）"),
+    )
 
 
 class StrategyTagResourceSerializer(serializers.Serializer):
@@ -1337,20 +1937,14 @@ class ListTablesRequestSerializer(serializers.Serializer):
 
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
-    scene_id = serializers.CharField(label=gettext_lazy("Scene ID"), required=False)
+    scene_id = serializers.CharField(
+        label=gettext_lazy("Scene ID"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text=gettext_lazy("场景ID（场景策略按场景收敛；全局策略不传返回平台视角全量）"),
+    )
     bk_biz_id = serializers.CharField(label=gettext_lazy("业务 ID"), required=False)
-
-    def validate(self, attrs):
-        """
-        校验参数逻辑：对于EventLog类型，必须提供scene_id参数
-        """
-        attrs = super().validate(attrs)
-
-        # 对于EventLog类型，必须提供scene_id
-        if attrs.get("table_type") == ListTableType.EVENT_LOG.value and not attrs.get("scene_id"):
-            raise serializers.ValidationError({"scene_id": gettext("对于EventLog类型的表查询，必须提供scene_id参数")})
-
-        return attrs
 
 
 class GetRTFieldsRequestSerializer(serializers.Serializer):
@@ -1883,7 +2477,12 @@ class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
 
 
 class ListLinkTableAllRequestSerializer(serializers.Serializer):
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True, help_text="按场景过滤联表")
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"),
+        required=False,
+        allow_null=True,
+        help_text=gettext_lazy("按场景过滤联表；不传返回全部（全局策略平台视角）"),
+    )
 
 
 class ListLinkTableAllResponseSerializer(serializers.ModelSerializer):
@@ -2050,7 +2649,7 @@ class RuleAuditHavingSerializer(RuleAuditWhereSerializer):
         自定义序列化逻辑: 递归解析 conditions
         """
 
-        ret = super().to_representation(instance)
+        ret = super().to_internal_value(instance)
 
         # 递归处理 conditions
         conditions = instance.get('conditions', [])
@@ -2106,6 +2705,15 @@ class RuleAuditSerializer(serializers.Serializer):
 
         attrs["where"] = self._normalize_empty_clause(attrs.get("where"))
         attrs["having"] = self._normalize_empty_clause(attrs.get("having"))
+
+        # display_name 是输出字段的全域标识（SQL 列名 md5 源、event_data 的 JSON 键、
+        # 事件映射/having 身份锚点），重复会导致同名列冲突与 event_data 键覆盖，必须唯一
+        display_names = [field["display_name"] for field in attrs["select"]]
+        duplicated = {name for name in display_names if display_names.count(name) > 1}
+        if duplicated:
+            raise serializers.ValidationError(
+                gettext("select 字段 display_name 必须唯一，重复字段：%s") % ",".join(sorted(duplicated))
+            )
 
         # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
         # 1. 日志需要指定 rt_id,system_ids
