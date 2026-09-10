@@ -81,7 +81,7 @@ class SystemInitHelper:
     def ensure_system_default_scene() -> Scene:
         """确保系统默认场景存在"""
         return Scene.objects.get_or_create(
-            name=DEFAULT_SCENE_NAME,
+            name='系统默认场景',
             defaults={"description": "系统默认场景（存量资源迁移生成）"},
         )[0]
 
@@ -520,7 +520,7 @@ class SystemInitHandler:
             print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
             return
 
-        # 自愈：确保系统策略依赖的系统资源存在（默认场景/管理员通知组，幂等，缺啥补啥）
+        # 确保系统策略依赖的系统资源存在（默认场景/管理员通知组）
         SystemInitHelper.ensure_system_default_scene()
         SystemInitHelper.ensure_admin_notice_group()
 
@@ -539,7 +539,7 @@ class SystemInitHandler:
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
             return
 
-        # 系统策略处理人为管理员通知组：先确保其绑定默认场景（幂等），避免策略级通知组场景校验失败
+        # 系统策略处理人为管理员通知组：先确保其绑定默认场景
         SystemInitHelper.ensure_admin_notice_group_in_scene(params["scene_id"])
 
         try:
