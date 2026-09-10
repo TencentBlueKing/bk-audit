@@ -800,11 +800,18 @@
         conditions: createEmptyAssignWhere(),
       }));
     }
+    if (nextForm.configs) {
+      nextForm.configs = {
+        ...nextForm.configs,
+        where: emptyDiscoveryWhere(),
+        having: emptyDiscoveryWhere(),
+      };
+    }
     nextForm.hit_conditions_reset_seq = (Number(nextForm.hit_conditions_reset_seq) || 0) + 1;
   };
 
+  // 预期结果变更时新建/编辑都清空命中条件；数据源切换仍由 maybeResetHitConditionsByDataSource 在编辑态跳过
   const handleResetHitConditions = () => {
-    if (isEditMode) return;
     applyHitConditionsReset();
   };
 

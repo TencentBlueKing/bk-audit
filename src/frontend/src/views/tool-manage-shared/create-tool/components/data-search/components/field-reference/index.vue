@@ -760,7 +760,13 @@
   const findFieldByValue = (fields: LocalOutputFields[], targetValue: string): LocalOutputFields | undefined => {
     for (const field of fields) {
       // 匹配 json_path 或 raw_name
-      if (field.json_path === targetValue || field.raw_name === targetValue) {
+      if (
+        field.json_path === targetValue
+        || field.raw_name === targetValue
+        || field.display_name === targetValue
+        || (!!field.raw_name && targetValue.endsWith(`(${field.raw_name})`))
+        || (!!field.display_name && field.raw_name && `${field.display_name}(${field.raw_name})` === targetValue)
+      ) {
         return field;
       }
       if (field.children && field.children.length > 0) {
