@@ -24,16 +24,13 @@
       'line-clamp': line,
     } : {}">
     <span>
-      {{ data || '--' }}
+      {{ displayText }}
     </span>
     <div
       ref="templateRef"
-      style="display: none;">
-      <div
-        class="show-tooltips-text-template"
-        :class="tooltipContentClass"
-        :style="tooltipContentStyle">
-        {{ props.tip || data }}
+      style="display: none;max-height: 90vh;overflow: auto;">
+      <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
+        {{ props.tip || displayText }}
       </div>
     </div>
   </div>
@@ -88,6 +85,12 @@
 
   const rootRef = ref();
   const templateRef = ref<HTMLElement | null>(null);
+  const displayText = computed(() => {
+    if (props.data === undefined || props.data === null || props.data === '') {
+      return '--';
+    }
+    return props.data;
+  });
 
   let tippyIns: Instance;
   let resizeObserver: ResizeObserver | null = null;
