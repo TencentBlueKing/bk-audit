@@ -108,6 +108,13 @@ class StreamConcurrencySpecialTest(TransactionTestCase):
 
     def tearDown(self):
         release_concurrency_observations()
+        # 流式任务会先提交数据库终态，再补写 Redis terminal 事件，必须等 Worker
+        # 退出后再清理，否则 teardown 可能在最后一次 Redis 写入前误删并误报残留。
+        task_ids = set(
+            Attachment.objects.filter(is_stream=True, task_id__isnull=False).values_list("task_id", flat=True)
+        )
+        for task_id in task_ids:
+            wait_for_task_postrun(task_id=task_id)
         leftovers = delete_attachment_stream_keys(
             attachment_uids=Attachment.objects.filter(is_stream=True).values_list("uid", flat=True)
         )
