@@ -80,7 +80,7 @@
   import ChatInput from './chat-input.vue';
   import type { ChatSceneType, SelectPromptPayload } from '../types';
 
-  import aiAssistantIcon from '@images/ai-assistant.svg';
+  import aiAssistantIcon from '@images/ai-assistant.svg?inline';
   import aiSettingIcon from '@images/ai-setting.svg';
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fengxianIcon from '@images/fengxian-icon.svg';

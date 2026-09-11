@@ -110,7 +110,7 @@
   } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
-  import aiXiaojingIcon from '@/images/aixiaojing.svg';
+  import aiXiaojingIcon from '@/images/aixiaojing.svg?inline';
   import infoIcon from '@/images/info.svg';
   import AddCondition from './components/add-condition.vue';
   import ConditionTags from './components/condition-tags.vue';
