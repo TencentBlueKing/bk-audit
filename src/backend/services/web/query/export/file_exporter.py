@@ -25,10 +25,20 @@ from typing import List
 import xlsxwriter
 from blueapps.utils.logger import logger_celery
 from django.core.files import File
+from django.utils.translation import gettext_lazy
 
 from core.utils.data import unique_id
-from services.web.query.constants import FieldCategoryEnum
+from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR, FieldCategoryEnum
 from services.web.query.export.model import ExportConfig
+
+# AI 日志检索导出的"扩展字段"分组文案（仅 flatten_extension 平铺开启时生效）：
+# 拓展数据容器在所有白名单外，平铺后子键列落 CUSTOM 兜底分组（_write_category_header
+# 按分类渲染合并表头）。flatten_extension 是 AI 助手导出专属参数（检索页导出永不传），
+# 以此作渲染开关——检索页与非平铺 AI 导出的 CUSTOM 分组保持"自定义字段"label 不变，
+# 避免影响既有日志检索的字段导出文案；全属 extend_data 容器系列（产品语义"拓展字段"
+# 专指 extend_data 下钻，09-10 限定）的 CUSTOM 分组才渲染为"扩展字段"。
+EXTEND_DATA_RAW_NAME = "extend_data"
+EXTENSION_GROUP_LABEL = gettext_lazy("扩展字段")
 
 
 class FileExporter(abc.ABC):
@@ -149,17 +159,40 @@ class XLSXExporter(FileExporter):
             if not fields:
                 continue
 
+            label = self._resolve_category_label(category, fields, flatten_extension=self.config.flatten_extension)
             span = len(fields)
             fmt = self.category_header_fmts.get(category)
 
             if span > 1:
-                self.worksheet.merge_range(
-                    self.row, current_col, self.row, current_col + span - 1, str(category.label), fmt
-                )
+                self.worksheet.merge_range(self.row, current_col, self.row, current_col + span - 1, str(label), fmt)
             else:
-                self.worksheet.write(self.row, current_col, str(category.label), fmt)
+                self.worksheet.write(self.row, current_col, str(label), fmt)
             current_col += span
         self.row += 1
+
+    @staticmethod
+    def _resolve_category_label(category, fields, *, flatten_extension: bool = False):
+        """解析分类合并表头文案：仅 AI 导出平铺（flatten_extension，检索页不传）且
+        CUSTOM 分组全属 extend_data 容器系列时渲染为"扩展字段"。
+
+        extend_data 容器原列在 STANDARD 分组；平铺后子键列（full_key 形如
+        extend_data/{sub_key}）不在三个白名单 map 内，落 CUSTOM 兜底。兜底分组
+        是通用语义（其他真正自定义字段也归这里），不替换 label 会让真正自定义
+        字段与 extend_data 容器共用"自定义字段"表头，违背产品语义"拓展字段"
+        专指 extend_data 下钻（09-10 限定）。混合分组（既有 extend_data 子键列
+        又有其他兜底字段）保守保持"自定义字段"——不强行拆分避免视觉混乱；
+        flatten_extension 关闭/缺省（检索页导出、AI 非平铺）一律保持原 label，
+        不影响既有日志检索的字段导出文案。
+        """
+
+        if not flatten_extension or category != FieldCategoryEnum.CUSTOM:
+            return category.label
+        prefix = f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"
+        for field in fields:
+            full_key = getattr(field, "full_key", "") or ""
+            if not full_key.startswith(prefix):
+                return category.label
+        return EXTENSION_GROUP_LABEL
 
     def _write_title_header(self):
         """
