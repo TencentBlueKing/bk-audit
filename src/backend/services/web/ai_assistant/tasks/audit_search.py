@@ -10,12 +10,14 @@ import time
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from celery.schedules import crontab
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     NL_PARSE_MAX_RETRIES,
     NL_PARSE_RETRY_INTERVAL_SECONDS,
     NL_PARSE_RETRY_TIMEOUT_SECONDS,
     ExecutionStatus,
+    MessageErrorCode,
     MessageType,
 )
 from services.web.ai_assistant.models import Message
@@ -51,6 +53,65 @@ from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 logger = logging.getLogger(__name__)
 
 
+def _create_log_search_with_fallback(
+    *,
+    execution: MessageExecution,
+    condition,
+    system_id: str,
+    session_scope_type: str,
+    session_scope_id: str,
+    log_prefix: str,
+) -> None:
+    """续链创建 LOG_SEARCH；执行失败降级固化 FAILED 子消息（可见可重试）而非静默消失。
+
+    父消息已 SUCCESS 且 condition 完整时，若续链执行异常而子消息不创建，前端以父消息
+    为锚点的 AFTER 轮询将死等到超时且无任何反馈（线上报障：意图 SUCCESS + condition
+    完整但检索消息消失）。降级固化 FAILED 子消息：用户可见失败卡，且 FAILED 可经
+    retry 走 execute_log_search 全量重新执行检索（condition 与 context 已固化）。
+    """
+
+    message = execution.message
+    parent_context = execution.context_data
+    try:
+        MessageService(user=message.created_by).create_executed(
+            conversation=message.conversation,
+            message_type=MessageType.LOG_SEARCH,
+            input_data={"condition": condition.model_dump(mode="json")},
+            parent_message=message,
+            timeline_started_at=message.created_at,
+        )
+    except Exception:
+        logger.exception(
+            "%s auto log search failed, fallback to FAILED message, parent_message_id=%s",
+            log_prefix,
+            message.id,
+        )
+        now = timezone.now()
+        fallback = Message.objects.create(
+            conversation=message.conversation,
+            parent_message=message,
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.FAILED,
+            input_data={"condition": condition.model_dump(mode="json")},
+            context_data={
+                "username": parent_context.username,
+                "namespace": parent_context.namespace,
+                "system_id": system_id,
+                "source": "natural_language",
+                "session_scope_type": session_scope_type,
+                "session_scope_id": session_scope_id,
+            },
+            error_code=str(MessageErrorCode.TASK_EXECUTION_FAILED),
+            error_message="日志检索执行失败，请重试或调整检索条件",
+            last_activity_at=now,
+            finished_at=now,
+            created_by=message.created_by,
+            updated_by=message.created_by,
+        )
+        # timeline 回写：FAILED 消息 duration 同样表达「发问 → 续链失败」的全链耗时
+        Message.objects.filter(id=fallback.id).update(created_at=message.created_at, updated_at=now)
+
+
 class NLSearchExecutionTask(MessageExecutionTask):
     """自然语言检索任务：消息成功后按 auto_execute 续链同步执行 LOG_SEARCH。
 
@@ -78,7 +139,7 @@ class NLSearchExecutionTask(MessageExecutionTask):
 
     @staticmethod
     def _create_auto_log_search(*, execution: MessageExecution, output_data: NLSearchOutputSchema) -> None:
-        """以自然语言消息为父消息同步创建日志检索子消息（失败不创建）。"""
+        """以自然语言消息为父消息续链日志检索（失败降级 FAILED 子消息，见 helper）。"""
 
         message = execution.message
         if not execution.input_data.auto_execute:
@@ -86,13 +147,14 @@ class NLSearchExecutionTask(MessageExecutionTask):
         if output_data.condition is None:
             # 识别失败（结构化 error 协议）无检索条件，不续链
             return
-        MessageService(user=message.created_by).create_executed(
-            conversation=message.conversation,
-            message_type=MessageType.LOG_SEARCH,
-            input_data={"condition": output_data.condition.model_dump(mode="json")},
-            parent_message=message,
-            # 时间线起点=用户发问时刻（NL 消息创建即用户发问）：duration 为全链真实耗时
-            timeline_started_at=message.created_at,
+        context_data = execution.context_data
+        _create_log_search_with_fallback(
+            execution=execution,
+            condition=output_data.condition,
+            system_id=context_data.scope_id,
+            session_scope_type=context_data.session_scope_type,
+            session_scope_id=context_data.session_scope_id,
+            log_prefix="[NLSearchExecutionTask]",
         )
         logger.info(
             "[NLSearchExecutionTask] auto log search created, parent_message_id=%s",
@@ -155,18 +217,20 @@ class UserIntentExecutionTask(MessageExecutionTask):
 
     @staticmethod
     def _create_log_search(*, execution: MessageExecution, output_data: UserIntentOutputSchema) -> None:
-        """以意图识别消息为父消息同步创建日志检索子消息（复用 NL 续链模式）。"""
+        """以意图识别消息为父消息续链日志检索（失败降级 FAILED 子消息，见 helper）。"""
 
         message = execution.message
         if not execution.input_data.auto_execute:
             return
-        MessageService(user=message.created_by).create_executed(
-            conversation=message.conversation,
-            message_type=MessageType.LOG_SEARCH,
-            input_data={"condition": output_data.condition.model_dump(mode="json")},
-            parent_message=message,
-            # 时间线起点=用户发问时刻：检索结果消息的 duration_seconds 为全链真实耗时
-            timeline_started_at=message.created_at,
+        context_data = execution.context_data
+        _create_log_search_with_fallback(
+            execution=execution,
+            condition=output_data.condition,
+            system_id=output_data.system_id,
+            # 意图链路 session scope = 入口消息透传的 scope（前端左上角场景过滤器）
+            session_scope_type=context_data.scope_type or "",
+            session_scope_id=context_data.scope_id or "",
+            log_prefix="[UserIntentExecutionTask]",
         )
         logger.info(
             "[UserIntentExecutionTask] auto log search created, parent_message_id=%s",
