@@ -548,6 +548,47 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             )
 
     @staticmethod
+    def attach_scene_risk_counts(strategies: List[Strategy], risk_start_time) -> None:
+        """
+        为全局策略附加按场景分组的风险数。
+
+        从 Risk 表按 strategy_id + scene_id 分组统计，挂载到策略实例的 scene_risk_counts 属性。
+        场景策略不附加（其 scene_risk_counts 保持空列表）。
+        """
+        if not strategies:
+            return
+        # 筛选出全局策略 ID
+        strategy_ids = [s.strategy_id for s in strategies]
+        platform_resource_ids = set(
+            ResourceBinding.objects.filter(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id__in=[str(sid) for sid in strategy_ids],
+                binding_type=BindingType.PLATFORM_BINDING,
+            ).values_list("resource_id", flat=True)
+        )
+        platform_strategy_ids = [sid for sid in strategy_ids if str(sid) in platform_resource_ids]
+        if not platform_strategy_ids:
+            for s in strategies:
+                if not hasattr(s, 'scene_risk_counts'):
+                    s.scene_risk_counts = []
+            return
+        # 一次性查询所有全局策略的按场景风险数
+        scene_risk_qs = (
+            Risk.objects.filter(
+                strategy_id__in=platform_strategy_ids,
+                event_time__gte=risk_start_time,
+                scene_id__isnull=False,
+            )
+            .values('strategy_id', 'scene_id')
+            .annotate(count=Count('*'))
+        )
+        scene_risk_map: Dict[int, List[Dict]] = defaultdict(list)
+        for row in scene_risk_qs:
+            scene_risk_map[row['strategy_id']].append({"scene_id": row['scene_id'], "risk_count": row['count']})
+        for s in strategies:
+            s.scene_risk_counts = scene_risk_map.get(s.strategy_id, [])
+
+    @staticmethod
     def sync_platform_binding_scenes(strategy: Strategy) -> None:
         """
         创建/更新策略时同步全局策略的可见场景
@@ -1153,6 +1194,8 @@ class ListStrategy(StrategyV2Base):
         )
         # 批量回填绑定与可见范围（全局策略展示 binding/visibility）
         self.attach_binding_visibility(list(queryset))
+        # 批量回填全局策略的各场景的风险数
+        self.attach_scene_risk_counts(list(queryset), strategy_risk_start_time)
 
         # response
         return queryset

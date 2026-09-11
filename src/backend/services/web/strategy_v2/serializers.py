@@ -1528,6 +1528,13 @@ class StrategyVisibilitySerializer(serializers.Serializer):
     system_ids = serializers.ListField(child=serializers.CharField(), required=False, label=gettext_lazy("可见系统ID列表"))
 
 
+class SceneRiskCountSerializer(serializers.Serializer):
+    """单个场景的风险数"""
+
+    scene_id = serializers.IntegerField(label=gettext_lazy("Scene ID"))
+    risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
+
+
 class ListStrategyResponseSerializer(serializers.ModelSerializer):
     """
     List Strategy
@@ -1535,6 +1542,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
 
     tags = serializers.SerializerMethodField()
     risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
+    scene_risk_counts = serializers.SerializerMethodField(label=gettext_lazy("Scene Risk Counts"))
     tools = StrategyToolSerializer(many=True, read_only=True)
     report_status = serializers.SerializerMethodField(
         label=gettext_lazy("事件调查报告状态"),
@@ -1558,6 +1566,11 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
         elif instance.report_auto_render:
             return StrategyReportStatus.AUTO.value
         return StrategyReportStatus.MANUAL.value
+
+    def get_scene_risk_counts(self, instance):
+        if not hasattr(instance, 'scene_risk_counts'):
+            return []
+        return instance.scene_risk_counts
 
     class Meta:
         model = Strategy
