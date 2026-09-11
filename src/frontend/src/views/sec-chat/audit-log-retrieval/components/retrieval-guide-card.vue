@@ -92,7 +92,10 @@
               @click="$emit('select-suggestion', item)">
               <show-tooltips-text
                 class="suggest-text"
-                :data="item" />
+                :data="item"
+                :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
+                :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
             </button>
           </div>
           <div class="suggest-column">
@@ -107,7 +110,10 @@
               @click="$emit('select-suggestion', item)">
               <show-tooltips-text
                 class="suggest-text"
-                :data="item" />
+                :data="item"
+                :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
+                :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
             </button>
           </div>
         </div>
@@ -205,6 +211,7 @@
                 <td class="col-sample">
                   <json-field-preview
                     class="cell-text"
+                    click-tip="点击单元格可查看或复制完整数据"
                     :text="row.sample || ''"
                     :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
                     :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT"
@@ -304,6 +311,8 @@
   }
 
   const SUGGESTION_LIMIT = 4;
+  /** 常用/历史操作 tooltip：限制宽度，长文本自动换行 */
+  const SUGGEST_TOOLTIP_MAX_WIDTH = 360;
   /** 按字段检索表格 tooltip：限制宽度与高度，长 JSON 内容区内滚动 */
   const FIELD_TABLE_TOOLTIP_MAX_WIDTH = 480;
   const FIELD_TABLE_TOOLTIP_MAX_HEIGHT = '400px';
