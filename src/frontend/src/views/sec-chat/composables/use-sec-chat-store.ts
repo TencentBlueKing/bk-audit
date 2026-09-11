@@ -66,8 +66,12 @@ const buildSystemSelectionInputData = (systemIds: string[]): AiSystemSelectionIn
 };
 
 const MESSAGE_POLL_INTERVAL_MS = 2000;
-const CHILD_LOG_RETRY_TIMES = 3;
-const CHILD_LOG_RETRY_DELAY_MS = 500;
+/** 意图 SUCCESS 后等后端续链 LOG_SEARCH：约 60s，兼容合法慢续链 */
+const CHILD_LOG_RETRY_TIMES = 30;
+const CHILD_LOG_RETRY_DELAY_MS = 2000;
+/** 超时仍无子消息时写入本地识别错误，结束无限「检索中」 */
+const LOG_SEARCH_CHAIN_TIMEOUT_CODE = 'LOG_SEARCH_CHAIN_TIMEOUT';
+const LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE = '日志检索任务创建超时，请稍后重试或换一种描述';
 const DEFAULT_CONVERSATION_TITLE = '新对话';
 const TITLE_REFRESH_TIMES = 5;
 const TITLE_REFRESH_INTERVAL_MS = 2000;
@@ -129,6 +133,8 @@ const messageLoadInflight = new Map<string, Promise<void>>();
 const groupLoadInflight = new Map<string, Promise<void>>();
 /** 同一会话标题刷新进行中的 Promise，避免并发叠打 */
 const titleRefreshInflight = new Map<string, Promise<void>>();
+/** 同一 NL uid 拉子 LOG_SEARCH 进行中的 Promise，避免长轮询叠打 */
+const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 /** 异步 SYSTEM_SELECTION 成功后补发原始 NL 查询 */
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
 /** NL 隐式识别到系统时，SYSTEM_SELECTION 仅用于补上下文，不展示 guide */
@@ -232,33 +238,100 @@ const upsertConversationMessage = (
   }
 };
 
-/** NL SUCCESS 后拉取后端续链创建的 LOG_SEARCH 子消息 */
-const fetchChildLogSearch = async (conversationId: string, nlUid: string) => {
-  for (let attempt = 0; attempt < CHILD_LOG_RETRY_TIMES; attempt += 1) {
-    try {
-      const windowData = await AiAssistantManageService.fetchMessageHistory({
-        conversation_uid: conversationId,
-        anchor_uid: nlUid,
-        direction: 'AFTER',
-        include_content: true,
-      });
-      const child = (windowData.results || []).find(item => (
-        item.message_type === 'LOG_SEARCH'
-        && item.parent_message_uid === nlUid
-      ));
-      if (child) {
-        upsertConversationMessage(conversationId, child);
-        if (child.status === 'PROCESSING') {
-          startMessagePoll(conversationId, child.uid);
-        }
-        return child;
+/** 续链超时：给意图消息打本地错误态，结束无限「正在检索日志…」 */
+const markChildLogSearchTimeout = (conversationId: string, nlUid: string) => {
+  const conv = findStoredConversation(conversationId);
+  if (!conv) return;
+  const idx = conv.messages.findIndex(item => item.id === nlUid);
+  if (idx < 0) return;
+  const prev = conv.messages[idx];
+  if (prev.recognitionError || prev.result) return;
+  const hasChild = conv.messages.some(item => (
+    item.messageType === 'LOG_SEARCH' && item.parentMessageUid === nlUid
+  ));
+  if (hasChild) return;
+  conv.messages.splice(idx, 1, {
+    ...prev,
+    recognitionError: {
+      code: LOG_SEARCH_CHAIN_TIMEOUT_CODE,
+      message: LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE,
+    },
+  });
+};
+
+/** NL SUCCESS 后拉取后端续链创建的 LOG_SEARCH 子消息；超时返回 null */
+const fetchChildLogSearch = async (
+  conversationId: string,
+  nlUid: string,
+  options?: { maxAttempts?: number },
+) => {
+  const existing = childLogFetchInflight.get(nlUid);
+  if (existing) return existing;
+
+  const maxAttempts = options?.maxAttempts ?? CHILD_LOG_RETRY_TIMES;
+  const task = (async (): Promise<AiMessage | null> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      // 轮询期间若已有子消息 / 已有识别错误，提前结束
+      const conv = findStoredConversation(conversationId);
+      const nlMsg = conv?.messages.find(item => item.id === nlUid);
+      if (nlMsg?.recognitionError) return null;
+      if (conv?.messages.some(item => (
+        item.messageType === 'LOG_SEARCH' && item.parentMessageUid === nlUid
+      ))) {
+        return null;
       }
-    } catch {
-      // 短暂重试
+      try {
+        const windowData = await AiAssistantManageService.fetchMessageHistory({
+          conversation_uid: conversationId,
+          anchor_uid: nlUid,
+          direction: 'AFTER',
+          include_content: true,
+        });
+        const child = (windowData.results || []).find(item => (
+          item.message_type === 'LOG_SEARCH'
+          && item.parent_message_uid === nlUid
+        ));
+        if (child) {
+          upsertConversationMessage(conversationId, child);
+          if (child.status === 'PROCESSING') {
+            startMessagePoll(conversationId, child.uid);
+          }
+          return child;
+        }
+      } catch {
+        // 短暂重试
+      }
+      if (attempt < maxAttempts - 1) {
+        await sleep(CHILD_LOG_RETRY_DELAY_MS);
+      }
     }
-    if (attempt < CHILD_LOG_RETRY_TIMES - 1) {
-      await sleep(CHILD_LOG_RETRY_DELAY_MS);
-    }
+    return null;
+  })();
+
+  childLogFetchInflight.set(nlUid, task);
+  try {
+    return await task;
+  } finally {
+    childLogFetchInflight.delete(nlUid);
+  }
+};
+
+/** 拉子 LOG；找不到则打超时错误态 */
+const ensureChildLogSearch = async (
+  conversationId: string,
+  nlUid: string,
+  options?: { maxAttempts?: number },
+) => {
+  const child = await fetchChildLogSearch(conversationId, nlUid, options);
+  if (child) return child;
+  const conv = findStoredConversation(conversationId);
+  const nlMsg = conv?.messages.find(item => item.id === nlUid);
+  if (nlMsg?.recognitionError) return null;
+  const hasChild = conv?.messages.some(item => (
+    item.messageType === 'LOG_SEARCH' && item.parentMessageUid === nlUid
+  ));
+  if (!hasChild) {
+    markChildLogSearchTimeout(conversationId, nlUid);
   }
   return null;
 };
@@ -435,7 +508,7 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
       );
     }
     if (!pureSystemSwitch) {
-      await fetchChildLogSearch(conversationId, detail.uid);
+      await ensureChildLogSearch(conversationId, detail.uid);
     }
   }
 };
@@ -553,7 +626,8 @@ const applyMessageWindow = (conv: Conversation, windowData: {
         item.messageType === 'LOG_SEARCH' && item.parentMessageUid === message.uid
       ));
       if (!hasChild) {
-        void fetchChildLogSearch(conv.id, message.uid);
+        // 历史窗口补拉：短等即可；实时续链走默认约 60s
+        void ensureChildLogSearch(conv.id, message.uid, { maxAttempts: 5 });
       }
     }
   });
