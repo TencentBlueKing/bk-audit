@@ -98,7 +98,8 @@
         class="conversation-list"
         :class="{ 'is-dnd-active': !!dragState.type }"
         @dragleave="handleListDragLeave"
-        @dragover="onConversationListDragOver">
+        @dragover="onConversationListDragOver"
+        @drop="onConversationListDrop">
         <!-- 侧栏头：新建分组 + 拖出分组投放位 -->
         <div
           ref="historySectionRef"
@@ -1501,8 +1502,9 @@
   );
 
   /**
-   * 未分组会话拖到展开分组：上下边沿为根层排序（插到分组前/后），中间区域为归入分组。
-   * 跨组 / 折叠分组仍固定为 inside。
+   * 未分组会话拖到分组：上下边沿为根层排序（插到分组前/后），中间为归入分组。
+   * 折叠分组同样支持插到上下（此前折叠一律 inside，导致只能移入、无法插到分组之间）。
+   * 跨组拖拽仍固定为 inside。
    */
   const resolveConvGroupDropPosition = (
     e: { clientX: number; clientY: number; currentTarget: EventTarget | null },
@@ -1511,22 +1513,99 @@
     if (dragState.value.type !== 'conversation') return null;
     if (dragState.value.sourceGroup === groupName) return null;
 
-    if (dragState.value.sourceGroup || collapsedGroups.value.has(groupName)) {
+    if (dragState.value.sourceGroup) {
       return 'inside';
     }
 
-    const groupItemEl = getGroupItemElement(e.currentTarget as HTMLElement);
+    const list = conversationListRef.value;
+    let groupItemEl = getGroupItemElement(e.currentTarget as HTMLElement);
+    if (!groupItemEl && list) {
+      groupItemEl = list.querySelector(`.group-item[data-node-id="${CSS.escape(groupName)}"]`);
+    }
     if (!groupItemEl) return 'inside';
 
-    const rect = groupItemEl.getBoundingClientRect();
-    const offsetY = e.clientY - rect.top;
-    const edge = Math.min(24, Math.max(12, rect.height * 0.12));
-    if (rect.height <= edge * 2 + 8) {
-      return e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom';
+    const headerEl = groupItemEl.querySelector('.group-header') as HTMLElement | null;
+    const itemRect = groupItemEl.getBoundingClientRect();
+    const headerRect = headerEl?.getBoundingClientRect() ?? itemRect;
+    const y = e.clientY;
+    const isCollapsed = isGroupCollapsedInView(groupName);
+
+    // 折叠：标题三区（上下约 30% 插序，中间归入），便于在密集分组间插入
+    if (isCollapsed) {
+      const h = Math.max(1, headerRect.height);
+      const edge = Math.max(10, h * 0.3);
+      const offsetY = y - headerRect.top;
+      if (offsetY <= edge) return 'top';
+      if (offsetY >= h - edge) return 'bottom';
+      return 'inside';
     }
-    if (offsetY <= edge) return 'top';
-    if (offsetY >= rect.height - edge) return 'bottom';
+
+    // 展开：标题顶部边沿 → 插到分组前；整项底部边沿 → 插到分组后；其余归入
+    const headerTopEdge = Math.max(12, Math.min(20, headerRect.height * 0.35));
+    const itemBottomEdge = Math.max(20, Math.min(36, itemRect.height * 0.15));
+    if (y <= headerRect.top + headerTopEdge) return 'top';
+    if (y >= itemRect.bottom - itemBottomEdge) return 'bottom';
     return 'inside';
+  };
+
+  /** 根层最后一个可排序节点（分组或未分组会话） */
+  const getLastRootNodeEl = (list: HTMLElement): HTMLElement | null => {
+    const mixed = list.querySelector('.conv-section--mixed');
+    if (!mixed) return null;
+    const nodes = mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item');
+    return nodes.length ? nodes[nodes.length - 1] : null;
+  };
+
+  /** 光标落在分组间隙时，吸附到最近的根层节点 */
+  const findNearestRootNodeByY = (list: HTMLElement, clientY: number): HTMLElement | null => {
+    const mixed = list.querySelector('.conv-section--mixed');
+    if (!mixed) return null;
+    const nodes = [
+      ...mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item'),
+    ];
+    if (!nodes.length) return null;
+
+    let best: HTMLElement | null = null;
+    let bestDist = Infinity;
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) return node;
+      const dist = clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = node;
+      }
+    }
+    return bestDist <= 24 ? best : null;
+  };
+
+  /** 光标在最后一项下方 / 列表底部空白时，视为插到根层末尾 */
+  const applyListEndDropTargetIfNeeded = (): boolean => {
+    const list = conversationListRef.value;
+    if (!list || !dragState.value.type) return false;
+    const lastRoot = getLastRootNodeEl(list);
+    const kind = lastRoot?.dataset.nodeKind;
+    const id = lastRoot?.dataset.nodeId;
+    if (!lastRoot || (kind !== 'group' && kind !== 'conversation') || !id) return false;
+
+    // 拖的就是最后一项时，没有「自己下面」可插
+    if (dragState.value.type === kind && dragState.value.id === id) return false;
+
+    const lastRect = lastRoot.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const endSlack = 48;
+    const inEndZone = lastDragPoint.y >= lastRect.bottom - 14
+      && lastDragPoint.y <= Math.max(listRect.bottom, lastRect.bottom) + endSlack
+      && lastDragPoint.x >= listRect.left - 16
+      && lastDragPoint.x <= listRect.right + 16;
+    if (!inEndZone) return false;
+
+    setDragOverState({
+      type: kind,
+      id,
+      position: 'bottom',
+    });
+    return true;
   };
 
   const applyDragOverAt = (
@@ -1600,7 +1679,10 @@
     const hit = hits.find((node): node is HTMLElement => (
       node instanceof HTMLElement && list.contains(node)
     ));
-    if (!hit) return;
+    if (!hit) {
+      applyListEndDropTargetIfNeeded();
+      return;
+    }
 
     const convEl = hit.closest<HTMLElement>('.conv-item[data-node-id]');
     if (convEl && list.contains(convEl)) {
@@ -1646,12 +1728,30 @@
     }
 
     if (groupItem?.dataset.nodeId) {
+      // 分组拖到最后一项下半 / 未分组会话落到分组边沿时，优先识别末尾插入
+      if (applyListEndDropTargetIfNeeded() && getLastRootNodeEl(list)?.dataset.nodeId === groupItem.dataset.nodeId) {
+        return;
+      }
       applyDragOverAt(groupItem, 'group', groupItem.dataset.nodeId);
       return;
     }
 
     if (hit.closest('.conv-section--history')) {
       applyDragOverAt(historySectionRef.value || list, 'history', 'history');
+      return;
+    }
+
+    // 列表底部空白 / 最后一项之下：插到根层末尾
+    if (applyListEndDropTargetIfNeeded()) return;
+
+    // 落在分组间隙等空白处：吸附到最近根节点，便于插到分组上下
+    const nearest = findNearestRootNodeByY(list, lastDragPoint.y);
+    if (nearest?.dataset.nodeId && nearest.dataset.nodeKind) {
+      if (nearest.dataset.nodeKind === 'group') {
+        applyDragOverAt(nearest, 'group', nearest.dataset.nodeId);
+      } else {
+        applyDragOverAt(nearest, 'conversation', nearest.dataset.nodeId);
+      }
     }
   };
 
@@ -1846,6 +1946,39 @@
     noteDragPoint(e);
   };
 
+  /** 松手在列表空白（含最后一项下方 padding）时，按当前高亮落点提交排序 */
+  const onConversationListDrop = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    e.preventDefault();
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    cancelDropTargetSync();
+    applyDropTargetFromPoint();
+    applyListEndDropTargetIfNeeded();
+
+    const over = dragOverState.value;
+    if (!over.type || !over.id) {
+      handleDragEnd();
+      return;
+    }
+    if (over.type === 'history') {
+      handleDrop(e, 'history', 'history');
+      return;
+    }
+    if (over.position === 'top' || over.position === 'bottom' || over.position === 'inside') {
+      handleDrop(
+        e,
+        over.type,
+        over.id,
+        over.type === 'conversation'
+          ? props.conversations.find(c => c.id === over.id)?.groupName
+          : undefined,
+      );
+      return;
+    }
+    handleDragEnd();
+  };
+
   const handleListDragLeave = () => {
     if (listDragLeaveTimer) clearTimeout(listDragLeaveTimer);
     listDragLeaveTimer = setTimeout(() => {
@@ -1882,6 +2015,21 @@
     return e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom';
   };
 
+  const getDropTargetRect = (
+    e: DragEvent,
+    selector: string,
+  ): DOMRect => {
+    const current = e.currentTarget as HTMLElement | null;
+    if (current?.matches?.(selector) || current?.closest?.(selector)) {
+      const el = current.matches(selector) ? current : current.closest(selector);
+      if (el) return el.getBoundingClientRect();
+    }
+    const found = conversationListRef.value?.querySelector(selector);
+    return (found as HTMLElement | null)?.getBoundingClientRect()
+      ?? current?.getBoundingClientRect()
+      ?? new DOMRect();
+  };
+
   const handleDrop = (
     e: DragEvent,
     targetType: 'group' | 'conversation' | 'history',
@@ -1900,9 +2048,9 @@
 
     if (type === 'conversation' && targetType === 'conversation' && id) {
       const sameContainer = (sourceGroup || undefined) === (targetGroup || undefined);
-      // drop 前常先触发 dragleave 清空 position，这里用落点坐标重算
-      const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const dropPosition = e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom';
+      // drop 前常先触发 dragleave 清空 position，这里用落点坐标重算；列表空白 drop 时优先已有高亮
+      const targetRect = getDropTargetRect(e, `.conv-item[data-node-id="${CSS.escape(targetId)}"]`);
+      const dropPosition = resolveDropPosition(position, e, targetRect);
       if (sameContainer && id !== targetId) {
         if (targetGroup) {
           const list = props.conversations.filter(c => c.groupName === targetGroup);
@@ -1934,9 +2082,12 @@
       }
     } else if (type === 'conversation' && targetType === 'group') {
       if (sourceGroup !== targetId) {
-        const isCollapsedTarget = collapsedGroups.value.has(targetId);
-        const dropPosition = resolveConvGroupDropPosition(e, targetId) ?? position;
-        if (!sourceGroup && dropPosition && dropPosition !== 'inside' && !isCollapsedTarget) {
+        // 优先用拖拽过程中的高亮落点，避免 drop 的 currentTarget 不在分组内时误判为 inside
+        const resolved = resolveConvGroupDropPosition(e, targetId);
+        const dropPosition = (position === 'top' || position === 'bottom' || position === 'inside')
+          ? position
+          : (resolved ?? position);
+        if (!sourceGroup && dropPosition && dropPosition !== 'inside') {
           const targetGroupItem = props.groups.find(g => g.name === targetId);
           if (targetGroupItem) {
             emitRootReorder('conversation', id!, 'group', targetGroupItem.id, dropPosition);
@@ -1951,14 +2102,14 @@
       const movedGroup = props.groups.find(g => g.name === id);
       const targetGroupItem = props.groups.find(g => g.name === targetId);
       if (movedGroup && targetGroupItem) {
-        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const targetRect = getDropTargetRect(e, `.group-item[data-node-id="${CSS.escape(targetId)}"]`);
         const dropPosition = resolveDropPosition(position, e, targetRect);
         emitRootReorder('group', movedGroup.id, 'group', targetGroupItem.id, dropPosition);
       }
     } else if (type === 'group' && targetType === 'conversation' && id && targetId) {
       const movedGroup = props.groups.find(g => g.name === id);
       if (movedGroup) {
-        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const targetRect = getDropTargetRect(e, `.conv-item[data-node-id="${CSS.escape(targetId)}"]`);
         const dropPosition = resolveDropPosition(position, e, targetRect);
         emitRootReorder('group', movedGroup.id, 'conversation', targetId, dropPosition);
       }
