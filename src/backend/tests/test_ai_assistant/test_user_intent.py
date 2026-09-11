@@ -290,6 +290,11 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
 
         with mock.patch(
+            # 候选组装必须 mock：load_candidates 先于 recognize 执行且内部走 IAM 权限查询，
+            # 不 mock 会真实外呼（CI 无外网 AuthAPIError，2026-09-11 同款教训）
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        ), mock.patch(
             "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
             mock.MagicMock(side_effect=AIOutputParseFailedError()),
         ), mock.patch("services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
