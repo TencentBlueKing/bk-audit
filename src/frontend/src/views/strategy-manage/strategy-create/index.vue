@@ -114,6 +114,7 @@
     createEmptyAssignWhere,
     parseStrategyDetailToForm,
     enrichFieldDisplayNames,
+    hasFilledWhereConditions,
   } from './utils/strategy-protocol';
   import {
     getStrategyBindingScope,
@@ -776,6 +777,20 @@
 
   const emptyDiscoveryWhere = () => ({ connector: 'and', conditions: [] });
 
+  const hasExistingHitConditions = () => {
+    const rulesHaveWhere = (formData.value.rules || []).some((rule: Record<string, any>) => (
+      hasFilledWhereConditions(rule?.conditions?.where)
+      || hasFilledWhereConditions(rule?.configs?.where)
+      || hasFilledWhereConditions(rule?.formData?.configs?.where)
+    ));
+    const assignHaveWhere = (formData.value.assign_rules || []).some((rule: Record<string, any>) => (
+      hasFilledWhereConditions(rule?.conditions)
+    ));
+    return rulesHaveWhere
+      || hasFilledWhereConditions(formData.value.configs?.where)
+      || assignHaveWhere;
+  };
+
   const applyHitConditionsReset = () => {
     sessionStorage.removeItem('rule-tree-data');
     sessionStorage.removeItem('storage-tree-data');
@@ -812,15 +827,25 @@
 
   // 预期结果变更时新建/编辑都清空命中条件；数据源切换仍由 maybeResetHitConditionsByDataSource 在编辑态跳过
   const handleResetHitConditions = () => {
+    // keep-alive 第一步在后续步骤仍可能回写预期结果，不能在第二步之后再抬 seq
+    if (currentStep.value !== 1) {
+      return;
+    }
+    // 还没有填过命中条件时不必抬高 reset_seq，否则第二步填写后会被空值冲掉
+    if (!hasExistingHitConditions()) {
+      return;
+    }
     applyHitConditionsReset();
   };
 
   const maybeResetHitConditionsByDataSource = (nextConfigs?: Record<string, any>) => {
     if (isEditMode) return;
+    // 数据源只在基础信息步骤修改，后续步骤回写 configs 格式差异不能当成切换数据源
+    if (currentStep.value !== 1) return;
     const prevKey = getDataSourceKey(formData.value.configs);
     const nextKey = getDataSourceKey(nextConfigs);
     if (!formData.value.configs?.config_type || prevKey === nextKey) return;
-    applyHitConditionsReset();
+    handleResetHitConditions();
   };
 
   const handlePreviousStep = async (step: number, params: any) => {
