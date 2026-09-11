@@ -205,6 +205,8 @@ export interface AiMessage {
   parent_message_uid?: string | null;
   message_type: AiMessageType;
   status: AiMessageStatus;
+  /** SYSTEM_SELECTION 是否展示引导卡（与 status / message_type 同级） */
+  show_guide?: boolean | null;
   input_data?: Record<string, any>;
   output_data?: Record<string, any> | null;
   error_code?: string | null;
