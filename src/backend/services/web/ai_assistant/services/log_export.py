@@ -122,11 +122,15 @@ class MessageExportService:
 
     @staticmethod
     def _extract_extension_keys(message: Message) -> list:
-        """从父消息聚合 extend_data 单层子键清单（保序去重）。
+        """从消息树聚合 extend_data 单层子键清单（保序去重）。
 
-        来源二选一：自然语言父消息的 context_data.system_selection.systems；
-        系统选择父消息的 output_data.systems。两者均为
-        systems[].extension_fields[]（SelectionFieldMeta dict 形态，raw_name+keys）。
+        按父消息类型取来源：自然语言父消息的 context_data.system_selection.systems；
+        系统选择父消息的 output_data.systems。用户意图父消息（一期主链路）无
+        systems 快照——SELECTION 与日志检索为兄弟消息（同父意图消息）：取
+        「检索消息创建时点的最新成功系统选择」（id 上界限定，防导出前用户切换
+        系统干扰取值）的 output_data.systems：复合意图轮为本轮新建选择、纯检索轮
+        为会话当前系统，两形态均正确。三者均为 systems[].extension_fields[]
+        （SelectionFieldMeta dict 形态，raw_name+keys）。
         """
 
         parent = message.parent_message
@@ -134,6 +138,19 @@ class MessageExportService:
             return []
         if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
             systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
+        elif parent.message_type == MessageType.USER_INTENT:
+            selection = (
+                Message.objects.filter(
+                    conversation=parent.conversation,
+                    created_by=parent.created_by,
+                    message_type=MessageType.SYSTEM_SELECTION,
+                    status=ExecutionStatus.SUCCESS,
+                    id__lte=message.id,
+                )
+                .order_by("-id")
+                .first()
+            )
+            systems = ((selection.output_data if selection else None) or {}).get("systems") or []
         else:
             systems = (parent.output_data or {}).get("systems") or []
         keys: list = []

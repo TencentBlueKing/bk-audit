@@ -6,7 +6,7 @@ from unittest import mock
 
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import ExecutionStatus
+from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidMessageState,
@@ -386,6 +386,73 @@ class TestMessageExport(AIAssistantPlatformTestCase):
             )
         _, kwargs = mock_create.call_args
         self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
+
+    def _make_intent_parent_with_selection(self, selection_output):
+        """构造意图链路消息树：系统选择（兄弟消息）→ USER_INTENT 父消息，返回父消息。"""
+
+        from tests.test_ai_assistant.base import make_selection_output as _make
+
+        self.create_selection_message(output=selection_output or _make())
+        return Message.objects.create(
+            conversation=self.conversation,
+            parent_message=None,
+            message_type=MessageType.USER_INTENT,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"query_text": "查一下最近日志", "auto_execute": True},
+            context_data={"username": self.user, "namespace": "bkaudit", "scope_type": "cross_system"},
+            output_data={"intent": "log_search", "system_id": TARGET_SYSTEM_ID, "selection_message_uid": ""},
+            created_by=self.user,
+        )
+
+    def test_full_export_auto_injects_extension_keys_from_intent_parent(self):
+        """回归：意图链路（一期主链路）父消息为 USER_INTENT 时同样自动聚合注入。
+
+        08-28 实现仅覆盖 NL/SELECTION 两种父消息；09 月 USER_INTENT 上线后 LOG_SEARCH
+        父消息变为 USER_INTENT（output 无 systems 快照）→ extension_keys 注入为空
+        → 全量导出回退 extend_data 单列 JSON（线上报障"扩展字段不展开"）。修复后
+        取检索时点的最新成功系统选择（SELECTION 为兄弟消息）聚合。
+        """
+
+        from services.web.query.ai_assistant.schemas import SelectionFieldMeta
+
+        selection_output = make_selection_output()
+        selection_output.systems[0].extension_fields = [
+            SelectionFieldMeta(raw_name="extend_data", keys=["ticket_id"], display_name="工单ID"),
+            SelectionFieldMeta(raw_name="extend_data", keys=["operator"], display_name="经办人"),
+        ]
+        intent_parent = self._make_intent_parent_with_selection(selection_output)
+        message = self.create_log_search_message(parent=intent_parent)
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value={"id": 1, "status": "PENDING"},
+        ) as mock_create:
+            self.service.create_full_export(
+                message_uid=str(message.uid),
+                export_config={"field_scope": "all", "flatten_extension": True, "fields": []},
+            )
+        _, kwargs = mock_create.call_args
+        self.assertEqual(kwargs["export_config"]["extension_keys"], ["ticket_id", "operator"])
+
+    def test_extract_intent_parent_uses_selection_at_search_time(self):
+        """意图父消息：取检索消息创建时点的系统选择，导出前用户已切换系统不受影响（id 上界）。"""
+
+        from services.web.query.ai_assistant.schemas import SelectionFieldMeta
+
+        selection_output = make_selection_output()
+        selection_output.systems[0].extension_fields = [
+            SelectionFieldMeta(raw_name="extend_data", keys=["ticket_id"], display_name="工单ID"),
+        ]
+        intent_parent = self._make_intent_parent_with_selection(selection_output)
+        message = self.create_log_search_message(parent=intent_parent)
+        # 检索完成后用户切换到其他系统（id 更大的新选择）：导出取值不得被后续切换污染
+        later_output = make_selection_output(system_id="other-system")
+        later_output.systems[0].extension_fields = [
+            SelectionFieldMeta(raw_name="extend_data", keys=["strategy_id"], display_name="策略ID"),
+        ]
+        self.create_selection_message(output=later_output)
+
+        keys = MessageExportService._extract_extension_keys(message)
+        self.assertEqual(keys, ["ticket_id"])
 
     def test_full_export_explicit_extension_keys_not_overridden(self):
         """显式传 extension_keys：后端不覆盖调用方清单"""
