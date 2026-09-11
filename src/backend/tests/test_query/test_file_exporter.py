@@ -2,7 +2,7 @@
 """FileExporter 分组表头文案解析单测。"""
 
 from services.web.query.constants import FieldCategoryEnum, LogExportField
-from services.web.query.export.file_exporter import EXTENSION_GROUP_LABEL, FileExporter
+from services.web.query.export.file_exporter import EXTENSION_GROUP_LABEL, XLSXExporter
 
 
 def _field(raw_name: str, *keys: str) -> LogExportField:
@@ -23,9 +23,9 @@ class TestResolveCategoryLabel:
 
     def test_non_custom_categories_preserve_label(self):
         for category in (FieldCategoryEnum.STANDARD, FieldCategoryEnum.SNAPSHOT, FieldCategoryEnum.SYSTEM):
-            assert FileExporter._resolve_category_label(category, [_field("username")]) == category.label
+            assert XLSXExporter._resolve_category_label(category, [_field("username")]) == category.label
             assert (
-                FileExporter._resolve_category_label(category, [_field("username")], flatten_extension=True)
+                XLSXExporter._resolve_category_label(category, [_field("username")], flatten_extension=True)
                 == category.label
             )
 
@@ -41,7 +41,7 @@ class TestResolveCategoryLabel:
             _field("extend_data", "request_data"),
         ]
         assert (
-            FileExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=False)
+            XLSXExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=False)
             == FieldCategoryEnum.CUSTOM.label
         )
 
@@ -53,7 +53,7 @@ class TestResolveCategoryLabel:
             _field("extend_data", "request_data"),
         ]
         assert (
-            FileExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
+            XLSXExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
             == EXTENSION_GROUP_LABEL
         )
 
@@ -65,7 +65,7 @@ class TestResolveCategoryLabel:
             _field("other_custom"),
         ]
         assert (
-            FileExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
+            XLSXExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
             == FieldCategoryEnum.CUSTOM.label
         )
 
@@ -74,7 +74,7 @@ class TestResolveCategoryLabel:
 
         fields = [_field("custom_a"), _field("custom_b")]
         assert (
-            FileExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
+            XLSXExporter._resolve_category_label(FieldCategoryEnum.CUSTOM, fields, flatten_extension=True)
             == FieldCategoryEnum.CUSTOM.label
         )
 
