@@ -137,7 +137,6 @@ const titleRefreshInflight = new Map<string, Promise<void>>();
 const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 /** 异步 SYSTEM_SELECTION 成功后补发原始 NL 查询 */
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
-/** NL 隐式识别到系统时，SYSTEM_SELECTION 仅用于补上下文，不展示 guide */
 const hiddenGuideMessageIds = new Set<string>();
 /** 首页建会话进行中的 Promise，避免连点重复创建 */
 let createLogConversationInflight: Promise<Conversation> | null = null;
@@ -205,7 +204,8 @@ const upsertConversationMessage = (
   if (!conv) return;
 
   const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
-  if (message.message_type === 'SYSTEM_SELECTION') {
+  if (message.message_type === 'SYSTEM_SELECTION' && typeof message.show_guide !== 'boolean') {
+    // 仅当协议未带 show_guide 时写入内存兜底；有字段则以协议为准
     if (options?.showGuide === false) {
       hiddenGuideMessageIds.add(message.uid);
     } else if (options?.showGuide === true) {
@@ -490,22 +490,8 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
     const pureSystemSwitch = isPureSystemSwitchIntent(detail);
     const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
     if (selectionMessageUid) {
-      const existingSelectionMessage = findStoredConversation(conversationId)?.messages.find(item => (
-        item.id === selectionMessageUid
-        && (item.type === 'retrieval-guide' || item.type === 'select-system')
-      ));
-      // 纯切系统需要展示引导卡；切系统+检索仍隐藏引导，避免与结果卡抢视线
-      let selectionOptions: { showGuide?: boolean } | undefined;
-      if (pureSystemSwitch) {
-        selectionOptions = { showGuide: true };
-      } else if (!existingSelectionMessage) {
-        selectionOptions = { showGuide: false };
-      }
-      await fetchSelectionMessage(
-        conversationId,
-        selectionMessageUid,
-        selectionOptions,
-      );
+      // 是否展示引导卡由 SYSTEM_SELECTION.show_guide 决定
+      await fetchSelectionMessage(conversationId, selectionMessageUid);
     }
     if (!pureSystemSwitch) {
       await ensureChildLogSearch(conversationId, detail.uid);
