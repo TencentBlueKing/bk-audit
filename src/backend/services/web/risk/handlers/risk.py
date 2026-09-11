@@ -38,6 +38,7 @@ from apps.meta.utils.format import preprocess_data
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from apps.permission.handlers.actions import ActionEnum
 from core.render import Jinja2Renderer, VariableUndefined
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
@@ -50,7 +51,7 @@ from services.web.risk.constants import (
     RiskStatus,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.risk.models import Risk
+from services.web.risk.models import Risk, UserType
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
 from services.web.scene.constants import (
@@ -414,6 +415,9 @@ class RiskHandler:
             risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
             update_fields += ["confirmer", "status", "display_status"]
         risk.save(update_fields=update_fields)
+        # 为确认人授予查看权限，使其能打开详情核实
+        if risk.confirmer:
+            risk.auth_users(action=ActionEnum.LIST_RISK.id, users=risk.confirmer, user_type=UserType.CONFIRMER)
 
     def _get_strategy_scene_id(self, strategy_id) -> Optional[int]:
         """
