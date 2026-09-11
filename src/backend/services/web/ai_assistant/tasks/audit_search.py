@@ -261,6 +261,8 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                         "[execute_user_intent] intent parse retry budget exhausted, message_id=%s, attempt=%s",
                         execution.message.id,
                         attempt + 1,
+                        # raw_output 进结构化日志 extra：定位失败形态（嵌套引号未转义 vs 输出截断）的唯一直接证据
+                        extra={"raw_output": error.extra.get("raw_output", "")},
                     )
                     # 解析失败超预算 = 确定性失败（模型能力边界，重试同输入大概率仍失败）：
                     # 收敛 SUCCESS + 结构化 error（前端错误卡有现成渲染，用户有反馈），
@@ -381,6 +383,8 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                         "[execute_user_intent] condition parse retry budget exhausted, message_id=%s, attempt=%s",
                         execution.message.id,
                         attempt + 1,
+                        # raw_output 进结构化日志 extra：定位失败形态（嵌套引号未转义 vs 输出截断）的唯一直接证据
+                        extra={"raw_output": error.extra.get("raw_output", "")},
                     )
                     condition_error = error
                     break
@@ -419,6 +423,9 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
             intent=payload.intent,
             system_id=system_id,
             error=UserIntentErrorSchema(error_code=condition_error.error_code, error_message=error_message),
+            # 本轮 SELECTION 已建（select_system 恒新建）：透传 uid 供前端定位切换消息，
+            # 检索失败不应丢失切换上下文（曾漏传致 output.selection_message_uid 恒空）
+            selection_message_uid=str(selection_message.uid) if selection_message is not None else "",
         )
     return UserIntentOutputSchema(
         intent=payload.intent,

@@ -326,6 +326,8 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(output.error.error_code, QueryNotRecognizedError().error_code)
         # 兜底文案：检索失败不掩盖切换成功（修复前整句"未能理解检索需求"误导用户）
         self.assertIn("已为您切换到 审计中心", output.error.error_message)
+        # 检索失败不丢失切换上下文：SELECTION 已建须透传 uid（曾漏传致恒空）
+        self.assertTrue(output.selection_message_uid)
         # SELECTION 已建保留（切换不被检索失败阻塞），无 LOG_SEARCH 子消息
         self.assertEqual(self._selection_count(), 1)
         self.assertFalse(
