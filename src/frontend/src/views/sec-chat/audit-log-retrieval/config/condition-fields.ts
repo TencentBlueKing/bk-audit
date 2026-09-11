@@ -21,10 +21,7 @@ import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/typ
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
 import type { LogFieldConditionValue, SelectedSystem, SystemFieldRow } from '../../types';
-import {
-  buildParentFieldLabelMap,
-  resolveSystemFieldDisplayLabel,
-} from '../../utils/map-ai-message';
+import { resolveSystemFieldDisplayLabel } from '../../utils/map-ai-message';
 
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
@@ -226,13 +223,12 @@ const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
 
 const fieldConfigFromRow = (
   field: SystemFieldRow,
-  parentLabelMap?: Record<string, string>,
 ): ILogFieldConfig => {
   const operators = field.allowOperators || [];
   const options = field.options || [];
   const hasOptions = options.length > 0;
   const isUser = /user|username/i.test(field.rawName) || field.nlName.includes('操作人');
-  const label = resolveSystemFieldDisplayLabel(field, parentLabelMap);
+  const label = resolveSystemFieldDisplayLabel(field);
   const metaExtras = {
     fieldMeta: field,
     allowOperators: operators,
@@ -299,14 +295,12 @@ export const createConditionFieldConfigFromSystemFields = (
     },
   };
 
-  const parentLabelMap = buildParentFieldLabelMap(standardFields);
-
   [...standardFields, ...extensionFields].forEach((field) => {
     if (!field.rawName || field.rawName === 'datetime') return;
     const key = field.keys?.length
       ? `${field.rawName}.${field.keys.join('.')}`
       : field.rawName;
-    config[key] = fieldConfigFromRow(field, parentLabelMap);
+    config[key] = fieldConfigFromRow(field);
   });
 
   return config;

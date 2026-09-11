@@ -28,7 +28,6 @@
         placement="bottom-start"
         theme="light"
         trigger="manual"
-        :width="600"
         @clickoutside="onPopoverClickOutside"
         @update:is-show="onPopoverShowChange">
         <div
@@ -242,6 +241,8 @@
 
     .bk-pop2-content,
     .bk-popover-content {
+      width: max-content;
+      max-width: 600px;
       padding: 0;
       overflow: hidden;
       background: #fff;
@@ -255,8 +256,8 @@
   .json-field-preview-panel {
     position: relative;
     box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
+    width: max-content;
+    max-width: 600px;
     overflow: hidden;
   }
 
