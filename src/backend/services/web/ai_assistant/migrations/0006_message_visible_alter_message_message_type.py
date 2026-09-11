@@ -18,6 +18,15 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='message',
             name='message_type',
-            field=models.CharField(choices=[('SYSTEM_SELECTION', '系统选择'), ('USER_INTENT', '用户意图识别'), ('NATURAL_LANGUAGE_SEARCH', '自然语言检索'), ('LOG_SEARCH', '日志检索')], max_length=32, verbose_name='消息类型'),
+            field=models.CharField(
+                choices=[
+                    ('SYSTEM_SELECTION', '系统选择'),
+                    ('USER_INTENT', '用户意图识别'),
+                    ('NATURAL_LANGUAGE_SEARCH', '自然语言检索'),
+                    ('LOG_SEARCH', '日志检索'),
+                ],
+                max_length=32,
+                verbose_name='消息类型',
+            ),
         ),
     ]
