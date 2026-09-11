@@ -12,7 +12,7 @@ from django.utils import timezone
 from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME
 from core.utils.data import extract_nested_value
-from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
+from services.web.query.ai_assistant.constants import MCP_LOG_DEFAULT_FIELDS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
 from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContext,
@@ -51,7 +51,7 @@ class LogDetailSearchService:
     三列，并将完整行交给 SearchDataParser；投影发生在脱敏之后，辅助列永不外泄。
     """
 
-    _DEFAULT_FIELDS = tuple(LogFieldRef(raw_name=raw_name) for raw_name, _display_name in SNAPSHOT_DEFAULT_COLUMNS)
+    _DEFAULT_FIELDS = tuple(LogFieldRef(raw_name=raw_name) for raw_name in MCP_LOG_DEFAULT_FIELDS)
 
     @classmethod
     def search(cls, *, username: str, namespace: str, request: SearchLogsRequest) -> SearchLogsResponse:

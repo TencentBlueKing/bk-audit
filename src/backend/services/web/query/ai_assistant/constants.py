@@ -111,3 +111,15 @@ AI_FORBIDDEN_CONDITION_FIELDS = AI_FORBIDDEN_TIME_FIELDS + ("system_id",)
 
 # D4 默认实现：后端生成全量导出任务名，{prefix} 为 message_uid 前 8 位
 AI_EXPORT_TASK_NAME_TEMPLATE = gettext_lazy("AI助手检索导出-%s")
+
+# MCP 明细默认按证据字段取数，避免复用前端快照的大 JSON/完整日志列。
+MCP_LOG_DEFAULT_FIELDS = (
+    "event_id",
+    "start_time",
+    "username",
+    "system_id",
+    "action_id",
+    "resource_type_id",
+    "instance_id",
+    "result_code",
+)

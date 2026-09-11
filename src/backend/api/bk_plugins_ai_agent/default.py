@@ -172,11 +172,13 @@ class ChatCompletion(AIAgentBase):
         if isinstance(request_data, dict):
             execute_kwargs = request_data.get("execute_kwargs") or {}
             logger.info(
-                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, chat_history_count=%s",
+                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, "
+                "chat_history_count=%s, thread_id=%s",
                 self._current_agent_code,
                 bool(execute_kwargs.get("stream")),
                 len(request_data.get("input") or ""),
                 len(request_data.get("chat_history") or []),
+                execute_kwargs.get("thread_id"),
             )
             if execute_kwargs.get("stream"):
                 kwargs["stream"] = True
