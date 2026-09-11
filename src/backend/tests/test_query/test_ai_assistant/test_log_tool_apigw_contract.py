@@ -40,15 +40,15 @@ from services.web.query.ai_assistant.log_tools.schemas import (
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 MCP_LOG_RESOURCES = {
     "mcp_get_log_field_metadata": (
-        "/mcp/{namespace}/logs/field_metadata/",
+        "/mcp/logs/field_metadata/",
         "/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/",
     ),
     "mcp_search_logs": (
-        "/mcp/{namespace}/logs/search/",
+        "/mcp/logs/search/",
         "/api/v1/query/namespaces/{namespace}/mcp_user/logs/search/",
     ),
     "mcp_aggregate_logs": (
-        "/mcp/{namespace}/logs/aggregate/",
+        "/mcp/logs/aggregate/",
         "/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/",
     ),
 }
@@ -84,16 +84,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
             with self.subTest(operation_id=operation_id):
                 operation = self.resources["paths"][path]["post"]
                 self.assertEqual(operation["operationId"], operation_id)
-                self.assertEqual(
-                    operation["parameters"][0],
-                    {
-                        "in": "path",
-                        "name": "namespace",
-                        "type": "string",
-                        "required": True,
-                        "description": "命名空间，仅由 URL path 提供，不能在请求体伪造。",
-                    },
-                )
+                self.assertEqual([parameter["in"] for parameter in operation["parameters"]], ["body"])
                 request_schema = next(item["schema"] for item in operation["parameters"] if item["in"] == "body")
                 self.assertNotIn("namespace", request_schema["properties"])
                 self.assertTrue(operation["responses"]["200"]["schema"]["properties"])
@@ -101,7 +92,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
                 self.assertTrue(config["isPublic"])
                 self.assertTrue(config["allowApplyPermission"])
                 self.assertEqual(config["backend"]["method"], "post")
-                self.assertEqual(config["backend"]["path"], backend_path)
+                self.assertEqual(config["backend"]["path"], backend_path.replace("{namespace}", "default"))
                 self.assertEqual(
                     config["authConfig"],
                     {

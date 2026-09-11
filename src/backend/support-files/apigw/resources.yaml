@@ -3066,17 +3066,12 @@ paths:
           resourcePermissionRequired: true
         disabledStages: []
         descriptionEn:
-  /mcp/{namespace}/logs/field_metadata/:
+  /mcp/logs/field_metadata/:
     post:
       operationId: mcp_get_log_field_metadata
-      description: 探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；业务 data 最大 1 MiB，字段或权限错误可修正参数后重试。
+      description: 默认空间日志工具，无需传 namespace。探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；业务 data 最大 1 MiB，字段含义或 JSON 路径不明确时按需探索，样本未出现不表示总体不存在；未知字段应修正，权限拒绝应停止对应查询。
       tags: []
       parameters:
-        - in: path
-          name: namespace
-          type: string
-          required: true
-          description: 命名空间，仅由 URL path 提供，不能在请求体伪造。
         - in: body
           name: body
           required: true
@@ -3154,7 +3149,7 @@ paths:
         backend:
           type: HTTP
           method: post
-          path: /api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/
+          path: /api/v1/query/namespaces/default/mcp_user/logs/field_metadata/
           matchSubpath: false
           timeout: 0
           upstreams: {}
@@ -3165,17 +3160,12 @@ paths:
           resourcePermissionRequired: true
         disabledStages: []
         descriptionEn:
-  /mcp/{namespace}/logs/search/:
+  /mcp/logs/search/:
     post:
       operationId: mcp_search_logs
-      description: 查询当前用户可访问的已脱敏日志明细。省略 fields 时使用紧凑默认列；显式列最多 20 个，页码和页大小最多 100，业务 data 载荷不超过 1 MiB，超时可缩小范围后重试。
+      description: 默认空间日志工具，无需传 namespace。查询当前用户可访问的已脱敏日志明细。省略 fields 返回 event_id、start_time、username、system_id、action_id、resource_type_id、instance_id、result_code；log 和 JSON 字段按需显式投影。明细用于举证，不代表总体分布；显式列最多 20 个，页码为正整数、每页最多 100 条，业务 data 载荷不超过 1 MiB，超时可缩小范围后重试。
       tags: []
       parameters:
-        - in: path
-          name: namespace
-          type: string
-          required: true
-          description: 命名空间，仅由 URL path 提供，不能在请求体伪造。
         - in: body
           name: body
           required: true
@@ -3274,7 +3264,7 @@ paths:
         backend:
           type: HTTP
           method: post
-          path: /api/v1/query/namespaces/{namespace}/mcp_user/logs/search/
+          path: /api/v1/query/namespaces/default/mcp_user/logs/search/
           matchSubpath: false
           timeout: 0
           upstreams: {}
@@ -3285,17 +3275,12 @@ paths:
           resourcePermissionRequired: true
         disabledStages: []
         descriptionEn:
-  /mcp/{namespace}/logs/aggregate/:
+  /mcp/logs/aggregate/:
     post:
       operationId: mcp_aggregate_logs
-      description: 对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；时间桶使用物理时间列 dtEventTimeStamp，AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回，业务 data 最大 1 MiB。
+      description: 默认空间日志工具，无需传 namespace。对当前用户可访问日志执行类型化聚合。最多 2 个维度、5 个指标和 100 个分组；时间桶使用物理时间列 dtEventTimeStamp，AUTO 时间桶按已验证时间范围决定，转换质量在 data_quality 返回，业务 data 最大 1 MiB。总体数量和比例使用聚合核验，失败子集不能代替总体分母；TopN 显式按指标 DESC 排序，检查 has_more，缺失时间桶不推断为零。
       tags: []
       parameters:
-        - in: path
-          name: namespace
-          type: string
-          required: true
-          description: 命名空间，仅由 URL path 提供，不能在请求体伪造。
         - in: body
           name: body
           required: true
@@ -3465,7 +3450,7 @@ paths:
         backend:
           type: HTTP
           method: post
-          path: /api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/
+          path: /api/v1/query/namespaces/default/mcp_user/logs/aggregate/
           matchSubpath: false
           timeout: 0
           upstreams: {}

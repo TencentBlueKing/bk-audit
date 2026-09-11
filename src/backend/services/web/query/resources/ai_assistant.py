@@ -49,7 +49,8 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
 class MCPSearchLogs(QueryBaseResource):
     """按受控字段分页返回当前用户可见、已脱敏的日志明细。
 
-    省略 fields 时使用紧凑默认列；显式投影最多 20 列、页码和每页数量最多 100，运行
+    省略 fields 时返回含 event_id 的紧凑证据列，JSON/完整日志按需显式投影；
+    显式投影最多 20 列、页码为正整数且每页最多 100 条，运行
     配置只能收紧这些边界。业务 data 载荷不超过 1 MiB，且不含 SQL、表名或原始敏感行；
     超时可缩小时间范围后重试。
     """

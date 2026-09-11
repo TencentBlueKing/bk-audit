@@ -34,6 +34,8 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationQuerySummary,
     FieldSampleSummary,
     GetLogFieldMetadataResponse,
+    LogDetailColumn,
+    LogFieldMetadataItem,
     LogQueryExecutionSummary,
     LogSearchPagination,
     SearchLogsResponse,
@@ -265,7 +267,17 @@ class TestMCPUserLogResources(AIAssistantTestCase):
     def test_field_metadata_uses_request_user_and_path_namespace(self):
         from services.web.query.resources.ai_assistant import MCPGetLogFieldMetadata
 
-        response_model = GetLogFieldMetadataResponse(sample_summary=FieldSampleSummary())
+        response_model = GetLogFieldMetadataResponse(
+            fields=[
+                LogFieldMetadataItem(
+                    field={"raw_name": "extend_data", "keys": ["request_data"]},
+                    category="EXTENDED",
+                    type_source="INFERRED",
+                    description="",
+                )
+            ],
+            sample_summary=FieldSampleSummary(),
+        )
         with (
             mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
             mock.patch(
@@ -286,6 +298,13 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         from services.web.query.resources.ai_assistant import MCPSearchLogs
 
         response_model = SearchLogsResponse(
+            columns=[
+                LogDetailColumn(
+                    field={"raw_name": "extend_data", "keys": ["request_data"]},
+                    key="extend_data.request_data",
+                    description="",
+                )
+            ],
             total=0,
             pagination=LogSearchPagination(page=1, page_size=20, returned_count=0, has_more=False),
             query_summary=LogQueryExecutionSummary(took_ms=1, executed_at=self.end_time),

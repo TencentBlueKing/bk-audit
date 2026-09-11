@@ -135,6 +135,7 @@ class TestLogDetailSearchService(AIAssistantTestCase):
         self.assertEqual(
             [column.key for column in result.columns],
             [
+                "event_id",
                 "start_time",
                 "username",
                 "system_id",
@@ -142,8 +143,6 @@ class TestLogDetailSearchService(AIAssistantTestCase):
                 "resource_type_id",
                 "instance_id",
                 "result_code",
-                "extend_data",
-                "log",
             ],
         )
         self.assertEqual(result.total, 5)
@@ -574,7 +573,7 @@ class TestLogDetailSearchSensitiveProjection(TestCase):
 
     @mock.patch.object(SafeQuerySyncResource, "bulk_request")
     @mock.patch(f"{SEARCH_MODULE}.LogQueryContextService.build")
-    def test_default_columns_do_not_expose_raw_log_for_private_rule(self, mock_context, mock_query):
+    def test_explicit_json_and_log_columns_respect_private_rule(self, mock_context, mock_query):
         condition = SearchCondition(
             scope_id=self.target_system_id,
             start_time="2026-08-13T00:00:00+08:00",
@@ -613,7 +612,9 @@ class TestLogDetailSearchSensitiveProjection(TestCase):
         result = LogDetailSearchService.search(
             username=self.username,
             namespace=self.namespace,
-            request=SearchLogsRequest(condition=condition),
+            request=SearchLogsRequest(
+                condition=condition, fields=[LogFieldRef(raw_name="extend_data"), LogFieldRef(raw_name="log")]
+            ),
         )
 
         self.assertEqual(result.items[0]["extend_data"], {"public": "visible"})
