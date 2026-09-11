@@ -221,9 +221,7 @@ const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
   && 'operator' in value
 );
 
-const fieldConfigFromRow = (
-  field: SystemFieldRow,
-): ILogFieldConfig => {
+const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
   const operators = field.allowOperators || [];
   const options = field.options || [];
   const hasOptions = options.length > 0;
