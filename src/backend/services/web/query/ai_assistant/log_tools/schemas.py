@@ -350,8 +350,12 @@ class LogFieldMetadataItem(BaseModel):
 
     field: LogFieldRef = Field(..., description="Agent 后续查询可直接复用的字段引用。")
     category: LogFieldCategory = Field(..., description="根字段为 BASIC，JSON 子字段为 EXTENDED。")
-    display_name: str = Field(default="", description="面向用户和 Agent 的字段展示名。")
-    description: str = Field(default="", description="字段业务含义；动态子字段可能为空。")
+    display_name: Annotated[str, serializers.CharField(allow_blank=True)] = Field(
+        default="", description="面向用户和 Agent 的字段展示名。"
+    )
+    description: Annotated[str, serializers.CharField(allow_blank=True)] = Field(
+        default="", description="字段业务含义；动态子字段可能为空。"
+    )
     type_source: LogFieldMetadataTypeSource = Field(..., description="字段类型来自声明还是样本推断。")
     observed_types: List[JSONValueType] = Field(default_factory=list, description="脱敏样本中观察到的 JSON 类型。")
     allow_operators: List[str] = Field(default_factory=list, description="现有日志检索支持的操作符。")
@@ -473,8 +477,8 @@ class LogDetailColumn(BaseModel):
 
     field: LogFieldRef
     key: str
-    display_name: str = ""
-    description: str = ""
+    display_name: Annotated[str, serializers.CharField(allow_blank=True)] = ""
+    description: Annotated[str, serializers.CharField(allow_blank=True)] = ""
     options: Optional[List[SelectionFieldOption]] = None
 
 

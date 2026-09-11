@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -18,6 +19,7 @@ from django.utils import timezone
 from gevent import Timeout
 
 from api.constants import AIAgentCode
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import (
     DEFAULT_AI_ANALYSIS_TITLE,
     AttachmentType,
@@ -182,6 +184,14 @@ def execute_log_analysis(
 ) -> AIAnalysisOutputSchema:  # noqa: N805
     """调用日志分析 Agent，过程事件实时写入平台 UI 流。"""
 
+    # 流执行已在首次请求前落库；每次重新执行会轮换标识，避免复用失败会话。
+    thread_id = str(execution.stream.execution_id)
+    logger.info(
+        "日志分析 Agent 首轮会话: attachment_uid=%s, thread_id=%s, system_prompt_sha256=%s",
+        execution.attachment.uid,
+        thread_id,
+        hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+    )
     artifact_extractor = LogAnalysisArtifactExtractor()
 
     def on_event(event: dict[str, Any]) -> None:
@@ -195,9 +205,11 @@ def execute_log_analysis(
         api.bk_plugins_ai_agent.chat_completion(
             agent_code=AIAgentCode.AUDIT_LOG_ANALYSIS,
             user=execution.context_data.username,
-            input=build_agent_input(execution.context_data),
-            chat_history=[],
-            execute_kwargs={"stream": True},
+            chat_history=[
+                {"role": "role", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_agent_input(execution.context_data)},
+            ],
+            execute_kwargs={"stream": True, "thread_id": thread_id},
             on_event=on_event,
         )
     # 通用 AG-UI 客户端不解释业务产物；日志分析只持久化最后一条完整 assistant Markdown。
