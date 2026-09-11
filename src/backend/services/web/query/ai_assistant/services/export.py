@@ -168,7 +168,8 @@ class PreviewExportService:
         for key in keys:
             flat_columns.append(ResultColumn(raw_name="extend_data", keys=[key], display_name=key))
 
-        # ③ 内存态 LogExportTask 走 SPECIFIED 形态
+        # ③ 内存态 LogExportTask 走 SPECIFIED 形态；携带 flatten_extension 标记——
+        #    既是平铺语义自洽，也是 Excel 分组表头渲染"扩展字段"的开关（检索页导出不传）
         export_fields = [
             {"raw_name": column.full_key, "display_name": column.display_name, "keys": []} for column in flat_columns
         ]
@@ -176,6 +177,7 @@ class PreviewExportService:
             export_config={
                 "field_scope": LogExportFieldScope.SPECIFIED.value,
                 "fields": export_fields,
+                "flatten_extension": True,
             }
         )
         config = ExportConfig(task=task_stub)

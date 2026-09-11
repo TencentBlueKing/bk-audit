@@ -202,7 +202,10 @@ class AIConditionItem(BaseModel):
     keys: List[str] = Field(default_factory=list, description="下钻子键，仅 JSON 容器字段使用，通用字段为空数组")
     field_type: Optional[str] = Field(None, description="字段类型，可缺省由服务端按字段元数据补全")
     operator: str = Field(..., min_length=1, description="操作符，必须在该字段 allow_operators 内")
-    filters: List[Any] = Field(default_factory=list, description="原始查询值列表，形态匹配操作符")
+    filters: List[Any] = Field(
+        default_factory=list,
+        description="原始查询值列表，形态匹配操作符；值保持原样：JSON 对象字面量整体作为一个字符串" "（内部双引号转义），URL 与特殊字符文本不截断不改写",
+    )
 
 
 class AIConditionPayload(BaseModel):
