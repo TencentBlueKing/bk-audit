@@ -106,7 +106,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
                 intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您选择审计中心"
             ),
         )
-
         self.assertEqual(output.intent, "select_system")
         self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
         self.assertIsNotNone(output.condition)
@@ -125,6 +124,58 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertIsNotNone(log_search)
         self.assertEqual(output.selection_message_uid, str(selection.uid))
         mock_delay.assert_called_once_with(conversation_id=self.conversation.id, query_text="看审计中心近七天 hermit 的操作记录")
+
+    def test_log_search_fallback_failed_message_on_chain_failure(self):
+        """回归：续链 LOG_SEARCH 执行失败降级固化 FAILED 子消息，不再静默消失。
+
+        线上报障：意图 SUCCESS + condition 完整 + auto_execute，但续链 create_executed
+        抛异常被钩子静默吞 → 子消息不创建 → 前端以意图消息为锚点 AFTER 轮询死等超时。
+        修复：失败降级建 FAILED LOG_SEARCH（可见可重试，condition 与 context 固化，
+        timeline 回写保持全链耗时语义）。
+        """
+
+        from services.web.ai_assistant.constants import MessageErrorCode
+        from services.web.ai_assistant.services.message import MessageService
+
+        payload = IntentPayload(
+            intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您选择审计中心"
+        )
+        real_create_executed = MessageService.create_executed
+
+        def fail_log_search_only(**kwargs):
+            # 仅 LOG_SEARCH 续链失败（SELECTION 正常建，模拟 Doris 检索异常）
+            if kwargs.get("message_type") == MessageType.LOG_SEARCH:
+                raise RuntimeError("doris search boom")
+            return real_create_executed(MessageService(user=self.user), **kwargs)
+
+        message, output, _ = self._run_with_create_executed(payload, fail_log_search_only)
+
+        # 意图消息终态不受续链失败影响（SUCCESS + condition 保留）
+        self.assertIsNotNone(output.condition)
+        # 降级 FAILED 子消息：可见、可重试、condition 与 context 固化
+        log_search = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
+        ).first()
+        self.assertIsNotNone(log_search)
+        self.assertEqual(log_search.status, ExecutionStatus.FAILED)
+        self.assertEqual(log_search.error_code, str(MessageErrorCode.TASK_EXECUTION_FAILED))
+        self.assertTrue(log_search.visible)
+        self.assertEqual(log_search.input_data["condition"]["scope_id"], TARGET_SYSTEM_ID)
+        self.assertEqual(log_search.context_data["system_id"], TARGET_SYSTEM_ID)
+        self.assertEqual(log_search.context_data["source"], "natural_language")
+        # timeline 回写：FAILED 消息 duration 表达「发问 → 续链失败」全链耗时
+        self.assertEqual(log_search.created_at, message.created_at)
+        # SELECTION 正常建成（复合意图切换不受检索失败影响）
+        self.assertEqual(self._selection_count(), 1)
+
+    def _run_with_create_executed(self, payload, create_executed_side_effect):
+        """_run 变体：额外拦截 MessageService.create_executed（按需分流失败）。"""
+
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.MessageService.create_executed",
+            side_effect=create_executed_side_effect,
+        ):
+            return self._run(payload)
 
     def test_log_search_with_current_selection(self):
         """场景② 纯检索（已有系统）：复用当前 SELECTION 不新建，直接条件识别续链"""
