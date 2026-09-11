@@ -347,6 +347,11 @@ class Message(ExternalUIDModel, OperateRecordModel, ExecutionSnapshotModel):
         blank=True,
     )
     message_type = models.CharField(gettext_lazy("消息类型"), max_length=32, choices=MessageType.choices)
+    # 消息卡片可见性（通用显隐协议，任何消息类型可复用）：默认 True 展示；
+    # 仅特定编排场景置 False（如复合意图「切系统+检索」自动创建的 SELECTION——本轮
+    # 仅展示日志检索消息）。随消息持久化，刷新/重试/编辑保持；序列化层顶层输出，
+    # 前端 visible=false 时整卡不渲染（历史消息缺省 True 兜底）
+    visible = models.BooleanField(gettext_lazy("卡片可见性"), default=True)
 
     class Meta:
         verbose_name = gettext_lazy("AI 助手消息")

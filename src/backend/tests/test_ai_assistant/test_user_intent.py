@@ -116,9 +116,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         ).first()
         self.assertIsNotNone(selection)
         self.assertIsNone(selection.parent_message)
-        # 引导卡显隐：复合意图（切系统+检索）自动建的 SELECTION 隐藏引导卡
-        # （设计侧要求仅展示日志检索消息）；随快照固化，前端刷新后按 show_guide 恢复显隐
-        self.assertFalse(selection.output_data["show_guide"])
+        # 消息卡片可见性：复合意图（切系统+检索）自动建的 SELECTION 隐藏
+        # （设计侧要求仅展示日志检索消息）；visible 随消息持久化，刷新后按顶层字段恢复
+        self.assertFalse(selection.visible)
         log_search = Message.objects.filter(
             conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
         ).first()
@@ -233,11 +233,11 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertIn("已为您切换到 审计中心", output.message)
         # 仅 1 条 SELECTION（切换生效）、0 条 LOG_SEARCH（不追加检索）
         self.assertEqual(self._selection_count(), 1)
-        # 纯切换 SELECTION 是本轮唯一产出：引导卡展示（show_guide=True）
+        # 纯切换 SELECTION 是本轮唯一产出：卡片展示（visible=True）
         selection = Message.objects.filter(
             conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION
         ).first()
-        self.assertTrue(selection.output_data["show_guide"])
+        self.assertTrue(selection.visible)
         self.assertFalse(
             Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
         )
@@ -297,7 +297,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         ), mock.patch(
             "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
             mock.MagicMock(side_effect=AIOutputParseFailedError()),
-        ), mock.patch("services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
+        ), mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
+        ):
             message, execution = create_intent_message(self, query_text="随便查点什么")
             output = execute_user_intent.run(execution)
 

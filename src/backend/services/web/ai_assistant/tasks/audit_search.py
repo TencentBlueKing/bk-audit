@@ -309,11 +309,11 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 "system_ids": [system_id],
                 "scope_type": context_data.scope_type or "cross_system",
                 "scope_id": context_data.scope_id,
-                # 引导卡显隐：纯切换（need_search=false）SELECTION 是本轮唯一产出，
-                # 引导卡必须展示；复合意图（切系统+检索）仅展示日志检索消息（设计侧
-                # 要求），引导卡隐藏——随快照固化，前端刷新后按 output.show_guide 恢复
-                "show_guide": not payload.need_search,
             },
+            # 消息卡片可见性（通用显隐协议）：纯切换（need_search=false）SELECTION 是
+            # 本轮唯一产出，卡片必须展示；复合意图（切系统+检索）仅展示日志检索消息
+            # （设计侧要求）——visible 随消息持久化，刷新后前端按顶层 visible 字段恢复
+            visible=not payload.need_search,
             # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
             timeline_started_at=execution.message.created_at,
         )

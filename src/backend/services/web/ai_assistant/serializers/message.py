@@ -225,6 +225,9 @@ class MessageResponseSerializer(serializers.Serializer):
             "conversation_uid": str(instance.conversation.uid),
             "parent_message_uid": str(instance.parent_message.uid) if instance.parent_message else None,
             "message_type": instance.message_type,
+            # 消息卡片可见性（通用显隐协议，任何消息类型可复用）：默认 True 展示，
+            # 仅特定编排场景 False（如复合意图自动创建的 SELECTION）；历史消息默认 True 兜底
+            "visible": instance.visible,
             "status": instance.status,
             "error_code": instance.error_code,
             "error_message": instance.error_message,
