@@ -34,7 +34,15 @@
           class="json-field-preview-trigger"
           @click.stop="togglePopover"
           @mousedown.stop="preparePopoverToggle">
-          {{ previewText }}
+          <span
+            v-bk-tooltips="{
+              content: clickTip,
+              disabled: !clickTip || popoverVisible,
+              placement: 'top',
+            }"
+            class="json-field-preview-value">
+            {{ previewText }}
+          </span>
         </div>
         <template #content>
           <div
@@ -87,12 +95,15 @@
     value?: unknown;
     /** 非 JSON 时的展示文案 */
     text?: string;
+    /** JSON 可点击预览时的 hover 提示 */
+    clickTip?: string;
     tooltipMaxWidth?: string | number;
     tooltipMaxHeight?: string;
     tooltipContentClass?: string;
   }>(), {
     value: undefined,
     text: '',
+    clickTip: '',
     tooltipMaxWidth: 480,
     tooltipMaxHeight: '400px',
     tooltipContentClass: 'show-tooltips-text-popup',
@@ -220,10 +231,17 @@
     font-size: inherit;
     line-height: inherit;
     color: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     cursor: pointer;
     box-sizing: border-box;
+  }
+
+  .json-field-preview-value {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
   }
 
   .json-field-preview-fallback {
