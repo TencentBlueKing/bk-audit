@@ -65,6 +65,10 @@ class SystemSelectionInputSchema(MessageSchema):
     system_ids: list[str] = Field(min_length=1, max_length=1)
     scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
     scope_id: str = Field(default="", max_length=64)
+    # 引导卡显隐（编排链路专用：复合意图「切系统+检索」自动创建的 SELECTION 传 False——
+    # 本轮仅展示日志检索消息，设计侧要求；前端手选系统不传，默认 True 展示引导卡。
+    # 随 input 快照固化，刷新/重试/编辑后前端仍可按 output.show_guide 恢复显隐）
+    show_guide: bool = True
 
     @model_validator(mode="after")
     def _validate_scope(self) -> "SystemSelectionInputSchema":
@@ -91,6 +95,10 @@ class SystemSelectionOutputSchema(MessageSchema):
     systems: Annotated[list[SelectionSystem], _NestedListField] = Field(default_factory=list)
     common_operations: list[CommonQuerySchema] = Field(default_factory=list)
     historical_operations: list[CommonQuerySchema] = Field(default_factory=list)
+    # 引导卡显隐（由 input.show_guide 透传固化；历史快照缺省 True = 展示，兼容不回退）：
+    # 前端以此字段控制 retrieval-guide 卡显示/隐藏，替代内存态 hiddenGuideMessageIds
+    # （刷新即丢，曾致复合意图刷新后引导卡重现的 bug）
+    show_guide: bool = True
 
 
 class NLSearchInputSchema(MessageSchema):

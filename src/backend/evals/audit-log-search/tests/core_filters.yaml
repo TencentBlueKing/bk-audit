@@ -259,3 +259,73 @@
       value: 'file://assertions/check_conditions.py:exact_conditions_match'
     - type: python
       value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+# ---- E 系列：拓展字段复杂值形态（2026-09-11 强化：复杂拓展值解析失败高发，
+#      线上报障场景为双下钻 JSON+URL 值查询，值原样整体入 filters 是硬要求）----
+
+- description: 'E1-拓展JSON值：request_data 对象字面量整体入 filters（转义正确性）'
+  vars:
+    query: '查一下 extend.request_data 为 {"scope_id":"49","namespace":"default","scope_type":"scene"} 的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['request_data']
+        operator: 'eq'
+        filters: ['{"scope_id":"49","namespace":"default","scope_type":"scene"}']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E2-拓展URL值：_request_url 含 & ? = 的完整 URL 原样保留'
+  vars:
+    query: '查一下 extend._request_url 为 http://bkaudit-api.bkop.example.com/api/v1/namespaces/default/systems/all/?scope_id=49&scope_type=scene 的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['_request_url']
+        operator: 'eq'
+        filters: ['http://bkaudit-api.bkop.example.com/api/v1/namespaces/default/systems/all/?scope_id=49&scope_type=scene']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E3-双下钻复杂值并行：JSON 值 + URL 值各自独立成条件（线上报障场景复刻）'
+  vars:
+    query: '检索 extend.request_data 为 {"scope_id":"49","namespace":"default","scope_type":"scene","audit_status__in":"accessed"}，extend._request_url 为 http://bkaudit-api.bkop.example.com/api/v1/meta/namespaces/default/systems/all/?scope_id=49&scope_type=scene&audit_status__in=accessed 的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['request_data']
+        operator: 'eq'
+        filters: ['{"scope_id":"49","namespace":"default","scope_type":"scene","audit_status__in":"accessed"}']
+      - raw_name: 'extend_data'
+        keys: ['_request_url']
+        operator: 'eq'
+        filters: ['http://bkaudit-api.bkop.example.com/api/v1/meta/namespaces/default/systems/all/?scope_id=49&scope_type=scene&audit_status__in=accessed']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'

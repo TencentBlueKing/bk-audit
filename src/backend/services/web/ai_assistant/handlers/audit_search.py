@@ -220,6 +220,8 @@ class SystemSelectionHandler(
             systems=selection.systems,
             common_operations=common_operations,
             historical_operations=historical_operations,
+            # 引导卡显隐透传固化（复合意图编排创建时传 False；前端手选默认 True）
+            show_guide=input_data.show_guide,
         )
 
 
