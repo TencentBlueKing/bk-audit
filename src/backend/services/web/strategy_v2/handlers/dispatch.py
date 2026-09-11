@@ -208,7 +208,7 @@ def evaluate(node: Optional[WhereCondition], ctx: dict) -> bool:
     if node.condition:
         return apply_condition(node.condition, ctx)
     if node.conditions:
-        results = [evaluate(sub, ctx) for sub in node.conditions]
+        results = [evaluate(sub, ctx) for sub in node.conditions if not evaluate_is_empty(sub)]
         if not results:
             return True
         return all(results) if node.connector == FilterConnector.AND else any(results)
