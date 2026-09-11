@@ -116,6 +116,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         ).first()
         self.assertIsNotNone(selection)
         self.assertIsNone(selection.parent_message)
+        # 引导卡显隐：复合意图（切系统+检索）自动建的 SELECTION 隐藏引导卡
+        # （设计侧要求仅展示日志检索消息）；随快照固化，前端刷新后按 show_guide 恢复显隐
+        self.assertFalse(selection.output_data["show_guide"])
         log_search = Message.objects.filter(
             conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
         ).first()
@@ -230,6 +233,11 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertIn("已为您切换到 审计中心", output.message)
         # 仅 1 条 SELECTION（切换生效）、0 条 LOG_SEARCH（不追加检索）
         self.assertEqual(self._selection_count(), 1)
+        # 纯切换 SELECTION 是本轮唯一产出：引导卡展示（show_guide=True）
+        selection = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION
+        ).first()
+        self.assertTrue(selection.output_data["show_guide"])
         self.assertFalse(
             Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
         )
@@ -238,7 +246,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         mock_delay.assert_called_once()
 
     def test_condition_transient_failure_raises_for_retry(self):
-        """[review P2] 条件识别暂态故障（超时/服务异常/超预算解析失败）冒泡收敛 FAILED：
+        """[review P2] 条件识别暂态故障（超时/服务异常）冒泡收敛 FAILED：
         MessageService.retry 仅接受 FAILED——SUCCESS+error 协议会让用户无法重试这类
         可恢复失败；确定性业务失败（未识别/输出非法）才走 SUCCESS+error。"""
 
@@ -252,6 +260,46 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             )
         # 暂态失败不产生结构化 error 输出（任务由平台收敛 FAILED，重试接口可用）
         self.assertEqual(self._selection_count(), 1)
+
+    def test_condition_parse_budget_exhausted_returns_error_protocol(self):
+        """[2026-09-11 修复] 条件识别解析失败超预算 = 确定性失败（模型能力边界）：
+        收敛 SUCCESS + 结构化 error（前端错误卡有现成渲染），不再冒泡 FAILED——
+        曾收敛 FAILED 致续链不发生、前端轮询子消息永远空、用户无任何反馈。"""
+
+        from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
+
+        self.create_selection_message()
+        with mock.patch("services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
+            message, output, _ = self._run(
+                payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的"),
+                convert=AIOutputParseFailedError(),
+            )
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, AIOutputParseFailedError().error_code)
+        self.assertTrue(output.error.error_message)
+        # 无续链子消息（确定性失败不建 LOG_SEARCH）
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+
+    def test_intent_parse_budget_exhausted_returns_error_protocol(self):
+        """[2026-09-11 修复] 意图识别解析失败超预算 = 确定性失败：SUCCESS + 结构化
+        error（错误卡反馈），暂态故障（超时/服务异常）仍冒泡 FAILED 保留重试。"""
+
+        from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
+
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(side_effect=AIOutputParseFailedError()),
+        ), mock.patch("services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
+            message, execution = create_intent_message(self, query_text="随便查点什么")
+            output = execute_user_intent.run(execution)
+
+        self.assertEqual(output.intent, "unrecognized")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, AIOutputParseFailedError().error_code)
+        self.assertTrue(output.error.error_message)
 
     def test_select_system_with_search_condition_not_recognized(self):
         """切换并检索（need_search=true）但条件识别失败：切换结果不被掩盖，文案前置切换成功事实"""

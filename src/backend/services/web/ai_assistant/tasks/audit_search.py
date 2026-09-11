@@ -237,8 +237,9 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
         if current_system_id not in {candidate["system_id"] for candidate in candidates}:
             current_selection = None
             current_system_id = ""
-    # ① 意图识别（仅解析失败预算重试，对齐 NL 模式；越权/暂态直接冒泡）
+    # ① 意图识别（解析失败预算重试，超限转结构化错误协议；越权/暂态冒泡 FAILED）
     deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
+    intent_error: AIAssistantError | None = None
     try:
         for attempt in range(NL_PARSE_MAX_RETRIES + 1):
             try:
@@ -248,10 +249,9 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     current_system_id=current_system_id,
                     username=context_data.username,
                 )
-            except AIOutputParseFailedError:
-                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
+            except AIOutputParseFailedError as error:
+                # 解析失败具随机性：预算内自动重试（超次数/超时长/含 sleep 后即超
                 # 预算的前置检查——防 19s 失败 + 2s 等待后仍发起突破 20s 预算的下一轮）
-                # 即结束并冒泡 FAILED
                 if (
                     attempt >= NL_PARSE_MAX_RETRIES
                     or time.monotonic() >= deadline
@@ -262,13 +262,25 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                         execution.message.id,
                         attempt + 1,
                     )
-                    raise
+                    # 解析失败超预算 = 确定性失败（模型能力边界，重试同输入大概率仍失败）：
+                    # 收敛 SUCCESS + 结构化 error（前端错误卡有现成渲染，用户有反馈），
+                    # 不收敛 FAILED——FAILED 仅保留给可恢复的暂态故障（重试才有意义）
+                    intent_error = error
+                    break
                 time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
             else:
                 break
-    except (AITimeoutError, AIServiceError, AIOutputParseFailedError, AIOutputInvalidError):
+    except (AITimeoutError, AIServiceError, AIOutputInvalidError):
         logger.exception("[execute_user_intent] intent recognition failed, message_id=%s", execution.message.id)
         raise
+    if intent_error is not None:
+        return UserIntentOutputSchema(
+            intent="unrecognized",
+            error=UserIntentErrorSchema(
+                error_code=intent_error.error_code,
+                error_message="AI 返回内容解析失败，请稍后重试或换一种描述",
+            ),
+        )
     # ② 无法识别：AI 动态说明为什么不行
     if payload.intent == "unrecognized":
         return UserIntentOutputSchema(
@@ -297,6 +309,10 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 "system_ids": [system_id],
                 "scope_type": context_data.scope_type or "cross_system",
                 "scope_id": context_data.scope_id,
+                # 引导卡显隐：纯切换（need_search=false）SELECTION 是本轮唯一产出，
+                # 引导卡必须展示；复合意图（切系统+检索）仅展示日志检索消息（设计侧
+                # 要求），引导卡隐藏——随快照固化，前端刷新后按 output.show_guide 恢复
+                "show_guide": not payload.need_search,
             },
             # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
             timeline_started_at=execution.message.created_at,
@@ -334,11 +350,13 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 candidates=candidates,
             ),
         )
-    # ④ 条件识别（field_context 来自目标系统选择快照；解析失败预算内重试，
-    #    暂态故障冒泡 FAILED 保留重试接口；确定性失败走结构化 error，
+    # ④ 条件识别（field_context 来自目标系统选择快照；解析失败预算内重试、超限转
+    #    结构化 error；暂态故障冒泡 FAILED 保留重试接口；确定性失败走结构化 error，
     #    SELECTION 已建则保留——系统切换不被检索失败阻塞）
     selection = load_selection_snapshot(selection_message)
     deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
+    condition = None
+    condition_error: AIAssistantError | None = None
     try:
         for attempt in range(NL_PARSE_MAX_RETRIES + 1):
             try:
@@ -348,9 +366,12 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     scope_id=system_id,
                     username=context_data.username,
                 )
-            except AIOutputParseFailedError:
-                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
-                # 预算的前置检查）即结束并冒泡 FAILED
+            except AIOutputParseFailedError as error:
+                # 解析失败具随机性：预算内自动重试（超次数/超时长/含 sleep 后即超
+                # 预算的前置检查）；超限为确定性失败（模型能力边界，重试同输入大概率
+                # 仍失败）——转结构化 error 协议而非冒泡：SUCCESS+error 前端错误卡有
+                # 现成渲染（曾收敛 FAILED 致续链不发生、前端轮询子消息永远空、
+                # 用户无任何反馈，2026-09-11 修复），FAILED 仅保留给可恢复暂态故障
                 if (
                     attempt >= NL_PARSE_MAX_RETRIES
                     or time.monotonic() >= deadline
@@ -361,13 +382,14 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                         execution.message.id,
                         attempt + 1,
                     )
-                    raise
+                    condition_error = error
+                    break
                 time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
             else:
                 break
-    except (AITimeoutError, AIServiceError, AIOutputParseFailedError):
-        # 暂态基础设施故障 + 超预算解析失败：冒泡收敛 FAILED（MessageService.retry 仅
-        # 接受 FAILED，SUCCESS+error 协议会让用户无法重试这类可恢复失败），对齐 NL 任务语义
+    except (AITimeoutError, AIServiceError):
+        # 暂态基础设施故障：冒泡收敛 FAILED（MessageService.retry 仅接受 FAILED，
+        # 可恢复故障必须保留重试接口），对齐 NL 任务语义
         logger.exception(
             "[execute_user_intent] condition recognition transient failure, message_id=%s",
             execution.message.id,
@@ -376,25 +398,27 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
     except AIAssistantError as error:
         # 确定性业务失败（未识别/输出非法/权限拒绝）：SUCCESS + 结构化 error
         # （重试同输入仍会失败，引导调整问法）
+        condition_error = error
+    if condition_error is not None:
         logger.warning(
             "[execute_user_intent] condition not recognized, message_id=%s, error_code=%s",
             execution.message.id,
-            error.error_code,
+            condition_error.error_code,
         )
         # 本轮发生系统切换（select_system 恒新建 SELECTION）时，检索条件识别失败
         # 不得掩盖切换结果：文案前置切换成功事实，防整句「未能理解检索需求」
         # 让用户误以为切换也失败了（need_search 误判时的兜底）
-        error_message = error.message
+        error_message = condition_error.message
         if payload.intent == "select_system":
             candidate_name = next(
                 (str(candidate["name"]) for candidate in candidates if str(candidate.get("system_id")) == system_id),
                 system_id,
             )
-            error_message = f"已为您切换到 {candidate_name}，{error.message}"
+            error_message = f"已为您切换到 {candidate_name}，{condition_error.message}"
         return UserIntentOutputSchema(
             intent=payload.intent,
             system_id=system_id,
-            error=UserIntentErrorSchema(error_code=error.error_code, error_message=error_message),
+            error=UserIntentErrorSchema(error_code=condition_error.error_code, error_message=error_message),
         )
     return UserIntentOutputSchema(
         intent=payload.intent,
