@@ -301,5 +301,6 @@ class GetPluginListResource(ModelResource, PluginBaseResource):
     name = gettext_lazy("采集插件列表")
     model = CollectorPlugin
     action = "list"
+    many_response_data = True
     filter_fields = ["namespace"]
     serializer_class = PluginListResponseSerializer

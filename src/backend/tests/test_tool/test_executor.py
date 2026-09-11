@@ -74,7 +74,7 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
                 "output_fields": [],
                 "prefer_storage": "doris",
             },
-            updated_by="test_user",
+            permission_owner="test_user",
         )
 
         # 创建执行参数
@@ -99,6 +99,13 @@ class TestSqlDataSearchExecutor(DjangoTestCase):
             return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
         )
         self.mock_auth_api = self.patcher_auth.start()
+
+        # SQL 执行器会使用当前请求用户进行表权限校验，测试不应依赖线程请求上下文。
+        self.patcher_request_username = mock.patch(
+            "services.web.tool.executor.tool.get_request_username",
+            return_value="test_user",
+        )
+        self.patcher_request_username.start()
 
         # Mock 场景授权表查询（默认无场景关联）
         self.patcher_scene_id = mock.patch.object(
@@ -747,6 +754,14 @@ class TestVariableParserPersonSelect(TestCase):
             return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
         )
         self.mock_auth_api = self.patcher_auth.start()
+
+        # 配置型 SQL 工具没有所属用户，会从当前请求上下文获取权限校验用户。
+        # 测试显式提供用户，避免依赖其他测试可能遗留的线程请求上下文。
+        self.patcher_request_username = mock.patch(
+            "services.web.tool.executor.tool.get_request_username",
+            return_value="test_user",
+        )
+        self.patcher_request_username.start()
 
     def tearDown(self):
         mock.patch.stopall()

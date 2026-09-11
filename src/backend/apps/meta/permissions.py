@@ -76,7 +76,15 @@ class SearchLogPermission:
 
     @classmethod
     def get_auth_systems(cls, namespace) -> (list, list):
-        username = get_request_username()
+        return cls.get_auth_systems_by_username(namespace, get_request_username())
+
+    @classmethod
+    def get_auth_systems_by_username(cls, namespace, username: str) -> (list, list):
+        """get_auth_systems 的显式用户参数版：全量系统 ∩ 用户检索权限。
+
+        供 Celery 任务等无请求上下文场景使用（如 AI 助手意图识别的候选系统组装）。
+        """
+
         scoped_system_ids = cls._get_system_scope_system_ids(username) | cls._get_scene_scope_system_ids(username)
         systems = resource.meta.system_list_all(namespace=namespace)
         system_ids = {str(system["id"]) for system in systems}

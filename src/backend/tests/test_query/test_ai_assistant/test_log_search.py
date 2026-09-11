@@ -1,0 +1,515 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing
+permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+
+F3 检索快照服务测试
+"""
+
+from unittest import mock
+
+from services.web.query.ai_assistant.constants import (
+    LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH,
+)
+from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+from services.web.query.ai_assistant.services.log_search import LogSearchService
+from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
+
+LOG_SEARCH_MODULE = "services.web.query.ai_assistant.services.log_search"
+
+MOCK_HITS = [
+    {
+        "start_time": "2026-08-13 12:00:00",
+        "username": "admin",
+        "user_identify_type": "个人账号",
+        "system_id": "bk_log",
+        "action_id": "delete",
+        "resource_type_id": "ticket",
+        "instance_id": "Story-3000",
+        "result_code": "成功(0)",
+        "access_type": "WEB",
+        "access_source_ip": "127.0.0.1",
+        "dtEventTimeStamp": 1755057600000,
+        "log": "原始日志内容",
+        "extend_data": {"ticket_id": "Story-3000"},
+    },
+    {
+        "start_time": "2026-08-13 11:00:00",
+        "username": "zhangsan",
+        "user_identify_type": "个人账号",
+        "system_id": "bk_log",
+        "action_id": "edit",
+        "resource_type_id": "resource",
+        "instance_id": "i-001",
+        "result_code": "失败(-1)",
+        "access_type": "API",
+        "access_source_ip": "127.0.0.2",
+        "dtEventTimeStamp": 1755054000000,
+        "log": "另一条日志",
+        "extend_data": {},
+    },
+]
+
+
+@mock.patch(f"{LOG_SEARCH_MODULE}.resource.meta.system_list")
+@mock.patch(f"{LOG_SEARCH_MODULE}.api.bk_base.query_sync")
+@mock.patch(f"{LOG_SEARCH_MODULE}.SearchLogPermission.get_scope_auth_systems")
+@mock.patch(f"{LOG_SEARCH_MODULE}.CollectorPlugin.build_collector_rt")
+class TestLogSearchService(AIAssistantTestCase):
+    """F3 LOG_SEARCH 快照执行
+
+    注意：mock.patch 装饰器参数从下到上注入（最下面的装饰器对应第一个参数）。
+    """
+
+    def _setup_mocks(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, **kwargs):
+        mock_build_rt.return_value = "test_rt.doris"
+        mock_get_authed.return_value = kwargs.get("authed_systems", [self.target_system_id])
+        hits = kwargs.get("hits", MOCK_HITS)
+        total = kwargs.get("total", len(hits))
+        mock_query_sync.bulk_request.return_value = ({"list": hits}, {"list": [{"count": total}]})
+        mock_system_list.return_value = [
+            {"system_id": self.target_system_id, "name": self.target_system_name, "extra_field": "x"}
+        ]
+
+    def _search(self, condition=None, **kwargs):
+        with mock.patch.object(LogSearchService, "_format_hits", side_effect=lambda rows, username: rows):
+            return LogSearchService.search(
+                condition=condition or self.make_condition(),
+                namespace=self.namespace,
+                username=self.username,
+                **kwargs,
+            )
+
+    @staticmethod
+    def _data_sql(mock_query_sync) -> str:
+        (bulk_params,), _ = mock_query_sync.bulk_request.call_args
+        return bulk_params[0]["sql"]
+
+    def test_search_session_scope_takes_priority(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """session scope 优先过滤：AI 助手链路按用户当前具体场景（前端左上角场景选择器）
+        过滤 system_id，而非 condition.scope_id 的 system 维度权限——后者对 AI 助手过宽
+        （用户对目标系统在 system 方向有权限即放行，但当前场景可能未授权该系统）。
+        """
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        self._search(session_scope_type="scene", session_scope_id="1")
+
+        # 权限注入按 session scope 维度（非 condition 的 system 维度）
+        mock_get_authed.assert_called_once_with(scope_type="scene", scope_id="1", username=self.username)
+        # system_id 过滤条件仍注入 SQL
+        self.assertIn("system_id", self._data_sql(mock_query_sync))
+
+    def test_search_session_scope_intersects_target_system(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[review P1] 查询范围收敛到目标系统：scope 授权集（可见边界）与
+        condition.scope_id（查询意图）取交集——scope 授权 [A,B] 而目标为 A 时
+        只查 A，结果与总数不混入 B。"""
+
+        self._setup_mocks(
+            mock_build_rt,
+            mock_get_authed,
+            mock_query_sync,
+            mock_system_list,
+            authed_systems=[self.target_system_id, "other_authorized_system"],
+        )
+
+        self._search(session_scope_type="cross_system", session_scope_id="")
+
+        # SQL 的 system_id 过滤只含目标系统，不含 scope 内其他授权系统
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn(self.target_system_id, data_sql)
+        self.assertNotIn("other_authorized_system", data_sql)
+
+    def test_search_session_scope_target_not_authorized_zero_hit(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[review P1] 目标系统不在 session scope 授权内：交集为空退化为 [""]，
+        SQL system_id IN ("") 自然零命中（权限拒绝语义，非越权放行）。"""
+
+        self._setup_mocks(
+            mock_build_rt,
+            mock_get_authed,
+            mock_query_sync,
+            mock_system_list,
+            authed_systems=["other_authorized_system"],
+        )
+
+        self._search(session_scope_type="scene", session_scope_id="1")
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertNotIn(self.target_system_id, data_sql)
+        self.assertIn("IN ('')", data_sql)
+
+    def test_search_without_session_scope_falls_back_to_condition(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """未传 session scope（非 AI 链路 / 历史消息）：兜底 condition 维度的 system 权限（原行为）。"""
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        condition = self.make_condition()
+        self._search(condition=condition)
+
+        mock_get_authed.assert_called_once_with(
+            scope_type=condition.scope_type, scope_id=condition.scope_id, username=self.username
+        )
+
+    def test_search_success(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        output = self._search()
+
+        self.assertEqual(output.total, 2)
+        self.assertEqual(len(output.samples), 2)
+        # 快照四键，无 query_sql
+        self.assertEqual(set(output.model_dump().keys()), {"total", "columns", "samples", "query_summary"})
+        # 产品需求 9 列固定展示字段（2026-08-14），首列 start_time
+        expected_columns = [
+            "start_time",
+            "username",
+            "system_id",
+            "action_id",
+            "resource_type_id",
+            "instance_id",
+            "result_code",
+            "extend_data",
+            "log",
+        ]
+        self.assertEqual([column.raw_name for column in output.columns], expected_columns)
+        # 显示名用产品文案
+        display_map = {column.raw_name: column.display_name for column in output.columns}
+        self.assertEqual(display_map["system_id"], "来源系统(ID)")
+        self.assertEqual(display_map["action_id"], "操作事件名(ID)")
+        self.assertEqual(display_map["result_code"], "操作结果(Code)")
+        # samples 按 columns 裁剪 + system_info 裁剪到 2 键
+        column_keys = {column.full_key for column in output.columns}
+        for sample in output.samples:
+            self.assertTrue(set(sample.keys()) <= column_keys | {"system_info"})
+            self.assertEqual(
+                sample["system_info"], {"system_id": self.target_system_id, "name": self.target_system_name}
+            )
+        self.assertEqual(output.samples[0]["username"], "admin")
+        # query_summary
+        summary = output.query_summary
+        self.assertEqual(summary.scope_id, self.target_system_id)
+        self.assertEqual(summary.source, "field_condition")
+        self.assertEqual(summary.time_range["start_time"], self.start_time)
+        self.assertGreaterEqual(summary.took_ms, 0)
+        self.assertTrue(summary.executed_at)
+
+    def test_permission_injection_sql(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        self._search()
+
+        data_sql = self._data_sql(mock_query_sync)
+        # 权限条件注入（显式 username 取得的授权系统）
+        self.assertIn("`system_id` IN ('bk_log')", data_sql)
+        # 时间条件注入（4 条 GTE/LTE）
+        self.assertIn("`thedate`>='20260813'", data_sql)
+        self.assertIn("`thedate`<='20260814'", data_sql)
+        mock_get_authed.assert_called_once_with(
+            scope_type="system", scope_id=self.target_system_id, username=self.username
+        )
+
+    def test_no_permission_natural_zero_hit(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        """无权限时 get_scope_auth_systems 返回 [""]，SQL 自然零命中"""
+        self._setup_mocks(
+            mock_build_rt,
+            mock_get_authed,
+            mock_query_sync,
+            mock_system_list,
+            hits=[],
+            total=0,
+            authed_systems=[""],
+        )
+
+        output = self._search()
+
+        self.assertIn("IN ('')", self._data_sql(mock_query_sync))
+        self.assertEqual(output.total, 0)
+        self.assertEqual(output.samples, [])
+
+    def test_zero_hit_is_success(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=[], total=0)
+
+        output = self._search()
+        self.assertEqual(output.total, 0)
+        self.assertEqual(output.samples, [])
+
+    def test_invalid_field_rejected(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(conditions=[self.make_field_condition(raw_name="not_a_field")])
+
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            self._search(condition=condition)
+        self.assertEqual(ctx.exception.error_code, "AI_OUTPUT_INVALID")
+        mock_query_sync.bulk_request.assert_not_called()
+
+    def test_invalid_operator_rejected(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        # username 白名单操作符为 [include, eq]，like 越权
+        condition = self.make_condition(
+            conditions=[self.make_field_condition(raw_name="username", operator="like", filters=["adm"])]
+        )
+
+        with self.assertRaises(AIOutputInvalidError):
+            self._search(condition=condition)
+        mock_query_sync.bulk_request.assert_not_called()
+
+    def test_sample_value_truncated(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        long_value = "x" * (LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH + 100)
+        hits = [dict(MOCK_HITS[0], username=long_value)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+        self.assertEqual(len(output.samples[0]["username"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH)
+
+    def test_snapshot_raw_log_structured_as_object(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """[前端需求] 原始数据内容（log）为合法 JSON 时解析为对象完整返回（不截断）：
+        前端识别 JSON 格式渲染样式（对齐拓展数据形态），截断字符串必非合法 JSON。"""
+
+        import json
+
+        raw_log = json.dumps(
+            {
+                "event_content": "获取策略详情",
+                "action_id": "list_strategy_v2",
+                "extend_data": '{"strategy_id": "259", "namespace": "default"}',
+            },
+            ensure_ascii=False,
+        )
+        hits = [dict(MOCK_HITS[0], log=raw_log)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        log_value = output.samples[0]["log"]
+        self.assertIsInstance(log_value, dict)
+        self.assertEqual(log_value["action_id"], "list_strategy_v2")
+        self.assertEqual(log_value["event_content"], "获取策略详情")
+
+    def test_snapshot_raw_log_non_json_keeps_truncated(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """非 JSON 纯文本日志：保持字符串并按常规上限截断（原行为不变）。"""
+
+        hits = [dict(MOCK_HITS[0], log="纯文本日志内容" * 500)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        self.assertIsInstance(output.samples[0]["log"], str)
+        self.assertEqual(len(output.samples[0]["log"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH)
+
+    def test_snapshot_raw_log_oversized_json_returns_complete(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """超大 JSON 也完整返回对象（口径对齐检索页无截断；审计事件上报侧自带大小约束）。"""
+
+        import json
+
+        raw_log = json.dumps({"data": "x" * (LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH * 8)})
+        hits = [dict(MOCK_HITS[0], log=raw_log)]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+
+        log_value = output.samples[0]["log"]
+        self.assertIsInstance(log_value, dict)
+        self.assertEqual(len(log_value["data"]), LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH * 8)
+
+    def test_snapshot_size_fixed(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        """固化口径：page=1 / size=100 / 最新排序"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+
+        self._search()
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("LIMIT 100", data_sql)
+        self.assertIn("ORDER BY", data_sql)
+
+    def test_source_natural_language(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        output = self._search(source="natural_language")
+        self.assertEqual(output.query_summary.source, "natural_language")
+
+    def test_key_normalization_fallback(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
+        """Doris 返回小写键时按归一逻辑取值"""
+        hits = [{key.lower(): value for key, value in MOCK_HITS[0].items()}]
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list, hits=hits, total=1)
+
+        output = self._search()
+        self.assertEqual(output.samples[0]["username"], "admin")
+
+    def test_format_hits_with_explicit_username(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """D1：脱敏判定身份显式传递，不依赖请求上下文"""
+        with mock.patch(f"{LOG_SEARCH_MODULE}.SearchDataParser") as mock_parser:
+            rows = [{"a": 1}]
+            LogSearchService._format_hits(rows, "alice")
+            mock_parser.return_value.parse_data.assert_called_once_with(rows, username="alice")
+
+    def test_eq_multi_filters_converted_to_include_sql(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """字段筛选多选（eq + 多 filters）不再被 SQL 层截取首个值，聚合为 IN"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang", "wang"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username` IN ('zhang','wang')", data_sql)
+        self.assertNotIn("`username`='zhang'", data_sql)
+
+    def test_same_field_eq_conditions_merged_to_include(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """NL 多值拆分为多条同字段 eq 条件（AND 恒空）→ 合并为单条 IN"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="eq", filters=["wang"]),
+                self.make_field_condition(raw_name="action_id", operator="eq", filters=["delete"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username` IN ('zhang','wang')", data_sql)
+        self.assertIn("`action_id`='delete'", data_sql)
+
+    def test_massive_split_eq_conditions_merged_without_loss(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """海量多值拆分归一（10 人梯度）：合并为单条 IN 且零丢失零重复"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        usernames = [f"user{index:02d}" for index in range(1, 11)]
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=[name]) for name in usernames
+            ]
+        )
+
+        normalized = LogSearchService._normalize_condition(condition)
+
+        self.assertEqual(len(normalized.conditions), 1)
+        cond = normalized.conditions[0]
+        self.assertEqual(cond.field.raw_name, "username")
+        self.assertEqual(cond.operator, "include")
+        self.assertEqual(cond.filters, usernames)
+
+    def test_same_field_eq_conditions_deduplicated(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段同值重复条件合并去重"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn("`username`='zhang'", self._data_sql(mock_query_sync))
+
+    def test_same_field_neq_conditions_merged_to_exclude(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段多条 neq 聚合为 NOT IN（排除语义；拓展字段白名单含 neq/exclude）"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="neq", filters=["Story-1"]
+                ),
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="neq", filters=["Story-2"]
+                ),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn(
+            "NOT JSON_EXTRACT_STRING(`extend_data`,'$.ticket_id') IN ('Story-1','Story-2')",
+            self._data_sql(mock_query_sync),
+        )
+
+    def test_mixed_operator_conditions_not_merged(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """同字段不同操作符（eq + include）保留原样：用户显式 AND 意图不猜测合并"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="username", operator="eq", filters=["zhang"]),
+                self.make_field_condition(raw_name="username", operator="include", filters=["wang", "li"]),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        data_sql = self._data_sql(mock_query_sync)
+        self.assertIn("`username`='zhang'", data_sql)
+        self.assertIn("`username` IN ('wang','li')", data_sql)
+
+    def test_extension_eq_multi_converted_to_include(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """拓展子键（用户显式指定）eq 多值同样聚合为 include"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data", keys=["ticket_id"], operator="eq", filters=["Story-1", "Story-2"]
+                ),
+            ]
+        )
+
+        self._search(condition=condition)
+
+        self.assertIn("IN ('Story-1','Story-2')", self._data_sql(mock_query_sync))
+
+    def test_eq_multi_filters_without_include_allowed_kept(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """字段白名单不允许 include 时保持 eq 原样（不转非法操作符）"""
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        # instance_name 白名单仅 [like]，用 include 不合法的字段构造 eq 多值归一前置检查
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(raw_name="instance_name", operator="eq", filters=["a", "b"]),
+            ]
+        )
+        normalized = LogSearchService._normalize_condition(condition)
+        # instance_name 不允许 eq/include：无操作符转换（后续 DRF 校验会拒绝，属协议边界）
+        self.assertEqual(normalized.conditions[0].operator, "eq")

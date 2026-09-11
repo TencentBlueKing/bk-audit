@@ -1,0 +1,612 @@
+# -*- coding: utf-8 -*-
+"""USER_INTENT 意图识别任务测试：三类场景路由 + 平台守门 + 续链与标题。"""
+
+from unittest import mock
+
+from services.web.ai_assistant.constants import ExecutionStatus, MessageType
+from services.web.ai_assistant.handlers import message_handler_registry
+from services.web.ai_assistant.models import Message
+from services.web.ai_assistant.schemas import parse_snapshot
+from services.web.ai_assistant.services.message_execution import MessageExecution
+from services.web.ai_assistant.tasks.audit_search import execute_user_intent
+from services.web.query.ai_assistant.schemas import IntentPayload
+from tests.test_ai_assistant.base import (
+    TARGET_SYSTEM_ID,
+    AIAssistantPlatformTestCase,
+    make_condition,
+    make_log_search_output,
+    make_selection_output,
+)
+
+HANDLERS_MODULE = "services.web.ai_assistant.handlers.audit_search"
+TITLE_DELAY = "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay"
+CONVERT_MOCK = "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
+
+
+def create_intent_message(testcase, query_text="看审计中心近七天 hermit 的操作记录", scope_extra=None):
+    """构造 PROCESSING 状态的 USER_INTENT 消息与其执行上下文。
+
+    scope_extra：场景过滤参数（{scope_type, scope_id}），同时写入输入与上下文快照，
+    模拟前端发起对话时携带左上角场景过滤器当前选择；缺省 cross_system
+    （宽松语义，单元测试不关心具体场景）。
+    """
+    scope = scope_extra or {"scope_type": "cross_system"}
+    input_data = {"query_text": query_text, "auto_execute": True}
+    input_data.update(scope)
+    context_data = {"username": testcase.user, "namespace": "bkaudit"}
+    context_data.update(scope)
+    message = Message.objects.create(
+        conversation=testcase.conversation,
+        parent_message=None,
+        message_type=MessageType.USER_INTENT,
+        status=ExecutionStatus.PROCESSING,
+        task_id="task-1",
+        input_data=input_data,
+        context_data=context_data,
+        created_by=testcase.user,
+        updated_by=testcase.user,
+    )
+    handler = message_handler_registry.require(MessageType.USER_INTENT)
+    execution = MessageExecution(
+        message=message,
+        input_data=parse_snapshot(handler.input_model, message.input_data, field_name="input_data"),
+        context_data=parse_snapshot(handler.context_model, message.context_data, field_name="context_data"),
+    )
+    return message, execution
+
+
+class UserIntentExecutionTest(AIAssistantPlatformTestCase):
+    """意图路由三类场景 + SYSTEM_REQUIRED 守门 + 复用/续链/标题"""
+
+    def _create_intent_message(self, query_text="看审计中心近七天 hermit 的操作记录"):
+        return create_intent_message(self, query_text)
+
+    def _run(self, payload, with_selection=False, convert=None):
+        """mock 意图/条件识别后执行任务，返回 (message, output, mock_delay)。"""
+        if with_selection:
+            self.create_selection_message()
+        message, execution = self._create_intent_message()
+        convert_mock = mock.MagicMock(return_value=convert or make_condition())
+        if convert is not None and isinstance(convert, Exception):
+            convert_mock.side_effect = convert
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(return_value=payload),
+        ), mock.patch(
+            CONVERT_MOCK, convert_mock
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.LogSearchService.search", return_value=make_log_search_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.FieldContextService.build_selection", return_value=make_selection_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.OperationContextService.build", return_value=([], [])
+        ), mock.patch(
+            # session scope 校验：建 SELECTION 时 system_id 必须在 scope 候选内
+            f"{HANDLERS_MODULE}.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
+        ), mock.patch(
+            TITLE_DELAY
+        ) as mock_delay:
+            output = execute_user_intent.run(execution)
+            # 完整执行链：run 产出 output 后由平台收敛终态并续链/派发标题
+            execute_user_intent._finish_success(execution=execution, task_id="task-1", output_data=output)
+        return message, output, mock_delay
+
+    def _selection_count(self):
+        return Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION).count()
+
+    def test_select_system_and_search(self):
+        """场景③ 选系统+检索：建 SELECTION → 条件识别 → 续链 LOG_SEARCH（父=意图消息）→ 派发标题"""
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您选择审计中心"
+            ),
+        )
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
+        self.assertIsNotNone(output.condition)
+        self.assertIsNone(output.error)
+        selection = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION
+        ).first()
+        self.assertIsNotNone(selection)
+        self.assertIsNone(selection.parent_message)
+        # 消息卡片可见性：复合意图（切系统+检索）自动建的 SELECTION 隐藏
+        # （设计侧要求仅展示日志检索消息）；visible 随消息持久化，刷新后按顶层字段恢复
+        self.assertFalse(selection.visible)
+        log_search = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
+        ).first()
+        self.assertIsNotNone(log_search)
+        self.assertEqual(output.selection_message_uid, str(selection.uid))
+        mock_delay.assert_called_once_with(conversation_id=self.conversation.id, query_text="看审计中心近七天 hermit 的操作记录")
+
+    def test_log_search_fallback_failed_message_on_chain_failure(self):
+        """回归：续链 LOG_SEARCH 执行失败降级固化 FAILED 子消息，不再静默消失。
+
+        线上报障：意图 SUCCESS + condition 完整 + auto_execute，但续链 create_executed
+        抛异常被钩子静默吞 → 子消息不创建 → 前端以意图消息为锚点 AFTER 轮询死等超时。
+        修复：失败降级建 FAILED LOG_SEARCH（可见可重试，condition 与 context 固化，
+        timeline 回写保持全链耗时语义）。
+        """
+
+        from services.web.ai_assistant.constants import MessageErrorCode
+        from services.web.ai_assistant.services.message import MessageService
+
+        payload = IntentPayload(
+            intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您选择审计中心"
+        )
+        real_create_executed = MessageService.create_executed
+
+        def fail_log_search_only(**kwargs):
+            # 仅 LOG_SEARCH 续链失败（SELECTION 正常建，模拟 Doris 检索异常）
+            if kwargs.get("message_type") == MessageType.LOG_SEARCH:
+                raise RuntimeError("doris search boom")
+            return real_create_executed(MessageService(user=self.user), **kwargs)
+
+        message, output, _ = self._run_with_create_executed(payload, fail_log_search_only)
+
+        # 意图消息终态不受续链失败影响（SUCCESS + condition 保留）
+        self.assertIsNotNone(output.condition)
+        # 降级 FAILED 子消息：可见、可重试、condition 与 context 固化
+        log_search = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
+        ).first()
+        self.assertIsNotNone(log_search)
+        self.assertEqual(log_search.status, ExecutionStatus.FAILED)
+        self.assertEqual(log_search.error_code, str(MessageErrorCode.TASK_EXECUTION_FAILED))
+        self.assertTrue(log_search.visible)
+        self.assertEqual(log_search.input_data["condition"]["scope_id"], TARGET_SYSTEM_ID)
+        self.assertEqual(log_search.context_data["system_id"], TARGET_SYSTEM_ID)
+        self.assertEqual(log_search.context_data["source"], "natural_language")
+        # timeline 回写：FAILED 消息 duration 表达「发问 → 续链失败」全链耗时
+        self.assertEqual(log_search.created_at, message.created_at)
+        # SELECTION 正常建成（复合意图切换不受检索失败影响）
+        self.assertEqual(self._selection_count(), 1)
+
+    def _run_with_create_executed(self, payload, create_executed_side_effect):
+        """_run 变体：额外拦截 MessageService.create_executed（按需分流失败）。"""
+
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.MessageService.create_executed",
+            side_effect=create_executed_side_effect,
+        ):
+            return self._run(payload)
+
+    def test_log_search_with_current_selection(self):
+        """场景② 纯检索（已有系统）：复用当前 SELECTION 不新建，直接条件识别续链"""
+
+        selection = self.create_selection_message()
+        message, output, _ = self._run(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+        )
+
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNotNone(output.condition)
+        self.assertEqual(self._selection_count(), 1)
+        self.assertEqual(output.selection_message_uid, str(selection.uid))
+        # 续链产物必须真实存在：_create_log_search 的异常会被 _finish_success
+        # 静默吞掉（续链失败不回滚终态），不断言子消息则该调用点破损无法被发现
+        log_search = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.LOG_SEARCH, parent_message=message
+        ).first()
+        self.assertIsNotNone(log_search)
+
+    def test_log_search_without_selection_requires_system(self):
+        """场景②无系统变体：SYSTEM_REQUIRED 守门（AI 动态引导 + 候选清单），不建子消息不派发标题"""
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+        )
+
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertIn("审计中心", output.error.error_message)
+        self.assertEqual(output.error.candidates, [{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}])
+        self.assertEqual(self._selection_count(), 0)
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+        # 检索意图明确（log_search）：仍派发标题（与 unrecognized 闲聊不同）
+        mock_delay.assert_called_once()
+
+    def test_select_system_hit_current_creates_new(self):
+        """select_system 命中当前系统也新建 SELECTION（产品决策：通用性优先，无复用分支）——
+        每次切换都有新消息/新卡片（复用分支曾引发重复切换「AI 回应消失」问题）"""
+
+        selection = self.create_selection_message()
+        message, output, _ = self._run(
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="继续在审计中心查询"
+            ),
+        )
+
+        # 旧 1 条 + 新建 1 条；意图消息指向新建的 SELECTION
+        self.assertEqual(self._selection_count(), 2)
+        self.assertNotEqual(output.selection_message_uid, str(selection.uid))
+        self.assertIsNotNone(output.condition)
+
+    def test_user_intent_success_output_always_has_message(self):
+        """对话不变式：USER_INTENT 任何 SUCCESS 输出必带非空 message（前端渲染的可见载体）。
+
+        select_system 无条件新建 SELECTION（真切换），LLM 切换话术语义成立；
+        重复切换同样新建新卡，AI 回应每轮都有可见载体——防"消息消失"类问题
+        （后端保证有话说，前端保证说出口：两侧各守一条不变式即可闭环此类缺陷）。
+        """
+
+        # 场景1：首次切换——LLM 无话术时 fallback 兜底
+        _, output_first, _ = self._run(
+            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=False),
+        )
+        self.assertTrue(output_first.message)
+        self.assertIn("已为您切换到 审计中心", output_first.message)
+
+        # 场景2：重复切换（当前已是目标系统）——同样新建 SELECTION（新卡片），LLM 话术语义成立
+        _, output_repeat, _ = self._run(
+            payload=IntentPayload(
+                intent="select_system",
+                system_id=TARGET_SYSTEM_ID,
+                need_search=False,
+                message="已为您切换到审计中心",
+            ),
+            with_selection=True,
+        )
+        self.assertEqual(output_repeat.intent, "select_system")
+        self.assertIsNone(output_repeat.error)
+        self.assertIsNone(output_repeat.condition)
+        self.assertIn("已为您切换到审计中心", output_repeat.message)
+        # 无复用分支：重复切换也产出新 SELECTION
+        # （场景1 新建 1 + 场景2 预置 1 + 场景2 任务内新建 1 = 3），意图消息指向新建条目
+        self.assertEqual(self._selection_count(), 3)
+        self.assertTrue(output_repeat.selection_message_uid)
+
+    def test_pure_switch_without_search(self):
+        """报障回归：纯切换（"切换到 test0907"，need_search=false）——不调条件解析、不续链检索、无报错。
+
+        修复前：纯切换被强绑条件解析，「切换到X」类语句必然解析失败并误报
+        「未能理解检索需求」（切换其实已成功）；修复后切换即本轮终点。
+        """
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=False),
+        )
+
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
+        # 切换成功：无 error、无检索条件、文案面向用户
+        self.assertIsNone(output.error)
+        self.assertIsNone(output.condition)
+        self.assertIn("已为您切换到 审计中心", output.message)
+        # 仅 1 条 SELECTION（切换生效）、0 条 LOG_SEARCH（不追加检索）
+        self.assertEqual(self._selection_count(), 1)
+        # 纯切换 SELECTION 是本轮唯一产出：卡片展示（visible=True）
+        selection = Message.objects.filter(
+            conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION
+        ).first()
+        self.assertTrue(selection.visible)
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+        self.assertTrue(output.selection_message_uid)
+        # 意图成功仍派发标题
+        mock_delay.assert_called_once()
+
+    def test_condition_transient_failure_raises_for_retry(self):
+        """[review P2] 条件识别暂态故障（超时/服务异常）冒泡收敛 FAILED：
+        MessageService.retry 仅接受 FAILED——SUCCESS+error 协议会让用户无法重试这类
+        可恢复失败；确定性业务失败（未识别/输出非法）才走 SUCCESS+error。"""
+
+        from services.web.query.ai_assistant.exceptions import AITimeoutError
+
+        self.create_selection_message()
+        with self.assertRaises(AITimeoutError):
+            self._run(
+                payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的"),
+                convert=AITimeoutError(),
+            )
+        # 暂态失败不产生结构化 error 输出（任务由平台收敛 FAILED，重试接口可用）
+        self.assertEqual(self._selection_count(), 1)
+
+    def test_condition_parse_budget_exhausted_returns_error_protocol(self):
+        """[2026-09-11 修复] 条件识别解析失败超预算 = 确定性失败（模型能力边界）：
+        收敛 SUCCESS + 结构化 error（前端错误卡有现成渲染），不再冒泡 FAILED——
+        曾收敛 FAILED 致续链不发生、前端轮询子消息永远空、用户无任何反馈。"""
+
+        from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
+
+        self.create_selection_message()
+        with mock.patch("services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
+            message, output, _ = self._run(
+                payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的"),
+                convert=AIOutputParseFailedError(),
+            )
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, AIOutputParseFailedError().error_code)
+        self.assertTrue(output.error.error_message)
+        # 无续链子消息（确定性失败不建 LOG_SEARCH）
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+
+    def test_intent_parse_budget_exhausted_returns_error_protocol(self):
+        """[2026-09-11 修复] 意图识别解析失败超预算 = 确定性失败：SUCCESS + 结构化
+        error（错误卡反馈），暂态故障（超时/服务异常）仍冒泡 FAILED 保留重试。"""
+
+        from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
+
+        with mock.patch(
+            # 候选组装必须 mock：load_candidates 先于 recognize 执行且内部走 IAM 权限查询，
+            # 不 mock 会真实外呼（CI 无外网 AuthAPIError，2026-09-11 同款教训）
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(side_effect=AIOutputParseFailedError()),
+        ), mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
+        ):
+            message, execution = create_intent_message(self, query_text="随便查点什么")
+            output = execute_user_intent.run(execution)
+
+        self.assertEqual(output.intent, "unrecognized")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, AIOutputParseFailedError().error_code)
+        self.assertTrue(output.error.error_message)
+
+    def test_select_system_with_search_condition_not_recognized(self):
+        """切换并检索（need_search=true）但条件识别失败：切换结果不被掩盖，文案前置切换成功事实"""
+
+        from services.web.query.ai_assistant.exceptions import QueryNotRecognizedError
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(
+                intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您切换"
+            ),
+            convert=QueryNotRecognizedError(),
+        )
+
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, QueryNotRecognizedError().error_code)
+        # 兜底文案：检索失败不掩盖切换成功（修复前整句"未能理解检索需求"误导用户）
+        self.assertIn("已为您切换到 审计中心", output.error.error_message)
+        # 检索失败不丢失切换上下文：SELECTION 已建须透传 uid（曾漏传致恒空）
+        self.assertTrue(output.selection_message_uid)
+        # SELECTION 已建保留（切换不被检索失败阻塞），无 LOG_SEARCH 子消息
+        self.assertEqual(self._selection_count(), 1)
+        self.assertFalse(
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.LOG_SEARCH).exists()
+        )
+        # 意图成功仍派发标题
+        mock_delay.assert_called_once()
+
+    def test_unrecognized_returns_ai_message(self):
+        """unrecognized：AI 动态说明为什么不行，不派发标题"""
+
+        message, output, mock_delay = self._run(
+            payload=IntentPayload(intent="unrecognized", system_id="", message="没理解您的需求，想查哪个系统的日志？"),
+        )
+
+        self.assertEqual(output.intent, "unrecognized")
+        self.assertEqual(output.error.error_code, "UNRECOGNIZED_INTENT")
+        self.assertIn("没理解", output.error.error_message)
+        self.assertEqual(self._selection_count(), 0)
+        mock_delay.assert_not_called()
+
+
+class UserIntentHandlerTest(AIAssistantPlatformTestCase):
+    """Handler prepare：入口消息无父校验 + 输入与 NL 同构"""
+
+    def test_prepare_rejects_parent(self):
+        from services.web.ai_assistant.exceptions import InvalidParentMessage
+
+        selection = self.create_selection_message()
+        handler = message_handler_registry.require(MessageType.USER_INTENT)
+        with self.assertRaises(InvalidParentMessage):
+            handler.prepare(
+                user=self.user,
+                conversation=self.conversation,
+                parent_message=selection,
+                input_data=handler.input_model(query_text="查日志", scope_type="cross_system"),
+            )
+
+    def test_scope_input_validation(self):
+        """scope 双层校验：schema 层宽松（历史快照兼容）+ prepare 层必填；scene/system 必填 scope_id"""
+
+        from pydantic import ValidationError as PydanticValidationError
+
+        from services.web.ai_assistant.exceptions import ScopeContextRequired
+
+        handler = message_handler_registry.require(MessageType.USER_INTENT)
+        # schema 层宽松：不传 scope_type 可解析（历史消息快照兼容，读取/重试不报错）
+        legacy_parsed = handler.input_model(query_text="查日志")
+        self.assertIsNone(legacy_parsed.scope_type)
+        # prepare 层强约束：外部创建不传 scope_type → 400（ScopeContextRequired）
+        with self.assertRaises(ScopeContextRequired):
+            handler.prepare(
+                user=self.user,
+                conversation=self.conversation,
+                parent_message=None,
+                input_data=legacy_parsed,
+            )
+        # scene 缺 scope_id 拒绝（schema 层）
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_type="scene")
+        # system 缺 scope_id 拒绝（schema 层）
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_type="system")
+        # 非法 scope_type 拒绝（schema 层）
+        with self.assertRaises(PydanticValidationError):
+            handler.input_model(query_text="查日志", scope_type="hack_scope")
+        # 合法组合：prepare 将 scope 固化到上下文（重试/编辑复用同一 scope 语义）
+        preparation = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=handler.input_model(query_text="查日志", scope_type="scene", scope_id="1"),
+        )
+        self.assertEqual(preparation.context_data.scope_type, "scene")
+        self.assertEqual(preparation.context_data.scope_id, "1")
+        # cross_scene 无需 scope_id
+        preparation_cross = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=None,
+            input_data=handler.input_model(query_text="查日志", scope_type="cross_scene"),
+        )
+        self.assertEqual(preparation_cross.context_data.scope_type, "cross_scene")
+        self.assertEqual(preparation_cross.context_data.scope_id, "")
+
+    def test_log_search_parent_whitelist_accepts_user_intent(self):
+        """LOG_SEARCH 父消息白名单接受 USER_INTENT（续链合法性：父须已成功）"""
+
+        message, _ = create_intent_message(self)
+        # 生产路径续链发生在 _finish_success 收敛 SUCCESS 之后，此处同步置成功并落路由结果再校验白名单
+        Message.objects.filter(id=message.id).update(
+            status=ExecutionStatus.SUCCESS, output_data={"system_id": TARGET_SYSTEM_ID}
+        )
+        message.refresh_from_db()
+        from services.web.ai_assistant.services.message import MessageService
+
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            return_value=make_log_search_output(),
+        ):
+            child = MessageService(user=self.user).create(
+                conversation=self.conversation,
+                message_type=MessageType.LOG_SEARCH,
+                input_data={"condition": make_condition().model_dump(mode="json")},
+                parent_message_uid=str(message.uid),
+            )
+        self.assertEqual(child.parent_message.id, message.id)
+
+
+class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
+    """场景过滤（scope）：候选收窄 + scope 外当前系统失效 + 空候选引导
+
+    前端发起对话时携带左上角场景过滤器当前选择（scope_type/scope_id），
+    意图识别的候选系统与检索页同口径收窄，AI 无法路由到场景外系统。
+    """
+
+    SCOPE = {"scope_type": "scene", "scope_id": "1"}
+
+    def _run_with_scope(self, payload, candidates, with_selection=False):
+        """带 scope 上下文执行意图任务，返回 (message, output, load_candidates_mock)。"""
+
+        if with_selection:
+            self.create_selection_message()
+        message, execution = create_intent_message(
+            self,
+            query_text="看下最近的操作日志",
+            scope_extra=self.SCOPE,
+        )
+        load_candidates_mock = mock.MagicMock(return_value=candidates)
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            load_candidates_mock,
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(return_value=payload),
+        ), mock.patch(
+            CONVERT_MOCK, mock.MagicMock(return_value=make_condition())
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.LogSearchService.search", return_value=make_log_search_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.FieldContextService.build_selection", return_value=make_selection_output()
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.OperationContextService.build", return_value=([], [])
+        ), mock.patch(
+            # session scope 校验：建 SELECTION 时 system_id 必须在 scope 候选内
+            f"{HANDLERS_MODULE}.SearchLogPermission.get_scope_auth_systems",
+            return_value=[c["system_id"] for c in candidates] or [TARGET_SYSTEM_ID],
+        ), mock.patch(
+            TITLE_DELAY
+        ):
+            output = execute_user_intent.run(execution)
+        return message, output, load_candidates_mock
+
+    def test_scope_passed_to_load_candidates(self):
+        """scope 透传候选组装：与检索页场景过滤同口径"""
+
+        _, _, load_mock = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        )
+        load_mock.assert_called_once_with("bkaudit", self.user, scope_type="scene", scope_id="1")
+
+    def test_scope_out_current_selection_invalidated(self):
+        """scope 外当前系统失效：log_search 不复用旧系统，走 SYSTEM_REQUIRED 引导场景内重选"""
+
+        selection = self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            # scope 候选不含当前会话系统（TARGET_SYSTEM_ID）
+            candidates=[{"system_id": "other-system", "name": "其他系统"}],
+        )
+
+        self.assertEqual(output.intent, "log_search")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertEqual(output.error.candidates, [{"system_id": "other-system", "name": "其他系统"}])
+        # 不新建选择、不复用 scope 外选择
+        self.assertEqual(self._selection_count(), 1)
+        self.assertNotEqual(output.selection_message_uid, str(selection.uid))
+        self.assertFalse(output.selection_message_uid)
+
+    def test_scope_in_current_selection_reused(self):
+        """scope 内当前系统：正常复用不失效"""
+
+        selection = self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        )
+
+        self.assertIsNotNone(output.condition)
+        self.assertEqual(output.selection_message_uid, str(selection.uid))
+        self.assertEqual(self._selection_count(), 1)
+
+    def test_scope_empty_candidates_message(self):
+        """场景内无授权系统：SYSTEM_REQUIRED 专属文案 + 空候选清单"""
+
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            candidates=[],
+        )
+
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertIn("暂无可检索的系统", output.error.error_message)
+        self.assertEqual(output.error.candidates, [])
+
+    def test_scope_out_select_system_rebuilds_selection(self):
+        """scope 外当前系统 + select_system：按 scope 候选重建选择（不命中旧系统）"""
+
+        self.create_selection_message()
+        _, output, _ = self._run_with_scope(
+            payload=IntentPayload(intent="select_system", system_id="other-system", need_search=True, message="已为您切换"),
+            candidates=[{"system_id": "other-system", "name": "其他系统"}],
+        )
+
+        self.assertEqual(output.intent, "select_system")
+        self.assertEqual(output.system_id, "other-system")
+        # 重建选择：旧（scope 外）+ 新（scope 内）各一条
+        self.assertEqual(self._selection_count(), 2)
+        self.assertIsNotNone(output.condition)
+        # 新建的 SELECTION 子消息透传 session scope（续链继承同一场景）
+        new_selection = (
+            Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION)
+            .order_by("-id")
+            .first()
+        )
+        self.assertEqual((new_selection.context_data or {}).get("scope_type"), self.SCOPE["scope_type"])
+        self.assertEqual((new_selection.context_data or {}).get("scope_id"), self.SCOPE["scope_id"])
+
+    def _selection_count(self):
+        return Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION).count()
