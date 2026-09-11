@@ -222,6 +222,7 @@ class MessageService:
         input_data: Mapping[str, Any],
         parent_message: Message | None = None,
         timeline_started_at=None,
+        visible: bool = True,
     ) -> Message:
         """任务内编排专用：同步执行业务并直接落库成功消息（不经 Celery 派发）。
 
@@ -231,6 +232,9 @@ class MessageService:
         :param timeline_started_at: 时间线起点（用户发问消息的 created_at）：回写为本消息
             created_at，使 duration_seconds 表达「用户发问 → 本条 AI 输出完成」的真实耗时
             （含此前所有 LLM 编排）；缺省为落库时刻（耗时≈0）。
+        :param visible: 消息卡片可见性（通用显隐协议，默认 True 展示）：仅特定编排场景
+            置 False（如复合意图自动创建的 SELECTION 仅展示检索消息）；随消息持久化，
+            刷新/重试/编辑保持，序列化层顶层输出
         """
 
         # 编排场景父消息可能刚收敛终态（内存实例仍是 PROCESSING），刷新后校验
@@ -265,6 +269,7 @@ class MessageService:
                 output_data=output_snapshot,
                 last_activity_at=now,
                 finished_at=now,
+                visible=visible,
                 created_by=self.user,
                 updated_by=self.user,
             )

@@ -96,32 +96,6 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
         self.assertEqual(output.systems[0].system_id, TARGET_SYSTEM_ID)
         self.assertEqual(output.common_operations[0].query_text, "查登录失败")
         self.assertEqual(output.historical_operations[0].query_text, "查 admin 删除")
-        # 引导卡显隐透传：前端手选系统不传 show_guide，默认 True（展示）；
-        # 编排链路复合意图创建时传 False 隐藏（output 快照固化，前端刷新可恢复）
-        self.assertTrue(output.show_guide)
-
-    def test_execute_show_guide_passthrough(self):
-        """[前端需求] 引导卡显隐透传：编排链路（复合意图自动创建）传 False 时
-        output.show_guide=False 固化到快照——前端以此字段控制消息显隐（替代刷新
-        即丢的内存态 hiddenGuideMessageIds）。"""
-
-        with self.patch_field_context(), self.patch_operation_context(), mock.patch(
-            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
-            return_value=[TARGET_SYSTEM_ID],
-        ):
-            output = self.handler.execute(
-                input_data=SystemSelectionInputSchema(
-                    system_ids=[TARGET_SYSTEM_ID],
-                    scope_type=DEFAULT_SCOPE_TYPE,
-                    show_guide=False,
-                ),
-                context_data=SystemSelectionHandler.context_model(
-                    username=self.user,
-                    namespace="bkaudit",
-                    scope_type=DEFAULT_SCOPE_TYPE,
-                ),
-            )
-        self.assertFalse(output.show_guide)
 
     def test_execute_scope_rejects_out_of_scope_system(self):
         """session scope 校验：system_ids 不在 scope 候选内时拒绝（防 AI 跨场景越权）"""
