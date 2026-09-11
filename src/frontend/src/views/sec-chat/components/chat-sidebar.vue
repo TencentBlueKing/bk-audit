@@ -1560,9 +1560,7 @@
   const findNearestRootNodeByY = (list: HTMLElement, clientY: number): HTMLElement | null => {
     const mixed = list.querySelector('.conv-section--mixed');
     if (!mixed) return null;
-    const nodes = Array.from(
-      mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item'),
-    );
+    const nodes = Array.from(mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item'));
     if (!nodes.length) return null;
 
     let best: HTMLElement | null = null;
