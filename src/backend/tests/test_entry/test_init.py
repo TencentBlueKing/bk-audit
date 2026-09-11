@@ -42,6 +42,7 @@ from services.web.entry.constants import (
 )
 from services.web.entry.init.base import SystemInitHandler
 from services.web.scene.constants import BindingType
+from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -199,6 +200,7 @@ class SystemInitRuleAuditTests(TestCase):
     def setUp(self):
         super().setUp()
         self.handler = SystemInitHandler()
+        Scene.objects.get_or_create(name='系统默认场景', defaults={"description": "测试场景"})
 
     @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
