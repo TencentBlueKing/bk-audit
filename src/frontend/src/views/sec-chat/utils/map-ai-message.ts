@@ -365,17 +365,20 @@ export const mapLogSearchFailedToResult = (
 export interface MapAiMessageOptions {
   /** 来自 SYSTEM_SELECTION 的字段表，用于条件标签中文映射 */
   fieldCatalog?: SystemFieldRow[];
-
-  hiddenGuideMessageIds?: Set<string>;
+  /**
+   * 后端尚未下发 visible 时，用内存标记强制隐藏卡片。
+   * 有协议字段时以协议为准。
+   */
+  hiddenCardMessageIds?: Set<string>;
 }
 
-/** 解析 SYSTEM_SELECTION 是否展示引导卡（读消息顶层 show_guide） */
-export const resolveSystemSelectionShowGuide = (
+/** 解析消息卡片是否可见（读顶层 visible，缺省 true） */
+export const resolveMessageVisible = (
   message: AiMessage,
-  hiddenGuideMessageIds?: Set<string>,
+  hiddenCardMessageIds?: Set<string>,
 ): boolean => {
-  if (typeof message.show_guide === 'boolean') return message.show_guide;
-  if (hiddenGuideMessageIds?.has(message.uid)) return false;
+  if (typeof message.visible === 'boolean') return message.visible;
+  if (hiddenCardMessageIds?.has(message.uid)) return false;
   return true;
 };
 
@@ -416,27 +419,27 @@ export const mapAiMessageToChatMessage = (
   options: MapAiMessageOptions = {},
 ): ChatMessage => {
   const fieldCatalog = options.fieldCatalog || [];
-  const hiddenGuideMessageIds = options.hiddenGuideMessageIds || new Set<string>();
+  const hiddenCardMessageIds = options.hiddenCardMessageIds || new Set<string>();
   const outputSystems = pickSystems(message.output_data);
   const systems = outputSystems.length ? outputSystems : pickSystems(message.input_data);
   const systemIds = systems.map(item => item.id);
+  const visible = resolveMessageVisible(message, hiddenCardMessageIds);
   const baseMeta = {
     apiStatus: message.status,
     messageType: message.message_type,
     errorCode: message.error_code || undefined,
     errorMessage: message.error_message || undefined,
     parentMessageUid: message.parent_message_uid,
+    visible,
   };
 
   if (message.message_type === 'SYSTEM_SELECTION') {
-    const showGuide = resolveSystemSelectionShowGuide(message, hiddenGuideMessageIds);
     if (message.status === 'SUCCESS' && (systems.length || message.output_data)) {
       const { standardFields, extensionFields } = pickSystemFields(message.output_data);
       return {
         id: message.uid,
         role: 'assistant',
         type: 'retrieval-guide',
-        showGuide,
         systems,
         systemIds,
         commonOperations: pickOperations(message.output_data?.common_operations),
@@ -451,7 +454,6 @@ export const mapAiMessageToChatMessage = (
       role: 'assistant',
       type: 'select-system',
       status: message.status === 'FAILED' ? 'closed' : 'pending',
-      showGuide,
       systems,
       systemIds,
       ...baseMeta,
