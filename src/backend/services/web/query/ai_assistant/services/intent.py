@@ -83,8 +83,14 @@ INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
      · 话语仅表达切换/选择系统，不含任何检索诉求（如「帮我切换到蓝盾」「用蓝盾系统」「切换到 test0907」）
        → need_search=false（仅切换系统，本轮不检索）
      · intent=log_search 时 need_search 恒为 true；intent=unrecognized 时恒为 false
-   - 用户话语为日志检索需求且未提及任何系统 → intent=log_search（system_id 留空）
-   - 与日志检索和系统选择完全无关（寒暄/闲聊）→ intent=unrecognized
+   - 用户话语为日志检索需求且未提及任何系统 → intent=log_search（system_id 留空）。
+     「日志检索需求」不限显式检索动词（查/查询/看看/检索等）——话语出现「字段为值」「字段=值」
+     「字段是值」类检索条件描述（如「extend.request_data为{"id":...}」「username=admin」
+     「result_code为0」），本身即构成日志检索诉求（用户在直接给定检索条件）：
+     按上述意图分类规则正常归类，不得因缺少检索动词而判 unrecognized
+   - 与日志检索和系统选择完全无关（寒暄/闲聊/与技术数据无关的日常话语）→ intent=unrecognized；
+     含任何字段条件描述（含 extend. 前缀下钻字段、JSON 字面量值、URL 值）、时间范围
+     或日志/审计相关词汇的话语均不得判 unrecognized
 3. system_id 必须严格来自候选系统列表，禁止编造。「无法确定具体系统」仅指话语中没有任何系统指向词、
    或指向词与所有候选均无法建立匹配，此时才判 log_search（system_id 留空）；
    话语已明确点名系统名时必须给出 select_system 与最佳匹配候选，即使存在名称相似的多个候选也不得放弃选择

@@ -75,6 +75,35 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
         self.assertEqual(payload.intent, "unrecognized")
         self.assertIn("没理解", payload.message)
 
+    def test_recognize_condition_only_query_prompt_rule(self, mock_chat):
+        """回归：纯条件罗列（无检索动词）必须判为检索诉求——prompt 注入条件描述判定规则。
+
+        线上报障：用户输入「extend.request_data为{...}，extend._request_url为http://...」
+        通篇无检索动词与系统指向，意图被误判 unrecognized（"未能理解当前意图"）。
+        修复：意图规则明确「字段为/=/是 + 值」类条件描述本身即日志检索需求，
+        即使无检索动词也判 log_search；含条件描述的话语不得判 unrecognized。
+        """
+
+        mock_chat.return_value = json.dumps({"intent": "log_search", "system_id": "", "message": "好的，为您检索"})
+        payload = IntentRecognitionService.recognize(
+            query_text=(
+                'extend.request_data为{"id":"20260910204720871773","pk":"20260910204720871773"},'
+                "extend._request_url为http://bkaudit-api.example.com/api/v1/risks/20260910204720871773/"
+            ),
+            candidates=CANDIDATES,
+            current_system_id="bk-audit",
+            username=self.username,
+        )
+        self.assertEqual(payload.intent, "log_search")
+        self.assertEqual(payload.system_id, "")
+        # User Message 注入条件描述判定规则与用户原话（URL 用 example.com 占位避免敏感扫描）
+        _, kwargs = mock_chat.call_args
+        user_message = kwargs["input"]
+        self.assertIn("字段为值", user_message)
+        self.assertIn("检索条件描述", user_message)
+        self.assertIn("不得判 unrecognized", user_message)
+        self.assertIn("extend.request_data", user_message)
+
     def test_parse_fenced_json(self, mock_chat):
         """代码块包裹输出：三级递进提取（复用 NL2JSON 闸门）"""
 
