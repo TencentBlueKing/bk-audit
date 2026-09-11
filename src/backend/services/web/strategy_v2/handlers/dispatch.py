@@ -183,6 +183,33 @@ PY_OPERATORS = {
 }
 
 
+def _field_python_type(field: Optional[ConditionField]):
+    """
+    返回字段的有效输出类型：聚合结果类型优先，其次字段本身类型
+    """
+    if field is None:
+        return None
+    ftype = (field.aggregate.result_data_type if field.aggregate else None) or field.field_type
+    if ftype is None:
+        return None
+    try:
+        return ftype.python_type
+    except (AttributeError, KeyError):
+        return None
+
+
+def _as_number(value: Any) -> Any:
+    """
+    字段是数值类型时，把实际值和条件值都转为数字
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
+
 def apply_condition(condition: Condition, ctx: dict) -> bool:
     """
     原子条件求值：字段解析 + 操作符比较。
@@ -193,7 +220,13 @@ def apply_condition(condition: Condition, ctx: dict) -> bool:
         # 未知操作符：视为不匹配
         return False
     actual = resolve_field(condition.field, ctx)
-    return op_func(actual, condition.filter, condition.filters)
+    filter_value, filter_values = condition.filter, condition.filters
+    if _field_python_type(condition.field) in (int, float):
+        # 数值型字段：实际值与比较值统一恢复数值后再比较
+        actual = _as_number(actual)
+        filter_value = _as_number(filter_value)
+        filter_values = [_as_number(value) for value in (filter_values or [])]
+    return op_func(actual, filter_value, filter_values)
 
 
 def evaluate(node: Optional[WhereCondition], ctx: dict) -> bool:
@@ -208,7 +241,7 @@ def evaluate(node: Optional[WhereCondition], ctx: dict) -> bool:
     if node.condition:
         return apply_condition(node.condition, ctx)
     if node.conditions:
-        results = [evaluate(sub, ctx) for sub in node.conditions]
+        results = [evaluate(sub, ctx) for sub in node.conditions if not evaluate_is_empty(sub)]
         if not results:
             return True
         return all(results) if node.connector == FilterConnector.AND else any(results)

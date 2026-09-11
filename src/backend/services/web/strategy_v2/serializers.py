@@ -879,6 +879,14 @@ class MultiRuleValidateMixin:
         if len(names) != len(set(names)):
             raise serializers.ValidationError(gettext("发现规则名称在策略内必须唯一"))
 
+        # 拒绝重复 rule_id：同一 id 提交两次会被同步逻辑顺序覆盖
+        rule_ids = [r.get("rule_id") for r in rules if r.get("rule_id")]
+        if len(rule_ids) != len(set(rule_ids)):
+            duplicated = sorted({rid for rid in rule_ids if rule_ids.count(rid) > 1})
+            raise serializers.ValidationError(
+                gettext("发现规则存在重复的 rule_id：%s") % ",".join(str(rid) for rid in duplicated)
+            )
+
         # 策略级 select 的聚合字段集合（having 列引用的合法域）
         configs = attrs.get("configs")
         if not configs:
@@ -893,6 +901,8 @@ class MultiRuleValidateMixin:
             if f.get("aggregate")
         }
 
+        # 场景策略：规则级通知组按策略所属场景校验（全局策略 scene_id=None 自动跳过）
+        scene_id = self.get_scene_id(attrs)
         for rule in rules:
             conditions = rule.get("conditions") or {}
             where_tree = conditions.get("where")
@@ -939,6 +949,10 @@ class MultiRuleValidateMixin:
                         gettext("规则[%s]的where条件操作符[%s]不合法") % (rule.get("rule_name"), operator)
                     )
 
+            # 规则级通知组（processor/follower）：存在性 + 场景归属校验
+            notice_group_ids = list(set((rule.get("processor") or []) + (rule.get("follower") or [])))
+            self._validate_notice_groups("rules", notice_group_ids, scene_id)
+
         # 行级配置（无聚合字段）时禁 having（having 无聚合字段可引用）
         if not aggregate_identities:
             for rule in rules:
@@ -964,6 +978,14 @@ class MultiRuleValidateMixin:
             names = [r.get("rule_name") for r in dispatch_rules]
             if len(names) != len(set(names)):
                 raise serializers.ValidationError(gettext("分派规则名称在策略内必须唯一"))
+
+            # 拒绝重复 rule_id：同一 id 提交两次会被同步逻辑顺序覆盖
+            dispatch_rule_ids = [r.get("rule_id") for r in dispatch_rules if r.get("rule_id")]
+            if len(dispatch_rule_ids) != len(set(dispatch_rule_ids)):
+                duplicated = sorted({rid for rid in dispatch_rule_ids if dispatch_rule_ids.count(rid) > 1})
+                raise serializers.ValidationError(
+                    gettext("分派规则存在重复的 rule_id：%s") % ",".join(str(rid) for rid in duplicated)
+                )
 
             default_count = 0
             for rule in dispatch_rules:

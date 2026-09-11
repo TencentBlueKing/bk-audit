@@ -20,8 +20,15 @@ from services.web.strategy_v2.constants import RiskLevel, StrategyType
 from services.web.strategy_v2.serializers import (
     CreateStrategyRequestSerializer,
     MultiRuleValidateMixin,
+    StrategySerializer,
 )
 from tests.base import TestCase
+
+
+class TestMultiRuleMixin(MultiRuleValidateMixin, StrategySerializer):
+    """测试用组合类，与生产环境 CreateStrategyRequestSerializer 的继承链一致"""
+
+    pass
 
 
 def make_dispatch_condition(field_name, operator="eq", filters=None, filter_val=""):
@@ -45,7 +52,7 @@ class MultiRuleValidateMixinTest(TestCase):
 
     def setUp(self):
         super().setUp()
-        self.mixin = MultiRuleValidateMixin()
+        self.mixin = TestMultiRuleMixin()
 
     def test_condition_tree_is_empty_with_none(self):
         self.assertTrue(self.mixin._condition_tree_is_empty(None))
@@ -92,7 +99,7 @@ class CheckRulesTest(TestCase):
 
     def setUp(self):
         super().setUp()
-        self.mixin = MultiRuleValidateMixin()
+        self.mixin = TestMultiRuleMixin()
         self.valid_where = {
             "condition": {
                 "field": {"table": "t", "raw_name": "f", "display_name": "f", "field_type": "string"},
