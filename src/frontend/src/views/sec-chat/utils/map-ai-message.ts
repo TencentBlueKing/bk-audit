@@ -194,9 +194,7 @@ const resolveNestedLeafLabel = (
 };
 
 /** SystemFieldRow → 引导卡 / 条件 tag 展示名（有 keys 时仅展示子字段，不再二级拼接父名） */
-export const resolveSystemFieldDisplayLabel = (
-  field: Pick<SystemFieldRow, 'rawName' | 'keys' | 'displayName' | 'nlName'>,
-): string => {
+export const resolveSystemFieldDisplayLabel = (field: Pick<SystemFieldRow, 'rawName' | 'keys' | 'displayName' | 'nlName'>): string => {
   const keys = field.keys || [];
   if (keys.length) {
     return resolveNestedLeafLabel(field.rawName, keys, field.displayName, field.nlName);
