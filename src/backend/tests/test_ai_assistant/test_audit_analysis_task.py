@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 from unittest import mock
+from uuid import uuid4
 
 import yaml
 from bk_resource import api
@@ -15,6 +16,7 @@ from django.test import SimpleTestCase, override_settings
 
 from api.constants import AIAgentCode
 from apps.meta.models import GlobalMetaConfig
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant import exceptions as ai_assistant_exceptions
 from services.web.ai_assistant.constants import (
     AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY,
@@ -281,10 +283,15 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
             attachment = Attachment.objects.get(uid=created["uid"])
             old_task_id = attachment.task_id
             with (
-                mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=LogAnalysisTimeout()),
+                mock.patch.object(
+                    api.bk_plugins_ai_agent, "chat_completion", side_effect=LogAnalysisTimeout()
+                ) as first_agent,
                 self.assertRaises(LogAnalysisTimeout),
             ):
                 invoke_task(execute_log_analysis, attachment=attachment)
+            attachment.refresh_from_db()
+            first_thread_id = first_agent.call_args.kwargs["execute_kwargs"]["thread_id"]
+            self.assertEqual(first_thread_id, attachment.stream_config["execution_id"])
             failed = GetAttachment().request(attachment_uid=created["uid"])
             self.assertEqual(failed["status"], ExecutionStatus.FAILED)
 
@@ -298,6 +305,11 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
             self.assertEqual(attachment.context_data["effective_instruction"], "默认分析 v1")
 
             def respond(**kwargs):
+                attachment.refresh_from_db()
+                thread_id = kwargs["execute_kwargs"]["thread_id"]
+                self.assertEqual(thread_id, attachment.stream_config["execution_id"])
+                self.assertNotEqual(thread_id, first_thread_id)
+                self.assertEqual([item["role"] for item in kwargs["chat_history"]], ["role", "user"])
                 self._emit_agent_content(callback=kwargs["on_event"], content="# 默认报告")
                 return None
 
@@ -310,7 +322,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
             self.assertTrue(attachment.stream_archive)
 
     def make_execution(self):
-        stream = mock.Mock()
+        stream = mock.Mock(execution_id=uuid4())
         return AttachmentExecution(
             attachment=self.create_attachment(),
             input_data=self.input_data,
@@ -451,10 +463,16 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
         request = agent.call_args.kwargs
         self.assertEqual(request["agent_code"], AIAgentCode.AUDIT_LOG_ANALYSIS)
         self.assertEqual(request["user"], self.user)
-        self.assertEqual(request["chat_history"], [])
-        self.assertEqual(request["execute_kwargs"], {"stream": True})
+        self.assertEqual(
+            request["chat_history"],
+            [
+                {"role": "role", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_agent_input(self.context_data)},
+            ],
+        )
+        self.assertEqual(request["execute_kwargs"], {"stream": True, "thread_id": str(execution.stream.execution_id)})
         self.assertNotIn("max_sse_line_bytes", request)
-        self.assertEqual(json.loads(request["input"]), json.loads(build_agent_input(self.context_data)))
+        self.assertNotIn("input", request)
 
     def test_agent_exception_and_invalid_final_content_propagate_to_platform(self):
         execution = self.make_execution()

@@ -49,6 +49,12 @@ class GetAttachmentStream(AIAssistantResource):
     bind_request = True
     RequestSerializer = AttachmentStreamRequestSerializer
 
+    def validate_request_data(self, request_data):
+        """使用 DRF 参数错误返回 400，避免缺失执行代际被资源层包装为 500。"""
+        self._request_serializer = self.RequestSerializer(data=request_data, many=self.many_request_data)
+        self._request_serializer.is_valid(raise_exception=True)
+        return self._request_serializer.validated_data
+
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request", None)
         last_stream_id = self._resolve_cursor(
