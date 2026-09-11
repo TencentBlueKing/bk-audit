@@ -20,7 +20,7 @@
     <div class="nl-search-header">
       <img
         class="nl-search-header-icon"
-        src="@/images/aixiaojing.svg">
+        :src="aiXiaojingIcon">
       <span class="nl-search-header-title">{{ t('智能搜索') }}</span>
     </div>
 
@@ -39,7 +39,7 @@
       <div class="nl-search-warning-content">
         <img
           class="nl-search-warning-icon"
-          src="@/images/info.svg">
+          :src="infoIcon">
         <span>{{ t('未识别到有效搜索条件，请输入责任人、风险等级、处理状态等关键词') }}</span>
       </div>
       <audit-icon
@@ -110,6 +110,8 @@
   } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+  import aiXiaojingIcon from '@/images/aixiaojing.svg';
+  import infoIcon from '@/images/info.svg';
   import AddCondition from './components/add-condition.vue';
   import ConditionTags from './components/condition-tags.vue';
   import NlInput from './components/nl-input.vue';
