@@ -861,17 +861,35 @@ const buildVisibility = (params: Record<string, any>, isPlatform: boolean) => {
   };
 };
 
+/** 是否包含真正选了字段的过滤条件（空「请选择」占位不算） */
+export const hasFilledWhereConditions = (where?: { conditions?: any[] } | null) => (
+  (where?.conditions || []).some((group: any) => (
+    (Array.isArray(group?.conditions) ? group.conditions : []).some((item: any) => {
+      const field = item?.condition?.field ?? item?.field;
+      return Boolean(getConditionFieldRaw(field));
+    })
+  ))
+);
+
+type WhereCandidate = { conditions?: unknown[] } | null | undefined;
+
+const pickWhereValue = (...candidates: WhereCandidate[]) => (
+  candidates.find(item => hasFilledWhereConditions(item)) ?? null
+);
+
 const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<string, any>) => {
-  if (rule.conditions && (rule.conditions.where !== undefined || rule.conditions.having !== undefined)) {
-    return {
-      where: rule.conditions.where ?? null,
-      having: rule.conditions.having ?? null,
-    };
-  }
   const configs = rule.configs || {};
   return {
-    where: configs.where ?? fallbackConfigs?.where ?? null,
-    having: configs.having ?? fallbackConfigs?.having ?? null,
+    where: pickWhereValue(
+      rule.conditions?.where,
+      configs.where,
+      fallbackConfigs?.where,
+    ),
+    having: pickWhereValue(
+      rule.conditions?.having,
+      configs.having,
+      fallbackConfigs?.having,
+    ),
   };
 };
 

@@ -389,7 +389,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
-  import { excludeHavingFromWhere } from '../../utils/strategy-protocol';
+  import { excludeHavingFromWhere, hasFilledWhereConditions } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface RuleItem {
@@ -833,6 +833,18 @@
       const com = comRefs.value[index];
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
       const mergedConfigs = mergeRuleConfigs(fields.configs);
+      const where = pickConditionWhere(
+        mergedConfigs.where,
+        fields.configs?.where,
+        rule.formData?.configs?.where,
+        rule.conditions?.where,
+      ) ?? mergedConfigs.where ?? null;
+      const having = pickConditionWhere(
+        mergedConfigs.having,
+        fields.configs?.having,
+        rule.formData?.configs?.having,
+        rule.conditions?.having,
+      ) ?? mergedConfigs.having ?? null;
       return {
         ...(rule.rule_id ? { rule_id: rule.rule_id } : {}),
         name: rule.name,
@@ -844,10 +856,14 @@
         processor: rule.processor ?? [],
         follower: rule.follower ?? [],
         conditions: {
-          where: mergedConfigs.where ?? null,
-          having: mergedConfigs.having ?? null,
+          where,
+          having,
         },
-        configs: mergedConfigs,
+        configs: {
+          ...mergedConfigs,
+          where,
+          having,
+        },
       };
     });
 
@@ -873,7 +889,7 @@
   };
 
   const hasConditionGroups = (where?: { conditions?: unknown[] } | null) => (
-    Boolean(where?.conditions?.length)
+    hasFilledWhereConditions(where)
   );
 
   const pickConditionWhere = (...candidates: Array<{ conditions?: unknown[] } | null | undefined>) => (
@@ -886,14 +902,11 @@
     const formRule = props.formData?.rules?.[index] ?? {};
     const hitConditionsReset = Number(props.formData?.hit_conditions_reset_seq) > 0;
     const emptyWhere = { connector: 'and', conditions: [] };
-    // 注意：customize 初始化会回写空 where（conditions: []），不能优先生效，否则会盖住真实命中条件
-    // 预期结果变更后已主动清空：空条件也要生效，不能再回落到详情原始 where
-    const pickWhere = (...candidates: Array<{ conditions?: unknown[] } | null | undefined>) => {
-      if (hitConditionsReset) {
-        return candidates.find(item => item !== null && item !== undefined) ?? emptyWhere;
-      }
-      return pickConditionWhere(...candidates);
-    };
+    // 空 { conditions: [] } 不能优先生效，否则会盖住用户刚填的命中条件
+    // 预期结果变更后不再回落到详情原始 where（inheritBaseCondition 已关掉）
+    const pickWhere = (...candidates: Array<{ conditions?: unknown[] } | null | undefined>) => (
+      pickConditionWhere(...candidates) ?? (hitConditionsReset ? emptyWhere : undefined)
+    );
     const inheritBaseCondition = !hitConditionsReset && index === 0;
     const where = pickWhere(
       localRule?.conditions?.where,
@@ -1093,7 +1106,16 @@
         const com = comRefs.value[index];
         return com?.getValue?.() ?? Promise.resolve();
       }));
-      emits('nextStep', 3, buildStepParams());
+      const params = buildStepParams();
+      const missingWhere = params.rules.find((rule: Record<string, any>) => (
+        !hasConditionGroups(rule?.conditions?.where)
+        && !hasConditionGroups(rule?.conditions?.having)
+      ));
+      if (missingWhere) {
+        messageError(t('{label}缺少where过滤条件（规则where必填）', { label: missingWhere.name || missingWhere.rule_name }));
+        return;
+      }
+      emits('nextStep', 3, params);
     } catch {
       // 验证失败，停留在当前步骤
     }

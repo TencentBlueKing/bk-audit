@@ -500,7 +500,7 @@
   };
 
   const tableFieldsSign = computed(() => localTableFields.value
-    .map(item => `${item.raw_name || ''}:${item.aggregate || ''}:${item.display_name || ''}`)
+    .map(item => `${item.raw_name || ''}:${item.aggregate || ''}`)
     .join('|'));
   // 返回值
   const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {

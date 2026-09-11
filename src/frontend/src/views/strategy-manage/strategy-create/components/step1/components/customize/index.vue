@@ -284,7 +284,10 @@
     computed,
     h,
     nextTick,
-    onMounted,    ref,
+    onActivated,
+    onDeactivated,
+    onMounted,
+    ref,
     watch,
     watchEffect } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -316,7 +319,11 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
-  import { enrichFieldDisplayNames, excludeHavingFromWhere } from '../../../../utils/strategy-protocol';
+  import {
+    enrichFieldDisplayNames,
+    excludeHavingFromWhere,
+    hasFilledWhereConditions,
+  } from '../../../../utils/strategy-protocol';
 
   interface Where {
     connector: 'and' | 'or'
@@ -477,6 +484,14 @@
   const originalEditHaving = ref<Where | undefined>(undefined);
   const isWhereModified = ref(false);
   const isWhereSettingUp = ref(false);
+  // keep-alive 停用后不再向外抛重置，避免第一步预期结果回写把第二步已填条件清空
+  const isStepActive = ref(true);
+  onActivated(() => {
+    isStepActive.value = true;
+  });
+  onDeactivated(() => {
+    isStepActive.value = false;
+  });
 
   // 仅 MineBizRt：点击第二列业务项后再带 bk_biz_id 懒加载第三列
   // cascader 按单层 id 展开（getNodeById），跨类型重复的 bizId/rtId 会串选到「其他数据」
@@ -1075,7 +1090,7 @@
     tableFields.value = [];
     removeTreeData();
     [rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
-    if (!isEditMode) {
+    if (!isEditMode && isStepActive.value) {
       emits('resetHitConditions');
     }
   };
@@ -1246,6 +1261,7 @@
 
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
+    const prevSelect = JSON.stringify(formData.value.configs.select || []);
     formData.value.configs.select = expectedResult;
     sessionStorage.removeItem('rule-tree-data');
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
@@ -1255,13 +1271,17 @@
       // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
       formData.value.configs.data_source.source_type = originSourceType.value;
     }
+    if (props.stepMode !== 'basic' || !isStepActive.value
+      || prevSelect === JSON.stringify(expectedResult || [])) {
+      return;
+    }
     emits('resetHitConditions');
   };
 
   // 更新风险规则
   const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
-    if (isEditMode && !isWhereSettingUp.value) {
+    if (!isWhereSettingUp.value) {
       isWhereModified.value = true;
     }
   };
@@ -1463,10 +1483,10 @@
         having,
       ) as Where
       : undefined;
-    const hasWhere = Boolean(where?.conditions?.length);
-    const hasHaving = Boolean(having?.conditions?.length);
+    const hasWhere = hasFilledWhereConditions(where);
+    const hasHaving = hasFilledWhereConditions(having);
     if (!hasWhere && !hasHaving) {
-      // 组件已挂载且确实无条件：结束 pending；否则保留等待有效 where
+      // 空「请选择」占位不能 setWhere，否则会把用户已填条件冲掉
       if (rulesComponentRef.value) {
         pendingWhereEditData.value = null;
       }
@@ -1628,13 +1648,13 @@
       if (Number(props.editData?.hit_conditions_reset_seq) > 0) {
         return;
       }
-      const hasIncoming = Boolean((where as Where | undefined)?.conditions?.length
-        || (having as Where | undefined)?.conditions?.length);
+      const hasIncoming = hasFilledWhereConditions(where as Where | undefined)
+        || hasFilledWhereConditions(having as Where | undefined);
       if (!hasIncoming || isWhereModified.value) {
         return;
       }
-      const currentEmpty = !formData.value.configs.where?.conditions?.length
-        && !formData.value.configs.having?.conditions?.length;
+      const currentEmpty = !hasFilledWhereConditions(formData.value.configs.where)
+        && !hasFilledWhereConditions(formData.value.configs.having);
       if (!currentEmpty) {
         return;
       }
@@ -1751,28 +1771,34 @@
         } else if (params.configs.where) {
           // 添加having参数
           // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
+          const isHavingCondition = (item: { condition?: { field?: unknown } }) => {
+            const field = item?.condition?.field;
+            return Boolean(field && typeof field !== 'string' && (field as { aggregate?: unknown }).aggregate);
+          };
           const having = {
             connector: params.configs.where.connector,
             conditions: params.configs.where.conditions
               .map(group => ({
                 connector: group.connector,
                 index: group.index,
-                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && item.condition.field?.aggregate),
+                conditions: group.conditions.filter(item => isHavingCondition(item)),
               }))
               // 过滤掉没有聚合条件的组
               .filter(group => group.conditions.length > 0),
           };
           if (having.conditions.length > 0) {
-            params.configs.having = having;
-            // 将where中符合having的条件删除
-            params.configs.where.conditions = params.configs.where.conditions
+            const nextWhereConditions = params.configs.where.conditions
               .map(group => ({
                 connector: group.connector,
                 index: group.index,
-                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
+                conditions: group.conditions.filter(item => !isHavingCondition(item)),
               }))
-              // 过滤掉没有聚合条件的组
               .filter(group => group.conditions.length > 0);
+            // 全部是聚合条件时仍保留 where，后端规则 where 必填
+            if (nextWhereConditions.length > 0) {
+              params.configs.having = having;
+              params.configs.where.conditions = nextWhereConditions;
+            }
           } else {
             delete params.configs.having;
           }
