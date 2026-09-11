@@ -304,6 +304,7 @@
     AI_OUTPUT_INVALID: '检索条件无效',
     AI_SERVICE_ERROR: 'AI 服务暂不可用',
     AI_TIMEOUT: 'AI 服务响应超时',
+    LOG_SEARCH_CHAIN_TIMEOUT: '日志检索启动超时',
     PERMISSION_DENIED: '无日志检索权限',
   };
 
@@ -315,6 +316,7 @@
     AI_OUTPUT_INVALID: '请修改描述后重试',
     AI_SERVICE_ERROR: '请稍后重试',
     AI_TIMEOUT: '请稍后重试',
+    LOG_SEARCH_CHAIN_TIMEOUT: '请稍后重试或换一种描述',
     PERMISSION_DENIED: '请联系管理员申请目标系统的日志检索权限',
   };
 
@@ -340,11 +342,12 @@
     || code === 'AI_OUTPUT_INVALID'
   );
 
-  /** AI 瞬时失败：回填原句到输入框，由用户编辑后重发（不走 RetryMessage） */
+  /** AI 瞬时失败 / 续链超时：回填原句到输入框，由用户编辑后重发（不走 RetryMessage） */
   const showRecognitionResend = (code: string) => (
     code === 'AI_TIMEOUT'
     || code === 'AI_SERVICE_ERROR'
     || code === 'AI_OUTPUT_PARSE_FAILED'
+    || code === 'LOG_SEARCH_CHAIN_TIMEOUT'
   );
 
   const getProcessingText = (messageType?: string) => {
