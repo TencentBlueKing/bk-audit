@@ -254,7 +254,6 @@
   import useRequest from '@hooks/use-request';
 
   import {
-    buildParentFieldLabelMap,
     formatSampleValue,
     resolveFieldSampleDisplay,
     resolveSystemFieldDisplayLabel,
@@ -326,11 +325,8 @@
     props.historicalOperations.slice(0, SUGGESTION_LIMIT)
   ));
 
-  const parentFieldLabelMap = computed(() => buildParentFieldLabelMap(props.standardFields));
-
   const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
-    // 有 keys 时与日志检索一致：父中文名/子 key，避免 instance_data / instance_origin_data 同名混淆
-    name: resolveSystemFieldDisplayLabel(field, parentFieldLabelMap.value),
+    name: resolveSystemFieldDisplayLabel(field),
     desc: field.description || '',
     sample: resolveFieldSampleDisplay(field),
     sampleRaw: formatSampleValue(field.sampleValue),
