@@ -365,9 +365,19 @@ export const mapLogSearchFailedToResult = (
 export interface MapAiMessageOptions {
   /** 来自 SYSTEM_SELECTION 的字段表，用于条件标签中文映射 */
   fieldCatalog?: SystemFieldRow[];
-  /** 指定哪些 SYSTEM_SELECTION 仅用于补充上下文，不展示 guide */
+
   hiddenGuideMessageIds?: Set<string>;
 }
+
+/** 解析 SYSTEM_SELECTION 是否展示引导卡（读消息顶层 show_guide） */
+export const resolveSystemSelectionShowGuide = (
+  message: AiMessage,
+  hiddenGuideMessageIds?: Set<string>,
+): boolean => {
+  if (typeof message.show_guide === 'boolean') return message.show_guide;
+  if (hiddenGuideMessageIds?.has(message.uid)) return false;
+  return true;
+};
 
 /** NL 消息在 SUCCESS 时若 output_data.error 非空，表示识别失败（非任务 FAILED） */
 export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError | null => {
@@ -419,7 +429,7 @@ export const mapAiMessageToChatMessage = (
   };
 
   if (message.message_type === 'SYSTEM_SELECTION') {
-    const showGuide = !hiddenGuideMessageIds.has(message.uid);
+    const showGuide = resolveSystemSelectionShowGuide(message, hiddenGuideMessageIds);
     if (message.status === 'SUCCESS' && (systems.length || message.output_data)) {
       const { standardFields, extensionFields } = pickSystemFields(message.output_data);
       return {
