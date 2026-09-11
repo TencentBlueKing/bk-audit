@@ -69,64 +69,13 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
+from services.web.scene.constants import BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 
 
 class SystemInitHelper:
     config_path = os.path.join(os.getcwd(), "support-files", "init-configs")
-
-    @staticmethod
-    def ensure_system_default_scene() -> Scene:
-        """确保系统默认场景存在"""
-        return Scene.objects.get_or_create(
-            name='系统默认场景',
-            defaults={"description": "系统默认场景（存量资源迁移生成）"},
-        )[0]
-
-    @staticmethod
-    def ensure_admin_notice_group() -> None:
-        """确保系统管理员通知组存在"""
-        from apps.notice.constants import (
-            ADMIN_NOTICE_GROUP_ID,
-            ADMIN_NOTICE_GROUP_NAME,
-            get_default_notice_config,
-        )
-        from apps.notice.models import NoticeGroup
-        from core.utils.environ import get_env_or_raise
-
-        if NoticeGroup.objects.filter(group_id=ADMIN_NOTICE_GROUP_ID).exists():
-            return
-        NoticeGroup.objects.create(
-            group_id=ADMIN_NOTICE_GROUP_ID,
-            group_name=ADMIN_NOTICE_GROUP_NAME,
-            group_member=[u for u in get_env_or_raise("BKAPP_ADMIN_USERNAMES").split(",") if u],
-            notice_config=get_default_notice_config(),
-        )
-
-    @staticmethod
-    def ensure_admin_notice_group_in_scene(scene_id: int) -> None:
-        """
-        确保系统管理员通知组绑定到指定场景
-        """
-        from apps.notice.constants import ADMIN_NOTICE_GROUP_ID
-        from services.web.scene.constants import ResourceVisibilityType, VisibilityScope
-        from services.web.scene.models import ResourceBinding, ResourceBindingScene
-
-        resource_id = str(ADMIN_NOTICE_GROUP_ID)
-        binding = ResourceBinding.objects.filter(
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            resource_id=resource_id,
-        ).first()
-        if binding is None:
-            binding = ResourceBinding.objects.create(
-                resource_type=ResourceVisibilityType.NOTICE_GROUP,
-                resource_id=resource_id,
-                binding_type=BindingType.SCENE_BINDING,
-                visibility_type=VisibilityScope.SPECIFIC_SCENES,
-            )
-        ResourceBindingScene.objects.get_or_create(binding=binding, scene_id=scene_id)
 
     def __init__(self):
         self.es_config = self.get_es_config()
@@ -483,7 +432,7 @@ class SystemInitHandler:
         params.setdefault("tags", [])
         params.setdefault("notice_groups", [])
         params.setdefault("processor_groups", [])
-        default_scene = Scene.objects.filter(name=DEFAULT_SCENE_NAME).order_by("scene_id").first()
+        default_scene = Scene.objects.filter(name='系统默认场景').order_by("scene_id").first()
         if not default_scene:
             return {}
         params["binding_type"] = BindingType.SCENE_BINDING
@@ -520,10 +469,6 @@ class SystemInitHandler:
             print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
             return
 
-        # 确保系统策略依赖的系统资源存在（默认场景/管理员通知组）
-        SystemInitHelper.ensure_system_default_scene()
-        SystemInitHelper.ensure_admin_notice_group()
-
         params = self._build_system_rule_audit_params(snapshot.bkbase_table_id)
         if not params:
             print("[InitSystemRuleAudit] Params Build Failed")
@@ -538,9 +483,6 @@ class SystemInitHandler:
             print(f"[InitSystemRuleAudit] Strategy Already Exists => {strategy_name}")
             self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
             return
-
-        # 系统策略处理人为管理员通知组：先确保其绑定默认场景
-        SystemInitHelper.ensure_admin_notice_group_in_scene(params["scene_id"])
 
         try:
             resource.strategy_v2.create_strategy(**params)
