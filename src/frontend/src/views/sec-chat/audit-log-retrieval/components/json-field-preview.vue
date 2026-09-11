@@ -29,11 +29,12 @@
         theme="light"
         trigger="manual"
         :width="600"
-        @clickoutside="popoverVisible = false"
+        @clickoutside="onPopoverClickOutside"
         @update:is-show="onPopoverShowChange">
         <div
           class="json-field-preview-trigger"
-          @click.stop="openPopover">
+          @click.stop="togglePopover"
+          @mousedown.stop="preparePopoverToggle">
           {{ previewText }}
         </div>
         <template #content>
@@ -101,6 +102,8 @@
   const { messageSuccess, messageError } = useMessage();
   const popoverVisible = ref(false);
 
+  let ignorePopoverClickOutside = false;
+
   const jsonObject = computed(() => (
     tryParseJsonObject(props.value) || tryParseJsonObject(props.text)
   ));
@@ -128,16 +131,43 @@
     return String(props.value);
   });
 
-  watch(jsonObject, () => {
+  const closePopover = () => {
     popoverVisible.value = false;
+    ignorePopoverClickOutside = false;
+  };
+
+  watch(jsonObject, () => {
+    closePopover();
   });
 
-  const openPopover = () => {
-    popoverVisible.value = !popoverVisible.value;
+  // mousedown 早于 document 捕获阶段的 clickoutside，先标记避免同一次点击误关
+  const preparePopoverToggle = () => {
+    if (!popoverVisible.value) {
+      ignorePopoverClickOutside = true;
+    }
+  };
+
+  const togglePopover = () => {
+    if (popoverVisible.value) {
+      closePopover();
+      return;
+    }
+    popoverVisible.value = true;
+    window.setTimeout(() => {
+      ignorePopoverClickOutside = false;
+    }, 0);
   };
 
   const onPopoverShowChange = (visible: boolean) => {
     popoverVisible.value = visible;
+    if (!visible) {
+      ignorePopoverClickOutside = false;
+    }
+  };
+
+  const onPopoverClickOutside = () => {
+    if (ignorePopoverClickOutside) return;
+    closePopover();
   };
 
   const handleCopy = async () => {
