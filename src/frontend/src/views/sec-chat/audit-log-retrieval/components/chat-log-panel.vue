@@ -61,12 +61,13 @@
               <!-- 系统确认/引导异步处理中：整条骨架占位，避免终态卡片突然撑开 -->
               <retrieval-card-skeleton
                 v-else-if="msg.messageType === 'SYSTEM_SELECTION'
-                  && msg.apiStatus === 'PROCESSING'"
-                :status-text="msg.showGuide === false ? '正在理解检索意图…' : '正在加载检索引导…'" />
+                  && msg.apiStatus === 'PROCESSING'
+                  && msg.visible !== false"
+                status-text="正在加载检索引导…" />
 
               <!-- 内联选择系统卡片 -->
               <select-system-card
-                v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false"
+                v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.visible !== false"
                 :candidate-systems="msg.candidateSystems || []"
                 :confirming="confirmingSystemMessageId === msg.id"
                 :model-value="msg.systemIds || []"
@@ -77,7 +78,7 @@
 
               <!-- 显式选系统后的检索引导卡片 -->
               <retrieval-guide-card
-                v-else-if="msg.type === 'retrieval-guide' && msg.showGuide !== false"
+                v-else-if="msg.type === 'retrieval-guide' && msg.visible !== false"
                 :common-operations="msg.commonOperations || []"
                 :confirming-system="confirmingSystemMessageId === msg.id"
                 :extension-fields="msg.extensionFields || []"
@@ -382,10 +383,11 @@
 
   /** 与模板渲染条件对齐；隐藏空行避免 flex gap 把上下间距撑成双倍 */
   const isMessageRowVisible = (msg: ChatMessage) => {
+    if (msg.visible === false) return false;
     if (msg.role === 'user' && msg.type === 'text') return true;
     if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return true;
-    if (msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false) return true;
-    if (msg.type === 'retrieval-guide' && msg.showGuide !== false) return true;
+    if (msg.type === 'select-system' && msg.status === 'pending') return true;
+    if (msg.type === 'retrieval-guide') return true;
     if (shouldShowRetrievalLoading(msg)) return true;
     if (msg.type === 'retrieval-result' && msg.recognitionError) return true;
     if (msg.type === 'retrieval-result' && msg.result) return true;
@@ -395,10 +397,11 @@
 
   const visibleMessageSignature = computed(() => props.messages.map((msg) => {
     const visibleKind = (() => {
+      if (msg.visible === false) return 'hidden';
       if (msg.role === 'user' && msg.type === 'text') return 'user-text';
       if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return 'system-selection-loading';
-      if (msg.type === 'select-system' && msg.status === 'pending' && msg.showGuide !== false) return 'select-system-card';
-      if (msg.type === 'retrieval-guide' && msg.showGuide !== false) return 'retrieval-guide-card';
+      if (msg.type === 'select-system' && msg.status === 'pending') return 'select-system-card';
+      if (msg.type === 'retrieval-guide') return 'retrieval-guide-card';
       if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
       if (msg.type === 'retrieval-result' && msg.recognitionError) return `recognition-error:${msg.recognitionError.code || ''}`;
       if (msg.type === 'retrieval-result' && msg.result) {
@@ -413,7 +416,7 @@
       visibleKind,
       msg.status || '',
       msg.apiStatus || '',
-      msg.showGuide === false ? 'hidden-guide' : 'show-guide',
+      msg.visible === false ? 'hidden-card' : 'visible-card',
       msg.systems?.map(item => item.id).join(',') || '',
     ].join(':');
   }).join('|'));

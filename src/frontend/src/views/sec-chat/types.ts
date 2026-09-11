@@ -112,8 +112,8 @@ export interface ChatMessage {
   intent?: string;
   aiMessage?: string;
   candidateSystems?: SelectedSystem[];
-  /** 是否展示引导卡；可仅缓存 SYSTEM_SELECTION 上下文而不展示 */
-  showGuide?: boolean;
+  /** 卡片是否可见；对应协议 visible，false 时不渲染整张卡片 */
+  visible?: boolean;
   parentMessageUid?: string | null;
 }
 

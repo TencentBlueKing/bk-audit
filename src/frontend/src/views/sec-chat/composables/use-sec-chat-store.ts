@@ -137,7 +137,8 @@ const titleRefreshInflight = new Map<string, Promise<void>>();
 const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 /** 异步 SYSTEM_SELECTION 成功后补发原始 NL 查询 */
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
-const hiddenGuideMessageIds = new Set<string>();
+/** 后端未下发 visible 时的会话内兜底（如选系统后待补发检索） */
+const hiddenCardMessageIds = new Set<string>();
 /** 首页建会话进行中的 Promise，避免连点重复创建 */
 let createLogConversationInflight: Promise<Conversation> | null = null;
 
@@ -197,24 +198,24 @@ const applySystemSelectionContext = (conv: Conversation, chatMessage: ReturnType
 const upsertConversationMessage = (
   conversationId: string,
   message: AiMessage,
-  options?: { showGuide?: boolean },
+  options?: { visible?: boolean },
 ) => {
   const conv = conversations.value.find(c => c.id === conversationId)
     || (draftConversation.value?.id === conversationId ? draftConversation.value : null);
   if (!conv) return;
 
   const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
-  if (message.message_type === 'SYSTEM_SELECTION' && typeof message.show_guide !== 'boolean') {
-    // 仅当协议未带 show_guide 时写入内存兜底；有字段则以协议为准
-    if (options?.showGuide === false) {
-      hiddenGuideMessageIds.add(message.uid);
-    } else if (options?.showGuide === true) {
-      hiddenGuideMessageIds.delete(message.uid);
+  if (typeof message.visible !== 'boolean') {
+    // 仅当协议未带 visible 时写入内存兜底；有字段则以协议为准
+    if (options?.visible === false) {
+      hiddenCardMessageIds.add(message.uid);
+    } else if (options?.visible === true) {
+      hiddenCardMessageIds.delete(message.uid);
     }
   }
   const chatMessage = mapAiMessageToChatMessage(message, {
     fieldCatalog,
-    hiddenGuideMessageIds,
+    hiddenCardMessageIds,
   });
   const idx = conv.messages.findIndex(item => item.id === message.uid);
   if (idx >= 0) {
@@ -339,7 +340,7 @@ const ensureChildLogSearch = async (
 const fetchSelectionMessage = async (
   conversationId: string,
   messageUid?: string | null,
-  options?: { showGuide?: boolean },
+  options?: { visible?: boolean },
 ) => {
   if (!messageUid) return null;
   try {
@@ -490,7 +491,7 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
     const pureSystemSwitch = isPureSystemSwitchIntent(detail);
     const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
     if (selectionMessageUid) {
-      // 是否展示引导卡由 SYSTEM_SELECTION.show_guide 决定
+      // 是否展示卡片由消息顶层 visible 决定
       await fetchSelectionMessage(conversationId, selectionMessageUid);
     }
     if (!pureSystemSwitch) {
@@ -560,7 +561,7 @@ const applyMessageWindow = (conv: Conversation, windowData: {
     }
     mapped.push(mapAiMessageToChatMessage(message, {
       fieldCatalog,
-      hiddenGuideMessageIds,
+      hiddenCardMessageIds,
     }));
   });
   /* eslint-disable no-param-reassign -- 原地更新会话消息窗口与系统上下文 */
@@ -591,7 +592,7 @@ const applyMessageWindow = (conv: Conversation, windowData: {
   // 仅在替换/追加更新「当前系统」；向前翻历史不应回退到更早的 SYSTEM_SELECTION
   if (mode !== 'prepend' && latestSystemInWindow) {
     applySystemSelectionContext(conv, mapAiMessageToChatMessage(latestSystemInWindow, {
-      hiddenGuideMessageIds,
+      hiddenCardMessageIds,
     }));
   }
   /* eslint-enable no-param-reassign */
@@ -1240,7 +1241,7 @@ export function useSecChatStore() {
     const sourceMessage = conv.messages.find(item => item.id === messageId);
     if (!msg && !sourceMessage) return null;
     const pendingQueryText = msg?.messageType === 'USER_INTENT' ? msg.content?.trim() : '';
-    const shouldHideGuide = Boolean(pendingQueryText);
+    const shouldHideCard = Boolean(pendingQueryText);
 
     const postSystemSelection = async (conversationUid: string) => (
       AiAssistantManageService.createMessage({
@@ -1274,7 +1275,7 @@ export function useSecChatStore() {
       conversations.value.unshift(realConversation);
       activeConversationId.value = realId;
       upsertConversationMessage(realId, systemMessage, {
-        showGuide: shouldHideGuide ? false : undefined,
+        visible: shouldHideCard ? false : undefined,
       });
 
       await initSidebar();
@@ -1300,7 +1301,7 @@ export function useSecChatStore() {
     });
     const systemMessage = await postSystemSelection(conv.id);
     upsertConversationMessage(conv.id, systemMessage, {
-      showGuide: shouldHideGuide ? false : undefined,
+      visible: shouldHideCard ? false : undefined,
     });
     if (systemMessage.status === 'PROCESSING') {
       if (pendingQueryText) {
