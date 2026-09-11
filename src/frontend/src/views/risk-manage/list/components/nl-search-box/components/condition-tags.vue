@@ -107,7 +107,7 @@
         @click="handleClearAll">
         <img
           class="clear-icon"
-          src="@/images/qingchu.svg">
+          :src="qingchuIcon">
         <span>{{ t('清空') }}</span>
       </div>
     </div>
@@ -126,6 +126,7 @@
 
   import type { IConditionTag } from '../types';
 
+  import qingchuIcon from '@/images/qingchu.svg';
   import {
     TagDatetimerange,
     TagEventField,
