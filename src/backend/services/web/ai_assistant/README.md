@@ -97,6 +97,7 @@ Node 移动支持互斥的 `before_node_*` 和 `after_node_*` 锚点。`after` �
 
 ## 6. 开发入口
 
+- [前端联调指南](docs/frontend_integration.md)：会话、消息、附件、流式恢复与日志检索调用链路。
 - [Handler 接入指南](docs/handler_integration.md)：新增消息或附件类型的最短路径。
 - [流式传输设计](streaming/README.md)：Redis、MySQL、SSE、重试和降级协议。
 - [可观测性架构](docs/observability.md)：生命周期、指标边界和巡检设计。
