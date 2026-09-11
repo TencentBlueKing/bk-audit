@@ -209,6 +209,7 @@ def _as_number(value: Any) -> Any:
     except (TypeError, ValueError):
         return value
 
+
 def apply_condition(condition: Condition, ctx: dict) -> bool:
     """
     原子条件求值：字段解析 + 操作符比较。

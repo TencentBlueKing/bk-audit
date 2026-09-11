@@ -44,7 +44,11 @@ from core.sql.model import (
 )
 from services.web.analyze.constants import FlowSQLNodeType
 from services.web.risk.constants import EventMappingFields
-from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType, StrategySource
+from services.web.strategy_v2.constants import (
+    LinkTableTableType,
+    RuleAuditConfigType,
+    StrategySource,
+)
 from services.web.strategy_v2.exceptions import (
     LinkTableConfigError,
     RuleAuditSqlGeneratorError,
