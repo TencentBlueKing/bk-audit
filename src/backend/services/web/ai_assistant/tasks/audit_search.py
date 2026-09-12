@@ -4,8 +4,11 @@
 常见操作缓存刷新为声明式周期任务（对齐上游 periodic_task 惯例，beat 自动调度）。
 """
 
+from __future__ import annotations
+
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
@@ -30,15 +33,9 @@ from services.web.ai_assistant.schemas.audit_search import (
     UserIntentOutputSchema,
 )
 
-# 导入契约：MessageService 必须保持模块级导入，禁止改成延迟导入——曾发生"仅给部分
-# 调用点补局部导入"的事故（漏改 _create_log_search 与 execute_user_intent 的
-# select_system 分支），产生 NameError / flake8 F821，且前者位于 _finish_success
-# 的静默兜底内极难察觉（续链子消息悄悄不创建）。若确需规避循环依赖，应在引入反向
-# 依赖的一侧（services/handlers 对本模块的引用）做函数内延迟导入，
-# 写法对齐 services/message.py 的标题派发延迟导入。
+# 多条续链共用 MessageService，统一导入以免局部导入漏掉分支，静默丢失子消息。
+# AIAssistantConfig.ready() 从 handlers 入口完成初始化，避免 Worker 从 tasks 反向触发注册。
 from services.web.ai_assistant.services.message import MessageService
-from services.web.ai_assistant.services.message_execution import MessageExecution
-from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
@@ -49,6 +46,9 @@ from services.web.query.ai_assistant.exceptions import (
 )
 from services.web.query.ai_assistant.services.intent import IntentRecognitionService
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
+
+if TYPE_CHECKING:
+    from services.web.ai_assistant.services.message_execution import MessageExecution
 
 logger = logging.getLogger(__name__)
 
@@ -576,5 +576,8 @@ def refresh_common_queries() -> dict:
     由 beat 自动调度，无需在 django_celery_beat 后台手动配置；
     任务幂等，重复执行只会覆盖为相同数据。
     """
+
+    # 同上，避免周期任务模块导入阶段提前初始化业务 Service 包。
+    from services.web.ai_assistant.services.operation import OperationContextService
 
     return OperationContextService.refresh_common_queries()

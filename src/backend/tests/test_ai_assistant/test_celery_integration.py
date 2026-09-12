@@ -19,10 +19,6 @@ from services.web.ai_assistant.constants import (
     MessageType,
     PlatformStreamEvent,
 )
-from services.web.ai_assistant.handlers import (
-    attachment_handler_registry,
-    message_handler_registry,
-)
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.services import AttachmentService, MessageService
@@ -37,7 +33,7 @@ from tests.test_ai_assistant.celery_integration import (
     wait_for_snapshot,
     wait_for_task_postrun,
 )
-from tests.test_ai_assistant.handlers import register_test_message_handler
+from tests.test_ai_assistant.handlers import use_attachment_handler, use_message_handler
 from tests.test_ai_assistant.integration_handlers import (
     INTEGRATION_QUEUE,
     RealAttachmentStreamDuplicateHandler,
@@ -129,8 +125,6 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def tearDown(self):
         self._clear_stream_keys()
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
-        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
 
     def create_processing_message(self, *, task_id: str) -> Message:
         return Message.objects.create(
@@ -146,7 +140,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         )
 
     def test_message_service_dispatches_real_task_and_persists_success(self):
-        register_test_message_handler(RealMessageSuccessHandler())
+        use_message_handler(self, RealMessageSuccessHandler())
 
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
@@ -164,7 +158,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         self.assertEqual(completed.output_data, {"content": "real:query"})
 
     def test_attachment_service_dispatches_real_task_and_persists_success(self):
-        attachment_handler_registry.register(RealAttachmentSuccessHandler())
+        use_attachment_handler(self, RealAttachmentSuccessHandler())
         source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -192,7 +186,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         self.assertEqual(completed.output_data, {"content": "real:analyse"})
 
     def test_stream_attachment_persists_live_events_archive_and_terminal(self):
-        attachment_handler_registry.register(RealAttachmentStreamSuccessHandler())
+        use_attachment_handler(self, RealAttachmentStreamSuccessHandler())
         source_message = self.create_source_message()
 
         attachment = AttachmentService(user=self.user).create(
@@ -219,7 +213,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_stream_attachment_retry_rotates_execution_and_rebuilds_archive(self):
         integration_handlers.reset_stream_observations()
-        attachment_handler_registry.register(RealAttachmentStreamRetryHandler())
+        use_attachment_handler(self, RealAttachmentStreamRetryHandler())
         source_message = self.create_source_message()
 
         attachment = AttachmentService(user=self.user).create(
@@ -244,7 +238,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_stream_duplicate_delivery_keeps_only_current_execution_result(self):
         integration_handlers.reset_stream_duplicate_observations(parties=2)
-        handler = attachment_handler_registry.register(RealAttachmentStreamDuplicateHandler())
+        handler = use_attachment_handler(self, RealAttachmentStreamDuplicateHandler())
         source_message = self.create_source_message()
         try:
             attachment = AttachmentService(user=self.user).create(
@@ -277,7 +271,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_stream_final_transaction_failure_retries_with_new_execution(self):
         integration_handlers.reset_stream_observations()
-        attachment_handler_registry.register(RealAttachmentStreamFinalizeRetryHandler())
+        use_attachment_handler(self, RealAttachmentStreamFinalizeRetryHandler())
         source_message = self.create_source_message()
         original_finalize = AttachmentArchiveStore.finalize
         finalize_lock = threading.Lock()
@@ -316,7 +310,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_self_retry_keeps_processing_and_reuses_business_task_id(self):
         integration_handlers.reset_retry_observations()
-        handler = register_test_message_handler(RealMessageSelfRetryHandler())
+        handler = use_message_handler(self, RealMessageSelfRetryHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
@@ -367,7 +361,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_autoretry_exhaustion_marks_message_failed_once(self):
         integration_handlers.reset_retry_observations()
-        register_test_message_handler(RealMessageAutoretryFailureHandler())
+        use_message_handler(self, RealMessageAutoretryFailureHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
@@ -386,7 +380,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def test_old_task_id_is_ignored_before_business_execution(self):
         integration_handlers.reset_old_task_observations()
-        handler = register_test_message_handler(RealMessageOldTaskHandler())
+        handler = use_message_handler(self, RealMessageOldTaskHandler())
         message = self.create_processing_message(task_id="current-task-id")
 
         reset_task_postrun(task_id="old-task-id")
@@ -425,7 +419,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         """巡检失败后再到达的 RabbitMQ 任务不能覆盖 MySQL 终态。"""
 
         integration_handlers.reset_old_task_observations()
-        handler = message_handler_registry.register(RealMessageOldTaskHandler())
+        handler = use_message_handler(self, RealMessageOldTaskHandler())
         message = self.create_processing_message(task_id="timed-out-task-id")
         expired_at = timezone.now() - timedelta(hours=1)
         Message.objects.filter(id=message.id).update(
@@ -454,7 +448,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
     def test_duplicate_delivery_allows_concurrent_execution_but_only_one_terminal_snapshot(self):
         integration_handlers.reset_duplicate_observations(parties=2)
         try:
-            handler = register_test_message_handler(RealMessageDuplicateHandler())
+            handler = use_message_handler(self, RealMessageDuplicateHandler())
             message = self.create_processing_message(task_id="duplicate-task-id")
             kwargs = {"message_id": message.id, "task_id": message.task_id}
 
@@ -479,7 +473,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
             integration_handlers.clear_duplicate_observations()
 
     def test_manual_retry_uses_new_task_id_and_old_task_cannot_overwrite(self):
-        handler = register_test_message_handler(RealMessageSuccessHandler())
+        handler = use_message_handler(self, RealMessageSuccessHandler())
         failed = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.NATURAL_LANGUAGE_SEARCH,

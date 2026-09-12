@@ -70,6 +70,13 @@ class AttachmentType(TextChoices):
     AI_ANALYSIS = "AI_ANALYSIS", gettext_lazy("AI 分析")
 
 
+class AnalysisMode(TextChoices):
+    """日志分析报告的指令来源。"""
+
+    DEFAULT = "DEFAULT", gettext_lazy("默认分析")
+    CUSTOM = "CUSTOM", gettext_lazy("自定义分析")
+
+
 class AttachmentExportFormat(TextChoices):
     """Attachment Handler 可声明的后端导出格式。"""
 
@@ -124,3 +131,7 @@ AI_CONVERSATION_TITLE_MAX_LENGTH = 35
 NL_PARSE_MAX_RETRIES = 2
 NL_PARSE_RETRY_INTERVAL_SECONDS = 2
 NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
+
+# 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
+DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"

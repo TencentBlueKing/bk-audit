@@ -28,10 +28,7 @@ from services.web.ai_assistant.exceptions import (
     MessageNotFound,
     MessageSnapshotValidationError,
 )
-from services.web.ai_assistant.handlers import (
-    attachment_handler_registry,
-    message_handler_registry,
-)
+from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
@@ -69,6 +66,8 @@ from tests.test_ai_assistant.handlers import (
     FeedbackAttachmentEchoHandler,
     FeedbackEchoSyncHandler,
     register_test_message_handler,
+    use_attachment_handler,
+    use_message_handler,
 )
 
 
@@ -375,16 +374,10 @@ class MessageResourceTest(TestCase):
         self.async_handler = EchoAsyncHandler()
         self.attachment_handler = FeedbackAttachmentEchoHandler()
         self.async_attachment_handler = EchoAttachmentAsyncHandler()
-        register_test_message_handler(self.sync_handler)
-        register_test_message_handler(self.async_handler)
-        attachment_handler_registry.register(self.attachment_handler)
-        attachment_handler_registry.register(self.async_attachment_handler)
-
-    def tearDown(self):
-        message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
-        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
-        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        use_message_handler(self, self.sync_handler)
+        use_message_handler(self, self.async_handler)
+        use_attachment_handler(self, self.attachment_handler)
+        use_attachment_handler(self, self.async_attachment_handler)
 
     def test_update_message_returns_replaced_content_with_existing_feedback_and_attachment(self, _username):
         message = MessageService(user="alice").create(

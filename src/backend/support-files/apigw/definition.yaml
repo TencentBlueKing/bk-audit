@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.14"
+  version: "0.0.16"
   # 版本标题
-  title: "0.0.14"
+  title: "0.0.16"
   # 版本描述
-  comment: "新增 ITSM 工单回调接口，用于场景自动化审批回调"
+  comment: "审计日志分析 MCP 工具隐藏默认空间参数"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
@@ -67,6 +67,20 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 Agent 专用 MCP 工具集"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -103,6 +117,20 @@ stages:
           - "risk"
         resource_names:
           - list_event_fields_by_strategy_brief
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+      - name: "audit-log-analysis"
+        description: "审计日志分析 Agent 专用 MCP 工具集"
+        labels:
+          - "audit"
+          - "log-analysis"
+        resource_names:
+          - mcp_get_log_field_metadata
+          - mcp_search_logs
+          - mcp_aggregate_logs
         is_public: true
         status: 1
         protocol_type: "streamable_http"

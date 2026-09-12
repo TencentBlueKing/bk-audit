@@ -1,4 +1,9 @@
 from services.web.ai_assistant.tasks.attachment import AttachmentExecutionTask
+from services.web.ai_assistant.tasks.audit_analysis import (
+    build_agent_input,
+    execute_log_analysis,
+    generate_log_analysis_title,
+)
 from services.web.ai_assistant.tasks.audit_search import (
     NLSearchExecutionTask,
     execute_natural_language_search,
@@ -23,8 +28,11 @@ __all__ = [
     "MessageExecutionTask",
     "NLSearchExecutionTask",
     "attachment_execution_task",
+    "build_agent_input",
+    "execute_log_analysis",
     "execute_natural_language_search",
     "generate_conversation_title",
+    "generate_log_analysis_title",
     "message_execution_task",
     "monitor_ai_assistant_executions",
     "refresh_common_queries",

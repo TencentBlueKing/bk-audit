@@ -1,5 +1,7 @@
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
@@ -36,6 +38,60 @@ REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10)
 # MCP 事件字段简化接口返回上限
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
 
+# ============== 审计 AI 日志字段探索配置 ==============
+# 单次字段探索最多返回的字段数，限制 Agent 工具响应体积；采样行数复用 AI_ASSISTANT_FIELD_SAMPLE_ROWS。
+AI_LOG_FIELD_METADATA_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_MAX_FIELDS", 100))
+# 单字段保留的脱敏样例值数量，值在去重和稳定排序后截断。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUES", 3))
+# 单个标量样例的 UTF-8 JSON 编码字节上限；超限样例直接跳过，避免伪截断值参与后续查询推理。
+AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = int(
+    os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES", 1024)
+)
+AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES", 1024 * 1024))
+
+# ============== 审计 AI 日志明细查询配置 ==============
+# 限制单次查询投影、排序与响应大小；累计读取预算由调用方控制，不截断可访问页码。
+AI_LOG_SEARCH_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_FIELDS", 20))
+AI_LOG_SEARCH_MAX_SORT_FIELDS = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_SORT_FIELDS", 3))
+# page_size 的公开默认值属于固定接口契约；运行上限只能在 20 至协议硬上限之间收紧。
+AI_LOG_SEARCH_DEFAULT_PAGE_SIZE = 20
+AI_LOG_SEARCH_MAX_PAGE_SIZE = int(os.getenv("BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE", 100))
+if AI_LOG_SEARCH_MAX_PAGE_SIZE < AI_LOG_SEARCH_DEFAULT_PAGE_SIZE:
+    raise ImproperlyConfigured("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20")
+# Agent 工具业务 data 的 UTF-8 字节预算；标准响应 envelope 由 renderer 额外封装。
+AI_LOG_SEARCH_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_SEARCH_RESPONSE_MAX_BYTES", 1024 * 1024))
+
+# 聚合限制返回分组数；默认按维度排序，显式按指标排序才表示 TopN。
+# 公开默认值属于固定接口契约，运行上限不能低于默认值。
+AI_LOG_AGGREGATION_DEFAULT_LIMIT = 20
+AI_LOG_AGGREGATION_MAX_LIMIT = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_MAX_LIMIT", 100))
+if AI_LOG_AGGREGATION_MAX_LIMIT < AI_LOG_AGGREGATION_DEFAULT_LIMIT:
+    raise ImproperlyConfigured("AI_LOG_AGGREGATION_MAX_LIMIT 不能小于公开默认值 20")
+AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES = int(os.getenv("BKAPP_AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES", 1024 * 1024))
+
+# Agent 日志工具公共请求成本；代码中的冻结硬上限仍会阻止环境配置放大。
+AI_LOG_TOOL_MAX_CONDITIONS = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_CONDITIONS", 100))
+AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FILTERS_PER_CONDITION", 1000))
+AI_LOG_TOOL_MAX_CONDITION_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_CONDITION_BYTES", 256 * 1024))
+AI_LOG_TOOL_MAX_FILTER_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FILTER_BYTES", 16 * 1024))
+AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_KEY_LENGTH", 128))
+AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH", 16))
+AI_LOG_TOOL_MAX_FIELD_PATH_BYTES = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_FIELD_PATH_BYTES", 1024))
+AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH = int(os.getenv("BKAPP_AI_LOG_TOOL_MAX_SCOPE_ID_LENGTH", 255))
+
+# ============== 审计 AI 日志分析报告配置 ==============
+# 用户自定义分析指令的字符上限；默认 Prompt 由 GlobalMetaConfig 运营管理，不受此值限制。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_PROMPT_MAX_LENGTH", 2048))
+# 长任务使用独立 Worker；Celery rate_limit 按 Worker 实例生效，不是集群全局限流。
+AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT = os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT", "5/m")
+# Celery 硬时限（秒）仅作为 Worker 最终保险；默认 30 分钟。
+AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT", 30 * 60))
+# 业务执行时限（秒）必须短于硬时限；默认 29 分钟，以普通异常进入平台 FAILED/流终态链路。
+AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT", 29 * 60))
+if not 0 < AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT < AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT:
+    raise ImproperlyConfigured(
+        "AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT 必须大于 0 且小于 " "AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT"
+    )
 # ============== AI 风险分析报告相关配置 ==============
 ANALYSE_REPORT_TIME_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_TIME_LIMIT", 30 * 60))
 ANALYSE_REPORT_AI_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_ANALYSE_REPORT_AI_TITLE_MAX_LENGTH", 20))

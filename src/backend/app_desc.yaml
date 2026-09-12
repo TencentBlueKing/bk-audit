@@ -39,6 +39,10 @@ modules:
         command: python manage.py celery worker -O fair -l info -Q risk_report -P gevent -c ${BKAPP_RISK_REPORT_CONCURRENCY:-32} -E
         plan: 2C2G5R
         replicas: 2
+      ai-log-analysis:
+        command: python manage.py celery worker -O fair --prefetch-multiplier=1 -l info -Q ai_assistant_log_analysis -P gevent -c ${BKAPP_AI_ASSISTANT_LOG_ANALYSIS_CONCURRENCY:-32} -E
+        plan: 2C2G5R
+        replicas: 2
       risk-render:
         command: python manage.py celery worker -O fair -l info -Q risk_render -P gevent -c 64 -E
         plan: 2C2G5R
