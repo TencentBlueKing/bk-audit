@@ -2,7 +2,11 @@
   <div
     ref="sidebarRootRef"
     class="chat-sidebar"
-    :class="{ 'is-collapsed': collapsed, 'is-sidebar-dragging': !!dragState.type }">
+    :class="{
+      'is-collapsed': collapsed,
+      'is-sidebar-dragging': !!dragState.type,
+      'is-report-list-open': isReportListShow,
+    }">
     <template v-if="!collapsed">
       <!-- 场景选择 -->
       <div class="sidebar-project">
@@ -67,11 +71,7 @@
                 @mousedown.stop.prevent>
                 导入会话
               </bk-dropdown-item>
-              <bk-dropdown-item
-                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
-                ext-cls="is-config-disabled"
-                @click.stop.prevent="onDisabledConfigClick"
-                @mousedown.stop.prevent>
+              <bk-dropdown-item @click="showReportList">
                 报告列表
               </bk-dropdown-item>
               <bk-dropdown-item @click="showClearAllDialog">
@@ -669,172 +669,18 @@
       </template>
     </bk-dialog>
 
-    <!-- 报告列表面板 -->
-    <div
+    <!-- 报告列表面板：配置 > 报告列表 -->
+    <report-list-panel
       v-if="isReportListShow"
-      class="report-list-panel"
-      :style="{ width: panelWidth + 'px' }">
-      <!-- 右侧竖排小圆点手柄（可拖拽调整宽度） -->
-      <div
-        class="panel-drag-handle"
-        @mousedown="handlePanelDragStart">
-        <span class="drag-dot" />
-        <span class="drag-dot" />
-        <span class="drag-dot" />
-        <span class="drag-dot" />
-        <span class="drag-dot" />
-        <span class="drag-dot" />
-      </div>
-      <div class="panel-header">
-        <span class="title">报告列表</span>
-        <close
-          class="close-icon"
-          @click="closeReportList" />
-      </div>
-      <div class="panel-search">
-        <bk-input
-          v-model="reportSearchKeyword"
-          clearable
-          placeholder="搜索报告标题、IP 地址、会话名称...">
-          <template #prefix>
-            <search class="search-icon" />
-          </template>
-        </bk-input>
-      </div>
-      <div class="panel-tabs">
-        <div class="tabs-wrapper">
-          <div
-            v-for="tab in reportTabs"
-            :key="tab.id"
-            class="tab-item"
-            :class="{ 'is-active': activeReportTab === tab.id }"
-            @click="activeReportTab = tab.id">
-            {{ tab.name }} <span class="count">{{ tab.count }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="panel-content">
-        <bk-collapse
-          v-model="activeReportPanels"
-          class="report-collapse">
-          <bk-collapse-panel
-            v-for="category in filteredReportCategories"
-            :key="category.id"
-            :name="category.id">
-            <template #header>
-              <div class="group-header">
-                {{ category.name }} <span class="count">{{ category.reports.length }}</span>
-              </div>
-            </template>
-            <template #content>
-              <div class="report-list">
-                <div
-                  v-for="report in category.reports"
-                  :key="report.id"
-                  class="report-item"
-                  :class="{ 'is-active': activeDropdownReport === report.name }"
-                  @click="handleReportClick(report)">
-                  <div
-                    class="report-icon-wrap"
-                    :class="{ warning: report.isWarning }">
-                    <text-file class="report-icon" />
-                  </div>
-                  <div class="report-content">
-                    <div class="report-name">
-                      <span
-                        v-if="report.isWarning"
-                        class="warning-icon">⚠️</span>{{ report.name }}
-                    </div>
-                    <div class="report-time">
-                      {{ report.time }}
-                    </div>
-                    <div
-                      class="report-actions"
-                      @click.stop>
-                      <bk-dropdown
-                        placement="bottom-end"
-                        trigger="click"
-                        @hide="handleDropdownHide"
-                        @show="handleDropdownShow(report.name)">
-                        <span class="action-icon">
-                          <audit-icon
-                            class="download-icon"
-                            type="download" />
-                          <span class="action-text">导出</span>
-                        </span>
-                        <template #content>
-                          <bk-dropdown-menu>
-                            <bk-dropdown-item @click="handleExport('markdown')">
-                              导出 Markdown
-                            </bk-dropdown-item>
-                            <bk-dropdown-item @click="handleExport('pdf')">
-                              导出 PDF
-                            </bk-dropdown-item>
-                          </bk-dropdown-menu>
-                        </template>
-                      </bk-dropdown>
-                      <span
-                        class="action-text jump-text"
-                        @click="handleLocateConversation">跳转</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </bk-collapse-panel>
-        </bk-collapse>
-      </div>
-    </div>
-    <bk-sideslider
-      v-model:isShow="isReportDetailShow"
-      quick-close
-      title="报告详情"
-      :width="800">
-      <template #header>
-        <div class="report-detail-header">
-          <span class="title">{{ currentReport?.name || '报告详情' }}</span>
-          <div class="actions">
-            <bk-dropdown
-              placement="bottom-end"
-              trigger="click">
-              <bk-button>
-                <audit-icon
-                  class="download-icon"
-                  type="download" />
-                导出
-              </bk-button>
-              <template #content>
-                <bk-dropdown-menu>
-                  <bk-dropdown-item @click="handleExport('markdown')">
-                    导出 Markdown
-                  </bk-dropdown-item>
-                  <bk-dropdown-item @click="handleExport('pdf')">
-                    导出 PDF
-                  </bk-dropdown-item>
-                </bk-dropdown-menu>
-              </template>
-            </bk-dropdown>
-            <bk-button @click="handleLocateConversation">
-              跳转至会话
-            </bk-button>
-          </div>
-        </div>
-      </template>
-      <template #default>
-        <div class="report-detail-content">
-          <div class="markdown-body">
-            <p>这里是报告的 Markdown 内容...</p>
-          </div>
-        </div>
-      </template>
-    </bk-sideslider>
+      @close="closeReportList"
+      @select="handleReportLocateConversation" />
   </div>
 </template>
 
 <script lang="ts" setup>
   import { computed, h, nextTick, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { InfoBox } from 'bkui-vue';
-  import { AngleLeft, AngleRight, Search, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
+  import { AngleLeft, AngleRight, Search, Plus } from 'bkui-vue/lib/icon';
 
   import useMessage from '@hooks/use-message';
 
@@ -850,6 +696,7 @@
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';
   import type { RootSidebarItem } from '../types';
+  import ReportListPanel from './report-list-panel.vue';
 
   interface Conversation {
     id: string;
@@ -1092,88 +939,8 @@
       .join('');
   };
 
-  // 报告列表相关
+  // 报告列表：设计入口为配置 > 报告列表
   const isReportListShow = ref(false);
-  const reportSearchKeyword = ref('');
-  const activeReportPanels = ref(['behavior', 'alarm', 'other']);
-  const activeReportTab = ref('all');
-  const panelWidth = ref(360);
-  const PANEL_MIN_WIDTH = 420;
-  const PANEL_MAX_WIDTH = 600;
-
-  // 报告分类数据
-  const reportCategories = ref([
-    {
-      id: 'behavior',
-      name: '多主机行为分析',
-      reports: [
-        { id: 'r1', name: '多主机行为分析报告', time: '2026-03-27 11:32', isWarning: false },
-        { id: 'r2', name: '主机行为分析报告', time: '2026-03-27 11:32', isWarning: false },
-      ],
-    },
-    {
-      id: 'alarm',
-      name: '风险告警解读',
-      reports: [
-        { id: 'r3', name: '高危风险告警解读', time: '2026-03-27 11:32', isWarning: true },
-      ],
-    },
-    {
-      id: 'other',
-      name: '其他',
-      reports: [
-        { id: 'r4', name: '安全事件调查报告', time: '2026-03-27 11:32', isWarning: false },
-      ],
-    },
-  ]);
-
-  // 标签页数据
-  const reportTabs = computed(() => {
-    const tabs = [
-      { id: 'all', name: '全部', count: reportCategories.value.reduce((sum, cat) => sum + cat.reports.length, 0) },
-    ];
-    reportCategories.value.forEach((cat) => {
-      tabs.push({
-        id: cat.id,
-        name: cat.name,
-        count: cat.reports.length,
-      });
-    });
-    return tabs;
-  });
-
-  // 过滤后的报告分类
-  const filteredReportCategories = computed(() => {
-    if (activeReportTab.value === 'all') {
-      return reportCategories.value;
-    }
-    return reportCategories.value.filter(cat => cat.id === activeReportTab.value);
-  });
-
-  const isReportDetailShow = ref(false);
-  const currentReport = ref<any>(null);
-  const activeDropdownReport = ref<string | null>(null);
-
-  const handleDropdownShow = (reportName: string) => {
-    activeDropdownReport.value = reportName;
-  };
-
-  const handleDropdownHide = () => {
-    activeDropdownReport.value = null;
-  };
-
-  const handleReportClick = (report: any) => {
-    currentReport.value = report;
-    isReportDetailShow.value = true;
-  };
-
-  const handleExport = (type: string) => {
-    console.log('export', type);
-  };
-
-  const handleLocateConversation = () => {
-    console.log('locate conversation');
-  };
 
   const showReportList = () => {
     isReportListShow.value = true;
@@ -1184,29 +951,8 @@
     isReportListShow.value = false;
   };
 
-  // 面板宽度拖拽调整
-  const handlePanelDragStart = (e: MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = panelWidth.value;
-
-    const onDragMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const newWidth = startWidth + deltaX;
-      panelWidth.value = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, newWidth));
-    };
-
-    const onDragEnd = () => {
-      document.removeEventListener('mousemove', onDragMove);
-      document.removeEventListener('mouseup', onDragEnd);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.addEventListener('mousemove', onDragMove);
-    document.addEventListener('mouseup', onDragEnd);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+  const handleReportLocateConversation = (conversationUid: string) => {
+    emit('select', conversationUid);
   };
 
   /** 同 id 多份时优先未分组副本，避免移出分组过程中根列表与分组各显示一条 */
@@ -2624,7 +2370,6 @@
 
   // 本期配置菜单未挂入口，保留实现便于恢复
   void showImportDialog;
-  void showReportList;
 
   watch(
     () => importDialog.value.show,
@@ -2909,7 +2654,6 @@
     addGroupDialog.value.show = false;
     addGroupDialog.value.name = '';
     importDialog.value.show = false;
-    isReportDetailShow.value = false;
     isReportListShow.value = false;
   };
 

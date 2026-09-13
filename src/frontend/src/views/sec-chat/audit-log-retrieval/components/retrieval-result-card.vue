@@ -262,14 +262,17 @@
               </div>
             </div>
 
-            <!-- 后续操作：本期先禁用智能分析 / 数据统计 -->
+            <!-- 后续操作 -->
             <div class="action-section">
               <span
-                v-bk-tooltips="{ content: '功能开发中', placement: 'top' }"
-                class="action-btn-tip-wrap">
+                v-bk-tooltips="{
+                  content: t('正在生成中'),
+                  disabled: !analyzeActionDisabled,
+                }"
+                class="action-btn-wrap">
                 <bk-button
                   class="analyze-btn"
-                  disabled
+                  :disabled="analyzeActionDisabled"
                   outline
                   @click="analyzeDialogShow = true">
                   <img
@@ -278,45 +281,73 @@
                     height="14"
                     :src="aiSvg"
                     width="24">
-                  智能分析
+                  {{ t('智能分析') }}
                 </bk-button>
               </span>
               <span
-                v-bk-tooltips="{ content: '功能开发中', placement: 'top' }"
-                class="action-btn-tip-wrap">
+                v-bk-tooltips="{
+                  content: t('正在生成中'),
+                  disabled: !statisticsActionDisabled,
+                }"
+                class="action-btn-wrap">
                 <bk-button
                   class="statistics-btn"
-                  disabled
+                  :disabled="statisticsActionDisabled"
                   outline
                   @click="handleStatistics">
                   <audit-icon
                     class="action-icon"
                     type="shujutongji" />
-                  数据统计
+                  {{ t('数据统计') }}
                 </bk-button>
               </span>
             </div>
 
-            <!-- 报告生成状态 -->
+            <!-- 报告生成状态：生成中无灰底；成功/失败各自一条灰底 -->
             <div
               v-if="reportItems.length"
-              class="report-status-section"
-              :class="{ 'is-done': hasDoneReport }">
+              class="report-status-section">
               <div
-                v-for="item in reportItems"
+                v-for="item in visibleReportItems"
                 :key="item.id"
-                class="report-status-row">
+                class="report-status-row"
+                :class="`is-${item.status}`">
                 <template v-if="item.status === 'loading'">
-                  <audit-icon
-                    class="status-icon is-loading"
-                    type="loading" />
-                  <span class="status-text">{{ item.title }}生成中...</span>
+                  <span
+                    v-bk-tooltips="t('正在生成中')"
+                    class="status-loading-wrap">
+                    <audit-icon
+                      class="status-icon is-loading"
+                      type="loading" />
+                    <span class="status-text">{{ reportStatusText(item) }}</span>
+                  </span>
+                </template>
+                <template v-else-if="item.status === 'failed'">
+                  <span
+                    v-bk-tooltips="item.errorMessage || reportStatusText(item)"
+                    class="status-failed-wrap">
+                    <audit-icon
+                      class="status-icon is-failed"
+                      type="failed" />
+                    <span class="status-text">{{ reportStatusText(item) }}</span>
+                  </span>
+                  <button
+                    class="view-report-btn"
+                    :disabled="item.retrying"
+                    type="button"
+                    @click="handleRetryReport(item)">
+                    <audit-icon
+                      class="view-icon"
+                      :class="{ 'is-loading': item.retrying }"
+                      type="refresh" />
+                    {{ t('重新分析') }}
+                  </button>
                 </template>
                 <template v-else>
                   <audit-icon
                     class="status-icon is-success"
-                    type="success" />
-                  <span class="status-text">{{ item.title }}已生成</span>
+                    type="completed" />
+                  <span class="status-text">{{ reportStatusText(item) }}</span>
                   <span class="status-time">{{ item.createdAt }}</span>
                   <button
                     class="view-report-btn"
@@ -324,8 +355,8 @@
                     @click="openReport(item)">
                     <audit-icon
                       class="view-icon"
-                      type="help-document-fill" />
-                    查看报告
+                      type="report" />
+                    {{ t('查看报告') }}
                   </button>
                 </template>
               </div>
@@ -399,6 +430,7 @@
       v-if="analyzeDialogShow"
       v-model="analyzeDialogShow"
       :conditions="displayResult.conditions"
+      :submitting="analyzeSubmitting"
       :total-hit="displayResult.totalHit"
       @select="handleAnalyzeSelect" />
 
@@ -411,9 +443,11 @@
       v-if="reportDrawerShow"
       v-model:is-show="reportDrawerShow"
       :conditions="displayResult.conditions"
+      entry="session"
       :report="activeReport"
       :systems="systemNames"
-      :total-hit="displayResult.totalHit" />
+      :total-hit="displayResult.totalHit"
+      @updated="handleReportUpdated" />
 
     <log-statistics-drawer
       v-if="statisticsDrawerShow"
@@ -425,7 +459,16 @@
 
 <script lang="ts" setup>
   import dayjs from 'dayjs';
-  import { computed, nextTick, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+  import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import AiAssistantManageService from '@service/ai-assistant-manage';
+
+  import type {
+    AiAttachment,
+    AiAttachmentListItem,
+    AiCreateAttachmentParams,
+  } from '@model/ai-assistant/types';
 
   import useMessage from '@hooks/use-message';
 
@@ -442,6 +485,7 @@
 
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
   import type { AiUiMessageStatus, RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
+  import { followAttachment, type FollowAttachmentHandle } from '../../utils/follow-attachment';
   import {
     buildAiSearchCondition,
     appendSearchModelField,
@@ -497,6 +541,7 @@
     reselectSystem: [];
   }>();
 
+  const { t } = useI18n();
   const { rerunLogSearch } = useSecChatStore();
 
   /** 当前卡片展示的结果；二次检索 PATCH 同 uid 覆盖，不追加新卡 */
@@ -507,7 +552,13 @@
   const showFeedbackActions = false;
 
   interface ReportStatusItem extends LogReportInfo {
-    status: 'loading' | 'done';
+    status: 'loading' | 'done' | 'failed';
+    errorMessage?: string;
+    retrying?: boolean;
+    markdown?: string;
+    exportFormats?: string[];
+    isStream?: boolean;
+    executionId?: string | null;
   }
 
   /** 多列时保证列宽可读，超出横向滚动 */
@@ -781,6 +832,7 @@
   const pageSize = ref(10);
   const feedback = ref<'up' | 'down' | ''>('');
   const analyzeDialogShow = ref(false);
+  const analyzeSubmitting = ref(false);
   const statisticsDialogShow = ref(false);
   const reportItems = ref<ReportStatusItem[]>([]);
   const reportDrawerShow = ref(false);
@@ -788,7 +840,10 @@
   const statisticsDrawerShow = ref(false);
   const statisticsCreatedAt = ref('');
   const statisticsFields = ref<string[]>([]);
-  let generateTimer: ReturnType<typeof setTimeout> | null = null;
+  const followHandles = new Map<string, FollowAttachmentHandle>();
+  /** 本次会话新建/重试成功后按稿自动打开抽屉 */
+  const pendingAutoOpenIds = new Set<string>();
+  const hiddenUntilDrawerCloseIds = ref<Set<string>>(new Set());
 
   const pageRows = computed(() => {
     const start = (currentPage.value - 1) * pageSize.value;
@@ -800,29 +855,64 @@
     return `${Math.max(total, 760)}px`;
   });
 
-  const hasDoneReport = computed(() => reportItems.value.some(item => item.status === 'done'));
+  const hasLoadingReport = (type: ReportStatusItem['type']) => (
+    reportItems.value.some(item => item.type === type && item.status === 'loading')
+  );
+
+  const analyzeActionDisabled = computed(() => hasLoadingReport('analyze'));
+  const statisticsActionDisabled = computed(() => hasLoadingReport('statistics'));
+  const visibleReportItems = computed(() => (
+    reportItems.value.filter(item => !(
+      item.status === 'done' && hiddenUntilDrawerCloseIds.value.has(item.id)
+    ))
+  ));
+
+  const reportStatusText = (item: ReportStatusItem) => {
+    if (item.type === 'statistics') {
+      if (item.status === 'loading') return t('数据统计中...');
+      if (item.status === 'failed') return t('数据统计失败');
+      return t('数据统计已完成');
+    }
+    if (item.status === 'loading') return t('智能分析中...');
+    if (item.status === 'failed') return t('智能分析失败');
+    return t('智能分析已生成');
+  };
 
   const systemNames = computed(() => {
-    const systemCond = displayResult.value.conditions.find(item => item.field === '来源系统');
-    return systemCond?.value || '已选系统';
+    const names = props.systems
+      .map(item => item.name || item.id)
+      .filter(Boolean);
+    if (names.length) return names.join('、');
+    const systemCond = displayResult.value.conditions.find(item => (
+      item.field === '来源系统' || item.field === '系统'
+    ));
+    return systemCond?.value || '';
   });
 
-  watch(() => displayResult.value, () => {
-    currentPage.value = 1;
-    feedback.value = '';
-    reportItems.value = [];
-    reportDrawerShow.value = false;
-    activeReport.value = null;
-    statisticsDrawerShow.value = false;
-    statisticsFields.value = [];
-    if (generateTimer) {
-      clearTimeout(generateTimer);
-      generateTimer = null;
-    }
-  });
+  watch(
+    () => [displayMessageUid.value, props.apiStatus] as const,
+    ([messageUid, apiStatus], previous) => {
+      const previousUid = previous?.[0];
+      if (messageUid !== previousUid) {
+        currentPage.value = 1;
+        feedback.value = '';
+        reportDrawerShow.value = false;
+        activeReport.value = null;
+        statisticsDrawerShow.value = false;
+        statisticsFields.value = [];
+        pendingAutoOpenIds.clear();
+        hiddenUntilDrawerCloseIds.value = new Set();
+        stopAllFollows();
+        reportItems.value = [];
+      }
+      if (messageUid && apiStatus === 'SUCCESS' && (messageUid !== previousUid || previous?.[1] !== 'SUCCESS')) {
+        void hydrateAttachments(messageUid);
+      }
+    },
+  );
 
   onBeforeUnmount(() => {
-    if (generateTimer) clearTimeout(generateTimer);
+    stopAllFollows();
   });
 
   // keep-alive 失活时卸载弹层，避免消息多时大量 teleport/sideslider 残留导致切回白屏
@@ -831,6 +921,13 @@
     statisticsDialogShow.value = false;
     reportDrawerShow.value = false;
     statisticsDrawerShow.value = false;
+    stopAllFollows();
+  });
+
+  onActivated(() => {
+    if (displayMessageUid.value && props.apiStatus === 'SUCCESS') {
+      void hydrateAttachments(displayMessageUid.value);
+    }
   });
 
   const formatNumber = (num: number) => num.toLocaleString('en-US');
@@ -860,11 +957,156 @@
     return String(value);
   };
 
-  const formatNow = () => {
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const formatAttachmentTime = (value?: string) => {
+    if (!value) return '';
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value;
   };
+
+  const resolveReportStatus = (status: AiAttachment['status']): ReportStatusItem['status'] => {
+    if (status === 'SUCCESS') return 'done';
+    if (status === 'FAILED') return 'failed';
+    return 'loading';
+  };
+
+  const mapAttachmentToReport = (attachment: AiAttachment | AiAttachmentListItem): ReportStatusItem => {
+    const status = resolveReportStatus(attachment.status);
+    const detail = attachment as AiAttachment;
+    return {
+      id: attachment.uid,
+      type: 'analyze',
+      title: status === 'loading' ? t('智能分析中') : (attachment.title || t('智能分析报告')),
+      createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
+      status,
+      errorMessage: detail.error_message || '',
+      markdown: detail.output_data?.markdown || '',
+      exportFormats: detail.export_formats || attachment.export_formats || [],
+      isStream: detail.is_stream,
+      retrying: false,
+    };
+  };
+
+  const upsertReport = (item: ReportStatusItem, prepend = false) => {
+    const index = reportItems.value.findIndex(current => current.id === item.id);
+    if (index === -1) {
+      reportItems.value = prepend ? [item, ...reportItems.value] : [...reportItems.value, item];
+      return;
+    }
+    const next = [...reportItems.value];
+    next.splice(index, 1, {
+      ...next[index],
+      ...item,
+    });
+    reportItems.value = next;
+  };
+
+  const stopFollow = (attachmentUid: string) => {
+    const handle = followHandles.get(attachmentUid);
+    handle?.stop();
+    followHandles.delete(attachmentUid);
+  };
+
+  const stopAllFollows = () => {
+    followHandles.forEach(handle => handle.stop());
+    followHandles.clear();
+  };
+
+  const hideReportRowUntilDrawerClose = (reportId: string) => {
+    const next = new Set(hiddenUntilDrawerCloseIds.value);
+    next.add(reportId);
+    hiddenUntilDrawerCloseIds.value = next;
+  };
+
+  const revealReportRow = (reportId: string) => {
+    if (!hiddenUntilDrawerCloseIds.value.has(reportId)) return;
+    const next = new Set(hiddenUntilDrawerCloseIds.value);
+    next.delete(reportId);
+    hiddenUntilDrawerCloseIds.value = next;
+  };
+
+  const markPendingAutoOpen = (reportId: string) => {
+    pendingAutoOpenIds.add(reportId);
+  };
+
+  const applyAttachmentDetail = (attachment: AiAttachment) => {
+    upsertReport(mapAttachmentToReport(attachment));
+    if (activeReport.value?.id === attachment.uid) {
+      activeReport.value = {
+        ...activeReport.value,
+        title: attachment.title || activeReport.value.title,
+        createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
+        markdown: attachment.output_data?.markdown || activeReport.value.markdown,
+        exportFormats: attachment.export_formats || activeReport.value.exportFormats,
+        analysisMode: String(attachment.input_data?.analysis_mode || activeReport.value.analysisMode || ''),
+      };
+    }
+    maybeAutoOpenReport(attachment.uid);
+  };
+
+  const maybeAutoOpenReport = (reportId: string) => {
+    if (!pendingAutoOpenIds.has(reportId)) return;
+    const item = reportItems.value.find(current => current.id === reportId);
+    if (!item || item.status !== 'done') return;
+    pendingAutoOpenIds.delete(reportId);
+    hideReportRowUntilDrawerClose(reportId);
+    queueMicrotask(() => {
+      void openReport(item);
+    });
+  };
+
+  watch(reportDrawerShow, (show, wasShow) => {
+    if (wasShow && !show && activeReport.value?.id) {
+      revealReportRow(activeReport.value.id);
+    }
+  });
+
+  const startFollow = (attachmentUid: string, previousExecutionId?: string | null) => {
+    stopFollow(attachmentUid);
+    const handle = followAttachment({
+      attachmentUid,
+      previousExecutionId,
+      onDetail: applyAttachmentDetail,
+      onArchiveIncomplete: () => {
+        messageWarn(t('部分生成过程不可恢复'));
+      },
+      onExecutionId: (executionId) => {
+        const current = reportItems.value.find(item => item.id === attachmentUid);
+        if (current) {
+          upsertReport({ ...current, executionId });
+        }
+      },
+      onProcessParseError: () => {
+        messageWarn(t('部分生成过程不可恢复'));
+      },
+    });
+    followHandles.set(attachmentUid, handle);
+  };
+
+  const hydrateAttachments = async (messageUid: string) => {
+    try {
+      // 消息块按生成时间倒序：附件列表默认排 content_updated_at，编辑或重试会让报告前移
+      const list = await AiAssistantManageService.fetchAttachments({
+        source_message_uid: messageUid,
+        attachment_type: 'AI_ANALYSIS',
+        sort: '-created_at',
+      }, { catchError: true });
+      const mapped = list.map(item => mapAttachmentToReport(item));
+      reportItems.value = mapped;
+      mapped
+        .filter(item => item.status === 'loading')
+        .forEach(item => startFollow(item.id));
+    } catch {
+      // 历史附件加载失败不影响检索卡
+    }
+  };
+
+  if (displayMessageUid.value && props.apiStatus === 'SUCCESS') {
+    void hydrateAttachments(displayMessageUid.value);
+  }
+
+  const resolveCreateErrorMessage = (error: any) => (
+    error?.message || t('创建分析失败')
+  );
 
   const handlePageChange = (page: number) => {
     currentPage.value = page;
@@ -899,71 +1141,173 @@
     }
   };
 
-  const startGenerate = (
-    items: Array<{ id: string; type: 'analyze' | 'statistics'; title: string }>,
-    options?: { openStatistics?: boolean; fields?: string[] },
-  ) => {
-    if (generateTimer) clearTimeout(generateTimer);
-    reportItems.value = items.map(item => ({
-      ...item,
-      status: 'loading',
-      createdAt: '',
-    }));
-    generateTimer = setTimeout(() => {
-      const createdAt = formatNow();
-      reportItems.value = reportItems.value.map(item => ({
-        ...item,
-        status: 'done',
-        createdAt,
-      }));
-      if (options?.openStatistics) {
-        statisticsFields.value = options.fields || [];
-        statisticsCreatedAt.value = createdAt;
-        statisticsDrawerShow.value = true;
-      } else {
-        const primary = reportItems.value.find(item => item.type === 'analyze') || reportItems.value[0];
-        if (primary) openReport(primary);
-      }
-      generateTimer = null;
-    }, 1600);
+  const removeReport = (reportId: string) => {
+    reportItems.value = reportItems.value.filter(item => item.id !== reportId);
   };
 
-  const handleAnalyzeSelect = (payload: { type: 'recommend' | 'custom'; title: string; prompt?: string }) => {
+  const handleAnalyzeSelect = async (payload: { type: 'recommend' | 'custom'; title: string; prompt?: string }) => {
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn(t('缺少结果消息无法分析'));
+      return;
+    }
+    if (analyzeSubmitting.value) return;
+    const isCustom = payload.type === 'custom';
+    const params: AiCreateAttachmentParams = isCustom
+      ? {
+        message_uid: messageUid,
+        attachment_type: 'AI_ANALYSIS',
+        input_data: {
+          analysis_mode: 'CUSTOM',
+          instruction: payload.prompt || '',
+        },
+      }
+      : {
+        message_uid: messageUid,
+        attachment_type: 'AI_ANALYSIS',
+        input_data: {
+          analysis_mode: 'DEFAULT',
+        },
+      };
+
+    const placeholderId = `pending-analyze-${Date.now()}`;
+    const placeholder: ReportStatusItem = {
+      id: placeholderId,
+      type: 'analyze',
+      title: t('智能分析中'),
+      createdAt: '',
+      status: 'loading',
+    };
+
+    analyzeSubmitting.value = true;
     emit('analyze');
-    void payload;
-    startGenerate([
-      { id: `analyze-${Date.now()}`, type: 'analyze', title: '智能分析报告' },
-      { id: `stats-${Date.now()}`, type: 'statistics', title: '数据统计报告' },
-    ]);
+    upsertReport(placeholder, true);
+    analyzeDialogShow.value = false;
+    try {
+      const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
+      removeReport(placeholderId);
+      upsertReport(mapAttachmentToReport(attachment), true);
+      markPendingAutoOpen(attachment.uid);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      try {
+        await hydrateAttachments(messageUid);
+        if (reportItems.value.some(item => item.status === 'loading' && item.id !== placeholderId)) {
+          removeReport(placeholderId);
+          analyzeDialogShow.value = false;
+          messageWarn(t('分析请求未确认'));
+          return;
+        }
+      } catch {
+        // 刷新失败时仍提示创建失败
+      }
+      removeReport(placeholderId);
+      messageError(resolveCreateErrorMessage(error));
+    } finally {
+      analyzeSubmitting.value = false;
+    }
   };
 
   const handleStatistics = () => {
+    if (statisticsActionDisabled.value) return;
     statisticsDialogShow.value = true;
   };
 
   const handleStatisticsConfirm = (payload: { fields: string[]; customPrompt?: string }) => {
     emit('statistics');
-    void payload.customPrompt;
-    startGenerate(
-      [{ id: `stats-${Date.now()}`, type: 'statistics', title: '数据统计报告' }],
-      { openStatistics: true, fields: payload.fields },
-    );
+    void payload;
+    messageWarn(t('数据统计尚未开放'));
   };
 
-  const openReport = (item: ReportStatusItem | LogReportInfo) => {
+  const resolvePreviousExecutionId = async (attachmentUid: string, fallback?: string | null) => {
+    try {
+      const snapshot = await AiAssistantManageService.fetchAttachmentStreamSnapshot({
+        attachment_uid: attachmentUid,
+      }, { catchError: true });
+      return snapshot.execution_id || fallback || null;
+    } catch {
+      return fallback || null;
+    }
+  };
+
+  const handleRetryReport = async (item: ReportStatusItem) => {
+    if (item.retrying || item.status !== 'failed') return;
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: t('智能分析中'),
+      errorMessage: '',
+    });
+    stopFollow(item.id);
+    markPendingAutoOpen(item.id);
+    const previousExecutionId = await resolvePreviousExecutionId(item.id, item.executionId);
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      applyAttachmentDetail(attachment);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, previousExecutionId);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: 'failed',
+        errorMessage: error?.message || item.errorMessage,
+      });
+      messageError(error?.message || t('创建分析失败'));
+    }
+  };
+
+  const openReport = async (item: ReportStatusItem | LogReportInfo) => {
     if (item.type === 'statistics') {
       statisticsFields.value = statisticsFields.value.length ? statisticsFields.value : [];
-      statisticsCreatedAt.value = ('createdAt' in item && item.createdAt) ? item.createdAt : formatNow();
+      statisticsCreatedAt.value = item.createdAt || '';
       statisticsDrawerShow.value = true;
       return;
     }
+    if ('status' in item && item.status === 'loading') return;
+    let {
+      markdown = '',
+      exportFormats = [],
+      title,
+      createdAt = '',
+      analysisMode = '',
+    } = item;
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      applyAttachmentDetail(detail);
+      markdown = detail.output_data?.markdown || markdown;
+      exportFormats = detail.export_formats || exportFormats;
+      title = detail.title || title;
+      createdAt = formatAttachmentTime(detail.created_at || detail.content_updated_at || '') || createdAt;
+      analysisMode = String(detail.input_data?.analysis_mode || analysisMode);
+    } catch {
+      // 使用卡片上已有摘要打开
+    }
     activeReport.value = {
       id: item.id,
-      type: item.type,
-      title: item.title,
-      createdAt: 'createdAt' in item ? item.createdAt : formatNow(),
+      type: 'analyze',
+      title,
+      createdAt,
+      markdown,
+      exportFormats,
+      analysisMode,
     };
     reportDrawerShow.value = true;
+  };
+
+  const handleReportUpdated = (attachment: AiAttachment) => {
+    applyAttachmentDetail(attachment);
   };
 
   const handleCopy = async () => {
@@ -1326,7 +1670,7 @@
     gap: 12px;
   }
 
-  .action-btn-tip-wrap {
+  .action-btn-wrap {
     display: inline-flex;
   }
 
@@ -1380,70 +1724,114 @@
   }
 
   .report-status-section {
-    margin-top: 16px;
-
-    &.is-done {
-      padding: 8px 12px;
-      background: #f5f7fa;
-      border-radius: 2px;
-    }
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--audit-space-16);
+    gap: var(--audit-space-8);
   }
 
   .report-status-row {
     display: flex;
+    min-width: 0;
     min-height: 32px;
+    overflow: hidden;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--audit-space-8);
 
-    & + .report-status-row {
-      margin-top: 4px;
+    &.is-loading {
+      cursor: not-allowed;
+    }
+
+    &.is-done,
+    &.is-failed {
+      padding: 5px var(--audit-space-16) 5px var(--audit-space-12);
+      background: var(--audit-neutral-bg-03);
+      border-radius: var(--audit-radius-container);
+    }
+
+    .status-loading-wrap,
+    .status-failed-wrap {
+      display: inline-flex;
+      min-width: 0;
+      cursor: default;
+      flex: 1;
+      align-items: center;
+      gap: var(--audit-space-8);
     }
 
     .status-icon {
-      font-size: 16px;
+      font-size: var(--audit-font-size-lg);
       flex-shrink: 0;
 
       &.is-loading {
-        color: #3a84ff;
+        color: var(--audit-brand-02);
         animation: log-report-spin 1s linear infinite;
       }
 
       &.is-success {
         color: #2dcb56;
       }
+
+      &.is-failed {
+        color: var(--audit-danger-02);
+      }
     }
 
     .status-text {
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
+      min-width: 0;
+      overflow: hidden;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    &.is-done .status-text,
+    &.is-failed .status-text {
+      color: var(--audit-neutral-text-01);
     }
 
     .status-time {
-      margin-left: 8px;
-      font-size: 12px;
-      color: #979ba5;
+      margin-left: var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      color: var(--audit-neutral-text-03);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .view-report-btn {
       display: inline-flex;
       margin-left: auto;
       padding: 0;
-      font-size: 12px;
-      line-height: 20px;
-      color: #3a84ff;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-brand-02);
       cursor: pointer;
       background: none;
       border: none;
+      white-space: nowrap;
+      flex-shrink: 0;
       align-items: center;
-      gap: 4px;
+      gap: var(--audit-space-4);
 
       .view-icon {
-        font-size: 14px;
+        font-size: 16px;
+
+        &.is-loading {
+          animation: log-report-spin 1s linear infinite;
+        }
       }
 
       &:hover {
-        color: #699df4;
+        color: var(--audit-brand-03);
+      }
+
+      &:disabled {
+        color: var(--audit-neutral-text-04);
+        cursor: not-allowed;
       }
     }
   }

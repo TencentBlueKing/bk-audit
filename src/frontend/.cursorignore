@@ -1,0 +1,23 @@
+*.local
+
+.env.local
+
+
+# 排除编译产物
+target/
+dist/
+build/
+.next/
+
+# 排除依赖
+node_modules/
+
+# 排除大型文档或媒体
+*.pdf
+*.png
+*.jpg
+assets/
+
+# 排除缓存和日志
+*.log
+.cache/
