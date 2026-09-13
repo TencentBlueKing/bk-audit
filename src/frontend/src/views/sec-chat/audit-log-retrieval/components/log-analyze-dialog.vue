@@ -18,76 +18,82 @@
   <teleport
     v-if="isShow"
     to="#sec-chat-overlay-root">
-    <div
-      class="log-analyze-overlay"
-      @click.self="handleClose">
-      <div class="log-analyze-modal">
-        <div class="modal-header">
-          <h4 class="modal-title">
-            智能分析
-          </h4>
+    <div class="log-analyze-overlay">
+      <div
+        class="log-analyze-dialog-sizer"
+        @click.self="handleOverlayClose">
+        <div class="log-analyze-modal">
           <div
             class="modal-close"
             @click="handleClose">
             <audit-icon type="close" />
           </div>
-        </div>
-
-        <div class="log-analyze-dialog-content">
-          <div class="subtitle">
-            基于当前 <span class="highlight">{{ formatNumber(totalHit) }}</span> 条日志，为您推荐以下分析报告：
+          <div class="modal-header">
+            <h4 class="modal-title">
+              智能分析
+            </h4>
           </div>
 
-          <div
-            class="report-card recommend"
-            @click="handleRecommend">
-            <div class="report-info">
-              <div class="report-title">
-                智能分析报告
-              </div>
-              <div class="report-desc">
-                {{ recommendDesc }}
-              </div>
+          <div class="log-analyze-dialog-content">
+            <div class="subtitle">
+              基于当前 <span class="highlight">{{ formatNumber(totalHit) }}</span> 条日志，为您推荐以下分析报告：
             </div>
-            <img
-              class="report-icon"
-              :src="reportIcon">
-          </div>
 
-          <div class="divider-wrapper">
-            <div class="divider-line" />
-            <div class="divider-text">
-              以上报告不满足需求？
-            </div>
-            <div class="divider-line" />
-          </div>
-
-          <div class="custom-analysis">
             <div
-              class="custom-header"
-              @click="isCustomExpanded = !isCustomExpanded">
-              <audit-icon
-                class="collapse-icon"
-                :type="isCustomExpanded ? 'angle-fill-down' : 'angle-fill-rignt'" />
-              <span class="custom-title">自定义分析</span>
-              <span class="custom-desc">（输入任意分析需求，AI为您定制报告）</span>
+              class="report-card recommend"
+              :class="{ 'is-disabled': submitting }"
+              @click="handleRecommend">
+              <div class="report-info">
+                <div class="report-title">
+                  智能分析报告
+                </div>
+                <div class="report-desc">
+                  {{ recommendDesc }}
+                </div>
+              </div>
+              <img
+                class="report-icon"
+                :src="reportIcon">
             </div>
-            <div
-              v-show="isCustomExpanded"
-              class="custom-content">
-              <div class="custom-input-wrapper">
-                <bk-input
-                  v-model="customRequirement"
-                  class="custom-input"
-                  placeholder="输入你想分析的内容，例如：分析张三在英雄联盟业务的资产转移报告"
-                  :rows="3"
-                  type="textarea" />
-                <bk-button
-                  class="custom-analysis-btn"
-                  theme="primary"
-                  @click.stop="handleCustomAnalyze">
-                  分析
-                </bk-button>
+
+            <div class="divider-wrapper">
+              <div class="divider-line" />
+              <div class="divider-text">
+                以上报告不满足需求？
+              </div>
+              <div class="divider-line" />
+            </div>
+
+            <div class="custom-analysis">
+              <div
+                class="custom-header"
+                @click="isCustomExpanded = !isCustomExpanded">
+                <audit-icon
+                  class="collapse-icon"
+                  :type="isCustomExpanded ? 'angle-fill-down' : 'angle-fill-rignt'" />
+                <span class="custom-title">自定义分析</span>
+                <span class="custom-desc">（输入任意分析需求，AI为您定制报告）</span>
+              </div>
+              <div
+                v-show="isCustomExpanded"
+                class="custom-content">
+                <div class="custom-input-wrapper">
+                  <bk-input
+                    v-model="customRequirement"
+                    class="custom-input"
+                    placeholder="输入你想分析的内容，例如：分析张三在英雄联盟业务的资产转移报告"
+                    :rows="3"
+                    type="textarea" />
+                  <bk-button
+                    class="custom-analysis-btn"
+                    :disabled="submitting"
+                    :loading="submitting"
+                    size="small"
+                    theme="primary"
+                    @click.stop="handleCustomAnalyze">
+                    分析
+                  </bk-button>
+                </div>
               </div>
             </div>
           </div>
@@ -99,6 +105,7 @@
 
 <script lang="ts" setup>
   import { computed, onDeactivated, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
 
@@ -110,10 +117,12 @@
     modelValue?: boolean;
     totalHit?: number;
     conditions?: RetrievalFilterCondition[];
+    submitting?: boolean;
   }>(), {
     modelValue: false,
     totalHit: 0,
     conditions: () => [],
+    submitting: false,
   });
 
   const emit = defineEmits<{
@@ -121,23 +130,21 @@
     select: [payload: { type: 'recommend' | 'custom'; title: string; prompt?: string }];
   }>();
 
-  const { messageSuccess } = useMessage();
+  const { messageWarn } = useMessage();
+  const { t } = useI18n();
 
-  const isShow = ref(false);
   const isCustomExpanded = ref(false);
   const customRequirement = ref('');
-
-  watch(() => props.modelValue, (val) => {
-    isShow.value = val;
-    if (val) {
-      isCustomExpanded.value = false;
-      customRequirement.value = '';
-    }
+  /** 父级用 v-if 挂载时 modelValue 已是 true，不能再等无 immediate 的 watch */
+  const isShow = computed({
+    get: () => props.modelValue,
+    set: (val: boolean) => emit('update:modelValue', val),
   });
 
-  watch(isShow, (val) => {
-    if (val !== props.modelValue) {
-      emit('update:modelValue', val);
+  watch(() => props.modelValue, (val) => {
+    if (val && !props.submitting) {
+      isCustomExpanded.value = false;
+      customRequirement.value = '';
     }
   });
 
@@ -152,7 +159,12 @@
   const formatNumber = (num: number) => num.toLocaleString('en-US');
 
   const handleClose = () => {
+    if (props.submitting) return;
     isShow.value = false;
+  };
+
+  const handleOverlayClose = () => {
+    handleClose();
   };
 
   // keep-alive 场景下失活时，防止 teleport 留下遮罩/DOM 影响其他页面点击
@@ -163,24 +175,25 @@
   });
 
   const handleRecommend = () => {
+    if (props.submitting) return;
     emit('select', {
       type: 'recommend',
-      title: '智能分析报告',
+      title: t('智能分析报告'),
     });
-    messageSuccess('已选择智能分析报告');
-    handleClose();
   };
 
   const handleCustomAnalyze = () => {
+    if (props.submitting) return;
     const prompt = customRequirement.value.trim();
-    if (!prompt) return;
+    if (!prompt) {
+      messageWarn(t('请输入分析要求'));
+      return;
+    }
     emit('select', {
       type: 'custom',
-      title: '自定义分析',
+      title: t('智能分析报告'),
       prompt,
     });
-    messageSuccess('已提交自定义分析');
-    handleClose();
   };
 </script>
 
@@ -189,126 +202,154 @@
     position: absolute;
     inset: 0;
     z-index: 100;
-    display: flex;
-    padding: 24px;
     overflow: auto;
     pointer-events: auto;
     background: rgb(0 0 0 / 40%);
+    box-sizing: border-box;
+  }
+
+  .log-analyze-dialog-sizer {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    min-height: 100%;
+    padding: 24px;
     box-sizing: border-box;
     align-items: center;
     justify-content: center;
   }
 
   .log-analyze-modal {
+    position: relative;
     width: 680px;
-    max-width: 100%;
+    min-width: 680px;
+    flex-shrink: 0;
     margin: auto;
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+    background: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-container);
+    box-shadow: var(--audit-shadow-dialog);
+    box-sizing: border-box;
   }
 
   .modal-header {
     display: flex;
-    height: 52px;
-    padding: 0 24px;
+    padding: var(--audit-space-16) var(--audit-space-24) 0;
     align-items: center;
-    justify-content: space-between;
     box-sizing: border-box;
 
     .modal-title {
       margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 28px;
-      color: #313238;
+      font-size: var(--audit-font-size-xl);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-xl);
+      color: var(--audit-neutral-text-01);
     }
+  }
 
-    .modal-close {
-      display: flex;
-      width: 32px;
-      height: 32px;
-      margin-right: -8px;
-      font-size: 18px;
-      color: #979ba5;
-      cursor: pointer;
-      border-radius: 2px;
-      align-items: center;
-      justify-content: center;
+  .modal-close {
+    position: absolute;
+    top: var(--audit-space-8);
+    right: var(--audit-space-8);
+    display: flex;
+    width: 24px;
+    height: 24px;
+    font-size: var(--audit-font-size-base);
+    color: var(--audit-neutral-text-03);
+    cursor: pointer;
+    border-radius: var(--audit-radius-control);
+    align-items: center;
+    justify-content: center;
 
-      &:hover {
-        color: #63656e;
-        background: #eaebf0;
-      }
+    &:hover {
+      color: var(--audit-neutral-text-02);
+      background: var(--audit-neutral-border-02);
     }
   }
 
   .log-analyze-dialog-content {
-    padding: 0 24px 24px;
-    font-size: 12px;
-    color: #63656e;
+    padding: 20px var(--audit-space-24) var(--audit-space-24);
+    font-size: var(--audit-font-size-sm);
+    color: var(--audit-neutral-text-02);
 
     .subtitle {
-      margin-bottom: 16px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
+      margin-bottom: var(--audit-space-12);
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
 
       .highlight {
         margin: 0 2px;
-        font-weight: 700;
-        color: #3a84ff;
+        font-weight: var(--audit-font-weight-bold);
+        color: var(--audit-brand-02);
       }
     }
 
     .report-card {
       position: relative;
-      padding: 16px 20px;
-      margin-bottom: 12px;
+      display: flex;
+      padding: var(--audit-space-12) var(--audit-space-16);
+      margin-bottom: 0;
       overflow: hidden;
       cursor: pointer;
-      background: #fff;
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      background: linear-gradient(90deg, #eaf3ff 0%, #fafdff 100%);
+      border: 1px solid var(--audit-brand-04);
+      border-radius: var(--audit-radius-container);
       transition: all .2s;
+      flex-direction: column;
+      gap: var(--audit-space-4);
+      box-sizing: border-box;
 
       &:hover {
-        background: linear-gradient(90deg, #eaf3ff 0%, #fafdff 100%);
-        border-color: #3a84ff;
-        box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
+        border-color: var(--audit-brand-02);
+      }
+
+      &.is-disabled {
+        cursor: not-allowed;
+        pointer-events: none;
+        opacity: 0.6;
       }
 
       &.recommend {
-        border-color: #c4d9ff;
+        border-color: var(--audit-brand-04);
+      }
+
+      .report-info {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
       }
 
       .report-title {
-        margin-bottom: 8px;
-        font-size: 14px;
-        font-weight: 700;
-        color: #313238;
+        margin-bottom: 0;
+        font-size: var(--audit-font-size-base);
+        font-weight: var(--audit-font-weight-bold);
+        line-height: var(--audit-line-height-base);
+        color: var(--audit-neutral-text-01);
       }
 
       .report-desc {
-        padding-right: 60px;
-        line-height: 18px;
-        color: #979ba5;
+        padding-right: 96px;
+        font-size: var(--audit-font-size-sm);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-neutral-text-03);
+        overflow-wrap: break-word;
+        word-break: break-word;
       }
 
       .report-icon {
         position: absolute;
-        top: 50%;
-        right: 20px;
-        width: 60px;
-        height: 60px;
+        top: 7px;
+        right: 25px;
+        width: 72px;
+        height: 72px;
         pointer-events: none;
-        transform: translateY(-50%);
+        object-fit: contain;
       }
     }
 
     .divider-wrapper {
       display: flex;
-      margin: 24px 0 16px;
+      margin: var(--audit-space-24) 0 var(--audit-space-16);
       align-items: center;
 
       .divider-line {
@@ -318,46 +359,66 @@
       }
 
       .divider-text {
-        padding: 0 16px;
-        color: #979ba5;
+        padding: 0 var(--audit-space-16);
+        font-size: var(--audit-font-size-sm);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-neutral-text-02);
+        white-space: nowrap;
       }
     }
 
     .custom-analysis {
       .custom-header {
         display: flex;
+        min-width: 0;
         cursor: pointer;
         user-select: none;
         align-items: center;
+        gap: var(--audit-space-8);
 
         .collapse-icon {
-          margin-right: 6px;
-          font-size: 16px;
-          color: #979ba5;
+          display: inline-flex;
+          width: 12px;
+          height: 12px;
+          font-size: 12px;
+          line-height: 12px;
+          color: var(--audit-neutral-text-03);
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
         }
 
         .custom-title {
-          font-size: 14px;
-          font-weight: 700;
-          color: #313238;
+          font-size: var(--audit-font-size-base);
+          font-weight: var(--audit-font-weight-bold);
+          line-height: var(--audit-line-height-base);
+          color: var(--audit-neutral-text-02);
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .custom-desc {
-          color: #979ba5;
+          min-width: 0;
+          font-size: var(--audit-font-size-sm);
+          line-height: var(--audit-line-height-sm);
+          color: var(--audit-neutral-text-03);
+          white-space: nowrap;
         }
       }
 
       .custom-content {
-        margin-top: 16px;
+        margin-top: var(--audit-space-12);
 
         .custom-input-wrapper {
           position: relative;
           display: flex;
           width: 100%;
-          border: 1px solid #dcdee5;
-          border-radius: 2px;
+          height: 72px;
+          border: 1px solid var(--audit-neutral-border-01);
+          border-radius: var(--audit-radius-control);
           transition: all .2s;
           align-items: flex-end;
+          box-sizing: border-box;
 
           &:focus-within {
             background: linear-gradient(white, white) padding-box,
@@ -372,12 +433,14 @@
             flex: 1;
 
             :deep(.bk-textarea) {
-              min-height: 80px;
-              padding-right: 80px;
-              padding-bottom: 40px;
+              min-height: 72px;
+              height: 72px;
+              padding: 4px 8px 32px;
+              padding-right: 72px;
               background: transparent;
               border: none;
               resize: none;
+              box-sizing: border-box;
             }
           }
 
@@ -385,8 +448,9 @@
             position: absolute;
             right: 8px;
             bottom: 8px;
-            height: 32px;
-            min-width: 64px;
+            height: 26px;
+            min-width: 48px;
+            padding: 3px 12px;
           }
         }
       }
