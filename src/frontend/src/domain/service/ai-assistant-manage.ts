@@ -15,7 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type {
+  AiAttachmentExportFormat,
+  AiAttachmentListParams,
   AiConversation,
+  AiCreateAttachmentParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
   AiExportConfig,
@@ -25,6 +28,7 @@ import type {
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
+  AiUpdateAttachmentParams,
   AiUpdateMessageParams,
 } from '@model/ai-assistant/types';
 
@@ -182,6 +186,78 @@ export default {
     options?: { catchError?: boolean },
   ) {
     return AiAssistantManageSource.fullExport(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  // ---------- 附件 ----------
+
+  createAttachment(
+    params: AiCreateAttachmentParams,
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.createAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  fetchAttachments(
+    params: AiAttachmentListParams = {},
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getAttachments(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => (Array.isArray(data) ? data : []));
+  },
+
+  fetchAttachment(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  updateAttachment(
+    params: AiUpdateAttachmentParams,
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.updateAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  retryAttachment(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.retryAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  fetchAttachmentStreamSnapshot(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getAttachmentStreamSnapshot(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  exportAttachment(
+    params: { attachment_uid: string; export_format: AiAttachmentExportFormat },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.exportAttachment(params, {
       catchError: options?.catchError,
     })
       .then(({ data }) => data);
