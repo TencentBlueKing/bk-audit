@@ -154,24 +154,23 @@
     '扩展字段2', '扩展字段3', '扩展字段4', '扩展字段5', '扩展字段6',
   ];
 
-  const isShow = ref(false);
   const keyword = ref('');
   const selectedFields = ref<string[]>([]);
   const customExpanded = ref(false);
   const customPrompt = ref('');
+  /** 父级用 v-if 挂载时 modelValue 已是 true，不能再等无 immediate 的 watch */
+  const isShow = computed({
+    get: () => props.modelValue,
+    set: (val: boolean) => emit('update:modelValue', val),
+  });
 
   watch(() => props.modelValue, (val) => {
-    isShow.value = val;
     if (val) {
       keyword.value = '';
       selectedFields.value = [];
       customExpanded.value = false;
       customPrompt.value = '';
     }
-  });
-
-  watch(isShow, (val) => {
-    if (val !== props.modelValue) emit('update:modelValue', val);
   });
 
   const filterFields = (fields: string[]) => {
@@ -239,14 +238,16 @@
   .log-statistics-modal {
     display: flex;
     width: 680px;
-    max-width: 100%;
+    min-width: 680px;
     max-height: calc(100% - 48px);
     margin: auto;
     overflow: hidden;
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+    background: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-container);
+    box-shadow: var(--audit-shadow-dialog);
     flex-direction: column;
+    flex-shrink: 0;
+    box-sizing: border-box;
   }
 
   .modal-header {
