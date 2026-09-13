@@ -56,6 +56,7 @@ bkcodeai.json
 *.cursor
 *.specify
 AGENTS.md
+!src/frontend/AGENTS.md
 .claude
 *debug*
 .worktrees/
