@@ -28,41 +28,63 @@
     <template #header>
       <div class="ai-report-header">
         <div class="ai-report-title-wrapper">
-          <span class="ai-report-title-text">{{ isEditing ? '编辑报告' : displayTitle }}</span>
+          <span class="ai-report-title-text">{{ isEditing ? t('编辑报告') : t('智能分析报告') }}</span>
+          <template v-if="!isEditing && analysisTimeText">
+            <span class="ai-report-title-divider" />
+            <span class="ai-report-subtitle">{{ t('分析时间') }}：{{ analysisTimeText }}</span>
+          </template>
         </div>
         <div
           v-if="!isEditing"
           class="ai-report-header-actions">
           <bk-button
-            class="mr8"
+            outline
+            theme="primary"
             @click="handleEdit">
-            编辑
+            {{ t('编辑') }}
           </bk-button>
           <bk-dropdown
+            v-if="availableExportFormats.length"
+            :disabled="exporting"
             placement="bottom-end"
             trigger="click">
-            <bk-button>
+            <bk-button
+              :disabled="exporting"
+              :loading="exporting">
               <audit-icon
                 class="mr4"
                 type="download" />
-              导出
+              {{ exporting ? t('导出中...') : t('导出') }}
             </bk-button>
             <template #content>
               <bk-dropdown-menu>
-                <bk-dropdown-item @click="handleExport('pdf')">
-                  导出为 PDF
+                <bk-dropdown-item
+                  v-if="availableExportFormats.includes('PDF')"
+                  :disabled="exporting"
+                  @click="handleExport('PDF')">
+                  {{ t('导出为PDF') }}
                 </bk-dropdown-item>
-                <bk-dropdown-item @click="handleExport('markdown')">
-                  导出为 Markdown
+                <bk-dropdown-item
+                  v-if="availableExportFormats.includes('MARKDOWN')"
+                  :disabled="exporting"
+                  @click="handleExport('MARKDOWN')">
+                  {{ t('导出为Markdown') }}
                 </bk-dropdown-item>
               </bk-dropdown-menu>
             </template>
           </bk-dropdown>
+          <bk-button
+            v-if="isReportListEntry && report?.conversationUid"
+            @click="handleLocate">
+            {{ t('跳转至会话') }}
+          </bk-button>
         </div>
       </div>
     </template>
 
-    <div class="ai-report-preview-body">
+    <div
+      class="ai-report-preview-body log-report-preview"
+      :class="{ 'is-editing': isEditing }">
       <template v-if="!isEditing">
         <div class="ai-report-meta">
           <div class="ai-report-meta-row">
@@ -87,16 +109,19 @@
                 alt=""
                 class="ai-report-section-icon"
                 :src="aiIcon">
-              <span class="title">报告内容</span>
+              <span class="title">{{ displayTitle }}</span>
             </div>
           </div>
           <div class="ai-report-section-body">
+            <!-- eslint-disable vue/no-v-html -->
             <div
-              v-for="(section, index) in reportSections"
-              :key="section.title"
-              class="report-block">
-              <h4>{{ numberMap[index] }}、{{ section.title }}</h4>
-              <p>{{ section.content }}</p>
+              v-if="htmlText"
+              class="markdowm-container"
+              v-html="htmlText" />
+            <div
+              v-else
+              class="report-empty">
+              {{ t('暂无报告内容') }}
             </div>
           </div>
         </div>
@@ -106,18 +131,18 @@
         <div class="edit-form">
           <div class="edit-field">
             <div class="edit-label">
-              报告名称
+              {{ t('报告名称') }}
             </div>
             <bk-input v-model="editTitle" />
           </div>
-          <div class="edit-field">
+          <div class="edit-field edit-field--content">
             <div class="edit-label">
-              报告内容
+              {{ t('报告内容') }}
             </div>
-            <bk-input
-              v-model="editContent"
-              :rows="18"
-              type="textarea" />
+            <rich-editor
+              v-model:content="editContent"
+              class="edit-rich-editor"
+              :default="editorInitialContent" />
           </div>
         </div>
       </template>
@@ -126,15 +151,16 @@
     <template #footer>
       <div class="ai-report-edit-footer">
         <bk-button
-          style="width: 102px;"
+          class="ai-report-save-btn"
+          :loading="saving"
           theme="primary"
           @click="handleSave">
-          保存
+          {{ t('保存') }}
         </bk-button>
         <bk-button
-          style="min-width: 64px;"
+          class="ai-report-cancel-btn"
           @click="handleCancelEdit">
-          取消
+          {{ t('取消') }}
         </bk-button>
       </div>
     </template>
@@ -143,10 +169,24 @@
 
 <script lang="ts" setup>
   import { computed, onDeactivated, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import AiAssistantManageService from '@service/ai-assistant-manage';
+
+  import type {
+    AiAttachment,
+    AiAttachmentExportFormat,
+  } from '@model/ai-assistant/types';
 
   import useMessage from '@hooks/use-message';
 
   import aiIcon from '@images/ai-icon.svg?inline';
+  import RichEditor from '@components/rich-editor/index.vue';
+
+  import {
+    toPreviewHtml,
+    toReportDisplayHtml,
+  } from '@views/risk-manage/list/components/ai-analyzes-tip/report-content-utils';
 
   import type { RetrievalFilterCondition } from '../../types';
 
@@ -155,6 +195,10 @@
     type: 'analyze' | 'statistics';
     title: string;
     createdAt: string;
+    markdown?: string;
+    exportFormats?: string[];
+    conversationUid?: string;
+    analysisMode?: string;
   }
 
   const props = withDefaults(defineProps<{
@@ -163,85 +207,93 @@
     totalHit?: number;
     conditions?: RetrievalFilterCondition[];
     systems?: string;
+    /** 报告列表打开时额外提供「跳转至会话」；编辑、导出两入口都有 */
+    entry?: 'session' | 'report-list';
   }>(), {
     isShow: false,
     report: null,
-    totalHit: 0,
+    totalHit: undefined,
     conditions: () => [],
-    systems: '已选系统',
+    systems: '',
+    entry: 'session',
   });
 
   const emit = defineEmits<{
     'update:isShow': [value: boolean];
+    updated: [attachment: AiAttachment];
+    locate: [conversationUid: string];
   }>();
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageError } = useMessage();
+  const { t } = useI18n();
 
   const isEditing = ref(false);
+  const saving = ref(false);
+  const exporting = ref(false);
   const editTitle = ref('');
   const editContent = ref('');
+  const editorInitialContent = ref('');
   const savedTitle = ref('');
   const savedContent = ref('');
-
-  const numberMap = ['一', '二', '三', '四', '五', '六'];
 
   const isShow = computed({
     get: () => props.isShow,
     set: val => emit('update:isShow', val),
   });
 
-  const drawerWidth = 1100;
+  const drawerWidth = 800;
 
-  const displayTitle = computed(() => savedTitle.value || props.report?.title || '智能分析报告');
+  const displayTitle = computed(() => savedTitle.value || props.report?.title || t('智能分析报告'));
+
+  const analysisTimeText = computed(() => props.report?.createdAt || '');
+
+  const isReportListEntry = computed(() => props.entry === 'report-list');
+
+  const availableExportFormats = computed(() => (
+    (props.report?.exportFormats || []).map(item => String(item).toUpperCase())
+  ));
+
+  const htmlText = computed(() => toPreviewHtml(savedContent.value || props.report?.markdown || ''));
 
   const conditionText = computed(() => {
     if (!props.conditions.length) return '--';
     return props.conditions.map(item => `${item.field}=${item.value}`).join('，');
   });
 
+  const analysisScopeText = computed(() => (
+    String(props.report?.analysisMode || '').toUpperCase() === 'CUSTOM'
+      ? '自定义分析'
+      : '全量命中数据'
+  ));
+
+  const hitCountText = computed(() => {
+    if (props.totalHit === undefined || props.totalHit === null) return '--';
+    return `${props.totalHit.toLocaleString('en-US')} 条`;
+  });
+
   const metaList = computed(() => [
     { key: 'systems', label: '系统范围', value: props.systems || '--' },
     { key: 'conditions', label: '查询条件', value: conditionText.value },
-    { key: 'total', label: '总命中数', value: `${props.totalHit.toLocaleString('en-US')}条` },
-    { key: 'scope', label: '分析口径', value: '全量数据' },
+    { key: 'total', label: '命中总量', value: hitCountText.value },
+    { key: 'scope', label: '分析口径', value: analysisScopeText.value },
   ]);
 
-  const defaultSections = computed(() => {
-    if (props.report?.type === 'statistics') {
-      return [
-        { title: '总量趋势', content: '近周期内命中日志量整体呈波动趋势，高峰集中在工作日白天时段。' },
-        { title: '操作结果分布', content: '成功操作占比约 78%，失败操作主要集中在权限校验与接口超时场景。' },
-        { title: '来源系统分布', content: '日志主要来自蓝盾、云安全审计及业务系统，需关注跨系统关联行为。' },
-        { title: '操作人活跃度', content: '头部操作人贡献了大部分变更类操作，建议结合权限策略进一步核查。' },
-      ];
-    }
-    return [
-      { title: '行为链分析', content: '基于检索结果还原关键操作链路，识别异常跳转与高频敏感动作。' },
-      { title: '风险关联分析', content: '将删除/下载等高风险操作与账号、IP、系统进行关联，定位潜在风险点。' },
-      { title: '意图判断', content: '结合操作时间窗与操作组合，判断更可能属于正常运维还是异常探查。' },
-      { title: '关联人员挖掘', content: '挖掘同 IP、同系统、同时间窗的关联操作人，辅助扩大调查范围。' },
-      { title: '建议下一步调查', content: '建议继续核验权限变更记录，并复核相关资产的访问与导出行为。' },
-      { title: '风险影响评估', content: '当前命中规模较大，建议优先处置高危动作并沉淀持续监测规则。' },
-    ];
-  });
-
-  const reportSections = computed(() => defaultSections.value);
-
-  const buildDefaultContent = () => reportSections.value
-    .map((item, index) => `${numberMap[index]}、${item.title}\n${item.content}`)
-    .join('\n\n');
+  const resetEditForm = (title: string, markdown: string) => {
+    editTitle.value = title;
+    editorInitialContent.value = toReportDisplayHtml(markdown);
+    editContent.value = editorInitialContent.value;
+  };
 
   const syncFromReport = () => {
-    savedTitle.value = props.report?.title || '智能分析报告';
-    savedContent.value = buildDefaultContent();
-    editTitle.value = savedTitle.value;
-    editContent.value = savedContent.value;
+    savedTitle.value = props.report?.title || t('智能分析报告');
+    savedContent.value = props.report?.markdown || '';
+    resetEditForm(savedTitle.value, savedContent.value);
     isEditing.value = false;
   };
 
-  watch(() => [props.isShow, props.report?.id], () => {
-    if (props.isShow) syncFromReport();
-  });
+  watch(() => [props.isShow, props.report?.id, props.report?.markdown], () => {
+    if (props.isShow && !isEditing.value) syncFromReport();
+  }, { immediate: true });
 
   const handleUpdateShow = (val: boolean) => {
     emit('update:isShow', val);
@@ -253,22 +305,39 @@
   });
 
   const handleEdit = () => {
-    editTitle.value = savedTitle.value;
-    editContent.value = savedContent.value;
+    resetEditForm(savedTitle.value, savedContent.value);
     isEditing.value = true;
   };
 
   const handleCancelEdit = () => {
     isEditing.value = false;
-    editTitle.value = savedTitle.value;
-    editContent.value = savedContent.value;
+    resetEditForm(savedTitle.value, savedContent.value);
   };
 
-  const handleSave = () => {
-    savedTitle.value = editTitle.value.trim() || savedTitle.value;
-    savedContent.value = editContent.value;
-    isEditing.value = false;
-    messageSuccess('保存成功');
+  const handleSave = async () => {
+    if (!props.report?.id || saving.value) return;
+    const nextTitle = editTitle.value.trim() || savedTitle.value;
+    const nextContent = editContent.value;
+    saving.value = true;
+    try {
+      const attachment = await AiAssistantManageService.updateAttachment({
+        attachment_uid: props.report.id,
+        title: nextTitle,
+        output_data: {
+          markdown: nextContent,
+        },
+      }, { catchError: true });
+      savedTitle.value = attachment.title || nextTitle;
+      savedContent.value = attachment.output_data?.markdown || nextContent;
+      resetEditForm(savedTitle.value, savedContent.value);
+      isEditing.value = false;
+      emit('updated', attachment);
+      messageSuccess(t('保存成功'));
+    } catch (error: any) {
+      messageError(error?.message || t('保存失败'));
+    } finally {
+      saving.value = false;
+    }
   };
 
   const handleBeforeClose = () => {
@@ -279,8 +348,24 @@
     return true;
   };
 
-  const handleExport = (mode: 'pdf' | 'markdown') => {
-    messageSuccess(mode === 'pdf' ? '已选择导出为 PDF' : '已选择导出为 Markdown');
+  const handleLocate = () => {
+    if (!props.report?.conversationUid) return;
+    emit('locate', props.report.conversationUid);
+  };
+
+  const handleExport = async (exportFormat: AiAttachmentExportFormat) => {
+    if (!props.report?.id || exporting.value) return;
+    exporting.value = true;
+    try {
+      await AiAssistantManageService.exportAttachment({
+        attachment_uid: props.report.id,
+        export_format: exportFormat,
+      }, { catchError: true });
+    } catch (error: any) {
+      messageError(error?.message || t('导出失败'));
+    } finally {
+      exporting.value = false;
+    }
   };
 </script>
 
@@ -290,49 +375,74 @@
     display: flex;
     width: 100%;
     height: 52px;
-    border-bottom: 1px solid #dcdee5;
+    border-bottom: 1px solid var(--audit-neutral-border-01);
     align-items: center;
     justify-content: space-between;
   }
 
+  .ai-report-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--audit-space-8);
+    min-width: 0;
+  }
+
   .ai-report-title-text {
-    font-size: 16px;
-    font-weight: 600;
-    color: #313238;
+    font-size: var(--audit-font-size-lg);
+    font-weight: var(--audit-font-weight-regular);
+    line-height: var(--audit-line-height-lg);
+    color: var(--audit-neutral-text-01);
+  }
+
+  .ai-report-title-divider {
+    width: 1px;
+    height: 12px;
+    background: var(--audit-neutral-border-01);
+    flex-shrink: 0;
+  }
+
+  .ai-report-subtitle {
+    font-size: var(--audit-font-size-base);
+    line-height: var(--audit-line-height-base);
+    color: var(--audit-neutral-text-03);
+    white-space: nowrap;
   }
 
   .ai-report-header-actions {
     position: absolute;
-    right: 20px;
+    right: var(--audit-space-24);
     display: flex;
+    gap: var(--audit-space-8);
     align-items: center;
   }
 
   .mr4 {
-    margin-right: 4px;
-  }
-
-  .mr8 {
-    margin-right: 8px;
+    margin-right: var(--audit-space-4);
   }
 
   .ai-report-preview-body {
-    font-size: 13px;
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    font-size: var(--audit-font-size-md);
     line-height: 1.6;
-    color: #63656e;
+    color: var(--audit-neutral-text-02);
+    flex-direction: column;
+    box-sizing: border-box;
   }
 
   .ai-report-meta {
-    padding: 16px 40px;
-    background: #f5f7fa;
-    border: 1px solid #e1e6f0;
+    padding: var(--audit-space-16) var(--audit-space-40);
+    background: var(--audit-neutral-bg-03);
+    border: 1px solid var(--audit-neutral-border-02);
     border-bottom: none;
-    border-radius: 2px 2px 0 0;
+    border-radius: var(--audit-radius-control) var(--audit-radius-control) 0 0;
+    flex-shrink: 0;
   }
 
   .ai-report-meta-row {
     display: flex;
-    gap: 24px;
+    gap: var(--audit-space-24);
     align-items: flex-start;
     justify-content: space-between;
   }
@@ -343,36 +453,41 @@
 
     .label {
       margin-bottom: 6px;
-      font-size: 12px;
-      color: #979ba5;
+      font-size: var(--audit-font-size-sm);
+      color: var(--audit-neutral-text-03);
     }
 
     .value {
-      font-size: 13px;
-      line-height: 20px;
-      color: #313238;
+      font-size: var(--audit-font-size-md);
+      line-height: var(--audit-line-height-md);
+      color: var(--audit-neutral-text-01);
       word-break: break-all;
     }
   }
 
   .ai-report-section {
-    min-height: 360px;
-    border: 1px solid #e1e6f0;
-    border-radius: 0 0 2px 2px;
+    display: flex;
+    min-height: 0;
+    border: 1px solid var(--audit-neutral-border-02);
+    border-bottom: none;
+    border-radius: 0 0 var(--audit-radius-control) var(--audit-radius-control);
+    flex: 1;
+    flex-direction: column;
   }
 
   .ai-report-section-header {
     display: flex;
     height: 48px;
-    padding: 0 24px;
-    border-bottom: 1px solid #e1e6f0;
+    padding: 0 var(--audit-space-24);
+    border-bottom: 1px solid var(--audit-neutral-border-02);
     align-items: center;
+    flex-shrink: 0;
   }
 
   .ai-report-section-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--audit-space-8);
 
     .ai-report-section-icon {
       width: 18px;
@@ -380,51 +495,194 @@
     }
 
     .title {
-      font-size: 14px;
-      font-weight: 700;
-      color: #313238;
+      font-size: var(--audit-font-size-base);
+      font-weight: var(--audit-font-weight-bold);
+      color: var(--audit-neutral-text-01);
     }
   }
 
   .ai-report-section-body {
-    padding: 24px 40px 32px;
+    min-height: 0;
+    padding: var(--audit-space-24) var(--audit-space-40) var(--audit-space-32);
+    overflow: auto;
+    flex: 1;
   }
 
-  .report-block {
-    margin-bottom: 20px;
+  .report-empty {
+    font-size: var(--audit-font-size-md);
+    color: var(--audit-neutral-text-03);
+  }
 
-    h4 {
-      margin: 0 0 8px;
-      font-size: 14px;
-      font-weight: 700;
-      color: #313238;
+  .markdowm-container {
+    font-size: var(--audit-font-size-md);
+    line-height: 1.8;
+    color: var(--audit-neutral-text-01);
+    word-break: break-word;
+
+    :deep(p) {
+      margin: 0 0 14px;
+      line-height: 1.8;
     }
 
-    p {
-      margin: 0;
-      font-size: 13px;
-      line-height: 22px;
-      color: #63656e;
+    :deep(h1),
+    :deep(h2),
+    :deep(h3),
+    :deep(h4),
+    :deep(h5),
+    :deep(h6),
+    :deep(ul),
+    :deep(ol) {
+      margin: 0 0 14px;
+      line-height: 1.6;
+    }
+
+    :deep(ul),
+    :deep(ol) {
+      padding-left: 20px;
     }
   }
 
   .edit-form {
-    padding: 24px;
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    padding: var(--audit-space-24) var(--audit-space-40);
+    flex: 1;
+    flex-direction: column;
+    box-sizing: border-box;
   }
 
   .edit-field {
-    margin-bottom: 16px;
+    width: 100%;
+    margin-bottom: var(--audit-space-24);
+    flex-shrink: 0;
 
     .edit-label {
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: #63656e;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
+    }
+  }
+
+  .edit-field--content {
+    display: flex;
+    min-height: 0;
+    margin-bottom: 0;
+    flex: 1;
+    flex-direction: column;
+
+    :deep(.edit-rich-editor) {
+      display: flex;
+      width: 100%;
+      min-height: 0;
+      padding: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    /* Quill 把 toolbar 作为 container 的兄弟插进 editor-wrap，两者都得显式定尺寸 */
+    :deep(.ql-toolbar.ql-snow) {
+      height: 40px;
+      padding: 0 var(--audit-space-16);
+      box-sizing: border-box;
+      border-color: var(--audit-neutral-border-01);
+      border-radius: var(--audit-radius-control) var(--audit-radius-control) 0 0;
+      flex: 0 0 40px;
+    }
+
+    :deep(.ql-container.ql-snow) {
+      /* height 被组件按 height prop 写成了行内 auto，只能用 important 夺回 */
+      min-height: 0;
+      height: auto !important;
+      padding-bottom: 0;
+      flex: 1 1 0;
+      border-color: var(--audit-neutral-border-01);
+      border-radius: 0 0 var(--audit-radius-control) var(--audit-radius-control);
+    }
+
+    :deep(.ql-editor) {
+      min-height: 0;
+      padding: var(--audit-space-12) var(--audit-space-16);
+      overflow-y: auto;
     }
   }
 
   .ai-report-edit-footer {
     display: flex;
-    gap: 8px;
-    justify-content: flex-end;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--audit-space-8);
+  }
+
+  .ai-report-save-btn,
+  .ai-report-cancel-btn {
+    min-width: 88px;
+  }
+</style>
+
+<style lang="postcss">
+  .bk-sideslider .bk-modal-content:has(.log-report-preview:not(.is-editing)),
+  .bk-sideslider .bk-sideslider-content:has(.log-report-preview:not(.is-editing)) {
+    height: 100%;
+    min-height: calc(100vh - 52px);
+  }
+
+  /* bk-modal-body 有确定高度但不是弹性容器，不铺这一层下面的 flex:1 全部落空，编辑器会塌成 0 高 */
+  .bk-sideslider .bk-modal-body:has(.log-report-preview.is-editing) {
+    display: flex;
+    flex-direction: column;
+    .bk-sideslider-content > div {
+      height: 100%;
+    }
+  }
+
+  .bk-sideslider .bk-modal-body:has(.log-report-preview.is-editing) .bk-sideslider-header {
+    flex-shrink: 0;
+  }
+
+  .bk-sideslider .bk-modal-content:has(.log-report-preview.is-editing),
+  .bk-sideslider .bk-sideslider-content:has(.log-report-preview.is-editing) {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .bk-sideslider .audit-sideslider-content:has(.log-report-preview.is-editing) {
+    min-height: 0;
+    flex: 1;
+  }
+
+  .bk-sideslider:has(.log-report-preview.is-editing)  {
+    .bk-modal-content > div {
+      height: 100%;
+    }
+    .bk-sideslider-content {
+      height: 100%;
+    }
+  }
+
+  .bk-sideslider:has(.log-report-preview.is-editing) .bk-modal-footer {
+    flex-shrink: 0;
+  }
+
+  /* 稿 3573:25180：48px 固定操作栏，灰底 + 上边框，按钮左对齐留 40px */
+  .bk-sideslider:has(.log-report-preview.is-editing) .bk-sideslider-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 48px;
+    padding: 0 var(--audit-space-40);
+    /* 默认 footer 带 margin-top:24，贴底后会顶出一条空隙 */
+    margin: 0;
+    flex-shrink: 0;
+    background: var(--audit-neutral-bg-02);
+    border-top: 1px solid var(--audit-neutral-border-01);
+    box-sizing: border-box;
   }
 </style>

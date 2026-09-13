@@ -56,7 +56,15 @@ bkcodeai.json
 *.cursor
 *.specify
 AGENTS.md
+!src/frontend/AGENTS.md
 .claude
 *debug*
 .worktrees/
 .playwright-cli
+.agents/
+**/.agents/
+skills-lock.json
+
+
+pre-*-bkcodeai
+.husky/
