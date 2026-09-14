@@ -6,6 +6,7 @@ from unittest import mock
 
 from requests.exceptions import Timeout
 
+from api.constants import AIAgentCode
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIOutputParseFailedError,
@@ -54,6 +55,9 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
         self.assertIn("bk-audit", user_message)
         self.assertIn("审计中心", user_message)
         self.assertEqual(kwargs["agent_code"], IntentRecognitionService.agent_code)
+        # 意图识别路由专属生产 agent（bp-ai-user-intent，与 NL2JSON 的检索 agent 解耦）——
+        # 硬断言防误回退到共享检索 agent（提示词冲突的已知权衡曾因此存在）
+        self.assertEqual(kwargs["agent_code"], AIAgentCode.USER_INTENT)
         self.assertEqual(kwargs["user"], self.username)
         self.assertFalse(kwargs["execute_kwargs"]["stream"])
 
