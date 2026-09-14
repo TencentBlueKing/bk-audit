@@ -87,7 +87,8 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容：
 {{ output_schema_json }}
 2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键路径——
-   字段上下文已列出的照抄；未列出但用户明确指定的按用户描述的完整路径生成，**支持多层路径**（如 extend.request_data.audit_status__in → keys=["request_data","audit_status__in"]，每层路径一段）；
+   字段上下文已列出的照抄；未列出但用户明确指定的按用户描述的完整路径生成，**支持多层路径**，每层路径一段
+   （如 extend.request_data.audit_status__in → keys=["request_data","audit_status__in"]）；
    检索范围由「目标系统」唯一指定，禁止输出 system_id 字段条件，用户提及系统名或其他系统时不映射该字段
 3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；
    filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
@@ -114,7 +115,9 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 7. 关键词全文检索用 log 字段的 match_all/match_any 操作符表达：多个关键词需同时满足用 match_all，任一满足用 match_any；
    当用户以中文或口语描述操作类型、资源类型等，而字段上下文的 options 与 sample_value 均无法确定该字段确切取值时，禁止猜测字段值，改用 log 的 match_any 表达该关键词需求；
    安全审计类口语话术（如"删除了什么重要的东西"、"谁动了配置"、"有没有人乱改"）提取全文关键词时，动作动词（删除、修改、导出、乱改等）是核心检索关键词必须保留，不得只提取修饰性宾语（如"重要的东西"）而丢失动作词
-8. 用户明确指定某个下钻路径（单层或多层）时，即使字段上下文未列出也必须按用户描述的完整路径生成对应拓展字段条件（禁止因字段上下文没有该路径就拒绝或忽略，多层路径逐层写入 keys）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
+8. 用户明确指定某个下钻路径（单层或多层）时，即使字段上下文未列出也必须按用户描述的完整路径生成对应拓展字段条件
+   （禁止因字段上下文没有该路径就拒绝或忽略，多层路径逐层写入 keys）；
+   仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
 9. 时间范围本身就是有效检索需求：仅含时间的查询（如"帮我查下最近七天的日志"）必须输出空 conditions 与换算后的 start_time/end_time；
    仅当输入与日志检索完全无关（寒暄/闲聊）时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
 
