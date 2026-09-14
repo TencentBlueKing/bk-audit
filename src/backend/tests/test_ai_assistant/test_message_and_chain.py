@@ -5,7 +5,7 @@ from unittest import mock
 
 from pydantic import ValidationError as PydanticValidationError
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageType
+from services.web.ai_assistant.constants import ExecutionStatus, MessageErrorCode, MessageType
 from services.web.ai_assistant.exceptions import SystemSelectionRequired
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
@@ -265,7 +265,7 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         )
 
     def test_chain_failure_keeps_nl_success(self):
-        """续链失败不影响 NL 消息 SUCCESS（子消息不创建）。"""
+        """续链失败不影响 NL 消息 SUCCESS，且降级固化 FAILED 子消息（不再静默消失）。"""
 
         nl_message, execution = self._create_processing_nl(auto_execute=True)
         with mock.patch(
@@ -281,9 +281,12 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
             )
         nl_message.refresh_from_db()
         self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
-        self.assertFalse(
-            Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).exists()
-        )
+        # 降级 FAILED 子消息：可见可重试（condition 固化），防前端轮询死等超时
+        log_search = Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).first()
+        self.assertIsNotNone(log_search)
+        self.assertEqual(log_search.status, ExecutionStatus.FAILED)
+        self.assertEqual(log_search.error_code, str(MessageErrorCode.TASK_EXECUTION_FAILED))
+        self.assertEqual(log_search.context_data["source"], "natural_language")
 
     def test_nl_recognized_failure_returns_structured_error(self):
         """预期内识别失败（AI 未识别）：消息任务 SUCCESS + 结构化 error 协议，不 FAILED。"""
