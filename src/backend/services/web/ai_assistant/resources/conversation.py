@@ -10,6 +10,7 @@ from services.web.ai_assistant.serializers.conversation import (
     ConversationGroupDetailRequestSerializer,
     ConversationGroupResponseSerializer,
     ConversationGroupUpdateRequestSerializer,
+    ConversationListItemSerializer,
     ConversationListRequestSerializer,
     ConversationResponseSerializer,
     ConversationSearchResponseSerializer,
@@ -127,7 +128,7 @@ class ListConversations(AIAssistantResource):
 
     name = gettext_lazy("获取会话列表")
     RequestSerializer = ConversationListRequestSerializer
-    ResponseSerializer = ConversationResponseSerializer
+    ResponseSerializer = ConversationListItemSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):

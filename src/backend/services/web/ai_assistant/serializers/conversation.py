@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.serializers import FlexibleListField
@@ -206,6 +207,22 @@ class ConversationResponseSerializer(serializers.Serializer):
     title = serializers.CharField(help_text="会话标题")
     created_at = serializers.DateTimeField(help_text="会话创建时间")
     updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
+
+
+class ConversationListItemSerializer(ConversationResponseSerializer):
+    """会话列表摘要及全类型附件计数，统计不随附件类型筛选收窄。"""
+
+    attachment_count = serializers.IntegerField(min_value=0, help_text="当前会话下当前用户全部附件总数，包含所有状态")
+    attachment_counts_by_type = serializers.SerializerMethodField(help_text="各附件类型数量，无附件的类型返回0")
+
+    @extend_schema_field(serializers.DictField(child=serializers.IntegerField(min_value=0)))
+    def get_attachment_counts_by_type(self, instance):
+        """读取列表查询一次性聚合的类型计数，不在序列化阶段访问数据库。"""
+
+        return {
+            attachment_type: getattr(instance, f"attachment_count_{attachment_type.lower()}")
+            for attachment_type in AttachmentType.values
+        }
 
 
 class ConversationCreateResponseSerializer(serializers.Serializer):
