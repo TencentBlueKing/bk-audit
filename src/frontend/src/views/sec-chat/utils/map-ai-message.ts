@@ -176,28 +176,52 @@ const formatFilterValue = (filters: any[]): string => {
     .join('，');
 };
 
-const fieldCatalogKey = (rawName: string, keys: string[] = []) => (
-  keys.length ? `${rawName}.${keys.join('.')}` : rawName
-);
-
-/** 嵌套字段叶子展示名：优先显式 display/nl，否则用 keys；不拼接父字段名 */
-const resolveNestedLeafLabel = (
-  rawName: string,
-  keys: string[],
-  displayName?: string,
-  nlName?: string,
-): string => {
-  const leaf = displayName || nlName || '';
-  // mapFieldItem 在缺省时会把 displayName 回退为 rawName（父字段），需排除
-  if (leaf && leaf !== rawName) return leaf;
-  return keys.join('/') || rawName || '条件';
+/** 常见父字段中文名兜底（目录无空 keys 父项时） */
+const KNOWN_PARENT_FIELD_LABELS: Record<string, string> = {
+  extend_data: '拓展数据',
+  instance_data: '实例当前内容',
+  snapshot_instance_data: '实例信息快照',
 };
 
-/** SystemFieldRow → 引导卡 / 条件 tag 展示名（有 keys 时仅展示子字段，不再二级拼接父名） */
-export const resolveSystemFieldDisplayLabel = (field: Pick<SystemFieldRow, 'rawName' | 'keys' | 'displayName' | 'nlName'>): string => {
+/** 解析下钻父字段中文名：优先目录空 keys 项，其次已知兜底，最后 rawName */
+export const resolveParentFieldLabel = (
+  rawName: string,
+  fieldCatalog: SystemFieldRow[] = [],
+): string => {
+  if (!rawName) return '';
+  const parent = fieldCatalog.find(field => field.rawName === rawName && !(field.keys?.length));
+  if (parent) {
+    return parent.displayName || parent.nlName || rawName;
+  }
+  return KNOWN_PARENT_FIELD_LABELS[rawName] || rawName;
+};
+
+/**
+ * 下钻字段展示：父中文名 + 点路径
+ * 例：拓展数据.request_data.audit_status_in
+ */
+export const resolveNestedPathLabel = (
+  rawName: string,
+  keys: string[],
+  parentLabel?: string,
+): string => {
+  if (!keys.length) return parentLabel || rawName || '条件';
+  const parent = parentLabel || rawName || '条件';
+  return `${parent}.${keys.join('.')}`;
+};
+
+/** SystemFieldRow → 引导卡 / 条件 tag 展示名（有 keys 时：父中文名 + 点路径） */
+export const resolveSystemFieldDisplayLabel = (
+  field: Pick<SystemFieldRow, 'rawName' | 'keys' | 'displayName' | 'nlName'>,
+  fieldCatalog: SystemFieldRow[] = [],
+): string => {
   const keys = field.keys || [];
   if (keys.length) {
-    return resolveNestedLeafLabel(field.rawName, keys, field.displayName, field.nlName);
+    return resolveNestedPathLabel(
+      field.rawName,
+      keys,
+      resolveParentFieldLabel(field.rawName, fieldCatalog),
+    );
   }
   return field.displayName || field.nlName || field.rawName || '条件';
 };
@@ -208,19 +232,13 @@ export const resolveConditionFieldLabel = (
   keys: string[] = [],
   fieldCatalog: SystemFieldRow[] = [],
 ): string => {
-  if (!rawName) return keys.length ? keys.join('/') : '条件';
+  if (!rawName) return keys.length ? keys.join('.') : '条件';
 
   if (keys.length) {
-    const exactKey = fieldCatalogKey(rawName, keys);
-    const exact = fieldCatalog.find((field) => {
-      const key = fieldCatalogKey(field.rawName, field.keys || []);
-      return key === exactKey;
-    });
-    return resolveNestedLeafLabel(
+    return resolveNestedPathLabel(
       rawName,
       keys,
-      exact?.displayName,
-      exact?.nlName,
+      resolveParentFieldLabel(rawName, fieldCatalog),
     );
   }
 
@@ -289,10 +307,16 @@ export const mapLogSearchOutputToResult = (
 
   const totalHit = Number(output.total ?? 0);
   const previewCount = rows.length;
-  const condition = (message.input_data?.condition || undefined) as AiSearchCondition | undefined;
+  const condition = (
+    message.input_data?.condition || undefined
+  ) as AiSearchCondition | undefined;
   const conditionTags = mapConditionToFilterTags(condition, fieldCatalog);
   const durationSeconds = message.duration_seconds;
-  const thinkSeconds = durationSeconds === null || durationSeconds === undefined || Number.isNaN(Number(durationSeconds))
+  const thinkSeconds = (
+    durationSeconds === null
+    || durationSeconds === undefined
+    || Number.isNaN(Number(durationSeconds))
+  )
     ? null
     : Math.max(0, Math.round(Number(durationSeconds)));
 

@@ -335,7 +335,10 @@
   ));
 
   const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
-    name: resolveSystemFieldDisplayLabel(field),
+    name: resolveSystemFieldDisplayLabel(field, [
+      ...(props.standardFields || []),
+      ...(props.extensionFields || []),
+    ]),
     desc: field.description || '',
     sample: resolveFieldSampleDisplay(field),
     sampleRaw: formatSampleValue(field.sampleValue),
