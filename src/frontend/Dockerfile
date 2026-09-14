@@ -1,5 +1,6 @@
 FROM node:20-alpine
 
+ENV NODE_OPTIONS=--max-old-space-size=4096
 
 COPY . /app
 
