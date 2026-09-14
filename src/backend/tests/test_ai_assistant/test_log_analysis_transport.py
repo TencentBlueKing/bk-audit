@@ -22,7 +22,7 @@ class FakeLogAnalysisTransportTest(unittest.TestCase):
             agent.release(instruction)
             with requests.post(
                 agent.base_url,
-                json={"input": json.dumps({"instruction": instruction})},
+                json={"chat_history": [{"role": "user", "content": json.dumps({"instruction": instruction})}]},
                 stream=True,
                 timeout=(3.05, 5),
             ) as response:
@@ -41,7 +41,7 @@ class FakeLogAnalysisTransportTest(unittest.TestCase):
             try:
                 with requests.post(
                     agent.base_url,
-                    json={"input": json.dumps({"instruction": instruction})},
+                    json={"chat_history": [{"role": "user", "content": json.dumps({"instruction": instruction})}]},
                     stream=True,
                     timeout=(3.05, 5),
                 ) as response:
