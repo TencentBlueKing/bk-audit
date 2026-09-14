@@ -5,10 +5,10 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Exists, OuterRef, QuerySet, Subquery
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import SidebarNodeType
+from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
@@ -65,7 +65,23 @@ class ConversationService:
             queryset = queryset.alias(has_matching_attachments=Exists(attachments)).filter(
                 has_matching_attachments=has_attachments if has_attachments is not None else True,
             )
-        return queryset.only("id", "uid", "title", "created_at", "updated_at").order_by("-updated_at", "-id")
+        # 存在性过滤只筛会话；统计覆盖该会话下当前用户全部附件和执行状态。
+        owned_attachments = Q(messages__attachments__created_by=self.user)
+        counts = {
+            f"attachment_count_{attachment_type.lower()}": Count(
+                "messages__attachments",
+                filter=owned_attachments & Q(messages__attachments__attachment_type=attachment_type),
+            )
+            for attachment_type in AttachmentType.values
+        }
+        return (
+            queryset.annotate(
+                attachment_count=Count("messages__attachments", filter=owned_attachments),
+                **counts,
+            )
+            .only("id", "uid", "title", "created_at", "updated_at")
+            .order_by("-updated_at", "-id")
+        )
 
     @transaction.atomic
     def create_group(self, *, name: str) -> ConversationGroup:
