@@ -62,6 +62,7 @@
       </div>
       <div class="input-box">
         <div
+          v-if="enableAttach"
           class="attach-btn"
           @click="handleAttach">
           <img
@@ -164,6 +165,8 @@
     stop: [];
     attach: [];
   }>();
+
+  const enableAttach = false;
 
   const inputValue = ref('');
   const textareaRef = ref<HTMLTextAreaElement | null>(null);
