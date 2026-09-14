@@ -219,6 +219,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="附件执行状态")
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
+    error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
+    error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
@@ -237,6 +239,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
             "attachment_type": instance.attachment_type,
             "status": instance.status,
             "title": instance.title,
+            "error_code": instance.error_code,
+            "error_message": instance.error_message,
             "created_at": instance.created_at,
             "content_updated_at": instance.content_updated_at,
             "source_message": {
