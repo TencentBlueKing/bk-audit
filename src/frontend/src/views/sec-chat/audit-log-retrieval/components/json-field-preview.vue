@@ -26,6 +26,8 @@
         hide-ignore-reference
         :is-show="popoverVisible"
         placement="bottom-start"
+        reference-cls="json-field-preview-reference"
+        render-type="shown"
         theme="light"
         trigger="manual"
         @clickoutside="onPopoverClickOutside"
@@ -198,7 +200,8 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
-    line-height: inherit;
+    /* 避免继承表格 42px line-height，与 bk-popover 的 inline-block reference 叠加产生基线空隙 */
+    line-height: 20px;
     box-sizing: border-box;
   }
 
@@ -208,9 +211,17 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
+    line-height: 20px;
+    /* 消除 inline-block 基线空隙：父级字号归零，子级再恢复 */
+    font-size: 0;
   }
 
-  /* bk-popover 默认 reference 为 inline，会被超长文本撑开，导致 tip 错位、邻列无法点击 */
+  /*
+   * bk-popover reference 默认是带 inline style 的 span(display:inline-block)。
+   * 在 line-height 较大的表格单元格内会因基线对齐撑高行高，部署环境若 deep 选择器未命中更明显。
+   * 通过 reference-cls + :deep 强制改为 block，并恢复字号。
+   */
+  .json-field-preview-popover-host :deep(.json-field-preview-reference),
   .json-field-preview-popover-host :deep(> .bk-popover-reference),
   .json-field-preview-popover-host :deep(> .bk-popover-trigger),
   .json-field-preview-popover-host :deep(> span) {
@@ -219,6 +230,9 @@
     max-width: 100% !important;
     min-width: 0 !important;
     overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
+    vertical-align: top;
     box-sizing: border-box;
   }
 
@@ -228,20 +242,21 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
-    font-size: inherit;
-    line-height: inherit;
+    font-size: 12px;
+    line-height: 20px;
     color: inherit;
     cursor: pointer;
     box-sizing: border-box;
   }
 
   .json-field-preview-value {
-    display: inline-block;
+    display: block;
     max-width: 100%;
     overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    vertical-align: bottom;
   }
 
   .json-field-preview-fallback {
@@ -250,10 +265,25 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
   }
 </style>
 
 <style lang="postcss">
+  /* 非 scoped：覆盖 bk-popover 写在 style 上的 display:inline-block，避免表格行被基线空隙撑高 */
+  .json-field-preview-popover-host .json-field-preview-reference {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
+    vertical-align: top;
+    box-sizing: border-box;
+  }
+
   .sec-chat-json-preview-popover {
     z-index: 9999 !important;
 
