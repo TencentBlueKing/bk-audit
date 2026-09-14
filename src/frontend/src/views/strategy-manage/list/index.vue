@@ -62,6 +62,7 @@
           class="audit-highlight-table"
           :columns="tableColumn"
           :data-source="dataSource"
+          :row-class="() => 'hover-highlight'"
           :settings="settings"
           @clear-search="handleClearSearch"
           @column-filter="handleColumnFilter"
@@ -457,13 +458,23 @@
     return Array.from(ids);
   };
 
-  const getRiskCountJumpScenes = (data: StrategyModel): JumpScopeItem[] => (
-    getDispatchSceneIds(data).map(id => ({
+  const getSceneRiskCountMap = (data: StrategyModel) => {
+    const map: Record<string, number> = {};
+    (data.scene_risk_counts || []).forEach((item) => {
+      map[String(item.scene_id)] = item.risk_count ?? 0;
+    });
+    return map;
+  };
+
+  const getRiskCountJumpScenes = (data: StrategyModel): JumpScopeItem[] => {
+    const countMap = getSceneRiskCountMap(data);
+    return getDispatchSceneIds(data).map(id => ({
       type: 'scene' as const,
       id,
       name: sceneNameMap.value[String(id)] || String(id),
-    }))
-  );
+      count: countMap[String(id)] ?? 0,
+    }));
+  };
 
   const buildRiskCountLink = (data: StrategyModel, sceneId: string | number) => ({
     name: 'sceneRiskManageList',
@@ -491,6 +502,20 @@
       return firstSceneId;
     }
     return getSceneSystemParams().scope_id;
+  };
+
+  /** 审计策略列表：全局策略按当前场景取 scene_risk_counts，避免展示全量 risk_count */
+  const getDisplayRiskCount = (data: StrategyModel) => {
+    if (isPlatformList.value || !isGlobalStrategy(data)) {
+      return data.risk_count ?? 0;
+    }
+    const sceneId = getSceneSystemParams().scope_id;
+    const sceneCounts = data.scene_risk_counts;
+    if (!sceneId || !Array.isArray(sceneCounts) || !sceneCounts.length) {
+      return data.risk_count ?? 0;
+    }
+    const matched = sceneCounts.find(item => String(item.scene_id) === String(sceneId));
+    return matched?.risk_count ?? 0;
   };
 
   const createDispatchSceneColumn = () => ({
@@ -1103,76 +1128,101 @@
       sort: 'custom',
       width: 120,
       render: ({ data }: { data: StrategyModel }) => {
-        const riskCount = data.risk_count ?? 0;
+        const riskCount = getDisplayRiskCount(data);
         if (!riskCount || data.isDraft) {
           return <span>{riskCount}</span>;
         }
 
-        const countNode = (
-          <span
-            class="strategy-risk-count-trigger"
-            v-bk-tooltips={{
-              content: t('近6个月此策略产生风险单总数，点击查看'),
-            }}>
-            <span>{riskCount}</span>
-            <audit-icon
-              class="strategy-risk-count-jump-icon"
-              type="jump-link" />
-          </span>
-        );
-
-        if (isPlatformList.value) {
-          const scenes = getRiskCountJumpScenes(data);
-          if (scenes.length >= 1) {
-            const isPopoverActive = activeRiskJumpStrategyId.value === data.strategy_id;
-            return (
-              <bk-popover
-                extCls="strategy-risk-jump-scope-popover"
-                placement="bottom-start"
-                theme="light"
-                trigger="click"
-                width="240"
-                onAfterShow={() => {
-                  activeRiskJumpStrategyId.value = data.strategy_id;
-                }}
-                onAfterHidden={() => {
-                  if (activeRiskJumpStrategyId.value === data.strategy_id) {
-                    activeRiskJumpStrategyId.value = null;
-                  }
-                }}>
-                {{
-                  default: () => (
-                    <span
-                      class={[
-                        'strategy-risk-count-link',
-                        { 'is-popover-active': isPopoverActive },
-                      ]}
-                      onClick={(e: Event) => e.stopPropagation()}>
-                      {countNode}
-                    </span>
-                  ),
-                  content: () => (
-                    <ReportJumpScopeMenu
-                      scenes={getRiskCountJumpScenes(data)}
-                      systems={[]}
-                      onSelect={(scope: JumpScopeItem) => openRiskCountLink(data, scope.id)} />
-                  ),
-                }}
-              </bk-popover>
-            );
-          }
-          const sceneId = scenes[0]?.id ?? getRiskCountLinkSceneId(data);
+        // 审计策略列表：不显示跳转图标，点击数字跳转
+        if (!isPlatformList.value) {
+          const sceneId = getRiskCountLinkSceneId(data);
           if (!sceneId) {
             return <span>{riskCount}</span>;
           }
-          return <router-link class="strategy-risk-count-link" to={buildRiskCountLink(data, sceneId)} target="_blank">{countNode}</router-link>;
+          return (
+            <router-link
+              class="strategy-risk-count-link"
+              to={buildRiskCountLink(data, sceneId)}
+              target="_blank"
+              v-bk-tooltips={{
+                content: t('近6个月此策略产生风险单总数，点击查看'),
+              }}>
+              {riskCount}
+            </router-link>
+          );
         }
 
-        const sceneId = getRiskCountLinkSceneId(data);
-        if (!sceneId) {
-          return <span>{riskCount}</span>;
+        const scenes = getRiskCountJumpScenes(data);
+        const sceneId = scenes[0]?.id ?? getRiskCountLinkSceneId(data);
+        const isPopoverActive = activeRiskJumpStrategyId.value === data.strategy_id;
+        const jumpIcon = (
+          <audit-icon
+            class="strategy-risk-count-jump-icon"
+            type="jump-link"
+            v-bk-tooltips={{
+              content: t('近6个月此策略产生风险单总数，点击查看'),
+              disabled: scenes.length >= 1,
+            }}
+          />
+        );
+
+        let jumpAction = null;
+        if (scenes.length >= 1) {
+          jumpAction = (
+            <bk-popover
+              extCls="strategy-risk-jump-scope-popover"
+              placement="bottom-start"
+              theme="light"
+              trigger="click"
+              width="240"
+              onAfterShow={() => {
+                activeRiskJumpStrategyId.value = data.strategy_id;
+              }}
+              onAfterHidden={() => {
+                if (activeRiskJumpStrategyId.value === data.strategy_id) {
+                  activeRiskJumpStrategyId.value = null;
+                }
+              }}>
+              {{
+                default: () => (
+                  <span
+                    class="strategy-risk-count-jump"
+                    onClick={(e: Event) => e.stopPropagation()}>
+                    {jumpIcon}
+                  </span>
+                ),
+                content: () => (
+                  <ReportJumpScopeMenu
+                    scenes={getRiskCountJumpScenes(data)}
+                    systems={[]}
+                    onSelect={(scope: JumpScopeItem) => openRiskCountLink(data, scope.id)} />
+                ),
+              }}
+            </bk-popover>
+          );
+        } else if (sceneId) {
+          jumpAction = (
+            <span
+              class="strategy-risk-count-jump"
+              onClick={(e: Event) => {
+                e.stopPropagation();
+                openRiskCountLink(data, sceneId);
+              }}>
+              {jumpIcon}
+            </span>
+          );
         }
-        return <router-link class="strategy-risk-count-link" to={buildRiskCountLink(data, sceneId)} target="_blank">{countNode}</router-link>;
+
+        return (
+          <span
+            class={[
+              'strategy-risk-count-cell',
+              { 'is-popover-active': isPopoverActive },
+            ]}>
+            <span class="strategy-risk-count-text">{riskCount}</span>
+            {jumpAction}
+          </span>
+        );
       },
     },
     {
@@ -2410,12 +2460,8 @@
   display: none;
 }
 
-.hover-highlight {
-  &:hover {
-    .operation-records {
-      display: inline-block;
-    }
-  }
+:deep(.hover-highlight:hover) .operation-records {
+  display: inline-block;
 }
 
 .strategy-operation-dropdown-pop {
@@ -2429,15 +2475,32 @@
   cursor: pointer;
 }
 
-.strategy-risk-count-trigger {
+.strategy-risk-count-cell {
   display: inline-flex;
   align-items: center;
+  color: #313238;
+  cursor: default;
+}
+
+.strategy-risk-count-text {
+  color: #313238;
+}
+
+.strategy-risk-count-jump {
+  display: none;
+  align-items: center;
+  cursor: pointer;
 }
 
 .strategy-risk-count-jump-icon {
   margin-left: 4px;
   font-size: 14px;
   color: #3a84ff;
+}
+
+.strategy-risk-count-cell:hover .strategy-risk-count-jump,
+.strategy-risk-count-cell.is-popover-active .strategy-risk-count-jump {
+  display: inline-flex;
 }
 
 .strategy-risk-jump-scope-popover.bk-popover.bk-pop2-content {

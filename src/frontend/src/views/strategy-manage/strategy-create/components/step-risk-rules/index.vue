@@ -666,6 +666,16 @@
     ruleItems.value[index].isVariableCopy = false;
   };
 
+  const commitAllRiskTitleEdits = () => {
+    ruleItems.value.forEach((_, i) => {
+      commitRiskTitleEdit(i);
+    });
+  };
+
+  const getRuleRiskTitle = (rule: RuleItem) => (
+    `${rule.risk_title || ''}${rule.riskTitleInputValue || ''}`
+  );
+
   const closeOtherRiskTitleEditors = (index: number) => {
     ruleItems.value.forEach((_, i) => {
       if (i === index) return;
@@ -828,6 +838,8 @@
   };
 
   const buildStepParams = () => {
+    // 标题在编辑态写在 input 里，risk_title 会被临时置空；提交/切步前必须先落盘
+    commitAllRiskTitleEdits();
     const baseFormData = { ...props.formData };
     const rules = ruleItems.value.map((rule, index) => {
       const com = comRefs.value[index];
@@ -849,7 +861,7 @@
         ...(rule.rule_id ? { rule_id: rule.rule_id } : {}),
         name: rule.name,
         rule_name: rule.name,
-        risk_title: rule.risk_title,
+        risk_title: getRuleRiskTitle(rule),
         risk_level: rule.risk_level,
         risk_hazard: rule.risk_hazard,
         risk_guidance: rule.risk_guidance,
@@ -1148,11 +1160,7 @@
   });
 
   onDeactivated(() => {
-    ruleItems.value.forEach((_, i) => {
-      ruleItems.value[i].showVariablePanel = false;
-      ruleItems.value[i].isVariableCopy = false;
-      ruleItems.value[i].variableInputActive = false;
-    });
+    commitAllRiskTitleEdits();
     window.removeEventListener('click', handleDocumentClick);
   });
 
