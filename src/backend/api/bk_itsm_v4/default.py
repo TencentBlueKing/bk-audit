@@ -79,7 +79,7 @@ class Workflows(BKITSMV4):
     action = "/api/v1/workflows/"
 
 
-class GetTicketDetail(BKITSMV4):
+class TicketDetail(BKITSMV4):
     # 对应 itsm 的 GetTicketStatus（单据状态查询）,itsm 的查询审批结果用这个查，返回字段有 approve_result
     name = gettext_lazy("V4-单据详情")
     method = "GET"

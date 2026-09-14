@@ -429,7 +429,7 @@ class ForApprove(RiskFlowBaseHandler):
                 value = json.dumps(value, ensure_ascii=False)
             field["value"] = value
             fields.append(field)
-        ticket = api.bk_itsm.create_ticket(
+        ticket = api.bk_itsm_v4.create_ticket(
             service_id=self.process_application.approve_service_id,
             creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
             fields=fields,
@@ -513,7 +513,10 @@ def get_itsm_ticket_status(ticket_id: str) -> dict:
     以兼容下游基于 TicketStatus 的状态机判断逻辑。
     """
     detail = api.bk_itsm_v4.ticket_detail(id=ticket_id)
-    current_status = ITSM_V4_STATUS_MAPPING.get((detail.get("status") or "").lower(), detail.get("status"))
+    current_status = ITSM_V4_STATUS_MAPPING.get((detail.get("status") or "").lower())
+    if not current_status:
+        logger.warning("unmapped V4 itsm status: %s", detail.get("status"))
+        current_status = detail.get("status")
     return {
         "sn": detail.get("sn"),
         "current_status": current_status,
