@@ -275,10 +275,13 @@
       }
     }
 
+    .search-results-empty {
+      margin-top: 24px;
+    }
+
     /* 搜索模式 */
     .conv-section--search {
-      .search-results-loading,
-      .search-results-empty {
+      .search-results-loading {
         padding: 8px 16px;
         font-size: 12px;
         line-height: 20px;
