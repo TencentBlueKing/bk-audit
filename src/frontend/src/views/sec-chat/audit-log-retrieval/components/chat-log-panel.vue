@@ -431,7 +431,7 @@
     chatInputRef.value?.setInputValue(text);
   };
 
-  /** 自然语言字段检索：多选向输入框末尾追加，逗号区隔 */
+  /** 自然语言字段检索：多选向输入框末尾追加（同字段去重替换），逗号区隔 */
   const handleAppendNlField = (text: string) => {
     chatInputRef.value?.appendInputValue(text);
   };
@@ -603,10 +603,6 @@
     }
   });
 
-  /**
-   * 消息流尾部新出现 NL 相关消息时收起条件草稿。
-   * 覆盖 store 直发 / 轮询落结果等不经输入框 send 的路径；加载历史（prepend）不触发。
-   */
   watch(() => props.messages, (msgs, prevMsgs) => {
     if (!conditionFilterCards.value.length || !prevMsgs?.length) return;
     if (scrollAnchor.value || props.loadingOlderMessages) return;
