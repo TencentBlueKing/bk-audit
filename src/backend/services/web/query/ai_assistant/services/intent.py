@@ -17,10 +17,13 @@ to the current version of the project delivered to anyone in the future.
 
 用户意图识别服务（一期 v6）：自然语言 → IntentPayload。
 
-用户意图识别服务（一期 v6）：自然语言 → IntentPayload。
+意图识别智能体按环境路由（settings.AI_USER_INTENT_AGENT_CODE）：
+- bkop：默认 AUDIT_LOG_SEARCH（复用 BKAPP_AI_AUDIT_LOG_SEARCH_* 三件套直连共享检索
+  智能体；与 NL2JSON 共用 agent，意图任务指令在 User Message 完整自述，与 agent 侧
+  System Prompt 并存是已知权衡，一期即此模式）
+- 上云：BKAPP_AI_USER_INTENT_AGENT_CODE=USER_INTENT 切专属智能体（bp-ai-user-intent，
+  配套 BKAPP_AI_USER_INTENT_* 三件套，与 NL2JSON 解耦无 System Prompt 干扰）
 
-调用专属生产 agent（AIAgentCode.USER_INTENT = bp-ai-user-intent，与 NL2JSON 的
-AUDIT_LOG_SEARCH 解耦——意图任务指令在 User Message 完整自述，agent 侧无需 System Prompt；
 输出契约 IntentPayload 为 single source of truth（schema 注入与校验同模型）；
 候选系统 = 用户权限内系统（无权限系统不进候选，AI 无法越权），
 前端传场景过滤 scope 时与检索页同口径收窄候选（防意图识别绕过场景过滤）。
@@ -30,6 +33,8 @@ import json
 import logging
 
 from bk_resource import api, resource
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.template import Context, Template
 from django.utils import timezone
 from pydantic import ValidationError
@@ -102,6 +107,18 @@ INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
 4. message 必须自然、面向用户：识别成功时简述识别结果（如「已为您切换到蓝盾」）；无法识别时说明原因并引导用户明确表达（此消息将直接展示给用户）"""
 
 
+def resolve_intent_agent_code() -> AIAgentCode:
+    """按环境开关解析意图识别智能体（AIAgentCode 枚举名），非法值启动即快速失败。"""
+
+    try:
+        return AIAgentCode[settings.AI_USER_INTENT_AGENT_CODE]
+    except KeyError:
+        raise ImproperlyConfigured(
+            f"AI_USER_INTENT_AGENT_CODE 非法: {settings.AI_USER_INTENT_AGENT_CODE}，"
+            f"可选值: {[code.name for code in AIAgentCode]}"
+        )
+
+
 class IntentRecognitionService:
     """用户意图识别：自然语言 → IntentPayload（select_system / log_search / unrecognized）。
 
@@ -111,9 +128,9 @@ class IntentRecognitionService:
     - AI 调用超时 / 服务异常 → AITimeoutError / AIServiceError（触发重试）
     """
 
-    # 用户意图识别专属生产 agent（bp-ai-user-intent，网关已授权 bk-audit 应用）：
-    # 任务指令在 User Message 完整自述，agent 侧无需 System Prompt；凭证走全局应用链
-    agent_code = AIAgentCode.USER_INTENT
+    # 智能体按环境路由（见模块 docstring）：bkop 默认共享检索智能体（AUDIT_LOG_SEARCH），
+    # 上云经 BKAPP_AI_USER_INTENT_AGENT_CODE=USER_INTENT 切专属智能体
+    agent_code = resolve_intent_agent_code()
 
     @classmethod
     def recognize(
