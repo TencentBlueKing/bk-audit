@@ -57,7 +57,16 @@
               <span class="jump-scope-item-name">
                 <tooltips :data="scene.name" />
               </span>
+              <span
+                v-if="typeof scene.count === 'number'"
+                class="jump-scope-item-count">
+                <audit-icon
+                  class="jump-scope-count-icon"
+                  type="gaojingshijian" />
+                {{ scene.count }}
+              </span>
               <audit-icon
+                v-else
                 class="jump-scope-link-icon"
                 type="jump-link" />
             </span>
@@ -113,6 +122,7 @@
     type: 'scene' | 'system';
     id: number | string;
     name: string;
+    count?: number;
   }
 
   const props = withDefaults(defineProps<{
@@ -269,6 +279,26 @@
     min-width: 0;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .jump-scope-item-count {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    margin-left: 8px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #63656e;
+    background: #f0f1f5;
+    border-radius: 10px;
+  }
+
+  .jump-scope-count-icon {
+    font-size: 14px;
+    color: #979ba5;
   }
 
   .jump-scope-link-icon {
