@@ -1213,7 +1213,8 @@
       padding: 0 12px;
       overflow: hidden;
       font-size: 12px;
-      line-height: 42px;
+      /* 勿用 line-height:42px 撑行高，会与 popover inline-block 基线空隙叠加 */
+      line-height: 20px;
       color: #63656e;
       text-align: left;
       vertical-align: middle;
@@ -1227,7 +1228,7 @@
       max-width: 100%;
       min-width: 0;
       overflow: hidden;
-      line-height: 42px;
+      line-height: 20px;
       box-sizing: border-box;
     }
 
@@ -1235,7 +1236,7 @@
       display: inline;
       max-width: 100%;
       overflow: hidden;
-      line-height: 42px;
+      line-height: 20px;
       color: inherit;
       text-overflow: ellipsis;
       white-space: nowrap;
