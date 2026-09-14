@@ -37,9 +37,13 @@
           <div
             v-for="item in promptCards"
             :key="item.title"
+            v-bk-tooltips="{
+              disabled: !item.disabled,
+              content: '功能开发中',
+              placement: 'top',
+            }"
             class="prompt-card"
             :class="{ 'is-disabled': item.disabled || entering }"
-            :title="item.disabled ? '暂未开放' : undefined"
             @click="handleCardClick(item)">
             <div class="card-icon">
               <img
@@ -261,7 +265,6 @@
 
       &.is-disabled {
         cursor: not-allowed;
-        pointer-events: none;
       }
 
       .card-icon {
