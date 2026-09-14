@@ -5,7 +5,11 @@ from unittest import mock
 
 from pydantic import ValidationError as PydanticValidationError
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageErrorCode, MessageType
+from services.web.ai_assistant.constants import (
+    ExecutionStatus,
+    MessageErrorCode,
+    MessageType,
+)
 from services.web.ai_assistant.exceptions import SystemSelectionRequired
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
