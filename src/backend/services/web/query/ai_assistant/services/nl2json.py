@@ -86,8 +86,10 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 ## 输出要求
 1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容：
 {{ output_schema_json }}
-2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键——
-   字段上下文已列出的照抄，未列出但用户明确指定的按用户描述的子键名生成；检索范围由「目标系统」唯一指定，禁止输出 system_id 字段条件，用户提及系统名或其他系统时不映射该字段
+2. 通用字段：raw_name 必须来自字段上下文，keys 为 []；拓展字段（下钻）：raw_name 取字段上下文中的 JSON 容器字段（如 extend_data），keys 为下钻子键路径——
+   字段上下文已列出的照抄；未列出但用户明确指定的按用户描述的完整路径生成，**支持多层路径**，每层路径一段
+   （如 extend.request_data.audit_status__in → keys=["request_data","audit_status__in"]）；
+   检索范围由「目标系统」唯一指定，禁止输出 system_id 字段条件，用户提及系统名或其他系统时不映射该字段
 3. operator 必须在该字段 allow_operators 内（拓展字段允许 eq/neq/include/exclude/like）；
    filters 形态匹配操作符（isnull/notnull 为 []，between 恰好 2 个值，like 只传子串不带 %）
 4. 同一字段的多个取值（如多个操作人、多个资源类型）输出为单个条件：filters 放全部值、operator 用 include（排除语义用 exclude）；禁止拆成多个同字段条件，也禁止把多个值塞进 eq
@@ -113,9 +115,34 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
 7. 关键词全文检索用 log 字段的 match_all/match_any 操作符表达：多个关键词需同时满足用 match_all，任一满足用 match_any；
    当用户以中文或口语描述操作类型、资源类型等，而字段上下文的 options 与 sample_value 均无法确定该字段确切取值时，禁止猜测字段值，改用 log 的 match_any 表达该关键词需求；
    安全审计类口语话术（如"删除了什么重要的东西"、"谁动了配置"、"有没有人乱改"）提取全文关键词时，动作动词（删除、修改、导出、乱改等）是核心检索关键词必须保留，不得只提取修饰性宾语（如"重要的东西"）而丢失动作词
-8. 用户明确指定某个下钻子键时，即使字段上下文未列出该子键也必须按用户要求生成对应拓展字段条件（禁止因字段上下文没有该子键就拒绝或忽略）；仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
+8. 用户明确指定某个下钻路径（单层或多层）时，即使字段上下文未列出也必须按用户描述的完整路径生成对应拓展字段条件
+   （禁止因字段上下文没有该路径就拒绝或忽略，多层路径逐层写入 keys）；
+   仅通用字段不在字段上下文中时才忽略该字段，继续组装其余可识别的检索条件
 9. 时间范围本身就是有效检索需求：仅含时间的查询（如"帮我查下最近七天的日志"）必须输出空 conditions 与换算后的 start_time/end_time；
    仅当输入与日志检索完全无关（寒暄/闲聊）时，才返回：{"conditions":[],"start_time":null,"end_time":null}"""
+
+# 语义校验拒绝原因 → 用户可读文案（extra.reason 保留机器码供日志排障；message 直达用户）
+INVALID_REASON_MESSAGES = {
+    "field not in field context": "字段不在当前系统的可检索字段内",
+    "operator not allowed for field": "该字段不支持此筛选方式",
+    "operator not allowed for extension field": "拓展字段不支持此筛选方式",
+    "keys on non-json field": "该字段不支持下钻筛选",
+    "numeric operator on string extension field": "拓展字段为文本类型，不支持数值比较",
+    "numeric operator on non-numeric field": "该字段为非数值类型，不支持数值比较",
+    "unknown operator": "不支持的操作符",
+    "filters required": "筛选条件缺少比较值",
+    "between needs 2 filters": "区间筛选需要恰好 2 个值",
+}
+
+
+def _invalid_condition_error(cond: "AIConditionItem", reason: str) -> AIOutputInvalidError:
+    """语义校验失败统一构造：message 面向用户可读（前端错误卡直显），extra 保留机器 reason。"""
+
+    return AIOutputInvalidError(
+        message=INVALID_REASON_MESSAGES.get(reason, AIOutputInvalidError.error_message),
+        extra={"condition": cond.model_dump(), "reason": reason},
+    )
+
 
 # 数值比较操作符（仅数值类型字段可用）
 NUMERIC_OPERATORS = {
@@ -359,56 +386,46 @@ class NL2JSONService:
     @classmethod
     def _validate_operator_shape(cls, cond: AIConditionItem, valid_operators: set) -> None:
         if cond.operator not in valid_operators:
-            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "unknown operator"})
+            raise _invalid_condition_error(cond, "unknown operator")
         if cond.operator in NO_VALUE_OPERATORS:
             # isnull/notnull 不需要值，容错归一为空数组
             cond.filters = []
         elif not cond.filters:
-            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "filters required"})
+            raise _invalid_condition_error(cond, "filters required")
         if cond.operator == QueryConditionOperator.BETWEEN.value and len(cond.filters) != 2:
-            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "between needs 2 filters"})
+            raise _invalid_condition_error(cond, "between needs 2 filters")
 
     @classmethod
     def _validate_extension_condition(cls, cond: AIConditionItem, extension_map: dict, json_containers: set) -> None:
-        """拓展子键信任边界：容器字段必须在白名单（防编造容器），子键采样发现或用户显式指定均放行。
+        """拓展子键信任边界：容器字段必须在白名单（防编造容器），子键路径采样发现或用户显式指定均放行。
 
-        采样覆盖率有限（单系统子键集合远大于 N 条样本），用户显式指定的下钻子键
-        不因「字段上下文未列出」被拒绝；用户指定的子键限单层（一期下钻协议），
-        多层路径仅字段上下文精确匹配（L1 人工配置）时放行；未发现子键的操作符按拓展字段默认集合校验。
+        采样覆盖率有限（单系统子键集合远大于 N 条样本），用户显式指定的下钻路径
+        不因「字段上下文未列出」被拒绝；下钻路径支持多层（产品确认不做层级限制——
+        Doris SQL 层 variant 逐级拼接 / JSON Path 均天然支持任意深度，见
+        core/sql/builder/terms.py::DorisVariantField.format_keys_quote）；未发现
+        子键路径的操作符按拓展字段默认集合校验。
         """
         if cond.raw_name not in json_containers:
-            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "keys on non-json field"})
+            raise _invalid_condition_error(cond, "keys on non-json field")
         meta = extension_map.get((cond.raw_name, tuple(cond.keys)))
-        if meta is None and len(cond.keys) != 1:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "extension keys depth not supported"}
-            )
         allowed_operators = meta.allow_operators if meta is not None else EXTENSION_FIELD_DEFAULT_OPERATORS
         if cond.operator not in allowed_operators:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "operator not allowed for extension field"}
-            )
+            raise _invalid_condition_error(cond, "operator not allowed for extension field")
         # 拓展字段一期恒 string：数值比较不支持
         if cond.operator in NUMERIC_OPERATORS:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "numeric operator on string extension field"}
-            )
+            raise _invalid_condition_error(cond, "numeric operator on string extension field")
 
     @classmethod
     def _validate_standard_condition(cls, cond: AIConditionItem, standard_map: dict) -> None:
         meta = standard_map.get(cond.raw_name)
         if meta is None:
-            raise AIOutputInvalidError(extra={"condition": cond.model_dump(), "reason": "field not in field context"})
+            raise _invalid_condition_error(cond, "field not in field context")
         if cond.operator not in meta.allow_operators:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "operator not allowed for field"}
-            )
+            raise _invalid_condition_error(cond, "operator not allowed for field")
         field_cfg = COLLECT_SEARCH_CONFIG.query_field_map.get(cond.raw_name)
         field_type = field_cfg.field.field_type if field_cfg else None
         if cond.operator in NUMERIC_OPERATORS and field_type not in NUMERIC_FIELD_TYPES:
-            raise AIOutputInvalidError(
-                extra={"condition": cond.model_dump(), "reason": "numeric operator on non-numeric field"}
-            )
+            raise _invalid_condition_error(cond, "numeric operator on non-numeric field")
         # field_type 缺省补全（协议：服务端按字段元数据补全）
         if not cond.field_type and field_cfg:
             cond.field_type = field_cfg.field.field_type

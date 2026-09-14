@@ -299,6 +299,41 @@ class TestNL2JSONService(AIAssistantTestCase):
         with self.assertRaises(AIOutputInvalidError):
             self._convert()
 
+    def test_extension_multilayer_keys_accepted(self, mock_chat):
+        """多层下钻放行（产品确认不做层级限制）。
+
+        线上报障演进：extend.request_data.audit_status__in 二层下钻曾被单层协议拒绝
+        （AI_OUTPUT_INVALID"AI 生成的检索条件不合法"）——产品拍板不限制层级：
+        Doris SQL 层 variant 逐级拼接 / JSON Path 天然支持任意深度（见
+        core/sql/builder/terms.py::DorisVariantField.format_keys_quote），放开
+        校验层人为的单层约束即可。
+        """
+        selection = self.make_selection(extension_fields=[self.make_extension_field()])
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["request_data", "audit_status__in"],
+                "operator": "eq",
+                "filters": ["accessed"],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+        condition = self._convert(selection=selection)
+        # 多层 keys 原样组装（SQL 层逐级提取），不被单层校验拒绝
+        self.assertEqual(condition.conditions[0].field.keys, ["request_data", "audit_status__in"])
+        self.assertEqual(condition.conditions[0].operator, "eq")
+        self.assertEqual(condition.conditions[0].filters, ["accessed"])
+
+    def test_prompt_contains_multilayer_extension_rule(self, mock_chat):
+        """prompt 规则：下钻路径支持多层（逐层写入 keys），防单层限制回退。"""
+        from services.web.query.ai_assistant.services.nl2json import (
+            NL2JSON_USER_MESSAGE_TEMPLATE,
+        )
+
+        self.assertIn("支持多层路径", NL2JSON_USER_MESSAGE_TEMPLATE)
+        self.assertIn("多层路径逐层写入 keys", NL2JSON_USER_MESSAGE_TEMPLATE)
+
     def test_numeric_operator_on_string_extension_rejected(self, mock_chat):
         selection = self.make_selection(extension_fields=[self.make_extension_field(allow_operators=["eq", "gt"])])
         output = dict(VALID_AI_OUTPUT)
@@ -739,7 +774,7 @@ class TestNL2JSONAdversarial(AIAssistantTestCase):
         self.assertEqual(condition.conditions[0].filters, [0])
 
     def test_deeply_nested_malformed_keys(self, mock_chat):
-        """keys 深度嵌套超出字段清单 → 拒绝"""
+        """深层嵌套 keys 放行（产品取消层级限制：SQL 层逐级提取天然支持任意深度）"""
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [
             {
@@ -750,8 +785,8 @@ class TestNL2JSONAdversarial(AIAssistantTestCase):
             }
         ]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
-            self._convert()
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].field.keys, ["a", "b", "c"])
 
     def test_condition_with_extra_noise_fields(self, mock_chat):
         """AI 输出附加多余字段（容错：Pydantic 忽略多余键）"""
