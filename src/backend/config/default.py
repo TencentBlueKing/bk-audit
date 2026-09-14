@@ -222,6 +222,13 @@ AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
 AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
 AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
+# 意图识别智能体环境路由开关（值为 AIAgentCode 枚举名）：
+# - bkop：默认 AUDIT_LOG_SEARCH（复用 BKAPP_AI_AUDIT_LOG_SEARCH_API_URL/_APP_CODE/_SECRET_KEY
+#   三件套直连共享检索智能体，零额外配置即用）
+# - 上云：配置 BKAPP_AI_USER_INTENT_AGENT_CODE=USER_INTENT 切换专属智能体
+#   （bp-ai-user-intent，配套 BKAPP_AI_USER_INTENT_API_URL/_APP_CODE/_SECRET_KEY 三件套，
+#   配置模式同上云的 AUDIT_LOG_SEARCH）
+AI_USER_INTENT_AGENT_CODE = os.getenv("BKAPP_AI_USER_INTENT_AGENT_CODE", "AUDIT_LOG_SEARCH")
 # 单次智能体调用超时（秒）：默认 300 保持历史行为；NL 检索链路建议收紧到 60
 # （重试预算 deadline 无法中断进行中的调用，单次超时是链路总时长的实际闸门）
 AI_AGENT_API_TIMEOUT_SECONDS = int(os.getenv("BKAPP_AI_AGENT_API_TIMEOUT_SECONDS", "300"))
