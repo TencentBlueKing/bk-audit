@@ -108,7 +108,7 @@
           <div class="card-icon">
             <img
               class="card-img"
-              src="@/images/jieru.svg">
+              :src="jieruImg">
           </div>
           <div class="card-body">
             <div class="card-title">
@@ -213,7 +213,8 @@
   import ConfigModel from '@model/root/config';
 
   import useRequest from '@/hooks/use-request';
-  import landingImg from '@/images/access-system.png';
+  import landingImg from '@/images/access-system.png?inline';
+  import jieruImg from '@/images/jieru.svg?inline';
 
   interface SystemItem {
     id: string;
