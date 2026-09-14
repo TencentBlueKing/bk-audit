@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from services.web.ai_assistant.constants import SidebarNodeType
+from core.serializers import FlexibleListField
+from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
 from services.web.ai_assistant.serializers.message import (
     InitialMessageRequestSerializer,
     MessageResponseSerializer,
@@ -182,6 +183,20 @@ class ConversationGroupResponseSerializer(serializers.Serializer):
     name = serializers.CharField(help_text="会话分组名称")
     created_at = serializers.DateTimeField(help_text="分组创建时间")
     updated_at = serializers.DateTimeField(help_text="分组最后更新时间")
+
+
+class ConversationListRequestSerializer(serializers.Serializer):
+    """平铺会话列表筛选；附件类型限定存在性判断的范围。"""
+
+    # QueryDict 缺失布尔字段默认会被视为 False，显式 None 保留未筛选语义。
+    has_attachments = serializers.BooleanField(
+        required=False, default=None, allow_null=True, help_text="筛选有/无附件的会话，不传返回全部"
+    )
+    attachment_type = FlexibleListField(
+        child=serializers.ChoiceField(choices=AttachmentType.choices),
+        required=False,
+        help_text="限定附件类型；未传 has_attachments 时筛选有该类型附件的会话",
+    )
 
 
 class ConversationResponseSerializer(serializers.Serializer):

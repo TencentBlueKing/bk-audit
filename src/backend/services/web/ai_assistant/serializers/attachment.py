@@ -1,9 +1,12 @@
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from rest_framework import serializers
 
-from core.serializers import FlexibleListField
+from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from services.web.ai_assistant.constants import (
+    ATTACHMENT_DEFAULT_ORDER_FIELDS,
+    ATTACHMENT_LIST_MAX_LIMIT,
     AttachmentExportFormat,
+    AttachmentSortField,
     AttachmentType,
     ExecutionStatus,
     MessageType,
@@ -94,7 +97,7 @@ class AttachmentExportRequestSerializer(serializers.Serializer):
     )
 
 
-class AttachmentListRequestSerializer(serializers.Serializer):
+class AttachmentListRequestSerializer(SortSerializerMixin, serializers.Serializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
 
     attachment_type = FlexibleListField(
@@ -110,6 +113,17 @@ class AttachmentListRequestSerializer(serializers.Serializer):
     keyword = serializers.CharField(required=False, allow_blank=True, help_text="附件标题关键词")
     conversation_uid = serializers.UUIDField(required=False, help_text="所属会话对外 UUID")
     source_message_uid = serializers.UUIDField(required=False, help_text="来源消息对外 UUID")
+    limit = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=ATTACHMENT_LIST_MAX_LIMIT,
+        help_text=f"最多返回的附件数量，范围 1–{ATTACHMENT_LIST_MAX_LIMIT}，不传返回全部匹配附件",
+    )
+    sort = SortListField(
+        allowed_fields=AttachmentSortField.values,
+        default_sort=ATTACHMENT_DEFAULT_ORDER_FIELDS,
+        field_descriptions=dict(AttachmentSortField.choices),
+    )
 
 
 class AttachmentUpdateRequestSerializer(serializers.Serializer):

@@ -139,3 +139,16 @@ DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"
 # 日志分析重试退避（秒）；上限短于平台失活阈值，避免排队期间被巡检收敛。
 LOG_ANALYSIS_RETRY_DELAY_SECONDS = 30
 LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS = 120
+
+
+class AttachmentSortField(TextChoices):
+    """附件列表公开排序字段；不开放内部任务和关联模型字段。"""
+
+    CONTENT_UPDATED_AT = "content_updated_at", gettext_lazy("内容更新时间")
+    CREATED_AT = "created_at", gettext_lazy("创建时间")
+    UPDATED_AT = "updated_at", gettext_lazy("记录更新时间")
+    TITLE = "title", gettext_lazy("附件标题")
+
+
+ATTACHMENT_DEFAULT_ORDER_FIELDS = ("-content_updated_at",)
+ATTACHMENT_LIST_MAX_LIMIT = 100
