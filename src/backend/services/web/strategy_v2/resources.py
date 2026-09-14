@@ -110,6 +110,7 @@ from services.web.scene.models import (
     Scene,
 )
 from services.web.strategy_v2.constants import (
+    CONFIGS_SELECT_COMPARE_FIELDS,
     EVENT_BASIC_CONFIG_FIELD,
     EVENT_BASIC_CONFIG_REMOTE_FIELDS,
     EVENT_BASIC_CONFIG_SORT_FIELD,
@@ -885,6 +886,16 @@ class UpdateStrategy(StrategyV2Base):
             optional_keys = {"where", "having"}
             clean_origin = {**{k: None for k in optional_keys}, **origin_value}
             clean_new = {**{k: None for k in optional_keys}, **new_value}
+            # 规范化 select 字段，只比较核心字段，忽略展示类字段（如 spec_field_type、property）
+            if "select" in clean_origin and "select" in clean_new:
+                clean_origin["select"] = [
+                    {k: v for k, v in item.items() if k in CONFIGS_SELECT_COMPARE_FIELDS}
+                    for item in clean_origin["select"]
+                ]
+                clean_new["select"] = [
+                    {k: v for k, v in item.items() if k in CONFIGS_SELECT_COMPARE_FIELDS}
+                    for item in clean_new["select"]
+                ]
             if clean_origin != clean_new:
                 need_update_remote = True
         # 如果两个值都为空，则不需要更新，避免 None 和 空值 的比较异常
