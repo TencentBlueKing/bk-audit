@@ -8,6 +8,7 @@ import pytest
 import requests
 from django.conf import settings
 
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import ExecutionStatus, PlatformStreamEvent
 from services.web.ai_assistant.exceptions import LogAnalysisTimeout
 from services.web.ai_assistant.models import Attachment
@@ -115,8 +116,11 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
 
     assert completed.output_data == {"markdown": "# 审计结论"}
     agent_request = log_analysis_stack.agent.requests[-1]
-    assert agent_request["chat_history"] == []
-    assert agent_request["execute_kwargs"] == {"stream": True}
+    assert len(agent_request["chat_history"]) == 2
+    assert agent_request["chat_history"][0] == {"role": "role", "content": SYSTEM_PROMPT}
+    assert agent_request["chat_history"][1]["role"] == "user"
+    assert json.loads(agent_request["chat_history"][1]["content"])["instruction"] == "success"
+    assert agent_request["execute_kwargs"] == {"stream": True, "thread_id": str(config.execution_id)}
     assert any(frame.data.get("type") == "TOOL_CALL_START" for frame in frames if isinstance(frame.data, dict))
     assert frames[-1].event == PlatformStreamEvent.STREAM_END
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
@@ -332,7 +336,8 @@ def test_log_analysis_two_users_are_isolated_under_real_gevent_worker(log_analys
     completed = {user: wait_for_terminal(attachment) for user, attachment in attachments.items()}
     configs = {user: parse_stream_config(attachment.stream_config) for user, attachment in completed.items()}
     request_contexts = {
-        json.loads(request["input"])["context"]["user"]["username"] for request in log_analysis_stack.agent.requests
+        json.loads(request["chat_history"][-1]["content"])["context"]["user"]["username"]
+        for request in log_analysis_stack.agent.requests
     }
 
     assert all(attachment.status == ExecutionStatus.SUCCESS for attachment in completed.values())
