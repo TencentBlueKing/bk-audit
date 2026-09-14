@@ -391,10 +391,8 @@ class ListRisk(RiskMeta):
         return response
 
     def _filter_queryset_by_scene_ids(self, queryset: QuerySet, scene_ids: List[str]) -> QuerySet:
-        if scene_ids is None:
-            return queryset
         if not scene_ids:
-            return queryset.none()
+            return queryset
 
         # 风险场景归属已固化到 Risk.scene_id，直接按模型字段过滤（不再经 ResourceBinding 反查）
         return queryset.filter(scene_id__in=scene_ids)
