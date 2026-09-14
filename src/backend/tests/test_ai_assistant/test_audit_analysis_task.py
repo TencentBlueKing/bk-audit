@@ -10,10 +10,14 @@ from uuid import uuid4
 
 import yaml
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError, IAMNoPermission
 from celery.exceptions import Ignore, Retry
 from django.conf import settings
 from django.test import SimpleTestCase, override_settings
+from requests import Response
+from requests.exceptions import HTTPError
 
+from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.constants import AIAgentCode
 from apps.meta.models import GlobalMetaConfig
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
@@ -288,7 +292,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
                 ) as first_agent,
                 self.assertRaises(LogAnalysisTimeout),
             ):
-                invoke_task(execute_log_analysis, attachment=attachment)
+                invoke_task(execute_log_analysis, attachment=attachment, retries=execute_log_analysis.max_retries)
             attachment.refresh_from_db()
             first_thread_id = first_agent.call_args.kwargs["execute_kwargs"]["thread_id"]
             self.assertEqual(first_thread_id, attachment.stream_config["execution_id"])
@@ -404,7 +408,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
             ) as agent,
             self.assertRaises(LogAnalysisTimeout),
         ):
-            invoke_task(execute_log_analysis, attachment=attachment)
+            invoke_task(execute_log_analysis, attachment=attachment, retries=execute_log_analysis.max_retries)
 
         attachment.refresh_from_db()
         timeout.assert_called_once()
@@ -519,7 +523,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
             self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as captured,
             self.assertRaises(AttachmentOutputValidationError) as caught,
         ):
-            invoke_task(execute_log_analysis, attachment=attachment)
+            invoke_task(execute_log_analysis, attachment=attachment, retries=execute_log_analysis.max_retries)
 
         attachment.refresh_from_db()
         log_output = "\n".join(captured.output)
@@ -549,6 +553,163 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
         self.assertIn("--prefetch-multiplier=1", process["command"])
         self.assertIn("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_CONCURRENCY", process["command"])
         self.assertEqual(process["replicas"], 2)
+
+    def test_agent_timeout_retries_three_times_before_final_failure(self):
+        """临时失败保持处理中，第四次执行失败才收敛终态。"""
+
+        attachment = self.create_attachment()
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=LogAnalysisTimeout()) as agent:
+            for retries in range(3):
+                with self.assertRaises(Retry) as caught:
+                    invoke_task(execute_log_analysis, attachment=attachment, retries=retries)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+                self.assertEqual(attachment.error_code, "")
+                self.assertEqual(
+                    caught.exception.sig.kwargs,
+                    {
+                        "attachment_id": attachment.id,
+                        "task_id": attachment.task_id,
+                    },
+                )
+            with self.assertRaises(LogAnalysisTimeout):
+                invoke_task(execute_log_analysis, attachment=attachment, retries=3)
+        attachment.refresh_from_db()
+        self.assertEqual(agent.call_count, 4)
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+        self.assertEqual(attachment.error_code, LogAnalysisTimeout().code)
+        self.assertEqual(attachment.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
+
+    def test_retry_reuses_persisted_prompt_and_starts_new_agent_session(self):
+        """自动重试复用创建时的系统提示词，并轮换 Agent 会话。"""
+
+        attachment = self.create_attachment()
+        attachment.context_data["system_prompt"] = "历史系统提示词"
+        attachment.save(update_fields=["context_data"])
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=LogAnalysisTimeout()) as first:
+            with self.assertRaises(Retry):
+                invoke_task(execute_log_analysis, attachment=attachment)
+        first_request = first.call_args.kwargs
+        self.assertEqual(first_request["chat_history"][0]["content"], "历史系统提示词")
+
+        def respond(**kwargs):
+            """通过真实事件回调生成报告，保留平台成功收敛链路。"""
+            self._emit_agent_content(callback=kwargs["on_event"], content="# 重试成功")
+
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond) as second:
+            invoke_task(execute_log_analysis, attachment=attachment, retries=1)
+        attachment.refresh_from_db()
+        second_request = second.call_args.kwargs
+        self.assertEqual(second_request["chat_history"][0]["content"], "历史系统提示词")
+        self.assertEqual(second_request["chat_history"][1], first_request["chat_history"][1])
+        self.assertNotEqual(second_request["execute_kwargs"]["thread_id"], first_request["execute_kwargs"]["thread_id"])
+        self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(attachment.output_data, {"markdown": "# 重试成功"})
+
+    def test_legacy_context_uses_default_prompt_without_writing_snapshot(self):
+        """旧附件缺系统提示词时使用兼容默认值，执行不修改 context。"""
+
+        attachment = self.create_attachment()
+        legacy_context = dict(attachment.context_data)
+        legacy_context.pop("system_prompt", None)
+        legacy_context.pop("agent_code", None)
+        Attachment.objects.filter(id=attachment.id).update(context_data=legacy_context)
+
+        def respond(**kwargs):
+            """检查真实任务请求并返回完整报告。"""
+            self.assertEqual(kwargs["chat_history"][0]["content"], SYSTEM_PROMPT)
+            self.assertEqual(kwargs["agent_code"], AIAgentCode.AUDIT_LOG_ANALYSIS)
+            self._emit_agent_content(callback=kwargs["on_event"], content="# 成功")
+
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond):
+            invoke_task(execute_log_analysis, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.context_data, legacy_context)
+        self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
+
+    def test_agent_request_protocol_and_output_failures_retry(self):
+        """Agent 请求、断流协议及无有效产物进入同一重试生命周期。"""
+
+        for error in (
+            APIRequestError(status_code=503),
+            AGUIStreamProtocolError("断流"),
+            AttachmentOutputValidationError(),
+        ):
+            with self.subTest(error=type(error).__name__):
+                attachment = self.create_attachment()
+                with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=error):
+                    with self.assertRaises(Retry):
+                        invoke_task(execute_log_analysis, attachment=attachment)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+                self.assertEqual(attachment.error_message, "")
+
+    def test_zero_retry_limit_disables_automatic_retry(self):
+        """关闭重试时第一次临时失败就写入失败终态。"""
+
+        attachment = self.create_attachment()
+        with (
+            mock.patch.object(execute_log_analysis, "max_retries", 0),
+            mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=LogAnalysisTimeout()),
+            self.assertRaises(LogAnalysisTimeout),
+        ):
+            invoke_task(execute_log_analysis, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+
+    def test_retry_limit_environment_reaches_registered_task(self):
+        """Worker 冷启动从环境变量读取重试上限，并拒绝负数配置。"""
+
+        code = (
+            "from services.web.ai_assistant.tasks.audit_analysis import execute_log_analysis; "
+            "assert execute_log_analysis.max_retries == 0"
+        )
+        result = self._run_cold_import(code, env={"BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES": "0"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self._run_cold_import(code, env={"BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES": "-1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES", result.stdout + result.stderr)
+
+    def test_http_client_errors_do_not_retry(self):
+        """HTTP 认证、权限及参数错误直接失败，覆盖非标准 IAM 响应。"""
+
+        for status in (400, 401, 403, 404):
+            response = Response()
+            response.status_code = status
+            for error in (HTTPError(response=response), APIRequestError(status_code=status)):
+                with self.subTest(status=status, error=type(error).__name__):
+                    attachment = self.create_attachment()
+                    with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=error):
+                        with self.assertRaises(type(error)):
+                            invoke_task(execute_log_analysis, attachment=attachment)
+                    attachment.refresh_from_db()
+                    self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+
+    def test_transient_http_errors_retry(self):
+        """请求超时、限流和上游服务失败仍允许重试。"""
+
+        for status in (408, 429, 503):
+            response = Response()
+            response.status_code = status
+            with self.subTest(status=status):
+                attachment = self.create_attachment()
+                with mock.patch.object(
+                    api.bk_plugins_ai_agent, "chat_completion", side_effect=HTTPError(response=response)
+                ):
+                    with self.assertRaises(Retry):
+                        invoke_task(execute_log_analysis, attachment=attachment)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+
+    def test_permission_error_does_not_retry(self):
+        """明确的权限失败直接结束，避免重复调用无权限 Agent。"""
+
+        attachment = self.create_attachment()
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=IAMNoPermission()):
+            with self.assertRaises(IAMNoPermission):
+                invoke_task(execute_log_analysis, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
 
     def test_retry_keeps_processing_and_flushes_current_stream(self):
         attachment = self.create_attachment()

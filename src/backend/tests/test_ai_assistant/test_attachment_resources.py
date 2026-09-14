@@ -251,6 +251,8 @@ class AttachmentRequestSerializerTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "error_code",
+                "error_message",
                 "supports_feedback",
                 "export_formats",
             },
@@ -726,10 +728,16 @@ class AttachmentResourceTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "error_code",
+                "error_message",
                 "supports_feedback",
                 "export_formats",
             },
         )
+        self.assertEqual(response[0]["error_code"], "OLD_CODE")
+        self.assertEqual(response[0]["error_message"], "old error")
+        self.assertEqual(response[1]["error_code"], "")
+        self.assertEqual(response[1]["error_message"], "")
         self.assertEqual(response[0]["export_formats"], [])
         self.assertNotIn("input_data", response[0])
         self.assertNotIn("output_data", response[0])

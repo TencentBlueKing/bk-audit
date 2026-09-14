@@ -269,6 +269,8 @@ class AttachmentService:
                 "title",
                 "content_updated_at",
                 "created_at",
+                "error_code",
+                "error_message",
             )
             .order_by("-content_updated_at", "-id")
         )

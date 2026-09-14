@@ -6,6 +6,7 @@ from unittest import mock
 from django.conf import settings
 
 from apps.meta.models import GlobalMetaConfig
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import (
     AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY,
     AnalysisMode,
@@ -80,6 +81,8 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
         snapshot = preparation.context_data.model_dump(mode="json")
         self.assertEqual(preparation.title, "智能分析报告")
         self.assertEqual(snapshot["effective_instruction"], "按操作人汇总异常行为")
+        self.assertEqual(snapshot["system_prompt"], SYSTEM_PROMPT)
+        self.assertNotIn("agent_code", snapshot)
         self.assertEqual(snapshot["query_summary"]["total"], self.log_search.output_data["total"])
         self.assertEqual(snapshot["username"], self.user)
         self.assertEqual(snapshot["namespace"], "bkaudit")

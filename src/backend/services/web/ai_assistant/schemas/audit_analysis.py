@@ -1,7 +1,7 @@
 """日志分析报告的 Input / Context / Output 快照协议。
 
 Context 只保存重放 Agent 请求所需的最小充分信息，不保存预览日志、
-SQL 或数据库内部 ID。历史附件的有效指令固化在 Context，不跟随全局配置变化。
+SQL 或数据库内部 ID。有效指令、系统提示词在创建时固化，重试复用已保存值。
 """
 
 from typing import Annotated
@@ -16,6 +16,7 @@ from pydantic import (
 )
 from rest_framework import serializers
 
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import AnalysisMode
 from services.web.ai_assistant.schemas.message import MessageSchema
 from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
@@ -72,6 +73,8 @@ class AIAnalysisQuerySummary(MessageSchema):
 class AIAnalysisContextSchema(MessageSchema):
     """Worker 使用的不对外执行快照。"""
 
+    # 旧快照缺字段时使用当前部署默认值，仅兼容读取，不在执行阶段补写。
+    system_prompt: str = Field(default=SYSTEM_PROMPT, min_length=1, description="创建时固化的 Agent 系统提示词。")
     effective_instruction: str = Field(min_length=1, description="创建时已固化的有效分析指令。")
     search_condition: Annotated[AgentSearchCondition, _NestedObjectField]
     query_summary: AIAnalysisQuerySummary

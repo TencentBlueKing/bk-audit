@@ -1,5 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
+from services.web.ai_assistant.constants import ExecutionStatus
+from services.web.ai_assistant.exceptions import AIAssistantException
 from services.web.ai_assistant.models import (
     Attachment,
     Conversation,
@@ -8,6 +10,7 @@ from services.web.ai_assistant.models import (
     Feedback,
     Message,
 )
+from services.web.ai_assistant.services.attachment import AttachmentService
 
 
 class ReadOnlyCreateDeleteAdminMixin:
@@ -115,6 +118,7 @@ class MessageAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
 
 @admin.register(Attachment)
 class AttachmentAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
+    actions = ["retry_attachments"]
     list_display = [
         "id",
         "uid",
@@ -154,6 +158,35 @@ class AttachmentAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
         "updated_by",
         "updated_at",
     ]
+
+    @admin.action(description="重试选中的失败附件", permissions=["change"])
+    def retry_attachments(self, request, queryset):
+        """按附件原用户身份提交重试，并将实际管理员记录到 Admin 操作日志。
+
+        重试资格、快照复用、并发抢占和事务后投递均由领域服务负责；业务拒绝
+        逐项提示，不影响其他选中附件。任务投递失败也计入未提交数量。
+        """
+
+        submitted = 0
+        rejected = 0
+        for attachment in queryset.only("uid", "created_by").iterator():
+            try:
+                retried = AttachmentService(user=attachment.created_by).retry(attachment_uid=str(attachment.uid))
+            except AIAssistantException as error:
+                rejected += 1
+                self.message_user(request, f"附件 {attachment.uid} 未提交重试：{error}", level=messages.WARNING)
+                continue
+            self.log_change(request, retried, f"提交附件重试，task_id={retried.task_id}")
+            if retried.status == ExecutionStatus.FAILED:
+                rejected += 1
+                self.message_user(request, f"附件 {attachment.uid} 重试投递失败：{retried.error_message}", level=messages.ERROR)
+            else:
+                submitted += 1
+        self.message_user(
+            request,
+            f"已提交重试 {submitted} 个，未提交 {rejected} 个",
+            level=messages.WARNING if rejected else messages.SUCCESS,
+        )
 
 
 @admin.register(Feedback)
