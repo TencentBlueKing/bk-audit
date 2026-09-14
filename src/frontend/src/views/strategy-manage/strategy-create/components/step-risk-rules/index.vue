@@ -100,7 +100,7 @@
                   class="rule-header-actions"
                   @click.stop>
                   <audit-icon
-                    v-bk-tooltips="t('克隆')"
+                    v-bk-tooltips="t('复制')"
                     class="rule-action-icon"
                     type="copy"
                     @click="() => handleCloneRule(index)" />
@@ -139,6 +139,7 @@
                   </div>
                   <div class="rule-section-body rule-section-body--condition">
                     <audit-form
+                      :ref="(el: any) => setFormRef(el, index)"
                       class="rule-condition-form"
                       form-type="vertical"
                       :model="rule.formData">
@@ -389,7 +390,7 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
-  import { excludeHavingFromWhere, hasFilledWhereConditions } from '../../utils/strategy-protocol';
+  import { excludeHavingFromWhere, hasFilledWhereConditions, toNoticeGroupIds } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface RuleItem {
@@ -474,7 +475,15 @@
     model: ReferenceModel,
   };
 
-  const formRef = ref();
+  const formRefs = ref<Array<any>>([]);
+  const formRef = computed(() => ({
+    validate: (fields?: string | Array<string>) => Promise.all(formRefs.value
+      .filter(Boolean)
+      .map(item => item.validate(fields))),
+    clearValidate: (fields?: string | Array<string>) => {
+      formRefs.value.forEach(item => item?.clearValidate?.(fields));
+    },
+  }));
   provide('strategyStep1FormRef', formRef);
 
   const stepFormData = ref({
@@ -524,6 +533,10 @@
 
   const setComRef = (el: any, index: number) => {
     comRefs.value[index] = el;
+  };
+
+  const setFormRef = (el: any, index: number) => {
+    formRefs.value[index] = el;
   };
 
   const setTitleInputRef = (el: any, index: number) => {
@@ -611,6 +624,7 @@
     });
     ruleItems.value.splice(index + 1, 0, cloned);
     comRefs.value.splice(index + 1, 0, null);
+    formRefs.value.splice(index + 1, 0, null);
     titleInputRefs.value.splice(index + 1, 0, null);
   };
 
@@ -620,6 +634,7 @@
     }
     ruleItems.value.splice(index, 1);
     comRefs.value.splice(index, 1);
+    formRefs.value.splice(index, 1);
     titleInputRefs.value.splice(index, 1);
     return Promise.resolve();
   };
@@ -637,6 +652,7 @@
       return;
     }
     comRefs.value = reorderRefArray(comRefs.value, oldIndex, newIndex);
+    formRefs.value = reorderRefArray(formRefs.value, oldIndex, newIndex);
     titleInputRefs.value = reorderRefArray(titleInputRefs.value, oldIndex, newIndex);
   };
 
@@ -865,8 +881,8 @@
         risk_level: rule.risk_level,
         risk_hazard: rule.risk_hazard,
         risk_guidance: rule.risk_guidance,
-        processor: rule.processor ?? [],
-        follower: rule.follower ?? [],
+        processor: toNoticeGroupIds(rule.processor ?? []),
+        follower: toNoticeGroupIds(rule.follower ?? []),
         conditions: {
           where,
           having,
@@ -982,8 +998,8 @@
           risk_level: r.risk_level || 'HIGH',
           risk_hazard: r.risk_hazard || '',
           risk_guidance: r.risk_guidance || '',
-          processor: r.processor ?? [],
-          follower: r.follower ?? [],
+          processor: toNoticeGroupIds(r.processor ?? r.processors),
+          follower: toNoticeGroupIds(r.follower ?? r.notice_users),
           conditions: {
             where: configs.where,
             having: configs.having,
@@ -1100,6 +1116,48 @@
     emits('previousStep', 1, buildStepParams());
   };
 
+  const OPERATORS_WITHOUT_VALUE = new Set(['', 'notnull', 'isnull']);
+
+  const getConditionNode = (item: Record<string, any>) => item?.condition ?? item;
+
+  const hasConditionField = (condition: Record<string, any>) => {
+    const field = condition?.field;
+    if (!field) return false;
+    if (typeof field === 'string') return field.trim() !== '';
+    return Boolean(field.raw_name || field.display_name);
+  };
+
+  const hasConditionValue = (condition: Record<string, any>) => {
+    const filters = condition?.filters;
+    if (Array.isArray(filters) && filters.some(item => String(item ?? '').trim() !== '')) {
+      return true;
+    }
+    const filter = condition?.filter ?? condition?.value;
+    if (Array.isArray(filter)) {
+      return filter.some(item => String(item ?? '').trim() !== '');
+    }
+    return String(filter ?? '').trim() !== '';
+  };
+
+  const findInvalidHitCondition = (where?: { conditions?: any[] } | null) => {
+    const groups = where?.conditions || [];
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      const items = Array.isArray(groups[groupIndex]?.conditions) ? groups[groupIndex].conditions : [];
+      for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+        const condition = getConditionNode(items[itemIndex]);
+        if (hasConditionField(condition)) {
+          if (!condition.operator) {
+            return 'operator';
+          }
+          if (!OPERATORS_WITHOUT_VALUE.has(condition.operator) && !hasConditionValue(condition)) {
+            return 'value';
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const handleNext = async () => {
     if (ruleItems.value.length === 0) {
       return;
@@ -1114,10 +1172,25 @@
     }
     // 验证所有规则的命中条件
     try {
-      await Promise.all(ruleItems.value.map((_, index) => {
-        const com = comRefs.value[index];
-        return com?.getValue?.() ?? Promise.resolve();
-      }));
+      await Promise.all(ruleItems.value.map((_, index) => (
+        comRefs.value[index]?.getValue?.() ?? Promise.resolve()
+      )));
+      for (let index = 0; index < ruleItems.value.length; index++) {
+        const rule = ruleItems.value[index];
+        const fields = comRefs.value[index]?.getFields?.({ forValidate: true });
+        const where = fields?.configs?.where ?? rule.formData?.configs?.where ?? rule.conditions?.where;
+        const having = fields?.configs?.having ?? rule.formData?.configs?.having ?? rule.conditions?.having;
+        const invalidType = findInvalidHitCondition(where) || findInvalidHitCondition(having);
+        if (invalidType) {
+          rule.collapsed = false;
+          const message = invalidType === 'operator'
+            ? t('命中条件运算符不能为空')
+            : t('命中条件值不能为空');
+          messageError(message);
+          formRefs.value[index]?.validate?.().catch(() => {});
+          return;
+        }
+      }
       const params = buildStepParams();
       const missingWhere = params.rules.find((rule: Record<string, any>) => (
         !hasConditionGroups(rule?.conditions?.where)

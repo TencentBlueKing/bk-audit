@@ -35,170 +35,231 @@
           :key="`${rowIndex}-${itemIndex}-${fieldItem.field_name}`"
           :label="fieldItem.field_name === 'strategy_name' ? t('风险命中策略(ID)') : fieldItem.display_name"
           :label-width="labelWidth">
-          <template v-if="fieldItem.field_name === 'risk_id'">
-            {{ data.risk_id || '--' }}
-          </template>
-          <template v-else-if="fieldItem.field_name === 'risk_level'">
-            <span
-              v-if="data.risk_level"
-              :style="{
-                'background-color': riskLevelMap[data.risk_level].color,
-                padding: '3px 8px',
-                'border-radius': '3px',
-                color: 'white'
-              }">
-              {{ riskLevelMap[data.risk_level].label || '--' }}
-            </span>
-            <span v-else>--</span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'event_type'">
-            <span v-if="isAddRisk">
-              <edit-tag
-                v-if="eventTypeComfig[0]?.typeValue === 'user-selector'"
-                :data="eventTypeComfig[0].value || ''"
-                style="display: inline-block;" />
-              <span v-else> {{ eventTypeComfig[0]?.value === '' ? '--' : eventTypeComfig[0]?.value }} </span>
-            </span>
-            <span v-else>
-              {{ handleShowText(data.event_type) || '--' }}
-            </span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'risk_tags'">
-            <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
-          </template>
-          <template v-else-if="fieldItem.field_name === 'strategy_name'">
-            <router-link
-              v-if="strategyDisplayText"
-              target="_blank"
-              :to="{
-                name: 'strategyList',
-                query: {
-                  strategy_id: data.strategy_id,
-                  scope_id: data.scene_id,
-                  scope_type: 'scene',
-                },
-              }">
-              {{ strategyDisplayText }}
-            </router-link>
-            <span v-else>--</span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'scene_id'">
-            <span>{{ sceneName || '--' }}</span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'event_content'">
-            <span v-if="isAddRisk">
-              <edit-tag
-                v-if="eventContentComfig[0]?.typeValue === 'user-selector'"
-                :data="eventContentComfig[0].value || ''"
-                style="display: inline-block;" />
-              <span v-else> {{ eventContentComfig[0]?.value === '' ? '--' : eventContentComfig[0]?.value }} </span>
-            </span>
-            <span v-else>
-              {{ handleShowText(data.event_content) || '--' }}
+          <div class="risk-field-value-wrap">
+            <div
+              v-bk-tooltips="{
+                disabled: !hasFieldDrill(fieldItem) || isLinkField(fieldItem),
+                content: t('点击查看此字段的证据下探'),
+              }"
+              class="risk-field-value"
+              :class="{ 'is-drill': hasFieldDrill(fieldItem) && !isLinkField(fieldItem) }"
+              @click="handleFieldValueClick(fieldItem)">
+              <template v-if="fieldItem.field_name === 'risk_id'">
+                {{ data.risk_id || '--' }}
+              </template>
+              <template v-else-if="fieldItem.field_name === 'risk_level'">
+                <span
+                  v-if="data.risk_level"
+                  :style="{
+                    'background-color': riskLevelMap[data.risk_level].color,
+                    padding: '3px 8px',
+                    'border-radius': '3px',
+                    color: 'white'
+                  }">
+                  {{ riskLevelMap[data.risk_level].label || '--' }}
+                </span>
+                <span v-else>--</span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'event_type'">
+                <span v-if="isAddRisk">
+                  <edit-tag
+                    v-if="eventTypeComfig[0]?.typeValue === 'user-selector'"
+                    :data="eventTypeComfig[0].value || ''"
+                    style="display: inline-block;" />
+                  <span v-else> {{ eventTypeComfig[0]?.value === '' ? '--' : eventTypeComfig[0]?.value }} </span>
+                </span>
+                <span v-else>
+                  {{ handleShowText(data.event_type) || '--' }}
+                </span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'risk_tags'">
+                <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
+              </template>
+              <template v-else-if="fieldItem.field_name === 'strategy_name'">
+                <router-link
+                  v-if="strategyDisplayText"
+                  target="_blank"
+                  :to="{
+                    name: 'strategyList',
+                    query: {
+                      strategy_id: data.strategy_id,
+                      scope_id: data.scene_id,
+                      scope_type: 'scene',
+                    },
+                  }">
+                  {{ strategyDisplayText }}
+                </router-link>
+                <span v-else>--</span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'scene_id'">
+                <span>{{ sceneName || '--' }}</span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'event_content'">
+                <span v-if="isAddRisk">
+                  <edit-tag
+                    v-if="eventContentComfig[0]?.typeValue === 'user-selector'"
+                    :data="eventContentComfig[0].value || ''"
+                    style="display: inline-block;" />
+                  <span v-else> {{ eventContentComfig[0]?.value === '' ? '--' : eventContentComfig[0]?.value }} </span>
+                </span>
+                <span v-else>
+                  {{ handleShowText(data.event_content) || '--' }}
 
-            </span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'risk_hazard'">
-            {{ displayEmptyText(data.risk_hazard) }}
-          </template>
-          <template v-else-if="fieldItem.field_name === 'risk_guidance'">
-            {{ displayEmptyText(data.risk_guidance) }}
-          </template>
-          <template v-else-if="fieldItem.field_name === 'status'">
-            <template v-if="statusToMap[data.status]">
-              <bk-tag :theme="statusToMap[data.status].theme">
-                <p style="display: flex;align-items: center;">
-                  <audit-icon
-                    :style="`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`"
-                    :type="statusToMap[data.status].icon" />
-                  {{ riskStatusCommon.find(item=>item.id===data.status)?.name === '' ? '--' :
-                    riskStatusCommon.find(item=>item.id===data.status)?.name }}
-                </p>
-              </bk-tag>
+                </span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'risk_hazard'">
+                {{ displayEmptyText(data.risk_hazard) }}
+              </template>
+              <template v-else-if="fieldItem.field_name === 'risk_guidance'">
+                {{ displayEmptyText(data.risk_guidance) }}
+              </template>
+              <template v-else-if="fieldItem.field_name === 'status'">
+                <template v-if="statusToMap[data.status]">
+                  <bk-tag :theme="statusToMap[data.status].theme">
+                    <p style="display: flex;align-items: center;">
+                      <audit-icon
+                        :style="`margin-right: 6px;color: ${statusToMap[data.status]?.color || ''}`"
+                        :type="statusToMap[data.status].icon" />
+                      {{ resolveRiskStatusName(data.status, riskStatusCommon) || '--' }}
+                    </p>
+                  </bk-tag>
+                </template>
+                <span v-else>--</span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'operator'">
+                <span v-if="isAddRisk">
+                  <edit-tag
+                    v-if="operatorsComfig[0]?.typeValue === 'user-selector'"
+                    :data="operatorsComfig[0].value || ''"
+                    style="display: inline-block;" />
+                  <span v-else> {{ operatorsComfig[0]?.value === '' ? '--' : operatorsComfig[0]?.value }} </span>
+                </span>
+                <edit-tag
+                  v-else
+                  :data="(typeof data.operator === 'string' ?
+                    handleShowText(data.operator).split(',') : data.operator) || ''" />
+              </template>
+              <template v-else-if="fieldItem.field_name === 'current_operator'">
+                <edit-tag :data="(isAddRisk ? processorGroups : data.current_operator) || []" />
+              </template>
+              <template v-else-if="fieldItem.field_name === 'notice_users'">
+                <edit-tag :data="(isAddRisk ? noticeGroups : data.notice_users) || []" />
+              </template>
+              <template v-else-if="fieldItem.field_name === 'event_time'">
+                {{ (isAddRisk ? editData?.formData.event_time : data.event_time) === '' ? '--' :
+                  (isAddRisk ? editData?.formData.event_time : data.event_time) }}
+              </template>
+              <template v-else-if="fieldItem.field_name === 'event_end_time'">
+                {{ (isAddRisk ? editData?.formData.event_time : data.event_end_time) === '' ? '--' :
+                  (isAddRisk ? editData?.formData.event_time : data.event_end_time) }}
+              </template>
+              <template v-else-if="fieldItem.field_name === 'rule_id'">
+                <router-link
+                  v-if="riskRule"
+                  target="_blank"
+                  :to="{
+                    name:'ruleManageList',
+                    query:{
+                      rule_id: data.rule_id
+                    }
+                  }">
+                  {{ riskRule }}
+                </router-link>
+                <span v-else>--</span>
+              </template>
+              <template v-else-if="fieldItem.field_name === 'risk_label'">
+                <span
+                  class="risk-label-status"
+                  :class="{
+                    misreport: data.risk_label === 'misreport',
+                  }">
+                  <span v-if="isAddRisk">{{ t('正常') }}</span>
+                  <span v-else>{{ data.risk_label === 'normal' ? t('正常') : t('误报') }}</span>
+                </span>
+              </template>
+              <template v-else>
+                {{ (isAddRisk ? '--'
+                  : (data[fieldItem.field_name as keyof RiskManageModel]) === '' ? '--'
+                    : data[fieldItem.field_name as keyof RiskManageModel]) }}
+              </template>
+            </div>
+            <template v-if="hasFieldDrill(fieldItem)">
+              <bk-popover
+                placement="top"
+                theme="black">
+                <bk-button
+                  class="ml8"
+                  text
+                  theme="primary"
+                  @click="handleUseTool(fieldItem)">
+                  <span class="drill-count-badge">
+                    {{ getFieldDrill(fieldItem).length }}
+                  </span>
+                </bk-button>
+                <template #content>
+                  <div>
+                    <div
+                      v-for="config in getFieldDrill(fieldItem)"
+                      :key="config.tool?.uid">
+                      {{ config.drill_name || getToolNameAndType(config.tool?.uid).name }}
+                      <bk-button
+                        class="ml8"
+                        text
+                        theme="primary"
+                        @click="(e: Event) => {
+                          e.stopPropagation();
+                          handleUseTool(fieldItem, config.tool?.uid);
+                        }">
+                        {{ t('去查看') }}
+                        <audit-icon
+                          class="mr-18"
+                          type="jump-link" />
+                      </bk-button>
+                    </div>
+                  </div>
+                </template>
+              </bk-popover>
             </template>
-            <span v-else>--</span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'operator'">
-            <span v-if="isAddRisk">
-              <edit-tag
-                v-if="operatorsComfig[0]?.typeValue === 'user-selector'"
-                :data="operatorsComfig[0].value || ''"
-                style="display: inline-block;" />
-              <span v-else> {{ operatorsComfig[0]?.value === '' ? '--' : operatorsComfig[0]?.value }} </span>
-            </span>
-            <edit-tag
-              v-else
-              :data="(typeof data.operator === 'string' ?
-                handleShowText(data.operator).split(',') : data.operator) || ''" />
-          </template>
-          <template v-else-if="fieldItem.field_name === 'current_operator'">
-            <edit-tag :data="(isAddRisk ? processorGroups : data.current_operator) || []" />
-          </template>
-          <template v-else-if="fieldItem.field_name === 'notice_users'">
-            <edit-tag :data="(isAddRisk ? noticeGroups : data.notice_users) || []" />
-          </template>
-          <template v-else-if="fieldItem.field_name === 'event_time'">
-            {{ (isAddRisk ? editData?.formData.event_time : data.event_time) === '' ? '--' :
-              (isAddRisk ? editData?.formData.event_time : data.event_time) }}
-          </template>
-          <template v-else-if="fieldItem.field_name === 'event_end_time'">
-            {{ (isAddRisk ? editData?.formData.event_time : data.event_end_time) === '' ? '--' :
-              (isAddRisk ? editData?.formData.event_time : data.event_end_time) }}
-          </template>
-          <template v-else-if="fieldItem.field_name === 'rule_id'">
-            <router-link
-              v-if="riskRule"
-              target="_blank"
-              :to="{
-                name:'ruleManageList',
-                query:{
-                  rule_id: data.rule_id
-                }
-              }">
-              {{ riskRule }}
-            </router-link>
-            <span v-else>--</span>
-          </template>
-          <template v-else-if="fieldItem.field_name === 'risk_label'">
-            <span
-              class="risk-label-status"
-              :class="{
-                misreport: data.risk_label === 'misreport',
-              }">
-              <span v-if="isAddRisk">{{ t('正常') }}</span>
-              <span v-else>{{ data.risk_label === 'normal' ? t('正常') : t('误报') }}</span>
-            </span>
-          </template>
-          <template v-else>
-            {{ (isAddRisk ? '--'
-              : (data[fieldItem.field_name as keyof RiskManageModel]) === '' ? '--'
-                : data[fieldItem.field_name as keyof RiskManageModel]) }}
-          </template>
+          </div>
         </render-info-item>
       </div>
     </template>
   </div>
+  <div
+    v-for="item in allOpenToolsData"
+    :key="item">
+    <component
+      :is="DialogVue"
+      :ref="(el: any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
+      source="risk"
+      :tags-enums="tagData"
+      @open-field-down="openFieldDown" />
+  </div>
 </template>
 <script setup lang='ts'>
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
   import RiskRuleManageService from '@service/rule-manage';
   import SceneManageService from '@service/scene-manage';
+  import ToolManageService from '@service/tool-manage';
 
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import { RISK_STATUS_THEME_MAP } from '@views/risk-manage/constants';
+  import { RISK_STATUS_THEME_MAP, resolveRiskStatusName } from '@views/risk-manage/constants';
+  import DialogVue from '@views/tools/tools-square/components/dialog/dialog.vue';
 
   import { findStrategyLabel, formatStrategyNameWithId } from '@utils/format-strategy-name';
 
   import RenderInfoItem from './render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface Props{
     data: RiskManageModel & StrategyInfo
@@ -240,6 +301,111 @@
   type FieldItem = Props['showFieldNames'][0];
 
   const isValidFieldItem = (item: FieldItem | null | undefined): item is FieldItem => item !== null;
+
+  type DrillConfigItem = NonNullable<FieldItem['drill_config']>[number];
+
+  const LINK_FIELD_NAMES = ['strategy_name', 'rule_id'];
+
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+  } = useToolDialog();
+
+  const getFieldDrill = (fieldItem?: FieldItem | null): DrillConfigItem[] => {
+    if (props.isAddRisk || !fieldItem) {
+      return [];
+    }
+    const value = fieldItem.drill_config as DrillConfigItem | DrillConfigItem[] | undefined;
+    if (!value) {
+      return [];
+    }
+    const list = Array.isArray(value) ? value : [value];
+    return list.filter(item => Boolean(item?.tool?.uid));
+  };
+
+  const hasFieldDrill = (fieldItem?: FieldItem | null) => getFieldDrill(fieldItem).length > 0;
+
+  const isLinkField = (fieldItem?: FieldItem | null) => (
+    Boolean(fieldItem && LINK_FIELD_NAMES.includes(fieldItem.field_name))
+  );
+
+  const riskToolParams = computed(() => ({
+    caller_resource_type: 'risk',
+    caller_resource_id: props.data.risk_id,
+    drill_field: '',
+    event_start_time: props.data.event_time,
+    event_end_time: props.data.event_end_time,
+  }));
+
+  const {
+    data: allToolsData,
+    run: fetchAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    defaultParams: {
+      scope_type: 'scene',
+      scope_id: props.data.scene_id,
+    },
+  });
+
+  const {
+    data: tagData,
+    run: fetchToolTags,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+  });
+
+  const getToolNameAndType = (uid?: string) => {
+    if (!uid) {
+      return {
+        name: '',
+        type: '',
+      };
+    }
+    const tool = allToolsData.value?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
+  const handleUseTool = (fieldItem: FieldItem, activeUid?: string) => {
+    const drillConfig = getFieldDrill(fieldItem);
+    if (!drillConfig.length) {
+      return;
+    }
+    riskToolParams.value.drill_field = fieldItem.field_name;
+    const drillDownItem = {
+      ...fieldItem,
+      drill_config: drillConfig,
+    };
+    const uids = drillConfig.map(config => config.tool.uid).join('&');
+    if (!allOpenToolsData.value.find(item => item === uids)) {
+      allOpenToolsData.value.push(uids);
+    }
+    nextTick(() => {
+      if (dialogRefs.value[uids]) {
+        dialogRefs.value[uids].openDialog(
+          uids,
+          drillDownItem,
+          props.data,
+          activeUid,
+          riskToolParams.value,
+        );
+      }
+    });
+  };
+
+  const handleFieldValueClick = (fieldItem: FieldItem) => {
+    if (isLinkField(fieldItem) || !hasFieldDrill(fieldItem)) {
+      return;
+    }
+    handleUseTool(fieldItem);
+  };
 
   const strategyTagMap = ref<Record<string, string>>({});
 
@@ -439,6 +605,16 @@
       scope_type: 'scene',
     });
     fetchSceneAll();
+    if (!props.isAddRisk) {
+      fetchAllTools({
+        scope_id: sceneId,
+        scope_type: 'scene',
+      });
+      fetchToolTags({
+        scope_id: sceneId,
+        scope_type: 'scene',
+      });
+    }
   }, {
     immediate: true,
   });
@@ -446,5 +622,26 @@
 <style lang="postcss" scoped>
 .base-info-form {
   margin-bottom: 10px;
+}
+
+.risk-field-value-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.risk-field-value.is-drill {
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.drill-count-badge {
+  padding: 2px 10px;
+  color: #3a84ff;
+  cursor: pointer;
+  background-color: #cddffe;
+  border-radius: 8px;
 }
 </style>

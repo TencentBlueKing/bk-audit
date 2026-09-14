@@ -53,6 +53,10 @@
                   <bk-tag
                     v-for="item in rule.processorTags"
                     :key="`processor-${item.id}`"
+                    v-bk-tooltips="{
+                      content: item.name,
+                      placement: 'top',
+                    }"
                     class="notice-group-tag">
                     {{ item.name }}
                   </bk-tag>
@@ -67,6 +71,10 @@
                   <bk-tag
                     v-for="item in rule.followerTags"
                     :key="`follower-${item.id}`"
+                    v-bk-tooltips="{
+                      content: item.name,
+                      placement: 'top',
+                    }"
                     class="notice-group-tag">
                     {{ item.name }}
                   </bk-tag>
@@ -104,9 +112,13 @@
   import {
     type NoticeGroupOption,
     resolveNoticeGroupTags,
+    toNoticeGroupIds,
     useStrategyDetailRules,
   } from './use-strategy-detail-rules';
 
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import { isEmptyDispatchConditions } from '../../strategy-create/utils/strategy-protocol';
   import { getStrategyListScopeParams, isPlatformStrategyRoute } from '../../utils/strategy-routes';
 
   interface Props {
@@ -119,10 +131,59 @@
   const { t } = useI18n();
   const route = useRoute();
 
-  const showRuleNoticeGroups = computed(() => {
-    const isGlobal = props.data?.visibility?.binding_type === 'platform_binding'
-      || props.data?.binding_type === 'platform_binding';
-    return !isPlatformStrategyRoute(route.name) && !isGlobal;
+  const showRuleNoticeGroups = computed(() => !isPlatformStrategyRoute(route.name));
+
+  const isGlobalStrategy = computed(() => (
+    props.data?.visibility?.binding_type === 'platform_binding'
+    || props.data?.binding_type === 'platform_binding'
+  ));
+
+  const currentSceneId = computed(() => {
+    const { scene_id: sceneId } = getStrategyListScopeParams(route);
+    return sceneId || getSceneSystemParams().scope_id;
+  });
+
+  const matchDispatchRuleByScene = (rule: Record<string, any>, sceneId: string | number) => {
+    if (rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== '') {
+      if (String(rule.target_scene_id) === String(sceneId)) {
+        return true;
+      }
+    }
+    return (rule.scene_ids || []).some((id: unknown) => String(id) === String(sceneId));
+  };
+
+  const pickDispatchNotice = (rule?: Record<string, any>) => {
+    if (!rule) {
+      return {
+        processor: [] as Array<string | number>,
+        follower: [] as Array<string | number>,
+      };
+    }
+    return {
+      processor: toNoticeGroupIds(rule.processor ?? rule.processors),
+      follower: toNoticeGroupIds(rule.follower ?? rule.notice_users),
+    };
+  };
+
+  const sceneDispatchNotice = computed(() => {
+    if (!isGlobalStrategy.value) {
+      return null;
+    }
+    const sceneId = currentSceneId.value;
+    if (sceneId === undefined || sceneId === null || sceneId === '') {
+      return null;
+    }
+    const dispatchRules = props.data?.dispatch_rules || [];
+    const matched = dispatchRules.find((rule: Record<string, any>) => (
+      matchDispatchRuleByScene(rule, sceneId)
+    ));
+    if (matched) {
+      return pickDispatchNotice(matched);
+    }
+    const defaultRule = dispatchRules.find((rule: Record<string, any>) => (
+      isEmptyDispatchConditions(rule?.conditions)
+    ));
+    return pickDispatchNotice(defaultRule);
   });
 
   const strategyData = computed(() => props.data);
@@ -157,11 +218,15 @@
     return Array.from(map.values());
   });
 
-  const displayRulesWithTags = computed(() => displayRules.value.map(rule => ({
-    ...rule,
-    processorTags: resolveNoticeGroupTags(rule.processor, noticeGroupList.value),
-    followerTags: resolveNoticeGroupTags(rule.follower, noticeGroupList.value),
-  })));
+  const displayRulesWithTags = computed(() => displayRules.value.map((rule) => {
+    const processor = sceneDispatchNotice.value?.processor ?? rule.processor;
+    const follower = sceneDispatchNotice.value?.follower ?? rule.follower;
+    return {
+      ...rule,
+      processorTags: resolveNoticeGroupTags(processor, noticeGroupList.value),
+      followerTags: resolveNoticeGroupTags(follower, noticeGroupList.value),
+    };
+  }));
 
   const operatorMap = computed(() => (
     commonData.value.rule_audit_condition_operator || []
@@ -247,6 +312,14 @@
   .notice-group-tag {
     max-width: 220px;
     margin: 0 4px 4px 0;
+    overflow: hidden;
+
+    :deep(.bk-tag-text),
+    :deep(.bk-tag-content) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   .risk-level-tag {

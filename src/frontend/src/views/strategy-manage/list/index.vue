@@ -127,7 +127,7 @@
             :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
             :resource="strategyItem.strategy_id"
             theme="primary"
-            @click="handleEdit(strategyItem)">
+            @click="handleEdit(strategyItem, { fromDetail: true })">
             {{ t('编辑') }}
           </auth-button>
           <auth-button
@@ -1907,6 +1907,7 @@
     if (!visible) {
       detailRequestSeq += 1;
       detailLoading.value = false;
+      currentDetailTab.value = 'riskDetection';
     }
   });
 
@@ -1959,16 +1960,20 @@
   };
 
   // 编辑
-  const handleEdit = (data: StrategyModel) => {
+  const handleEdit = (data: StrategyModel, options?: { fromDetail?: boolean }) => {
     if (isSceneGlobalStrategy(data) || data.isPending || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
+    // 列表入口始终从第 1 步进入；详情侧栏编辑才跟随当前查看的 tab
+    const step = options?.fromDetail
+      ? (tabToStepMap[currentDetailTab.value] || 1)
+      : 1;
     router.push({
       name: strategyRoutes.edit,
       params: {
         id: data.strategy_id,
       },
       query: {
-        step: tabToStepMap[currentDetailTab.value] || 1,
+        step,
       },
     });
   };

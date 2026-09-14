@@ -71,7 +71,7 @@
                     class="header-actions"
                     @click.stop>
                     <audit-icon
-                      v-bk-tooltips="t('克隆')"
+                      v-bk-tooltips="t('复制')"
                       class="action-icon"
                       type="copy"
                       @click="() => handleCloneRule(index)" />
@@ -207,6 +207,7 @@
     hasValidAssignCondition,
     isEmptyDispatchConditions,
     toAssignWhere,
+    toNoticeGroupIds,
   } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
@@ -554,18 +555,18 @@
       ...rule,
       conditions: cloneConditionForm(rule.conditions),
       scene_ids: [...rule.scene_ids],
-      processors: [...rule.processors],
-      notice_users: [...rule.notice_users],
-      confirmers: [...rule.confirmers],
+      processors: toNoticeGroupIds(rule.processors),
+      notice_users: toNoticeGroupIds(rule.notice_users),
+      confirmers: toNoticeGroupIds(rule.confirmers),
     })),
     default_assign_rule: {
       ...(defaultRule.value.rule_id ? { rule_id: defaultRule.value.rule_id } : {}),
       collapsed: defaultRule.value.collapsed,
       scene_ids: [...defaultRule.value.scene_ids],
-      processors: [...defaultRule.value.processors],
-      notice_users: [...defaultRule.value.notice_users],
+      processors: toNoticeGroupIds(defaultRule.value.processors),
+      notice_users: toNoticeGroupIds(defaultRule.value.notice_users),
       assign_mode: defaultRule.value.assign_mode,
-      confirmers: [...defaultRule.value.confirmers],
+      confirmers: toNoticeGroupIds(defaultRule.value.confirmers),
     },
     // 兼容旧接口字段
     processor_groups: props.formData?.processor_groups ?? [],
@@ -641,10 +642,10 @@
             ...item,
             scene_ids: item.scene_ids ?? (item.target_scene_id !== undefined ? [item.target_scene_id] : []),
           }),
-          processors: item.processors ?? item.processor ?? [],
-          notice_users: item.notice_users ?? item.follower ?? [],
+          processors: toNoticeGroupIds(item.processors ?? item.processor),
+          notice_users: toNoticeGroupIds(item.notice_users ?? item.follower),
           assign_mode: item.assign_mode || (item.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
-          confirmers: item.confirmers ?? item.confirmer ?? [],
+          confirmers: toNoticeGroupIds(item.confirmers ?? item.confirmer),
         }));
         applyWhereToComponents();
       }
@@ -660,9 +661,9 @@
             scene_ids: defaultSource.scene_ids
               ?? (defaultSource.target_scene_id !== undefined ? [defaultSource.target_scene_id] : []),
           }),
-          processors: defaultSource.processors ?? defaultSource.processor ?? [],
-          notice_users: defaultSource.notice_users ?? defaultSource.follower ?? [],
-          confirmers: defaultSource.confirmers ?? defaultSource.confirmer ?? [],
+          processors: toNoticeGroupIds(defaultSource.processors ?? defaultSource.processor),
+          notice_users: toNoticeGroupIds(defaultSource.notice_users ?? defaultSource.follower),
+          confirmers: toNoticeGroupIds(defaultSource.confirmers ?? defaultSource.confirmer),
           assign_mode: defaultSource.assign_mode || (defaultSource.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
         };
       }

@@ -36,6 +36,10 @@
                 <bk-tag
                   v-for="item in rule.processorTags"
                   :key="`processor-${item.id}`"
+                  v-bk-tooltips="{
+                    content: item.name,
+                    placement: 'top',
+                  }"
                   class="notice-group-tag">
                   {{ item.name }}
                 </bk-tag>
@@ -50,6 +54,10 @@
                 <bk-tag
                   v-for="item in rule.followerTags"
                   :key="`follower-${item.id}`"
+                  v-bk-tooltips="{
+                    content: item.name,
+                    placement: 'top',
+                  }"
                   class="notice-group-tag">
                   {{ item.name }}
                 </bk-tag>
@@ -72,6 +80,10 @@
                 <bk-tag
                   v-for="item in rule.confirmerTags"
                   :key="`confirmer-${item.id}`"
+                  v-bk-tooltips="{
+                    content: item.name,
+                    placement: 'top',
+                  }"
                   class="notice-group-tag">
                   {{ item.name }}
                 </bk-tag>
@@ -256,6 +268,14 @@
   .notice-group-tag {
     max-width: 220px;
     margin: 0 4px 4px 0;
+    overflow: hidden;
+
+    :deep(.bk-tag-text),
+    :deep(.bk-tag-content) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   .risk-dispatch-rules-empty {
