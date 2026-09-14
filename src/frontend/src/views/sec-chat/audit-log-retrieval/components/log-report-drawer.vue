@@ -146,7 +146,7 @@
 
   import useMessage from '@hooks/use-message';
 
-  import aiIcon from '@images/ai-icon.svg';
+  import aiIcon from '@images/ai-icon.svg?inline';
 
   import type { RetrievalFilterCondition } from '../../types';
 

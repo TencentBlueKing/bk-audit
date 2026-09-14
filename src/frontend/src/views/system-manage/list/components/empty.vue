@@ -24,7 +24,7 @@
       'text-align': 'center',
     }">
     <img
-      src="@images/empty.svg"
+      :src="emptySvg"
       style="height: 200px; margin-top: -100px;">
     <div
       style="margin-top: 8px; font-size: 24px; line-height: 32px; color: #63656e;">
@@ -37,4 +37,5 @@
   </div>
 </template>
 <script setup lang="ts">
+  import emptySvg from '@images/empty.svg?inline';
 </script>

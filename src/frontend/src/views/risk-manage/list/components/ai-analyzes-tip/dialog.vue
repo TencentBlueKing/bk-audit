@@ -110,7 +110,7 @@
 
   import iconUnion from '@images/Union.svg';
   import iconZonghe from '@images/zonghe.svg';
-  import iconZrren from '@images/zrren.svg';
+  import iconZrren from '@images/zrren.svg?inline';
 
   import { formatStrategyNameWithId } from '@utils/format-strategy-name';
 

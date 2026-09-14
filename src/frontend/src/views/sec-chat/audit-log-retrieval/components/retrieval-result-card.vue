@@ -437,7 +437,7 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import aiSvg from '@images/ai.svg';
-  import emptySearchIcon from '@images/empty-search.svg';
+  import emptySearchIcon from '@images/empty-search.svg?inline';
   import errorSearchIcon from '@images/error-search.svg';
 
   import { useSecChatStore } from '../../composables/use-sec-chat-store';

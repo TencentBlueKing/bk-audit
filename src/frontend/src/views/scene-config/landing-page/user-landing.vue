@@ -317,7 +317,7 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import landingImg from '@/images/landing.png';
+  import landingImg from '@/images/landing.png?inline';
   import qwIcon from '@/images/qw.svg';
 
   type ApplyStatus = 'idle' | 'applying' | 'rejected' | 'passed';
