@@ -21,7 +21,8 @@ class FakeLogAnalysisAgent:
     user_pair_ready: threading.Event = field(default_factory=threading.Event)
 
     def record(self, payload: dict[str, Any]) -> tuple[str, int]:
-        request_input = json.loads(payload["input"])
+        # 首轮分析输入通过 chat_history 的最后一条 user 消息传递。
+        request_input = json.loads(payload["chat_history"][-1]["content"])
         instruction = request_input["instruction"]
         with self.lock:
             self.requests.append(payload)
