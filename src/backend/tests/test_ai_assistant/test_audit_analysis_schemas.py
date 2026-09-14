@@ -131,6 +131,7 @@ class AIAnalysisSchemaTest(SimpleTestCase):
         self.assertEqual(
             set(context.model_dump(mode="json")),
             {
+                "system_prompt",
                 "effective_instruction",
                 "search_condition",
                 "query_summary",

@@ -135,3 +135,7 @@ NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
 # 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
 AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
 DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"
+
+# 日志分析重试退避（秒）；上限短于平台失活阈值，避免排队期间被巡检收敛。
+LOG_ANALYSIS_RETRY_DELAY_SECONDS = 30
+LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS = 120

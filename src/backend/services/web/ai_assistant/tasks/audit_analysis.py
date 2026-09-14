@@ -9,19 +9,25 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from blueapps.core.celery import celery_app
 from celery.result import AsyncResult, EagerResult
+from celery.utils.time import get_exponential_backoff_interval
 from django.conf import settings
 from django.utils import timezone
 from gevent import Timeout
+from requests.exceptions import HTTPError, RequestException
 
+from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.constants import AIAgentCode
-from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import (
     DEFAULT_AI_ANALYSIS_TITLE,
+    LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS,
+    LOG_ANALYSIS_RETRY_DELAY_SECONDS,
     AttachmentType,
     ExecutionStatus,
 )
@@ -175,6 +181,8 @@ class LogAnalysisExecutionTask(AttachmentExecutionTask):
     queue="ai_assistant_log_analysis",
     ignore_result=True,
     acks_late=True,
+    max_retries=settings.AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES,
+    default_retry_delay=LOG_ANALYSIS_RETRY_DELAY_SECONDS,
     rate_limit=settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT,
     time_limit=settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT,
 )
@@ -182,7 +190,39 @@ def execute_log_analysis(
     self,
     execution: AttachmentExecution,
 ) -> AIAnalysisOutputSchema:  # noqa: N805
-    """调用日志分析 Agent，过程事件实时写入平台 UI 流。"""
+    """按错误类型重试 Agent 执行；权限和请求参数错误直接交给平台收敛。"""
+
+    try:
+        return _execute_log_analysis(execution)
+    except (
+        APIRequestError,
+        RequestException,
+        AGUIStreamProtocolError,
+        LogAnalysisTimeout,
+        AttachmentOutputValidationError,
+    ) as error:
+        status_code = None
+        if isinstance(error, APIRequestError):
+            status_code = error.status_code
+        elif isinstance(error, HTTPError) and error.response is not None:
+            status_code = error.response.status_code
+        if (
+            status_code is not None
+            and HTTPStatus.BAD_REQUEST <= status_code < HTTPStatus.INTERNAL_SERVER_ERROR
+            and status_code not in (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS)
+        ):
+            raise
+        countdown = get_exponential_backoff_interval(
+            factor=self.default_retry_delay,
+            retries=self.request.retries,
+            maximum=LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS,
+            full_jitter=True,
+        )
+        raise self.retry(exc=error, countdown=countdown) from error
+
+
+def _execute_log_analysis(execution: AttachmentExecution) -> AIAnalysisOutputSchema:
+    """按固化的请求快照调用 Agent、透传事件并返回最终产物；调用及校验异常向上传递。"""
 
     # 流执行已在首次请求前落库；每次重新执行会轮换标识，避免复用失败会话。
     thread_id = str(execution.stream.execution_id)
@@ -190,7 +230,7 @@ def execute_log_analysis(
         "日志分析 Agent 首轮会话: attachment_uid=%s, thread_id=%s, system_prompt_sha256=%s",
         execution.attachment.uid,
         thread_id,
-        hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
+        hashlib.sha256(execution.context_data.system_prompt.encode("utf-8")).hexdigest(),
     )
     artifact_extractor = LogAnalysisArtifactExtractor()
 
@@ -206,7 +246,7 @@ def execute_log_analysis(
             agent_code=AIAgentCode.AUDIT_LOG_ANALYSIS,
             user=execution.context_data.username,
             chat_history=[
-                {"role": "role", "content": SYSTEM_PROMPT},
+                {"role": "role", "content": execution.context_data.system_prompt},
                 {"role": "user", "content": build_agent_input(execution.context_data)},
             ],
             execute_kwargs={"stream": True, "thread_id": thread_id},

@@ -7,6 +7,7 @@ Handler 只负责校验 LOG_SEARCH 来源、构建最小快照与声明编辑/�
 from django.conf import settings
 
 from apps.meta.models import GlobalMetaConfig
+from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import (
     AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY,
     DEFAULT_AI_ANALYSIS_TITLE,
@@ -107,6 +108,7 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
         return AttachmentPreparation(
             title=DEFAULT_AI_ANALYSIS_TITLE,
             context_data=AIAnalysisContextSchema(
+                system_prompt=SYSTEM_PROMPT,
                 effective_instruction=effective_instruction,
                 search_condition=search_condition,
                 query_summary=AIAnalysisQuerySummary(
