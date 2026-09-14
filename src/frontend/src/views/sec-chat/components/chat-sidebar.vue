@@ -483,7 +483,25 @@
         <div
           v-if="isSearchActive && !hasSearchMatches"
           class="search-results-empty">
-          无匹配对话
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;"
+            type="search-empty">
+            <div>
+              <div style="color: #63656e;">
+                搜索结果为空
+              </div>
+              <div style="margin-top: 8px; color: #979ba5;">
+                可以尝试调整关键词 或
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleClearSearch">
+                  清空搜索条件
+                </bk-button>
+              </div>
+            </div>
+          </bk-exception>
         </div>
       </div>
     </template>
@@ -1007,6 +1025,10 @@
 
   const isSearchActive = computed(() => searchKeyword.value.trim().length > 0);
   const normalizedSearchKeyword = computed(() => normalizeSearchText(searchKeyword.value));
+
+  const handleClearSearch = () => {
+    searchKeyword.value = '';
+  };
 
   const collapsedFilteredHistoryList = computed(() => {
     const keyword = normalizeSearchText(collapsedSearchKeyword.value);
