@@ -128,7 +128,6 @@
   });
 
   const checkResultMap = ref<Record<string, boolean>>({});
-  let sceneWatchInitialized = false;
 
   const {
     loading: isGroupLoading,
@@ -170,33 +169,29 @@
     fetchGroupList({ scene_id: selectedSceneId.value });
   };
 
-  const filterValidGroupIds = (ids: Array<string | number>) => {
-    const validIdSet = new Set((groupList.value || []).map(item => String(item.id)));
-    return ids
-      .map((id) => {
-        const num = Number(id);
-        return Number.isNaN(num) ? id : num;
-      })
-      .filter(id => validIdSet.has(String(id)));
-  };
-
   watch(
     () => props.modelValue.scene_ids?.[0],
     (sceneId, prevSceneId) => {
       if (!hasSceneId(sceneId)) {
         groupList.value = [];
         checkResultMap.value = {};
-        if (!sceneWatchInitialized) {
-          sceneWatchInitialized = true;
+        // 用户清空场景时，通知组一并清空；编辑回填（prev 为空）不能清
+        if (hasSceneId(prevSceneId)) {
+          emits('update:modelValue', {
+            ...props.modelValue,
+            processors: [],
+            notice_users: [],
+            confirmers: [],
+          });
         }
         return;
       }
       loadSceneRelatedData(sceneId);
-      if (!sceneWatchInitialized) {
-        sceneWatchInitialized = true;
+      // 首次从空回填到有场景，不算用户切换
+      if (!hasSceneId(prevSceneId)) {
         return;
       }
-      if (`${sceneId}` !== `${prevSceneId ?? ''}`) {
+      if (`${sceneId}` !== `${prevSceneId}`) {
         emits('update:modelValue', {
           ...props.modelValue,
           processors: [],
@@ -206,31 +201,6 @@
       }
     },
     { immediate: true },
-  );
-
-  watch(
-    [groupList, isGroupLoading],
-    () => {
-      if (isGroupLoading.value || !selectedSceneId.value) return;
-      if (!groupList.value?.length) return;
-      const processors = filterValidGroupIds(props.modelValue.processors || []);
-      const noticeUsers = filterValidGroupIds(props.modelValue.notice_users || []);
-      const confirmers = filterValidGroupIds(props.modelValue.confirmers || []);
-      if (
-        processors.length === (props.modelValue.processors || []).length
-        && noticeUsers.length === (props.modelValue.notice_users || []).length
-        && confirmers.length === (props.modelValue.confirmers || []).length
-      ) {
-        return;
-      }
-      emits('update:modelValue', {
-        ...props.modelValue,
-        processors,
-        notice_users: noticeUsers,
-        confirmers,
-      });
-    },
-    { deep: true },
   );
 </script>
 <style lang="postcss" scoped>

@@ -111,6 +111,31 @@ export const createEmptyAssignWhere = (): AssignWhere => ({
   }],
 });
 
+/** 通知组字段统一成 ID 列表（兼容对象 / 单值 / 字符串数字） */
+export const toNoticeGroupIds = (value: unknown): Array<string | number> => {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .map((item) => {
+      if (item === undefined || item === null || item === '') {
+        return null;
+      }
+      let rawId: unknown = item;
+      if (typeof item === 'object') {
+        const rec = item as Record<string, unknown>;
+        rawId = rec.id ?? rec.group_id;
+      }
+      if (rawId === undefined || rawId === null || rawId === '') {
+        return null;
+      }
+      const num = Number(rawId);
+      return Number.isNaN(num) ? rawId as string | number : num;
+    })
+    .filter((id): id is string | number => id !== null);
+};
+
 const getConditionFieldRaw = (field: unknown) => {
   if (!field) return '';
   if (typeof field === 'string') return field;
@@ -781,9 +806,9 @@ const toDispatchRule = (rule: Record<string, any>, isDefault: boolean, isEdit = 
     rule_name: rule.rule_name || rule.name || (isDefault ? '默认分派规则' : '分派规则'),
     conditions,
     target_scene_id: toTargetSceneId(rule),
-    processor: rule.processor ?? rule.processors ?? [],
-    follower: rule.follower ?? rule.notice_users ?? [],
-    confirmer: rule.confirmer ?? rule.confirmers ?? [],
+    processor: toNoticeGroupIds(rule.processor ?? rule.processors),
+    follower: toNoticeGroupIds(rule.follower ?? rule.notice_users),
+    confirmer: toNoticeGroupIds(rule.confirmer ?? rule.confirmers),
     dispatch_mode: rule.dispatch_mode || mapAssignModeToDispatch(rule.assign_mode),
   };
 };
@@ -978,24 +1003,26 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
     }];
   const isEdit = !!params.strategy_id;
 
-  const fallbackProcessor = params.processor_groups?.length
+  const fallbackProcessor = toNoticeGroupIds(params.processor_groups?.length
     ? params.processor_groups
     : (params.default_assign_rule?.processors
       ?? params.default_assign_rule?.processor
-      ?? []);
-  const fallbackFollower = params.notice_groups?.length
+      ?? []));
+  const fallbackFollower = toNoticeGroupIds(params.notice_groups?.length
     ? params.notice_groups
     : (params.default_assign_rule?.notice_users
       ?? params.default_assign_rule?.follower
-      ?? []);
+      ?? []));
 
   return source.map((rule: Record<string, any>, index: number) => {
     const { where, having } = pickWhereHaving(rule, index === 0 ? params.configs : undefined);
     let processor: Array<string | number> = [];
     let follower: Array<string | number> = [];
     if (isScene) {
-      processor = rule.processor?.length ? rule.processor : fallbackProcessor;
-      follower = rule.follower?.length ? rule.follower : fallbackFollower;
+      const ruleProcessor = toNoticeGroupIds(rule.processor ?? rule.processors);
+      const ruleFollower = toNoticeGroupIds(rule.follower ?? rule.notice_users);
+      processor = ruleProcessor.length ? ruleProcessor : fallbackProcessor;
+      follower = ruleFollower.length ? ruleFollower : fallbackFollower;
     }
     return {
       ...(isEdit && rule.rule_id ? { rule_id: rule.rule_id } : {}),
@@ -1113,10 +1140,10 @@ const fromDispatchRuleToForm = (rule: Record<string, any> = {}) => ({
   scene_ids: rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== ''
     ? [rule.target_scene_id]
     : (rule.scene_ids ?? []),
-  processors: rule.processor ?? rule.processors ?? [],
-  notice_users: rule.follower ?? rule.notice_users ?? [],
+  processors: toNoticeGroupIds(rule.processor ?? rule.processors),
+  notice_users: toNoticeGroupIds(rule.follower ?? rule.notice_users),
   assign_mode: mapDispatchModeToAssign(rule.dispatch_mode || rule.assign_mode),
-  confirmers: rule.confirmer ?? rule.confirmers ?? [],
+  confirmers: toNoticeGroupIds(rule.confirmer ?? rule.confirmers),
 });
 
 /** 详情回填：新协议字段转回向导内部结构 */
@@ -1150,8 +1177,8 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
     risk_level: rule.risk_level ?? d.risk_level ?? 'HIGH',
     risk_hazard: rule.risk_hazard ?? d.risk_hazard ?? '',
     risk_guidance: rule.risk_guidance ?? d.risk_guidance ?? '',
-    processor: rule.processor ?? [],
-    follower: rule.follower ?? [],
+    processor: toNoticeGroupIds(rule.processor ?? rule.processors),
+    follower: toNoticeGroupIds(rule.follower ?? rule.notice_users),
     conditions: {
       where: rule.conditions?.where ?? rule.configs?.where ?? (index === 0 ? d.configs?.where : null),
       having: rule.conditions?.having ?? rule.configs?.having ?? (index === 0 ? d.configs?.having : null),

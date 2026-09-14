@@ -22,7 +22,7 @@ import type RiskManageModel from '@model/risk/risk';
 import EditTag from '@components/edit-box/tag.vue';
 import Tooltips from '@components/show-tooltips-text/index.vue';
 
-import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+import { resolveRiskStatusName, RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
 import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
 import { findStrategyLabel, formatStrategyNameWithId } from '@utils/format-strategy-name';
@@ -136,7 +136,7 @@ export const createBaseRiskColumns = (deps: RiskColumnDeps, t: RiskColumnTransla
         const BkButton = resolveComponent('bk-button');
         const AuditIcon = resolveComponent('audit-icon');
         const config = statusToMap[row.status] || {};
-        const name = riskStatusCommon.value.find((i: any) => i.id === row.status)?.name || '--';
+        const name = resolveRiskStatusName(row.status, riskStatusCommon.value) || '--';
 
         const tagNode = h(BkTag as any, { theme: config.tag }, () => [
           h('p', { style: 'display: flex; align-items: center;' }, [

@@ -313,9 +313,10 @@
   }
 
   .add-rule-item {
-    display: flex;
+    display: inline-flex;
+    width: fit-content;
     height: 32px;
-    padding: 0 5px;
+    padding: 0 12px 0 6px;
     color: #3a84ff;
     cursor: pointer;
     background: #fafbfd;
