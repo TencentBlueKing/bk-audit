@@ -95,6 +95,10 @@ export default class Strategy {
   risk_guidance: string;
   risk_title: string;
   risk_count: number;
+  scene_risk_counts?: Array<{
+    scene_id: string | number;
+    risk_count: number;
+  }>;
   strategy_type: string;
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
@@ -136,6 +140,9 @@ export default class Strategy {
     this.risk_guidance = payload.risk_guidance;
     this.risk_title = payload.risk_title;
     this.risk_count = payload.risk_count; // 风险数量
+    this.scene_risk_counts = Array.isArray(payload.scene_risk_counts)
+      ? payload.scene_risk_counts
+      : [];
     this.strategy_type = payload.strategy_type;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
