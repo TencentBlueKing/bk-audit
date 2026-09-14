@@ -85,7 +85,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import landingImg from '@/images/landing.png';
+  import landingImg from '@/images/landing.png?inline';
 
   const { t } = useI18n();
   const router = useRouter();

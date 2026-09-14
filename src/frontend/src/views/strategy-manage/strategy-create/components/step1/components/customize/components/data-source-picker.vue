@@ -55,7 +55,7 @@
         class="dsp-empty">
         <img
           class="dsp-empty-img"
-          src="@images/empty.svg">
+          :src="emptySvg">
         <div class="dsp-empty-title">
           {{ t('暂无数据源') }}
         </div>
@@ -210,6 +210,8 @@
   import RootManageService from '@service/root-manage';
 
   import ConfigModel from '@model/root/config';
+
+  import emptySvg from '@images/empty.svg?inline';
 
   import useRequest from '@/hooks/use-request';
 
