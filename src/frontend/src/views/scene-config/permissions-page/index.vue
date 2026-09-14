@@ -251,7 +251,7 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import landingImg from '@/images/landing.png';
+  import landingImg from '@/images/landing.png?inline';
 
   type ApplyStatus = 'idle' | 'applying' | 'rejected' | 'passed';
 

@@ -63,7 +63,7 @@
             class="field-output">
             <img
               class="field-type-icon"
-              :src="getFieldTypeIcon(item.field_type)">
+              :src="getAssetsFile(`field-type/${item.field_type}.png`)">
             <span>
               {{ `${item.field_name}(${item.field_alias})` }}
             </span>
@@ -75,7 +75,7 @@
       v-else
       class="exception-empty-part">
       <img
-        src="@images/content-empty.png"
+        :src="contentEmptyPng"
         style="width: 220px;">
       <p class="tip">
         {{ t('暂无方案说明') }}
@@ -89,7 +89,9 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import getFieldTypeIcon from '@utils/getFieldTypeIcon';
+  import contentEmptyPng from '@images/content-empty.png?inline';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   interface Props{
     data: Record<string, any> | null

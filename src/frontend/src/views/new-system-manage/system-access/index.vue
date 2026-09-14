@@ -21,7 +21,7 @@
     @click="handleCloseSelect($event)">
     <img
       class="access-empty"
-      src="@images/empty.svg">
+      :src="emptySvg">
     <div class="icon-title">
       {{ t("尚未接入系统") }}
     </div>
@@ -174,6 +174,7 @@
 
   import ImportSvg from '@images/Import.svg';
   import ImportActiveSvg from '@images/Import-active.svg';
+  import emptySvg from '@images/empty.svg?inline';
 
   import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
