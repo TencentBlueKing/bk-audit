@@ -346,6 +346,17 @@ class AttachmentRequestSerializerTest(TestCase):
             parameter["name"]: parameter
             for parameter in schema["paths"]["/api/v1/ai_assistant/attachments/"]["get"]["parameters"]
         }
+        self.assertEqual(parameters["sort"]["schema"]["type"], "array")
+        self.assertEqual(parameters["limit"]["schema"]["type"], "integer")
+        conversation_list = schema["paths"]["/api/v1/ai_assistant/conversations/"]["get"]
+        self.assertEqual(
+            conversation_list["responses"]["200"]["content"]["application/json"]["schema"]["type"], "array"
+        )
+        self.assertTrue(
+            {"has_attachments", "attachment_type"}.issubset(
+                {parameter["name"] for parameter in conversation_list["parameters"]}
+            )
+        )
         expected_enums = {
             "attachment_type": set(AttachmentType.values),
             "status": set(ExecutionStatus.values),

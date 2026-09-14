@@ -10,6 +10,7 @@ from services.web.ai_assistant.serializers.conversation import (
     ConversationGroupDetailRequestSerializer,
     ConversationGroupResponseSerializer,
     ConversationGroupUpdateRequestSerializer,
+    ConversationListRequestSerializer,
     ConversationResponseSerializer,
     ConversationSearchResponseSerializer,
     ConversationUpdateRequestSerializer,
@@ -119,6 +120,22 @@ class ClearConversations(AIAssistantResource):
 
     def perform_request(self, validated_request_data):
         ConversationService(user=get_request_username()).clear_conversations()
+
+
+class ListConversations(AIAssistantResource):
+    """全量返回当前用户未删除会话摘要，不受侧栏分组或置顶位置限制。"""
+
+    name = gettext_lazy("获取会话列表")
+    RequestSerializer = ConversationListRequestSerializer
+    ResponseSerializer = ConversationResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        """转换公开附件类型参数后交由领域服务查询。"""
+
+        query = dict(validated_request_data)
+        query["attachment_types"] = query.pop("attachment_type", None)
+        return ConversationService(user=get_request_username()).list(**query)
 
 
 class ListPinnedConversations(AIAssistantResource):

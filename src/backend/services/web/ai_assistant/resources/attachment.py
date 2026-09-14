@@ -32,7 +32,7 @@ class CreateAttachment(AIAssistantResource):
 
 
 class ListAttachments(AIAssistantResource):
-    """一次性返回附件摘要列表，支持按类型、状态、来源消息、会话和关键词筛选。"""
+    """返回附件摘要列表，支持类型、状态、来源、标题筛选及排序、限量。"""
 
     name = gettext_lazy("获取附件列表")
     RequestSerializer = AttachmentListRequestSerializer
