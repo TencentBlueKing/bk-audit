@@ -807,7 +807,7 @@
 
   import aiAddIcon from '@images/ai-add.svg';
   import aiSettingIcon from '@images/ai-setting.svg';
-  import folderEmptyIcon from '@images/folder-empty.svg';
+  import folderEmptyIcon from '@images/folder-empty.svg?inline';
   import folderIcon from '@images/folder.svg';
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';

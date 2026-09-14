@@ -88,7 +88,7 @@
                   v-else
                   class="no-data">
                   <img
-                    src="@images/no-log-data.svg"
+                    :src="noLogDataSvg"
                     style="width: 68px; margin-left: 16px;">
                   <div
                     class="ml8"
@@ -248,6 +248,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
+
+  import noLogDataSvg from '@images/no-log-data.svg?inline';
 
   import RenderAlternativeField from '@/views/system-manage/log-create/components/field-cleaning/components/field-map/alternative-field.vue';
   import FieldMap from '@/views/system-manage/log-create/components/field-cleaning/components/field-map/index.vue';

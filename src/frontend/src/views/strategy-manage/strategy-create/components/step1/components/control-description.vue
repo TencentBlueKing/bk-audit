@@ -75,7 +75,7 @@
       v-else
       class="exception-empty-part">
       <img
-        src="@images/content-empty.png"
+        :src="contentEmptyPng"
         style="width: 220px;">
       <p class="tip">
         {{ t('暂无方案说明') }}
@@ -88,6 +88,8 @@
   import { useI18n } from 'vue-i18n';
 
   import EditTag from '@components/edit-box/tag.vue';
+
+  import contentEmptyPng from '@images/content-empty.png?inline';
 
   import getFieldTypeIcon from '@utils/getFieldTypeIcon';
 
