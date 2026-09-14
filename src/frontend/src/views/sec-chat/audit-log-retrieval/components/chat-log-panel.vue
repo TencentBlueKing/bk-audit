@@ -173,14 +173,14 @@
                   class="failed-retry-btn"
                   size="small"
                   theme="primary"
-                  @click="$emit('retry-message', msg.id)">
+                  @click="handleRetryMessage(msg.id)">
                   重试
                 </bk-button>
               </div>
             </div>
           </template>
 
-          <!-- 条件检索卡：未检索时覆盖草稿；已检索后再点则新建，固定在会话底部 -->
+          <!-- 条件检索卡：未检索草稿；发 NL / 出现 NL 结果时收起；检索成功后收起，再点新建 -->
           <div
             v-for="card in conditionFilterCards"
             :id="`condition-filter-${card.id}`"
@@ -205,7 +205,7 @@
           ref="chatInputRef"
           hide-shortcuts
           @attach="$emit('attach')"
-          @send="$emit('send', $event)" />
+          @send="handleSend" />
       </div>
     </div>
   </div>
@@ -271,7 +271,7 @@
     appendInputValue:(text: string, separator?: string) => void
   } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
-  /** 引导卡条件筛选：未检索最多 1 张草稿（再点覆盖）；检索成功收起后再点则新建 */
+
   const conditionFilterCards = ref<Array<{
     id: string
     fieldName: string
@@ -436,8 +436,32 @@
     chatInputRef.value?.appendInputValue(text);
   };
 
+  /** 切换到自然语言检索时，收起未检索的条件草稿 */
+  const dismissConditionFilterDraft = () => {
+    if (!conditionFilterCards.value.length) return;
+    conditionFilterCards.value = [];
+  };
+
+  const isNlRelatedMessage = (msg: ChatMessage) => (
+    (msg.role === 'user' && msg.type === 'text')
+    || msg.messageType === 'USER_INTENT'
+    || msg.messageType === 'NATURAL_LANGUAGE_SEARCH'
+  );
+
+  const handleSend = (content: string) => {
+    dismissConditionFilterDraft();
+    emit('send', content);
+  };
+
+  const handleRetryMessage = (messageUid: string) => {
+    dismissConditionFilterDraft();
+    emit('retry-message', messageUid);
+  };
+
   const handleRegenerate = (text: string) => {
-    if (text) emit('send', text);
+    if (!text) return;
+    dismissConditionFilterDraft();
+    emit('send', text);
   };
 
   const createConditionFilterCardId = () => (
@@ -576,6 +600,24 @@
     }
     if (newLen > oldLen) {
       await scrollToBottom(oldLen !== 0);
+    }
+  });
+
+  /**
+   * 消息流尾部新出现 NL 相关消息时收起条件草稿。
+   * 覆盖 store 直发 / 轮询落结果等不经输入框 send 的路径；加载历史（prepend）不触发。
+   */
+  watch(() => props.messages, (msgs, prevMsgs) => {
+    if (!conditionFilterCards.value.length || !prevMsgs?.length) return;
+    if (scrollAnchor.value || props.loadingOlderMessages) return;
+    const prevIds = new Set(prevMsgs.map(item => item.id));
+    const added = msgs.filter(item => !prevIds.has(item.id));
+    if (!added.length) return;
+    const lastId = msgs[msgs.length - 1]?.id;
+    // 仅处理追加到尾部；历史 prepend 时新增 id 不在末尾
+    if (!lastId || !added.some(item => item.id === lastId)) return;
+    if (added.some(isNlRelatedMessage)) {
+      dismissConditionFilterDraft();
     }
   });
 
