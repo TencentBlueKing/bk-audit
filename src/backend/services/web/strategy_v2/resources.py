@@ -583,11 +583,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         }
         if scene_id is not None:
             qs_filter["scene_id"] = scene_id
-        scene_risk_qs = (
-            Risk.objects.filter(**qs_filter)
-            .values('strategy_id', 'scene_id')
-            .annotate(count=Count('*'))
-        )
+        scene_risk_qs = Risk.objects.filter(**qs_filter).values('strategy_id', 'scene_id').annotate(count=Count('*'))
         scene_risk_map: Dict[int, List[Dict]] = defaultdict(list)
         for row in scene_risk_qs:
             scene_risk_map[row['strategy_id']].append({"scene_id": row['scene_id'], "risk_count": row['count']})

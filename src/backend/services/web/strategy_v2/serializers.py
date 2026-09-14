@@ -515,9 +515,7 @@ class StrategySerializer(serializers.Serializer):
             if is_system_strategy:
                 # 系统策略：保留字段仅支持来源字段直传，固定值会覆盖直传结果
                 if map_config_by_name[field_name].get("target_value"):
-                    raise serializers.ValidationError(
-                        gettext("系统策略保留字段[%s]仅支持来源字段映射，不支持固定值") % field_name
-                    )
+                    raise serializers.ValidationError(gettext("系统策略保留字段[%s]仅支持来源字段映射，不支持固定值") % field_name)
                 continue
             raise serializers.ValidationError(gettext("字段[%s]为系统保留字段，不支持配置映射") % field_name)
         return validated_request_data
@@ -1047,28 +1045,22 @@ class MultiRuleValidateMixin:
     def _check_dispatch_condition_fields(attrs: dict) -> None:
         """
         分派条件字段合法域校验（field 为对象结构，同发现规则 where）：
-        - select 字段：display_name 命中策略级 select（求值时从 event_data 按该键取值）
-        - 直连字段：raw_name ∈ 事件输出字段 ∪ 规则实例化字段（求值时直接从分派上下文读取）
+        仅允许策略级 select 字段（display_name）
         """
         configs = attrs.get("configs") or {}
         select_names = {f.get("display_name") for f in configs.get("select") or [] if f.get("display_name")}
         if not select_names:
             # 非规则审计策略或未携带 configs（如部分更新场景）：无 select 词表，不做校验
             return
-        passthrough = {f.field_name for f in EventMappingFields().fields} | {
-            "risk_level",
-            "risk_hazard",
-            "risk_guidance",
-        }
         for rule in attrs.get("dispatch_rules") or []:
             for leaf in MultiRuleValidateMixin._walk_tree_leaves(rule.get("conditions")):
                 field = (leaf or {}).get("field") or {}
-                display_name, raw_name = field.get("display_name"), field.get("raw_name")
-                if display_name in select_names or raw_name in passthrough:
+                display_name = field.get("display_name")
+                if display_name in select_names:
                     continue
                 raise serializers.ValidationError(
                     gettext("分派规则[%s]的条件字段[%s]不在可选范围内，可选字段：%s")
-                    % (rule.get("rule_name"), display_name or raw_name, ",".join(sorted(select_names | passthrough)))
+                    % (rule.get("rule_name"), display_name or field.get("raw_name"), ",".join(sorted(select_names)))
                 )
 
 

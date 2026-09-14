@@ -202,11 +202,19 @@ class RiskHandler:
             if rule is not None and rule.strategy_id != event["strategy_id"]:
                 # 事件的规则归属与策略不一致
                 logger.warning(
-                    "[CreateRisk] rule %s not belong to strategy %s, fallback to strategy meta",
+                    "[CreateRisk] rule %s not belong to strategy %s, discard event",
                     strategy_rule_id,
                     event["strategy_id"],
                 )
-                rule = None
+                return None
+            if rule is None:
+                # 显式规则 ID 但规则已删除：延迟事件应丢弃，避免回退首规则导致重复建单
+                logger.warning(
+                    "[CreateRisk] rule %s not found (deleted?), discard event for strategy %s",
+                    strategy_rule_id,
+                    event["strategy_id"],
+                )
+                return None
         # 存量事件strategy_rule_id为空，需要从本地DB去查rule
         if rule is None:
             rule_order = (
@@ -257,6 +265,8 @@ class RiskHandler:
 
         # 构建建单参数，避免旧 SQL 未重建窗口期事件因规则 ID 为空导致去重错位、重复建单
         create_params = self.gen_risk_create_params(event)
+        if create_params is None:
+            return False, None
 
         # 手动创建事件在建单前即标记同步/录入中状态（与场景解析顺序无关，提前固化）
         if manual:
@@ -382,13 +392,8 @@ class RiskHandler:
         strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
         if strategy is None:
             return None
-        # ctx：事件字段 + 已实例化的规则元信息
-        ctx = {
-            **event,
-            "risk_level": create_params.get("risk_level"),
-            "risk_hazard": create_params.get("risk_hazard"),
-            "risk_guidance": create_params.get("risk_guidance"),
-        }
+        # ctx：事件字段
+        ctx = {**event}
         dispatch_result = match_dispatch_rule(ctx, strategy=strategy)
         if not dispatch_result.matched:
             logger.error(

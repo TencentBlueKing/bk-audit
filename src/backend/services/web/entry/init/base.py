@@ -69,7 +69,7 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import BindingType, DEFAULT_SCENE_NAME
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 

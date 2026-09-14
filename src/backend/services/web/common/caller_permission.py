@@ -30,7 +30,7 @@ from services.web.scene.constants import (
     SceneStatus,
 )
 from services.web.scene.filters import CompositeScopeFilter
-from services.web.scene.models import ResourceBindingScene, Scene
+from services.web.scene.models import Scene
 from services.web.tool.models import Tool
 
 
@@ -196,22 +196,14 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     from services.web.risk.models import Risk
     from services.web.strategy_v2.models import StrategyTool
 
-    strategy_id = Risk.objects.filter(risk_id=risk_id).values_list("strategy_id", flat=True).first()
-    if not strategy_id:
+    risk = Risk.objects.filter(risk_id=risk_id).only("strategy_id", "scene_id").first()
+    if not risk or not risk.strategy_id:
         return False
 
-    if not StrategyTool.objects.filter(strategy_id=strategy_id, tool_uid=tool_uid).exists():
+    if not StrategyTool.objects.filter(strategy_id=risk.strategy_id, tool_uid=tool_uid).exists():
         return False
 
-    scene_id = (
-        ResourceBindingScene.objects.filter(
-            scene__is_deleted=False,
-            binding__resource_type=ResourceVisibilityType.STRATEGY,
-            binding__resource_id=str(strategy_id),
-        )
-        .values_list("scene_id", flat=True)
-        .first()
-    )
+    scene_id = risk.scene_id
     if not scene_id:
         return False
 

@@ -28,11 +28,9 @@ from services.web.strategy_v2.models import DispatchRule, Strategy
 
 条件树结构：与发现规则 where 条件一致（core.sql.model.WhereCondition，field 为字段对象）
 
-字段词表（field 对象的求值来源，resolve_field 按此解析）：
-- select 字段：display_name 命中事件输出 event_data 的键（策略级 select 以 display_name 作为输出列名）
-- 直连字段：raw_name 直接读取——事件输出字段（EventMappingFields 定义，
-  如 strategy_id/strategy_rule_id/event_type/event_time/event_source/operator/raw_event_id/event_content...）
-  及规则实例化字段（risk_level、risk_hazard、risk_guidance）
+字段词表（校验层见 MultiRuleValidateMixin._check_dispatch_condition_fields）：
+- 仅允许策略级 select 字段：display_name 命中事件输出 event_data 的键
+  （select 以 display_name 作为输出列名，求值按该键从 event_data 取值）
 """
 
 
@@ -72,7 +70,6 @@ def resolve_field(field: ConditionField, ctx: dict) -> Any:
     """
     解析条件字段对象的值（结构同发现规则 where 的 field 对象）：
     - select 字段：display_name 命中 ctx.event_data 的键（策略级 select 以 display_name 作为输出列名）
-    - 直连字段：raw_name 直接读取（事件输出字段 / risk_level 等规则实例化字段）
     """
     if field is None:
         return None
@@ -200,10 +197,19 @@ def _field_python_type(field: Optional[ConditionField]):
 
 def _as_number(value: Any) -> Any:
     """
-    字段是数值类型时，把实际值和条件值都转为数字
+    字段是数值类型时，把实际值和条件值都转为数字。
+    优先保留 int（无精度损失），仅真正的小数转 float。
     """
     if value is None or isinstance(value, bool):
         return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        pass
     try:
         return float(value)
     except (TypeError, ValueError):
