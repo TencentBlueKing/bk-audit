@@ -21,7 +21,11 @@ import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/typ
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
 import type { LogFieldConditionValue, SelectedSystem, SystemFieldRow } from '../../types';
-import { resolveSystemFieldDisplayLabel } from '../../utils/map-ai-message';
+import {
+  resolveNestedPathLabel,
+  resolveParentFieldLabel,
+  resolveSystemFieldDisplayLabel,
+} from '../../utils/map-ai-message';
 
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
@@ -221,12 +225,15 @@ const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
   && 'operator' in value
 );
 
-const fieldConfigFromRow = (field: SystemFieldRow): ILogFieldConfig => {
+const fieldConfigFromRow = (
+  field: SystemFieldRow,
+  fieldCatalog: SystemFieldRow[] = [],
+): ILogFieldConfig => {
   const operators = field.allowOperators || [];
   const options = field.options || [];
   const hasOptions = options.length > 0;
   const isUser = /user|username/i.test(field.rawName) || field.nlName.includes('操作人');
-  const label = resolveSystemFieldDisplayLabel(field);
+  const label = resolveSystemFieldDisplayLabel(field, fieldCatalog);
   const metaExtras = {
     fieldMeta: field,
     allowOperators: operators,
@@ -293,12 +300,13 @@ export const createConditionFieldConfigFromSystemFields = (
     },
   };
 
-  [...standardFields, ...extensionFields].forEach((field) => {
+  const fieldCatalog = [...standardFields, ...extensionFields];
+  fieldCatalog.forEach((field) => {
     if (!field.rawName || field.rawName === 'datetime') return;
     const key = field.keys?.length
       ? `${field.rawName}.${field.keys.join('.')}`
       : field.rawName;
-    config[key] = fieldConfigFromRow(field);
+    config[key] = fieldConfigFromRow(field, fieldCatalog);
   });
 
   return config;
@@ -374,15 +382,83 @@ export const resolveConditionFieldKey = (
   const exactKey = fieldCatalogKey(rawName, keys);
   if (fieldConfig[exactKey]) return exactKey;
 
+  // 有 keys 时只允许精确命中，禁止回退到父字段（否则标签会丢下钻路径）
+  if (keys.length) {
+    const matched = Object.entries(fieldConfig).find(([, config]) => {
+      const meta = (config as ILogFieldConfig).fieldMeta;
+      if (!meta) return false;
+      return fieldCatalogKey(meta.rawName, meta.keys || []) === exactKey;
+    });
+    return matched?.[0] || null;
+  }
+
   const matched = Object.entries(fieldConfig).find(([, config]) => {
     const meta = (config as ILogFieldConfig).fieldMeta;
     if (!meta) return false;
-    const metaKey = fieldCatalogKey(meta.rawName, meta.keys || []);
-    return metaKey === exactKey || meta.rawName === rawName;
+    return meta.rawName === rawName && !(meta.keys?.length);
   });
   if (matched) return matched[0];
   if (fieldConfig[rawName]) return rawName;
   return null;
+};
+
+/**
+ * 目录无对应下钻字段时，按 raw_name + keys 动态挂载 fieldConfig。
+ * 返回可用的 fieldConfig key；无法挂载时返回 null。
+ */
+export const ensureNestedConditionFieldConfig = (
+  fieldConfig: Record<string, IFieldConfig>,
+  rawName: string,
+  keys: string[] = [],
+  fieldCatalog: SystemFieldRow[] = [],
+): string | null => {
+  if (!rawName) return null;
+  const existing = resolveConditionFieldKey(rawName, keys, fieldConfig);
+  if (existing) return existing;
+  if (!keys.length) return null;
+
+  const exactKey = fieldCatalogKey(rawName, keys);
+  const sibling = Object.values(fieldConfig).find((config) => {
+    const meta = (config as ILogFieldConfig).fieldMeta;
+    return meta?.rawName === rawName;
+  }) as ILogFieldConfig | undefined;
+
+  const label = resolveNestedPathLabel(
+    rawName,
+    keys,
+    resolveParentFieldLabel(rawName, fieldCatalog),
+  );
+  const syntheticField: SystemFieldRow = {
+    rawName,
+    keys: [...keys],
+    displayName: label,
+    nlName: label,
+    description: '',
+    allowOperators: sibling?.allowOperators
+      || sibling?.fieldMeta?.allowOperators
+      || ['eq', 'include', 'like'],
+    fieldType: sibling?.fieldMeta?.fieldType || 'string',
+    isExtension: true,
+  };
+  // 动态挂载到传入的 fieldConfig（调用方持有可变副本）
+  fieldConfig[exactKey] = fieldConfigFromRow(syntheticField, fieldCatalog);
+  return exactKey;
+};
+
+/** 根据 AiSearchCondition 把缺失的下钻字段补进 fieldConfig */
+export const ensureConditionFieldsFromAiSearch = (
+  fieldConfig: Record<string, IFieldConfig>,
+  condition?: AiSearchCondition | null,
+  fieldCatalog: SystemFieldRow[] = [],
+) => {
+  if (!condition?.conditions?.length) return fieldConfig;
+  condition.conditions.forEach((item) => {
+    const rawName = String(item?.field?.raw_name || '');
+    const keys = Array.isArray(item?.field?.keys) ? item.field.keys.map(String) : [];
+    if (!rawName || !keys.length) return;
+    ensureNestedConditionFieldConfig(fieldConfig, rawName, keys, fieldCatalog);
+  });
+  return fieldConfig;
 };
 
 const normalizeFiltersToModelValue = (
@@ -407,6 +483,7 @@ const normalizeFiltersToModelValue = (
 export const parseAiSearchConditionToSearchModel = (
   condition: AiSearchCondition,
   fieldConfig: Record<string, IFieldConfig>,
+  fieldCatalog: SystemFieldRow[] = [],
 ): Record<string, any> => {
   const searchModel: Record<string, any> = {
     datetime: [
@@ -419,10 +496,16 @@ export const parseAiSearchConditionToSearchModel = (
   (condition.conditions || []).forEach((item) => {
     const rawName = String(item?.field?.raw_name || '');
     const keys = Array.isArray(item?.field?.keys) ? item.field.keys.map(String) : [];
-    const fieldKey = resolveConditionFieldKey(rawName, keys, fieldConfig);
+    const fieldKey = ensureNestedConditionFieldConfig(
+      fieldConfig,
+      rawName,
+      keys,
+      fieldCatalog,
+    );
     if (!fieldKey) return;
 
     const config = fieldConfig[fieldKey];
+    if (!config) return;
     const filters = Array.isArray(item.filters)
       ? item.filters.filter(v => v !== undefined && v !== null && v !== '')
       : [];

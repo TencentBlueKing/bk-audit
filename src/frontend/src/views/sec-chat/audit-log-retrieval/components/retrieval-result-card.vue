@@ -448,6 +448,7 @@
     createConditionFieldConfigFromSystemFields,
     createDefaultDatetime,
     createDefaultDatetimeOrigin,
+    ensureConditionFieldsFromAiSearch,
     getConditionDefaultValue,
     getPrimaryFieldNames,
     getSecondaryFieldNames,
@@ -542,12 +543,21 @@
     datetime_origin: createDefaultDatetimeOrigin(),
   });
 
+  const fieldCatalog = computed(() => (
+    [...(props.standardFields || []), ...(props.extensionFields || [])]
+  ));
+
   const fieldConfig = computed(() => {
     const nextConfig = createConditionFieldConfigFromSystemFields(
       props.standardFields,
       props.extensionFields,
     );
     delete nextConfig.system_id;
+    ensureConditionFieldsFromAiSearch(
+      nextConfig,
+      displayResult.value.rawCondition,
+      fieldCatalog.value,
+    );
     return nextConfig;
   });
   const commonFieldKeys = computed(() => (
@@ -585,6 +595,7 @@
     const nextSearchModel = parseAiSearchConditionToSearchModel(
       rawCondition,
       fieldConfig.value,
+      fieldCatalog.value,
     );
     if ('system_id' in nextSearchModel) {
       delete nextSearchModel.system_id;
