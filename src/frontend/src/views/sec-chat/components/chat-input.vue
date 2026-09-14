@@ -32,9 +32,13 @@
             <div
               v-for="tag in shortcutTags"
               :key="tag.id"
+              v-bk-tooltips="{
+                disabled: !tag.disabled,
+                content: '功能开发中',
+                placement: 'top',
+              }"
               class="shortcut-tag"
               :class="{ 'is-disabled': tag.disabled }"
-              :title="tag.disabled ? '暂未开放' : undefined"
               @click="selectTag(tag)">
               <img
                 v-if="tag.iconSrc"
