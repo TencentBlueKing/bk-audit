@@ -287,6 +287,20 @@ class RiskFlowBaseHandler:
 
         return {}
 
+    def record_create_node(self) -> None:
+        """
+        补写"风险产生"节点（after_confirm 分派建单时未写该节点）。
+
+        直接复用 NewRisk 的 record_history，使该节点与 direct 流程写出的完全同构
+        （action=NewRisk、extra={}）。幂等，已存在则跳过。
+        在确认流程的事务内、于"风险确认/误报确认"节点之前调用，
+        以保证时间戳天然递增，前端展示顺序正确（无需回拨时间戳）。
+        """
+
+        if TicketNode.objects.filter(risk_id=self.risk.risk_id, action=NewRisk.__name__).exists():
+            return
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).record_history({})
+
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         """
         处理结束后执行
@@ -349,6 +363,14 @@ class NewRisk(RiskFlowBaseHandler):
         RiskStatus.AWAIT_PROCESS: RiskDisplayStatus.AWAIT_PROCESS,  # 覆盖为"待处理"
     }
 
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        # 默认由本方法写出"风险产生"节点（direct 建单路径依赖此行为）。
+        # 仅当确认流程已通过 record_create_node() 先行写入该节点时，
+        # 由调用方传入 skip_record=True 避免重复记录。
+        if kwargs.get("skip_record"):
+            return
+        super().record_history(process_result=process_result, *args, **kwargs)
+
     def pre_check(self, *args, **kwargs) -> None:
         if (
             self.risk.status == RiskStatus.CLOSED
@@ -405,10 +427,10 @@ class CloseRisk(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
-        # 待确认状态禁止关单（仅 ConfirmRisk 和 ConfirmAsMisReport 允许）
+
         if self.risk.status == RiskStatus.PENDING_CONFIRM:
             raise RiskStatusInvalid(message="待确认状态不能执行关单操作")
-        super().pre_check(*args, **kwargs)
+        return
 
     def process(self, description: str, *args, **kwargs) -> dict:
         return {}
@@ -916,9 +938,8 @@ class ConfirmRisk(RiskFlowBaseHandler):
         pass
 
     def record_history(self, process_result: dict, *args, **kwargs) -> None:
-        # 跳过 run() 中的记录，留待 _post_confirm_tasks() 中在 NewRisk 之后记录
-        # 确保"风险确认"节点时间戳晚于"风险产生"，使前端展示时"风险确认"在上方
-        pass
+        self.record_create_node()
+        super().record_history(process_result=process_result, *args, **kwargs)
 
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
@@ -927,9 +948,7 @@ class ConfirmRisk(RiskFlowBaseHandler):
         """事务提交后执行的任务：流转、渲染、通知、记录历史"""
 
         self.risk.refresh_from_db()
-        # 1. 先流转 NewRisk，记录"风险产生"节点
-        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
-        super().record_history(process_result={}, description=description)
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run(skip_record=True)
         # 触发渲染任务
         RiskHandler().trigger_render_task(self.risk)
         # 通知关注人
@@ -989,19 +1008,14 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
 
     def _post_confirm_tasks(self, description: str = "") -> None:
-        """事务提交后执行的任务：记录风险产生、误报确认、风险关闭"""
-        # 1. 先流转 NewRisk，记录"风险单产生"节点
-        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run()
-        # 2. 调用父类方法记录"误报确认"节点
-        super().record_history(process_result={}, description=description)
-        # 3. 关单并记录"风险单关闭"节点
+        """事务提交后执行：风险关闭"""
         CloseRisk(risk_id=self.risk.risk_id, operator=self.operator).run(
             description=gettext("%s 标记误报，系统自动关单") % self.operator
         )
 
     def record_history(self, process_result: dict, *args, **kwargs) -> None:
-        # 跳过 run() 中的记录，留待 _post_confirm_tasks() 中在 NewRisk 之后记录
-        pass
+        self.record_create_node()
+        super().record_history(process_result=process_result, *args, **kwargs)
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         # 记录确认说明和状态变更，供历史展示

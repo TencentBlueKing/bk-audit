@@ -490,7 +490,6 @@ class StrategySerializer(serializers.Serializer):
         """
         校验事件基本信息字段配置
         """
-
         strategy_type = validated_request_data["strategy_type"]
         if strategy_type != StrategyType.RULE.value:
             return
@@ -500,6 +499,27 @@ class StrategySerializer(serializers.Serializer):
         for field in EVENT_BASIC_MAP_FIELDS:
             if field.field_name not in mapped_fields:
                 raise serializers.ValidationError(gettext("%s Need to configure mapping") % field.description)
+        # 保留字段（event_data/strategy_id/strategy_rule_id）的输出由 SQL 构造固定生成：
+        # 普通策略 = UDF 拼装 event_data / 策略ID / 命中规则ID；系统策略 = 来源字段直传。
+        # 映射配置会产生同名列或覆盖命中结果（错绑规则），与 rule_audit SQL 构造口径一致，此处直接拒绝
+        reserved_fields = {
+            EventMappingFields.EVENT_DATA.field_name,
+            EventMappingFields.STRATEGY_ID.field_name,
+            EventMappingFields.STRATEGY_RULE_ID.field_name,
+        }
+        is_system_strategy = validated_request_data.get("source") == StrategySource.SYSTEM.value
+        map_config_by_name = {
+            f["field_name"]: f["map_config"] for f in event_basic_field_configs if f.get("map_config")
+        }
+        for field_name in reserved_fields & mapped_fields:
+            if is_system_strategy:
+                # 系统策略：保留字段仅支持来源字段直传，固定值会覆盖直传结果
+                if map_config_by_name[field_name].get("target_value"):
+                    raise serializers.ValidationError(
+                        gettext("系统策略保留字段[%s]仅支持来源字段映射，不支持固定值") % field_name
+                    )
+                continue
+            raise serializers.ValidationError(gettext("字段[%s]为系统保留字段，不支持配置映射") % field_name)
         return validated_request_data
 
     def _validate_report_config(self, validated_request_data: dict):

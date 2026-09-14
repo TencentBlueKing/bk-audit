@@ -836,6 +836,61 @@ class PlatformVsSceneBindingTest(TestCase):
         self.assertEqual(serializer.validated_data["scene_id"], self.scene.scene_id)
 
 
+class ReservedFieldMappingValidationTest(TestCase):
+    """保留字段（event_data/strategy_id/strategy_rule_id）映射校验测试
+
+    背景：SQL 构造对外层输出固定生成这三个字段（普通策略=UDF/策略ID/命中规则，系统策略=直传），
+    mapping 中的同名配置会产生重复列或覆盖命中结果（错绑规则），校验层需直接拒绝。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.serializer = CreateStrategyRequestSerializer()
+
+    @staticmethod
+    def _build_attrs(source, extra_fields):
+        # 必配映射字段（raw_event_id/event_source/operator）先行满足，再叠加被测字段
+        base_fields = [
+            {"field_name": "raw_event_id", "map_config": {"source_field": "事件ID"}},
+            {"field_name": "event_source", "map_config": {"source_field": "IP"}},
+            {"field_name": "operator", "map_config": {"source_field": "操作人用户名"}},
+        ]
+        return {
+            "strategy_type": StrategyType.RULE.value,
+            "source": source,
+            "event_basic_field_configs": base_fields + extra_fields,
+        }
+
+    def test_regular_strategy_rejects_reserved_mapping(self):
+        """普通策略：保留字段配置映射直接拒绝（防止错绑规则）"""
+        from rest_framework import serializers as drf_serializers
+
+        for reserved in ("strategy_rule_id", "strategy_id", "event_data"):
+            attrs = self._build_attrs("user", [{"field_name": reserved, "map_config": {"target_value": "999"}}])
+            with self.assertRaises(drf_serializers.ValidationError) as cm:
+                self.serializer._validate_event_basic_field_configs(attrs)
+            self.assertIn("系统保留字段", str(cm.exception))
+
+    def test_system_strategy_allows_source_field_mapping(self):
+        """系统策略：保留字段来源字段直传合法"""
+        attrs = self._build_attrs("system", [{"field_name": "strategy_rule_id", "map_config": {"source_field": "发现规则ID"}}])
+        self.assertEqual(self.serializer._validate_event_basic_field_configs(attrs), attrs)
+
+    def test_system_strategy_rejects_target_value_mapping(self):
+        """系统策略：保留字段固定值映射拒绝（会覆盖直传结果）"""
+        from rest_framework import serializers as drf_serializers
+
+        attrs = self._build_attrs("system", [{"field_name": "strategy_rule_id", "map_config": {"target_value": "999"}}])
+        with self.assertRaises(drf_serializers.ValidationError) as cm:
+            self.serializer._validate_event_basic_field_configs(attrs)
+        self.assertIn("不支持固定值", str(cm.exception))
+
+    def test_regular_strategy_without_reserved_mapping_passes(self):
+        """普通策略：不含保留字段映射时正常通过"""
+        attrs = self._build_attrs("user", [{"field_name": "event_content", "map_config": {"source_field": "操作ID"}}])
+        self.assertEqual(self.serializer._validate_event_basic_field_configs(attrs), attrs)
+
+
 class PlatformBindingScenePermissionTest(TestCase):
     """全局策略编辑时的场景维度校验跳过测试
 

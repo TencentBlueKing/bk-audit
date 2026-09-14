@@ -116,14 +116,16 @@ class ListAllNoticeGroup(NoticeMeta):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        scene_id = validated_request_data["scene_id"]
+        scene_id = validated_request_data.get("scene_id")
         queryset = NoticeGroup.objects.all()
-        queryset = SceneScopeFilter.filter_queryset(
-            queryset=queryset,
-            scene_id=scene_id,
-            resource_type=ResourceVisibilityType.NOTICE_GROUP,
-            pk_field="group_id",
-        )
+        # 按场景过滤（通过 ResourceBinding），scene_id 为空时返回全部
+        if scene_id is not None:
+            queryset = SceneScopeFilter.filter_queryset(
+                queryset=queryset,
+                scene_id=scene_id,
+                resource_type=ResourceVisibilityType.NOTICE_GROUP,
+                pk_field="group_id",
+            )
         return queryset
 
 

@@ -46,6 +46,7 @@ from api.bk_base.serializers import (
     UserAuthCheckRespSerializer,
 )
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from core.utils.retry import FuncRunner
 
 
 class BkBaseResource(BkApiResource, abc.ABC):
@@ -179,6 +180,19 @@ class AiopsBaseResource(BkBaseResource, abc.ABC):
         return data
 
 
+class StrategyBkBaseResource(AiopsBaseResource, abc.ABC):
+    """策略相关 bkbase 接口，统一加 3 次重试。"""
+
+    RETRY_TIMES = 3
+
+    def perform_request(self, validated_request_data: dict) -> dict:
+        return FuncRunner(
+            func=super().perform_request,
+            args=(validated_request_data,),
+            max_retry=self.RETRY_TIMES,
+        ).run()
+
+
 class GetScenePlans(AiopsBaseResource):
     name = gettext_lazy("获取方案列表")
     action = "/v3/aiops/scene_service/plans/"
@@ -211,27 +225,27 @@ class AuthTickets(AiopsBaseResource):
     method = "POST"
 
 
-class CreateFlow(AiopsBaseResource):
+class CreateFlow(StrategyBkBaseResource):
     name = gettext_lazy("创建Flow")
     action = "/v3/dataflow/flow/flows/"
     method = "POST"
 
 
-class StartFlow(AiopsBaseResource):
+class StartFlow(StrategyBkBaseResource):
     name = gettext_lazy("启动Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/start/"
     url_keys = ["flow_id"]
     method = "POST"
 
 
-class RestartFlow(AiopsBaseResource):
+class RestartFlow(StrategyBkBaseResource):
     name = gettext_lazy("重启Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/restart/"
     url_keys = ["flow_id"]
     method = "POST"
 
 
-class StopFlow(AiopsBaseResource):
+class StopFlow(StrategyBkBaseResource):
     name = gettext_lazy("停止Flow")
     action = "/v3/dataflow/flow/flows/{flow_id}/stop/"
     url_keys = ["flow_id"]
@@ -252,7 +266,7 @@ class GetFlowGraph(AiopsBaseResource):
     method = "GET"
 
 
-class CreateFlowNode(AiopsBaseResource):
+class CreateFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("创建Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/"
     url_keys = ["flow_id"]
@@ -260,7 +274,7 @@ class CreateFlowNode(AiopsBaseResource):
     TIMEOUT = 5 * 60
 
 
-class UpdateFlowNode(AiopsBaseResource):
+class UpdateFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("更新Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
@@ -268,7 +282,7 @@ class UpdateFlowNode(AiopsBaseResource):
     TIMEOUT = 5 * 60
 
 
-class DeleteFlowNode(AiopsBaseResource):
+class DeleteFlowNode(StrategyBkBaseResource):
     name = gettext_lazy("删除Flow节点")
     action = "/v3/dataflow/flow/flows/{flow_id}/nodes/{node_id}/"
     url_keys = ["flow_id", "node_id"]
