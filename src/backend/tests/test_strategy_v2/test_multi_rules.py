@@ -646,8 +646,8 @@ class CheckDispatchRulesTest(TestCase):
             self.mixin._check_dispatch_rules(attrs)
         self.assertIn("不在可选范围内", str(cm.exception))
 
-    def test_dispatch_condition_passthrough_field_allowed(self):
-        """直连字段（risk_level 等规则实例化字段）在词表内，select 非空时可通过校验"""
+    def test_dispatch_condition_passthrough_field_rejected(self):
+        """直连字段（risk_level 等）不在 select 词表内，应被拒绝"""
         attrs = {
             "binding_type": BindingType.PLATFORM_BINDING,
             "configs": {
@@ -679,8 +679,9 @@ class CheckDispatchRulesTest(TestCase):
                 },
             ],
         }
-        result = self.mixin._check_dispatch_rules(attrs)
-        self.assertEqual(result, attrs)
+        with self.assertRaises(serializers.ValidationError) as cm:
+            self.mixin._check_dispatch_rules(attrs)
+        self.assertIn("不在可选范围内", str(cm.exception))
 
 
 class PlatformVsSceneBindingTest(TestCase):
@@ -873,7 +874,9 @@ class ReservedFieldMappingValidationTest(TestCase):
 
     def test_system_strategy_allows_source_field_mapping(self):
         """系统策略：保留字段来源字段直传合法"""
-        attrs = self._build_attrs("system", [{"field_name": "strategy_rule_id", "map_config": {"source_field": "发现规则ID"}}])
+        attrs = self._build_attrs(
+            "system", [{"field_name": "strategy_rule_id", "map_config": {"source_field": "发现规则ID"}}]
+        )
         self.assertEqual(self.serializer._validate_event_basic_field_configs(attrs), attrs)
 
     def test_system_strategy_rejects_target_value_mapping(self):
