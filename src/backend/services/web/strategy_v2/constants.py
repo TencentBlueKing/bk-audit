@@ -47,6 +47,17 @@ REMOTE_UPDATE_FIELDS = [
     "strategy_type",
 ]
 
+# configs.select 字段比较白名单，只比较核心字段，忽略展示类字段（如 spec_field_type、property）
+CONFIGS_SELECT_COMPARE_FIELDS = [
+    "table",
+    "raw_name",
+    "field_type",
+    "aggregate",
+    "display_name",
+    "remark",
+    "keys",
+]
+
 # 事件基本配置字段
 EVENT_BASIC_CONFIG_FIELD = "event_basic_field_configs"
 

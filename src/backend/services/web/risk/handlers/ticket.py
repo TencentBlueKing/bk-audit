@@ -132,6 +132,10 @@ class RiskFlowBaseHandler:
         if getattr(self.risk, "dispatch_rule_id", None):
             from services.web.strategy_v2.models import DispatchRule
 
+            # 建单时已固化处理人快照：直接复用，分派规则后续编辑不影响已产生单据
+            if self.risk.current_operator:
+                return self.risk.current_operator
+
             dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
             if dispatch_rule:
                 processor_groups: List[NoticeGroup] = list(
@@ -356,7 +360,9 @@ class NewRisk(RiskFlowBaseHandler):
     def process(self, *args, **kwargs) -> dict:
         # 初始化参数
         self.risk.origin_operator = []
-        self.risk.current_operator = []
+        # 分派风险建单时已固化处理人快照（_apply_dispatch），流转时保留，由 update_operator 复用
+        if not getattr(self.risk, "dispatch_rule_id", None):
+            self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
         # 只有有责任人时走规则
         if self.risk.operator:

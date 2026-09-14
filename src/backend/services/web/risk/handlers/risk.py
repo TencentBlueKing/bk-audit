@@ -414,6 +414,12 @@ class RiskHandler:
             risk.status = RiskStatus.PENDING_CONFIRM
             risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
             update_fields += ["confirmer", "status", "display_status"]
+        # 固化处理人与关注人
+        processors = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.processor))
+        risk.current_operator = RiskNoticeParser(risk=risk).parse_groups(processors)
+        followers = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.follower))
+        risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(followers)
+        update_fields += ["current_operator", "notice_users"]
         risk.save(update_fields=update_fields)
         # 为确认人授予查看权限，使其能打开详情核实
         if risk.confirmer:
@@ -557,8 +563,9 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
-        risk.save(update_fields=["notice_users"])
+        if not risk.notice_users:
+            risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
+            risk.save(update_fields=["notice_users"])
 
     @classmethod
     def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], is_todo: bool) -> None:
