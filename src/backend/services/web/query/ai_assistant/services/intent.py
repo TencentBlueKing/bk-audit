@@ -17,7 +17,10 @@ to the current version of the project delivered to anyone in the future.
 
 用户意图识别服务（一期 v6）：自然语言 → IntentPayload。
 
-复用现有 AUDIT_LOG_SEARCH agent（意图识别任务指令在 User Message 完整自述）；
+用户意图识别服务（一期 v6）：自然语言 → IntentPayload。
+
+调用专属生产 agent（AIAgentCode.USER_INTENT = bp-ai-user-intent，与 NL2JSON 的
+AUDIT_LOG_SEARCH 解耦——意图任务指令在 User Message 完整自述，agent 侧无需 System Prompt；
 输出契约 IntentPayload 为 single source of truth（schema 注入与校验同模型）；
 候选系统 = 用户权限内系统（无权限系统不进候选，AI 无法越权），
 前端传场景过滤 scope 时与检索页同口径收窄候选（防意图识别绕过场景过滤）。
@@ -64,7 +67,9 @@ INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
 {{ current_system_id|default:"无（用户尚未选择系统）" }}
 
 ## 输出要求
-1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容：
+1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容；
+   **无论用户输入是什么（含寒暄/闲聊/无关内容）都必须且只能输出契约 JSON**——
+   与日志检索无关的输入输出 intent=unrecognized 并在 message 说明，禁止以自然语言/散文回复：
 {{ output_schema_json }}
 2. 意图分类规则：
    - 用户话语包含选择或切换系统的意图（无论是否同时包含日志检索需求，如「我要看审计中心近七天的操作记录」「帮我切换到蓝盾」）→ intent=select_system，并从候选系统中确定 system_id
@@ -106,7 +111,9 @@ class IntentRecognitionService:
     - AI 调用超时 / 服务异常 → AITimeoutError / AIServiceError（触发重试）
     """
 
-    agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+    # 用户意图识别专属生产 agent（bp-ai-user-intent，网关已授权 bk-audit 应用）：
+    # 任务指令在 User Message 完整自述，agent 侧无需 System Prompt；凭证走全局应用链
+    agent_code = AIAgentCode.USER_INTENT
 
     @classmethod
     def recognize(
