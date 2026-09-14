@@ -141,7 +141,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import existingSystemIcon from '@images/jieru.svg';
+  import existingSystemIcon from '@images/jieru.svg?inline';
   import newSystemIcon from '@images/new-jieru.svg';
 
   interface SystemItem {

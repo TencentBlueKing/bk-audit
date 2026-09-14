@@ -70,7 +70,7 @@
                   v-else
                   class="no-data">
                   <img
-                    src="@images/no-log-data.svg"
+                    :src="noLogDataSvg"
                     style="width: 68px; margin-left: 16px;">
                   <div
                     class="ml8"
@@ -180,6 +180,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
+
+  import noLogDataSvg from '@images/no-log-data.svg?inline';
 
   import Card from './components/card.vue';
   import RenderAlternativeField from './components/field-map/alternative-field.vue';

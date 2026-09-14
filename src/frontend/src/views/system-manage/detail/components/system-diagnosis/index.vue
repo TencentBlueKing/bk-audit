@@ -89,7 +89,7 @@
             </li>
             <li style="text-indent: 4em;">
               <img
-                src="@images/index-1.png"
+                :src="index1Png"
                 style="width: calc(100% - 4em)">
             </li>
           </ol>
@@ -214,12 +214,12 @@
             </li>
             <li style="text-indent: 4em;">
               <img
-                src="@images/index-2.png"
+                :src="index2Png"
                 style="width: calc(100% - 4em)">
             </li>
             <li style="text-indent: 4em;">
               <img
-                src="@images/index-3.png"
+                :src="index3Png"
                 style="width: calc(100% - 4em)">
             </li>
           </ol>
@@ -239,6 +239,10 @@
   import IamApplyDataModel from '@model/iam/apply-data';
   import SystemModel from '@model/meta/system';
   import ConfigModel from '@model/root/config';
+
+  import index1Png from '@images/index-1.png?inline';
+  import index2Png from '@images/index-2.png?inline';
+  import index3Png from '@images/index-3.png?inline';
 
   import useEventBus from '@/hooks/use-event-bus';
   import useMessage from '@/hooks/use-message';
