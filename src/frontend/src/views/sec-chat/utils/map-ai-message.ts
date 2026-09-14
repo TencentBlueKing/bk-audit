@@ -292,7 +292,7 @@ export const mapLogSearchOutputToResult = (
   const condition = (message.input_data?.condition || undefined) as AiSearchCondition | undefined;
   const conditionTags = mapConditionToFilterTags(condition, fieldCatalog);
   const durationSeconds = message.duration_seconds;
-  const thinkSeconds = durationSeconds == null || Number.isNaN(Number(durationSeconds))
+  const thinkSeconds = durationSeconds === null || durationSeconds === undefined || Number.isNaN(Number(durationSeconds))
     ? null
     : Math.max(0, Math.round(Number(durationSeconds)));
 
