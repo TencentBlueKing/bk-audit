@@ -670,7 +670,6 @@ class ListRisk(RiskMeta):
                     RiskDisplayStatus.AWAIT_PROCESS,
                     RiskDisplayStatus.CLOSED,
                     RiskDisplayStatus.STAND_BY,
-                    RiskDisplayStatus.PENDING_CONFIRM,
                 ],
             )
             .distinct()
