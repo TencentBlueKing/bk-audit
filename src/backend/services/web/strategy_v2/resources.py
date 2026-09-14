@@ -549,12 +549,14 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             )
 
     @staticmethod
-    def attach_scene_risk_counts(strategies: List[Strategy], risk_start_time) -> None:
+    def attach_scene_risk_counts(strategies: List[Strategy], risk_start_time, scene_id=None) -> None:
         """
         为全局策略附加按场景分组的风险数。
 
         从 Risk 表按 strategy_id + scene_id 分组统计，挂载到策略实例的 scene_risk_counts 属性。
         场景策略不附加（其 scene_risk_counts 保持空列表）。
+
+        :param scene_id: 传入时仅统计该场景的风险数（场景视角），为 None 时统计全量（平台管理视角）
         """
         if not strategies:
             return
@@ -573,13 +575,16 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
                 if not hasattr(s, 'scene_risk_counts'):
                     s.scene_risk_counts = []
             return
-        # 一次性查询所有全局策略的按场景风险数
+        # 一次性查询全局策略的按场景风险数（场景视角限定单场景，平台视角全量）
+        qs_filter = {
+            "strategy_id__in": platform_strategy_ids,
+            "event_time__gte": risk_start_time,
+            "scene_id__isnull": False,
+        }
+        if scene_id is not None:
+            qs_filter["scene_id"] = scene_id
         scene_risk_qs = (
-            Risk.objects.filter(
-                strategy_id__in=platform_strategy_ids,
-                event_time__gte=risk_start_time,
-                scene_id__isnull=False,
-            )
+            Risk.objects.filter(**qs_filter)
             .values('strategy_id', 'scene_id')
             .annotate(count=Count('*'))
         )
@@ -1206,7 +1211,7 @@ class ListStrategy(StrategyV2Base):
         # 批量回填绑定与可见范围（全局策略展示 binding/visibility）
         self.attach_binding_visibility(list(queryset))
         # 批量回填全局策略的各场景的风险数
-        self.attach_scene_risk_counts(list(queryset), strategy_risk_start_time)
+        self.attach_scene_risk_counts(list(queryset), strategy_risk_start_time, scene_id=scene_id)
 
         # response
         return queryset

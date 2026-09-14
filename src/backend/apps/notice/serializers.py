@@ -100,7 +100,9 @@ class ListAllNoticeGroupResponseSerializer(serializers.Serializer):
 class ListAllNoticeGroupRequestSerializer(serializers.Serializer):
     """通知组 all 列表（按场景过滤）"""
 
-    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("场景ID"), required=False, allow_null=True, help_text="按场景过滤通知组，不传时返回全部通知组"
+    )
 
 
 class RetrieveNoticeGroupRequestSerializer(serializers.Serializer):

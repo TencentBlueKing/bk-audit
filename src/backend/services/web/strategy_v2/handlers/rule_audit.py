@@ -363,6 +363,12 @@ class RuleAuditSQLBuilder:
         #    3.3 strategy_rule_id => 系统策略可 map_config 映射（来源表列），普通策略命中规则标识
         #    3.4 其他字段 => 来自 field_mapping
         is_system_strategy = self.strategy.source == StrategySource.SYSTEM.value
+        # 保留字段名集合：系统策略由 mapping 决定是否追加，普通策略由下方默认分支固定追加
+        reserved_fields = {
+            EventMappingFields.EVENT_DATA.field_name,
+            EventMappingFields.STRATEGY_ID.field_name,
+            EventMappingFields.STRATEGY_RULE_ID.field_name,
+        }
         select_fields = []
         if not is_system_strategy or EventMappingFields.EVENT_DATA.field_name not in field_mapping:
             select_fields.append(make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name))
@@ -373,6 +379,9 @@ class RuleAuditSQLBuilder:
                 sub_table.field(generator.RULE_HIT_FIELD).as_(EventMappingFields.STRATEGY_RULE_ID.field_name)
             )
         for display_name, map_config in field_mapping.items():
+            # 普通策略：保留字段已在上方固定追加，mapping 中的同名配置跳过，避免重复列
+            if not is_system_strategy and display_name in reserved_fields:
+                continue
             if map_config.target_value:
                 select_fields.append(ValueWrapper(map_config.target_value, display_name))
             elif map_config.source_field:

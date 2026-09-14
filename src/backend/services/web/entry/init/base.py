@@ -69,7 +69,7 @@ from services.web.risk.constants import (
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
-from services.web.scene.constants import BindingType
+from services.web.scene.constants import BindingType, DEFAULT_SCENE_NAME
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 
@@ -432,7 +432,7 @@ class SystemInitHandler:
         params.setdefault("tags", [])
         params.setdefault("notice_groups", [])
         params.setdefault("processor_groups", [])
-        default_scene = Scene.objects.filter(name='系统默认场景').order_by("scene_id").first()
+        default_scene = Scene.objects.filter(name=DEFAULT_SCENE_NAME).order_by("scene_id").first()
         if not default_scene:
             return {}
         params["binding_type"] = BindingType.SCENE_BINDING
