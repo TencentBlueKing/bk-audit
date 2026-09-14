@@ -175,3 +175,68 @@ class ListQueriesTest(TestCase):
                 response = resolve(path).func(request)
                 self.assertEqual(response.status_code, 200, response.data)
                 self.assertEqual([item["uid"] for item in response.data], expected)
+
+    def test_conversation_attachment_counts_include_all_types_and_states(self):
+        """类型筛选不截断统计，空类型补零，其他用户附件不计入。"""
+        Attachment.objects.create(
+            source_message=self.source,
+            attachment_type=AttachmentType.FIELD_STATISTICS,
+            status=ExecutionStatus.FAILED,
+            created_by="alice",
+            updated_by="alice",
+        )
+        Attachment.objects.create(
+            source_message=self.source,
+            attachment_type=AttachmentType.AI_STATISTICS,
+            status=ExecutionStatus.PROCESSING,
+            created_by="bob",
+            updated_by="bob",
+        )
+        with self.assertNumQueries(1):
+            response = conversation_resources.ListConversations().request(attachment_type=AttachmentType.AI_ANALYSIS)
+        self.assertEqual(len(response), 1)
+        self.assertEqual(response[0]["attachment_count"], 3)
+        self.assertEqual(
+            response[0]["attachment_counts_by_type"],
+            {
+                "FIELD_STATISTICS": 1,
+                "AI_STATISTICS": 0,
+                "AI_ANALYSIS": 2,
+            },
+        )
+        response = conversation_resources.ListConversations().request(has_attachments=False)
+        self.assertEqual(response[0]["attachment_count"], 0)
+        self.assertEqual(
+            response[0]["attachment_counts_by_type"],
+            {
+                "FIELD_STATISTICS": 0,
+                "AI_STATISTICS": 0,
+                "AI_ANALYSIS": 0,
+            },
+        )
+
+    def test_conversation_counts_remain_one_query_across_multiple_messages(self):
+        """同会话多消息正确汇总，多会话仍只执行一次数据库查询。"""
+        source = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.SUCCESS,
+            created_by="alice",
+            updated_by="alice",
+        )
+        Attachment.objects.create(
+            source_message=source,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.PROCESSING,
+            created_by="alice",
+            updated_by="alice",
+        )
+        for index in range(5):
+            Conversation.objects.create(title=f"空会话{index}", created_by="alice", updated_by="alice")
+        with self.assertNumQueries(1):
+            response = conversation_resources.ListConversations().request()
+        rows = {row["uid"]: row for row in response}
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[str(self.conversation.uid)]["attachment_count"], 3)
+        self.assertEqual(rows[str(self.conversation.uid)]["attachment_counts_by_type"]["AI_ANALYSIS"], 3)
+        self.assertEqual(sum(row["attachment_count"] for row in response), 3)
