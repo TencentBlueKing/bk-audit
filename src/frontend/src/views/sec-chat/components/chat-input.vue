@@ -354,11 +354,36 @@
     });
   };
 
-  /** 自然语言字段检索：向输入框末尾追加，多个以逗号区隔 */
+  /** 自然语言字段检索：向输入框末尾追加，多个以逗号区隔；同字段（`{nlName}为…`）则替换而非叠加 */
   const appendInputValue = (text: string, separator = '，') => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
     const current = inputValue.value.trimEnd();
-    const next = current ? `${current}${separator}${text}` : text;
-    setInputValue(next);
+    if (!current) {
+      setInputValue(trimmed);
+      return;
+    }
+
+    const fieldPrefixMatch = trimmed.match(/^(.+?)为/);
+    const fieldPrefix = fieldPrefixMatch ? `${fieldPrefixMatch[1]}为` : '';
+    const parts = current.split(separator);
+    const sameFieldIdx = fieldPrefix
+      ? parts.findIndex(part => part.trim().startsWith(fieldPrefix))
+      : parts.findIndex(part => part.trim() === trimmed);
+
+    if (sameFieldIdx >= 0) {
+      if (parts[sameFieldIdx].trim() === trimmed) {
+        // 完全相同：仅聚焦，不重复追加
+        setInputValue(current);
+        return;
+      }
+      parts[sameFieldIdx] = trimmed;
+      setInputValue(parts.join(separator));
+      return;
+    }
+
+    setInputValue(`${current}${separator}${trimmed}`);
   };
 
   defineExpose({
