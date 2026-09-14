@@ -51,6 +51,11 @@ export const RISK_STATUS_TAG_MAP: Record<string, RiskStatusMapItem> = {
     icon: 'daichuli',
     color: '#FF9E00',
   },
+  pending_confirm: {
+    tag: 'warning',
+    icon: 'daichuli',
+    color: '#FF9E00',
+  },
 };
 
 export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
@@ -89,4 +94,32 @@ export const RISK_STATUS_THEME_MAP: Record<string, RiskStatusThemeItem> = {
     icon: 'daichuli',
     color: '#FF9E00',
   },
+  pending_confirm: {
+    theme: 'warning',
+    icon: 'daichuli',
+    color: '#FF9E00',
+  },
+};
+
+const RISK_STATUS_ALIAS: Record<string, string> = {
+  pending_confirm: 'await_confirm',
+};
+
+const RISK_STATUS_FALLBACK_NAME: Record<string, string> = {
+  await_confirm: '待确认',
+  pending_confirm: '待确认',
+};
+
+export const resolveRiskStatusName = (
+  status: string,
+  list: Array<{ id: string; name: string }> = [],
+) => {
+  const exact = list.find(item => item.id === status)?.name;
+  if (exact) return exact;
+  const alias = RISK_STATUS_ALIAS[status];
+  if (alias) {
+    const aliased = list.find(item => item.id === alias)?.name;
+    if (aliased) return aliased;
+  }
+  return RISK_STATUS_FALLBACK_NAME[status] || '';
 };

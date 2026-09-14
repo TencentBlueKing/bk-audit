@@ -674,6 +674,13 @@
   margin-bottom: 0;
 }
 
+.risk-await-deal-wrap :deep(.bk-form-error) {
+  position: static;
+  display: block;
+  padding-top: 4px;
+  line-height: 18px;
+}
+
 .risk-await-deal-wrap :deep(.bk-form-label) {
   font-size: 12px;
   line-height: 20px;
@@ -749,7 +756,12 @@
 }
 
 .submit-actions-form-item {
+  margin-top: 8px !important;
   margin-bottom: 0 !important;
+}
+
+.submit-actions-form-item :deep(.bk-form-label) {
+  display: none;
 }
 
 .pa-params-grid {

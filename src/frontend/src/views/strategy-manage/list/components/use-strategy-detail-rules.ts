@@ -9,6 +9,7 @@ import {
   formatFieldDisplayLabel,
   mergeHavingIntoWhere,
   parseStrategyDetailToForm,
+  toNoticeGroupIds,
 } from '../../strategy-create/utils/strategy-protocol';
 
 export interface RuleWhereDisplay {
@@ -243,28 +244,7 @@ export const useStrategyDetailRules = (data: ComputedRef<StrategyModel> | Strate
 
 export type NoticeGroupOption = { id: string | number; name: string };
 
-export const toNoticeGroupIds = (value: unknown): Array<string | number> => {
-  if (value === undefined || value === null || value === '') {
-    return [];
-  }
-  const list = Array.isArray(value) ? value : [value];
-  return list
-    .map((item) => {
-      if (item === undefined || item === null || item === '') {
-        return null;
-      }
-      if (typeof item === 'object') {
-        const rec = item as Record<string, unknown>;
-        const id = rec.id ?? rec.group_id;
-        if (id === undefined || id === null || id === '') {
-          return null;
-        }
-        return id as string | number;
-      }
-      return item as string | number;
-    })
-    .filter((id): id is string | number => id !== null);
-};
+export { toNoticeGroupIds };
 
 export const resolveNoticeGroupTags = (
   ids: unknown,

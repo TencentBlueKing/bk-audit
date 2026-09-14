@@ -109,7 +109,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+  import { RISK_STATUS_TAG_MAP, resolveRiskStatusName } from '@views/risk-manage/constants';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
@@ -301,7 +301,7 @@
                     theme={statusToMap[row.status]?.tag}>
                     <p style='display: flex;align-items: center;'>
                       <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                      <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                      <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                     </p>
                   </bk-tag>
                   <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
@@ -314,7 +314,7 @@
                   theme={statusToMap[row.status]?.tag}>
                   <p style='display: flex;align-items: center;'>
                     <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                    <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                    <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                   </p>
                 </bk-tag>))
         ),
