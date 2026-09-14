@@ -353,6 +353,106 @@ export interface AiFullExportResult {
   message?: string;
 }
 
+/** 附件业务类型；二期分析只注册 AI_ANALYSIS */
+export type AiAttachmentType = 'AI_ANALYSIS' | 'AI_STATISTICS' | 'FIELD_STATISTICS' | string;
+
+export type AiAttachmentStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED';
+
+export type AiAnalysisMode = 'DEFAULT' | 'CUSTOM';
+
+export type AiAttachmentExportFormat = 'MARKDOWN' | 'PDF' | string;
+
+export interface AiAttachmentFeedback {
+  uid?: string;
+  feedback_type?: 'LIKE' | 'DISLIKE' | string;
+  [key: string]: any;
+}
+
+export interface AiAnalysisInputData {
+  analysis_mode: AiAnalysisMode;
+  instruction?: string;
+}
+
+export interface AiAttachment {
+  uid: string;
+  source_message_uid: string;
+  attachment_type: AiAttachmentType;
+  status: AiAttachmentStatus;
+  title?: string;
+  content_updated_at?: string | null;
+  input_data?: Record<string, any> | null;
+  output_data?: {
+    markdown?: string;
+    [key: string]: any;
+  } | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  supports_feedback?: boolean;
+  is_stream?: boolean;
+  export_formats?: AiAttachmentExportFormat[];
+  feedback?: AiAttachmentFeedback | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AiAttachmentListItem {
+  uid: string;
+  attachment_type: AiAttachmentType;
+  status: AiAttachmentStatus;
+  title?: string;
+  created_at?: string;
+  content_updated_at?: string | null;
+  source_message?: {
+    uid: string;
+    message_type?: string;
+    created_at?: string;
+  };
+  conversation?: {
+    uid: string;
+    title?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+  supports_feedback?: boolean;
+  export_formats?: AiAttachmentExportFormat[];
+}
+
+export interface AiCreateAttachmentParams {
+  message_uid: string;
+  attachment_type: AiAttachmentType;
+  input_data: AiAnalysisInputData | Record<string, any>;
+}
+
+export interface AiUpdateAttachmentParams {
+  attachment_uid: string;
+  title?: string;
+  output_data?: {
+    markdown: string;
+    [key: string]: any;
+  };
+}
+
+export interface AiAttachmentListParams {
+  attachment_type?: AiAttachmentType | AiAttachmentType[];
+  status?: AiAttachmentStatus | AiAttachmentStatus[];
+  keyword?: string;
+  conversation_uid?: string;
+  source_message_uid?: string;
+}
+
+export interface AiStreamSnapshotEvent {
+  event?: string;
+  stream_id?: string | null;
+  data?: Record<string, any>;
+}
+
+export interface AiStreamSnapshot {
+  events: AiStreamSnapshotEvent[];
+  execution_id: string | null;
+  latest_stream_id?: string | null;
+  archive_status?: 'COMPLETE' | 'DEGRADED' | 'TRUNCATED' | string;
+}
+
 /** 导出任务详情（collector_query_task） */
 export interface AiExportTaskDetail {
   id: number;
