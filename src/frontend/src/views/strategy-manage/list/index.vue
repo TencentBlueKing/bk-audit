@@ -1231,7 +1231,7 @@
               to={buildRiskCountLink(data, sceneId)}
               target="_blank"
               v-bk-tooltips={{
-                content: t('近6个月此策略产生风险单总数（不含待确认），点击查看'),
+                content: t('近6个月此策略产生风险单总数，点击查看'),
               }}>
               {riskCount}
             </router-link>

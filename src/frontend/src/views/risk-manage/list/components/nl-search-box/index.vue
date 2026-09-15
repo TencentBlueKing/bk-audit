@@ -101,7 +101,6 @@
   import AuditIcon from '@components/audit-icon';
   import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
   import { isPageReload } from '@utils/assist';
-  import { isSceneSelectorContextQuery } from '@/utils/assist/scene-system-params';
   import { applyTableFiltersToSearchModel } from '@utils/sync-table-filter-fields';
   import {
     applyDatetimeUrlParams,
@@ -190,10 +189,10 @@
       if (urlSearchParams[searchFieldName] === undefined
         || urlSearchParams[searchFieldName] === null
         || urlSearchParams[searchFieldName] === '') return;
-      // 场景选择器写入的 scene_id（含 allSecen/allSystem、scope_type 上下文）不是「所属场景」筛选
-      if (searchFieldName === 'scene_id'
-        && (isSceneSelectorContextQuery(urlSearchParams) || props.scopeType)) {
-        return;
+      // 场景选择器写入的 scene_id（含 allSecen/allSystem、以及无选择器页的残留）不是「所属场景」筛选
+      if (searchFieldName === 'scene_id') {
+        const sceneId = String(urlSearchParams.scene_id);
+        if (sceneId === 'allSecen' || sceneId === 'allSystem' || props.scopeType) return;
       }
       if (config.type !== 'string') {
         searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);

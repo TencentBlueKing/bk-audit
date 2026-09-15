@@ -821,14 +821,11 @@
           isLoading.value = true;
           run(params);
           if (fetchSeq === latestFetchSeq) {
-            // 场景选择器上下文不要写成搜索参数；无选择器页保留真实 scene_id 作为所属场景筛选
+            // 所属场景筛选不要写进场景选择器上下文（scene_id/scope_*）
             const urlParams = { ...params };
-            const injectSceneParams = props.isNeedSceneParams || props.isNeedSceneId;
+            delete urlParams.scene_id;
             delete urlParams.scope_id;
             delete urlParams.scope_type;
-            if (injectSceneParams || isSceneSelectorSentinelId(urlParams.scene_id)) {
-              delete urlParams.scene_id;
-            }
             replaceSearchParams(urlParams);
           }
         }

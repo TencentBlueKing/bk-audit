@@ -230,7 +230,6 @@
   interface IFormData {
     assign_rules: AssignRuleItem[];
     default_assign_rule: Omit<AssignRuleItem, 'id' | 'name' | 'conditions' | 'editingName'>;
-    dispatch_rules: Array<Record<string, any>>;
     processor_groups: Array<any>;
     notice_groups: Array<any>;
   }
@@ -569,8 +568,6 @@
       assign_mode: defaultRule.value.assign_mode,
       confirmers: toNoticeGroupIds(defaultRule.value.confirmers),
     },
-    // 向导已产出分派规则，清掉详情带回的旧 dispatch_rules，避免提交仍用旧处理人/关注人
-    dispatch_rules: [],
     // 兼容旧接口字段
     processor_groups: props.formData?.processor_groups ?? [],
     notice_groups: props.formData?.notice_groups ?? [],
