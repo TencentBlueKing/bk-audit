@@ -52,6 +52,7 @@ class Strategy extends ModuleBase {
     tag?: string
     scene_id?: string | number | null
     binding_type?: string
+    exclude_pending_confirm?: boolean
   }, payload = {} as IRequestPayload) {
     const hasSceneIdKey = Object.prototype.hasOwnProperty.call(params, 'scene_id');
     const { scene_id: sceneId, ...rest } = params;

@@ -61,6 +61,7 @@
         @click="() => handleClick(localEventItem.drill_config)"
         @mouseleave="handleDrillMouseLeave">
         <bk-popover
+          boundary="body"
           placement="top"
           theme="black">
           <span style="cursor: pointer;">
@@ -73,7 +74,7 @@
               <div
                 v-for="config in localEventItem.drill_config"
                 :key="config.tool.uid">
-                {{ getToolNameAndType(config.tool.uid).name }}
+                {{ getDrillDisplayName(config) }}
               </div>
             </div>
           </template>
@@ -105,6 +106,7 @@
         <bk-popover
           v-if="localEventItem.drill_config
             .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+          boundary="body"
           placement="top"
           theme="black">
           <audit-icon
@@ -117,7 +119,7 @@
                 v-for="drill in localEventItem.drill_config
                   .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                 :key="drill.tool.uid">
-                {{ getToolNameAndType(drill.tool.uid).name }}
+                {{ getDrillDisplayName(drill) }}
               </div>
             </div>
           </template>
@@ -208,7 +210,7 @@
 
   const columns = [{
     label: () => t('工具列表'),
-    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getDrillDisplayName(data)}</div>,
   }] as Column[];
 
   const disabledList = ['risk_level', 'status', 'current_operator'];
@@ -269,6 +271,14 @@
       type: '',
     };
   };
+
+  const getDrillDisplayName = (config: {
+    tool?: { uid?: string };
+    drill_name?: string;
+  }) => config.drill_name
+    || getToolNameAndType(config.tool?.uid || '').name
+    || config.tool?.uid
+    || '--';
 
   watch(() => props.eventItem, (value) => {
     localEventItem.value = value;

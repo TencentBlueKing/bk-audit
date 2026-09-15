@@ -499,11 +499,44 @@
   const fetchToolsDetail = async (uid: string) => {
     try {
       const result = await ToolManageService.fetchToolsDetail({ uid });
-      toolsDetailData.value.set(uid, result);
+      const nextMap = new Map(toolsDetailData.value);
+      nextMap.set(uid, result);
+      toolsDetailData.value = nextMap;
       return result;
     } catch (error) {
       return new ToolDetailModel();
     }
+  };
+
+  // 获取工具名称：列表 -> 详情 -> 下钻按钮名称 -> uid
+  const getToolName = (uid: string) => {
+    const listTool = props.allToolsData.find(item => item.uid === uid);
+    if (listTool?.name) {
+      return listTool.name;
+    }
+    const detailTool = toolsDetailData.value.get(uid);
+    if (detailTool?.name) {
+      return detailTool.name;
+    }
+    const drillName = formData.value.tools.find(item => item.tool.uid === uid)?.drill_name;
+    if (drillName) {
+      return drillName;
+    }
+    return uid;
+  };
+
+  const syncSelectToolLabels = () => {
+    if (!selectToolRef.value) {
+      return;
+    }
+    const allChildren = toolCascaderList.value.flatMap(group => group.children || []);
+    selectToolRef.value.selected = formData.value.tools.map((toolConfig) => {
+      const tool = allChildren.find((child: { id: string; name: string }) => child.id === toolConfig.tool.uid);
+      return {
+        value: toolConfig.tool.uid,
+        label: tool?.name || getToolName(toolConfig.tool.uid),
+      };
+    });
   };
 
   // 处理单个工具详情的对比逻辑
@@ -559,7 +592,7 @@
   const resetFormData = () => {
     formData.value.tools = [];
     formData.value.selectTool = [];
-    toolsDetailData.value.clear();
+    toolsDetailData.value = new Map();
     activeFieldName.value = '';
   };
 
@@ -583,9 +616,11 @@
       if (toolsToRemove.length > 0) {
         formData.value.tools = formData.value.tools.filter(toolConfig => !toolsToRemove.includes(toolConfig.tool.uid));
         // 清理对应的工具详情数据
+        const nextMap = new Map(toolsDetailData.value);
         toolsToRemove.forEach((uid) => {
-          toolsDetailData.value.delete(uid);
+          nextMap.delete(uid);
         });
+        toolsDetailData.value = nextMap;
       }
 
       // 添加新选择的工具
@@ -631,17 +666,7 @@
       resetFormData();
     }
     nextTick(() => {
-      selectToolRef.value.selected = [];
-      // 设置selectTool的选中值：以 formData.tools 为准，优先从 toolCascaderList 获取名称
-      const allChildren = toolCascaderList.value.flatMap(group => group.children || []);
-      const selectedTools = formData.value.tools.map((toolConfig) => {
-        const tool = allChildren.find((child: any) => child.id === toolConfig.tool.uid);
-        // 如果在列表中找到，使用列表中的名称；否则使用 getToolName 获取名称
-        const label = tool?.name || getToolName(toolConfig.tool.uid);
-        return { value: toolConfig.tool.uid, label };
-      });
-
-      selectToolRef.value.selected = selectedTools;
+      syncSelectToolLabels();
     });
   };
 
@@ -651,11 +676,6 @@
     emit('refresh-tool-list');
   };
 
-  // 获取工具名称
-  const getToolName = (uid: string) => {
-    const tool = props.allToolsData.find(item => item.uid === uid);
-    return tool?.name || uid;
-  };
 
   // 获取字段显示名称
   const getFieldDisplayName = (toolUid: string, sourceField: string) => {
@@ -822,7 +842,12 @@
     const deleteTool = element.tool.uid;
     formData.value.tools = formData.value.tools.filter(tool => tool.tool.uid !== deleteTool);
     formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
-    toolsDetailData.value.delete(deleteTool);
+    const nextMap = new Map(toolsDetailData.value);
+    nextMap.delete(deleteTool);
+    toolsDetailData.value = nextMap;
+    nextTick(() => {
+      syncSelectToolLabels();
+    });
   };
 
   const handleSubmit = () => {
@@ -866,9 +891,10 @@
         results.forEach(({ index, updatedToolConfig }) => {
           formData.value.tools[index] = updatedToolConfig;
         });
-        // 设置已存在配置的 select 选中状态
+        // 设置已存在配置的 select 选中状态，并用详情里的工具名回填标签
         nextTick(() => {
           setSelectValues();
+          syncSelectToolLabels();
         });
       } catch (error) {
         console.error('获取工具详情时发生错误:', error);
@@ -991,6 +1017,11 @@
     () => [props.allToolsData, props.tagData] as const,
     () => {
       syncToolCascaderList();
+      if (formData.value.tools.length) {
+        nextTick(() => {
+          syncSelectToolLabels();
+        });
+      }
     },
     { immediate: true, deep: true },
   );
