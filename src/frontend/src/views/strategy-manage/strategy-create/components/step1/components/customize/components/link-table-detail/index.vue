@@ -142,6 +142,7 @@
   import { InfoBox } from 'bkui-vue';
   import { h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import LinkDataManageService from '@service/link-data-manage';
   import MetaManageService from '@service/meta-manage';
@@ -155,7 +156,11 @@
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
 
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategyResourceSceneParams,
+    getStrategySystemScopeParams,
+    isPlatformStrategyRoute,
+  } from '@/views/strategy-manage/utils/strategy-routes';
 
   interface Emits {
     (e: 'refreshLinkData'): void;
@@ -176,6 +181,26 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
+  const isPlatformMode = isPlatformStrategyRoute(route.name);
+  const strategySceneParams = () => getStrategyResourceSceneParams(route);
+  const strategySystemScopeParams = () => getStrategySystemScopeParams(route);
+  const fetchStrategyTableList = (params: {
+    table_type: string;
+    scene_id?: string | number | null;
+    bk_biz_id?: string | number;
+  }) => {
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams = {
+      ...rest,
+      ...(sceneId !== undefined && sceneId !== null && sceneId !== ''
+        ? { scene_id: String(sceneId) }
+        : {}),
+    };
+    return isPlatformMode
+      ? StrategyManageService.fetchTable(requestParams)
+      : StrategyManageService.fetchScenePermissionTable(requestParams);
+  };
   const createRef = ref();
   const linkTableMaxVersionMap = ref<Record<string, number>>({});
   const tableTypeData = ref<Record<'BizRt' | 'BuildIn' | 'EventLog', Array<TableData>>>({
@@ -188,9 +213,9 @@
   const fetchTableTypeData = () => {
     // 获取tableData
     for (const type of uniqueTableTypes.value) {
-      StrategyManageService.fetchScenePermissionTable({
+      fetchStrategyTableList({
         table_type: type,
-        scene_id: getSceneSystemParams().scope_id,
+        ...strategySceneParams(),
       }).then((data) => {
         tableTypeData.value[type] = data;
       });
@@ -308,9 +333,8 @@
       if (newLinks) {
         // 获取系统
         fetchSystemWithAction({
-          scope_id: getSceneSystemParams().scope_id,
           action_ids: 'view_system',
-          scope_type: 'scene',
+          ...strategySystemScopeParams(),
         });
         uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
         fetchTableTypeData();

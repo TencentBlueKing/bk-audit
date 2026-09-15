@@ -324,18 +324,27 @@
     permission?: { view_scene?: boolean; manage_scene?: boolean },
   ): ApplyStatus => {
     const normalized = status.toLowerCase();
+    const hasView = Boolean(permission?.view_scene);
+    const hasManage = Boolean(permission?.manage_scene);
+
     if (APPLYING_STATUS.includes(normalized) || statusDisplay.includes('申请中') || statusDisplay.includes('审批中')) {
       return 'applying';
     }
     if (REJECTED_STATUS.includes(normalized) || statusDisplay.includes('拒绝')) {
       return 'rejected';
     }
+
+    // 无查看/管理权限时：非「申请中」一律走申请（勿因历史单据 status 显示「已通过」）
+    if (!hasView && !hasManage) {
+      return 'idle';
+    }
+
     if (
       PASSED_STATUS.includes(normalized)
       || statusDisplay.includes('通过')
       || statusDisplay.includes('成功')
-      || permission?.view_scene
-      || permission?.manage_scene
+      || hasView
+      || hasManage
     ) {
       return 'passed';
     }

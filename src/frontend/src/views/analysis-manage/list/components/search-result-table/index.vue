@@ -523,11 +523,6 @@
   background: #fff;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
-
-  .bk-table .bk-table-fixed .column_fixed.column_fixed_left,
-  .bk-table .bk-table-fixed .column_fixed.column_fixed_right {
-    bottom: 71px !important;
-  }
 }
 
 .highlight-cell {

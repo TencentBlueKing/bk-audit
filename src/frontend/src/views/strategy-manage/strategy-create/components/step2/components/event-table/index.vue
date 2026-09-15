@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, onActivated, ref } from 'vue';
+  import { computed, onActivated, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -98,7 +98,16 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
-  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategySystemScopeParams,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+  import {
+    buildStrategyEventOutputFields,
+    findSelectField,
+    isSameSelectField,
+  } from '../../../../utils/strategy-protocol';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -128,8 +137,8 @@
     handleOpenTool,
   } = useToolDialog();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
   // 用于自动填充参数
   const fieldMap: Record<string, string> = {
     event_id: 'raw_event_id',
@@ -167,39 +176,41 @@
   const groupMap = computed(() => (props.strategyType === 'rule'
     ? {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
     } : {
       event_basic_field_configs: t('基本信息'),
-      event_data_field_configs: t('事件结果'),
+      event_data_field_configs: t('事件内容'),
       event_evidence_field_configs: t('事件证据'),
     }));
 
   const outputFields = computed(() => {
-    const basicFields = tableData.value.event_basic_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'basic',
-    }));
-    const dataFields = tableData.value.event_data_field_configs.map(item => ({
-      raw_name: item.field_name,
-      display_name: item.display_name,
-      description: item.description,
-      target_field_type: 'data',
-    }));
-    const evidenceFields = props.strategyType === 'rule'
-      ? tableData.value.event_evidence_field_configs.map(item => ({
-        raw_name: item.field_name,
-        display_name: item.display_name,
-        description: item.description,
-        target_field_type: 'evidence',
+    const eventFields = buildStrategyEventOutputFields({
+      event_basic_field_configs: tableData.value.event_basic_field_configs,
+      event_data_field_configs: tableData.value.event_data_field_configs,
+      event_evidence_field_configs: tableData.value.event_evidence_field_configs,
+      strategy_type: props.strategyType,
+    });
+    const selectDataFields = (props.select || [])
+      .map(item => ({
+        raw_name: item.raw_name || item.display_name || '',
+        display_name: item.display_name || item.raw_name || '',
+        description: '',
+        target_field_type: 'data' as const,
       }))
-      : [];
-    return basicFields.concat(dataFields, evidenceFields);
+      .filter(item => item.raw_name);
+    return [
+      ...eventFields,
+      ...selectDataFields.filter(item => !eventFields.some(field => (
+        isSameSelectField(item, field.raw_name) || isSameSelectField(item, field.display_name)
+      ))),
+    ];
   });
 
 
-  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
+  const buildToolListParams = () => ({
+    ...getStrategySystemScopeParams(route),
+    status: 'published',
+  });
 
   // 获取所有工具
   const {
@@ -263,12 +274,16 @@
         tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
           if (item.map_config && !item.map_config.target_value) {
             const value = item.map_config.source_field || item.map_config.target_value;
-            if (!props.select.some(selectItem => selectItem.display_name === value)) {
+            const matched = findSelectField(props.select, value);
+            if (!matched) {
               // eslint-disable-next-line no-param-reassign
               item.map_config = {
                 source_field: undefined,
                 target_value: undefined,
               };
+            } else {
+              // eslint-disable-next-line no-param-reassign
+              item.map_config.source_field = matched.display_name;
             }
           }
           return item;
@@ -286,25 +301,20 @@
       break;
     case 'event_data_field_configs':
       if (props.select && props.select.length) {
-        // 保持原有顺序，只保留 props.select 中存在的字段
+        // 保持原有顺序，只保留 props.select 中存在的字段（兼容 raw_name / 中文名(raw_name)）
         tableData.value.event_data_field_configs = tableData.value.event_data_field_configs
-          .filter(fieldItem => props.select.some(item => item.display_name === fieldItem.field_name))
-          .map((fieldItem) => {
-            // 找到对应的 props.select 项
-            const selectItem = props.select.find(item => item.display_name === fieldItem.field_name);
-            if (selectItem) {
-              return {
-                ...fieldItem,
-                // 可以在这里添加需要更新的属性
-              };
-            }
-            return fieldItem;
-          });
+          .filter(fieldItem => props.select.some(item => (
+            isSameSelectField(item, fieldItem.field_name)
+            || isSameSelectField(item, fieldItem.display_name)
+          )));
 
         // 添加 props.select 中有但 tableData 中没有的新字段到末尾
         props.select.forEach((item) => {
           const existingField = tableData.value.event_data_field_configs
-            .find(fieldItem => fieldItem.field_name === item.display_name);
+            .find(fieldItem => (
+              isSameSelectField(item, fieldItem.field_name)
+              || isSameSelectField(item, fieldItem.display_name)
+            ));
 
           if (!existingField) {
             tableData.value.event_data_field_configs.push(createField(item));
@@ -385,6 +395,14 @@
     process();
   });
 
+  watch(
+    () => props.select,
+    () => {
+      process();
+    },
+    { deep: true },
+  );
+
   defineExpose<Exposes>({
     getData() {
       return tableData.value;
@@ -421,6 +439,14 @@
       @include cell-base;
 
       background-color: #f5f7fa;
+      font-weight: 500;
+      color: #313238;
+
+      &:first-child {
+        width: 80px;
+        min-width: 80px;
+        flex-shrink: 0;
+      }
 
       &.field-name {
         width: 200px;
@@ -456,7 +482,10 @@
       @include cell-base;
 
       display: flex;
-      background-color: #f5f7fa;
+      width: 80px;
+      min-width: 80px;
+      flex-shrink: 0;
+      background-color: #fafbfd;
       align-items: center;
       justify-content: center;
     }

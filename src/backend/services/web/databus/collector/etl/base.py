@@ -29,7 +29,11 @@ from django.utils.translation import gettext
 
 from apps.meta.utils.fields import PYTHON_FIELD_TYPE_MAP
 from core.models import get_request_username
-from services.web.databus.constants import JOIN_DATA_RT_FORMAT, EtlConfigEnum
+from services.web.databus.constants import (
+    JOIN_DATA_RT_FORMAT,
+    EtlConfigEnum,
+    JoinDataType,
+)
 from services.web.databus.models import CollectorConfig, Snapshot
 from services.web.databus.utils import restart_bkbase_clean, start_bkbase_clean
 
@@ -75,7 +79,9 @@ class EtlClean(metaclass=abc.ABCMeta):
 
         # 新建的采集需要自动关联
         if not instance.join_data_rt:
-            snapshots = Snapshot.objects.filter(system_id=instance.system_id).exclude(bkbase_table_id=None)
+            snapshots = Snapshot.objects.filter(
+                system_id=instance.system_id, join_data_type=JoinDataType.BASIC.value
+            ).exclude(bkbase_table_id=None)
             if snapshots.count():
                 snapshot = snapshots.first()
                 rt_name = JOIN_DATA_RT_FORMAT.format(

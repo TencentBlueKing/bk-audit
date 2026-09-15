@@ -113,7 +113,6 @@
   } from 'vue-router';
 
   import RiskManageService from '@service/risk-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
@@ -125,6 +124,11 @@
   import {
     execCopy,
   } from '@utils/assist';
+
+  import {
+    getRiskViewTypeByDetailRoute,
+    useRiskListStrategyList,
+  } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import BaseInfo from './components/base-info.vue';
   import EditEventReport from './components/event-report/edit-event-report.vue';
@@ -140,7 +144,7 @@
   const isShowEditEventReport = ref(false);
   const renderComRef = ref();
   const hasAutoOpenedReport = ref(false);
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   const stageNameMap: Record<string, string> = {
     await_deal: t('人工处理'),
@@ -169,12 +173,9 @@
   let syncedActiveTabRiskId: string | undefined;
 
   const {
-    loading: strategyLoading,
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+    strategyList,
+    strategyLoading,
+  } = useRiskListStrategyList(getRiskViewTypeByDetailRoute(String(route.name || '')));
 
   const {
     data: riskStatusCommon,
@@ -295,11 +296,22 @@
     isShowEditEventReport.value = true;
   };
 
+  const pickStrategyText = (...values: Array<string | null | undefined>) => (
+    values.find(item => item !== undefined && item !== null && item !== '') || ''
+  );
+
   // 合并数据（包含事件信息配置）
-  const detailData = computed(() => ({
-    ...riskData.value,
-    ...strategyInfoData.value,
-  }));
+  const detailData = computed(() => {
+    const risk = riskData.value;
+    const strategyInfo = strategyInfoData.value;
+    return {
+      ...risk,
+      ...strategyInfo,
+      risk_level: pickStrategyText(strategyInfo?.risk_level, risk?.risk_level),
+      risk_hazard: pickStrategyText(strategyInfo?.risk_hazard, risk?.risk_hazard),
+      risk_guidance: pickStrategyText(strategyInfo?.risk_guidance, risk?.risk_guidance),
+    };
+  });
 
   // 无调查报告时仅挂载「关联事件列表」panel，并隐藏页签头（由内容区展示区块标题）
   const visiblePanels = computed(() => (
@@ -358,6 +370,7 @@
       attentionManageDetail: 'attentionManageList',
       processedManageDetail: 'processedManageList',
       sceneRiskManageDetail: 'sceneRiskManageList',
+      confirmManageDetail: 'confirmManageList',
     };
     router.push({
       name: listNameMap[route.name as keyof typeof listNameMap],
@@ -397,9 +410,7 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 

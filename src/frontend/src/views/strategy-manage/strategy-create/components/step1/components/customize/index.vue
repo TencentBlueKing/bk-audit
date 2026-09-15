@@ -15,98 +15,16 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-customize">
+  <div
+    class="strategy-customize"
+    :class="{ 'customize-basic-mode': stepMode === 'basic' }">
+    <!-- rules 模式：带 collapse-panel 和 form-item 包裹（旧）-->
     <auth-collapse-panel
+      v-if="stepMode === 'rules'"
       is-active
-      :label="t('规则配置')"
+      :label="t('风险发现规则')"
       style="margin-bottom: 14px">
       <div class="customize-rule">
-        <bk-form-item
-          label=""
-          label-width="0"
-          required>
-          <span
-            v-bk-tooltips="{
-              content: t(
-                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
-              ),
-              extCls: 'strategy-config-type-tooltips',
-              placement: 'top-start'
-            }"
-            class="label-is-required"
-            style="
-              color: #63656e;
-              cursor: pointer;
-              border-bottom: 1px dashed #979ba5;
-            ">
-            {{ t('数据源') }}
-          </span>
-          <bk-loading :loading="typeTableLoading">
-            <div class="select-group">
-              <bk-form-item
-                class="no-label"
-                label-width="0"
-                property="configs.config_type">
-                <data-source-picker
-                  v-model="tableId"
-                  :decode-type-biz-id="decodeTypeBizId"
-                  :list="allConfigTypeTable"
-                  :load-children="handlePickerLoadChildren"
-                  :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
-                  :system-ids="formData.configs.data_source.system_ids"
-                  @change="handleChangeTable"
-                  @event-log-commit="handleEventLogCommit" />
-              </bk-form-item>
-            </div>
-          </bk-loading>
-          <!-- 联表详情 -->
-          <link-data-detail-component
-            v-if="formData.configs.data_source.link_table
-              && formData.configs.data_source.link_table.uid
-            "
-            :join-type-list="joinTypeList"
-            :link-data-detail="linkDataDetail"
-            @refresh-link-data="handleRefreshLinkData" />
-          <!-- 其他数据表详情 -->
-          <other-table-detail-component
-            v-if="formData.configs.data_source.rt_id?.length"
-            :rt-id="formData.configs.data_source.rt_id"
-            @show-structure-preview="handleShowStructureView" />
-          <!-- 查看表字段详情 -->
-          <structure-preview-component
-            v-model:show-structure="showStructure"
-            :current-view-field="currentViewField"
-            :rt-id="currentViewRtId" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160"
-          property="configs.select"
-          required>
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
-              }"
-              style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
-              {{ t('预期结果') }}
-            </span>
-          </template>
-          <expected-results
-            ref="expectedResultsRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :table-fields="tableFields"
-            @update-expected-result="handleUpdateExpectedResult" />
-        </bk-form-item>
         <bk-form-item
           label=""
           label-width="160"
@@ -135,12 +53,116 @@
             :configs-data="formData.configs"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
-            @show-structure-preview="handleShowStructureView"
+            :table-fields-loading="tableFieldsLoading"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
       </div>
     </auth-collapse-panel>
+    <!-- rules-only 模式：仅渲染命中条件，不带 collapse-panel 和 label 包裹 -->
+    <div
+      v-if="stepMode === 'rules-only'"
+      class="customize-rule-only">
+      <rules-component
+        ref="rulesComponentRef"
+        :aggregate-list="aggregateList"
+        :config-type="formData.configs.config_type"
+        :configs-data="formData.configs"
+        :expected-result="formData.configs.select"
+        :table-fields="tableFields"
+        :table-fields-loading="tableFieldsLoading"
+        @update-where="handleUpdateWhere" />
+    </div>
+    <div
+      v-if="stepMode === 'basic'"
+      class="customize-rule customize-rule-basic">
+      <bk-form-item
+        class="is-required data-source-form-item"
+        property="configs.config_type">
+        <template #label>
+          <span
+            v-bk-tooltips="{
+              content: t(
+                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start'
+            }"
+            class="form-label-tip">
+            {{ t('数据源') }}
+          </span>
+        </template>
+        <bk-loading :loading="typeTableLoading">
+          <div
+            v-bk-tooltips="{
+              content: t('审计策略不支持编辑数据源'),
+              disabled: !isEditMode,
+              placement: 'top',
+            }"
+            class="select-group">
+            <data-source-picker
+              ref="dataSourcePickerRef"
+              v-model="tableId"
+              :decode-type-biz-id="decodeTypeBizId"
+              :disabled="isEditMode"
+              :list="allConfigTypeTable"
+              :load-children="handlePickerLoadChildren"
+              :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
+              :system-ids="formData.configs.data_source.system_ids"
+              @change="handleChangeTable"
+              @event-log-commit="handleEventLogCommit"
+              @update:system-ids="handleSystemIdsUpdate" />
+          </div>
+        </bk-loading>
+      </bk-form-item>
+      <!-- 联表详情 -->
+      <link-data-detail-component
+        v-if="formData.configs.data_source.link_table
+          && formData.configs.data_source.link_table.uid
+        "
+        :join-type-list="joinTypeList"
+        :link-data-detail="linkDataDetail"
+        @refresh-link-data="handleRefreshLinkData" />
+      <!-- 其他数据表详情 -->
+      <other-table-detail-component
+        v-if="formData.configs.data_source.rt_id?.length"
+        :rt-id="formData.configs.data_source.rt_id"
+        @show-structure-preview="handleShowStructureView" />
+      <!-- 查看表字段详情 -->
+      <structure-preview-component
+        v-model:show-structure="showStructure"
+        :current-view-field="currentViewField"
+        :rt-id="currentViewRtId" />
+      <bk-form-item
+        class="expected-result-form-item"
+        label=""
+        label-width="160">
+        <template #label>
+          <span
+            v-bk-tooltips="{
+              content: t(
+                '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
+              ),
+              extCls: 'strategy-config-type-tooltips',
+              placement: 'top-start'
+            }"
+            style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
+            {{ t('预期结果') }}
+          </span>
+        </template>
+        <expected-results
+          ref="expectedResultsRef"
+          :aggregate-list="aggregateList"
+          :config-type="formData.configs.config_type"
+          :table-fields="tableFields"
+          @update-expected-result="handleUpdateExpectedResult" />
+      </bk-form-item>
+    </div>
     <auth-collapse-panel
+      v-if="stepMode === 'basic'"
       is-active
       :label="t('调度配置')"
       style="margin-bottom: 12px">
@@ -152,7 +174,7 @@
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
             class="source-type-radio-group"
-            :disabled="isEditMode"
+            :disabled="isStrategyConfigLocked"
             @change="handleSourceTypeChange">
             <bk-radio
               v-bk-tooltips="{
@@ -171,9 +193,11 @@
                 placement: 'top-start',
               }"
               :style="{
-                color: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                color: (isStrategyConfigLocked
+                  || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isStrategyConfigLocked
+                  || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
                   ? '#c4c6cc' : '#979ba5'}`,
                 marginLeft: '6px',
                 lineHeight: '12px',
@@ -194,9 +218,11 @@
                 placement: 'top-start',
               }"
               :style="{
-                color: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                color: (isStrategyConfigLocked
+                  || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isStrategyConfigLocked
+                  || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
                   ? '#c4c6cc' : '#979ba5'}`,
                 marginLeft: '6px',
                 lineHeight: '12px',
@@ -219,7 +245,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.count_freq"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-input
                 v-model="formData.configs.schedule_config.count_freq"
                 class="schedule-input"
@@ -232,7 +258,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.schedule_period"
-              style="margin-bottom: 12px">
+              style="margin-bottom: 0">
               <bk-select
                 v-model="formData.configs.schedule_config.schedule_period"
                 class="schedule-select"
@@ -258,7 +284,10 @@
     computed,
     h,
     nextTick,
-    onMounted,    ref,
+    onActivated,
+    onDeactivated,
+    onMounted,
+    ref,
     watch,
     watchEffect } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -281,8 +310,21 @@
   import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
   import { normalizeWhereForDisplay } from '@/utils/assist/normalize-condition-filter';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    getStrategyResourceSceneParams,
+    getStrategySystemScopeParams,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+  import {
+    enrichFieldDisplayNames,
+    excludeHavingFromWhere,
+    formatFieldDisplayLabel,
+    hasFilledWhereConditions,
+  } from '../../../../utils/strategy-protocol';
 
   interface Where {
     connector: 'and' | 'or'
@@ -313,6 +355,8 @@
       }
       config_type: string
       select: Array<DatabaseTableFieldModel>
+      // 前端临时字段：预期结果为空时用于兜底，提交前会剔除
+      table_fields?: Array<DatabaseTableFieldModel>
       where: Where
       having?: Where
       schedule_config: {
@@ -339,30 +383,63 @@
   }
   interface Emits {
     (e: 'updateFormData', value: IFormData): void
+    (e: 'resetHitConditions'): void
   }
   interface Expose {
     getFields: (options?: { forValidate?: boolean }) => IFormData;
     typeTableLoading: boolean;
+    resetFormData: () => void;
   }
   interface Props {
-    editData: any
+    editData: any,
+    stepMode?: 'basic' | 'rules' | 'rules-only',
+    parentConfigs?: Record<string, any>,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+    parentConfigs: () => ({}),
+  });
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
   const route = useRoute();
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
+  const dataSourcePickerRef = ref<{ flushEventLogSelection?:() => void } | null>(null);
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isPlatformMode = isPlatformStrategyRoute(route.name);
+  const strategyStatus = computed(() => props.editData?.status);
+  const { isStrategyConfigLocked } = useStrategyConfigLock(strategyStatus);
+  const strategySceneParams = computed(() => getStrategyResourceSceneParams(route));
+  const strategySystemScopeParams = computed(() => getStrategySystemScopeParams(route));
+
+  const fetchStrategyTableList = (params: {
+    table_type: string;
+    scene_id?: string | number | null;
+    bk_biz_id?: string | number;
+  }) => {
+    const { scene_id: sceneId, ...rest } = params;
+    const requestParams = {
+      ...rest,
+      ...(sceneId !== undefined && sceneId !== null && sceneId !== ''
+        ? { scene_id: String(sceneId) }
+        : {}),
+    };
+    return isPlatformMode
+      ? StrategyManageService.fetchTable(requestParams)
+      : StrategyManageService.fetchScenePermissionTable(requestParams);
+  };
 
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
   let isInit = false;
+  let isInitFromParent = false;
   // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
   let tableIdEchoSeq = 0;
+  // 回显写 tableId 期间忽略 change，避免把 system_ids 等已回填字段清空
+  let isEchoingTableId = false;
 
   const formData = ref<IFormData>({
     configs: {
@@ -397,6 +474,7 @@
   }>>([]);
   const aggregateList = ref<Array<Record<string, any>>>([]);
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
+  const tableFieldsLoading = ref(false);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
   const typeTableLoading = ref(false);
@@ -407,6 +485,14 @@
   const originalEditHaving = ref<Where | undefined>(undefined);
   const isWhereModified = ref(false);
   const isWhereSettingUp = ref(false);
+  // keep-alive 停用后不再向外抛重置，避免第一步预期结果回写把第二步已填条件清空
+  const isStepActive = ref(true);
+  onActivated(() => {
+    isStepActive.value = true;
+  });
+  onDeactivated(() => {
+    isStepActive.value = false;
+  });
 
   // 仅 MineBizRt：点击第二列业务项后再带 bk_biz_id 懒加载第三列
   // cascader 按单层 id 展开（getNodeById），跨类型重复的 bizId/rtId 会串选到「其他数据」
@@ -478,13 +564,13 @@
 
   const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
     // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate，或者是编辑模式
-    if (isEditMode
+    if (isStrategyConfigLocked.value
       || !sourceType.value.support_source_types.includes(type)
       || (type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate))) {
       return {
         disabled: true,
         // eslint-disable-next-line no-nested-ternary
-        tips: isEditMode
+        tips: isStrategyConfigLocked.value
           ? t('编辑状态下不能编辑调度方式')
           : !sourceType.value.support_source_types.includes(type)
             ? t('不可选择，如仍需使用此数据，请联系系统管理员')
@@ -522,7 +608,7 @@
   // 获取tableid
   const {
     run: fetchTable,
-  } = useRequest(StrategyManageService.fetchScenePermissionTable, {
+  } = useRequest(fetchStrategyTableList, {
     defaultValue: [],
   });
 
@@ -535,23 +621,28 @@
   const mapTableChildren = (
     data: Array<Record<string, any>>,
     tableType: string,
-  ): ConfigTypeTableItem['children'] => data.map(tableItem => ({
-    label: String(tableItem.label ?? ''),
-    // 第二/三列 value 加 tableType 前缀，避免 getNodeById 跨类型串选
-    value: tableType === 'EventLog'
-      ? String(tableItem.value)
-      : encodeTypeBizId(tableType, tableItem.value),
-    // 操作日志：点插件后再懒加载系统列表，与我的授权结果表一致
-    leaf: tableType === 'EventLog'
-      ? false
-      : !(tableItem.children && tableItem.children.length),
-    disabled: !(tableItem.children && tableItem.children.length) && tableType !== 'EventLog',
-    children: tableItem.children?.map((child: Record<string, any>) => ({
-      label: String(child.label ?? ''),
-      value: encodeTypeBizId(tableType, child.value),
-      leaf: !(child.children && child.children.length),
-    })),
-  }));
+  ): ConfigTypeTableItem['children'] => data
+    // 无可用子项的系统视为禁用：与审计策略一致，不进入列表（不展示灰置项）
+    .filter(tableItem => (
+      tableType === 'EventLog'
+      || (Array.isArray(tableItem.children) && tableItem.children.length > 0)
+    ))
+    .map(tableItem => ({
+      label: String(tableItem.label ?? ''),
+      // 第二/三列 value 加 tableType 前缀，避免 getNodeById 跨类型串选
+      value: tableType === 'EventLog'
+        ? String(tableItem.value)
+        : encodeTypeBizId(tableType, tableItem.value),
+      // 操作日志：点插件后再懒加载系统列表，与我的授权结果表一致
+      leaf: tableType === 'EventLog'
+        ? false
+        : !(tableItem.children && tableItem.children.length),
+      children: tableItem.children?.map((child: Record<string, any>) => ({
+        label: String(child.label ?? ''),
+        value: encodeTypeBizId(tableType, child.value),
+        leaf: !(child.children && child.children.length),
+      })),
+    }));
 
   const getBizChildrenCacheKey = (tableType: string, bizId: string | number) => (
     `${tableType}_${bizId}`
@@ -570,10 +661,10 @@
     if (pending) {
       return pending;
     }
-    const promise = StrategyManageService.fetchScenePermissionTable({
+    const promise = fetchStrategyTableList({
       table_type: tableType,
       bk_biz_id: bizId,
-      scene_id: getSceneSystemParams().scope_id,
+      ...strategySceneParams.value,
     }).then((data) => {
       // 兼容：带 bk_biz_id 时可能直接返回子表，也可能仍返回业务树
       let tableList = data as Array<Record<string, any>>;
@@ -649,8 +740,7 @@
     eventLogSystemPending = (async () => {
       const systems = await MetaManageService.fetchSystemWithAction({
         action_ids: 'view_system',
-        scope_id: getSceneSystemParams().scope_id,
-        scope_type: 'scene',
+        ...strategySystemScopeParams.value,
       });
       const systemIds = (systems || []).map((item: { id: string }) => item.id).join(',');
       if (!systemIds) {
@@ -694,7 +784,7 @@
     const requests = ruleAuditConfigType.value.map((item) => {
       if (item.value === 'LinkTable') {
         return async () => {
-          const LinkTableData = await fetchLinkTableAll();
+          const LinkTableData = await fetchLinkTableAll(strategySceneParams.value);
           return [{
             ...item,
             children: LinkTableData.map(tableItem => ({
@@ -709,7 +799,7 @@
       return async () => {
         const data = await fetchTable({
           table_type: item.value,
-          scene_id: getSceneSystemParams().scope_id,
+          ...strategySceneParams.value,
         });
         return [{
           ...item,
@@ -781,13 +871,67 @@
     property: item.property || {},
   }));
 
+  const enrichWhereFieldDisplayNames = (where?: Where) => {
+    if (!where?.conditions?.length) {
+      return;
+    }
+    const select = formData.value.configs.select || [];
+    where.conditions.forEach((group) => {
+      group.conditions.forEach((item) => {
+        const field = item.condition?.field;
+        if (!field || typeof field === 'string' || !(field.raw_name || field.display_name)) {
+          return;
+        }
+        const matchedSelect = select.find((selectItem: { raw_name?: string; aggregate?: unknown; display_name?: string }) => (
+          selectItem.raw_name === field.raw_name
+          && (selectItem.aggregate || null) === (field.aggregate || null)
+        ));
+        if (matchedSelect?.display_name) {
+          field.display_name = matchedSelect.display_name;
+          return;
+        }
+        if (!tableFields.value.length) {
+          field.display_name = formatFieldDisplayLabel(field.display_name, field.raw_name);
+          return;
+        }
+        const [enriched] = enrichFieldDisplayNames([field], tableFields.value);
+        field.display_name = formatFieldDisplayLabel(enriched.display_name, field.raw_name);
+      });
+    });
+  };
+
+  const syncExpectedResultDisplayNames = () => {
+    if (!formData.value.configs.select?.length || !tableFields.value.length) {
+      return;
+    }
+    const enriched = enrichFieldDisplayNames(formData.value.configs.select, tableFields.value);
+    formData.value.configs.select = enriched;
+    expectedResultsRef.value?.setSelect?.(enriched);
+  };
+
   // 选择tableid后，获取表字段
+  const resolveRtId = (rtId: string | string[] | undefined) => {
+    if (Array.isArray(rtId)) {
+      return rtId.length ? String(_.last(rtId)) : '';
+    }
+    return rtId ? String(rtId) : '';
+  };
+
   const fetDatabaseTableFields = (rtId: string) => {
+    if (!rtId) {
+      return;
+    }
+    tableFieldsLoading.value = true;
     StrategyManageService.fetchTableRtFields({
       table_id: rtId,
     }).then((data) => {
       tableFields.value = setTableFields(data, rtId);
-    });
+      formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
+      syncExpectedResultDisplayNames();
+    })
+      .finally(() => {
+        tableFieldsLoading.value = false;
+      });
   };
 
   // 选择tableid后，获取联表表字段
@@ -799,6 +943,10 @@
     const idArr = Array.from(new Set(rtIdArr.reduce((acc, curr) => acc.concat(curr), [])));
     // 别名
     const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
+    if (!idArr.length) {
+      return;
+    }
+    tableFieldsLoading.value = true;
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
     }).then((data) => {
@@ -806,7 +954,12 @@
       data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
-    });
+      formData.value.configs.table_fields = _.cloneDeep(tableFields.value);
+      syncExpectedResultDisplayNames();
+    })
+      .finally(() => {
+        tableFieldsLoading.value = false;
+      });
   };
 
   // 获取关联表详情
@@ -890,6 +1043,7 @@
   };
   const removeTreeData = () => {
     sessionStorage.removeItem('storage-tree-data');
+    sessionStorage.removeItem('rule-tree-data');
   };
   const createInfoBoxConfig = (overrides: {
     onConfirm: () => void
@@ -946,7 +1100,13 @@
       connector: 'and',
       conditions: [],
     };
+    formData.value.configs.table_fields = [];
+    tableFields.value = [];
+    removeTreeData();
     [rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
+    if (!isEditMode && isStepActive.value) {
+      emits('resetHitConditions');
+    }
   };
 
   // 选择tableid和数据源类型
@@ -954,6 +1114,10 @@
     value: Array<string>,
     options?: { systemIds?: string[] },
   ) => {
+    // 回显写值触发的 change 不处理，否则会把已回填的 system_ids 等清掉
+    if (isEchoingTableId) {
+      return;
+    }
     // 用户主动选择时作废进行中的编辑回显，防止异步回写覆盖
     tableIdEchoSeq += 1;
     const systemIdsBackup = [...(formData.value.configs.data_source.system_ids || [])];
@@ -978,8 +1142,13 @@
         return;
       }
 
-      // 有填写预期结果、风险发现规则，重置
-      if (hasData.value) {
+      // 操作日志无 systemIds 时禁止变更（由 eventLogCommit 提交），避免只写 rt_id 或误 reset
+      if (configType === 'EventLog' && !options?.systemIds?.length) {
+        return;
+      }
+
+      // 有填写预期结果、风险发现规则，或从已有数据源切换，重置下游字段与命中条件
+      if (hasData.value || previousTableId.value.length) {
         resetDataSource();
       }
 
@@ -988,11 +1157,13 @@
         // 路径：[EventLog, pluginId]；系统多选随 options.systemIds 提交
         const pluginId = nextValue[1] || '';
         formData.value.configs.data_source.rt_id = pluginId;
-        formData.value.configs.data_source.link_table.uid = '';
-        formData.value.configs.data_source.link_table.version = 0;
-        formData.value.configs.data_source.system_ids = options?.systemIds
-          ? [...options.systemIds]
-          : [];
+        if (!formData.value.configs.data_source.link_table) {
+          formData.value.configs.data_source.link_table = { uid: '', version: 0 };
+        } else {
+          formData.value.configs.data_source.link_table.uid = '';
+          formData.value.configs.data_source.link_table.version = 0;
+        }
+        formData.value.configs.data_source.system_ids = [...(options?.systemIds || [])];
         if (pluginId) {
           fetDatabaseTableFields(pluginId);
           fetchSourceType({ config_type: configType, rt_id: pluginId });
@@ -1031,8 +1202,8 @@
       handleTableChangeCore(value);
     };
 
-    // 首次初始化或没有配置数据，直接处理
-    if (!formData.value.configs.config_type || !hasData.value) {
+    // 首次选择数据源直接处理；已有数据源时弹窗确认
+    if (!previousTableId.value.length) {
       applyChange();
       return;
     }
@@ -1051,29 +1222,80 @@
     }));
   };
 
+  // 操作日志系统多选即时回写（防止只靠关面板提交时被空值冲掉）
+  const handleSystemIdsUpdate = (systemIds: string[]) => {
+    if (!formData.value.configs.data_source) {
+      formData.value.configs.data_source = {
+        system_ids: [],
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+      };
+    }
+    formData.value.configs.data_source.system_ids = [...(systemIds || [])];
+  };
+
   // 操作日志：关闭面板时提交插件 + 系统多选
   const handleEventLogCommit = (payload: { path: string[]; systemIds: string[] }) => {
-    handleChangeTable(payload.path, { systemIds: payload.systemIds });
+    const { path, systemIds } = payload;
+    if (path[0] !== 'EventLog' || !path[1] || !systemIds?.length) {
+      return;
+    }
+    // 用户确认选择：作废进行中的回显锁，强制写入（否则选中的 system_ids 会被静默丢掉）
+    tableIdEchoSeq += 1;
+    isEchoingTableId = false;
+
+    const pathChanged = previousTableId.value.join(',') !== path.join(',');
+    if (pathChanged && previousTableId.value.length) {
+      resetDataSource();
+    }
+
+    if (!formData.value.configs.data_source) {
+      formData.value.configs.data_source = {
+        system_ids: [],
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+      };
+    }
+    // 先写 system_ids，避免后续字段赋值触发的中间态把展示冲成「仅插件」
+    formData.value.configs.data_source.system_ids = [...systemIds];
+    formData.value.configs.config_type = 'EventLog';
+    const [, pluginId] = path;
+    formData.value.configs.data_source.rt_id = pluginId;
+    formData.value.configs.data_source.link_table = {
+      uid: '',
+      version: 0,
+    };
+    previousTableId.value = [...path];
+    tableId.value = [...path];
+    fetDatabaseTableFields(pluginId);
+    fetchSourceType({ config_type: 'EventLog', rt_id: pluginId });
   };
 
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
+    const prevSelect = JSON.stringify(formData.value.configs.select || []);
     formData.value.configs.select = expectedResult;
+    sessionStorage.removeItem('rule-tree-data');
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
       formData.value.configs.data_source.source_type = '';
-      return;
-    }
-    // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
-    if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
+    } else if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
+      // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
       formData.value.configs.data_source.source_type = originSourceType.value;
     }
+    if (props.stepMode !== 'basic' || !isStepActive.value
+      || prevSelect === JSON.stringify(expectedResult || [])) {
+      return;
+    }
+    emits('resetHitConditions');
   };
 
   // 更新风险规则
   const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
-    if (isEditMode && !isWhereSettingUp.value) {
+    if (!isWhereSettingUp.value) {
       isWhereModified.value = true;
     }
   };
@@ -1087,82 +1309,243 @@
 
   const extractBizIdFromRtId = (rtId: string) => {
     if (!rtId) return '';
-    return rtId.split('_')[0];
+    const first = rtId.split('_')[0];
+    return /^\d+$/.test(first) ? first : '';
+  };
+
+  const isMatchedRtNode = (
+    tableType: string,
+    node: { label?: string; value: string },
+    rtId: string,
+  ) => {
+    if (!rtId) return false;
+    const realValue = decodeTypeBizId(tableType, node.value);
+    if (
+      realValue === rtId
+      || String(node.value) === rtId
+      || String(node.label || '') === rtId
+    ) {
+      return true;
+    }
+    const bizId = extractBizIdFromRtId(realValue) || extractBizIdFromRtId(rtId);
+    return Boolean(bizId && (
+      realValue === `${bizId}_${rtId}`
+      || rtId === `${bizId}_${realValue}`
+    ));
+  };
+
+  const applyEchoPath = (path: string[]) => {
+    if (!path.length) return;
+    previousTableId.value = [...path];
+    tableId.value = [...path];
+  };
+
+  const findEchoPathInTableItem = (
+    tableItem: ConfigTypeTableItem,
+    rtId: string,
+  ): string[] | null => {
+    const tableType = tableItem.value;
+    for (const item of tableItem.children || []) {
+      const matchedChild = (item.children || []).find(child => (
+        isMatchedRtNode(tableType, child, rtId)
+      ));
+      if (matchedChild) {
+        return [tableType, item.value, matchedChild.value];
+      }
+      if (item.leaf !== false && isMatchedRtNode(tableType, item, rtId)) {
+        return [tableType, item.value];
+      }
+    }
+    return null;
+  };
+
+  const findLeftNodeByBizId = (bizId: string) => {
+    for (const typeItem of allConfigTypeTable.value) {
+      const left = (typeItem.children || []).find(item => (
+        decodeTypeBizId(typeItem.value, item.value) === bizId
+      ));
+      if (left) {
+        return { typeItem, left };
+      }
+    }
+    return null;
+  };
+
+  const findEchoPathInAnyType = (
+    rtId: string,
+    preferred?: ConfigTypeTableItem,
+  ) => {
+    const others = allConfigTypeTable.value.filter(item => (
+      item.value !== preferred?.value
+      && item.value !== 'EventLog'
+      && item.value !== 'LinkTable'
+    ));
+    const ordered = [preferred, ...others].filter(Boolean) as ConfigTypeTableItem[];
+    for (const item of ordered) {
+      const path = findEchoPathInTableItem(item, rtId);
+      if (path) return path;
+    }
+    return null;
+  };
+
+  const buildFallbackEchoPath = (
+    tableItem: ConfigTypeTableItem,
+    rtId: string,
+  ) => {
+    const bizId = extractBizIdFromRtId(rtId);
+    if (!bizId) {
+      return [tableItem.value, encodeTypeBizId(tableItem.value, rtId)];
+    }
+    const found = findLeftNodeByBizId(bizId);
+    const typeItem = found?.typeItem || tableItem;
+    const left = found?.left;
+    const matchedChild = (left?.children || []).find(child => (
+      isMatchedRtNode(typeItem.value, child, rtId)
+    ));
+    return [
+      typeItem.value,
+      left?.value || encodeTypeBizId(typeItem.value, bizId),
+      matchedChild?.value || encodeTypeBizId(typeItem.value, rtId),
+    ];
   };
 
   const changeTableId = async () => {
     tableIdEchoSeq += 1;
     const echoSeq = tableIdEchoSeq;
     const isEchoValid = () => echoSeq === tableIdEchoSeq;
+    isEchoingTableId = true;
 
-    const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
-    if (!tableItem) return;
-    // 操作日志：插件路径回显，系统多选走 system_ids
-    if (tableItem.value === 'EventLog') {
-      if (!isEchoValid()) return;
-      const pluginId = formData.value.configs.data_source.rt_id as string;
-      await loadEventLogSystems();
-      if (!isEchoValid()) return;
-      tableId.value = [formData.value.configs.config_type, pluginId];
-      previousTableId.value = tableId.value;
-    } else if (tableItem.value === 'LinkTable') {
-      if (!isEchoValid()) return;
-      tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.link_table.uid];
-      previousTableId.value = tableId.value ;
-    } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
-      const rtId = formData.value.configs.data_source.rt_id as string;
-      const bizId = extractBizIdFromRtId(rtId);
-      if (!bizId) return;
-      // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
-      const children = await loadBizTableChildren(tableItem.value, bizId);
-      if (!isEchoValid()) return;
-      const matchedChild = children.find((item) => {
-        const realValue = decodeTypeBizId(MINE_BIZ_RT_TYPE, item.value);
-        return realValue === rtId
-          || realValue === `${bizId}_${rtId}`
-          || realValue.endsWith(`_${rtId}`)
-          || item.label === rtId;
-      });
-      const selectedRtId = matchedChild?.value
-        || encodeTypeBizId(MINE_BIZ_RT_TYPE, rtId);
-      // 用接口返回的子表替换进树，确保展开时是「我的授权结果表」完整三级路径
-      replaceMineBizRtTree(bizId, children);
-      const echoPath = [
-        formData.value.configs.config_type,
-        encodeTypeBizId(MINE_BIZ_RT_TYPE, bizId),
-        selectedRtId,
-      ];
-      previousTableId.value = [...echoPath];
-      // 先清空再设值，避免旧路径干扰
-      tableId.value = [];
-      await nextTick();
-      if (!isEchoValid()) return;
-      tableId.value = echoPath;
-      await nextTick();
-    } else {
-      // 资产和其他数据还需要获取二级父id
-      tableItem.children.forEach((item) => {
-        if (item.children && item.children.length) {
-          item.children.forEach((cItem) => {
-            if (decodeTypeBizId(tableItem.value, cItem.value)
-              === formData.value.configs.data_source.rt_id) {
-              const id = [item.value, cItem.value];
-              if (!isEchoValid()) return;
-              tableId.value = [formData.value.configs.config_type, ...id];
-              previousTableId.value = tableId.value ;
-            }
-          });
+    try {
+      const configType = formData.value.configs.config_type;
+      const tableItem = allConfigTypeTable.value.find(item => item.value === configType)
+        || allConfigTypeTable.value.find((item) => {
+          const rtId = resolveRtId(formData.value.configs.data_source?.rt_id);
+          return Boolean(rtId && findEchoPathInTableItem(item, rtId));
+        });
+      if (!tableItem) return;
+      // 操作日志：插件路径回显，系统多选走 system_ids
+      if (tableItem.value === 'EventLog') {
+        if (!isEchoValid()) return;
+        const pluginId = resolveRtId(formData.value.configs.data_source.rt_id);
+        await loadEventLogSystems();
+        if (!isEchoValid()) return;
+        // 先记 previous，再写 tableId，避免误判为「路径变更」清空 system_ids
+        applyEchoPath([tableItem.value, pluginId]);
+      } else if (tableItem.value === 'LinkTable') {
+        if (!isEchoValid()) return;
+        applyEchoPath([
+          tableItem.value,
+          formData.value.configs.data_source.link_table.uid,
+        ]);
+      } else if (tableItem.value === MINE_BIZ_RT_TYPE) {
+        const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+        const bizId = extractBizIdFromRtId(rtId);
+        if (!bizId) {
+          applyEchoPath(buildFallbackEchoPath(tableItem, rtId));
+          return;
         }
-      });
+        // 编辑回显：先请求 bk_biz_id 对应子表，拼进完整三级树后再设值
+        const children = await loadBizTableChildren(tableItem.value, bizId);
+        if (!isEchoValid()) return;
+        const matchedChild = children.find(item => isMatchedRtNode(MINE_BIZ_RT_TYPE, item, rtId));
+        const selectedRtId = matchedChild?.value
+          || encodeTypeBizId(MINE_BIZ_RT_TYPE, rtId);
+        // 用接口返回的子表替换进树，确保展开时是「我的授权结果表」完整三级路径
+        replaceMineBizRtTree(bizId, children);
+        const echoPath = [
+          tableItem.value,
+          encodeTypeBizId(MINE_BIZ_RT_TYPE, bizId),
+          selectedRtId,
+        ];
+        previousTableId.value = [...echoPath];
+        // 先清空再设值，避免旧路径干扰
+        tableId.value = [];
+        await nextTick();
+        if (!isEchoValid()) return;
+        tableId.value = echoPath;
+        await nextTick();
+      } else {
+        // 资产 / 其他数据：优先用树里真实路径（业务名/系统名），避免回退成纯数字业务 ID
+        const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+        if (!rtId || !isEchoValid()) return;
+        const echoPath = findEchoPathInAnyType(rtId, tableItem)
+          || buildFallbackEchoPath(tableItem, rtId);
+        applyEchoPath(echoPath);
+      }
+      await nextTick();
+    } finally {
+      // 无论回显是否被用户操作作废，都必须释放锁，否则后续选系统会全部被忽略
+      isEchoingTableId = false;
     }
   };
 
   // 编辑
+  const pendingWhereEditData = ref<any>(null);
+
+  const applyRulesWhere = (editData: any) => {
+    if (!editData?.configs || !rulesComponentRef.value) {
+      return false;
+    }
+    const rawWhere = editData.configs.where;
+    const rawHaving = editData.configs.having;
+    const having = rawHaving
+      ? normalizeWhereForDisplay(_.cloneDeep(rawHaving)) as Where
+      : undefined;
+    const where = rawWhere
+      ? excludeHavingFromWhere(
+        normalizeWhereForDisplay(_.cloneDeep(rawWhere)) as Where,
+        having,
+      ) as Where
+      : undefined;
+    const hasWhere = hasFilledWhereConditions(where);
+    const hasHaving = hasFilledWhereConditions(having);
+    if (!hasWhere && !hasHaving) {
+      // 空「请选择」占位不能 setWhere，否则会把用户已填条件冲掉
+      if (rulesComponentRef.value) {
+        pendingWhereEditData.value = null;
+      }
+      return Boolean(rulesComponentRef.value);
+    }
+    if (isEditMode) {
+      originalEditWhere.value = _.cloneDeep(rawWhere);
+      originalEditHaving.value = rawHaving ? _.cloneDeep(rawHaving) : undefined;
+      isWhereModified.value = false;
+    }
+    isWhereSettingUp.value = true;
+    if (where) {
+      formData.value.configs.where = where;
+    }
+    if (having) {
+      formData.value.configs.having = having;
+    }
+    rulesComponentRef.value.setWhere(where, having);
+    nextTick(() => {
+      isWhereSettingUp.value = false;
+    });
+    pendingWhereEditData.value = null;
+    return true;
+  };
+
+  const scheduleApplyRulesWhere = async (editData: any) => {
+    pendingWhereEditData.value = editData;
+    if (applyRulesWhere(editData)) {
+      return;
+    }
+    await nextTick();
+    if (applyRulesWhere(editData)) {
+      return;
+    }
+    await nextTick();
+    applyRulesWhere(editData);
+  };
+
   const setFormData = async (editData: any) => {
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
-    expectedResultsRef.value.setSelect(editData.configs.select);
+    if (expectedResultsRef.value?.setSelect) {
+      expectedResultsRef.value.setSelect(editData.configs.select);
+    }
     if (isEditMode) {
       originalEditWhere.value = _.cloneDeep(editData.configs.where);
       originalEditHaving.value = editData.configs.having
@@ -1170,32 +1553,49 @@
         : undefined;
       isWhereModified.value = false;
     }
-    const where = normalizeWhereForDisplay(_.cloneDeep(editData.configs.where)) as Where;
-    const having = editData.configs.having
-      ? normalizeWhereForDisplay(_.cloneDeep(editData.configs.having)) as Where
-      : undefined;
-    isWhereSettingUp.value = true;
-    rulesComponentRef.value.setWhere(where, having);
-    nextTick(() => {
-      isWhereSettingUp.value = false;
-    });
+    // 命中条件子组件可能尚未挂载，需延迟重试 setWhere，否则编辑回显会一直为空
+    await scheduleApplyRulesWhere(editData);
     if (editData.configs.data_source) {
-      formData.value.configs.data_source = editData.configs.data_source;
+      // 深拷贝，避免后续切换数据源时改到 editData / 详情原始对象
+      const dataSource = _.cloneDeep(editData.configs.data_source);
+      formData.value.configs.data_source = {
+        source_type: '',
+        rt_id: '',
+        link_table: { uid: '', version: 0 },
+        ...dataSource,
+        system_ids: [...(dataSource.system_ids || [])],
+      };
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
     }
     // 转换tableid,反显
+    // 回显期间提前进入 loading，避免命中条件下拉先闪空态
+    const willLoadFields = formData.value.configs.config_type === 'LinkTable'
+      || !!resolveRtId(formData.value.configs.data_source?.rt_id);
+    if (willLoadFields) {
+      tableFieldsLoading.value = true;
+    }
     await changeTableId();
     if (formData.value.configs.config_type === 'LinkTable') {
-      fetchLinkDataSheetDetail({
-        uid: formData.value.configs.data_source.link_table.uid,
-        version: formData.value.configs.data_source.link_table.version,
-      });
+      const linkTable = formData.value.configs.data_source.link_table;
+      if (linkTable?.uid) {
+        fetchLinkDataSheetDetail({
+          uid: linkTable.uid,
+          version: linkTable.version,
+        });
+      } else {
+        tableFieldsLoading.value = false;
+      }
     } else {
-      fetDatabaseTableFields(formData.value.configs.data_source.rt_id as string);
-      fetchSourceType({
-        config_type: formData.value.configs.config_type,
-        rt_id: formData.value.configs.data_source.rt_id as string,
-      });
+      const rtId = resolveRtId(formData.value.configs.data_source.rt_id);
+      if (rtId) {
+        fetDatabaseTableFields(rtId);
+        fetchSourceType({
+          config_type: formData.value.configs.config_type,
+          rt_id: rtId,
+        });
+      } else {
+        tableFieldsLoading.value = false;
+      }
     }
   };
 
@@ -1210,9 +1610,16 @@
     },
   );
 
+  watch(() => props.editData?.strategy_id, (id, prevId) => {
+    if (id !== prevId) {
+      isInit = false;
+      isInitFromParent = false;
+    }
+  });
+
   watchEffect(() => {
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
-      if (isInit) {
+      if (isInit || isInitFromParent) {
         return;
       }
       setFormData(props.editData);
@@ -1220,10 +1627,128 @@
     }
   });
 
+  watch(
+    [() => props.parentConfigs, () => allConfigTypeTable.value.length],
+    ([configs, tableLen]) => {
+      if ((props.stepMode === 'rules' || props.stepMode === 'rules-only')
+        && configs?.config_type
+        && tableLen > 0
+        && !isInit
+        && !isInitFromParent) {
+        setFormData({
+          configs: {
+            ...configs,
+            where: props.editData?.configs?.where ?? configs.where,
+            having: props.editData?.configs?.having ?? configs.having,
+          },
+        });
+        isInitFromParent = true;
+        isInit = true;
+      }
+    },
+    { immediate: true, deep: true },
+  );
+
+  // rules-only：父级稍后才带上 where 时补一次回显（仅当前为空且用户未改过）
+  watch(
+    () => [
+      props.editData?.configs?.where,
+      props.editData?.configs?.having,
+    ],
+    async ([where, having]) => {
+      if (props.stepMode !== 'rules' && props.stepMode !== 'rules-only') {
+        return;
+      }
+      if (Number(props.editData?.hit_conditions_reset_seq) > 0) {
+        return;
+      }
+      const hasIncoming = hasFilledWhereConditions(where as Where | undefined)
+        || hasFilledWhereConditions(having as Where | undefined);
+      if (!hasIncoming || isWhereModified.value) {
+        return;
+      }
+      const currentEmpty = !hasFilledWhereConditions(formData.value.configs.where)
+        && !hasFilledWhereConditions(formData.value.configs.having);
+      if (!currentEmpty) {
+        return;
+      }
+      await scheduleApplyRulesWhere(props.editData);
+    },
+    { deep: true },
+  );
+
+  watch(
+    () => props.parentConfigs,
+    (configs) => {
+      if (props.stepMode !== 'rules-only' || !configs) return;
+      formData.value.configs.select = _.cloneDeep(configs.select || []);
+      if (Array.isArray(configs.table_fields)) {
+        tableFields.value = _.cloneDeep(configs.table_fields);
+        formData.value.configs.table_fields = _.cloneDeep(configs.table_fields);
+      }
+      if (configs.config_type) {
+        formData.value.configs.config_type = configs.config_type;
+      }
+      if (configs.data_source) {
+        formData.value.configs.data_source = {
+          ...formData.value.configs.data_source,
+          ..._.cloneDeep(configs.data_source),
+        };
+      }
+      if (configs.schedule_config) {
+        formData.value.configs.schedule_config = _.cloneDeep(configs.schedule_config);
+      }
+      syncExpectedResultDisplayNames();
+    },
+    { immediate: true, deep: true },
+  );
+
+  let schemaSourceWatchReady = false;
+  watch(
+    () => [
+      formData.value.configs.config_type,
+      resolveRtId(formData.value.configs.data_source?.rt_id),
+      formData.value.configs.data_source?.link_table?.uid || '',
+    ].join('|'),
+    (next, prev) => {
+      if (props.stepMode === 'basic' || !prev || next === prev) return;
+      if (!schemaSourceWatchReady) {
+        schemaSourceWatchReady = true;
+        return;
+      }
+      removeTreeData();
+      tableFields.value = [];
+      formData.value.configs.table_fields = [];
+      if (formData.value.configs.config_type === 'LinkTable') {
+        const linkTable = formData.value.configs.data_source.link_table;
+        if (linkTable?.uid) {
+          fetchLinkDataSheetDetail({
+            uid: linkTable.uid,
+            version: linkTable.version ?? 0,
+          });
+        }
+        return;
+      }
+      const rtId = resolveRtId(formData.value.configs.data_source?.rt_id);
+      if (rtId) {
+        fetDatabaseTableFields(rtId);
+      }
+    },
+  );
+
   defineExpose<Expose>({
     // 获取提交参数
     getFields(options?: { forValidate?: boolean }) {
+      // 下一步/保存前先把操作日志面板里未落盘的系统选择写入表单
+      dataSourcePickerRef.value?.flushEventLogSelection?.();
       const params = _.cloneDeep(formData.value);
+      params.configs.table_fields = _.cloneDeep(tableFields.value);
+      if (!params.configs.select?.length && tableFields.value.length) {
+        params.configs.select = enrichFieldDisplayNames(
+          _.cloneDeep(tableFields.value),
+          tableFields.value,
+        );
+      }
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
         params.configs.data_source = {
@@ -1237,9 +1762,19 @@
       params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1
         ? params.configs.data_source.rt_id
         : '') as string;
+      if (props.stepMode === 'rules-only' && props.parentConfigs?.select?.length && !params.configs.select?.length) {
+        params.configs.select = _.cloneDeep(props.parentConfigs.select);
+      }
+      if (params.configs.select?.length && tableFields.value.length) {
+        params.configs.select = enrichFieldDisplayNames(
+          params.configs.select,
+          tableFields.value,
+        );
+      }
       // 编辑且风险发现规则未改动：提交时沿用原始 where/having，避免 filter/filters 转换影响老数据
       // 校验场景（forValidate）保持当前展示结构，避免误报「条件值不能为空」
-      if (!options?.forValidate) {
+      // 基础信息步骤不做 where/having 转换
+      if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
           if (originalEditHaving.value) {
@@ -1250,28 +1785,34 @@
         } else if (params.configs.where) {
           // 添加having参数
           // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
+          const isHavingCondition = (item: { condition?: { field?: unknown } }) => {
+            const field = item?.condition?.field;
+            return Boolean(field && typeof field !== 'string' && (field as { aggregate?: unknown }).aggregate);
+          };
           const having = {
             connector: params.configs.where.connector,
             conditions: params.configs.where.conditions
               .map(group => ({
                 connector: group.connector,
                 index: group.index,
-                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && item.condition.field?.aggregate),
+                conditions: group.conditions.filter(item => isHavingCondition(item)),
               }))
               // 过滤掉没有聚合条件的组
               .filter(group => group.conditions.length > 0),
           };
           if (having.conditions.length > 0) {
-            params.configs.having = having;
-            // 将where中符合having的条件删除
-            params.configs.where.conditions = params.configs.where.conditions
+            const nextWhereConditions = params.configs.where.conditions
               .map(group => ({
                 connector: group.connector,
                 index: group.index,
-                conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
+                conditions: group.conditions.filter(item => !isHavingCondition(item)),
               }))
-              // 过滤掉没有聚合条件的组
               .filter(group => group.conditions.length > 0);
+            // 全部是聚合条件时仍保留 where，后端规则 where 必填
+            if (nextWhereConditions.length > 0) {
+              params.configs.having = having;
+              params.configs.where.conditions = nextWhereConditions;
+            }
           } else {
             delete params.configs.having;
           }
@@ -1307,21 +1848,47 @@
             transferFilter(params.configs.having);
           }
         }
-      } else if (params.configs.where) {
+      } else if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && params.configs.where) {
         params.configs.where = normalizeWhereForDisplay(params.configs.where) as Where;
         if (params.configs.having) {
           params.configs.having = normalizeWhereForDisplay(params.configs.having) as Where;
         }
       }
+      enrichWhereFieldDisplayNames(params.configs.where);
+      enrichWhereFieldDisplayNames(params.configs.having);
       return params;
     },
     // 暴露 typeTableLoading 状态
     get typeTableLoading() {
       return typeTableLoading.value;
     },
+    resetFormData: () => {
+      formData.value.configs.where = {
+        connector: 'and',
+        conditions: [],
+      };
+      formData.value.configs.having = {
+        connector: 'and',
+        conditions: [],
+      };
+      originalEditWhere.value = {
+        connector: 'and',
+        conditions: [],
+      };
+      originalEditHaving.value = undefined;
+      isWhereModified.value = true;
+      pendingWhereEditData.value = null;
+      rulesComponentRef.value?.resetFormData?.();
+    },
   });
   onMounted(() => {
-    sessionStorage.removeItem('storage-tree-data'); // 清除数据
+    sessionStorage.removeItem('storage-tree-data');
+    sessionStorage.removeItem('rule-tree-data');
+    if (pendingWhereEditData.value) {
+      nextTick(() => {
+        applyRulesWhere(pendingWhereEditData.value);
+      });
+    }
   });
 </script>
 <style scoped lang="postcss">
@@ -1343,15 +1910,81 @@
     padding-right: 0;
   }
 
+  &.customize-basic-mode {
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+
+    :deep(.bk-form-item) {
+      overflow: visible;
+    }
+
+    .select-group,
+    :deep(.data-source-picker) {
+      width: 100%;
+      overflow: visible;
+    }
+
+    :deep(.data-source-picker .dsp-trigger),
+    :deep(.other-table-detail),
+    :deep(.link-data-detail),
+    :deep(.panel-edit) {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
+  .customize-rule-only {
+    padding: 0 8px 0 8px;
+    overflow: visible;
+
+    :deep(.bk-form-item) {
+      overflow: visible;
+    }
+  }
+
   .customize-rule {
     padding: 16px 32px 24px;
 
+    &.customize-rule-basic {
+      padding: 0;
+      overflow: visible;
+
+      > :deep(.data-source-form-item),
+      > :deep(.expected-result-form-item) {
+        margin-bottom: 16px;
+      }
+
+      > :deep(.expected-result-form-item) {
+        margin-top: 16px;
+      }
+
+      :deep(.data-source-form-item .bk-form-content) {
+        min-height: 0;
+        line-height: normal;
+        padding-bottom: 0;
+      }
+
+      :deep(.data-source-form-item .bk-form-error) {
+        position: static;
+        margin-top: 4px;
+        line-height: 16px;
+      }
+
+      :deep(.bk-loading) {
+        min-height: 0;
+      }
+    }
+
+    .form-label-tip {
+      color: #63656e;
+      cursor: pointer;
+      border-bottom: 1px dashed #979ba5;
+    }
+
     .select-group {
       width: 100%;
-
-      :deep(.bk-form-item) {
-        margin-bottom: 0;
-      }
+      overflow: visible;
     }
 
     :deep(.bk-infobox-title) {
@@ -1361,6 +1994,10 @@
 
   .dispatch-wrap {
     padding: 16px 24px;
+
+    &.dispatch-wrap-basic {
+      padding: 0;
+    }
 
     :deep(.source-type-radio-group) {
       .bk-radio-label {
@@ -1372,6 +2009,40 @@
       display: flex;
       align-items: center;
       justify-content: left;
+    }
+
+    .schedule-period-row {
+      display: inline-flex;
+      width: auto;
+      align-items: center;
+      gap: 0;
+
+      :deep(.bk-form-item) {
+        width: auto;
+        margin-bottom: 0;
+        flex: none;
+      }
+
+      :deep(.bk-form-content) {
+        width: auto;
+      }
+
+      .schedule-input {
+        width: 120px;
+
+        :deep(.bk-input) {
+          border-right: 0;
+          border-radius: 2px 0 0 2px;
+        }
+      }
+
+      .schedule-select {
+        width: 68px;
+
+        :deep(.bk-input) {
+          border-radius: 0 2px 2px 0;
+        }
+      }
     }
 
     .circle {

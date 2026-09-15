@@ -34,6 +34,9 @@ export default {
     page_size?: number
     strategy_type?: string
     tag?: string
+    scene_id?: string | number | null
+    binding_type?: string
+    exclude_pending_confirm?: boolean
   }) {
     return StrategySource.getStrategyList(
       params,
@@ -51,9 +54,13 @@ export default {
    * @param { Object } params
    */
   fetchStrategyInfo(params: {
-    strategy_id : number
+    strategy_id: number
   }) {
-    return StrategySource.getStrategyInfo(params)
+    const strategyId = Number(params?.strategy_id);
+    if (!strategyId) {
+      return Promise.reject(new Error('strategy_id is required'));
+    }
+    return StrategySource.getStrategyInfo({ strategy_id: strategyId })
       .then(({ data }) => new StrategyModel(data));
   },
   /**
@@ -166,6 +173,9 @@ export default {
     scene_id?: string;
     bk_biz_id?: string | number;
   }) {
+    if (!params?.table_type) {
+      return Promise.reject(new Error('table_type is required'));
+    }
     return StrategySource.getTable(params)
       .then(({ data }) => data);
   },
@@ -177,6 +187,9 @@ export default {
     scene_id?: string;
     bk_biz_id?: string | number;
   }) {
+    if (!params?.table_type) {
+      return Promise.reject(new Error('table_type is required'));
+    }
     if (params.table_type === 'BuildIn' || params.table_type === 'BizRt') {
       return StrategySource.getScenePermissionTable(params)
         .then(({ data }) => data);
@@ -232,8 +245,11 @@ export default {
   /**
    * @desc 获取策略标签
    */
-  fetchStrategyTags() {
-    return StrategySource.getStrategyTags()
+  fetchStrategyTags(params: {
+    scene_id?: string | number | null
+    binding_type?: string
+  } = {}) {
+    return StrategySource.getStrategyTags(params)
       .then(({ data }) => data);
   },
   /**

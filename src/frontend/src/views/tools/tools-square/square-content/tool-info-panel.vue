@@ -209,6 +209,7 @@
     mergeGameDetailRouteQuery,
     mergeToolRouteQuery,
     parseGameDetailFromRoute,
+    shouldApplyToolUrlParams,
     shouldAutoExecuteToolOnLoad,
   } from '@/views/tools/tools-square/utils/tool-url-params';
 
@@ -654,6 +655,23 @@
   const smartPageUrlParamsMap = ref<Record<string, { accountType: string; accountId: string }>>({});
   const isSyncingToolRoute = ref(false);
   const toolRouteQuerySnapshot = ref<Record<string, string>>({});
+  /**
+   * 当前 URL 业务参数（扁平 raw_name）的写出方 tab uid。
+   * 打开另一工具时禁止套用；深链首次进入为空，允许回填到路由 uid。
+   */
+  const urlParamsOwnerUid = ref('');
+
+  const getRouteToolUid = () => (typeof route.params.uid === 'string' ? route.params.uid : '');
+
+  const canApplyUrlParamsToUid = (uid: string) => shouldApplyToolUrlParams(
+    uid,
+    getRouteToolUid(),
+    urlParamsOwnerUid.value || null,
+  );
+
+  const markUrlParamsOwner = (uid: string) => {
+    if (uid) urlParamsOwnerUid.value = uid;
+  };
 
   const markRouteQueryApplied = (uid: string) => {
     toolRouteQuerySnapshot.value[uid] = JSON.stringify(route.query);
@@ -709,6 +727,8 @@
       accountId: smartPageParams?.accountId,
     });
 
+    // 记录写出方：后续仅该 uid 可回填这些扁平业务参数
+    markUrlParamsOwner(uid);
     isSyncingToolRoute.value = true;
     router.replace({
       name: 'toolDetail',
@@ -760,6 +780,16 @@
     },
   );
 
+  // 切换工具 uid 时：若尚未记录写出方，将现有 URL 业务参数归属旧工具，禁止套到新工具
+  watch(
+    () => getRouteToolUid(),
+    (newUid, oldUid) => {
+      if (oldUid && newUid && oldUid !== newUid && !urlParamsOwnerUid.value) {
+        urlParamsOwnerUid.value = oldUid;
+      }
+    },
+  );
+
   const extractDataByPath = (data: any, path: string): any => {
     if (!path || !data) return null;
     const cleanPath = path.replace(/\[\d+\]/g, '');
@@ -800,6 +830,11 @@
     const detail = toolDetailMap.value[uid];
     if (!detail || detail.tool_type === 'smart_page') return;
     if (!searchListMap.value[uid]?.length) return;
+    // URL 格式不变；仅当前工具自己写出的参数才允许回填
+    if (!canApplyUrlParamsToUid(uid)) {
+      markRouteQueryApplied(uid);
+      return;
+    }
 
     const inputRawNames = getToolInputRawNames(detail);
     const urlParams = getFlatToolParamsFromRoute(route.query as Record<string, unknown>, {
@@ -818,6 +853,7 @@
 
     searchListMap.value[uid] = urlApplied.list;
     syncSearchListToStorage();
+    markUrlParamsOwner(uid);
     markRouteQueryApplied(uid);
 
     nextTick(() => {
@@ -926,16 +962,15 @@
         syncSearchListToStorage();
       }
 
-      let hasUrlParams = false;
-      if (!drillParams) {
+      if (!drillParams && canApplyUrlParamsToUid(uid)) {
         const urlParams = getFlatToolParamsFromRoute(route.query as Record<string, unknown>, {
           inputRawNames,
         });
         const urlApplied = applyUrlParamsToSearchList(searchListMap.value[uid], urlParams);
-        hasUrlParams = urlApplied.hasApplied;
-        if (hasUrlParams) {
+        if (urlApplied.hasApplied) {
           searchListMap.value[uid] = urlApplied.list;
           syncSearchListToStorage();
+          markUrlParamsOwner(uid);
         }
       }
 
@@ -948,16 +983,17 @@
         const ref = toolContentRefs.value[uid];
         if (ref) {
           ref.setFormItemData(searchListMap.value[uid]);
-          if (hasUrlParams || shouldAutoExecute) {
-            syncToolParamsToRoute(uid);
-          }
           if (shouldAutoExecute) {
             nextTick(() => {
               ref.submit();
             });
           }
-          markRouteQueryApplied(uid);
         }
+        // 始终用当前工具自身参数重写 URL，清掉上一工具残留的扁平业务参数
+        if (props.activeUid === uid) {
+          syncToolParamsToRoute(uid);
+        }
+        markRouteQueryApplied(uid);
       });
     } else {
       const createBkVisionSearchItem = (item: any) => ({
@@ -1010,16 +1046,15 @@
         syncSearchListToStorage();
       }
 
-      let hasUrlParams = false;
-      if (!drillParams) {
+      if (!drillParams && canApplyUrlParamsToUid(uid)) {
         const urlParams = getFlatToolParamsFromRoute(route.query as Record<string, unknown>, {
           inputRawNames,
         });
         const urlApplied = applyUrlParamsToSearchList(searchListMap.value[uid], urlParams);
-        hasUrlParams = urlApplied.hasApplied;
-        if (hasUrlParams) {
+        if (urlApplied.hasApplied) {
           searchListMap.value[uid] = urlApplied.list;
           syncSearchListToStorage();
+          markUrlParamsOwner(uid);
         }
       }
       const shouldAutoExecute = shouldAutoExecuteToolOnLoad(data.tool_type, {
@@ -1031,12 +1066,14 @@
       nextTick(() => {
         nextTick(() => {
           const ref = toolContentRefs.value[uid];
-          if (!ref) return;
-          if (hasUrlParams || shouldAutoExecute) {
-            syncToolParamsToRoute(uid);
+          if (ref) {
+            if (shouldAutoExecute) {
+              ref.executeBkVision();
+            }
           }
-          if (shouldAutoExecute) {
-            ref.executeBkVision();
+          // 始终用当前工具自身参数重写 URL，清掉上一工具残留的扁平业务参数
+          if (props.activeUid === uid) {
+            syncToolParamsToRoute(uid);
           }
           markRouteQueryApplied(uid);
         });

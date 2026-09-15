@@ -795,6 +795,9 @@ class MatchedEventSubqueryBuilder(SQLHelper):
 class FinalSelectAssembler(SQLHelper):
     """将基础风险查询与事件子查询组合成最终 SQL。"""
 
+    RISK_DEDUP_ALIAS = "ranked_risk"
+    RISK_ROW_NUMBER_ALIAS = "_risk_row_number"
+
     def __init__(self, resolver: BkBaseFieldResolver) -> None:
         self.resolver = resolver
 
@@ -804,15 +807,20 @@ class FinalSelectAssembler(SQLHelper):
         filtered_copy.set("order", None)
         filtered_copy.set("limit", None)
         filtered_copy.set("offset", None)
-        filtered_copy.set(
-            "expressions",
-            [
-                exp.alias_(
-                    exp.Literal.number(1),
-                    "__dummy",
-                )
-            ],
-        )
+        if matched_event is not None:
+            # JOIN 后同一风险可能对应多条匹配事件，count 必须按 risk_id 去重。
+            filtered_copy.set("expressions", [self.column("base_query", "risk_id")])
+            filtered_copy.set("distinct", exp.Distinct())
+        else:
+            filtered_copy.set(
+                "expressions",
+                [
+                    exp.alias_(
+                        exp.Literal.number(1),
+                        "__dummy",
+                    )
+                ],
+            )
         subquery = exp.Subquery(
             this=filtered_copy,
             alias=exp.TableAlias(this=exp.to_identifier("risk_count")),
@@ -832,39 +840,110 @@ class FinalSelectAssembler(SQLHelper):
         joined = self._join_events(base_query, matched_event)
 
         if matched_event is not None:
-            projections = list(joined.expressions or [exp.Star()])
-            if not projections:
-                projections = [exp.Star()]
-            projections.append(
-                # Expose matched event payload so Django objects can attach filtered_event_data later.
-                exp.alias_(
-                    self.column("matched_event", "event_data"),
-                    "__matched_event_data",
-                )
+            joined = self._project_matched_event_fields(joined)
+            joined = self._dedupe_joined_rows_by_risk_id(joined, order_fields)
+            order_expressions = self._build_order_expressions(
+                order_fields,
+                has_event_join=True,
+                table_alias=self.RISK_DEDUP_ALIAS,
+                event_ts_alias=self.RISK_DEDUP_ALIAS,
             )
-            event_order_field = self.resolver.event_order_field()
-            if event_order_field:
-                order_expression = exp.func(
-                    "JSON_EXTRACT_STRING",
-                    self.column("matched_event", "event_data"),
-                    exp.Literal.string(build_event_json_path(event_order_field)),
-                )
-                if self.resolver.event_order_requires_numeric_cast():
-                    order_expression = exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
-                projections.append(exp.alias_(order_expression, "__order_event_field"))
-            joined.set("expressions", projections)
+        else:
+            order_expressions = self._build_order_expressions(order_fields, has_event_join=False)
 
-        order_expressions = self._build_order_expressions(order_fields, matched_event is not None)
         if order_expressions:
             joined = joined.order_by(*order_expressions)
-        if limit:
-            joined = joined.limit(int(limit))
-            if offset:
-                joined = joined.offset(int(offset))
-        elif offset:
-            joined = joined.offset(int(offset))
+        return self._apply_limit_offset(joined, limit=limit, offset=offset)
 
+    def _project_matched_event_fields(self, joined: exp.Select) -> exp.Select:
+        # 只投影 base_query.*，避免 JOIN 两侧 strategy_id/raw_event_id 重名后无法包进派生表。
+        # 必须用 Star 节点；exp.column("*") 会生成 base_query.`*`，Doris/Hive 不会展开。
+        projections = [
+            self._table_star("base_query"),
+            exp.alias_(
+                self.column("matched_event", "event_data"),
+                "__matched_event_data",
+            ),
+            exp.alias_(
+                self.column("matched_event", "dteventtimestamp"),
+                "dteventtimestamp",
+            ),
+        ]
+        event_order_expression = self._event_order_sql_expression()
+        if event_order_expression is not None:
+            projections.append(exp.alias_(event_order_expression, "__order_event_field"))
+        joined.set("expressions", projections)
         return joined
+
+    def _dedupe_joined_rows_by_risk_id(self, joined: exp.Select, order_fields: List[str]) -> exp.Select:
+        """同一风险只保留一条匹配事件，再交给 LIMIT 分页。"""
+        window = exp.Window(
+            this=exp.func("ROW_NUMBER"),
+            partition_by=[self.column("base_query", "risk_id")],
+            order=exp.Order(expressions=self._build_risk_dedup_window_order(order_fields)),
+        )
+        projections = list(joined.expressions)
+        projections.append(exp.alias_(window, self.RISK_ROW_NUMBER_ALIAS))
+        joined.set("expressions", projections)
+
+        ranked_subquery = exp.Subquery(
+            this=joined,
+            alias=exp.TableAlias(this=exp.to_identifier(self.RISK_DEDUP_ALIAS)),
+        )
+        return (
+            exp.select(exp.Star())
+            .from_(ranked_subquery)
+            .where(
+                exp.EQ(
+                    this=self.column(self.RISK_DEDUP_ALIAS, self.RISK_ROW_NUMBER_ALIAS),
+                    expression=exp.Literal.number("1"),
+                )
+            )
+        )
+
+    def _build_risk_dedup_window_order(self, order_fields: List[str]) -> List[exp.Expression]:
+        expressions = self._build_order_expressions(
+            order_fields,
+            has_event_join=True,
+            for_window=True,
+        )
+        if not expressions or not any(self._order_references_event_timestamp(item) for item in expressions):
+            expressions.append(
+                exp.Ordered(
+                    this=self.column("matched_event", "dteventtimestamp"),
+                    desc=True,
+                )
+            )
+        return expressions
+
+    def _event_order_sql_expression(self) -> Optional[exp.Expression]:
+        event_order_field = self.resolver.event_order_field()
+        if not event_order_field:
+            return None
+        order_expression: exp.Expression = exp.func(
+            "JSON_EXTRACT_STRING",
+            self.column("matched_event", "event_data"),
+            exp.Literal.string(build_event_json_path(event_order_field)),
+        )
+        if self.resolver.event_order_requires_numeric_cast():
+            return exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
+        return order_expression
+
+    @staticmethod
+    def _apply_limit_offset(query: exp.Select, *, limit: int, offset: int) -> exp.Select:
+        if limit:
+            query = query.limit(int(limit))
+            if offset:
+                query = query.offset(int(offset))
+        elif offset:
+            query = query.offset(int(offset))
+        return query
+
+    @staticmethod
+    def _order_references_event_timestamp(order_expr: exp.Expression) -> bool:
+        return any(
+            isinstance(node, exp.Column) and node.name.lower() == "dteventtimestamp" for node in order_expr.walk()
+        )
 
     def _join_events(self, base_query: exp.Select, matched_event: Optional[exp.Subquery]) -> exp.Select:
         if matched_event is None:
@@ -894,6 +973,10 @@ class FinalSelectAssembler(SQLHelper):
         self,
         order_fields: List[str],
         has_event_join: bool,
+        *,
+        table_alias: str = "base_query",
+        event_ts_alias: str = "matched_event",
+        for_window: bool = False,
     ) -> List[exp.Expression]:
         """
         将 order_fields 列表转换为 sqlglot ORDER BY 表达式列表。
@@ -901,7 +984,7 @@ class FinalSelectAssembler(SQLHelper):
         每个字段按类型分三种处理方式：
         1. event_data.xxx  → __order_event_field + dteventtimestamp DESC（只取第一个，相同值按时间倒序）
         2. strategy__risk_level → CASE/WHEN 将 LOW/MIDDLE/HIGH 映射为 0/1/2 排名
-        3. 其他普通字段      → 直接引用 base_query.field_name
+        3. 其他普通字段      → 直接引用 table_alias.field_name
         """
         if not order_fields:
             return []
@@ -913,22 +996,36 @@ class FinalSelectAssembler(SQLHelper):
                 (f for f in order_fields if f.lstrip("-").startswith(self.resolver.EVENT_DATA_PREFIX)), None
             )
             if event_raw is not None:
+                if for_window:
+                    # 窗口函数与 SELECT 别名同层，不能引用 __order_event_field。
+                    event_order_expr = self._event_order_sql_expression()
+                else:
+                    event_order_expr = self.column(table_alias, "__order_event_field")
                 return [
-                    exp.Ordered(this=exp.column("__order_event_field"), desc=event_raw.startswith("-")),
-                    exp.Ordered(this=self.column("matched_event", "dteventtimestamp"), desc=True),
+                    exp.Ordered(this=event_order_expr, desc=event_raw.startswith("-")),
+                    exp.Ordered(this=self.column(event_ts_alias, "dteventtimestamp"), desc=True),
                 ]
 
         expressions = []
         for field in order_fields:
             bare = field.lstrip("-")
             descending = field.startswith("-")
+            column = self._order_column(bare, table_alias=table_alias)
 
             if bare == RISK_LEVEL_ORDER_FIELD:
-                rank_expr = self._build_risk_level_rank_expression(self._base_query_column(bare))
+                rank_expr = self._build_risk_level_rank_expression(column)
                 expressions.append(exp.Ordered(this=rank_expr, desc=descending))
             else:
-                expressions.append(exp.Ordered(this=self._base_query_column(bare), desc=descending))
+                expressions.append(exp.Ordered(this=column, desc=descending))
         return expressions
+
+    def _order_column(self, field_name: str, *, table_alias: str) -> exp.Column:
+        normalized = field_name.split("__")[-1] if "__" in field_name else field_name
+        return self.column(table_alias, normalized)
+
+    @staticmethod
+    def _table_star(alias: str) -> exp.Column:
+        return exp.Column(this=exp.Star(), table=exp.to_identifier(alias))
 
     def _build_join_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
         event_timestamp = self.column(alias, "dteventtimestamp")
@@ -949,10 +1046,6 @@ class FinalSelectAssembler(SQLHelper):
                 exp.Literal.number(str(index)),
             )
         return case_expr.else_(exp.Literal.number("-1"))
-
-    def _base_query_column(self, field_name: str) -> exp.Column:
-        normalized = field_name.split("__")[-1] if "__" in field_name else field_name
-        return self.column("base_query", normalized)
 
 
 class BkBaseCountQueryBuilder:

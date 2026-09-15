@@ -22,6 +22,7 @@ import {
 } from 'vue-router';
 
 import IamManageService from '@service/iam-manage';
+import RootManageService from '@service/root-manage';
 import SceneManageService from '@service/scene-manage';
 
 import type ConfigModel from '@model/root/config';
@@ -29,6 +30,7 @@ import type ConfigModel from '@model/root/config';
 import NotFound from '@views/404.vue';
 import AnalysisManage from '@views/analysis-manage/routes'; // 检索
 import AttentionManage from '@views/attention-manege/routes'; // 我的关注
+import ConfirmManage from '@views/confirm-manage/routes'; // 待我确认
 import EventManage from '@views/event-manage/routes'; // 审计风险
 import HandleManage from '@views/handle-manage/routes'; // 待我处理
 import LinkDataManage from '@views/link-data-manage/routes'; // 联表管理
@@ -243,6 +245,7 @@ export default (config: ConfigModel) => {
         PlatformManage,
         SceneResources,
         SceneRiskManage,
+        ConfirmManage,
       ],
     },
     {
@@ -310,11 +313,18 @@ export default (config: ConfigModel) => {
       }
 
       // 检查权限：如果路由需要权限且用户没有权限，则重定向到首页
+      // 平台管理（manage_platform）走 my_role_permissions，其余仍走 IAM check
       if (to.meta?.permission) {
         const permission = to.meta.permission as string;
-        const hasPermission = await IamManageService.checkAny({ action_ids: permission });
-
-        if (!hasPermission[permission]) {
+        let allowed = false;
+        if (permission === 'manage_platform') {
+          const rolePermission = await RootManageService.getUserPermission();
+          allowed = Boolean(rolePermission.manage_platform);
+        } else {
+          const hasPermission = await IamManageService.checkAny({ action_ids: permission });
+          allowed = Boolean(hasPermission[permission]);
+        }
+        if (!allowed) {
           next({ name: 'handleManage' });
           return;
         }

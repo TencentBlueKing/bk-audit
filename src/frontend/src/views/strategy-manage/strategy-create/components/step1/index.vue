@@ -53,22 +53,17 @@
                   <bk-loading
                     :loading="tagLoading"
                     style="width: 100%;">
-                    <bk-select
+                    <bk-tag-input
                       v-model="formData.tags"
                       allow-create
-                      class="bk-select"
-                      filterable
-                      :input-search="false"
-                      multiple
-                      multiple-mode="tag"
-                      :placeholder="t('请选择')"
-                      :search-placeholder="t('请输入关键字')">
-                      <bk-option
-                        v-for="(item, index) in tagData"
-                        :key="index"
-                        :label="item.name"
-                        :value="item.id" />
-                    </bk-select>
+                      collapse-tags
+                      display-key="name"
+                      has-delete-icon
+                      :list="tagData"
+                      :placeholder="t('请输入并Enter结束')"
+                      save-key="id"
+                      search-key="name"
+                      trigger="focus" />
                   </bk-loading>
                 </bk-form-item>
               </div>
@@ -267,6 +262,14 @@
   import Customize from './components/customize/index.vue';
   import ReferenceModel from './components/reference-model/index.vue';
 
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyListRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../utils/strategy-routes';
+
   type ItemType = {
     label: string,
     value: string
@@ -303,12 +306,13 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const { removePageParams } = useRecordPage;
   const { t } = useI18n();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const strategyWayComMap: Record<string, any> = {
     rule: Customize,
@@ -398,13 +402,6 @@
         message: t('数据源不能为空'),
         trigger: 'change',
       }],
-    'configs.select': [
-      {
-        validator: (value: Array<Record<string, any>>) => Array.isArray(value) && value.length > 0,
-        message: t('预期结果不能为空'),
-        trigger: 'change',
-      },
-    ],
     'configs.data_source.system_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
@@ -560,7 +557,7 @@
     },
   });
 
-  // 获取标签列表
+  // 获取标签列表（过滤系统内置特殊标签，保留 allow-create 自定义创建）
   const {
     loading: tagLoading,
   } = useRequest(MetaManageService.fetchTags, {
@@ -568,7 +565,8 @@
     manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-1') {
+        // 负数字符串 id（如 -1/-2…）为系统内置分类，不放入下拉
+        if (!String(item.tag_id).startsWith('-')) {
           res.push({
             id: item.tag_id,
             name: item.tag_name,
@@ -723,7 +721,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
   const handleBeforeUnload = (evt: any) => {
@@ -735,7 +733,7 @@
 
   useRouterBack(() => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   });
   onMounted(() => {
@@ -745,7 +743,7 @@
     window.removeEventListener('beforeunload', handleBeforeUnload);
   });
   onBeforeRouteLeave((to) => {
-    if (to.name !== 'strategyList' && to.name !== 'strategyUpgrade') {
+    if (!isStrategyListRoute(to.name) && !isStrategyUpgradeRoute(to.name)) {
       removePageParams();
     }
   });

@@ -20,7 +20,11 @@
     class="data-source-picker">
     <div
       class="dsp-trigger"
-      :class="{ 'is-active': panelVisible, 'is-empty': !displayLabel }"
+      :class="{
+        'is-active': panelVisible,
+        'is-empty': !displayLabel,
+        'is-disabled': disabled,
+      }"
       @click="togglePanel">
       <span
         class="dsp-trigger-text"
@@ -33,166 +37,170 @@
         type="angle-line-down" />
     </div>
 
-    <div
-      v-show="panelVisible"
-      class="dsp-panel"
-      :class="{ 'is-empty-panel': isSourceEmpty }">
+    <teleport to="body">
       <div
-        v-if="list.length"
-        class="dsp-tabs">
-        <span
-          v-for="tab in list"
-          :key="tab.value"
-          class="dsp-tab-item"
-          :class="{ 'is-active': activeTab === tab.value }"
-          @click="handleTabChange(tab.value)">
-          {{ tab.label }}
-        </span>
-      </div>
-
-      <div
-        v-if="isSourceEmpty"
-        class="dsp-empty">
-        <img
-          class="dsp-empty-img"
-          src="@images/empty.svg">
-        <div class="dsp-empty-title">
-          {{ t('暂无数据源') }}
-        </div>
-        <div class="dsp-empty-desc">
-          <span>{{ t('请在企微联系') }}</span>
+        v-show="panelVisible"
+        ref="panelRef"
+        class="dsp-panel"
+        :class="{ 'is-empty-panel': isSourceEmpty }"
+        :style="panelStyle">
+        <div
+          v-if="list.length"
+          class="dsp-tabs">
           <span
-            class="dsp-empty-contact"
-            @click.stop="contactHelper">iegsec_helper</span>
-          <span>{{ t('数据源空态联系后缀') }}</span>
+            v-for="tab in list"
+            :key="tab.value"
+            class="dsp-tab-item"
+            :class="{ 'is-active': activeTab === tab.value }"
+            @click="handleTabChange(tab.value)">
+            {{ tab.label }}
+          </span>
         </div>
-      </div>
 
-      <div
-        v-else
-        class="dsp-body"
-        :class="{ 'is-single-column': !hasThirdLevel }">
-        <div class="dsp-column dsp-column-left">
-          <div class="dsp-search">
-            <audit-icon
-              class="dsp-search-icon"
-              type="search1" />
-            <input
-              v-model="leftKeyword"
-              class="dsp-search-input"
-              :placeholder="leftSearchPlaceholder"
-              type="text"
-              @click.stop>
+        <div
+          v-if="isSourceEmpty"
+          class="dsp-empty">
+          <img
+            class="dsp-empty-img"
+            src="@images/empty.svg">
+          <div class="dsp-empty-title">
+            {{ t('暂无数据源') }}
           </div>
-          <div class="dsp-list">
-            <div
-              v-for="item in filteredLeftList"
-              :key="item.value"
-              v-bk-tooltips="getItemTooltip(item, true)"
-              class="dsp-list-item"
-              :class="{
-                'is-active': selectedLeftValue === item.value,
-                'is-disabled': item.disabled,
-              }"
-              @click="handleSelectLeft(item)">
-              <span class="dsp-list-item-label">{{ formatLeftLabel(item) }}</span>
-              <span
-                v-if="!isLeafNode(item)"
-                class="dsp-list-item-meta">
-                <bk-tag
-                  v-if="getChildCount(item) > 0"
-                  class="dsp-list-item-count"
-                  radius="8px">
-                  {{ getChildCount(item) }}
-                </bk-tag>
-                <audit-icon
-                  class="dsp-list-item-arrow"
-                  type="angle-line-down" />
-              </span>
-            </div>
-            <div
-              v-if="filteredLeftList.length === 0"
-              class="dsp-list-empty">
-              {{ t('暂无数据') }}
-            </div>
+          <div class="dsp-empty-desc">
+            <span>{{ t('请在企微联系') }}</span>
+            <span
+              class="dsp-empty-contact"
+              @click.stop="contactHelper">iegsec_helper</span>
+            <span>{{ t('数据源空态联系后缀') }}</span>
           </div>
         </div>
 
         <div
-          v-if="hasThirdLevel"
-          class="dsp-column dsp-column-right">
-          <div class="dsp-search">
-            <audit-icon
-              class="dsp-search-icon"
-              type="search1" />
-            <input
-              v-model="rightKeyword"
-              class="dsp-search-input"
-              :placeholder="rightSearchPlaceholder"
-              type="text"
-              @click.stop>
-          </div>
-          <bk-loading
-            class="dsp-right-loading"
-            :loading="rightLoading"
-            mode="spin"
-            size="small">
+          v-else
+          class="dsp-body"
+          :class="{ 'is-single-column': !hasThirdLevel }">
+          <div class="dsp-column dsp-column-left">
+            <div class="dsp-search">
+              <audit-icon
+                class="dsp-search-icon"
+                type="search1" />
+              <input
+                v-model="leftKeyword"
+                class="dsp-search-input"
+                :placeholder="leftSearchPlaceholder"
+                type="text"
+                @click.stop>
+            </div>
             <div class="dsp-list">
-              <template v-if="showRightPane">
-                <template v-if="isEventLogTab">
+              <div
+                v-for="item in filteredLeftList"
+                :key="item.value"
+                v-bk-tooltips="getItemTooltip(item, true)"
+                class="dsp-list-item"
+                :class="{
+                  'is-active': selectedLeftValue === item.value,
+                  'is-disabled': item.disabled,
+                }"
+                @click="handleSelectLeft(item)">
+                <span class="dsp-list-item-label">{{ formatLeftLabel(item) }}</span>
+                <span
+                  v-if="!isLeafNode(item)"
+                  class="dsp-list-item-meta">
+                  <bk-tag
+                    v-if="getChildCount(item) > 0"
+                    class="dsp-list-item-count"
+                    radius="8px">
+                    {{ getChildCount(item) }}
+                  </bk-tag>
+                  <audit-icon
+                    class="dsp-list-item-arrow"
+                    type="angle-line-down" />
+                </span>
+              </div>
+              <div
+                v-if="filteredLeftList.length === 0"
+                class="dsp-list-empty">
+                {{ t('暂无数据') }}
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="hasThirdLevel"
+            class="dsp-column dsp-column-right">
+            <div class="dsp-search">
+              <audit-icon
+                class="dsp-search-icon"
+                type="search1" />
+              <input
+                v-model="rightKeyword"
+                class="dsp-search-input"
+                :placeholder="rightSearchPlaceholder"
+                type="text"
+                @click.stop>
+            </div>
+            <bk-loading
+              class="dsp-right-loading"
+              :loading="rightLoading"
+              mode="spin"
+              size="small">
+              <div class="dsp-list">
+                <template v-if="showRightPane">
+                  <template v-if="isEventLogTab">
+                    <div
+                      class="dsp-list-item"
+                      :class="{ 'is-active': isAllSystemsSelected }"
+                      @click="handleToggleAllSystems">
+                      <span class="dsp-list-item-label">{{ t('全部系统') }}</span>
+                      <audit-icon
+                        v-if="isAllSystemsSelected"
+                        class="dsp-list-item-check"
+                        type="check-line" />
+                    </div>
+                    <div
+                      v-for="item in filteredRightList"
+                      :key="item.value"
+                      class="dsp-list-item"
+                      :class="{ 'is-active': isEventLogSystemSelected(item) }"
+                      @click="handleToggleEventLogSystem(item)">
+                      <span class="dsp-list-item-label">{{ formatEventLogSystemLabel(item) }}</span>
+                      <audit-icon
+                        v-if="isEventLogSystemSelected(item)"
+                        class="dsp-list-item-check"
+                        type="check-line" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div
+                      v-for="item in filteredRightList"
+                      :key="item.value"
+                      v-bk-tooltips="getItemTooltip(item, false)"
+                      class="dsp-list-item"
+                      :class="{
+                        'is-active': isRightSelected(item),
+                        'is-disabled': item.disabled,
+                      }"
+                      @click="handleSelectRight(item)">
+                      <span class="dsp-list-item-label">{{ item.label }}</span>
+                    </div>
+                  </template>
                   <div
-                    class="dsp-list-item"
-                    :class="{ 'is-active': isAllSystemsSelected }"
-                    @click="handleToggleAllSystems">
-                    <span class="dsp-list-item-label">{{ t('全部系统') }}</span>
-                    <audit-icon
-                      v-if="isAllSystemsSelected"
-                      class="dsp-list-item-check"
-                      type="check-line" />
-                  </div>
-                  <div
-                    v-for="item in filteredRightList"
-                    :key="item.value"
-                    class="dsp-list-item"
-                    :class="{ 'is-active': isEventLogSystemSelected(item) }"
-                    @click="handleToggleEventLogSystem(item)">
-                    <span class="dsp-list-item-label">{{ formatEventLogSystemLabel(item) }}</span>
-                    <audit-icon
-                      v-if="isEventLogSystemSelected(item)"
-                      class="dsp-list-item-check"
-                      type="check-line" />
-                  </div>
-                </template>
-                <template v-else>
-                  <div
-                    v-for="item in filteredRightList"
-                    :key="item.value"
-                    v-bk-tooltips="getItemTooltip(item, false)"
-                    class="dsp-list-item"
-                    :class="{
-                      'is-active': isRightSelected(item),
-                      'is-disabled': item.disabled,
-                    }"
-                    @click="handleSelectRight(item)">
-                    <span class="dsp-list-item-label">{{ item.label }}</span>
+                    v-if="filteredRightList.length === 0 && !rightLoading"
+                    class="dsp-list-empty">
+                    {{ t('暂无数据') }}
                   </div>
                 </template>
                 <div
-                  v-if="filteredRightList.length === 0 && !rightLoading"
+                  v-else
                   class="dsp-list-empty">
-                  {{ t('暂无数据') }}
+                  {{ rightEmptyHint }}
                 </div>
-              </template>
-              <div
-                v-else
-                class="dsp-list-empty">
-                {{ rightEmptyHint }}
               </div>
-            </div>
-          </bk-loading>
+            </bk-loading>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
   </div>
 </template>
 
@@ -245,6 +253,7 @@
       leaf: boolean;
     }>>;
     decodeTypeBizId?: (tableType: string, value: string | number) => string;
+    disabled?: boolean;
   }
 
   interface Emits {
@@ -260,6 +269,7 @@
     mineBizRtType: 'MineBizRt',
     loadChildren: undefined,
     decodeTypeBizId: undefined,
+    disabled: false,
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -276,7 +286,9 @@
   };
 
   const rootRef = ref<HTMLElement>();
+  const panelRef = ref<HTMLElement>();
   const panelVisible = ref(false);
+  const panelStyle = ref<Record<string, string>>({});
   const activeTab = ref('');
   const selectedLeftValue = ref('');
   const leftKeyword = ref('');
@@ -284,6 +296,8 @@
   const rightLoading = ref(false);
   const lazyChildrenMap = ref<Record<string, PickerNode[]>>({});
   const selectedSystemIds = ref<string[]>([]);
+  /** 最近一次成功提交的系统选择，防止关面板后被空 props 冲掉展示 */
+  const lastCommittedSystemIds = ref<string[]>([]);
 
   const decodeId = (tableType: string, value: string | number) => {
     if (props.decodeTypeBizId) {
@@ -337,11 +351,13 @@
   });
 
   const filteredLeftList = computed(() => {
+    // 禁用项不展示（与审计策略一致）
+    const availableList = leftList.value.filter(item => !item.disabled);
     const keyword = leftKeyword.value.trim().toLowerCase();
     if (!keyword) {
-      return leftList.value;
+      return availableList;
     }
-    return leftList.value.filter((item) => {
+    return availableList.filter((item) => {
       const label = String(item.label || '').toLowerCase();
       const value = decodeId(activeTab.value, item.value).toLowerCase();
       return label.includes(keyword) || value.includes(keyword);
@@ -410,11 +426,13 @@
   });
 
   const filteredRightList = computed(() => {
+    // 禁用项不展示（与审计策略一致）
+    const availableList = rightList.value.filter(item => !item.disabled);
     const keyword = rightKeyword.value.trim().toLowerCase();
     if (!keyword) {
-      return rightList.value;
+      return availableList;
     }
-    return rightList.value.filter((item) => {
+    return availableList.filter((item) => {
       const label = String(item.label || '').toLowerCase();
       const value = decodeId(activeTab.value, item.value).toLowerCase();
       return label.includes(keyword) || value.includes(keyword);
@@ -444,9 +462,15 @@
     const eventLogPath = useEventLogDraft
       ? ['EventLog', selectedLeftValue.value]
       : path;
+    let resolvedSystemIds = lastCommittedSystemIds.value;
+    if (props.systemIds?.length) {
+      resolvedSystemIds = props.systemIds;
+    } else if (selectedSystemIds.value.length) {
+      resolvedSystemIds = selectedSystemIds.value;
+    }
     const eventLogSystemIds = useEventLogDraft
       ? selectedSystemIds.value
-      : ((props.systemIds?.length ? props.systemIds : selectedSystemIds.value) || []);
+      : (resolvedSystemIds || []);
 
     if (eventLogPath[0] === 'EventLog' && eventLogPath.length >= 2) {
       const typeItem = props.list.find(item => item.value === 'EventLog');
@@ -473,23 +497,39 @@
     const typeItem = props.list.find(item => item.value === path[0]);
     if (!typeItem) return '';
     const tabLabel = typeItem.label;
+    const formatRtName = (raw: string) => {
+      const real = decodeId(path[0], raw);
+      if (!real) return '';
+      const bizId = real.split('_')[0];
+      if (/^\d+$/.test(bizId) && real.length > bizId.length + 1) {
+        return real.slice(bizId.length + 1);
+      }
+      return real;
+    };
 
     // 两级：联表等 → 联表数据 / 名称
     if (path.length === 2) {
       const leaf = typeItem.children?.find(item => item.value === path[1]);
-      return joinDisplayPath([tabLabel, leaf?.label || String(path[1] || '')]);
+      return joinDisplayPath([tabLabel, leaf?.label || formatRtName(path[1])]);
     }
 
     // 三级：资产数据 / 系统(id) / 资产；其他数据 / 业务(id) / 表 …
-    const left = typeItem.children?.find(item => item.value === path[1]);
-    if (!left) {
-      return joinDisplayPath([tabLabel, String(path[1] || '')]);
-    }
-    const leftId = decodeId(path[0], left.value);
-    const leftLabel = formatNodeNameId(left.label, leftId);
-    const right = left.children?.find(item => item.value === path[2])
+    const leftId = decodeId(path[0], path[1]);
+    const left = typeItem.children?.find(item => item.value === path[1])
+      || typeItem.children?.find(item => decodeId(path[0], item.value) === leftId)
+      || props.list
+        .flatMap(tab => (tab.children || []).map(item => ({ tab, item })))
+        .find(({ tab, item }) => (
+          item.value === path[1]
+          || decodeId(tab.value, item.value) === leftId
+        ))?.item;
+    const leftLabel = left
+      ? formatNodeNameId(left.label, decodeId(path[0], left.value) || leftId)
+      : leftId;
+    const right = left?.children?.find(item => item.value === path[2])
+      || left?.children?.find(item => decodeId(path[0], item.value) === decodeId(path[0], path[2]))
       || lazyChildrenMap.value[`${path[0]}_${path[1]}`]?.find(item => item.value === path[2]);
-    const rightLabel = right?.label || String(path[2] || '');
+    const rightLabel = right?.label || formatRtName(path[2]);
     return joinDisplayPath([tabLabel, leftLabel, rightLabel]);
   });
 
@@ -555,7 +595,7 @@
     emit('change', path);
   };
 
-  /** 关闭面板时提交操作日志：插件 + 系统多选一次性生效 */
+  /** 提交操作日志：插件 + 系统多选 */
   const commitEventLogSelection = () => {
     if (activeTab.value !== 'EventLog') {
       return false;
@@ -563,21 +603,70 @@
     if (!selectedLeftValue.value || selectedSystemIds.value.length === 0) {
       return false;
     }
+    const path = ['EventLog', selectedLeftValue.value];
+    const systemIds = [...selectedSystemIds.value];
+    lastCommittedSystemIds.value = systemIds;
+    // 先写 systemIds，再写 path，减少父级只收到 rt_id、系统仍为空的中间态
+    emit('update:systemIds', systemIds);
+    emit('changeSystemIds', systemIds);
     emit('eventLogCommit', {
-      path: ['EventLog', selectedLeftValue.value],
-      systemIds: [...selectedSystemIds.value],
+      path,
+      systemIds,
     });
+    emit('update:modelValue', path);
     return true;
+  };
+
+  const applySystemIdsFromProps = (ids?: string[]) => {
+    const next = [...(ids || [])];
+    if (next.length) {
+      selectedSystemIds.value = next;
+      lastCommittedSystemIds.value = next;
+      return;
+    }
+    // 外部空值不要清掉本地/刚提交的选择，否则关面板后展示会退化成「仅插件」
+    if (selectedSystemIds.value.length || lastCommittedSystemIds.value.length) {
+      return;
+    }
+    selectedSystemIds.value = [];
   };
 
   const closePanel = () => {
     if (!panelVisible.value) return;
-    panelVisible.value = false;
+    const snapshotSystems = [...selectedSystemIds.value];
+    const snapshotLeft = selectedLeftValue.value;
+    // 先提交再关面板，避免关面板后的 sync 把本地已选 systemIds 清掉
     const committed = commitEventLogSelection();
-    if (!committed && isEventLogTab.value) {
+    panelVisible.value = false;
+    if (committed) {
+      // 提交成功后保留本地勾选，等父级 props 回写；避免空数组 sync 把展示冲掉
+      selectedSystemIds.value = snapshotSystems;
+      selectedLeftValue.value = snapshotLeft;
+      return;
+    }
+    if (isEventLogTab.value) {
       // 未选完系统则回滚本地草稿
-      selectedSystemIds.value = [...(props.systemIds || [])];
+      selectedSystemIds.value = [...(props.systemIds?.length
+        ? props.systemIds
+        : lastCommittedSystemIds.value)];
       syncFromModelValue();
+    }
+  };
+
+  /** 供父组件在下一步/保存前强制落盘当前操作日志选择 */
+  const flushEventLogSelection = () => {
+    if (panelVisible.value) {
+      closePanel();
+      return;
+    }
+    // 面板已关，但本地仍有未同步到表单的系统选择
+    if (
+      isEventLogTab.value
+      && selectedLeftValue.value
+      && selectedSystemIds.value.length
+      && !(props.systemIds?.length)
+    ) {
+      commitEventLogSelection();
     }
   };
 
@@ -638,6 +727,7 @@
     // 操作日志：仅本地选中插件并加载系统，关闭面板时再统一提交
     if (isEventLogTab.value && pluginChanged) {
       setLocalSystemIds([]);
+      lastCommittedSystemIds.value = [];
     }
   };
 
@@ -653,6 +743,10 @@
       ? selectedSystemIds.value.filter(id => id !== item.value)
       : [...selectedSystemIds.value, item.value];
     setLocalSystemIds(next);
+    // 勾选即落盘，避免只依赖关面板提交时被 sync 冲掉
+    if (next.length) {
+      commitEventLogSelection();
+    }
   };
 
   const handleToggleAllSystems = () => {
@@ -662,19 +756,45 @@
       return;
     }
     setLocalSystemIds(rightList.value.map(item => item.value));
+    commitEventLogSelection();
+  };
+
+  const PANEL_WIDTH = 640;
+  const EMPTY_PANEL_WIDTH = 480;
+
+  const updatePanelPosition = () => {
+    if (!rootRef.value || !panelVisible.value) return;
+    const rect = rootRef.value.getBoundingClientRect();
+    const panelWidth = Math.min(
+      isSourceEmpty.value ? EMPTY_PANEL_WIDTH : PANEL_WIDTH,
+      window.innerWidth - 48,
+    );
+    const maxLeft = Math.max(24, window.innerWidth - panelWidth - 24);
+    const left = Math.min(rect.left, maxLeft);
+    panelStyle.value = {
+      position: 'fixed',
+      top: `${rect.bottom + 4}px`,
+      left: `${left}px`,
+      width: `${panelWidth}px`,
+      zIndex: '3000',
+    };
   };
 
   const togglePanel = () => {
+    if (props.disabled) return;
     if (panelVisible.value) {
       closePanel();
       return;
     }
     panelVisible.value = true;
+    nextTick(() => {
+      updatePanelPosition();
+    });
   };
 
   const syncFromModelValue = async () => {
     const path = props.modelValue || [];
-    selectedSystemIds.value = [...(props.systemIds || [])];
+    applySystemIdsFromProps(props.systemIds);
     if (!path.length) {
       if (!activeTab.value && props.list.length) {
         activeTab.value = props.list[0].value;
@@ -695,7 +815,7 @@
   const handleDocumentClick = (event: MouseEvent) => {
     if (!panelVisible.value) return;
     const target = event.target as Node;
-    if (rootRef.value?.contains(target)) return;
+    if (rootRef.value?.contains(target) || panelRef.value?.contains(target)) return;
     // InfoBox 确认框点击不关闭提交（节点可能在 body 下）
     const targetEl = target as HTMLElement;
     if (targetEl?.closest?.('.bk-modal, .bk-dialog, .bk-info-wrapper, .bk-message')) {
@@ -722,21 +842,38 @@
   }, { deep: true });
 
   watch(() => props.systemIds, (ids) => {
-    selectedSystemIds.value = [...(ids || [])];
+    // 面板打开时用户正在勾选系统，不能被外部空值回写冲掉
+    if (panelVisible.value) return;
+    applySystemIdsFromProps(ids);
   }, { deep: true });
 
   watch(panelVisible, async (visible) => {
     if (!visible) return;
     await nextTick();
+    updatePanelPosition();
     await syncFromModelValue();
   });
 
+  const handleWindowChange = () => {
+    updatePanelPosition();
+  };
+
   onMounted(() => {
     document.addEventListener('mousedown', handleDocumentClick, true);
+    window.addEventListener('resize', handleWindowChange);
+    document.querySelector('#auditNavigationContent .scroll-faker-content')
+      ?.addEventListener('scroll', handleWindowChange);
   });
 
   onBeforeUnmount(() => {
     document.removeEventListener('mousedown', handleDocumentClick, true);
+    window.removeEventListener('resize', handleWindowChange);
+    document.querySelector('#auditNavigationContent .scroll-faker-content')
+      ?.removeEventListener('scroll', handleWindowChange);
+  });
+
+  defineExpose({
+    flushEventLogSelection,
   });
 </script>
 
@@ -769,6 +906,22 @@
   &:hover {
     border-color: #3a84ff;
   }
+
+  &.is-disabled {
+    color: #63656e;
+    cursor: not-allowed;
+    background: #fafbfd;
+    border-color: #dcdee5;
+
+    &:hover,
+    &.is-active {
+      border-color: #dcdee5;
+    }
+
+    &.is-empty {
+      color: #c4c6cc;
+    }
+  }
 }
 
 .dsp-trigger-text {
@@ -791,11 +944,8 @@
 }
 
 .dsp-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 100;
   width: 640px;
+  max-width: calc(100vw - 48px);
   overflow: hidden;
   background: #fff;
   border: 1px solid #dcdee5;

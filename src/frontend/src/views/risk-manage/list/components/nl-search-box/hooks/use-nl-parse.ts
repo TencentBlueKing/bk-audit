@@ -131,6 +131,9 @@ export default function useNLParse() {
       if (options.scope_id) {
         params.scope_id = options.scope_id;
       }
+      if (options.risk_view_type) {
+        params.risk_view_type = options.risk_view_type;
+      }
       const result = await runNl2RiskFilter(params);
 
       if (!result) return null;

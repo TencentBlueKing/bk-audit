@@ -1,5 +1,33 @@
 # 定义公共参数
 
+VENV ?= .venv
+PYTHON ?= $(VENV)/bin/python
+PRE_COMMIT ?= $(VENV)/bin/pre-commit
+
+# ── Backend Quality ─────────────────────────────────────
+
+# 为当前 clone 安装只检查暂存文件的 Git pre-commit hook
+.PHONY: install-hooks
+install-hooks:
+	$(PRE_COMMIT) install --install-hooks --config .pre-commit-config.yaml
+
+# 检查 Git 暂存区；与提交时执行范围一致
+.PHONY: quality
+quality:
+	$(PRE_COMMIT) run
+
+# 检查全部受管文件；用于存量治理和本地复现 CI
+.PHONY: quality-all
+quality-all:
+	$(PRE_COMMIT) run --all-files --show-diff-on-failure
+
+.PHONY: test
+test:
+	$(PYTHON) manage.py test tests/
+
+.PHONY: check
+check: quality test
+
 # 默认目标（强制重新生成所有依赖）
 .PHONY: all_deps
 all_deps: deps_prod deps_dev

@@ -19,6 +19,7 @@
     <nl-search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      risk-view-type="all"
       :scenes="nlSearchBoxScenes"
       @change="handleSearchChange"
       @model-value-watch="handleModelValueWatch"
@@ -108,8 +109,10 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
-  import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { RISK_STATUS_TAG_MAP, resolveRiskStatusName } from '@views/risk-manage/constants';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import addRisk from './add-risk/index.vue';
   import AllRiskExportButton from './components/all-risk-export-button.vue';
@@ -229,7 +232,7 @@
 
   const buildBaseTableColumns = () => useRiskColumns({
     t,
-    deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+    deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
     detailRouteName: 'riskManageDetail',
     overrides: {
       // risk_id 列：stand_by 状态不可点击
@@ -298,7 +301,7 @@
                     theme={statusToMap[row.status]?.tag}>
                     <p style='display: flex;align-items: center;'>
                       <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                      <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                      <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                     </p>
                   </bk-tag>
                   <bk-button text theme='primary' onClick={() => handleToDetail(row, true)}>
@@ -311,7 +314,7 @@
                   theme={statusToMap[row.status]?.tag}>
                   <p style='display: flex;align-items: center;'>
                     <audit-icon type={statusToMap[row.status]?.icon} style={`margin-right: 6px;color: ${statusToMap[row.status]?.color || ''}`} />
-                    <span>{riskStatusCommon.value.find(item => item.id === row.status)?.name || '--'}</span>
+                    <span>{resolveRiskStatusName(row.status, riskStatusCommon.value) || '--'}</span>
                   </p>
                 </bk-tag>))
         ),
@@ -329,6 +332,13 @@
   });
 
   const tableColumns = computed(() => {
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
     const baseColumns = buildBaseTableColumns();
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
@@ -453,12 +463,7 @@
       }));
     },
   });
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('all');
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
@@ -499,12 +504,6 @@
     scene_id: Number(item.scene_id || item.id),
     name: item.name,
   })) || []);
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
 
   const {
     run: fetchRiskList,
@@ -529,10 +528,6 @@
       return;
     }
 
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
     if (results.some(item => item.status === 'stand_by')) {
       // 执行定时器
       safeSetTimeout(() => {
@@ -728,6 +723,8 @@
       timeout = undefined;
     }
   });
+
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   // 添加定时器执行前的组件状态检查
   const safeSetTimeout = (callback: () => void, delay: number) => {

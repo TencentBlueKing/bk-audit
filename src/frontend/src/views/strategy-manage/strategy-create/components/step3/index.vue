@@ -1,174 +1,159 @@
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
-  Copyright (C) 2023 THL A29 Limited,
-  a Tencent company. All rights reserved.
-  Licensed under the MIT License (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at http://opensource.org/licenses/MIT
-  Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
-  We undertake not to change the open source license (MIT license) applicable
-  to the current version of the project delivered to anyone in the future.
 -->
 <template>
   <smart-action
-    class="create-strategy-page"
+    class="create-strategy-page assign-rules-page"
     :offset-target="getSmartActionOffsetTarget">
     <div class="create-strategy-main">
-      <audit-form
-        ref="formRef"
-        class="strategt-form"
-        form-type="vertical"
-        :model="formData"
-        :rules="rules">
-        <card-part-vue :title="t('其他配置')">
-          <template #content>
-            <bk-form-item
-              class="is-required"
-              :label="t('风险单处理人')"
-              label-width="160"
-              property="processor_groups"
-              style="flex: 1;">
-              <bk-loading
-                :loading="isGroupLoading"
-                style="width: 100%;">
-                <bk-select
-                  ref="groupSelectRef"
-                  v-model="formData.processor_groups"
-                  class="bk-select"
-                  filterable
-                  :input-search="false"
-                  multiple
-                  multiple-mode="tag"
-                  :placeholder="t('请选择通知组')"
-                  :popover-options="{
-                    zIndex: 1000
-                  }"
-                  :search-placeholder="t('请输入关键字')">
-                  <auth-option
-                    v-for="(item, index) in groupList"
-                    :key="index"
-                    action-id="list_notice_group_v2"
-                    :label="item.name"
-                    :permission="checkResultMap.list_notice_group_v2"
-                    resource-is-scene
-                    :value="item.id" />
-                  <template #extension>
-                    <div class="create-notice-group">
-                      <auth-router-link
-                        action-id="create_notice_group_v2"
-                        class="create_notice_group_v2"
-                        :permission="checkResultMap.create_notice_group_v2"
-                        resource-is-scene
-                        target="_blank"
-                        :to="{
-                          name: 'noticeGroupList',
-                          query: {
-                            create: true
-                          }
-                        }">
-                        <audit-icon
-                          style="font-size: 14px;color: #3a84ff;"
-                          type="plus-circle" />
-                        {{ t('新增通知组') }}
-                      </auth-router-link>
-                    </div>
-                    <div
-                      class="refresh"
-                      @click="refreshGroupList">
+      <div class="assign-rules-card">
+        <div class="assign-rules-header">
+          <div class="assign-rules-title-row">
+            <span class="assign-rules-title">{{ t('风险分派规则') }}</span>
+          </div>
+          <p class="assign-rules-tip">
+            {{ t('分派规则按从上到下的顺序匹配，首条命中后停止；未命中任何分派规则时，将执行默认分派规则。') }}
+          </p>
+          <bk-button
+            class="add-assign-rule-btn"
+            @click="handleAddRule">
+            <audit-icon
+              class="add-icon"
+              type="add" />
+            {{ t('添加分派规则') }}
+          </bk-button>
+        </div>
+
+        <div class="assign-rule-list">
+          <vuedraggable
+            class="assign-rule-draggable"
+            ghost-class="assign-rule-item-ghost"
+            handle=".rule-drag-handle"
+            item-key="id"
+            :list="assignRules">
+            <template #item="{ element: rule, index }">
+              <div
+                class="assign-rule-item"
+                :class="{ 'is-collapsed': rule.collapsed }">
+                <div
+                  class="assign-rule-item-header"
+                  @click="() => toggleCollapse(index)">
+                  <span
+                    class="rule-drag-handle"
+                    title="拖拽排序"
+                    @click.stop>
+                    <audit-icon type="move" />
+                  </span>
+                  <audit-icon
+                    class="collapse-icon"
+                    :class="{ 'is-collapsed': rule.collapsed }"
+                    type="angle-line-down" />
+                  <template v-if="rule.editingName">
+                    <input
+                      v-model="rule.name"
+                      class="rule-name-input"
+                      type="text"
+                      @blur="() => stopEditName(index)"
+                      @click.stop
+                      @keydown.enter="() => stopEditName(index)">
+                  </template>
+                  <template v-else>
+                    <div class="rule-name-wrap">
+                      <span class="rule-name">{{ rule.name }}</span>
                       <audit-icon
-                        v-if="isGroupLoading"
-                        class="rotate-loading"
-                        svg
-                        type="loading" />
-                      <template v-else>
-                        <audit-icon
-                          type="refresh" />
-                        {{ t('刷新') }}
-                      </template>
+                        class="rule-name-edit-icon"
+                        type="edit-fill"
+                        @click.stop="() => startEditName(index)" />
                     </div>
                   </template>
-                </bk-select>
-              </bk-loading>
-            </bk-form-item>
-            <bk-form-item
-              :label="t('关注人')"
-              label-width="160"
-              property="notice_groups"
-              style="flex: 1;">
-              <bk-loading
-                :loading="isGroupLoading"
-                style="width: 100%;">
-                <bk-select
-                  ref="groupSelectRef"
-                  v-model="formData.notice_groups"
-                  class="bk-select"
-                  filterable
-                  :input-search="false"
-                  multiple
-                  multiple-mode="tag"
-                  :placeholder="t('请选择通知组')"
-                  :popover-options="{
-                    zIndex: 1000
-                  }"
-                  :search-placeholder="t('请输入关键字')">
-                  <auth-option
-                    v-for="(item, index) in groupList"
-                    :key="index"
-                    action-id="list_notice_group_v2"
-                    :label="item.name"
-                    :permission="checkResultMap.list_notice_group_v2"
-                    resource-is-scene
-                    :value="item.id" />
-                  <template #extension>
-                    <div class="create-notice-group">
-                      <auth-router-link
-                        action-id="create_notice_group_v2"
-                        class="create_notice_group_v2"
-                        :permission="checkResultMap.create_notice_group_v2"
-                        resource-is-scene
-                        target="_blank"
-                        :to="{
-                          name: 'noticeGroupList',
-                          query: {
-                            create: true
-                          }
-                        }">
-                        <audit-icon
-                          style="font-size: 14px;color: #3a84ff;"
-                          type="plus-circle" />
-                        {{ t('新增通知组') }}
-                      </auth-router-link>
-                    </div>
-                    <div
-                      class="refresh"
-                      @click="refreshGroupList">
+                  <div
+                    class="header-actions"
+                    @click.stop>
+                    <audit-icon
+                      v-bk-tooltips="t('复制')"
+                      class="action-icon"
+                      type="copy"
+                      @click="() => handleCloneRule(index)" />
+                    <audit-popconfirm
+                      :cancel-text="t('取消')"
+                      :confirm-handler="() => handleDeleteRule(index)"
+                      :confirm-text="t('删除')"
+                      :content="t('确认删除「{name}」？删除后不可恢复。', { name: rule.name })"
+                      placement="bottom-end"
+                      :title="t('确认删除该规则？')">
                       <audit-icon
-                        v-if="isGroupLoading"
-                        class="rotate-loading"
-                        svg
-                        type="loading" />
-                      <template v-else>
-                        <audit-icon
-                          type="refresh" />
-                        {{ t('刷新') }}
-                      </template>
+                        v-bk-tooltips="t('删除')"
+                        class="action-icon action-delete"
+                        type="delete" />
+                    </audit-popconfirm>
+                  </div>
+                </div>
+
+                <div
+                  v-show="!rule.collapsed"
+                  class="assign-rule-item-content">
+                  <div class="form-section">
+                    <div class="form-label is-required">
+                      <span
+                        v-bk-tooltips="{
+                          content: t('命中条件的风险记录将分派至指定场景'),
+                          placement: 'top-start',
+                        }"
+                        class="form-label-tip">
+                        {{ t('命中条件') }}
+                      </span>
                     </div>
-                  </template>
-                </bk-select>
-              </bk-loading>
-            </bk-form-item>
-          </template>
-        </card-part-vue>
-      </audit-form>
+                    <bk-form
+                      class="assign-hit-condition-form"
+                      form-type="vertical"
+                      :model="getAssignFormModel(rule)">
+                      <rules-component
+                        :ref="(el: unknown) => setWhereRef(el, index)"
+                        :aggregate-list="aggregateList"
+                        :config-type="configType"
+                        :expected-result="expectedResult"
+                        :table-fields="assignTableFields"
+                        :table-fields-loading="schemaFieldsLoading"
+                        @update-where="(where) => handleUpdateWhere(index, where)" />
+                    </bk-form>
+                  </div>
+                  <assign-rule-fields
+                    :model-value="rule"
+                    :scene-options="sceneOptions"
+                    @update:model-value="(val) => { assignRules[index] = { ...assignRules[index], ...val }; }" />
+                </div>
+              </div>
+            </template>
+          </vuedraggable>
+
+          <!-- 默认分派规则 -->
+          <div
+            class="assign-rule-item default-rule"
+            :class="{ 'is-collapsed': defaultRule.collapsed, 'has-assign-rules': assignRules.length }">
+            <div
+              class="assign-rule-item-header"
+              @click="defaultRule.collapsed = !defaultRule.collapsed">
+              <audit-icon
+                class="collapse-icon"
+                :class="{ 'is-collapsed': defaultRule.collapsed }"
+                type="angle-line-down" />
+              <span class="rule-name">{{ t('默认分派规则') }}</span>
+            </div>
+            <div
+              v-show="!defaultRule.collapsed"
+              class="assign-rule-item-content">
+              <assign-rule-fields
+                v-model="defaultRule"
+                :scene-options="sceneOptions" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
     <template #action>
-      <bk-button
-        @click="handlePrevious">
+      <bk-button @click="handlePrevious">
         {{ t('上一步') }}
       </bk-button>
       <bk-button
@@ -176,6 +161,12 @@
         theme="primary"
         @click="submit">
         {{ t('提交') }}
+      </bk-button>
+      <bk-button
+        v-if="showSaveDraftButton"
+        class="ml8"
+        @click="handleSaveDraft">
+        {{ t('保存草稿') }}
       </bk-button>
       <bk-button
         class="ml8"
@@ -186,32 +177,73 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, inject, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
+  import Vuedraggable from 'vuedraggable';
 
-  import IamManageService from '@service/iam-manage';
-  import NoticeManageService from '@service/notice-group';
+  import LinkDataManageService from '@service/link-data-manage';
+  import SceneManageService from '@service/scene-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
-  import CardPartVue from '../step1/components/card-part.vue';
+  import AssignRuleFields from './components/assign-rule-fields.vue';
+  import RulesComponent from '../step1/components/customize/components/rules/index.vue';
 
+  import {
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../utils/strategy-routes';
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import {
+    type AssignWhere,
+    createEmptyAssignWhere,
+    enrichAssignWhereFields,
+    hasValidAssignCondition,
+    isEmptyDispatchConditions,
+    toAssignWhere,
+    toNoticeGroupIds,
+  } from '../../utils/strategy-protocol';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
+
+  import useMessage from '@/hooks/use-message';
+
+  interface AssignRuleItem {
+    id: number;
+    rule_id?: number;
+    name: string;
+    collapsed: boolean;
+    editingName: boolean;
+    conditions: AssignWhere;
+    scene_ids: Array<string | number>;
+    processors: Array<string | number>;
+    notice_users: Array<string | number>;
+    assign_mode: 'confirm' | 'direct';
+    confirmers: Array<string | number>;
+  }
 
   interface IFormData {
-    processor_groups: Array<any>,
-    notice_groups: Array<any>,
+    assign_rules: AssignRuleItem[];
+    default_assign_rule: Omit<AssignRuleItem, 'id' | 'name' | 'conditions' | 'editingName'>;
+    processor_groups: Array<any>;
+    notice_groups: Array<any>;
   }
 
   interface Emits {
     (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'saveDraft', params: IFormData): void;
     (e: 'submitData'): void;
   }
   interface Props {
-    editData: StrategyModel
+    editData: StrategyModel;
+    formData?: Record<string, any>;
+    select?: Array<DatabaseTableFieldModel>;
   }
 
   const props = defineProps<Props>();
@@ -219,106 +251,676 @@
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { t } = useI18n();
+  const { messageError } = useMessage();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
 
-  const groupSelectRef = ref();
-  const formRef = ref();
+  let ruleIdSeq = 1;
 
-  const formData = ref<IFormData>({
-    processor_groups: [],
-    notice_groups: [],
-  });
+  const createConditionForm = (): AssignWhere => createEmptyAssignWhere();
 
-  const rules = {
-    processor_groups: [
-      {
-        validator: (value: Array<any>) => !!value.length,
-        message: t('风险单处理人不能为空'),
-        trigger: 'change',
-      },
-    ],
+  const cloneConditionForm = (form: AssignWhere): AssignWhere => JSON.parse(JSON.stringify(form));
+
+  const createRule = (overrides: Partial<AssignRuleItem> = {}): AssignRuleItem => {
+    const id = ruleIdSeq;
+    ruleIdSeq += 1;
+    return {
+      id,
+      name: overrides.name ?? `规则${id}`,
+      collapsed: false,
+      editingName: false,
+      conditions: createConditionForm(),
+      scene_ids: [],
+      processors: [],
+      notice_users: [],
+      assign_mode: 'confirm',
+      confirmers: [],
+      ...overrides,
+    };
   };
 
-  // 获取通知组权限
-  const {
-    data: checkResultMap,
-  } = useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'list_notice_group_v2,create_notice_group_v2',
-      resources: getSceneSystemParams().scope_id,
+  const createDefaultRule = (): IFormData['default_assign_rule'] => ({
+    collapsed: false,
+    scene_ids: [] as Array<string | number>,
+    processors: [] as Array<string | number>,
+    notice_users: [] as Array<string | number>,
+    assign_mode: 'confirm' as 'confirm' | 'direct',
+    confirmers: [] as Array<string | number>,
+  });
+
+  const normalizeSceneIds = (item: Record<string, any> = {}): Array<string | number> => {
+    let ids: Array<string | number> = [];
+    if (Array.isArray(item.scene_ids)) {
+      ids = item.scene_ids.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    } else if (Array.isArray(item.scene_id)) {
+      ids = item.scene_id.filter((id: string | number | '' | null | undefined) => id !== '' && id !== null && id !== undefined);
+    } else if (item.scene_id !== undefined && item.scene_id !== null && item.scene_id !== '') {
+      ids = [item.scene_id];
+    } else if (item.scene_space?.id) {
+      ids = [item.scene_space.id];
+    }
+    return ids.length ? [ids[0]] : [];
+  };
+
+  const assignRules = ref<AssignRuleItem[]>([]);
+  const defaultRule = ref<IFormData['default_assign_rule']>(createDefaultRule());
+  const whereRefs = ref<Array<{ setWhere?:(where: AssignWhere, having: AssignWhere) => void } | null>>([]);
+  const schemaTableFields = ref<Array<Record<string, any>>>([]);
+  const schemaFieldsLoading = ref(false);
+  const aggregateList = ref<Array<Record<string, any>>>([]);
+
+  const tableFields = computed(() => props.formData?.configs?.table_fields || []);
+  const configType = computed(() => props.formData?.configs?.config_type || '');
+  const expectedResult = computed(() => {
+    if (props.select?.length) return props.select;
+    const select = props.formData?.configs?.select;
+    return Array.isArray(select) ? select : [];
+  });
+  const assignTableFields = computed(() => (
+    tableFields.value.length ? tableFields.value : schemaTableFields.value
+  ));
+  const assignLookupFields = computed(() => {
+    const expected = expectedResult.value || [];
+    const schema = assignTableFields.value || [];
+    if (!expected.length) return schema;
+    if (!schema.length) return expected;
+    return [...expected, ...schema];
+  });
+
+  const resolveRtId = (rtId: unknown) => {
+    if (Array.isArray(rtId)) {
+      return rtId.length ? String(rtId[rtId.length - 1]) : '';
+    }
+    return rtId ? String(rtId) : '';
+  };
+
+  const mapRtFields = (
+    data: Array<Record<string, any>> = [],
+    table = '',
+  ) => data.map(item => ({
+    table,
+    raw_name: item.value || item.raw_name || '',
+    display_name: item.label || item.display_name || '',
+    field_type: item.field_type || '',
+    aggregate: null,
+    spec_field_type: item.spec_field_type || '',
+    remark: '',
+    property: item.property || {},
+  }));
+
+  const emptyHaving = (): AssignWhere => ({ connector: 'and', conditions: [] });
+
+  const getAssignFormModel = (rule: AssignRuleItem) => ({
+    configs: {
+      where: rule.conditions,
     },
-    defaultValue: {},
-    manual: true,
   });
 
-  const refreshGroupList = () => {
-    groupList.value = [];
-    groupSelectRef.value.searchKey = '';
-    fetchGroupList();
+  const setWhereRef = (el: unknown, index: number) => {
+    whereRefs.value[index] = el as typeof whereRefs.value[number];
   };
 
-  // 获取通知组下拉
+  const applyWhereToComponents = () => {
+    nextTick(() => {
+      assignRules.value.forEach((rule, index) => {
+        whereRefs.value[index]?.setWhere?.(rule.conditions, emptyHaving());
+      });
+    });
+  };
+
+  const enrichRuleConditions = () => {
+    const fields = assignLookupFields.value;
+    if (!fields.length) return;
+    assignRules.value = assignRules.value.map(rule => ({
+      ...rule,
+      conditions: enrichAssignWhereFields(rule.conditions, fields),
+    }));
+    applyWhereToComponents();
+  };
+
+  let schemaFetchSeq = 0;
+  const loadSchemaTableFields = async () => {
+    const seq = schemaFetchSeq + 1;
+    schemaFetchSeq = seq;
+    const configs = props.formData?.configs || {};
+    if (Array.isArray(configs.table_fields) && configs.table_fields.length) {
+      schemaTableFields.value = configs.table_fields;
+      schemaFieldsLoading.value = false;
+      enrichRuleConditions();
+      return;
+    }
+    const dataSource = configs.data_source || {};
+    schemaFieldsLoading.value = true;
+    try {
+      if (configs.config_type === 'LinkTable') {
+        const uid = dataSource.link_table?.uid;
+        if (!uid) {
+          if (seq === schemaFetchSeq) {
+            schemaTableFields.value = [];
+            schemaFieldsLoading.value = false;
+          }
+          return;
+        }
+        const detail = await LinkDataManageService.fetchLinkDataDetail({
+          uid,
+          version: dataSource.link_table?.version ?? 0,
+        });
+        if (seq !== schemaFetchSeq) return;
+        const links = detail.config?.links || [];
+        const idArr = Array.from(new Set(links.flatMap((item: Record<string, any>) => [
+          resolveRtId(item.left_table?.rt_id),
+          resolveRtId(item.right_table?.rt_id),
+        ]).filter(Boolean)));
+        const displayArr = Array.from(new Set(links.flatMap((item: Record<string, any>) => [
+          item.left_table?.display_name,
+          item.right_table?.display_name,
+        ]).filter(Boolean)));
+        if (!idArr.length) {
+          schemaTableFields.value = [];
+          schemaFieldsLoading.value = false;
+          return;
+        }
+        const data = await StrategyManageService.fetchBatchTableRtFields({
+          table_ids: idArr.join(','),
+        });
+        if (seq !== schemaFetchSeq) return;
+        schemaTableFields.value = (data || []).flatMap((item: Record<string, any>, index: number) => (
+          mapRtFields(item.fields || [], displayArr[index] || '')
+        ));
+        schemaFieldsLoading.value = false;
+        enrichRuleConditions();
+        return;
+      }
+      const rtId = resolveRtId(dataSource.rt_id);
+      if (!rtId) {
+        if (seq === schemaFetchSeq) {
+          schemaTableFields.value = [];
+          schemaFieldsLoading.value = false;
+        }
+        return;
+      }
+      const data = await StrategyManageService.fetchTableRtFields({ table_id: rtId });
+      if (seq !== schemaFetchSeq) return;
+      schemaTableFields.value = mapRtFields(data || [], rtId);
+      schemaFieldsLoading.value = false;
+      enrichRuleConditions();
+    } catch {
+      if (seq === schemaFetchSeq) {
+        schemaTableFields.value = [];
+        schemaFieldsLoading.value = false;
+      }
+    }
+  };
+
+  watch(
+    () => JSON.stringify({
+      tableFieldsLen: props.formData?.configs?.table_fields?.length || 0,
+      configType: props.formData?.configs?.config_type,
+      rtId: resolveRtId(props.formData?.configs?.data_source?.rt_id),
+      linkUid: props.formData?.configs?.data_source?.link_table?.uid,
+      linkVersion: props.formData?.configs?.data_source?.link_table?.version,
+    }),
+    () => {
+      loadSchemaTableFields();
+    },
+    { immediate: true },
+  );
+
   const {
-    loading: isGroupLoading,
-    data: groupList,
-    run: fetchGroupList,
-  } = useRequest(NoticeManageService.fetchGroupSelectList, {
+    data: commonData,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+    onSuccess() {
+      aggregateList.value = [
+        { label: t('不聚合'), value: null },
+        ...commonData.value.rule_audit_aggregate_type,
+      ];
+    },
+  });
+
+  const handleUpdateWhere = (index: number, where: AssignWhere) => {
+    const prev = assignRules.value[index]?.conditions;
+    if (!hasValidAssignCondition(where) && hasValidAssignCondition(prev)) {
+      return;
+    }
+    assignRules.value[index].conditions = where;
+  };
+
+  const {
+    data: sceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
     defaultValue: [],
-    defaultParams: {
-      page_size: 1000,
-      page: 1,
-    },
+    defaultParams: { status: 'enabled' },
     manual: true,
   });
+
+  const sceneOptions = computed(() => (sceneList.value || []).map((item: any) => ({
+    id: item.scene_id,
+    name: item.name,
+  })));
+
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
+
+  const toggleCollapse = (index: number) => {
+    assignRules.value[index].collapsed = !assignRules.value[index].collapsed;
+  };
+
+  const startEditName = (index: number) => {
+    assignRules.value[index].editingName = true;
+    nextTick(() => {
+      const container = document.querySelector('.assign-rule-draggable');
+      const inputs = container?.querySelectorAll<HTMLInputElement>('.rule-name-input');
+      inputs?.[index]?.focus();
+    });
+  };
+
+  const stopEditName = (index: number) => {
+    assignRules.value[index].editingName = false;
+    if (!assignRules.value[index].name.trim()) {
+      assignRules.value[index].name = `规则${index + 1}`;
+    }
+  };
+
+  const handleAddRule = () => {
+    const rule = createRule({ name: `规则${assignRules.value.length + 1}` });
+    assignRules.value.push(rule);
+    nextTick(() => {
+      document.querySelector('.assign-rule-draggable .assign-rule-item:last-of-type')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleCloneRule = (index: number) => {
+    const source = assignRules.value[index];
+    const cloned = createRule({
+      name: `${source.name}_复制`,
+      conditions: cloneConditionForm(source.conditions),
+      scene_ids: [...source.scene_ids],
+      processors: [...source.processors],
+      notice_users: [...source.notice_users],
+      assign_mode: source.assign_mode,
+      confirmers: [...source.confirmers],
+    });
+    assignRules.value.splice(index + 1, 0, cloned);
+    nextTick(() => {
+      whereRefs.value[index + 1]?.setWhere?.(cloned.conditions, emptyHaving());
+    });
+  };
+
+  const handleDeleteRule = (index: number) => {
+    assignRules.value.splice(index, 1);
+    return Promise.resolve();
+  };
+
+  const buildStepParams = (): IFormData => ({
+    assign_rules: assignRules.value.map(rule => ({
+      ...rule,
+      conditions: cloneConditionForm(rule.conditions),
+      scene_ids: [...rule.scene_ids],
+      processors: toNoticeGroupIds(rule.processors),
+      notice_users: toNoticeGroupIds(rule.notice_users),
+      confirmers: toNoticeGroupIds(rule.confirmers),
+    })),
+    default_assign_rule: {
+      ...(defaultRule.value.rule_id ? { rule_id: defaultRule.value.rule_id } : {}),
+      collapsed: defaultRule.value.collapsed,
+      scene_ids: [...defaultRule.value.scene_ids],
+      processors: toNoticeGroupIds(defaultRule.value.processors),
+      notice_users: toNoticeGroupIds(defaultRule.value.notice_users),
+      assign_mode: defaultRule.value.assign_mode,
+      confirmers: toNoticeGroupIds(defaultRule.value.confirmers),
+    },
+    // 兼容旧接口字段
+    processor_groups: props.formData?.processor_groups ?? [],
+    notice_groups: props.formData?.notice_groups ?? [],
+  });
+
+  const validateRules = () => {
+    const validateOne = (rule: {
+      scene_ids: Array<string | number>;
+      processors: Array<string | number>;
+      assign_mode: string;
+      confirmers: Array<string | number>;
+    }, label: string) => {
+      if (!rule.scene_ids?.length) {
+        messageError(t('{label}：分派场景空间不能为空', { label }));
+        return false;
+      }
+      if (!rule.processors?.length) {
+        messageError(t('{label}：风险单处理人不能为空', { label }));
+        return false;
+      }
+      if (rule.assign_mode === 'confirm' && !rule.confirmers?.length) {
+        messageError(t('{label}：确认人不能为空', { label }));
+        return false;
+      }
+      return true;
+    };
+
+    for (const rule of assignRules.value) {
+      const hasValidCondition = hasValidAssignCondition(rule.conditions);
+      if (!hasValidCondition) {
+        messageError(t('{label}：命中条件不能为空', { label: rule.name }));
+        return false;
+      }
+      if (!validateOne(rule, rule.name)) return false;
+    }
+    return validateOne(defaultRule.value, t('默认分派规则'));
+  };
 
   const handlePrevious = () => {
-    emits('previousStep', 3, formData.value);
+    emits('previousStep', 4, buildStepParams());
   };
 
   const handleCancel = () => {
-    router.push({
-      name: 'strategyList',
-    });
+    router.push({ name: strategyRoutes.list });
   };
 
   const submit = () => {
-    formRef.value.validate().then(() => {
-      // 先更新formData, 最后一步step不变
-      emits('nextStep', 4, formData.value);
-      emits('submitData');
-    });
+    if (!validateRules()) return;
+    emits('nextStep', 5, buildStepParams());
+    emits('submitData');
   };
 
-  // 编辑
-  watch(() => props.editData, (data) => {
-    formData.value.notice_groups = Array.isArray(data.notice_groups) ? data.notice_groups : [];
-    formData.value.processor_groups = Array.isArray(data.processor_groups) ? data.processor_groups : [];
-  }, {
-    immediate: isEditMode || isCloneMode,
-  });
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildStepParams());
+  };
 
-  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
+  const applyEchoData = (data: Record<string, any>) => {
+    try {
+      const assignSource = data.assign_rules?.length
+        ? data.assign_rules
+        : (data.dispatch_rules || []).filter((item: any) => !isEmptyDispatchConditions(item?.conditions));
+      if (assignSource?.length) {
+        ruleIdSeq = 1;
+        assignRules.value = assignSource.map((item: any, index: number) => createRule({
+          rule_id: item.rule_id,
+          name: item.rule_name || item.name || `分派规则${index + 1}`,
+          conditions: enrichAssignWhereFields(
+            toAssignWhere(item?.conditions, assignLookupFields.value),
+            assignLookupFields.value,
+          ),
+          scene_ids: normalizeSceneIds({
+            ...item,
+            scene_ids: item.scene_ids ?? (item.target_scene_id !== undefined ? [item.target_scene_id] : []),
+          }),
+          processors: toNoticeGroupIds(item.processors ?? item.processor),
+          notice_users: toNoticeGroupIds(item.notice_users ?? item.follower),
+          assign_mode: item.assign_mode || (item.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
+          confirmers: toNoticeGroupIds(item.confirmers ?? item.confirmer),
+        }));
+        applyWhereToComponents();
+      }
+      const defaultSource = (data.default_assign_rule && Object.keys(data.default_assign_rule).length)
+        ? data.default_assign_rule
+        : (data.dispatch_rules || []).find((item: any) => isEmptyDispatchConditions(item?.conditions));
+      if (defaultSource) {
+        defaultRule.value = {
+          ...createDefaultRule(),
+          ...defaultSource,
+          scene_ids: normalizeSceneIds({
+            ...defaultSource,
+            scene_ids: defaultSource.scene_ids
+              ?? (defaultSource.target_scene_id !== undefined ? [defaultSource.target_scene_id] : []),
+          }),
+          processors: toNoticeGroupIds(defaultSource.processors ?? defaultSource.processor),
+          notice_users: toNoticeGroupIds(defaultSource.notice_users ?? defaultSource.follower),
+          confirmers: toNoticeGroupIds(defaultSource.confirmers ?? defaultSource.confirmer),
+          assign_mode: defaultSource.assign_mode || (defaultSource.dispatch_mode === 'direct' ? 'direct' : 'confirm'),
+        };
+      }
+    } catch (e) {
+      console.error('[assign-rules] echo failed', e);
+    }
+  };
+
+  watch(
+    () => props.formData,
+    (data) => {
+      if (!data) return;
+      if (data.assign_rules || data.default_assign_rule || data.dispatch_rules) {
+        applyEchoData(data);
+      }
+    },
+    { immediate: true },
+  );
+
+  watch(
+    () => props.editData,
+    (data) => {
+      if (!(isEditMode || isCloneMode) || !data) return;
+      const anyData = data as any;
+      // formData 覆盖详情：预期结果变更清空命中条件后，不能再用接口原始分派条件回填
+      const merged = {
+        ...anyData,
+        ...(props.formData || {}),
+      };
+      if (merged.assign_rules || merged.default_assign_rule || merged.dispatch_rules) {
+        applyEchoData(merged);
+      }
+    },
+    { immediate: isEditMode || isCloneMode },
+  );
+
+  watch(
+    () => props.formData?.hit_conditions_reset_seq,
+    (seq) => {
+      if (!seq) return;
+      assignRules.value = assignRules.value.map(rule => ({
+        ...rule,
+        conditions: createEmptyAssignWhere(),
+      }));
+      applyWhereToComponents();
+    },
+  );
 </script>
 <style lang="postcss" scoped>
-.create-strategy-main {
-  margin-bottom: 32px;
-}
+.assign-rules-page {
+  .create-strategy-main {
+    padding-top: 4px;
+    margin-bottom: 24px;
+  }
 
-.create-notice-group {
-  padding: 0 12px;
-  text-align: center;
-  flex: 1;
-}
+  .assign-rules-card {
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px 0 #00000029;
+  }
 
-.refresh {
-  padding: 0 12px;
-  color: #3a84ff;
-  text-align: center;
-  cursor: pointer;
-  border-left: 1px solid #dcdee5;
-  flex: 1;
+  .assign-rules-header {
+    padding: 16px 24px 0;
+  }
+
+  .assign-rules-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #313238;
+  }
+
+  .assign-rules-tip {
+    margin: 8px 0 16px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+  }
+
+  .add-assign-rule-btn {
+    margin-bottom: 16px;
+    color: #3a84ff;
+    border-color: #3a84ff;
+
+    .add-icon {
+      margin-right: 4px;
+      color: #3a84ff;
+    }
+  }
+
+  .assign-rule-list {
+    padding: 0 24px 24px;
+  }
+
+  .assign-rule-draggable {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .assign-rule-item-ghost {
+    opacity: 0.5;
+    background: #f0f5ff;
+  }
+
+  .assign-rule-item {
+    margin-bottom: 8px;
+    background: #fff;
+    border: 1px solid #dcdee5;
+    border-radius: 2px;
+
+    &.default-rule.has-assign-rules {
+      margin-top: 8px;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .assign-rule-item-header {
+      display: flex;
+      align-items: center;
+      height: 48px;
+      padding: 0 16px;
+      cursor: pointer;
+      background: #f5f6fa;
+      border-bottom: 1px solid #dcdee5;
+      gap: 8px;
+
+      .rule-drag-handle {
+        font-size: 14px;
+        color: #c4c6cc;
+        cursor: grab;
+        flex-shrink: 0;
+
+        &:active {
+          cursor: grabbing;
+        }
+      }
+
+      .collapse-icon {
+        font-size: 14px;
+        color: #63656e;
+        cursor: pointer;
+        transition: transform 0.2s ease;
+
+        &.is-collapsed {
+          transform: rotate(-90deg);
+        }
+      }
+
+      .rule-name-wrap {
+        display: flex;
+        flex: 1;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .rule-name {
+        min-width: 0;
+        overflow: hidden;
+        font-size: 14px;
+        font-weight: 600;
+        color: #313238;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rule-name-input {
+        flex: 1;
+        min-width: 0;
+        height: 28px;
+        padding: 0 8px;
+        font-size: 14px;
+        color: #313238;
+        background: #fff;
+        border: 1px solid #3a84ff;
+        border-radius: 2px;
+        outline: none;
+      }
+
+      .rule-name-edit-icon {
+        font-size: 14px;
+        color: #979ba5;
+        cursor: pointer;
+        flex-shrink: 0;
+
+        &:hover {
+          color: #3a84ff;
+        }
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 12px;
+        margin-left: auto;
+
+        .action-icon {
+          font-size: 16px;
+          color: #63656e;
+          cursor: pointer;
+
+          &:hover {
+            color: #3a84ff;
+          }
+
+          &.action-delete:hover {
+            color: #ea3636;
+          }
+        }
+      }
+    }
+
+    &.is-collapsed .assign-rule-item-header {
+      border-bottom: none;
+    }
+
+    .assign-rule-item-content {
+      padding: 20px 24px 24px;
+      background: #fafbfd;
+    }
+
+    .form-section {
+      margin-bottom: 20px;
+    }
+
+    .assign-hit-condition-form {
+      :deep(.bk-form-item) {
+        margin-bottom: 0;
+      }
+    }
+
+    .form-label {
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #63656e;
+
+      &.is-required::before {
+        display: inline-block;
+        width: 8px;
+        color: #ea3636;
+        text-align: center;
+        content: '*';
+      }
+
+      .form-label-tip {
+        cursor: pointer;
+        border-bottom: 1px dashed #979ba5;
+      }
+    }
+  }
 }
 </style>

@@ -21,6 +21,7 @@
       label-width="0"
       required>
       <collapse-panel
+        v-if="stepMode === 'basic'"
         :is-active="isActive"
         :label="t('方案输入')"
         style="margin-bottom: 14px;">
@@ -33,7 +34,7 @@
             <bk-radio-group
               v-model="formData.configs.config_type"
               class="strategy-radio-group"
-              :disabled="isEditMode || isCloneMode || isUpgradeMode"
+              :disabled="isStrategyConfigLocked || isUpgradeMode"
               @change="handleDataSourceType">
               <bk-radio-button
                 v-for="item in commonData.table_type"
@@ -61,6 +62,7 @@
       </collapse-panel>
 
       <collapse-panel
+        v-if="stepMode === 'rules'"
         :is-active="isActive"
         :label="t('方案参数')"
         style="margin-bottom: 14px;">
@@ -73,6 +75,7 @@
       </collapse-panel>
 
       <collapse-panel
+        v-if="stepMode === 'basic'"
         :is-active="isActive"
         :label="t('调度配置')"
         style="margin-bottom: 12px;">
@@ -168,14 +171,22 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
+
+  import { getStrategyResourceSceneParams } from '../../../../../../../utils/strategy-routes';
 
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
   interface Props {
     controlDetail: ControlModel;
     triggerError?: boolean,
+    stepMode?: 'basic' | 'rules',
   }
+
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+  });
+  const emits = defineEmits<Emits>();
   interface Emits {
     (e: 'updateDataSource', value: Record<string, any>): void,
     (e: 'updateConfigType', value: string): void,
@@ -203,18 +214,16 @@
     },
   }
 
-  const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
   const comMap: Record<string, any> = {
     EventLog: EventLogComponent,
     BuildIn: ResourceDataComponent,
     BizAsset: ResourceDataComponent,
   };
   const route = useRoute();
+  const strategySceneParams = () => getStrategyResourceSceneParams(route);
   let isInit = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const { isUpgradeMode, isStrategyConfigLocked } = useStrategyConfigLock();
+  const shouldUseCreateDefaults = !isUpgradeMode && !isStrategyConfigLocked.value;
   const { t } = useI18n();
   const tableTypeTip: Record<string, string> = {
     EventLog: t('各应用系统按照审计中心规范上报的系统操作日志'),
@@ -242,7 +251,7 @@
   });
   const sourceTypeMap = ref<Record<string, string>>({});
 
-  if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+  if (shouldUseCreateDefaults) {
     isInit = true;
     emits('updateDataSource', formData.value.configs.data_source);
     emits('updateConfigType', formData.value.configs.config_type);
@@ -256,11 +265,11 @@
     defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
-      if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+      if (shouldUseCreateDefaults) {
         formData.value.configs.config_type = data.table_type[0].value;
         fetchTable({
           table_type: formData.value.configs.config_type,
-          scene_id: getSceneSystemParams().scope_id,
+          ...strategySceneParams(),
         });
       }
       sourceTypeMap.value = commonData.value.table_type.reduce((
@@ -286,7 +295,7 @@
   const handleDataSourceType = (item: boolean | string | number) => {
     fetchTable({
       table_type: item,
-      scene_id: getSceneSystemParams().scope_id,
+      ...strategySceneParams(),
     });
     if (isInit) {
       emits('updateDataSource', formData.value.configs.data_source);
@@ -328,10 +337,13 @@
 
   defineExpose<Exposes>({
     getValue() {
+      if (props.stepMode === 'basic') {
+        return comRef.value?.getValue?.() ?? Promise.resolve();
+      }
       if (!props.controlDetail.variable_config.parameter.length) {
         return Promise.resolve();
       }
-      return comRef.value.getValue().then(() => paramenterRef.value.getValue());
+      return paramenterRef.value.getValue();
     },
     setConfigs(configs: IFormData['configs']) {
       formData.value.configs.config_type = configs.config_type;
@@ -343,11 +355,13 @@
 
       fetchTable({
         table_type: formData.value.configs.config_type,
-        scene_id: getSceneSystemParams().scope_id,
+        ...strategySceneParams(),
       }).then(() => {
-        comRef.value.setConfigs(configs);
+        comRef.value?.setConfigs?.(configs);
       });
-      paramenterRef.value.setConfigs(configs.variable_config);
+      if (props.stepMode !== 'basic') {
+        paramenterRef.value?.setConfigs?.(configs.variable_config);
+      }
       isInit = true;
     },
     getFields() {

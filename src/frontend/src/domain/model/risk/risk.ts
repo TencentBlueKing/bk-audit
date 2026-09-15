@@ -84,6 +84,9 @@ export default class Event {
   notice_users: string[];
   tags: string[];
   risk_label: string;
+  risk_level: string;
+  risk_hazard: string;
+  risk_guidance: string;
   report_enabled: boolean;
   report_auto_render: boolean;
   report_generating: boolean;
@@ -133,6 +136,9 @@ export default class Event {
     this.notice_users = payload.notice_users;
     this.tags = payload.tags;
     this.risk_label = payload.risk_label;
+    this.risk_level = payload.risk_level;
+    this.risk_hazard = payload.risk_hazard;
+    this.risk_guidance = payload.risk_guidance;
     this.permission = payload.permission;
     this.experiences = payload.experiences;
     this.title = payload.title;

@@ -88,6 +88,7 @@
                 </div>
                 <node-select
                   v-else
+                  :key="tableFieldsSign"
                   ref="nodeSelectRef"
                   :config-data="localTableFields"
                   :config-type="configType"
@@ -175,10 +176,10 @@
                   <th style="width: 250px;">
                     <span
                       v-bk-tooltips="{
-                        content: t('sql示例：`字段名` AS `显示名`')
+                        content: t('字段别名类似 SQL 中的 `字段名 AS 字段别名`，设置后将改变数据入库后的原始字段名，请谨慎使用')
                       }"
                       style="border-bottom: 1px dashed #979ba5;">
-                      {{ t('显示名') }}
+                      {{ t('字段别名') }}
                     </span>
                   </th>
                 </tr>
@@ -296,6 +297,8 @@
 
   import { encodeRegexp } from '@utils/assist';
 
+  import { formatFieldDisplayLabel } from '../../../../../../utils/strategy-protocol';
+
   import nodeSelect from './tree.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
@@ -367,6 +370,10 @@
   const fieldComplianceMap = ref<Map<string, boolean>>(new Map());
 
   const searchKey = useDebouncedRef('');
+
+  const tableFieldsSign = computed(() => (props.tableFields || [])
+    .map(item => `${item.raw_name || ''}:${item.table || ''}`)
+    .join('|'));
 
   // 检查是否有不合规的字段
   const hasInvalidFields = computed(() => Array.from(fieldComplianceMap.value.values()).some(isValid => !isValid));
@@ -477,10 +484,6 @@
 
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
-    if ('textValue' in field) {
-      // eslint-disable-next-line no-param-reassign
-      field.display_name =  field.textValue  as string;
-    }
     // 创建新对象避免参数修改
     const processedField = {
       ...field,
@@ -499,11 +502,22 @@
         ?? NO_AGGREGATE_VALUE;
     }
 
-    // 处理显示名称 - 编辑模式下不添加聚合算法后缀
-    const displayName = isEdit.value ? processedField.display_name
-      : `${processedField.display_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+    // 字段别名：编辑保留已有值；新增默认「中文名(raw_name)」
+    let displayName: string;
+    if (isEdit.value) {
+      if ('textValue' in field) {
+        processedField.display_name = field.textValue as string;
+      }
+      displayName = processedField.display_name;
+    } else {
+      const formattedName = formatFieldDisplayLabel(
+        processedField.display_name,
+        processedField.raw_name,
+      );
+      displayName = `${formattedName}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+    }
 
-    // 统计重复显示名(包含已存在的和当前已选的)
+    // 统计重复别名(包含已存在的和当前已选的)
     const allDisplayNames = [
       ...props.expectedResultList,
       ...tableData.value,
@@ -518,7 +532,7 @@
       {},
     );
 
-    // 生成最终显示名
+    // 生成最终字段别名
     if (props.configType === 'LinkTable') {
       processedField.display_name = `${processedField.table}.${displayName}`;
     } else {
@@ -662,6 +676,7 @@
     }
   }, {
     immediate: true,
+    deep: true,
   });
 
   watch(() => searchKey.value, (data) => {

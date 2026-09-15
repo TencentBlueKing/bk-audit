@@ -87,7 +87,6 @@
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import SceneManageService from '@service/scene-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
@@ -106,7 +105,9 @@
 
   import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
-  import { useRiskColumns } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
+  import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
+  import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
   import FieldConfig from './components/config';
 
@@ -181,16 +182,20 @@
   };
 
   // 根据 event_filters 动态添加关联事件列，插入到操作列之前
-  let initTableColumns: any[] = [];
   const tableColumns = computed(() => {
-    if (!initTableColumns.length) {
-      initTableColumns = useRiskColumns({
-        t,
-        deps: { levelData, strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
-        detailRouteName: 'sceneRiskManageDetail',
-        appendColumns: [actionColumn],
-      });
-    }
+    touchRiskColumnDeps({
+      strategyTagMap,
+      strategyList,
+      riskStatusCommon,
+      sceneList,
+      handleToDetail,
+    });
+    const initTableColumns = useRiskColumns({
+      t,
+      deps: { strategyTagMap, strategyList, riskStatusCommon, sceneList, handleToDetail },
+      detailRouteName: 'sceneRiskManageDetail',
+      appendColumns: [actionColumn],
+    });
     const eventFilters = searchModel.value?.event_filters;
     if (!eventFilters || !Array.isArray(eventFilters) || eventFilters.length === 0) {
       return initTableColumns;
@@ -213,7 +218,7 @@
   });
 
   // 默认的可配置列键
-  const defaultSettings = ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
+  const defaultSettings = ['risk_id', 'title', 'event_content', 'scene_id', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'has_report', 'risk_label'];
 
   // 用于在场景切换时强制刷新 settings 计算属性
   const settingsVersion = ref(0);
@@ -239,15 +244,14 @@
       result = defaultSettings;
     }
     // 选择具体场景时，默认不展示所属场景(scene_id)列；
-    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id
+    // 选择所有风险(cross_scene/cross_system)时，默认勾选 scene_id（放在风险描述后面）
     const sceneParams = getSceneSystemParams();
     const isAllRisks = !sceneParams.scope_id
       || sceneParams.scope_type === 'cross_scene'
       || sceneParams.scope_type === 'cross_system';
     if (isAllRisks && !result.includes('scene_id')) {
-      // 在 event_time 之后插入 scene_id，保持合理顺序
-      const idx = result.indexOf('event_time');
-      result.splice(idx + 1, 0, 'scene_id');
+      const idx = result.indexOf('event_content');
+      result.splice(idx >= 0 ? idx + 1 : result.length, 0, 'scene_id');
     } else if (!isAllRisks) {
       result = result.filter((key: string) => key !== 'scene_id');
     }
@@ -341,6 +345,7 @@
     const params = {
       risk_id: '',
       tags: '',
+      scene_id: '',
       start_time: '',
       end_time: '',
       strategy_id: '',
@@ -417,12 +422,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchAllStrategyList, {
-    manual: true,
-    defaultValue: [],
-  });
+  const { strategyList } = useRiskListStrategyList('all');
 
   // 获取标签列表
   const {
@@ -444,20 +444,7 @@
     defaultValue: [],
   });
 
-  const {
-    data: levelData,
-    run: fetchRiskLevel,
-  } = useRequest(StrategyManageService.fetchRiskLevel, {
-    defaultValue: {},
-  });
-
-  const handleRequestSuccess = ({ results }: { results: Array<RiskManageModel> }) => {
-    if (!results.length) return;
-    // 获取对应风险等级
-    fetchRiskLevel({
-      strategy_ids: results.map(item => item.strategy_id).join(','),
-    });
-  };
+  const handleRequestSuccess = () => {};
 
   const handleModelValueWatch = (val: any) => {
     if (val?.strategy_id?.length) {
@@ -493,6 +480,7 @@
     fieldConfigKey.value = 0;
   });
 
+  useRefreshRiskListOnActivated(() => listRef.value);
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'sceneRiskManageDetail') {

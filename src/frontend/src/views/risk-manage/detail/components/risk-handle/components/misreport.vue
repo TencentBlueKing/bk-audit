@@ -1,37 +1,28 @@
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
-  Copyright (C) 2023 THL A29 Limited,
-  a Tencent company. All rights reserved.
-  Licensed under the MIT License (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at http://opensource.org/licenses/MIT
-  Unless required by applicable law or agreed to in writing,
-  software distributed under the License is distributed on
-  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
-  either express or implied. See the License for the
-  specific language governing permissions and limitations under the License.
-  We undertake not to change the open source license (MIT license) applicable
-  to the current version of the project delivered to anyone in the future.
 -->
 <template>
   <div class="reopen-mis-report-wrap">
-    <span class="misreport-label">{{ t('误报说明：') }}</span>
-    <!-- eslint-disable vue/no-v-html -->
-    <div
-      class="description-html"
-      @click="handleDescriptionImageClick"
-      v-html="htmlText(data.description) || '--'" />
-    <editor-image-preview
-      v-if="descriptionImages.length > 0"
-      ref="imagePreviewRef"
-      class="inline-image-preview-hidden"
-      :images="descriptionImages"
-      :title="t('图片')" />
+    <div class="mis-content">
+      <render-info-item :label="t('误报说明')">
+        <!-- eslint-disable vue/no-v-html -->
+        <div
+          class="description-html"
+          @click="handleDescriptionImageClick"
+          v-html="htmlText(data.description) || '--'" />
+        <editor-image-preview
+          v-if="descriptionImages.length > 0"
+          ref="imagePreviewRef"
+          class="inline-image-preview-hidden"
+          :images="descriptionImages"
+          :title="t('图片')" />
+      </render-info-item>
+    </div>
   </div>
 </template>
 
-<script setup lang='ts'>
+<script setup lang="ts">
   import DOMPurify from 'dompurify';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -39,11 +30,13 @@
   import type RiskManageModel from '@model/risk/risk';
 
   import { sanitizeEditorHtml } from '@views/risk-manage/detail/components/event-report/editor-utils';
+  import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
   import editorImagePreview from '@/components/editor-image-preview/index.vue';
 
-  interface Props{
-    data: RiskManageModel['ticket_history'][0]
+  interface Props {
+    data: RiskManageModel['ticket_history'][number],
   }
+
   const props = defineProps<Props>();
   const { t } = useI18n();
 
@@ -116,21 +109,44 @@
     imagePreviewRef.value?.openAt(index);
   };
 </script>
+
 <style scoped lang="postcss">
 .reopen-mis-report-wrap {
-  padding: 10px 16px;
+  padding: 0;
   font-size: 12px;
   color: #63656e;
-  background: #fff;
-  border: 1px solid #eaebf0;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px 0 #0000000a;
-}
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 
-.misreport-label {
-  display: block;
-  margin-bottom: 8px;
-  color: #313238;
+  > .mis-content {
+    padding: 12px 8px 12px 12px;
+    background: #f5f7fa;
+    border-radius: 2px;
+
+    .render-info-item {
+      align-items: flex-start;
+
+      :deep(.info-label) {
+        width: auto !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        line-height: 20px;
+        text-align: left;
+        word-break: keep-all;
+        white-space: nowrap;
+        flex: 0 0 auto !important;
+      }
+
+      :deep(.info-value) {
+        min-width: 0;
+        padding-left: 4px;
+        line-height: 20px;
+        flex: 1;
+      }
+    }
+  }
 }
 
 .description-html {

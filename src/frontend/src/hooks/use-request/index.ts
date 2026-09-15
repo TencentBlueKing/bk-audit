@@ -69,24 +69,33 @@ export default function <T> (
 
   let paramsMemo = {};
   let cancelTokenSource: CancelTokenSource;
-  let isCancelled = false;
+  let requestSeq = 0;
 
   const run = (params = {} as Record<string, any>) => {
     paramsMemo = params || {};
-    isCancelled = false;
+    requestSeq += 1;
+    const currentSeq = requestSeq;
     const requestHandler = options.holdLoading ? execRequest(service(params), () => {
-      loading.value = true;
+      if (currentSeq === requestSeq) {
+        loading.value = true;
+      }
     }) : (() => {
       loading.value = true;
       return service(params);
     })();
     const handler = requestHandler.then((result) => {
+      if (currentSeq !== requestSeq) {
+        return result;
+      }
       data.value = result;
       error.value = false; // 成功时清除错误状态
       options.onSuccess?.(data.value);
       return result;
     })
       .catch((errorMsg) => {
+        if (currentSeq !== requestSeq) {
+          return data.value;
+        }
         if (errorMsg?.code === 'CANCEL') {
           error.value = false;
           errorMessage.value = '';
@@ -97,8 +106,8 @@ export default function <T> (
         throw errorMsg;
       })
       .finally(() => {
-        // 被取消的请求不重置 loading，避免覆盖新请求的 loading 状态
-        if (!isCancelled) {
+        // 只有当前这次请求结束才关掉 loading，避免旧请求 finally 把新查询的加载态清掉
+        if (currentSeq === requestSeq) {
           loading.value = false;
         }
         options.onFinally?.();
@@ -113,7 +122,6 @@ export default function <T> (
 
   const cancel = () => {
     if (cancelTokenSource) {
-      isCancelled = true;
       cancelTokenSource.cancel();
     }
   };

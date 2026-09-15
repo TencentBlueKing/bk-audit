@@ -48,13 +48,14 @@
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import CollectorManageService from '@service/collector-manage';
   import MetaManageService from '@service/meta-manage';
 
   import useRequest from '@hooks/use-request';
 
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getStrategySystemScopeParams } from '@/views/strategy-manage/utils/strategy-routes';
 
   interface Expose {
     resetFormData: () => void,
@@ -67,6 +68,7 @@
 
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
   const systemIds = ref<Array<string>>([]);
   const statusSystems = ref<Array<Record<string, any>>>([]);
 
@@ -78,8 +80,7 @@
     defaultValue: [],
     defaultParams: {
       action_ids: 'view_system',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: 'scene',
+      ...getStrategySystemScopeParams(route),
     },
     manual: true,
     onSuccess(data) {

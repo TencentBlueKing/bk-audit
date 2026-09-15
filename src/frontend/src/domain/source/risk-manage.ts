@@ -89,6 +89,16 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 获取待我确认的风险列表
+  getConfirmRiskList(params: {
+    page: number,
+    page_size: number,
+    scene_id?: string,
+  }) {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/pending_confirm/?page=${params.page}&page_size=${params.page_size}`, {
+      params,
+    });
+  }
   // 获取风险可用字段
   getFields() {
     return Request.get<Array<{
@@ -232,6 +242,46 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 确认风险
+  confirmRisk(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/${params.risk_id}/confirm/`, {
+      params: {
+        description: params.description,
+      },
+    });
+  }
+  // 确认为误报
+  confirmAsMisreport(params: {
+    risk_id: string | number,
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/${params.risk_id}/confirm_as_misreport/`, {
+      params: {
+        description: params.description,
+      },
+    });
+  }
+  // 批量确认风险单
+  batchConfirmRisk(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/batch_confirm/`, {
+      params,
+    });
+  }
+  // 批量标记误报
+  batchConfirmAsMisreport(params: {
+    risk_ids: string[],
+    description?: string,
+  }) {
+    return Request.post(`${this.module}/batch_confirm_as_misreport/`, {
+      params,
+    });
+  }
   // 批量导出
   batchExport(params: {
     risk_view_type: string,
@@ -309,6 +359,7 @@ class RiskManage extends ModuleBase {
     scenes?: Array<{ id: number; name: string }>,
     scope_type?: string,
     scope_id?: string,
+    risk_view_type?: string,
   }) {
     return Request.post<{
       filter_conditions: Record<string, any>,
@@ -317,22 +368,29 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
-  // 获取AI分析列表
+  // 获取搜索历史
   getNl2RiskFilterLog(params: {
     end_time?: string,
     page: number,
     page_size: number,
+    risk_view_type?: string,
     start_time?: string,
     status?: string,
   }) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return;
+      }
+      query.append(key, String(value));
+    });
+    const qs = query.toString();
     return Request.get<IRequestResponsePaginationData<{
       id: number,
       query: string,
       response_data: string,
       status: string,
-    }>>(`${this.module}/nl2risk_filter_log/`, {
-      params,
-    });
+    }>>(`${this.module}/nl2risk_filter_log/${qs ? `?${qs}` : ''}`);
   }
   getAiAnalyseList() {
     return Request.get(`${this.api}/analyse_report/scenarios/`);

@@ -16,7 +16,6 @@
           @click="emits('edit')" />
       </render-info-item>
       <render-info-item
-        class="mt8"
         :label="t('评论内容')"
         :label-width="labelWidth">
         <!-- eslint-disable vue/no-v-html -->
@@ -154,7 +153,11 @@
   white-space: normal;
 
   :deep(p) {
-    margin: 0 0 8px;
+    margin: 0;
+  }
+
+  :deep(p + p) {
+    margin-top: 8px;
   }
 
   :deep(.ql-report-table) {

@@ -63,7 +63,7 @@
             class="field-output">
             <img
               class="field-type-icon"
-              :src="getAssetsFile(`field-type/${item.field_type}.png`)">
+              :src="getFieldTypeIcon(item.field_type)">
             <span>
               {{ `${item.field_name}(${item.field_alias})` }}
             </span>
@@ -89,7 +89,7 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import getAssetsFile from '@utils/getAssetsFile';
+  import getFieldTypeIcon from '@utils/getFieldTypeIcon';
 
   interface Props{
     data: Record<string, any> | null

@@ -191,8 +191,8 @@ export const PROFILE_FIELDS = {
   TOTAL_RECHARGE_YUAN: '总充值（元）',
   ACCOUNT_NATURE: '账号性质',
   TOTAL_ISSUE_COUNT_YUAN: '累计发数（¥）',
-  LOGIN_DAYS_31: '登录天数（31）',
-  LOGIN_COUNT_7DAYS: '登录次数（7天）',
+  LOGIN_DAYS_31: '登录天数（近31天）',
+  LOGIN_COUNT_7DAYS: '登录次数（近7天）',
   TOTAL_GIFT_COUNT: '累计赠送次数',
   TOTAL_TRADE_COUNT: '累计交易次数',
   ACCOUNT_HISTORY_LIST: '历史账号列表',
@@ -213,6 +213,14 @@ export const getExchangeRateValue = (row: Record<string, any> = {}) => (
 export const getAccountNatureValue = (row: Record<string, any> = {}) => (
   row[PROFILE_FIELDS.ACCOUNT_NATURE] || row.accountNature || row.accountability || ''
 );
+
+/** 读取近31天登录天数；后端 -1 表示无数据 */
+export const getLoginDays31Value = (row: Record<string, any> = {}): number | null => {
+  const raw = row[PROFILE_FIELDS.LOGIN_DAYS_31] ?? row.loginDays31;
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return num;
+};
 
 /** 账号性质为 test_account 时视为测试号 */
 export const isTestAccountNature = (nature: unknown) => nature === ACCOUNT_NATURE_TEST;

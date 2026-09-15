@@ -50,7 +50,8 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('策略ID、策略名称、配置方式、标签、状态、事件调查报告')"
+            :get-menu-list="getMenuList"
+            :placeholder="searchPlaceholder"
             unique-select
             :validate-values="validateValues"
             value-split-code=","
@@ -61,23 +62,29 @@
           class="audit-highlight-table"
           :columns="tableColumn"
           :data-source="dataSource"
+          :row-class="() => 'hover-highlight'"
           :settings="settings"
           @clear-search="handleClearSearch"
           @column-filter="handleColumnFilter"
+          @mouseleave="handleRiskCountRowLeave"
+          @mouseover="handleStrategyTableMouseOver"
           @on-setting-change="handleSettingChange"
-          @request-success="handleRequestSuccess" />
+          @request-success="handleRequestSuccess"
+          @row-mouse-enter="handleRiskCountRowEnter"
+          @row-mouse-leave="handleRiskCountRowLeave" />
       </div>
     </div>
   </skeleton-loading>
 
   <!-- 策略详情 -->
   <audit-sideslider
-    ref="sidesliderRef"
+    ref="strategyDetailSidesliderRef"
     v-model:isShow="showDetail"
+    :before-close="handleDetailBeforeClose"
     :show-footer="false"
     show-header-slot
     title="策略详情"
-    :width="1100">
+    :width="1400">
     <template #header>
       <div
         class="flex"
@@ -103,29 +110,50 @@
         <div style="margin-left: auto;">
           <auth-button
             v-bk-tooltips="{
-              content: t('处理中，不能编辑'),
-              disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : isModelStrategy(strategyItem.strategy_type)
+                  ? modelStrategyDisabledTip()
+                  : t('处理中，不能编辑'),
+              disabled: !(isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="edit_strategy"
             class="w88"
             :class="{
-              'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
+              'is-disabled': isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type)
             }"
-            :permission="strategyItem.permission.edit_strategy"
+            :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
             :resource="strategyItem.strategy_id"
             theme="primary"
-            @click="handleEdit(strategyItem)">
+            @click="handleEdit(strategyItem, { fromDetail: true })">
             {{ t('编辑') }}
           </auth-button>
           <auth-button
+            v-if="!strategyItem.isDraft"
             v-bk-tooltips="{
-              content: t('处理中，不能克隆'),
-              disabled: !(strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id))
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : isModelStrategy(strategyItem.strategy_type)
+                  ? modelStrategyDisabledTip()
+                  : t('处理中，不能克隆'),
+              disabled: !(isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type))
             }"
             action-id="create_strategy_v2"
             class="ml8"
             :class="{
-              'is-disabled': strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)
+              'is-disabled': isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
+                || pendingStatusIdList.includes(strategyItem.strategy_id)
+                || isModelStrategy(strategyItem.strategy_type)
             }"
             :permission="permissionCheckData"
             resource-is-scene
@@ -134,9 +162,13 @@
             {{ t('克隆') }}
           </auth-button>
           <bk-button
-            v-if="strategyItem.isPending || pendingStatusIdList.includes(strategyItem.strategy_id)"
+            v-if="isSceneGlobalStrategy(strategyItem)
+              || strategyItem.isPending
+              || pendingStatusIdList.includes(strategyItem.strategy_id)"
             v-bk-tooltips="{
-              content: t('处理中，不能删除'),
+              content: isSceneGlobalStrategy(strategyItem)
+                ? globalStrategyDisabledTip()
+                : t('处理中，不能删除'),
             }"
             class="is-disabled ml8">
             {{ t('删除') }}
@@ -144,7 +176,7 @@
           <auth-component
             v-else
             action-id="delete_strategy"
-            :permission="strategyItem.permission.delete_strategy"
+            :permission="resolveStrategyPermission(strategyItem.permission?.delete_strategy)"
             :resource="strategyItem.strategy_id">
             <bk-button
               class="ml8"
@@ -153,30 +185,33 @@
               {{ t('删除') }}
             </bk-button>
           </auth-component>
-          <span>
+          <span v-if="!strategyItem.isDraft">
             <span
               class="mr8"
               style="margin-left: 24px;font-size: 14px;color: #63656e;">
               {{ t('启/停') }}
             </span>
             <auth-switch
-              v-if="strategyItem.isPending
+              v-if="isSceneGlobalStrategy(strategyItem)
+                || strategyItem.isPending
                 || pendingStatusIdList.includes(strategyItem.strategy_id) || strategyItem.isFailed"
               v-bk-tooltips="{
-                content: strategyItem.isFailed
-                  ? t('策略状态异常，不能启停')
-                  : t('处理中，不支持启停'),
+                content: isSceneGlobalStrategy(strategyItem)
+                  ? globalStrategyDisabledTip()
+                  : strategyItem.isFailed
+                    ? t('策略状态异常，不能启停')
+                    : t('处理中，不支持启停'),
               }"
               action-id="edit_strategy"
               disabled
               :model-value="strategyItem.status === 'running'"
-              :permission="strategyItem.permission.edit_strategy"
+              :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
               :resource="strategyItem.strategy_id"
               theme="primary" />
             <auth-component
               v-else
               action-id="edit_strategy"
-              :permission="strategyItem.permission.edit_strategy"
+              :permission="resolveStrategyPermission(strategyItem.permission?.edit_strategy)"
               :resource="strategyItem.strategy_id">
               <audit-popconfirm
                 class="ml8"
@@ -194,9 +229,11 @@
         </div>
       </div>
     </template>
-    <div>
+    <div class="strategy-detail-wrap">
       <strategy-detail
+        :key="strategyItem.strategy_id"
         :data="strategyItem"
+        :detail-loading="detailLoading"
         :strategy-map="strategyTagMap"
         :user-group-list="userGroupList"
         @tab-change="handleDetailTabChange" />
@@ -204,7 +241,7 @@
   </audit-sideslider>
 
   <audit-sideslider
-    ref="sidesliderRef"
+    ref="strategyRecordsSidesliderRef"
     v-model:isShow="showRecords"
     :show-footer="false"
     :title="t('运行记录')"
@@ -266,23 +303,28 @@
     onUnmounted,
     ref,
     shallowRef,
+    watch,
   } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
   import ControlManageService from '@service/control-manage';
   import IamManageService from '@service/iam-manage';
   import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
   import NoticeGroupManageService from '@service/notice-group';
+  import RootManageService from '@service/root-manage';
+  import SceneManageService from '@service/scene-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
-  import type StrategyModel from '@model/strategy/strategy';
+  import StrategyModel from '@model/strategy/strategy';
 
   import useMessage from '@hooks/use-message';
   import useRecordPage from '@hooks/use-record-page';
@@ -297,6 +339,9 @@
   } from '@utils/assist';
   import getAssetsFile from '@utils/getAssetsFile';
 
+  import ReportJumpScopeMenu, {
+    type JumpScopeItem,
+  } from '../../platform-manage/report-config/components/report-jump-scope-menu.vue';
   import StrategyDetail from './components/detail.vue';
   import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
@@ -308,6 +353,7 @@
     getSceneSystemParams,
     syncSceneContextToUrl,
   } from '@/utils/assist/scene-system-params';
+  import { getStrategyRouteNames, getStrategyListScopeParams, getStrategyResourceSceneParams, isPlatformStrategyRoute } from '../utils/strategy-routes';
 
   enum FullEnum {
     FULL = 'full',
@@ -351,6 +397,7 @@
     placeholder?: string;
     multiple?: boolean;
     onlyRecommendChildren?: boolean,
+    async?: boolean,
   }
   interface ISettings{
     checked: Array<string>,
@@ -369,6 +416,222 @@
   const { on: onEvent, off } = useEventBus();
 
   const router = useRouter();
+  const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
+  const isPlatformList = computed(() => isPlatformStrategyRoute(route.name));
+  /** 全局策略：以 my_role_permissions.manage_platform 判定管理员权限 */
+  const hasManagePlatform = ref(false);
+  const resolveStrategyPermission = (permission?: boolean) => (
+    isPlatformList.value ? hasManagePlatform.value : permission
+  );
+  const sceneNameMap = ref<Record<string, string>>({});
+  const DISPATCH_SCENE_COLUMN_FIELD = 'dispatch_scenes';
+  const activeRiskJumpStrategyId = ref<number | string | null>(null);
+  const hoveredRiskJumpStrategyId = ref<number | string | null>(null);
+  let hoveredRiskJumpLeaveTimer: number | undefined;
+
+  const toggleRiskCountCellClass = (
+    strategyId: number | string | null | undefined,
+    className: string,
+    enabled: boolean,
+  ) => {
+    if (strategyId === null || strategyId === undefined || strategyId === '') {
+      return;
+    }
+    document.querySelectorAll(`.strategy-risk-count-cell[data-strategy-id="${strategyId}"]`).forEach((el) => {
+      el.classList.toggle(className, enabled);
+    });
+  };
+
+  const clearRiskCountRowHover = () => {
+    document.querySelectorAll('.strategy-risk-count-cell.is-row-hover').forEach((el) => {
+      el.classList.remove('is-row-hover');
+    });
+    hoveredRiskJumpStrategyId.value = null;
+  };
+
+  const handleStrategyTableMouseOver = (e: MouseEvent) => {
+    const tr = (e.target as HTMLElement | null)?.closest?.('tbody tr') as HTMLElement | null;
+    if (!tr) {
+      return;
+    }
+    const rowIndex = tr.getAttribute('data-row-index');
+    if (rowIndex === null) {
+      return;
+    }
+    const row = listRef.value?.getListData?.()?.[Number(rowIndex)] as StrategyModel | undefined;
+    if (!row) {
+      return;
+    }
+    handleRiskCountRowEnter(e, row);
+  };
+
+  const handleRiskCountRowEnter = (_e: Event, row: StrategyModel) => {
+    if (hoveredRiskJumpLeaveTimer !== undefined) {
+      window.clearTimeout(hoveredRiskJumpLeaveTimer);
+      hoveredRiskJumpLeaveTimer = undefined;
+    }
+    const strategyId = row?.strategy_id;
+    if (hoveredRiskJumpStrategyId.value !== strategyId) {
+      clearRiskCountRowHover();
+      hoveredRiskJumpStrategyId.value = strategyId ?? null;
+      toggleRiskCountCellClass(strategyId, 'is-row-hover', true);
+    }
+  };
+
+  const handleRiskCountRowLeave = () => {
+    hoveredRiskJumpLeaveTimer = window.setTimeout(() => {
+      if (activeRiskJumpStrategyId.value !== null) {
+        return;
+      }
+      clearRiskCountRowHover();
+      hoveredRiskJumpLeaveTimer = undefined;
+    }, 50);
+  };
+
+  const isRiskCountRowHover = (data: StrategyModel) => (
+    hoveredRiskJumpStrategyId.value === data.strategy_id
+  );
+
+  const isGlobalStrategy = (data: StrategyModel) => (
+    data.visibility?.binding_type === 'platform_binding'
+  );
+  /** 审计策略列表中展示的全局策略：仅可查看，不可操作 */
+  const isSceneGlobalStrategy = (data: StrategyModel) => (
+    !isPlatformList.value && isGlobalStrategy(data)
+  );
+  const globalStrategyDisabledTip = () => t('全局策略不可操作');
+
+  const collectSceneIdsFromRule = (rule: Record<string, any>, ids: Set<string | number>) => {
+    if (rule.target_scene_id !== undefined && rule.target_scene_id !== null && rule.target_scene_id !== '') {
+      ids.add(rule.target_scene_id);
+    }
+    (rule.scene_ids || []).forEach((id: string | number) => {
+      if (id !== '' && id !== null && id !== undefined) {
+        ids.add(id);
+      }
+    });
+  };
+
+  const getDispatchSceneIds = (data: StrategyModel): Array<string | number> => {
+    const sceneIds = data.visibility?.scene_ids;
+    if (Array.isArray(sceneIds) && sceneIds.length) {
+      return sceneIds;
+    }
+    const ids = new Set<string | number>();
+    (data.dispatch_rules || []).forEach((rule: Record<string, any>) => collectSceneIdsFromRule(rule, ids));
+    (data.assign_rules || []).forEach((rule: Record<string, any>) => collectSceneIdsFromRule(rule, ids));
+    if (data.default_assign_rule) {
+      collectSceneIdsFromRule(data.default_assign_rule, ids);
+    }
+    return Array.from(ids);
+  };
+
+  const getSceneRiskCountMap = (data: StrategyModel) => {
+    const map: Record<string, number> = {};
+    (data.scene_risk_counts || []).forEach((item) => {
+      map[String(item.scene_id)] = item.risk_count ?? 0;
+    });
+    return map;
+  };
+
+  const getDispatchSceneLabel = (id: string | number) => {
+    const key = String(id);
+    const name = sceneNameMap.value[key];
+    return name ? `${name}(${id})` : `${id}`;
+  };
+
+  const getRiskCountJumpScenes = (data: StrategyModel): JumpScopeItem[] => {
+    const countMap = getSceneRiskCountMap(data);
+    return getDispatchSceneIds(data).map(id => ({
+      type: 'scene' as const,
+      id,
+      name: getDispatchSceneLabel(id),
+      count: countMap[String(id)] ?? 0,
+    }));
+  };
+
+  const buildRiskCountLink = (data: StrategyModel, sceneId: string | number) => {
+    // 全局策略数字含「待确认」，场景风险列表不含，因此跳「所有风险」+ 所属场景筛选。
+    // 这里不能带 scope_type=scene，否则会走场景空间隔离，待确认单会被滤掉。
+    if (isPlatformList.value) {
+      return {
+        name: 'riskManageList',
+        query: {
+          scene_id: String(sceneId),
+          strategy_id: data.strategy_id,
+        },
+      };
+    }
+    return {
+      name: 'sceneRiskManageList',
+      query: {
+        scene_id: String(sceneId),
+        scope_type: 'scene',
+        strategy_id: data.strategy_id,
+      },
+    };
+  };
+
+  const openRiskCountLink = (data: StrategyModel, sceneId: string | number) => {
+    const routeData = router.resolve(buildRiskCountLink(data, sceneId));
+    window.open(routeData.href, '_blank');
+  };
+
+  const getDispatchSceneLabels = (data: StrategyModel) => getDispatchSceneIds(data).map(getDispatchSceneLabel);
+
+  const getRiskCountLinkSceneId = (data: StrategyModel) => {
+    if (isPlatformList.value) {
+      const [firstSceneId] = getDispatchSceneIds(data);
+      return firstSceneId;
+    }
+    return getSceneSystemParams().scope_id;
+  };
+
+  /** 审计策略列表：全局策略按当前场景取 scene_risk_counts；场景列表数字不含待确认 */
+  const getDisplayRiskCount = (data: StrategyModel) => {
+    if (isPlatformList.value || !isGlobalStrategy(data)) {
+      return data.risk_count ?? 0;
+    }
+    const sceneId = getSceneSystemParams().scope_id;
+    const sceneCounts = data.scene_risk_counts;
+    if (!sceneId || !Array.isArray(sceneCounts) || !sceneCounts.length) {
+      return data.risk_count ?? 0;
+    }
+    const matched = sceneCounts.find(item => String(item.scene_id) === String(sceneId));
+    return matched?.risk_count ?? 0;
+  };
+
+  const createDispatchSceneColumn = () => ({
+    label: () => t('分派场景'),
+    field: () => DISPATCH_SCENE_COLUMN_FIELD,
+    minWidth: 180,
+    width: 220,
+    render: ({ data }: { data: StrategyModel }) => {
+      const labels = getDispatchSceneLabels(data);
+      return labels.length
+        ? <EditTag
+            data={labels}
+            key={`dispatch-scenes-${data.strategy_id}-${labels.join('|')}`}
+            showCopy={false}
+          />
+        : <span>--</span>;
+    },
+  });
+
+  const syncPlatformTableColumns = () => {
+    const columnIndex = tableColumn.value.findIndex(column => column.field?.() === DISPATCH_SCENE_COLUMN_FIELD);
+    const riskCountIndex = tableColumn.value.findIndex(column => column.field?.() === 'risk_count');
+    if (isPlatformList.value) {
+      if (columnIndex < 0 && riskCountIndex >= 0) {
+        tableColumn.value.splice(riskCountIndex, 0, createDispatchSceneColumn());
+      }
+      return;
+    }
+    if (columnIndex >= 0) {
+      tableColumn.value.splice(columnIndex, 1);
+    }
+  };
   const {
     recordPageParams,
     removePageParams,
@@ -379,12 +642,15 @@
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
   const showRecords = ref(false);
-  const currentDetailTab = ref<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther'>('riskDetection');
+  const currentDetailTab = ref<
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther'
+  >('riskDetection');
   const styles = shallowRef({ left: '216px' });
   // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
   const strategyLabelList = ref<any[]>([]);
   const searchKey = ref<Array<SearchKey>>([]);
   const strategyItem = ref({} as StrategyModel);
+  const detailLoading = ref(false);
   const permissionCheckData = ref();
   const renderLabelRef = ref();
   const total = ref(0);
@@ -428,73 +694,20 @@
     return true;
   };
 
-  const defaultSearchData = [
-    {
-      name: t('策略ID'),
-      id: 'strategy_id',
-      placeholder: t('请输入策略ID (只允许输入整数)'),
-    },
-    {
-      name: t('策略名称'),
-      id: 'strategy_name',
-      placeholder: t('请输入策略名称'),
-    },
-    {
-      name: t('配置方式'),
-      id: 'strategy_type',
-      children: [{
-        name: t('自定义规则审计'),
-        id: 'rule',
-        placeholder: t('请选择配置方式'),
-      }, {
-        name: t('引入模型审计'),
-        id: 'model',
-        placeholder: t('请选择配置方式'),
-      }],
-      placeholder: t('请选择配置方式'),
-      onlyRecommendChildren: true,
-    },
-  ];
-  let searchData: SearchData[] = [
-    ...defaultSearchData,
-    {
-      name: t('状态'),
-      id: 'status',
-      multiple: true,
-      placeholder: t('请选择状态'),
-      onlyRecommendChildren: true,
-    },
-    {
-      name: t('标签'),
-      id: 'tag',
-      placeholder: t('请选择标签'),
-      onlyRecommendChildren: true,
-    },
-    {
-      name: t('事件调查报告'),
-      id: 'report_status',
-      placeholder: t('请选择事件调查报告'),
-      children: [{
-        name: t('手动生成'),
-        id: 'manual',
-        placeholder: t('请选择事件调查报告'),
-      }, {
-        name: t('自动生成'),
-        id: 'auto',
-        placeholder: t('请选择事件调查报告'),
-      }, {
-        name: t('未开启'),
-        id: 'disabled',
-        placeholder: t('请选择事件调查报告'),
-      }],
-      onlyRecommendChildren: true,
-    },
-  ] as { name: string, id: string, placeholder: string, children?: any[] }[];
+  const getScopeKey = () => {
+    const { scene_id: sceneId } = getStrategyListScopeParams(route);
+    return sceneId !== undefined && sceneId !== null && sceneId !== ''
+      ? String(sceneId)
+      : '__platform__';
+  };
 
   const dataSource = (params: Record<string, any> = {}) => {
+    const scopeParams = getStrategyListScopeParams(route);
     // 记录本次请求实际使用的场景，供 scene:change 判断场景是否真正变化
-    lastFetchedScopeId.value = getSceneSystemParams().scope_id;
+    lastFetchedScopeId.value = getScopeKey();
     // render-list 统一产出 sort: ['-field'] / ['field']，策略后台接口使用 order_field + order_type
+    // Strategy 模型已无 scene_id，需过滤 URL/缓存中残留的非法排序字段
+    const STRATEGY_SORTABLE_FIELDS = new Set(['strategy_id', 'risk_count', 'updated_at']);
     const { sort, order_field: orderFieldFromParams, order_type: orderTypeFromParams, ...rest } = params;
     let orderField = orderFieldFromParams;
     let orderType = orderTypeFromParams;
@@ -509,10 +722,17 @@
       orderField = isDesc ? primarySort.slice(1) : primarySort;
       orderType = isDesc ? 'desc' : 'asc';
     }
+    if (orderField && !STRATEGY_SORTABLE_FIELDS.has(String(orderField))) {
+      orderField = undefined;
+      orderType = undefined;
+    }
     return StrategyManageService.fetchStrategyList({
       ...rest,
+      ...scopeParams,
       ...(orderField ? { order_field: orderField, order_type: orderType || 'asc' } : {}),
       tag: leftLabelFilterCondition.value,
+      // 场景策略列表数字对齐场景风险：不含待确认；全局策略列表保持全量
+      ...(!isPlatformList.value ? { exclude_pending_confirm: true } : {}),
     });
   };
   const initStatusFilterList = [
@@ -541,6 +761,10 @@
       value: 'delete_failed',
     },
     {
+      text: t('编辑中'),
+      value: 'draft',
+    },
+    {
       text: t('启动中'),
       value: 'starting',
     },
@@ -561,6 +785,10 @@
     rule: t('自定义规则审计'),
     model: t('引入模型审计'),
   } as Record<string, string>;
+  const isModelStrategy = (strategyType?: string) => (
+    strategyType === 'model' || strategyType === 'referenceModel'
+  );
+  const modelStrategyDisabledTip = () => t('暂不支持此配置方式');
   const initEnableFilterList = [
     {
       text: t('运行中'),
@@ -595,6 +823,150 @@
       value: 'disabled',
     },
   ];
+
+  const defaultSearchData: SearchData[] = [
+    {
+      name: t('策略ID'),
+      id: 'strategy_id',
+      placeholder: t('请输入策略ID (只允许输入整数)'),
+    },
+    {
+      name: t('策略名称'),
+      id: 'strategy_name',
+      placeholder: t('请输入策略名称'),
+    },
+    {
+      name: t('配置方式'),
+      id: 'strategy_type',
+      children: initTypeFilterList.map(item => ({
+        name: item.text,
+        id: item.value,
+        placeholder: t('请选择配置方式'),
+      })),
+      placeholder: t('请选择配置方式'),
+      onlyRecommendChildren: true,
+    },
+  ];
+
+  // 与表头状态枚举顺序保持一致（含「编辑中」）
+  const buildStatusSearchChildren = (): SearchData[] => initStatusFilterList.map(item => ({
+    name: statusMap.value[item.value] || item.text,
+    id: item.value,
+    placeholder: t('请选择状态'),
+  }));
+
+  const buildReportStatusSearchChildren = (): SearchData[] => initReportStatusFilterList.map(item => ({
+    name: item.text,
+    id: item.value,
+    placeholder: t('请选择事件调查报告'),
+  }));
+
+  const buildTagSearchChildren = (): SearchData[] => strategyLabelList.value.map(item => ({
+    name: item.tag_name,
+    id: item.tag_id,
+    placeholder: t('请选择标签'),
+  }));
+
+  const buildSceneSearchChildren = (): SearchData[] => Object.entries(sceneNameMap.value).map(([id, name]) => ({
+    name: `${name}(${id})`,
+    id,
+    placeholder: t('请选择分派场景'),
+  }));
+
+  /**
+   * 搜索字段顺序对齐列表字段：
+   * 策略ID → 策略名称 → 配置方式 → 标签 → 状态 → 分派场景(全局) → 事件调查报告 → 最近更新人
+   */
+  const buildSearchData = (): SearchData[] => {
+    const next: SearchData[] = [
+      ...defaultSearchData,
+      {
+        name: t('标签'),
+        id: 'tag',
+        placeholder: t('请选择标签'),
+        children: buildTagSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+      {
+        name: t('状态'),
+        id: 'status',
+        multiple: true,
+        placeholder: t('请选择状态'),
+        children: buildStatusSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+    ];
+    if (isPlatformList.value) {
+      next.push({
+        name: t('分派场景'),
+        id: 'dispatch_scene_id',
+        multiple: true,
+        placeholder: t('请选择分派场景'),
+        children: buildSceneSearchChildren(),
+        onlyRecommendChildren: true,
+      });
+    }
+    next.push(
+      {
+        name: t('事件调查报告'),
+        id: 'report_status',
+        placeholder: t('请选择事件调查报告'),
+        children: buildReportStatusSearchChildren(),
+        onlyRecommendChildren: true,
+      },
+      {
+        name: t('最近更新人'),
+        id: 'updated_by',
+        placeholder: t('请输入最近更新人'),
+        async: true,
+        children: [],
+      },
+    );
+    return next;
+  };
+
+  const searchData = ref<SearchData[]>(buildSearchData());
+
+  // 审计策略（场景）不含分派场景；仅全局策略展示
+  const searchPlaceholder = computed(() => (
+    isPlatformList.value
+      ? t('策略ID、策略名称、配置方式、标签、状态、分派场景、事件调查报告、最近更新人')
+      : t('策略ID、策略名称、配置方式、标签、状态、事件调查报告、最近更新人')
+  ));
+
+  const {
+    run: fetchUserList,
+  } = useRequest(MetaManageService.fetchUserList, {
+    defaultParams: { page: 1, page_size: 30 },
+    defaultValue: { count: 0, results: [] } as { count: number; results: any[] },
+  });
+
+  // 最近更新人：远程人员列表（与工具管理「更新人」一致）
+  const getMenuList = async (item: any, keyword: string) => {
+    if (!item) return searchData.value;
+    const searchItem = searchData.value.find(s => s.id === item?.id);
+    if (!searchItem) return [];
+
+    if (item.id === 'updated_by') {
+      if (keyword) {
+        const userList = await fetchUserList({ fuzzy_lookups: keyword });
+        searchItem.children = userList.results.map((u: any) => ({
+          id: u.username,
+          name: `${u.username}(${u.display_name})`,
+        }));
+      } else {
+        searchItem.children = [];
+      }
+      return searchItem.children;
+    }
+
+    return searchItem.children || [];
+  };
+
+  const refreshSearchData = () => {
+    searchData.value = buildSearchData();
+  };
+
   const tableColumn = ref([
     {
       label: () => t('策略ID'),
@@ -610,19 +982,55 @@
       minWidth: 220,
       render: ({ data }: { data: StrategyModel}) => {
         const isNew = isNewData(data);
-        return isNew
-          ? <div style='display: flex;align-items: center;'>
-          <a onClick={() => handleDetail(data)}>
+        const nameLink = (
+          <a
+            class="strategy-name-link"
+            onClick={() => (data.isDraft ? handleEdit(data) : handleDetail(data))}>
             <Tooltips data={data.strategy_name} />
           </a>
-          <img
+        );
+        const draftTag = data.isDraft ? (
+          <bk-tag
+            size="small"
+            theme="warning">
+            {t('草稿')}
+          </bk-tag>
+          ) : null;
+        const globalTag = !isPlatformList.value && isGlobalStrategy(data) ? (
+          <bk-tag
+            class="strategy-name-global-tag"
+            radius="2px"
+            size="small">
+            {t('全局')}
+          </bk-tag>
+          ) : null;
+        const suffixTags = [globalTag, draftTag].filter(Boolean);
+        const renderCell = (extraNodes: any[] = []) => (
+          <span class="strategy-name-cell">
+            {nameLink}
+            {extraNodes}
+            {suffixTags.length ? (
+              <span class="strategy-name-tags">
+                {suffixTags}
+              </span>
+            ) : null}
+          </span>
+        );
+        if (isNew) {
+          return renderCell([
+            <img
               class='table-new-tip'
-              src={getAssetsFile('new-tip.png')}/>
-          </div>
-          :  <a onClick={() => handleDetail(data)}>
-            <Tooltips data={data.strategy_name} />
-          </a>
-        ;
+              src={getAssetsFile('new-tip.png')} />,
+          ]);
+        }
+        if (suffixTags.length) {
+          return renderCell();
+        }
+        return (
+          <span class="strategy-name-cell">
+            {nameLink}
+          </span>
+        );
       },
     },
     {
@@ -650,10 +1058,16 @@
     {
       label: () => t('标签'),
       field: () => 'tags',
-      width: 120,
+      minWidth: 160,
+      width: 220,
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
-        return <EditTag data={tags} key={data.strategy_id} />;
+        return (
+          <EditTag
+            data={tags}
+            key={`tags-${data.strategy_id}-${tags.join('|')}`}
+          />
+        );
       },
     },
     {
@@ -669,6 +1083,17 @@
         btnReset: t('重置'),
       },
       render: ({ data }: { data: StrategyModel }) => {
+        if (data.isDraft) {
+          return (
+            <p style='display: flex; align-items: center;'>
+              <audit-icon
+                svg
+                class='mr4'
+                type={data.statusTag} />
+              {t('编辑中')}
+            </p>
+          );
+        }
         if (!data.isFailed) {
           if (data.isPending) {
             return <p
@@ -721,12 +1146,21 @@
             </span>
             <p>
               <span>, </span>
-              <bk-button
-                text
-                theme='primary'
-                onClick={() => retryRequest(data.strategy_id)}>
-                {t('重试')}
-              </bk-button>
+              {isSceneGlobalStrategy(data) ? (
+                <bk-button
+                  text
+                  class="is-disabled"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  {t('重试')}
+                </bk-button>
+              ) : (
+                <bk-button
+                  text
+                  theme='primary'
+                  onClick={() => retryRequest(data.strategy_id)}>
+                  {t('重试')}
+                </bk-button>
+              )}
             </p>
             <p class='err-underline' />
             <audit-icon
@@ -747,12 +1181,21 @@
           <span>{statusMap.value[data.status] || data.status}</span>
           <p>
             <span>, </span>
-            <bk-button
-              text
-              theme='primary'
-              onClick={() => retryRequest(data.strategy_id)}>
-              {t('重试')}
-            </bk-button>
+            {isSceneGlobalStrategy(data) ? (
+              <bk-button
+                text
+                class="is-disabled"
+                v-bk-tooltips={globalStrategyDisabledTip()}>
+                {t('重试')}
+              </bk-button>
+            ) : (
+              <bk-button
+                text
+                theme='primary'
+                onClick={() => retryRequest(data.strategy_id)}>
+                {t('重试')}
+              </bk-button>
+            )}
           </p>
           <audit-icon
             v-bk-tooltips={{
@@ -771,21 +1214,120 @@
       sort: 'custom',
       width: 120,
       render: ({ data }: { data: StrategyModel }) => {
-        const riskCount = data.risk_count ?? 0;
-        const to = {
-          name: 'sceneRiskManageList',
-          query: {
-            scene_id: getSceneSystemParams().scope_id,
-            scope_type: 'scene',
-            strategy_id: data.strategy_id,
-          },
-        };
-        return riskCount ? <router-link to = {to} target='_blank'>
-          <span v-bk-tooltips={{
-            content: t('近6个月此策略产生风险单总数，点击查看'),
-            disabled: !riskCount,
-          }}>{riskCount}</span>
-        </router-link> : <span>{riskCount}</span>;
+        const riskCount = getDisplayRiskCount(data);
+        if (!riskCount || data.isDraft) {
+          return <span>{riskCount}</span>;
+        }
+
+        // 审计策略列表：不显示跳转图标，点击数字跳转
+        if (!isPlatformList.value) {
+          const sceneId = getRiskCountLinkSceneId(data);
+          if (!sceneId) {
+            return <span>{riskCount}</span>;
+          }
+          return (
+            <router-link
+              class="strategy-risk-count-link"
+              to={buildRiskCountLink(data, sceneId)}
+              target="_blank"
+              v-bk-tooltips={{
+                content: t('近6个月此策略产生风险单总数，点击查看'),
+              }}>
+              {riskCount}
+            </router-link>
+          );
+        }
+
+        const scenes = getRiskCountJumpScenes(data);
+        const fallbackSceneId = scenes[0]?.id ?? getRiskCountLinkSceneId(data);
+        const isPopoverActive = activeRiskJumpStrategyId.value === data.strategy_id;
+        const jumpIcon = (
+          <audit-icon
+            class="strategy-risk-count-jump-icon"
+            type="jump-link"
+            v-bk-tooltips={{
+              content: t('近6个月此策略产生风险单总数，点击查看'),
+              disabled: scenes.length > 1,
+            }}
+          />
+        );
+
+        if (scenes.length > 1) {
+          return (
+            <span
+              class={[
+                'strategy-risk-count-cell',
+                {
+                  'is-popover-active': isPopoverActive,
+                  'is-row-hover': isRiskCountRowHover(data),
+                },
+              ]}
+              data-strategy-id={data.strategy_id}>
+              <bk-popover
+                extCls="strategy-risk-jump-scope-popover"
+                placement="bottom-start"
+                theme="light"
+                trigger="click"
+                width="240"
+                onAfterShow={() => {
+                  activeRiskJumpStrategyId.value = data.strategy_id;
+                }}
+                onAfterHidden={() => {
+                  if (activeRiskJumpStrategyId.value === data.strategy_id) {
+                    activeRiskJumpStrategyId.value = null;
+                  }
+                }}>
+                {{
+                  default: () => (
+                    <span
+                      class="strategy-risk-count-jump-trigger"
+                      onClick={(e: Event) => e.stopPropagation()}>
+                      <span class="strategy-risk-count-text is-clickable">{riskCount}</span>
+                      <span class="strategy-risk-count-jump">{jumpIcon}</span>
+                    </span>
+                  ),
+                  content: () => (
+                    <ReportJumpScopeMenu
+                      scenes={getRiskCountJumpScenes(data)}
+                      systems={[]}
+                      onSelect={(scope: JumpScopeItem) => openRiskCountLink(data, scope.id)} />
+                  ),
+                }}
+              </bk-popover>
+            </span>
+          );
+        }
+
+        if (fallbackSceneId) {
+          const handleDirectJump = (e: Event) => {
+            e.stopPropagation();
+            openRiskCountLink(data, fallbackSceneId);
+          };
+          return (
+            <span
+              class={[
+                'strategy-risk-count-cell',
+                { 'is-row-hover': isRiskCountRowHover(data) },
+              ]}
+              data-strategy-id={data.strategy_id}>
+              <span
+                class="strategy-risk-count-text is-clickable"
+                onClick={handleDirectJump}
+                v-bk-tooltips={{
+                  content: t('近6个月此策略产生风险单总数，点击查看'),
+                }}>
+                {riskCount}
+              </span>
+              <span
+                class="strategy-risk-count-jump"
+                onClick={handleDirectJump}>
+                {jumpIcon}
+              </span>
+            </span>
+          );
+        }
+
+        return <span>{riskCount}</span>;
       },
     },
     {
@@ -816,10 +1358,37 @@
         btnReset: t('重置'),
       },
       render: ({ data }: { data: StrategyModel }) => {
+        if (isSceneGlobalStrategy(data)) {
+          return (
+            <span v-bk-tooltips={globalStrategyDisabledTip()}>
+              <bk-switcher
+                disabled
+                size="small"
+                model-value={data.status === 'running'}
+                theme="primary"
+              />
+            </span>
+          );
+        }
+        if (data.isDraft) {
+          return (
+            <auth-switch
+              action-id="edit_strategy"
+              disabled
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
+              size="small"
+              resource={data.strategy_id}
+              theme="primary"
+              v-bk-tooltips={{
+                content: t('草稿策略不支持启停'),
+              }}
+            />
+          );
+        }
         if (data.isPending || data.isFailed) {
           return <auth-switch
           action-id="edit_strategy"
-          permission={data.permission.edit_strategy}
+          permission={resolveStrategyPermission(data.permission.edit_strategy)}
           size="small"
           resource={data.strategy_id}
           theme="primary"
@@ -837,7 +1406,7 @@
         confirmHandler={() => handleChange(data)}>
         <auth-switch
           action-id="edit_strategy"
-          permission={data.permission.edit_strategy}
+          permission={resolveStrategyPermission(data.permission.edit_strategy)}
           size="small"
           model-value={data.status === 'running'}
           resource={data.strategy_id}
@@ -871,16 +1440,107 @@
       fixed: 'right',
       label: () => t('操作'),
       width: '120px',
-      render: ({ data }: { data: StrategyModel }) => <>
+      render: ({ data }: { data: StrategyModel }) => {
+        if (isSceneGlobalStrategy(data)) {
+          return <>
+            <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={globalStrategyDisabledTip()}>
+              {t('编辑')}
+            </bk-button>
+            {data.isDraft ? (
+              <bk-button
+                text
+                class="is-disabled ml8"
+                v-bk-tooltips={globalStrategyDisabledTip()}>
+                {t('删除')}
+              </bk-button>
+            ) : (
+              <>
+                <bk-button
+                  text
+                  class="is-disabled ml8"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  {t('克隆')}
+                </bk-button>
+                <span
+                  class="ml8"
+                  style="display: inline-flex;"
+                  v-bk-tooltips={globalStrategyDisabledTip()}>
+                  <bk-button
+                    text
+                    class="is-disabled">
+                    <audit-icon type="more" />
+                  </bk-button>
+                </span>
+              </>
+            )}
+          </>;
+        }
+        if (data.isDraft) {
+          if (isModelStrategy(data.strategy_type)) {
+            return <>
+              <bk-button
+                text
+                class="is-disabled"
+                v-bk-tooltips={modelStrategyDisabledTip()}>
+                {t('编辑')}
+              </bk-button>
+              <auth-button
+                actionId="delete_strategy"
+                class="ml8"
+                permission={resolveStrategyPermission(data.permission.delete_strategy)}
+                resource={data.strategy_id}
+                theme="primary"
+                text
+                onClick={() => handleDelete(data)}>
+                {t('删除')}
+              </auth-button>
+            </>;
+          }
+          return <>
+            <auth-button
+              actionId="edit_strategy"
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
+              resource={data.strategy_id}
+              theme="primary"
+              text
+              onClick={() => handleEdit(data)}>
+              {t('编辑')}
+            </auth-button>
+            <auth-button
+              actionId="delete_strategy"
+              class="ml8"
+              permission={resolveStrategyPermission(data.permission.delete_strategy)}
+              resource={data.strategy_id}
+              theme="primary"
+              text
+              onClick={() => handleDelete(data)}>
+              {t('删除')}
+            </auth-button>
+          </>;
+        }
+        return <>
       {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled"
-            v-bk-tooltips={t('处理中，不能编辑')}>
-            {t('编辑')}
-          </bk-button>
-          : <bk-badge
+        (() => {
+          if (data.isPending) {
+            return <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={t('处理中，不能编辑')}>
+              {t('编辑')}
+            </bk-button>;
+          }
+          if (isModelStrategy(data.strategy_type)) {
+            return <bk-button
+              text
+              class="is-disabled"
+              v-bk-tooltips={modelStrategyDisabledTip()}>
+              {t('编辑')}
+            </bk-button>;
+          }
+          return <bk-badge
             class='edit-badge'
             position="top-right"
             theme="danger"
@@ -892,7 +1552,7 @@
           >
             <auth-button
               actionId="edit_strategy"
-              permission={data.permission.edit_strategy}
+              permission={resolveStrategyPermission(data.permission.edit_strategy)}
               resource={data.strategy_id}
               v-bk-tooltips={{
                 content: data.strategy_type === 'rule' ? t('策略使用的联表，有新版本待升级') : t('策略使用的方案，有新版本待升级'),
@@ -905,17 +1565,28 @@
               onClick={() => handleEdit(data)}>
               {t('编辑')} {data.link_table_version >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)}
             </auth-button>
-          </bk-badge>
+          </bk-badge>;
+        })()
       }
       {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled ml8"
-            v-bk-tooltips={t('处理中，不能克隆')}>
-            {t('克隆')}
-          </bk-button>
-          : <auth-button
+        (() => {
+          if (data.isPending) {
+            return <bk-button
+              text
+              class="is-disabled ml8"
+              v-bk-tooltips={t('处理中，不能克隆')}>
+              {t('克隆')}
+            </bk-button>;
+          }
+          if (isModelStrategy(data.strategy_type)) {
+            return <bk-button
+              text
+              class="is-disabled ml8"
+              v-bk-tooltips={modelStrategyDisabledTip()}>
+              {t('克隆')}
+            </bk-button>;
+          }
+          return <auth-button
             actionId="create_strategy_v2"
             permission={permissionCheckData.value}
             resource-is-scene
@@ -924,7 +1595,8 @@
             onClick={() => handleClone(data)}
             text>
             {t('克隆')}
-          </auth-button>
+          </auth-button>;
+        })()
       }
 
       <bk-dropdown
@@ -960,7 +1632,7 @@
                     <auth-button
                       style="width: 100%;"
                       actionId="delete_strategy"
-                      permission={data.permission.delete_strategy}
+                      permission={resolveStrategyPermission(data.permission.delete_strategy)}
                       resource={data.strategy_id}
                       onClick={() => handleDelete(data)}
                       text>
@@ -972,7 +1644,8 @@
           ),
         }}
       </bk-dropdown>
-    </>,
+    </>;
+      },
     },
   ] as any[]);
 
@@ -986,6 +1659,7 @@
     return t('未开启');
   };
   const handleDelete = (data: StrategyModel) => {
+    if (isSceneGlobalStrategy(data)) return;
     isShowDeleteDialog.value = true;
     deleteName.value = data.strategy_name;
     deleteId.value = Number(data.strategy_id);
@@ -1025,7 +1699,9 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
+    checked: isPlatformList.value
+      ? ['strategy_id', 'strategy_name', 'dispatch_scenes', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status']
+      : ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at', 'report_status'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -1052,6 +1728,21 @@
   });
 
   const {
+    run: fetchSceneAll,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data: Array<{ scene_id: number; name: string }>) => {
+      const map: Record<string, string> = {};
+      (data || []).forEach((item) => {
+        map[String(item.scene_id)] = item.name;
+      });
+      sceneNameMap.value = map;
+      refreshSearchData();
+    },
+  });
+
+  const {
     run: retryStrategy,
   } = useRequest(StrategyManageService.retryStrategy, {
     defaultValue: null,
@@ -1061,15 +1752,42 @@
   });
 
 
-  // 获取策略新建权限
-  useRequest(IamManageService.check, {
-    defaultParams: {
+  // 获取策略新建权限：审计策略走 IAM check；全局策略走 my_role_permissions.manage_platform
+  useRequest(async (): Promise<{
+    fromRolePermission: boolean;
+    manage_platform: boolean;
+    create_strategy_v2: boolean;
+  }> => {
+    if (isPlatformStrategyRoute(route.name)) {
+      const data = await RootManageService.getUserPermission();
+      return {
+        fromRolePermission: true,
+        manage_platform: Boolean(data.manage_platform),
+        create_strategy_v2: false,
+      };
+    }
+    const data = await IamManageService.check({
       action_ids: 'create_strategy_v2',
       resources: getSceneSystemParams().scope_id,
+    });
+    return {
+      fromRolePermission: false,
+      manage_platform: false,
+      create_strategy_v2: Boolean(data.create_strategy_v2),
+    };
+  }, {
+    defaultValue: {
+      fromRolePermission: false,
+      create_strategy_v2: false,
+      manage_platform: false,
     },
-    defaultValue: {},
     manual: true,
     onSuccess: (data) => {
+      if (data.fromRolePermission) {
+        hasManagePlatform.value = Boolean(data.manage_platform);
+        permissionCheckData.value = Boolean(data.manage_platform);
+        return;
+      }
       permissionCheckData.value = data.create_strategy_v2;
     },
   });
@@ -1081,6 +1799,7 @@
     defaultParams: {
       page: 1,
       page_size: 1,
+      ...getStrategyListScopeParams(route),
     },
     defaultValue: [],
     // manual: true,
@@ -1109,6 +1828,7 @@
   useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
+    defaultParams: getStrategyResourceSceneParams(route),
     onSuccess(data) {
       linkTableMaxVersionMap.value = data.reduce((res, item) => {
         res[item.uid] = item.version;
@@ -1118,7 +1838,6 @@
   });
   const {
     run: fetchStrategyCommon,
-    data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
     onSuccess(data) {
@@ -1129,6 +1848,7 @@
         res[item.value] = item.label;
         return res;
       }, {});
+      refreshSearchData();
     },
   });
 
@@ -1197,6 +1917,8 @@
       tag: '',
       status: '',
       report_status: '',
+      dispatch_scene_id: '',
+      updated_by: '',
     } as Record<string, any>;
 
     keyword.forEach((item: SearchKey, index) => {
@@ -1204,7 +1926,7 @@
         const value = item.values.map(item => item.id).join(',');
         search[item.id] = value;
       } else {
-        // 默认输入字段后匹配套餐名字
+        // 默认输入字段后匹配策略名称
         const list = search.strategy_name.split(',').filter((item: string) => !!item);
         list.push(item.id);
         _.uniq(list);
@@ -1260,16 +1982,59 @@
     execCopy(route, t('复制成功'));
   };
 
+  // 获取策略详情（仅点击策略名称时调用）
+  let detailRequestSeq = 0;
+  const loadStrategyDetail = (strategyId: number) => {
+    const id = Number(strategyId);
+    if (!id) return;
+    detailRequestSeq += 1;
+    const currentSeq = detailRequestSeq;
+    detailLoading.value = true;
+    StrategyManageService.fetchStrategyInfo({ strategy_id: id })
+      .then((data) => {
+        if (currentSeq !== detailRequestSeq) return;
+        const preservedPermission = strategyItem.value?.permission;
+        const model = data instanceof StrategyModel ? data : new StrategyModel(data);
+        if (!model.permission && preservedPermission) {
+          model.permission = preservedPermission;
+        }
+        strategyItem.value = model;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (currentSeq === detailRequestSeq) {
+          detailLoading.value = false;
+        }
+      });
+  };
+
+  watch(showDetail, (visible) => {
+    if (!visible) {
+      detailRequestSeq += 1;
+      detailLoading.value = false;
+      currentDetailTab.value = 'riskDetection';
+    }
+  });
+
+  const handleDetailBeforeClose = () => Promise.resolve(true);
+
   // 详情
   const handleDetail = (data: StrategyModel) => {
-    if (!data) return;
+    if (data.isDraft) {
+      handleEdit(data);
+      return;
+    }
+    const strategyId = Number(data?.strategy_id);
+    if (!strategyId) return;
     recordPageParams();
     strategyItem.value = data;
     showDetail.value = true;
+    loadStrategyDetail(strategyId);
   };
 
   // 运行记录
   const handleRecord = (data: StrategyModel) => {
+    if (data.isDraft) return;
     strategyItem.value = data;
     showRecords.value = true;
   };
@@ -1278,44 +2043,56 @@
   const handleCreate = () => {
     removePageParams();
     router.push({
-      name: 'strategyCreate',
+      name: strategyRoutes.create,
     });
   };
 
-  const tabToStepMap: Record<'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther', number> = {
+  const tabToStepMap: Record<
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther',
+    number
+  > = {
     riskDetection: 1,
-    riskDisplay: 2,
-    eventReport: 3,
-    riskOther: 4,
+    riskDiscoveryRules: 2,
+    riskDisplay: 3,
+    eventReport: 4,
+    riskOther: 5,
   };
 
   const handleDetailTabChange = (tab: string) => {
-    if (tabToStepMap[tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther']) {
-      currentDetailTab.value = tab as 'riskDetection' | 'riskDisplay' | 'eventReport' | 'riskOther';
+    if (tabToStepMap[tab as keyof typeof tabToStepMap]) {
+      currentDetailTab.value = tab as keyof typeof tabToStepMap;
     }
   };
 
   // 编辑
-  const handleEdit = (data: StrategyModel) => {
-    if (data.isPending) return;
+  const handleEdit = (data: StrategyModel, options?: { fromDetail?: boolean }) => {
+    if (isSceneGlobalStrategy(data) || data.isPending || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
+    // 列表入口始终从第 1 步进入；详情侧栏编辑才跟随当前查看的 tab
+    const step = options?.fromDetail
+      ? (tabToStepMap[currentDetailTab.value] || 1)
+      : 1;
     router.push({
-      name: 'strategyEdit',
+      name: strategyRoutes.edit,
       params: {
         id: data.strategy_id,
       },
       query: {
-        step: tabToStepMap[currentDetailTab.value] || 1,
+        step,
       },
     });
   };
 
   // 克隆
   const handleClone = (data: StrategyModel) => {
-    if (data.isPending || pendingStatusIdList.value.includes(data.strategy_id)) return;
+    if (isSceneGlobalStrategy(data)
+      || data.isDraft
+      || data.isPending
+      || pendingStatusIdList.value.includes(data.strategy_id)
+      || isModelStrategy(data.strategy_type)) return;
     recordPageParams();
     router.push({
-      name: 'strategyClone',
+      name: strategyRoutes.clone,
       params: {
         id: data.strategy_id,
       },
@@ -1392,6 +2169,8 @@
       tag: '',
       status: '',
       report_status: '',
+      dispatch_scene_id: '',
+      updated_by: '',
     } as Record<string, any>;
     searchKey.value = [];
     renderLabelRef.value.resetAllLabel();
@@ -1410,6 +2189,9 @@
   };
   // 启停
   const handleChange = (data: StrategyModel) => {
+    if (data.isDraft || isSceneGlobalStrategy(data)) {
+      return Promise.resolve();
+    }
     const { status } = data;
     switchSuccessMap.value[data.strategy_id] = false;
     switchStrategyParams.value = {
@@ -1444,59 +2226,18 @@
     listRef.value.fetchData({ tag: name });
   };
   let isRequest = false;
+  let initialListFetchScheduled = false;
   const handleRequestSuccess = (data: Strategy) => {
     hasListLoadedOnce.value = true;
-    // 先检验策略列表权限再获取通知组
+    // 先检验策略列表权限再获取通知组；全局策略不传场景 id
     if (!groupList.value.results.length) {
-      fetchGroupList();
+      fetchGroupList(isPlatformList.value
+        ? { scene_id: null, page: 1, page_size: 1000 }
+        : { page: 1, page_size: 1000 });
     }
     if (!isRequest) {
-      Promise.all([fetchStrategyTags(), fetchStrategyCommon()]).then(() => {
-        searchData = [
-          ...defaultSearchData,
-          {
-            name: t('状态'),
-            id: 'status',
-            placeholder: t('请选择状态'),
-            multiple: true,
-            children: commonData.value.strategy_status.map((item: { label: string; value: string }) => ({
-              name: item.label,
-              id: item.value,
-              placeholder: t('请选择状态'),
-            })),
-            onlyRecommendChildren: true,
-          },
-          {
-            name: t('标签'),
-            id: 'tag',
-            placeholder: t('请选择标签'),
-            children: strategyLabelList.value.map(item => ({
-              name: item.tag_name,
-              id: item.tag_id,
-              placeholder: t('请选择标签'),
-            })),
-            onlyRecommendChildren: true,
-          },
-          {
-            name: t('事件调查报告'),
-            id: 'report_status',
-            placeholder: t('请选择事件调查报告'),
-            children: [{
-              name: t('手动生成'),
-              id: 'manual',
-              placeholder: t('请选择事件调查报告'),
-            }, {
-              name: t('自动生成'),
-              id: 'auto',
-              placeholder: t('请选择事件调查报告'),
-            }, {
-              name: t('未开启'),
-              id: 'disabled',
-              placeholder: t('请选择事件调查报告'),
-            }],
-            onlyRecommendChildren: true,
-          },
-        ];
+      Promise.all([fetchStrategyTags(getStrategyListScopeParams(route)), fetchStrategyCommon()]).then(() => {
+        refreshSearchData();
         setSearchKey();
       });
       isRequest = true;
@@ -1542,7 +2283,7 @@
     searchKey.value = [];
     const params = getSearchParams();
     const recordParams = getRecordPageParams();
-    searchData.forEach((item) => {
+    searchData.value.forEach((item) => {
       const { id, name } = item;
       if (!params[id] && (!recordParams || !recordParams[id])) return;
       const content = params[id] || recordParams[id];
@@ -1565,9 +2306,23 @@
     return hasKey;
   };
   const fetchData = () => {
+    // 预先记录作用域，避免 scene:change 与首屏 fetch 并发触发双请求
+    lastFetchedScopeId.value = getScopeKey();
+    initialListFetchScheduled = true;
+    // 清理 URL/缓存中残留的非法排序（如已移除的 scene_id 字段）
+    const urlParams = getSearchParams();
+    const sortableFields = new Set(['strategy_id', 'risk_count', 'updated_at']);
+    if (urlParams.order_field && !sortableFields.has(String(urlParams.order_field))) {
+      const nextParams = { ...urlParams };
+      delete nextParams.order_field;
+      delete nextParams.order_type;
+      delete nextParams.sort;
+      replaceSearchParams(nextParams);
+    }
+
     const hasKey = setSearchKey();
     // 标签与列表并行加载：列表不再依赖标签接口成功，避免标签失败时列表不渲染
-    void fetchStrategyTags();
+    void fetchStrategyTags(getStrategyListScopeParams(route));
     const tryFetch = (retry = 0) => {
       if (!listRef.value) {
         if (retry < 5) {
@@ -1584,7 +2339,7 @@
     nextTick(() => tryFetch());
   };
   const handlFetchData = () => {
-    const currentScopeId = getSceneSystemParams().scope_id;
+    const currentScopeKey = getScopeKey();
     // 深链场景：URL 已携带 strategy_id 等筛选条件时，首屏的 fetchData() 会立刻触发筛选请求；
     // 若此刻收到 scene:change 事件，handlFetchData 里调用无筛选的 listRef.fetchData() 会把筛选冲掉。
     // 因此在“尚未首次加载成功”阶段，若存在 URL 筛选参数则直接跳过。
@@ -1594,20 +2349,22 @@
       || urlSearch.strategy_type
       || urlSearch.tag
       || urlSearch.status
-      || urlSearch.report_status);
+      || urlSearch.report_status
+      || urlSearch.dispatch_scene_id
+      || urlSearch.updated_by);
     if (hasUrlStrategyFilter && !hasListLoadedOnce.value) {
       return;
     }
-    // 场景未变且列表已成功加载过时才跳过；首屏因 sort 解析失败/请求取消等未加载成功时仍需重试
+    const isSceneChanged = lastFetchedScopeId.value !== null
+      && currentScopeKey !== lastFetchedScopeId.value;
     if (
-      lastFetchedScopeId.value !== null
-      && currentScopeId === lastFetchedScopeId.value
-      && hasListLoadedOnce.value
+      !isSceneChanged
+      && initialListFetchScheduled
+      && lastFetchedScopeId.value !== null
+      && currentScopeKey === lastFetchedScopeId.value
     ) {
       return;
     }
-    const isSceneChanged = lastFetchedScopeId.value !== null
-      && currentScopeId !== lastFetchedScopeId.value;
 
     total.value = 0;
     hasListLoadedOnce.value = false;
@@ -1617,6 +2374,7 @@
 
     // 真正切换场景：清空搜索/筛选/排序，避免旧场景参数带到新场景
     if (isSceneChanged) {
+      initialListFetchScheduled = false;
       syncSceneContextToUrl(getSceneContextQuery());
       router.replace({ query: getQueryFromLocation() }).catch(() => {});
       searchKey.value = [];
@@ -1644,11 +2402,26 @@
   };
   window.addEventListener('beforeunload', handleBeforeUnload);
 
+  watch(
+    () => route.name,
+    () => {
+      syncPlatformTableColumns();
+      refreshSearchData();
+      if (isPlatformList.value) {
+        fetchSceneAll({ status: 'enabled' });
+      }
+    },
+  );
+
   onMounted(() => {
     // 如果是页面刷新，则不高亮新建行
     if (sessionStorage.getItem('audit-strategy-page-reloaded')) {
       sessionStorage.removeItem('audit-strategy-page-reloaded');
       shouldHighlightNewRow.value = false;
+    }
+    syncPlatformTableColumns();
+    if (isPlatformList.value) {
+      fetchSceneAll({ status: 'enabled' });
     }
     // 立即注册监听，避免场景选择器在首屏解析场景时漏接事件导致空列表
     onEvent('scene:change', handlFetchData);
@@ -1657,6 +2430,9 @@
   onUnmounted(() => {
     off('scene:change', handlFetchData);
     window.removeEventListener('beforeunload', handleBeforeUnload);
+    if (hoveredRiskJumpLeaveTimer !== undefined) {
+      window.clearTimeout(hoveredRiskJumpLeaveTimer);
+    }
   });
   onBeforeRouteLeave(() => {
     clearTimeout(timeout);
@@ -1667,11 +2443,53 @@
 <style lang="postcss">
 .table-new-tip {
   height: 14px;
+  flex-shrink: 0;
+  margin-left: 0;
+}
 
-  /* position: absolute; */
+.strategy-name-cell {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
+}
 
-  /* right: 0; */
-  margin-left: 8px;
+.strategy-name-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+
+  :deep(.show-tooltips-text) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.strategy-name-tags {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+:deep(.strategy-name-global-tag.bk-tag) {
+  flex-shrink: 0;
+  margin: 0;
+  color: #63656e;
+  background-color: #f0f1f5;
+  border: none;
+
+  &:hover {
+    color: #63656e;
+    background-color: #f0f1f5;
+  }
 }
 
 .mr4 {
@@ -1685,6 +2503,11 @@
 .strategy-manage {
   display: flex;
   margin: -20px -24px 0;
+
+  :deep(.audit-highlight-table .bk-table-body td .cell:has(.strategy-name-cell)) {
+    overflow: hidden;
+    white-space: nowrap;
+  }
 
   .edit-badge {
     .bk-badge.pinned.top-right {
@@ -1708,9 +2531,14 @@
       margin-bottom: 20px;
 
       .search-input {
-        width: 480px;
+        width: 720px;
         margin-left: auto;
       }
+    }
+
+    .bk-button.is-disabled {
+      color: #c4c6cc;
+      cursor: not-allowed;
     }
 
     .label-box {
@@ -1745,16 +2573,80 @@
   display: none;
 }
 
-.hover-highlight {
-  &:hover {
-    .operation-records {
-      display: inline-block;
-    }
-  }
+:deep(.hover-highlight:hover) .operation-records {
+  display: inline-block;
 }
 
 .strategy-operation-dropdown-pop {
   z-index: 2000 !important;
+}
+
+.strategy-risk-count-link {
+  display: inline-flex;
+  align-items: center;
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.strategy-risk-count-cell {
+  display: inline-flex;
+  align-items: center;
+  color: #313238;
+  cursor: default;
+}
+
+.strategy-risk-count-text {
+  color: #313238;
+}
+
+.strategy-risk-count-text.is-clickable {
+  cursor: pointer;
+}
+
+.strategy-risk-count-jump-trigger {
+  display: inline-flex;
+  align-items: center;
+}
+
+.strategy-risk-count-jump {
+  display: inline-flex;
+  align-items: center;
+  width: 18px;
+  margin-left: 4px;
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.strategy-risk-count-jump-icon {
+  font-size: 14px;
+  color: #3a84ff;
+}
+
+.strategy-risk-count-cell:hover .strategy-risk-count-jump,
+.strategy-risk-count-cell.is-row-hover .strategy-risk-count-jump,
+.strategy-risk-count-cell.is-popover-active .strategy-risk-count-jump {
+  visibility: visible;
+}
+
+.strategy-risk-jump-scope-popover.bk-popover.bk-pop2-content {
+  width: 240px !important;
+  max-width: 240px !important;
+  min-width: 240px !important;
+  height: auto !important;
+  padding: 0;
+  overflow: hidden;
+}
+
+.strategy-risk-jump-scope-popover.bk-popover.bk-pop2-content .bk-popover-content {
+  height: auto !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+.strategy-risk-jump-scope-popover .jump-scope-loading,
+.strategy-risk-jump-scope-popover .jump-scope-loading .bk-loading-wrapper {
+  min-height: 0 !important;
+  height: auto !important;
 }
 
 .alert-icon {
@@ -1807,6 +2699,19 @@
   .strategy-manage-content-text {
     font-weight: 700;
     cursor: pointer;
+  }
+}
+
+.strategy-detail-wrap {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+  background: #fff;
+
+  .strategy-detail {
+    flex: 1;
+    min-height: 0;
   }
 }
 </style>

@@ -190,6 +190,7 @@
     getAccountNatureValue,
     getExchangeRateValue,
     getIsTestAccountText,
+    getLoginDays31Value,
     PROFILE_FIELDS,
   } from '../game/game-field-keys';
 
@@ -755,6 +756,7 @@
           ...row,
           [PROFILE_FIELDS.EXCHANGE_RATE]: getExchangeRateValue(row),
           [PROFILE_FIELDS.ACCOUNT_NATURE]: getAccountNatureValue(row),
+          [PROFILE_FIELDS.LOGIN_DAYS_31]: getLoginDays31Value(row),
         }));
         pagination.value.count = data?.data?.result?.total
           || data?.result?.total || data?.data?.total || results.length;
@@ -836,8 +838,8 @@
     // 平台账号类型和平台账号（用于游戏详情顶栏动态展示微信/QQ）
     platType: row[PROFILE_FIELDS.PLATFORM_ACCOUNT_TYPE] || row.platformAccountType || '',
     platAccount: row[PROFILE_FIELDS.PLATFORM_ACCOUNT] || row.platformAccount || '',
-    // 登录天数（31天）（用于传递给游戏详情）
-    loginDays31: row[PROFILE_FIELDS.LOGIN_DAYS_31] || row.loginDays31 || 0,
+    // 登录天数（31天）（用于传递给游戏详情）；-1 视为无数据
+    loginDays31: getLoginDays31Value(row) ?? 0,
   });
 
   // 封装：通过 ctx（企业微信）查询用户信息（用于微信/QQ/openid搜索的级联查询）
@@ -1053,7 +1055,10 @@
       colKey: PROFILE_FIELDS.LOGIN_DAYS_31,
       sorter: true,
       width: 250,
-      cell: (_h: any, { row }: { row: Record<string, any> }) => h('span', {}, row[PROFILE_FIELDS.LOGIN_DAYS_31] ?? '--'),
+      cell: (_h: any, { row }: { row: Record<string, any> }) => {
+        const days = getLoginDays31Value(row);
+        return h('span', {}, days ?? '--');
+      },
     },
     {
       title: () => t('是否测试号'),
@@ -1328,6 +1333,10 @@
           }
           if (col.id === 'isTestAccount') {
             row[col.name] = getIsTestAccountText(getAccountNatureValue(game), t('是'), t('否'));
+            return;
+          }
+          if (col.id === 'loginDays') {
+            row[col.name] = getLoginDays31Value(game) ?? '--';
             return;
           }
           row[col.name] = game[col.field] ?? (col.fallbackField ? game[col.fallbackField] : '') ?? '';

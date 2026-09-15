@@ -35,6 +35,7 @@
         <div class="search-box">
           <search-box
             ref="searchBoxRef"
+            :loading="isLoading"
             @change="handleSearchChange"
             @change-table-height="handleTableHeightChange" />
           <div class="search-result-action">
@@ -177,11 +178,6 @@
       font-weight: 700;
       color: #313238;
     }
-  }
-
-  /* 解决表格悬停超出 */
-  .bk-table-fixed .column_fixed {
-    bottom: 80px !important;
   }
 
   .search-result-action {

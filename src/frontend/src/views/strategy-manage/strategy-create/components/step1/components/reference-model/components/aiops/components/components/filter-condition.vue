@@ -192,6 +192,13 @@
 
   import useRequest from '@hooks/use-request';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+    isStrategyUpgradeRoute,
+  } from '../../../../../../../../../utils/strategy-routes';
+
+
   interface Exposes{
     handleValueDicts: (data: ConditionData) => void,
     getValue(): void,
@@ -222,9 +229,9 @@
   const route = useRoute();
 
   const isNeedErrorTip = ref(false);
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isUpgradeMode = isStrategyUpgradeRoute(route.name);
 
 
   const errors = ref<Array<Errors>>([]);

@@ -129,7 +129,13 @@
           class="ml8"
           theme="primary"
           @click="handleNext">
-          {{ t(isEnvent ? '下一步' : '跳过') }}
+          {{ primaryActionText }}
+        </bk-button>
+        <bk-button
+          v-if="showSaveDraftButton"
+          class="ml8"
+          @click="handleSaveDraft">
+          {{ t('保存草稿') }}
         </bk-button>
         <!-- <bk-button
           v-if="isEditMode"
@@ -153,7 +159,7 @@
 </template>
 <script setup lang="ts">
   import dayjs from 'dayjs';
-  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+  import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -167,6 +173,14 @@
   import PreviewReport from './preview-report.vue';
 
   import { formatDate } from '@/utils/assist/timestamp-conversion';
+  import {
+    getStrategyRouteNames,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyCreateRoute,
+    isStrategyEditRoute,
+  } from '../../../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface IFormData {
     processor_groups?: Array<any>,
@@ -196,6 +210,7 @@
     (e: 'previousStep', step: number, params: IFormData): void;
     (e: 'nextStep', step: number, params: IFormData): void;
     (e: 'saveCurrentStep', params: Partial<IFormData>): void;
+    (e: 'saveDraft', params: Partial<IFormData>): void;
     (e: 'submitData'): void;
   }
 
@@ -211,9 +226,19 @@
   const aiEditorRef = ref();
   const route = useRoute();
   const router = useRouter();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isCreateeMode = route.name === 'strategyCreate';
+  const strategyRoutes = getStrategyRouteNames(route);
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isCreateeMode = isStrategyCreateRoute(route.name);
+  const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
+  // 全局策略有第 5 步风险分派；审计策略在本步直接提交
+  const hasAssignStep = isPlatformStrategyRoute(route.name);
+  const primaryActionText = computed(() => {
+    if (hasAssignStep) {
+      return t(isEnvent.value ? '下一步' : '跳过');
+    }
+    return t('提交');
+  });
 
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -387,7 +412,7 @@
       reportInfo.value.config = buildReportConfig();
     }
 
-    emits('previousStep', 2, {
+    emits('previousStep', 3, {
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,
@@ -406,11 +431,37 @@
       reportInfo.value.config = buildReportConfig();
     }
 
-    emits('nextStep', 4, {
+    const stepParams = {
       report_enabled: reportInfo.value.enabled,
       report_config: reportInfo.value.config,
       report_auto_render: isAutoGetReports.value,
-    });
+    };
+
+    if (hasAssignStep) {
+      emits('nextStep', 5, stepParams);
+      return;
+    }
+    // 审计策略：第 4 步为最后一步，直接提交
+    emits('saveCurrentStep', stepParams);
+  };
+
+  const buildReportStepParams = () => {
+    if (isEnvent.value) {
+      reportInfo.value.enabled = true;
+      reportInfo.value.config = buildReportConfig();
+    } else {
+      reportInfo.value.enabled = false;
+      reportInfo.value.config = buildReportConfig();
+    }
+    return {
+      report_enabled: reportInfo.value.enabled,
+      report_config: reportInfo.value.config,
+      report_auto_render: isAutoGetReports.value,
+    };
+  };
+
+  const handleSaveDraft = () => {
+    emits('saveDraft', buildReportStepParams());
   };
 
   // 提交（编辑态）：效果与「其他配置」的提交一致
@@ -435,7 +486,7 @@
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
 
