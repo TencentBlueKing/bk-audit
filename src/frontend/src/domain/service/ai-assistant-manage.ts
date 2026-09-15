@@ -14,10 +14,13 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type { CancelTokenSource } from 'axios';
+
 import type {
   AiAttachmentExportFormat,
   AiAttachmentListParams,
   AiConversation,
+  AiConversationListParams,
   AiCreateAttachmentParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
@@ -88,6 +91,16 @@ export default {
   createConversation(params: AiCreateConversationParams) {
     return AiAssistantManageSource.createConversation(params)
       .then(({ data }) => data as AiConversation);
+  },
+
+  fetchConversationList(
+    params: AiConversationListParams = {},
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getConversationList(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => (Array.isArray(data) ? data : []));
   },
 
   fetchConversation(params: { conversation_uid: string }) {
@@ -205,10 +218,11 @@ export default {
 
   fetchAttachments(
     params: AiAttachmentListParams = {},
-    options?: { catchError?: boolean },
+    options?: { catchError?: boolean; cancelTokenSource?: CancelTokenSource },
   ) {
     return AiAssistantManageSource.getAttachments(params, {
       catchError: options?.catchError,
+      cancelTokenSource: options?.cancelTokenSource,
     })
       .then(({ data }) => (Array.isArray(data) ? data : []));
   },

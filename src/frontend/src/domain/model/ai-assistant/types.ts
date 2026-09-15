@@ -191,6 +191,23 @@ export interface AiConversationGroup {
   updated_at?: string;
 }
 
+/** 会话摘要：GET /conversations/ 返回，按 updated_at 倒序，含置顶与分组内会话 */
+export interface AiConversationSummary {
+  uid: string;
+  title: string;
+  created_at?: string;
+  updated_at?: string;
+  /** 当前用户在该会话下所有状态的附件总数；筛选条件不缩小此计数 */
+  attachment_count?: number;
+  /** 按类型计数，无附件的类型为 0。报告侧栏读 AI_ANALYSIS */
+  attachment_counts_by_type?: Partial<Record<AiAttachmentType, number>>;
+}
+
+export interface AiConversationListParams {
+  has_attachments?: boolean;
+  attachment_type?: AiAttachmentType;
+}
+
 export interface AiConversation {
   uid: string;
   title: string;
@@ -415,6 +432,9 @@ export interface AiAttachmentListItem {
   };
   supports_feedback?: boolean;
   export_formats?: AiAttachmentExportFormat[];
+  /** 与详情一致；无错误时后端返回空字符串，失败原因不必再拉详情 */
+  error_code?: string | null;
+  error_message?: string | null;
 }
 
 export interface AiCreateAttachmentParams {
@@ -438,6 +458,10 @@ export interface AiAttachmentListParams {
   keyword?: string;
   conversation_uid?: string;
   source_message_uid?: string;
+  /** 1–100；不传返回全部匹配附件 */
+  limit?: number;
+  /** content_updated_at | created_at | updated_at | title，前缀 - 倒序，可逗号分隔；默认 -content_updated_at */
+  sort?: string;
 }
 
 export interface AiStreamSnapshotEvent {
