@@ -305,6 +305,27 @@ class TestAgentScopedCredentials(TestCase):
                 self.assertEqual(self.resource.app_code, "log_search_app")
                 self.assertEqual(self.resource.secret_key, "log_search_secret")
 
+    def test_user_intent_credential_uses_hyphenated_app_code(self):
+        """意图识别 per-agent 凭证锚点：bp-ai-user-intent 网关认连字符 bk-audit 应用。
+
+        部署事实（2026-09-15 线上定案）：该网关授权的应用是 PaaS 应用 bk-audit（连字符，
+        BKPAAS_APP_ID），而全局 APP_CODE 为 bk_audit（下划线）——直连网关带全局凭证报
+        400 app not found。部署环境配置 BKAPP_AI_USER_INTENT_APP_CODE=bk-audit 与
+        _SECRET_KEY（PaaS 应用密钥）即修复，仅影响该 agent，不影响其他智能体凭证链。
+        """
+
+        self.resource._current_agent_code = AIAgentCode.USER_INTENT
+        env = self._env_without_bkapp_ai()
+        env.update(
+            {
+                "BKAPP_AI_USER_INTENT_APP_CODE": "bk-audit",
+                "BKAPP_AI_USER_INTENT_SECRET_KEY": "your-secret",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(self.resource.app_code, "bk-audit")
+            self.assertEqual(self.resource.secret_key, "your-secret")
+
     def test_per_agent_credential_fallback_to_global_chain(self):
         """未配置 per-agent 凭证时回退原有全局链 AI_AGENT_APP_CODE（历史行为不变）"""
         self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
