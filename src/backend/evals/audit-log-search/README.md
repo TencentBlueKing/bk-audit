@@ -1,6 +1,6 @@
 # 审计 AI 日志检索评估套件
 
-评估 `NATURAL_LANGUAGE_SEARCH` 的核心能力：将自然语言转换为受控的 `SearchCondition`。Provider 直接调用 `NL2JSONService.convert`，因此会走生产的 User Message 组装、AIDev `bp-audit-log-search` 智能体调用、JSON 提取、语义校验与条件组装。
+评估 `NATURAL_LANGUAGE_SEARCH` 的核心能力：将自然语言转换为受控的 `SearchCondition`。Provider 直接调用 `NL2JSONService.convert`，因此会走生产的 User Message 组装、AIDev `bp-ai-user-intent` 智能体调用、JSON 提取、语义校验与条件组装。
 
 ## 评估目标
 
@@ -17,7 +17,7 @@ flowchart LR
     Q[自然语言话术] --> P[Promptfoo Provider]
     P --> F[固定合成字段上下文]
     F --> N[NL2JSONService.convert]
-    N --> A[AIDev: bp-audit-log-search]
+    N --> A[AIDev: bp-ai-user-intent]
     A --> V[生产 JSON 与语义校验]
     V --> C[SearchCondition 或业务错误]
     C --> R[确定性断言]
@@ -137,7 +137,7 @@ Get-Content evals\audit-log-search\output\progress.log -Tail 15
 | 项目 | 内容 |
 |---|---|
 | User Message | `services/web/query/ai_assistant/services/nl2json.py` 的 `NL2JSON_USER_MESSAGE_TEMPLATE` |
-| System Prompt | AIDev 智能体平台中的 `bp-audit-log-search`（v2 全文见 mydocs 自然语言话术覆盖文档 §4） |
+| System Prompt | AIDev 智能体平台中的 `bp-ai-user-intent`（v2 全文见 mydocs 自然语言话术覆盖文档 §4） |
 | 生产校验 | `NL2JSONService._parse_and_validate`、`_validate_semantics`、`_assemble` |
 | 已知限制 | 不支持数值范围和否定语义；拓展字段默认仅支持单层用户显式子键；指代跟进（多轮）为单轮设计边界 |
 

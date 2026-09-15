@@ -241,7 +241,7 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
     定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
     BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
     （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
-    （第 1 层优先级，模式同 bkop 的 AUDIT_LOG_SEARCH 三件套）。
+    （第 1 层优先级）。
     """
 
     def test_default_routes_to_dedicated_agent(self):
@@ -250,11 +250,11 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
         self.assertEqual(IntentRecognitionService.agent_code, AIAgentCode.USER_INTENT)
         self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
 
-    @override_settings(AI_USER_INTENT_AGENT_CODE="AUDIT_LOG_SEARCH")
-    def test_switch_routes_to_shared_agent(self):
-        """应急口：BKAPP_AI_USER_INTENT_AGENT_CODE=AUDIT_LOG_SEARCH 切共享检索智能体"""
+    @override_settings(AI_USER_INTENT_AGENT_CODE="RISK_SEARCH")
+    def test_switch_routes_to_other_agent(self):
+        """应急口：BKAPP_AI_USER_INTENT_AGENT_CODE 可覆盖路由到其他智能体（枚举名任意）"""
 
-        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.AUDIT_LOG_SEARCH)
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.RISK_SEARCH)
 
     @override_settings(AI_USER_INTENT_AGENT_CODE="NOT_EXIST")
     def test_invalid_switch_fails_fast(self):
