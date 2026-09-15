@@ -819,7 +819,10 @@ const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) =>
     return [];
   }
   const isEdit = !!params.strategy_id;
-  if (Array.isArray(params.dispatch_rules) && params.dispatch_rules.length && !params.assign_rules?.length) {
+  const hasWizardAssign = Boolean(params.assign_rules?.length)
+    || Boolean(params.default_assign_rule && Object.keys(params.default_assign_rule).length);
+  // 向导里改了处理人/关注人后，不能再回退到详情里的旧 dispatch_rules
+  if (!hasWizardAssign && Array.isArray(params.dispatch_rules) && params.dispatch_rules.length) {
     return params.dispatch_rules.map((rule: Record<string, any>) => (
       toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)), isEdit)
     ));
