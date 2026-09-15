@@ -106,6 +106,8 @@ export const followAttachment = (options: FollowAttachmentOptions): FollowAttach
   let eventSource: EventSource | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let waitAttempt = 0;
+  /** 已被重置、不可再订阅的代际；后端自动重试会换 execution，读到它就退避等新代际 */
+  let staleExecutionId: string | null = options.previousExecutionId || null;
 
   const isAborted = () => aborted;
 
@@ -180,6 +182,7 @@ export const followAttachment = (options: FollowAttachmentOptions): FollowAttach
     source.addEventListener(PLATFORM_STREAM_RESET, () => {
       source.close();
       if (eventSource === source) eventSource = null;
+      staleExecutionId = executionId;
       void recoverFromDetail();
     });
     source.onerror = () => {
@@ -262,7 +265,7 @@ export const followAttachment = (options: FollowAttachmentOptions): FollowAttach
       return;
     }
 
-    if (options.previousExecutionId && executionId === options.previousExecutionId) {
+    if (staleExecutionId && executionId === staleExecutionId) {
       options.onWaitingStart?.();
       const delay = WAIT_START_BACKOFF_MS[Math.min(waitAttempt, WAIT_START_BACKOFF_MS.length - 1)];
       waitAttempt += 1;
@@ -277,6 +280,7 @@ export const followAttachment = (options: FollowAttachmentOptions): FollowAttach
     options.onRebuildProcess?.();
     const { sawEnd, sawReset } = consumeSnapshotEvents(snapshot, options);
     if (sawReset) {
+      staleExecutionId = executionId;
       await recoverFromDetail();
       return;
     }
