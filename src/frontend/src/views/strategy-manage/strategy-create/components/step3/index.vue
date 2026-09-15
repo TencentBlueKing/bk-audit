@@ -323,6 +323,13 @@
   const assignTableFields = computed(() => (
     tableFields.value.length ? tableFields.value : schemaTableFields.value
   ));
+  const assignLookupFields = computed(() => {
+    const expected = expectedResult.value || [];
+    const schema = assignTableFields.value || [];
+    if (!expected.length) return schema;
+    if (!schema.length) return expected;
+    return [...expected, ...schema];
+  });
 
   const resolveRtId = (rtId: unknown) => {
     if (Array.isArray(rtId)) {
@@ -366,7 +373,7 @@
   };
 
   const enrichRuleConditions = () => {
-    const fields = assignTableFields.value;
+    const fields = assignLookupFields.value;
     if (!fields.length) return;
     assignRules.value = assignRules.value.map(rule => ({
       ...rule,
@@ -635,8 +642,8 @@
           rule_id: item.rule_id,
           name: item.rule_name || item.name || `分派规则${index + 1}`,
           conditions: enrichAssignWhereFields(
-            toAssignWhere(item?.conditions, assignTableFields.value),
-            assignTableFields.value,
+            toAssignWhere(item?.conditions, assignLookupFields.value),
+            assignLookupFields.value,
           ),
           scene_ids: normalizeSceneIds({
             ...item,
