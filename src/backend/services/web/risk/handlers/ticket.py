@@ -949,10 +949,14 @@ class ConfirmRisk(RiskFlowBaseHandler):
 
         self.risk.refresh_from_db()
         NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run(skip_record=True)
-        # 触发渲染任务
-        RiskHandler().trigger_render_task(self.risk)
-        # 通知关注人
-        RiskHandler().send_risk_notice(self.risk)
+        try:
+            RiskHandler().trigger_render_task(self.risk)
+        except Exception as e:
+            logger.exception(f"[ConfirmRenderFailed] risk_id={self.risk.risk_id}, err={e}")
+        try:
+            RiskHandler().send_risk_notice(self.risk)
+        except Exception as e:
+            logger.exception(f"[ConfirmNoticeFailed] risk_id={self.risk.risk_id}, err={e}")
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return {"description": kwargs.get("description", "")}
