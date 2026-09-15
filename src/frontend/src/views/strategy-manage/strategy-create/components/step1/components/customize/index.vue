@@ -322,6 +322,7 @@
   import {
     enrichFieldDisplayNames,
     excludeHavingFromWhere,
+    formatFieldDisplayLabel,
     hasFilledWhereConditions,
   } from '../../../../utils/strategy-protocol';
 
@@ -871,17 +872,30 @@
   }));
 
   const enrichWhereFieldDisplayNames = (where?: Where) => {
-    if (!where?.conditions?.length || !tableFields.value.length) {
+    if (!where?.conditions?.length) {
       return;
     }
+    const select = formData.value.configs.select || [];
     where.conditions.forEach((group) => {
       group.conditions.forEach((item) => {
         const field = item.condition?.field;
         if (!field || typeof field === 'string' || !(field.raw_name || field.display_name)) {
           return;
         }
+        const matchedSelect = select.find((selectItem: { raw_name?: string; aggregate?: unknown; display_name?: string }) => (
+          selectItem.raw_name === field.raw_name
+          && (selectItem.aggregate || null) === (field.aggregate || null)
+        ));
+        if (matchedSelect?.display_name) {
+          field.display_name = matchedSelect.display_name;
+          return;
+        }
+        if (!tableFields.value.length) {
+          field.display_name = formatFieldDisplayLabel(field.display_name, field.raw_name);
+          return;
+        }
         const [enriched] = enrichFieldDisplayNames([field], tableFields.value);
-        field.display_name = enriched.display_name;
+        field.display_name = formatFieldDisplayLabel(enriched.display_name, field.raw_name);
       });
     });
   };
