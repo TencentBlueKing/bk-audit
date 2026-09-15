@@ -16,6 +16,7 @@ from celery.schedules import crontab
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
+    AI_ASSISTANT_AUDIT_SEARCH_QUEUE,
     NL_PARSE_MAX_RETRIES,
     NL_PARSE_RETRY_INTERVAL_SECONDS,
     NL_PARSE_RETRY_TIMEOUT_SECONDS,
@@ -162,7 +163,7 @@ class NLSearchExecutionTask(MessageExecutionTask):
         )
 
 
-@celery_app.task(bind=True, base=MessageExecutionTask)
+@celery_app.task(bind=True, base=MessageExecutionTask, queue=AI_ASSISTANT_AUDIT_SEARCH_QUEUE)
 def execute_system_selection(self, execution: MessageExecution) -> SystemSelectionOutputSchema:  # noqa: N805
     """系统选择消息任务（一期全异步化）：构建字段上下文与操作上下文（原 SYNC execute 原样移入）。"""
 
@@ -172,7 +173,7 @@ def execute_system_selection(self, execution: MessageExecution) -> SystemSelecti
     return handler.execute(input_data=execution.input_data, context_data=execution.context_data)
 
 
-@celery_app.task(bind=True, base=MessageExecutionTask)
+@celery_app.task(bind=True, base=MessageExecutionTask, queue=AI_ASSISTANT_AUDIT_SEARCH_QUEUE)
 def execute_log_search(self, execution: MessageExecution) -> LogSearchOutputSchema:  # noqa: N805
     """日志检索消息任务（一期全异步化）：执行检索并产出快照（原 SYNC execute 原样移入）。
 
@@ -259,7 +260,7 @@ def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) 
         )
 
 
-@celery_app.task(bind=True, base=UserIntentExecutionTask)
+@celery_app.task(bind=True, base=UserIntentExecutionTask, queue=AI_ASSISTANT_AUDIT_SEARCH_QUEUE)
 def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSchema:  # noqa: N805
     """用户意图识别：意图（选系统/日志检索/无法识别）→ 按需系统选择 → 条件识别 → 结构化输出。
 
@@ -523,7 +524,7 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
     )
 
 
-@celery_app.task(bind=True, base=NLSearchExecutionTask)
+@celery_app.task(bind=True, base=NLSearchExecutionTask, queue=AI_ASSISTANT_AUDIT_SEARCH_QUEUE)
 def execute_natural_language_search(self, execution: MessageExecution) -> NLSearchOutputSchema:  # noqa: N805
     """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。
 
