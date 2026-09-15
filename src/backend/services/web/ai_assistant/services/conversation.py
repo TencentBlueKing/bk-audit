@@ -5,15 +5,16 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import QuerySet, Subquery
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import SidebarNodeType
+from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
 )
 from services.web.ai_assistant.models import (
+    Attachment,
     Conversation,
     ConversationGroup,
     ConversationSidebarNode,
@@ -40,6 +41,47 @@ class ConversationService:
         self.user = user
         self.sidebar_service = ConversationSidebarService(user=user)
         self.message_service = MessageService(user=user)
+
+    def list(
+        self,
+        *,
+        has_attachments: bool | None = None,
+        attachment_types: list[str] | None = None,
+    ) -> QuerySet[Conversation]:
+        """平铺当前用户全部可见会话；附件存在性筛选与附件列表使用相同归属边界。
+
+        附件类型单独传入时隐含存在该类型附件；has_attachments=False 时表示
+        不存在指定类型附件。Exists 避免多附件连接重复会话和逐行查询。
+        """
+
+        queryset = Conversation.objects.filter(created_by=self.user, is_deleted=False)
+        if has_attachments is not None or attachment_types:
+            attachments = Attachment.objects.filter(
+                source_message__conversation_id=OuterRef("pk"),
+                created_by=self.user,
+            )
+            if attachment_types:
+                attachments = attachments.filter(attachment_type__in=attachment_types)
+            queryset = queryset.alias(has_matching_attachments=Exists(attachments)).filter(
+                has_matching_attachments=has_attachments if has_attachments is not None else True,
+            )
+        # 存在性过滤只筛会话；统计覆盖该会话下当前用户全部附件和执行状态。
+        owned_attachments = Q(messages__attachments__created_by=self.user)
+        counts = {
+            f"attachment_count_{attachment_type.lower()}": Count(
+                "messages__attachments",
+                filter=owned_attachments & Q(messages__attachments__attachment_type=attachment_type),
+            )
+            for attachment_type in AttachmentType.values
+        }
+        return (
+            queryset.annotate(
+                attachment_count=Count("messages__attachments", filter=owned_attachments),
+                **counts,
+            )
+            .only("id", "uid", "title", "created_at", "updated_at")
+            .order_by("-updated_at", "-id")
+        )
 
     @transaction.atomic
     def create_group(self, *, name: str) -> ConversationGroup:
