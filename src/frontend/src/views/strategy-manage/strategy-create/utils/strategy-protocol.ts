@@ -180,6 +180,38 @@ const findTableFieldByRaw = (
   return matchField(tableFields);
 };
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const AGGREGATE_NAME_SUFFIX_RE = /_[A-Z]+$/;
+
+/** 展示格式：中文名(raw_name)；聚合为 中文名(raw_name)_COUNT，已带 (raw_name) 时不再重复拼接 */
+export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) => {
+  const name = String(displayName || '');
+  const raw = String(rawName || '');
+  if (!name) return raw;
+  if (!raw || name === raw) return name;
+  const suffix = `(${raw})`;
+  const escapedSuffix = `\\(${escapeRegExp(raw)}\\)`;
+  // 聚合字段被重复拼接：事件ID(event_id)_COUNT(event_id) → 事件ID(event_id)_COUNT
+  const normalized = name.replace(new RegExp(`(_[A-Z]+)${escapedSuffix}$`), '$1');
+  if (normalized.includes(suffix)) {
+    return normalized;
+  }
+  const aggregateMatch = normalized.match(AGGREGATE_NAME_SUFFIX_RE);
+  if (aggregateMatch) {
+    const withoutAgg = normalized.slice(0, -aggregateMatch[0].length);
+    if (!withoutAgg || withoutAgg === raw) {
+      return normalized;
+    }
+    return `${withoutAgg}${suffix}${aggregateMatch[0]}`;
+  }
+  return `${normalized}${suffix}`;
+};
+
+const normalizeFieldAggregate = (value: unknown) => (
+  value === '' || value === undefined ? null : value
+);
+
 export const resolveAssignField = (
   field: unknown,
   tableFields: Array<Record<string, any>> = [],
@@ -187,18 +219,28 @@ export const resolveAssignField = (
   if (field && typeof field === 'object') {
     const current = field as Record<string, any>;
     const raw = getConditionFieldRaw(current);
-    const found = findTableFieldByRaw(raw, tableFields);
+    const foundByAgg = tableFields.find((item) => {
+      const itemRaw = item.raw_name || item.value || '';
+      return itemRaw === raw
+        && normalizeFieldAggregate(item.aggregate) === normalizeFieldAggregate(current.aggregate);
+    });
+    const found = foundByAgg || findTableFieldByRaw(raw, tableFields);
     if (!found) {
       return {
         ...emptyAssignField(),
         ...current,
         raw_name: raw || current.raw_name || '',
-        display_name: current.display_name || raw,
+        display_name: formatFieldDisplayLabel(current.display_name || raw, raw),
       };
     }
-    const displayName = current.display_name && current.display_name !== raw
-      ? current.display_name
-      : (found.display_name || found.label || current.display_name || raw);
+    const sourceDisplay = foundByAgg?.display_name
+      || (current.display_name && current.display_name !== raw
+        ? current.display_name
+        : (found.display_name || found.label || current.display_name || raw));
+    const displayName = formatFieldDisplayLabel(
+      sourceDisplay,
+      found.raw_name || found.value || raw,
+    );
     return {
       ...found,
       ...current,
@@ -623,17 +665,6 @@ const resolveSelectFieldDisplayName = (
     return displayNameByRaw.get(lastSegment) || rawName;
   }
   return ownDisplayName || rawName;
-};
-
-/** 展示格式：中文名(raw_name)；display_name 已带后缀时不再重复拼接 */
-export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) => {
-  const name = String(displayName || '');
-  const raw = String(rawName || '');
-  if (!name) return raw;
-  if (!raw || name === raw) return name;
-  const suffix = `(${raw})`;
-  if (name.endsWith(suffix)) return name;
-  return `${name}${suffix}`;
 };
 
 /** 预期结果字段可能是 raw_name、中文名或 中文名(raw_name)，编辑回显都要认 */
