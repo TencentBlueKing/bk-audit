@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import traceback
 
-from bk_resource import BkApiResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
@@ -40,13 +39,21 @@ from api.bk_base.serializers import (
     UserAuthCheckReqSerializer,
     UserAuthCheckRespSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_BASE_API_URL, BK_BASE_DEBUG_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class BkBaseResource(BkApiResource, abc.ABC):
-    base_url = BK_BASE_API_URL
+class BkBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bkbase"
     platform_authorization = True
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_API_URL
 
     def build_request_data(self, validated_request_data: dict) -> dict:
         data = super().build_request_data(validated_request_data)
@@ -58,7 +65,12 @@ class BkBaseResource(BkApiResource, abc.ABC):
 class DebugBkBaseResource(BkBaseResource, abc.ABC):
     """用于调试场景的 BKBase 资源，支持独立 base_url。"""
 
-    base_url = BK_BASE_DEBUG_API_URL
+    @property
+    def base_url(self):
+        """多租户模式切换到租户 APIGW"""
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_BASE_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_BASE_DEBUG_API_URL
 
 
 class DatabusStoragesPost(BkBaseResource):

@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 import requests
-from bk_resource import BkApiResource
 from django.utils.translation import gettext_lazy
 
 from api.domains import BK_IAM_API_URL
+from core.bk_api_base import AuditBkApiResource
 
 
-class IAMBaseResource(BkApiResource, abc.ABC):
+class IAMBaseResource(AuditBkApiResource, abc.ABC):
     base_url = BK_IAM_API_URL
     module_name = "iam"
 

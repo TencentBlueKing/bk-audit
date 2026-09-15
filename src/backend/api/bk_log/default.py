@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 from binascii import Error
 
-from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
@@ -67,14 +66,23 @@ from api.bk_log.serializers import (
     ValidateContainerConfigYamlRequestSerializer,
     ValidateContainerConfigYamlResponseSerializer,
 )
+from api.constants import APIProvider
 from api.domains import BK_LOG_API_URL
+from api.utils import get_endpoint
 from apps.bk_crypto.crypto import asymmetric_cipher
+from core.bk_api_base import AuditBkApiResource
 from core.utils.data import distinct
 
 
-class BKLogBaseResource(BkApiResource, abc.ABC):
-    base_url = BK_LOG_API_URL
+class BKLogBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bk-log"
+    use_admin_username = True
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.LOG_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_LOG_API_URL
 
 
 class GetOperators(BKLogBaseResource):
@@ -192,6 +200,7 @@ class BizsList(BizBaseResource):
     name = gettext_lazy("业务列表")
     action = "/meta/projects/mine/"
     method = "GET"
+    use_admin_username = False
 
 
 class BizTopos(BizBaseResource):
@@ -283,8 +292,13 @@ class CreateCollector(CollectorsBaseResource):
 
 class UpdateCollector(CollectorsBaseResource):
     name = gettext_lazy("更新采集")
-    action = "/databus_collector_plugins/update_instance/"
     method = "PUT"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/databus/collector_plugins/update_instance/"
+        return "/databus_collector_plugins/update_instance/"
 
 
 class ListBcsClusters(BizBaseResource):
@@ -482,6 +496,8 @@ class CheckAllowed(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/check_allowed/"
     method = "POST"
+    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
+    use_admin_username = False
 
     def perform_request(self, validated_request_data):
         resources = super(CheckAllowed, self).perform_request(validated_request_data)
@@ -497,6 +513,8 @@ class GetApplyData(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/get_apply_data/"
     method = "POST"
+    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
+    use_admin_username = False
 
     ResponseSerializer = GetApplyDataResponseSerializer
 
@@ -506,6 +524,7 @@ class GetSpacesMine(BKLogBaseResource):
     method = "GET"
     action = "/meta/spaces/mine/"
     cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 10, user_related=True)
+    use_admin_username = False
 
 
 class CreateCustomCollector(CollectorsBaseResource):

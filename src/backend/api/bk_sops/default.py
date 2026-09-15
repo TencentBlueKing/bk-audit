@@ -19,20 +19,27 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 import requests
-from bk_resource import BkApiResource
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_sops.constants import SOpsDatetime
+from api.constants import APIProvider
 from api.domains import BK_SOPS_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class BKSOps(BkApiResource, abc.ABC):
+class BKSOps(AuditBkApiResource, abc.ABC):
     module_name = "bk_sops"
-    base_url = BK_SOPS_API_URL
     platform_authorization = True
     rate_limit = settings.SOPS_API_RATE_LIMIT
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_SOPS_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_SOPS_API_URL
 
     def perform_request(self, validated_request_data):
         return Throttler(

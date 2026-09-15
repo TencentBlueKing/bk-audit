@@ -23,6 +23,7 @@ from django.utils.translation import gettext
 
 from apps.feature.constants import FeatureStatusChoices
 from apps.feature.models import FeatureToggle
+from core.tenant import use_multi_tenant_mode
 
 
 class BaseFeaturePlugin(abc.ABC):
@@ -68,4 +69,19 @@ class BklogOtlpPlugin(BaseFeaturePlugin):
         # 更新 feature
         self._feature.config = config
         # 响应状态
+        return self._feature.status
+
+
+class AiCapabilityPlugin(BaseFeaturePlugin):
+    """AI 能力开关插件
+
+    默认开启（settings.FEATURE_TOGGLE["ai_capability"] = "available"），
+    多租户环境下强制关闭，无需运维手动配置。
+    """
+
+    def _update_status(self):
+        # 多租户环境不支持 AI 能力，强制关闭
+        if use_multi_tenant_mode():
+            return FeatureStatusChoices.DENY.value
+        # 非多租户环境沿用配置状态（默认 available）
         return self._feature.status

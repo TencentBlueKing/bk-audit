@@ -18,13 +18,13 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import BkApiResource
 from django.utils.translation import gettext_lazy
 
 from api.domains import WATERMARK_API_URL
+from core.bk_api_base import AuditBkApiResource
 
 
-class Watermark(BkApiResource, abc.ABC):
+class Watermark(AuditBkApiResource, abc.ABC):
     base_url = WATERMARK_API_URL
     module_name = "watermark"
 

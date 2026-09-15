@@ -68,7 +68,9 @@ class GetMsgType(NoticeMeta):
         local_msg_type = MsgType.values
         cc_msg_type = api.bk_cmsi.get_msg_type()["data"]
         return [
-            _msg_type for _msg_type in cc_msg_type if _msg_type["type"] in local_msg_type and _msg_type["is_active"]
+            _msg_type
+            for _msg_type in cc_msg_type
+            if _msg_type["type"] in local_msg_type and _msg_type.get("is_active", _msg_type.get("enabled", False))
         ]
 
 

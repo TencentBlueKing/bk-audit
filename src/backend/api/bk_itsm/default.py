@@ -18,18 +18,25 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import BkApiResource
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from api.constants import APIProvider
 from api.domains import APIGW_ENABLED, BK_ITSM_API_URL
+from api.utils import get_endpoint
+from core.bk_api_base import AuditBkApiResource
 
 
-class BKITSM(BkApiResource, abc.ABC):
+class BKITSM(AuditBkApiResource, abc.ABC):
     module_name = "bk_itsm"
-    base_url = BK_ITSM_API_URL
     platform_authorization = True
+
+    @property
+    def base_url(self):
+        if self.use_multi_tenant_mode():
+            return get_endpoint(settings.BK_ITSM_APIGW_NAME, APIProvider.APIGW, stage="prod")
+        return BK_ITSM_API_URL
 
     def perform_request(self, validated_request_data):
         return Throttler(
@@ -44,34 +51,64 @@ class BKITSM(BkApiResource, abc.ABC):
 class GetServices(BKITSM):
     name = gettext_lazy("服务列表查询")
     method = "GET"
-    action = "/get_services/" if not APIGW_ENABLED else "/v2/itsm/get_services/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/get_services/"
+        return "/get_services/" if not APIGW_ENABLED else "/v2/itsm/get_services/"
 
 
 class GetServiceDetail(BKITSM):
     name = gettext_lazy("获取服务详情")
     method = "GET"
-    action = "/get_service_detail/" if not APIGW_ENABLED else "/v2/itsm/get_service_detail/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/get_service_detail/"
+        return "/get_service_detail/" if not APIGW_ENABLED else "/v2/itsm/get_service_detail/"
 
 
 class CreateTicket(BKITSM):
     name = gettext_lazy("创建单据")
     method = "POST"
-    action = "/create_ticket/" if not APIGW_ENABLED else "/v2/itsm/create_ticket/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/create_ticket/"
+        return "/create_ticket/" if not APIGW_ENABLED else "/v2/itsm/create_ticket/"
 
 
 class GetTicketStatus(BKITSM):
     name = gettext_lazy("单据状态查询")
     method = "GET"
-    action = "/get_ticket_status/" if not APIGW_ENABLED else "/v2/itsm/get_ticket_status/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/get_ticket_status/"
+        return "/get_ticket_status/" if not APIGW_ENABLED else "/v2/itsm/get_ticket_status/"
 
 
 class TicketApproveResult(BKITSM):
     name = gettext_lazy("查询审批结果")
     method = "POST"
-    action = "/ticket_approval_result/" if not APIGW_ENABLED else "/v2/itsm/ticket_approval_result/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/ticket_approval_result/"
+        return "/ticket_approval_result/" if not APIGW_ENABLED else "/v2/itsm/ticket_approval_result/"
 
 
 class OperateTicket(BKITSM):
     name = gettext_lazy("操作单据")
     method = "POST"
-    action = "/operate_ticket/" if not APIGW_ENABLED else "/v2/itsm/operate_ticket/"
+
+    @property
+    def action(self):
+        if self.use_multi_tenant_mode():
+            return "/v2/itsm/operate_ticket/"
+        return "/operate_ticket/" if not APIGW_ENABLED else "/v2/itsm/operate_ticket/"
