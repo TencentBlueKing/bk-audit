@@ -352,7 +352,7 @@
                 <template v-else>
                   <audit-icon
                     class="status-icon is-success"
-                    type="success" />
+                    type="completed" />
                   <span class="status-text">{{ reportStatusText(item) }}</span>
                   <span class="status-time">{{ item.createdAt }}</span>
                   <button
@@ -361,7 +361,7 @@
                     @click="openReport(item)">
                     <audit-icon
                       class="view-icon"
-                      type="help-document-fill" />
+                      type="report" />
                     {{ t('查看报告') }}
                   </button>
                 </template>
@@ -839,18 +839,24 @@
 
   const reportStatusText = (item: ReportStatusItem) => {
     if (item.type === 'statistics') {
-      if (item.status === 'loading') return t('数据统计中');
+      if (item.status === 'loading') return t('数据统计中...');
       if (item.status === 'failed') return t('数据统计失败');
       return t('数据统计已完成');
     }
-    if (item.status === 'loading') return t('智能分析中');
+    if (item.status === 'loading') return t('智能分析中...');
     if (item.status === 'failed') return t('智能分析失败');
     return t('智能分析已生成');
   };
 
   const systemNames = computed(() => {
-    const systemCond = displayResult.value.conditions.find(item => item.field === '来源系统');
-    return systemCond?.value || '已选系统';
+    const names = props.systems
+      .map(item => item.name || item.id)
+      .filter(Boolean);
+    if (names.length) return names.join('、');
+    const systemCond = displayResult.value.conditions.find(item => (
+      item.field === '来源系统' || item.field === '系统'
+    ));
+    return systemCond?.value || '';
   });
 
   watch(
@@ -1001,6 +1007,7 @@
         createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
         markdown: attachment.output_data?.markdown || activeReport.value.markdown,
         exportFormats: attachment.export_formats || activeReport.value.exportFormats,
+        analysisMode: String(attachment.input_data?.analysis_mode || activeReport.value.analysisMode || ''),
       };
     }
     maybeAutoOpenReport(attachment.uid);
@@ -1047,17 +1054,14 @@
 
   const hydrateAttachments = async (messageUid: string) => {
     try {
+      // 消息块按生成时间倒序：附件列表默认排 content_updated_at，编辑或重试会让报告前移
       const list = await AiAssistantManageService.fetchAttachments({
         source_message_uid: messageUid,
         attachment_type: 'AI_ANALYSIS',
+        sort: '-created_at',
       }, { catchError: true });
       const mapped = list.map(item => mapAttachmentToReport(item));
-      // 新报告在前：列表若按 created desc 则直接用；否则按时间倒序
-      reportItems.value = [...mapped].sort((a, b) => {
-        const aTime = dayjs(a.createdAt).valueOf() || 0;
-        const bTime = dayjs(b.createdAt).valueOf() || 0;
-        return bTime - aTime;
-      });
+      reportItems.value = mapped;
       mapped
         .filter(item => item.status === 'loading')
         .forEach(item => startFollow(item.id));
@@ -1147,16 +1151,11 @@
 
     analyzeSubmitting.value = true;
     emit('analyze');
-    if (!isCustom) {
-      upsertReport(placeholder, true);
-      analyzeDialogShow.value = false;
-    }
+    upsertReport(placeholder, true);
+    analyzeDialogShow.value = false;
     try {
       const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
-      if (!isCustom) {
-        removeReport(placeholderId);
-      }
-      analyzeDialogShow.value = false;
+      removeReport(placeholderId);
       upsertReport(mapAttachmentToReport(attachment), true);
       markPendingAutoOpen(attachment.uid);
       if (attachment.status === 'PROCESSING') {
@@ -1176,9 +1175,7 @@
       } catch {
         // 刷新失败时仍提示创建失败
       }
-      if (!isCustom) {
-        removeReport(placeholderId);
-      }
+      removeReport(placeholderId);
       messageError(resolveCreateErrorMessage(error));
     } finally {
       analyzeSubmitting.value = false;
@@ -1252,6 +1249,7 @@
       exportFormats = [],
       title,
       createdAt = '',
+      analysisMode = '',
     } = item;
     try {
       const detail = await AiAssistantManageService.fetchAttachment({
@@ -1262,6 +1260,7 @@
       exportFormats = detail.export_formats || exportFormats;
       title = detail.title || title;
       createdAt = formatAttachmentTime(detail.created_at || detail.content_updated_at || '') || createdAt;
+      analysisMode = String(detail.input_data?.analysis_mode || analysisMode);
     } catch {
       // 使用卡片上已有摘要打开
     }
@@ -1272,6 +1271,7 @@
       createdAt,
       markdown,
       exportFormats,
+      analysisMode,
     };
     reportDrawerShow.value = true;
   };
@@ -1794,7 +1794,7 @@
       gap: var(--audit-space-4);
 
       .view-icon {
-        font-size: var(--audit-font-size-base);
+        font-size: 16px;
 
         &.is-loading {
           animation: log-report-spin 1s linear infinite;

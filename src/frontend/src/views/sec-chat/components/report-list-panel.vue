@@ -50,77 +50,137 @@
         v-model="searchKeyword"
         class="panel-search-input"
         clearable
-        :placeholder="t('搜索报告标题')">
+        :placeholder="t('搜索报告标题')"
+        @clear="handleSearchClear"
+        @compositionend="handleSearchCompositionEnd"
+        @compositionstart="isComposing = true">
         <template #suffix>
           <search class="search-icon" />
         </template>
       </bk-input>
-      <bk-button
-        class="collapse-all-btn"
-        size="small"
-        @click="collapseAll">
-        <plus class="collapse-all-icon" />
-        {{ t('一键收起') }}
-      </bk-button>
+      <div
+        class="collapse-all-wrap"
+        :class="{ 'is-hidden': isCollapseAllHidden }">
+        <bk-button
+          class="collapse-all-btn"
+          size="small"
+          @click="toggleCollapseAll">
+          <audit-icon
+            class="collapse-all-icon"
+            :type="isAllCollapsed ? 'full-screen' : 'zoom-out'" />
+          {{ isAllCollapsed ? t('一键展开') : t('一键收起') }}
+        </bk-button>
+      </div>
     </div>
 
     <div
       ref="listScrollRef"
-      class="panel-content"
-      @scroll="handleListScroll">
+      class="panel-content">
       <bk-loading :loading="loading">
         <div
-          v-if="!loading && !groupedReports.length"
+          v-if="!loading && !renderBlocks.length"
           class="panel-empty">
           {{ t('暂无报告') }}
         </div>
         <div
-          v-for="group in groupedReports"
-          :key="group.id"
-          class="report-group">
+          v-for="block in renderBlocks"
+          :key="block.key"
+          class="report-group"
+          :data-session-uid="block.session ? block.session.uid : undefined">
           <button
+            v-if="block.session"
             class="group-header"
             type="button"
-            @click="toggleGroup(group.id)">
+            @click="toggleGroup(block.session.uid)">
             <audit-icon
               class="group-arrow"
-              :type="collapsedGroups.has(group.id) ? 'angle-fill-rignt' : 'angle-fill-down'" />
-            <span class="group-name">{{ group.name }}</span>
-            <span class="group-count">{{ group.reports.length }}</span>
+              :type="collapsedSessions.has(block.session.uid) ? 'angle-fill-rignt' : 'angle-fill-down'" />
+            <span class="group-name">{{ block.session.title || t('未命名会话') }}</span>
+            <span
+              v-if="block.session.loaded"
+              class="group-count">
+              {{ groupCountText(block.session) }}
+            </span>
           </button>
           <div
-            v-show="!collapsedGroups.has(group.id)"
+            v-show="!block.session || !collapsedSessions.has(block.session.uid)"
             class="report-rows">
             <div
-              v-for="report in group.reports"
+              v-for="report in block.reports"
               :key="report.uid"
               class="report-row"
+              :class="{
+                'is-export-open': exportMenuUid === report.uid,
+                'is-exporting': exportingUid === report.uid,
+              }"
               @click="handleReportClick(report)">
-              <img
-                alt=""
+              <audit-icon
                 class="report-file-icon"
-                :src="reportListFileIcon">
+                type="report" />
               <span class="report-name">{{ report.title || t('智能分析报告') }}</span>
-              <span class="report-time">{{ formatReportTime(report.created_at) }}</span>
+              <span class="report-time">{{ reportTimeText(report) }}</span>
               <div
                 class="report-hover-actions"
                 @click.stop>
-                <button
-                  v-bk-tooltips="t('导出')"
-                  class="hover-action"
-                  type="button"
-                  @click="handleExport(report)">
-                  <audit-icon type="download" />
-                </button>
+                <bk-dropdown
+                  v-if="getExportFormats(report).length"
+                  class="hover-export-dropdown"
+                  :disabled="exportingUid === report.uid"
+                  placement="bottom-end"
+                  :popover-options="exportPopoverOptions"
+                  trigger="click"
+                  @hide="handleExportMenuHide(report.uid)"
+                  @show="handleExportMenuShow(report.uid)">
+                  <button
+                    v-bk-tooltips="{
+                      content: exportingUid === report.uid ? t('导出中...') : t('导出'),
+                      disabled: exportMenuUid === report.uid && exportingUid !== report.uid,
+                    }"
+                    class="hover-action"
+                    :class="{ 'is-loading': exportingUid === report.uid }"
+                    :disabled="exportingUid === report.uid"
+                    type="button">
+                    <span
+                      v-if="exportingUid === report.uid"
+                      class="hover-action-spinner" />
+                    <audit-icon
+                      v-else
+                      type="download" />
+                  </button>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item
+                        v-if="getExportFormats(report).includes('PDF')"
+                        :disabled="exportingUid === report.uid"
+                        @click="handleExport(report, 'PDF')">
+                        {{ t('导出为PDF') }}
+                      </bk-dropdown-item>
+                      <bk-dropdown-item
+                        v-if="getExportFormats(report).includes('MARKDOWN')"
+                        :disabled="exportingUid === report.uid"
+                        @click="handleExport(report, 'MARKDOWN')">
+                        {{ t('导出为Markdown') }}
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
                 <button
                   v-bk-tooltips="t('跳转至会话')"
                   class="hover-action"
                   type="button"
                   @click="handleLocate(report)">
-                  <audit-icon type="jump-link" />
+                  <audit-icon type="huihua" />
                 </button>
               </div>
             </div>
+            <button
+              v-if="block.session && block.session.loaded && !block.session.allLoaded"
+              class="load-all-btn"
+              :disabled="block.session.loadingAll"
+              type="button"
+              @click="handleLoadAll(block.session)">
+              {{ t('点击加载全部') }}
+            </button>
           </div>
         </div>
       </bk-loading>
@@ -137,35 +197,52 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+  import axios, { type CancelTokenSource } from 'axios';
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { Plus, Search } from 'bkui-vue/lib/icon';
+  import { Search } from 'bkui-vue/lib/icon';
   import dayjs from 'dayjs';
 
   import AiAssistantManageService from '@service/ai-assistant-manage';
 
-  import type { AiAttachment, AiAttachmentListItem } from '@model/ai-assistant/types';
+  import type {
+    AiAttachment,
+    AiAttachmentExportFormat,
+    AiAttachmentListItem,
+  } from '@model/ai-assistant/types';
 
   import useMessage from '@hooks/use-message';
 
   import reportListCloseIcon from '@images/report-list-close.svg';
-  import reportListFileIcon from '@images/report-list-file.svg';
 
   import LogReportDrawer, { type LogReportInfo } from '../audit-log-retrieval/components/log-report-drawer.vue';
 
-  type ReportCategoryId = 'audit-log' | 'risk' | 'other';
+  interface ReportSession {
+    uid: string;
+    title: string;
+    reports: AiAttachmentListItem[];
+    /** 首屏已拉回来了（不是「已发起请求」，否则计数和加载全部会先冒出来再改） */
+    loaded: boolean;
+    /** 首屏请求进行中 */
+    loading: boolean;
+    /** 该会话报告是否已全部在列 */
+    allLoaded: boolean;
+    loadingAll: boolean;
+  }
 
-  interface ReportGroup {
-    id: ReportCategoryId;
-    name: string;
+  interface RenderBlock {
+    key: string;
+    /** 搜索态平铺，没有会话头 */
+    session: ReportSession | null;
     reports: AiAttachmentListItem[];
   }
 
-  const PAGE_SIZE = 20;
+  const SESSION_PAGE_SIZE = 10;
   const PANEL_DEFAULT_WIDTH = 400;
   const PANEL_MIN_WIDTH = 400;
   const PANEL_MAX_WIDTH = 600;
   const SEARCH_DEBOUNCE_MS = 300;
+  const { CancelToken } = axios;
 
   const emit = defineEmits<{
     close: [];
@@ -177,105 +254,250 @@
 
   const loading = ref(false);
   const searchKeyword = ref('');
-  const allReports = ref<AiAttachmentListItem[]>([]);
-  const visibleCount = ref(PAGE_SIZE);
-  const collapsedGroups = ref<Set<ReportCategoryId>>(new Set());
+  const sessions = ref<ReportSession[]>([]);
+  const searchResults = ref<AiAttachmentListItem[]>([]);
+  const collapsedSessions = ref<Set<string>>(new Set());
   const panelWidth = ref(PANEL_DEFAULT_WIDTH);
   const listScrollRef = ref<HTMLElement | null>(null);
   const reportDrawerShow = ref(false);
   const activeReport = ref<(LogReportInfo & { conversationUid?: string }) | null>(null);
-
-  let searchTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const categoryMeta: { id: ReportCategoryId; name: string }[] = [
-    { id: 'audit-log', name: t('审计日志检索') },
-    { id: 'risk', name: t('风险分析') },
-    { id: 'other', name: t('其他') },
-  ];
-
-  const resolveCategory = (item: AiAttachmentListItem): ReportCategoryId => {
-    const messageType = String(item.source_message?.message_type || '').toUpperCase();
-    if (
-      messageType === 'LOG_SEARCH'
-      || messageType === 'NATURAL_LANGUAGE_SEARCH'
-      || messageType === 'USER_INTENT'
-    ) {
-      return 'audit-log';
-    }
-    if (messageType.includes('RISK') || messageType.includes('ALARM')) {
-      return 'risk';
-    }
-    return 'other';
+  const exportMenuUid = ref('');
+  const exportingUid = ref('');
+  const exportPopoverOptions = {
+    clickContentAutoHide: true,
   };
+  const DEFAULT_EXPORT_FORMATS: AiAttachmentExportFormat[] = ['PDF', 'MARKDOWN'];
 
-  const displayedReports = computed(() => allReports.value.slice(0, visibleCount.value));
+  const isComposing = ref(false);
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  let searchCancelSource: CancelTokenSource | null = null;
+  let lastIssuedKeyword: string | null = null;
+  /** 会话列表可能被清空搜索、重复点击并发触发，只认最后一次 */
+  let sessionsFetchToken = 0;
+  const activeSearchKeyword = ref('');
 
-  const groupedReports = computed((): ReportGroup[] => {
-    const buckets: Record<ReportCategoryId, AiAttachmentListItem[]> = {
-      'audit-log': [],
-      risk: [],
-      other: [],
-    };
-    displayedReports.value.forEach((item) => {
-      buckets[resolveCategory(item)].push(item);
-    });
-    return categoryMeta
-      .map(meta => ({
-        id: meta.id,
-        name: meta.name,
-        reports: buckets[meta.id],
-      }))
-      .filter(group => group.reports.length > 0);
+  const isSearching = computed(() => Boolean(activeSearchKeyword.value));
+
+  const renderBlocks = computed((): RenderBlock[] => {
+    if (isSearching.value) {
+      return searchResults.value.length
+        ? [{ key: 'search-flat', session: null, reports: searchResults.value }]
+        : [];
+    }
+    return sessions.value
+      // 会话按「有 AI_ANALYSIS 附件」筛出，但只有失败/生成中报告的会话取不到成功项，不展示空分组
+      .filter(session => !(session.allLoaded && !session.reports.length))
+      .map(session => ({
+        key: session.uid,
+        session,
+        reports: session.reports,
+      }));
   });
 
-  const formatReportTime = (value?: string) => {
+  /** 首屏只取一页，没取全时用 n+ 表示还有更多 */
+  const groupCountText = (session: ReportSession) => (
+    session.allLoaded ? `${session.reports.length}` : `${session.reports.length}+`
+  );
+
+  const formatReportTime = (value?: string | null) => {
     if (!value) return '';
     const parsed = dayjs(value);
     return parsed.isValid() ? parsed.format('YYYY-MM-DD  HH:mm') : value;
   };
 
-  const fetchReports = async () => {
-    loading.value = true;
+  /** 列表默认按 content_updated_at 排序，行上时间同步展示内容更新时间 */
+  const reportTimeText = (item: AiAttachmentListItem) => (
+    formatReportTime(item.content_updated_at || item.created_at)
+  );
+
+  const fetchSessionReports = (conversationUid: string, limit?: number) => (
+    AiAssistantManageService.fetchAttachments({
+      conversation_uid: conversationUid,
+      attachment_type: 'AI_ANALYSIS',
+      status: 'SUCCESS',
+      ...(limit ? { limit } : {}),
+    }, { catchError: true })
+  );
+
+  /**
+   * 会话上的 attachment_counts_by_type 含所有状态，与只取 SUCCESS 的列表对不上，
+   * 只能按「是否取满一页」判断还有没有更多。
+   */
+  const resolveAllLoaded = (loadedCount: number) => loadedCount < SESSION_PAGE_SIZE;
+
+  const patchSession = (uid: string, patch: Partial<ReportSession>) => {
+    sessions.value = sessions.value.map(item => (
+      item.uid === uid ? { ...item, ...patch } : item
+    ));
+  };
+
+  /** 首屏只取 10 条，按会话进入视口时触发 */
+  const loadSessionReports = async (session: ReportSession) => {
+    if (session.loaded || session.loading || session.loadingAll) return;
+    patchSession(session.uid, { loading: true });
     try {
-      const list = await AiAssistantManageService.fetchAttachments({
-        keyword: searchKeyword.value.trim() || undefined,
-      }, { catchError: true });
-      allReports.value = [...list].sort((a, b) => {
-        const aTime = dayjs(a.created_at).valueOf() || 0;
-        const bTime = dayjs(b.created_at).valueOf() || 0;
-        return bTime - aTime;
+      const list = await fetchSessionReports(session.uid, SESSION_PAGE_SIZE);
+      patchSession(session.uid, {
+        reports: list,
+        loaded: true,
+        loading: false,
+        allLoaded: resolveAllLoaded(list.length),
       });
-      visibleCount.value = PAGE_SIZE;
+    } catch {
+      // 单个会话拉取失败不影响其他会话，重新进入视口可再试
+      patchSession(session.uid, { loading: false });
+    }
+  };
+
+  const handleLoadAll = async (session: ReportSession) => {
+    if (session.loadingAll) return;
+    patchSession(session.uid, { loadingAll: true });
+    try {
+      const reports = await fetchSessionReports(session.uid);
+      // 不带 limit 即全量，无需再按计数判断
+      patchSession(session.uid, {
+        reports,
+        allLoaded: true,
+      });
     } catch (error: any) {
-      allReports.value = [];
       messageError(error?.message || t('报告列表加载失败'));
     } finally {
-      loading.value = false;
+      patchSession(session.uid, { loadingAll: false });
     }
   };
 
-  const collapseAll = () => {
-    collapsedGroups.value = new Set(groupedReports.value.map(group => group.id));
+  const fetchSessions = async () => {
+    sessionsFetchToken += 1;
+    const token = sessionsFetchToken;
+    loading.value = true;
+    try {
+      const list = await AiAssistantManageService.fetchConversationList({
+        has_attachments: true,
+        attachment_type: 'AI_ANALYSIS',
+      }, { catchError: true });
+      if (token !== sessionsFetchToken) return;
+      sessions.value = list.map(item => ({
+        uid: item.uid,
+        title: item.title,
+        reports: [],
+        loaded: false,
+        loading: false,
+        allLoaded: false,
+        loadingAll: false,
+      }));
+      collapsedSessions.value = new Set();
+      /*
+       * 会话整体换了新对象，reports 全被重置回空。
+       * 视口内的会话 intersection 状态没变化，不重新 observe 就永远等不到回调，
+       * 分组会一直空着。
+       */
+      void nextTick(observeSessions);
+    } catch (error: any) {
+      if (token !== sessionsFetchToken) return;
+      sessions.value = [];
+      messageError(error?.message || t('报告列表加载失败'));
+    } finally {
+      if (token === sessionsFetchToken) {
+        loading.value = false;
+      }
+    }
   };
 
-  const toggleGroup = (id: ReportCategoryId) => {
-    const next = new Set(collapsedGroups.value);
-    if (next.has(id)) {
-      next.delete(id);
+  const fetchSearchResults = async () => {
+    const keyword = searchKeyword.value.trim();
+    const previousKeyword = lastIssuedKeyword;
+    if (keyword === previousKeyword) return;
+
+    lastIssuedKeyword = keyword;
+    searchCancelSource?.cancel('report-list search aborted');
+    searchCancelSource = null;
+
+    if (!keyword) {
+      activeSearchKeyword.value = '';
+      searchResults.value = [];
+      await fetchSessions();
+      return;
+    }
+
+    // 先盖 loading，再切到搜索列表，避免空数组先画出「暂无报告」
+    loading.value = true;
+    activeSearchKeyword.value = keyword;
+
+    const source = CancelToken.source();
+    searchCancelSource = source;
+    try {
+      const list = await AiAssistantManageService.fetchAttachments({
+        attachment_type: 'AI_ANALYSIS',
+        status: 'SUCCESS',
+        keyword,
+      }, {
+        catchError: true,
+        cancelTokenSource: source,
+      });
+      if (source !== searchCancelSource) return;
+      searchResults.value = list;
+    } catch (error: any) {
+      if (error?.code === 'CANCEL' || source !== searchCancelSource) return;
+      searchResults.value = [];
+      messageError(error?.message || t('报告列表加载失败'));
+    } finally {
+      if (source === searchCancelSource) {
+        loading.value = false;
+      }
+    }
+  };
+
+  const scheduleSearch = () => {
+    if (searchTimer) clearTimeout(searchTimer);
+    const pendingKeyword = searchKeyword.value.trim();
+    searchTimer = setTimeout(() => {
+      if (isComposing.value) return;
+      // 排队期间关键词又变了（典型是被清空），这一次作废，避免打出旧词
+      if (searchKeyword.value.trim() !== pendingKeyword) return;
+      void fetchSearchResults();
+    }, SEARCH_DEBOUNCE_MS);
+  };
+
+  const handleSearchCompositionEnd = () => {
+    isComposing.value = false;
+    scheduleSearch();
+  };
+
+  const handleSearchClear = () => {
+    isComposing.value = false;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchKeyword.value = '';
+    void fetchSearchResults();
+  };
+
+  const isAllCollapsed = computed(() => {
+    if (!sessions.value.length) return false;
+    return sessions.value.every(session => collapsedSessions.value.has(session.uid));
+  });
+
+  /** 分组列表才显示；搜索中 / 暂无报告都 display:none，loading 时也不要闪回来 */
+  const isCollapseAllHidden = computed(() => (
+    // 拉列表期间 renderBlocks 会短暂为空，此时别动显隐，否则每次搜索都闪一下
+    isSearching.value || (!loading.value && !renderBlocks.value.length)
+  ));
+
+  const toggleCollapseAll = () => {
+    if (isSearching.value) return;
+    if (isAllCollapsed.value) {
+      collapsedSessions.value = new Set();
+      return;
+    }
+    collapsedSessions.value = new Set(sessions.value.map(session => session.uid));
+  };
+
+  const toggleGroup = (uid: string) => {
+    const next = new Set(collapsedSessions.value);
+    if (next.has(uid)) {
+      next.delete(uid);
     } else {
-      next.add(id);
+      next.add(uid);
     }
-    collapsedGroups.value = next;
-  };
-
-  const handleListScroll = () => {
-    const el = listScrollRef.value;
-    if (!el || loading.value) return;
-    if (visibleCount.value >= allReports.value.length) return;
-    const remain = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (remain < 48) {
-      visibleCount.value = Math.min(allReports.value.length, visibleCount.value + PAGE_SIZE);
-    }
+    collapsedSessions.value = next;
   };
 
   const handleReportClick = async (item: AiAttachmentListItem) => {
@@ -283,6 +505,7 @@
     let exportFormats = item.export_formats || [];
     let title = item.title || t('智能分析报告');
     let createdAt = formatReportTime(item.created_at);
+    let analysisMode = '';
     try {
       const detail = await AiAssistantManageService.fetchAttachment({
         attachment_uid: item.uid,
@@ -291,6 +514,7 @@
       exportFormats = detail.export_formats || exportFormats;
       title = detail.title || title;
       createdAt = formatReportTime(detail.created_at || detail.content_updated_at || '') || createdAt;
+      analysisMode = String(detail.input_data?.analysis_mode || '');
     } catch {
       // 列表摘要仍可打开空内容抽屉
     }
@@ -302,22 +526,42 @@
       markdown,
       exportFormats,
       conversationUid: item.conversation?.uid,
+      analysisMode,
     };
     reportDrawerShow.value = true;
   };
 
-  const handleExport = async (item: AiAttachmentListItem) => {
-    const format = (item.export_formats || []).map(value => String(value).toUpperCase())
-      .includes('MARKDOWN')
-      ? 'MARKDOWN'
-      : (item.export_formats?.[0] || 'MARKDOWN');
+  const getExportFormats = (item: AiAttachmentListItem): AiAttachmentExportFormat[] => {
+    const formats = (item.export_formats || [])
+      .map(value => String(value).toUpperCase())
+      .filter((value): value is AiAttachmentExportFormat => (
+        DEFAULT_EXPORT_FORMATS.includes(value as AiAttachmentExportFormat)
+      ));
+    return formats.length ? formats : DEFAULT_EXPORT_FORMATS;
+  };
+
+  const handleExportMenuShow = (uid: string) => {
+    exportMenuUid.value = uid;
+  };
+
+  const handleExportMenuHide = (uid: string) => {
+    if (exportMenuUid.value === uid) {
+      exportMenuUid.value = '';
+    }
+  };
+
+  const handleExport = async (item: AiAttachmentListItem, exportFormat: AiAttachmentExportFormat) => {
+    if (exportingUid.value === item.uid) return;
+    exportingUid.value = item.uid;
     try {
       await AiAssistantManageService.exportAttachment({
         attachment_uid: item.uid,
-        export_format: format,
+        export_format: exportFormat,
       }, { catchError: true });
     } catch (error: any) {
       messageError(error?.message || t('导出失败'));
+    } finally {
+      exportingUid.value = '';
     }
   };
 
@@ -335,14 +579,16 @@
   };
 
   const handleReportUpdated = (attachment: AiAttachment) => {
-    allReports.value = allReports.value.map((item) => {
-      if (item.uid !== attachment.uid) return item;
-      return {
-        ...item,
-        title: attachment.title || item.title,
-        status: attachment.status,
-      };
-    });
+    const mergeItem = (item: AiAttachmentListItem) => (
+      item.uid === attachment.uid
+        ? { ...item, title: attachment.title || item.title, status: attachment.status }
+        : item
+    );
+    sessions.value = sessions.value.map(session => ({
+      ...session,
+      reports: session.reports.map(mergeItem),
+    }));
+    searchResults.value = searchResults.value.map(mergeItem);
     if (activeReport.value?.id === attachment.uid) {
       activeReport.value = {
         ...activeReport.value,
@@ -375,19 +621,53 @@
     document.body.style.userSelect = 'none';
   };
 
-  watch(searchKeyword, () => {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      void fetchReports();
-    }, SEARCH_DEBOUNCE_MS);
+  let sessionObserver: IntersectionObserver | null = null;
+
+  const observeSessions = () => {
+    const root = listScrollRef.value;
+    if (!sessionObserver || !root) return;
+    sessionObserver.disconnect();
+    if (isSearching.value) return;
+    root.querySelectorAll('[data-session-uid]').forEach((el) => {
+      sessionObserver?.observe(el);
+    });
+  };
+
+  watch(searchKeyword, (value) => {
+    if (isComposing.value) return;
+    // 点清空是明确操作，立刻回到会话列表，不再等防抖
+    if (!String(value).trim()) {
+      if (searchTimer) clearTimeout(searchTimer);
+      void fetchSearchResults();
+      return;
+    }
+    scheduleSearch();
+  });
+
+  watch([() => sessions.value.length, isSearching], () => {
+    void nextTick(observeSessions);
   });
 
   onMounted(() => {
-    void fetchReports();
+    sessionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const uid = (entry.target as HTMLElement).dataset.sessionUid;
+        const session = sessions.value.find(item => item.uid === uid);
+        if (session) void loadSessionReports(session);
+      });
+    }, {
+      root: listScrollRef.value,
+      rootMargin: '120px',
+    });
+    void fetchSessions();
   });
 
   onBeforeUnmount(() => {
     if (searchTimer) clearTimeout(searchTimer);
+    searchCancelSource?.cancel('report-list search aborted');
+    sessionObserver?.disconnect();
+    sessionObserver = null;
   });
 </script>
 
@@ -510,6 +790,14 @@
         border: 0;
         outline: none;
         box-shadow: none;
+
+        .bk-input--suffix,
+        .bk-input--suffix-icon,
+        .bk-input--clear-icon,
+        .clear-icon {
+          background: transparent !important;
+          background-color: transparent !important;
+        }
       }
 
       .bk-input--text {
@@ -517,6 +805,14 @@
         font-size: var(--audit-font-size-sm);
         line-height: var(--audit-line-height-sm);
         background: transparent;
+      }
+
+      .bk-input--suffix,
+      .bk-input--suffix-icon,
+      .bk-input--clear-icon,
+      .clear-icon {
+        background: transparent !important;
+        background-color: transparent !important;
       }
     }
 
@@ -526,8 +822,14 @@
       color: var(--audit-neutral-text-03);
     }
 
+    .collapse-all-wrap {
+      &.is-hidden {
+        display: none;
+      }
+    }
+
     :deep(.collapse-all-btn) {
-      min-width: 92px;
+      min-width: 100px;
       height: 26px;
       padding: 3px 12px;
       color: var(--audit-neutral-text-02);
@@ -538,6 +840,11 @@
     .collapse-all-icon {
       margin-right: var(--audit-space-4);
       font-size: 16px;
+
+      /* iconcool 里 full-screen 重名两次，字体后一条会盖成四角全屏；这里用与 zoom-out 成对的那颗 */
+      &.audit-icon-full-screen::before {
+        content: '\e1c0';
+      }
     }
   }
 
@@ -608,6 +915,27 @@
     gap: var(--audit-space-8);
   }
 
+  .load-all-btn {
+    padding: 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-brand-02);
+    text-align: center;
+    cursor: pointer;
+    background: none;
+    border: none;
+    align-self: center;
+
+    &:hover {
+      color: var(--audit-brand-03);
+    }
+
+    &:disabled {
+      color: var(--audit-neutral-text-04);
+      cursor: not-allowed;
+    }
+  }
+
   .report-row {
     display: flex;
     height: 32px;
@@ -618,7 +946,9 @@
     align-items: center;
     gap: var(--audit-space-8);
 
-    &:hover {
+    &:hover,
+    &.is-export-open,
+    &.is-exporting {
       background: var(--audit-neutral-border-02);
 
       .report-time {
@@ -633,6 +963,8 @@
     .report-file-icon {
       width: 16px;
       height: 16px;
+      font-size: 16px;
+      color: var(--audit-neutral-text-03);
       flex-shrink: 0;
     }
 
@@ -662,6 +994,11 @@
       flex-shrink: 0;
     }
 
+    .hover-export-dropdown {
+      display: inline-flex;
+      line-height: 1;
+    }
+
     .hover-action {
       display: inline-flex;
       padding: 0;
@@ -676,6 +1013,29 @@
       &:hover {
         color: var(--audit-brand-02);
       }
+
+      &:disabled {
+        cursor: not-allowed;
+      }
+    }
+
+    .hover-action-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--audit-neutral-border-01);
+      border-top-color: var(--audit-brand-02);
+      border-radius: 50%;
+      animation: report-export-spin 0.8s linear infinite;
+    }
+  }
+
+  @keyframes report-export-spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
     }
   }
 </style>
