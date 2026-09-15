@@ -68,6 +68,7 @@ import('bkui-vue/dist/style.variable.css');
 import('@lib/bk-icon/style.css');
 import('@lib/bk-icon/iconcool.js');
 import('@/css/reset.css');
+import('@/css/tokens.css');
 import('@/css/common.css');
 import('@blueking/notice-component/dist/style.css');
 import('@blueking/date-picker/vue3/vue3.css');
