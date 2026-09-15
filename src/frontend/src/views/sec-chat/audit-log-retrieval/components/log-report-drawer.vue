@@ -38,29 +38,35 @@
           v-if="!isEditing"
           class="ai-report-header-actions">
           <bk-button
-            v-if="isSessionEntry"
+            outline
+            theme="primary"
             @click="handleEdit">
             {{ t('编辑') }}
           </bk-button>
           <bk-dropdown
             v-if="availableExportFormats.length"
+            :disabled="exporting"
             placement="bottom-end"
             trigger="click">
-            <bk-button>
+            <bk-button
+              :disabled="exporting"
+              :loading="exporting">
               <audit-icon
                 class="mr4"
                 type="download" />
-              {{ t('导出') }}
+              {{ exporting ? t('导出中...') : t('导出') }}
             </bk-button>
             <template #content>
               <bk-dropdown-menu>
                 <bk-dropdown-item
                   v-if="availableExportFormats.includes('PDF')"
+                  :disabled="exporting"
                   @click="handleExport('PDF')">
                   {{ t('导出为PDF') }}
                 </bk-dropdown-item>
                 <bk-dropdown-item
                   v-if="availableExportFormats.includes('MARKDOWN')"
+                  :disabled="exporting"
                   @click="handleExport('MARKDOWN')">
                   {{ t('导出为Markdown') }}
                 </bk-dropdown-item>
@@ -76,7 +82,9 @@
       </div>
     </template>
 
-    <div class="ai-report-preview-body">
+    <div
+      class="ai-report-preview-body log-report-preview"
+      :class="{ 'is-editing': isEditing }">
       <template v-if="!isEditing">
         <div class="ai-report-meta">
           <div class="ai-report-meta-row">
@@ -133,8 +141,8 @@
             </div>
             <rich-editor
               v-model:content="editContent"
-              :default="editorInitialContent"
-              height="calc(100vh - 280px)" />
+              class="edit-rich-editor"
+              :default="editorInitialContent" />
           </div>
         </div>
       </template>
@@ -143,14 +151,14 @@
     <template #footer>
       <div class="ai-report-edit-footer">
         <bk-button
+          class="ai-report-save-btn"
           :loading="saving"
-          style="width: 102px;"
           theme="primary"
           @click="handleSave">
           {{ t('保存') }}
         </bk-button>
         <bk-button
-          style="min-width: 64px;"
+          class="ai-report-cancel-btn"
           @click="handleCancelEdit">
           {{ t('取消') }}
         </bk-button>
@@ -191,6 +199,7 @@
     markdown?: string;
     exportFormats?: string[];
     conversationUid?: string;
+    analysisMode?: string;
   }
 
   const props = withDefaults(defineProps<{
@@ -199,14 +208,14 @@
     totalHit?: number;
     conditions?: RetrievalFilterCondition[];
     systems?: string;
-    /** 会话内打开：编辑 + 导出；报告列表打开：导出 + 跳转至会话 */
+    /** 报告列表打开时额外提供「跳转至会话」；编辑、导出两入口都有 */
     entry?: 'session' | 'report-list';
   }>(), {
     isShow: false,
     report: null,
-    totalHit: 0,
+    totalHit: undefined,
     conditions: () => [],
-    systems: '已选系统',
+    systems: '',
     entry: 'session',
   });
 
@@ -239,26 +248,35 @@
 
   const analysisTimeText = computed(() => props.report?.createdAt || '');
 
-  const isSessionEntry = computed(() => props.entry === 'session');
-
   const isReportListEntry = computed(() => props.entry === 'report-list');
 
   const availableExportFormats = computed(() => (
     (props.report?.exportFormats || []).map(item => String(item).toUpperCase())
   ));
 
-  const htmlText = computed(() => toPreviewHtml(savedContent.value));
+  const htmlText = computed(() => toPreviewHtml(savedContent.value || props.report?.markdown || ''));
 
   const conditionText = computed(() => {
     if (!props.conditions.length) return '--';
     return props.conditions.map(item => `${item.field}=${item.value}`).join('，');
   });
 
+  const analysisScopeText = computed(() => (
+    String(props.report?.analysisMode || '').toUpperCase() === 'CUSTOM'
+      ? '自定义分析'
+      : '全量命中数据'
+  ));
+
+  const hitCountText = computed(() => {
+    if (props.totalHit === undefined || props.totalHit === null) return '--';
+    return `${props.totalHit.toLocaleString('en-US')} 条`;
+  });
+
   const metaList = computed(() => [
     { key: 'systems', label: '系统范围', value: props.systems || '--' },
     { key: 'conditions', label: '查询条件', value: conditionText.value },
-    { key: 'total', label: '命中总量', value: `${props.totalHit.toLocaleString('en-US')} 条` },
-    { key: 'scope', label: '分析口径', value: '全量命中数据' },
+    { key: 'total', label: '命中总量', value: hitCountText.value },
+    { key: 'scope', label: '分析口径', value: analysisScopeText.value },
   ]);
 
   const resetEditForm = (title: string, markdown: string) => {
@@ -276,7 +294,7 @@
 
   watch(() => [props.isShow, props.report?.id, props.report?.markdown], () => {
     if (props.isShow && !isEditing.value) syncFromReport();
-  });
+  }, { immediate: true });
 
   const handleUpdateShow = (val: boolean) => {
     emit('update:isShow', val);
@@ -393,7 +411,7 @@
 
   .ai-report-header-actions {
     position: absolute;
-    right: 20px;
+    right: var(--audit-space-24);
     display: flex;
     gap: var(--audit-space-8);
     align-items: center;
@@ -404,9 +422,23 @@
   }
 
   .ai-report-preview-body {
+    display: flex;
+    height: 100%;
+    min-height: 0;
     font-size: var(--audit-font-size-md);
     line-height: 1.6;
     color: var(--audit-neutral-text-02);
+    flex-direction: column;
+    box-sizing: border-box;
+
+    /*
+     * 父级 audit-sideslider-content 是 flex column 且高度由 flex 撑开，
+     * height:100% 在这里拿不到确定值，编辑态必须走 flex 取高。
+     */
+    &.is-editing {
+      height: auto;
+      flex: 1;
+    }
   }
 
   .ai-report-meta {
@@ -415,6 +447,7 @@
     border: 1px solid var(--audit-neutral-border-02);
     border-bottom: none;
     border-radius: var(--audit-radius-control) var(--audit-radius-control) 0 0;
+    flex-shrink: 0;
   }
 
   .ai-report-meta-row {
@@ -443,9 +476,13 @@
   }
 
   .ai-report-section {
-    min-height: 360px;
+    display: flex;
+    min-height: 0;
     border: 1px solid var(--audit-neutral-border-02);
+    border-bottom: none;
     border-radius: 0 0 var(--audit-radius-control) var(--audit-radius-control);
+    flex: 1;
+    flex-direction: column;
   }
 
   .ai-report-section-header {
@@ -454,6 +491,7 @@
     padding: 0 var(--audit-space-24);
     border-bottom: 1px solid var(--audit-neutral-border-02);
     align-items: center;
+    flex-shrink: 0;
   }
 
   .ai-report-section-title {
@@ -474,7 +512,10 @@
   }
 
   .ai-report-section-body {
+    min-height: 0;
     padding: var(--audit-space-24) var(--audit-space-40) var(--audit-space-32);
+    overflow: auto;
+    flex: 1;
   }
 
   .report-empty {
@@ -512,14 +553,23 @@
   }
 
   .edit-form {
+    display: flex;
+    width: 100%;
+    min-height: 0;
     padding: var(--audit-space-24) var(--audit-space-40);
+    flex: 1;
+    flex-direction: column;
+    box-sizing: border-box;
   }
 
   .edit-field {
+    width: 100%;
     margin-bottom: var(--audit-space-24);
+    flex-shrink: 0;
 
     .edit-label {
       margin-bottom: 6px;
+      flex-shrink: 0;
       font-size: var(--audit-font-size-sm);
       line-height: var(--audit-line-height-sm);
       color: var(--audit-neutral-text-02);
@@ -527,16 +577,119 @@
   }
 
   .edit-field--content {
+    display: flex;
+    min-height: 0;
     margin-bottom: 0;
+    flex: 1;
+    flex-direction: column;
 
-    :deep(.editor-wrap) {
+    :deep(.edit-rich-editor) {
+      display: flex;
       width: 100%;
+      min-height: 0;
+      padding: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    /* Quill 把 toolbar 作为 container 的兄弟插进 editor-wrap，两者都得显式定尺寸 */
+    :deep(.ql-toolbar.ql-snow) {
+      height: 40px;
+      padding: 0 var(--audit-space-16);
+      box-sizing: border-box;
+      border-color: var(--audit-neutral-border-01);
+      border-radius: var(--audit-radius-control) var(--audit-radius-control) 0 0;
+      flex: 0 0 40px;
+    }
+
+    :deep(.ql-container.ql-snow) {
+      /* height 被组件按 height prop 写成了行内 auto，只能用 important 夺回 */
+      min-height: 0;
+      height: auto !important;
+      padding-bottom: 0;
+      flex: 1 1 0;
+      border-color: var(--audit-neutral-border-01);
+      border-radius: 0 0 var(--audit-radius-control) var(--audit-radius-control);
+    }
+
+    :deep(.ql-editor) {
+      min-height: 0;
+      padding: var(--audit-space-12) var(--audit-space-16);
+      overflow-y: auto;
     }
   }
 
   .ai-report-edit-footer {
     display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: flex-start;
     gap: var(--audit-space-8);
-    justify-content: flex-end;
+  }
+
+  .ai-report-save-btn,
+  .ai-report-cancel-btn {
+    min-width: 88px;
+  }
+</style>
+
+<style lang="postcss">
+  .bk-sideslider .bk-modal-content:has(.log-report-preview:not(.is-editing)),
+  .bk-sideslider .bk-sideslider-content:has(.log-report-preview:not(.is-editing)) {
+    height: 100%;
+    min-height: calc(100vh - 52px);
+  }
+
+  /* bk-modal-body 有确定高度但不是弹性容器，不铺这一层下面的 flex:1 全部落空，编辑器会塌成 0 高 */
+  .bk-sideslider .bk-modal-body:has(.log-report-preview.is-editing) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bk-sideslider .bk-modal-body:has(.log-report-preview.is-editing) .bk-sideslider-header {
+    flex-shrink: 0;
+  }
+
+  .bk-sideslider .bk-modal-content:has(.log-report-preview.is-editing),
+  .bk-sideslider .bk-sideslider-content:has(.log-report-preview.is-editing) {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .bk-sideslider .audit-sideslider-content:has(.log-report-preview.is-editing) {
+    min-height: 0;
+    flex: 1;
+  }
+
+  .bk-sideslider:has(.log-report-preview.is-editing)  {
+    .bk-modal-content > div {
+      height: 100%;
+    }
+    .bk-sideslider-content {
+      height: 100%;
+    }
+  }
+
+  .bk-sideslider:has(.log-report-preview.is-editing) .bk-modal-footer {
+    flex-shrink: 0;
+  }
+
+  /* 稿 3573:25180：48px 固定操作栏，灰底 + 上边框，按钮左对齐留 40px */
+  .bk-sideslider:has(.log-report-preview.is-editing) .bk-sideslider-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 48px;
+    padding: 0 var(--audit-space-40);
+    /* 默认 footer 带 margin-top:24，贴底后会顶出一条空隙 */
+    margin: 0;
+    flex-shrink: 0;
+    background: var(--audit-neutral-bg-02);
+    border-top: 1px solid var(--audit-neutral-border-01);
+    box-sizing: border-box;
   }
 </style>

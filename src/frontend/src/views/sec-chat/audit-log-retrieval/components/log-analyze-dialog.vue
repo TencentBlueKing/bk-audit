@@ -109,7 +109,7 @@
 
   import useMessage from '@hooks/use-message';
 
-  import reportIcon from '@images/Union.svg';
+  import reportIcon from '@images/analyze-recommend-icon.svg';
 
   import type { RetrievalFilterCondition } from '../../types';
 
@@ -180,6 +180,7 @@
       type: 'recommend',
       title: t('智能分析报告'),
     });
+    isShow.value = false;
   };
 
   const handleCustomAnalyze = () => {
@@ -194,6 +195,7 @@
       title: t('智能分析报告'),
       prompt,
     });
+    isShow.value = false;
   };
 </script>
 
@@ -287,6 +289,7 @@
     .report-card {
       position: relative;
       display: flex;
+      min-height: 70px;
       padding: var(--audit-space-12) var(--audit-space-16);
       margin-bottom: 0;
       overflow: hidden;
@@ -296,6 +299,8 @@
       border-radius: var(--audit-radius-container);
       transition: all .2s;
       flex-direction: column;
+      justify-content: center;
+      align-items: stretch;
       gap: var(--audit-space-4);
       box-sizing: border-box;
 
@@ -328,7 +333,6 @@
       }
 
       .report-desc {
-        padding-right: 96px;
         font-size: var(--audit-font-size-sm);
         line-height: var(--audit-line-height-sm);
         color: var(--audit-neutral-text-03);
@@ -340,10 +344,11 @@
         position: absolute;
         top: 7px;
         right: 25px;
+        z-index: 0;
         width: 72px;
         height: 72px;
         pointer-events: none;
-        object-fit: contain;
+        object-fit: none;
       }
     }
 
