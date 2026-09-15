@@ -1230,13 +1230,66 @@ class TestListRiskResource(TestCase):
         self.resource.risk.list_risk(self._payload(sort=["-event_time"]), _request=request)
         self.iam_filter_patcher.target.iam_risk_filter.assert_called()
 
+    def test_list_risk_scene_scope_excludes_pending_confirm(self):
+        """场景风险视图（带 scope）应排除待确认状态，待确认由独立列表承载"""
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm",
+            raw_event_id="raw-pending",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            title="pending",
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+        )
+        TicketPermission.objects.create(
+            risk_id=pending_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        data = self._call_resource({})
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertNotIn(pending_risk.risk_id, risk_ids)
+        self.assertIn(self.risk.risk_id, risk_ids)
+
+    def test_list_risk_without_scope_keeps_pending_confirm(self):
+        """所有风险视图不传 scope，需保留待确认状态"""
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm-all",
+            raw_event_id="raw-pending-all",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            title="pending-all",
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+        )
+        TicketPermission.objects.create(
+            risk_id=pending_risk.risk_id,
+            action=ActionEnum.LIST_RISK.id,
+            user=self.username,
+            user_type=UserType.OPERATOR,
+        )
+
+        request = self._make_request()
+        data = self.resource.risk.list_risk({}, _request=request)
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertIn(pending_risk.risk_id, risk_ids)
+
     # ──── Tags / Strategy ────
 
-    def test_scene_risk_view_type_maps_to_list_scene_risk(self):
+    def test_scene_risk_view_type_maps_to_list_risk(self):
+        """场景视图与全部视图共用 ListRisk，待确认的排除由 scope 过滤在 ListRisk.perform_request 内完成"""
         from services.web.risk.constants import RiskViewType
-        from services.web.risk.resources.risk import ListRiskMetaBase, ListSceneRisk
+        from services.web.risk.resources.risk import ListRisk, ListRiskMetaBase
 
-        self.assertIs(ListRiskMetaBase.risk_cls_map[RiskViewType.SCENE.value], ListSceneRisk)
+        self.assertIs(ListRiskMetaBase.risk_cls_map[RiskViewType.SCENE.value], ListRisk)
 
     def test_list_risk_tags_no_memory_materialization(self):
         """ListRiskTags 应使用子查询而非将 risk_id 物化到内存"""

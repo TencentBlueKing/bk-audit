@@ -357,6 +357,18 @@ class AttachmentRequestSerializerTest(TestCase):
                 {parameter["name"] for parameter in conversation_list["parameters"]}
             )
         )
+        counts_schema = schema["components"]["schemas"]["ConversationListItem"]["properties"][
+            "attachment_counts_by_type"
+        ]
+        if "allOf" in counts_schema:
+            counts_schema = counts_schema["allOf"][0]
+        if "$ref" in counts_schema:
+            counts_schema = schema["components"]["schemas"][counts_schema["$ref"].rsplit("/", 1)[-1]]
+        self.assertEqual(set(counts_schema["properties"]), set(AttachmentType.values))
+        self.assertEqual(set(counts_schema["required"]), set(AttachmentType.values))
+        for attachment_type in AttachmentType.values:
+            self.assertEqual(counts_schema["properties"][attachment_type]["type"], "integer")
+            self.assertEqual(counts_schema["properties"][attachment_type]["minimum"], 0)
         expected_enums = {
             "attachment_type": set(AttachmentType.values),
             "status": set(ExecutionStatus.values),
