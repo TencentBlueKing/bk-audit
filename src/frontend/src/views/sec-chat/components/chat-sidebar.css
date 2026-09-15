@@ -14,6 +14,7 @@
     min-width: 0;
     overflow: visible;
     border-right: none;
+
     .collapsed-toolbar {
       position: absolute;
       top: 16px;
@@ -58,26 +59,23 @@
         }
 
         .search-icon {
-          width: 25px;
-          height: 25px;
-          font-size: 30px;
-
-          :deep(svg),
-          svg {
-            width: 20px;
-            height: 20px;
-            font-size: 20px;
-          }
+          width: 16px;
+          height: 16px;
+          transition: filter .2s;
         }
 
         .add-icon {
-          width: 20px;
-          height: 20px;
+          width: 18px;
+          height: 18px;
           opacity: 75%;
 
           /* ai-add.svg 为白色，收起态白底需转为深色 */
           filter: brightness(0) saturate(100%);
           transition: opacity .2s, filter .2s;
+        }
+
+        &:hover .search-icon {
+          filter: brightness(0) saturate(100%) invert(42%) sepia(98%) saturate(1496%) hue-rotate(198deg) brightness(101%) contrast(101%);
         }
 
         &:hover .add-icon {
@@ -358,8 +356,8 @@
         background: #f0f5ff;
         border: 0 dashed #a3c5fd;
         border-radius: 4px;
+        opacity: 0%;
         box-sizing: border-box;
-        opacity: 0;
         transition: height .15s ease, margin .15s ease, opacity .15s ease, border-width .15s ease;
         align-items: center;
         justify-content: center;
@@ -368,9 +366,9 @@
           height: 80px;
           min-height: 80px;
           margin: 0 8px 8px;
-          border-width: 1px;
-          opacity: 1;
           pointer-events: auto;
+          border-width: 1px;
+          opacity: 100%;
         }
       }
     }
@@ -507,8 +505,8 @@
           display: block;
           pointer-events: none;
           opacity: 0%;
-          transition: opacity .15s;
           transform: translateY(-50%);
+          transition: opacity .15s;
         }
 
         .group-more {
@@ -665,8 +663,8 @@
 
       .conv-title.show-tooltips-text {
         display: block;
-        min-width: 0;
         max-width: 100%;
+        min-width: 0;
         flex: 1;
       }
 
@@ -685,8 +683,8 @@
         display: flex;
         pointer-events: none;
         opacity: 0%;
-        transition: opacity .15s;
         transform: translateY(-50%);
+        transition: opacity .15s;
         align-items: center;
         flex-shrink: 0;
 
