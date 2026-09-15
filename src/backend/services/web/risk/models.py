@@ -299,7 +299,6 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
             models.Index(
                 fields=['scene_id', 'is_deleted', 'display_status', 'event_time'], name='idx_risk_scene_del_status_time'
             ),
-            models.Index(fields=["strategy", "is_deleted", "event_time"], name="idx_risk_strategy_isdel_time"),
         ]
 
     # ──── 单一权限 ────
