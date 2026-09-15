@@ -170,7 +170,10 @@ RAW_OUTPUT_KEEP_LENGTH = 2048
 class NL2JSONService:
     """自然语言 → condition（NL 输出 = LOG_SEARCH 输入，零转换）"""
 
-    agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+    # 2026-09-15 统一切换新智能体（bp-ai-user-intent，与意图识别共用）：旧网关
+    # （bp-audit-log-search / bp-ai-nlls 同一智能体的两个名）退役不再使用；
+    # per-agent 配置按枚举名读 BKAPP_AI_USER_INTENT_*（bkop 三件套已配）
+    agent_code = AIAgentCode.USER_INTENT
 
     @classmethod
     def convert(

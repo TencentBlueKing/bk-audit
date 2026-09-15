@@ -58,5 +58,4 @@ class AIAgentCode(TextChoices):
     RISK_SEARCH = "bp-ai-aud-rsk-srch", gettext_lazy("风险检索助手")
     ALS_TITLE_SUM = "bp-ai-als-title-sum", gettext_lazy("AI 风险分析报告标题生成")
     AUDIT_ANALYSE = "bp-ai-audit-analyse", gettext_lazy("审计风险分析助手")
-    AUDIT_LOG_SEARCH = "bp-audit-log-search", gettext_lazy("审计日志检索助手")
     USER_INTENT = "bp-ai-user-intent", gettext_lazy("用户意图识别智能体")

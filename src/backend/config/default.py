@@ -215,7 +215,7 @@ BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 #   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
 #   3. get_endpoint(apigw_name, APIGW, stage="prod") — 自动生成
 # 认证配置：per-agent 应用凭证 BKAPP_AI_{AGENT}_APP_CODE / _SECRET_KEY 优先级最高，
-# 仅对该 agent 生效（如上云版的 BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE），未配置时走下方全局链。
+# 仅对该 agent 生效（如上云版的 BKAPP_AI_AUDIT_ANALYSE_APP_CODE），未配置时走下方全局链。
 # 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 为原有逻辑（所有 agent 共用，历史上早于日志检索迭代存在），
 # 注意：若配置的凭证与其网关环境不匹配会导致凭证错配，跨平台 agent 请一律使用 per-agent 变量。
 AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
@@ -226,7 +226,7 @@ AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
 # - 生产（上云）：默认 USER_INTENT，BK_API_URL_TMPL 独立域名模板默认链路直接跑通，零额外配置
 # - bkop：PaaS 注入的统一域名模板下 bp-ai-user-intent 未注册（404），配置
 #   BKAPP_AI_USER_INTENT_API_URL 指向该网关的独立域名完整 URL
-#   （第 1 层优先级最高，配置模式同 bkop 的 AUDIT_LOG_SEARCH 直连）；
+#   （第 1 层优先级最高）；
 #   凭证走全局 bk-audit（网关已授权）
 AI_USER_INTENT_AGENT_CODE = os.getenv("BKAPP_AI_USER_INTENT_AGENT_CODE", "USER_INTENT")
 # 单次智能体调用超时（秒）：默认 300 保持历史行为；NL 检索链路建议收紧到 60
