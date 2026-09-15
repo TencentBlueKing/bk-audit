@@ -98,8 +98,8 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import { getToolListScopeParams } from '@/utils/assist/scene-system-params';
   import {
-    getStrategySystemScopeParams,
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
@@ -207,10 +207,7 @@
   });
 
 
-  const buildToolListParams = () => ({
-    ...getStrategySystemScopeParams(route),
-    status: 'published',
-  });
+  const buildToolListParams = () => getToolListScopeParams({ status: 'published' });
 
   // 获取所有工具
   const {

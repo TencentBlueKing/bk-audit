@@ -396,9 +396,9 @@
   const getDrillDisplayName = (config: {
     tool?: { uid?: string };
     drill_name?: string;
-  }) => config.drill_name
-    || getToolNameAndType(config.tool?.uid || '').name
+  }) => getToolNameAndType(config.tool?.uid || '').name
     || config.tool?.uid
+    || config.drill_name
     || '--';
 
   const getTooltipData = (value: any): string | number => {
