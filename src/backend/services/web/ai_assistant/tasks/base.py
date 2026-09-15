@@ -197,7 +197,7 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
         instance_id: int,
         task_id: str,
     ) -> None:
-        """记录可定位执行对象的结构化日志，不写入业务快照或异常正文。"""
+        """记录执行对象标识及异常堆栈，不额外附加业务快照；堆栈仍可能包含异常正文。"""
 
         logger.exception(
             message,

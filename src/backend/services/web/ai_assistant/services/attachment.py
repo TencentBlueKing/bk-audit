@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
+    ATTACHMENT_DEFAULT_ORDER_FIELDS,
     AttachmentErrorCode,
     AttachmentExportFormat,
     ExecutionMode,
@@ -231,6 +232,8 @@ class AttachmentService:
         keyword: str = "",
         conversation_uid: str | None = None,
         source_message_uid: str | None = None,
+        limit: int | None = None,
+        order_fields: list[str] | None = None,
     ):
         """返回当前用户可见附件列表，并只加载列表视图必需字段。"""
 
@@ -246,7 +249,7 @@ class AttachmentService:
         if source_message_uid:
             filters["source_message__uid"] = source_message_uid
 
-        return (
+        queryset = (
             self._visible_attachments()
             .filter(**filters)
             .select_related("source_message__conversation")
@@ -269,9 +272,12 @@ class AttachmentService:
                 "title",
                 "content_updated_at",
                 "created_at",
+                "error_code",
+                "error_message",
             )
-            .order_by("-content_updated_at", "-id")
+            .order_by(*(order_fields or ATTACHMENT_DEFAULT_ORDER_FIELDS), "-id")
         )
+        return queryset[:limit] if limit is not None else queryset
 
     def update(
         self,

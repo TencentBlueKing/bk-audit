@@ -1,3 +1,9 @@
+from services.web.ai_assistant.schemas.audit_analysis import (
+    AIAnalysisContextSchema,
+    AIAnalysisInputSchema,
+    AIAnalysisOutputSchema,
+    AIAnalysisQuerySummary,
+)
 from services.web.ai_assistant.schemas.message import (
     MessageSchema,
     SchemaT,
@@ -15,6 +21,10 @@ from services.web.ai_assistant.schemas.stream import (
 )
 
 __all__ = [
+    "AIAnalysisContextSchema",
+    "AIAnalysisInputSchema",
+    "AIAnalysisOutputSchema",
+    "AIAnalysisQuerySummary",
     "AttachmentStreamConfig",
     "AttachmentStreamSnapshot",
     "MessageSchema",

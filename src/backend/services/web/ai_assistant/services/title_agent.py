@@ -20,12 +20,14 @@ limitations under the License.
 # User Message 为单行 label 前缀格式（与 risk 的「用户自定义分析描述: "..."」同构，
 # label 区分模块），清洗规则与 risk _normalize_analyse_report_ai_title 一致。
 
+import ast
 import logging
 from typing import Any, Mapping, Sequence
 
 from bk_resource import api
 
 from api.constants import AIAgentCode
+from services.web.ai_assistant.constants import AI_CONVERSATION_TITLE_MAX_LENGTH
 from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,
@@ -39,6 +41,11 @@ logger = logging.getLogger(__name__)
 AI_TITLE_INPUT_TEMPLATE = '用户自然语言检索描述: "{input_text}"'
 # 条件检索（非自然语言）来源的标题素材：label 区分来源，仍保持单行 label 前缀格式
 AI_TITLE_CONDITION_INPUT_TEMPLATE = '用户条件检索描述: "{input_text}"'
+# 报告标题与会话标题共享 Agent 和清洗逻辑，但提示词语义固定且独立，避免调用方
+# 组合 source/module/max_length 等互斥参数。
+AI_ANALYSIS_TITLE_INPUT_TEMPLATE = (
+    "模块：AI审计日志分析；场景：根据日志检索条件和分析要求生成审计报告；" '请根据用户输入生成不超过 {max_length} 字的报告标题："{input_text}"'
+)
 
 # 枚举字段值 → 展示值（标题素材给人类可读文案，智能体才能生成「WebUI操作」而非「操作途径审计」；
 # 检索查询侧仍用原始值，两套口径互不影响；非枚举字段/未知值回退原文）
@@ -152,13 +159,18 @@ def _format_time_range(start_time: Any, end_time: Any) -> str:
 
 
 class TitleAgentService:
-    """共用智能体标题生成（复刻 risk 调用方式，服务 AI 日志检索会话标题）。"""
+    """复用同一智能体生成会话或报告标题，并统一清洗返回内容。"""
 
     @classmethod
     def generate_title(
-        cls, *, input_text: str, username: str, max_length: int, source: str = "natural_language"
+        cls,
+        *,
+        input_text: str,
+        username: str,
+        max_length: int,
+        source: str = "natural_language",
     ) -> str:
-        """拼 input → 调共用智能体 → 清洗截断，返回标题文本（空串表示无可用标题）。
+        """根据自然语言或字段条件摘要生成会话标题。
 
         :param source: 素材来源（natural_language=自然语言原文 / field_condition=条件摘要），
             决定 User Message 的 label 前缀，格式仍为与 risk 同构的单行 label。
@@ -166,6 +178,26 @@ class TitleAgentService:
 
         template = AI_TITLE_CONDITION_INPUT_TEMPLATE if source == "field_condition" else AI_TITLE_INPUT_TEMPLATE
         prompt = template.format(input_text=input_text)
+        return cls._request_title(prompt=prompt, username=username, max_length=max_length)
+
+    @classmethod
+    def generate_analysis_title(cls, *, input_text: str, username: str) -> str:
+        """根据日志分析要求生成报告标题。"""
+
+        prompt = AI_ANALYSIS_TITLE_INPUT_TEMPLATE.format(
+            input_text=input_text,
+            max_length=AI_CONVERSATION_TITLE_MAX_LENGTH,
+        )
+        return cls._request_title(
+            prompt=prompt,
+            username=username,
+            max_length=AI_CONVERSATION_TITLE_MAX_LENGTH,
+        )
+
+    @classmethod
+    def _request_title(cls, *, prompt: str, username: str, max_length: int) -> str:
+        """调用共用标题 Agent，并统一应用无副作用的结果清洗。"""
+
         result = api.bk_plugins_ai_agent.chat_completion(
             agent_code=AIAgentCode.ALS_TITLE_SUM,
             user=username,
@@ -196,8 +228,6 @@ class TitleAgentService:
         #    典型形态：'[{"error_code": 1, "message": "bad request", "data": {}}, {...}]'
         extracted = candidate
         if candidate.startswith(("[", "(")):
-            import ast
-
             try:
                 parsed = ast.literal_eval(candidate)
             except (ValueError, SyntaxError):

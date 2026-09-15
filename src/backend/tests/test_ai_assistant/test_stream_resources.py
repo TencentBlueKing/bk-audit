@@ -253,6 +253,18 @@ class AttachmentStreamServiceTestCase(AttachmentHandlerRegistryMixin, TestCase):
 
 
 class AttachmentStreamSnapshotTest(AttachmentStreamServiceTestCase):
+    def test_json_snapshot_and_report_preserve_supplementary_unicode(self):
+        """真实数据库往返保留四字节字符，防止快照和最终报告静默变为问号。"""
+        text = "中文 🔍 😀 𠀀"
+        events = [business_event(text, stream_id="1-0").model_dump(mode="json")]
+        Attachment.objects.filter(pk=self.attachment.pk).update(
+            stream_archive=events,
+            output_data={"markdown": text},
+        )
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.stream_archive, events)
+        self.assertEqual(self.attachment.output_data, {"markdown": text})
+
     def test_get_snapshot_returns_persisted_events_and_cursor(self):
         config = self.make_config()
         self.set_config(config)
@@ -751,6 +763,19 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
                 execution_id=str(config.execution_id),
                 _request=request,
             )
+
+    @override_settings(ROOT_URLCONF="urls")
+    def test_stream_view_rejects_missing_execution_id_as_bad_request(self, _username):
+        """缺失执行代际应在建立流前返回 400，供客户端修正参数。"""
+        request = APIRequestFactory().get("/stream/", HTTP_ACCEPT="text/event-stream")
+        request.user = mock.Mock(is_authenticated=True, username="alice")
+        with mock.patch.object(AttachmentStreamService, "iter_events") as events:
+            response = AttachmentsViewSet.as_view({"get": "stream"})(
+                request,
+                attachment_uid=str(self.attachment.uid),
+            )
+        self.assertEqual(response.status_code, 400)
+        events.assert_not_called()
 
     @override_settings(ROOT_URLCONF="urls")
     def test_stream_view_accepts_event_stream_content_negotiation(self, _username):

@@ -26,9 +26,10 @@ from unittest import mock
 
 import yaml
 from bk_resource import api
-from bk_resource.exceptions import APIRequestError
+from bk_resource.exceptions import APIRequestError, IAMNoPermission
 from django.conf import settings
 from django.test import override_settings
+from requests import HTTPError
 
 from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
 from api.bk_plugins_ai_audit_analyse.default import (
@@ -541,9 +542,7 @@ class TestAIAuditReportStream(TestCase):
     @mock.patch("api.bk_plugins_ai_agent.default.logger.info")
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
-    def test_stream_logs_text_done_and_final_previews_without_short_truncation(
-        self, mock_build_header, mock_build_url, mock_logger_info
-    ):
+    def test_stream_logs_metadata_without_content_previews(self, mock_build_header, mock_build_url, mock_logger_info):
         long_text = "正在思考...\n\n" + ("x" * 260)
         long_done = "done-" + ("y" * 260)
         mock_response = mock.MagicMock()
@@ -567,18 +566,16 @@ class TestAIAuditReportStream(TestCase):
             }
         )
 
-        preview_calls = [
+        metadata_calls = [
             call
             for call in mock_logger_info.call_args_list
-            if call.args and call.args[0] == "AI stream content preview: part=%s, size=%s, preview=%s"
+            if call.args and call.args[0].startswith("AI stream parsed:")
         ]
-        previews = {call.args[1]: call.args[3] for call in preview_calls}
-        self.assertEqual(set(previews), {"text", "done", "final"})
-        self.assertIn("x" * 260, previews["text"])
-        self.assertIn("y" * 260, previews["done"])
-        self.assertIn("x" * 260, previews["final"])
+        self.assertEqual(len(metadata_calls), 1)
+        log_calls = str(mock_logger_info.call_args_list)
+        self.assertNotIn(long_text, log_calls)
+        self.assertNotIn(long_done, log_calls)
         self.assertNotIn("正在思考...", result)
-        self.assertNotIn("正在思考...", previews["final"])
 
     @mock.patch.object(ChatCompletion, "build_url", return_value="http://example.com")
     @mock.patch.object(ChatCompletion, "build_header", return_value={})
@@ -1068,19 +1065,115 @@ class TestAIAgentStreamCompatibility(TestCase):
 
         self.assertEqual(resource._parse_stream_response(response), "最终正文")
 
-    def test_base_chat_completion_raises_agui_run_error(self):
+    @mock.patch("api.bk_plugins_ai_agent.default.logger.error")
+    def test_base_chat_completion_raises_agui_run_error_without_logging_message(self, mock_logger_error):
         resource = BaseChatCompletion()
+        private_error = "PRIVATE_UPSTREAM_ERROR"
         response = mock.MagicMock()
         response.status_code = 200
         response.headers = {"Content-Type": "text/event-stream"}
         response.iter_lines.return_value = [
-            agui_sse_event({"type": "RUN_ERROR", "message": "上游执行失败"}),
+            agui_sse_event({"type": "RUN_ERROR", "message": private_error}),
         ]
 
         with self.assertRaises(APIRequestError) as context:
             resource._parse_stream_response(response)
 
-        self.assertIn("上游执行失败", context.exception.data["message"])
+        self.assertIn(private_error, context.exception.data["message"])
+        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+
+    @mock.patch("bk_resource.contrib.api.logger.error")
+    def test_base_chat_completion_raises_non_stream_error_without_parent_logging_message(self, mock_logger_error):
+        resource = BaseChatCompletion()
+        private_error = "PRIVATE_NON_STREAM_ERROR"
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "application/json"}
+        response.json.return_value = {
+            "result": False,
+            "code": 500,
+            "message": private_error,
+            "request_id": "request-id",
+        }
+
+        with self.assertRaises(APIRequestError) as context:
+            resource.parse_response(response)
+
+        self.assertIn(private_error, context.exception.data["message"])
+        self.assertNotIn("request-id", context.exception.data["message"])
+        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+
+    def test_base_chat_completion_preserves_parent_http_error_for_unknown_status(self):
+        """测试替身缺少整数状态码时，不应抢在父类 HTTP 校验前解析业务错误。"""
+
+        resource = BaseChatCompletion()
+        response = mock.MagicMock()
+        response.status_code = mock.MagicMock()
+        response.json.return_value = {"result": False, "code": 500, "message": "business error"}
+        response.raise_for_status.side_effect = HTTPError(response=response)
+        response.request.url = "http://example.com"
+        response.content = b"http error"
+
+        with self.assertRaises(APIRequestError):
+            resource.parse_response(response)
+
+        response.raise_for_status.assert_called_once_with()
+
+    @mock.patch("bk_resource.contrib.api.logger.error")
+    def test_base_chat_completion_sanitizes_business_error_for_non_http_error_status(self, mock_logger_error):
+        """Requests 不将 600 视为 HTTP 错误，标准业务错误仍应绕过父类正文日志。"""
+
+        resource = BaseChatCompletion()
+        private_error = "PRIVATE_UNUSUAL_STATUS_ERROR"
+        response = mock.MagicMock()
+        response.status_code = 600
+        response.json.return_value = {"result": False, "code": 500, "message": private_error}
+
+        with self.assertRaises(APIRequestError):
+            resource.parse_response(response)
+
+        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+
+    @mock.patch("bk_resource.contrib.api.logger.error")
+    def test_base_chat_completion_preserves_iam_permission_error_contract(self, mock_logger_error):
+        resource = BaseChatCompletion()
+        permission = {"action": "view", "resource": "audit_log"}
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "application/json"}
+        response.json.return_value = {
+            "result": False,
+            "code": IAMNoPermission().code,
+            "message": "permission denied",
+            "data": {"system_id": "system-1"},
+            "permission": permission,
+        }
+
+        with self.assertRaises(IAMNoPermission) as context:
+            resource.parse_response(response)
+
+        self.assertEqual(
+            json.loads(context.exception.data),
+            {"system_id": "system-1", "permission": permission},
+        )
+        mock_logger_error.assert_not_called()
+
+    @mock.patch("api.bk_plugins_ai_agent.default.logger.error")
+    def test_base_chat_completion_raises_legacy_error_without_logging_message(self, mock_logger_error):
+        resource = BaseChatCompletion()
+        private_error = "PRIVATE_LEGACY_ERROR"
+        response = mock.MagicMock()
+        response.status_code = 200
+        response.headers = {"Content-Type": "text/event-stream"}
+        response.iter_lines.return_value = [
+            "data: " + json.dumps({"event": "error", "code": 500, "message": private_error}),
+        ]
+
+        with self.assertRaises(APIRequestError) as context:
+            resource._parse_stream_response(response)
+
+        self.assertIn(private_error, context.exception.data["message"])
+        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
 
 
 class TestGetAgentBaseUrl(TestCase):

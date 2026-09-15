@@ -96,10 +96,17 @@ class AttachmentTaskTest(TestCase):
             updated_by=self.user,
         )
         self.handler = EchoAttachmentAsyncHandler()
+        original_handler = attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        self.addCleanup(self._restore_handler, original_handler)
         attachment_handler_registry.register(self.handler)
 
-    def tearDown(self):
+    @staticmethod
+    def _restore_handler(original_handler) -> None:
+        """恢复平台测试前的 Handler，避免清空生产注册项或污染后续用例。"""
+
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        if original_handler is not None:
+            attachment_handler_registry.register(original_handler)
 
     def create_attachment(self, *, task_id: str = "task-current") -> Attachment:
         return Attachment.objects.create(

@@ -60,3 +60,4 @@ class AIAgentCode(TextChoices):
     AUDIT_ANALYSE = "bp-ai-audit-analyse", gettext_lazy("审计风险分析助手")
     AUDIT_LOG_SEARCH = "bp-audit-log-search", gettext_lazy("审计日志检索助手")
     USER_INTENT = "bp-ai-user-intent", gettext_lazy("用户意图识别智能体")
+    AUDIT_LOG_ANALYSIS = "bp-ai-log-analyse", gettext_lazy("审计日志分析助手")
