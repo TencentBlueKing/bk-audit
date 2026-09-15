@@ -4,15 +4,21 @@
 import json
 from unittest import mock
 
+from django.core.exceptions import ImproperlyConfigured
+from django.test import override_settings
 from requests.exceptions import Timeout
 
+from api.constants import AIAgentCode
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
 )
-from services.web.query.ai_assistant.services.intent import IntentRecognitionService
+from services.web.query.ai_assistant.services.intent import (
+    IntentRecognitionService,
+    resolve_intent_agent_code,
+)
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 INTENT_MODULE = "services.web.query.ai_assistant.services.intent"
@@ -54,6 +60,10 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
         self.assertIn("bk-audit", user_message)
         self.assertIn("审计中心", user_message)
         self.assertEqual(kwargs["agent_code"], IntentRecognitionService.agent_code)
+        # 意图识别路由专属生产 agent（bp-ai-user-intent，与 NL2JSON 的检索 agent 解耦）——
+        # 硬断言防误回退到共享检索 agent（提示词冲突的已知权衡曾因此存在）；
+        # bkop 地址差异由 BKAPP_AI_USER_INTENT_API_URL 直连解决（2026-09-14 线上 404 事故定案）
+        self.assertEqual(kwargs["agent_code"], AIAgentCode.USER_INTENT)
         self.assertEqual(kwargs["user"], self.username)
         self.assertFalse(kwargs["execute_kwargs"]["stream"])
 
@@ -223,3 +233,32 @@ class LoadCandidatesTest(AIAssistantTestCase):
             candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
         self.assertEqual(candidates, CANDIDATES[:1])
         mock_scope.assert_not_called()
+
+
+class IntentAgentRoutingTest(AIAssistantTestCase):
+    """意图识别智能体环境路由开关（默认专属 / 应急切共享）。
+
+    定案（2026-09-15 与领导确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
+    BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
+    （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
+    （第 1 层优先级，模式同 bkop 的 AUDIT_LOG_SEARCH 三件套）。
+    """
+
+    def test_default_routes_to_dedicated_agent(self):
+        """默认：路由到 USER_INTENT 专属智能体（生产默认链路零额外配置）"""
+
+        self.assertEqual(IntentRecognitionService.agent_code, AIAgentCode.USER_INTENT)
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
+
+    @override_settings(AI_USER_INTENT_AGENT_CODE="AUDIT_LOG_SEARCH")
+    def test_switch_routes_to_shared_agent(self):
+        """应急口：BKAPP_AI_USER_INTENT_AGENT_CODE=AUDIT_LOG_SEARCH 切共享检索智能体"""
+
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.AUDIT_LOG_SEARCH)
+
+    @override_settings(AI_USER_INTENT_AGENT_CODE="NOT_EXIST")
+    def test_invalid_switch_fails_fast(self):
+        """非法枚举名：启动即快速失败（ImproperlyConfigured），防静默走错智能体"""
+
+        with self.assertRaises(ImproperlyConfigured):
+            resolve_intent_agent_code()

@@ -36,7 +36,7 @@ from api.bk_plugins_ai_audit_analyse.default import (
     ChatCompletion as AnalyseChatCompletion,
 )
 from api.bk_plugins_ai_audit_report.default import ChatCompletion
-from api.constants import AIAgentCode
+from api.constants import AIAgentCode, APIProvider
 from api.utils import get_agent_base_url
 from tests.base import TestCase
 
@@ -1207,6 +1207,41 @@ class TestGetAgentBaseUrl(TestCase):
         ):
             result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
             self.assertEqual(result, "http://direct")
+
+    @mock.patch.dict("os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "https://bp-ai-user-intent.apigw.example.com/prod"})
+    def test_user_intent_api_url_fixes_missing_apigw_route(self):
+        """USER_INTENT 网关路由部署配置锚点（2026-09-14 线上事故修复方式）。
+
+        bp-ai-user-intent 未接入 bkapi 统一域名，部署环境默认解析链生成
+        bkapi.*.com/api/bp-ai-user-intent/prod → 404 API not found，意图链路全量
+        FAILED。修复方式：部署环境配置 BKAPP_AI_USER_INTENT_API_URL 指向该网关的
+        独立域名完整 URL（内网域名不进代码库，经环境变量注入），重启 worker 生效。
+        """
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertEqual(result, "https://bp-ai-user-intent.apigw.example.com/prod")
+
+    @mock.patch.dict(
+        "os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": "bp-audit-log-search"}
+    )
+    def test_user_intent_env_apigw_name_switches_shared_agent(self):
+        """应急口：BKAPP_AI_USER_INTENT_APIGW_NAME 覆盖网关名走统一域名解析（切共享 agent）"""
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertIn("bp-audit-log-search", result)
+
+    @mock.patch.dict("os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": ""})
+    def test_user_intent_default_resolves_unified_apigw(self):
+        """无覆盖时 USER_INTENT 走 get_endpoint 统一解析链（与映射表机制无关的基线行为）。
+
+        部署环境该链路生成 bkapi 统一域名（该网关未接入则 404）——正是事故现场，
+        修复依赖 BKAPP_AI_USER_INTENT_API_URL（见 test_user_intent_api_url_fixes_missing_apigw_route）。
+        """
+
+        from api.utils import get_endpoint
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertEqual(result, get_endpoint(AIAgentCode.USER_INTENT.value, APIProvider.APIGW, stage="prod"))
 
 
 class TestAIAuditReportAPIGWConfig(TestCase):
