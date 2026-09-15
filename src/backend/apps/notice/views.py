@@ -67,7 +67,7 @@ class NoticeGroupsViewSet(ResourceViewSet):
         )
 
     def get_permissions(self):
-        if self.action in ["list"]:
+        if self.action in ["list", "all"]:
             scene_id = get_value_by_request(self.request, "scene_id")
             if scene_id:
                 return [
