@@ -124,9 +124,3 @@ AI_CONVERSATION_TITLE_MAX_LENGTH = 35
 NL_PARSE_MAX_RETRIES = 2
 NL_PARSE_RETRY_INTERVAL_SECONDS = 2
 NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
-
-# 消息执行任务专属队列（对齐 log_analysis 附件的 ai_assistant_log_analysis 模式，
-# 命名 ai_assistant_{业务域}）：审计检索对话链路（意图/NL/检索/系统选择，均在
-# tasks/audit_search.py）与主 worker（celery,default 队列）隔离，由专属 worker 消费；
-# 任务为 IO 密集（LLM 调用为主），gevent 模式下并发容量充足
-AI_ASSISTANT_AUDIT_SEARCH_QUEUE = "ai_assistant_audit_search"
