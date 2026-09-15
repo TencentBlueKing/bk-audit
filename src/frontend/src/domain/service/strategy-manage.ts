@@ -36,6 +36,7 @@ export default {
     tag?: string
     scene_id?: string | number | null
     binding_type?: string
+    exclude_pending_confirm?: boolean
   }) {
     return StrategySource.getStrategyList(
       params,

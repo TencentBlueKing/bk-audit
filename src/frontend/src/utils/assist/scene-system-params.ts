@@ -77,6 +77,15 @@ export const isSceneSelectorSentinelId = (id: unknown) => (
   id === 'allSecen' || id === 'allSystem'
 );
 
+/** URL 中的 scene_id 是否来自场景选择器空间上下文，而不是列表「所属场景」筛选 */
+export const isSceneSelectorContextQuery = (query: Record<string, unknown> = {}) => {
+  const sceneId = String(query.scene_id ?? '');
+  if (isSceneSelectorSentinelId(sceneId)) {
+    return true;
+  }
+  return Boolean(query.scope_type);
+};
+
 const getSelectionSceneKey = (params: SceneSystemParams) => {
   if (params.scope_type === 'cross_scene') return 'allSecen';
   if (params.scope_type === 'cross_system') return 'allSystem';

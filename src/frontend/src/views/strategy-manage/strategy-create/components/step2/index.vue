@@ -199,7 +199,13 @@
   :deep(.event-table) {
     margin-bottom: 0;
     border-radius: 2px;
+    overflow: visible;
+  }
+
+  :deep(.strategy-table > .head),
+  :deep(.event-table > .head) {
     overflow: hidden;
+    border-radius: 2px 2px 0 0;
   }
 }
 </style>
