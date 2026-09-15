@@ -298,7 +298,11 @@ class RetrieveRiskStrategyInfo(RiskMeta):
     def perform_request(self, validated_request_data):
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
-        return strategy or {}
+        if strategy is None:
+            return {}
+        # 按风险归属场景过滤不可见的下钻工具（展示态与执行鉴权同口径）
+        serializer = RetrieveRiskStrategyInfoResponseSerializer(strategy, context={"risk_scene_id": risk.scene_id})
+        return serializer.data
 
 
 class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
@@ -314,7 +318,9 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
             return {}
 
         lite_mode = validated_request_data.get("lite_mode", True)
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(strategy, lite_mode=lite_mode)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
+            strategy, lite_mode=lite_mode, context={"risk_scene_id": risk.scene_id}
+        )
         return serializer.data
 
 
