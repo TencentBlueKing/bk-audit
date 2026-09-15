@@ -1282,6 +1282,39 @@ class TestListRiskResource(TestCase):
         risk_ids = [item["risk_id"] for item in data["results"]]
         self.assertIn(pending_risk.risk_id, risk_ids)
 
+    def test_pending_confirm_list_with_scope_not_emptied(self):
+        """待我确认列表带 scope 查询时，不能被场景视图的待确认排除逻辑清空"""
+        from services.web.risk.resources.risk import ListPendingConfirmRisk
+
+        pending_risk = Risk.objects.create(
+            risk_id="risk-pending-confirm-scope",
+            raw_event_id="raw-pending-scope",
+            strategy=self.strategy,
+            scene_id=self.scene_id,
+            status=RiskStatus.PENDING_CONFIRM,
+            title="pending-scope",
+            event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
+            risk_level="high",
+            risk_hazard="测试危害",
+            risk_guidance="测试指引",
+            confirmer=[self.username],
+        )
+
+        request = self._make_request()
+        data = ListPendingConfirmRisk().perform_request(
+            {
+                "scope_type": ScopeType.SCENE,
+                "scope_id": str(self.scene_id),
+                "order_fields": [],
+                "use_bkbase": False,
+                "event_filters": [],
+                "scene_id": [],
+                "_request": request,
+            }
+        )
+        risk_ids = [item["risk_id"] for item in data["results"]]
+        self.assertIn(pending_risk.risk_id, risk_ids)
+
     # ──── Tags / Strategy ────
 
     def test_scene_risk_view_type_maps_to_list_risk(self):

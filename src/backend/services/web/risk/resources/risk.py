@@ -344,6 +344,10 @@ class ListRisk(RiskMeta):
     bind_request = True
     audit_action = ActionEnum.LIST_RISK
     STORAGE_SUFFIX = "doris"
+    # list_risk 接口同时承载"所有风险"(不传 scope) 与"场景风险"(传 scope) 两个视图，
+    # 仅场景风险视图需排除待确认状态（待确认有独立的 pending_confirm 接口）。
+    # 因此该开关只在带 scope 查询时生效；本身以待确认为主体的子类需置为 False，否则结果会被清空
+    exclude_pending_confirm = True
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
@@ -367,7 +371,10 @@ class ListRisk(RiskMeta):
                 base_queryset = base_queryset.filter(scene_id__in=scope_scene_ids)
             else:
                 base_queryset = base_queryset.none()
-            base_queryset = base_queryset.exclude(display_status=RiskDisplayStatus.PENDING_CONFIRM)
+            # 场景风险视图排除待确认状态（待确认由独立列表承载）；
+            # 所有风险视图不传 scope，保留全部状态
+            if self.exclude_pending_confirm:
+                base_queryset = base_queryset.exclude(display_status=RiskDisplayStatus.PENDING_CONFIRM)
 
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
@@ -928,6 +935,8 @@ class ListPendingConfirmRisk(ListRisk):
     """获取待我确认的风险列表"""
 
     name = gettext_lazy("待我确认")
+    # 本视图只展示待确认，必须关闭 scope 查询下的待确认排除，否则结果被清空
+    exclude_pending_confirm = False
 
     def load_risks(self, validated_request_data, username: str = None):
         username = username or get_request_username()
