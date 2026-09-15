@@ -16,9 +16,7 @@ class RiskNoticeParser(MemberVariableParser):
     def __init__(self, risk: Risk):
         super().__init__(operators=risk.operator)
 
-    def parse_groups_snapshot(
-        self, groups: Union[QuerySet[NoticeGroup], List[NoticeGroup]]
-    ) -> List[dict]:
+    def parse_groups_snapshot(self, groups: Union[QuerySet[NoticeGroup], List[NoticeGroup]]) -> List[dict]:
         """
         快照通知组完整信息（成员解析为实际用户名）
         """
