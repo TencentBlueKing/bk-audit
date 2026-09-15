@@ -69,6 +69,11 @@
     useRoute,
   } from 'vue-router';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../../utils/strategy-routes';
+
   interface Emits{
     (e:'change', id: string): void
   }
@@ -97,8 +102,8 @@
   const localValue = ref();
   const isError = ref(false);
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const onControlIdChange = (id: string) => {
     if (id) isError.value = false;

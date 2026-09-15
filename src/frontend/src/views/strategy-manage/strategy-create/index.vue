@@ -40,7 +40,9 @@
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: number, params: any) => handlePreviousStep(step, params)"
+      @reset-hit-conditions="handleResetHitConditions"
       @save-current-step="handleSaveCurrentStep"
+      @save-draft="handleSaveDraft"
       @show-preview="showPreview = true"
       @submit-data="handleSubmit" />
   </keep-alive>
@@ -60,7 +62,7 @@
         size="small"
         theme="primary" />
       <div class="save-dialog-text">
-        {{ isEditMode ? t('更新中,请稍后...') : t('创建中,请稍后...') }}
+        {{ saveDialogText }}
       </div>
     </div>
     <template #footer />
@@ -84,6 +86,7 @@
   import {
     computed,
     onMounted,
+    provide,
     ref,
     // toRaw,
     watch } from 'vue';
@@ -98,14 +101,30 @@
 
   import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
-  import Step1 from './components/step1/index.vue';
+  import StepBasicInfo from './components/step-basic-info/index.vue';
+  import StepRiskRules from './components/step-risk-rules/index.vue';
   import Step2 from './components/step2/index.vue';
   import Step3 from './components/step3/index.vue';
 
   import useMessage from '@/hooks/use-message';
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import {
+    buildStrategyCreatePayload,
+    createEmptyAssignWhere,
+    parseStrategyDetailToForm,
+    enrichFieldDisplayNames,
+    hasFilledWhereConditions,
+  } from './utils/strategy-protocol';
+  import {
+    getStrategyBindingScope,
+    getStrategyRouteNames,
+    isDraftStrategyStatus,
+    isPlatformStrategyRoute,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../utils/strategy-routes';
+  import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from './composables/use-strategy-config-lock';
 
 
   interface IFormData {
@@ -131,53 +150,82 @@
     report_enabled: boolean,
     report_auto_render: boolean,
     report_config: Record<string, any>,
+    rules?: Array<Record<string, any>>,
+    assign_rules?: Array<Record<string, any>>,
+    default_assign_rule?: Record<string, any>,
+    dispatch_rules?: Array<Record<string, any>>,
+    binding_type?: string,
+    visibility?: Record<string, any>,
+    scene_id?: string | number,
+    hit_conditions_reset_seq?: number,
   }
 
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
-  const { isActive: isHeaderSlotActive, isPageActive, claim: claimHeaderSlot } = usePageHeaderSlot();
+  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
+
+  // 全局策略（平台）含第 5 步「风险分派规则」；审计策略（场景）仅 4 步
+  const hasAssignStep = isPlatformStrategyRoute(route.name);
 
   const comMap = {
-    1: Step1,
-    2: Step2,
-    3: eventReport,
-    4: Step3,
+    1: StepBasicInfo,
+    2: StepRiskRules,
+    3: Step2,
+    4: eventReport,
+    5: Step3,
   };
-  const steps = [
-    { title: t('风险发现') },
-    { title: t('单据展示') },
-    { title: t('事件调查报告') },
-    { title: t('其他配置') },
-  ];
-  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 => {
+  const steps = computed(() => {
+    const list = [
+      { title: t('基础信息') },
+      { title: t('风险发现规则') },
+      { title: t('单据展示') },
+      { title: t('事件调查报告') },
+    ];
+    if (hasAssignStep) {
+      list.push({ title: t('风险分派规则') });
+    }
+    return list;
+  });
+  const maxStep = hasAssignStep ? 5 : 4;
+  const stepBarWidth = computed(() => (hasAssignStep ? '780px' : '620px'));
+  const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
     const n = Number(step);
-    if ([1, 2, 3, 4].includes(n)) {
-      return n as 1 | 2 | 3 | 4;
+    if ([1, 2, 3, 4, 5].includes(n)) {
+      const clamped = Math.min(n, maxStep) as 1 | 2 | 3 | 4 | 5;
+      return clamped;
     }
     return 1;
   };
 
   const initialStep = normalizeStep(route.query.step || 1);
-  const targetStep = ref<1 | 2 | 3 | 4>(initialStep);
-  const currentStep = ref<1 | 2 | 3 | 4>(1);
+  const targetStep = ref<1 | 2 | 3 | 4 | 5>(initialStep);
+  const currentStep = ref<1 | 2 | 3 | 4 | 5>(1);
   const comRef = ref();
 
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
+  // display_name 统一为「中文名(raw_name)」，与命中条件字段展示一致
   const fieldSelectOptions = computed(() => {
+    const tableFields = formData.value.configs?.table_fields || [];
     const select = formData.value.configs?.select;
-    if (Array.isArray(select) && select.length) {
-      return select;
-    }
-    return formData.value.configs?.table_fields || [];
+    const source = Array.isArray(select) && select.length ? select : tableFields;
+    return enrichFieldDisplayNames(source, tableFields);
   });
 
   let isSwitchSuccess = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isDraftStrategyEdit = computed(() => (
+    isEditMode && isDraftStrategyStatus(formData.value.status)
+  ));
+  const showSaveDraftButton = computed(() => (
+    !isEditMode || isDraftStrategyEdit.value
+  ));
+  provide(STRATEGY_SHOW_SAVE_DRAFT_KEY, showSaveDraftButton);
 
   const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
@@ -198,6 +246,7 @@
     }
     return tagMapPromise;
   };
+  const createBindingScope = getStrategyBindingScope(route);
   const formData = ref<IFormData>({
     strategy_name: '',
     tags: [],
@@ -205,7 +254,7 @@
     control_id: '',
     configs: {},
     status: '',
-    risk_level: '',
+    risk_level: 'MIDDLE',
     risk_hazard: '',
     risk_guidance: '',
     risk_title: '',
@@ -219,6 +268,9 @@
     report_enabled: false,
     report_auto_render: false,
     report_config: {},
+    binding_type: createBindingScope.binding_type,
+    visibility: createBindingScope.isPlatform ? undefined : {},
+    scene_id: createBindingScope.scene_id ?? undefined,
   });
   // 进入编辑时的初始表单快照（只在编辑态使用，用于还原）
   const initialFormData = ref<IFormData | null>(null);
@@ -286,9 +338,10 @@
       });
       // 确保标签映射已加载后，再用接口返回的数据初始化表单（将 tags 从 ID 转为名称）
       await ensureTagMapLoaded();
-      const d = editData.value;
+      const d = editData.value as any;
       const normalizedTags = (d.tags ?? []).map((item: string) => tagIdToNameMap.value[String(item)] ?? item);
       d.tags = normalizedTags;
+      const protocolForm = parseStrategyDetailToForm(d);
       // 编辑态：用接口返回的完整策略数据初始化 formData，保证任意步骤点「提交」时提交的是全量数据
       formData.value = {
         strategy_name: d.strategy_name ?? '',
@@ -299,10 +352,10 @@
         control_version: d.control_version,
         configs: _.cloneDeep(d.configs ?? {}),
         status: d.status ?? '',
-        risk_level: d.risk_level ?? '',
-        risk_hazard: d.risk_hazard ?? '',
-        risk_guidance: d.risk_guidance ?? '',
-        risk_title: d.risk_title ?? '',
+        risk_level: protocolForm.risk_level ?? '',
+        risk_hazard: protocolForm.risk_hazard ?? '',
+        risk_guidance: protocolForm.risk_guidance ?? '',
+        risk_title: protocolForm.risk_title ?? '',
         strategy_type: d.strategy_type ?? '',
         event_data_field_configs: _.cloneDeep(d.event_data_field_configs ?? []),
         event_basic_field_configs: _.cloneDeep(d.event_basic_field_configs ?? []),
@@ -313,6 +366,21 @@
         report_enabled: d.report_enabled ?? false,
         report_auto_render: d.report_auto_render ?? false,
         report_config: _.cloneDeep(d.report_config ?? {}),
+        rules: protocolForm.rules?.length
+          ? _.cloneDeep(protocolForm.rules)
+          : [{
+            name: '规则1',
+            risk_title: protocolForm.risk_title ?? '',
+            risk_level: protocolForm.risk_level ?? 'HIGH',
+            risk_hazard: protocolForm.risk_hazard ?? '',
+            risk_guidance: protocolForm.risk_guidance ?? '',
+          }],
+        assign_rules: _.cloneDeep(protocolForm.assign_rules ?? []),
+        default_assign_rule: _.cloneDeep(protocolForm.default_assign_rule ?? {}),
+        dispatch_rules: _.cloneDeep(protocolForm.dispatch_rules ?? []),
+        binding_type: protocolForm.binding_type ?? createBindingScope.binding_type,
+        visibility: _.cloneDeep(protocolForm.visibility),
+        scene_id: protocolForm.scene_id ?? createBindingScope.scene_id ?? undefined,
       };
       if (d.strategy_id) {
         formData.value.strategy_id = d.strategy_id;
@@ -329,22 +397,57 @@
   // 保存中的 Dialog 显示状态，等接口请求结束后再关闭
   const showSaveDialog = ref(false);
   const saveDialogOpenedByDoSave = ref(false);
+  const isSavingDraft = ref(false);
+  // 新建/克隆态首次保存草稿成功后，后续走更新接口
+  const hasCreatedDraft = ref(false);
+  const saveDialogText = computed(() => {
+    if (isSavingDraft.value) {
+      return t('保存草稿中,请稍后...');
+    }
+    return isEditMode ? t('更新中,请稍后...') : t('创建中,请稍后...');
+  });
   // 是否在保存成功后停留在当前页，仅刷新本页数据（不返回列表）
   const stayOnPageAfterSave = ref(false);
   // 从「下一步」弹窗触发保存时，保存成功后需要前往的目标步骤
-  const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | null>(null);
+  const pendingStepAfterSave = ref<1 | 2 | 3 | 4 | 5 | null>(null);
+
+  const resolveSaveRequest = (payload: Record<string, any>) => {
+    const strategyId = payload.strategy_id;
+    const shouldUpdate = !!(strategyId && (isEditMode || hasCreatedDraft.value));
+    if (shouldUpdate) {
+      return StrategyManageService.updateStrategy(payload as StrategyModel);
+    }
+    const createPayload = { ...payload };
+    delete createPayload.strategy_id;
+    return StrategyManageService.saveStrategy(createPayload);
+  };
 
   // 保存接口
   const {
     run: saveStrategy,
     loading: isSaveLoading,
-  } = useRequest(isEditMode
-    ? StrategyManageService.updateStrategy
-    : StrategyManageService.saveStrategy, {
+  } = useRequest(resolveSaveRequest, {
     defaultValue: {},
     onSuccess: (data) => {
+      if (isSavingDraft.value) {
+        isSavingDraft.value = false;
+        window.changeConfirm = false;
+        if (data?.strategy_id) {
+          formData.value.strategy_id = data.strategy_id;
+          hasCreatedDraft.value = true;
+        }
+        if (initialFormData.value) {
+          initialFormData.value = _.cloneDeep(formData.value);
+        }
+        messageSuccess(t('保存草稿成功'));
+        router.push({
+          name: strategyRoutes.list,
+        });
+        return;
+      }
+      const treatAsCreate = !isEditMode;
       // 编辑态：来自「下一步」弹窗的保存，要求不返回列表，只刷新当前页数据
-      if (isEditMode && stayOnPageAfterSave.value) {
+      if (isEditMode && !treatAsCreate && stayOnPageAfterSave.value) {
         stayOnPageAfterSave.value = false;
         window.changeConfirm = false;
         // 更新进入编辑时的快照为当前已保存的数据，后续对比以新快照为准
@@ -359,16 +462,16 @@
         messageSuccess(t('保存成功'));
         return;
       }
-      if (isEditMode && formData.value.status === 'running') {
+      if (isEditMode && !treatAsCreate && formData.value.status === 'running') {
         window.changeConfirm = false;
         router.push({
-          name: 'strategyList',
+          name: strategyRoutes.list,
         });
         messageSuccess(t('编辑成功'));
         return;
       }
       const SendSwitchStrategy = (toggle: boolean) => {
-        messageSuccess(isEditMode ? t('编辑成功') : t('新建成功'));
+        messageSuccess(treatAsCreate ? t('新建成功') : t('编辑成功'));
         fetchSwitchStrategy({
           strategy_id: data.strategy_id,
           toggle,
@@ -376,12 +479,12 @@
           if (isSwitchSuccess) return;
           window.changeConfirm = false;
           router.push({
-            name: 'strategyList',
+            name: strategyRoutes.list,
           });
         });
       };
       // 常规策略
-      if (controlTypeId.value === 'BKM' && (!isEditMode || !(formData.value.status === 'running'))) {
+      if (controlTypeId.value === 'BKM' && (treatAsCreate || !(formData.value.status === 'running'))) {
         isSwitchSuccess = false;
         InfoBox({
           title: t('是否启用该策略'),
@@ -399,12 +502,15 @@
           },
         });
       } else {
-        messageSuccess(isEditMode ? t('编辑成功') : t('新建成功'));
+        messageSuccess(treatAsCreate ? t('新建成功') : t('编辑成功'));
         window.changeConfirm = false;
         router.push({
-          name: 'strategyList',
+          name: strategyRoutes.list,
         });
       }
+    },
+    onFinally: () => {
+      isSavingDraft.value = false;
     },
   });
 
@@ -424,7 +530,7 @@
     onSuccess: () => {
       window.changeConfirm = false;
       router.push({
-        name: 'strategyList',
+        name: strategyRoutes.list,
       });
       isSwitchSuccess = true;
     },
@@ -438,7 +544,10 @@
     }
     // 接口 select 不能为空：未配置时用数据源全字段兜底
     if (next.configs && !next.configs.select?.length && next.configs.table_fields?.length) {
-      next.configs.select = next.configs.table_fields;
+      next.configs.select = enrichFieldDisplayNames(
+        next.configs.table_fields,
+        next.configs.table_fields,
+      );
     }
     // table_fields 仅前端临时字段，不提交后端
     if (next.configs?.table_fields) {
@@ -454,24 +563,42 @@
   //   return _.mergeWith(base, patch, (_objValue, srcValue) => (Array.isArray(srcValue) ? srcValue : undefined));
   // };
 
-  const doSave = async () => {
+  const doSave = async ({ isDraft = false }: { isDraft?: boolean } = {}) => {
     await ensureTagMapLoaded();
     const params = normalizeSubmitParams(formData.value);
+    if (isCloneMode && !hasCreatedDraft.value) {
+      delete params.strategy_id;
+    }
+    isSavingDraft.value = isDraft;
     saveDialogOpenedByDoSave.value = true;
     showSaveDialog.value = true;
-    saveStrategy({
-      ...params,
-      scene_id: getSceneSystemParams().scope_id,
-    });
+    const payload = buildStrategyCreatePayload(params, route);
+    if (isDraft) {
+      payload.is_draft = true;
+    } else if (isDraftStrategyEdit.value) {
+      payload.is_draft = false;
+    }
+    saveStrategy(payload);
+  };
+
+  const handleSaveDraft = (params?: Record<string, any>) => {
+    if (params) {
+      maybeResetHitConditionsByDataSource(params.configs);
+      Object.assign(formData.value, params);
+    }
+    doSave({ isDraft: true });
   };
 
   // 提交
   const handleSubmit = () => {
+    const submitAsCreate = !isEditMode;
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
         title: t('策略提交确认'),
-        subTitle: isEditMode ? t('本次将提交所有已修改的内容') : t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。'),
+        subTitle: submitAsCreate
+          ? t('策略一旦提交，审计中心会开启策略配置的相关检测，若有风险命中策略会立即输出风险，请仔细检查策略配置是否正确以免输出错误风险。')
+          : t('本次将提交所有已修改的内容'),
         confirmText: t('提交'),
         cancelText: t('取消'),
         headerAlign: 'center',
@@ -637,6 +764,90 @@
   //     return !isSameByCommonFields(currentVal, snapshotVal);
   //   });
   // };
+  const getDataSourceKey = (configs?: Record<string, any>) => {
+    const rtId = configs?.data_source?.rt_id;
+    return JSON.stringify({
+      type: configs?.config_type || '',
+      rt: Array.isArray(rtId) ? rtId.filter(Boolean).join('/') : (rtId || ''),
+      link: configs?.data_source?.link_table?.uid || '',
+      systems: [...(configs?.data_source?.system_ids || [])].map(String).sort()
+        .join(','),
+    });
+  };
+
+  const emptyDiscoveryWhere = () => ({ connector: 'and', conditions: [] });
+
+  const hasExistingHitConditions = () => {
+    const rulesHaveWhere = (formData.value.rules || []).some((rule: Record<string, any>) => (
+      hasFilledWhereConditions(rule?.conditions?.where)
+      || hasFilledWhereConditions(rule?.configs?.where)
+      || hasFilledWhereConditions(rule?.formData?.configs?.where)
+    ));
+    const assignHaveWhere = (formData.value.assign_rules || []).some((rule: Record<string, any>) => (
+      hasFilledWhereConditions(rule?.conditions)
+    ));
+    return rulesHaveWhere
+      || hasFilledWhereConditions(formData.value.configs?.where)
+      || assignHaveWhere;
+  };
+
+  const applyHitConditionsReset = () => {
+    sessionStorage.removeItem('rule-tree-data');
+    sessionStorage.removeItem('storage-tree-data');
+    const nextForm = formData.value;
+    if (Array.isArray(nextForm.rules)) {
+      nextForm.rules = nextForm.rules.map((rule: Record<string, any>) => ({
+        ...rule,
+        conditions: {
+          where: emptyDiscoveryWhere(),
+          having: emptyDiscoveryWhere(),
+        },
+        configs: {
+          ...(rule.configs || {}),
+          where: emptyDiscoveryWhere(),
+          having: emptyDiscoveryWhere(),
+        },
+      }));
+    }
+    if (Array.isArray(nextForm.assign_rules)) {
+      nextForm.assign_rules = nextForm.assign_rules.map((rule: Record<string, any>) => ({
+        ...rule,
+        conditions: createEmptyAssignWhere(),
+      }));
+    }
+    if (nextForm.configs) {
+      nextForm.configs = {
+        ...nextForm.configs,
+        where: emptyDiscoveryWhere(),
+        having: emptyDiscoveryWhere(),
+      };
+    }
+    nextForm.hit_conditions_reset_seq = (Number(nextForm.hit_conditions_reset_seq) || 0) + 1;
+  };
+
+  // 预期结果变更时新建/编辑都清空命中条件；数据源切换仍由 maybeResetHitConditionsByDataSource 在编辑态跳过
+  const handleResetHitConditions = () => {
+    // keep-alive 第一步在后续步骤仍可能回写预期结果，不能在第二步之后再抬 seq
+    if (currentStep.value !== 1) {
+      return;
+    }
+    // 还没有填过命中条件时不必抬高 reset_seq，否则第二步填写后会被空值冲掉
+    if (!hasExistingHitConditions()) {
+      return;
+    }
+    applyHitConditionsReset();
+  };
+
+  const maybeResetHitConditionsByDataSource = (nextConfigs?: Record<string, any>) => {
+    if (isEditMode) return;
+    // 数据源只在基础信息步骤修改，后续步骤回写 configs 格式差异不能当成切换数据源
+    if (currentStep.value !== 1) return;
+    const prevKey = getDataSourceKey(formData.value.configs);
+    const nextKey = getDataSourceKey(nextConfigs);
+    if (!formData.value.configs?.config_type || prevKey === nextKey) return;
+    handleResetHitConditions();
+  };
+
   const handlePreviousStep = async (step: number, params: any) => {
     // 与下一步逻辑一致：对比"完整数据结构"中当前步骤回传字段的变化
     // await ensureTagMapLoaded();
@@ -672,6 +883,7 @@
     //   return;
     // }
 
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
@@ -709,19 +921,21 @@
     //   return;
     // }
 
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     currentStep.value = normalizeStep(step);
   };
 
   // 提交：合并当前步骤数据后提交，效果与「其他配置」的提交按钮一致
   const handleSaveCurrentStep = (params: any) => {
+    maybeResetHitConditionsByDataSource(params?.configs);
     Object.assign(formData.value, params);
     handleSubmit();
   };
 
   const handleCancel = () => {
     router.push({
-      name: 'strategyList',
+      name: strategyRoutes.list,
     });
   };
 
@@ -738,16 +952,14 @@
   watch(
     () => route.fullPath,
     () => {
-      if (isPageActive.value) {
-        claimHeaderSlot();
-      }
+      refreshHeaderSlot();
     },
   );
 
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 650px;
+  width: v-bind(stepBarWidth);
   margin: 0 auto;
   transform: translateX(-86px);
 

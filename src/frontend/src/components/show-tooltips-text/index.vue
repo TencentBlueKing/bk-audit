@@ -24,13 +24,13 @@
       'line-clamp': line,
     } : {}">
     <span>
-      {{ data || '--' }}
+      {{ displayText }}
     </span>
     <div
       ref="templateRef"
       style="display: none;max-height: 90vh;overflow: auto;">
       <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
-        {{ props.tip || data }}
+        {{ props.tip || displayText }}
       </div>
     </div>
   </div>
@@ -42,6 +42,7 @@
     type SingleTarget,
   } from 'tippy.js';
   import {
+    computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
@@ -70,6 +71,12 @@
 
   const rootRef = ref();
   const templateRef = ref<HTMLElement | null>(null);
+  const displayText = computed(() => {
+    if (props.data === undefined || props.data === null || props.data === '') {
+      return '--';
+    }
+    return props.data;
+  });
 
   let tippyIns: Instance;
   let resizeObserver: ResizeObserver | null = null;

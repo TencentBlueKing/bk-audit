@@ -20,13 +20,19 @@
     class="audit-edit-tag">
     <template v-if="initData && initData.length">
       <div class="audit-edit-tag__main">
-        <bk-tag
-          v-for="(item) in renderData"
-          :key="item"
-          class="audit-edit-tag__label"
-          @click="handlerClick">
-          {{ item }}
-        </bk-tag>
+        <div class="audit-edit-tag__labels">
+          <bk-tag
+            v-for="(item) in renderData"
+            :key="item"
+            v-bk-tooltips="{
+              content: item,
+              disabled: item.length < 12,
+            }"
+            class="audit-edit-tag__label"
+            @click="handlerClick">
+            {{ item }}
+          </bk-tag>
+        </div>
         <bk-tag
           v-if="moreDataText"
           key="more"
@@ -61,11 +67,14 @@
     <teleport to="body">
       <div
         v-if="isCalcRenderTagNum"
-        style="position: absolute; word-break: keep-all; white-space: nowrap; visibility: hidden;">
+        class="audit-edit-tag-measure"
+        style="position: absolute; top: -9999px; left: -9999px;
+          word-break: keep-all; white-space: nowrap; visibility: hidden;">
         <bk-tag
           v-for="item in initData"
           :key="item"
-          ref="tagElsRef">
+          ref="tagElsRef"
+          class="audit-edit-tag__label">
           {{ item }}
         </bk-tag>
       </div>
@@ -112,6 +121,9 @@
   const tagElsRef = ref();
   const renderTagNum = ref(1);
   const isCalcRenderTagNum = ref(false);
+  let pendingCalc = false;
+  let calcRetryCount = 0;
+  const MAX_CALC_RETRY = 5;
   const initData = computed(() =>  {
     // 1. 如果是真正的数组，直接连接
     if (Array.isArray(props.data)) {
@@ -138,6 +150,31 @@
 
   let tippyIns: Instance | null = null;
 
+  const getTagElWidth = (tagIns: { $el?: HTMLElement } | HTMLElement) => {
+    const el = (tagIns as { $el?: HTMLElement })?.$el || (tagIns as HTMLElement);
+    return el?.getBoundingClientRect?.().width || 0;
+  };
+
+  const finishCalc = (options?: { retry?: boolean }) => {
+    isCalcRenderTagNum.value = false;
+    if (options?.retry && calcRetryCount < MAX_CALC_RETRY) {
+      calcRetryCount += 1;
+      window.setTimeout(() => {
+        calcRenderTagNum();
+      }, 50);
+      return;
+    }
+    if (pendingCalc) {
+      pendingCalc = false;
+      calcRetryCount = 0;
+      nextTick(() => {
+        calcRenderTagNum();
+      });
+      return;
+    }
+    calcRetryCount = 0;
+  };
+
   const calcRenderTagNum = () => {
     if (props.max && props.max > 0) {
       renderTagNum.value = props.max;
@@ -147,8 +184,9 @@
       return;
     }
 
-    // 防止重复计算
+    // 计算中收到新请求时排队，避免场景名异步加载后不再重算
     if (isCalcRenderTagNum.value) {
+      pendingCalc = true;
       return;
     }
 
@@ -158,41 +196,61 @@
       nextTick(() => {
         if (rootRef.value && tagElsRef.value && tagElsRef.value.length > 0) {
           // 用父容器可用宽度计算，避免组件自身尚未撑开时把可见标签算少
-          const parentWidth = rootRef.value.parentElement?.clientWidth || 0;
-          const boxWidth = parentWidth > 0
-            ? parentWidth
-            : rootRef.value.getBoundingClientRect().width;
-          const numTagWidth = 50;
+          const parentEl = rootRef.value.parentElement as HTMLElement | null;
+          const parentStyle = parentEl ? window.getComputedStyle(parentEl) : null;
+          const parentPadding = parentStyle
+            ? (Number.parseFloat(parentStyle.paddingLeft) || 0)
+              + (Number.parseFloat(parentStyle.paddingRight) || 0)
+            : 0;
+          const parentWidth = parentEl?.clientWidth || 0;
+          const boxWidth = Math.max(
+            0,
+            (parentWidth > 0
+              ? parentWidth - parentPadding
+              : rootRef.value.getBoundingClientRect().width),
+          );
+          const numTagWidth = 42;
           const copyBtnWidth = props.showCopy ? 20 : 0;
           let totalTagWidth = 0;
           let fitted = 0;
+          const tagList = Array.isArray(tagElsRef.value)
+            ? tagElsRef.value
+            : [tagElsRef.value];
 
-          // 从0开始重新计算
-          for (let i = 0; i < tagElsRef.value.length; i++) {
-            const currentTagWidth = tagElsRef.value[i].$el.getBoundingClientRect().width;
-            totalTagWidth += currentTagWidth;
+          // 测量节点尚未布局完成时延后重算
+          const hasInvalidWidth = tagList.some(tag => !getTagElWidth(tag));
+          if (hasInvalidWidth || boxWidth <= 0) {
+            finishCalc({ retry: true });
+            return;
+          }
 
-            // 检查是否还能放下当前标签和"+N"按钮
-            const needNumBtn = i < tagElsRef.value.length - 1;
+          // 从0开始重新计算；预留 +N / 复制按钮空间，保证溢出时 +N 可展示
+          for (let i = 0; i < tagList.length; i++) {
+            const currentTagWidth = getTagElWidth(tagList[i]);
+            const needNumBtn = i < tagList.length - 1;
             const trailingWidth = copyBtnWidth + (slots.suffix ? 22 : 0);
-            const requiredWidth = totalTagWidth
+            const gapWidth = i * 6;
+            const nextTotal = totalTagWidth + currentTagWidth;
+            const requiredWidth = nextTotal
               + (needNumBtn ? numTagWidth : 0)
               + trailingWidth
-              + (i * 6);
+              + gapWidth;
 
             if (requiredWidth <= boxWidth) {
+              totalTagWidth = nextTotal;
               fitted = i + 1;
             } else {
+              // 第一个都放不下时仍展示 1 个完整标签，其余用 +N
               break;
             }
           }
 
-          // 确保至少显示一个标签
+          // 至少显示一个标签；放不下的用 +N
           renderTagNum.value = fitted > 0 ? fitted : 1;
-          isCalcRenderTagNum.value = false;
+          finishCalc();
         } else {
-          renderTagNum.value = 0;
-          isCalcRenderTagNum.value = false;
+          renderTagNum.value = Math.min(1, initData.value.length || 1);
+          finishCalc({ retry: true });
         }
       });
     });
@@ -272,6 +330,7 @@
     position: relative;
     display: inline-flex;
     max-width: 100%;
+    overflow: hidden;
     align-items: center;
     vertical-align: middle;
 
@@ -279,6 +338,18 @@
       display: inline-flex;
       flex-wrap: nowrap;
       align-items: center;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .audit-edit-tag__labels {
+      display: inline-flex;
+      flex: 1 1 auto;
+      flex-wrap: nowrap;
+      align-items: center;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .audit-edit-tag__actions {
@@ -288,10 +359,6 @@
     }
 
     .audit-edit-tag__label {
-      flex-shrink: 0;
-    }
-
-    .audit-edit-tag__more {
       flex-shrink: 0;
     }
 
@@ -308,6 +375,12 @@
       & ~ .bk-tag {
         margin-left: 6px;
       }
+    }
+
+    /* +N 与左侧标签保持空隙（需写在 .bk-tag 之后，避免被 margin-left:0 覆盖） */
+    .audit-edit-tag__more.bk-tag {
+      flex-shrink: 0;
+      margin-left: 6px;
     }
 
     .copy-btn {
@@ -336,5 +409,22 @@
     margin-right: 0;
     overflow: visible;
     vertical-align: middle;
+  }
+</style>
+
+<style lang="postcss">
+  /* 测量节点与展示标签同宽，避免默认 bk-tag max-width 导致可放数量算多 */
+  .audit-edit-tag-measure {
+    .audit-edit-tag__label.bk-tag {
+      width: auto !important;
+      max-width: none !important;
+      margin-right: 0;
+      margin-left: 0;
+      overflow: visible;
+
+      & ~ .bk-tag {
+        margin-left: 6px;
+      }
+    }
   }
 </style>

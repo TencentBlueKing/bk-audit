@@ -21,7 +21,9 @@
     :show-footer="false"
     :title="t('数据结构预览')"
     :width="960">
-    <bk-loading :loading="loadingRtMeta">
+    <bk-loading
+      class="structure-preview-loading"
+      :loading="loadingRtMeta">
       <div class="structure-preview">
         <div
           class="title"
@@ -86,19 +88,30 @@
               type="angle-line-down" />
           </bk-button>
         </div>
-        <bk-table
-          ref="tableRef"
-          :border="['outer']"
-          :columns="columns"
-          :data="rtMeta.formatted_fields"
-          :max-height="650" />
+        <div
+          ref="tableWrapRef"
+          class="table-wrap">
+          <bk-table
+            ref="tableRef"
+            :border="['outer']"
+            :columns="columns"
+            :data="rtMeta.formatted_fields"
+            :max-height="tableHeight" />
+        </div>
       </div>
     </bk-loading>
   </audit-sideslider>
 </template>
 <script setup lang="ts">
   import type { Table } from 'bkui-vue';
-  import { watch } from 'vue';
+  import {
+    computed,
+    h,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RootManageService from '@service/root-manage';
@@ -106,6 +119,8 @@
 
   import ConfigModel from '@model/root/config';
   import RtMetaModel from '@model/strategy/rt-meta';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
@@ -123,31 +138,68 @@
     required: true,
   });
 
-  const columns = [
-    {
-      label: () => t('序号'),
-      width: 60,
-      type: 'index',
-    },
-    {
-      label: () => t('字段名'),
-      field: () => 'value',
-    },
-    {
-      label: () => t('字段中文名'),
-      field: () => 'label',
-    },
-    {
-      label: () => t('类型'),
-      width: 60,
-      field: () => 'spec_field_type',
-    },
-    {
-      label: () => t('最新一条数据'),
-      field: () => '',
-      render: ({ data }: {data: Record<string, any>}) => rtLastData.value.last_data?.[data.value] || '--',
-    },
-  ] as  InstanceType<typeof Table>['$props']['columns'];
+  const tableWrapRef = ref<HTMLElement>();
+  const tableHeight = ref(480);
+  const TABLE_BOTTOM_GAP = 24;
+
+  const updateTableHeight = () => {
+    const el = tableWrapRef.value;
+    if (!el) {
+      return;
+    }
+    const { top } = el.getBoundingClientRect();
+    if (top <= 0) {
+      return;
+    }
+    const next = Math.floor(window.innerHeight - top - TABLE_BOTTOM_GAP);
+    if (next > 0) {
+      tableHeight.value = next;
+    }
+  };
+
+  const formatLastDataValue = (value: unknown) => {
+    if (value === undefined || value === null || value === '') {
+      return '--';
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '--';
+      }
+    }
+    return String(value);
+  };
+
+  const getLastDataRecord = () => {
+    const payload = rtLastData.value as { last_data?: unknown } | unknown[];
+    if (Array.isArray(payload)) {
+      return payload[0] as Record<string, any> | undefined;
+    }
+    const lastData = payload?.last_data;
+    if (Array.isArray(lastData)) {
+      return lastData[0] as Record<string, any> | undefined;
+    }
+    if (lastData && typeof lastData === 'object') {
+      return lastData as Record<string, any>;
+    }
+    return undefined;
+  };
+
+  const getRecordFieldValue = (record: Record<string, any> | undefined, fieldName: string) => {
+    if (!record || !fieldName) {
+      return undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(record, fieldName)) {
+      return record[fieldName];
+    }
+    const target = fieldName.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(record, target)) {
+      return record[target];
+    }
+    const matchedKey = Object.keys(record).find(key => key.toLowerCase() === target);
+    return matchedKey !== undefined ? record[matchedKey] : undefined;
+  };
 
   const {
     data: configData,
@@ -182,35 +234,145 @@
     },
   });
 
-  watch(() => props.rtId, () => {
-    fetchTableRtMeta({
-      table_id: props.rtId,
-    });
-    fetchTableRtLastData({
-      table_id: props.rtId,
-    });
+  const columns = computed(() => {
+    const lastRecord = getLastDataRecord();
+    return [
+      {
+        label: () => t('序号'),
+        width: 60,
+        type: 'index',
+      },
+      {
+        label: () => t('字段名'),
+        field: () => 'value',
+        width: 180,
+      },
+      {
+        label: () => t('字段中文名'),
+        field: () => 'label',
+        width: 140,
+      },
+      {
+        label: () => t('类型'),
+        width: 90,
+        field: () => 'spec_field_type',
+      },
+      {
+        label: () => t('最新一条数据'),
+        field: () => '',
+        minWidth: 320,
+        render: ({ data }: {data: Record<string, any>}) => h(Tooltips, {
+          data: formatLastDataValue(getRecordFieldValue(lastRecord, data.value)),
+          maxWidth: 480,
+        }),
+      },
+    ] as InstanceType<typeof Table>['$props']['columns'];
+  });
+
+  watch(
+    [() => props.rtId, showStructure],
+    ([rtId, visible]) => {
+      if (!visible || !rtId) {
+        return;
+      }
+      fetchTableRtMeta({
+        table_id: rtId,
+      });
+      fetchTableRtLastData({
+        table_id: rtId,
+      });
+    },
+  );
+
+  watch(
+    [showStructure, () => loadingRtMeta.value],
+    async ([visible]) => {
+      window.removeEventListener('resize', updateTableHeight);
+      if (!visible) {
+        return;
+      }
+      await nextTick();
+      requestAnimationFrame(updateTableHeight);
+      window.addEventListener('resize', updateTableHeight);
+    },
+    {
+      flush: 'post',
+    },
+  );
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('resize', updateTableHeight);
   });
 </script>
 <style scoped lang="postcss">
+.structure-preview-loading {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+
+  :deep(.bk-loading-wrapper) {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+  }
+}
+
 .structure-preview {
+  display: flex;
+  height: 100%;
+  min-height: 0;
   padding: 20px 40px;
+  overflow: hidden;
+  flex-direction: column;
+  box-sizing: border-box;
 
   .title-head {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 16px;
   }
 
   .title {
+    flex-shrink: 0;
     font-size: 14px;
     font-weight: 700;
+  }
+
+  .base-info {
+    flex-shrink: 0;
   }
 
   .info-block {
     display: grid;
     margin-bottom: 12px;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .table-wrap {
+    min-height: 0;
+    flex: 1;
+  }
+
+  :deep(.bk-table) {
+    width: 100%;
+
+    .bk-table-body,
+    .bk-table-body-wrapper {
+      overflow-x: hidden !important;
+    }
+
+    td .cell,
+    th .cell {
+      overflow: hidden;
+    }
+
+    .show-tooltips-text {
+      max-width: 100%;
+    }
   }
 }
 </style>

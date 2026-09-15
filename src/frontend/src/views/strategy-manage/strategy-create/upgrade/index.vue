@@ -47,6 +47,8 @@
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
 
+  import { getStrategyRouteNames } from '../../utils/strategy-routes';
+
   const comMap = {
     1: Step1,
     2: Step2,
@@ -57,6 +59,7 @@
   ];
   const router = useRouter();
   const route = useRoute();
+  const strategyRoutes = getStrategyRouteNames(route);
   const { isActive: isHeaderSlotActive } = usePageHeaderSlot();
   const currentStep = ref(1);
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
@@ -66,7 +69,7 @@
   };
   useRouterBack(() => {
     router.push({
-      name: 'strategyEdit',
+      name: strategyRoutes.edit,
       params: {
         id: route.params.strategyId,
       },

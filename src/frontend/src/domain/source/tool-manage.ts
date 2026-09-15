@@ -61,10 +61,14 @@ class ToolManage extends ModuleBase {
     status?: string[],
   }) {
     const sceneParams = getSceneSystemParams();
+    const { scope_type: paramScopeType, scope_id: paramScopeId, ...rest } = params || {};
+    const scopeType = paramScopeType || sceneParams.scope_type || 'cross_scene';
+    const isSingleScope = scopeType === 'scene' || scopeType === 'system';
+    const scopeId = paramScopeId || (isSingleScope ? sceneParams.scope_id : '');
     const mergedParams = {
-      scope_type: sceneParams.scope_type,
-      scope_id: sceneParams.scope_id,
-      ...params,
+      ...rest,
+      scope_type: scopeType,
+      ...(scopeId ? { scope_id: scopeId } : {}),
     };
     const query = `?${processedParams(mergedParams).toString()}`;
     return Request.get<Array<{
@@ -125,10 +129,12 @@ class ToolManage extends ModuleBase {
     namespace?: string,
   }) {
     // scope_type 为后端必填；无参/空参调用时回退当前场景/系统，避免 /tool/all/? 空查询 500
+    // 跨场景/跨系统不要回填残留 scene_id，否则平台策略工具名匹配会空
     const sceneParams = getSceneSystemParams();
     const { scope_type: paramScopeType, scope_id: paramScopeId, ...rest } = params || {};
     const scopeType = paramScopeType || sceneParams.scope_type || 'cross_scene';
-    const scopeId = paramScopeId || sceneParams.scope_id;
+    const isSingleScope = scopeType === 'scene' || scopeType === 'system';
+    const scopeId = paramScopeId || (isSingleScope ? sceneParams.scope_id : '');
     const mergedParams = {
       ...rest,
       scope_type: scopeType,

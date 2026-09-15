@@ -259,6 +259,13 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
         blank=True,
         help_text=gettext_lazy("确认人用户名 列表"),
     )
+    notice_group_snapshot = models.JSONField(
+        gettext_lazy("Notice Group Snapshot"),
+        default=list,
+        null=True,
+        blank=True,
+        help_text=gettext_lazy("关注人通知组完整信息快照，包含组ID、名称、成员、通知方式、描述"),
+    )
 
     def can_auto_generate_report(self) -> bool:
         """

@@ -698,6 +698,9 @@ class ListRisk(RiskMeta):
                 base_queryset = base_queryset.filter(scene_id__in=scope_scene_ids)
             else:
                 base_queryset = base_queryset.none()
+            # 场景风险视图排除待确认状态
+            if self.exclude_pending_confirm:
+                base_queryset = base_queryset.exclude(display_status=RiskDisplayStatus.PENDING_CONFIRM)
 
         base_queryset = self._filter_queryset_by_scene_ids(base_queryset, scene_ids)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)

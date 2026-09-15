@@ -64,11 +64,7 @@
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import StrategyManageService from '@service/strategy-manage';
-
   import StrategyModel from '@model/strategy/strategy';
-
-  import useRequest from '@hooks/use-request';
 
   import AiEditor from '../../strategy-create/components/event-report/ai-editor/index.vue';
 
@@ -77,27 +73,16 @@
 
   interface Props {
     data: StrategyModel;
-    activeTab?: string;
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    activeTab: '',
-  });
+  const props = defineProps<Props>();
   const { t } = useI18n();
 
-  // 本地策略数据，优先使用接口返回的最新数据
   const strategyData = ref<StrategyModel>(props.data);
   const aiEditorRef = ref<InstanceType<typeof AiEditor> | null>(null);
 
-  // 是否已加载过数据，防止重复调用（使用 strategy_id 作为 key）
-  const loadedStrategyIds = ref<Set<number>>(new Set());
-  // 当前正在加载的 strategy_id，防止并发请求
-  const loadingStrategyId = ref<number | null>(null);
-
-  // 风险列表（用于 ai-editor）
   const riskLisks = ref<Array<{ risk_id: string; title: string; strategy_id: number; created_at: string }>>([]);
 
-  // 事件数据（用于 ai-editor）
   const eventData = computed(() => {
     if (!strategyData.value) {
       return [];
@@ -109,65 +94,23 @@
     ];
   });
 
-  // 事件信息数据（用于 ai-editor）
   const eventInfoData = computed(() => (strategyData.value as any)?.configs?.select || []);
 
-  // 获取策略详情
-  const {
-    run: fetchStrategyInfo,
-  } = useRequest(StrategyManageService.fetchStrategyInfo, {
-    defaultValue: new StrategyModel(),
-    onSuccess(data) {
+  const syncEditorContent = () => {
+    nextTick(() => {
+      const frontendTemplate = (strategyData.value as any)?.report_config?.frontend_template || '';
+      if (frontendTemplate && aiEditorRef.value) {
+        aiEditorRef.value.setQuillContent(frontendTemplate);
+      }
+    });
+  };
+
+  watch(
+    () => props.data,
+    (data) => {
+      if (!data?.strategy_id) return;
       strategyData.value = data;
-      if (loadingStrategyId.value) {
-        loadedStrategyIds.value.add(loadingStrategyId.value);
-      }
-      loadingStrategyId.value = null;
-      // 设置编辑器内容
-      nextTick(() => {
-        const frontendTemplate = (data as any)?.report_config?.frontend_template || '';
-        if (frontendTemplate && aiEditorRef.value) {
-          aiEditorRef.value.setQuillContent(frontendTemplate);
-        }
-      });
-    },
-    onFinally() {
-      // 请求完成后清除 loading 状态
-      if (loadingStrategyId.value) {
-        // 如果请求失败，也需要清除 loading 状态，但不添加到已加载列表
-        loadingStrategyId.value = null;
-      }
-    },
-  });
-
-  // 当切换到"事件调查报告"标签页时获取策略详情
-  watch(
-    () => [props.activeTab, props.data?.strategy_id] as [string, number | undefined],
-    ([newTab, strategyId]) => {
-      if (newTab === 'eventReport' && strategyId && typeof strategyId === 'number' && strategyId > 0) {
-        // 防止重复调用：如果已经加载过或正在加载，则跳过
-        if (loadedStrategyIds.value.has(strategyId) || loadingStrategyId.value === strategyId) {
-          return;
-        }
-        loadingStrategyId.value = strategyId;
-        fetchStrategyInfo({
-          strategy_id: strategyId,
-        });
-      }
-    },
-    { immediate: true },
-  );
-
-  // 初始化时设置编辑器内容
-  watch(
-    () => strategyData.value,
-    () => {
-      nextTick(() => {
-        const frontendTemplate = (strategyData.value as any)?.report_config?.frontend_template || '';
-        if (frontendTemplate && aiEditorRef.value) {
-          aiEditorRef.value.setQuillContent(frontendTemplate);
-        }
-      });
+      syncEditorContent();
     },
     { immediate: true },
   );
@@ -265,4 +208,3 @@
   display: none !important;
 }
 </style>
-

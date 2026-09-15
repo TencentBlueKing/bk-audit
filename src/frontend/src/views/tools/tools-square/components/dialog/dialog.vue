@@ -244,7 +244,10 @@
   import useRequest from '@/hooks/use-request';
   import userProfileIcon from '@/images/user.svg';
   import { getSceneSystemParams, getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
-  import { getSearchItemDefaultValue } from '@/views/tools/tools-square/utils/search-item-default';
+  import {
+    getSearchItemDefaultValue,
+    resolveSearchValueWithDefault,
+  } from '@/views/tools/tools-square/utils/search-item-default';
   import { hasVisibleSearchParams } from '@/views/tools/tools-square/utils/tool-url-params';
   import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
@@ -261,6 +264,7 @@
     description: string;
     display_name: string;
     field_category: string;
+    default_value?: unknown;
     choices:Array<{
       key: string,
       name: string
@@ -637,11 +641,13 @@
           }
         }
 
+        const resolvedValue = configItem.target_value_type === 'fixed_value'
+          ? configItem.target_value
+          : dynamicValue;
+
         return {
           ...searchItem,
-          value: configItem.target_value_type === 'fixed_value'
-            ? configItem.target_value
-            : dynamicValue,
+          value: resolveSearchValueWithDefault(resolvedValue, searchItem),
         };
       });
     }

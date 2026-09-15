@@ -24,7 +24,7 @@
         <bk-cascader
           v-slot="{node,data}"
           v-model="formData.configs.data_source.result_table_id"
-          :disabled="isEditMode || isCloneMode || isUpgradeMode"
+          :disabled="isStrategyConfigLocked || isUpgradeMode"
           filterable
           id-key="value"
           :list="filterTableData"
@@ -80,9 +80,6 @@
   import {
     useI18n,
   } from 'vue-i18n';
-  import {
-    useRoute,
-  } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
 
@@ -92,6 +89,9 @@
 
   import FilterCondition,  { type ConditionData } from '../components/filter-condition.vue';
   import RenderField from '../components/render-field.vue';
+
+  import { useStrategyConfigLock } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
+
 
   interface Props {
     loading: boolean;
@@ -121,11 +121,9 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const route = useRoute();
   let isInit = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
+  const { isUpgradeMode, isStrategyConfigLocked } = useStrategyConfigLock();
+  const shouldUseCreateDefaults = !isUpgradeMode && !isStrategyConfigLocked.value;
   // const outputFields = computed(() => props.controlDetail?.output_config[0]?.fields);
   const fieldRef = ref();
   const filterRef = ref();
@@ -144,7 +142,7 @@
     disabled: !(item.children && item.children.length),
   })));
   type FormData = typeof formData.value['configs'];
-  if (!isEditMode && !isCloneMode && !isUpgradeMode)   {
+  if (shouldUseCreateDefaults) {
     isInit = true;
   }
 
@@ -177,7 +175,7 @@
   };
 
   watch(() => props.inputFields, (data) => {
-    if (data && (!isEditMode && !isCloneMode && !isUpgradeMode)) {
+    if (data && shouldUseCreateDefaults) {
       formData.value.configs.data_source.fields = props.inputFields.map(item => item);
     }
   }, {

@@ -44,8 +44,8 @@
           :config-type="configType"
           :expected-result="expectedResult"
           :table-fields="tableFields"
+          :table-fields-loading="tableFieldsLoading"
           @handle-update-local-conditions="handleUpdateLocalConditions"
-          @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
@@ -83,6 +83,8 @@
 
   import FieldItem from './components/field-item.vue';
 
+  import { mergeHavingIntoWhere } from '../../../../../../utils/strategy-protocol';
+
   interface Expose {
     resetFormData: () => void,
     setWhere: (whereData: Where, having: Where) => void;
@@ -104,20 +106,22 @@
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    tableFieldsLoading?: boolean,
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>
     configType: string,
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;
-    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
-  defineProps<Props>();
+  withDefaults(defineProps<Props>(), {
+    tableFieldsLoading: false,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const where = ref<Where>({
+  const createEmptyWhere = (): Where => ({
     connector: 'and',
     conditions: [{
       connector: 'and',
@@ -132,12 +136,14 @@
       }],
     }],
   });
+  const isEmptyWhere = (whereData?: Where) => !whereData?.conditions?.length;
+  const where = ref<Where>(createEmptyWhere());
   const needCondition = computed(() => where.value.conditions.length > 1);
 
   // 是否有选中预期结果
   const hasSelectedExpectedResult = computed(() => where.value.conditions
-    .some(item => item.conditions
-      .some(condItem => condItem.condition.field?.aggregate)));
+    .some(item => item?.conditions
+      ?.some(condItem => condItem?.condition?.field?.aggregate)));
 
   const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
     const beforeArr = where.value.conditions.slice(0, index);
@@ -147,10 +153,6 @@
       return '55px';
     }
     return '16px';
-  };
-
-  const handleShowStructurePreview = (table: string | Array<string>, currentViewField: string) => {
-    emits('show-structure-preview', table, currentViewField);
   };
 
   const handleDelete = (index: number) => {
@@ -236,29 +238,13 @@
 
   defineExpose<Expose>({
     resetFormData: () => {
-      where.value = {
-        connector: 'and',
-        conditions: [{
-          connector: 'and',
-          index: 0,
-          conditions: [{
-            condition: {
-              field: new DatabaseTableFieldModel(),
-              filter: '',
-              filters: [],
-              operator: '',
-            },
-          }],
-        }],
-      };
+      where.value = createEmptyWhere();
     },
     setWhere(whereData: Where, having: Where) {
-      where.value = whereData;
-      if (having && having.conditions.length > 0) {
-        // 将having条件合并到where条件中, conditions根据item.index进行排序合并
-        where.value.conditions = where.value.conditions.concat(having.conditions);
-        where.value.conditions.sort((a, b) => a.index - b.index);
-      }
+      const base = isEmptyWhere(whereData) ? createEmptyWhere() : _.cloneDeep(whereData);
+      where.value = having?.conditions?.length
+        ? mergeHavingIntoWhere(base, _.cloneDeep(having))
+        : base;
     },
   });
 </script>
@@ -327,9 +313,10 @@
   }
 
   .add-rule-item {
-    display: flex;
+    display: inline-flex;
+    width: fit-content;
     height: 32px;
-    padding: 0 5px;
+    padding: 0 12px 0 6px;
     color: #3a84ff;
     cursor: pointer;
     background: #fafbfd;

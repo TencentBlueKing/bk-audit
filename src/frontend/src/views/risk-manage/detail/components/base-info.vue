@@ -85,7 +85,7 @@
     data: RiskManageModel & StrategyInfo
     strategyList: Array<{
       label: string,
-      value: number
+      value: number | string
     }>,
     riskStatusCommon: Array<{
       id: string,

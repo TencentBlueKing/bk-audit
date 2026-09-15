@@ -243,7 +243,7 @@
   import type { IRequestResponsePaginationData } from '@utils/request';
 
   import '@blueking/tdesign-ui/vue3/index.css';
-  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import { getSceneSystemParams, isSceneSelectorSentinelId } from '@/utils/assist/scene-system-params';
 
   export interface IPagination {
     count: number;
@@ -572,9 +572,15 @@
     }
 
     const memoWithoutScene = { ...paramsMemo };
-    delete memoWithoutScene.scene_id;
-    delete memoWithoutScene.scope_id;
-    delete memoWithoutScene.scope_type;
+    // 仅在由场景选择器注入范围时覆盖；否则保留页面传入的 scope_type（如待我确认的 cross_scene）
+    if (needSceneParams) {
+      delete memoWithoutScene.scope_id;
+      delete memoWithoutScene.scope_type;
+    }
+    // 场景选择器注入 scene_id 时才覆盖；否则保留搜索条件里的所属场景
+    if (isNeedSceneId) {
+      delete memoWithoutScene[props.sceneIdKey || 'scene_id'];
+    }
 
     const rawParams: Record<string, any> = {
       ...memoWithoutScene,
@@ -583,6 +589,11 @@
       ...(isNeedSceneParams ? sceneParams : {}),
       ...(isNeedSceneId ? { [props.sceneIdKey]: sceneParams.scope_id } : {}),
     };
+    const sceneIdKey = props.sceneIdKey || 'scene_id';
+    // 跨场景时不传选择器占位 scene_id（allSecen/allSystem）
+    if (isSceneSelectorSentinelId(rawParams[sceneIdKey])) {
+      delete rawParams[sceneIdKey];
+    }
     Object.keys(rawParams).forEach((key) => {
       const value = rawParams[key];
       if (value === '' || value === undefined || value === null) {
@@ -810,7 +821,12 @@
           isLoading.value = true;
           run(params);
           if (fetchSeq === latestFetchSeq) {
-            replaceSearchParams(params);
+            // 所属场景筛选不要写进场景选择器上下文（scene_id/scope_*）
+            const urlParams = { ...params };
+            delete urlParams.scene_id;
+            delete urlParams.scope_id;
+            delete urlParams.scope_type;
+            replaceSearchParams(urlParams);
           }
         }
       });

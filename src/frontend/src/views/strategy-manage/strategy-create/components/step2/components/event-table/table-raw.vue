@@ -75,6 +75,13 @@
 
   import FieldCell from './field-cell.vue';
 
+  import {
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
+
+  type EventFieldKey = keyof StrategyFieldEvent['event_basic_field_configs'][0];
+
   interface Props {
     eventItemArr: StrategyFieldEvent['event_basic_field_configs'];
     eventItemKey: keyof StrategyFieldEvent;
@@ -106,14 +113,14 @@
   const route = useRoute();
 
   const fieldCellRef = ref();
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
   // 固定列顺序，避免按对象 key 遍历导致「基本信息 / 事件结果」列错位
-  const columnKeys = computed(() => {
-    const keys = [
+  const columnKeys = computed((): EventFieldKey[] => {
+    const keys: EventFieldKey[] = [
       'field_name',
       'display_name',
       'is_show',
@@ -130,7 +137,7 @@
     return keys;
   });
 
-  const getCellClass = (valueKey: string) => ({
+  const getCellClass = (valueKey: EventFieldKey) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
     'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings' || valueKey === 'duplicate_field',
@@ -139,7 +146,7 @@
     description: valueKey === 'description',
   });
 
-  const updateFieldValue = (config: any, key: string, value: any) => {
+  const updateFieldValue = (config: any, key: EventFieldKey, value: any) => {
     // eslint-disable-next-line no-param-reassign
     config[key] = value;
   };
@@ -205,10 +212,16 @@
 <style lang="postcss" scoped>
 .table-row {
   display: flex;
+  background: #fff;
+
+  &.is-even {
+    background: #fafbfd;
+  }
 
   .cell {
     display: flex;
     height: 42px;
+    padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;

@@ -232,6 +232,10 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import { formatTimeRangeSelectValue } from '@views/tools/tools-square/utils/time-range-value';
+  import {
+    getSearchItemDefaultValue,
+    isEmptySearchValue,
+  } from '@/views/tools/tools-square/utils/search-item-default';
 
   interface Exposes {
     executeTool: () => void;
@@ -307,6 +311,7 @@
     description: string;
     display_name: string;
     field_category: string;
+    default_value?: unknown;
   }
 
   interface Props {
@@ -362,30 +367,29 @@
     defaultValue: {},
   });
 
-  // 判断值是否为空
-  const isEmptyValue = (value: any) => {
-    if (value === undefined || value === null || value === '') return true;
-    if (Array.isArray(value) && value.length === 0) return true;
-    return false;
-  };
-
   // 格式化工具变量值
   const formatToolVariableValue = (item: SearchItem) => {
+    const resolvedValue = isEmptySearchValue(item.value)
+      ? getSearchItemDefaultValue(item)
+      : item.value;
+
     // 人员选择器转字符串
     if (item.field_category === 'person_select') {
-      const strValue = Array.isArray(item.value) && item.value.length > 0 ? item.value.join(',') : '';
+      const strValue = Array.isArray(resolvedValue) && resolvedValue.length > 0
+        ? resolvedValue.join(',')
+        : (typeof resolvedValue === 'string' ? resolvedValue : '');
       // 非必填且为空，返回 null
       return !item.required && strValue === '' ? null : strValue;
     }
     // 非必填且值为空，返回 null
-    if (!item.required && isEmptyValue(item.value)) {
+    if (!item.required && isEmptySearchValue(resolvedValue)) {
       return null;
     }
     // 时间范围选择器统一转换为绝对时间（后端不支持 now-7d 等相对时间表达式）
     if (item.field_category === 'time_range_select') {
-      return formatTimeRangeSelectValue(item.value);
+      return formatTimeRangeSelectValue(resolvedValue);
     }
-    return item.value;
+    return resolvedValue;
   };
 
   const collectPaginationVariables = (): Array<{ raw_name: string; value: any }> => {

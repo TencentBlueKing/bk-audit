@@ -17,20 +17,20 @@
 <template>
   <div class="strategy-reference-model">
     <bk-form-item
+      v-if="stepMode === 'basic'"
       class="is-required"
       :label="t('模型方案')"
-      label-width="160"
       property="control_id">
       <div
-        class="flex-center"
-        style="position: relative; width: 100%;">
+        class="flex-center plan-select-row"
+        style="position: relative;">
         <plan-select
           ref="planSelectRef"
           :control-list="controlList"
           :cur-version="(formData.control_version as number)"
           :default-value="formData.control_id"
-          :disabled="isEditMode || isCloneMode"
-          style="width: 46%;"
+          :disabled="isPlanSelectDisabled"
+          style="width: 100%;"
           @change="onControlIdChange">
           <span
             v-if="controlTypeId === 'BKM'"
@@ -54,9 +54,11 @@
     </bk-form-item>
     <component
       :is="comMap[controlTypeId]"
+      v-if="shouldRenderSubComponent"
       ref="comRef"
       :control-detail="controlDetail"
       :data="formData"
+      :step-mode="stepMode"
       @update-aiops-config="handleUpdateAiopsConfig"
       @update-config-type="handleUpdateConfigType"
       @update-configs="handleUpdateConfigs"
@@ -65,7 +67,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, provide, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -80,6 +82,13 @@
   import PlanSelect from './components/plan-select.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { STRATEGY_DRAFT_EDIT_KEY } from '@/views/strategy-manage/strategy-create/composables/use-strategy-config-lock';
+  import {
+    isDraftStrategyStatus,
+    getStrategyRouteNames,
+    isStrategyCloneRoute,
+    isStrategyEditRoute,
+  } from '../../../../../utils/strategy-routes';
 
   interface ControlType {
     control_type_id: string;
@@ -98,27 +107,41 @@
   }
   interface Expose {
     getValue: () => void,
-    getFields: () => IFormData
+    getFields: () => IFormData,
+    controlTypeId: typeof controlTypeId,
   }
   interface Emits {
     (e: 'updateControlDetail', value: ControlModel | null): void;
     (e: 'updateFormData', value: IFormData): void;
   }
   interface Props {
-    editData: StrategyModel
+    editData: StrategyModel,
+    stepMode?: 'basic' | 'rules',
+    parentFormData?: Record<string, any>,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    stepMode: 'basic',
+    parentFormData: () => ({}),
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const strategyRoutes = getStrategyRouteNames(route);
 
   const comRef = ref();
   const planSelectRef = ref();
 
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
+  const isEditMode = isStrategyEditRoute(route.name);
+  const isCloneMode = isStrategyCloneRoute(route.name);
+  const isDraftStrategyEdit = computed(() => (
+    isEditMode && isDraftStrategyStatus(props.editData.status)
+  ));
+  const isPlanSelectDisabled = computed(() => (
+    isCloneMode || (isEditMode && !isDraftStrategyEdit.value)
+  ));
+  provide(STRATEGY_DRAFT_EDIT_KEY, isDraftStrategyEdit);
   const comMap: Record<string, any> = {
     BKM: NormalCondition,
     AIOps: AiopsCondition,
@@ -135,7 +158,15 @@
   const timeType = ref('minute');
 
   const isShowUpgradeTip = computed(() => isEditMode
+    && !isDraftStrategyEdit.value
     && maxVersionMap.value[formData.value.control_id] > (formData.value.control_version as number));
+  const shouldRenderSubComponent = computed(() => {
+    if (!controlTypeId.value) return false;
+    if (props.stepMode === 'basic') {
+      return controlTypeId.value === 'AIOps';
+    }
+    return true;
+  });
   const aggInterval = computed(() => {
     switch (timeType.value) {
     case 'minute':
@@ -262,7 +293,7 @@
   // 查看升级详情
   const handleShowUpgradeDetail = () => {
     router.push({
-      name: 'strategyUpgrade',
+      name: strategyRoutes.upgrade,
       params: {
         controlId: formData.value.control_id,
         strategyId: formData.value.strategy_id as number,
@@ -312,7 +343,34 @@
     deep: true,
   });
 
+  watch(
+    () => props.parentFormData,
+    async (data) => {
+      if (props.stepMode !== 'rules' || !data?.control_id || !controlList.value.length) {
+        return;
+      }
+      const controlItem = controlMap.value[data.control_id];
+      if (!controlItem) return;
+      formData.value.control_id = data.control_id;
+      formData.value.control_version = data.control_version;
+      formData.value.configs = _.cloneDeep(data.configs ?? {});
+      controlTypeId.value = controlItem.control_type_id;
+      await fetchControlDetail({
+        control_id: data.control_id,
+        control_version: data.control_version,
+      });
+      nextTick(() => {
+        comRef.value?.setConfigs?.(formData.value.configs);
+        if (controlTypeId.value === 'BKM') {
+          comRef.value?.handleValueDicts?.(formData.value.configs.agg_condition);
+        }
+      });
+    },
+    { immediate: true, deep: true },
+  );
+
   defineExpose<Expose>({
+    controlTypeId,
     getValue() {
       const tastQueue = [planSelectRef.value.getValue()];
       if (controlTypeId.value && controlTypeId.value !== 'BKM') {
@@ -324,27 +382,30 @@
     getFields() {
       const params = { ...formData.value };
       params.configs = Object.assign({}, formData.value.configs);
-      // 内置模型
       if (controlTypeId.value !== 'BKM') {
-        const fields = comRef.value.getFields();
-        const tableIdList = params.configs.data_source.result_table_id;
-        if (params.configs.config_type !== 'EventLog') {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-            result_table_id: _.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList,
-          };
+        if (props.stepMode === 'basic') {
+          const fields = comRef.value.getFields();
+          const tableIdList = params.configs.data_source.result_table_id;
+          if (params.configs.config_type !== 'EventLog') {
+            params.configs.data_source = {
+              ...params.configs.data_source,
+              fields,
+              result_table_id: _.isArray(tableIdList) ? _.last(tableIdList) : tableIdList,
+            };
+          } else {
+            params.configs.data_source = {
+              ...params.configs.data_source,
+              fields,
+            };
+          }
         } else {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-          };
+          params.configs.variable_config = comRef.value.getParamenterFields();
         }
-        // 添加方案配置参数
-        params.configs.variable_config = comRef.value.getParamenterFields();
       } else {
-        params.configs.algorithms = [formData.value.configs.algorithms];
-        params.configs.agg_interval = aggInterval.value;
+        if (props.stepMode === 'rules') {
+          params.configs.algorithms = [formData.value.configs.algorithms];
+          params.configs.agg_interval = aggInterval.value;
+        }
       }
       return params;
     },
@@ -352,6 +413,14 @@
 </script>
 <style lang="postcss" scoped>
 .strategy-reference-model {
+  width: 100%;
+  max-width: none;
+
+  .plan-select-row {
+    width: 100%;
+    max-width: none;
+  }
+
   .upgrade-tip {
     margin-left: 13px;
     font-size: 12px;

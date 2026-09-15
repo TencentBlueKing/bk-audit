@@ -8,15 +8,32 @@
     display-key="name"
     filterable
     id-key="id"
+    :loading="isListLoading"
     multiple
     :popover-options="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select', placement: 'top-start' }"
     @search-change="handleSearch"
     @toggle="handleToggle">
+    <div
+      v-if="isListLoading"
+      class="field-list-loading">
+      <bk-loading
+        loading
+        mode="spin"
+        size="small"
+        theme="primary" />
+      <span class="field-list-loading-text">{{ t('加载中') }}...</span>
+    </div>
+    <div
+      v-else-if="!treeData.length"
+      class="field-list-empty">
+      {{ t('暂无数据') }}
+    </div>
     <bk-tree
+      v-else
       ref="treeRef"
       children="children"
       :data="treeData"
-      empty-text=" "
+      :empty-text="t('暂无数据')"
       label="raw_name"
       :node-content-action="['click']"
       :show-node-type-icon="false"
@@ -28,10 +45,10 @@
           class="field">
           <div class="field-left">
             <audit-icon
-              style="margin-right: 4px;font-size: 14px;"
+              class="field-type-icon"
               svg
-              :type="data.spec_field_type" />
-            <span v-if="props.configType === 'LinkTable'">
+              :type="getFieldTypeIcon(data)" />
+            <span v-if="configType === 'LinkTable'">
               <span style=" color: #3a84ff;">{{ data.table }}.</span>
               <span
                 v-if="'self_name' in data"
@@ -42,9 +59,8 @@
               </span>
               <span
                 v-else
-                class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name }}{{ data.raw_name ?
-                  `(${data.raw_name})` : ``
-                }}
+                class="field-type-span">
+                {{ getAggregateName(data) }}{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}
                 <span
                   v-for="(field, fieldIndex) in data?.fieldTypeValueAr"
                   :key="fieldIndex">
@@ -76,7 +92,7 @@
                   {{ data.parent_display_name }}{{ data.parent_raw_name ?
                     `(${data.parent_raw_name})` : ``
                   }}</span>
-                <span v-else>{{ data.display_name }}{{ `(${data.raw_name})` }}</span>
+                <span v-else>{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}</span>
 
                 <span
                   v-for="(field, fieldIndex) in data?.keys"
@@ -134,10 +150,10 @@
                 v-if="data.spec_field_type !== ''"
                 class="field-type">
                 <audit-icon
-                  style="margin-right: 4px;font-size: 14px;"
+                  class="field-type-icon"
                   svg
-                  :type="data.spec_field_type" />
-                <span v-if="props.configType === 'LinkTable'">
+                  :type="getFieldTypeIcon(data)" />
+                <span v-if="configType === 'LinkTable'">
                   <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
                   <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
                     `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
@@ -207,13 +223,23 @@
   </bk-select>
 </template>
 <script setup lang="tsx">
-  import { onMounted, onUnmounted, ref, watch } from 'vue';
+  import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    ref,
+    watch,
+  } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
   import useRequest from '@hooks/use-request';
+
+  import { isStrategyEditRoute } from '../../../../../../../../utils/strategy-routes';
+  import { formatFieldDisplayLabel } from '../../../../../../../utils/strategy-protocol';
 
 
   interface Emits {
@@ -224,9 +250,11 @@
     configType: string,
     aggregateList: Array<Record<string, any>>,
     condition: Record<string, any>,
-    conditions: Record<string, any>,
+    loading?: boolean,
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
 
   const emits = defineEmits<Emits>();
 
@@ -240,6 +268,20 @@
 
   const treeData = ref<Record<string, any>[]>([]);
   const storageTreeData = ref<Record<string, any>[]>([]);
+  const popoverOpen = ref(false);
+  // 下拉打开且列表未就绪时展示加载态，避免先闪空态；搜索无结果不算加载中
+  const isListLoading = computed(() => {
+    if (props.loading) return true;
+    if (
+      popoverOpen.value
+      && !treeData.value.length
+      && !storageTreeData.value.length
+      && (props.configData?.length ?? 0) > 0
+    ) {
+      return true;
+    }
+    return false;
+  });
   const newItem = {
     aggregate: null,
     parent_aggregate: null,
@@ -265,13 +307,33 @@
   const selectedValue = ref();
   const selectRef = ref(null);
 
-  const handleToggle = (isToggle: boolean) => {
-    if (isToggle) {
-      const haveTreeData = sessionStorage.getItem('rule-tree-data');
-      if (haveTreeData) {
-        treeData.value = JSON.parse(sessionStorage.getItem('rule-tree-data') || '[]');
-      }
+  const buildTreeData = (configData: any[]) => {
+    const initTreeData = JSON.parse(JSON.stringify(configData || []));
+    if (isStrategyEditRoute(route.name)) {
+      return transformData(initTreeData).map((e) => {
+        if ((props.condition?.condition?.field?.parent_raw_name === e.raw_name) && !('from' in e)) {
+          e.children.push({ ...props.condition.condition.field, isStrategyEdit: true });
+        }
+        return e;
+      });
     }
+    return transformData(initTreeData);
+  };
+
+  const handleToggle = async (isToggle: boolean) => {
+    popoverOpen.value = isToggle;
+    if (!isToggle) return;
+    // 打开时优先用最新 configData 重建，避免 sessionStorage 空数据盖住真实列表
+    if (props.configData?.length) {
+      treeData.value = buildTreeData(props.configData);
+      storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+      sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
+    } else if (!props.loading) {
+      treeData.value = [];
+      storageTreeData.value = [];
+      sessionStorage.removeItem('rule-tree-data');
+    }
+    await nextTick();
   };
   // 取消
   const handleAddFieldClose = (val: Record<string, any>) => {
@@ -284,20 +346,29 @@
   };
   // 搜索逻辑
   const handleSearch = (keyword: string) => {
-    // eslint-disable-next-line max-len
-    const searchInTree = (nodes: Record<string, any>) => nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
-      // 检查当前节点
-      if (node.raw_name.includes(keyword) || node.display_name.includes(keyword)) {
-        result.push(node);
-      }
-
-      // 如果有子节点，递归搜索
-      if (node.children && node.children.length > 0) {
-        result.push(...searchInTree(node.children));
-      }
-
+    const text = (keyword || '').trim();
+    if (!text) {
+      treeData.value = storageTreeData.value;
+      return;
+    }
+    const matchNode = (node: Record<string, any>) => {
+      const rawName = String(node.raw_name || '');
+      const displayName = String(node.display_name || '');
+      const selected = String(node.selectedValue || '');
+      return rawName.includes(text) || displayName.includes(text) || selected.includes(text);
+    };
+    const searchInTree = (nodes: Record<string, any>[]): Record<string, any>[] => {
+      const result: Record<string, any>[] = [];
+      nodes.forEach((node) => {
+        if (matchNode(node)) {
+          result.push(node);
+        }
+        if (Array.isArray(node.children) && node.children.length) {
+          result.push(...searchInTree(node.children));
+        }
+      });
       return result;
-    }, []);
+    };
 
     treeData.value = searchInTree(storageTreeData.value);
   };
@@ -387,6 +458,10 @@
   };
 
 
+  const getFieldTypeIcon = (data: Record<string, any>) => (
+    data.spec_field_type || data.field_type || ''
+  );
+
   const getAggregateName = (element: Record<string, any>) => {
     // 添加的子项
     if ('parent_aggregate' in element) {
@@ -420,11 +495,13 @@
       return {
         ...item,
         isEdit: false,
-        selectedValue: ('alias' in item) ? `${JSON.stringify(item.display_name)}()` : `${item.display_name}(${item.raw_name})`,
+        selectedValue: ('alias' in item)
+          ? `${JSON.stringify(item.display_name)}()`
+          : formatFieldDisplayLabel(item.display_name, item.raw_name),
         children: transformData(item.property.sub_keys).map(child => ({
           ...child,
           raw_name: item.raw_name,
-          self_name: `${item.display_name}(${item.raw_name})`,
+          self_name: formatFieldDisplayLabel(item.display_name, item.raw_name),
           self_key_name: `${child.alias}(${child.value})`,
           table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
         })),
@@ -437,35 +514,43 @@
       ...item,
       isEdit: false,
       keys: 'alias' in item ? [item.value] : (item.keys || []),
-      selectedValue: ('alias' in item) ? `${item.label}(${item.value})` : `${item.display_name}(${item.raw_name})`,
+      selectedValue: ('alias' in item)
+        ? `${item.label}(${item.value})`
+        : formatFieldDisplayLabel(item.display_name, item.raw_name),
       children: [],
       display_name: 'alias' in item ? item.label : item.display_name,
       raw_name: item.raw_name,
     };
   });
-  // 改造数据
-  watch(() => props, (newData) => {
-    const haveTreeData = sessionStorage.getItem('rule-tree-data');
-    if (haveTreeData) {
-      treeData.value = JSON.parse(sessionStorage.getItem('rule-tree-data') || '[]');
-    } else {
-      const initTreeData = JSON.parse(JSON.stringify(newData.configData));
-
-      if (route.name === 'strategyEdit') {
-        // 编辑时手动插入数据回显
-        const initData = transformData(initTreeData).map((e) => {
-          if ((newData.condition.condition.field.parent_raw_name === e.raw_name) && !('from' in e)) {
-            e.children.push({ ...newData.condition.condition.field, isStrategyEdit: true });
-          }
-          return e;
-        });
-        treeData.value = initData;
-      } else {
-        treeData.value = transformData(initTreeData);
+  // 改造数据：优先用最新 configData，避免 sessionStorage 空数组盖住真实字段列表
+  watch(() => [props.configData, props.condition, props.loading] as const, () => {
+    if (props.configData?.length) {
+      treeData.value = buildTreeData(props.configData);
+      try {
+        storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
+        sessionStorage.setItem('rule-tree-data', JSON.stringify(storageTreeData.value));
+      } catch {
+        storageTreeData.value = treeData.value;
       }
+    } else if (!props.loading) {
+      treeData.value = [];
+      storageTreeData.value = [];
+      sessionStorage.removeItem('rule-tree-data');
     }
-    storageTreeData.value = JSON.parse(JSON.stringify(treeData.value));
-    selectedValue.value = 'self_name' in newData.condition.condition.field ? `${newData.condition.condition.field.self_name}/${newData.condition.condition.field.self_key_name}` : newData.condition.condition.field.display_name;
+    const field = props.condition?.condition?.field;
+    if (field && typeof field === 'object' && ('self_name' in field)) {
+      selectedValue.value = `${field.self_name}/${field.self_key_name}`;
+    } else if (field?.raw_name) {
+      const matched = (props.configData || []).find((item: Record<string, any>) => (
+        item.raw_name === field.raw_name
+      ));
+      selectedValue.value = formatFieldDisplayLabel(
+        matched?.display_name || field.display_name,
+        field.raw_name,
+      );
+    } else {
+      selectedValue.value = field?.display_name || '';
+    }
   }, {
     deep: true,
     immediate: true,
@@ -491,30 +576,70 @@
   });
 </script>
 <style scoped lang="postcss">
+.field-list-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  height: 340px;
+  min-height: 200px;
+}
+
+.field-list-loading-text {
+  font-size: 12px;
+  color: #979ba5;
+}
+
+.field-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 340px;
+  min-height: 200px;
+  font-size: 12px;
+  color: #979ba5;
+}
+
 .field {
   display: flex;
   width: 100%;
+  align-items: center;
   justify-content: space-between;
   padding-right: 10px;
+  min-height: 32px;
 
   .field-left {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+
+    .field-type-icon {
+      flex-shrink: 0;
+      margin-right: 4px;
+      font-size: 14px;
+      line-height: 1;
+    }
+
     .field-type-span {
       font-size: 12px;
+      line-height: 20px;
       color: #63656e;
-      text-align: center;
     }
   }
 
   .field-right {
-    margin-top: 3px;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
     margin-left: 10px;
-
   }
 
   .field-type-span {
     font-size: 12px;
+    line-height: 20px;
     color: #49bb07;
-    text-align: center;
   }
 }
 
@@ -534,14 +659,24 @@
 
   .field-edit-left {
     display: flex;
+    align-items: center;
 
     .field-type {
-      .field-type-span {
-        font-size: 12px;
-        color: #63656e;
-        text-align: center;
+      display: flex;
+      align-items: center;
+
+      .field-type-icon {
+        flex-shrink: 0;
+        margin-right: 4px;
+        font-size: 14px;
+        line-height: 1;
       }
 
+      .field-type-span {
+        font-size: 12px;
+        line-height: 20px;
+        color: #63656e;
+      }
     }
 
     .edit-input {
@@ -558,12 +693,14 @@
 }
 
 .subscript {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 10px;
-  height: 28px;
-  padding-bottom: 2px;
+  height: 16px;
   margin-right: 5px;
   margin-left: 5px;
+  vertical-align: middle;
   background-color: #e3ecfd;
   border-radius: 2px;
 }

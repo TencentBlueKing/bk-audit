@@ -352,6 +352,9 @@ class RiskHandler:
             if dispatch_result is not None:
                 # 将分派结果（dispatch_rule/confirmer）固化到风险单，后续分派规则编辑不影响已产生单据
                 self._apply_dispatch(risk, dispatch_result)
+            else:
+                # 场景策略：生成时固化关注人名单与通知组快照（含通知方式，供后续通知与追溯）
+                self._snapshot_scene_followers(risk)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
 
         if dispatch_result is not None and dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
@@ -413,23 +416,54 @@ class RiskHandler:
         """
         risk.dispatch_rule_id = dispatch_result.rule.rule_id
         update_fields = ["dispatch_rule"]
+        parser = RiskNoticeParser(risk=risk)
         if dispatch_result.dispatch_mode == DispatchMode.AFTER_CONFIRM:
             confirmers = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.confirmer))
-            risk.confirmer = RiskNoticeParser(risk=risk).parse_groups(confirmers)
+            risk.confirmer = parser.parse_groups(confirmers)
             # display_status 同步，否则列表页展示为空；周期任务 process_one_risk 的 match 无该分支会跳过，
             risk.status = RiskStatus.PENDING_CONFIRM
             risk.display_status = RiskDisplayStatus.PENDING_CONFIRM
             update_fields += ["confirmer", "status", "display_status"]
         # 固化处理人与关注人
         processors = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.processor))
-        risk.current_operator = RiskNoticeParser(risk=risk).parse_groups(processors)
+        risk.current_operator = parser.parse_groups(processors)
         followers = list(NoticeGroup.objects.filter(group_id__in=dispatch_result.follower))
-        risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(followers)
-        update_fields += ["current_operator", "notice_users"]
+        risk.notice_users = parser.parse_groups(followers)
+        # 快照关注人通知组完整信息（发送通知按快照的用户与通知方式）
+        risk.notice_group_snapshot = parser.parse_groups_snapshot(followers)
+        update_fields += ["current_operator", "notice_users", "notice_group_snapshot"]
         risk.save(update_fields=update_fields)
         # 为确认人授予查看权限，使其能打开详情核实
         if risk.confirmer:
             risk.auth_users(action=ActionEnum.LIST_RISK.id, users=risk.confirmer, user_type=UserType.CONFIRMER)
+
+    def _snapshot_scene_followers(self, risk: Risk) -> None:
+        """
+        场景策略：生成时固化关注人名单与通知组快照
+
+        关注组来源：
+        1. 命中发现规则：StrategyRule.follower
+        2. 未命中规则：Strategy.notice_groups
+
+        """
+
+        strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+        if not strategy:
+            return
+
+        follower_group_ids = strategy.notice_groups or []
+        if getattr(risk, "strategy_rule_id", None):
+            from services.web.strategy_v2.models import StrategyRule
+
+            rule = StrategyRule._base_manager.filter(rule_id=risk.strategy_rule_id).first()
+            if rule and rule.follower:
+                follower_group_ids = rule.follower
+
+        notice_groups = list(NoticeGroup.objects.filter(group_id__in=follower_group_ids))
+        parser = RiskNoticeParser(risk=risk)
+        risk.notice_users = parser.parse_groups(notice_groups)
+        risk.notice_group_snapshot = parser.parse_groups_snapshot(notice_groups)
+        risk.save(update_fields=["notice_users", "notice_group_snapshot"])
 
     def _get_strategy_scene_id(self, strategy_id) -> Optional[int]:
         """
@@ -534,44 +568,23 @@ class RiskHandler:
         """
         发送通知给关注人
 
-        关注人来源：
-        1. 全局策略风险：分派规则的follower DispatchRule.follower
-        2. 场景策略风险：发现规则的follower  StrategyRule.follower
+        关注人及通知方式统一按风险生成时固化的通知组快照发送，
+        保证通知对象、通知方式与风险生成时一致，后续策略/规则/通知组
+        的变更均不影响历史风险的通知行为。
         """
 
-        # 获取策略
-        strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
-        if not strategy:
+        if not risk.notice_group_snapshot:
             return
-
-        # 1. 全局策略风险：获取分派规则的关注组
-        if getattr(risk, "dispatch_rule_id", None):
-            from services.web.strategy_v2.models import DispatchRule
-
-            dispatch_rule = DispatchRule._base_manager.filter(rule_id=risk.dispatch_rule_id).first()
-            follower_group_ids = (dispatch_rule.follower if dispatch_rule else None) or []
-        else:
-            # 2. 场景策略风险：获取发现规则的关注组
-            follower_group_ids = strategy.notice_groups or []
-            if getattr(risk, "strategy_rule_id", None):
-                from services.web.strategy_v2.models import StrategyRule
-
-                rule = StrategyRule._base_manager.filter(rule_id=risk.strategy_rule_id).first()
-                if rule and rule.follower:
-                    follower_group_ids = rule.follower
-
-        # 获取通知组
-        notice_groups = NoticeGroup.objects.filter(group_id__in=follower_group_ids)
-        if not notice_groups:
-            return
-
-        # 发送通知
-        self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
-
-        # 更新风险的通知人员名单
-        if not risk.notice_users:
-            risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
-            risk.save(update_fields=["notice_users"])
+        # is_todo=False：关注人通知（非待办）。通知模板 builder 依据 agg_key 中，是否包含 "is_todo:True" 来区分"待办/关注"文案，需与 send_notice 保持格式一致。
+        is_todo = False
+        for snapshot in risk.notice_group_snapshot:
+            resource.notice.send_notice(
+                relate_type=RelateType.RISK,
+                relate_id=risk.pk,
+                agg_key=f"notice_group:{snapshot.get('group_id')}::strategy:{risk.strategy_id}::is_todo:{is_todo}",
+                msg_type=[c.get("msg_type") for c in snapshot.get("notice_config", []) if "msg_type" in c],
+                receivers=snapshot.get("group_member", []),
+            )
 
     @classmethod
     def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], is_todo: bool) -> None:

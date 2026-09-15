@@ -1232,12 +1232,15 @@ class TestListRiskResource(TestCase):
 
     def test_list_risk_scene_scope_excludes_pending_confirm(self):
         """场景风险视图（带 scope）应排除待确认状态，待确认由独立列表承载"""
+        from services.web.risk.constants import RiskDisplayStatus
+
         pending_risk = Risk.objects.create(
             risk_id="risk-pending-confirm",
             raw_event_id="raw-pending",
             strategy=self.strategy,
             scene_id=self.scene_id,
             status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
             title="pending",
             event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
             risk_level="high",
@@ -1284,6 +1287,7 @@ class TestListRiskResource(TestCase):
 
     def test_pending_confirm_list_with_scope_not_emptied(self):
         """待我确认列表带 scope 查询时，不能被场景视图的待确认排除逻辑清空"""
+        from services.web.risk.constants import RiskDisplayStatus
         from services.web.risk.resources.risk import ListPendingConfirmRisk
 
         pending_risk = Risk.objects.create(
@@ -1292,6 +1296,7 @@ class TestListRiskResource(TestCase):
             strategy=self.strategy,
             scene_id=self.scene_id,
             status=RiskStatus.PENDING_CONFIRM,
+            display_status=RiskDisplayStatus.PENDING_CONFIRM,
             title="pending-scope",
             event_time=datetime.datetime(2024, 1, 4, tzinfo=datetime.timezone.utc),
             risk_level="high",
