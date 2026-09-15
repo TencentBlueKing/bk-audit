@@ -25,6 +25,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from django.conf import settings
 from django.contrib import admin
 from django.db.models import Q
 from django.http import Http404
@@ -34,6 +35,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.permission.handlers.actions import ActionEnum
+from core.exporter.markdown import render_ai_markdown as render_common_ai_markdown
 from services.web.risk.constants import (
     AnalyseReportStatus,
     AnalyseReportType,
@@ -51,6 +53,8 @@ from services.web.risk.models import (
     TicketPermission,
     UserType,
 )
+from services.web.risk.report.markdown import render_ai_markdown
+from services.web.risk.resources.analyse_report import ExportAnalyseReport
 from services.web.risk.serializers import (
     GenerateAnalyseReportRequestSerializer,
     ListAnalyseReportRequestSerializer,
@@ -1083,6 +1087,14 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
     @staticmethod
     def _extract_html_body(html):
         return html.split("<body>", 1)[1].split("</body>", 1)[0].strip()
+
+    def test_export_markdown_renderer_and_font_use_common_export_configuration(self):
+        markdown = "| A | B |\n| - | - |\n| 1 | 2 |"
+
+        self.assertEqual(render_ai_markdown(markdown), render_common_ai_markdown(markdown))
+        self.assertEqual(ExportAnalyseReport._CJK_FONT_PATH, settings.PDF_CJK_FONT_PATH)
+        self.assertTrue(Path(settings.PDF_CJK_FONT_PATH).is_file())
+        self.assertTrue(Path(settings.PDF_CJK_FONT_PATH).with_name("NotoSansSC-LICENSE.txt").is_file())
 
     def setUp(self):
         super().setUp()

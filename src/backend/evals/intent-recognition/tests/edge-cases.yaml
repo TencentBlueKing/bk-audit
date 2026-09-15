@@ -1,0 +1,40 @@
+# 边界场景：歧义表达 / 近义系统 / 复合意图
+- description: '复合意图（一句话既选系统又检索，系统信息含时间条件）'
+  vars:
+    query: '我要看配置平台近一个月 admin 的变更记录'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_config_system"'
+
+- description: '含近义词的检索（"平台"泛指，不应误判具体系统）'
+  vars:
+    query: '查一下平台上的异常日志'
+    current_system_id: 'eval_audit_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === ""'
+
+- description: '系统名不完整（半称，语义仍可定位）'
+  vars:
+    query: '看下审计的操作记录'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system"'
+
+- description: '英文话语（跨语言意图识别）'
+  vars:
+    query: 'show me the audit center logs for the last 7 days'
+    current_system_id: ''
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system"'
+
+- description: '长句多重修饰（选系统+多条件检索）'
+  vars:
+    query: '麻烦帮我在蓝盾上面查一下张三和李四最近三天操作id为456和789并且结果是失败的日志'
+    current_system_id: 'eval_config_system'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system"'
