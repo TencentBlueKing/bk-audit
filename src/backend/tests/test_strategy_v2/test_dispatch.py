@@ -172,7 +172,12 @@ class TestOperators(TestCase):
     """操作符实现测试"""
 
     def _make_condition(self, field_name, operator, filters=None, filter_val=""):
-        return Condition(field=make_field(field_name, display_name=field_name), operator=operator, filters=filters or [], filter=filter_val)
+        return Condition(
+            field=make_field(field_name, display_name=field_name),
+            operator=operator,
+            filters=filters or [],
+            filter=filter_val,
+        )
 
     def _eval_condition(self, field_name, operator, ctx, filters=None, filter_val=""):
         cond = self._make_condition(field_name, operator, filters, filter_val)
@@ -316,7 +321,9 @@ class TestOperators(TestCase):
         # 通过 mock 来模拟操作符不在 PY_OPERATORS 中的场景
         from unittest import mock as mock_module
 
-        cond = Condition(field=make_field("field", display_name="field"), operator=Operator.EQ, filters=[], filter="value")
+        cond = Condition(
+            field=make_field("field", display_name="field"), operator=Operator.EQ, filters=[], filter="value"
+        )
         with mock_module.patch.dict("services.web.strategy_v2.handlers.dispatch.PY_OPERATORS", clear=True):
             self.assertFalse(apply_condition(cond, ctx))
 
@@ -375,9 +382,13 @@ class TestEvaluate(TestCase):
 
     def test_nested_conditions(self):
         """嵌套条件树：(status=active AND level=HIGH) OR operator=admin"""
-        cond_status = Condition(field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active")
+        cond_status = Condition(
+            field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active"
+        )
         cond_level = Condition(field=make_field("level", display_name="level"), operator=Operator.EQ, filter="HIGH")
-        cond_operator = Condition(field=make_field("operator", display_name="operator"), operator=Operator.EQ, filter="admin")
+        cond_operator = Condition(
+            field=make_field("operator", display_name="operator"), operator=Operator.EQ, filter="admin"
+        )
         node = WhereCondition(
             connector=FilterConnector.OR,
             conditions=[
@@ -636,8 +647,12 @@ class TestMatchDispatchRule(TestCase):
 
     def test_priority_order(self):
         """按 rule_order 优先级匹配"""
-        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["LOW"], display_name="level")})
+        rule1 = self._make_rule(
+            1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")}
+        )
+        rule2 = self._make_rule(
+            2, conditions={"condition": make_condition_dict("level", filters=["LOW"], display_name="level")}
+        )
         # rule_order: [2, 1] 表示 rule2 优先级更高
         result = match_dispatch_rule(
             ctx={"event_data": {"level": "LOW"}},
@@ -649,8 +664,12 @@ class TestMatchDispatchRule(TestCase):
 
     def test_first_match_wins(self):
         """首匹配：多个规则都匹配时返回第一个"""
-        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
+        rule1 = self._make_rule(
+            1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")}
+        )
+        rule2 = self._make_rule(
+            2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")}
+        )
         result = match_dispatch_rule(
             ctx={"event_data": {"level": "HIGH"}},
             rules=[rule1, rule2],
@@ -661,7 +680,9 @@ class TestMatchDispatchRule(TestCase):
 
     def test_non_default_rule_miss_falls_to_default(self):
         """非默认规则未命中时降级到默认规则"""
-        rule_cond = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
+        rule_cond = self._make_rule(
+            1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")}
+        )
         rule_default = self._make_rule(2, is_default=True)
         result = match_dispatch_rule(
             ctx={"event_data": {"level": "LOW"}},  # 不匹配 rule_cond
@@ -694,8 +715,16 @@ class TestMatchDispatchRule(TestCase):
                     {
                         "connector": "or",
                         "conditions": [
-                            {"condition": make_condition_dict("risk_level", filters=["HIGH"], display_name="risk_level")},
-                            {"condition": make_condition_dict("risk_level", filters=["MEDIUM"], display_name="risk_level")},
+                            {
+                                "condition": make_condition_dict(
+                                    "risk_level", filters=["HIGH"], display_name="risk_level"
+                                )
+                            },
+                            {
+                                "condition": make_condition_dict(
+                                    "risk_level", filters=["MEDIUM"], display_name="risk_level"
+                                )
+                            },
                         ],
                     },
                 ],
@@ -723,7 +752,9 @@ class TestMatchDispatchRule(TestCase):
     def test_rule_order_not_in_list(self):
         """rule_id 不在 rule_order 中时排到最后"""
         rule1 = self._make_rule(1, is_default=True)
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
+        rule2 = self._make_rule(
+            2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")}
+        )
         # rule_order 只包含 rule1，rule2 优先级最低
         result = match_dispatch_rule(
             ctx={"event_data": {"level": "HIGH"}},

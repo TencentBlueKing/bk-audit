@@ -591,7 +591,11 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         for row in scene_risk_qs:
             scene_risk_map[row['strategy_id']].append({"scene_id": row['scene_id'], "risk_count": row['count']})
         for s in strategies:
-            s.scene_risk_counts = scene_risk_map.get(s.strategy_id, [])
+            if scene_id is not None and s.strategy_id in platform_strategy_ids:
+                # 场景视角：即使风险数为0，也返回该场景的记录
+                s.scene_risk_counts = scene_risk_map.get(s.strategy_id, [{"scene_id": scene_id, "risk_count": 0}])
+            else:
+                s.scene_risk_counts = scene_risk_map.get(s.strategy_id, [])
 
     @staticmethod
     def sync_platform_binding_scenes(strategy: Strategy) -> None:
