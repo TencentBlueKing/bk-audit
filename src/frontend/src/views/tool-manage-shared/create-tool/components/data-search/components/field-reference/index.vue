@@ -60,8 +60,8 @@
               multiple-mode="tag"
               :remote-method="handleRemoteMethod"
               @change="handleSelectTool">
-              <template #tagRender="{ label }">
-                {{ label }}
+              <template #tagRender="{ value, label }">
+                {{ getToolName(value) || label }}
               </template>
               <template
                 v-for="(item, index) in toolCascaderList"
@@ -499,11 +499,48 @@
   const fetchToolsDetail = async (uid: string) => {
     try {
       const result = await ToolManageService.fetchToolsDetail({ uid });
-      toolsDetailData.value.set(uid, result);
+      const next = new Map(toolsDetailData.value);
+      next.set(String(uid), result);
+      toolsDetailData.value = next;
       return result;
     } catch (error) {
       return new ToolDetailModel();
     }
+  };
+
+  // 优先用工具详情名称，列表未命中时不要回退成 UID
+  const getToolName = (uid: string) => {
+    if (!uid) {
+      return '';
+    }
+    const key = String(uid);
+    const fromDetail = toolsDetailData.value.get(key)?.name;
+    if (fromDetail) {
+      return fromDetail;
+    }
+    const fromList = props.allToolsData.find(item => String(item.uid) === key)?.name;
+    if (fromList) {
+      return fromList;
+    }
+    const fromCascader = toolCascaderList.value
+      .flatMap(group => group.children || [])
+      .find(child => String(child.id) === key)?.name;
+    return fromCascader || uid;
+  };
+
+  const syncSelectedToolTags = () => {
+    nextTick(() => {
+      if (!selectToolRef.value) {
+        return;
+      }
+      selectToolRef.value.selected = formData.value.tools.map((toolConfig) => {
+        const { uid } = toolConfig.tool;
+        return {
+          value: uid,
+          label: getToolName(uid),
+        };
+      });
+    });
   };
 
   // 处理单个工具详情的对比逻辑
@@ -559,7 +596,7 @@
   const resetFormData = () => {
     formData.value.tools = [];
     formData.value.selectTool = [];
-    toolsDetailData.value.clear();
+    toolsDetailData.value = new Map();
     activeFieldName.value = '';
   };
 
@@ -582,47 +619,50 @@
       // 移除取消选择的工具
       if (toolsToRemove.length > 0) {
         formData.value.tools = formData.value.tools.filter(toolConfig => !toolsToRemove.includes(toolConfig.tool.uid));
-        // 清理对应的工具详情数据
+        const next = new Map(toolsDetailData.value);
         toolsToRemove.forEach((uid) => {
-          toolsDetailData.value.delete(uid);
+          next.delete(uid);
+          next.delete(String(uid));
         });
+        toolsDetailData.value = next;
       }
 
       // 添加新选择的工具
       if (toolsToAdd.length > 0) {
         for (const toolUid of toolsToAdd) {
-          const tool = props.allToolsData.find(item => item.uid === toolUid);
-          if (tool) {
-            const toolDetail = await fetchToolsDetail(tool.uid);
-
-            // 创建工具配置
-            const toolConfig: ToolConfig = {
-              tool: {
-                uid: tool.uid,
-                version: tool.version,
-              },
-              config: [],
-              drill_name: '',
-            };
-
-            // 为每个输入变量创建配置项
-            if (toolDetail.config?.input_variable) {
-              // 如果activeFieldName不为空，input_variable只有一项，target_value为activeFieldName
-              toolDetail.config.input_variable.forEach((item) => {
-                // time_range_select 类型只能使用固定值填充
-                const defaultType = item.field_category === 'time_range_select' ? 'fixed_value' : 'field';
-                toolConfig.config.push({
-                  source_field: item.raw_name,
-                  target_value_type: defaultType,
-                  target_value: toolDetail.config.input_variable.length === 1 ? activeFieldName.value : '',
-                  target_field_type: '',
-                  description: item.description,
-                });
-              });
-            }
-
-            formData.value.tools.push(toolConfig);
+          const tool = props.allToolsData.find(item => String(item.uid) === String(toolUid));
+          const toolDetail = await fetchToolsDetail(toolUid);
+          if (!tool && !toolDetail?.config) {
+            continue;
           }
+
+          // 创建工具配置
+          const toolConfig: ToolConfig = {
+            tool: {
+              uid: tool?.uid || toolUid,
+              version: tool?.version || toolDetail.version,
+            },
+            config: [],
+            drill_name: '',
+          };
+
+          // 为每个输入变量创建配置项
+          if (toolDetail.config?.input_variable) {
+            // 如果activeFieldName不为空，input_variable只有一项，target_value为activeFieldName
+            toolDetail.config.input_variable.forEach((item) => {
+              // time_range_select 类型只能使用固定值填充
+              const defaultType = item.field_category === 'time_range_select' ? 'fixed_value' : 'field';
+              toolConfig.config.push({
+                source_field: item.raw_name,
+                target_value_type: defaultType,
+                target_value: toolDetail.config.input_variable.length === 1 ? activeFieldName.value : '',
+                target_field_type: '',
+                description: item.description,
+              });
+            });
+          }
+
+          formData.value.tools.push(toolConfig);
         }
       }
 
@@ -631,17 +671,7 @@
       resetFormData();
     }
     nextTick(() => {
-      selectToolRef.value.selected = [];
-      // 设置selectTool的选中值：以 formData.tools 为准，优先从 toolCascaderList 获取名称
-      const allChildren = toolCascaderList.value.flatMap(group => group.children || []);
-      const selectedTools = formData.value.tools.map((toolConfig) => {
-        const tool = allChildren.find((child: any) => child.id === toolConfig.tool.uid);
-        // 如果在列表中找到，使用列表中的名称；否则使用 getToolName 获取名称
-        const label = tool?.name || getToolName(toolConfig.tool.uid);
-        return { value: toolConfig.tool.uid, label };
-      });
-
-      selectToolRef.value.selected = selectedTools;
+      syncSelectedToolTags();
     });
   };
 
@@ -649,12 +679,6 @@
     isToolLoading.value = true;
     // 刷新后会触发 props.allToolsData 的 watch，自动重建列表
     emit('refresh-tool-list');
-  };
-
-  // 获取工具名称
-  const getToolName = (uid: string) => {
-    const tool = props.allToolsData.find(item => item.uid === uid);
-    return tool?.name || uid;
   };
 
   // 获取字段显示名称
@@ -822,7 +846,11 @@
     const deleteTool = element.tool.uid;
     formData.value.tools = formData.value.tools.filter(tool => tool.tool.uid !== deleteTool);
     formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
-    toolsDetailData.value.delete(deleteTool);
+    const next = new Map(toolsDetailData.value);
+    next.delete(deleteTool);
+    next.delete(String(deleteTool));
+    toolsDetailData.value = next;
+    syncSelectedToolTags();
   };
 
   const handleSubmit = () => {
@@ -869,6 +897,7 @@
         // 设置已存在配置的 select 选中状态
         nextTick(() => {
           setSelectValues();
+          syncSelectedToolTags();
         });
       } catch (error) {
         console.error('获取工具详情时发生错误:', error);
