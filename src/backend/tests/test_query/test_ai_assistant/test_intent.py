@@ -238,7 +238,7 @@ class LoadCandidatesTest(AIAssistantTestCase):
 class IntentAgentRoutingTest(AIAssistantTestCase):
     """意图识别智能体环境路由开关（默认专属 / 应急切共享）。
 
-    定案（2026-09-15 与领导确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
+    定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
     BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
     （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
     （第 1 层优先级，模式同 bkop 的 AUDIT_LOG_SEARCH 三件套）。
