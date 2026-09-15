@@ -365,24 +365,47 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
     system_id = current_system_id
     if payload.intent == "select_system":
         system_id = payload.system_id
-        selection_message = MessageService(user=context_data.username).create_executed(
-            conversation=execution.message.conversation,
-            message_type=MessageType.SYSTEM_SELECTION,
-            # 透传 session scope（前端左上角场景过滤器当前选择）：
-            # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄；
-            # 历史消息重试（scope 为空，协议升级前快照）补 cross_system 宽口径兜底（v1 行为）
-            input_data={
-                "system_ids": [system_id],
-                "scope_type": context_data.scope_type or "cross_system",
-                "scope_id": context_data.scope_id,
-            },
-            # 消息卡片可见性（通用显隐协议）：纯切换（need_search=false）SELECTION 是
-            # 本轮唯一产出，卡片必须展示；复合意图（切系统+检索）仅展示日志检索消息
-            # （设计侧要求）——visible 随消息持久化，刷新后前端按顶层 visible 字段恢复
-            visible=not payload.need_search,
-            # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
-            timeline_started_at=execution.message.created_at,
+        # acks_late 重投防重：SELECTION 建于父消息终态前（复合意图下被杀窗口可长达
+        # 条件识别全程），重投重跑时本轮已建卡则复用，防重复建卡；id 上界锚定本轮
+        # （意图消息之后），不误伤历史轮次。极端边界（意图执行期间用户手动选择系统）
+        # 复用该手动卡——本轮已有选择结果的语义仍成立，代价可接受
+        existing_selection = (
+            Message.objects.filter(
+                conversation=execution.message.conversation,
+                created_by=context_data.username,
+                message_type=MessageType.SYSTEM_SELECTION,
+                id__gt=execution.message.id,
+            )
+            .order_by("id")
+            .first()
         )
+        if existing_selection is not None:
+            logger.info(
+                "[execute_user_intent] reuse selection of current round on redelivery, "
+                "message_id=%s, selection_id=%s",
+                execution.message.id,
+                existing_selection.id,
+            )
+            selection_message = existing_selection
+        else:
+            selection_message = MessageService(user=context_data.username).create_executed(
+                conversation=execution.message.conversation,
+                message_type=MessageType.SYSTEM_SELECTION,
+                # 透传 session scope（前端左上角场景过滤器当前选择）：
+                # 子消息继承同一 scope，使 NL/LOG_SEARCH 续链仍按 session 收窄；
+                # 历史消息重试（scope 为空，协议升级前快照）补 cross_system 宽口径兜底（v1 行为）
+                input_data={
+                    "system_ids": [system_id],
+                    "scope_type": context_data.scope_type or "cross_system",
+                    "scope_id": context_data.scope_id,
+                },
+                # 消息卡片可见性（通用显隐协议）：纯切换（need_search=false）SELECTION 是
+                # 本轮唯一产出，卡片必须展示；复合意图（切系统+检索）仅展示日志检索消息
+                # （设计侧要求）——visible 随消息持久化，刷新后前端按顶层 visible 字段恢复
+                visible=not payload.need_search,
+                # 时间线起点=用户发问时刻：duration_seconds 表达真实等待耗时（含意图识别 LLM）
+                timeline_started_at=execution.message.created_at,
+            )
         if not payload.need_search:
             # 纯切换（无检索诉求）：不调条件解析、不续链检索——切换即本轮终点。
             # 若强行把「切换到X」类语句交给条件解析必然失败，曾误报

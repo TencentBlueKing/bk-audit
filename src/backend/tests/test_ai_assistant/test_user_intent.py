@@ -231,6 +231,39 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertNotEqual(output.selection_message_uid, str(selection.uid))
         self.assertIsNotNone(output.condition)
 
+    def test_select_system_redelivery_reuses_current_round_selection(self):
+        """[acks_late 重投防重] 本轮（意图消息之后）已有 SELECTION 时重投复用，不再重复建卡。
+
+        发版重启 Worker 重投场景（2026-09-15 定案）：复合意图 SELECTION 建于父消息终态前
+        （被杀窗口可达条件识别全程），重投重跑若再建一条 → 前端重复卡片。防重锚点 =
+        意图消息 id 之后的 SELECTION（本轮边界），不误伤历史轮次（id 更小的旧选择）。
+        """
+
+        message, execution = self._create_intent_message()
+        # 模拟第一次执行已建的 SELECTION（id > 意图消息），Worker 在条件识别期间被杀
+        first_selection = self.create_selection_message()
+        self.assertGreater(first_selection.id, message.id)
+        payload = IntentPayload(intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="已为您切换")
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            mock.MagicMock(return_value=payload),
+        ), mock.patch(
+            CONVERT_MOCK, mock.MagicMock(return_value=make_condition())
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.LogSearchService.search", return_value=make_log_search_output()
+        ), mock.patch(
+            TITLE_DELAY
+        ):
+            output = execute_user_intent.run(execution)
+
+        # 重投复用本轮已建卡：总数不变、uid 指向第一次的 SELECTION
+        self.assertEqual(self._selection_count(), 1)
+        self.assertEqual(output.selection_message_uid, str(first_selection.uid))
+        self.assertIsNotNone(output.condition)
+
     def test_user_intent_success_output_always_has_message(self):
         """对话不变式：USER_INTENT 任何 SUCCESS 输出必带非空 message（前端渲染的可见载体）。
 
