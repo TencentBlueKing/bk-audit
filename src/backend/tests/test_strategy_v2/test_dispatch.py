@@ -72,10 +72,10 @@ class TestResolveField(TestCase):
     """resolve_field: 字段解析测试"""
 
     def test_resolve_direct_field(self):
-        """直连字段：raw_name 直接从 ctx 取值"""
-        ctx = {"risk_level": "HIGH", "operator": "admin"}
-        self.assertEqual(resolve_field(make_field("risk_level"), ctx), "HIGH")
-        self.assertEqual(resolve_field(make_field("operator"), ctx), "admin")
+        """直连字段：从 event_data 获取值（生产环境标准结构）"""
+        ctx = {"event_data": {"risk_level": "HIGH", "operator": "admin"}}
+        self.assertEqual(resolve_field(make_field("risk_level", display_name="risk_level"), ctx), "HIGH")
+        self.assertEqual(resolve_field(make_field("operator", display_name="operator"), ctx), "admin")
 
     def test_resolve_select_field_from_event_data(self):
         """select 字段：display_name 命中 event_data 键时取值"""
@@ -84,33 +84,33 @@ class TestResolveField(TestCase):
         self.assertEqual(resolve_field(field, ctx), "host")
 
     def test_resolve_select_field_takes_precedence(self):
-        """display_name 命中 event_data 时优先于 raw_name 直连取值"""
-        ctx = {"risk_level": "HIGH", "event_data": {"risk_level": "MIDDLE"}}
+        """display_name 命中 event_data 时取值"""
+        ctx = {"event_data": {"risk_level": "MIDDLE"}}
         field = make_field("risk_level", display_name="risk_level")
         self.assertEqual(resolve_field(field, ctx), "MIDDLE")
 
     def test_resolve_missing_field_returns_none(self):
         """字段不存在时返回 None"""
-        ctx = {"risk_level": "HIGH"}
-        self.assertIsNone(resolve_field(make_field("operator"), ctx))
+        ctx = {"event_data": {"risk_level": "HIGH"}}
+        self.assertIsNone(resolve_field(make_field("operator", display_name="operator"), ctx))
 
     def test_resolve_select_field_missing_key_returns_none(self):
-        """select 字段的 display_name 不在 event_data 中且 raw_name 不在 ctx 中"""
+        """select 字段的 display_name 不在 event_data 中返回 None"""
         ctx = {"event_data": {"resource_type": "host"}}
         self.assertIsNone(resolve_field(make_field("risk_type", display_name="风险类型"), ctx))
 
     def test_resolve_none_field_returns_none(self):
         """空字段对象返回 None"""
-        ctx = {"risk_level": "HIGH"}
+        ctx = {"event_data": {"risk_level": "HIGH"}}
         self.assertIsNone(resolve_field(None, ctx))
 
     def test_resolve_event_data_not_dict(self):
-        """event_data 不是 dict 时按直连字段处理"""
+        """event_data 不是 dict 时返回 None"""
         ctx = {"event_data": "not_a_dict"}
         self.assertIsNone(resolve_field(make_field("risk_level"), ctx))
 
     def test_resolve_event_data_none(self):
-        """event_data 为 None 时按直连字段处理"""
+        """event_data 为 None 时返回 None"""
         ctx = {"event_data": None}
         self.assertIsNone(resolve_field(make_field("risk_level"), ctx))
 
@@ -172,14 +172,14 @@ class TestOperators(TestCase):
     """操作符实现测试"""
 
     def _make_condition(self, field_name, operator, filters=None, filter_val=""):
-        return Condition(field=make_field(field_name), operator=operator, filters=filters or [], filter=filter_val)
+        return Condition(field=make_field(field_name, display_name=field_name), operator=operator, filters=filters or [], filter=filter_val)
 
     def _eval_condition(self, field_name, operator, ctx, filters=None, filter_val=""):
         cond = self._make_condition(field_name, operator, filters, filter_val)
         return apply_condition(cond, ctx)
 
     def test_eq(self):
-        ctx = {"status": "active"}
+        ctx = {"event_data": {"status": "active"}}
         self.assertTrue(self._eval_condition("status", Operator.EQ, ctx, filter_val="active"))
         self.assertFalse(self._eval_condition("status", Operator.EQ, ctx, filter_val="inactive"))
 
@@ -195,102 +195,128 @@ class TestOperators(TestCase):
         self.assertTrue(apply_condition(cond, ctx))
 
     def test_neq(self):
-        ctx = {"status": "active"}
+        ctx = {"event_data": {"status": "active"}}
         self.assertTrue(self._eval_condition("status", Operator.NEQ, ctx, filter_val="inactive"))
         self.assertFalse(self._eval_condition("status", Operator.NEQ, ctx, filter_val="active"))
 
     def test_gt(self):
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertTrue(self._eval_condition("count", Operator.GT, ctx, filter_val="5"))
         self.assertFalse(self._eval_condition("count", Operator.GT, ctx, filter_val="10"))
         self.assertFalse(self._eval_condition("count", Operator.GT, ctx, filter_val="15"))
 
     def test_gte(self):
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertTrue(self._eval_condition("count", Operator.GTE, ctx, filter_val="10"))
         self.assertTrue(self._eval_condition("count", Operator.GTE, ctx, filter_val="5"))
         self.assertFalse(self._eval_condition("count", Operator.GTE, ctx, filter_val="15"))
 
     def test_lt(self):
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertTrue(self._eval_condition("count", Operator.LT, ctx, filter_val="15"))
         self.assertFalse(self._eval_condition("count", Operator.LT, ctx, filter_val="10"))
         self.assertFalse(self._eval_condition("count", Operator.LT, ctx, filter_val="5"))
 
     def test_lte(self):
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertTrue(self._eval_condition("count", Operator.LTE, ctx, filter_val="10"))
         self.assertTrue(self._eval_condition("count", Operator.LTE, ctx, filter_val="15"))
         self.assertFalse(self._eval_condition("count", Operator.LTE, ctx, filter_val="5"))
 
+    def test_numeric_compare_big_int_precision(self):
+        """大整数比较精度：超过 float 53 位尾数（2^53 以上）仍准确判定"""
+        # 9007199254740992 = 2^53，9007199254740993 无法被 float 精确表示（float 化后两者相等）
+        ctx = {"event_data": {"count": 9007199254740993}}
+        self.assertTrue(self._eval_condition("count", Operator.GT, ctx, filter_val=9007199254740992))
+        self.assertFalse(self._eval_condition("count", Operator.LTE, ctx, filter_val=9007199254740992))
+        # 末尾含 0 的大整数（字符串形式）同样保留 int 精度
+        ctx = {"event_data": {"count": 1234567890123456780}}
+        self.assertTrue(self._eval_condition("count", Operator.GT, ctx, filter_val="1234567890123456770"))
+        # 浮点整数值回归 int：不影响普通数值比较
+        ctx = {"event_data": {"count": 10.0}}
+        self.assertTrue(self._eval_condition("count", Operator.GT, ctx, filter_val="9"))
+        # 非整数保持 float 语义
+        ctx = {"event_data": {"count": 10.5}}
+        self.assertTrue(self._eval_condition("count", Operator.GT, ctx, filter_val="10"))
+
+    def test_between_big_int(self):
+        """BETWEEN 大整数边界"""
+        ctx = {"event_data": {"count": 9007199254740993}}
+        self.assertTrue(
+            self._eval_condition("count", Operator.BETWEEN, ctx, filters=[9007199254740993, 9007199254740995])
+        )
+        self.assertFalse(
+            self._eval_condition("count", Operator.BETWEEN, ctx, filters=[9007199254740990, 9007199254740992])
+        )
+
     def test_include(self):
-        ctx = {"operator": "admin"}
+        ctx = {"event_data": {"operator": "admin"}}
         self.assertTrue(self._eval_condition("operator", Operator.INCLUDE, ctx, filters=["admin", "user"]))
         self.assertFalse(self._eval_condition("operator", Operator.INCLUDE, ctx, filters=["user", "guest"]))
 
     def test_exclude(self):
-        ctx = {"operator": "admin"}
+        ctx = {"event_data": {"operator": "admin"}}
         self.assertTrue(self._eval_condition("operator", Operator.EXCLUDE, ctx, filters=["user", "guest"]))
         self.assertFalse(self._eval_condition("operator", Operator.EXCLUDE, ctx, filters=["admin", "user"]))
 
     def test_like(self):
-        ctx = {"name": "test_resource_001"}
+        ctx = {"event_data": {"name": "test_resource_001"}}
         self.assertTrue(self._eval_condition("name", Operator.LIKE, ctx, filter_val="test_%"))
         self.assertFalse(self._eval_condition("name", Operator.LIKE, ctx, filter_val="prod_%"))
 
     def test_not_like(self):
-        ctx = {"name": "test_resource_001"}
+        ctx = {"event_data": {"name": "test_resource_001"}}
         self.assertTrue(self._eval_condition("name", Operator.NOT_LIKE, ctx, filter_val="prod_%"))
         self.assertFalse(self._eval_condition("name", Operator.NOT_LIKE, ctx, filter_val="test_%"))
 
     def test_isnull(self):
-        ctx = {"value": None}
+        ctx = {"event_data": {"value": None}}
         self.assertTrue(self._eval_condition("value", Operator.ISNULL, ctx))
-        ctx2 = {"value": "not_none"}
+        ctx2 = {"event_data": {"value": "not_none"}}
         self.assertFalse(self._eval_condition("value", Operator.ISNULL, ctx2))
 
     def test_notnull(self):
-        ctx = {"value": "not_none"}
+        ctx = {"event_data": {"value": "not_none"}}
         self.assertTrue(self._eval_condition("value", Operator.NOTNULL, ctx))
-        ctx2 = {"value": None}
+        ctx2 = {"event_data": {"value": None}}
         self.assertFalse(self._eval_condition("value", Operator.NOTNULL, ctx2))
 
     def test_between(self):
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertTrue(self._eval_condition("count", Operator.BETWEEN, ctx, filters=[5, 15]))
         self.assertTrue(self._eval_condition("count", Operator.BETWEEN, ctx, filters=[10, 10]))
         self.assertFalse(self._eval_condition("count", Operator.BETWEEN, ctx, filters=[11, 20]))
 
     def test_between_invalid_filters(self):
         """BETWEEN 需要恰好 2 个 filter 值"""
-        ctx = {"count": 10}
+        ctx = {"event_data": {"count": 10}}
         self.assertFalse(self._eval_condition("count", Operator.BETWEEN, ctx, filters=[5]))
         self.assertFalse(self._eval_condition("count", Operator.BETWEEN, ctx, filters=[1, 2, 3]))
 
     def test_match_any(self):
-        ctx = {"level": "HIGH"}
+        ctx = {"event_data": {"level": "HIGH"}}
         self.assertTrue(self._eval_condition("level", Operator.MATCH_ANY, ctx, filters=["HIGH", "MEDIUM"]))
         self.assertFalse(self._eval_condition("level", Operator.MATCH_ANY, ctx, filters=["LOW", "MEDIUM"]))
 
     def test_match_all(self):
         """MATCH_ALL 要求值与所有 filter 都匹配（通常用于多值字段）"""
-        ctx = {"tags": "tag1"}
+        ctx = {"event_data": {"tags": "tag1"}}
         self.assertTrue(self._eval_condition("tags", Operator.MATCH_ALL, ctx, filters=["tag1"]))
         self.assertFalse(self._eval_condition("tags", Operator.MATCH_ALL, ctx, filters=["tag1", "tag2"]))
 
     def test_json_contains(self):
-        ctx = {"data": "admin"}
+        ctx = {"event_data": {"data": "admin"}}
         self.assertTrue(self._eval_condition("data", Operator.JSON_CONTAINS, ctx, filters=["admin"]))
         self.assertFalse(self._eval_condition("data", Operator.JSON_CONTAINS, ctx, filters=["user"]))
 
     def test_unknown_operator_in_py_operators_returns_false(self):
         """PY_OPERATORS 中不存在的操作符返回 False"""
-        ctx = {"field": "value"}
+        ctx = {"event_data": {"field": "value"}}
         # 使用一个合法的 Operator 值，但手动构造一个不在 PY_OPERATORS 中的情况
         # 通过 mock 来模拟操作符不在 PY_OPERATORS 中的场景
         from unittest import mock as mock_module
 
-        cond = Condition(field=make_field("field"), operator=Operator.EQ, filters=[], filter="value")
+        cond = Condition(field=make_field("field", display_name="field"), operator=Operator.EQ, filters=[], filter="value")
         with mock_module.patch.dict("services.web.strategy_v2.handlers.dispatch.PY_OPERATORS", clear=True):
             self.assertFalse(apply_condition(cond, ctx))
 
@@ -310,17 +336,17 @@ class TestEvaluate(TestCase):
 
     def test_single_leaf_condition(self):
         """单个叶子条件"""
-        cond = Condition(field=make_field("status"), operator=Operator.EQ, filter="active")
+        cond = Condition(field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active")
         node = WhereCondition(condition=cond)
-        ctx = {"status": "active"}
+        ctx = {"event_data": {"status": "active"}}
         self.assertTrue(evaluate(node, ctx))
-        ctx2 = {"status": "inactive"}
+        ctx2 = {"event_data": {"status": "inactive"}}
         self.assertFalse(evaluate(node, ctx2))
 
     def test_and_connector(self):
         """AND 连接器：所有子节点都为真"""
-        cond1 = Condition(field=make_field("status"), operator=Operator.EQ, filter="active")
-        cond2 = Condition(field=make_field("level"), operator=Operator.EQ, filter="HIGH")
+        cond1 = Condition(field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active")
+        cond2 = Condition(field=make_field("level", display_name="level"), operator=Operator.EQ, filter="HIGH")
         node = WhereCondition(
             connector=FilterConnector.AND,
             conditions=[
@@ -328,14 +354,14 @@ class TestEvaluate(TestCase):
                 WhereCondition(condition=cond2),
             ],
         )
-        self.assertTrue(evaluate(node, {"status": "active", "level": "HIGH"}))
-        self.assertFalse(evaluate(node, {"status": "active", "level": "LOW"}))
-        self.assertFalse(evaluate(node, {"status": "inactive", "level": "HIGH"}))
+        self.assertTrue(evaluate(node, {"event_data": {"status": "active", "level": "HIGH"}}))
+        self.assertFalse(evaluate(node, {"event_data": {"status": "active", "level": "LOW"}}))
+        self.assertFalse(evaluate(node, {"event_data": {"status": "inactive", "level": "HIGH"}}))
 
     def test_or_connector(self):
         """OR 连接器：任一子节点为真"""
-        cond1 = Condition(field=make_field("status"), operator=Operator.EQ, filter="active")
-        cond2 = Condition(field=make_field("level"), operator=Operator.EQ, filter="HIGH")
+        cond1 = Condition(field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active")
+        cond2 = Condition(field=make_field("level", display_name="level"), operator=Operator.EQ, filter="HIGH")
         node = WhereCondition(
             connector=FilterConnector.OR,
             conditions=[
@@ -343,15 +369,15 @@ class TestEvaluate(TestCase):
                 WhereCondition(condition=cond2),
             ],
         )
-        self.assertTrue(evaluate(node, {"status": "active", "level": "LOW"}))
-        self.assertTrue(evaluate(node, {"status": "inactive", "level": "HIGH"}))
-        self.assertFalse(evaluate(node, {"status": "inactive", "level": "LOW"}))
+        self.assertTrue(evaluate(node, {"event_data": {"status": "active", "level": "LOW"}}))
+        self.assertTrue(evaluate(node, {"event_data": {"status": "inactive", "level": "HIGH"}}))
+        self.assertFalse(evaluate(node, {"event_data": {"status": "inactive", "level": "LOW"}}))
 
     def test_nested_conditions(self):
         """嵌套条件树：(status=active AND level=HIGH) OR operator=admin"""
-        cond_status = Condition(field=make_field("status"), operator=Operator.EQ, filter="active")
-        cond_level = Condition(field=make_field("level"), operator=Operator.EQ, filter="HIGH")
-        cond_operator = Condition(field=make_field("operator"), operator=Operator.EQ, filter="admin")
+        cond_status = Condition(field=make_field("status", display_name="status"), operator=Operator.EQ, filter="active")
+        cond_level = Condition(field=make_field("level", display_name="level"), operator=Operator.EQ, filter="HIGH")
+        cond_operator = Condition(field=make_field("operator", display_name="operator"), operator=Operator.EQ, filter="admin")
         node = WhereCondition(
             connector=FilterConnector.OR,
             conditions=[
@@ -366,11 +392,11 @@ class TestEvaluate(TestCase):
             ],
         )
         # 满足 status=active AND level=HIGH
-        self.assertTrue(evaluate(node, {"status": "active", "level": "HIGH", "operator": "user"}))
+        self.assertTrue(evaluate(node, {"event_data": {"status": "active", "level": "HIGH", "operator": "user"}}))
         # 满足 operator=admin
-        self.assertTrue(evaluate(node, {"status": "inactive", "level": "LOW", "operator": "admin"}))
+        self.assertTrue(evaluate(node, {"event_data": {"status": "inactive", "level": "LOW", "operator": "admin"}}))
         # 都不满足
-        self.assertFalse(evaluate(node, {"status": "inactive", "level": "LOW", "operator": "user"}))
+        self.assertFalse(evaluate(node, {"event_data": {"status": "inactive", "level": "LOW", "operator": "user"}}))
 
 
 @pytest.mark.django_db
@@ -426,14 +452,14 @@ class TestFrontendFieldStructure(TestCase):
         self.assertFalse(evaluate(tree, ctx_miss))
 
     def test_passthrough_field_condition_with_extras(self):
-        """直连字段（含扩展属性）：按 raw_name 从分派上下文取值"""
+        """直连字段（含扩展属性）：按 display_name 从 event_data 取值"""
         conditions = {
             "connector": "and",
             "conditions": [{"condition": {"field": self.FRONTEND_RISK_FIELD, "operator": "eq", "filter": "HIGH"}}],
         }
         tree = to_condition_tree(conditions)
-        self.assertTrue(evaluate(tree, {"risk_level": "HIGH"}))
-        self.assertFalse(evaluate(tree, {"risk_level": "LOW"}))
+        self.assertTrue(evaluate(tree, {"event_data": {"风险等级": "HIGH"}}))
+        self.assertFalse(evaluate(tree, {"event_data": {"风险等级": "LOW"}}))
 
     def test_mixed_fields_match_dispatch_rule(self):
         """混合词表（select 字段 + 直连字段）首匹配"""
@@ -475,7 +501,7 @@ class TestFrontendFieldStructure(TestCase):
         )
         # 命中规则1：action=list_risk_v2 且 risk_level=HIGH
         result = match_dispatch_rule(
-            ctx={"event_data": {"操作ID(action_id)": "list_risk_v2"}, "risk_level": "HIGH"},
+            ctx={"event_data": {"操作ID(action_id)": "list_risk_v2", "风险等级": "HIGH"}},
             rules=[rule, rule_default],
             rule_order=[1, 2],
         )
@@ -483,7 +509,7 @@ class TestFrontendFieldStructure(TestCase):
         self.assertEqual(result.rule.rule_id, 1)
         # action 不匹配 -> 兜底
         result = match_dispatch_rule(
-            ctx={"event_data": {"操作ID(action_id)": "create_strategy"}, "risk_level": "HIGH"},
+            ctx={"event_data": {"操作ID(action_id)": "create_strategy", "风险等级": "HIGH"}},
             rules=[rule, rule_default],
             rule_order=[1, 2],
         )
@@ -610,11 +636,11 @@ class TestMatchDispatchRule(TestCase):
 
     def test_priority_order(self):
         """按 rule_order 优先级匹配"""
-        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"])})
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["LOW"])})
+        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
+        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["LOW"], display_name="level")})
         # rule_order: [2, 1] 表示 rule2 优先级更高
         result = match_dispatch_rule(
-            ctx={"level": "LOW"},
+            ctx={"event_data": {"level": "LOW"}},
             rules=[rule1, rule2],
             rule_order=[2, 1],
         )
@@ -623,10 +649,10 @@ class TestMatchDispatchRule(TestCase):
 
     def test_first_match_wins(self):
         """首匹配：多个规则都匹配时返回第一个"""
-        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"])})
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"])})
+        rule1 = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
+        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
         result = match_dispatch_rule(
-            ctx={"level": "HIGH"},
+            ctx={"event_data": {"level": "HIGH"}},
             rules=[rule1, rule2],
             rule_order=[1, 2],
         )
@@ -635,10 +661,10 @@ class TestMatchDispatchRule(TestCase):
 
     def test_non_default_rule_miss_falls_to_default(self):
         """非默认规则未命中时降级到默认规则"""
-        rule_cond = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"])})
+        rule_cond = self._make_rule(1, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
         rule_default = self._make_rule(2, is_default=True)
         result = match_dispatch_rule(
-            ctx={"level": "LOW"},  # 不匹配 rule_cond
+            ctx={"event_data": {"level": "LOW"}},  # 不匹配 rule_cond
             rules=[rule_cond, rule_default],
             rule_order=[1, 2],
         )
@@ -668,8 +694,8 @@ class TestMatchDispatchRule(TestCase):
                     {
                         "connector": "or",
                         "conditions": [
-                            {"condition": make_condition_dict("risk_level", filters=["HIGH"])},
-                            {"condition": make_condition_dict("risk_level", filters=["MEDIUM"])},
+                            {"condition": make_condition_dict("risk_level", filters=["HIGH"], display_name="risk_level")},
+                            {"condition": make_condition_dict("risk_level", filters=["MEDIUM"], display_name="risk_level")},
                         ],
                     },
                 ],
@@ -678,7 +704,7 @@ class TestMatchDispatchRule(TestCase):
         rule_default = self._make_rule(2, is_default=True)
         # 匹配：资源类型=host 且 risk_level=HIGH
         result = match_dispatch_rule(
-            ctx={"event_data": {"资源类型": "host"}, "risk_level": "HIGH"},
+            ctx={"event_data": {"资源类型": "host", "risk_level": "HIGH"}},
             rules=[rule, rule_default],
             rule_order=[1, 2],
         )
@@ -687,7 +713,7 @@ class TestMatchDispatchRule(TestCase):
 
         # 不匹配：资源类型=vm（第一个条件不满足）
         result = match_dispatch_rule(
-            ctx={"event_data": {"资源类型": "vm"}, "risk_level": "HIGH"},
+            ctx={"event_data": {"资源类型": "vm", "risk_level": "HIGH"}},
             rules=[rule, rule_default],
             rule_order=[1, 2],
         )
@@ -697,10 +723,10 @@ class TestMatchDispatchRule(TestCase):
     def test_rule_order_not_in_list(self):
         """rule_id 不在 rule_order 中时排到最后"""
         rule1 = self._make_rule(1, is_default=True)
-        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"])})
+        rule2 = self._make_rule(2, conditions={"condition": make_condition_dict("level", filters=["HIGH"], display_name="level")})
         # rule_order 只包含 rule1，rule2 优先级最低
         result = match_dispatch_rule(
-            ctx={"level": "HIGH"},
+            ctx={"event_data": {"level": "HIGH"}},
             rules=[rule1, rule2],
             rule_order=[1],
         )

@@ -197,8 +197,8 @@ class RiskHandler:
         strategy_rule_id = event.get("strategy_rule_id")
         rule: Optional[StrategyRule] = None
         if strategy_rule_id:
-            # _base_manager避免规则已经被软删除
-            rule = StrategyRule._base_manager.filter(rule_id=strategy_rule_id).first()
+            # 只查询活动规则，规则已删除则丢弃事件
+            rule = StrategyRule.objects.filter(rule_id=strategy_rule_id).first()
             if rule is not None and rule.strategy_id != event["strategy_id"]:
                 # 事件的规则归属与策略不一致
                 logger.warning(
@@ -208,7 +208,7 @@ class RiskHandler:
                 )
                 return None
             if rule is None:
-                # 显式规则 ID 但规则已删除：延迟事件应丢弃，避免回退首规则导致重复建单
+                # 规则已删除：延迟事件应丢弃，避免使用已删除规则建单
                 logger.warning(
                     "[CreateRisk] rule %s not found (deleted?), discard event for strategy %s",
                     strategy_rule_id,
@@ -221,7 +221,8 @@ class RiskHandler:
                 Strategy.objects.filter(strategy_id=event["strategy_id"]).values_list("rule_order", flat=True).first()
             )
             if rule_order:
-                rule = StrategyRule._base_manager.filter(rule_id=rule_order[0]).first()
+                # 只查询活动规则，规则已删除则使用策略级配置
+                rule = StrategyRule.objects.filter(rule_id=rule_order[0]).first()
         # 规则级元信息（优先级：规则 > 策略；策略级回退覆盖模型策略与窗口期事件）
         strategy = Strategy.objects.filter(strategy_id=event["strategy_id"]).first()
         create_params["strategy_rule_id"] = rule.rule_id if rule else None

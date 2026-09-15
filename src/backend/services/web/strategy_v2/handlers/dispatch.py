@@ -74,9 +74,9 @@ def resolve_field(field: ConditionField, ctx: dict) -> Any:
     if field is None:
         return None
     event_data = ctx.get("event_data")
-    if isinstance(event_data, dict) and field.display_name in event_data:
-        return event_data[field.display_name]
-    return ctx.get(field.raw_name)
+    if isinstance(event_data, dict):
+        return event_data.get(field.display_name)
+    return None
 
 
 def _stringify(value: Any) -> Optional[str]:
@@ -119,11 +119,35 @@ def _op_like(actual: Any, pattern: Any) -> bool:
 
 
 def _numeric_pair(a: Any, b: Any) -> Optional[tuple]:
-    """数值比较辅助：可转数值则转，否则退化为字符串比较标记 None"""
-    try:
-        return float(a), float(b)
-    except (TypeError, ValueError):
+    """
+    数值比较辅助：可转数值则转，否则返回 None（视为不匹配）。
+    整数一律保留 int 精度, 非整数保持 float。
+    """
+
+    def _to_number(value: Any) -> Optional[Union[int, float]]:
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value) if value.is_integer() else value
+        if isinstance(value, str):
+            # 整数字符串优先 int（任意精度）；小数字符串走 float，整数值回归 int
+            try:
+                return int(value)
+            except ValueError:
+                pass
+            try:
+                number = float(value)
+            except ValueError:
+                return None
+            return int(number) if number.is_integer() else number
         return None
+
+    a_number, b_number = _to_number(a), _to_number(b)
+    if a_number is None or b_number is None:
+        return None
+    return a_number, b_number
 
 
 def _op_gt(a, b):
