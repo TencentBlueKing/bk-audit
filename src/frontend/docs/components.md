@@ -72,7 +72,7 @@
 
 | 组件 | 职责与实现要点 |
 | --- | --- |
-| **audit-icon** ★ | 基于雪碧图 / SVG symbol 的统一图标（`audit-icon-${type}`）。props：`type`（必填）、`svg`。 |
+| **audit-icon** ★ | 基于 `@lib/bk-icon` 雪碧图 / SVG symbol（`audit-icon-${type}`）。`type` 必须等于 `lib/bk-icon/iconcool.json` 里的 `icons[].name`（当前约 150 个）。props：`type`（必填）、`svg`。 |
 | **skeleton-loading** ★ | 按 `name` 映射的骨架屏，内置 20+ 场景（如 `analysisList`）；props `name` / `loading` / `once` / `fullscreen`，配合 `use-skeleton` 在路由切换时启用。 |
 | **show-tooltips-text** | 文本省略自动 hover 提示（单行 / 多行），基于 tippy。 |
 | **version-log** | 版本日志弹窗：左侧版本列表 + 右侧 markdown 详情。打开时 `fetchVersions`，命中 `show_version` 自动弹窗；选中后 `fetchVersionContent` 取 markdown 渲染。 |

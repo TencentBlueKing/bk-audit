@@ -21,6 +21,8 @@ import type {
   AiAttachmentListParams,
   AiConversation,
   AiConversationGroup,
+  AiConversationListParams,
+  AiConversationSummary,
   AiCreateAttachmentParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
@@ -86,6 +88,17 @@ class AiAssistantManage extends ModuleBase {
 
   createConversation(params: AiCreateConversationParams, payload = {} as IRequestPayload) {
     return Request.post<AiConversation>(`${this.module}/conversations/`, {
+      params,
+      payload,
+    });
+  }
+
+  /**
+   * 会话摘要列表：不受侧栏节点位置限制，按 updated_at 倒序。
+   * 报告侧栏用 has_attachments=true + attachment_type 过滤出有报告的会话。
+   */
+  getConversationList(params: AiConversationListParams = {}, payload = {} as IRequestPayload) {
+    return Request.get<AiConversationSummary[]>(`${this.module}/conversations/`, {
       params,
       payload,
     });

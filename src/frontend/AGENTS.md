@@ -17,6 +17,7 @@
 - 未经同意不主动修 eslint / stylelint / 格式，不擅自跑构建或长脚本。
 - `git commit` / `push` 前展示范围与 message，等明确确认。禁止 `--no-verify`、`push --force`。
 - 收尾用 `memory-save` 判断是否记经验；架构/模块变化再改 `docs/`，不要把密钥写入文档或 learnings。
+- 图标优先查 `@lib/bk-icon`：在 `lib/bk-icon/iconcool.json` 的 `icons[].name` 里检索，用全局 `AuditIcon` 的 `type` 对上该 name。不要只查 bkui Icon 文档就断定没有。库里确实没有，再记入交付报告「icon 缺口」，不要用近似图标、emoji 或手写图形冒充已还原。
 
 ## 任务路由
 
