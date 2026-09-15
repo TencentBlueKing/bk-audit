@@ -87,6 +87,7 @@ from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     EventMappingFields,
     RiskMetaFields,
+    RiskStatus,
 )
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
@@ -575,7 +576,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
                 if not hasattr(s, 'scene_risk_counts'):
                     s.scene_risk_counts = []
             return
-        # 一次性查询全局策略的按场景风险数（场景视角限定单场景，平台视角全量）
+        # 一次性查询全局策略的按场景风险数
         qs_filter = {
             "strategy_id__in": platform_strategy_ids,
             "event_time__gte": risk_start_time,
@@ -583,6 +584,8 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         }
         if scene_id is not None:
             qs_filter["scene_id"] = scene_id
+            # 场景视角：排除待确认单据
+            qs_filter["status__in"] = [s for s in RiskStatus.values if s != RiskStatus.PENDING_CONFIRM]
         scene_risk_qs = Risk.objects.filter(**qs_filter).values('strategy_id', 'scene_id').annotate(count=Count('*'))
         scene_risk_map: Dict[int, List[Dict]] = defaultdict(list)
         for row in scene_risk_qs:

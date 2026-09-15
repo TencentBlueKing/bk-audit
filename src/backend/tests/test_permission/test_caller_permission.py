@@ -205,7 +205,11 @@ class TestCallerPermission(TestCase):
             ResourceVisibilityType,
             SceneStatus,
         )
-        from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
         from services.web.strategy_v2.constants import StrategyFieldSourceEnum
         from services.web.strategy_v2.models import Strategy, StrategyTool
         from services.web.tool.models import Tool

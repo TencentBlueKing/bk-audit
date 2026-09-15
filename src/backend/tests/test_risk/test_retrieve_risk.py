@@ -1232,12 +1232,11 @@ class TestListRiskResource(TestCase):
 
     # ──── Tags / Strategy ────
 
-    def test_scene_risk_view_type_maps_to_list_risk(self):
+    def test_scene_risk_view_type_maps_to_list_scene_risk(self):
         from services.web.risk.constants import RiskViewType
-        from services.web.risk.resources import ListRisk
-        from services.web.risk.resources.risk import ListRiskMetaBase
+        from services.web.risk.resources.risk import ListRiskMetaBase, ListSceneRisk
 
-        self.assertIs(ListRiskMetaBase.risk_cls_map[RiskViewType.SCENE.value], ListRisk)
+        self.assertIs(ListRiskMetaBase.risk_cls_map[RiskViewType.SCENE.value], ListSceneRisk)
 
     def test_list_risk_tags_no_memory_materialization(self):
         """ListRiskTags 应使用子查询而非将 risk_id 物化到内存"""
