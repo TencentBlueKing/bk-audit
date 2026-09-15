@@ -298,7 +298,11 @@ class RetrieveRiskStrategyInfo(RiskMeta):
     def perform_request(self, validated_request_data):
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
-        return strategy or {}
+        if strategy is None:
+            return {}
+        # 按风险归属场景过滤不可见的下钻工具（展示态与执行鉴权同口径）
+        serializer = RetrieveRiskStrategyInfoResponseSerializer(strategy, context={"risk_scene_id": risk.scene_id})
+        return serializer.data
 
 
 class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
@@ -314,7 +318,9 @@ class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
             return {}
 
         lite_mode = validated_request_data.get("lite_mode", True)
-        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(strategy, lite_mode=lite_mode)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
+            strategy, lite_mode=lite_mode, context={"risk_scene_id": risk.scene_id}
+        )
         return serializer.data
 
 
@@ -658,22 +664,7 @@ class ListRisk(RiskMeta):
 
     def load_risks(self, validated_request_data: dict, username: str = None) -> QuerySet["Risk"]:
         q = self._build_filter_query(validated_request_data)
-        return (
-            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
-            .filter(
-                q,
-                display_status__in=[
-                    RiskDisplayStatus.NEW,
-                    RiskDisplayStatus.PROCESSING,
-                    RiskDisplayStatus.FOR_APPROVE,
-                    RiskDisplayStatus.AUTO_PROCESS,
-                    RiskDisplayStatus.AWAIT_PROCESS,
-                    RiskDisplayStatus.CLOSED,
-                    RiskDisplayStatus.STAND_BY,
-                ],
-            )
-            .distinct()
-        )
+        return Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username).filter(q).distinct()
 
     def load_filter_risk_ids(self, validated_request_data: dict, username: str, risk_limit: int) -> List[str]:
         """复用列表筛选、权限过滤和 DB/BKBase 检索分支，按指定用户加载风险 ID。"""
@@ -811,6 +802,32 @@ class ListRisk(RiskMeta):
         return formatted or "risk_event"
 
 
+class ListSceneRisk(ListRisk):
+    """场景风险视图：排除待确认状态"""
+
+    name = gettext_lazy("获取场景风险列表")
+
+    def load_risks(self, validated_request_data, username: str = None):
+        q = self._build_filter_query(validated_request_data)
+        return (
+            Risk.load_iam_authed_risks(action=ActionEnum.LIST_RISK, username=username)
+            .filter(
+                q,
+                display_status__in=[
+                    RiskDisplayStatus.NEW,
+                    RiskDisplayStatus.PROCESSING,
+                    RiskDisplayStatus.FOR_APPROVE,
+                    RiskDisplayStatus.AUTO_PROCESS,
+                    RiskDisplayStatus.AWAIT_PROCESS,
+                    RiskDisplayStatus.CLOSED,
+                    RiskDisplayStatus.STAND_BY,
+                    # 排除 PENDING_CONFIRM，待确认有独立列表
+                ],
+            )
+            .distinct()
+        )
+
+
 class ListRiskAPIGW(ListRisk):
     """APIGW 获取风险列表接口 - 继承 ListRisk，仅鉴权方式不同（App 鉴权替代 IAM 用户鉴权），其他逻辑完全一致"""
 
@@ -867,6 +884,8 @@ class ListMineRisk(ListRisk):
                 RiskDisplayStatus.FOR_APPROVE,
                 RiskDisplayStatus.AUTO_PROCESS,
                 RiskDisplayStatus.AWAIT_PROCESS,
+                RiskDisplayStatus.CLOSED,
+                RiskDisplayStatus.STAND_BY,
             ],
         ).distinct()
 
@@ -894,6 +913,8 @@ class ListNoticingRisk(ListRisk):
                 RiskDisplayStatus.FOR_APPROVE,
                 RiskDisplayStatus.AUTO_PROCESS,
                 RiskDisplayStatus.AWAIT_PROCESS,
+                RiskDisplayStatus.CLOSED,
+                RiskDisplayStatus.STAND_BY,
             ],
         ).distinct()
 
@@ -923,6 +944,7 @@ class ListProcessedRisk(ListRisk):
                 RiskDisplayStatus.AUTO_PROCESS,
                 RiskDisplayStatus.AWAIT_PROCESS,
                 RiskDisplayStatus.CLOSED,
+                RiskDisplayStatus.STAND_BY,
             ],
         ).exclude(current_operator__contains=username)
 
@@ -1026,7 +1048,7 @@ class ListRiskMetaBase(RiskMeta, CacheResource, abc.ABC):
     # 风险视图类型与风险类的映射
     risk_cls_map: Dict[str, Type[ListRisk]] = {
         RiskViewType.ALL.value: ListRisk,
-        RiskViewType.SCENE.value: ListRisk,
+        RiskViewType.SCENE.value: ListSceneRisk,
         RiskViewType.TODO.value: ListMineRisk,
         RiskViewType.WATCH.value: ListNoticingRisk,
         RiskViewType.PROCESSED.value: ListProcessedRisk,

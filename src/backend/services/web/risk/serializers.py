@@ -1267,6 +1267,18 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             # 兼容历史数据
             if config["field_name"] == EventMappingFields.RAW_EVENT_ID.field_name:
                 config["description"] = str(RAW_EVENT_ID_REMARK)
+        # 风险归属场景下不可见的下钻工具不展示
+        if "risk_scene_id" in self.context:
+            from services.web.scene.filters import filter_drill_tools_by_scene
+
+            risk_scene_id = self.context.get("risk_scene_id")
+            for field_key in (
+                "event_basic_field_configs",
+                "event_data_field_configs",
+                "event_evidence_field_configs",
+                "risk_meta_field_config",
+            ):
+                data[field_key] = filter_drill_tools_by_scene(data.get(field_key) or [], risk_scene_id)
         return data
 
 

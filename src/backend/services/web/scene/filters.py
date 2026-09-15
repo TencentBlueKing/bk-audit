@@ -548,3 +548,53 @@ class CompositeScopeFilter:
 
         # 都不传，不返回任何资源
         return queryset.none()
+
+
+def filter_drill_tools_by_scene(field_configs: list | None, scene_id: int | None) -> list:
+    """
+    按场景可见性过滤字段配置 drill_config 中的工具条目（风险详情展示态口径）。
+
+    ① 收集 drill 引用的工具 uid
+    ② 可见性判定：CompositeScopeFilter   ← 该场景risk.scene_id可见哪些工具
+    ③ 剔除不可见工具的 drill 条目、保留字段本身
+    """
+
+    def _drill_tool_uid(item: Any) -> str | None:
+        tool = (item or {}).get("tool") or {}
+        uid = tool.get("uid")
+        return str(uid) if uid else None
+
+    field_configs = field_configs or []
+    requested_uids = {
+        uid
+        for config in field_configs
+        for uid in (_drill_tool_uid(item) for item in (config.get("drill_config") or []))
+        if uid
+    }
+    if not requested_uids:
+        return field_configs
+
+    visible_uids: set = set()
+    if scene_id is not None:
+        from services.web.tool.models import Tool
+
+        visible_uids = {
+            str(uid)
+            for uid in CompositeScopeFilter.filter_queryset(
+                queryset=Tool.all_latest_tools().filter(uid__in=requested_uids),
+                scene_id=[scene_id],
+                system_id=[],
+                resource_type=ResourceVisibilityType.TOOL,
+                pk_field="uid",
+            ).values_list("uid", flat=True)
+        }
+
+    return [
+        {
+            **config,
+            "drill_config": [
+                item for item in (config.get("drill_config") or []) if _drill_tool_uid(item) in visible_uids
+            ],
+        }
+        for config in field_configs
+    ]
