@@ -28,6 +28,15 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
     # 业务 run() 接收 Worker 内构造的执行快照，生产端只投递对象 ID 和 task_id。
     typing = False
 
+    # 发版/崩溃容灾（2026-09-15 定案）：生产发版重启 Worker 时正在执行的任务不再丢失——
+    # acks_late 执行完成才 ack（Worker 整体被杀时 Broker 连接断开，unacked 消息自动
+    # requeue）；reject_on_worker_lost 覆盖执行子进程被杀（如 OOM）场景——WorkerLost
+    # 时立即 reject 重投而非误标失败。重投安全由平台 fencing（task_id 不匹配的陈旧
+    # 投递直接 Ignore）与业务幂等（条件更新终态、SELECTION 续链防重）保证；
+    # 装饰器接入方显式声明的同名选项优先于本基类默认值。
+    acks_late = True
+    reject_on_worker_lost = True
+
     # 两个领域 Task 声明自己的投递参数、陈旧任务异常和日志对象名称。
     id_argument: str
     object_label: str
