@@ -17,13 +17,14 @@ to the current version of the project delivered to anyone in the future.
 
 用户意图识别服务（一期 v6）：自然语言 → IntentPayload。
 
-意图识别默认调用专属智能体（AIAgentCode.USER_INTENT = bp-ai-user-intent，与 NL2JSON 的
-AUDIT_LOG_SEARCH 解耦——意图任务指令在 User Message 完整自述，agent 侧无需 System Prompt）。
+意图识别默认调用专属智能体（AIAgentCode.USER_INTENT = bp-ai-user-intent，NL2JSON 同款——
+2026-09-15 统一切换新智能体，旧网关 bp-audit-log-search / bp-ai-nlls 退役；意图任务指令
+在 User Message 完整自述，agent 侧无需 System Prompt）。
 环境地址差异由 get_agent_base_url 优先级链解决：
 - 生产（上云）：BK_API_URL_TMPL 独立域名模板默认链路直接跑通（零额外配置）
 - bkop：统一域名模板下该网关未注册（404），配置 BKAPP_AI_USER_INTENT_API_URL
-  直连独立域名（第 1 层优先级，模式同 bkop 的 AUDIT_LOG_SEARCH 三件套）
-settings.AI_USER_INTENT_AGENT_CODE 可按环境覆盖路由到其他智能体（应急切共享智能体等）。
+  直连独立域名（第 1 层优先级）
+settings.AI_USER_INTENT_AGENT_CODE 可按环境覆盖路由到其他智能体（应急等）。
 
 输出契约 IntentPayload 为 single source of truth（schema 注入与校验同模型）；
 候选系统 = 用户权限内系统（无权限系统不进候选，AI 无法越权），
