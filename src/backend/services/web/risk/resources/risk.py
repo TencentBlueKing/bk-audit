@@ -344,9 +344,6 @@ class ListRisk(RiskMeta):
     bind_request = True
     audit_action = ActionEnum.LIST_RISK
     STORAGE_SUFFIX = "doris"
-    # list_risk 接口同时承载"所有风险"(不传 scope) 与"场景风险"(传 scope) 两个视图，
-    # 仅场景风险视图需排除待确认状态（待确认有独立的 pending_confirm 接口）。
-    # 因此该开关只在带 scope 查询时生效；本身以待确认为主体的子类需置为 False，否则结果会被清空
     exclude_pending_confirm = True
 
     def perform_request(self, validated_request_data):
@@ -371,8 +368,7 @@ class ListRisk(RiskMeta):
                 base_queryset = base_queryset.filter(scene_id__in=scope_scene_ids)
             else:
                 base_queryset = base_queryset.none()
-            # 场景风险视图排除待确认状态（待确认由独立列表承载）；
-            # 所有风险视图不传 scope，保留全部状态
+            # 场景风险视图排除待确认状态
             if self.exclude_pending_confirm:
                 base_queryset = base_queryset.exclude(display_status=RiskDisplayStatus.PENDING_CONFIRM)
 
@@ -862,16 +858,6 @@ class ListMineRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             current_operator__contains=username,
-            # 排除待确认状态（待确认有独立列表）
-            display_status__in=[
-                RiskDisplayStatus.NEW,
-                RiskDisplayStatus.PROCESSING,
-                RiskDisplayStatus.FOR_APPROVE,
-                RiskDisplayStatus.AUTO_PROCESS,
-                RiskDisplayStatus.AWAIT_PROCESS,
-                RiskDisplayStatus.CLOSED,
-                RiskDisplayStatus.STAND_BY,
-            ],
         ).distinct()
 
 
@@ -891,16 +877,6 @@ class ListNoticingRisk(ListRisk):
                 authorized_at_start=event_time_start,
             ),
             notice_users__contains=username,
-            # 排除待确认状态（待确认有独立列表）
-            display_status__in=[
-                RiskDisplayStatus.NEW,
-                RiskDisplayStatus.PROCESSING,
-                RiskDisplayStatus.FOR_APPROVE,
-                RiskDisplayStatus.AUTO_PROCESS,
-                RiskDisplayStatus.AWAIT_PROCESS,
-                RiskDisplayStatus.CLOSED,
-                RiskDisplayStatus.STAND_BY,
-            ],
         ).distinct()
 
 

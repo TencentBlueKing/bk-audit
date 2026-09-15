@@ -288,13 +288,13 @@ class TestAgentScopedCredentials(TestCase):
         return {k: v for k, v in os.environ.items() if not k.startswith("BKAPP_AI_")}
 
     def test_per_agent_credential_overrides_global(self):
-        """日志检索配置 per-agent 凭证后优先于全局 AI_AGENT_APP_CODE（独立凭证路径，不再依赖全局变量）"""
-        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        """配置 per-agent 凭证后优先于全局 AI_AGENT_APP_CODE（独立凭证路径，不再依赖全局变量）"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
         env = self._env_without_bkapp_ai()
         env.update(
             {
-                "BKAPP_AI_AUDIT_LOG_SEARCH_APP_CODE": "log_search_app",
-                "BKAPP_AI_AUDIT_LOG_SEARCH_SECRET_KEY": "log_search_secret",
+                "BKAPP_AI_RISK_SEARCH_APP_CODE": "risk_search_app",
+                "BKAPP_AI_RISK_SEARCH_SECRET_KEY": "risk_search_secret",
             }
         )
         with mock.patch.dict(os.environ, env, clear=True):
@@ -302,8 +302,8 @@ class TestAgentScopedCredentials(TestCase):
                 AI_AGENT_APP_CODE="global_agent_app",
                 AI_AGENT_SECRET_KEY="global_agent_secret",
             ):
-                self.assertEqual(self.resource.app_code, "log_search_app")
-                self.assertEqual(self.resource.secret_key, "log_search_secret")
+                self.assertEqual(self.resource.app_code, "risk_search_app")
+                self.assertEqual(self.resource.secret_key, "risk_search_secret")
 
     def test_user_intent_credential_uses_hyphenated_app_code(self):
         """意图识别 per-agent 凭证锚点：bp-ai-user-intent 网关认连字符 bk-audit 应用。
@@ -328,7 +328,7 @@ class TestAgentScopedCredentials(TestCase):
 
     def test_per_agent_credential_fallback_to_global_chain(self):
         """未配置 per-agent 凭证时回退原有全局链 AI_AGENT_APP_CODE（历史行为不变）"""
-        self.resource._current_agent_code = AIAgentCode.AUDIT_LOG_SEARCH
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
         with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
             with override_settings(
                 AI_AGENT_APP_CODE="global_agent_app",
@@ -1243,13 +1243,13 @@ class TestGetAgentBaseUrl(TestCase):
         self.assertEqual(result, "https://bp-ai-user-intent.apigw.example.com/prod")
 
     @mock.patch.dict(
-        "os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": "bp-audit-log-search"}
+        "os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": "my-custom-gw"}
     )
-    def test_user_intent_env_apigw_name_switches_shared_agent(self):
-        """应急口：BKAPP_AI_USER_INTENT_APIGW_NAME 覆盖网关名走统一域名解析（切共享 agent）"""
+    def test_user_intent_env_apigw_name_overrides_gateway(self):
+        """应急口：BKAPP_AI_USER_INTENT_APIGW_NAME 覆盖网关名走统一域名解析"""
 
         result = get_agent_base_url(AIAgentCode.USER_INTENT)
-        self.assertIn("bp-audit-log-search", result)
+        self.assertIn("my-custom-gw", result)
 
     @mock.patch.dict("os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": ""})
     def test_user_intent_default_resolves_unified_apigw(self):

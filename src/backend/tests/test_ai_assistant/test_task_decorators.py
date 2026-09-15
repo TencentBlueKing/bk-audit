@@ -176,6 +176,42 @@ class TaskDecoratorTest(SimpleTestCase):
                     self.assertTrue(callable(getattr(task_class, method_name)))
 
 
+class ProductionTaskRedeliveryConfigTest(SimpleTestCase):
+    """生产任务发版容灾配置锚点（2026-09-15 定案）。
+
+    发版/崩溃重启 Worker 时正在执行的任务不得丢失：acks_late 执行完成才 ack
+    （Worker 整体被杀 → Broker unacked 自动 requeue）；reject_on_worker_lost 覆盖
+    执行子进程被杀（OOM 等 WorkerLost 场景）立即重投而非误标失败。配置声明在
+    BaseExecutionTask 基类，全部生产消息/附件任务继承生效；重投安全由平台
+    fencing（陈旧投递 Ignore）与业务防重（SELECTION 续链复用）保证。
+    """
+
+    def test_production_tasks_enable_late_ack_and_worker_lost_redelivery(self):
+        from services.web.ai_assistant.tasks.audit_search import (
+            execute_log_search,
+            execute_natural_language_search,
+            execute_system_selection,
+            execute_user_intent,
+        )
+
+        tasks = (
+            execute_system_selection,
+            execute_user_intent,
+            execute_natural_language_search,
+            execute_log_search,
+        )
+        for task in tasks:
+            with self.subTest(task=task.name):
+                self.assertTrue(task.acks_late)
+                self.assertTrue(task.reject_on_worker_lost)
+
+    def test_base_execution_task_declares_redelivery_defaults(self):
+        from services.web.ai_assistant.tasks.base import BaseExecutionTask
+
+        self.assertTrue(BaseExecutionTask.acks_late)
+        self.assertTrue(BaseExecutionTask.reject_on_worker_lost)
+
+
 class CommonHandlerRegistryTest(SimpleTestCase):
     def test_domain_registries_share_common_implementation(self):
         self.assertTrue(issubclass(MessageHandlerRegistry, HandlerRegistry))
