@@ -205,6 +205,29 @@ class ProductionTaskRedeliveryConfigTest(SimpleTestCase):
                 self.assertTrue(task.acks_late)
                 self.assertTrue(task.reject_on_worker_lost)
 
+    def test_production_tasks_use_dedicated_message_queue(self):
+        """四个消息执行任务挂专属队列（对齐 log_analysis 附件模式）：
+        与主 worker（celery,default）隔离，由专属 worker 消费；
+        误改回默认队列会导致任务被主 worker 抢走、专属 worker 空转。
+        """
+
+        from services.web.ai_assistant.constants import AI_ASSISTANT_AUDIT_SEARCH_QUEUE
+        from services.web.ai_assistant.tasks.audit_search import (
+            execute_log_search,
+            execute_natural_language_search,
+            execute_system_selection,
+            execute_user_intent,
+        )
+
+        for task in (
+            execute_system_selection,
+            execute_user_intent,
+            execute_natural_language_search,
+            execute_log_search,
+        ):
+            with self.subTest(task=task.name):
+                self.assertEqual(task.queue, AI_ASSISTANT_AUDIT_SEARCH_QUEUE)
+
     def test_base_execution_task_declares_redelivery_defaults(self):
         from services.web.ai_assistant.tasks.base import BaseExecutionTask
 
