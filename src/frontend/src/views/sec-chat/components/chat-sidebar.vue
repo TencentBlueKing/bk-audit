@@ -535,7 +535,10 @@
         v-bk-tooltips="{ content: '搜索对话', placement: 'right' }"
         class="toolbar-item"
         @click="openCollapsedSearch">
-        <search class="toolbar-icon search-icon" />
+        <img
+          alt=""
+          class="toolbar-icon search-icon"
+          :src="searchIcon">
       </div>
     </div>
 
@@ -827,6 +830,7 @@
   import aiSettingIcon from '@images/ai-setting.svg';
   import folderEmptyIcon from '@images/folder-empty.svg?inline';
   import folderIcon from '@images/folder.svg';
+  import searchIcon from '@images/search.svg';
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';
   import type { RootSidebarItem } from '../types';
