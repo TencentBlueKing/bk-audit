@@ -391,6 +391,7 @@
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
   import {
+    applyScheduleConfigForSubmit,
     excludeHavingFromWhere,
     hasFilledWhereConditions,
     normalizeWhereHaving,
@@ -603,13 +604,13 @@
   const handleCloneRule = (index: number) => {
     const source = ruleItems.value[index];
     const com = comRefs.value[index];
-    const fields = com?.getFields?.({ forValidate: true })
+    const fields = com?.getFields?.({ forValidate: false })
       ?? { configs: source.formData?.configs ?? {} };
     const configs = _.cloneDeep(fields.configs ?? source.formData?.configs ?? {});
     if (!configs.where && source.conditions?.where) {
       configs.where = _.cloneDeep(source.conditions.where);
     }
-    if (!configs.having && source.conditions?.having) {
+    if (!Object.prototype.hasOwnProperty.call(configs, 'having') && source.conditions?.having) {
       configs.having = _.cloneDeep(source.conditions.having);
     }
 
@@ -792,14 +793,19 @@
       ...(prev.formData?.configs || {}),
       ...(data.configs || {}),
     };
-    // 子组件初始化会回传空 where，不能覆盖已同步的命中条件
+    // 子组件初始化会回传空 where/having，不能覆盖已同步的命中条件；
+    // 只在 where、having 都为空时回退，避免用户删光聚合条件后又被旧 having 填回
     const prevWhere = prev.conditions?.where;
     const prevHaving = prev.conditions?.having;
-    if (!hasConditionGroups(nextConfigs.where) && hasConditionGroups(prevWhere)) {
-      nextConfigs.where = _.cloneDeep(prevWhere);
-    }
-    if (!hasConditionGroups(nextConfigs.having) && hasConditionGroups(prevHaving)) {
-      nextConfigs.having = _.cloneDeep(prevHaving);
+    const nextEmpty = !hasConditionGroups(nextConfigs.where)
+      && !hasConditionGroups(nextConfigs.having);
+    if (nextEmpty) {
+      if (hasConditionGroups(prevWhere)) {
+        nextConfigs.where = _.cloneDeep(prevWhere);
+      }
+      if (hasConditionGroups(prevHaving)) {
+        nextConfigs.having = _.cloneDeep(prevHaving);
+      }
     }
     if (hasConditionGroups(nextConfigs.where) || hasConditionGroups(nextConfigs.having)) {
       ruleItems.value[index].conditions = {
@@ -855,7 +861,14 @@
     if (!fieldsConfigs.schedule_config?.count_freq && parent.schedule_config) {
       merged.schedule_config = parent.schedule_config;
     }
-    return merged;
+    // 命中条件以当前规则为准；having 为 null 表示用户已删光聚合条件，不能再用父级旧值
+    if (Object.prototype.hasOwnProperty.call(fieldsConfigs, 'where')) {
+      merged.where = fieldsConfigs.where;
+    }
+    if (Object.prototype.hasOwnProperty.call(fieldsConfigs, 'having')) {
+      merged.having = fieldsConfigs.having;
+    }
+    return applyScheduleConfigForSubmit(merged) ?? merged;
   };
 
   const buildStepParams = () => {
@@ -867,18 +880,10 @@
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
       const mergedConfigs = mergeRuleConfigs(fields.configs);
       const { where, having } = normalizeWhereHaving(
-        pickConditionWhere(
-          mergedConfigs.where,
-          fields.configs?.where,
-          rule.formData?.configs?.where,
-          rule.conditions?.where,
-        ) ?? mergedConfigs.where ?? null,
-        pickConditionWhere(
-          mergedConfigs.having,
-          fields.configs?.having,
-          rule.formData?.configs?.having,
-          rule.conditions?.having,
-        ) ?? mergedConfigs.having ?? null,
+        fields.configs?.where ?? mergedConfigs.where ?? null,
+        Object.prototype.hasOwnProperty.call(fields.configs || {}, 'having')
+          ? (fields.configs.having ?? null)
+          : (mergedConfigs.having ?? null),
       );
       return {
         ...(rule.rule_id ? { rule_id: rule.rule_id } : {}),
@@ -912,13 +917,14 @@
     };
     delete topConfigs.where;
     delete topConfigs.having;
+    const nextTopConfigs = applyScheduleConfigForSubmit(topConfigs) ?? topConfigs;
     return {
       ...baseFormData,
       risk_title: firstRule.risk_title ?? baseFormData.risk_title ?? '',
       risk_level: firstRule.risk_level ?? baseFormData.risk_level ?? 'HIGH',
       risk_hazard: firstRule.risk_hazard ?? baseFormData.risk_hazard ?? '',
       risk_guidance: firstRule.risk_guidance ?? baseFormData.risk_guidance ?? '',
-      configs: topConfigs,
+      configs: nextTopConfigs,
       rules,
     };
   };

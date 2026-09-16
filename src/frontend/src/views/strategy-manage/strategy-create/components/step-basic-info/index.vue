@@ -190,6 +190,7 @@
     isStrategyListRoute,
     isStrategyUpgradeRoute,
   } from '../../../utils/strategy-routes';
+  import { applyScheduleConfigForSubmit, parseScheduleCountFreq } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   type ItemType = {
@@ -402,9 +403,26 @@
     ],
     'configs.schedule_config.count_freq': [
       {
-        validator: (value: number) => !!value,
-        message: t('调度周期不能为空'),
+        validator: (value: string | number) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return parseScheduleCountFreq(value) !== null;
+        },
+        message: t('请输入大于等于1的整数'),
         trigger: ['change', 'blur'],
+      },
+    ],
+    'configs.schedule_config.schedule_period': [
+      {
+        validator: (value: string) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return value === 'hour' || value === 'day';
+        },
+        message: t('不能为空'),
+        trigger: 'change',
       },
     ],
     'configs.aiops_config.schedule_period': [
@@ -657,19 +675,16 @@
     if (mergedConfigs.config_type !== 'LinkTable' && mergedConfigs.data_source) {
       mergedConfigs.data_source.link_table = null;
     }
-    // 非周期不需要schedule_config
-    if (mergedConfigs.data_source && mergedConfigs.data_source.source_type !== 'batch_join_source') {
-      mergedConfigs.schedule_config = undefined;
-    } else if (
-      mergedConfigs.data_source?.source_type === 'batch_join_source'
-      && !mergedConfigs.schedule_config
-    ) {
+    // 实时调度不传 schedule_config；固定调度必传整数周期
+    if (mergedConfigs.data_source?.source_type === 'batch_join_source'
+      && !mergedConfigs.schedule_config) {
       mergedConfigs.schedule_config = formData.value.configs.schedule_config;
     }
+    const nextConfigs = applyScheduleConfigForSubmit(mergedConfigs) ?? mergedConfigs;
     const params: Record<string, any> = {
       ...baseParams,
       ...fields,
-      configs: mergedConfigs,
+      configs: nextConfigs,
     };
     return params as IFormData;
   };

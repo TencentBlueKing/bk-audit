@@ -265,7 +265,7 @@
                 :clearable="false"
                 style="width: 68px">
                 <bk-option
-                  v-for="(item, index) in commonData.offset_unit"
+                  v-for="(item, index) in schedulePeriodOptions"
                   :key="index"
                   :label="item.label"
                   :value="item.value" />
@@ -320,11 +320,13 @@
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
   import {
+    applyScheduleConfigForSubmit,
     enrichFieldDisplayNames,
     excludeHavingFromWhere,
     formatFieldDisplayLabel,
     hasFilledWhereConditions,
     normalizeWhereHaving,
+    splitWhereAndHaving,
   } from '../../../../utils/strategy-protocol';
 
   interface Where {
@@ -359,7 +361,7 @@
       // 前端临时字段：预期结果为空时用于兜底，提交前会剔除
       table_fields?: Array<DatabaseTableFieldModel>
       where: Where
-      having?: Where
+      having?: Where | null
       schedule_config: {
         count_freq: string
         schedule_period: string
@@ -602,6 +604,17 @@
       // 获取到数据源类别后，获取所有tableid
       getAllConfigTypeTable();
     },
+  });
+
+  const schedulePeriodOptions = computed(() => {
+    const list = (commonData.value.offset_unit || []).filter(item => (
+      item.value === 'hour' || item.value === 'day'
+    ));
+    if (list.length) return list;
+    return [
+      { label: t('小时'), value: 'hour' },
+      { label: t('天'), value: 'day' },
+    ];
   });
 
   // 获取tableid
@@ -900,7 +913,7 @@
     property: item.property || {},
   }));
 
-  const enrichWhereFieldDisplayNames = (where?: Where) => {
+  const enrichWhereFieldDisplayNames = (where?: Where | null) => {
     if (!where?.conditions?.length) {
       return;
     }
@@ -1335,6 +1348,11 @@
     formData.value.configs.where = where;
     if (!isWhereSettingUp.value) {
       isWhereModified.value = true;
+      // UI 维护 where+having 合并树；旧 having 不能再参与提交合并，否则删掉的聚合条件会被加回去
+      formData.value.configs.having = {
+        connector: 'and',
+        conditions: [],
+      };
     }
   };
 
@@ -1803,6 +1821,9 @@
       ) {
         params.configs.schedule_config = { ...lastScheduleConfig.value };
       }
+      if (!options?.forValidate) {
+        params.configs = applyScheduleConfigForSubmit(params.configs) ?? params.configs;
+      }
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {
         params.configs.select = enrichFieldDisplayNames(
@@ -1838,26 +1859,19 @@
       if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
-          if (originalEditHaving.value) {
-            params.configs.having = _.cloneDeep(originalEditHaving.value);
-          } else {
-            delete params.configs.having;
-          }
+          params.configs.having = originalEditHaving.value
+            ? _.cloneDeep(originalEditHaving.value)
+            : null;
         }
-        // 有聚合进 having，普通字段进 where；编辑未改动也要拆，避免历史 COUNT 留在 where
-        const { where, having } = normalizeWhereHaving(
-          params.configs.where,
-          params.configs.having,
-        );
+        // 用户改过命中条件后，以当前合并树拆 where/having，不能再把旧 having 合回来
+        const { where, having } = isEditMode && !isWhereModified.value
+          ? normalizeWhereHaving(params.configs.where, params.configs.having)
+          : splitWhereAndHaving(params.configs.where);
         params.configs.where = where ?? {
           connector: params.configs.where?.connector || 'and',
           conditions: [],
         };
-        if (having) {
-          params.configs.having = having as Where;
-        } else {
-          delete params.configs.having;
-        }
+        params.configs.having = having ?? null;
         // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
         const transferFilter = (whereData: Where) => {
           whereData.conditions.forEach((group) => {
