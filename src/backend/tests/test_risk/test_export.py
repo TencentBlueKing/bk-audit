@@ -795,23 +795,33 @@ class TestRiskExport(TestCase):
         self.assertEqual(data["scene_id"], self.scene.scene_id)
 
     @mock.patch("services.web.risk.resources.risk.ScopePermission")
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_load_filter_risk_ids_excludes_pending_confirm_in_scene_view(
-        self, mock_load_iam_authed_risks, mock_scope_perm
-    ):
+    @mock.patch("services.web.risk.resources.risk.ListRisk.load_risks")
+    def test_load_filter_risk_ids_excludes_pending_confirm_in_scene_view(self, mock_load_risks, mock_scope_perm_cls):
         """
         测试场景视图导出时排除待确认风险
         """
         from services.web.risk.constants import RiskDisplayStatus
+        from services.web.risk.resources.risk import ListRisk
 
         # 创建 mock 的 queryset
         mock_queryset = mock.MagicMock()
         mock_queryset.filter.return_value = mock_queryset
         mock_queryset.exclude.return_value = mock_queryset
-        mock_queryset.values_list.return_value = ["risk001", "risk002"]
-        mock_load_iam_authed_risks.return_value = mock_queryset
+        mock_queryset.none.return_value = mock_queryset
+        mock_load_risks.return_value = mock_queryset
 
         # Mock scope permission 返回场景 ID
-        mock_scope_perm.return_value.get_scene_ids.return_value = [self.scene.scene_id]
+        mock_scope_perm_cls.return_value.get_scene_ids.return_value = [self.scene.scene_id]
+
+        # 调用被测方法
+        ListRisk().load_filter_risk_ids(
+            validated_request_data={
+                "scope_type": "scene",
+                "scope_id": str(self.scene.scene_id),
+            },
+            username="admin",
+            risk_limit=100,
+        )
+
         # 验证调用了 exclude 方法排除待确认风险
         mock_queryset.exclude.assert_called_once_with(display_status=RiskDisplayStatus.PENDING_CONFIRM)
