@@ -882,7 +882,11 @@
         if (!field || typeof field === 'string' || !(field.raw_name || field.display_name)) {
           return;
         }
-        const matchedSelect = select.find((selectItem: { raw_name?: string; aggregate?: unknown; display_name?: string }) => (
+        const matchedSelect = select.find((selectItem: {
+          raw_name?: string;
+          aggregate?: unknown;
+          display_name?: string;
+        }) => (
           selectItem.raw_name === field.raw_name
           && (selectItem.aggregate || null) === (field.aggregate || null)
         ));

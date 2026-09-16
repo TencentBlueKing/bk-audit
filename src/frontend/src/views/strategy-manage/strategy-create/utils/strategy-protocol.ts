@@ -850,7 +850,11 @@ const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) =>
     return [];
   }
   const isEdit = !!params.strategy_id;
-  if (Array.isArray(params.dispatch_rules) && params.dispatch_rules.length && !params.assign_rules?.length) {
+  // 向导里已有分派表单（含仅默认规则、assign_rules 为空）时，必须用表单重建，
+  // 不能回退接口原 dispatch_rules，否则编辑默认规则处理人/关注人不会生效
+  const hasWizardAssign = Boolean(params.assign_rules?.length)
+    || Boolean(params.default_assign_rule && Object.keys(params.default_assign_rule).length);
+  if (!hasWizardAssign && Array.isArray(params.dispatch_rules) && params.dispatch_rules.length) {
     return params.dispatch_rules.map((rule: Record<string, any>) => (
       toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)), isEdit)
     ));
