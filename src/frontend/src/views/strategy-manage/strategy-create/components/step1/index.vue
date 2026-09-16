@@ -686,6 +686,11 @@
     // 非周期不需要schedule_config
     if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
       fields.configs.schedule_config = undefined;
+    } else if (
+      fields.configs.data_source?.source_type === 'batch_join_source'
+      && !fields.configs.schedule_config
+    ) {
+      fields.configs.schedule_config = formData.value.configs.schedule_config;
     }
     return {
       ...baseParams,

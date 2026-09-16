@@ -660,6 +660,11 @@
     // 非周期不需要schedule_config
     if (mergedConfigs.data_source && mergedConfigs.data_source.source_type !== 'batch_join_source') {
       mergedConfigs.schedule_config = undefined;
+    } else if (
+      mergedConfigs.data_source?.source_type === 'batch_join_source'
+      && !mergedConfigs.schedule_config
+    ) {
+      mergedConfigs.schedule_config = formData.value.configs.schedule_config;
     }
     const params: Record<string, any> = {
       ...baseParams,
