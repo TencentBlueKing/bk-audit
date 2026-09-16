@@ -24,6 +24,7 @@ from bk_resource.settings import bk_resource_settings
 
 from apps.itsm.constants import TicketStatus
 from services.web.risk.constants import RiskDisplayStatus, RiskStatus
+from services.web.risk.handlers import ticket as ticket_handlers
 from services.web.risk.handlers.ticket import ForApprove, NewRisk
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
@@ -31,6 +32,7 @@ from tests.test_risk.test_tickets.constants import (
     APPROVE_TICKET_DETAIL,
     APPROVE_TICKET_STATUS,
     CUSTOM_AUTO_PROCESS_PARAMS,
+    PA_INFO,
 )
 
 
@@ -40,10 +42,10 @@ class ForApproveTest(TicketTest):
         mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
@@ -79,10 +81,10 @@ class ForApproveTest(TicketTest):
         mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
@@ -111,6 +113,18 @@ class ForApproveTest(TicketTest):
                 risk.refresh_from_db()
                 # 检测单据号一致
                 self.assertEquals(risk.last_history.process_result["ticket"]["sn"], APPROVE_TICKET_DETAIL["sn"])
+                # V4 ticket_create 调用约定校验：使用 workflow_key + operator + form_data（不再使用 service_id/creator/fields）
+                self.assertTrue(ticket_handlers.api.bk_itsm_v4.ticket_create.called)
+                _, ticket_create_kwargs = ticket_handlers.api.bk_itsm_v4.ticket_create.call_args
+                self.assertIn("workflow_key", ticket_create_kwargs)
+                self.assertIn("operator", ticket_create_kwargs)
+                self.assertIn("form_data", ticket_create_kwargs)
+                self.assertNotIn("service_id", ticket_create_kwargs)
+                self.assertNotIn("creator", ticket_create_kwargs)
+                self.assertNotIn("fields", ticket_create_kwargs)
+                # form_data 为字段 key -> value 字典
+                self.assertIsInstance(ticket_create_kwargs["form_data"], dict)
+                self.assertEqual(ticket_create_kwargs["workflow_key"], PA_INFO["approve_service_id"])
                 with mock.patch(
                     "services.web.risk.handlers.ticket.get_itsm_ticket_status",
                     mock.Mock(
@@ -133,10 +147,10 @@ class ForApproveTest(TicketTest):
         mock.Mock(return_value={**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FAILED.value}),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)

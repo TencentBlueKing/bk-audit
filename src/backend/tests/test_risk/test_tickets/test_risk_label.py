@@ -95,10 +95,10 @@ class RiskLabelTest(TicketTest):
         mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
