@@ -56,6 +56,7 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
+from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 
@@ -72,6 +73,7 @@ class RiskFlowBaseHandler:
     # 子类可覆盖以实现特殊映射（如 NewRisk 将 AWAIT_PROCESS 映射为"待处理"）
     DISPLAY_STATUS_MAP = {
         RiskStatus.NEW: RiskDisplayStatus.NEW,
+        RiskStatus.PENDING_CONFIRM: RiskDisplayStatus.PENDING_CONFIRM,  # 二次确认状态
         RiskStatus.FOR_APPROVE: RiskDisplayStatus.FOR_APPROVE,
         RiskStatus.AUTO_PROCESS: RiskDisplayStatus.AUTO_PROCESS,
         RiskStatus.CLOSED: RiskDisplayStatus.CLOSED,
@@ -114,15 +116,60 @@ class RiskFlowBaseHandler:
     def load_processor(self) -> List[str]:
         """
         获取处理人(用安全接口人进行兜底)
+
+        处理人来源
+        规则策略
+            1. 全局策略风险：分派规则 DispatchRule.processor
+            2. 场景策略风险：命中发现规则的 StrategyRule.processor
+        模型策略（strategy_type=model）：策略级 processor_groups
         """
 
         # 获取策略
         if not self.strategy:
             return self.load_security_person()
-        # 获取处理组成员
-        processor_groups: List[NoticeGroup] = list(
-            NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
-        )
+
+        # 1. 规则策略 全局策略风险：从分派规则中获取处理组
+        if getattr(self.risk, "dispatch_rule_id", None):
+            from services.web.strategy_v2.models import DispatchRule
+
+            # 建单时已固化处理人快照：直接复用，分派规则后续编辑不影响已产生单据
+            if self.risk.current_operator:
+                return self.risk.current_operator
+
+            dispatch_rule = DispatchRule._base_manager.filter(rule_id=self.risk.dispatch_rule_id).first()
+            if dispatch_rule:
+                processor_groups: List[NoticeGroup] = list(
+                    NoticeGroup.objects.filter(group_id__in=dispatch_rule.processor or [])
+                )
+                parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+                if parsed_members:
+                    return parsed_members
+            return self.load_security_person()
+
+        # 2. 规则策略 场景策略：从命中发现规则中获取处理组
+        if self.strategy.strategy_type == StrategyType.RULE:
+            from services.web.strategy_v2.models import StrategyRule
+
+            group_ids = []
+            if getattr(self.risk, "strategy_rule_id", None):
+                rule = StrategyRule._base_manager.filter(rule_id=self.risk.strategy_rule_id).first()
+                if rule:
+                    group_ids = rule.processor or []
+            if not group_ids:
+                # 未关联规则（旧 SQL 未重建窗口期建的单据）时回退策略级处理组，
+                group_ids = self.strategy.processor_groups or []
+            processor_groups = list(NoticeGroup.objects.filter(group_id__in=group_ids))
+            origin_members = NoticeGroup.parse_members(processor_groups)
+            # 解析处理组
+            parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+            logger.info(
+                f"[{self.__class__.__name__}]Risk:{self.risk.risk_id};"
+                f"Notice Groups Members:{origin_members};Parsed Members:{parsed_members}"
+            )
+            return parsed_members or self.load_security_person()
+
+        # 3. 模型策略：策略级处理组
+        processor_groups = list(NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or []))
         origin_members = NoticeGroup.parse_members(processor_groups)
         # 解析处理组(变量)
         parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
@@ -180,10 +227,16 @@ class RiskFlowBaseHandler:
         预检查
         """
 
-        # 已关闭状态 或 状态不在允许的范围内
-        if self.risk.status == RiskStatus.CLOSED or (
-            self.allowed_status and self.risk.status not in self.allowed_status
-        ):
+        # 已关闭状态
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+
+        # 待确认状态禁止所有普通操作（仅 ConfirmRisk 和 ConfirmAsMisReport 允许）
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行此操作")
+
+        # 状态不在允许的范围内
+        if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
 
     @abc.abstractmethod
@@ -233,6 +286,20 @@ class RiskFlowBaseHandler:
         """
 
         return {}
+
+    def record_create_node(self) -> None:
+        """
+        补写"风险产生"节点（after_confirm 分派建单时未写该节点）。
+
+        直接复用 NewRisk 的 record_history，使该节点与 direct 流程写出的完全同构
+        （action=NewRisk、extra={}）。幂等，已存在则跳过。
+        在确认流程的事务内、于"风险确认/误报确认"节点之前调用，
+        以保证时间戳天然递增，前端展示顺序正确（无需回拨时间戳）。
+        """
+
+        if TicketNode.objects.filter(risk_id=self.risk.risk_id, action=NewRisk.__name__).exists():
+            return
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).record_history({})
 
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         """
@@ -296,6 +363,14 @@ class NewRisk(RiskFlowBaseHandler):
         RiskStatus.AWAIT_PROCESS: RiskDisplayStatus.AWAIT_PROCESS,  # 覆盖为"待处理"
     }
 
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        # 默认由本方法写出"风险产生"节点（direct 建单路径依赖此行为）。
+        # 仅当确认流程已通过 record_create_node() 先行写入该节点时，
+        # 由调用方传入 skip_record=True 避免重复记录。
+        if kwargs.get("skip_record"):
+            return
+        super().record_history(process_result=process_result, *args, **kwargs)
+
     def pre_check(self, *args, **kwargs) -> None:
         if (
             self.risk.status == RiskStatus.CLOSED
@@ -307,7 +382,9 @@ class NewRisk(RiskFlowBaseHandler):
     def process(self, *args, **kwargs) -> dict:
         # 初始化参数
         self.risk.origin_operator = []
-        self.risk.current_operator = []
+        # 分派风险建单时已固化处理人快照（_apply_dispatch），流转时保留，由 update_operator 复用
+        if not getattr(self.risk, "dispatch_rule_id", None):
+            self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
         # 只有有责任人时走规则
         if self.risk.operator:
@@ -350,6 +427,9 @@ class CloseRisk(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
+
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行关单操作")
         return
 
     def process(self, description: str, *args, **kwargs) -> dict:
@@ -661,6 +741,8 @@ class MisReport(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
+        super().pre_check(*args, **kwargs)
+        # 检查风险标签
         if self.risk.risk_label != RiskLabel.NORMAL:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.risk_label)
 
@@ -814,3 +896,135 @@ class OperateFailed(RiskFlowBaseHandler):
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return kwargs
+
+
+class ConfirmRisk(RiskFlowBaseHandler):
+    """
+    风险确认 - 从 PENDING_CONFIRM 转为 NEW 并触发处理流程
+    """
+
+    name = gettext_lazy("风险确认")
+    allowed_status = [RiskStatus.PENDING_CONFIRM]
+
+    def pre_check(self, *args, **kwargs) -> None:
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 检查 allowed_status
+        if self.allowed_status and self.risk.status not in self.allowed_status:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 验证只能由 confirmer 操作
+        username = kwargs.get("username")
+        if username and username not in self.risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认风险")
+
+    def process(self, description: str = "", *args, **kwargs) -> dict:
+        # 事务内使用 select_for_update 重新校验状态，防止并发确认
+        with transaction.atomic():
+            risk = Risk.objects.select_for_update().get(risk_id=self.risk.risk_id)
+            if risk.status != RiskStatus.PENDING_CONFIRM:
+                raise RiskStatusInvalid(message=f"风险状态已变更，当前状态：{risk.status}")
+            # 更新状态
+            risk.status = RiskStatus.NEW
+            risk.display_status = RiskDisplayStatus.NEW
+            risk.save(update_fields=["status", "display_status"])
+        return {}
+
+    def update_status(self, process_result: dict, *args, **kwargs) -> None:
+        pass
+
+    def update_operator(self, process_result: dict, *args, **kwargs) -> None:
+        pass
+
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        self.record_create_node()
+        super().record_history(process_result=process_result, *args, **kwargs)
+
+    def post_process(self, process_result: dict, *args, **kwargs) -> None:
+        transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
+
+    def _post_confirm_tasks(self, description: str = "") -> None:
+        """事务提交后执行的任务：流转、渲染、通知、记录历史"""
+
+        self.risk.refresh_from_db()
+        NewRisk(risk_id=self.risk.risk_id, operator=self.operator).run(skip_record=True)
+        try:
+            RiskHandler().trigger_render_task(self.risk)
+        except Exception as e:
+            logger.exception(f"[ConfirmRenderFailed] risk_id={self.risk.risk_id}, err={e}")
+        try:
+            RiskHandler().send_risk_notice(self.risk)
+        except Exception as e:
+            logger.exception(f"[ConfirmNoticeFailed] risk_id={self.risk.risk_id}, err={e}")
+
+    def build_history(self, process_result: dict, *args, **kwargs) -> dict:
+        return {"description": kwargs.get("description", "")}
+
+
+class ConfirmAsMisReport(RiskFlowBaseHandler):
+    """
+    风险确认为误报 - 直接关单
+    """
+
+    name = gettext_lazy("误报确认")
+    allowed_status = [RiskStatus.PENDING_CONFIRM]
+
+    def pre_check(self, *args, **kwargs) -> None:
+        # 检查 CLOSED 状态（不调用 super() 避免 PENDING_CONFIRM 检查）
+        if self.risk.status == RiskStatus.CLOSED:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 检查 allowed_status
+        if self.allowed_status and self.risk.status not in self.allowed_status:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
+        # 验证只能由 confirmer 操作
+        username = kwargs.get("username")
+        if username and username not in self.risk.confirmer:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("非确认人，无权确认误报")
+
+    def process(self, description: str = "", *args, **kwargs) -> dict:
+        with transaction.atomic():
+            risk = Risk.objects.select_for_update().get(risk_id=self.risk.risk_id)
+            if risk.status != RiskStatus.PENDING_CONFIRM:
+                raise RiskStatusInvalid(message=f"风险状态已变更，当前状态：{risk.status}")
+            # 标记误报并关闭
+            risk.risk_label = RiskLabel.MISREPORT
+            risk.status = RiskStatus.CLOSED
+            risk.display_status = RiskDisplayStatus.CLOSED
+            risk.save(update_fields=["status", "display_status", "risk_label"])
+        return {}
+
+    def update_status(self, process_result: dict, *args, **kwargs) -> None:
+        pass
+
+    def update_operator(self, process_result: dict, *args, **kwargs) -> None:
+        # 关单后清空处理人
+        self.risk.current_operator = []
+        self.risk.save(update_fields=["current_operator"])
+
+    def sync_display_status(self) -> None:
+        self.risk.display_status = RiskDisplayStatus.CLOSED
+
+    def post_process(self, process_result: dict, *args, **kwargs) -> None:
+        # 外部任务放到事务提交后执行，保证数据已落库
+        transaction.on_commit(lambda: self._post_confirm_tasks(description=kwargs.get("description", "")))
+
+    def _post_confirm_tasks(self, description: str = "") -> None:
+        """事务提交后执行：风险关闭"""
+        CloseRisk(risk_id=self.risk.risk_id, operator=self.operator).run(
+            description=gettext("%s 标记误报，系统自动关单") % self.operator
+        )
+
+    def record_history(self, process_result: dict, *args, **kwargs) -> None:
+        self.record_create_node()
+        super().record_history(process_result=process_result, *args, **kwargs)
+
+    def build_history(self, process_result: dict, *args, **kwargs) -> dict:
+        # 记录确认说明和状态变更，供历史展示
+        return {
+            "description": kwargs.get("description", ""),
+            "from_status": RiskStatus.PENDING_CONFIRM,
+            "to_status": RiskStatus.CLOSED,
+        }

@@ -23,7 +23,7 @@ from django.test import TestCase
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk
 from services.web.scene.constants import ResourceVisibilityType
-from services.web.scene.models import ResourceBinding
+from services.web.scene.models import ResourceBinding, ResourceBindingScene, Scene
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
@@ -53,8 +53,16 @@ class TestCreateRiskWithStrategyStatus(TestCase):
         self.assertEqual(Risk.objects.count(), 0)
 
     def test_create_when_strategy_running(self):
-        # Prepare a running strategy
-        Strategy.objects.create(strategy_id=102, status=StrategyStatusChoices.RUNNING.value)
+        # Prepare a running strategy with a bound scene (required for risk creation)
+        strategy = Strategy.objects.create(strategy_id=102, status=StrategyStatusChoices.RUNNING.value)
+        scene = Scene.objects.create(name="Test Scene")
+        ResourceBindingScene.objects.create(
+            binding=ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.STRATEGY,
+                resource_id=str(strategy.strategy_id),
+            ),
+            scene=scene,
+        )
 
         event = {
             "strategy_id": 102,

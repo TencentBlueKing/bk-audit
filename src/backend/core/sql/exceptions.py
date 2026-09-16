@@ -108,3 +108,13 @@ class FilterValueError(SQLGeneratorError):
             aggregation=aggregation if aggregation else "",
         )
         super().__init__(message)
+
+
+class InvalidRuleConfigError(SQLGeneratorError):
+    """多规则模式配置非法时抛出。"""
+
+    MESSAGE = gettext_lazy("多规则模式配置非法：{reason}")
+
+    def __init__(self, reason):
+        message = self.MESSAGE.format(reason=reason)
+        super().__init__(message)

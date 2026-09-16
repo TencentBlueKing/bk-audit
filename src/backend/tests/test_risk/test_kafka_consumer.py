@@ -25,6 +25,12 @@ from django.test import TestCase
 
 from services.web.risk.management.commands.gen_risk import AuditEventKafkaRecordConsumer
 from services.web.risk.models import Risk
+from services.web.scene.constants import (
+    BindingType,
+    ResourceVisibilityType,
+    SceneStatus,
+)
+from services.web.scene.models import ResourceBinding, Scene
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
@@ -87,6 +93,14 @@ class TestAuditEventKafkaRecordConsumer(TestCase):
         # Prepare strategies: one running, one disabled
         Strategy.objects.create(strategy_id=201, status=StrategyStatusChoices.RUNNING.value)
         Strategy.objects.create(strategy_id=202, status=StrategyStatusChoices.DISABLED.value)
+
+        # Bind strategy 201 to a scene (required by create_risk)
+        scene = Scene.objects.create(name="test-scene", status=SceneStatus.ENABLED)
+        ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id="201",
+            binding_type=BindingType.SCENE_BINDING,
+        ).binding_scenes.create(scene_id=scene.scene_id)
 
         now_ms = int(datetime.datetime.now().timestamp() * 1000)
 

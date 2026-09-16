@@ -52,7 +52,7 @@ class RiskViewPermission(InstanceActionPermission):
         return all(
             [
                 TicketPermission.objects.filter(
-                    user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
+                    user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR, UserType.CONFIRMER],
                     risk_id=risk_id,
                     action=action.id,
                     user=operator,

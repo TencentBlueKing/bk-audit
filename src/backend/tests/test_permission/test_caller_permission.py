@@ -90,6 +90,7 @@ class TestCallerPermission(TestCase):
             raw_event_id="e1",
             strategy=strategy,
             event_time=timezone.now(),
+            scene_id=scene.scene_id,
         )
         # 策略与工具建立关联
         StrategyTool.objects.create(
@@ -193,6 +194,80 @@ class TestCallerPermission(TestCase):
 
         self.assertFalse(is_tool_related_to_risk(risk.risk_id, "T_SCENE"))
 
+    def test_is_tool_related_to_risk_uses_risk_own_scene(self):
+        """按风险自身归属场景校验工具可见性（策略多场景绑定时结果确定）"""
+        from django.utils import timezone
+
+        from services.web.risk.models import Risk
+        from services.web.scene.constants import (
+            BindingType,
+            PanelStatus,
+            ResourceVisibilityType,
+            SceneStatus,
+        )
+        from services.web.scene.models import (
+            ResourceBinding,
+            ResourceBindingScene,
+            Scene,
+        )
+        from services.web.strategy_v2.constants import StrategyFieldSourceEnum
+        from services.web.strategy_v2.models import Strategy, StrategyTool
+        from services.web.tool.models import Tool
+
+        scene_risk = Scene.objects.create(name="scene-risk-own", status=SceneStatus.ENABLED)
+        scene_other = Scene.objects.create(name="scene-other-own", status=SceneStatus.ENABLED)
+
+        # 策略绑定多个场景（模拟全局策略的分派目标场景并集）
+        strategy = Strategy.objects.create(namespace="ns", strategy_name="s_multi_scene")
+        strategy_binding = ResourceBinding.objects.create(
+            resource_type=ResourceVisibilityType.STRATEGY,
+            resource_id=str(strategy.strategy_id),
+            binding_type=BindingType.SCENE_BINDING,
+        )
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene_risk)
+        ResourceBindingScene.objects.create(binding=strategy_binding, scene=scene_other)
+
+        def _make_tool(uid, scene, field_name):
+            Tool.objects.create(
+                namespace="ns",
+                uid=uid,
+                version=1,
+                name=f"tool-{uid}",
+                tool_type="data_search",
+                config={"input_variable": [], "output_fields": [], "referenced_tables": [], "sql": "select 1"},
+                permission_owner="admin",
+                status=PanelStatus.PUBLISHED,
+            )
+            tool_binding = ResourceBinding.objects.create(
+                resource_type=ResourceVisibilityType.TOOL,
+                resource_id=uid,
+                binding_type=BindingType.SCENE_BINDING,
+            )
+            ResourceBindingScene.objects.create(binding=tool_binding, scene=scene)
+            StrategyTool.objects.create(
+                strategy=strategy,
+                tool_uid=uid,
+                tool_version=1,
+                field_name=field_name,
+                field_source=StrategyFieldSourceEnum.BASIC.value,
+            )
+
+        # 工具A 只在风险归属场景可见；工具B 只在其他场景可见
+        _make_tool("T_RISK_SCENE", scene_risk, "f_a")
+        _make_tool("T_OTHER_SCENE", scene_other, "f_b")
+
+        # 风险固化归属场景 scene_risk（全局策略建单时=分派目标场景）
+        risk = Risk.objects.create(
+            raw_event_id="e_risk_own_scene",
+            strategy=strategy,
+            event_time=timezone.now(),
+            scene_id=scene_risk.scene_id,
+        )
+
+        # 按风险自身场景判定，与策略绑定场景的顺序无关，结果确定
+        self.assertTrue(is_tool_related_to_risk(risk.risk_id, "T_RISK_SCENE"))
+        self.assertFalse(is_tool_related_to_risk(risk.risk_id, "T_OTHER_SCENE"))
+
     def test_extract_extra_variables(self):
         # 读取 current_type / current_object_id
         data = {"current_type": "tool", "current_object_id": "T2"}
@@ -274,6 +349,7 @@ class TestCallerPermission(TestCase):
             strategy=strategy,
             event_time=timezone.now(),
             event_data={"ip": "1.1.1.1", "event_data": {"username": "admin"}},
+            scene_id=scene.scene_id,
         )
         StrategyTool.objects.create(
             strategy=strategy,
@@ -373,6 +449,7 @@ class TestCallerPermission(TestCase):
             strategy=strategy,
             event_time=timezone.now(),
             event_data={},
+            scene_id=scene.scene_id,
         )
         StrategyTool.objects.create(
             strategy=strategy,

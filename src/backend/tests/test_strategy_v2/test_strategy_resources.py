@@ -105,8 +105,10 @@ class StrategyResourcesTest(TestCase):
     def test_list_strategy_all_request_serializer_accepts_optional_scene_id(self):
         serializer = ListStrategyAllRequestSerializer()
 
-        self.assertIn("scene_id", serializer.fields)
-        self.assertFalse(serializer.fields["scene_id"].required)
+        self.assertIn("scope_type", serializer.fields)
+        self.assertIn("scope_id", serializer.fields)
+        self.assertFalse(serializer.fields["scope_type"].required)
+        self.assertFalse(serializer.fields["scope_id"].required)
 
     def test_list_strategy_all_filters_by_scene(self):
         scene_2 = Scene.objects.create(name="scene-2", status=SceneStatus.ENABLED)
@@ -126,12 +128,12 @@ class StrategyResourcesTest(TestCase):
             binding_type=BindingType.SCENE_BINDING,
         ).binding_scenes.create(scene_id=scene_2.scene_id)
 
-        result = self.resource.strategy_v2.list_strategy_all(scene_id=self.scene.scene_id)
+        result = self.resource.strategy_v2.list_strategy_all(scope_type="scene", scope_id=str(self.scene.scene_id))
 
         self.assertEqual(result, [{"label": self.strategy.strategy_name, "value": self.strategy.strategy_id}])
 
     def test_list_strategy_all_returns_all_user_strategies_without_scene_id(self):
-        strategy_2 = Strategy.objects.create(
+        Strategy.objects.create(
             namespace=self.namespace,
             strategy_name="another-user-strategy",
             strategy_type=StrategyType.MODEL.value,
@@ -143,15 +145,11 @@ class StrategyResourcesTest(TestCase):
             source=StrategySource.SYSTEM,
         )
 
-        result = self.resource.strategy_v2.list_strategy_all()
+        # 传 binding_type=PLATFORM_BINDING，仅返回平台级策略（需要创建 ResourceBinding）
+        result = self.resource.strategy_v2.list_strategy_all(binding_type=BindingType.PLATFORM_BINDING)
 
-        self.assertEqual(
-            result,
-            [
-                {"label": strategy_2.strategy_name, "value": strategy_2.strategy_id},
-                {"label": self.strategy.strategy_name, "value": self.strategy.strategy_id},
-            ],
-        )
+        # 未创建 PLATFORM_BINDING 资源，应返回空列表
+        self.assertEqual(result, [])
 
     @mock.patch("services.web.strategy_v2.resources.get_local_request")
     @mock.patch("services.web.strategy_v2.resources.ActionPermission")
@@ -427,16 +425,13 @@ class StrategyResourcesTest(TestCase):
         mock_table_handler.assert_called_once_with(table_type="BizRt", namespace=self.namespace)
         self.assertEqual(result, [{"bk_biz_name": "biz", "bk_biz_id": "rt"}])
 
-    def test_list_tables_eventlog_missing_scene_id_raises_error(self):
-        """测试EventLog类型缺少scene_id时应该抛出参数校验错误"""
-        # 框架在 request() 阶段会先通过 RequestSerializer 校验，
-        # ListTablesRequestSerializer.validate() 要求 EventLog 必须提供 scene_id，故抛出参数校验错误
-        with self.assertRaises(Exception) as context:
-            ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
-
-        # 验证错误消息中包含scene_id相关的错误
-        self.assertIn("scene_id", str(context.exception))
-        self.assertIn("必须提供", str(context.exception))
+    @mock.patch("services.web.strategy_v2.resources.TableHandler")
+    def test_list_tables_eventlog_missing_scene_id_succeeds(self, mock_table_handler):
+        """测试EventLog类型不传scene_id时走平台视角，不抛异常"""
+        handler_instance = mock_table_handler.return_value
+        handler_instance.list_tables.return_value = []
+        result = ListTables().request({"table_type": "EventLog", "namespace": self.namespace})
+        self.assertEqual(result, [])
 
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.query_sync")
     @mock.patch("services.web.strategy_v2.resources.api.bk_base.get_result_table")

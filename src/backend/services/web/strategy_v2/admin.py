@@ -26,9 +26,11 @@ from core.utils.data import choices_to_items
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control
 from services.web.strategy_v2.models import (
+    DispatchRule,
     LinkTable,
     LinkTableTag,
     Strategy,
+    StrategyRule,
     StrategyTag,
     StrategyTagSyncTrash,
 )
@@ -91,3 +93,117 @@ class StrategyTagSyncTrashAdmin(admin.ModelAdmin):
     list_display = ("id", "original_id", "strategy_id", "tag_id", "created_at", "updated_at")
     list_filter = ("created_at", "updated_at")
     search_fields = ("original_id", "strategy_id", "tag_id")
+
+
+@admin.register(StrategyRule)
+class StrategyRuleAdmin(admin.ModelAdmin):
+    # JSONField 截断展示的最大长度
+    JSON_DISPLAY_MAX_LENGTH = 100
+
+    list_display = (
+        "rule_id",
+        "rule_name",
+        "strategy_link",
+        "risk_level",
+        "conditions_short",
+        "risk_title_short",
+        "processor_short",
+        "follower_short",
+        "is_deleted",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("risk_level", "is_deleted")
+    search_fields = ("rule_id", "rule_name", "strategy__strategy_name", "strategy__strategy_id")
+    ordering = ("-rule_id",)
+
+    @admin.display(description=gettext_lazy("Strategy"))
+    def strategy_link(self, inst: StrategyRule) -> str:
+        return f"[{inst.strategy_id}] {inst.strategy.strategy_name}"
+
+    def _truncate_json(self, value, max_length: int = None) -> str:
+        if not value:
+            return "-"
+        text = str(value)
+        max_len = max_length or self.JSON_DISPLAY_MAX_LENGTH
+        return text[:max_len] + "..." if len(text) > max_len else text
+
+    @admin.display(description=gettext_lazy("Conditions"))
+    def conditions_short(self, inst: StrategyRule) -> str:
+        return self._truncate_json(inst.conditions)
+
+    @admin.display(description=gettext_lazy("Risk Title"))
+    def risk_title_short(self, inst: StrategyRule) -> str:
+        return self._truncate_text(inst.risk_title)
+
+    @admin.display(description=gettext_lazy("Processor"))
+    def processor_short(self, inst: StrategyRule) -> str:
+        return self._truncate_json(inst.processor)
+
+    @admin.display(description=gettext_lazy("Follower"))
+    def follower_short(self, inst: StrategyRule) -> str:
+        return self._truncate_json(inst.follower)
+
+    def _truncate_text(self, value: str, max_length: int = None) -> str:
+        if not value:
+            return "-"
+        max_len = max_length or self.JSON_DISPLAY_MAX_LENGTH
+        return value[:max_len] + "..." if len(value) > max_len else value
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("strategy")
+
+
+@admin.register(DispatchRule)
+class DispatchRuleAdmin(admin.ModelAdmin):
+    # JSONField 截断展示的最大长度
+    JSON_DISPLAY_MAX_LENGTH = 100
+
+    list_display = (
+        "rule_id",
+        "rule_name",
+        "strategy_link",
+        "target_scene",
+        "conditions_short",
+        "processor_short",
+        "follower_short",
+        "confirmer_short",
+        "dispatch_mode",
+        "is_default",
+        "is_deleted",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("dispatch_mode", "is_default", "is_deleted")
+    search_fields = ("rule_id", "rule_name", "strategy__strategy_name", "strategy__strategy_id")
+    ordering = ("-rule_id",)
+
+    @admin.display(description=gettext_lazy("Strategy"))
+    def strategy_link(self, inst: DispatchRule) -> str:
+        return f"[{inst.strategy_id}] {inst.strategy.strategy_name}"
+
+    def _truncate_json(self, value, max_length: int = None) -> str:
+        if not value:
+            return "-"
+        text = str(value)
+        max_len = max_length or self.JSON_DISPLAY_MAX_LENGTH
+        return text[:max_len] + "..." if len(text) > max_len else text
+
+    @admin.display(description=gettext_lazy("Conditions"))
+    def conditions_short(self, inst: DispatchRule) -> str:
+        return self._truncate_json(inst.conditions)
+
+    @admin.display(description=gettext_lazy("Processor"))
+    def processor_short(self, inst: DispatchRule) -> str:
+        return self._truncate_json(inst.processor)
+
+    @admin.display(description=gettext_lazy("Follower"))
+    def follower_short(self, inst: DispatchRule) -> str:
+        return self._truncate_json(inst.follower)
+
+    @admin.display(description=gettext_lazy("Confirmer"))
+    def confirmer_short(self, inst: DispatchRule) -> str:
+        return self._truncate_json(inst.confirmer)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("strategy", "target_scene")

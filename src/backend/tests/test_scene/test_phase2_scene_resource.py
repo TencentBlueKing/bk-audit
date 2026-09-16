@@ -566,11 +566,11 @@ class TestListStrategyRequestSerializer:
         assert "scene_id" in serializer.fields
 
     def test_scene_id_required(self):
-        """测试 scene_id 为必填"""
+        """测试 scene_id 为可选"""
         from services.web.strategy_v2.serializers import ListStrategyRequestSerializer
 
         serializer = ListStrategyRequestSerializer()
-        assert serializer.fields["scene_id"].required is True
+        assert serializer.fields["scene_id"].required is False
 
 
 class TestCreateStrategyRequestSerializer:
@@ -595,11 +595,11 @@ class TestListNoticeGroupRequestSerializer:
         assert "scene_id" in serializer.fields
 
     def test_scene_id_required(self):
-        """测试 scene_id 为必填"""
+        """测试 scene_id 为可选"""
         from apps.notice.serializers import ListNoticeGroupRequestSerializer
 
         serializer = ListNoticeGroupRequestSerializer()
-        assert serializer.fields["scene_id"].required is True
+        assert serializer.fields["scene_id"].required is False
 
 
 class TestCreateNoticeGroupRequestSerializer:
@@ -1036,16 +1036,15 @@ class TestRiskSceneFilter:
     """风险场景过滤测试（基于策略绑定）"""
 
     @pytest.mark.django_db
-    def test_filter_risk_by_strategy_scene(self, scene, another_scene):
-        """测试风险按策略绑定场景过滤"""
+    def test_filter_risk_by_scene_id(self, scene, another_scene):
+        """风险按 Risk.scene_id 过滤（场景归属已固化到 Risk 模型，不再经策略绑定反查）"""
         event_time = datetime.datetime(2026, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
         strategy1 = Strategy.objects.create(strategy_name="场景1策略")
         strategy2 = Strategy.objects.create(strategy_name="场景2策略")
-        _bind_resource_to_scene(strategy1.strategy_id, ResourceVisibilityType.STRATEGY, scene.scene_id)
-        _bind_resource_to_scene(strategy2.strategy_id, ResourceVisibilityType.STRATEGY, another_scene.scene_id)
 
         risk1 = Risk.objects.create(
             strategy=strategy1,
+            scene_id=scene.scene_id,
             raw_event_id="raw-scene-1",
             event_time=event_time,
             event_end_time=event_time,
@@ -1054,6 +1053,7 @@ class TestRiskSceneFilter:
         )
         Risk.objects.create(
             strategy=strategy2,
+            scene_id=another_scene.scene_id,
             raw_event_id="raw-scene-2",
             event_time=event_time,
             event_end_time=event_time,
@@ -1277,7 +1277,7 @@ class TestCompositeScopeFilter:
 
     @pytest.mark.django_db
     def test_filter_platform_binding_specific_scenes_without_scene_relation_raise(self):
-        """测试平台级 specific_scenes 未配置场景关联时报错"""
+        """测试平台级 specific_scenes 未配置场景关联时跳过（草稿策略场景）"""
         ng = NoticeGroup.objects.create(group_name="非法平台组", group_member=["admin"], notice_config=[])
         ResourceBinding.objects.create(
             resource_id=str(ng.group_id),
@@ -1285,14 +1285,14 @@ class TestCompositeScopeFilter:
             binding_type=BindingType.PLATFORM_BINDING,
             visibility_type=VisibilityScope.SPECIFIC_SCENES,
         )
-        with pytest.raises(ValueError, match="specific_scenes"):
-            CompositeScopeFilter.filter_queryset(
-                queryset=NoticeGroup.objects.all(),
-                binding_type=BindingType.PLATFORM_BINDING,
-                scene_id=1,
-                resource_type=ResourceVisibilityType.NOTICE_GROUP,
-                pk_field="group_id",
-            )
+        qs = CompositeScopeFilter.filter_queryset(
+            queryset=NoticeGroup.objects.all(),
+            binding_type=BindingType.PLATFORM_BINDING,
+            scene_id=1,
+            resource_type=ResourceVisibilityType.NOTICE_GROUP,
+            pk_field="group_id",
+        )
+        assert qs.count() == 0
 
     @pytest.mark.django_db
     def test_filter_scene_binding_without_scene_relation_raise(self):
@@ -1590,12 +1590,12 @@ class TestCreateSerializerScopeValidation:
     """创建序列化器 scene_id 必传的校验测试"""
 
     def test_strategy_serializer_scene_id_required(self):
-        """测试策略创建序列化器 scene_id 为必传字段"""
+        """测试策略创建序列化器 scene_id 为可选字段（binding_type=scene_binding 时业务层校验必填）"""
         from services.web.strategy_v2.serializers import CreateStrategyRequestSerializer
 
         serializer = CreateStrategyRequestSerializer()
         assert "scene_id" in serializer.fields
-        assert serializer.fields["scene_id"].required is True
+        assert serializer.fields["scene_id"].required is False
         assert "system_id" not in serializer.fields
 
     def test_link_table_serializer_scene_id_required(self):
@@ -1655,12 +1655,12 @@ class TestCreateSerializerScopeValidation:
         assert serializer.fields["scene_id"].required is True
 
     def test_notice_group_all_serializer_scene_id_required(self):
-        """测试通知组 all 序列化器 scene_id 为必传字段"""
+        """测试通知组 all 序列化器 scene_id 为可选字段"""
         from apps.notice.serializers import ListAllNoticeGroupRequestSerializer
 
         serializer = ListAllNoticeGroupRequestSerializer()
         assert "scene_id" in serializer.fields
-        assert serializer.fields["scene_id"].required is True
+        assert serializer.fields["scene_id"].required is False
 
 
 class TestCreateResourceBinding:
