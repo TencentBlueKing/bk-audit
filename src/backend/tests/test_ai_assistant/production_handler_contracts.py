@@ -22,6 +22,9 @@ MESSAGE_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
     ),
 }
 ATTACHMENT_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
+    AttachmentType.AI_STATISTICS: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.test_audit_statistics_task.AIStatisticsTaskTest"
+    ),
     AttachmentType.FIELD_STATISTICS: HandlerContractSpec(
         test_case_path="tests.test_ai_assistant.test_audit_statistics_task.FieldStatisticsTaskTest"
     ),

@@ -95,14 +95,23 @@ class AIAnalysisSchemaTest(SimpleTestCase):
             response.render()
             components = yaml.safe_load(response.content)["components"]["schemas"]
 
-            assert components["AIAttachmentInputDataRequest"]["oneOf"] == [
-                {"$ref": "#/components/schemas/AIAnalysisInputSchemaRequest"},
-                {"$ref": "#/components/schemas/FieldStatisticsAttachmentInputRequest"},
-            ]
-            assert components["AIAttachmentOutputData"]["oneOf"] == [
-                {"$ref": "#/components/schemas/AIAnalysisOutputSchema"},
-                {"$ref": "#/components/schemas/FieldStatisticsAttachmentOutput"},
-            ]
+            assert {item["$ref"] for item in components["AIAttachmentInputDataRequest"]["oneOf"]} == {
+                "#/components/schemas/AIAnalysisInputSchemaRequest",
+                "#/components/schemas/AIStatisticsAttachmentInputRequest",
+                "#/components/schemas/FieldStatisticsAttachmentInputRequest",
+            }
+            assert {item["$ref"] for item in components["AIAttachmentOutputData"]["oneOf"]} == {
+                "#/components/schemas/AIAnalysisOutputSchema",
+                "#/components/schemas/AIStatisticsAttachmentOutput",
+                "#/components/schemas/FieldStatisticsAttachmentOutput",
+            }
+            assert len(components["AIAttachmentInputDataRequest"]["oneOf"]) == 3
+            assert len(components["AIAttachmentOutputData"]["oneOf"]) == 3
+            output = components["AIStatisticsAttachmentOutput"]
+            assert set(output["properties"]) == {"content"}
+            assert output["properties"]["content"]["type"] == "string"
+            assert output["required"] == ["content"]
+            assert set(components["AIStatisticsAttachmentInputRequest"]["properties"]) == {"instruction"}
             assert components["EditableAIAttachmentOutputDataRequest"]["oneOf"] == [
                 {"$ref": "#/components/schemas/AIAnalysisOutputSchemaRequest"}
             ]

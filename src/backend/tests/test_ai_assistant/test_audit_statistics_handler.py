@@ -11,6 +11,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentState,
 )
 from services.web.ai_assistant.handlers.audit_statistics import (
+    AIStatisticsAttachmentHandler,
     FieldStatisticsAttachmentHandler,
 )
 from services.web.ai_assistant.models import Attachment, Conversation
@@ -132,3 +133,65 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
                     GetAttachment().request(attachment_uid=created["uid"])
                 with self.assertRaises(InvalidAttachmentSource):
                     self.create()
+
+
+class AIStatisticsTestMixin:
+    """AI 统计使用公开创建入口及独立生产注册恢复。"""
+
+    def setUp(self):
+        super().setUp()
+        self.handler = use_attachment_handler(self, AIStatisticsAttachmentHandler())
+        self.source = self.create_log_search_message()
+        self.enterContext(
+            mock.patch("services.web.ai_assistant.resources.attachment.get_request_username", return_value=self.user)
+        )
+        self.enterContext(mock.patch.object(self.handler.async_task, "apply_async"))
+
+    def create(self, **input_overrides):
+        """提交指令，保留真实 Resource 校验及来源快照。"""
+        with self.captureOnCommitCallbacks(execute=True):
+            return CreateAttachment().request(
+                message_uid=str(self.source.uid),
+                attachment_type=AttachmentType.AI_STATISTICS,
+                input_data={"instruction": "比较另一系统最近一天的操作趋势", **input_overrides},
+            )
+
+
+class AIStatisticsHandlerTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
+    """确认统计能力独立，不因加入 AI 统计改变报告与程序统计。"""
+
+    def test_creation_has_initial_scope_and_independent_capabilities(self):
+        created = self.create()
+        attachment = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(created["status"], "PROCESSING")
+        self.assertTrue(created["is_stream"])
+        self.assertTrue(created["supports_retry"])
+        self.assertTrue(created["supports_feedback"])
+        self.assertEqual(created["export_formats"], [])
+        self.assertFalse(self.handler.supports_output_edit())
+        self.assertEqual(attachment.context_data["initial_search_condition"], self.source.input_data["condition"])
+        self.assertEqual(attachment.context_data["username"], self.user)
+        self.assertEqual(attachment.context_data["namespace"], "bkaudit")
+        self.assertNotIn("samples", attachment.context_data)
+        self.assertEqual(ListAttachments().request(attachment_type="AI_ANALYSIS"), [])
+
+    def test_creation_rejects_overridden_identity_and_invalid_source(self):
+        for extra in ({"username": "other"}, {"namespace": "other"}, {"condition": {}}):
+            with self.subTest(extra=extra), self.assertRaises(AttachmentSnapshotValidationError):
+                self.create(**extra)
+        self.source.status = "FAILED"
+        self.source.save(update_fields=["status"])
+        with self.assertRaises(InvalidAttachmentSource):
+            self.create()
+
+    def test_manual_retry_keeps_attachment_but_rotates_task(self):
+        created = self.create()
+        attachment = Attachment.objects.get(uid=created["uid"])
+        original_task_id = attachment.task_id
+        Attachment.objects.filter(pk=attachment.pk).update(status=ExecutionStatus.FAILED)
+        with self.captureOnCommitCallbacks(execute=True):
+            retried = RetryAttachment().request(attachment_uid=created["uid"])
+        attachment.refresh_from_db()
+        self.assertEqual(retried["uid"], created["uid"])
+        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+        self.assertNotEqual(attachment.task_id, original_task_id)

@@ -300,3 +300,10 @@ class UnsupportedLogAnalysisCondition(AIAssistantException):
     MESSAGE = gettext_lazy("当前日志检索条件暂不支持智能分析，请调整检索条件后重试")
     ERROR_CODE = "044"
     STATUS_CODE = 400
+
+
+class AIStatisticsTimeout(AIAssistantException):
+    """AI 统计达到业务时限，先于 Worker 硬终止收敛附件和流。"""
+
+    MESSAGE = gettext_lazy("AI 统计超时，请重试")
+    ERROR_CODE = "045"

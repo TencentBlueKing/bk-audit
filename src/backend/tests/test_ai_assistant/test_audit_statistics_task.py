@@ -1,25 +1,31 @@
 """程序统计真实 Task 生命周期；仅替换远端 Doris 和系统元数据依赖。"""
 
+import json
 import os
 import threading
 import traceback
 from copy import deepcopy
 from unittest import mock
 
+from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from celery import signals
 from celery.exceptions import Ignore, Retry
 from django.conf import settings
 from django.test import TransactionTestCase, override_settings
 from gevent import sleep
+from redis.exceptions import RedisError
 from requests.exceptions import ConnectionError, Timeout
 
 from api.bk_base.default import SafeQuerySyncResource
+from api.bk_plugins_ai_agent.default import ChatCompletion
 from core.exceptions import PermissionException
 from services.web.ai_assistant.constants import AttachmentType
 from services.web.ai_assistant.exceptions import (
+    AIStatisticsTimeout,
     AttachmentExportNotSupported,
     AttachmentNotEditable,
+    AttachmentOutputValidationError,
     FeedbackNotSupported,
     InvalidAttachmentSource,
 )
@@ -30,10 +36,13 @@ from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.resources.attachment import (
     ExportAttachment,
     GetAttachment,
+    RetryAttachment,
     UpdateAttachment,
 )
 from services.web.ai_assistant.resources.feedback import UpsertFeedback
 from services.web.ai_assistant.services.attachment import AttachmentService
+from services.web.ai_assistant.services.attachment_stream import AttachmentStreamService
+from services.web.ai_assistant.streaming import RedisLiveStore
 from services.web.ai_assistant.tasks.audit_statistics import generate_field_statistics
 from services.web.query.ai_assistant.exceptions import (
     SensitiveFieldPermissionDenied,
@@ -54,8 +63,10 @@ from tests.test_ai_assistant.celery_integration import (
     wait_for_snapshot,
 )
 from tests.test_ai_assistant.handlers import use_attachment_handler
+from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
 from tests.test_ai_assistant.test_attachment_task import invoke_task
 from tests.test_ai_assistant.test_audit_statistics_handler import (
+    AIStatisticsTestMixin,
     FieldStatisticsTestMixin,
 )
 from tests.test_query.test_ai_assistant.test_field_statistics import field_frames
@@ -460,3 +471,286 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
                 self.assertEqual(completed.output_data["overview"]["total_count"], 10)
         finally:
             signals.task_postrun.disconnect(on_task_done)
+
+
+class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
+    """保留真实平台、数据库及流；仅替换远端 Agent。"""
+
+    def setUp(self):
+        """清理仅属于本测试附件的 Redis 流，不影响其他执行。"""
+        super().setUp()
+        self.stream_uids = []
+        self.addCleanup(lambda: delete_attachment_stream_keys(attachment_uids=self.stream_uids))
+
+    def processing(self):
+        """公开入口创建流式统计附件。"""
+        attachment = Attachment.objects.get(uid=self.create()["uid"])
+        self.stream_uids.append(str(attachment.uid))
+        return attachment
+
+    @staticmethod
+    def events(content, message_id="final", closed=True):
+        """构造 Agent 标准文本帧，不对正文格式作预处理。"""
+        result = [
+            {"type": "TEXT_MESSAGE_START", "messageId": message_id, "role": "assistant"},
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": message_id, "delta": content},
+        ]
+        if closed:
+            result.append({"type": "TEXT_MESSAGE_END", "messageId": message_id})
+        return result
+
+    def run_events(self, attachment, events, **kwargs):
+        """远端替身按真实 on_event 回调输入原始事件。"""
+
+        def respond(**request):
+            for event in events:
+                request["on_event"](event)
+
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond) as agent:
+            result = invoke_task(self.handler.async_task, attachment=attachment, **kwargs)
+        return result, agent.call_args.kwargs
+
+    def test_non_sse_upstream_error_does_not_leak_body_to_task_logs(self):
+        """实际callback解析收到业务错误时，任务日志与异常不得包含上游正文。"""
+        attachment = self.processing()
+        marker = "PRIVATE_STATISTICS_BODY_10"
+        response = mock.Mock(status_code=200, headers={"Content-Type": "application/json"})
+        response.json.return_value = {"result": False, "code": 1001, "message": marker}
+
+        def respond(**request):
+            """只替换HTTP边界，真实执行callback响应解析。"""
+            resource = ChatCompletion()
+            token = resource._on_event_context.set(request["on_event"])
+            try:
+                return resource.parse_response(response)
+            finally:
+                resource._on_event_context.reset(token)
+
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond):
+            with self.assertRaises(Retry) as retried:
+                invoke_task(self.handler.async_task, attachment=attachment)
+            self.assertNotIn(marker, "".join(traceback.format_exception(retried.exception)))
+            self.assertNotIn(marker, str(retried.exception.exc))
+            with self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as captured:
+                with self.assertRaises(Exception) as raised:
+                    invoke_task(
+                        self.handler.async_task, attachment=attachment, retries=self.handler.async_task.max_retries
+                    )
+        self.assertNotIn(marker, "\n".join(captured.output))
+        self.assertNotIn(marker, str(raised.exception))
+        result = GetAttachment().request(attachment_uid=str(attachment.uid))
+        self.assertEqual(result["status"], "FAILED")
+        self.assertNotIn(marker, str(result))
+
+    def test_success_contract(self):
+        attachment = self.processing()
+        content = "  ```custom-chart\nnot-json\n```\n"
+        events = [
+            *self.events("过程", "first"),
+            {"type": "CUSTOM", "name": "arbitrary", "value": {"x": 1}},
+            *self.events(content),
+            {"type": "RUN_FINISHED", "result": {"ignored": True}},
+        ]
+        result, request = self.run_events(attachment, events)
+        attachment.refresh_from_db()
+        self.assertEqual(result, {"status": "SUCCESS"})
+        self.assertEqual(attachment.output_data, {"content": content})
+        self.assertEqual(
+            GetAttachment().request(attachment_uid=str(attachment.uid))["output_data"], {"content": content}
+        )
+        self.assertEqual(request["agent_code"], "bp-ai-log-stats")
+        self.assertEqual(request["user"], self.user)
+        self.assertEqual([entry["role"] for entry in request["chat_history"]], ["role", "user"])
+        payload = json.loads(request["chat_history"][1]["content"])
+        self.assertEqual(set(payload), {"instruction", "context"})
+        self.assertEqual(set(payload["context"]), {"initial_search_condition", "query_summary", "user"})
+        self.assertEqual(payload["context"]["initial_search_condition"], self.source.input_data["condition"])
+        self.assertEqual(set(payload["context"]["query_summary"]), {"total", "executed_at"})
+        self.assertEqual(
+            payload["context"]["user"], {"username": self.user, "timezone": "Asia/Shanghai", "language": "zh-cn"}
+        )
+        for forbidden in ("samples", "namespace", "sql", "attachment_id", "message_id"):
+            self.assertNotIn(forbidden, json.dumps(payload))
+        self.assertEqual(
+            request["execute_kwargs"], {"stream": True, "thread_id": str(attachment.stream_config["execution_id"])}
+        )
+        archived = [
+            item["data"]
+            for item in attachment.stream_archive
+            if item["event"] not in ("platform.stream_reset", "platform.stream_end")
+        ]
+        self.assertEqual(archived, events)
+
+    def test_failure_contract(self):
+        for events in (self.events(" \n"), self.events("完整", "a") + self.events("未闭合", "b", False), []):
+            with self.subTest(events=events):
+                attachment = self.processing()
+                with self.assertRaises(AttachmentOutputValidationError):
+                    self.run_events(attachment, events, retries=self.handler.async_task.max_retries)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, "FAILED")
+                self.assertIsNone(attachment.output_data)
+                self.assertEqual(attachment.stream_archive[-1]["data"], {"status": "FAILED"})
+
+    def test_retry_contract(self):
+        attachment = self.processing()
+        task_id = attachment.task_id
+        attachment.context_data["system_prompt"] = "创建时的统计提示词"
+        attachment.save(update_fields=["context_data"])
+        original_context = deepcopy(attachment.context_data)
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=Timeout()) as first:
+            with self.assertRaises(Retry) as caught:
+                invoke_task(self.handler.async_task, attachment=attachment)
+        attachment.refresh_from_db()
+        first_execution = attachment.stream_config["execution_id"]
+        self.assertEqual(attachment.status, "PROCESSING")
+        self.assertEqual(caught.exception.sig.kwargs, {"attachment_id": attachment.pk, "task_id": task_id})
+        result, second = self.run_events(attachment, self.events(" 无数据\n"), retries=1)
+        attachment.refresh_from_db()
+        self.assertEqual(result, {"status": "SUCCESS"})
+        self.assertEqual(attachment.task_id, task_id)
+        self.assertNotEqual(attachment.stream_config["execution_id"], first_execution)
+        self.assertEqual(attachment.context_data, original_context)
+        self.assertEqual(first.call_args.kwargs["chat_history"], second["chat_history"])
+        self.assertEqual(second["chat_history"][0]["content"], "创建时的统计提示词")
+        self.assertNotEqual(
+            first.call_args.kwargs["execute_kwargs"]["thread_id"], second["execute_kwargs"]["thread_id"]
+        )
+
+    def test_manual_retry_rotates_task_and_agent_execution_then_keeps_history(self):
+        """失败原对象经公开手动重试后更换两层执行 ID，历史文本独立保存。"""
+        attachment = self.processing()
+        with self.assertRaises(AttachmentOutputValidationError):
+            self.run_events(attachment, self.events("未闭合", closed=False), retries=self.handler.async_task.max_retries)
+        attachment.refresh_from_db()
+        old_task = attachment.task_id
+        old_execution = attachment.stream_config["execution_id"]
+        with self.captureOnCommitCallbacks(execute=True):
+            RetryAttachment().request(attachment_uid=str(attachment.uid))
+        attachment.refresh_from_db()
+        self.assertNotEqual(attachment.task_id, old_task)
+        _, request = self.run_events(attachment, self.events("历史正文"))
+        attachment.refresh_from_db()
+        self.assertNotEqual(request["execute_kwargs"]["thread_id"], old_execution)
+        self.assertEqual(attachment.output_data, {"content": "历史正文"})
+        other = self.processing()
+        self.run_events(other, self.events("另一个统计"))
+        detail = GetAttachment().request(attachment_uid=str(attachment.uid))
+        self.assertEqual(detail["output_data"], {"content": "历史正文"})
+
+    def test_stale_task_contract(self):
+        attachment = self.processing()
+        Attachment.objects.filter(pk=attachment.pk).update(task_id="new-task")
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion") as agent, self.assertRaises(Ignore):
+            invoke_task(self.handler.async_task, attachment=attachment)
+        agent.assert_not_called()
+
+    def test_invalid_source_and_identity_fail_before_agent(self):
+        for mutation in ("source", "identity", "cleared"):
+            with self.subTest(mutation=mutation):
+                attachment = self.processing()
+                if mutation == "source":
+                    Message.objects.filter(pk=self.source.pk).update(status="FAILED")
+                elif mutation == "identity":
+                    context = deepcopy(attachment.context_data)
+                    context["username"] = "other"
+                    Attachment.objects.filter(pk=attachment.pk).update(context_data=context)
+                else:
+                    Conversation.objects.filter(pk=self.conversation.pk).update(is_deleted=True)
+                with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion") as agent:
+                    with self.assertRaises(InvalidAttachmentSource):
+                        invoke_task(self.handler.async_task, attachment=attachment)
+                agent.assert_not_called()
+                Message.objects.filter(pk=self.source.pk).update(status="SUCCESS")
+
+    def test_permission_errors_do_not_retry(self):
+        attachment = self.processing()
+        with mock.patch.object(
+            api.bk_plugins_ai_agent, "chat_completion", side_effect=APIRequestError(status_code=403)
+        ):
+            with self.assertRaises(APIRequestError):
+                invoke_task(self.handler.async_task, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "FAILED")
+
+    @override_settings(AI_ASSISTANT_AI_STATISTICS_BUSINESS_TIMEOUT=0.001)
+    def test_business_timeout_retries_and_exhaustion_has_statistics_message(self):
+        """真实 gevent 业务超时在硬终止前完成重试及稳定错误快照。"""
+        attachment = self.processing()
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=lambda **kwargs: sleep(0.02)):
+            with self.assertRaises(Retry):
+                invoke_task(self.handler.async_task, attachment=attachment)
+            attachment.refresh_from_db()
+            self.assertEqual(attachment.status, "PROCESSING")
+            with self.assertRaises(AIStatisticsTimeout):
+                invoke_task(self.handler.async_task, attachment=attachment, retries=self.handler.async_task.max_retries)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "FAILED")
+        self.assertEqual(attachment.error_message, "AI 统计超时，请重试")
+        self.assertEqual(attachment.error_code, AIStatisticsTimeout().code)
+        self.assertEqual(attachment.stream_archive[-1]["data"], {"status": "FAILED"})
+
+    @override_settings(AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES=6)
+    def test_content_budget_failure_is_sanitized_and_later_complete_message_can_recover(self):
+        """UTF-8 超预算只作废候选；安全异常不泄露原文，后续闭合文本可恢复。"""
+        sentinel = "PRIVATE_STATISTICS_SENTINEL"
+        attachment = self.processing()
+        with self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as logs:
+            with self.assertRaises(AttachmentOutputValidationError):
+                self.run_events(attachment, self.events(sentinel), retries=self.handler.async_task.max_retries)
+        self.assertNotIn(sentinel, "\n".join(logs.output))
+        self.assertNotIn("input_value", "\n".join(logs.output))
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "FAILED")
+        self.assertNotIn(sentinel, attachment.error_message)
+        second = self.processing()
+        self.run_events(second, self.events(sentinel, "large") + self.events("中文", "valid"))
+        second.refresh_from_db()
+        self.assertEqual(second.output_data, {"content": "中文"})
+
+    def test_late_execution_cannot_overwrite_new_task(self):
+        """Agent 执行中任务被替换，完成 CAS 必须 Ignore，不能写结果或返回成功。"""
+        attachment = self.processing()
+
+        def respond(**request):
+            Attachment.objects.filter(pk=attachment.pk).update(task_id="new-task", output_data=None)
+            for event in self.events("旧正文"):
+                request["on_event"](event)
+
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond), self.assertRaises(
+            Ignore
+        ):
+            invoke_task(self.handler.async_task, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.task_id, "new-task")
+        self.assertEqual(attachment.status, "PROCESSING")
+        self.assertIsNone(attachment.output_data)
+
+    def test_archive_recovers_raw_text_when_live_redis_fails(self):
+        """实时写入降级后仍成功保存文本及原始事件，快照可重建展示。"""
+        attachment = self.processing()
+        events = self.events("  无数据\n")
+        with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("offline")):
+            self.run_events(attachment, events)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "SUCCESS")
+        self.assertEqual(attachment.output_data, {"content": "  无数据\n"})
+        snapshot = AttachmentStreamService(user=self.user).get_snapshot(attachment_uid=attachment.uid)
+        self.assertEqual([event.data for event in snapshot.events if event.event is None], events)
+        self.assertEqual(snapshot.events[-1].data, {"status": "SUCCESS"})
+
+    def test_success_supports_feedback_but_not_report_edit_or_export(self):
+        """AI 统计反馈独立启用，固定文本不能被报告编辑或导出入口改写。"""
+        attachment = self.processing()
+        self.run_events(attachment, self.events("结果"))
+        uid = str(attachment.uid)
+        with self.assertRaises(AttachmentNotEditable):
+            UpdateAttachment().request(attachment_uid=uid, output_data={"content": "overwrite"})
+        with self.assertRaises(AttachmentExportNotSupported):
+            ExportAttachment().request(attachment_uid=uid, export_format="MARKDOWN")
+        with mock.patch("services.web.ai_assistant.resources.feedback.get_request_username", return_value=self.user):
+            feedback = UpsertFeedback().request(source_type="ATTACHMENT", source_uid=uid, feedback_type="LIKE")
+        self.assertEqual(feedback["feedback_type"], "LIKE")
+
+    test_stream_success_contract = test_success_contract
+    test_stream_retry_contract = test_retry_contract

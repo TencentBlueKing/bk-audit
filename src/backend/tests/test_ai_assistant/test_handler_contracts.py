@@ -3,7 +3,7 @@ from unittest import mock
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from services.web.ai_assistant.constants import MessageType
+from services.web.ai_assistant.constants import AttachmentType, MessageType
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.handlers.attachment import AttachmentTypeHandler
 from services.web.ai_assistant.handlers.audit_analysis import AIAnalysisHandler
@@ -135,6 +135,17 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
 
 class AttachmentRetryCapabilityTest(SimpleTestCase):
     """手动重试必须由附件类型显式声明，错误布尔值在注册阶段失败。"""
+
+    def test_production_statistics_capabilities_remain_independent(self):
+        """生产注册必须显式区分两类统计的流、重试和反馈能力。"""
+        handlers = captured_attachment_handlers()
+        field = handlers[AttachmentType.FIELD_STATISTICS]
+        ai = handlers[AttachmentType.AI_STATISTICS]
+        self.assertEqual((field.is_stream, field.supports_retry, field.supports_feedback), (False, False, False))
+        self.assertEqual((ai.is_stream, ai.supports_retry, ai.supports_feedback), (True, True, True))
+        for handler in (field, ai):
+            self.assertFalse(handler.supports_output_edit())
+            self.assertEqual(handler.export_formats, ())
 
     def test_retry_defaults_closed_and_analysis_keeps_retry(self):
         self.assertIs(getattr(AttachmentTypeHandler, "supports_retry", None), False)
