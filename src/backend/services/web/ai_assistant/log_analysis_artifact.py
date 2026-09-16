@@ -14,10 +14,14 @@ class LogAnalysisArtifactExtractor:
     """在固定内存预算内提取最后一条完整的 assistant 文本消息。
 
     日志分析只需要一个最终报告，因此新的 assistant START 会替换未闭合候选。
+    默认允许回退到此前完整报告；AI 统计可开启严格终态，要求最后候选闭合。
     正文使用 bytearray 紧凑缓冲，避免大量微小 delta 产生无界 Python 对象。
     """
 
-    def __init__(self, max_content_bytes: int | None = None) -> None:
+    def __init__(self, max_content_bytes: int | None = None, *, strict_final_message: bool = False) -> None:
+        """设置 UTF-8 缓冲上限；严格模式禁止回退到新 assistant 消息之前的正文。"""
+
+        self._strict_final_message = strict_final_message
         self._active_message_id: str | None = None
         self._active_content = bytearray()
         self._max_content_bytes = (
@@ -49,6 +53,9 @@ class LogAnalysisArtifactExtractor:
         if event_type == AGUIEventType.TEXT_MESSAGE_START:
             role = event.get("role")
             if isinstance(role, str) and role.lower() == "assistant":
+                # 新候选一旦出现即作废旧终稿；即使稍后同 ID 改 role 丢弃 active，也不能回退。
+                if self._strict_final_message:
+                    self._final_content = ""
                 self._active_message_id = message_id
                 self._active_content.clear()
             elif message_id == self._active_message_id:

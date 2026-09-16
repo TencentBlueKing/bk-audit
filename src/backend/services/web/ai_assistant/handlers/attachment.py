@@ -62,6 +62,8 @@ class AttachmentTypeHandler(Generic[InputT, ContextT, OutputT], ABC):
     output_model: type[OutputT]
     # 反馈由业务 Handler 显式开放，默认不向前端暴露该能力。
     supports_feedback: bool = False
+    # 手动重试按业务显式开放，与任务内部的自动重试预算相互独立。
+    supports_retry: bool = False
     # 只有显式声明且覆写 export() 的类型才向前端公开下载格式。
     export_formats: tuple[AttachmentExportFormat, ...] = ()
     # 声明该类型是否使用平台 UI 流；仅异步 Handler 可开启，注册阶段强制校验。

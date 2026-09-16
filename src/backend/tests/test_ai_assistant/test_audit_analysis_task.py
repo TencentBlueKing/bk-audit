@@ -2,6 +2,7 @@
 
 import json
 import os
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ from bk_resource import api
 from bk_resource.exceptions import APIRequestError, IAMNoPermission
 from celery.exceptions import Ignore, Retry
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, override_settings
 from requests import Response
 from requests.exceptions import HTTPError
@@ -61,6 +63,65 @@ from tests.test_ai_assistant.test_attachment_task import invoke_task
 
 class LogAnalysisArtifactExtractorTest(SimpleTestCase):
     """业务提取器只提交完整 assistant 消息，并在 RUN_ERROR 后丢弃旧候选。"""
+
+    def test_strict_final_message_does_not_fall_back_after_unclosed_or_retyped_start(self):
+        """新 assistant 未闭合或被同 ID 非 assistant 作废后，严格模式不能回退旧正文。"""
+        for strict, retyped, expected in ((False, False, "A"), (True, False, ""), (True, True, "")):
+            with self.subTest(strict=strict, retyped=retyped):
+                extractor = LogAnalysisArtifactExtractor(strict_final_message=strict)
+                events = [
+                    {"type": "TEXT_MESSAGE_START", "messageId": "a", "role": "assistant"},
+                    {"type": "TEXT_MESSAGE_CONTENT", "messageId": "a", "delta": "A"},
+                    {"type": "TEXT_MESSAGE_END", "messageId": "a"},
+                    {"type": "TEXT_MESSAGE_START", "messageId": "b", "role": "assistant"},
+                    {"type": "TEXT_MESSAGE_CONTENT", "messageId": "b", "delta": "partial"},
+                ]
+                if retyped:
+                    events.extend(
+                        [
+                            {"type": "TEXT_MESSAGE_START", "messageId": "b", "role": "tool"},
+                            {"type": "TEXT_MESSAGE_END", "messageId": "b"},
+                        ]
+                    )
+                for event in events:
+                    extractor.consume(event)
+                self.assertEqual(extractor.final_content, expected)
+
+    def test_strict_and_default_preserve_last_complete_raw_text(self):
+        """正文含空白和任意围栏仍逐字返回，不由提取器解释格式或空白有效性。"""
+        for strict in (False, True):
+            for content in ("  ```custom-chart\nnot-json\n```\n", " \n\t"):
+                with self.subTest(strict=strict, content=content):
+                    extractor = LogAnalysisArtifactExtractor(strict_final_message=strict)
+                    for message_id, text in (("a", "A"), ("b", content)):
+                        extractor.consume({"type": "TEXT_MESSAGE_START", "messageId": message_id, "role": "assistant"})
+                        extractor.consume({"type": "TEXT_MESSAGE_CONTENT", "messageId": message_id, "delta": text})
+                        extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": message_id})
+                    self.assertEqual(extractor.final_content, content)
+
+    def test_strict_error_and_utf8_overflow_clear_old_final_but_allow_recovery(self):
+        """UTF-8 超限及 RUN_ERROR 均清旧结果；后续新消息可在同一流恢复。"""
+        for failure in ("overflow", "run_error"):
+            with self.subTest(failure=failure):
+                extractor = LogAnalysisArtifactExtractor(max_content_bytes=6, strict_final_message=True)
+                for message_id, content in (("a", "A"), ("b", "中文")):
+                    extractor.consume({"type": "TEXT_MESSAGE_START", "messageId": message_id, "role": "assistant"})
+                    extractor.consume({"type": "TEXT_MESSAGE_CONTENT", "messageId": message_id, "delta": content})
+                    if message_id == "a":
+                        extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": message_id})
+                self.assertEqual(extractor.buffered_content_bytes, 6)
+                extractor.consume(
+                    {"type": "TEXT_MESSAGE_CONTENT", "messageId": "b", "delta": "x"}
+                    if failure == "overflow"
+                    else {"type": "RUN_ERROR", "message": "failed"}
+                )
+                extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": "b"})
+                self.assertEqual(extractor.final_content, "")
+                self.assertEqual(extractor.buffered_content_bytes, 0)
+                extractor.consume({"type": "TEXT_MESSAGE_START", "messageId": "c", "role": "assistant"})
+                extractor.consume({"type": "TEXT_MESSAGE_CONTENT", "messageId": "c", "delta": "中文"})
+                extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": "c"})
+                self.assertEqual(extractor.final_content, "中文")
 
     def test_extracts_last_complete_fragmented_message_and_ignores_unknown_events(self):
         extractor = LogAnalysisArtifactExtractor()
@@ -195,6 +256,31 @@ class LogAnalysisArtifactExtractorTest(SimpleTestCase):
 
         self.assertEqual(extractor.final_content, "latest")
         self.assertEqual(extractor.buffered_content_bytes, 0)
+
+
+class StatisticsRuntimeSettingsTest(SimpleTestCase):
+    """冷加载 Web 配置拒绝提前硬杀及无界重试预算，并让巡检随运行预算调整。"""
+
+    def test_statistics_timeout_and_retry_budget_reject_invalid_environment(self):
+        for prefix in ("AI_ASSISTANT_FIELD_STATISTICS", "AI_ASSISTANT_AI_STATISTICS"):
+            for suffix, value in (("BUSINESS_TIMEOUT", "1800"), ("MAX_RETRIES", "-1"), ("RETRY_DELAY_SECONDS", "0")):
+                with self.subTest(prefix=prefix, suffix=suffix):
+                    with mock.patch.dict(os.environ, {f"BKAPP_{prefix}_{suffix}": value}):
+                        with self.assertRaises(ImproperlyConfigured):
+                            runpy.run_path(str(Path(settings.BASE_DIR) / "services/web/settings.py"))
+
+    def test_statistics_failure_threshold_covers_changed_hard_timeout_and_retry_wait(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT": "4000",
+                "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_RETRY_BACKOFF_MAX_SECONDS": "500",
+            },
+        ):
+            config = runpy.run_path(str(Path(settings.BASE_DIR) / "services/web/settings.py"))
+        thresholds = config["AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS"]
+        self.assertGreater(thresholds["FIELD_STATISTICS"]["failure_seconds"], 4500)
+        self.assertLess(thresholds["AI_STATISTICS"]["failure_seconds"], 4500)
 
 
 class AIAnalysisTaskTest(AIAssistantPlatformTestCase):

@@ -1,9 +1,13 @@
 from unittest import mock
 
+from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from services.web.ai_assistant.constants import MessageType
 from services.web.ai_assistant.handlers import attachment_handler_registry
+from services.web.ai_assistant.handlers.attachment import AttachmentTypeHandler
+from services.web.ai_assistant.handlers.audit_analysis import AIAnalysisHandler
+from services.web.ai_assistant.handlers.registry import AttachmentHandlerRegistry
 from tests.test_ai_assistant.handler_contracts import (
     HandlerContractSpec,
     validate_handler_contracts,
@@ -124,3 +128,19 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
             )
         finally:
             attachment_handler_registry.unregister(handler.attachment_type)
+
+
+class AttachmentRetryCapabilityTest(SimpleTestCase):
+    """手动重试必须由附件类型显式声明，错误布尔值在注册阶段失败。"""
+
+    def test_retry_defaults_closed_and_analysis_keeps_retry(self):
+        self.assertIs(getattr(AttachmentTypeHandler, "supports_retry", None), False)
+        self.assertIs(getattr(AIAnalysisHandler(), "supports_retry", None), True)
+
+    def test_registry_rejects_non_boolean_retry_capability(self):
+        for value in (None, 1, "false"):
+            with self.subTest(value=value):
+                handler = EchoAttachmentSyncHandler()
+                handler.supports_retry = value
+                with self.assertRaisesRegex(ImproperlyConfigured, "supports_retry"):
+                    AttachmentHandlerRegistry().register(handler)

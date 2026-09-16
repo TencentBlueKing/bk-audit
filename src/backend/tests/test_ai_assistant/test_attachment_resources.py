@@ -235,6 +235,7 @@ class AttachmentRequestSerializerTest(TestCase):
                 "created_at",
                 "updated_at",
                 "supports_feedback",
+                "supports_retry",
                 "feedback",
                 "export_formats",
                 "is_stream",
@@ -254,6 +255,7 @@ class AttachmentRequestSerializerTest(TestCase):
                 "error_code",
                 "error_message",
                 "supports_feedback",
+                "supports_retry",
                 "export_formats",
             },
         )
@@ -754,6 +756,7 @@ class AttachmentResourceTest(TestCase):
                 "error_code",
                 "error_message",
                 "supports_feedback",
+                "supports_retry",
                 "export_formats",
             },
         )
@@ -833,6 +836,15 @@ class AttachmentResourceTest(TestCase):
 
         self.assertEqual(context.exception.STATUS_CODE, 400)
 
+    def test_retry_capability_is_explicit_in_detail_and_list(self, _username):
+        """真实 Resource 输出公开类型能力，未声明能力的字段统计明确返回 false。"""
+        for attachment_type, expected in ((AttachmentType.FIELD_STATISTICS, False), (AttachmentType.AI_ANALYSIS, True)):
+            attachment = self.create_attachment(attachment_type=attachment_type)
+            detail = GetAttachment().request({"attachment_uid": str(attachment.uid)})
+            listed = ListAttachments().request({"attachment_type": [attachment_type]})
+            self.assertIs(detail["supports_retry"], expected)
+            self.assertIs(listed[0]["supports_retry"], expected)
+
     def test_retry_failed_async_attachment_returns_processing_snapshot(self, _username):
         attachment = self.create_attachment(
             attachment_type=AttachmentType.AI_ANALYSIS,
@@ -847,6 +859,7 @@ class AttachmentResourceTest(TestCase):
                 retried = RetryAttachment().request({"attachment_uid": str(attachment.uid)})
 
         attachment.refresh_from_db()
+        self.assertIs(retried["supports_retry"], True)
         self.assertEqual(retried["status"], ExecutionStatus.PROCESSING)
         self.assertIsNone(retried["output_data"])
         self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)

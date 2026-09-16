@@ -176,6 +176,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    supports_retry = serializers.BooleanField(help_text="附件类型是否支持失败后的手动重试")
     is_stream = serializers.BooleanField(help_text="是否使用流式输出；为真时可订阅流快照与 SSE 接口")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
@@ -214,6 +215,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "supports_feedback": supports_feedback,
+            "supports_retry": handler.supports_retry,
             "is_stream": instance.is_stream,
             "export_formats": [str(export_format) for export_format in handler.export_formats],
             "feedback": (
@@ -240,6 +242,7 @@ class AttachmentListItemSerializer(serializers.Serializer):
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
     conversation = AttachmentConversationSummarySerializer(help_text="所属会话摘要")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
+    supports_retry = serializers.BooleanField(help_text="附件类型是否支持失败后的手动重试")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
         help_text="当前类型支持的后端导出格式",
@@ -269,5 +272,6 @@ class AttachmentListItemSerializer(serializers.Serializer):
                 "updated_at": conversation.updated_at,
             },
             "supports_feedback": handler.supports_feedback,
+            "supports_retry": handler.supports_retry,
             "export_formats": [str(export_format) for export_format in handler.export_formats],
         }

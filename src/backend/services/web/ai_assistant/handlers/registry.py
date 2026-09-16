@@ -152,6 +152,8 @@ class AttachmentHandlerRegistry(HandlerRegistry[AttachmentTypeHandler]):
         """在通用 Handler 校验后收敛附件导出与流式声明，防止能力与实现不一致。"""
 
         super()._validate(handler)
+        if not isinstance(handler.supports_retry, bool):
+            raise ImproperlyConfigured("附件 supports_retry 必须是 bool")
         if not isinstance(handler.is_stream, bool):
             raise ImproperlyConfigured("附件 is_stream 必须是 bool")
         if handler.is_stream and handler.execution_mode != ExecutionMode.ASYNC:
