@@ -1183,14 +1183,20 @@ export const normalizeWhereHaving = <T extends WhereLike>(
 
 const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<string, any>) => {
   const configs = rule.configs || {};
+  const ruleConditions = rule.conditions;
+  if (ruleConditions && typeof ruleConditions === 'object'
+    && ('where' in ruleConditions || 'having' in ruleConditions)) {
+    return normalizeWhereHaving(
+      ruleConditions.where ?? null,
+      ruleConditions.having ?? null,
+    );
+  }
   return normalizeWhereHaving(
     pickWhereValue(
-      rule.conditions?.where,
       configs.where,
       fallbackConfigs?.where,
     ),
     pickWhereValue(
-      rule.conditions?.having,
       configs.having,
       fallbackConfigs?.having,
     ),
