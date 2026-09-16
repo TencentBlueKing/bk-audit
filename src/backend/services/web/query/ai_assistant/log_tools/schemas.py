@@ -7,7 +7,7 @@ Unicode 与标点 key，但点号保留为现有跨模块路径分隔符；SQL �
 import json
 import math
 from enum import StrEnum
-from typing import Annotated, Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
 from django.conf import settings
 from pydantic import (
@@ -25,7 +25,7 @@ from pydantic import (
 )
 from rest_framework import serializers
 
-from apps.meta.utils.fields import STANDARD_FIELDS, START_TIME
+from apps.meta.utils.fields import START_TIME
 from services.web.query.ai_assistant.schemas import (
     Condition,
     ConditionField,
@@ -72,7 +72,11 @@ LOG_TOOL_SORTABLE_FIELD_NAMES = frozenset(
         *(config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs if not config.field.is_json),
     )
 )
-AGGREGATION_STANDARD_FIELD_TYPES = {field.field_name: field.field_type for field in STANDARD_FIELDS}
+# 类型映射与可见字段使用同一检索配置，避免 log 等非 STANDARD_FIELDS 字段在响应构造时遗漏。
+AGGREGATION_STANDARD_FIELD_TYPES = {
+    **{name: config.field.field_type for name, config in COLLECT_SEARCH_CONFIG.query_field_map.items()},
+    START_TIME.field_name: START_TIME.field_type,
+}
 AGGREGATION_NUMERIC_FIELD_TYPES = frozenset(("int", "long", "float", "double", "timestamp"))
 AGGREGATION_MAX_DIMENSIONS = 2
 AGGREGATION_MAX_METRICS = 5
@@ -124,6 +128,8 @@ def _validate_field_path(raw_name: str, keys: List[str]) -> None:
 class AgentConditionField(ConditionField):
     """Agent 工具条件字段；只收紧公共 WEB 条件，不改变原检索协议。"""
 
+    raw_name: str = Field(min_length=1, description="筛选条件使用的可见日志根字段名。")
+    field_type: Optional[str] = Field(default=None, description="可选字段类型提示，沿用现有日志检索协议，不能用于绕过服务端字段校验。")
     keys: Annotated[
         List[LogFieldKey],
         serializers.ListField(
@@ -156,7 +162,8 @@ class AgentConditionField(ConditionField):
 class AgentCondition(Condition):
     """Agent 工具单条件，只允许标量比较值并限制请求成本。"""
 
-    field: AgentConditionField
+    field: AgentConditionField = Field(description="筛选字段引用，沿用当前日志检索字段与权限规则。")
+    operator: str = Field(min_length=1, description="字段支持的日志检索操作符，可先通过字段探索获取 allow_operators；isnull/notnull 不传比较值。")
     filters: Annotated[
         List[LogFilterValue],
         serializers.ListField(
@@ -199,9 +206,14 @@ class AgentCondition(Condition):
 
 
 class AgentSearchCondition(SearchCondition):
-    """仅供三项 Agent 日志工具使用的冻结成本协议。"""
+    """日志工具和程序统计复用的有界查询条件；系统及敏感字段权限在执行时校验。"""
 
-    scope_id: str = Field(..., min_length=1, max_length=LOG_TOOL_MAX_SCOPE_ID_LENGTH)
+    scope_type: Literal["system"] = Field(default="system", description="查询范围类型，当前仅支持单业务系统 system。")
+    start_time: str = Field(min_length=1, description="范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按用户时区解释。")
+    end_time: str = Field(min_length=1, description="范围结束时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；实际查询沿用日志检索时间边界。")
+    scope_id: str = Field(
+        ..., min_length=1, max_length=LOG_TOOL_MAX_SCOPE_ID_LENGTH, description='待查询的单个业务系统 ID；工具调用时按当前用户重新鉴权。'
+    )
     conditions: List[AgentCondition] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_CONDITIONS,
@@ -530,8 +542,8 @@ class LogSearchPagination(BaseModel):
 class LogQueryExecutionSummary(BaseModel):
     """查询执行摘要，仅保留 Agent 判断成本所需的非敏感信息。"""
 
-    took_ms: int
-    executed_at: str
+    took_ms: int = Field(description='本次查询执行耗时，单位毫秒。')
+    executed_at: str = Field(description='查询执行时间，ISO 8601 带时区。')
 
 
 class SearchLogsResponse(BaseModel):
@@ -822,13 +834,15 @@ class AggregateLogsRequest(AgentLogToolRequest):
 class AggregationColumn(BaseModel):
     """响应列描述，不回显 SQL、条件或物理表。"""
 
-    id: str
-    name: str
-    role: AggregationColumnRole
+    id: str = Field(description='请求声明的维度或指标 ID，对应 rows 中同名键。')
+    name: str = Field(description='供调用方展示的服务端列名。')
+    role: AggregationColumnRole = Field(description='DIMENSION 为分组维度，METRIC 为聚合指标。')
     data_type: AggregationResultDataType = Field(
         description="列值类型；scalar 表示混合或尚未观察到的 JSON 标量，结合 groups.values.value_type 判读，不能为 object/array。"
     )
-    effective_time_interval: Optional[AggregationEffectiveTimeInterval] = None
+    effective_time_interval: Optional[AggregationEffectiveTimeInterval] = Field(
+        default=None, description='仅时间维度返回实际粒度；其他列为 null。'
+    )
 
 
 class AggregationGroupKind(StrEnum):
@@ -858,7 +872,7 @@ class AggregationGroupValue(BaseModel):
         },
     )
 
-    dimension_id: str
+    dimension_id: str = Field(description='对应请求中的非时间维度 ID。')
     value_type: JSONValueType = Field(
         json_schema_extra={
             "enum": [JSONValueType.BOOLEAN, JSONValueType.INTEGER, JSONValueType.NUMBER, JSONValueType.STRING]
@@ -889,11 +903,13 @@ class AggregationGroup(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    group_id: str
-    kind: AggregationGroupKind
+    group_id: str = Field(description='本次结果内关联 rows 的稳定组标识，不应解析其内容。')
+    kind: AggregationGroupKind = Field(description='VALUE 为真实类别；OTHER 为 TopN 外非缺失类别；MISSING 为任一类别维度缺失；ALL 用于无类别统计。')
     values: Tuple[AggregationGroupValue, ...] = Field(description="VALUE 按非时间维度声明顺序；其他组为空数组。")
-    count: int = Field(ge=0)
-    ratio: Optional[float] = Field(ge=0, le=1, allow_inf_nan=False)
+    count: int = Field(ge=0, description='该组在完整检索范围内的日志数量，不是 rows 行数。')
+    ratio: Optional[float] = Field(
+        ge=0, le=1, allow_inf_nan=False, description='count / query_summary.total_count，取值 0 至 1；总数为 0 时为 null。'
+    )
 
     @model_validator(mode="after")
     def validate_values(self):
@@ -929,13 +945,13 @@ class AggregationQuerySummary(LogQueryExecutionSummary):
     returned_count: int = Field(ge=0, description="本次实际返回的 rows 行数。")
     total_count: int = Field(ge=0, description="完整检索范围内日志总数。")
     top_n: Optional[int] = Field(ge=1, le=AGGREGATION_MAX_TOP_N, description="实际类别上限；无类别维度为 null。")
-    has_other: bool
-    scope_id: str
-    start_time: str
-    end_time: str
-    requested_interval: Optional[AggregationTimeInterval]
-    effective_interval: Optional[AggregationEffectiveTimeInterval]
-    timezone: str
+    has_other: bool = Field(description='是否实际返回 OTHER 组。')
+    scope_id: str = Field(description='实际执行查询的单个业务系统 ID。')
+    start_time: str = Field(description='实际检索范围的开始时间，保留校验后的请求时间表达。')
+    end_time: str = Field(description='实际检索范围的结束时间，保留校验后的请求时间表达。')
+    requested_interval: Optional[AggregationTimeInterval] = Field(description='请求的时间粒度，允许 AUTO；无时间维度为 null。')
+    effective_interval: Optional[AggregationEffectiveTimeInterval] = Field(description='实际时间桶粒度，不含 AUTO；无时间维度为 null。')
+    timezone: str = Field(description='解释查询时间及划分时间桶的服务端有效时区。')
     complete: bool = Field(description="成功响应必须包含同口径完整统计。")
 
 
@@ -944,13 +960,20 @@ class AggregateLogsResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    columns: Tuple[AggregationColumn, ...]
+    columns: Tuple[AggregationColumn, ...] = Field(description='请求维度和指标的列定义，rows 通过列 ID 关联；辅助组信息由 groups 提供。')
     rows: Annotated[
         Tuple[Dict[str, Any], ...],
         serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="完整聚合行；业务 data 最大 4 MiB。"),
-    ] = Field(..., description="完整聚合行，不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。")
-    groups: Tuple[AggregationGroup, ...]
-    query_summary: AggregationQuerySummary
+    ] = Field(
+        ...,
+        description=(
+            "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。"
+            "时间桶补齐，空桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。"
+            "结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
+        ),
+    )
+    groups: Tuple[AggregationGroup, ...] = Field(description='全范围类别合计，不受时间桶切分影响；OTHER/MISSING 不占 TopN 名额。')
+    query_summary: AggregationQuerySummary = Field(description='实际查询范围、执行耗时及完整性信息。')
     data_quality: Tuple[AggregationDataQuality, ...] = Field(
         default=(),
         description="按指标返回完整检索范围的数值转换质量，不是 rows 中各分组的逐组统计。",

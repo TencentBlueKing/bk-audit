@@ -22,7 +22,6 @@ from requests.exceptions import Timeout as RequestsTimeout
 
 from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.constants import AIAgentCode
-from services.web.ai_assistant.constants import ExecutionStatus
 from services.web.ai_assistant.exceptions import (
     AIStatisticsTimeout,
     AttachmentOutputValidationError,
@@ -30,7 +29,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentSource,
 )
 from services.web.ai_assistant.log_analysis_artifact import LogAnalysisArtifactExtractor
-from services.web.ai_assistant.schemas import SnapshotInput, parse_snapshot
+from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_statistics import (
     AIStatisticsAttachmentContext,
     AIStatisticsAttachmentOutput,
@@ -49,15 +48,6 @@ if TYPE_CHECKING:
     from services.web.ai_assistant.services.attachment_execution import (
         AttachmentExecution,
     )
-
-
-class FieldStatisticsExecutionTask(AttachmentExecutionTask):
-    """先完成平台 CAS 持久化，再收敛 Celery 返回值。"""
-
-    def _finish_success(self, *, execution: AttachmentExecution, task_id: str, output_data: SnapshotInput) -> dict:
-        """CAS 失败继续抛陈旧任务异常，不将未持久化结果宣告成功。"""
-        super()._finish_success(execution=execution, task_id=task_id, output_data=output_data)
-        return {"status": ExecutionStatus.SUCCESS}
 
 
 def is_temporary_statistics_error(error: Exception) -> bool:
@@ -80,7 +70,7 @@ def is_temporary_statistics_error(error: Exception) -> bool:
 
 @celery_app.task(
     bind=True,
-    base=FieldStatisticsExecutionTask,
+    base=AttachmentExecutionTask,
     name="ai_assistant.generate_field_statistics",
     queue="ai_assistant_statistics",
     ignore_result=True,
@@ -138,15 +128,6 @@ def generate_field_statistics(self, execution: AttachmentExecution) -> FieldStat
     raise self.retry(exc=public_error, countdown=countdown) from None
 
 
-class AIStatisticsExecutionTask(AttachmentExecutionTask):
-    """AI 统计只持久化原文，无报告标题旁路；成功事件只返回状态。"""
-
-    def _finish_success(self, *, execution: AttachmentExecution, task_id: str, output_data: SnapshotInput) -> dict:
-        """完成平台校验和 CAS，旧执行失败不能宣告成功。"""
-        super()._finish_success(execution=execution, task_id=task_id, output_data=output_data)
-        return {"status": ExecutionStatus.SUCCESS}
-
-
 def build_statistics_agent_input(context: AIStatisticsAttachmentContext) -> str:
     """序列化可调整的初始上下文；不暴露 namespace、预览、SQL 或内部 ID。"""
     return json.dumps(
@@ -165,7 +146,7 @@ def build_statistics_agent_input(context: AIStatisticsAttachmentContext) -> str:
 
 @celery_app.task(
     bind=True,
-    base=AIStatisticsExecutionTask,
+    base=AttachmentExecutionTask,
     name="ai_assistant.generate_ai_statistics",
     queue="ai_assistant_statistics",
     ignore_result=True,

@@ -53,7 +53,6 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
     context_model = AIAnalysisContextSchema
     output_model = AIAnalysisOutputSchema
     supports_feedback = True
-    supports_retry = True
     is_stream = True
     export_formats = (AttachmentExportFormat.MARKDOWN, AttachmentExportFormat.PDF)
     async_task = execute_log_analysis

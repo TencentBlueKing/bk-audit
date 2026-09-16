@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import DatabaseError
 
-from services.web.ai_assistant.constants import ExecutionObjectType
+from services.web.ai_assistant.constants import ExecutionObjectType, ExecutionStatus
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
 from services.web.ai_assistant.models import Attachment
 from services.web.ai_assistant.schemas import SnapshotInput
@@ -52,14 +52,15 @@ class AttachmentExecutionTask(BaseExecutionTask["AttachmentExecution"]):
         task_id: str,
         output_data: SnapshotInput,
     ) -> dict[str, Any]:
-        """将附件业务输出交给附件领域函数校验并收敛。"""
+        """校验并持久化附件输出，只向 Celery 返回状态，避免成功事件携带业务正文。"""
 
         from services.web.ai_assistant.services.attachment_execution import (
             finish_attachment_success,
         )
 
         try:
-            return finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
+            finish_attachment_success(execution=execution, task_id=task_id, output_data=output_data)
+            return {"status": ExecutionStatus.SUCCESS}
         except DatabaseError as error:
             # 流式最终事务失败属于基础设施故障；重试才能重新生成流并保留业务产物。
             if execution.has_stream:

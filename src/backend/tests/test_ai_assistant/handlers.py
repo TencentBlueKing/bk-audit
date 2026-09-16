@@ -313,8 +313,6 @@ def execute_attachment_async_success(
 class EchoAttachmentAsyncHandler(EchoAttachmentSyncHandler):
     """示例 AI 附件 Handler：保留平台手动重试及异步任务机制的回归意图。"""
 
-    supports_retry = True
-
     attachment_type = AttachmentType.AI_ANALYSIS
     execution_mode = ExecutionMode.ASYNC
     async_task = execute_attachment_async_success

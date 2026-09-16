@@ -210,7 +210,7 @@ class AttachmentTaskTest(TestCase):
                     result = self.invoke(execute_attachment_async_success, attachment=attachment)
 
                 attachment.refresh_from_db()
-                self.assertEqual(result, {"content": "done"})
+                self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
                 self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
                 self.assertEqual(attachment.output_data, {"content": "done"})
 
@@ -290,7 +290,7 @@ class AttachmentTaskTest(TestCase):
         result = self.invoke(execute_attachment_async_retry, attachment=attachment, retries=1)
 
         attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
 
     def test_retry_with_exception_marks_failed_after_max_retries(self):
@@ -422,7 +422,7 @@ class AttachmentTaskTest(TestCase):
         result = self.invoke(execute_attachment_async_update_title, attachment=attachment)
 
         attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(attachment.title, "任务内更新标题")
         self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
 
@@ -523,7 +523,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         result = self.invoke(execute_attachment_stream_success, attachment=self.attachment)
 
         self.attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
         self.assertEqual(self.attachment.output_data, {"content": "async:hello"})
         events = self.attachment.stream_archive
@@ -569,7 +569,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
 
         self.attachment.refresh_from_db()
         second_config = parse_stream_config(self.attachment.stream_config)
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertNotEqual(second_config.execution_id, first_config.execution_id)
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
         # reset 只通知旧 Redis reader；新 archive 从本次业务事件开始。

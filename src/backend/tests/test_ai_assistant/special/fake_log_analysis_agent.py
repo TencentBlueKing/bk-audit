@@ -13,6 +13,7 @@ from typing import Any
 class FakeLogAnalysisAgent:
     base_url: str
     requests: list[dict[str, Any]] = field(default_factory=list)
+    user_headers: list[str | None] = field(default_factory=list)
     attempts: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     lock: threading.Lock = field(default_factory=threading.Lock)
     started: dict[str, threading.Event] = field(default_factory=dict)
@@ -36,6 +37,7 @@ class FakeLogAnalysisAgent:
     def reset(self) -> None:
         with self.lock:
             self.requests.clear()
+            self.user_headers.clear()
             self.attempts.clear()
             self.started.clear()
             self.releases.clear()
@@ -88,6 +90,12 @@ def _complete_events(markdown: str) -> list[dict[str, Any]]:
 
 
 def _scenario_events(instruction: str, attempt: int) -> list[dict[str, Any]]:
+    if instruction == "analysis-truncate-once":
+        return _complete_events("# 首轮不可采纳")[:-1] if attempt == 1 else _complete_events("# 自动重试结论")
+    if instruction == "statistics-success":
+        return _complete_events("  ```custom-chart\n非 JSON 原文\n```\n")
+    if instruction == "statistics-truncate-once":
+        return _complete_events("首轮不可采纳" if attempt == 1 else "  重试后的统计正文\n")
     if instruction == "run-error":
         return [
             {"type": "RUN_STARTED", "threadId": "thread-error", "runId": "run-error"},
@@ -141,11 +149,17 @@ def _build_handler(agent: FakeLogAnalysisAgent):
             content_length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(content_length))
             instruction, attempt = agent.record(payload)
+            # 只记录Agent用户身份头，不记录应用密钥等其他认证信息。
+            with agent.lock:
+                agent.user_headers.append(self.headers.get("X-BKAIDEV-USER"))
+            truncated = instruction == "truncated-chunked" or (
+                instruction in {"statistics-truncate-once", "analysis-truncate-once"} and attempt == 1
+            )
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Connection", "close")
-            if instruction == "truncated-chunked":
+            if truncated:
                 self.send_header("Transfer-Encoding", "chunked")
             self.end_headers()
             if instruction == "timeout":
@@ -161,12 +175,12 @@ def _build_handler(agent: FakeLogAnalysisAgent):
                 raise TimeoutError("两个用户请求未并发进入 fake Agent")
             for index, event in enumerate(_scenario_events(instruction, attempt)):
                 frame = f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode()
-                if instruction == "truncated-chunked":
+                if truncated:
                     frame = f"{len(frame):X}\r\n".encode() + frame + b"\r\n"
                 self.wfile.write(frame)
                 self.wfile.flush()
                 should_block = (
-                    (instruction == "success" and index == 1)
+                    (instruction in {"success", "statistics-success"} and index == 1)
                     or (instruction in {"run-error", "empty-artifact-eof", "id-mismatch"} and index == 0)
                     or (instruction in {"redelivery", "fencing"} and attempt == 1 and index == 1)
                 )
@@ -175,7 +189,9 @@ def _build_handler(agent: FakeLogAnalysisAgent):
                     self.wfile.flush()
                     agent.mark_started(instruction)
                     agent.wait_until_released(instruction, timeout=20)
-                if instruction == "truncated-chunked" and event["type"] == "TEXT_MESSAGE_END":
+                if (
+                    instruction == "truncated-chunked" or (instruction == "analysis-truncate-once" and attempt == 1)
+                ) and event["type"] == "TEXT_MESSAGE_END":
                     # 等前端收到完整正文后才截断，故意不发送 HTTP 的 0 长度终止块。
                     agent.mark_started(instruction)
                     agent.wait_until_released(instruction, timeout=20)

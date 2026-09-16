@@ -830,22 +830,6 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(updated.title, "第三次")
         self.assertEqual(updated.output_data, {"content": "latest"})
 
-    def test_retry_disabled_capability_preserves_failed_snapshot(self):
-        """禁止手动重试的异步类型不能抢占 task_id、清快照或投递新任务。"""
-        handler = self.register_async_handler()
-        handler.supports_retry = False
-        attachment = self.create_attachment(
-            attachment_type=AttachmentType.AI_ANALYSIS,
-            status=ExecutionStatus.FAILED,
-            task_id="disabled-retry-task",
-        )
-        before = Attachment.objects.values().get(id=attachment.id)
-        with self.captureOnCommitCallbacks(execute=False) as callbacks:
-            with self.assertRaises(InvalidAttachmentState):
-                self.service.retry(attachment_uid=str(attachment.uid))
-        self.assertEqual(callbacks, [])
-        self.assertEqual(Attachment.objects.values().get(id=attachment.id), before)
-
     def test_retry_only_allows_failed_async_and_preserves_snapshots_without_prepare(self):
         handler = self.register_async_handler()
         self.register_sync_handler()

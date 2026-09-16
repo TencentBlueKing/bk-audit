@@ -20,6 +20,10 @@ from services.web.query.ai_assistant.exceptions import (
 )
 from services.web.query.ai_assistant.log_tools.aggregation import LogAggregationService
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
+from services.web.query.ai_assistant.log_tools.schemas import (
+    LOG_TOOL_ALLOWED_FIELD_NAMES,
+    LOG_TOOL_NESTED_FIELD_NAMES,
+)
 from services.web.query.ai_assistant.schemas import Condition, ConditionField
 from tests.base import TestCase
 from tests.test_query.test_ai_assistant.test_log_aggregation_sql import make_request
@@ -332,6 +336,55 @@ class TestLogAggregationService(TestCase):
         result = self._aggregate()
         self.assertEqual(result.rows[0]["average"], 1.5)
         self.mock_permissions.assert_not_called()
+
+    def test_raw_log_authorized_aggregation_returns_complete_response(self):
+        """原始日志通过敏感权限后返回类型、分布及计数，空结果同样可生成列定义。"""
+        sensitive = SensitiveObject.objects.create(
+            name="authorized raw log",
+            system_id="s1",
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "extend_data.secret"}],
+        )
+        self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {str(sensitive.id): True}
+        for empty in (False, True):
+            with self.subTest(empty=empty):
+                data = [row for row in frames() if row["frame"] != "QUALITY"]
+                data[0]["c"] = "0"
+                for row in data:
+                    row.pop("m1", None)
+                if empty:
+                    data = [{"frame": "META", "n": "0", "a": "0", "b": "0", "c": "0", "d": "0", "e": "0"}]
+                self.mock_query.return_value = ({"list": data},)
+                result = self._aggregate(
+                    dimensions=[{"id": "raw", "type": "FIELD", "field": {"raw_name": "log"}}],
+                    metrics=[{"id": "events", "type": "COUNT"}],
+                )
+                self.assertEqual(
+                    result.columns[0].model_dump(mode="json"),
+                    {
+                        "id": "raw",
+                        "name": "raw",
+                        "role": "DIMENSION",
+                        "data_type": "text",
+                        "effective_time_interval": None,
+                    },
+                )
+                self.assertEqual([row["events"] for row in result.rows], [] if empty else [6, 3, 1])
+                self.assertEqual([group.count for group in result.groups], [] if empty else [6, 3, 1])
+                self.assertEqual(result.query_summary.total_count, 0 if empty else 10)
+                self.assertTrue(result.query_summary.complete)
+                self.assertEqual(result.data_quality, ())
+        self.mock_permissions.return_value.get_sensitive_object_permissions.assert_called_with([sensitive.id])
+
+    def test_every_visible_scalar_field_has_a_response_column_type(self):
+        """开放字段必须能构造公开响应，防止目录新增字段后遗漏类型映射。"""
+        for raw_name in sorted(LOG_TOOL_ALLOWED_FIELD_NAMES - LOG_TOOL_NESTED_FIELD_NAMES):
+            with self.subTest(raw_name=raw_name):
+                request = make_request(dimensions=[{"id": "value", "type": "FIELD", "field": {"raw_name": raw_name}}])
+                columns = LogAggregationService._columns(request)
+                self.assertEqual(columns[0].id, "value")
+                self.assertTrue(columns[0].data_type)
 
     def test_raw_log_retains_whole_object_sensitive_protection(self):
         SensitiveObject.objects.create(

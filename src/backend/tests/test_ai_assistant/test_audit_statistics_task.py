@@ -1,4 +1,8 @@
-"""程序统计真实 Task 生命周期；仅替换远端 Doris 和系统元数据依赖。"""
+"""统计 Task 的确定性生命周期回归。
+
+查询上下文及 Doris 响应使用替身，AI 事件通过回调注入；多数用例直接调用 Task。
+程序统计另含真实线程 Worker 重试测试，生产进程和 HTTP 流链路见 special 用例。
+"""
 
 import json
 import os
@@ -45,6 +49,7 @@ from services.web.ai_assistant.services.attachment_stream import AttachmentStrea
 from services.web.ai_assistant.streaming import RedisLiveStore
 from services.web.ai_assistant.tasks.audit_statistics import generate_field_statistics
 from services.web.query.ai_assistant.exceptions import (
+    LogQueryFailed,
     SensitiveFieldPermissionDenied,
     StatisticsBudgetExceeded,
     UnsupportedFieldType,
@@ -244,6 +249,30 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
                 self.assertEqual(
                     invoke_task(generate_field_statistics, attachment=attachment, retries=1), {"status": "SUCCESS"}
                 )
+
+    def test_failed_field_statistics_can_be_manually_retried(self):
+        """真实 Resource 重启失败程序统计，轮换任务并持久化重新计算的完整结果。"""
+        attachment = self.processing()
+        self.remote.side_effect = ValueError("temporary backend failure")
+        with self.assertRaises(LogQueryFailed):
+            invoke_task(generate_field_statistics, attachment=attachment)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "FAILED")
+        old_task_id = attachment.task_id
+        old_context = deepcopy(attachment.context_data)
+        with mock.patch.object(generate_field_statistics, "apply_async") as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = RetryAttachment().request(attachment_uid=str(attachment.uid))
+        self.assertEqual(retried["status"], "PROCESSING")
+        attachment.refresh_from_db()
+        self.assertNotEqual(attachment.task_id, old_task_id)
+        self.assertEqual(attachment.context_data, old_context)
+        dispatch.assert_called_once()
+        self.remote.side_effect = self.query
+        self.assertEqual(invoke_task(generate_field_statistics, attachment=attachment), {"status": "SUCCESS"})
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, "SUCCESS")
+        self.assertEqual(attachment.output_data["statistics_kind"], "CATEGORICAL")
 
     def test_stale_task_contract(self):
         attachment = self.processing()

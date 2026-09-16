@@ -1,7 +1,8 @@
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -46,14 +47,15 @@ class LogAnalysisRedeliveryStack:
     create_attachment: AttachmentFactory
 
 
-def log_analysis_worker_env(agent: FakeLogAnalysisAgent) -> dict[str, str]:
-    """返回生产日志分析 Worker 的专项配置，保证常规与重投用例使用同一参数。"""
+def log_analysis_worker_env(agent: FakeLogAnalysisAgent, *, max_retries: int = 0) -> dict[str, str]:
+    """单执行终态/手动重试场景关闭自动重试，自动重试专项显式开启。"""
 
     return {
         "BKAPP_AI_AUDIT_LOG_ANALYSIS_API_URL": agent.base_url,
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT": "10",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT": "1000/m",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT": "15",
+        "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES": str(max_retries),
     }
 
 
@@ -112,7 +114,7 @@ def using_task_queue(task: Any, queue_name: str) -> Iterator[None]:
 
 
 @pytest.fixture(scope="module")
-def log_analysis_stack(django_db_setup):
+def log_analysis_stack(django_db_setup, request):
     """组合生产日志分析 Task 所需的真实本地组件。"""
 
     from services.web.ai_assistant.constants import AttachmentType
@@ -131,7 +133,7 @@ def log_analysis_stack(django_db_setup):
                     running_worker_process(
                         queue_name=queue_name,
                         include_modules=("services.web.ai_assistant.tasks.audit_analysis",),
-                        extra_env=log_analysis_worker_env(agent),
+                        extra_env=log_analysis_worker_env(agent, max_retries=getattr(request, "param", 0)),
                         enable_special_handlers=False,
                         pool="gevent",
                         concurrency=2,
@@ -199,3 +201,123 @@ def pytest_collection_modifyitems(items):
             continue
         if item.get_closest_marker("special") is None:
             item.add_marker(marker)
+
+
+@pytest.fixture
+def statistics_stack(transactional_db):
+    """每例独立统计进程栈，先退出所有进程再清理流，最后允许测试库 flush。
+
+    显式依赖 transactional_db 保证失败路径的清理发生在数据库夹具回收前。
+    外部 Agent HTTP、Doris 和 IAM 使用确定性边界替身。
+    """
+    # 与既有日志分析栈一致：延迟业务模块导入，避免仅收集special就修改Handler注册表。
+    from services.web.ai_assistant.constants import AttachmentType
+    from services.web.ai_assistant.handlers.audit_statistics import (
+        AIStatisticsAttachmentHandler,
+        FieldStatisticsAttachmentHandler,
+    )
+    from services.web.ai_assistant.handlers.registry import attachment_handler_registry
+    from services.web.ai_assistant.models import Attachment, Conversation, Message
+    from services.web.ai_assistant.services import AttachmentService
+    from services.web.ai_assistant.tasks.audit_statistics import (
+        generate_ai_statistics,
+        generate_field_statistics,
+    )
+    from tests.test_ai_assistant.base import make_condition, make_log_search_output
+    from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
+
+    username = "statistics-e2e-user"
+    queue = prefixed_queue("statistics_e2e")
+    original_handlers = {}
+    for handler in (AIStatisticsAttachmentHandler(), FieldStatisticsAttachmentHandler()):
+        original_handlers[handler.attachment_type] = attachment_handler_registry.unregister(handler.attachment_type)
+        attachment_handler_registry.register(handler)
+
+    def create(kind, instruction=""):
+        """通过生产 Service 创建附件并由提交回调实际投递。"""
+        conversation = Conversation.objects.create(created_by=username, updated_by=username)
+        condition = make_condition()
+        condition.start_time = "2026-09-15T10:00:00+08:00"
+        condition.end_time = "2026-09-15T11:59:59+08:00"
+        output = make_log_search_output().model_dump(mode="json")
+        output["query_summary"]["time_range"] = {
+            "start_time": condition.start_time,
+            "end_time": condition.end_time,
+        }
+        source = Message.objects.create(
+            conversation=conversation,
+            message_type="LOG_SEARCH",
+            status="SUCCESS",
+            created_by=username,
+            updated_by=username,
+            input_data={"condition": condition.model_dump(mode="json")},
+            context_data={
+                "username": username,
+                "namespace": "bkaudit",
+                "system_id": condition.scope_id,
+                "source": "field_condition",
+            },
+            output_data=output,
+        )
+        data = (
+            {"instruction": instruction}
+            if kind == AttachmentType.AI_STATISTICS
+            else {
+                "field": {"raw_name": "extend_data", "keys": ["method"]},
+                "top_n": 1,
+                "interval": "HOUR",
+            }
+        )
+        return AttachmentService(user=username).create(
+            source_message_uid=str(source.uid),
+            attachment_type=kind,
+            input_data=data,
+        )
+
+    try:
+        with ExitStack() as stack:
+            agent = stack.enter_context(running_fake_log_analysis_agent())
+            for task in (generate_ai_statistics, generate_field_statistics):
+                # 测试队列加隔离前缀，实际投递和重试仍由生产 Handler/Task 完成。
+                assert task.queue == "ai_assistant_statistics"
+                stack.enter_context(using_task_queue(task, queue))
+            stack.enter_context(using_test_broker(queue_name=queue))
+            stack.enter_context(
+                running_worker_process(
+                    queue_name=queue,
+                    include_modules=(
+                        "services.web.ai_assistant.tasks.audit_statistics",
+                        "tests.test_ai_assistant.special.statistics_worker_boundary",
+                    ),
+                    extra_env={
+                        "BKAPP_STATISTICS_E2E_BOUNDARY": "1",
+                        "BKAPP_AI_AUDIT_LOG_STATISTICS_API_URL": agent.base_url,
+                        "BKAPP_AI_ASSISTANT_AI_STATISTICS_TASK_RATE_LIMIT": "1000/m",
+                        "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS": "1",
+                        "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS": "1",
+                        "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_TASK_RATE_LIMIT": "1000/m",
+                    },
+                    enable_special_handlers=False,
+                    pool="gevent",
+                    concurrency=2,
+                    log_scene="statistics-e2e",
+                )
+            )
+            web_url = stack.enter_context(running_gunicorn_web(username=username))
+            # 即使断言提前失败，也先解除HTTP替身阻塞；ExitStack随后回收Web和Worker进程。
+            stack.callback(agent.release, "statistics-success")
+            yield SimpleNamespace(username=username, web_url=web_url, queue_name=queue, agent=agent, create=create)
+    finally:
+        try:
+            # ExitStack已经wait/terminate/kill并回收Worker，之后不会继续写DB或重建Redis流。
+            leftovers = delete_attachment_stream_keys(
+                attachment_uids=Attachment.objects.filter(created_by=username, is_stream=True).values_list(
+                    "uid", flat=True
+                )
+            )
+            assert not leftovers, f"统计专项Redis流残留: {leftovers}"
+        finally:
+            for kind, original in original_handlers.items():
+                attachment_handler_registry.unregister(kind)
+                if original is not None:
+                    attachment_handler_registry.register(original)

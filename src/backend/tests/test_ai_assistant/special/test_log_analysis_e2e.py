@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 import requests
 from django.conf import settings
+from django.test import override_settings
 
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import ExecutionStatus, PlatformStreamEvent
@@ -24,6 +25,49 @@ from tests.test_ai_assistant.special.process_worker import (
 from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
 
 pytestmark = pytest.mark.django_db(transaction=True, reset_sequences=True)
+
+
+@pytest.mark.parametrize("log_analysis_stack", [1], indirect=True)
+def test_log_analysis_http_truncation_automatically_retries(log_analysis_stack):
+    """真实HTTP截断重试保留task ID，换流后只采纳第二次完整产物。"""
+    stack = log_analysis_stack
+    attachment = stack.create_attachment(user=stack.username, instruction="analysis-truncate-once")
+    stack.agent.wait_until_started("analysis-truncate-once", timeout=settings.CELERY_TEST_TASK_TIMEOUT)
+    started = wait_for_snapshot(
+        model=Attachment, instance_id=attachment.id, predicate=lambda value: bool(value.stream_config)
+    )
+    old_config = parse_stream_config(started.stream_config)
+    observe_process_task_postrun(attachment.task_id)
+    try:
+        stack.agent.release("analysis-truncate-once")
+        # 保留生产30秒随机退避；仅扩大测试等待预算，避免正好30秒时误判超时。
+        with override_settings(CELERY_TEST_TASK_TIMEOUT=60):
+            completed = wait_for_terminal(attachment)
+            states = wait_for_process_task_postrun(task_id=attachment.task_id, expected_count=2)
+        # retry先发布消息再退出；零秒jitter下另一greenlet可先完成，postrun不保证顺序。
+        assert sorted(states) == ["RETRY", "SUCCESS"]
+        assert completed.status == ExecutionStatus.SUCCESS
+        assert completed.task_id == attachment.task_id
+        assert completed.output_data == {"markdown": "# 自动重试结论"}
+        new_config = parse_stream_config(completed.stream_config)
+        assert new_config.execution_id != old_config.execution_id
+        assert new_config.redis_key != old_config.redis_key
+        requests_for_test = [
+            item
+            for item in stack.agent.requests
+            if json.loads(item["chat_history"][-1]["content"])["instruction"] == "analysis-truncate-once"
+        ]
+        assert len(requests_for_test) == 2
+        assert [item["execute_kwargs"]["thread_id"] for item in requests_for_test] == [
+            str(old_config.execution_id),
+            str(new_config.execution_id),
+        ]
+        assert "首轮不可采纳" not in json.dumps(completed.stream_archive, ensure_ascii=False)
+        old_events = RedisLiveStore().read(redis_key=old_config.redis_key, after_id="0-0", block_ms=1).events
+        assert any(event.event == PlatformStreamEvent.STREAM_RESET for event in old_events)
+    finally:
+        stack.agent.release("analysis-truncate-once")
+        clear_process_task_postrun(attachment.task_id)
 
 
 def attachment_service(user: str):

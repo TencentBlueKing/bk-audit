@@ -8,7 +8,6 @@ from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
     AttachmentSnapshotValidationError,
     InvalidAttachmentSource,
-    InvalidAttachmentState,
 )
 from services.web.ai_assistant.handlers.audit_statistics import (
     AIStatisticsAttachmentHandler,
@@ -59,7 +58,6 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
         attachment = Attachment.objects.get(uid=created["uid"])
         self.assertEqual(created["status"], "PROCESSING")
         self.assertFalse(created["is_stream"])
-        self.assertFalse(created["supports_retry"])
         self.assertFalse(created["supports_feedback"])
         self.assertEqual(created["export_formats"], [])
         self.assertFalse(self.handler.supports_output_edit())
@@ -108,14 +106,16 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
                 input_data=FieldStatisticsAttachmentInput(field={"raw_name": "username"}),
             )
 
-    def test_failed_generation_creates_new_attachment_and_cannot_retry(self):
+    def test_failed_generation_can_retry_original_or_create_new_attachment(self):
+        """手动重试保留原附件身份，重新创建仍产生独立历史。"""
         first = self.create()
         Attachment.objects.filter(uid=first["uid"]).update(status=ExecutionStatus.FAILED)
-        with self.assertRaises(InvalidAttachmentState):
-            RetryAttachment().request(attachment_uid=first["uid"])
+        with self.captureOnCommitCallbacks(execute=True):
+            retried = RetryAttachment().request(attachment_uid=first["uid"])
+        self.assertEqual(retried["uid"], first["uid"])
+        self.assertEqual(retried["status"], "PROCESSING")
         second = self.create()
         self.assertNotEqual(first["uid"], second["uid"])
-        self.assertEqual(GetAttachment().request(attachment_uid=first["uid"])["status"], "FAILED")
 
     def test_clear_and_delete_remove_visibility_and_reject_source(self):
         for action in ("clear", "delete"):
@@ -165,7 +165,6 @@ class AIStatisticsHandlerTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase
         attachment = Attachment.objects.get(uid=created["uid"])
         self.assertEqual(created["status"], "PROCESSING")
         self.assertTrue(created["is_stream"])
-        self.assertTrue(created["supports_retry"])
         self.assertTrue(created["supports_feedback"])
         self.assertEqual(created["export_formats"], [])
         self.assertFalse(self.handler.supports_output_edit())

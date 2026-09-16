@@ -344,12 +344,10 @@ class AttachmentService:
         return attachment
 
     def retry(self, *, attachment_uid: str) -> Attachment:
-        """仅显式开放能力的 FAILED + ASYNC 附件允许重试，用旧 task_id 做 CAS 抢占。"""
+        """所有 FAILED + ASYNC 附件均允许重试，用旧 task_id 做 CAS 抢占。"""
 
         attachment = self.get(attachment_uid=attachment_uid)
         handler = attachment_handler_registry.require(attachment.attachment_type)
-        if not handler.supports_retry:
-            raise InvalidAttachmentState()
         if (
             attachment.status != ExecutionStatus.FAILED
             or handler.execution_mode != ExecutionMode.ASYNC

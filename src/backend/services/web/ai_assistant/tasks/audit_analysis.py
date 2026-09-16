@@ -29,7 +29,6 @@ from services.web.ai_assistant.constants import (
     LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS,
     LOG_ANALYSIS_RETRY_DELAY_SECONDS,
     AttachmentType,
-    ExecutionStatus,
 )
 from services.web.ai_assistant.exceptions import (
     AttachmentOutputValidationError,
@@ -38,7 +37,7 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.log_analysis_artifact import LogAnalysisArtifactExtractor
 from services.web.ai_assistant.models import Attachment
-from services.web.ai_assistant.schemas import SnapshotInput, parse_snapshot
+from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisContextSchema,
     AIAnalysisOutputSchema,
@@ -157,21 +156,6 @@ class LogAnalysisExecutionTask(AttachmentExecutionTask):
         if attachment_id is not None:
             _dispatch_log_analysis_title(attachment_id=attachment_id)
         return result
-
-    def _finish_success(
-        self,
-        *,
-        execution: AttachmentExecution,
-        task_id: str,
-        output_data: SnapshotInput,
-    ) -> dict[str, Any]:
-        super()._finish_success(
-            execution=execution,
-            task_id=task_id,
-            output_data=output_data,
-        )
-        # Celery task-succeeded 事件会携带返回值；正文只允许保存在 Attachment 快照。
-        return {"status": ExecutionStatus.SUCCESS}
 
 
 @celery_app.task(

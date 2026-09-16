@@ -111,6 +111,23 @@ class AIAnalysisSchemaTest(SimpleTestCase):
             assert set(output["properties"]) == {"content"}
             assert output["properties"]["content"]["type"] == "string"
             assert output["required"] == ["content"]
+            assert output["properties"]["content"]["description"]
+            statistics = components["FieldStatisticsAttachmentOutput"]["properties"]
+            for name, model in {
+                "field": "StatisticsField", "overview": "FieldStatisticsOverview",
+                "distribution": "FieldDistribution", "time_series": "FieldTimeSeries",
+                "query_summary": "AggregationQuerySummary",
+            }.items():
+                assert statistics[name]["$ref"] == "#/components/schemas/" + model
+                assert statistics[name]["description"]
+                assert components[model]["properties"]
+            groups = components["FieldDistribution"]["properties"]["groups"]
+            assert groups["items"]["$ref"] == "#/components/schemas/FieldDistributionGroup"
+            assert components["FieldDistributionGroup"]["properties"]["ratio"]["description"]
+            assert components["FieldCountSeries"]["properties"]["counts"]["items"]["type"] == "integer"
+            field_input = components["FieldStatisticsAttachmentInputRequest"]["properties"]
+            assert field_input["field"]["$ref"] == "#/components/schemas/LogFieldRef"
+            assert field_input["top_n"]["description"]
             assert set(components["AIStatisticsAttachmentInputRequest"]["properties"]) == {"instruction"}
             assert components["EditableAIAttachmentOutputDataRequest"]["oneOf"] == [
                 {"$ref": "#/components/schemas/AIAnalysisOutputSchemaRequest"}

@@ -403,7 +403,6 @@ def execute_real_attachment_http_fail_once(self, execution):
 
 class RealAttachmentHttpFailOnceHandler(RealAttachmentSuccessHandler):
     # 该测试替身验证用户手动重试，须显式开放业务能力。
-    supports_retry = True
     async_task = execute_real_attachment_http_fail_once
 
 

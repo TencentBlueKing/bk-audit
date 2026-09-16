@@ -44,7 +44,7 @@ class FieldStatisticsAttachmentHandler(
         FieldStatisticsAttachmentInput, FieldStatisticsAttachmentContext, FieldStatisticsAttachmentOutput
     ]
 ):
-    """完整来源范围上的固定统计包；失败后生成新附件，不开放手动原对象重试。"""
+    """完整来源范围上的固定统计包；失败后可原对象手动重试，再次生成则创建新附件。"""
 
     attachment_type = AttachmentType.FIELD_STATISTICS
     execution_mode = ExecutionMode.ASYNC
@@ -95,7 +95,6 @@ class AIStatisticsAttachmentHandler(
     output_model = AIStatisticsAttachmentOutput
     async_task = generate_ai_statistics
     is_stream = True
-    supports_retry = True
     supports_feedback = True
 
     def prepare(self, *, user: str, source_message: Message, input_data: AIStatisticsAttachmentInput):

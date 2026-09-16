@@ -197,6 +197,12 @@ class SystemInitAssetTests(TestCase):
 
 @override_settings(BKAPP_INIT_SYSTEM="True")
 class SystemInitRuleAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        """显式准备默认场景，不依赖复用测试库残留的数据迁移结果。"""
+        super().setUpTestData()
+        Scene.objects.get_or_create(name=DEFAULT_SCENE_NAME)
+
     def setUp(self):
         super().setUp()
         self.handler = SystemInitHandler()

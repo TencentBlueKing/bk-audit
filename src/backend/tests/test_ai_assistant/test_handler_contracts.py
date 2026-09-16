@@ -1,13 +1,9 @@
 from unittest import mock
 
-from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from services.web.ai_assistant.constants import AttachmentType, MessageType
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.handlers.attachment import AttachmentTypeHandler
-from services.web.ai_assistant.handlers.audit_analysis import AIAnalysisHandler
-from services.web.ai_assistant.handlers.registry import AttachmentHandlerRegistry
 from tests.test_ai_assistant.handler_contracts import (
     HandlerContractSpec,
     validate_handler_contracts,
@@ -133,28 +129,16 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
                 attachment_handler_registry.register(original)
 
 
-class AttachmentRetryCapabilityTest(SimpleTestCase):
-    """手动重试必须由附件类型显式声明，错误布尔值在注册阶段失败。"""
+class AttachmentStatisticsCapabilityTest(SimpleTestCase):
+    """统计附件保留流和反馈的业务差异，重试由平台统一处理。"""
 
     def test_production_statistics_capabilities_remain_independent(self):
-        """生产注册必须显式区分两类统计的流、重试和反馈能力。"""
+        """生产注册区分两类统计的流与反馈能力。"""
         handlers = captured_attachment_handlers()
         field = handlers[AttachmentType.FIELD_STATISTICS]
         ai = handlers[AttachmentType.AI_STATISTICS]
-        self.assertEqual((field.is_stream, field.supports_retry, field.supports_feedback), (False, False, False))
-        self.assertEqual((ai.is_stream, ai.supports_retry, ai.supports_feedback), (True, True, True))
+        self.assertEqual((field.is_stream, field.supports_feedback), (False, False))
+        self.assertEqual((ai.is_stream, ai.supports_feedback), (True, True))
         for handler in (field, ai):
             self.assertFalse(handler.supports_output_edit())
             self.assertEqual(handler.export_formats, ())
-
-    def test_retry_defaults_closed_and_analysis_keeps_retry(self):
-        self.assertIs(getattr(AttachmentTypeHandler, "supports_retry", None), False)
-        self.assertIs(getattr(AIAnalysisHandler(), "supports_retry", None), True)
-
-    def test_registry_rejects_non_boolean_retry_capability(self):
-        for value in (None, 1, "false"):
-            with self.subTest(value=value):
-                handler = EchoAttachmentSyncHandler()
-                handler.supports_retry = value
-                with self.assertRaisesRegex(ImproperlyConfigured, "supports_retry"):
-                    AttachmentHandlerRegistry().register(handler)

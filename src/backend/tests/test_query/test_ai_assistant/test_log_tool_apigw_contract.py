@@ -415,6 +415,15 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         dynamic_request = operation["requestBody"]["content"]["application/json"]["schema"]
         dynamic_response = operation["responses"]["200"]["content"]["application/json"]["schema"]
 
+        request_properties = dynamic_request["properties"]
+        condition = request_properties["condition"]["properties"]
+        self.assertTrue(condition["scope_id"]["description"])
+        self.assertTrue(condition["conditions"]["items"]["properties"]["operator"]["description"])
+        data = dynamic_response["properties"]["data"]["properties"]
+        self.assertTrue(data["query_summary"]["properties"]["timezone"]["description"])
+        self.assertTrue(data["groups"]["items"]["properties"]["ratio"]["description"])
+        self.assertIn("DISTINCT_COUNT", data["rows"]["description"])
+
         def normalize(value):
             """忽略显示标题与两版本 nullable 名称，保留全部验证关键字。"""
             if isinstance(value, list):

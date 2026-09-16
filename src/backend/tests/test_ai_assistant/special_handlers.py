@@ -241,7 +241,6 @@ def execute_special_retry_race(self, execution):
 
 class SpecialRetryRaceHandler(SpecialRedisDegradedHandler):
     # 该测试替身验证用户手动重试，须显式开放业务能力。
-    supports_retry = True
     async_task = execute_special_retry_race
 
 
