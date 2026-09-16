@@ -141,6 +141,7 @@ export default {
     业务资产: 'Business asset',
     内置资产: 'Built-in asset',
     调度周期不能为空: 'Scheduling cycle cannot be empty',
+    请输入大于等于1的整数: 'Please enter an integer greater than or equal to 1',
     停用策略确认: 'Confirmation to disable strategy',
     启动策略确认: 'Confirmation to start strategy',
     '策略停用后对应风险可能无法及时发现，请确认是否停用': 'Disabling the strategy may result in delayed detection of corresponding risks. Please confirm whether to disable',

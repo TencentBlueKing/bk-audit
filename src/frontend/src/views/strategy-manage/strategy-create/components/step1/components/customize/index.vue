@@ -265,7 +265,7 @@
                 :clearable="false"
                 style="width: 68px">
                 <bk-option
-                  v-for="(item, index) in commonData.offset_unit"
+                  v-for="(item, index) in schedulePeriodOptions"
                   :key="index"
                   :label="item.label"
                   :value="item.value" />
@@ -320,6 +320,7 @@
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
   import {
+    applyScheduleConfigForSubmit,
     enrichFieldDisplayNames,
     excludeHavingFromWhere,
     formatFieldDisplayLabel,
@@ -602,6 +603,17 @@
       // 获取到数据源类别后，获取所有tableid
       getAllConfigTypeTable();
     },
+  });
+
+  const schedulePeriodOptions = computed(() => {
+    const list = (commonData.value.offset_unit || []).filter(item => (
+      item.value === 'hour' || item.value === 'day'
+    ));
+    if (list.length) return list;
+    return [
+      { label: t('小时'), value: 'hour' },
+      { label: t('天'), value: 'day' },
+    ];
   });
 
   // 获取tableid
@@ -1802,6 +1814,9 @@
         && lastScheduleConfig.value.count_freq
       ) {
         params.configs.schedule_config = { ...lastScheduleConfig.value };
+      }
+      if (!options?.forValidate) {
+        params.configs = applyScheduleConfigForSubmit(params.configs) ?? params.configs;
       }
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {

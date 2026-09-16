@@ -391,6 +391,7 @@
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
   import {
+    applyScheduleConfigForSubmit,
     excludeHavingFromWhere,
     hasFilledWhereConditions,
     normalizeWhereHaving,
@@ -855,7 +856,7 @@
     if (!fieldsConfigs.schedule_config?.count_freq && parent.schedule_config) {
       merged.schedule_config = parent.schedule_config;
     }
-    return merged;
+    return applyScheduleConfigForSubmit(merged) ?? merged;
   };
 
   const buildStepParams = () => {
@@ -912,13 +913,14 @@
     };
     delete topConfigs.where;
     delete topConfigs.having;
+    const nextTopConfigs = applyScheduleConfigForSubmit(topConfigs) ?? topConfigs;
     return {
       ...baseFormData,
       risk_title: firstRule.risk_title ?? baseFormData.risk_title ?? '',
       risk_level: firstRule.risk_level ?? baseFormData.risk_level ?? 'HIGH',
       risk_hazard: firstRule.risk_hazard ?? baseFormData.risk_hazard ?? '',
       risk_guidance: firstRule.risk_guidance ?? baseFormData.risk_guidance ?? '',
-      configs: topConfigs,
+      configs: nextTopConfigs,
       rules,
     };
   };

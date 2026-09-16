@@ -260,6 +260,43 @@ export const formatHitConditionFieldLabel = (
   return `[${label}] ${base}`;
 };
 
+export const SCHEDULE_PERIOD_VALUES = ['hour', 'day'] as const;
+
+export type SchedulePeriod = typeof SCHEDULE_PERIOD_VALUES[number];
+
+export const isSchedulePeriod = (value: unknown): value is SchedulePeriod => (
+  value === 'hour' || value === 'day'
+);
+
+export const parseScheduleCountFreq = (value: unknown): number | null => {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1) return null;
+  return num;
+};
+
+/** 实时调度不传 schedule_config；固定调度传整数 count_freq 与 hour/day */
+export const applyScheduleConfigForSubmit = <T extends Record<string, any>>(
+  configs?: T | null,
+): T | undefined => {
+  if (!configs) return configs ?? undefined;
+  if (configs.data_source?.source_type !== 'batch_join_source') {
+    const next = { ...configs };
+    delete next.schedule_config;
+    return next;
+  }
+  const current = configs.schedule_config || {};
+  const countFreq = parseScheduleCountFreq(current.count_freq);
+  return {
+    ...configs,
+    schedule_config: {
+      count_freq: countFreq ?? current.count_freq,
+      schedule_period: isSchedulePeriod(current.schedule_period)
+        ? current.schedule_period
+        : 'hour',
+    },
+  };
+};
+
 const normalizeFieldAggregate = (value: unknown) => (
   value === '' || value === undefined ? null : value
 );
@@ -845,9 +882,7 @@ export const buildStrategySelectFieldOptions = (
 
 type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
-export const isEmptyDispatchConditions = (
-  conditions: Record<string, any> | null | undefined,
-): boolean => {
+export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined): boolean => {
   if (!conditions) return true;
   try {
     if (isWhereHavingConditions(conditions)) {
