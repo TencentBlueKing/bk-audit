@@ -3,13 +3,11 @@
     ref="selectRef"
     v-model="selectedValue"
     :auto-height="false"
-    collapse-tags
     custom-content
     display-key="name"
     filterable
     id-key="id"
     :loading="isListLoading"
-    multiple
     :popover-options="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select', placement: 'top-start' }"
     @search-change="handleSearch"
     @toggle="handleToggle">
@@ -239,7 +237,7 @@
   import useRequest from '@hooks/use-request';
 
   import { isStrategyEditRoute } from '../../../../../../../../utils/strategy-routes';
-  import { formatFieldDisplayLabel } from '../../../../../../../utils/strategy-protocol';
+  import { formatFieldDisplayLabel, formatHitConditionFieldLabel } from '../../../../../../../utils/strategy-protocol';
 
 
   interface Emits {
@@ -304,7 +302,7 @@
     val.field_type = val.spec_field_type;
   };
   const treeRef = ref();
-  const selectedValue = ref();
+  const selectedValue = ref('');
   const selectRef = ref(null);
 
   const buildTreeData = (configData: any[]) => {
@@ -452,8 +450,12 @@
   // 选择
   const handleNodeClick = (nodes: Record<string, any>) => {
     if (!nodes.isEdit) {
-      selectedValue.value = 'self_name' in nodes ? `${nodes.self_name}/${nodes.self_key_name}` : nodes.selectedValue;
-      emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
+      const label = 'self_name' in nodes
+        ? `${nodes.self_name}/${nodes.self_key_name}`
+        : formatHitConditionFieldLabel(nodes, props.aggregateList);
+      selectedValue.value = label;
+      emits('handleNodeSelectedValue', nodes, label);
+      (selectRef.value as { hidePopover?: () => void } | null)?.hidePopover?.();
     }
   };
 
@@ -497,7 +499,7 @@
         isEdit: false,
         selectedValue: ('alias' in item)
           ? `${JSON.stringify(item.display_name)}()`
-          : formatFieldDisplayLabel(item.display_name, item.raw_name),
+          : formatHitConditionFieldLabel(item, props.aggregateList),
         children: transformData(item.property.sub_keys).map(child => ({
           ...child,
           raw_name: item.raw_name,
@@ -516,7 +518,7 @@
       keys: 'alias' in item ? [item.value] : (item.keys || []),
       selectedValue: ('alias' in item)
         ? `${item.label}(${item.value})`
-        : formatFieldDisplayLabel(item.display_name, item.raw_name),
+        : formatHitConditionFieldLabel(item, props.aggregateList),
       children: [],
       display_name: 'alias' in item ? item.label : item.display_name,
       raw_name: item.raw_name,
@@ -543,10 +545,11 @@
     } else if (field?.raw_name) {
       const matched = (props.configData || []).find((item: Record<string, any>) => (
         item.raw_name === field.raw_name
+        && (item.aggregate || null) === (field.aggregate || null)
       ));
-      selectedValue.value = formatFieldDisplayLabel(
-        matched?.display_name || field.display_name,
-        field.raw_name,
+      selectedValue.value = formatHitConditionFieldLabel(
+        matched || field,
+        props.aggregateList,
       );
     } else {
       selectedValue.value = field?.display_name || '';
