@@ -51,37 +51,49 @@ class SensitiveLogFieldPermissionService:
     def ensure_access(cls, *, username: str, system_id: str, fields: set[str]) -> None:
         """拒绝命中私密字段、无权敏感字段或可能包含这些字段的原始日志。"""
 
+        if not all(cls.get_access(username=username, system_id=system_id, fields=fields).values()):
+            raise SensitiveFieldPermissionDenied()
+
+    @classmethod
+    def get_access(cls, *, username: str, system_id: str, fields: set[str]) -> dict[str, bool]:
+        """批量返回字段可读性，一次请求内共用规则和权限快照。
+
+        Args:
+            username: 认证链取得的用户。
+            system_id: 实际查询系统。
+            fields: 完整字段路径集合，保留原始路径段。
+        Returns:
+            每条请求路径的可读状态；私密规则无条件拒绝。
+        """
         if not fields:
-            return
-        # 必须使用 _objects：objects 会排除私密规则，导致条件或聚合绕过私密字段限制。
+            return {}
+        # _objects 包含私密规则；不能使用会排除私密字段的 objects。
         sensitive_objects = list(
             SensitiveObject._objects.filter(
                 Q(system_id=system_id)
                 | Q(system_id=SensitiveUserData.SYSTEM_ID, resource_id=SensitiveUserData.RESOURCE_ID)
             )
         )
-        # log 是整条原始日志的文本副本，可能包含任意受保护字段。只要当前系统存在
-        # 调用者无权读取的敏感规则，就不能允许使用 log 条件探测命中数量。
-        contains_raw_log = LOG.field_name in fields
-        matched = [
-            sensitive_object
-            for sensitive_object in sensitive_objects
-            if contains_raw_log
-            or any(
-                cls._field_paths_overlap(sensitive_path, requested_path)
-                for sensitive_path in cls._sensitive_field_names(sensitive_object)
-                for requested_path in fields
-            )
-        ]
-        if any(item.is_private for item in matched):
-            raise SensitiveFieldPermissionDenied()
-        if not matched:
-            return
-        permissions = PermissionService(username=username).get_sensitive_object_permissions(
-            [item.id for item in matched]
+        matched_by_path = {
+            path: [
+                rule
+                for rule in sensitive_objects
+                if path == LOG.field_name
+                or any(
+                    cls._field_paths_overlap(sensitive_path, path)
+                    for sensitive_path in cls._sensitive_field_names(rule)
+                )
+            ]
+            for path in fields
+        }
+        rule_ids = sorted({rule.id for rules in matched_by_path.values() for rule in rules if not rule.is_private})
+        permissions = (
+            PermissionService(username=username).get_sensitive_object_permissions(rule_ids) if rule_ids else {}
         )
-        if any(not permissions.get(str(item.id), False) for item in matched):
-            raise SensitiveFieldPermissionDenied()
+        return {
+            path: all(not rule.is_private and permissions.get(str(rule.id), False) for rule in rules)
+            for path, rules in matched_by_path.items()
+        }
 
     @staticmethod
     def collect_field_paths(fields: Iterable[_FieldPathRef | None]) -> set[str]:

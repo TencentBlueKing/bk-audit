@@ -79,6 +79,50 @@ class TestSensitiveQueryFields(AIAssistantTestCase):
         )
 
 
+class TestStatisticsFieldPermissions(AIAssistantTestCase):
+    """目录权限批量读取一次规则与 IAM，逐路径保留重叠语义。"""
+
+    def test_batch_access_handles_independent_paths_private_overlap_and_raw_log(self):
+        rules = [
+            SensitiveObject(id=1, fields=[{"field_name": "extend_data.secret"}]),
+            SensitiveObject(id=2, fields=[{"field_name": "extend_data.allowed"}]),
+            SensitiveObject(id=3, is_private=True, fields=[{"field_name": "extend_data.private"}]),
+        ]
+        paths = {
+            "username",
+            "extend_data.secret",
+            "extend_data.secret.child",
+            "extend_data",
+            "extend_data.allowed",
+            "extend_data.private",
+            "log",
+        }
+        with mock.patch.object(
+            SensitiveObject._objects, "filter", return_value=rules
+        ) as rules_query, mock.patch.object(
+            sensitive.PermissionService, "get_sensitive_object_permissions", return_value={"1": False, "2": True}
+        ) as permissions:
+            self.assertTrue(hasattr(sensitive.SensitiveLogFieldPermissionService, "get_access"))
+            result = sensitive.SensitiveLogFieldPermissionService.get_access(
+                username=self.username, system_id=self.target_system_id, fields=paths
+            )
+        self.assertEqual(
+            result,
+            {
+                "username": True,
+                "extend_data.secret": False,
+                "extend_data.secret.child": False,
+                "extend_data": False,
+                "extend_data.allowed": True,
+                "extend_data.private": False,
+                "log": False,
+            },
+        )
+        self.assertEqual(rules_query.call_count, 1)
+        self.assertEqual(permissions.call_count, 1)
+        self.assertEqual(set(permissions.call_args.args[0]), {1, 2})
+
+
 class TestLogFieldMetadataService(AIAssistantTestCase):
     """字段探索只基于已授权、脱敏后的受控样本。"""
 
@@ -149,12 +193,91 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             mock.patch(f"{FIELD_METADATA_MODULE}.SensitiveLogFieldPermissionService.ensure_access")
         )
 
+        self.mock_catalog_access = self.enterContext(
+            mock.patch(
+                f"{FIELD_METADATA_MODULE}.SensitiveLogFieldPermissionService.get_access",
+                side_effect=lambda **kwargs: {path: True for path in kwargs["fields"]},
+            )
+        )
+
     def _get_metadata(self, **kwargs):
         return LogFieldMetadataService.get_metadata(
             username=self.username,
             namespace=self.namespace,
             request=GetLogFieldMetadataRequest(condition=self.condition, **kwargs),
         )
+
+    def test_statistics_capabilities_follow_declared_and_observed_types(self):
+        """数字混合保持数值，类别混合降级，容器和未知值不宣称直接支持。"""
+        rows = [
+            {"extend_data": {"numeric": 1, "mixed": 1, "boolean": True, "object": {}, "array": [], "null": None}},
+            {"extend_data": {"numeric": 1.5, "mixed": "1", "boolean": False, "object": 2, "array": "x"}},
+        ]
+        self.mock_parser.return_value.parse_data.return_value = rows
+        fields = {
+            item.field.keys[-1]: item.model_dump(mode="json")
+            for item in self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data")).fields
+        }
+        for name, kind, reason, metrics in (
+            ("numeric", "NUMERIC", None, ["COUNT", "DISTINCT_COUNT", "MIN", "MAX", "AVG", "SUM", "PERCENTILE_APPROX"]),
+            ("mixed", "CATEGORICAL", None, ["COUNT", "DISTINCT_COUNT"]),
+            ("boolean", "CATEGORICAL", None, ["COUNT", "DISTINCT_COUNT"]),
+            ("object", None, "OBJECT", []),
+            ("array", None, "ARRAY", []),
+            ("null", None, "UNKNOWN_TYPE", []),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    {
+                        key: fields[name].get(key)
+                        for key in ("statistics_supported", "statistics_kind", "unsupported_reason", "allowed_metrics")
+                    },
+                    {
+                        "statistics_supported": kind is not None,
+                        "statistics_kind": kind,
+                        "unsupported_reason": reason,
+                        "allowed_metrics": metrics,
+                    },
+                )
+        roots = {item.field.raw_name: item.model_dump(mode="json") for item in self._get_metadata().fields}
+        self.assertEqual(roots["start_time"].get("statistics_kind"), "NUMERIC")
+        self.assertEqual(roots["username"].get("statistics_kind"), "CATEGORICAL")
+        self.assertFalse(roots["extend_data"].get("statistics_supported", True))
+
+    def test_unauthorized_catalog_field_has_no_samples_or_statistics(self):
+        """即使脱敏留下遮罩值，也不能把无权字段当成可统计类别。"""
+        self.mock_catalog_access.side_effect = lambda **kwargs: {
+            path: path != "extend_data.region" for path in kwargs["fields"]
+        }
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
+        region = next(item.model_dump(mode="json") for item in result.fields if item.field.keys == ["region"])
+        self.assertEqual(region["sample_values"], [])
+        self.assertEqual(region.get("unsupported_reason"), "PERMISSION_DENIED")
+        self.assertFalse(region.get("statistics_supported", True))
+        self.assertEqual(region.get("allowed_metrics"), [])
+
+    def test_catalog_permission_failure_is_mapped_without_infrastructure_details(self):
+        """目录新增权限调用失败仍使用工具统一异常。"""
+        self.mock_catalog_access.side_effect = RuntimeError("SELECT sensitive FROM rules")
+        with self.assertRaises(LogQueryFailed) as raised:
+            self._get_metadata()
+        self.assertNotIn("SELECT sensitive", str(raised.exception))
+
+    def test_denied_root_does_not_expose_enum_options(self):
+        """根字段的枚举选项同样是受保护值。"""
+        item = LogFieldMetadataItem(
+            field=LogFieldRef(raw_name="username"),
+            category="BASIC",
+            type_source="DECLARED",
+            options=[{"id": "secret-id", "name": "secret-label"}],
+            statistics_supported=True,
+            statistics_kind="CATEGORICAL",
+        )
+        self.mock_catalog_access.side_effect = lambda **kwargs: {path: False for path in kwargs["fields"]}
+        with mock.patch.object(LogFieldMetadataService, "_build_basic_fields", return_value=[item]):
+            result = self._get_metadata()
+        self.assertIsNone(result.fields[0].options)
+        self.assertNotIn("secret", result.model_dump_json())
 
     def test_extended_fields_are_inferred_one_level_only_after_desensitization(self):
         result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))

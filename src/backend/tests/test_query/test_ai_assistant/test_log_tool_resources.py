@@ -45,7 +45,9 @@ from services.web.query.ai_assistant.serializers import (
     GetLogFieldMetadataRequestSerializer,
     SearchLogsRequestSerializer,
 )
+from services.web.query.mcp_views import MCPUserLogViewSet
 from services.web.query.resources.ai_assistant import MCPSearchLogs
+from services.web.query.views import CollectorQueryViewSet
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 
@@ -274,6 +276,10 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     category="EXTENDED",
                     type_source="INFERRED",
                     description="",
+                    statistics_supported=True,
+                    statistics_kind="NUMERIC",
+                    unsupported_reason=None,
+                    allowed_metrics=["COUNT", "DISTINCT_COUNT", "MIN", "MAX", "AVG", "SUM", "PERCENTILE_APPROX"],
                 )
             ],
             sample_summary=FieldSampleSummary(),
@@ -293,9 +299,20 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertEqual(service.call_args.kwargs["username"], "alice")
         self.assertEqual(service.call_args.kwargs["namespace"], "default")
         self.assertEqual(response, response_model.model_dump(mode="json"))
+        self.assertEqual(
+            {
+                name: response["fields"][0][name]
+                for name in ("statistics_supported", "statistics_kind", "unsupported_reason", "allowed_metrics")
+            },
+            {
+                "statistics_supported": True,
+                "statistics_kind": "NUMERIC",
+                "unsupported_reason": None,
+                "allowed_metrics": ["COUNT", "DISTINCT_COUNT", "MIN", "MAX", "AVG", "SUM", "PERCENTILE_APPROX"],
+            },
+        )
 
     def test_search_uses_request_user_and_path_namespace(self):
-        from services.web.query.resources.ai_assistant import MCPSearchLogs
 
         response_model = SearchLogsResponse(
             columns=[
@@ -387,6 +404,38 @@ class TestMCPUserLogResources(AIAssistantTestCase):
             },
         )
         query.assert_not_called()
+
+    def test_web_field_metadata_shares_resource_and_rejects_body_namespace(self):
+        """普通 Web 入口复用字段 Resource，且不能通过 body 覆盖 URL namespace。"""
+        web_route = next(
+            (route for route in CollectorQueryViewSet.resource_routes if route.endpoint == "field_metadata"), None
+        )
+        self.assertIsNotNone(web_route)
+        mcp_route = next(route for route in MCPUserLogViewSet.resource_routes if route.endpoint == "field_metadata")
+        self.assertIs(web_route.resource_class, mcp_route.resource_class)
+        self.assertFalse(
+            any(isinstance(permission, UserAPIGWPermission) for permission in CollectorQueryViewSet().get_permissions())
+        )
+        for extra, status in (({}, 200), ({"namespace": "forged-ns"}, 400), ({"namespace": "path-ns"}, 400)):
+            with self.subTest(extra=extra):
+                request = APIRequestFactory().post(
+                    "/", {"condition": self.condition.model_dump(mode="json"), **extra}, format="json"
+                )
+                force_authenticate(request, user=type("User", (), {"username": "web-user", "is_authenticated": True})())
+                view = resolve("/api/v1/query/namespaces/path-ns/collector_query/field_metadata/").func
+                with mock.patch(
+                    "query.resources.ai_assistant.get_request_username", return_value="web-user"
+                ), mock.patch(
+                    "services.web.query.ai_assistant.log_tools.field_metadata.LogFieldMetadataService.get_metadata",
+                    return_value=GetLogFieldMetadataResponse(sample_summary=FieldSampleSummary()),
+                ) as service:
+                    response = view(request, namespace="path-ns")
+                self.assertEqual(response.status_code, status, response.data)
+                if status == 200:
+                    self.assertEqual(service.call_args.kwargs["namespace"], "path-ns")
+                    self.assertEqual(service.call_args.kwargs["username"], "web-user")
+                else:
+                    service.assert_not_called()
 
     def test_aggregate_http_accepts_model_dump_with_explicit_nulls(self):
         request_model = AggregateLogsRequest.model_validate(

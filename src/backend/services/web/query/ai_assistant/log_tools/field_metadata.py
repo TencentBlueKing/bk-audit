@@ -36,12 +36,16 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     LogFieldMetadataTypeSource,
     LogFieldRef,
     LogFieldType,
+    StatisticsUnsupportedReason,
 )
 from services.web.query.ai_assistant.log_tools.sensitive import (
     SensitiveLogFieldPermissionService,
     prepare_sensitive_query_fields,
 )
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
+from services.web.query.ai_assistant.log_tools.statistics_types import (
+    statistics_capability,
+)
 from services.web.query.ai_assistant.schemas import SelectionFieldOption
 from services.web.query.constants import (
     COLLECT_SEARCH_CONFIG,
@@ -104,15 +108,35 @@ class LogFieldMetadataService:
                     parent_field=parent_field,
                     rows=safe_rows,
                 )
+            max_fields = cls._effective_limit(
+                settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0
+            )
+            truncated = scan_truncated or len(fields) > max_fields
+            fields = fields[:max_fields]
+            access = SensitiveLogFieldPermissionService.get_access(
+                username=username,
+                system_id=request.condition.scope_id,
+                fields=SensitiveLogFieldPermissionService.collect_field_paths(item.field for item in fields),
+            )
+            for item in fields:
+                path = ".".join((item.field.raw_name, *item.field.keys))
+                if not access[path]:
+                    # 目录可保留可展开路径，但遮罩值不能被误当成可统计类别或真实样例。
+                    item.statistics_supported = False
+                    item.statistics_kind = None
+                    item.unsupported_reason = StatisticsUnsupportedReason.PERMISSION_DENIED
+                    item.allowed_metrics = []
+                    item.sample_values = []
+                    item.options = None
+                    item.observed_types = []
+                    item.sampled_non_null_count = 0
+                    item.coverage = 0.0
         except Exception as err:  # noqa: BLE001
             mapped_error = map_log_query_error(err)
             if mapped_error is err:
                 raise
             raise mapped_error from err
 
-        max_fields = cls._effective_limit(settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0)
-        truncated = scan_truncated or len(fields) > max_fields
-        fields = fields[:max_fields]
         response = GetLogFieldMetadataResponse(
             fields=fields,
             sample_summary=FieldSampleSummary(
@@ -280,13 +304,15 @@ class LogFieldMetadataService:
         """把声明信息和脱敏观察值转换为稳定响应。"""
 
         non_null_values = [value for value in values if value is not None]
+        observed_types = cls._observed_types(values)
         return LogFieldMetadataItem(
             field=field_ref,
             category=category,
             display_name=display_name,
             description=description,
             type_source=type_source,
-            observed_types=cls._observed_types(values),
+            observed_types=observed_types,
+            **statistics_capability(field_ref, observed_types),
             allow_operators=allow_operators,
             options=[SelectionFieldOption(**option) for option in options] if options else None,
             is_expandable=is_expandable,

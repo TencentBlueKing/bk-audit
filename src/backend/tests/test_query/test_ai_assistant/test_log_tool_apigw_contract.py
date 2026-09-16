@@ -314,6 +314,18 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
             "properties"
         ]["keys"]
         static_keys = self.resources["definitions"]["log_tool_field_ref_response"]["properties"]["keys"]
+        dynamic_item = envelope["properties"]["data"]["properties"]["fields"]["items"]["properties"]
+        static_item = self._response_schema("mcp_get_log_field_metadata")["properties"]["data"]["properties"]["fields"][
+            "items"
+        ]["properties"]
+        for name in ("statistics_supported", "statistics_kind", "unsupported_reason", "allowed_metrics"):
+            self.assertIn(name, static_item)
+            self.assertIn(name, dynamic_item)
+        self.assertEqual(static_item["statistics_kind"]["enum"], ["CATEGORICAL", "NUMERIC", None])
+        self.assertEqual(
+            static_item["allowed_metrics"]["items"]["enum"],
+            ["COUNT", "DISTINCT_COUNT", "MIN", "MAX", "AVG", "SUM", "PERCENTILE_APPROX"],
+        )
 
         for keyword in ("maxItems", "description"):
             self.assertEqual(static_keys.get(keyword), dynamic_keys[keyword])

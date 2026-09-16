@@ -345,6 +345,34 @@ class GetLogFieldMetadataRequest(AgentLogToolRequest):
         return parent_field
 
 
+class StatisticsKind(StrEnum):
+    """字段可使用的统计包类型。"""
+
+    CATEGORICAL = "CATEGORICAL"
+    NUMERIC = "NUMERIC"
+
+
+class StatisticsUnsupportedReason(StrEnum):
+    """字段目录不可直接统计的稳定原因，不披露敏感规则。"""
+
+    OBJECT = "OBJECT"
+    ARRAY = "ARRAY"
+    UNKNOWN_TYPE = "UNKNOWN_TYPE"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+
+
+class AggregationMetricType(StrEnum):
+    """聚合函数枚举，禁止接收调用方给出的函数名。"""
+
+    COUNT = "COUNT"
+    DISTINCT_COUNT = "DISTINCT_COUNT"
+    MIN = "MIN"
+    MAX = "MAX"
+    AVG = "AVG"
+    SUM = "SUM"
+    PERCENTILE_APPROX = "PERCENTILE_APPROX"
+
+
 class LogFieldMetadataItem(BaseModel):
     """单个可查询字段的声明元信息与当前样本观察。"""
 
@@ -364,6 +392,10 @@ class LogFieldMetadataItem(BaseModel):
         default=False,
         description="可见 JSON 根字段及其对象子字段可为 true，表示可继续探索下一层。",
     )
+    statistics_supported: bool = Field(default=False, description="当前声明或样本及权限是否支持直接统计，仅作为目录提示。")
+    statistics_kind: Optional[StatisticsKind] = Field(default=None, description="声明或样本推断的统计类型；未知或不支持时为空。")
+    unsupported_reason: Optional[StatisticsUnsupportedReason] = Field(default=None, description="不可直接统计的稳定原因，不含敏感规则细节。")
+    allowed_metrics: List[AggregationMetricType] = Field(default_factory=list, description="当前字段类型和权限允许的聚合函数。")
     sample_values: Annotated[
         List[Any],
         serializers.ListField(
@@ -516,18 +548,6 @@ class AggregationDimensionType(StrEnum):
 
     FIELD = "FIELD"
     TIME_BUCKET = "TIME_BUCKET"
-
-
-class AggregationMetricType(StrEnum):
-    """聚合函数枚举，禁止接收调用方给出的函数名。"""
-
-    COUNT = "COUNT"
-    DISTINCT_COUNT = "DISTINCT_COUNT"
-    MIN = "MIN"
-    MAX = "MAX"
-    AVG = "AVG"
-    SUM = "SUM"
-    PERCENTILE_APPROX = "PERCENTILE_APPROX"
 
 
 class AggregationValueType(StrEnum):

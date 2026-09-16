@@ -3110,7 +3110,7 @@ paths:
                     maxItems: 100
                     items:
                       type: object
-                      required: [field, category, display_name, description, type_source, observed_types, allow_operators, options, is_expandable, sample_values, sampled_non_null_count, coverage]
+                      required: [field, category, display_name, description, type_source, observed_types, allow_operators, options, is_expandable, statistics_supported, statistics_kind, unsupported_reason, allowed_metrics, sample_values, sampled_non_null_count, coverage]
                       properties:
                         field: {$ref: '#/definitions/log_tool_field_ref_response'}
                         category: {type: string, enum: [BASIC, EXTENDED]}
@@ -3121,6 +3121,10 @@ paths:
                         allow_operators: {type: array, items: {type: string}}
                         options: {type: array, x-nullable: true, items: {$ref: '#/definitions/log_tool_option'}}
                         is_expandable: {type: boolean, description: 可见 JSON 根字段及其对象子字段可为 true，表示可继续探索下一层。}
+                        statistics_supported: {type: boolean, description: 当前声明或样本及权限是否支持直接统计，仅作为目录提示。}
+                        statistics_kind: {type: string, x-nullable: true, enum: [CATEGORICAL, NUMERIC], description: 声明或样本推断的统计类型；未知或不支持时为空。}
+                        unsupported_reason: {type: string, x-nullable: true, enum: [OBJECT, ARRAY, UNKNOWN_TYPE, PERMISSION_DENIED], description: 不可直接统计的稳定原因，不含敏感规则细节。}
+                        allowed_metrics: {type: array, items: {type: string, enum: [COUNT, DISTINCT_COUNT, MIN, MAX, AVG, SUM, PERCENTILE_APPROX]}, description: 当前字段类型和权限允许的聚合函数。}
                         sample_values: {type: array, maxItems: 3, items: {}, description: 最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。}
                         sampled_non_null_count: {type: integer}
                         coverage: {type: number, format: double}
