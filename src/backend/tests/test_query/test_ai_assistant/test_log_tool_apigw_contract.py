@@ -17,7 +17,10 @@ from services.web.query.ai_assistant.exceptions import (
     LogQueryResponseTooLarge,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
+    StatisticsBudgetExceeded,
+    StatisticsResponseTooLarge,
     UnsupportedAggregation,
+    UnsupportedFieldType,
     UnsupportedLogField,
 )
 from services.web.query.ai_assistant.log_tools.schemas import (
@@ -60,6 +63,9 @@ REQUEST_MODELS = {
 LOG_TOOL_ERROR_TYPES = (
     InvalidLogCondition,
     UnsupportedLogField,
+    UnsupportedFieldType,
+    StatisticsBudgetExceeded,
+    StatisticsResponseTooLarge,
     UnsupportedAggregation,
     SensitiveFieldPermissionDenied,
     LogQueryTimeout,
@@ -162,8 +168,21 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
                     )
                 ],
                 rows=(),
+                groups=(),
                 query_summary=AggregationQuerySummary(
-                    returned_count=0, has_more=False, took_ms=1, executed_at="2026-08-14T00:00:00+08:00"
+                    returned_count=0,
+                    total_count=0,
+                    top_n=None,
+                    has_other=False,
+                    scope_id="bk_log",
+                    start_time="2026-08-13T00:00:00+08:00",
+                    end_time="2026-08-14T00:00:00+08:00",
+                    requested_interval=None,
+                    effective_interval=None,
+                    timezone="Asia/Shanghai",
+                    complete=True,
+                    took_ms=1,
+                    executed_at="2026-08-14T00:00:00+08:00",
                 ),
             ),
         }
@@ -298,8 +317,8 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
         aggregate_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_aggregate_logs"][0]]["post"]
         aggregate_response = aggregate_operation["responses"]["200"]["schema"]["properties"]["data"]
-        self.assertEqual(aggregate_response["properties"]["rows"]["maxItems"], 100)
-        self.assertIn("1 MiB", aggregate_operation["description"])
+        self.assertNotIn("maxItems", aggregate_response["properties"]["rows"])
+        self.assertIn("4 MiB", aggregate_operation["description"])
 
     @override_settings(ROOT_URLCONF="urls")
     def test_response_field_ref_limits_match_dynamic_openapi(self):
@@ -345,22 +364,12 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         for name in ("type", "field", "value_type", "percentile"):
             self.assertEqual(metric[name]["description"], pydantic_metric[name]["description"])
 
-        allowed_fields = (
-            "action_id",
-            "resource_type_id",
-            "username",
-            "result_code",
-            "access_type",
-            "start_time",
-            "extend_data",
-        )
         for description in (dimension["field"]["description"], metric["field"]["description"]):
-            for field_name in allowed_fields:
-                self.assertIn(field_name, description)
+            self.assertIn("日志检索可见", description)
             self.assertIn("keys", description)
 
         self.assertIn("FIELD 必须省略", dimension["interval"]["description"])
-        self.assertIn("TIME_BUCKET 必填", dimension["interval"]["description"])
+        self.assertIn("默认 AUTO", dimension["interval"]["description"])
         metric_type_description = metric["type"]["description"]
         for metric_type in ("COUNT", "DISTINCT_COUNT", "MIN", "MAX", "AVG", "SUM", "PERCENTILE_APPROX"):
             self.assertIn(metric_type, metric_type_description)
@@ -394,6 +403,35 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         )
         AggregateLogsRequest.model_validate(payload)
         self._validate(self._body_schema("mcp_aggregate_logs"), payload)
+
+    @override_settings(ROOT_URLCONF="urls")
+    def test_aggregate_static_schema_matches_dynamic_contract(self):
+        """网关不能保留旧分页协议或丢失运行时 typed value、完整摘要约束。"""
+        request = APIRequestFactory().get("/api/schema/")
+        request.user = mock.Mock(is_staff=True, is_authenticated=True)
+        response = SpectacularAPIView.as_view()(request)
+        response.render()
+        operation = yaml.safe_load(response.content)["paths"][MCP_LOG_RESOURCES["mcp_aggregate_logs"][1]]["post"]
+        dynamic_request = operation["requestBody"]["content"]["application/json"]["schema"]
+        dynamic_response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+
+        def normalize(value):
+            """忽略显示标题与两版本 nullable 名称，保留全部验证关键字。"""
+            if isinstance(value, list):
+                return [normalize(item) for item in value]
+            if not isinstance(value, dict):
+                return value
+            return {
+                ("nullable" if key == "x-nullable" else key): normalize(item)
+                for key, item in value.items()
+                if key != "title" and not (key == "default" and item is None)
+            }
+
+        self.assertEqual(normalize(self._raw_body_schema("mcp_aggregate_logs")), normalize(dynamic_request))
+        self.assertEqual(
+            normalize(self.resources["paths"]["/mcp/logs/aggregate/"]["post"]["responses"]["200"]["schema"]),
+            normalize(dynamic_response),
+        )
 
     def _body_schema(self, operation_id):
         operation = self.json_schema["paths"][MCP_LOG_RESOURCES[operation_id][0]]["post"]

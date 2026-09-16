@@ -28,6 +28,7 @@ from services.web.query.ai_assistant.exceptions import (
     UnsupportedAggregation,
     UnsupportedLogField,
 )
+from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregateLogsResponse,
@@ -49,6 +50,7 @@ from services.web.query.mcp_views import MCPUserLogViewSet
 from services.web.query.resources.ai_assistant import MCPAggregateLogs, MCPSearchLogs
 from services.web.query.views import CollectorQueryViewSet
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
+from tests.test_query.test_ai_assistant.test_log_aggregation_service import frames
 
 
 class TestMCPUserLogRouting(SimpleTestCase):
@@ -337,6 +339,90 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertEqual(service.call_args.kwargs["username"], "alice")
         self.assertEqual(service.call_args.kwargs["namespace"], "default")
         self.assertEqual(response, response_model.model_dump(mode="json"))
+
+    def test_aggregate_real_service_preserves_groups_quality_and_complete_summary(self):
+        """Resource 与真实服务往返不能裁掉合成组、转换质量或完整范围摘要。"""
+        context = LogQueryContext(
+            username="alice", namespace="default", condition=self.condition, table="test_rt.doris", conditions=()
+        )
+        with (
+            mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.aggregation.LogQueryContextService.build",
+                return_value=context,
+            ),
+            mock.patch("services.web.query.ai_assistant.log_tools.sensitive.PermissionService"),
+            mock.patch("services.web.query.ai_assistant.log_tools.sensitive.SensitiveObject._objects") as objects,
+            mock.patch.object(SafeQuerySyncResource, "bulk_request", return_value=({"list": frames()},)) as query,
+        ):
+            objects.filter.return_value = []
+            response = MCPAggregateLogs().request(
+                namespace="default",
+                condition=self.condition.model_dump(mode="json"),
+                top_n=1,
+                dimensions=[{"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}}],
+                metrics=[
+                    {"id": "events", "type": "COUNT"},
+                    {
+                        "id": "average",
+                        "type": "AVG",
+                        "field": {"raw_name": "extend_data", "keys": ["duration"]},
+                        "value_type": "DOUBLE",
+                    },
+                ],
+            )
+            query.return_value = (
+                {
+                    "list": [
+                        {"frame": "META", "n": "10", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
+                        {
+                            "frame": "GROUP",
+                            "key": "1",
+                            "kind": "VALUE",
+                            "n": "10",
+                            "d0_type": "string",
+                            "d0_json": '\"GET\"',
+                        },
+                        {"frame": "ROW", "key": "1", "n": "10", "m0": "10"},
+                    ]
+                },
+            )
+            default_response = MCPAggregateLogs().request(
+                namespace="default",
+                condition=self.condition.model_dump(mode="json"),
+                dimensions=[{"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}}],
+                metrics=[{"id": "events", "type": "COUNT"}],
+            )
+        self.assertEqual(default_response["query_summary"]["top_n"], 100)
+        self.assertTrue(default_response["query_summary"]["complete"])
+        self.assertEqual([group["kind"] for group in response["groups"]], ["VALUE", "OTHER", "MISSING"])
+        self.assertEqual([group["count"] for group in response["groups"]], [6, 3, 1])
+        self.assertEqual(
+            response["groups"][0]["values"], [{"dimension_id": "action", "value_type": "string", "value": "GET"}]
+        )
+        self.assertEqual(response["rows"][1]["average"], 6)
+        self.assertEqual(
+            response["data_quality"],
+            [{"metric_id": "average", "present_count": 9, "converted_count": 8, "conversion_failed_count": 1}],
+        )
+        summary = response["query_summary"]
+        self.assertEqual(summary["top_n"], 1)
+        self.assertEqual(summary["total_count"], 10)
+        self.assertTrue(summary["complete"])
+        self.assertEqual(summary["scope_id"], self.condition.scope_id)
+        self.assertIsNone(summary["requested_interval"])
+        self.assertNotIn("has_more", summary)
+        self.assertEqual(AggregateLogsResponse.model_validate(response).model_dump(mode="json"), response)
+
+    def test_aggregate_resource_rejects_removed_limit(self):
+        """旧 limit 不得绕过 Resource 请求序列化器进入新统计服务。"""
+        with self.assertRaises(ValidationError):
+            MCPAggregateLogs().request(
+                namespace="default",
+                condition=self.condition.model_dump(mode="json"),
+                metrics=[{"id": "events", "type": "COUNT"}],
+                limit=20,
+            )
 
     def test_aggregate_uses_request_user_and_path_namespace(self):
         from services.web.query.resources.ai_assistant import MCPAggregateLogs
