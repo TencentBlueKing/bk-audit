@@ -4,6 +4,10 @@
 未知样本只影响目录提示，执行统计仍须重新校验权限和全范围类型，不得据此拒绝空结果。
 """
 
+import json
+import math
+from decimal import Decimal
+
 from apps.meta.utils.fields import START_TIME
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_TOOL_NESTED_FIELD_NAMES,
@@ -66,3 +70,49 @@ def statistics_capability(field: LogFieldRef, observed_types: list[JSONValueType
         "unsupported_reason": reason,
         "allowed_metrics": metrics,
     }
+
+
+SAFE_STATISTICS_INTEGER = 9007199254740991
+
+
+def _reject_json_constant(value: str):
+    """拒绝 JSON 标准以外的非有限数字，不回显字段值。"""
+    raise ValueError("non-finite statistics scalar")
+
+
+def parse_statistics_scalar(value_type: str, value_json_text: str):
+    """从 SQL STRING 通道恢复有界 JSON 标量，绝不用于生成或修复分组键。
+
+    数字先以 Decimal/int 解析以守住安全整数边界；非整值仅在输出边界恢复 binary64。
+    Raises:
+        ValueError: 非标量、类型错配、不安全整数或浮点下溢。
+        TypeError: 远端绕过文本通道。
+    """
+    if not isinstance(value_json_text, str):
+        raise TypeError("statistics scalar must use SQL text channel")
+    if value_type not in {"number", "integer", "boolean", "string"}:
+        raise ValueError("invalid statistics scalar type")
+    if value_type in {"number", "integer"} and len(value_json_text) > 128:
+        raise ValueError("statistics number text too long")
+    value = json.loads(value_json_text, parse_int=int, parse_float=Decimal, parse_constant=_reject_json_constant)
+    if value_type == "string" and type(value) is str:
+        return value
+    if value_type == "boolean" and type(value) is bool:
+        return value
+    if value_type not in {"integer", "number"} or type(value) not in {int, Decimal}:
+        raise ValueError("statistics scalar type mismatch")
+    number = Decimal(value)
+    if not number.is_finite() or number.copy_abs() > SAFE_STATISTICS_INTEGER:
+        raise ValueError("statistics number exceeds safe integer range")
+    if number == number.to_integral_value():
+        return int(number)
+    if value_type == "integer":
+        raise ValueError("statistics integer is fractional")
+    result = float(number)
+    if not math.isfinite(result) or (number != 0 and result == 0):
+        raise ValueError("statistics number does not roundtrip")
+    if result.is_integer() and abs(result) > SAFE_STATISTICS_INTEGER:
+        raise ValueError("statistics number exceeds safe integer range")
+    if json.loads(json.dumps(result)) != result:
+        raise ValueError("statistics number does not roundtrip")
+    return result

@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""aggregate_logs Service 的权限、批量查询和响应语义测试。"""
-
+"""聚合服务验证单SQL帧、权限及完整结果，远端Doris响应是唯一替身。"""
 import json
 from unittest import mock
 
@@ -14,221 +12,200 @@ from apps.meta.models import SensitiveObject
 from core.exceptions import PermissionException
 from services.web.query.ai_assistant.exceptions import (
     LogQueryFailed,
-    LogQueryResponseTooLarge,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
+    StatisticsResponseTooLarge,
+    UnsupportedFieldType,
 )
 from services.web.query.ai_assistant.log_tools.aggregation import LogAggregationService
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
-from services.web.query.ai_assistant.log_tools.schemas import AggregateLogsRequest
-from services.web.query.ai_assistant.schemas import (
-    Condition,
-    ConditionField,
-    SearchCondition,
-)
+from services.web.query.ai_assistant.schemas import Condition, ConditionField
 from tests.base import TestCase
+from tests.test_query.test_ai_assistant.test_log_aggregation_sql import make_request
 
 AGGREGATION_MODULE = "services.web.query.ai_assistant.log_tools.aggregation"
 
 
-def aggregation_request(condition, **kwargs):
-    payload = {
-        "condition": condition,
-        "dimensions": [{"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}}],
-        "metrics": [
-            {"id": "count", "type": "COUNT"},
-            {
-                "id": "avg_duration",
-                "type": "AVG",
-                "field": {"raw_name": "extend_data", "keys": ["duration"]},
-                "value_type": "DOUBLE",
-            },
-        ],
-        "order_by": [{"target_id": "count", "direction": "DESC"}],
-        "limit": 2,
-    }
-    payload.update(kwargs)
-    return AggregateLogsRequest(**payload)
+def frames():
+    """手算GET6/OTHER3/MISSING1；OTHER平均值来自2+4+12三条原记录。"""
+    return [
+        {"frame": "META", "n": "10", "a": "3", "b": "3", "c": "1", "d": "0", "e": "0"},
+        {"frame": "GROUP", "key": "1", "kind": "VALUE", "n": "6", "d0_type": "string", "d0_json": '"GET"'},
+        {"frame": "GROUP", "key": "2", "kind": "OTHER", "n": "3", "d0_type": None, "d0_json": None},
+        {"frame": "GROUP", "key": "3", "kind": "MISSING", "n": "1", "d0_type": None, "d0_json": None},
+        {"frame": "ROW", "key": "1", "n": "6", "m0": "6", "m1": "1.5"},
+        {"frame": "ROW", "key": "2", "n": "3", "m0": "3", "m1": "6"},
+        {"frame": "ROW", "key": "3", "n": "1", "m0": "1", "m1": None},
+        {"frame": "QUALITY", "key": "1", "n": "9", "a": "8", "b": "1"},
+    ]
 
 
 class TestLogAggregationService(TestCase):
-    """聚合必须先预检敏感字段，且绝不试图对分组行执行逐行脱敏。"""
-
     username = "tester"
     namespace = "default"
-    target_system_id = "bk_log"
+    target_system_id = "s1"
 
     def setUp(self):
         super().setUp()
-        self.condition = self.make_condition(scope_id=self.target_system_id)
+        self.condition = make_request().condition
         self.context = LogQueryContext(
             username=self.username,
             namespace=self.namespace,
             condition=self.condition,
             table="test_rt.doris",
-            conditions=(
-                {
-                    "field": {"raw_name": "system_id", "keys": []},
-                    "operator": "include",
-                    "filters": [self.target_system_id],
-                },
-            ),
+            conditions=({"field": {"raw_name": "system_id", "keys": []}, "operator": "include", "filters": ["s1"]},),
         )
         self.mock_context = self.enterContext(
             mock.patch(f"{AGGREGATION_MODULE}.LogQueryContextService.build", return_value=self.context)
         )
-        self.mock_query = self.enterContext(mock.patch.object(SafeQuerySyncResource, "bulk_request"))
+        self.mock_query = self.enterContext(
+            mock.patch.object(SafeQuerySyncResource, "bulk_request", return_value=({"list": frames()},))
+        )
         self.mock_permissions = self.enterContext(
             mock.patch("services.web.query.ai_assistant.log_tools.sensitive.PermissionService")
         )
-        self.mock_query.return_value = (
-            {
-                "list": [
-                    {"action": "view", "count": 3, "avg_duration": 1.5, "untrusted": "ignored"},
-                    {"action": "edit", "count": 2, "avg_duration": 2.0},
-                    {"action": "delete", "count": 1, "avg_duration": 3.0},
-                ]
-            },
-            {
-                "list": [
-                    {
-                        "avg_duration_non_empty_count": 6,
-                        "avg_duration_converted_count": 5,
-                        "avg_duration_conversion_failed_count": 1,
-                    }
-                ]
-            },
+
+    def _aggregate(self, **kwargs):
+        payload = dict(
+            condition=self.condition,
+            metrics=[
+                {"id": "events", "type": "COUNT"},
+                {
+                    "id": "average",
+                    "type": "AVG",
+                    "field": {"raw_name": "extend_data", "keys": ["duration"]},
+                    "value_type": "DOUBLE",
+                },
+            ],
+        )
+        payload.update(kwargs)
+        return LogAggregationService.aggregate(
+            username=self.username, namespace=self.namespace, request=make_request(**payload)
         )
 
     def make_condition(self, **kwargs):
-        return SearchCondition(
-            scope_type="system",
-            scope_id=kwargs.pop("scope_id", self.target_system_id),
-            start_time="2026-08-13T00:00:00+08:00",
-            end_time="2026-08-14T00:00:00+08:00",
-            conditions=kwargs.pop("conditions", []),
-        )
+        return make_request().condition.model_copy(update=kwargs)
 
     @staticmethod
-    def make_field_condition(*, raw_name, keys, operator, filters):
-        return Condition(
-            field=ConditionField(raw_name=raw_name, keys=keys),
-            operator=operator,
-            filters=filters,
-        )
+    def make_field_condition(**kwargs):
+        return Condition(field=ConditionField(raw_name=kwargs.pop("raw_name"), keys=kwargs.pop("keys")), **kwargs)
 
-    def _aggregate(self, **kwargs):
-        return LogAggregationService.aggregate(
-            username=self.username,
-            namespace=self.namespace,
-            request=aggregation_request(self.condition, **kwargs),
-        )
-
-    def test_limit_plus_one_trims_rows_and_returns_real_bulk_timing(self):
+    def test_complete_groups_quality_and_original_other_average(self):
         with mock.patch(f"{AGGREGATION_MODULE}.time.perf_counter", side_effect=[20.0, 20.125]):
             result = self._aggregate()
-
-        self.assertEqual(
-            result.rows,
-            (
-                {"action": "view", "count": 3, "avg_duration": 1.5},
-                {"action": "edit", "count": 2, "avg_duration": 2.0},
-            ),
-        )
-        self.assertEqual(result.query_summary.returned_count, 2)
-        self.assertTrue(result.query_summary.has_more)
+        self.assertEqual([g.count for g in result.groups], [6, 3, 1])
+        self.assertEqual([g.kind for g in result.groups], ["VALUE", "OTHER", "MISSING"])
+        self.assertEqual([g.ratio for g in result.groups], [0.6, 0.3, 0.1])
+        self.assertEqual(result.groups[0].values[0].value, "GET")
+        self.assertEqual(result.rows[1]["average"], 6)
+        self.assertEqual(result.rows[1]["log_count"], 3)
+        self.assertEqual(result.query_summary.total_count, 10)
+        self.assertEqual(result.query_summary.returned_count, 3)
+        self.assertTrue(result.query_summary.complete)
+        self.assertTrue(result.query_summary.has_other)
         self.assertEqual(result.query_summary.took_ms, 125)
-        self.assertTrue(result.query_summary.executed_at)
-        self.assertEqual(result.data_quality[0].metric_id, "avg_duration")
-        self.assertEqual(result.data_quality[0].non_empty_count, 6)
-        self.assertEqual(result.data_quality[0].converted_count, 5)
-        self.assertEqual(result.data_quality[0].conversion_failed_count, 1)
-        self.assertEqual([column.id for column in result.columns], ["action", "count", "avg_duration"])
-        self.assertNotIn("test_rt.doris", result.model_dump_json())
-        self.assertNotIn("SELECT", result.model_dump_json())
-
-        (requests,), _ = self.mock_query.call_args
-        self.assertEqual(len(requests), 2)
-        self.assertIn("LIMIT 3", requests[0]["sql"])
-
-    def _aggregate_payload_dimension(self, value, *, limit=2):
-        self.mock_query.return_value = ({"list": [{"payload": value, "count": 1}]},)
-        return self._aggregate(
-            dimensions=[
-                {
-                    "id": "payload",
-                    "type": "FIELD",
-                    "field": {"raw_name": "extend_data", "keys": ["payload"]},
-                }
-            ],
-            metrics=[{"id": "count", "type": "COUNT"}],
-            order_by=[],
-            limit=limit,
+        self.assertEqual(
+            result.data_quality[0].model_dump(),
+            dict(metric_id="average", present_count=9, converted_count=8, conversion_failed_count=1),
         )
-
-    def test_response_utf8_budget_accepts_exact_configured_limit_and_rejects_plus_one(self):
-        base = self._aggregate_payload_dimension("")
-        configured_limit = len(base.model_dump_json().encode("utf-8")) + 128
-
-        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=configured_limit):
-            result = self._aggregate_payload_dimension("x" * 128)
-        self.assertEqual(len(result.model_dump_json().encode("utf-8")), configured_limit)
-
-        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=configured_limit):
-            with self.assertRaises(LogQueryResponseTooLarge):
-                self._aggregate_payload_dimension("x" * 129)
-
-    def test_response_budget_counts_chinese_utf8_bytes(self):
-        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=1024):
-            with self.assertRaises(LogQueryResponseTooLarge):
-                self._aggregate_payload_dimension("中" * 400)
-
-    @override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=2 * 1024 * 1024)
-    def test_single_large_row_cannot_expand_hard_response_budget_and_does_not_leak_value(self):
-        marker = "secret-marker-" + "x" * (1024 * 1024)
-
-        with self.assertRaises(LogQueryResponseTooLarge) as raised:
-            self._aggregate_payload_dimension(marker)
-
-        self.assertNotIn("secret-marker", str(raised.exception))
-
-    def test_multiple_rows_are_rejected_when_cumulative_response_exceeds_budget(self):
-        self.mock_query.return_value = (
-            {"list": [{"payload": f"{index}-" + "x" * 11000, "count": 1} for index in range(100)]},
-        )
-
-        with self.assertRaises(LogQueryResponseTooLarge):
-            self._aggregate(
-                dimensions=[
-                    {
-                        "id": "payload",
-                        "type": "FIELD",
-                        "field": {"raw_name": "extend_data", "keys": ["payload"]},
-                    }
-                ],
-                metrics=[{"id": "count", "type": "COUNT"}],
-                order_by=[],
-                limit=100,
-            )
-
-    def test_no_conversion_metric_uses_one_bulk_item_and_no_quality_result(self):
-        self.mock_query.return_value = ({"list": [{"action": "view", "count": 1}]},)
-
-        result = self._aggregate(metrics=[{"id": "count", "type": "COUNT"}])
-
-        self.assertEqual(result.rows, ({"action": "view", "count": 1},))
-        self.assertEqual(result.data_quality, ())
-        (requests,), _ = self.mock_query.call_args
+        self.assertNotIn("test_rt", result.model_dump_json())
+        requests = self.mock_query.call_args.args[0]
         self.assertEqual(len(requests), 1)
+        self.assertIn("FROM mapped GROUP BY group_key", requests[0]["sql"])
 
-    def test_service_never_uses_row_desensitization_for_grouped_output(self):
-        with mock.patch(
-            "services.web.query.resources.base.SearchDataParser.parse_data",
-            side_effect=AssertionError("aggregate rows must not be desensitized post-query"),
-        ):
+    def test_missing_truncated_duplicate_or_inconsistent_frames_fail_closed(self):
+        cases = []
+        for index in (0, 1, 4, 7):
+            data = frames()
+            data.pop(index)
+            cases.append(data)
+        cases.append(frames() + [frames()[1]])
+        for index, key, value in [
+            (0, "n", "11"),
+            (0, "a", "2"),
+            (0, "b", "4"),
+            (0, "c", "0"),
+            (1, "n", "7"),
+            (4, "n", "5"),
+            (4, "m0", "5"),
+            (4, "m1", "NaN"),
+            (7, "a", "9"),
+            (7, "n", "11"),
+            (1, "key", "2"),
+            (1, "d0_json", 1),
+            (1, "d0_type", "array"),
+        ]:
+            data = frames()
+            data[index][key] = value
+            cases.append(data)
+        for data in cases:
+            with self.subTest(data=data):
+                self.mock_query.return_value = ({"list": data},)
+                with self.assertRaises(LogQueryFailed):
+                    self._aggregate()
+
+    def test_full_scope_invalid_type_or_unsafe_number_rejects_even_outside_top_n(self):
+        for key in ("d", "e"):
+            data = frames()
+            data[0][key] = "1"
+            self.mock_query.return_value = ({"list": data[:1]},)
+            with self.assertRaises(UnsupportedFieldType):
+                self._aggregate()
+
+    def test_empty_categories_and_empty_global_all(self):
+        self.mock_query.return_value = (
+            {"list": [{"frame": "META", "n": "0", "a": "0", "b": "0", "c": "0", "d": "0", "e": "0"}]},
+        )
+        result = self._aggregate(metrics=[{"id": "events", "type": "COUNT"}])
+        self.assertEqual(result.groups, ())
+        self.assertEqual(result.rows, ())
+        self.mock_query.return_value = (
+            {
+                "list": [
+                    {"frame": "META", "n": "0", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
+                    {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"},
+                    {"frame": "ROW", "key": "1", "n": "0", "m0": "0"},
+                ]
+            },
+        )
+        result = self._aggregate(dimensions=[], metrics=[{"id": "events", "type": "COUNT"}])
+        self.assertEqual(result.groups[0].kind, "ALL")
+        self.assertIsNone(result.groups[0].ratio)
+        self.assertEqual(result.rows[0]["events"], 0)
+
+    def test_typed_values_survive_transport_and_blank_remains_value(self):
+        for kind, text, want in [
+            ("number", "1", 1),
+            ("string", '"1"', "1"),
+            ("boolean", "true", True),
+            ("string", '""', ""),
+            ("number", "1e-20", 1e-20),
+        ]:
+            data = frames()
+            data[1]["d0_type"] = kind
+            data[1]["d0_json"] = text
+            self.mock_query.return_value = ({"list": data},)
             result = self._aggregate()
+            self.assertEqual(result.groups[0].values[0].value, want)
+            self.assertIs(type(result.groups[0].values[0].value), type(want))
 
-        self.assertEqual(result.rows[0]["action"], "view")
+    @override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=100)
+    def test_complete_response_uses_statistics_byte_budget(self):
+        with self.assertRaises(StatisticsResponseTooLarge):
+            self._aggregate()
+
+    def test_system_permission_error_is_preserved(self):
+        error = PermissionException(action_name="view_system", permission={"system_id": "s1"})
+        self.mock_context.side_effect = error
+        with self.assertRaises(PermissionException):
+            self._aggregate()
+        self.mock_query.assert_not_called()
+
+    def test_timeout_maps_without_raw_backend_details(self):
+        self.mock_query.side_effect = TimeoutError("secret sql")
+        with self.assertRaises(LogQueryTimeout) as raised:
+            self._aggregate()
+        self.assertNotIn("secret", str(raised.exception))
 
     def test_private_and_missing_sensitive_permission_stop_before_doris(self):
         private = SensitiveObject.objects.create(
@@ -276,7 +253,7 @@ class TestLogAggregationService(TestCase):
         self.mock_query.return_value = ({"list": []},)
 
         with self.assertRaises(SensitiveFieldPermissionDenied):
-            self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], order_by=[])
+            self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], **{})
 
         self.mock_query.assert_not_called()
 
@@ -310,7 +287,7 @@ class TestLogAggregationService(TestCase):
                             }
                         ],
                         metrics=[{"id": "count", "type": "COUNT"}],
-                        order_by=[],
+                        **{},
                     )
 
                 self.mock_query.assert_not_called()
@@ -336,262 +313,178 @@ class TestLogAggregationService(TestCase):
                     }
                 ],
                 metrics=[{"id": "count", "type": "COUNT"}],
-                order_by=[],
+                **{},
             )
 
         self.mock_permissions.assert_not_called()
         self.mock_query.assert_not_called()
 
-    def test_similar_sensitive_path_prefix_does_not_match_another_segment(self):
+    def test_similar_sensitive_prefix_does_not_hide_accessible_field(self):
         SensitiveObject.objects.create(
-            name="different credential field",
-            system_id=self.target_system_id,
+            name="other path",
+            system_id="s1",
             resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
             resource_id="host",
-            fields=[{"field_name": "extend_data.credential"}],
+            fields=[{"field_name": "extend_data.durations"}],
+            is_private=True,
         )
-        self.mock_query.return_value = ({"list": [{"credentials": "safe", "count": 1}]},)
-
-        result = self._aggregate(
-            dimensions=[
-                {
-                    "id": "credentials",
-                    "type": "FIELD",
-                    "field": {"raw_name": "extend_data", "keys": ["credentials"]},
-                }
-            ],
-            metrics=[{"id": "count", "type": "COUNT"}],
-            order_by=[],
-        )
-
-        self.assertEqual(result.rows, ({"credentials": "safe", "count": 1},))
+        result = self._aggregate()
+        self.assertEqual(result.rows[0]["average"], 1.5)
         self.mock_permissions.assert_not_called()
-        self.mock_query.assert_called_once()
 
-    def test_system_permission_exception_is_preserved_before_doris_mapping(self):
-        permission_error = PermissionException(
-            action_name="view_system",
-            permission={"system_id": self.target_system_id},
-            apply_url="https://iam.example/apply",
+    def test_raw_log_retains_whole_object_sensitive_protection(self):
+        SensitiveObject.objects.create(
+            name="protected",
+            system_id="s1",
+            resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+            resource_id="host",
+            fields=[{"field_name": "extend_data.secret"}],
+            is_private=True,
         )
-        self.mock_context.side_effect = permission_error
-
-        try:
-            self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}], order_by=[])
-        except Exception as error:  # noqa: BLE001 - 断言异常身份，避免错误映射被误判为测试错误。
-            raised = error
-        else:
-            self.fail("system permission failure must be raised")
-
-        self.assertIs(raised, permission_error)
-        self.assertEqual(raised.STATUS_CODE, 403)
-        self.assertEqual(raised.code, "9900403")
-        self.assertEqual(
-            raised.data,
-            json.dumps({"permission": {"system_id": self.target_system_id}, "apply_url": "https://iam.example/apply"}),
-        )
+        with self.assertRaises(SensitiveFieldPermissionDenied):
+            self._aggregate(
+                dimensions=[{"id": "raw", "type": "FIELD", "field": {"raw_name": "log"}}],
+                metrics=[{"id": "events", "type": "COUNT"}],
+            )
         self.mock_query.assert_not_called()
 
-    def test_global_sensitive_rule_is_checked_and_count_star_does_not_trigger_field_precheck(self):
-        global_sensitive = SensitiveObject.objects.create(
-            name="global action",
+    def test_global_sensitive_rule_blocks_dimension_but_not_count_star(self):
+        SensitiveObject.objects.create(
+            name="global",
             system_id=SensitiveUserData.SYSTEM_ID,
             resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
             resource_id=SensitiveUserData.RESOURCE_ID,
             fields=[{"field_name": "action_id"}],
+            is_private=True,
         )
-        self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {global_sensitive.id: False}
         with self.assertRaises(SensitiveFieldPermissionDenied):
-            self._aggregate(metrics=[{"id": "count", "type": "COUNT"}])
+            self._aggregate()
         self.mock_query.assert_not_called()
-
-        self.mock_permissions.reset_mock()
-        self.mock_query.return_value = ({"list": [{"count": 4}]},)
-        result = self._aggregate(dimensions=[], metrics=[{"id": "count", "type": "COUNT"}])
-        self.assertEqual(result.rows, ({"count": 4},))
-        self.mock_permissions.return_value.get_sensitive_object_permissions.assert_not_called()
-
-    def test_zero_rows_and_backend_failures_have_controlled_semantics(self):
         self.mock_query.return_value = (
-            {"list": []},
             {
                 "list": [
-                    {
-                        "avg_duration_non_empty_count": 0,
-                        "avg_duration_converted_count": 0,
-                        "avg_duration_conversion_failed_count": 0,
-                    }
+                    {"frame": "META", "n": "0", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
+                    {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"},
+                    {"frame": "ROW", "key": "1", "n": "0", "m0": "0"},
                 ]
             },
         )
-        result = self._aggregate()
-        self.assertEqual(result.rows, ())
-        self.assertFalse(result.query_summary.has_more)
-        self.assertEqual(result.query_summary.returned_count, 0)
+        result = self._aggregate(dimensions=[], metrics=[{"id": "events", "type": "COUNT"}])
+        self.assertEqual(result.rows[0]["events"], 0)
 
-        timeout = APIRequestError(result="gateway failed")
-        timeout.__cause__ = RequestsTimeout("upstream timeout")
-        self.mock_query.side_effect = timeout
-        with self.assertRaises(LogQueryTimeout) as raised:
+    def test_backend_failure_contract_and_timeout_cause_do_not_leak_sql(self):
+        error = APIRequestError(result="gateway error")
+        error.__cause__ = RequestsTimeout("secret sql")
+        self.mock_query.side_effect = error
+        with self.assertRaises(LogQueryTimeout):
             self._aggregate()
-        self.assertIs(raised.exception.__cause__, timeout)
-
-        self.mock_query.side_effect = RuntimeError("SELECT secret FROM audit")
+        self.mock_query.side_effect = RuntimeError("SELECT secret")
         with self.assertRaises(LogQueryFailed) as raised:
             self._aggregate()
         self.assertNotIn("SELECT secret", str(raised.exception))
+        self.mock_query.side_effect = None
+        for result in [(), ([],), ({},), ({"list": None},), ({"list": ["bad"]},), ({"list": frames()}, {})]:
+            self.mock_query.return_value = result
+            with self.assertRaises(LogQueryFailed):
+                self._aggregate()
 
-    def test_bulk_response_contract_rejects_invalid_subresponses_and_missing_declared_columns(self):
-        invalid_responses = (
-            (),
-            ([], {}),
-            ({}, {}),
-            (
-                {"list": [{"action": "view", "count": 1}]},
-                {
-                    "list": [
-                        {
-                            "avg_duration_non_empty_count": 1,
-                            "avg_duration_converted_count": 1,
-                            "avg_duration_conversion_failed_count": 0,
-                        }
-                    ]
-                },
-            ),
-            (
-                {"list": [{"action": "view", "count": 1, "avg_duration": 1.0}]},
-                {
-                    "list": [
-                        {
-                            "avg_duration_non_empty_count": 1,
-                            "avg_duration_converted_count": 1,
-                        }
-                    ]
-                },
-            ),
-            (
-                {"list": [{"action": "view", "count": 1, "avg_duration": 1.0}]},
-                {
-                    "list": [
-                        {
-                            "avg_duration_non_empty_count": 2,
-                            "avg_duration_converted_count": 1,
-                            "avg_duration_conversion_failed_count": 0,
-                        }
-                    ]
-                },
-            ),
-        )
-        for responses in invalid_responses:
-            with self.subTest(responses=responses):
-                self.mock_query.return_value = responses
-                with self.assertRaises(LogQueryFailed):
-                    self._aggregate()
+    def test_unexpected_remote_columns_are_not_exposed_or_desensitized(self):
+        data = frames()
+        data[1]["secret"] = "hidden"
+        data[4]["secret"] = "hidden"
+        self.mock_query.return_value = ({"list": data},)
+        with mock.patch(
+            "services.web.query.resources.base.SearchDataParser.parse_data",
+            side_effect=AssertionError("no post-query masking"),
+        ):
+            result = self._aggregate()
+        self.assertNotIn("hidden", result.model_dump_json())
+        self.assertEqual([c.id for c in result.columns], ["action", "events", "average"])
 
-    def test_columns_use_server_declared_types_not_request_field_type(self):
-        self.mock_query.return_value = (
-            {
-                "list": [
-                    {
-                        "bucket": "2026-08-13 00:00:00",
-                        "extension": "1",
-                        "count": 1,
-                        "distinct": 1,
-                        "avg": 1.0,
-                        "p95": 1.0,
-                        "min_access": 1,
-                    }
-                ]
-            },
-            {
-                "list": [
-                    {
-                        "avg_non_empty_count": 1,
-                        "avg_converted_count": 1,
-                        "avg_conversion_failed_count": 0,
-                        "p95_non_empty_count": 1,
-                        "p95_converted_count": 1,
-                        "p95_conversion_failed_count": 0,
-                    }
-                ]
-            },
-        )
+    def test_exact_utf8_budget_and_chinese_plus_one_byte(self):
+        result = self._aggregate()
+        result.groups[0].values[0].value = "中"
+        result.rows[0]["action"] = "中"
+        size = len(result.model_dump_json().encode("utf-8"))
+        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=size):
+            LogAggregationService._ensure_response_within_budget(result)
+        with override_settings(AI_LOG_AGGREGATION_RESPONSE_MAX_BYTES=size - 1):
+            with self.assertRaises(StatisticsResponseTooLarge):
+                LogAggregationService._ensure_response_within_budget(result)
+
+    def test_top_n_500_returns_all_500_selected_plus_synthetic_groups(self):
+        data = [{"frame": "META", "n": "502", "a": "502", "b": "502", "c": "0", "d": "0", "e": "0"}]
+        for key in range(1, 503):
+            data.append(
+                {
+                    "frame": "GROUP",
+                    "key": str(key),
+                    "kind": "VALUE" if key <= 500 else ("OTHER" if key == 501 else "MISSING"),
+                    "n": "1",
+                    "d0_type": "string" if key <= 500 else None,
+                    "d0_json": json.dumps(str(key)) if key <= 500 else None,
+                }
+            )
+            data.append({"frame": "ROW", "key": str(key), "n": "1", "m0": "1"})
+        self.mock_query.return_value = ({"list": data},)
+        result = self._aggregate(top_n=500, metrics=[{"id": "events", "type": "COUNT"}])
+        self.assertEqual(len(result.groups), 502)
+        self.assertEqual(len(result.rows), 502)
+        self.assertEqual(result.query_summary.total_count, 502)
+
+    def test_nonadditive_distinct_and_avg_are_not_summed_across_groups(self):
+        data = frames()
+        data[4]["m0"] = "2"
+        data[5]["m0"] = "2"
+        data[6]["m0"] = "0"
+        self.mock_query.return_value = ({"list": data},)
         result = self._aggregate(
-            dimensions=[
-                {
-                    "id": "bucket",
-                    "type": "TIME_BUCKET",
-                    "field": {"raw_name": "start_time", "field_type": "string"},
-                    "interval": "HOUR",
-                },
-                {
-                    "id": "extension",
-                    "type": "FIELD",
-                    "field": {"raw_name": "extend_data", "keys": ["duration"], "field_type": "string"},
-                },
-            ],
             metrics=[
-                {"id": "count", "type": "COUNT"},
+                {"id": "unique", "type": "DISTINCT_COUNT", "field": {"raw_name": "username"}},
                 {
-                    "id": "distinct",
-                    "type": "DISTINCT_COUNT",
-                    "field": {"raw_name": "username", "field_type": "string"},
-                },
-                {
-                    "id": "avg",
+                    "id": "average",
                     "type": "AVG",
-                    "field": {"raw_name": "extend_data", "keys": ["duration"]},
-                    "value_type": "LONG",
-                },
-                {
-                    "id": "p95",
-                    "type": "PERCENTILE_APPROX",
-                    "field": {"raw_name": "extend_data", "keys": ["duration"]},
-                    "value_type": "LONG",
-                    "percentile": 0.95,
-                },
-                {"id": "min_access", "type": "MIN", "field": {"raw_name": "access_type", "field_type": "string"}},
-            ],
-        )
-
-        self.assertEqual(
-            {column.id: column.data_type for column in result.columns},
-            {
-                "bucket": "datetime",
-                "extension": "string",
-                "count": "long",
-                "distinct": "long",
-                "avg": "double",
-                "p95": "double",
-                "min_access": "int",
-            },
-        )
-
-        self.mock_query.return_value = (
-            {"list": [{"sum_access": 1, "sum_duration": 1.0}]},
-            {
-                "list": [
-                    {
-                        "sum_duration_non_empty_count": 1,
-                        "sum_duration_converted_count": 1,
-                        "sum_duration_conversion_failed_count": 0,
-                    }
-                ]
-            },
-        )
-        sums = self._aggregate(
-            dimensions=[],
-            order_by=[],
-            metrics=[
-                {"id": "sum_access", "type": "SUM", "field": {"raw_name": "access_type", "field_type": "string"}},
-                {
-                    "id": "sum_duration",
-                    "type": "SUM",
                     "field": {"raw_name": "extend_data", "keys": ["duration"]},
                     "value_type": "DOUBLE",
                 },
-            ],
+            ]
+        )
+        self.assertEqual([r["unique"] for r in result.rows], [2, 2, 0])
+        self.assertEqual([r["average"] for r in result.rows], [1.5, 6, None])
+
+    def test_duplicate_typed_tuple_and_number_output_collisions_reject(self):
+        data = frames()
+        data[0].update(n="11", a="4", b="4")
+        data[2]["key"] = "3"
+        data[3]["key"] = "4"
+        data[5]["key"] = "3"
+        data[6]["key"] = "4"
+        data.extend(
+            [
+                {"frame": "GROUP", "key": "2", "kind": "VALUE", "n": "1", "d0_type": "number", "d0_json": "1.0"},
+                {"frame": "ROW", "key": "2", "n": "1", "m0": "1", "m1": "1"},
+            ]
+        )
+        data[1]["d0_type"] = "number"
+        data[1]["d0_json"] = "1"
+        self.mock_query.return_value = ({"list": data},)
+        with self.assertRaises(LogQueryFailed):
+            self._aggregate(top_n=2)
+
+    def test_two_dimensions_keep_value_order_and_any_missing_has_no_values(self):
+        data = frames()
+        data[1].update(d1_type="boolean", d1_json="true")
+        for index in (2, 3):
+            data[index].update(d1_type=None, d1_json=None)
+        self.mock_query.return_value = ({"list": data},)
+        result = self._aggregate(
+            dimensions=[
+                {"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}},
+                {"id": "flag", "type": "FIELD", "field": {"raw_name": "extend_data", "keys": ["flag"]}},
+            ]
         )
         self.assertEqual(
-            {column.id: column.data_type for column in sums.columns}, {"sum_access": "long", "sum_duration": "double"}
+            [(v.dimension_id, v.value) for v in result.groups[0].values], [("action", "GET"), ("flag", True)]
         )
+        self.assertEqual(result.groups[2].values, ())
+        self.assertEqual(result.rows[2]["flag"], None)
