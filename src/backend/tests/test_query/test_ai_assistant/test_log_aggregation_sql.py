@@ -1,11 +1,11 @@
 """完整聚合 SQL 关系及安全边界。"""
 import sqlite3
+from datetime import datetime
 
 import sqlglot
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from core.constants import OrderTypeChoices
-from services.web.query.ai_assistant.exceptions import UnsupportedAggregation
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
@@ -15,6 +15,7 @@ from services.web.query.ai_assistant.log_tools.sql import (
     LogAggregationSQLBuilder,
     ProjectedLogSQLBuilder,
 )
+from services.web.query.ai_assistant.log_tools.statistics_budget import build_time_axis
 from services.web.query.ai_assistant.schemas import SearchCondition
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 
@@ -203,7 +204,7 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
             ).fetchall()
         self.assertEqual(rows, [("VALUE", 6, 1.0), ("OTHER", 3, 6.0), ("MISSING", 1, None)])
 
-    def test_execute_metric_order_and_numeric_value_order_on_full_categories(self):
+    def test_execute_metric_order_and_string_value_order_on_full_categories(self):
         for order, want in [
             ([{"target_id": "average", "direction": "DESC"}], ("PUT", 12.0)),
             ([{"target_id": "action", "direction": "ASC"}], ("GET", 1.0)),
@@ -263,9 +264,144 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
         self.assertNotIn("JSON_TYPE(`snapshot_action_info`", sql)
         self.assertIn("COALESCE(", sql)
 
-    def test_time_bucket_is_explicitly_unsupported_until_task4(self):
+    def test_time_bucket_builds_complete_sql_without_legacy_rejection(self):
         request = make_request(
             dimensions=[{"id": "bucket", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}}]
         )
-        with self.assertRaises(UnsupportedAggregation):
-            LogAggregationSQLBuilder.from_request(self.context, request).build_complete_sql()
+        sql = LogAggregationSQLBuilder.from_request(self.context, request).build_complete_sql()
+        self.assertIn("time_rows AS", sql)
+        self.assertIn("`dtEventTimeStamp` AS event_timestamp", sql)
+        self.assertNotIn("FROM_UNIXTIME", sql)
+
+    def test_actual_numeric_category_order_is_not_lexical(self):
+        for direction, expected in [("ASC", ["-3", "0.5", "2", "10"]), ("DESC", ["10", "2", "0.5", "-3"])]:
+            request = make_request(top_n=4, order_by=[{"target_id": "action", "direction": direction}])
+            tree = sqlglot.parse_one(
+                LogAggregationSQLBuilder.from_request(self.context, request).build_complete_sql(), read="starrocks"
+            )
+            ctes = [
+                cte.sql(dialect="sqlite")
+                for cte in tree.find_all(sqlglot.exp.CTE)
+                if cte.alias in {"category_counts", "ranked", "selected"}
+            ]
+            with sqlite3.connect(":memory:") as db:
+                db.execute("CREATE TABLE normalized(d0_type TEXT,d0_key TEXT)")
+                db.executemany(
+                    "INSERT INTO normalized VALUES('number',?)", [(value,) for value in ["2", "10", "-3", "0.5"]]
+                )
+                rows = db.execute(
+                    "WITH " + ",".join(ctes) + " SELECT d0_key FROM selected ORDER BY group_key"
+                ).fetchall()
+            self.assertEqual([row[0] for row in rows], expected)
+
+    def test_time_relations_keep_full_range_topn_and_independent_bucket_counts(self):
+        request = make_request(
+            dimensions=[
+                {"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}},
+                {"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": "HOUR"},
+            ]
+        )
+        builder = LogAggregationSQLBuilder.from_request(self.context, request)
+        tree = sqlglot.parse_one(builder.build_complete_sql(effective_interval="HOUR"), read="starrocks")
+        ctes = [
+            cte.sql(dialect="sqlite")
+            for cte in tree.find_all(sqlglot.exp.CTE)
+            if cte.alias in {"category_counts", "ranked", "selected", "mapped", "aggregated", "bucketed", "time_rows"}
+        ]
+        origin = 1786550400000
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE normalized(d0_type TEXT,d0_key TEXT,event_timestamp INTEGER)")
+            db.executemany(
+                "INSERT INTO normalized VALUES(?,?,?)",
+                [("string", "GET", origin)] * 3
+                + [("string", "POST", origin + 3600000)] * 2
+                + [("string", "GET", origin + 86400000), (None, None, origin + 86400000)],
+            )
+            rows = db.execute(
+                "WITH "
+                + ",".join(ctes)
+                + " SELECT group_key,bucket,log_count,m0 FROM time_rows ORDER BY group_key,bucket"
+            ).fetchall()
+        self.assertEqual(rows, [(1, 0, 3, 3), (1, 24, 1, 1), (2, 1, 2, 2), (3, 24, 1, 1)])
+
+    @override_settings(TIME_ZONE="America/New_York")
+    def test_last_day_bucket_does_not_overflow_when_dst_makes_it_longer(self):
+        request = make_request(
+            dimensions=[{"id": "day", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": "DAY"}]
+        )
+        builder = LogAggregationSQLBuilder.from_request(self.context, request)
+        builder.time_axis = build_time_axis(
+            start_time="2026-10-31T00:00:00-04:00",
+            end_time="2026-11-01T23:59:00-05:00",
+            interval="DAY",
+            group_count=1,
+            numeric_columns=3,
+        )
+        expression = sqlglot.parse_one(builder._bucket_expression(), read="starrocks").sql(dialect="sqlite")
+        timestamp = int(datetime.fromisoformat("2026-11-01T23:59:00-05:00").timestamp() * 1000)
+        with sqlite3.connect(":memory:") as db:
+            bucket = db.execute(
+                "SELECT " + expression + " FROM (SELECT ? AS event_timestamp)", (timestamp,)
+            ).fetchone()[0]
+        self.assertEqual(bucket, 1)
+
+    @override_settings(TIME_ZONE="America/New_York")
+    def test_dst_multi_segment_day_axis_assigns_real_sql_boundaries(self):
+        """执行生产归桶表达式，跨25小时日的前后区段边界均落正确桶。"""
+        request = make_request(
+            dimensions=[{"id": "day", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": "DAY"}]
+        )
+        builder = LogAggregationSQLBuilder.from_request(self.context, request)
+        builder.time_axis = build_time_axis(
+            start_time="2026-10-30T00:00:00-04:00",
+            end_time="2026-11-03T00:00:00-05:00",
+            interval="DAY",
+            group_count=1,
+            numeric_columns=3,
+        )
+        expression = sqlglot.parse_one(builder._bucket_expression(), read="starrocks").sql(dialect="sqlite")
+        samples = [
+            ("2026-10-31T23:59:59-04:00", 1),
+            ("2026-11-01T00:00:00-04:00", 2),
+            ("2026-11-01T01:30:00-04:00", 2),
+            ("2026-11-01T01:30:00-05:00", 2),
+            ("2026-11-01T23:59:59-05:00", 2),
+            ("2026-11-02T00:00:00-05:00", 3),
+            ("2026-11-03T00:00:00-05:00", 4),
+        ]
+        with sqlite3.connect(":memory:") as db:
+            for value, expected in samples:
+                with self.subTest(value=value):
+                    timestamp = int(datetime.fromisoformat(value).timestamp() * 1000)
+                    actual = db.execute(
+                        "SELECT " + expression + " FROM (SELECT ? AS event_timestamp)", (timestamp,)
+                    ).fetchone()[0]
+                    self.assertEqual(actual, expected)
+
+    def test_physical_timestamp_closed_filter_precedes_bucket_assignment(self):
+        request = make_request(
+            dimensions=[{"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": "HOUR"}]
+        )
+        start_ms, end_ms = 1786550400000 + 1500000, 1786550400000 + 3600000
+        context = LogQueryContext(
+            username="tester",
+            namespace="default",
+            condition=request.condition,
+            table="logs",
+            conditions=tuple(
+                {"field": {"raw_name": "dtEventTimeStamp", "keys": []}, "operator": op, "filters": [value]}
+                for op, value in [("gte", start_ms), ("lte", end_ms)]
+            ),
+        )
+        builder = LogAggregationSQLBuilder.from_request(context, request)
+        tree = sqlglot.parse_one(builder.build_complete_sql(), read="starrocks")
+        ctes = [cte.sql(dialect="sqlite") for cte in tree.find_all(sqlglot.exp.CTE)]
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE logs(dtEventTimeStamp INTEGER,start_time INTEGER)")
+            db.executemany(
+                "INSERT INTO logs VALUES(?,0)", [(value,) for value in [start_ms - 1, start_ms, end_ms, end_ms + 1]]
+            )
+            rows = db.execute(
+                "WITH " + ",".join(ctes) + " SELECT bucket,log_count FROM time_rows ORDER BY bucket"
+            ).fetchall()
+        self.assertEqual(rows, [(0, 1), (1, 1)])

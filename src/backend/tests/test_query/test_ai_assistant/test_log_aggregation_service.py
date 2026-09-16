@@ -1,4 +1,4 @@
-"""聚合服务验证单SQL帧、权限及完整结果，远端Doris响应是唯一替身。"""
+"""验证聚合帧、敏感规则及结果完整性；查询上下文、IAM和远端Doris响应使用替身。"""
 import json
 from unittest import mock
 
@@ -14,6 +14,7 @@ from services.web.query.ai_assistant.exceptions import (
     LogQueryFailed,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
+    StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
     UnsupportedFieldType,
 )
@@ -488,3 +489,142 @@ class TestLogAggregationService(TestCase):
         )
         self.assertEqual(result.groups[2].values, ())
         self.assertEqual(result.rows[2]["flag"], None)
+
+    def _time_dimensions(self, interval="HOUR", category=True):
+        """时间列放首位，验证内部类别索引不会误用请求维度下标。"""
+        dimensions = [{"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": interval}]
+        if category:
+            dimensions.append({"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}})
+        return dimensions
+
+    def test_sparse_time_rows_fill_axis_and_keep_global_groups(self):
+        data = frames()
+        for row in data:
+            if row["frame"] == "ROW":
+                row["bucket"] = "0"
+        self.mock_query.side_effect = [
+            ({"list": [{"group_count": "3", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+            ({"list": data},),
+        ]
+        result = self._aggregate(dimensions=self._time_dimensions())
+        self.assertEqual(len(result.rows), 75)
+        self.assertEqual([g.count for g in result.groups], [6, 3, 1])
+        self.assertEqual(result.rows[0]["hour"], "2026-08-13T00:00:00+08:00")
+        self.assertEqual(result.rows[24]["hour"], "2026-08-14T00:00:00+08:00")
+        self.assertEqual(result.rows[1]["events"], 0)
+        self.assertIsNone(result.rows[1]["average"])
+        self.assertEqual(result.columns[0].effective_time_interval, "HOUR")
+        self.assertEqual(result.query_summary.requested_interval, "HOUR")
+        self.assertEqual(result.groups[0].values[0].dimension_id, "action")
+
+    def test_empty_pure_time_all_has_axis_but_category_empty_has_no_rows(self):
+        for category, groups, group_frames in [
+            (True, "0", []),
+            (False, "1", [{"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"}]),
+        ]:
+            with self.subTest(category=category):
+                data = [{"frame": "META", "n": "0", "a": groups, "b": "0", "c": "0", "d": "0", "e": "0"}] + group_frames
+                self.mock_query.side_effect = [
+                    ({"list": [{"group_count": groups, "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+                    ({"list": data},),
+                ]
+                result = self._aggregate(
+                    dimensions=self._time_dimensions(category=category), metrics=[{"id": "events", "type": "COUNT"}]
+                )
+                self.assertEqual(len(result.rows), 0 if category else 25)
+                if not category:
+                    self.assertEqual([row["events"] for row in result.rows], [0] * 25)
+
+    def test_distinct_count_fills_empty_time_buckets_with_zero(self):
+        """纯时序及类别时序空桶的去重计数为零，与有事件桶保留的引擎结果一致。"""
+        for category, total in ((False, 0), (False, 2), (True, 2)):
+            with self.subTest(category=category, total=total):
+                group = {"frame": "GROUP", "key": "1", "kind": "VALUE" if category else "ALL", "n": str(total)}
+                if category:
+                    group.update(d0_type="string", d0_json='"GET"')
+                data = [
+                    {
+                        "frame": "META",
+                        "n": str(total),
+                        "a": "1",
+                        "b": "1" if total else "0",
+                        "c": "0",
+                        "d": "0",
+                        "e": "0",
+                    },
+                    group,
+                ]
+                if total:
+                    data.append({"frame": "ROW", "key": "1", "bucket": "0", "n": "2", "m0": "2", "m1": "1"})
+                self.mock_query.side_effect = [
+                    ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+                    ({"list": data},),
+                ]
+                result = self._aggregate(
+                    dimensions=self._time_dimensions(category=category),
+                    metrics=[
+                        {"id": "events", "type": "COUNT"},
+                        {"id": "unique_users", "type": "DISTINCT_COUNT", "field": {"raw_name": "username"}},
+                    ],
+                )
+                self.assertEqual([row["unique_users"] for row in result.rows], [1 if total else 0] + [0] * 24)
+                self.assertEqual([row["events"] for row in result.rows], [total] + [0] * 24)
+
+    def test_time_truncation_duplicate_bucket_and_nonclosing_counts_reject(self):
+        for mutation in ("truncated", "duplicate", "count", "outside"):
+            with self.subTest(mutation=mutation):
+                data = frames()
+                for row in data:
+                    if row["frame"] == "ROW":
+                        row["bucket"] = "0"
+                if mutation == "truncated":
+                    data.pop(4)
+                elif mutation == "duplicate":
+                    data.append(dict(data[4]))
+                    data[0]["b"] = "4"
+                elif mutation == "count":
+                    data[4].update(n="5", m0="5")
+                else:
+                    data[4]["bucket"] = "25"
+                self.mock_query.side_effect = [
+                    ({"list": [{"group_count": "3", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+                    ({"list": data},),
+                ]
+                with self.assertRaises(LogQueryFailed):
+                    self._aggregate(dimensions=self._time_dimensions())
+
+    @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=200)
+    def test_auto_growth_reexecutes_complete_query_and_uses_only_final_snapshot(self):
+        data = frames()
+        for row in data:
+            if row["frame"] == "ROW":
+                row["bucket"] = "0"
+        self.mock_query.side_effect = [
+            ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+            ({"list": [data[0]]},),
+            ({"list": data},),
+        ]
+        result = self._aggregate(dimensions=self._time_dimensions(interval="AUTO"))
+        self.assertEqual(result.query_summary.effective_interval, "DAY")
+        self.assertEqual(len(result.rows), 6)
+        self.assertEqual(sum(row["events"] for row in result.rows), 10)
+        self.assertEqual(self.mock_query.call_count, 3)
+        final_sql = self.mock_query.call_args.args[0][0]["sql"]
+        self.assertIn("ROW_NUMBER() OVER", final_sql)
+        self.assertIn("FROM normalized", final_sql)
+
+    @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=200)
+    def test_explicit_growth_returns_budget_error_without_changing_interval(self):
+        self.mock_query.side_effect = [
+            ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+            ({"list": [frames()[0]]},),
+        ]
+        with self.assertRaises(StatisticsBudgetExceeded) as caught:
+            self._aggregate(dimensions=self._time_dimensions())
+        self.assertEqual(caught.exception.data["suggested_interval"], "DAY")
+        self.assertEqual(self.mock_query.call_count, 2)
+
+    @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=11)
+    def test_no_time_still_enforces_numeric_cell_budget(self):
+        with self.assertRaises(StatisticsBudgetExceeded):
+            self._aggregate()

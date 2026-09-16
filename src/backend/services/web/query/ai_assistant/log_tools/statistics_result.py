@@ -8,13 +8,21 @@ from dataclasses import dataclass
 
 from django.utils.translation import gettext_lazy
 
-from services.web.query.ai_assistant.exceptions import UnsupportedFieldType
+from services.web.query.ai_assistant.exceptions import (
+    StatisticsBudgetExceeded,
+    UnsupportedFieldType,
+)
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregationDataQuality,
+    AggregationDimensionType,
     AggregationGroup,
     AggregationGroupValue,
     AggregationMetricType,
+)
+from services.web.query.ai_assistant.log_tools.statistics_budget import (
+    budget_limits,
+    build_time_axis,
 )
 from services.web.query.ai_assistant.log_tools.statistics_types import (
     parse_statistics_scalar,
@@ -36,7 +44,7 @@ def statistics_count(value) -> int:
 
 @dataclass(frozen=True)
 class StatisticsResult:
-    """已验证的无时间聚合，用于 MCP 组装；后续时轴扩展复用完整性边界。"""
+    """已验证且补齐时间轴的聚合结果，供可信后端消费者组织响应。"""
 
     groups: tuple[AggregationGroup, ...]
     rows: tuple[dict, ...]
@@ -47,9 +55,14 @@ class StatisticsResult:
 class StatisticsResultParser:
     """只接受最终语句的完整帧集合，不信任远端行序或请求外的字段。"""
 
-    def __init__(self, request: AggregateLogsRequest):
+    def __init__(self, request: AggregateLogsRequest, time_axis=None, numeric_columns=None):
         self.request = request
-        self.dimensions = request.dimensions
+        self.dimensions = tuple(d for d in request.dimensions if d.type == AggregationDimensionType.FIELD)
+        self.time_dimension = next(
+            (d for d in request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET), None
+        )
+        self.time_axis = time_axis
+        self.numeric_columns = numeric_columns if numeric_columns is not None else len(request.metrics) + 2
         self.quality_indices = {i for i, m in enumerate(request.metrics) if m.needs_conversion}
 
     def parse(self, response: dict) -> StatisticsResult:
@@ -58,7 +71,9 @@ class StatisticsResultParser:
             raise ValueError("missing statistics frames")
         frames = response["list"]
         max_groups = self.request.top_n + 2 if self.dimensions else 1
-        if len(frames) > 1 + max_groups * 2 + len(self.quality_indices):
+        if len(frames) > 1 + max_groups * (1 + (len(self.time_axis.bucket_starts) if self.time_axis else 1)) + len(
+            self.quality_indices
+        ):
             raise ValueError("unbounded statistics frames")
         by_type = {kind: [] for kind in ("META", "GROUP", "ROW", "QUALITY")}
         for frame in frames:
@@ -75,13 +90,28 @@ class StatisticsResultParser:
             raise UnsupportedFieldType()
         if invalid_number:
             raise UnsupportedStatisticsNumber()
+        if group_count > max_groups:
+            raise ValueError("unbounded statistics groups")
+        buckets = len(self.time_axis.bucket_starts) if self.time_axis else 1
+        if group_count * buckets * self.numeric_columns > budget_limits()[1]:
+            try:
+                build_time_axis(
+                    start_time=self.request.condition.start_time,
+                    end_time=self.request.condition.end_time,
+                    interval=self.time_axis.effective_interval if self.time_axis else None,
+                    group_count=group_count,
+                    numeric_columns=self.numeric_columns,
+                )
+            except StatisticsBudgetExceeded as err:
+                err.actual_group_count = group_count
+                raise
         if (len(by_type["GROUP"]), len(by_type["ROW"]), len(by_type["QUALITY"])) != (
             group_count,
             row_count,
             quality_count,
         ):
             raise ValueError("truncated statistics frames")
-        if quality_count != len(self.quality_indices) or row_count != group_count:
+        if quality_count != len(self.quality_indices) or (not self.time_axis and row_count != group_count):
             raise ValueError("invalid statistics frame counts")
         groups = self._groups(by_type["GROUP"], total)
         rows = self._rows(by_type["ROW"], groups, total)
@@ -143,22 +173,24 @@ class StatisticsResultParser:
         return dict(sorted(groups.items()))
 
     def _rows(self, frames, groups, total):
-        """校验每组唯一行和指标空集语义，不对 AVG 等非可加指标求和。"""
+        """验证组/桶唯一及计数闭合，再补轴；非可加指标只保留原桶值。"""
         rows = {}
+        counts = {key: 0 for key in groups}
+        bucket_starts = self.time_axis.bucket_starts if self.time_axis else (None,)
         for frame in frames:
             key = statistics_count(frame.get("key"))
             count = statistics_count(frame.get("n"))
-            if key not in groups or key in rows or count != groups[key].count:
+            bucket = statistics_count(frame.get("bucket")) if self.time_axis else 0
+            identity = (key, bucket)
+            if key not in groups or identity in rows or bucket >= len(bucket_starts):
+                raise ValueError("statistics row group/bucket mismatch")
+            if self.time_axis and count == 0:
+                raise ValueError("sparse statistics row must contain events")
+            if not self.time_axis and count != groups[key].count:
                 raise ValueError("statistics row group/count mismatch")
-            group = groups[key]
-            row = dict(
-                group_id=group.group_id,
-                group_kind=group.kind.value,
-                log_count=count,
-                log_ratio=count / total if total else None,
-            )
-            row.update({d.id: None for d in self.dimensions})
-            row.update({v.dimension_id: v.value for v in group.values})
+            counts[key] += count
+            row = self._empty_row(groups[key], bucket_starts[bucket], total)
+            row.update(log_count=count, log_ratio=count / total if total else None)
             for i, metric in enumerate(self.request.metrics):
                 if f"m{i}" not in frame:
                     raise ValueError("statistics row misses metric")
@@ -172,10 +204,31 @@ class StatisticsResultParser:
                     if count == 0 and value is not None:
                         raise ValueError("statistics empty metric is not null")
                 row[metric.id] = value
-            rows[key] = row
-        if rows.keys() != groups.keys():
+            rows[identity] = row
+        if any(counts[key] != group.count for key, group in groups.items()):
+            raise ValueError("statistics bucket counts do not close")
+        if not self.time_axis and {key for key, _ in rows} != groups.keys():
             raise ValueError("statistics row groups are incomplete")
-        return tuple(rows[key] for key in groups)
+        return tuple(
+            rows.get((key, index), self._empty_row(group, start, total))
+            for key, group in groups.items()
+            for index, start in enumerate(bucket_starts)
+        )
+
+    def _empty_row(self, group, bucket_start, total):
+        """建立可公开的行身份；空桶计数为零，没有有效值的数值指标保持 null。"""
+        row = dict(group_id=group.group_id, group_kind=group.kind.value, log_count=0, log_ratio=0.0 if total else None)
+        row.update({d.id: None for d in self.dimensions})
+        row.update({v.dimension_id: v.value for v in group.values})
+        row.update(
+            {
+                m.id: 0 if m.type in {AggregationMetricType.COUNT, AggregationMetricType.DISTINCT_COUNT} else None
+                for m in self.request.metrics
+            }
+        )
+        if self.time_dimension:
+            row[self.time_dimension.id] = bucket_start
+        return row
 
     def _quality(self, frames, total):
         """质量计数覆盖完整原集合，空串计 present，失败转换不作为零。"""

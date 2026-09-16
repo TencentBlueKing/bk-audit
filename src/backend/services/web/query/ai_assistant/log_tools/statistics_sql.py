@@ -3,6 +3,8 @@
 预检只供规划使用，最终语句重新计算排名、质量及完整性计数。
 所有 UNION 值显式走 STRING 通道，防止传输层提前解析数值类别。
 """
+from datetime import datetime
+
 from services.web.query.ai_assistant.exceptions import UnsupportedAggregation
 from services.web.query.ai_assistant.log_tools.schemas import (
     AGGREGATION_STANDARD_FIELD_TYPES,
@@ -11,11 +13,16 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationMetricType,
     AggregationValueType,
 )
+from services.web.query.ai_assistant.log_tools.statistics_budget import (
+    budget_limits,
+    build_time_axis,
+)
 from services.web.query.ai_assistant.log_tools.statistics_fields import (
     SCALAR_KINDS,
     StatisticsFieldSQL,
     literal,
 )
+from services.web.query.constants import TIMESTAMP_PARTITION_FIELD
 from services.web.query.utils.doris import BaseDorisSQLBuilder
 
 LONG_LITERAL_REGEXP = r"^-?[0-9]{1,18}$"
@@ -29,6 +36,8 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         self.context = context
         self.request = AggregateLogsRequest.model_validate(request.model_dump())
         self.effective_time_intervals = {}
+        self.time_axis = None
+        self.numeric_columns = len(self.request.metrics) + 2
         self.dimensions = tuple(d for d in self.request.dimensions if d.type == AggregationDimensionType.FIELD)
         self.fields = []
         self._field_indices = {}
@@ -91,6 +100,8 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
     def _base_ctes(self):
         """构造全范围规范化关系；任何无效类型/数值均在 TopN 之前计数。"""
         columns = [column for field in self.fields for column in field.source_columns(self)]
+        if self.time_axis:
+            columns.append(f"`{TIMESTAMP_PARTITION_FIELD}` AS event_timestamp")
         base = str(self._build_where(self.query.select(1)))
         base = base.replace("SELECT 1", "SELECT " + (", ".join(columns) or "1 AS source_row"), 1)
         ctes = [f"source_values AS ({base})"]
@@ -160,13 +171,13 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
 
     def build_preflight_sql(self):
         """一行全范围类型/类别计数供 Task4 规划；最终查询不会复用这些计数。"""
-        ctes = self._base_ctes()
-        categories = "(SELECT COUNT(*) FROM category_counts)" if self.dimensions else "0"
+        ctes = self._base_ctes() + self._group_ctes()
         return (
             "WITH "
             + ",\n".join(ctes)
-            + " SELECT total_count, invalid_type_count, invalid_number_count, "
-            + f"{categories} AS category_count FROM validation"
+            + " SELECT CAST((SELECT COUNT(*) FROM aggregated) AS STRING) AS group_count, "
+            + "CAST(invalid_type_count AS STRING) AS invalid_type_count, "
+            + "CAST(invalid_number_count AS STRING) AS invalid_number_count FROM validation"
         )
 
     def _group_ctes(self):
@@ -196,7 +207,7 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
 
     def _frame(self, values, source):
         """给每个 UNION 分支显式补 STRING NULL，避免列类型提升破坏数值通道。"""
-        names = ["frame", "key", "kind", "n", "a", "b", "c", "d", "e"]
+        names = ["frame", "key", "kind", "n", "a", "b", "c", "d", "e", "bucket"]
         names.extend(f"d{i}_{part}" for i in range(len(self.dimensions)) for part in ("type", "json"))
         names.extend(f"m{i}" for i in range(len(self.request.metrics)))
         return (
@@ -207,10 +218,32 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         )
 
     def build_complete_sql(self, effective_interval=None):
-        """生成最终单语句；时间及预算规划由下一阶段接入，绝不返回伪完整时序。"""
-        if len(self.dimensions) != len(self.request.dimensions) or effective_interval is not None:
+        """生成最终同快照帧；预算超限时只留 META 供受控失败或 AUTO 重查。"""
+        time_dimensions = [d for d in self.request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET]
+        if time_dimensions and self.time_axis is None:
+            effective_interval = effective_interval or time_dimensions[0].interval
+            self.time_axis = build_time_axis(
+                start_time=self.context.condition.start_time,
+                end_time=self.context.condition.end_time,
+                interval=effective_interval,
+                group_count=0,
+                numeric_columns=self.numeric_columns,
+            )
+        if not time_dimensions and effective_interval is not None:
             raise UnsupportedAggregation()
         ctes = self._base_ctes() + self._group_ctes()
+        row_source = "aggregated"
+        if self.time_axis:
+            metrics = ", ".join(f"{self.metric_aggregate(i)} AS m{i}" for i in range(len(self.request.metrics)))
+            source = "mapped" if self.dimensions else "normalized"
+            group_key = "group_key" if self.dimensions else "1 AS group_key"
+            grouping = "group_key, bucket" if self.dimensions else "bucket"
+            ctes.append(f"bucketed AS (SELECT *, {self._bucket_expression()} AS bucket FROM {source})")
+            ctes.append(
+                f"time_rows AS (SELECT {group_key}, bucket, COUNT(*) AS log_count, {metrics} "
+                f"FROM bucketed GROUP BY {grouping})"
+            )
+            row_source = "time_rows"
         quality_indices = [i for i, m in enumerate(self.request.metrics) if m.needs_conversion]
         for i in quality_indices:
             p = self.field_prefix(self.request.metrics[i].field)
@@ -219,13 +252,17 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                 f"COUNT(m{i}_value) AS converted_count FROM normalized)"
             )
         guard = "validation.invalid_type_count = 0 AND validation.invalid_number_count = 0"
+        bucket_count = len(self.time_axis.bucket_starts) if self.time_axis else 1
+        guard += (
+            f" AND (SELECT COUNT(*) FROM aggregated) * {bucket_count} * {self.numeric_columns} <= {budget_limits()[1]}"
+        )
         frames = [
             self._frame(
                 dict(
                     frame="'META'",
                     n="total_count",
                     a="(SELECT COUNT(*) FROM aggregated)",
-                    b="(SELECT COUNT(*) FROM aggregated)",
+                    b=f"(SELECT COUNT(*) FROM {row_source})",
                     c=str(len(quality_indices)),
                     d="invalid_type_count",
                     e="invalid_number_count",
@@ -241,7 +278,9 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         frames.append(self._frame(group, f"FROM aggregated g{join} CROSS JOIN validation WHERE {guard}"))
         row = dict(frame="'ROW'", key="g.group_key", n="g.log_count")
         row.update({f"m{i}": f"g.m{i}" for i in range(len(self.request.metrics))})
-        frames.append(self._frame(row, f"FROM aggregated g CROSS JOIN validation WHERE {guard}"))
+        if self.time_axis:
+            row["bucket"] = "g.bucket"
+        frames.append(self._frame(row, f"FROM {row_source} g CROSS JOIN validation WHERE {guard}"))
         for i in quality_indices:
             frames.append(
                 self._frame(
@@ -256,3 +295,24 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                 )
             )
         return "WITH " + ",\n".join(ctes) + "\n" + "\nUNION ALL\n".join(frames)
+
+    def _bucket_expression(self):
+        """可信等间隔轴用整数毫秒归桶；仅跨不等长日区段使用少量 CASE 分支。"""
+        starts = [int(datetime.fromisoformat(value).timestamp() * 1000) for value in self.time_axis.bucket_starts]
+        if len(starts) == 1:
+            return "0"
+        segments = []
+        index = 0
+        while index < len(starts) - 1:
+            step = starts[index + 1] - starts[index]
+            end = index + 1
+            while end < len(starts) - 1 and starts[end + 1] - starts[end] == step:
+                end += 1
+            expression = f"({index} + ((event_timestamp - {starts[index]}) DIV {step}))"
+            segments.append((starts[end], expression))
+            index = end
+        if len(segments) == 1:
+            # 最后一个桶可能只有闭区间终点，算术仍保留其独立索引。
+            return f"CASE WHEN event_timestamp >= {starts[-1]} THEN {len(starts) - 1} ELSE {segments[0][1]} END"
+        branches = " ".join(f"WHEN event_timestamp < {end} THEN {expression}" for end, expression in segments)
+        return f"CASE {branches} ELSE {len(starts) - 1} END"

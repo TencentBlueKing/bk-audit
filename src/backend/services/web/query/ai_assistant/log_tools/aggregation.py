@@ -12,8 +12,10 @@ from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
 from services.web.query.ai_assistant.exceptions import (
+    StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
     UnsupportedAggregation,
+    UnsupportedFieldType,
 )
 from services.web.query.ai_assistant.log_tools.context import LogQueryContextService
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
@@ -24,6 +26,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsResponse,
     AggregationColumn,
     AggregationColumnRole,
+    AggregationDimensionType,
     AggregationMetricType,
     AggregationQuerySummary,
     AggregationResultDataType,
@@ -31,8 +34,11 @@ from services.web.query.ai_assistant.log_tools.schemas import (
 from services.web.query.ai_assistant.log_tools.sensitive import (
     SensitiveLogFieldPermissionService,
 )
+from services.web.query.ai_assistant.log_tools.statistics_budget import build_time_axis
 from services.web.query.ai_assistant.log_tools.statistics_result import (
     StatisticsResultParser,
+    UnsupportedStatisticsNumber,
+    statistics_count,
 )
 from services.web.query.ai_assistant.log_tools.statistics_sql import (
     StatisticsSQLBuilder,
@@ -40,7 +46,7 @@ from services.web.query.ai_assistant.log_tools.statistics_sql import (
 
 
 class LogAggregationService:
-    """执行无时间的完整聚合；Task4 在相同查询/解析边界扩展完整时轴和预算规划。"""
+    """统一执行全范围分组和时序，成功结果通过完整性及多维预算校验。"""
 
     @classmethod
     def aggregate(cls, *, username: str, namespace: str, request: AggregateLogsRequest) -> AggregateLogsResponse:
@@ -59,10 +65,9 @@ class LogAggregationService:
                 fields=SensitiveLogFieldPermissionService.collect_field_paths(fields),
             )
             builder = StatisticsSQLBuilder.from_request(context, request)
-            raw, took_ms = cls._query(builder)
-            result = StatisticsResultParser(request).parse(raw)
+            result, axis, took_ms = cls._execute(builder, numeric_columns=len(request.metrics) + 2)
             response = AggregateLogsResponse(
-                columns=cls._columns(request),
+                columns=cls._columns(request, axis),
                 rows=result.rows,
                 groups=result.groups,
                 data_quality=result.quality,
@@ -74,8 +79,8 @@ class LogAggregationService:
                     scope_id=context.condition.scope_id,
                     start_time=context.condition.start_time,
                     end_time=context.condition.end_time,
-                    requested_interval=None,
-                    effective_interval=None,
+                    requested_interval=axis.requested_interval,
+                    effective_interval=axis.effective_interval,
                     timezone=settings.TIME_ZONE,
                     complete=True,
                     took_ms=took_ms,
@@ -90,10 +95,68 @@ class LogAggregationService:
                 raise
             raise mapped from err
 
+    @classmethod
+    def _execute(cls, builder, *, numeric_columns):
+        """可信后端指定预算列数；预检只规划，AUTO 超限丢弃快照并完整重查。"""
+        request = builder.request
+        time_dimension = next((d for d in request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET), None)
+        builder.numeric_columns = numeric_columns
+        took_ms = 0
+        group_count = 0
+        if time_dimension:
+            raw, elapsed = cls._query(builder, preflight=True)
+            took_ms += elapsed
+            if not isinstance(raw.get("list"), list) or len(raw["list"]) != 1:
+                raise ValueError("invalid statistics preflight")
+            preflight = raw["list"][0]
+            if statistics_count(preflight.get("invalid_type_count")):
+                raise UnsupportedFieldType()
+            if statistics_count(preflight.get("invalid_number_count")):
+                raise UnsupportedStatisticsNumber()
+            group_count = statistics_count(preflight.get("group_count"))
+            if group_count > (request.top_n + 2 if builder.dimensions else 1):
+                raise ValueError("unbounded statistics preflight")
+        axis = build_time_axis(
+            start_time=builder.context.condition.start_time,
+            end_time=builder.context.condition.end_time,
+            interval=time_dimension.interval if time_dimension else None,
+            group_count=group_count,
+            numeric_columns=numeric_columns,
+        )
+        while True:
+            builder.time_axis = axis if time_dimension else None
+            raw, elapsed = cls._query(builder)
+            took_ms += elapsed
+            try:
+                result = StatisticsResultParser(request, builder.time_axis, numeric_columns).parse(raw)
+                return result, axis, took_ms
+            except StatisticsBudgetExceeded as err:
+                suggestion = err.data["suggested_interval"]
+                if not time_dimension or time_dimension.interval != "AUTO" or suggestion is None:
+                    raise
+                retry_axis = build_time_axis(
+                    start_time=builder.context.condition.start_time,
+                    end_time=builder.context.condition.end_time,
+                    interval=suggestion,
+                    group_count=err.actual_group_count,
+                    numeric_columns=numeric_columns,
+                )
+                axis = type(axis)(
+                    axis.requested_interval,
+                    retry_axis.effective_interval,
+                    retry_axis.timezone,
+                    retry_axis.bucket_starts,
+                )
+
     @staticmethod
-    def _query(builder):
+    def _query(builder, preflight=False):
         """仅提交一个最终逻辑 SQL；bulk 保留既有 BKBase 执行链及超时映射。"""
-        requests = [{"sql": builder.build_complete_sql(), "prefer_storage": StorageType.DORIS.value}]
+        requests = [
+            {
+                "sql": builder.build_preflight_sql() if preflight else builder.build_complete_sql(),
+                "prefer_storage": StorageType.DORIS.value,
+            }
+        ]
         started = time.perf_counter()
         responses = api.bk_base.safe_query_sync.bulk_request(requests)
         took_ms = int((time.perf_counter() - started) * 1000)
@@ -109,16 +172,21 @@ class LogAggregationService:
             raise StatisticsResponseTooLarge()
 
     @classmethod
-    def _columns(cls, request):
+    def _columns(cls, request, axis=None):
         """维度声明由服务端元信息给出；JSON 使用 scalar，类型见每个 group value。"""
         dimensions = tuple(
             AggregationColumn(
                 id=d.id,
                 name=d.id,
                 role=AggregationColumnRole.DIMENSION,
-                data_type=AggregationResultDataType.SCALAR
+                data_type=AggregationResultDataType.TIMESTAMP
+                if d.type == AggregationDimensionType.TIME_BUCKET
+                else AggregationResultDataType.SCALAR
                 if d.field.keys
                 else AggregationResultDataType(AGGREGATION_STANDARD_FIELD_TYPES[d.field.raw_name]),
+                effective_time_interval=axis.effective_interval
+                if axis and d.type == AggregationDimensionType.TIME_BUCKET
+                else None,
             )
             for d in request.dimensions
         )
