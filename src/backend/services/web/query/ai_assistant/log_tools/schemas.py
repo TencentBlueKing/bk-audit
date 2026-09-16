@@ -5,6 +5,7 @@ Unicode 与标点 key，但点号保留为现有跨模块路径分隔符；SQL �
 """
 
 import json
+import math
 from enum import StrEnum
 from typing import Annotated, Any, Dict, List, Optional, Tuple
 
@@ -19,11 +20,12 @@ from pydantic import (
     StrictStr,
     ValidationInfo,
     field_validator,
+    model_serializer,
     model_validator,
 )
 from rest_framework import serializers
 
-from apps.meta.utils.fields import EXTEND_DATA, STANDARD_FIELDS, START_TIME
+from apps.meta.utils.fields import STANDARD_FIELDS, START_TIME
 from services.web.query.ai_assistant.schemas import (
     Condition,
     ConditionField,
@@ -70,26 +72,28 @@ LOG_TOOL_SORTABLE_FIELD_NAMES = frozenset(
         *(config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs if not config.field.is_json),
     )
 )
-# 聚合和明细查询的风险模型不同：聚合无法逐行脱敏，因此只允许这一组经过
-# 成本评估的字段。它刻意不以 LogFieldRef 的允许集作为聚合白名单。
-AGGREGATION_DIMENSION_FIELD_NAMES = frozenset(
-    ("action_id", "resource_type_id", "username", "result_code", "access_type", "start_time", "extend_data")
-)
-AGGREGATION_METRIC_FIELD_NAMES = frozenset(
-    ("action_id", "resource_type_id", "username", "result_code", "access_type", "start_time", "extend_data")
-)
 AGGREGATION_STANDARD_FIELD_TYPES = {field.field_name: field.field_type for field in STANDARD_FIELDS}
 AGGREGATION_NUMERIC_FIELD_TYPES = frozenset(("int", "long", "float", "double", "timestamp"))
 AGGREGATION_MAX_DIMENSIONS = 2
 AGGREGATION_MAX_METRICS = 5
-AGGREGATION_MAX_LIMIT = 100
-AGGREGATION_RESPONSE_MAX_BYTES = 1024 * 1024
+AGGREGATION_MAX_TOP_N = 500
+AGGREGATION_MAX_TIME_BUCKETS = 1440
+AGGREGATION_MAX_CELLS = 100000
+AGGREGATION_RESPONSE_MAX_BYTES = 4 * 1024 * 1024
+AGGREGATION_RESERVED_COLUMN_IDS = frozenset(("group_id", "group_kind", "log_count", "log_ratio", "bucket_start"))
 
 
 def _bounded_limit(configured_limit: int, hard_limit: int, minimum: int) -> int:
     """运行环境只能收紧冻结协议上限，不能放大 Agent 工具成本。"""
 
     return min(hard_limit, max(minimum, configured_limit))
+
+
+def _omit_null_request_schema(schema: Dict[str, Any]) -> None:
+    """公开请求字段保留可省略语义，但不将内部 None 默认态暴露为合法输入。"""
+    alternatives = schema.pop("anyOf")
+    schema.update(next(item for item in alternatives if item.get("type") != "null"))
+    schema.pop("default", None)
 
 
 def _json_size(value: Any) -> int:
@@ -599,6 +603,9 @@ class AggregationResultDataType(StrEnum):
     TIMESTAMP = "timestamp"
     FLOAT = "float"
     DATETIME = "datetime"
+    BOOLEAN = "boolean"
+    NUMBER = "number"
+    SCALAR = "scalar"
 
 
 class AggregationDimension(BaseModel):
@@ -609,32 +616,46 @@ class AggregationDimension(BaseModel):
     id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="维度唯一 ID，仅允许字母开头。")
     type: AggregationDimensionType = Field(
         ...,
-        description="FIELD 按字段分组且不得传 interval；TIME_BUCKET 只能使用无 keys 的 start_time，必须传 interval。",
+        description="FIELD 按字段分组且不得传 interval；TIME_BUCKET 只能使用无 keys 的 start_time，interval 默认 AUTO。",
     )
     field: LogFieldRef = Field(
         ...,
-        description=(
-            "FIELD 允许的根字段仅限 action_id、resource_type_id、username、result_code、access_type、"
-            "start_time、extend_data，extend_data 必须带 keys；TIME_BUCKET 只能使用无 keys 的 start_time。"
-        ),
+        description="日志检索可见字段及合法 JSON keys 路径；TIME_BUCKET 只能使用无 keys 的 start_time。",
     )
-    interval: Optional[AggregationTimeInterval] = Field(
+    interval: Annotated[
+        Optional[AggregationTimeInterval],
+        serializers.ChoiceField(
+            choices=[item.value for item in AggregationTimeInterval], required=False, allow_null=False
+        ),
+    ] = Field(
         default=None,
-        description="FIELD 必须省略；TIME_BUCKET 必填，可选 AUTO、MINUTE、HOUR、DAY；AUTO 由服务按时间范围选择实际粒度。",
+        json_schema_extra=_omit_null_request_schema,
+        description="FIELD 必须省略；TIME_BUCKET 默认 AUTO，可选 AUTO、MINUTE、HOUR、DAY；AUTO 按时间范围和预算选择实际粒度。",
     )
 
     @model_validator(mode="after")
     def validate_dimension_contract(self):
-        if self.field.raw_name not in AGGREGATION_DIMENSION_FIELD_NAMES:
-            raise ValueError("unsupported aggregation dimension field")
-        if self.field.raw_name == EXTEND_DATA.field_name and not self.field.keys:
-            raise ValueError("extend_data dimension requires a key path")
+        """统一字段合法性由 LogFieldRef 校验；这里只限制维度形态。"""
+        if self.field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES and not self.field.keys:
+            raise ValueError("JSON dimension requires a key path")
         if self.type == AggregationDimensionType.TIME_BUCKET:
-            if self.field.raw_name != START_TIME.field_name or self.field.keys or self.interval is None:
-                raise ValueError("time bucket only supports start_time with an interval")
-        elif self.interval is not None:
+            if self.field.raw_name != START_TIME.field_name or self.field.keys:
+                raise ValueError("time bucket only supports start_time")
+            if "interval" not in self.model_fields_set:
+                self.interval = AggregationTimeInterval.AUTO
+            elif self.interval is None:
+                raise ValueError("time bucket interval cannot be null")
+        elif "interval" in self.model_fields_set:
             raise ValueError("field dimension does not accept interval")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_dimension(self, handler):
+        """FIELD 序列化省略不适用的 interval，避免再校验将默认 null 视为显式参数。"""
+        data = handler(self)
+        if self.type == AggregationDimensionType.FIELD:
+            data.pop("interval", None)
+        return data
 
 
 class AggregationMetric(BaseModel):
@@ -653,10 +674,7 @@ class AggregationMetric(BaseModel):
     )
     field: Optional[LogFieldRef] = Field(
         default=None,
-        description=(
-            "COUNT 必须省略；其余指标必须传。允许的根字段仅限 action_id、resource_type_id、username、"
-            "result_code、access_type、start_time、extend_data；extend_data 必须带 keys。"
-        ),
+        description="COUNT 必须省略；其余指标必须传日志检索可见字段或合法 JSON keys 路径。",
     )
     value_type: Optional[AggregationValueType] = Field(
         default=None,
@@ -697,9 +715,7 @@ class AggregationMetric(BaseModel):
 
         if self.field is None:
             raise ValueError("aggregation metric requires a field")
-        if self.field.raw_name not in AGGREGATION_METRIC_FIELD_NAMES:
-            raise ValueError("unsupported aggregation metric field")
-        if self.field.raw_name == EXTEND_DATA.field_name and not self.field.keys:
+        if self.field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES and not self.field.keys:
             raise ValueError("extend_data metric requires a key path")
 
         if self.type == AggregationMetricType.DISTINCT_COUNT:
@@ -732,7 +748,7 @@ class AggregationOrder(BaseModel):
 
 
 class AggregateLogsRequest(AgentLogToolRequest):
-    """类型化聚合请求，配置只能收紧 frozen hard limit。"""
+    """全范围类别聚合请求，配置只能收紧统一预算上限。"""
 
     dimensions: Tuple[AggregationDimension, ...] = Field(
         default=(),
@@ -745,16 +761,22 @@ class AggregateLogsRequest(AgentLogToolRequest):
         max_length=AGGREGATION_MAX_METRICS,
         description="1 至 5 个固定聚合指标；不接受 SQL、任意函数名或表达式。",
     )
-    order_by: Tuple[AggregationOrder, ...] = Field(default=(), description="可选排序，只能引用已声明的维度或指标 ID。")
-    limit: int = Field(
-        default=settings.AI_LOG_AGGREGATION_DEFAULT_LIMIT,
+    order_by: Tuple[AggregationOrder, ...] = Field(default=(), description="类别排名，只引用已声明非时间维度或指标 ID；无类别维度必须省略。")
+    top_n: Annotated[
+        Optional[int],
+        serializers.IntegerField(required=False, allow_null=False, min_value=1, max_value=AGGREGATION_MAX_TOP_N),
+    ] = Field(
+        default=None,
+        json_schema_extra=_omit_null_request_schema,
+        strict=True,
         ge=1,
-        le=AGGREGATION_MAX_LIMIT,
-        description="返回分组数，最大 100；运行配置只能进一步收紧，服务通过多取一行计算 has_more。",
+        le=AGGREGATION_MAX_TOP_N,
+        description="全范围非缺失类别数，有类别默认 100、最大 500；无类别必须省略，显式 null 也拒绝。",
     )
 
     @model_validator(mode="after")
     def validate_request_contract(self):
+        """校验类别排名、保留列 ID 和统一请求预算。"""
         if len(self.dimensions) > AGGREGATION_MAX_DIMENSIONS:
             raise ValueError("too many aggregation dimensions")
         if not self.metrics or len(self.metrics) > AGGREGATION_MAX_METRICS:
@@ -762,17 +784,39 @@ class AggregateLogsRequest(AgentLogToolRequest):
         if sum(item.type == AggregationDimensionType.TIME_BUCKET for item in self.dimensions) > 1:
             raise ValueError("at most one time bucket is allowed")
 
+        category_dimensions = [item for item in self.dimensions if item.type == AggregationDimensionType.FIELD]
+        if not category_dimensions and ({"top_n", "order_by"} & self.model_fields_set):
+            raise ValueError("no category dimensions: top_n and order_by must be omitted")
+        if category_dimensions and "top_n" not in self.model_fields_set:
+            self.top_n = settings.AI_LOG_AGGREGATION_DEFAULT_TOP_N
+        elif category_dimensions and self.top_n is None:
+            raise ValueError("category top_n cannot be null")
+
         ids = [item.id for item in (*self.dimensions, *self.metrics)]
+        if AGGREGATION_RESERVED_COLUMN_IDS.intersection(ids):
+            raise ValueError("reserved aggregation column id")
         if len(ids) != len(set(ids)):
             raise ValueError("dimension and metric ids must be globally unique")
         order_ids = [item.target_id for item in self.order_by]
         if len(order_ids) != len(set(order_ids)):
             raise ValueError("duplicate order targets are not allowed")
-        if len(order_ids) > len(ids) or any(item not in ids for item in order_ids):
-            raise ValueError("order_by must reference declared ids")
-        if self.limit > _bounded_limit(settings.AI_LOG_AGGREGATION_MAX_LIMIT, AGGREGATION_MAX_LIMIT, 1):
-            raise ValueError("aggregation limit exceeds maximum")
+        ranking_ids = {item.id for item in (*category_dimensions, *self.metrics)}
+        if any(item not in ranking_ids for item in order_ids):
+            raise ValueError("order_by must reference category or metric ids")
+        if self.top_n is not None and self.top_n > _bounded_limit(
+            settings.AI_LOG_AGGREGATION_MAX_TOP_N, AGGREGATION_MAX_TOP_N, 1
+        ):
+            raise ValueError("aggregation top_n exceeds maximum")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_request(self, handler):
+        """省略无类别请求的不适用参数，支持 Web、Resource、Service 多次协议校验。"""
+        data = handler(self)
+        if not any(item.type == AggregationDimensionType.FIELD for item in self.dimensions):
+            data.pop("top_n", None)
+            data.pop("order_by", None)
+        return data
 
 
 class AggregationColumn(BaseModel):
@@ -781,43 +825,131 @@ class AggregationColumn(BaseModel):
     id: str
     name: str
     role: AggregationColumnRole
-    data_type: AggregationResultDataType
+    data_type: AggregationResultDataType = Field(
+        description="列值类型；scalar 表示混合或尚未观察到的 JSON 标量，结合 groups.values.value_type 判读，不能为 object/array。"
+    )
     effective_time_interval: Optional[AggregationEffectiveTimeInterval] = None
 
 
+class AggregationGroupKind(StrEnum):
+    """完整聚合的真实类别与合成分组。"""
+
+    VALUE = "VALUE"
+    OTHER = "OTHER"
+    MISSING = "MISSING"
+    ALL = "ALL"
+
+
+class AggregationGroupValue(BaseModel):
+    """类别维度的有类型标量，保留布尔、数字和字符串的区别。"""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "oneOf": [
+                {"properties": {"value_type": {"const": value_type.value}, "value": {"type": value_type.value}}}
+                for value_type in (
+                    JSONValueType.BOOLEAN,
+                    JSONValueType.INTEGER,
+                    JSONValueType.NUMBER,
+                    JSONValueType.STRING,
+                )
+            ]
+        },
+    )
+
+    dimension_id: str
+    value_type: JSONValueType = Field(
+        json_schema_extra={
+            "enum": [JSONValueType.BOOLEAN, JSONValueType.INTEGER, JSONValueType.NUMBER, JSONValueType.STRING]
+        },
+        description="非缺失标量类型；容器和 null 不能作为 VALUE 组类别。",
+    )
+    value: Annotated[Any, serializers.JSONField(allow_null=False)] = Field(
+        json_schema_extra={"anyOf": [{"type": "boolean"}, {"type": "integer"}, {"type": "number"}, {"type": "string"}]},
+        description="与 value_type 一致的非 null 标量；保留空字符串。",
+    )
+
+    @model_validator(mode="after")
+    def validate_scalar_type(self):
+        """拒绝缺失、容器和类型错配；数值精度安全范围由执行层校验。"""
+        valid = {
+            JSONValueType.BOOLEAN: type(self.value) is bool,
+            JSONValueType.INTEGER: type(self.value) is int,
+            JSONValueType.NUMBER: type(self.value) in (int, float),
+            JSONValueType.STRING: type(self.value) is str,
+        }.get(self.value_type, False)
+        if not valid or (type(self.value) is float and not math.isfinite(self.value)):
+            raise ValueError("group value must match a finite non-null scalar type")
+        return self
+
+
+class AggregationGroup(BaseModel):
+    """全范围类别合计；合成组使用空 values，不伪造业务值。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    group_id: str
+    kind: AggregationGroupKind
+    values: Tuple[AggregationGroupValue, ...] = Field(description="VALUE 按非时间维度声明顺序；其他组为空数组。")
+    count: int = Field(ge=0)
+    ratio: Optional[float] = Field(ge=0, le=1, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_values(self):
+        """真实类别必须有值；合成组必须为空，避免与业务文本类别混淆。"""
+        if bool(self.values) != (self.kind == AggregationGroupKind.VALUE):
+            raise ValueError("group values do not match group kind")
+        return self
+
+
 class AggregationDataQuality(BaseModel):
-    """一个安全转换指标在完整检索范围内的输入质量计数。"""
+    """一个转换指标在完整检索范围内的输入质量；空字符串计入 present。"""
+
+    model_config = ConfigDict(extra="forbid")
 
     metric_id: str = Field(description="需要数值转换的指标 ID。")
-    non_empty_count: int = Field(description="完整检索范围内参与转换的非空值数量。")
-    converted_count: int = Field(description="完整检索范围内成功转换为目标数值类型的数量。")
-    conversion_failed_count: int = Field(description="完整检索范围内非空但转换失败的数量。")
+    present_count: int = Field(ge=0, description="完整检索范围内非缺失值数量，包含空字符串。")
+    converted_count: int = Field(ge=0, description="完整检索范围内成功转换为目标数值类型的数量。")
+    conversion_failed_count: int = Field(ge=0, description="完整检索范围内存在但转换失败的数量，包含不可转换的空字符串。")
+
+    @model_validator(mode="after")
+    def validate_counts(self):
+        """转换成功与失败必须覆盖全部存在值。"""
+        if self.present_count != self.converted_count + self.conversion_failed_count:
+            raise ValueError("invalid conversion quality counts")
+        return self
 
 
 class AggregationQuerySummary(LogQueryExecutionSummary):
-    """聚合执行摘要，仅保留非敏感运行元数据。"""
+    """完整统计的实际范围、TopN 和时间预算决策，不表示分页。"""
 
-    returned_count: int = Field(description="本次实际返回的分组数。")
-    has_more: bool = Field(description="是否还有未返回的聚合分组。")
+    model_config = ConfigDict(extra="forbid")
+
+    returned_count: int = Field(ge=0, description="本次实际返回的 rows 行数。")
+    total_count: int = Field(ge=0, description="完整检索范围内日志总数。")
+    top_n: Optional[int] = Field(ge=1, le=AGGREGATION_MAX_TOP_N, description="实际类别上限；无类别维度为 null。")
+    has_other: bool
+    scope_id: str
+    start_time: str
+    end_time: str
+    requested_interval: Optional[AggregationTimeInterval]
+    effective_interval: Optional[AggregationEffectiveTimeInterval]
+    timezone: str
+    complete: bool = Field(description="成功响应必须包含同口径完整统计。")
 
 
 class AggregateLogsResponse(BaseModel):
-    """聚合响应仅含声明列、分组结果和转换质量摘要。"""
+    """完整聚合响应；字节、时间桶和单元格预算由执行层统一校验。"""
+
+    model_config = ConfigDict(extra="forbid")
 
     columns: Tuple[AggregationColumn, ...]
     rows: Annotated[
         Tuple[Dict[str, Any], ...],
-        serializers.ListField(
-            child=serializers.JSONField(),
-            allow_empty=True,
-            max_length=AGGREGATION_MAX_LIMIT,
-            help_text="最多 100 行声明列对应的聚合结果；业务 data 最大 1 MiB。",
-        ),
-    ] = Field(
-        ...,
-        max_length=AGGREGATION_MAX_LIMIT,
-        description="最多 100 行声明列对应的聚合结果；业务 data 的 UTF-8 JSON 最大 1 MiB。",
-    )
+        serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="完整聚合行；业务 data 最大 4 MiB。"),
+    ] = Field(..., description="完整聚合行，不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。")
+    groups: Tuple[AggregationGroup, ...]
     query_summary: AggregationQuerySummary
     data_quality: Tuple[AggregationDataQuality, ...] = Field(
         default=(),

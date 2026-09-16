@@ -146,3 +146,38 @@ class LogQueryResponseTooLarge(LogToolException):
     ERROR_CODE = "007"
     STATUS_CODE = 413
     MESSAGE = gettext_lazy("日志查询结果过大，请缩小字段或 page_size 后重试")
+
+
+class UnsupportedFieldType(LogToolException):
+    """全范围字段类型不支持请求的统计操作。"""
+
+    ERROR_CODE = "008"
+    STATUS_CODE = 400
+    DOMAIN_CODE = "UNSUPPORTED_FIELD_TYPE"
+    MESSAGE = gettext_lazy("字段类型不支持当前统计操作")
+
+
+class StatisticsBudgetExceeded(LogToolException):
+    """完整统计超出桶数或单元格预算，只返回受控调整建议。"""
+
+    ERROR_CODE = "009"
+    STATUS_CODE = 400
+    DOMAIN_CODE = "STATISTICS_BUDGET_EXCEEDED"
+    MESSAGE = gettext_lazy("统计结果超出预算，请调整查询范围、类别数量或指标")
+
+    def __init__(self, *args, suggested_interval=None, **kwargs):
+        """接收可用实际粒度；任意底层消息与自定义 data 不进入公开响应。"""
+        super().__init__()
+        self.data = {
+            "suggested_interval": suggested_interval if suggested_interval in {"MINUTE", "HOUR", "DAY"} else None,
+            "adjustments": ["缩短查询时间范围", "降低 top_n", "减少指标数量"],
+        }
+
+
+class StatisticsResponseTooLarge(LogToolException):
+    """完整统计结构化 JSON 超出统一响应字节预算。"""
+
+    ERROR_CODE = "010"
+    STATUS_CODE = 413
+    DOMAIN_CODE = "STATISTICS_RESPONSE_TOO_LARGE"
+    MESSAGE = gettext_lazy("统计结果过大，请缩短查询范围或降低 top_n")

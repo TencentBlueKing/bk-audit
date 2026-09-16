@@ -12,6 +12,7 @@ from django.conf import settings
 from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError as PydanticValidationError
 
+from services.web.query.ai_assistant import exceptions as log_exceptions
 from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
     LogQueryFailed,
@@ -21,6 +22,7 @@ from services.web.query.ai_assistant.exceptions import (
     UnsupportedAggregation,
     UnsupportedLogField,
 )
+from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     GetLogFieldMetadataRequest,
@@ -57,9 +59,9 @@ class TestLogToolSettings(SimpleTestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20", completed.stderr)
 
-    def test_aggregation_limit_below_public_default_fails_at_startup(self):
+    def test_aggregation_top_n_below_public_default_fails_at_startup(self):
         environment = os.environ.copy()
-        environment["BKAPP_AI_LOG_AGGREGATION_MAX_LIMIT"] = "19"
+        environment["BKAPP_AI_LOG_AGGREGATION_MAX_TOP_N"] = "99"
 
         completed = subprocess.run(
             [sys.executable, "-c", "import services.web.settings"],
@@ -71,7 +73,7 @@ class TestLogToolSettings(SimpleTestCase):
         )
 
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("AI_LOG_AGGREGATION_MAX_LIMIT 不能小于公开默认值 20", completed.stderr)
+        self.assertIn("AI_LOG_AGGREGATION_MAX_TOP_N 不能小于公开默认值 100", completed.stderr)
 
 
 def _module_code_owners(module_code: str):
@@ -505,3 +507,34 @@ class TestLogToolExceptions(AIAssistantTestCase):
 
         self.assertIn((LOG_TOOL_EXCEPTIONS, "LogToolException"), owners)
         self.assertEqual(unrelated_owners, [])
+
+
+class TestStatisticsErrors(SimpleTestCase):
+    """统计失败需维持稳定领域错误与受控调整建议。"""
+
+    def test_statistics_error_mapping_preserves_codes_and_hides_details(self):
+        for name, code, status in (
+            ("UnsupportedFieldType", "26008", 400),
+            ("StatisticsBudgetExceeded", "26009", 400),
+            ("StatisticsResponseTooLarge", "26010", 413),
+        ):
+            with self.subTest(name=name):
+                error = getattr(log_exceptions, name)(message="SELECT secret FROM logs", data={"secret": "token"})
+                mapped = map_log_query_error(error)
+                self.assertEqual(mapped.code, f"{settings.PLATFORM_CODE}{code}")
+                self.assertEqual(mapped.STATUS_CODE, status)
+                self.assertNotIn("secret", json.dumps(mapped.response_data(), ensure_ascii=False))
+
+    def test_budget_suggestions_only_expose_safe_interval_and_adjustments(self):
+        error = log_exceptions.StatisticsBudgetExceeded(
+            suggested_interval="DAY", message="secret", adjustments=["secret"]
+        )
+        self.assertEqual(
+            error.response_data()["data"],
+            {"suggested_interval": "DAY", "adjustments": ["缩短查询时间范围", "降低 top_n", "减少指标数量"]},
+        )
+        self.assertIsNone(
+            log_exceptions.StatisticsBudgetExceeded(suggested_interval="SELECT secret").response_data()["data"][
+                "suggested_interval"
+            ]
+        )

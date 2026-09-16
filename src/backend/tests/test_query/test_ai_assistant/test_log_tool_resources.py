@@ -46,7 +46,7 @@ from services.web.query.ai_assistant.serializers import (
     SearchLogsRequestSerializer,
 )
 from services.web.query.mcp_views import MCPUserLogViewSet
-from services.web.query.resources.ai_assistant import MCPSearchLogs
+from services.web.query.resources.ai_assistant import MCPAggregateLogs, MCPSearchLogs
 from services.web.query.views import CollectorQueryViewSet
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
@@ -344,9 +344,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         response_model = AggregateLogsResponse(
             columns=(),
             rows=(),
-            query_summary=AggregationQuerySummary(
-                returned_count=0, has_more=False, took_ms=1, executed_at=self.end_time
-            ),
+            groups=(),
+            query_summary=self.make_aggregation_summary(),
         )
         with (
             mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value="alice"),
@@ -453,9 +452,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         response_model = AggregateLogsResponse(
             columns=(),
             rows=(),
-            query_summary=AggregationQuerySummary(
-                returned_count=0, has_more=False, took_ms=1, executed_at=self.end_time
-            ),
+            groups=(),
+            query_summary=self.make_aggregation_summary(),
         )
         with (
             mock.patch("core.permissions.get_app_info"),
@@ -982,6 +980,99 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(str(response.data["code"]), exception_type().code)
                 self.assertNotIn("sql", str(response.data))
+
+    def test_aggregate_resource_omitted_category_options_survive_service_revalidation(self):
+        """DRF 注入默认值不能把省略参数变成客户端显式 null。"""
+        for dimensions in ([], [{"id": "time", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}}]):
+            payload = {
+                "condition": self.condition.model_dump(mode="json"),
+                "dimensions": dimensions,
+                "metrics": [{"id": "events", "type": "COUNT"}],
+            }
+
+            def aggregate_after_revalidation(*, request, username, namespace):
+                """保留 Service 的真实 DTO 重校验边界，替换远端查询执行。"""
+                request = AggregateLogsRequest.model_validate(request.model_dump())
+                self.assertIsNone(request.top_n)
+                interval = "AUTO" if request.dimensions else None
+                return AggregateLogsResponse(
+                    columns=(),
+                    rows=(),
+                    groups=(),
+                    query_summary=self.make_aggregation_summary(
+                        requested_interval=interval, effective_interval="HOUR" if interval else None
+                    ),
+                )
+
+            with self.subTest(dimensions=dimensions), mock.patch(
+                "services.web.query.resources.ai_assistant.get_request_username", return_value="alice"
+            ), mock.patch(
+                "services.web.query.ai_assistant.log_tools.aggregation.LogAggregationService.aggregate",
+                side_effect=aggregate_after_revalidation,
+            ):
+                response = MCPAggregateLogs().request(namespace="default", **payload)
+                self.assertIsNone(response["query_summary"]["top_n"])
+                self.assertTrue(response["query_summary"]["complete"])
+
+    def test_aggregate_resource_rejects_explicit_no_category_options(self):
+        """无类别显式参数不能在 DRF 规范化时丢弃后偷偷接受。"""
+        for options in ({"top_n": None}, {"top_n": 1}, {"order_by": []}):
+            with self.subTest(options=options), self.assertRaises(UnsupportedAggregation):
+                MCPAggregateLogs().request(
+                    namespace="default",
+                    condition=self.condition.model_dump(mode="json"),
+                    metrics=[{"id": "events", "type": "COUNT"}],
+                    **options,
+                )
+
+    def test_aggregate_http_rejects_non_integer_top_n(self):
+        """布尔值、数值字符串与小数不得被 DRF 静默转成类别数量。"""
+        for top_n in (True, "10", 1.5):
+            request = APIRequestFactory().post(
+                "/api/v1/query/namespaces/path-ns/mcp_user/logs/aggregate/",
+                {
+                    "condition": self.condition.model_dump(mode="json"),
+                    "dimensions": [{"id": "actor", "type": "FIELD", "field": {"raw_name": "username"}}],
+                    "metrics": [{"id": "events", "type": "COUNT"}],
+                    "top_n": top_n,
+                },
+                format="json",
+            )
+            force_authenticate(request, user=type("User", (), {"username": "gateway-user", "is_authenticated": True})())
+            with self.subTest(top_n=top_n), mock.patch("core.permissions.get_app_info"):
+                response = self._view("aggregate")(request, namespace="path-ns")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(str(response.data["code"]), UnsupportedAggregation().code)
+
+    def test_generated_aggregation_optional_fields_do_not_accept_null(self):
+        """DRF 生成字段自身也要表达可省略、不可传 null，与公开 DTO 保持一致。"""
+        serializer = AggregateLogsRequestSerializer()
+        for field in (serializer.fields["top_n"], serializer.fields["dimensions"].child.fields["interval"]):
+            self.assertFalse(field.required)
+            self.assertFalse(field.allow_null)
+            with self.assertRaises(ValidationError):
+                field.run_validation(None)
+
+    def make_aggregation_summary(self, **overrides):
+        """构造空结果的完整聚合元信息；覆盖项仅用于纯时序场景。"""
+        return AggregationQuerySummary.model_validate(
+            {
+                "returned_count": 0,
+                "total_count": 0,
+                "top_n": None,
+                "has_other": False,
+                "scope_id": self.condition.scope_id,
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+                "requested_interval": None,
+                "effective_interval": None,
+                "timezone": "Asia/Shanghai",
+                "complete": True,
+                "took_ms": 1,
+                "executed_at": self.end_time,
+                **overrides,
+            }
+        )
 
     @staticmethod
     def _view(endpoint):

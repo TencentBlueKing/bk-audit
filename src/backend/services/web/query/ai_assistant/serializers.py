@@ -159,9 +159,17 @@ class AggregateLogsRequestSerializer(
     """聚合请求的生成 Serializer，加上 URL path namespace。"""
 
     PydanticRequestModel = AggregateLogsRequest
-    aggregation_error_roots = frozenset(("dimensions", "metrics", "order_by", "limit"))
+    aggregation_error_roots = frozenset(("dimensions", "metrics", "order_by", "top_n"))
     nested_field_error_roots = frozenset(("dimensions", "metrics"))
     model_error = UnsupportedAggregation
+
+    def to_internal_value(self, data):
+        """从调用方原始数据生成规范协议，移除 DRF 注入的不适用默认值。"""
+        attrs = super().to_internal_value(data)
+        payload = dict(data)
+        payload.pop("namespace", None)
+        normalized = self.PydanticRequestModel.model_validate(payload).model_dump(mode="json")
+        return {**normalized, "namespace": attrs["namespace"]}
 
 
 class AggregateLogsResponseSerializer(create_serializer_from_model(AggregateLogsResponse, _RESPONSE_DRF_CONFIG)):

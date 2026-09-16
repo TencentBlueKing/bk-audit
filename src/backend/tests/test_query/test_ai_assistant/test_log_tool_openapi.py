@@ -8,6 +8,7 @@ import jsonschema
 import yaml
 from django.test import SimpleTestCase, override_settings
 from drf_spectacular.views import SpectacularAPIView
+from pydantic import ValidationError as PydanticValidationError
 from rest_framework.test import APIRequestFactory
 
 from services.web.query.ai_assistant.exceptions import (
@@ -16,10 +17,16 @@ from services.web.query.ai_assistant.exceptions import (
     LogQueryResponseTooLarge,
     LogQueryTimeout,
     SensitiveFieldPermissionDenied,
+    StatisticsBudgetExceeded,
+    StatisticsResponseTooLarge,
     UnsupportedAggregation,
+    UnsupportedFieldType,
     UnsupportedLogField,
 )
-from services.web.query.ai_assistant.log_tools.schemas import AggregateLogsRequest
+from services.web.query.ai_assistant.log_tools.schemas import (
+    AggregateLogsRequest,
+    AggregationGroupValue,
+)
 
 LOG_TOOL_ERROR_TYPES = (
     InvalidLogCondition,
@@ -29,6 +36,9 @@ LOG_TOOL_ERROR_TYPES = (
     LogQueryTimeout,
     LogQueryFailed,
     LogQueryResponseTooLarge,
+    UnsupportedFieldType,
+    StatisticsBudgetExceeded,
+    StatisticsResponseTooLarge,
 )
 
 
@@ -76,7 +86,7 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
 
         self.assertEqual(component["properties"]["dimensions"]["maxItems"], 2)
         self.assertEqual(component["properties"]["metrics"]["maxItems"], 5)
-        self.assertEqual(component["properties"]["limit"]["maximum"], 100)
+        self.assertEqual(component["properties"]["top_n"]["maximum"], 500)
         self.assertIn("COUNT", self._enum(component, "metrics", "type"))
         self.assertIn("PERCENTILE_APPROX", self._enum(component, "metrics", "type"))
         self.assertEqual(self._enum(component, "dimensions", "type"), {"FIELD", "TIME_BUCKET"})
@@ -225,8 +235,8 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
             "post"
         ]
         aggregate_response = self._response_payload(aggregate_operation)
-        self.assertEqual(aggregate_response["properties"]["rows"]["maxItems"], 100)
-        self.assertIn("1 MiB", aggregate_operation["description"])
+        self.assertNotIn("maxItems", aggregate_response["properties"]["rows"])
+        self.assertIn("4 MiB", aggregate_operation["description"])
 
     def test_aggregate_descriptions_explain_all_runtime_combinations(self):
         operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
@@ -234,24 +244,14 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         dimension = properties["dimensions"]["items"]["properties"]
         metric = properties["metrics"]["items"]["properties"]
 
-        allowed_fields = (
-            "action_id",
-            "resource_type_id",
-            "username",
-            "result_code",
-            "access_type",
-            "start_time",
-            "extend_data",
-        )
         for description in (dimension["field"]["description"], metric["field"]["description"]):
-            for field_name in allowed_fields:
-                self.assertIn(field_name, description)
+            self.assertIn("日志检索可见", description)
             self.assertIn("keys", description)
 
         self.assertIn("FIELD", dimension["type"]["description"])
         self.assertIn("不得传 interval", dimension["type"]["description"])
         self.assertIn("TIME_BUCKET", dimension["type"]["description"])
-        self.assertIn("必须传 interval", dimension["type"]["description"])
+        self.assertIn("默认 AUTO", dimension["type"]["description"])
         self.assertIn("FIELD 必须省略", dimension["interval"]["description"])
         self.assertIn("AUTO", dimension["interval"]["description"])
 
@@ -319,7 +319,123 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         aggregate_payload = self._response_payload(aggregate)
         column = self._component(aggregate_payload["properties"]["columns"]["items"])
         self.assertEqual(self._resolve_enum(column["properties"]["effective_time_interval"]), {"MINUTE", "HOUR", "DAY"})
-        self.assertEqual(set(aggregate_payload["required"]), {"columns", "rows", "query_summary", "data_quality"})
+        self.assertTrue({"boolean", "number", "scalar"}.issubset(self._resolve_enum(column["properties"]["data_type"])))
+        self.assertEqual(
+            set(aggregate_payload["required"]), {"columns", "rows", "groups", "query_summary", "data_quality"}
+        )
+
+    def test_aggregate_groups_schema_preserves_scalar_values_and_complete_summary(self):
+        """公开 schema 不能允许 DTO 会拒绝的容器、缺失值或旧分页摘要。"""
+        operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
+        payload = self._response_payload(operation)
+        group = self._component(payload["properties"]["groups"]["items"])
+        self.assertEqual(self._resolve_enum(group["properties"]["kind"]), {"VALUE", "OTHER", "MISSING", "ALL"})
+        typed_value = self._component(group["properties"]["values"]["items"])
+        self.assertEqual(
+            self._resolve_enum(typed_value["properties"]["value_type"]), {"boolean", "integer", "number", "string"}
+        )
+        validator = jsonschema.Draft7Validator(self._openapi_json_schema(typed_value))
+        for value_type, value in (("boolean", True), ("integer", 1), ("number", 1.5), ("string", "")):
+            self.assertEqual(
+                list(validator.iter_errors({"dimension_id": "category", "value_type": value_type, "value": value})), []
+            )
+        for value in (None, [], {}):
+            self.assertTrue(
+                list(validator.iter_errors({"dimension_id": "category", "value_type": "string", "value": value}))
+            )
+        summary = self._component(payload["properties"]["query_summary"])
+        self.assertEqual(
+            set(summary["required"]),
+            {
+                "returned_count",
+                "total_count",
+                "top_n",
+                "has_other",
+                "scope_id",
+                "start_time",
+                "end_time",
+                "requested_interval",
+                "effective_interval",
+                "timezone",
+                "complete",
+                "took_ms",
+                "executed_at",
+            },
+        )
+        quality = self._component(payload["properties"]["data_quality"]["items"])
+        self.assertEqual(
+            set(quality["required"]), {"metric_id", "present_count", "converted_count", "conversion_failed_count"}
+        )
+
+    def test_optional_request_fields_reject_null_in_public_schema_and_runtime(self):
+        """请求可省略参数不可声明 nullable；响应实际粒度和无类别 top_n 仍允许 null。"""
+        operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
+        request_schema = self._openapi_json_schema(operation["requestBody"]["content"]["application/json"]["schema"])
+        validator = jsonschema.Draft7Validator(request_schema)
+        condition = {
+            "scope_id": "bk_log",
+            "start_time": "2026-08-13T00:00:00+08:00",
+            "end_time": "2026-08-14T00:00:00+08:00",
+        }
+        for dimension in (
+            {"id": "actor", "type": "FIELD", "field": {"raw_name": "username"}},
+            {"id": "time", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}},
+        ):
+            payload = {
+                "condition": condition,
+                "dimensions": [dimension],
+                "metrics": [{"id": "events", "type": "COUNT"}],
+            }
+            self.assertEqual(list(validator.iter_errors(payload)), [])
+            request = AggregateLogsRequest.model_validate(payload)
+            self.assertEqual(AggregateLogsRequest.model_validate(request.model_dump()), request)
+            for invalid in ({**payload, "top_n": None}, {**payload, "dimensions": [{**dimension, "interval": None}]}):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaises(PydanticValidationError):
+                        AggregateLogsRequest.model_validate(invalid)
+                    self.assertTrue(list(validator.iter_errors(invalid)))
+        summary = self._response_payload(operation)["properties"]["query_summary"]["properties"]
+        for field in ("top_n", "requested_interval", "effective_interval"):
+            self.assertEqual(
+                list(jsonschema.Draft7Validator(self._openapi_json_schema(summary[field])).iter_errors(None)), []
+            )
+
+    def test_typed_group_public_schema_and_runtime_agree_on_type_pairs(self):
+        """typed value 的公开契约必须将 discriminator 与真实标量类型配对。"""
+        operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
+        group = self._response_payload(operation)["properties"]["groups"]["items"]
+        typed_value = group["properties"]["values"]["items"]
+        validator = jsonschema.Draft7Validator(self._openapi_json_schema(typed_value))
+        valid_pairs = (
+            ("boolean", True),
+            ("boolean", False),
+            ("integer", 1),
+            ("number", 1),
+            ("number", 1.5),
+            ("string", ""),
+            ("string", "true"),
+        )
+        invalid_pairs = (
+            ("string", 1),
+            ("boolean", "true"),
+            ("integer", True),
+            ("number", False),
+            ("integer", 1.5),
+            ("string", None),
+            ("string", []),
+            ("string", {}),
+        )
+        for value_type, value in valid_pairs:
+            payload = {"dimension_id": "category", "value_type": value_type, "value": value}
+            with self.subTest(payload=payload):
+                self.assertEqual(AggregationGroupValue.model_validate(payload).model_dump(mode="json"), payload)
+                self.assertEqual(list(validator.iter_errors(payload)), [])
+        for value_type, value in invalid_pairs:
+            payload = {"dimension_id": "category", "value_type": value_type, "value": value}
+            with self.subTest(payload=payload):
+                with self.assertRaises(PydanticValidationError):
+                    AggregationGroupValue.model_validate(payload)
+                self.assertTrue(list(validator.iter_errors(payload)))
 
     def test_descriptions_explain_sampling_pagination_and_auto_conversion_boundaries(self):
         operations = self.schema["paths"]

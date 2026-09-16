@@ -73,7 +73,8 @@ class MCPAggregateLogs(QueryBaseResource):
     """对当前用户可访问日志执行类型化、受控的分组聚合。
 
     最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或
-    拓展数值转换质量在 data_quality 中返回，业务 data 载荷不超过 1 MiB。敏感字段无权限时不执行查询。
+    拓展数值转换质量按全范围 present_count 返回；有类别默认 top_n=100、最大 500，无类别省略。
+    完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。
     """
 
     name = gettext_lazy("MCP 聚合日志")

@@ -11,7 +11,7 @@ from services.web.query.ai_assistant.exceptions import (
 
 
 def map_log_query_error(error: BaseException) -> LogToolException:
-    """将底层失败收敛为不泄露查询细节的日志工具异常。"""
+    """保留领域错误及受控预算建议；底层失败收敛为不泄露查询细节的异常。"""
 
     if isinstance(error, LogToolException):
         return error

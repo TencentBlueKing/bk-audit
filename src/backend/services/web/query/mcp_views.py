@@ -159,14 +159,22 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                         "日志工具稳定领域错误码：2926001 日志查询条件不合法、2926002 不支持的日志字段、"
                         "2926003 不支持的日志聚合方式、2926004 无敏感字段查询权限、"
                         "2926005 日志查询超时，请稍后重试、2926006 日志查询失败，请稍后重试、"
-                        "2926007 日志查询结果过大，请缩小字段或 page_size 后重试；"
+                        "2926007 日志查询结果过大，请缩小字段或 page_size 后重试、"
+                        "2926008 字段类型不支持当前统计操作、"
+                        "2926009 统计结果超出预算，请调整查询范围、类别数量或指标、"
+                        "2926010 统计结果过大，请缩短查询范围或降低 top_n；"
                         "也可能返回 IAM 或平台通用错误码。"
                     ),
                 },
                 "message": {"type": "string", "nullable": True},
                 "request_id": {"type": "string", "nullable": True},
                 "trace_id": {"type": "string", "nullable": True},
-                "data": {"nullable": True},
+                "data": {
+                    "nullable": True,
+                    "description": (
+                        "统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）" "及受控 adjustments 调整建议；不回显 SQL 或字段值。"
+                    ),
+                },
                 "errors": {"nullable": True},
             },
         }
