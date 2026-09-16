@@ -26,11 +26,7 @@ from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import (
-    ApproveTicketFields,
-    EventMappingFields,
-    RiskStatus,
-)
+from services.web.risk.constants import RiskStatus
 
 RISK_INFO = {
     "event_content": gettext("Admin 风险"),
@@ -62,21 +58,33 @@ RULE_INFO = {
     "auto_close_risk": False,
 }
 
+# V4 Workflows 接口返回的完整响应（取自真实网关响应，bk_resource 已解包信封）：
+# workflows() 直接返回 {"items":[workflow, ...]}，workflow 的表单字段定义位于
+# form_canvas_data.jsonschema.properties，key 带 ticket__ 命名空间前缀
 APPROVE_SERVICE_INFO = {
-    "fields": [
-        {"key": ApproveTicketFields.TITLE.key},
-        {"key": ApproveTicketFields.PROCESS_APPLICATION_NAME_FIELD.key},
-        {"key": ApproveTicketFields.TAGS.key},
-        {"key": ApproveTicketFields.OPERATOR.key},
-        {"key": ApproveTicketFields.RISK_URL.key},
-        {"key": EventMappingFields.RAW_EVENT_ID.field_name},
+    "items": [
+        {
+            "form_canvas_data": {
+                "jsonschema": {
+                    "type": "object",
+                    "properties": {
+                        "ticket__title": {"type": "string", "title": "标题"},
+                        "ticket__process_application_name": {"type": "string", "title": "处理套餐名称"},
+                        "ticket__tags": {"type": "string", "title": "标签"},
+                        "ticket__operator": {"type": "string", "title": "责任人"},
+                        "ticket__risk_url": {"type": "string", "title": "审计关联单据"},
+                        "ticket__raw_event_id": {"type": "string", "title": "原始事件ID"},
+                    },
+                }
+            }
+        }
     ]
 }
 
-APPROVE_TICKET_DETAIL = {"sn": uuid.uuid1().hex}
+APPROVE_TICKET_DETAIL = {"id": uuid.uuid1().hex, "sn": uuid.uuid1().hex}
 
 APPROVE_TICKET_STATUS = {
-    "sn": uuid.uuid1().hex,
+    "id": uuid.uuid1().hex,
     "title": gettext("【审计中心】执行自动处理套餐审批"),
     "update_at": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
     "ticket_url": "https://bk.tencnet.com",

@@ -20,6 +20,6 @@ from rest_framework import serializers
 
 
 class GetServicesRespSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.CharField()
     name = serializers.CharField()
     url = serializers.CharField(required=False, allow_null=True, allow_blank=True)
