@@ -96,10 +96,12 @@ class AIAnalysisSchemaTest(SimpleTestCase):
             components = yaml.safe_load(response.content)["components"]["schemas"]
 
             assert components["AIAttachmentInputDataRequest"]["oneOf"] == [
-                {"$ref": "#/components/schemas/AIAnalysisInputSchemaRequest"}
+                {"$ref": "#/components/schemas/AIAnalysisInputSchemaRequest"},
+                {"$ref": "#/components/schemas/FieldStatisticsAttachmentInputRequest"},
             ]
             assert components["AIAttachmentOutputData"]["oneOf"] == [
-                {"$ref": "#/components/schemas/AIAnalysisOutputSchema"}
+                {"$ref": "#/components/schemas/AIAnalysisOutputSchema"},
+                {"$ref": "#/components/schemas/FieldStatisticsAttachmentOutput"},
             ]
             assert components["EditableAIAttachmentOutputDataRequest"]["oneOf"] == [
                 {"$ref": "#/components/schemas/AIAnalysisOutputSchemaRequest"}

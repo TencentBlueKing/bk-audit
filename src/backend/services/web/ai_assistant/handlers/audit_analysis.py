@@ -15,13 +15,9 @@ from services.web.ai_assistant.constants import (
     AttachmentExportFormat,
     AttachmentType,
     ExecutionMode,
-    ExecutionStatus,
-    MessageType,
 )
 from services.web.ai_assistant.exceptions import (
-    AttachmentSnapshotValidationError,
     InvalidAttachmentPreparation,
-    InvalidAttachmentSource,
     UnsupportedLogAnalysisCondition,
 )
 from services.web.ai_assistant.exporters import MarkdownDocumentExporter
@@ -29,6 +25,11 @@ from services.web.ai_assistant.handlers.attachment import (
     AttachmentExportResult,
     AttachmentPreparation,
     AttachmentTypeHandler,
+)
+from services.web.ai_assistant.handlers.log_search_source import (
+    parse_log_search_source,
+    validate_log_search_consistency,
+    validate_log_search_source,
 )
 from services.web.ai_assistant.handlers.registry import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Message
@@ -38,11 +39,6 @@ from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisInputSchema,
     AIAnalysisOutputSchema,
     AIAnalysisQuerySummary,
-)
-from services.web.ai_assistant.schemas.audit_search import (
-    LogSearchContextSchema,
-    LogSearchInputSchema,
-    LogSearchOutputSchema,
 )
 from services.web.ai_assistant.tasks.audit_analysis import execute_log_analysis
 from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
@@ -71,32 +67,7 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
     ) -> AttachmentPreparation[AIAnalysisContextSchema]:
         """解析 LOG_SEARCH 类型化快照，并固化本次实际分析指令。"""
 
-        self._validate_source(user=user, source_message=source_message)
-        log_input = parse_snapshot(
-            LogSearchInputSchema,
-            source_message.input_data,
-            field_name="source_message.input_data",
-            error_type=AttachmentSnapshotValidationError,
-        )
-        log_context = parse_snapshot(
-            LogSearchContextSchema,
-            source_message.context_data,
-            field_name="source_message.context_data",
-            error_type=AttachmentSnapshotValidationError,
-        )
-        log_output = parse_snapshot(
-            LogSearchOutputSchema,
-            source_message.output_data,
-            field_name="source_message.output_data",
-            error_type=AttachmentSnapshotValidationError,
-        )
-        if log_context.username != user or log_context.system_id != log_input.condition.scope_id:
-            raise InvalidAttachmentSource()
-        self._validate_snapshot_consistency(
-            log_input=log_input,
-            log_context=log_context,
-            log_output=log_output,
-        )
+        log_input, log_context, log_output = parse_log_search_source(user=user, source_message=source_message)
         # LOG_SEARCH 可承载比 Agent 工具更宽的历史条件；分析创建前必须确认该快照可被工具重放。
         search_condition = parse_snapshot(
             AgentSearchCondition,
@@ -147,19 +118,7 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
 
         return MarkdownDocumentExporter(title=attachment.title, markdown=output_data.markdown).export(export_format)
 
-    @staticmethod
-    def _validate_source(*, user: str, source_message: Message) -> None:
-        """防御性校验来源业务类型与可见边界；Service 仍是公开创建入口的第一道校验。"""
-
-        conversation = source_message.conversation
-        if (
-            source_message.message_type != MessageType.LOG_SEARCH
-            or source_message.status != ExecutionStatus.SUCCESS
-            or source_message.created_by != user
-            or conversation.created_by != user
-            or conversation.is_deleted
-        ):
-            raise InvalidAttachmentSource()
+    _validate_source = staticmethod(validate_log_search_source)
 
     @staticmethod
     def _resolve_instruction(input_data: AIAnalysisInputSchema) -> str:
@@ -170,34 +129,7 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
             raise InvalidAttachmentPreparation()
         return instruction.strip()
 
-    @staticmethod
-    def _validate_snapshot_consistency(
-        *,
-        log_input: LogSearchInputSchema,
-        log_context: LogSearchContextSchema,
-        log_output: LogSearchOutputSchema,
-    ) -> None:
-        """校验三份快照来自同一次检索，避免拼接不相干的分析范围。
-
-        日志检索会合并可归一的重复条件，因此输出条件数只校验合法区间，
-        不依赖 ``LogSearchService`` 的私有归一实现。
-        """
-
-        condition = log_input.condition
-        summary = log_output.query_summary
-        expected_time_range = {
-            "start_time": condition.start_time,
-            "end_time": condition.end_time,
-        }
-        is_consistent = (
-            summary.scope_type == condition.scope_type
-            and summary.scope_id == condition.scope_id == log_context.system_id
-            and summary.time_range == expected_time_range
-            and summary.source == log_context.source
-            and 0 <= summary.condition_count <= len(condition.conditions)
-        )
-        if not is_consistent:
-            raise AttachmentSnapshotValidationError(data={"field_name": "source_message", "errors": []})
+    _validate_snapshot_consistency = staticmethod(validate_log_search_consistency)
 
 
 attachment_handler_registry.register(AIAnalysisHandler())

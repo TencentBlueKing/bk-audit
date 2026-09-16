@@ -26,6 +26,7 @@ from services.web.ai_assistant.handlers.audit_search import (
     SystemSelectionHandler,
 )
 from services.web.ai_assistant.handlers.audit_analysis import AIAnalysisHandler
+from services.web.ai_assistant.handlers.audit_statistics import FieldStatisticsAttachmentHandler
 
 # isort: on
 
@@ -36,6 +37,7 @@ __all__ = [
     "AttachmentPreparation",
     "AttachmentTypeHandler",
     "AIAnalysisHandler",
+    "FieldStatisticsAttachmentHandler",
     "HandlerRegistry",
     "LogSearchHandler",
     "MessageHandlerRegistry",

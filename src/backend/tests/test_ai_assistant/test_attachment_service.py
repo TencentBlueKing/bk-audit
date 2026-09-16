@@ -190,6 +190,8 @@ class EmptyObjectEditableAttachmentHandler(EditableAttachmentEchoHandler):
 class AttachmentServiceTest(TestCase):
     def setUp(self):
         preserve_attachment_handler_registry(self)
+        # 程序统计已注册生产 Handler；机制用例在保存注册表后独占该类型。
+        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
         self.user = "alice"
         self.other_user = "bob"
         self.service = AttachmentService(user=self.user)

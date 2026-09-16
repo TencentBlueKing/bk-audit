@@ -119,6 +119,7 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
 
     def test_live_registry_pollution_does_not_change_captured_contracts(self):
         handler = EchoAttachmentSyncHandler()
+        original = attachment_handler_registry.unregister(handler.attachment_type)
         attachment_handler_registry.register(handler)
         try:
             validate_handler_contracts(
@@ -128,6 +129,8 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
             )
         finally:
             attachment_handler_registry.unregister(handler.attachment_type)
+            if original is not None:
+                attachment_handler_registry.register(original)
 
 
 class AttachmentRetryCapabilityTest(SimpleTestCase):
