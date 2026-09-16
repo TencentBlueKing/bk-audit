@@ -390,7 +390,12 @@
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../utils/strategy-routes';
-  import { excludeHavingFromWhere, hasFilledWhereConditions, toNoticeGroupIds } from '../../utils/strategy-protocol';
+  import {
+    excludeHavingFromWhere,
+    hasFilledWhereConditions,
+    normalizeWhereHaving,
+    toNoticeGroupIds,
+  } from '../../utils/strategy-protocol';
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
 
   interface RuleItem {
@@ -861,18 +866,20 @@
       const com = comRefs.value[index];
       const fields = com?.getFields?.({ forValidate: false }) ?? { configs: rule.formData?.configs ?? {} };
       const mergedConfigs = mergeRuleConfigs(fields.configs);
-      const where = pickConditionWhere(
-        mergedConfigs.where,
-        fields.configs?.where,
-        rule.formData?.configs?.where,
-        rule.conditions?.where,
-      ) ?? mergedConfigs.where ?? null;
-      const having = pickConditionWhere(
-        mergedConfigs.having,
-        fields.configs?.having,
-        rule.formData?.configs?.having,
-        rule.conditions?.having,
-      ) ?? mergedConfigs.having ?? null;
+      const { where, having } = normalizeWhereHaving(
+        pickConditionWhere(
+          mergedConfigs.where,
+          fields.configs?.where,
+          rule.formData?.configs?.where,
+          rule.conditions?.where,
+        ) ?? mergedConfigs.where ?? null,
+        pickConditionWhere(
+          mergedConfigs.having,
+          fields.configs?.having,
+          rule.formData?.configs?.having,
+          rule.conditions?.having,
+        ) ?? mergedConfigs.having ?? null,
+      );
       return {
         ...(rule.rule_id ? { rule_id: rule.rule_id } : {}),
         name: rule.name,

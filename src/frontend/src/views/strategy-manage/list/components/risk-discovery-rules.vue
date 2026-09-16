@@ -17,6 +17,7 @@
             <span class="rule-field-label">{{ t('命中条件') }}:</span>
             <div class="rule-field-value">
               <rule-condition-display
+                :aggregate-list="aggregateList"
                 :operator-map="operatorMap"
                 :where="rule.where" />
             </div>
@@ -234,6 +235,8 @@
     res[item.value] = item.label;
     return res;
   }, {} as Record<string, string>));
+
+  const aggregateList = computed(() => commonData.value.rule_audit_aggregate_type || []);
 
   onMounted(() => {
     fetchStrategyCommon();
