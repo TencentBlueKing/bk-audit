@@ -375,9 +375,12 @@
 
     // 人员选择器转字符串
     if (item.field_category === 'person_select') {
-      const strValue = Array.isArray(resolvedValue) && resolvedValue.length > 0
-        ? resolvedValue.join(',')
-        : (typeof resolvedValue === 'string' ? resolvedValue : '');
+      let strValue = '';
+      if (Array.isArray(resolvedValue) && resolvedValue.length > 0) {
+        strValue = resolvedValue.join(',');
+      } else if (typeof resolvedValue === 'string') {
+        strValue = resolvedValue;
+      }
       // 非必填且为空，返回 null
       return !item.required && strValue === '' ? null : strValue;
     }
