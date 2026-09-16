@@ -24,6 +24,10 @@ from services.web.query.ai_assistant.log_tools.statistics_budget import (
     budget_limits,
     build_time_axis,
 )
+from services.web.query.ai_assistant.log_tools.statistics_summary import (
+    StatisticsFieldSummary,
+    parse_field_summary,
+)
 from services.web.query.ai_assistant.log_tools.statistics_types import (
     parse_statistics_scalar,
 )
@@ -50,12 +54,15 @@ class StatisticsResult:
     rows: tuple[dict, ...]
     quality: tuple[AggregationDataQuality, ...]
     total_count: int
+    field_summary: StatisticsFieldSummary | None = None
 
 
 class StatisticsResultParser:
     """只接受最终语句的完整帧集合，不信任远端行序或请求外的字段。"""
 
-    def __init__(self, request: AggregateLogsRequest, time_axis=None, numeric_columns=None):
+    def __init__(self, request: AggregateLogsRequest, time_axis=None, numeric_columns=None, summary_field=None):
+        """摘要字段由可信 builder 显式提供，普通 MCP 不能接收 SUMMARY。"""
+        self.summary_field = summary_field
         self.request = request
         self.dimensions = tuple(d for d in request.dimensions if d.type == AggregationDimensionType.FIELD)
         self.time_dimension = next(
@@ -71,11 +78,13 @@ class StatisticsResultParser:
             raise ValueError("missing statistics frames")
         frames = response["list"]
         max_groups = self.request.top_n + 2 if self.dimensions else 1
-        if len(frames) > 1 + max_groups * (1 + (len(self.time_axis.bucket_starts) if self.time_axis else 1)) + len(
-            self.quality_indices
-        ):
+        if len(frames) > 1 + int(self.summary_field is not None) + max_groups * (
+            1 + (len(self.time_axis.bucket_starts) if self.time_axis else 1)
+        ) + len(self.quality_indices):
             raise ValueError("unbounded statistics frames")
         by_type = {kind: [] for kind in ("META", "GROUP", "ROW", "QUALITY")}
+        if self.summary_field is not None:
+            by_type["SUMMARY"] = []
         for frame in frames:
             if not isinstance(frame, dict) or frame.get("frame") not in by_type:
                 raise ValueError("invalid statistics frame")
@@ -116,7 +125,14 @@ class StatisticsResultParser:
         groups = self._groups(by_type["GROUP"], total)
         rows = self._rows(by_type["ROW"], groups, total)
         quality = self._quality(by_type["QUALITY"], total)
-        return StatisticsResult(groups=tuple(groups.values()), rows=rows, quality=quality, total_count=total)
+        summary = None
+        if self.summary_field is not None:
+            summary = parse_field_summary(
+                by_type["SUMMARY"], self.summary_field, groups.values(), total, statistics_count
+            )
+        return StatisticsResult(
+            groups=tuple(groups.values()), rows=rows, quality=quality, total_count=total, field_summary=summary
+        )
 
     def _groups(self, frames, total):
         """验证真实类别/合成组身份、稳定序号及全范围计数闭合。"""

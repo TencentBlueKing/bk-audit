@@ -497,6 +497,42 @@ class TestLogAggregationService(TestCase):
             dimensions.append({"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}})
         return dimensions
 
+    def test_time_only_sensitive_dimension_denies_before_any_doris_query(self):
+        """TIME_BUCKET 也暴露字段值，私密或缺少敏感权限时不能发出预检。"""
+        for private in (True, False):
+            with self.subTest(private=private):
+                rule = SensitiveObject.objects.create(
+                    name="protected time",
+                    system_id="s1",
+                    resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+                    resource_id="host",
+                    fields=[{"field_name": "start_time"}],
+                    is_private=private,
+                )
+                self.mock_permissions.return_value.get_sensitive_object_permissions.return_value = {}
+                self.mock_query.reset_mock()
+                self.mock_query.side_effect = [
+                    ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
+                    (
+                        {
+                            "list": [
+                                {"frame": "META", "n": "1", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
+                                {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "1"},
+                                {"frame": "ROW", "key": "1", "bucket": "0", "n": "1", "m0": "1"},
+                            ]
+                        },
+                    ),
+                ]
+                try:
+                    with self.assertRaises(SensitiveFieldPermissionDenied):
+                        self._aggregate(
+                            dimensions=self._time_dimensions(category=False),
+                            metrics=[{"id": "events", "type": "COUNT"}],
+                        )
+                    self.mock_query.assert_not_called()
+                finally:
+                    rule.delete()
+
     def test_sparse_time_rows_fill_axis_and_keep_global_groups(self):
         data = frames()
         for row in data:

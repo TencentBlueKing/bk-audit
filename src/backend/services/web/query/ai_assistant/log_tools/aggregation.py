@@ -57,13 +57,6 @@ class LogAggregationService:
             raise UnsupportedAggregation() from err
         context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
         try:
-            fields = [item.field for item in (*request.dimensions, *request.metrics)]
-            fields.extend(item.field for item in context.condition.conditions)
-            SensitiveLogFieldPermissionService.ensure_access(
-                username=username,
-                system_id=context.condition.scope_id,
-                fields=SensitiveLogFieldPermissionService.collect_field_paths(fields),
-            )
             builder = StatisticsSQLBuilder.from_request(context, request)
             result, axis, took_ms = cls._execute(builder, numeric_columns=len(request.metrics) + 2)
             response = AggregateLogsResponse(
@@ -99,6 +92,15 @@ class LogAggregationService:
     def _execute(cls, builder, *, numeric_columns):
         """可信后端指定预算列数；预检只规划，AUTO 超限丢弃快照并完整重查。"""
         request = builder.request
+        # 时间维度不进入 SQL 类别字段集，但其可见值同样必须授权。
+        fields = [item.field for item in (*request.dimensions, *request.metrics)]
+        fields.append(builder.summary_field)
+        fields.extend(item.field for item in builder.context.condition.conditions)
+        SensitiveLogFieldPermissionService.ensure_access(
+            username=builder.context.username,
+            system_id=builder.context.condition.scope_id,
+            fields=SensitiveLogFieldPermissionService.collect_field_paths(fields),
+        )
         time_dimension = next((d for d in request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET), None)
         builder.numeric_columns = numeric_columns
         took_ms = 0
@@ -128,7 +130,9 @@ class LogAggregationService:
             raw, elapsed = cls._query(builder)
             took_ms += elapsed
             try:
-                result = StatisticsResultParser(request, builder.time_axis, numeric_columns).parse(raw)
+                result = StatisticsResultParser(
+                    request, builder.time_axis, numeric_columns, builder.summary_field
+                ).parse(raw)
                 return result, axis, took_ms
             except StatisticsBudgetExceeded as err:
                 suggestion = err.data["suggested_interval"]

@@ -9,9 +9,11 @@ from services.web.query.ai_assistant.exceptions import UnsupportedAggregation
 from services.web.query.ai_assistant.log_tools.schemas import (
     AGGREGATION_STANDARD_FIELD_TYPES,
     AggregateLogsRequest,
+    AggregationDimension,
     AggregationDimensionType,
     AggregationMetricType,
     AggregationValueType,
+    LogFieldRef,
 )
 from services.web.query.ai_assistant.log_tools.statistics_budget import (
     budget_limits,
@@ -32,27 +34,33 @@ DOUBLE_LITERAL_REGEXP = r"^-?(?:[0-9]{1,15}(?:[.][0-9]{1,15})?|[.][0-9]{1,15})$"
 class StatisticsSQLBuilder(BaseDorisSQLBuilder):
     """只使用已鉴权条件和复验 DTO；内部字段/指标序号不使用调用方标识符。"""
 
-    def __init__(self, *, context, request):
+    def __init__(self, *, context, request, summary_field=None):
+        """复验请求与内部摘要字段，统一去重后交执行层授权。"""
         self.context = context
         self.request = AggregateLogsRequest.model_validate(request.model_dump())
+        self.summary_field = None if summary_field is None else LogFieldRef.model_validate(summary_field.model_dump())
+        if self.summary_field is not None:
+            AggregationDimension(id="summary", type="FIELD", field=self.summary_field)
         self.effective_time_intervals = {}
         self.time_axis = None
         self.numeric_columns = len(self.request.metrics) + 2
         self.dimensions = tuple(d for d in self.request.dimensions if d.type == AggregationDimensionType.FIELD)
         self.fields = []
         self._field_indices = {}
-        for item in (*self.dimensions, *self.request.metrics):
-            if item.field is not None:
-                key = (item.field.raw_name, tuple(item.field.keys))
+        fields = [item.field for item in (*self.dimensions, *self.request.metrics)]
+        fields.append(self.summary_field)
+        for field in fields:
+            if field is not None:
+                key = (field.raw_name, tuple(field.keys))
                 if key not in self._field_indices:
                     self._field_indices[key] = len(self.fields)
-                    self.fields.append(StatisticsFieldSQL(item.field, len(self.fields)))
+                    self.fields.append(StatisticsFieldSQL(field, len(self.fields)))
         super().__init__(table=context.table, conditions=list(context.conditions), sort_list=[], page=1, page_size=1)
 
     @classmethod
-    def from_request(cls, context, request):
+    def from_request(cls, context, request, *, summary_field=None):
         """保持领域消费者的构造接口，防御 model_construct 绕过验证。"""
-        return cls(context=context, request=request)
+        return cls(context=context, request=request, summary_field=summary_field)
 
     def field_prefix(self, field):
         """定位已复验且去重的业务字段。"""
@@ -210,6 +218,8 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         names = ["frame", "key", "kind", "n", "a", "b", "c", "d", "e", "bucket"]
         names.extend(f"d{i}_{part}" for i in range(len(self.dimensions)) for part in ("type", "json"))
         names.extend(f"m{i}" for i in range(len(self.request.metrics)))
+        if self.summary_field is not None:
+            names.extend(f"s_{name}" for name in ("min", "max", "avg", "median"))
         return (
             "SELECT "
             + ", ".join(f"CAST({values.get(name, 'NULL')} AS STRING) AS {name}" for name in names)
@@ -251,6 +261,8 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                 f"quality_{i} AS (SELECT COUNT({p}_type) AS present_count, "
                 f"COUNT(m{i}_value) AS converted_count FROM normalized)"
             )
+        if self.summary_field is not None:
+            ctes.append(self._summary_cte())
         guard = "validation.invalid_type_count = 0 AND validation.invalid_number_count = 0"
         bucket_count = len(self.time_axis.bucket_starts) if self.time_axis else 1
         guard += (
@@ -294,7 +306,39 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                     f"FROM quality_{i} CROSS JOIN validation WHERE {guard}",
                 )
             )
+        if self.summary_field is not None:
+            values = dict(frame="'SUMMARY'", n="present_count", a="numeric_count")
+            values.update({f"s_{name}": f"s_{name}" for name in ("min", "max", "avg", "median")})
+            frames.append(self._frame(values, f"FROM field_summary CROSS JOIN validation WHERE {guard}"))
         return "WITH " + ",\n".join(ctes) + "\n" + "\nUNION ALL\n".join(frames)
+
+    def _summary_cte(self):
+        """在完整 normalized 上取类型与原生摘要，整数极值保留整数域。
+
+        混合整数/浮点的统计运算提升到 DOUBLE；整数已通过安全范围守卫。
+        每个浮点摘要都核对文本往返，不以显示舍入修复引擎精度损失。
+        """
+        p = self.field_prefix(self.summary_field)
+        present = f"COUNT({p}_type)"
+        numeric = f"COUNT(CASE WHEN {p}_type = 'number' THEN 1 END)"
+        value = f"COALESCE(CAST({p}_i_safe AS DOUBLE), {p}_d_safe)"
+        expressions = [f"{present} AS present_count", f"{numeric} AS numeric_count"]
+        for name, aggregate in (
+            ("min", f"MIN({value})"),
+            ("max", f"MAX({value})"),
+            ("avg", f"AVG({value})"),
+            ("median", f"PERCENTILE_APPROX({value}, 0.5)"),
+        ):
+            text = (
+                f"CASE WHEN CAST(CAST({aggregate} AS STRING) AS DOUBLE) = {aggregate} "
+                f"THEN CAST({aggregate} AS STRING) END"
+            )
+            if name in {"min", "max"}:
+                text = (
+                    f"CASE WHEN COUNT({p}_d_safe) = 0 THEN CAST({name.upper()}({p}_i_safe) AS STRING) ELSE {text} END"
+                )
+            expressions.append(f"CASE WHEN {present} = {numeric} AND {numeric} > 0 THEN {text} END AS s_{name}")
+        return "field_summary AS (SELECT " + ", ".join(expressions) + " FROM normalized)"
 
     def _bucket_expression(self):
         """可信等间隔轴用整数毫秒归桶；仅跨不等长日区段使用少量 CASE 分支。"""
