@@ -112,6 +112,16 @@ class HavingCondition(WhereCondition):
     conditions: List["HavingCondition"] = PydanticField(default_factory=list)  # 子条件
 
 
+class RuleFilterConfig(BaseModel):
+    """
+    多规则模式下单条发现规则的过滤配置（发现规则命中：SQL 构造用）
+    """
+
+    rule_id: int  # 规则ID（SQL CASE THEN 值 / 风险单 strategy_rule_id）
+    where: WhereCondition  # 规则 where 条件树（必填）
+    having: Optional[HavingCondition] = None  # 规则 having 条件树
+
+
 class Order(BaseModel):
     """
     排序
@@ -142,4 +152,5 @@ class SqlConfig(BaseModel):
     having: Optional[HavingCondition] = None  # 筛选条件
     group_by: List[Field] = PydanticField(default_factory=list)  # 分组条件；如果未指定但有聚合函数，则会自动添加 group by 条件
     order_by: List[Order] = PydanticField(default_factory=list)  # 排序条件
+    rules: List[RuleFilterConfig] = PydanticField(default_factory=list)  # 多规则配置
     pagination: Optional[Pagination] = None  # 分页条件

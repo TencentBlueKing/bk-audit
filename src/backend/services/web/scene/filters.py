@@ -174,8 +174,9 @@ class BindingMetadataHelper:
     ) -> None:
         """通过资源绑定关系回填单个 `scene_id`。
 
-        适用于“业务对象本身不直接绑定场景，而是经由另一类资源间接绑定场景”的场景。
-        当前风险列表即通过 `strategy_id -> strategy binding -> scene_id` 回填。
+        适用于“业务对象经由资源绑定关系回填 scene_id”的场景（如策略/规则/通知组等场景级资源）。
+        注意：Risk 的场景归属已固化到 `Risk.scene_id` 字段，是该维度唯一权威，不在此列，
+        不应再经 `risk_id -> risk binding -> scene_id` 反查。
 
         Args:
             objects: 需要回填的对象集合。
@@ -304,14 +305,12 @@ class SceneScopeFilter:
         """
         scene_ids = _normalize_scope_values(scene_id)
         if scene_ids:
+            # 风险场景归属已固化到 Risk.scene_id（唯一权威），直接按模型字段过滤，
+            # 不再经 ResourceBinding(RISK) 反查（该绑定不存在，会导致返回空集）。
             if resource_type == ResourceVisibilityType.RISK:
-                SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
-                strategy_ids = ResourceBindingScene.objects.filter(
-                    scene_id__in=scene_ids,
-                    scene__is_deleted=False,
-                    binding__resource_type=ResourceVisibilityType.STRATEGY,
-                ).values_list("binding__resource_id", flat=True)
-                return queryset.filter(strategy_id__in=list(strategy_ids))
+
+                return queryset.filter(scene_id__in=scene_ids)
+
             SceneScopeFilter._assert_scene_binding_integrity(resource_type)
             # 按场景列表过滤：通过 ResourceBindingScene 查找并取并集
             bound_ids = ResourceBindingScene.objects.filter(
@@ -337,13 +336,8 @@ class SceneScopeFilter:
         if resource_type == ResourceVisibilityType.RISK:
             from services.web.risk.models import Risk
 
-            SceneScopeFilter._assert_scene_binding_integrity(ResourceVisibilityType.STRATEGY)
-            strategy_ids = ResourceBindingScene.objects.filter(
-                scene_id__in=scene_ids,
-                scene__is_deleted=False,
-                binding__resource_type=ResourceVisibilityType.STRATEGY,
-            ).values_list("binding__resource_id", flat=True)
-            return list(Risk.objects.filter(strategy_id__in=list(strategy_ids)).values_list("risk_id", flat=True))
+            # 风险场景归属已固化到 Risk.scene_id（唯一权威），直接按模型字段取并集，不依赖策略绑定反查
+            return list(Risk.objects.filter(scene_id__in=scene_ids).values_list("risk_id", flat=True))
 
         SceneScopeFilter._assert_scene_binding_integrity(resource_type)
         return list(
@@ -423,6 +417,9 @@ class CompositeScopeFilter:
         visible_ids = set()
 
         for binding in platform_bindings:
+            # 让草稿全局策略跳过绑定完整性校验（此时ResourceBindingScene记录还未创建）
+            if binding.visibility_type == VisibilityScope.SPECIFIC_SCENES and binding.scene_count == 0:
+                continue
             assert_binding_relation_integrity(
                 binding, scene_count=binding.scene_count, system_count=binding.system_count
             )
@@ -551,3 +548,53 @@ class CompositeScopeFilter:
 
         # 都不传，不返回任何资源
         return queryset.none()
+
+
+def filter_drill_tools_by_scene(field_configs: list | None, scene_id: int | None) -> list:
+    """
+    按场景可见性过滤字段配置 drill_config 中的工具条目（风险详情展示态口径）。
+
+    ① 收集 drill 引用的工具 uid
+    ② 可见性判定：CompositeScopeFilter   ← 该场景risk.scene_id可见哪些工具
+    ③ 剔除不可见工具的 drill 条目、保留字段本身
+    """
+
+    def _drill_tool_uid(item: Any) -> str | None:
+        tool = (item or {}).get("tool") or {}
+        uid = tool.get("uid")
+        return str(uid) if uid else None
+
+    field_configs = field_configs or []
+    requested_uids = {
+        uid
+        for config in field_configs
+        for uid in (_drill_tool_uid(item) for item in (config.get("drill_config") or []))
+        if uid
+    }
+    if not requested_uids:
+        return field_configs
+
+    visible_uids: set = set()
+    if scene_id is not None:
+        from services.web.tool.models import Tool
+
+        visible_uids = {
+            str(uid)
+            for uid in CompositeScopeFilter.filter_queryset(
+                queryset=Tool.all_latest_tools().filter(uid__in=requested_uids),
+                scene_id=[scene_id],
+                system_id=[],
+                resource_type=ResourceVisibilityType.TOOL,
+                pk_field="uid",
+            ).values_list("uid", flat=True)
+        }
+
+    return [
+        {
+            **config,
+            "drill_config": [
+                item for item in (config.get("drill_config") or []) if _drill_tool_uid(item) in visible_uids
+            ],
+        }
+        for config in field_configs
+    ]

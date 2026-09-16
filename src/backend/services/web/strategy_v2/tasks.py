@@ -77,6 +77,7 @@ class StrategyStatusChecker:
             return StrategyStatusAnomalyReason.FLOW_STATUS_MISMATCH.label.format(expected=expected, actual=flow_status)
         # strategy 暂无 flow_id 却处于需要运行的状态
         if not (strategy.backend_data or {}).get("flow_id") and strategy.status not in (
+            StrategyStatusChoices.DRAFT.value,
             StrategyStatusChoices.DISABLED.value,
             StrategyStatusChoices.DELETE_FAILED.value,
         ):

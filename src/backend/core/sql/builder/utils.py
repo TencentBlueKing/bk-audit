@@ -11,8 +11,8 @@ from core.sql.exceptions import OperatorValueError, UnsupportedOperatorError
 
 def operate(operator: str, field: Field, value: str | int | float, values: List[str | int | float]):
     cls = Operator
-    # 根据操作符类型调用对应的处理函数
-    if not value and values:
+    # 当 value 为空但 values 有值时，用 values[0] 兜底，确保单值操作符能正常工作，避免0被误覆盖
+    if (value is None or value == "") and values:
         value = values[0]
     if operator == cls.EQ:
         return field.eq(value)

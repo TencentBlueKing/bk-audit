@@ -330,6 +330,7 @@ class TestPermissionServiceRiskFilter(TestCase):
             risk_id="R-V4-BOUND",
             title="bound-risk",
             strategy=bound_strategy,
+            scene_id=scene.scene_id,
             status=RiskStatus.NEW,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
         )

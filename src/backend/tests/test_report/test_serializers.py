@@ -49,6 +49,10 @@ class TestReportRiskVariableSerializer(TestCase):
             current_operator=["user1"],
             notice_users=["user3"],
             event_type=["login", "access"],
+            # 风险快照字段
+            risk_level="high",
+            risk_hazard="测试风险危害",
+            risk_guidance="测试处理指引",
         )
 
     def test_serialize_risk_contains_all_fields(self):
@@ -160,9 +164,10 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
         # 关联的 strategy 默认值
         risk.strategy = MagicMock()
         risk.strategy.strategy_id = 1
-        risk.strategy.risk_level = "HIGH"
-        risk.strategy.risk_hazard = "危害描述"
-        risk.strategy.risk_guidance = "处理指引"
+        # risk_level/hazard/guidance 现为 Risk 模型的快照字段，直接挂在 risk 上
+        risk.risk_level = "HIGH"
+        risk.risk_hazard = "危害描述"
+        risk.risk_guidance = "处理指引"
 
         # 应用覆盖值
         for key, value in overrides.items():
@@ -195,7 +200,7 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
             last_operate_time=datetime.datetime(2025, 1, 19, 15, 0, 0, tzinfo=dt_timezone.utc),
             updated_at=datetime.datetime(2025, 1, 19, 16, 0, 0, tzinfo=dt_timezone.utc),
         )
-        risk.strategy.risk_level = "MIDDLE"
+        risk.risk_level = "MIDDLE"
 
         serializer = ReportRiskVariableSerializer(risk)
         data = serializer.data
@@ -238,9 +243,10 @@ class TestReportRiskVariableSerializerFriendlyDisplay(TestCase):
         )
         # strategy 关联字段设置为 None
         risk.strategy.strategy_id = None
-        risk.strategy.risk_level = None
-        risk.strategy.risk_hazard = None
-        risk.strategy.risk_guidance = None
+        # risk_level/hazard/guidance 为 Risk 快照字段，直接设在 risk 上
+        risk.risk_level = None
+        risk.risk_hazard = None
+        risk.risk_guidance = None
 
         serializer = ReportRiskVariableSerializer(risk)
         data = serializer.data
