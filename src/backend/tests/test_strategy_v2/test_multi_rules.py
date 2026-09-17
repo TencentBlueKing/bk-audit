@@ -160,18 +160,99 @@ class CheckRulesTest(TestCase):
             self.mixin._check_rules(attrs)
         self.assertIn("唯一", str(cm.exception))
 
-    def test_rule_requires_where_condition(self):
-        """规则 where 必填"""
+    def test_rule_allows_empty_where_with_having(self):
+        """规则 where 允许为空（需搭配 having）：空 = 不过滤明细行（全量参与聚合），命中由 having 决定"""
+        configs = {
+            "select": [
+                {
+                    "table": "t",
+                    "raw_name": "count",
+                    "display_name": "count",
+                    "field_type": "long",
+                    "aggregate": "COUNT",
+                },
+            ]
+        }
         attrs = {
             "strategy_type": StrategyType.RULE.value,
-            "configs": self.valid_configs,
+            "configs": configs,
             "rules": [
-                {"rule_name": "r1", "conditions": {"where": None}},
+                {
+                    "rule_name": "r1",
+                    "conditions": {
+                        "where": None,
+                        "having": {
+                            "condition": {
+                                "field": {
+                                    "table": "t",
+                                    "raw_name": "count",
+                                    "display_name": "count",
+                                    "field_type": "long",
+                                    "aggregate": "COUNT",
+                                },
+                                "operator": "gt",
+                                "filter": "5",
+                            }
+                        },
+                    },
+                },
             ],
         }
-        with self.assertRaises(serializers.ValidationError) as cm:
-            self.mixin._check_rules(attrs)
-        self.assertIn("where", str(cm.exception))
+        self.assertEqual(self.mixin._check_rules(attrs), attrs)
+
+    def test_rule_allows_empty_where_tree_with_having(self):
+        """规则 where 允许为空树（connector+空conditions），需搭配 having"""
+        configs = {
+            "select": [
+                {
+                    "table": "t",
+                    "raw_name": "count",
+                    "display_name": "count",
+                    "field_type": "long",
+                    "aggregate": "COUNT",
+                },
+            ]
+        }
+        attrs = {
+            "strategy_type": StrategyType.RULE.value,
+            "configs": configs,
+            "rules": [
+                {
+                    "rule_name": "r1",
+                    "conditions": {
+                        "where": {"connector": "and", "conditions": []},
+                        "having": {
+                            "condition": {
+                                "field": {
+                                    "table": "t",
+                                    "raw_name": "count",
+                                    "display_name": "count",
+                                    "field_type": "long",
+                                    "aggregate": "COUNT",
+                                },
+                                "operator": "gt",
+                                "filter": "5",
+                            }
+                        },
+                    },
+                },
+            ],
+        }
+        self.assertEqual(self.mixin._check_rules(attrs), attrs)
+
+    def test_rule_rejects_empty_where_and_having(self):
+        """规则 where/having 二者皆空 = 恒真规则，拒绝"""
+        for empty_where in (None, {"connector": "and", "conditions": []}):
+            attrs = {
+                "strategy_type": StrategyType.RULE.value,
+                "configs": self.valid_configs,
+                "rules": [
+                    {"rule_name": "r1", "conditions": {"where": empty_where}},
+                ],
+            }
+            with self.assertRaises(serializers.ValidationError) as cm:
+                self.mixin._check_rules(attrs)
+            self.assertIn("同时为空", str(cm.exception))
 
     def test_having_field_must_be_aggregate(self):
         """having 条件字段必须为聚合字段"""
