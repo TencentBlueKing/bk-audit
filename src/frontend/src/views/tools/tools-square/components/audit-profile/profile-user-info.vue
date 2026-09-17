@@ -19,7 +19,47 @@
     <div class="top-search-title">
       {{ t('用户信息') }}
     </div>
-    <div class="user-info-content">
+    <!-- 空态：左侧居中文案，右侧保留占位卡 -->
+    <div
+      v-if="isEmpty"
+      class="user-info-content user-info-empty-content">
+      <div class="user-info-left user-info-empty">
+        <div class="user-info-empty-text">
+          {{ t('暂无查询到此用户信息') }}
+        </div>
+      </div>
+      <div class="user-info-right">
+        <div class="stat-card responsibility">
+          <div class="stat-label">
+            {{ t('责任单数') }}
+          </div>
+          <div class="stat-value-row">
+            <div class="stat-value placeholder-value">
+              --
+            </div>
+          </div>
+          <img
+            class="stat-icon"
+            :src="danjvIcon">
+        </div>
+        <div class="stat-card risk low">
+          <div class="stat-label">
+            {{ t('风险系数') }}
+          </div>
+          <div class="stat-value-row">
+            <div class="stat-value risk-level placeholder-value">
+              --
+            </div>
+          </div>
+          <img
+            class="stat-icon"
+            :src="warningLowIcon">
+        </div>
+      </div>
+    </div>
+    <div
+      v-else
+      class="user-info-content">
       <div class="user-info-left">
         <div class="user-detail">
           <!-- 第1行：企业微信 | 用户名 -->
@@ -251,6 +291,9 @@
 
   const { t } = useI18n();
 
+  // 用户信息是否为空（无企微且无用户名视为查不到人员）
+  const isEmpty = computed(() => !props.userInfo.wecom && !props.userInfo.username);
+
   // 眼睛图标控制显示/隐藏
   const wechatVisible = ref(false);
   const qqVisible = ref(false);
@@ -424,6 +467,25 @@
   flex: 1;
   min-width: 0;
   gap: 16px;
+}
+
+/* 空态：左侧文案居中，右侧保留占位卡 */
+.user-info-empty-content {
+  align-items: center;
+  min-height: 88px;
+}
+
+.user-info-empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.user-info-empty-text {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  color: #979ba5;
+  text-align: center;
 }
 
 .user-detail {
@@ -692,6 +754,11 @@
     line-height: 40px;
     color: #313238;
 
+    &.placeholder-value {
+      font-weight: 400;
+      color: #c4c6cc;
+    }
+
     &.risk-level {
       &.high {
         color: #ea3636;
@@ -703,6 +770,11 @@
 
       &.low {
         color: #2dcb56;
+      }
+
+      &.placeholder-value {
+        font-weight: 400;
+        color: #c4c6cc;
       }
     }
   }
