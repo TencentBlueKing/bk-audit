@@ -21,10 +21,6 @@ quality:
 quality-all:
 	$(PRE_COMMIT) run --all-files --show-diff-on-failure
 
-.PHONY: test
-test:
-	$(PYTHON) manage.py test tests/
-
 .PHONY: check
 check: quality test
 
