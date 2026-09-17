@@ -41,7 +41,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
-from services.web.scene.constants import BindingType
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
