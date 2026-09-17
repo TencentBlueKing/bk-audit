@@ -171,12 +171,20 @@ class AgentCondition(Condition):
             allow_empty=True,
             default=list,
             max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
-            help_text="最多 1000 个字符串、整数或浮点数；单个值的 UTF-8 JSON 最大 16 KiB。",
+            help_text=(
+                "最多 1000 个 JSON 标量值：字符串、整数或浮点数（浮点数必须为有限值）；不接受布尔值、对象、数组或 null。"
+                "由于 API Gateway 使用 Swagger 2.0 不支持 anyOf，网关 schema 的 items 不做类型约束，"
+                "服务端仍按上述类型严格校验；单个值的 UTF-8 JSON 最大 16 KiB。"
+            ),
         ),
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FILTERS_PER_CONDITION,
-        description="最多 1000 个字符串、整数或浮点数；单个值的 UTF-8 JSON 最大 16 KiB。",
+        description=(
+            "最多 1000 个 JSON 标量值：字符串、整数或浮点数（浮点数必须为有限值）；不接受布尔值、对象、数组或 null。"
+            "由于 API Gateway 使用 Swagger 2.0 不支持 anyOf，网关 schema 的 items 不做类型约束，"
+            "服务端仍按上述类型严格校验；单个值的 UTF-8 JSON 最大 16 KiB。"
+        ),
     )
 
     @field_validator("operator")
@@ -855,7 +863,11 @@ class AggregationGroupKind(StrEnum):
 
 
 class AggregationGroupValue(BaseModel):
-    """类别维度的有类型标量，保留布尔、数字和字符串的区别。"""
+    """类别维度的有类型标量，保留布尔、数字和字符串的区别。
+
+    API Gateway 使用 Swagger 2.0，不支持 oneOf/anyOf；网关 schema 通过字段描述表达类型关联，
+    服务端仍按 value_type 严格校验。
+    """
 
     model_config = ConfigDict(
         extra="forbid",
@@ -877,11 +889,19 @@ class AggregationGroupValue(BaseModel):
         json_schema_extra={
             "enum": [JSONValueType.BOOLEAN, JSONValueType.INTEGER, JSONValueType.NUMBER, JSONValueType.STRING]
         },
-        description="非缺失标量类型；容器和 null 不能作为 VALUE 组类别。",
+        description=(
+            "非缺失标量类型：boolean 对应 JSON 布尔值，integer 对应 JSON 整数，"
+            "number 对应 JSON 数字（整数或浮点数），string 对应 JSON 字符串；容器和 null 不能作为 VALUE 组类别。"
+        ),
     )
     value: Annotated[Any, serializers.JSONField(allow_null=False)] = Field(
         json_schema_extra={"anyOf": [{"type": "boolean"}, {"type": "integer"}, {"type": "number"}, {"type": "string"}]},
-        description="与 value_type 一致的非 null 标量；保留空字符串。",
+        description=(
+            "必须与 value_type 匹配；boolean 为 JSON 布尔值，integer 为 JSON 整数，"
+            "number 为 JSON 数字（整数或浮点数），string 为 JSON 字符串；不得为 null、数组或对象。"
+            "由于 API Gateway 使用 Swagger 2.0 不支持 anyOf/oneOf，网关 schema 不表达上述关联，"
+            "服务端仍按 value_type 严格校验；保留空字符串。"
+        ),
     )
 
     @model_validator(mode="after")

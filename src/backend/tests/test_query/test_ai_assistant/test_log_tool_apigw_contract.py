@@ -385,6 +385,43 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         self.assertEqual(filters["items"], {})
         self.assertIn("字符串、整数或浮点数", filters["description"])
 
+    def test_downgraded_scalar_contract_explains_runtime_types_to_agents(self):
+        """联合类型降级后，描述仍完整表达允许值和服务端校验关系。"""
+        filters = self.resources["definitions"]["log_tool_condition"]["properties"]["conditions"]["items"][
+            "properties"
+        ]["filters"]
+        self.assertIn("不接受布尔值、对象、数组或 null", filters["description"])
+        self.assertIn("Swagger 2.0 不支持 anyOf", filters["description"])
+        self.assertIn("服务端仍按上述类型严格校验", filters["description"])
+
+        value_item = self.resources["paths"]["/mcp/logs/aggregate/"]["post"]["responses"]["200"]["schema"][
+            "properties"
+        ]["data"]["properties"]["groups"]["items"]["properties"]["values"]["items"]
+        self.assertIn("Swagger 2.0", value_item["description"])
+        self.assertIn("不支持 oneOf/anyOf", value_item["description"])
+        self.assertIn("boolean 对应 JSON 布尔值", value_item["properties"]["value_type"]["description"])
+        self.assertIn("integer 对应 JSON 整数", value_item["properties"]["value_type"]["description"])
+        self.assertIn("number 对应 JSON 数字", value_item["properties"]["value_type"]["description"])
+        self.assertIn("string 对应 JSON 字符串", value_item["properties"]["value_type"]["description"])
+        self.assertIn("不得为 null、数组或对象", value_item["properties"]["value"]["description"])
+
+    def test_static_resource_schemas_avoid_swagger2_unsupported_union_keywords(self):
+        """Swagger 2 静态资源不能携带网关不支持的联合类型关键字。"""
+        unsupported = []
+
+        def collect(value, path):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in {"anyOf", "oneOf"}:
+                        unsupported.append(f"{path}/{key}")
+                    collect(child, f"{path}/{key}")
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    collect(child, f"{path}/{index}")
+
+        collect(self.resources, "")
+        self.assertEqual(unsupported, [])
+
     def test_aggregate_model_dump_with_explicit_nulls_validates_against_yaml(self):
         request = AggregateLogsRequest.model_validate(
             {
@@ -424,22 +461,27 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         self.assertTrue(data["groups"]["items"]["properties"]["ratio"]["description"])
         self.assertIn("DISTINCT_COUNT", data["rows"]["description"])
 
-        def normalize(value):
-            """忽略显示标题与两版本 nullable 名称，保留全部验证关键字。"""
+        def normalize(value, *, gateway_compatible=False):
+            """统一两版本 schema 表达，并按需移除 Swagger 2 不支持的联合类型。"""
             if isinstance(value, list):
-                return [normalize(item) for item in value]
+                return [normalize(item, gateway_compatible=gateway_compatible) for item in value]
             if not isinstance(value, dict):
                 return value
             return {
-                ("nullable" if key == "x-nullable" else key): normalize(item)
+                ("nullable" if key == "x-nullable" else key): normalize(item, gateway_compatible=gateway_compatible)
                 for key, item in value.items()
-                if key != "title" and not (key == "default" and item is None)
+                if key != "title"
+                and not (key == "default" and item is None)
+                and not (gateway_compatible and key in {"anyOf", "oneOf"})
             }
 
-        self.assertEqual(normalize(self._raw_body_schema("mcp_aggregate_logs")), normalize(dynamic_request))
+        self.assertEqual(
+            normalize(self._raw_body_schema("mcp_aggregate_logs")),
+            normalize(dynamic_request, gateway_compatible=True),
+        )
         self.assertEqual(
             normalize(self.resources["paths"]["/mcp/logs/aggregate/"]["post"]["responses"]["200"]["schema"]),
-            normalize(dynamic_response),
+            normalize(dynamic_response, gateway_compatible=True),
         )
 
     def _body_schema(self, operation_id):
