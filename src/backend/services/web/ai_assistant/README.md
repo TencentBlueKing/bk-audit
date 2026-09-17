@@ -97,6 +97,8 @@ Node 移动支持互斥的 `before_node_*` 和 `after_node_*` 锚点。`after` �
 
 ## 6. 开发入口
 
+- [模块功能与架构设计](docs/architecture.md)：平台边界、统计内核、任务一致性与验证边界。
+- [AI 与程序统计前端联调](docs/frontend_statistics.md)：字段探索、创建、渲染、恢复与重试。
 - [前端联调指南](docs/frontend_integration.md)：会话、消息、附件、流式恢复与日志检索调用链路。
 - [前端调用链路：二期日志分析](docs/frontend_log_analysis.md)：分析附件、流恢复、报告编辑与下载。
 - [Handler 接入指南](docs/handler_integration.md)：新增消息或附件类型的最短路径。

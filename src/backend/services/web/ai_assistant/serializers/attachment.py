@@ -80,7 +80,11 @@ class AttachmentCreateRequestSerializer(serializers.Serializer):
 
     message_uid = serializers.UUIDField(help_text="来源消息对外 UUID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
-    input_data = AttachmentInputDataField(help_text="由附件类型对应 Pydantic 输入模型校验的业务数据")
+    input_data = AttachmentInputDataField(
+        help_text=(
+            "按外层 attachment_type 选择输入 schema：FIELD_STATISTICS 传 field 及可选 top_n/interval；" "AI_STATISTICS 传 instruction"
+        )
+    )
 
 
 class AttachmentDetailRequestSerializer(serializers.Serializer):
@@ -171,12 +175,12 @@ class AttachmentResponseSerializer(serializers.Serializer):
     output_data = AttachmentOutputDataField(
         allow_null=True,
         required=False,
-        help_text="附件类型化输出快照",
+        help_text="按 attachment_type 选择输出 schema；SUCCESS 时使用，FIELD_STATISTICS 为固定统计包，AI_STATISTICS 为 content 原文",
     )
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
-    is_stream = serializers.BooleanField(help_text="是否使用流式输出；为真时可订阅流快照与 SSE 接口")
+    is_stream = serializers.BooleanField(help_text="是否支持可选的流式过程；为真也可仅轮询详情获取最终产物")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
         help_text="当前类型支持的后端导出格式",

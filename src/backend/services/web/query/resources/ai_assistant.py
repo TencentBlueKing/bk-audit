@@ -25,11 +25,58 @@ from services.web.query.resources.base import QueryBaseResource
 
 
 class MCPGetLogFieldMetadata(QueryBaseResource):
-    """探索当前用户可查询日志字段的脱敏样例和下一层 JSON 路径。
+    """探索当前用户可查询的日志根字段或下一层 JSON 字段，返回脱敏元信息。
 
-    仅采样至多 50 条已脱敏日志，不递归展开对象字段；字段引用可用于明细查询，
-    聚合使用时还需满足聚合工具的字段和类型限制。业务 data 载荷不超过 1 MiB。
-    可恢复的参数、字段和权限错误维持平台标准错误响应。
+    Web 字段选择器与 MCP 共用该 Resource。Web 使用
+    `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`；
+    namespace 从路径传入，身份来自当前请求，不在 body 提交 namespace 或 username。
+
+    ### Case 1：打开程序统计字段选择器
+
+    ```json
+    {
+      "condition": {
+        "scope_type": "system",
+        "scope_id": "your-system-id",
+        "start_time": "2026-09-17 00:00:00",
+        "end_time": "2026-09-17 23:59:59",
+        "conditions": []
+      }
+    }
+    ```
+
+    将 condition 替换为来源 LOG_SEARCH 消息 input_data.condition 的完整内容，保留过滤条件。
+    省略 parent_field 时返回声明的根字段，不查询 Doris 样本。
+
+    ### Case 2：展开拓展字段
+
+    ```json
+    {
+      "condition": {
+        "scope_type": "system",
+        "scope_id": "your-system-id",
+        "start_time": "2026-09-17 00:00:00",
+        "end_time": "2026-09-17 23:59:59",
+        "conditions": []
+      },
+      "parent_field": {
+        "raw_name": "extend_data",
+        "keys": []
+      }
+    }
+    ```
+
+    下一次展开时用上一层返回的 field 替换 parent_field，保留完整 keys。
+    每次仅探索下一层，至多采样 50 条脱敏日志，不递归展开全部路径。
+
+    ### 如何使用返回值
+
+    fields[].field 可传给后续工具或程序统计附件；is_expandable 控制展开入口，
+    statistics_supported 控制统计选择提示，unsupported_reason 说明不可统计原因。
+    对象可展开不等于本身可统计。类型和覆盖率可能来自样本，不保证全范围一致；
+    执行统计时仍重新校验权限和真实类型。sample_summary.truncated 表示探索有截断，
+    不代表目录中不存在其他 key。业务 data 载荷不超过 1 MiB；配置可收紧采样与大小限制。
+    参数、字段和权限错误使用平台标准错误响应。
     """
 
     name = gettext_lazy("MCP 获取日志字段元信息")
