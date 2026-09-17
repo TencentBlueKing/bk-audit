@@ -42,7 +42,7 @@
         :config-data="localTableFields"
         :config-type="configType"
         :loading="tableFieldsLoading"
-        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
+        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition, index)" />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -172,7 +172,11 @@
 
   import { normalizeConditionValueForDisplay } from '@utils/assist/normalize-condition-filter';
   import { splitAndMerge } from '@utils/assist/split-and-merge';
-  import { enrichFieldDisplayNames, formatFieldDisplayLabel } from '../../../../../../../utils/strategy-protocol';
+  import {
+    enrichFieldDisplayNames,
+    formatFieldDisplayLabel,
+    formatHitConditionFieldBase,
+  } from '../../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
 
@@ -503,25 +507,31 @@
     .map(item => `${item.raw_name || ''}:${item.aggregate || ''}`)
     .join('|'));
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
+  const onHandleNodeSelectedValue = (
+    node: Record<string, any>,
+    val: string,
+    condition: Record<string, any>,
+    index: number,
+  ) => {
     // eslint-disable-next-line no-param-reassign
     condition.condition.field = { ...node };
-    // 标准字段统一存「中文名(raw_name)」；嵌套字段沿用下拉展示值
-    if (val && ('self_name' in node || 'fieldTypeValueAr' in node)) {
+    // 表单校验用 display_name，不带 [计数] 前缀，避免被当成数组；聚合仍带 _COUNT
+    if (val && ('self_name' in node)) {
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.display_name = val;
     } else {
       // eslint-disable-next-line no-param-reassign
-      condition.condition.field.display_name = formatFieldDisplayLabel(
-        node.display_name,
-        node.raw_name,
-      );
+      condition.condition.field.display_name = formatHitConditionFieldBase(node)
+        || formatFieldDisplayLabel(node.display_name, node.raw_name);
     }
     if ('fieldTypeValueAr' in node) {
       // eslint-disable-next-line no-param-reassign
       condition.condition.field.keys = node.fieldTypeValueAr;
     }
     emits('handleUpdateLocalConditions', props.conditionsIndex, localConditions.value);
+    nextTick(() => {
+      strategyStep1FormRef.value?.clearValidate?.(`configs.where.conditions[${props.conditionsIndex}].conditions[${index}].condition.field.display_name`);
+    });
   };
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {

@@ -6,7 +6,8 @@ import type StrategyModel from '@model/strategy/strategy';
 import {
   type AssignConditionForm,
   dispatchToAssignConditionForm,
-  formatFieldDisplayLabel,
+  formatHitConditionFieldLabel,
+  isWhereHavingConditions,
   mergeHavingIntoWhere,
   parseStrategyDetailToForm,
   toNoticeGroupIds,
@@ -42,11 +43,17 @@ export const emptyWhere = (): RuleWhereDisplay => ({
   conditions: [],
 });
 
-export const getConditionFieldLabel = (field: Record<string, any> | undefined) => {
+export const getConditionFieldLabel = (
+  field: Record<string, any> | undefined,
+  aggregateList: Array<{ label?: string; value?: unknown }> = [],
+) => {
   if (!field) return '';
-  const displayName = field.display_name || field.field_name || '';
-  const rawName = field.raw_name || field.field_name || '';
-  return formatFieldDisplayLabel(displayName, rawName);
+  return formatHitConditionFieldLabel({
+    display_name: field.display_name || field.field_name || '',
+    raw_name: field.raw_name || field.field_name || '',
+    aggregate: field.aggregate,
+    parent_aggregate: field.parent_aggregate,
+  }, aggregateList);
 };
 
 const getGroupChildConditions = (group: Record<string, any>) => {
@@ -80,6 +87,7 @@ export const getRuleWhere = (rule: Record<string, any>): RuleWhereDisplay => {
 export const buildConditionDisplayRows = (
   where: RuleWhereDisplay,
   getOperatorLabel: (operator: string) => string,
+  aggregateList: Array<{ label?: string; value?: unknown }> = [],
 ): ConditionDisplayRow[] => {
   const rows: ConditionDisplayRow[] = [];
   where.conditions.forEach((group, groupIndex) => {
@@ -88,7 +96,9 @@ export const buildConditionDisplayRows = (
       const condition = child.condition ?? child;
       if (!condition) return;
 
-      const fieldLabel = getConditionFieldLabel(condition.field) || condition.field_name || '';
+      const fieldLabel = getConditionFieldLabel(condition.field, aggregateList)
+        || condition.field_name
+        || '';
       const operatorLabel = condition.operator ? getOperatorLabel(condition.operator) : '';
       const values = getConditionValues(condition);
 
@@ -136,6 +146,12 @@ export const dispatchConditionsToWhere = (
   conditions: Record<string, any> | AssignConditionForm | undefined,
   getFieldLabel: (fieldName: string) => string,
 ): RuleWhereDisplay => {
+  if (isWhereHavingConditions(conditions)) {
+    return dispatchConditionsToWhere(
+      mergeHavingIntoWhere(conditions.where, conditions.having),
+      getFieldLabel,
+    );
+  }
   const form = dispatchToAssignConditionForm(conditions);
   if (!form.groups.some(group => group.conditions.some(row => row.field))) {
     // 已是风险发现规则 where 结构时，直接用于展示

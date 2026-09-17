@@ -265,7 +265,7 @@
                 :clearable="false"
                 style="width: 68px">
                 <bk-option
-                  v-for="(item, index) in commonData.offset_unit"
+                  v-for="(item, index) in schedulePeriodOptions"
                   :key="index"
                   :label="item.label"
                   :value="item.value" />
@@ -320,10 +320,13 @@
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
   import {
+    applyScheduleConfigForSubmit,
     enrichFieldDisplayNames,
     excludeHavingFromWhere,
     formatFieldDisplayLabel,
     hasFilledWhereConditions,
+    normalizeWhereHaving,
+    splitWhereAndHaving,
   } from '../../../../utils/strategy-protocol';
 
   interface Where {
@@ -358,7 +361,7 @@
       // 前端临时字段：预期结果为空时用于兜底，提交前会剔除
       table_fields?: Array<DatabaseTableFieldModel>
       where: Where
-      having?: Where
+      having?: Where | null
       schedule_config: {
         count_freq: string
         schedule_period: string
@@ -478,8 +481,6 @@
   const joinTypeList = ref<Array<Record<string, any>>>([]);
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
   const typeTableLoading = ref(false);
-  const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
-  const availableSourceTypes = ref<Array<string>>([]);
   // 编辑模式下保存原始风险发现规则，用于未改动时原样提交
   const originalEditWhere = ref<Where | null>(null);
   const originalEditHaving = ref<Where | undefined>(undefined);
@@ -603,6 +604,17 @@
       // 获取到数据源类别后，获取所有tableid
       getAllConfigTypeTable();
     },
+  });
+
+  const schedulePeriodOptions = computed(() => {
+    const list = (commonData.value.offset_unit || []).filter(item => (
+      item.value === 'hour' || item.value === 'day'
+    ));
+    if (list.length) return list;
+    return [
+      { label: t('小时'), value: 'hour' },
+      { label: t('天'), value: 'day' },
+    ];
   });
 
   // 获取tableid
@@ -819,6 +831,55 @@
       });
   };
 
+  const hasAggregateInSelect = (select = formData.value.configs.select) => (
+    (select || []).some(item => item.aggregate)
+  );
+
+  const createDefaultScheduleConfig = () => ({
+    count_freq: '',
+    schedule_period: 'hour',
+  });
+
+  const lastScheduleConfig = ref(createDefaultScheduleConfig());
+
+  const snapshotScheduleConfig = (config?: { count_freq?: string | number; schedule_period?: string } | null) => {
+    if (!config?.count_freq) {
+      return;
+    }
+    lastScheduleConfig.value = {
+      count_freq: String(config.count_freq),
+      schedule_period: config.schedule_period || 'hour',
+    };
+  };
+
+  const ensureScheduleConfig = () => {
+    const current = formData.value.configs.schedule_config;
+    if (current?.count_freq) {
+      snapshotScheduleConfig(current);
+      return;
+    }
+    formData.value.configs.schedule_config = lastScheduleConfig.value.count_freq
+      ? { ...lastScheduleConfig.value }
+      : (current || createDefaultScheduleConfig());
+  };
+
+  // 预期结果变更只禁用「实时调度」，已选的「固定周期调度」和调度周期必须保留
+  const preserveSourceTypeAfterSelectChange = (prevSourceType?: string) => {
+    const supported = sourceType.value.support_source_types || [];
+    const current = formData.value.configs.data_source.source_type || prevSourceType || '';
+    if (current === 'stream_source' && hasAggregateInSelect() && supported.includes('batch_join_source')) {
+      formData.value.configs.data_source.source_type = 'batch_join_source';
+      ensureScheduleConfig();
+      return;
+    }
+    if (current && (supported.includes(current) || !supported.length)) {
+      formData.value.configs.data_source.source_type = current as 'batch_join_source' | 'stream_source';
+      if (current === 'batch_join_source') {
+        ensureScheduleConfig();
+      }
+    }
+  };
+
   // 选择tableid后，获取该table的可用调度方式
   const {
     run: fetchSourceType,
@@ -828,26 +889,7 @@
       support_source_types: ['batch_join_source', 'stream_source'],
     },
     onSuccess: () => {
-      // 获取所有可用的调度方式
-      availableSourceTypes.value = sourceType.value.support_source_types.filter((type) => {
-        if (type === 'stream_source') {
-          // stream_source模式下:
-          // 存在聚合算法的数据不能使用该模式
-          return !formData.value.configs.select.some(item => item.aggregate);
-        }
-        return true; // 其他类型都可用
-      });
-
-      // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
-      if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
-        formData.value.configs.data_source.source_type = originSourceType.value;
-      }
-
-      // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
-      if (!availableSourceTypes.value.length
-        || !availableSourceTypes.value.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
-        formData.value.configs.data_source.source_type = '';
-      }
+      preserveSourceTypeAfterSelectChange();
     },
   });
 
@@ -871,7 +913,7 @@
     property: item.property || {},
   }));
 
-  const enrichWhereFieldDisplayNames = (where?: Where) => {
+  const enrichWhereFieldDisplayNames = (where?: Where | null) => {
     if (!where?.conditions?.length) {
       return;
     }
@@ -882,7 +924,11 @@
         if (!field || typeof field === 'string' || !(field.raw_name || field.display_name)) {
           return;
         }
-        const matchedSelect = select.find((selectItem: { raw_name?: string; aggregate?: unknown; display_name?: string }) => (
+        const matchedSelect = select.find((selectItem: {
+          raw_name?: string;
+          aggregate?: unknown;
+          display_name?: string;
+        }) => (
           selectItem.raw_name === field.raw_name
           && (selectItem.aggregate || null) === (field.aggregate || null)
         ));
@@ -1273,18 +1319,23 @@
     fetchSourceType({ config_type: 'EventLog', rt_id: pluginId });
   };
 
+  const lastSourceType = ref('');
+
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     const prevSelect = JSON.stringify(formData.value.configs.select || []);
+    const prevSourceType = formData.value.configs.data_source.source_type;
     formData.value.configs.select = expectedResult;
     sessionStorage.removeItem('rule-tree-data');
-    // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
-    if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
-      formData.value.configs.data_source.source_type = '';
-    } else if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
-      // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
-      formData.value.configs.data_source.source_type = originSourceType.value;
-    }
+    preserveSourceTypeAfterSelectChange(prevSourceType);
+    // 实时调度 radio 被禁用时，bk-radio-group 可能把 v-model 打空，下一拍恢复
+    nextTick(() => {
+      preserveSourceTypeAfterSelectChange(prevSourceType);
+      const kept = formData.value.configs.data_source.source_type;
+      if (kept) {
+        lastSourceType.value = kept;
+      }
+    });
     if (props.stepMode !== 'basic' || !isStepActive.value
       || prevSelect === JSON.stringify(expectedResult || [])) {
       return;
@@ -1297,14 +1348,25 @@
     formData.value.configs.where = where;
     if (!isWhereSettingUp.value) {
       isWhereModified.value = true;
+      // UI 维护 where+having 合并树；旧 having 不能再参与提交合并，否则删掉的聚合条件会被加回去
+      formData.value.configs.having = {
+        connector: 'and',
+        conditions: [],
+      };
     }
   };
 
-  const handleSourceTypeChange = () => {
-    formData.value.configs.schedule_config = {
-      count_freq: '',
-      schedule_period: 'hour',
-    };
+  const handleSourceTypeChange = (value: string) => {
+    // 预期结果变更导致 radio disabled 时可能误触发空值，不能清空已选调度方式
+    if (!value || value === lastSourceType.value) {
+      return;
+    }
+    lastSourceType.value = value;
+    if (value === 'batch_join_source') {
+      ensureScheduleConfig();
+      return;
+    }
+    formData.value.configs.schedule_config = createDefaultScheduleConfig();
   };
 
   const extractBizIdFromRtId = (rtId: string) => {
@@ -1541,7 +1603,9 @@
 
   const setFormData = async (editData: any) => {
     formData.value.configs.config_type = editData.configs.config_type || '';
-    formData.value.configs.schedule_config = editData.configs.schedule_config;
+    formData.value.configs.schedule_config = editData.configs.schedule_config
+      || createDefaultScheduleConfig();
+    snapshotScheduleConfig(formData.value.configs.schedule_config);
     formData.value.configs.select = editData.configs.select;
     if (expectedResultsRef.value?.setSelect) {
       expectedResultsRef.value.setSelect(editData.configs.select);
@@ -1565,7 +1629,7 @@
         ...dataSource,
         system_ids: [...(dataSource.system_ids || [])],
       };
-      originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
+      lastSourceType.value = dataSource.source_type || '';
     }
     // 转换tableid,反显
     // 回显期间提前进入 loading，避免命中条件下拉先闪空态
@@ -1608,6 +1672,14 @@
     {
       deep: true,
     },
+  );
+
+  watch(
+    () => formData.value.configs.schedule_config,
+    (config) => {
+      snapshotScheduleConfig(config);
+    },
+    { deep: true },
   );
 
   watch(() => props.editData?.strategy_id, (id, prevId) => {
@@ -1742,6 +1814,16 @@
       // 下一步/保存前先把操作日志面板里未落盘的系统选择写入表单
       dataSourcePickerRef.value?.flushEventLogSelection?.();
       const params = _.cloneDeep(formData.value);
+      if (
+        params.configs.data_source?.source_type === 'batch_join_source'
+        && !params.configs.schedule_config?.count_freq
+        && lastScheduleConfig.value.count_freq
+      ) {
+        params.configs.schedule_config = { ...lastScheduleConfig.value };
+      }
+      if (!options?.forValidate) {
+        params.configs = applyScheduleConfigForSubmit(params.configs) ?? params.configs;
+      }
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {
         params.configs.select = enrichFieldDisplayNames(
@@ -1777,46 +1859,25 @@
       if ((props.stepMode === 'rules' || props.stepMode === 'rules-only') && !options?.forValidate) {
         if (isEditMode && !isWhereModified.value) {
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
-          if (originalEditHaving.value) {
-            params.configs.having = _.cloneDeep(originalEditHaving.value);
-          } else {
-            delete params.configs.having;
-          }
-        } else if (params.configs.where) {
-          // 添加having参数
-          // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
-          const isHavingCondition = (item: { condition?: { field?: unknown } }) => {
-            const field = item?.condition?.field;
-            return Boolean(field && typeof field !== 'string' && (field as { aggregate?: unknown }).aggregate);
-          };
-          const having = {
-            connector: params.configs.where.connector,
-            conditions: params.configs.where.conditions
-              .map(group => ({
-                connector: group.connector,
-                index: group.index,
-                conditions: group.conditions.filter(item => isHavingCondition(item)),
-              }))
-              // 过滤掉没有聚合条件的组
-              .filter(group => group.conditions.length > 0),
-          };
-          if (having.conditions.length > 0) {
-            const nextWhereConditions = params.configs.where.conditions
-              .map(group => ({
-                connector: group.connector,
-                index: group.index,
-                conditions: group.conditions.filter(item => !isHavingCondition(item)),
-              }))
-              .filter(group => group.conditions.length > 0);
-            // 全部是聚合条件时仍保留 where，后端规则 where 必填
-            if (nextWhereConditions.length > 0) {
-              params.configs.having = having;
-              params.configs.where.conditions = nextWhereConditions;
-            }
-          } else {
-            delete params.configs.having;
-          }
+          params.configs.having = originalEditHaving.value
+            ? _.cloneDeep(originalEditHaving.value)
+            : {
+              connector: 'and',
+              conditions: [],
+            };
         }
+        // 用户改过命中条件后，以当前合并树拆 where/having，不能再把旧 having 合回来
+        const { where, having } = isEditMode && !isWhereModified.value
+          ? normalizeWhereHaving(params.configs.where, params.configs.having)
+          : splitWhereAndHaving(params.configs.where);
+        params.configs.where = where ?? {
+          connector: params.configs.where?.connector || 'and',
+          conditions: [],
+        };
+        params.configs.having = having ?? {
+          connector: 'and',
+          conditions: [],
+        };
         // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
         const transferFilter = (whereData: Where) => {
           whereData.conditions.forEach((group) => {

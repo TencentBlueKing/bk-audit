@@ -795,10 +795,8 @@ class TestRiskExport(TestCase):
         self.assertEqual(data["scene_id"], self.scene.scene_id)
 
     @mock.patch("services.web.risk.resources.risk.ScopePermission")
-    @mock.patch("services.web.risk.models.Risk.load_iam_authed_risks")
-    def test_load_filter_risk_ids_excludes_pending_confirm_in_scene_view(
-        self, mock_load_iam_authed_risks, mock_scope_perm
-    ):
+    @mock.patch("services.web.risk.resources.risk.ListRisk.load_risks")
+    def test_load_filter_risk_ids_excludes_pending_confirm_in_scene_view(self, mock_load_risks, mock_scope_perm_cls):
         """
         测试场景视图导出时排除待确认风险
         """

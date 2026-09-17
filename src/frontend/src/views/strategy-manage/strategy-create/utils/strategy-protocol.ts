@@ -1,7 +1,4 @@
-/*
-  TencentBlueKing is pleased to support the open source community by making
-  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
-*/
+
 
 import _ from 'lodash';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
@@ -183,6 +180,34 @@ const findTableFieldByRaw = (
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const AGGREGATE_NAME_SUFFIX_RE = /_[A-Z]+$/;
+const HIT_CONDITION_AGGREGATE_RE = /_(COUNT_DISTINCT|COUNT|SUM|AVG|MAX|MIN)$/i;
+const AGGREGATE_TYPE_LABELS: Record<string, string> = {
+  COUNT: '计数',
+  SUM: '求和',
+  AVG: '平均',
+  MAX: '最大值',
+  MIN: '最小值',
+  COUNT_DISTINCT: '去重计数',
+};
+
+type HitConditionField = {
+  display_name?: string;
+  raw_name?: string;
+  aggregate?: unknown;
+  parent_aggregate?: unknown;
+};
+
+const resolveHitConditionAggregate = (field: HitConditionField) => {
+  const explicit = field.aggregate || field.parent_aggregate;
+  if (explicit !== null && explicit !== undefined && String(explicit).trim()) {
+    const normalized = String(explicit).trim();
+    if (!['null', 'none', 'undefined'].includes(normalized.toLowerCase())) {
+      return normalized;
+    }
+  }
+  const match = String(field.display_name || '').match(HIT_CONDITION_AGGREGATE_RE);
+  return match ? match[1].toUpperCase() : '';
+};
 
 /** 展示格式：中文名(raw_name)；聚合为 中文名(raw_name)_COUNT，已带 (raw_name) 时不再重复拼接 */
 export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) => {
@@ -206,6 +231,70 @@ export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) 
     return `${withoutAgg}${suffix}${aggregateMatch[0]}`;
   }
   return `${normalized}${suffix}`;
+};
+
+/** 命中条件字段存值：中文名(raw_name)_COUNT，不带 [计数] 前缀 */
+export const formatHitConditionFieldBase = (field?: HitConditionField | null) => {
+  if (!field) return '';
+  const aggregate = resolveHitConditionAggregate(field);
+  let base = formatFieldDisplayLabel(field.display_name, field.raw_name);
+  if (aggregate && !new RegExp(`_${aggregate}$`, 'i').test(base)) {
+    base = `${base}_${aggregate}`;
+  }
+  return base;
+};
+
+/** 命中条件展示：与选项一致，聚合为 [计数] 中文名(raw_name)_COUNT */
+export const formatHitConditionFieldLabel = (
+  field?: HitConditionField | null,
+  aggregateList: Array<{ label?: string; value?: unknown }> = [],
+) => {
+  const base = formatHitConditionFieldBase(field);
+  if (!field || !base) return base;
+  const aggregate = resolveHitConditionAggregate(field);
+  if (!aggregate) return base;
+  const item = aggregateList.find(agg => (
+    String(agg.value || '').toUpperCase() === aggregate.toUpperCase()
+  ));
+  const label = item?.label || AGGREGATE_TYPE_LABELS[aggregate.toUpperCase()] || aggregate;
+  return `[${label}] ${base}`;
+};
+
+export const SCHEDULE_PERIOD_VALUES = ['hour', 'day'] as const;
+
+export type SchedulePeriod = typeof SCHEDULE_PERIOD_VALUES[number];
+
+export const isSchedulePeriod = (value: unknown): value is SchedulePeriod => (
+  value === 'hour' || value === 'day'
+);
+
+export const parseScheduleCountFreq = (value: unknown): number | null => {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1) return null;
+  return num;
+};
+
+/** 实时调度不传 schedule_config；固定调度传整数 count_freq 与 hour/day */
+export const applyScheduleConfigForSubmit = <T extends Record<string, any>>(
+  configs?: T | null,
+): T | undefined => {
+  if (!configs) return configs ?? undefined;
+  if (configs.data_source?.source_type !== 'batch_join_source') {
+    const next = { ...configs };
+    delete next.schedule_config;
+    return next;
+  }
+  const current = configs.schedule_config || {};
+  const countFreq = parseScheduleCountFreq(current.count_freq);
+  return {
+    ...configs,
+    schedule_config: {
+      count_freq: countFreq ?? current.count_freq,
+      schedule_period: isSchedulePeriod(current.schedule_period)
+        ? current.schedule_period
+        : 'hour',
+    },
+  };
 };
 
 const normalizeFieldAggregate = (value: unknown) => (
@@ -318,6 +407,12 @@ export const toAssignWhere = (
   conditions: DispatchConditions,
   tableFields: Array<Record<string, any>> = [],
 ): AssignWhere => {
+  if (isWhereHavingConditions(conditions)) {
+    return toAssignWhere(
+      mergeHavingIntoWhere(conditions.where, conditions.having) as DispatchConditions,
+      tableFields,
+    );
+  }
   if (isAssignConditionForm(conditions)) {
     return {
       connector: conditions.connector,
@@ -434,6 +529,10 @@ const hasValidAssignWhere = (where: unknown) => {
 };
 
 export const dispatchToAssignConditionForm = (conditions: DispatchConditions): AssignConditionForm => {
+  if (isWhereHavingConditions(conditions)) {
+    // eslint-disable-next-line max-len
+    return dispatchToAssignConditionForm(mergeHavingIntoWhere(conditions.where, conditions.having) as DispatchConditions);
+  }
   if (isAssignConditionForm(conditions)) {
     return {
       connector: conditions.connector,
@@ -783,9 +882,13 @@ export const buildStrategySelectFieldOptions = (
 
 type RouteLike = Pick<RouteLocationNormalizedLoaded, 'name' | 'meta'> | null | undefined;
 
-export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined) => {
+export const isEmptyDispatchConditions = (conditions: Record<string, any> | null | undefined): boolean => {
   if (!conditions) return true;
   try {
+    if (isWhereHavingConditions(conditions)) {
+      return isEmptyDispatchConditions(conditions.where as Record<string, any>)
+        && isEmptyDispatchConditions(conditions.having as Record<string, any>);
+    }
     if (Array.isArray(conditions)) {
       return !conditions.some(item => getConditionFieldRaw(item?.field || item?.condition?.field));
     }
@@ -850,7 +953,11 @@ const buildDispatchRules = (params: Record<string, any>, isPlatform: boolean) =>
     return [];
   }
   const isEdit = !!params.strategy_id;
-  if (Array.isArray(params.dispatch_rules) && params.dispatch_rules.length && !params.assign_rules?.length) {
+  // 向导里已有分派表单（含仅默认规则、assign_rules 为空）时，必须用表单重建，
+  // 不能回退接口原 dispatch_rules，否则编辑默认规则处理人/关注人不会生效
+  const hasWizardAssign = Boolean(params.assign_rules?.length)
+    || Boolean(params.default_assign_rule && Object.keys(params.default_assign_rule).length);
+  if (!hasWizardAssign && Array.isArray(params.dispatch_rules) && params.dispatch_rules.length) {
     return params.dispatch_rules.map((rule: Record<string, any>) => (
       toDispatchRule(rule, isEmptyDispatchConditions(toDispatchConditions(rule.conditions)), isEdit)
     ));
@@ -933,26 +1040,21 @@ const pickWhereValue = (...candidates: WhereCandidate[]) => (
   candidates.find(item => hasFilledWhereConditions(item)) ?? null
 );
 
-const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<string, any>) => {
-  const configs = rule.configs || {};
-  return {
-    where: pickWhereValue(
-      rule.conditions?.where,
-      configs.where,
-      fallbackConfigs?.where,
-    ),
-    having: pickWhereValue(
-      rule.conditions?.having,
-      configs.having,
-      fallbackConfigs?.having,
-    ),
-  };
-};
-
 type WhereLike = {
   connector?: string;
   conditions?: Array<Record<string, any>> | unknown[];
 };
+
+export const createEmptyWhereClause = <T extends WhereLike>(): T => ({
+  connector: 'and',
+  conditions: [],
+} as unknown as T);
+
+export const toWhereHavingClause = <T extends WhereLike>(value?: T | null): T => (
+  value && Array.isArray(value.conditions)
+    ? value
+    : createEmptyWhereClause<T>()
+);
 
 const conditionGroupKey = (group: Record<string, any>) => {
   const children = Array.isArray(group?.conditions) ? group.conditions : [];
@@ -1001,6 +1103,121 @@ export const mergeHavingIntoWhere = <T extends WhereLike>(
     connector,
     conditions: merged,
   } as T;
+};
+
+const getWhereConditionField = (item: Record<string, any>) => (
+  item?.condition?.field ?? item?.field
+);
+
+const EMPTY_AGGREGATE_VALUES = new Set(['', 'null', 'none', 'undefined']);
+const AGGREGATE_DISPLAY_SUFFIX_RE = /_(COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT)$/i;
+
+const hasAggregateValue = (value: unknown) => {
+  if (value === null || value === undefined || value === false) return false;
+  const normalized = String(value).trim();
+  if (!normalized) return false;
+  return !EMPTY_AGGREGATE_VALUES.has(normalized.toLowerCase());
+};
+
+/** 条件字段是否带聚合（COUNT/SUM 等），应放入 having 而非 where */
+export const isAggregateConditionField = (field: unknown) => {
+  if (!field || typeof field !== 'object') return false;
+  const rec = field as {
+    aggregate?: unknown;
+    parent_aggregate?: unknown;
+    display_name?: unknown;
+  };
+  if (hasAggregateValue(rec.aggregate) || hasAggregateValue(rec.parent_aggregate)) {
+    return true;
+  }
+  return AGGREGATE_DISPLAY_SUFFIX_RE.test(String(rec.display_name || ''));
+};
+
+/** 把 where 里的聚合条件拆到 having；where 全是聚合时 having 仍要产出，where 可为空 */
+export const splitWhereAndHaving = <T extends WhereLike>(where?: T | null): {
+  where: T | null;
+  having: T | null;
+} => {
+  if (!where?.conditions?.length) {
+    return {
+      where: createEmptyWhereClause<T>(),
+      having: createEmptyWhereClause<T>(),
+    };
+  }
+  const connector = (where.connector || 'and') as T['connector'];
+  const groups = where.conditions as Array<Record<string, any>>;
+  const havingConditions = groups
+    .map(group => ({
+      connector: group.connector || 'and',
+      index: group.index,
+      conditions: (group.conditions || []).filter((item: Record<string, any>) => (
+        isAggregateConditionField(getWhereConditionField(item))
+      )),
+    }))
+    .filter(group => group.conditions.length > 0);
+  const whereConditions = groups
+    .map(group => ({
+      connector: group.connector || 'and',
+      index: group.index,
+      conditions: (group.conditions || []).filter((item: Record<string, any>) => (
+        !isAggregateConditionField(getWhereConditionField(item))
+      )),
+    }))
+    .filter(group => group.conditions.length > 0);
+  return {
+    where: whereConditions.length
+      ? { ...where, connector, conditions: whereConditions } as T
+      : createEmptyWhereClause<T>(),
+    having: havingConditions.length
+      ? { connector, conditions: havingConditions } as T
+      : createEmptyWhereClause<T>(),
+  };
+};
+
+export const isWhereHavingConditions = (value: unknown): value is {
+  where?: WhereLike | null;
+  having?: WhereLike | null;
+} => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const rec = value as Record<string, any>;
+  return ('where' in rec || 'having' in rec) && !Array.isArray(rec.conditions);
+};
+
+/** 先合并再按聚合字段拆分，避免 where 里残留 COUNT/SUM */
+export const normalizeWhereHaving = <T extends WhereLike>(
+  where?: T | null,
+  having?: T | null,
+): { where: T | null; having: T | null } => {
+  const merged = mergeHavingIntoWhere(where ?? null, having ?? null);
+  if (!hasFilledWhereConditions(merged)) {
+    return {
+      where: createEmptyWhereClause<T>(),
+      having: createEmptyWhereClause<T>(),
+    };
+  }
+  return splitWhereAndHaving(merged);
+};
+
+const pickWhereHaving = (rule: Record<string, any>, fallbackConfigs?: Record<string, any>) => {
+  const configs = rule.configs || {};
+  const ruleConditions = rule.conditions;
+  if (ruleConditions && typeof ruleConditions === 'object'
+    && ('where' in ruleConditions || 'having' in ruleConditions)) {
+    return normalizeWhereHaving(
+      ruleConditions.where ?? null,
+      ruleConditions.having ?? null,
+    );
+  }
+  return normalizeWhereHaving(
+    pickWhereValue(
+      configs.where,
+      fallbackConfigs?.where,
+    ),
+    pickWhereValue(
+      configs.having,
+      fallbackConfigs?.having,
+    ),
+  );
 };
 
 /** 回显前把已混入 where 的 having 组拆回去，避免 setWhere 再合并一次变成三条 */
@@ -1059,8 +1276,8 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
       ...(isEdit && rule.rule_id ? { rule_id: rule.rule_id } : {}),
       rule_name: rule.rule_name || rule.name || `规则${index + 1}`,
       conditions: {
-        where,
-        having,
+        where: toWhereHavingClause(where),
+        having: toWhereHavingClause(having),
       },
       risk_title: rule.risk_title ?? '',
       risk_level: rule.risk_level ?? 'HIGH',
@@ -1160,6 +1377,10 @@ export const buildStrategyCreatePayload = (
   delete next.visibility_type;
   delete next.scene_ids;
   delete next.system_ids;
+
+  if (next.configs) {
+    next.configs = applyScheduleConfigForSubmit(next.configs) ?? next.configs;
+  }
 
   return next;
 };

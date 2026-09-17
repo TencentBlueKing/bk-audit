@@ -92,6 +92,7 @@ class ConfirmRiskTest(TicketTest):
             defaults={"config_value": ["test_security_person"]},
         )
 
+    @mock.patch("django.db.transaction.on_commit", new=mock.MagicMock(side_effect=lambda fn: fn()))
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
         mock.Mock(return_value=None),
@@ -123,6 +124,7 @@ class ConfirmRiskTest(TicketTest):
             # 验证处理人初始化（无规则时为安全责任人）
             self.assertEqual(risk.current_operator, ConfirmRisk.load_security_person())
 
+    @mock.patch("django.db.transaction.on_commit", new=mock.MagicMock(side_effect=lambda fn: fn()))
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
         mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
@@ -169,6 +171,7 @@ class ConfirmRiskTest(TicketTest):
                 # 需要审批时处理人应为空
                 self.assertEqual(risk.current_operator, [])
 
+    @mock.patch("django.db.transaction.on_commit", new=mock.MagicMock(side_effect=lambda fn: fn()))
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
         mock.Mock(return_value={"state": SOPSTaskStatus.FINISHED.value}),

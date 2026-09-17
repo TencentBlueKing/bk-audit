@@ -269,6 +269,7 @@
     isStrategyListRoute,
     isStrategyUpgradeRoute,
   } from '../../../utils/strategy-routes';
+  import { applyScheduleConfigForSubmit, parseScheduleCountFreq } from '../../utils/strategy-protocol';
 
   type ItemType = {
     label: string,
@@ -474,9 +475,26 @@
     ],
     'configs.schedule_config.count_freq': [
       {
-        validator: (value: number) => !!value,
-        message: t('调度周期不能为空'),
+        validator: (value: string | number) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return parseScheduleCountFreq(value) !== null;
+        },
+        message: t('请输入大于等于1的整数'),
         trigger: ['change', 'blur'],
+      },
+    ],
+    'configs.schedule_config.schedule_period': [
+      {
+        validator: (value: string) => {
+          if (formData.value.configs?.data_source?.source_type !== 'batch_join_source') {
+            return true;
+          }
+          return value === 'hour' || value === 'day';
+        },
+        message: t('不能为空'),
+        trigger: 'change',
       },
     ],
     'configs.aiops_config.schedule_period': [
@@ -683,10 +701,12 @@
     if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
       fields.configs.data_source.link_table = null;
     }
-    // 非周期不需要schedule_config
-    if (fields.configs.data_source && fields.configs.data_source.source_type !== 'batch_join_source') {
-      fields.configs.schedule_config = undefined;
+    // 实时调度不传 schedule_config；固定调度必传整数周期
+    if (fields.configs.data_source?.source_type === 'batch_join_source'
+      && !fields.configs.schedule_config) {
+      fields.configs.schedule_config = formData.value.configs.schedule_config;
     }
+    fields.configs = applyScheduleConfigForSubmit(fields.configs) ?? fields.configs;
     return {
       ...baseParams,
       ...fields,

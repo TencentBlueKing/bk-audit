@@ -56,13 +56,17 @@
   interface Props {
     where: RuleWhereDisplay;
     operatorMap: Record<string, string>;
+    aggregateList?: Array<{ label?: string; value?: unknown }>;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    aggregateList: () => [],
+  });
 
   const rows = computed(() => buildConditionDisplayRows(
     props.where,
     operator => props.operatorMap[operator] || operator,
+    props.aggregateList,
   ));
 
   const groupConnector = computed(() => (
