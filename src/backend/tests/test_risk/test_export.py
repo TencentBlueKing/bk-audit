@@ -803,15 +803,30 @@ class TestRiskExport(TestCase):
         测试场景视图导出时排除待确认风险
         """
         from services.web.risk.constants import RiskDisplayStatus
+        from services.web.risk.resources.risk import ListRisk
 
-        # 创建 mock 的 queryset
+        # 创建 mock 的 queryset，链式调用始终返回自身，便于断言 exclude 被调用
         mock_queryset = mock.MagicMock()
         mock_queryset.filter.return_value = mock_queryset
+        mock_queryset.distinct.return_value = mock_queryset
         mock_queryset.exclude.return_value = mock_queryset
+        mock_queryset.order_by.return_value = mock_queryset
         mock_queryset.values_list.return_value = ["risk001", "risk002"]
         mock_load_iam_authed_risks.return_value = mock_queryset
 
         # Mock scope permission 返回场景 ID
         mock_scope_perm.return_value.get_scene_ids.return_value = [self.scene.scene_id]
-        # 验证调用了 exclude 方法排除待确认风险
+
+        resource = ListRisk()
+        resource.load_filter_risk_ids(
+            validated_request_data={
+                "scope_type": "scene",
+                "scope_id": self.scene.scene_id,
+                "scene_id": [],
+            },
+            username="tester",
+            risk_limit=10,
+        )
+
+        # 场景风险视图需排除待确认状态
         mock_queryset.exclude.assert_called_once_with(display_status=RiskDisplayStatus.PENDING_CONFIRM)
