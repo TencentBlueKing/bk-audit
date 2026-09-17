@@ -35,7 +35,6 @@
 
     <template v-else-if="hasQueried || isQuerying || gameListLoading || userInfoLoading">
       <bk-loading
-        v-if="isQuerying || userInfoLoading || gameListLoading || !isUserInfoEmpty"
         class="user-info-loading-wrapper"
         :loading="isQuerying || userInfoLoading || gameListLoading">
         <div
@@ -48,9 +47,7 @@
           @view-detail="handleViewDetail" />
       </bk-loading>
 
-      <div
-        v-if="!(!isQuerying && !userInfoLoading && isUserInfoEmpty)"
-        class="section-divider" />
+      <div class="section-divider" />
 
       <!-- 关联游戏列表 -->
       <bk-loading
@@ -197,7 +194,6 @@
   import ColumnEnumFilter from './column-enum-filter.vue';
   import ProfileQueryInput from './profile-query-input.vue';
   import ProfileUserInfo from './profile-user-info.vue';
-
   import useRequest from '@/hooks/use-request';
   import {
     parseSmartPageGameDetailIntent,
@@ -1155,6 +1151,7 @@
     openidListFirstCtx.value = '';
     gameList.value = [];
     gameColumnFilter.value = {};
+    historyAccounts.value = [];
     // 重置排序状态为默认：按代币存量降序
     sortState.value = { column: PROFILE_FIELDS.COIN_BALANCE_UNIT, type: 'desc' };
     pagination.value.current = 1;
