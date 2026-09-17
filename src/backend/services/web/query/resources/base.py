@@ -51,13 +51,18 @@ class SearchDataParser:
         for sensitive_obj in sensitive_objs:
             setattr(sensitive_obj, "_has_permission", permissions.get(str(sensitive_obj.id), False))
 
-    def parse_data(self, data: List[dict]) -> list:
+    def parse_data(self, data: List[dict], username: str = None) -> list:
+        """
+        :param data: 检索结果
+        :param username: 显式指定脱敏判定身份（Celery 等无请求上下文场景）；
+                         缺省回退 get_request_username()，保持原有行为
+        """
         # 获取敏感字段列表
         private_sensitive_objs = list(SensitiveObject._objects.filter(is_private=True))
         sensitive_objs = list(SensitiveObject.objects.all())
         # 获取用户信息，用于判断敏感权限
         if sensitive_objs:
-            self.mark_sensitive_permissions(sensitive_objs, get_request_username())
+            self.mark_sensitive_permissions(sensitive_objs, username or get_request_username())
         # parse
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
 
