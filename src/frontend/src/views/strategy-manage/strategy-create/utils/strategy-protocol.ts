@@ -1045,6 +1045,17 @@ type WhereLike = {
   conditions?: Array<Record<string, any>> | unknown[];
 };
 
+export const createEmptyWhereClause = <T extends WhereLike>(): T => ({
+  connector: 'and',
+  conditions: [],
+} as unknown as T);
+
+export const toWhereHavingClause = <T extends WhereLike>(value?: T | null): T => (
+  value && Array.isArray(value.conditions)
+    ? value
+    : createEmptyWhereClause<T>()
+);
+
 const conditionGroupKey = (group: Record<string, any>) => {
   const children = Array.isArray(group?.conditions) ? group.conditions : [];
   const childKeys = children.map((child) => {
@@ -1128,7 +1139,10 @@ export const splitWhereAndHaving = <T extends WhereLike>(where?: T | null): {
   having: T | null;
 } => {
   if (!where?.conditions?.length) {
-    return { where: where ?? null, having: null };
+    return {
+      where: createEmptyWhereClause<T>(),
+      having: createEmptyWhereClause<T>(),
+    };
   }
   const connector = (where.connector || 'and') as T['connector'];
   const groups = where.conditions as Array<Record<string, any>>;
@@ -1153,10 +1167,10 @@ export const splitWhereAndHaving = <T extends WhereLike>(where?: T | null): {
   return {
     where: whereConditions.length
       ? { ...where, connector, conditions: whereConditions } as T
-      : null,
+      : createEmptyWhereClause<T>(),
     having: havingConditions.length
       ? { connector, conditions: havingConditions } as T
-      : null,
+      : createEmptyWhereClause<T>(),
   };
 };
 
@@ -1176,7 +1190,10 @@ export const normalizeWhereHaving = <T extends WhereLike>(
 ): { where: T | null; having: T | null } => {
   const merged = mergeHavingIntoWhere(where ?? null, having ?? null);
   if (!hasFilledWhereConditions(merged)) {
-    return { where: null, having: null };
+    return {
+      where: createEmptyWhereClause<T>(),
+      having: createEmptyWhereClause<T>(),
+    };
   }
   return splitWhereAndHaving(merged);
 };
@@ -1259,8 +1276,8 @@ const buildRules = (params: Record<string, any>, isScene: boolean) => {
       ...(isEdit && rule.rule_id ? { rule_id: rule.rule_id } : {}),
       rule_name: rule.rule_name || rule.name || `规则${index + 1}`,
       conditions: {
-        where,
-        having,
+        where: toWhereHavingClause(where),
+        having: toWhereHavingClause(having),
       },
       risk_title: rule.risk_title ?? '',
       risk_level: rule.risk_level ?? 'HIGH',
@@ -1360,6 +1377,10 @@ export const buildStrategyCreatePayload = (
   delete next.visibility_type;
   delete next.scene_ids;
   delete next.system_ids;
+
+  if (next.configs) {
+    next.configs = applyScheduleConfigForSubmit(next.configs) ?? next.configs;
+  }
 
   return next;
 };

@@ -1861,7 +1861,10 @@
           params.configs.where = _.cloneDeep(originalEditWhere.value as Where);
           params.configs.having = originalEditHaving.value
             ? _.cloneDeep(originalEditHaving.value)
-            : null;
+            : {
+              connector: 'and',
+              conditions: [],
+            };
         }
         // 用户改过命中条件后，以当前合并树拆 where/having，不能再把旧 having 合回来
         const { where, having } = isEditMode && !isWhereModified.value
@@ -1871,7 +1874,10 @@
           connector: params.configs.where?.connector || 'and',
           conditions: [],
         };
-        params.configs.having = having ?? null;
+        params.configs.having = having ?? {
+          connector: 'and',
+          conditions: [],
+        };
         // 处理 filter/filters 字段：eq 操作符值放 filter，其他操作符值放 filters
         const transferFilter = (whereData: Where) => {
           whereData.conditions.forEach((group) => {
