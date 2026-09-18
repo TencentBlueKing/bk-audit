@@ -151,11 +151,15 @@ class SQLGenerator:
         self.table_map = {}
         self._register_tables()
         # 预计算各规则的 where criterion，L1 select / L1 where / L2 hit-case 一致消费
-        self.rule_criterions: Dict[int, Term] = {}
+        # 空 where（None/空树）合法：语义为不过滤明细行（全量参与聚合），命中由 having 决定；criterion 记为 None
+        self.rule_criterions: Dict[int, Optional[Term]] = {}
         for idx, rule in enumerate(self.config.rules, start=1):
             criterion = self._apply_filter_conditions(rule.where) if rule.where else None
-            if criterion is None or isinstance(criterion, EmptyCriterion):
-                raise InvalidRuleConfigError(f"规则 {rule.rule_id} 缺少 where 过滤条件（规则 where 必填）")
+            criterion = criterion if criterion and not isinstance(criterion, EmptyCriterion) else None
+            having = rule.having
+            having_empty = having is None or (not having.condition and not having.conditions)
+            if criterion is None and having_empty:
+                raise InvalidRuleConfigError(f"规则 {rule.rule_id} 的 where 与 having 不能同时为空（至少配置一个检测条件）")
             self.rule_criterions[idx] = criterion
         # 行级判定：select 无聚合字段且未显式指定 group_by -> 行级模式守卫，逐行标记0/1
         self.rule_mode_row_level = not any(f.aggregate for f in self.config.select_fields) and not self.config.group_by
@@ -217,13 +221,21 @@ class SQLGenerator:
             for idx in range(1, len(self.config.rules) + 1):
                 alias = self._rule_agg_alias(field.display_name, idx)
                 self.rule_alias_map[(self.aggregate_field_identity(field), idx)] = alias
-                # CASE 无 ELSE：且不匹配 -> NULL -> 聚合忽略（COUNT/SUM 跳过 NULL）
-                conditional = pypika_terms.Case().when(self.rule_criterions[idx], pypika_field)
-                query = query.select(self._build_aggregate_term(field, conditional).as_(alias))
+                criterion = self.rule_criterions[idx]
+                if criterion is None:
+                    # 空 where：全部行参与聚合，无需 CASE 包裹
+                    query = query.select(self._build_aggregate_term(field, pypika_field).as_(alias))
+                else:
+                    # CASE 无 ELSE：且不匹配 -> NULL -> 聚合忽略（COUNT/SUM 跳过 NULL）
+                    conditional = pypika_terms.Case().when(criterion, pypika_field)
+                    query = query.select(self._build_aggregate_term(field, conditional).as_(alias))
         # 守卫列：确保只有真实出现过该规则数据的组才能命中；否则像 COUNT(xx) < 2 这类低向阈值，会在“组存在但零匹配”（COUNT=0）时凭空满足条件而出单。
         for idx in range(1, len(self.config.rules) + 1):
             criterion = self.rule_criterions[idx]
-            if self.rule_mode_row_level:
+            if criterion is None:
+                # 空 where：全部行属于该规则；聚合模式取全组计数（组存在即命中），行级模式恒 1
+                guard = pypika_terms.ValueWrapper(1) if self.rule_mode_row_level else Count(pypika_terms.Star())
+            elif self.rule_mode_row_level:
                 guard = pypika_terms.Case().when(criterion, 1).else_(0)
             else:
                 guard = Count(pypika_terms.Case().when(criterion, 1))
@@ -233,9 +245,11 @@ class SQLGenerator:
     def _build_rule_mode_where(self, query: QueryBuilder) -> QueryBuilder:
         """
         多规则 WHERE：OR(各规则 where)  AND 策略级条件（system_ids 等）。
+        任一规则 where 为空（恒真）时 OR 整体恒真，规则级条件不再过滤行集。
         """
-        rules_where = reduce(operator.or_, self.rule_criterions.values())
-        query = query.where(rules_where)
+        if all(criterion is not None for criterion in self.rule_criterions.values()):
+            rules_where = reduce(operator.or_, self.rule_criterions.values())
+            query = query.where(rules_where)
         if self.config.where:
             strategy_criterion = self._apply_filter_conditions(self.config.where)
             if strategy_criterion and not isinstance(strategy_criterion, EmptyCriterion):
