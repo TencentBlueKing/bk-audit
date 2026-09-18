@@ -254,7 +254,7 @@
                       <bk-input
                         v-model="rule.risk_hazard"
                         class="rule-resize-textarea"
-                        :maxlength="100"
+                        :maxlength="2000"
                         :placeholder="t('请输入')"
                         resize
                         :rows="3"
@@ -270,7 +270,7 @@
                       <bk-input
                         v-model="rule.risk_guidance"
                         class="rule-resize-textarea"
-                        :maxlength="100"
+                        :maxlength="2000"
                         :placeholder="t('请输入')"
                         resize
                         :rows="3"
