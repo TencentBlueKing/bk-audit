@@ -60,6 +60,8 @@
 
   import filedConfig from '@views/analysis-manage/list/components/search-box/components/render-field-config/config';
 
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
   import FieldStatisticPopover from './components/field-statistic-popover/index.vue';
   import RenderAction from './components/render-field/action.vue';
   import RenderAuthInstanceButton from './components/render-field/auth-instance-button.vue';
@@ -375,6 +377,21 @@
     return resultFilter;
   };
 
+  /** 自定义列单元格文案：对象需 stringify，避免 overflow tip 把 JSON 当 HTML 渲染成空白 */
+  const formatCustomFieldCell = (value: unknown): string => {
+    if (value === undefined || value === null || value === '') {
+      return '--';
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
+  };
+
   /**
    * 合并新设置的列
    */
@@ -405,8 +422,16 @@
           resizable: true,
           field: item.field_name,
           minWidth: 140,
-          showOverflowTooltip: true,
-          // render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
+          // 关闭表格内置 overflow tip：bkui 对 content 强制 allowHtml，JSON 含 < 时 tip 会变空白
+          showOverflowTooltip: false,
+          render: ({ data }: { data: SearchModel }) => {
+            const value = getValueFromPath(data, item.field_name);
+            return (
+              <ShowTooltipsText
+                data={formatCustomFieldCell(value)}
+                maxWidth={480} />
+            );
+          },
         }));
       return lists;
     }
