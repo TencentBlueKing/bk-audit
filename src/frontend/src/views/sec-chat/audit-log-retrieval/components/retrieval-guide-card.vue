@@ -311,6 +311,13 @@
   }
 
   const SUGGESTION_LIMIT = 4;
+  /** 无真实常用操作时的空态引导（与展示上限一致，固定 4 条） */
+  const COMMON_OPERATION_DEMOS = [
+    '查询「替换为实际用户」近 7 天的删除操作',
+    '查询「替换为实际安装包」近 7 天的下载操作',
+    '查询「替换为实际用户」近 7 天成功的操作',
+    '查询「替换为实际用户」近 30 天 API 操作',
+  ];
   /** 常用/历史操作 tooltip：限制宽度，长文本自动换行 */
   const SUGGEST_TOOLTIP_MAX_WIDTH = 360;
   /** 按字段检索表格 tooltip：限制宽度与高度，长 JSON 内容区内滚动 */
@@ -325,10 +332,11 @@
   const route = useRoute();
   const { messageWarn } = useMessage();
 
-  /** 常用操作：来自 SYSTEM_SELECTION.output_data.common_operations */
-  const commonSuggestions = computed(() => (
-    props.commonOperations.slice(0, SUGGESTION_LIMIT)
-  ));
+  /** 有真实数据则展示（最多 4 条）；否则用 demo 兜底空态 */
+  const commonSuggestions = computed(() => {
+    const real = props.commonOperations.slice(0, SUGGESTION_LIMIT);
+    return real.length > 0 ? real : COMMON_OPERATION_DEMOS;
+  });
 
   const historySuggestions = computed(() => (
     props.historicalOperations.slice(0, SUGGESTION_LIMIT)
