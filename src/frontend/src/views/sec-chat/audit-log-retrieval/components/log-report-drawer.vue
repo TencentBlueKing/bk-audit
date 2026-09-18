@@ -91,12 +91,15 @@
             <div
               v-for="item in metaList"
               :key="item.key"
-              class="ai-report-meta-item">
+              class="ai-report-meta-item"
+              :class="`ai-report-meta-item--${item.key}`">
               <div class="label">
                 {{ item.label }}
               </div>
               <div class="value">
-                {{ item.value }}
+                <tooltips
+                  :data="String(item.value ?? '')"
+                  :max-width="tooltipMaxWidth" />
               </div>
             </div>
           </div>
@@ -182,6 +185,7 @@
 
   import aiIcon from '@images/ai-icon.svg?inline';
   import RichEditor from '@components/rich-editor/index.vue';
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import {
     toPreviewHtml,
@@ -242,6 +246,7 @@
   });
 
   const drawerWidth = 800;
+  const tooltipMaxWidth = drawerWidth - 48;
 
   const displayTitle = computed(() => savedTitle.value || props.report?.title || t('智能分析报告'));
 
@@ -449,7 +454,7 @@
 
   .ai-report-meta-item {
     min-width: 0;
-    flex: 1;
+    overflow: hidden;
 
     .label {
       margin-bottom: 6px;
@@ -458,11 +463,28 @@
     }
 
     .value {
+      width: 100%;
       font-size: var(--audit-font-size-md);
       line-height: var(--audit-line-height-md);
       color: var(--audit-neutral-text-01);
-      word-break: break-all;
     }
+  }
+
+  .ai-report-meta-item--systems {
+    flex: 0 0 100px;
+  }
+
+  .ai-report-meta-item--conditions {
+    flex: 1 1 0;
+    min-width: 200px;
+  }
+
+  .ai-report-meta-item--total {
+    flex: 0 0 72px;
+  }
+
+  .ai-report-meta-item--scope {
+    flex: 0 0 100px;
   }
 
   .ai-report-section {
@@ -539,6 +561,58 @@
     :deep(ul),
     :deep(ol) {
       padding-left: 20px;
+    }
+
+    :deep(li) {
+      margin-bottom: 8px;
+      line-height: 1.8;
+    }
+
+    :deep(li:last-child) {
+      margin-bottom: 0;
+    }
+
+    :deep(strong) {
+      display: inline;
+    }
+
+    :deep(table) {
+      width: 100%;
+      margin: 16px 0;
+      font-size: var(--audit-font-size-md);
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    :deep(th),
+    :deep(td) {
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+      border: 1px solid var(--audit-neutral-border-01);
+    }
+
+    :deep(th) {
+      font-weight: var(--audit-font-weight-bold);
+      color: var(--audit-neutral-text-01);
+      background-color: var(--audit-neutral-bg-02);
+    }
+
+    :deep(td) {
+      color: var(--audit-neutral-text-02);
+    }
+
+    :deep(tr:hover td) {
+      background-color: var(--audit-neutral-bg-02);
+    }
+
+    :deep(thead tr) {
+      background-color: var(--audit-neutral-bg-02);
+    }
+
+    :deep(tbody tr:nth-child(even)) {
+      background-color: var(--audit-neutral-bg-03);
     }
   }
 
