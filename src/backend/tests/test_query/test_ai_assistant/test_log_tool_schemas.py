@@ -41,7 +41,7 @@ PRODUCTION_SOURCE_DIRECTORIES = ("api", "apps", "blueking", "core", "services")
 
 
 class TestLogToolSettings(SimpleTestCase):
-    """部署配置不能破坏公开请求的固定默认值。"""
+    """校验各类部署配置约定的启动行为。"""
 
     def test_page_size_limit_below_public_default_fails_at_startup(self):
         environment = os.environ.copy()
@@ -59,21 +59,26 @@ class TestLogToolSettings(SimpleTestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("AI_LOG_SEARCH_MAX_PAGE_SIZE 不能小于公开默认值 20", completed.stderr)
 
-    def test_aggregation_top_n_below_public_default_fails_at_startup(self):
-        environment = os.environ.copy()
-        environment["BKAPP_AI_LOG_AGGREGATION_MAX_TOP_N"] = "99"
-
-        completed = subprocess.run(
-            [sys.executable, "-c", "import services.web.settings"],
-            cwd=BACKEND_ROOT,
-            env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("AI_LOG_AGGREGATION_MAX_TOP_N 不能小于公开默认值 100", completed.stderr)
+    def test_aggregation_top_n_limit_has_no_startup_lower_bound(self):
+        """TopN 上限按配置读取，合法请求由请求层预算校验决定。"""
+        for limit in (1, 10, 50, 99):
+            with self.subTest(limit=limit):
+                environment = os.environ.copy()
+                environment["BKAPP_AI_LOG_AGGREGATION_MAX_TOP_N"] = str(limit)
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        "import services.web.settings as config; "
+                        f"assert config.AI_LOG_AGGREGATION_MAX_TOP_N == {limit}",
+                    ],
+                    cwd=BACKEND_ROOT,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 def _module_code_owners(module_code: str):
