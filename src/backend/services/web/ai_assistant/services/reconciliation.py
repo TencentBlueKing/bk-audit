@@ -6,7 +6,7 @@ MySQL 是状态事实源。巡检只按状态与活动时间索引扫描候选�
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from django.conf import settings
@@ -67,6 +67,7 @@ class _ModelReconcileConfig:
     warning_seconds: int
     failure_seconds: int
     timeout_error_code: str
+    type_thresholds: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,7 @@ def reconcile_processing_executions(*, now: datetime | None = None) -> Reconcile
             warning_seconds=settings.AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS,
             failure_seconds=settings.AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS,
             timeout_error_code=AttachmentErrorCode.TASK_EXECUTION_TIMEOUT,
+            type_thresholds=settings.AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS,
         ),
     )
 
@@ -136,20 +138,20 @@ def reconcile_processing_executions(*, now: datetime | None = None) -> Reconcile
 def _reconcile_model(*, config: _ModelReconcileConfig, now: datetime) -> _ModelReconcileResult:
     """对一个模型执行聚合和有界候选收敛；候选竞争失败属于正常并发。"""
 
-    warning_cutoff = now - timedelta(seconds=config.warning_seconds)
-    failure_cutoff = now - timedelta(seconds=config.failure_seconds)
+    warning_condition = _activity_cutoff_condition(config=config, now=now, threshold="warning_seconds")
+    failure_condition = _activity_cutoff_condition(config=config, now=now, threshold="failure_seconds")
     processing = config.model.objects.filter(status=ExecutionStatus.PROCESSING)
     records = _aggregate_processing(
         queryset=processing,
         config=config,
-        warning_cutoff=warning_cutoff,
-        failure_cutoff=failure_cutoff,
+        warning_condition=warning_condition,
+        failure_condition=failure_condition,
     )
     expired_count = sum(record.expired_count for record in records)
     candidates = _load_timeout_candidates(
         queryset=processing,
         business_field=config.business_field,
-        failure_cutoff=failure_cutoff,
+        failure_condition=failure_condition,
         batch_size=settings.AI_ASSISTANT_RECONCILE_BATCH_SIZE,
     )
 
@@ -166,7 +168,12 @@ def _reconcile_model(*, config: _ModelReconcileConfig, now: datetime) -> _ModelR
                     config=config,
                     candidate=candidate,
                     task_id=task_id,
-                    failure_cutoff=failure_cutoff,
+                    failure_cutoff=now
+                    - timedelta(
+                        seconds=config.type_thresholds.get(str(candidate[config.business_field]), {}).get(
+                            "failure_seconds", config.failure_seconds
+                        )
+                    ),
                     now=now,
                 )
                 if not updated:
@@ -251,12 +258,26 @@ def _timeout_candidate(
     return timeout_result.updated
 
 
+def _activity_cutoff_condition(*, config: _ModelReconcileConfig, now: datetime, threshold: str) -> models.Q:
+    """按类型组合活动截止条件；聚合与候选读取共享规则，仍共用单模型批次预算。"""
+
+    default_seconds = getattr(config, threshold)
+    condition = models.Q(last_activity_at__lte=now - timedelta(seconds=default_seconds))
+    if not config.type_thresholds:
+        return condition
+    condition &= ~models.Q(**{f"{config.business_field}__in": tuple(config.type_thresholds)})
+    for business_type, thresholds in config.type_thresholds.items():
+        cutoff = now - timedelta(seconds=thresholds.get(threshold, default_seconds))
+        condition |= models.Q(**{config.business_field: business_type, "last_activity_at__lte": cutoff})
+    return condition
+
+
 def _aggregate_processing(
     *,
     queryset,
     config: _ModelReconcileConfig,
-    warning_cutoff: datetime,
-    failure_cutoff: datetime,
+    warning_condition: models.Q,
+    failure_condition: models.Q,
 ) -> tuple[ProcessingMetricRecord, ...]:
     """在数据库按业务类型和年龄分桶，Python 只转换小规模聚合结果。"""
 
@@ -264,8 +285,8 @@ def _aggregate_processing(
         queryset.annotate(
             age_bucket=models.Case(
                 models.When(last_activity_at__isnull=True, then=models.Value("UNKNOWN")),
-                models.When(last_activity_at__lte=failure_cutoff, then=models.Value("EXPIRED")),
-                models.When(last_activity_at__lte=warning_cutoff, then=models.Value("WARNING")),
+                models.When(failure_condition, then=models.Value("EXPIRED")),
+                models.When(warning_condition, then=models.Value("WARNING")),
                 default=models.Value("HEALTHY"),
                 output_field=models.CharField(),
             )
@@ -287,8 +308,8 @@ def _aggregate_processing(
     )
 
 
-def _load_timeout_candidates(*, queryset, business_field: str, failure_cutoff: datetime, batch_size: int):
-    """先走状态活动索引，再用剩余额度读取异常空活动行，避免主查询 OR。"""
+def _load_timeout_candidates(*, queryset, business_field: str, failure_condition: models.Q, batch_size: int):
+    """按状态和活动范围读取候选，剩余额度单独读取 NULL 活动行，维持有界扫描。"""
 
     fields = [
         "id",
@@ -303,9 +324,7 @@ def _load_timeout_candidates(*, queryset, business_field: str, failure_cutoff: d
     if queryset.model is Attachment:
         fields.append("is_stream")
     candidates = list(
-        queryset.filter(last_activity_at__lte=failure_cutoff)
-        .order_by("last_activity_at", "id")
-        .values(*fields)[:batch_size]
+        queryset.filter(failure_condition).order_by("last_activity_at", "id").values(*fields)[:batch_size]
     )
     remaining = batch_size - len(candidates)
     if remaining > 0:

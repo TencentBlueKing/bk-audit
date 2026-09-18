@@ -41,7 +41,7 @@ from services.web.entry.constants import (
     SDK_CONFIG_KEY,
 )
 from services.web.entry.init.base import SystemInitHandler
-from services.web.scene.constants import BindingType
+from services.web.scene.constants import DEFAULT_SCENE_NAME, BindingType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -197,6 +197,12 @@ class SystemInitAssetTests(TestCase):
 
 @override_settings(BKAPP_INIT_SYSTEM="True")
 class SystemInitRuleAuditTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        """显式准备默认场景，不依赖复用测试库残留的数据迁移结果。"""
+        super().setUpTestData()
+        Scene.objects.get_or_create(name=DEFAULT_SCENE_NAME)
+
     def setUp(self):
         super().setUp()
         self.handler = SystemInitHandler()

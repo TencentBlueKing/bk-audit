@@ -70,6 +70,13 @@ class AttachmentType(TextChoices):
     AI_ANALYSIS = "AI_ANALYSIS", gettext_lazy("AI 分析")
 
 
+class AnalysisMode(TextChoices):
+    """日志分析报告的指令来源。"""
+
+    DEFAULT = "DEFAULT", gettext_lazy("默认分析")
+    CUSTOM = "CUSTOM", gettext_lazy("自定义分析")
+
+
 class AttachmentExportFormat(TextChoices):
     """Attachment Handler 可声明的后端导出格式。"""
 
@@ -124,3 +131,24 @@ AI_CONVERSATION_TITLE_MAX_LENGTH = 35
 NL_PARSE_MAX_RETRIES = 2
 NL_PARSE_RETRY_INTERVAL_SECONDS = 2
 NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
+
+# 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
+DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"
+
+# 日志分析重试退避（秒）；上限短于平台失活阈值，避免排队期间被巡检收敛。
+LOG_ANALYSIS_RETRY_DELAY_SECONDS = 30
+LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS = 120
+
+
+class AttachmentSortField(TextChoices):
+    """附件列表公开排序字段；不开放内部任务和关联模型字段。"""
+
+    CONTENT_UPDATED_AT = "content_updated_at", gettext_lazy("内容更新时间")
+    CREATED_AT = "created_at", gettext_lazy("创建时间")
+    UPDATED_AT = "updated_at", gettext_lazy("记录更新时间")
+    TITLE = "title", gettext_lazy("附件标题")
+
+
+ATTACHMENT_DEFAULT_ORDER_FIELDS = ("-content_updated_at",)
+ATTACHMENT_LIST_MAX_LIMIT = 100

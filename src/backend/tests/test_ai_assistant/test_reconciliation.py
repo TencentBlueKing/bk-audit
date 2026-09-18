@@ -86,6 +86,97 @@ class ReconciliationTest(TestCase):
         return attachment
 
     @override_settings(
+        AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS=100,
+        AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS=200,
+        AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS={
+            "FIELD_STATISTICS": {"warning_seconds": 300, "failure_seconds": 600},
+            "AI_STATISTICS": {"warning_seconds": 600, "failure_seconds": 900},
+        },
+        AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED=True,
+    )
+    @mock.patch("services.web.ai_assistant.services.reconciliation.report_processing_metrics")
+    def test_attachment_type_thresholds_cover_execution_and_retry_wait_with_fallback(self, report_metrics):
+        """类型阈值应用于分桶和超时；新一次重试的活动时间保护旧附件，不按创建年龄失败。"""
+        cases = (
+            ("normal", AttachmentType.FIELD_STATISTICS, 250, ExecutionStatus.PROCESSING, "HEALTHY"),
+            ("warning", AttachmentType.FIELD_STATISTICS, 400, ExecutionStatus.PROCESSING, "WARNING"),
+            ("retry-wait", AttachmentType.AI_STATISTICS, 800, ExecutionStatus.PROCESSING, "WARNING"),
+            ("expired", AttachmentType.AI_STATISTICS, 900, ExecutionStatus.FAILED, "EXPIRED"),
+            ("fallback", AttachmentType.AI_ANALYSIS, 250, ExecutionStatus.FAILED, "EXPIRED"),
+        )
+        attachments = []
+        for task_id, attachment_type, age, expected, bucket in cases:
+            attachment = self.create_attachment(task_id=task_id, age=timedelta(seconds=age))
+            Attachment.objects.filter(id=attachment.id).update(
+                attachment_type=attachment_type,
+                created_at=self.now - timedelta(days=1),
+            )
+            attachments.append((attachment, expected))
+        summary = reconcile_processing_executions(now=self.now)
+        self.assertEqual((summary.scanned_count, summary.expired_count, summary.failed_count), (2, 2, 2))
+        for attachment, expected in attachments:
+            attachment.refresh_from_db()
+            self.assertEqual(attachment.status, expected)
+        self.assertEqual(
+            {
+                (record.business_type, record.age_bucket, record.processing_count)
+                for record in report_metrics.call_args.args[0]
+            },
+            {(str(attachment_type), bucket, 1) for _, attachment_type, _, _, bucket in cases},
+        )
+
+    @override_settings(
+        AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS=7200,
+        AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS={
+            "FIELD_STATISTICS": {"warning_seconds": 10, "failure_seconds": 20},
+        },
+        AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED=True,
+    )
+    def test_type_specific_timeout_keeps_task_and_activity_cas(self):
+        """候选读取后若新执行抢占或活动刷新，旧巡检不能写 FAILED。"""
+        original_timeout = Attachment.timeout_processing
+        for race in ("new_task", "activity"):
+            with self.subTest(race=race):
+                attachment = self.create_attachment(task_id=race, age=timedelta(seconds=30))
+                Attachment.objects.filter(id=attachment.id).update(attachment_type=AttachmentType.FIELD_STATISTICS)
+
+                def timeout_after_race(**kwargs):
+                    """模拟读取候选与真实 CAS 之间的并发更新，保留数据库 CAS 本体。"""
+                    updates = {"task_id": "replacement"} if race == "new_task" else {"last_activity_at": self.now}
+                    Attachment.objects.filter(id=attachment.id).update(**updates)
+                    return original_timeout(**kwargs)
+
+                with mock.patch.object(Attachment, "timeout_processing", side_effect=timeout_after_race):
+                    summary = reconcile_processing_executions(now=self.now)
+                attachment.refresh_from_db()
+                self.assertEqual(summary.scanned_count, 1)
+                self.assertEqual(summary.failed_count, 0)
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+                Attachment.objects.filter(id=attachment.id).update(status=ExecutionStatus.SUCCESS)
+
+    @override_settings(
+        AI_ASSISTANT_ATTACHMENT_FAILURE_SECONDS=200,
+        AI_ASSISTANT_ATTACHMENT_RECONCILE_THRESHOLDS={
+            "FIELD_STATISTICS": {"warning_seconds": 10, "failure_seconds": 20},
+            "AI_STATISTICS": {"warning_seconds": 10, "failure_seconds": 20},
+        },
+        AI_ASSISTANT_RECONCILE_BATCH_SIZE=2,
+        AI_ASSISTANT_RECONCILE_AUTO_FAIL_ENABLED=True,
+    )
+    def test_type_overrides_share_attachment_batch_limit(self):
+        """类型覆盖不能把单模型的有界扫描放大为每种类型一个批次。"""
+        for attachment_type in (
+            AttachmentType.FIELD_STATISTICS,
+            AttachmentType.AI_STATISTICS,
+            AttachmentType.AI_ANALYSIS,
+        ):
+            attachment = self.create_attachment(task_id=str(attachment_type), age=timedelta(seconds=300))
+            Attachment.objects.filter(id=attachment.id).update(attachment_type=attachment_type)
+        summary = reconcile_processing_executions(now=self.now)
+        self.assertEqual((summary.scanned_count, summary.expired_count, summary.failed_count), (2, 3, 2))
+        self.assertEqual(Attachment.objects.filter(status=ExecutionStatus.PROCESSING).count(), 1)
+
+    @override_settings(
         AI_ASSISTANT_MESSAGE_WARNING_SECONDS=300,
         AI_ASSISTANT_MESSAGE_FAILURE_SECONDS=900,
         AI_ASSISTANT_ATTACHMENT_WARNING_SECONDS=3600,
