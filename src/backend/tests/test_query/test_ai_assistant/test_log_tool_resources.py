@@ -393,7 +393,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 dimensions=[{"id": "action", "type": "FIELD", "field": {"raw_name": "action_id"}}],
                 metrics=[{"id": "events", "type": "COUNT"}],
             )
-        self.assertEqual(default_response["query_summary"]["top_n"], 100)
+        self.assertEqual(default_response["query_summary"]["top_n"], 10)
         self.assertTrue(default_response["query_summary"]["complete"])
         self.assertEqual([group["kind"] for group in response["groups"]], ["VALUE", "OTHER", "MISSING"])
         self.assertEqual([group["count"] for group in response["groups"]], [6, 3, 1])

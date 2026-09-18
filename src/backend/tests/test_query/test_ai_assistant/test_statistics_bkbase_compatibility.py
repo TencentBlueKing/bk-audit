@@ -59,12 +59,13 @@ class TestStatisticsBKBaseCompatibility(SimpleTestCase):
         self.assertNotIn("key", aliases)
         self.assertIn("frame_key", aliases)
 
-    def test_explicit_doris_table_does_not_send_rejected_storage_hint(self):
-        """表已含 .doris 后缀，三条查询路径均交由 BKBase 按表路由。"""
+    def test_doris_queries_use_bare_table_and_storage_hint(self):
+        """三条查询路径统一使用裸表和显式存储，避免重复路由声明。"""
         builder = StatisticsSQLBuilder.from_request(self.context, make_request())
         with mock.patch.object(SafeQuerySyncResource, "bulk_request", return_value=({"list": []},)) as query:
             LogAggregationService._query(builder)
-            self.assertNotIn("prefer_storage", query.call_args.args[0][0])
+            self.assertEqual(query.call_args.args[0][0]["prefer_storage"], "doris")
+            self.assertNotIn(".doris", query.call_args.args[0][0]["sql"])
         with mock.patch.object(
             SafeQuerySyncResource, "bulk_request", return_value=({"list": []}, {"list": [{"count": 0}]})
         ) as query:
@@ -74,10 +75,12 @@ class TestStatisticsBKBaseCompatibility(SimpleTestCase):
                 fields=(LogFieldRef(raw_name="username"),),
             )
             for request in query.call_args.args[0]:
-                self.assertNotIn("prefer_storage", request)
+                self.assertEqual(request["prefer_storage"], "doris")
+                self.assertNotIn(".doris", request["sql"])
         with mock.patch.object(SafeQuerySyncResource, "request", return_value={"list": []}) as query:
             LogFieldMetadataService._query_samples(self.context, LogFieldRef(raw_name="extend_data"))
-            self.assertNotIn("prefer_storage", query.call_args.kwargs)
+            self.assertEqual(query.call_args.kwargs["prefer_storage"], "doris")
+            self.assertNotIn(".doris", query.call_args.kwargs["sql"])
 
     def test_complete_frames_keep_meta_for_empty_inputs_and_exceeded_budget(self):
         """执行完整 UNION，保护单行计数关系在空集和预算失败时的 META 保留。"""

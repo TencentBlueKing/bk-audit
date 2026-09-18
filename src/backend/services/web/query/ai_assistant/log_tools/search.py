@@ -9,6 +9,7 @@ from bk_resource.base import Empty
 from django.conf import settings
 from django.utils import timezone
 
+from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME
 from core.utils.data import extract_nested_value
 from services.web.query.ai_assistant.constants import MCP_LOG_DEFAULT_FIELDS
@@ -135,7 +136,7 @@ class LogDetailSearchService:
         else:
             sort_list = DEFAULT_COLLECTOR_SORT_LIST
         builder = ProjectedLogSQLBuilder(
-            table=context.table,
+            table=context.table.removesuffix(".doris"),
             conditions=list(context.conditions),
             sort_list=sort_list,
             page=request.page,
@@ -144,8 +145,8 @@ class LogDetailSearchService:
         started_at = time.perf_counter()
         responses = api.bk_base.safe_query_sync.bulk_request(
             [
-                {"sql": builder.build_data_sql(fields)},
-                {"sql": builder.build_count_sql()},
+                {"sql": builder.build_data_sql(fields), "prefer_storage": StorageType.DORIS.value},
+                {"sql": builder.build_count_sql(), "prefer_storage": StorageType.DORIS.value},
             ]
         )
         took_ms = int((time.perf_counter() - started_at) * 1000)

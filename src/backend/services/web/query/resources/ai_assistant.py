@@ -120,7 +120,8 @@ class MCPAggregateLogs(QueryBaseResource):
     """对当前用户可访问日志执行类型化、受控的分组聚合。
 
     最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或
-    拓展数值转换质量按全范围 present_count 返回；有类别默认 top_n=100、最大 500，无类别省略。
+    拓展数值转换质量按全范围 present_count 返回；有类别默认 top_n=10、最大 500，无类别省略。
+    时序 rows 仅返回有日志的桶，query_summary.sparse_time_buckets=true；缺省桶计数为0、数值指标为null。
     完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。
     """
 

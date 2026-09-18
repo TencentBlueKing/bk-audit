@@ -55,7 +55,13 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                 if key not in self._field_indices:
                     self._field_indices[key] = len(self.fields)
                     self.fields.append(StatisticsFieldSQL(field, len(self.fields)))
-        super().__init__(table=context.table, conditions=list(context.conditions), sort_list=[], page=1, page_size=1)
+        super().__init__(
+            table=context.table.removesuffix(".doris"),
+            conditions=list(context.conditions),
+            sort_list=[],
+            page=1,
+            page_size=1,
+        )
 
     @classmethod
     def from_request(cls, context, request, *, summary_field=None):

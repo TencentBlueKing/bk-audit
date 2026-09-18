@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
+from api.bk_base.constants import StorageType
 from services.web.query.ai_assistant.exceptions import (
     StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
@@ -57,7 +58,9 @@ class LogAggregationService:
         context = LogQueryContextService.build(username=username, namespace=namespace, condition=request.condition)
         try:
             builder = StatisticsSQLBuilder.from_request(context, request)
-            result, axis, took_ms = cls._execute(builder, numeric_columns=len(request.metrics) + 2)
+            result, axis, took_ms = cls._execute(
+                builder, numeric_columns=len(request.metrics) + 2, fill_time_buckets=False
+            )
             response = AggregateLogsResponse(
                 columns=cls._columns(request, axis),
                 rows=result.rows,
@@ -75,6 +78,7 @@ class LogAggregationService:
                     effective_interval=axis.effective_interval,
                     timezone=settings.TIME_ZONE,
                     complete=True,
+                    sparse_time_buckets=axis.effective_interval is not None,
                     took_ms=took_ms,
                     executed_at=timezone.now().isoformat(),
                 ),
@@ -88,7 +92,7 @@ class LogAggregationService:
             raise mapped from err
 
     @classmethod
-    def _execute(cls, builder, *, numeric_columns):
+    def _execute(cls, builder, *, numeric_columns, fill_time_buckets=True):
         """可信后端指定预算列数；预检只规划，AUTO 超限丢弃快照并完整重查。"""
         request = builder.request
         # 时间维度不进入 SQL 类别字段集，但其可见值同样必须授权。
@@ -103,8 +107,9 @@ class LogAggregationService:
         time_dimension = next((d for d in request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET), None)
         builder.numeric_columns = numeric_columns
         took_ms = 0
-        group_count = 0
-        if time_dimension:
+        # 无类别时 ALL 组固定为一个；最终查询仍验证类型和预算，无需扫描预检。
+        group_count = 0 if builder.dimensions else 1
+        if time_dimension and builder.dimensions:
             raw, elapsed = cls._query(builder, preflight=True)
             took_ms += elapsed
             if not isinstance(raw.get("list"), list) or len(raw["list"]) != 1:
@@ -130,7 +135,11 @@ class LogAggregationService:
             took_ms += elapsed
             try:
                 result = StatisticsResultParser(
-                    request, builder.time_axis, numeric_columns, builder.summary_field
+                    request,
+                    builder.time_axis,
+                    numeric_columns,
+                    builder.summary_field,
+                    fill_time_buckets=fill_time_buckets,
                 ).parse(raw)
                 return result, axis, took_ms
             except StatisticsBudgetExceeded as err:
@@ -153,10 +162,11 @@ class LogAggregationService:
 
     @staticmethod
     def _query(builder, preflight=False):
-        """表后缀已指定 Doris，不传 BKBase 拒绝的 prefer_storage；bulk 保留超时映射。"""
+        """使用裸表和显式 Doris 路由；bulk 保留超时映射。"""
         requests = [
             {
                 "sql": builder.build_preflight_sql() if preflight else builder.build_complete_sql(),
+                "prefer_storage": StorageType.DORIS.value,
             }
         ]
         started = time.perf_counter()

@@ -791,7 +791,7 @@ class AggregateLogsRequest(AgentLogToolRequest):
         strict=True,
         ge=1,
         le=AGGREGATION_MAX_TOP_N,
-        description="全范围非缺失类别数，有类别默认 100、最大 500；无类别必须省略，显式 null 也拒绝。",
+        description="全范围非缺失类别数，有类别默认 10、最大 500；无类别必须省略，显式 null 也拒绝。",
     )
 
     @model_validator(mode="after")
@@ -972,7 +972,11 @@ class AggregationQuerySummary(LogQueryExecutionSummary):
     requested_interval: Optional[AggregationTimeInterval] = Field(description='请求的时间粒度，允许 AUTO；无时间维度为 null。')
     effective_interval: Optional[AggregationEffectiveTimeInterval] = Field(description='实际时间桶粒度，不含 AUTO；无时间维度为 null。')
     timezone: str = Field(description='解释查询时间及划分时间桶的服务端有效时区。')
-    complete: bool = Field(description="成功响应必须包含同口径完整统计。")
+    complete: bool = Field(description="成功响应必须包含同口径完整统计，不表示补齐空时间桶。")
+    sparse_time_buckets: bool = Field(
+        default=False,
+        description="有时间维度时为 true：rows 仅含有日志的桶。缺省桶日志数及 COUNT/DISTINCT_COUNT 为 0，其他数值指标为 null；空范围 rows 为空。",
+    )
 
 
 class AggregateLogsResponse(BaseModel):
@@ -988,7 +992,7 @@ class AggregateLogsResponse(BaseModel):
         ...,
         description=(
             "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。"
-            "时间桶补齐，空桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。"
+            "时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。"
             "结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
         ),
     )
