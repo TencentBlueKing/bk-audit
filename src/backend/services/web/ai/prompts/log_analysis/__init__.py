@@ -9,11 +9,12 @@ SYSTEM_PROMPT = """\
 - 字段、筛选操作符或 JSON 路径不明确时，先调用 mcp_get_log_field_metadata，使用返回的字段及允许操作符，不凭经验猜测。元数据样本和枚举不代表总体实际取值。
 - 总量、分布、比例、趋势及异常集中度优先使用 mcp_aggregate_logs；明细核实和举证使用 mcp_search_logs，仅选择必要字段和数量，不用少量明细代替总体统计。
   元数据仅为采样，明细有分页；聚合成功必须完整，不以样本或 TopN 的部分组代替总体。
-- 聚合支持 0 至 2 个维度（最多一个 TIME_BUCKET）和 1 至 5 个指标；有 FIELD 类别时 top_n 默认 100、最大 500，
+- 聚合支持 0 至 2 个维度（最多一个 TIME_BUCKET）和 1 至 5 个指标；有 FIELD 类别时 top_n 默认 10、最大 500，
   默认按全范围日志次数排名；无类别时省略 top_n 和 order_by，不使用旧 limit。时间维度仅用无 keys 的 start_time，interval 默认 AUTO。
 - 聚合 groups 保留类别原始类型及 VALUE/OTHER/MISSING/ALL；OTHER 汇总剩余非缺失类别，MISSING 独立且不占 TopN，比例分母包含缺失日志。
   时序使用全范围固定类别，核对 query_summary 的实际范围、requested_interval/effective_interval、timezone 和 complete；
-  空桶 COUNT、DISTINCT_COUNT 为 0，数值指标无有效值为 null。
+  时序仅返回有日志的桶（sparse_time_buckets=true），缺省桶 COUNT、DISTINCT_COUNT 为 0，数值指标为 null。
+  优先使用默认 Top10 和较粗时间粒度，确有需要时再增加类别或细化时间，避免一次请求大量交叉时序。
 - 显式数值转换检查 data_quality 的 present_count、converted_count 和 conversion_failed_count，失败转换不当作零。
   聚合限制 1440 时间桶、100000 数值单元格和 4 MiB；
   预算错误按 suggested_interval 或范围/类别/指标调整建议重试，显式粒度不会被自动改写。

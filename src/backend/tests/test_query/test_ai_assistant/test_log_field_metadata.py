@@ -844,7 +844,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         sql = self.mock_query.call_args.kwargs["sql"]
         self.assertEqual(
             sql,
-            "SELECT `extend_data`,`system_id`,`resource_type_id`,`action_id` FROM test_rt.doris"
+            "SELECT `extend_data`,`system_id`,`resource_type_id`,`action_id` FROM test_rt"
             " ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 50",
         )
 

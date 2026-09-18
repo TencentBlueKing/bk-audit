@@ -48,7 +48,7 @@ def statistics_count(value) -> int:
 
 @dataclass(frozen=True)
 class StatisticsResult:
-    """已验证且补齐时间轴的聚合结果，供可信后端消费者组织响应。"""
+    """已验证的聚合结果，按消费者需要补齐时间轴，供可信后端消费者组织响应。"""
 
     groups: tuple[AggregationGroup, ...]
     rows: tuple[dict, ...]
@@ -60,8 +60,21 @@ class StatisticsResult:
 class StatisticsResultParser:
     """只接受最终语句的完整帧集合，不信任远端行序或请求外的字段。"""
 
-    def __init__(self, request: AggregateLogsRequest, time_axis=None, numeric_columns=None, summary_field=None):
-        """摘要字段由可信 builder 显式提供，普通 MCP 不能接收 SUMMARY。"""
+    def __init__(
+        self,
+        request: AggregateLogsRequest,
+        time_axis=None,
+        numeric_columns=None,
+        summary_field=None,
+        *,
+        fill_time_buckets=True,
+    ):
+        """摘要字段及补轴策略由可信后端指定；MCP 省略空桶，程序统计补齐。
+
+        fill_time_buckets 仅控制输出表示，始终校验完整时间范围与计数闭合。
+        普通 MCP 不能接收 SUMMARY。
+        """
+        self.fill_time_buckets = fill_time_buckets
         self.summary_field = summary_field
         self.request = request
         self.dimensions = tuple(d for d in request.dimensions if d.type == AggregationDimensionType.FIELD)
@@ -189,7 +202,7 @@ class StatisticsResultParser:
         return dict(sorted(groups.items()))
 
     def _rows(self, frames, groups, total):
-        """验证组/桶唯一及计数闭合，再补轴；非可加指标只保留原桶值。"""
+        """验证组/桶唯一及计数闭合，按消费者需要补轴；不重算非可加指标。"""
         rows = {}
         counts = {key: 0 for key in groups}
         bucket_starts = self.time_axis.bucket_starts if self.time_axis else (None,)
@@ -225,6 +238,8 @@ class StatisticsResultParser:
             raise ValueError("statistics bucket counts do not close")
         if not self.time_axis and {key for key, _ in rows} != groups.keys():
             raise ValueError("statistics row groups are incomplete")
+        if self.time_axis and not self.fill_time_buckets:
+            return tuple(rows[identity] for identity in sorted(rows))
         return tuple(
             rows.get((key, index), self._empty_row(group, start, total))
             for key, group in groups.items()

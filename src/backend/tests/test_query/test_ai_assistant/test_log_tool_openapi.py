@@ -358,6 +358,7 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
                 "effective_interval",
                 "timezone",
                 "complete",
+                "sparse_time_buckets",
                 "took_ms",
                 "executed_at",
             },

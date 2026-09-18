@@ -187,8 +187,8 @@ class TestAggregateLogsRequest(AIAssistantTestCase):
         request = AggregateLogsRequest(
             condition=self.make_condition(), dimensions=[field_dimension()], metrics=[count_metric()]
         )
-        self.assertEqual(request.top_n, 100)
-        self.assertEqual(AggregateLogsRequest.model_validate(request.model_dump()).top_n, 100)
+        self.assertEqual(request.top_n, 10)
+        self.assertEqual(AggregateLogsRequest.model_validate(request.model_dump()).top_n, 10)
         with self.assertRaises(PydanticValidationError):
             AggregateLogsRequest.model_validate({**request.model_dump(), "limit": 20})
 

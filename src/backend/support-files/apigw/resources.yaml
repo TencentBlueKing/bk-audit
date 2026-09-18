@@ -3297,8 +3297,8 @@ paths:
     post:
       operationId: mcp_aggregate_logs
       description: 默认空间日志工具，无需传 namespace。对当前用户可访问日志执行类型化、受控的分组聚合。 最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或 拓展数值转换质量按全范围
-        present_count 返回；有类别默认 top_n=100、最大 500，无类别省略。 完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。
-        groups 返回 VALUE/OTHER/MISSING/ALL，比例分母为完整范围总量；rows 按组和时间轴完整补齐，COUNT、DISTINCT_COUNT 空桶为 0，数值指标无有效值为 null。核对 query_summary
+        present_count 返回；有类别默认 top_n=10、最大 500，无类别省略。 时序 rows 仅返回有日志的桶，query_summary.sparse_time_buckets=true；缺省桶计数为0、数值指标为null。 完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。
+        groups 返回 VALUE/OTHER/MISSING/ALL，比例分母为完整范围总量；rows 保留全部有日志的时间桶，缺省桶 COUNT、DISTINCT_COUNT 为 0，数值指标为 null。核对 query_summary
         的实际范围、粒度及 complete；全范围 TopN 默认按日志次数降序，不将 OTHER 当作分页。
       tags: []
       parameters:
@@ -3554,7 +3554,7 @@ paths:
                 type: object
               type: array
             top_n:
-              description: 全范围非缺失类别数，有类别默认 100、最大 500；无类别必须省略，显式 null 也拒绝。
+              description: 全范围非缺失类别数，有类别默认 10、最大 500；无类别必须省略，显式 null 也拒绝。
               maximum: 500
               minimum: 1
               type: integer
@@ -3641,7 +3641,7 @@ paths:
                       type: object
                     type: array
                   rows:
-                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。时间桶补齐，空桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
+                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
                     items:
                       type: object
                     type: array
@@ -3765,8 +3765,12 @@ paths:
                       timezone:
                         description: "解释查询时间及划分时间桶的服务端有效时区。"
                         type: string
+                      sparse_time_buckets:
+                        default: false
+                        description: 有时间维度时为 true：rows 仅含有日志的桶。缺省桶日志数及 COUNT/DISTINCT_COUNT 为 0，其他数值指标为 null；空范围 rows 为空。
+                        type: boolean
                       complete:
-                        description: 成功响应必须包含同口径完整统计。
+                        description: 成功响应必须包含同口径完整统计，不表示补齐空时间桶。
                         type: boolean
                     required:
                     - took_ms
@@ -3782,6 +3786,7 @@ paths:
                     - effective_interval
                     - timezone
                     - complete
+                    - sparse_time_buckets
                     type: object
                   data_quality:
                     default: []

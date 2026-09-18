@@ -586,7 +586,7 @@ class TestLogAggregationService(TestCase):
                 finally:
                     rule.delete()
 
-    def test_sparse_time_rows_fill_axis_and_keep_global_groups(self):
+    def test_sparse_time_rows_preserve_nonempty_buckets_and_global_groups(self):
         data = frames()
         for row in data:
             if row["frame"] == "ROW":
@@ -596,17 +596,16 @@ class TestLogAggregationService(TestCase):
             ({"list": data},),
         ]
         result = self._aggregate(dimensions=self._time_dimensions())
-        self.assertEqual(len(result.rows), 75)
+        self.assertEqual(len(result.rows), 3)
         self.assertEqual([g.count for g in result.groups], [6, 3, 1])
         self.assertEqual(result.rows[0]["hour"], "2026-08-13T00:00:00+08:00")
-        self.assertEqual(result.rows[24]["hour"], "2026-08-14T00:00:00+08:00")
-        self.assertEqual(result.rows[1]["events"], 0)
-        self.assertIsNone(result.rows[1]["average"])
+        self.assertEqual(sum(row["events"] for row in result.rows), 10)
+        self.assertTrue(result.query_summary.sparse_time_buckets)
         self.assertEqual(result.columns[0].effective_time_interval, "HOUR")
         self.assertEqual(result.query_summary.requested_interval, "HOUR")
         self.assertEqual(result.groups[0].values[0].dimension_id, "action")
 
-    def test_empty_pure_time_all_has_axis_but_category_empty_has_no_rows(self):
+    def test_empty_time_has_no_rows_and_pure_time_skips_preflight(self):
         for category, groups, group_frames in [
             (True, "0", []),
             (False, "1", [{"frame": "GROUP", "frame_key": "1", "kind": "ALL", "n": "0"}]),
@@ -617,14 +616,16 @@ class TestLogAggregationService(TestCase):
                     ({"list": [{"group_count": groups, "invalid_type_count": "0", "invalid_number_count": "0"}]},),
                     ({"list": data},),
                 ]
+                if not category:
+                    self.mock_query.side_effect = [({"list": data},)]
                 result = self._aggregate(
                     dimensions=self._time_dimensions(category=category), metrics=[{"id": "events", "type": "COUNT"}]
                 )
-                self.assertEqual(len(result.rows), 0 if category else 25)
+                self.assertEqual(len(result.rows), 0)
                 if not category:
-                    self.assertEqual([row["events"] for row in result.rows], [0] * 25)
+                    self.assertEqual(result.groups[0].count, 0)
 
-    def test_distinct_count_fills_empty_time_buckets_with_zero(self):
+    def test_distinct_count_keeps_nonempty_buckets_without_padding(self):
         """纯时序及类别时序空桶的去重计数为零，与有事件桶保留的引擎结果一致。"""
         for category, total in ((False, 0), (False, 2), (True, 2)):
             with self.subTest(category=category, total=total):
@@ -649,6 +650,8 @@ class TestLogAggregationService(TestCase):
                     ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
                     ({"list": data},),
                 ]
+                if not category:
+                    self.mock_query.side_effect = [({"list": data},)]
                 result = self._aggregate(
                     dimensions=self._time_dimensions(category=category),
                     metrics=[
@@ -656,8 +659,8 @@ class TestLogAggregationService(TestCase):
                         {"id": "unique_users", "type": "DISTINCT_COUNT", "field": {"raw_name": "username"}},
                     ],
                 )
-                self.assertEqual([row["unique_users"] for row in result.rows], [1 if total else 0] + [0] * 24)
-                self.assertEqual([row["events"] for row in result.rows], [total] + [0] * 24)
+                self.assertEqual([row["unique_users"] for row in result.rows], [1] if total else [])
+                self.assertEqual([row["events"] for row in result.rows], [total] if total else [])
 
     def test_time_truncation_duplicate_bucket_and_nonclosing_counts_reject(self):
         for mutation in ("truncated", "duplicate", "count", "outside"):
@@ -695,7 +698,7 @@ class TestLogAggregationService(TestCase):
         ]
         result = self._aggregate(dimensions=self._time_dimensions(interval="AUTO"))
         self.assertEqual(result.query_summary.effective_interval, "DAY")
-        self.assertEqual(len(result.rows), 6)
+        self.assertEqual(len(result.rows), 3)
         self.assertEqual(sum(row["events"] for row in result.rows), 10)
         self.assertEqual(self.mock_query.call_count, 3)
         final_sql = self.mock_query.call_args.args[0][0]["sql"]
