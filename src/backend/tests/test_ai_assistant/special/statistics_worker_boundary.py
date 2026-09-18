@@ -22,7 +22,7 @@ def build_context(*, username, namespace, condition):
 
 def query_frames(requests):
     """返回手算十条日志的预检/最终统计帧，不执行 Doris SQL。"""
-    if "AS group_count" in requests[0]["sql"]:
+    if "CAST(group_count AS STRING) AS group_count" in requests[0]["sql"]:
         return ({"list": [dict(group_count="3", invalid_type_count="0", invalid_number_count="0")]},)
     return ({"list": field_frames()},)
 

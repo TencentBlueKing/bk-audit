@@ -111,7 +111,7 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
 
     def query(self, requests):
         """模拟同一最终查询的完整统计帧，结果总数10独立于来源2条预览。"""
-        if "AS group_count" in requests[0]["sql"]:
+        if "CAST(group_count AS STRING) AS group_count" in requests[0]["sql"]:
             return ({"list": [dict(group_count="3", invalid_type_count="0", invalid_number_count="0")]},)
         return ({"list": deepcopy(self.frames)},)
 
@@ -459,7 +459,7 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
             remote_calls.append(requests)
             if len(remote_calls) == 1:
                 raise ConnectionError("temporary")
-            if "AS group_count" in requests[0]["sql"]:
+            if "CAST(group_count AS STRING) AS group_count" in requests[0]["sql"]:
                 return ({"list": [dict(group_count="3", invalid_type_count="0", invalid_number_count="0")]},)
             return ({"list": field_frames()},)
 

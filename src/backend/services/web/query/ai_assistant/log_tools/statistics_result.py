@@ -140,7 +140,7 @@ class StatisticsResultParser:
         seen_values = set()
         number_keys = {}
         for frame in frames:
-            key = statistics_count(frame.get("key"))
+            key = statistics_count(frame.get("frame_key"))
             count = statistics_count(frame.get("n"))
             kind = frame.get("kind")
             values = []
@@ -194,7 +194,7 @@ class StatisticsResultParser:
         counts = {key: 0 for key in groups}
         bucket_starts = self.time_axis.bucket_starts if self.time_axis else (None,)
         for frame in frames:
-            key = statistics_count(frame.get("key"))
+            key = statistics_count(frame.get("frame_key"))
             count = statistics_count(frame.get("n"))
             bucket = statistics_count(frame.get("bucket")) if self.time_axis else 0
             identity = (key, bucket)
@@ -250,7 +250,7 @@ class StatisticsResultParser:
         """质量计数覆盖完整原集合，空串计 present，失败转换不作为零。"""
         quality = {}
         for frame in frames:
-            key = statistics_count(frame.get("key"))
+            key = statistics_count(frame.get("frame_key"))
             if key not in self.quality_indices or key in quality:
                 raise ValueError("invalid or duplicate statistics quality")
             present, converted, failed = (statistics_count(frame.get(k)) for k in ("n", "a", "b"))

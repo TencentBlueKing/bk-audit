@@ -38,12 +38,12 @@ def field_frames():
     data = [
         dict(frame="META", n="10", a="3", b="5", c="0", d="0", e="0"),
         dict(frame="SUMMARY", n="9", a="0", s_min=None, s_max=None, s_avg=None, s_median=None),
-        dict(frame="GROUP", key="1", kind="VALUE", n="6", d0_type="string", d0_json='"GET"'),
-        dict(frame="GROUP", key="2", kind="OTHER", n="3", d0_type=None, d0_json=None),
-        dict(frame="GROUP", key="3", kind="MISSING", n="1", d0_type=None, d0_json=None),
+        dict(frame="GROUP", frame_key="1", kind="VALUE", n="6", d0_type="string", d0_json='"GET"'),
+        dict(frame="GROUP", frame_key="2", kind="OTHER", n="3", d0_type=None, d0_json=None),
+        dict(frame="GROUP", frame_key="3", kind="MISSING", n="1", d0_type=None, d0_json=None),
     ]
     for key, bucket, count in [(1, 0, 2), (1, 1, 4), (2, 0, 1), (2, 1, 2), (3, 0, 1)]:
-        data.append(dict(frame="ROW", key=str(key), bucket=str(bucket), n=str(count), m0=str(count)))
+        data.append(dict(frame="ROW", frame_key=str(key), bucket=str(bucket), n=str(count), m0=str(count)))
     return data
 
 
@@ -74,7 +74,7 @@ class TestFieldStatistics(TestCase):
     def _remote(self, requests):
         """区分预检和最终SQL，最终只提供同一快照的完整帧。"""
         sql = requests[0]["sql"]
-        if "AS group_count" in sql:
+        if "CAST(group_count AS STRING) AS group_count" in sql:
             return ({"list": [dict(group_count="3", invalid_type_count="0", invalid_number_count="0")]},)
         self.assertIn("AS s_median", sql)
         self.assertIn("FROM normalized", sql)
@@ -153,8 +153,8 @@ class TestFieldStatistics(TestCase):
                 if total:
                     self.data.extend(
                         [
-                            dict(frame="GROUP", key="3", kind="MISSING", n="2", d0_type=None, d0_json=None),
-                            dict(frame="ROW", key="3", n="2", m0="2", bucket="0"),
+                            dict(frame="GROUP", frame_key="3", kind="MISSING", n="2", d0_type=None, d0_json=None),
+                            dict(frame="ROW", frame_key="3", n="2", m0="2", bucket="0"),
                         ]
                     )
                 result = self._analyze(field)

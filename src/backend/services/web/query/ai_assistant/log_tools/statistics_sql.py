@@ -180,12 +180,13 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
     def build_preflight_sql(self):
         """一行全范围类型/类别计数供 Task4 规划；最终查询不会复用这些计数。"""
         ctes = self._base_ctes() + self._group_ctes()
+        ctes.append("group_totals AS (SELECT COUNT(*) AS group_count FROM aggregated)")
         return (
             "WITH "
             + ",\n".join(ctes)
-            + " SELECT CAST((SELECT COUNT(*) FROM aggregated) AS STRING) AS group_count, "
+            + " SELECT CAST(group_count AS STRING) AS group_count, "
             + "CAST(invalid_type_count AS STRING) AS invalid_type_count, "
-            + "CAST(invalid_number_count AS STRING) AS invalid_number_count FROM validation"
+            + "CAST(invalid_number_count AS STRING) AS invalid_number_count FROM validation CROSS JOIN group_totals"
         )
 
     def _group_ctes(self):
@@ -214,7 +215,7 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         ]
 
     def _frame(self, values, source):
-        """给每个 UNION 分支显式补 STRING NULL，避免列类型提升破坏数值通道。"""
+        """给 UNION 分支补 STRING NULL，并避免 BKBase 重写后将 key 识别为保留字。"""
         names = ["frame", "key", "kind", "n", "a", "b", "c", "d", "e", "bucket"]
         names.extend(f"d{i}_{part}" for i in range(len(self.dimensions)) for part in ("type", "json"))
         names.extend(f"m{i}" for i in range(len(self.request.metrics)))
@@ -222,7 +223,10 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
             names.extend(f"s_{name}" for name in ("min", "max", "avg", "median"))
         return (
             "SELECT "
-            + ", ".join(f"CAST({values.get(name, 'NULL')} AS STRING) AS {name}" for name in names)
+            + ", ".join(
+                f"CAST({values.get(name, 'NULL')} AS STRING) AS {'frame_key' if name == 'key' else name}"
+                for name in names
+            )
             + " "
             + source
         )
@@ -263,23 +267,24 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
             )
         if self.summary_field is not None:
             ctes.append(self._summary_cte())
+        # 当前 Doris 不接受 CAST 内标量子查询；单行计数关系同时用于帧头与预算守卫。
+        ctes.append("group_totals AS (SELECT COUNT(*) AS group_count FROM aggregated)")
+        ctes.append(f"row_totals AS (SELECT COUNT(*) AS row_count FROM {row_source})")
         guard = "validation.invalid_type_count = 0 AND validation.invalid_number_count = 0"
         bucket_count = len(self.time_axis.bucket_starts) if self.time_axis else 1
-        guard += (
-            f" AND (SELECT COUNT(*) FROM aggregated) * {bucket_count} * {self.numeric_columns} <= {budget_limits()[1]}"
-        )
+        guard += f" AND group_totals.group_count * {bucket_count} * {self.numeric_columns} <= {budget_limits()[1]}"
         frames = [
             self._frame(
                 dict(
                     frame="'META'",
                     n="total_count",
-                    a="(SELECT COUNT(*) FROM aggregated)",
-                    b=f"(SELECT COUNT(*) FROM {row_source})",
+                    a="group_totals.group_count",
+                    b="row_totals.row_count",
                     c=str(len(quality_indices)),
                     d="invalid_type_count",
                     e="invalid_number_count",
                 ),
-                "FROM validation",
+                "FROM validation CROSS JOIN group_totals CROSS JOIN row_totals",
             )
         ]
         group = dict(frame="'GROUP'", key="g.group_key", kind="g.group_kind", n="g.log_count")
@@ -287,12 +292,16 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
             group[f"d{i}_type"] = f"s.d{i}_type"
             group[f"d{i}_json"] = f"CASE WHEN s.d{i}_type = 'string' THEN JSON_QUOTE(s.d{i}_key) ELSE s.d{i}_key END"
         join = " LEFT JOIN selected s ON g.group_key = s.group_key" if self.dimensions else ""
-        frames.append(self._frame(group, f"FROM aggregated g{join} CROSS JOIN validation WHERE {guard}"))
+        frames.append(
+            self._frame(group, f"FROM aggregated g{join} CROSS JOIN validation CROSS JOIN group_totals WHERE {guard}")
+        )
         row = dict(frame="'ROW'", key="g.group_key", n="g.log_count")
         row.update({f"m{i}": f"g.m{i}" for i in range(len(self.request.metrics))})
         if self.time_axis:
             row["bucket"] = "g.bucket"
-        frames.append(self._frame(row, f"FROM {row_source} g CROSS JOIN validation WHERE {guard}"))
+        frames.append(
+            self._frame(row, f"FROM {row_source} g CROSS JOIN validation CROSS JOIN group_totals WHERE {guard}")
+        )
         for i in quality_indices:
             frames.append(
                 self._frame(
@@ -303,13 +312,15 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
                         a="converted_count",
                         b="present_count - converted_count",
                     ),
-                    f"FROM quality_{i} CROSS JOIN validation WHERE {guard}",
+                    f"FROM quality_{i} CROSS JOIN validation CROSS JOIN group_totals WHERE {guard}",
                 )
             )
         if self.summary_field is not None:
             values = dict(frame="'SUMMARY'", n="present_count", a="numeric_count")
             values.update({f"s_{name}": f"s_{name}" for name in ("min", "max", "avg", "median")})
-            frames.append(self._frame(values, f"FROM field_summary CROSS JOIN validation WHERE {guard}"))
+            frames.append(
+                self._frame(values, f"FROM field_summary CROSS JOIN validation CROSS JOIN group_totals WHERE {guard}")
+            )
         return "WITH " + ",\n".join(ctes) + "\n" + "\nUNION ALL\n".join(frames)
 
     def _summary_cte(self):
@@ -352,7 +363,8 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
             end = index + 1
             while end < len(starts) - 1 and starts[end + 1] - starts[end] == step:
                 end += 1
-            expression = f"({index} + ((event_timestamp - {starts[index]}) DIV {step}))"
+            # BKBase SQL 解析器拒绝 DIV；先对毫秒差除法取整，再固定整数通道。
+            expression = f"({index} + CAST(FLOOR((event_timestamp - {starts[index]}) / {step}) AS BIGINT))"
             segments.append((starts[end], expression))
             index = end
         if len(segments) == 1:
