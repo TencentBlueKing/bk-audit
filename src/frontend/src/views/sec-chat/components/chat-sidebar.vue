@@ -865,13 +865,6 @@
     isCollapsedSearchOpen.value = false;
   };
 
-  watch(
-    () => props.collapsed,
-    (newVal) => {
-      if (!newVal) closeCollapsedSearch();
-    },
-  );
-
   let documentMouseDownHandler: ((e: MouseEvent) => void) | null = null;
   let documentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
   let documentSidebarMenuMouseDownHandler: ((e: MouseEvent) => void) | null = null;
@@ -970,6 +963,18 @@
   const closeReportList = () => {
     isReportListShow.value = false;
   };
+
+  watch(
+    () => props.collapsed,
+    (newVal) => {
+      if (newVal) {
+        // 折叠侧栏时同步收起报告列表，避免入口已隐藏仍占主内容区宽度
+        closeReportList();
+      } else {
+        closeCollapsedSearch();
+      }
+    },
+  );
 
   const handleReportLocateConversation = (conversationUid: string) => {
     emit('select', conversationUid);
