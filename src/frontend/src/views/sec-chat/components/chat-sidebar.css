@@ -283,7 +283,8 @@
       }
     }
 
-    .search-results-empty {
+    .search-results-empty,
+    .history-list-empty {
       margin-top: 24px;
     }
 
