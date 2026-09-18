@@ -67,6 +67,7 @@ MIDDLEWARE += (
     "apigw_manager.apigw.authentication.ApiGatewayJWTGenericMiddleware",  # JWT 认证
     "apigw_manager.apigw.authentication.ApiGatewayJWTAppMiddleware",  # JWT 透传的应用信息
     "apigw_manager.apigw.authentication.ApiGatewayJWTUserMiddleware",  # JWT 透传的用户信息
+    "core.middleware.tenant_router.TenantCookieMiddleware",  # 用于验证租户id的中间件
 )
 
 # 默认数据库自增字段
