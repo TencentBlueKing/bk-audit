@@ -105,7 +105,12 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
             return "COUNT(*)"
         if metric.type == AggregationMetricType.DISTINCT_COUNT:
             p = self.field_prefix(metric.field)
-            return f"COUNT(DISTINCT {p}_type, {p}_key)"
+            # Doris 不支持多个多列 DISTINCT 同查。类型标签固定且不含冒号，
+            # 前缀编码无碰撞，保留 JSON 类型差异；显式排除缺失但保留空串。
+            return (
+                f"COUNT(DISTINCT CASE WHEN {p}_type IS NOT NULL AND {p}_key IS NOT NULL "
+                f"THEN CONCAT({p}_type, ':', {p}_key) END)"
+            )
         value = f"m{index}_value"
         if metric.type == AggregationMetricType.PERCENTILE_APPROX:
             return f"PERCENTILE_APPROX({value}, {metric.percentile})"

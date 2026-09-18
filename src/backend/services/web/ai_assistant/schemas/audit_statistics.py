@@ -36,20 +36,28 @@ class FieldStatisticsAttachmentInput(MessageSchema):
         description='待统计的通用字段或 JSON 子路径；field_type 仅为提示，实际类型由服务端确定。'
     )
     top_n: int = Field(
-        default=100,
+        default=10,
         strict=True,
         ge=1,
         le=AGGREGATION_MAX_TOP_N,
-        description='非缺失类别上限，默认 100、协议最大 500，部署配置可收紧；OTHER/MISSING 不占名额。',
+        description='非缺失类别上限，默认 10、协议最大 500，部署配置可收紧；OTHER/MISSING 不占名额。',
     )
     interval: AggregationTimeInterval = Field(
         default=AggregationTimeInterval.AUTO, description='时间桶粒度，默认 AUTO，由服务端按检索范围及预算选择。'
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def apply_default_top_n(cls, data):
+        """仅新输入缺省时读取共享配置；显式值及持久化快照保持不变。"""
+        if isinstance(data, dict) and "top_n" not in data:
+            return {**data, "top_n": settings.AI_LOG_AGGREGATION_DEFAULT_TOP_N}
+        return data
+
     @model_validator(mode="after")
     def validate_budget(self):
         """创建时即拒绝超出部署预算的请求，不产生无效附件。"""
-        if self.top_n > min(settings.AI_LOG_AGGREGATION_MAX_TOP_N, AGGREGATION_MAX_TOP_N):
+        if not 1 <= self.top_n <= min(settings.AI_LOG_AGGREGATION_MAX_TOP_N, AGGREGATION_MAX_TOP_N):
             raise ValueError("statistics top_n exceeds maximum")
         return self
 

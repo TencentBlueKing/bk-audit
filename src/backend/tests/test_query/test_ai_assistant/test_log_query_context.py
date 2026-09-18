@@ -28,6 +28,20 @@ class TestLogQueryContextService(AIAssistantTestCase):
     def _permission_exception(self):
         return PermissionException(action_name="view_system", permission={}, apply_url="")
 
+    def test_equivalent_time_formats_have_identical_sql_timestamp_bounds(self):
+        """UTC不得被旧Collector解析器当成本地时间，SQL范围需与时间轴一致。"""
+        conditions = []
+        for start, end in (
+            ("2026-09-15 10:00:00", "2026-09-15 11:00:00"),
+            ("2026-09-15T02:00:00Z", "2026-09-15T03:00:00Z"),
+            ("2026-09-15T10:00:00+08:00", "2026-09-15T11:00:00+08:00"),
+        ):
+            condition = self.make_condition(start_time=start, end_time=end)
+            data = LogQueryContextService._validate_condition(condition=condition, namespace=self.namespace)
+            conditions.append(data["conditions"])
+        self.assertEqual(conditions[0], conditions[1])
+        self.assertEqual(conditions[1], conditions[2])
+
     def test_denied_scope_raises_before_condition_validation(self):
         with (
             mock.patch(

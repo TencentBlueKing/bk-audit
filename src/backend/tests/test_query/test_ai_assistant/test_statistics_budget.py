@@ -24,6 +24,19 @@ class TestStatisticsBudget(SimpleTestCase):
         self.assertEqual(axis.effective_interval, "HOUR")
         self.assertEqual(axis.timezone, "Asia/Shanghai")
 
+    def test_plain_local_and_offset_times_share_the_same_axis(self):
+        """接口允许普通日期字符串，时序规划不能将其变成502。"""
+        for start, end in (
+            ("2026-09-15 10:00:00", "2026-09-15 11:00:00"),
+            ("2026-09-15T02:00:00Z", "2026-09-15T03:00:00Z"),
+            ("2026-09-15T10:00:00+08:00", "2026-09-15T11:00:00+08:00"),
+        ):
+            with self.subTest(start=start):
+                self.assertEqual(
+                    self.axis(start_time=start, end_time=end).bucket_starts,
+                    ("2026-09-15T10:00:00+08:00", "2026-09-15T11:00:00+08:00"),
+                )
+
     def test_auto_uses_actual_groups_and_all_numeric_columns(self):
         self.assertEqual(self.axis(interval="AUTO", group_count=500, numeric_columns=3).effective_interval, "MINUTE")
         self.assertEqual(self.axis(interval="AUTO", group_count=500, numeric_columns=4).effective_interval, "HOUR")

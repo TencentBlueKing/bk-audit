@@ -45,7 +45,7 @@ class FieldStatisticsService:
         namespace: str,
         condition: AgentSearchCondition,
         field: LogFieldRef,
-        top_n: int = 100,
+        top_n: int | None = None,
         interval: AggregationTimeInterval = AggregationTimeInterval.AUTO
     ) -> FieldStatisticsResult:
         """重验权限并生成固定包；非法请求、查询不完整及超预算抛领域异常。"""
@@ -58,7 +58,7 @@ class FieldStatisticsService:
                     dict(id="bucket", type="TIME_BUCKET", field=LogFieldRef(raw_name="start_time"), interval=interval),
                 ],
                 metrics=[dict(id="events", type="COUNT")],
-                top_n=top_n,
+                **({"top_n": top_n} if top_n is not None else {}),
             )
         except ValidationError as err:
             raise UnsupportedAggregation() from err

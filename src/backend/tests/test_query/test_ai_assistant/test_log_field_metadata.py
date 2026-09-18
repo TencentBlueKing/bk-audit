@@ -323,6 +323,8 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         basic = self._get_metadata()
         extended = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
 
+        self.assertFalse(basic.sample_summary.sampling_performed)
+        self.assertTrue(extended.sample_summary.sampling_performed)
         self.assertTrue(basic.fields)
         self.assertTrue(all(item.category == LogFieldCategory.BASIC for item in basic.fields))
         self.assertTrue(extended.fields)
@@ -438,6 +440,13 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             system_id=self.target_system_id,
             fields={"log"},
         )
+        self.mock_query.assert_not_called()
+
+    def test_root_directory_explicitly_marks_sampling_not_performed(self):
+        """未采样的零计数不能被模型当成空日志范围。"""
+        result = self._get_metadata()
+        self.assertFalse(result.sample_summary.sampling_performed)
+        self.assertEqual(result.sample_summary.sampled_count, 0)
         self.mock_query.assert_not_called()
 
     def test_other_visible_json_roots_can_be_explored(self):

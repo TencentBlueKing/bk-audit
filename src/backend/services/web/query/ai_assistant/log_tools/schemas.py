@@ -23,9 +23,11 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 from rest_framework import serializers
 
 from apps.meta.utils.fields import START_TIME
+from services.web.query.ai_assistant.log_tools.time_range import parse_log_time
 from services.web.query.ai_assistant.schemas import (
     Condition,
     ConditionField,
@@ -85,6 +87,12 @@ AGGREGATION_MAX_TIME_BUCKETS = 1440
 AGGREGATION_MAX_CELLS = 100000
 AGGREGATION_RESPONSE_MAX_BYTES = 4 * 1024 * 1024
 AGGREGATION_RESERVED_COLUMN_IDS = frozenset(("group_id", "group_kind", "log_count", "log_ratio", "bucket_start"))
+STATISTICS_RATIO_DECIMAL_PLACES = 4
+
+
+def serialize_statistics_ratio(value: float | None) -> float | None:
+    """对外比例统一保留四位小数；空值保持 null，计数和内部计算不变。"""
+    return round(value, STATISTICS_RATIO_DECIMAL_PLACES) if value is not None else None
 
 
 def _bounded_limit(configured_limit: int, hard_limit: int, minimum: int) -> int:
@@ -197,7 +205,7 @@ class AgentCondition(Condition):
         if operator not in allowed_operators or (
             field is not None and not COLLECT_SEARCH_CONFIG.judge_operator(field.raw_name, field.keys, operator)
         ):
-            raise ValueError("unsupported log field operator")
+            raise PydanticCustomError("log_field_operator", "unsupported log field operator")
         return operator
 
     @model_validator(mode="after")
@@ -217,7 +225,7 @@ class AgentSearchCondition(SearchCondition):
     """日志工具和程序统计复用的有界查询条件；系统及敏感字段权限在执行时校验。"""
 
     scope_type: Literal["system"] = Field(default="system", description="查询范围类型，当前仅支持单业务系统 system。")
-    start_time: str = Field(min_length=1, description="范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按用户时区解释。")
+    start_time: str = Field(min_length=1, description="范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按服务端默认时区解释。")
     end_time: str = Field(min_length=1, description="范围结束时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；实际查询沿用日志检索时间边界。")
     scope_id: str = Field(
         ..., min_length=1, max_length=LOG_TOOL_MAX_SCOPE_ID_LENGTH, description='待查询的单个业务系统 ID；工具调用时按当前用户重新鉴权。'
@@ -227,6 +235,13 @@ class AgentSearchCondition(SearchCondition):
         max_length=LOG_TOOL_MAX_CONDITIONS,
         description="最多 100 个条件；完整 condition 的 UTF-8 JSON 最大 256 KiB。",
     )
+
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        """覆盖旧检索解析器的UTC歧义，与SQL和桶轴按同一真实时刻比较。"""
+        if parse_log_time(self.start_time) > parse_log_time(self.end_time):
+            raise ValueError("start_time must not exceed end_time")
+        return self
 
     @model_validator(mode="after")
     def validate_agent_condition_cost(self):
@@ -307,7 +322,7 @@ class LogFieldRef(BaseModel):
     )
     field_type: Optional[LogFieldType] = Field(
         default=None,
-        description="可选存储字段类型，取值与审计日志公共 FieldType 一致。",
+        description="可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。",
     )
 
     @model_validator(mode="after")
@@ -440,7 +455,8 @@ class LogFieldMetadataItem(BaseModel):
 class FieldSampleSummary(BaseModel):
     """字段探索的有界采样摘要。"""
 
-    sampled_count: int = Field(default=0, description="本次探索实际参与类型推断的脱敏日志数。")
+    sampling_performed: bool = Field(default=False, description="是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。")
+    sampled_count: int = Field(default=0, description="本次实际采样日志数，不是范围总量；sampling_performed=false 表示未采样，总量应使用 COUNT 查询。")
     returned_field_count: int = Field(default=0, description="本次返回字段数量。")
     truncated: bool = Field(
         default=False,
@@ -633,7 +649,14 @@ class AggregationDimension(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="维度唯一 ID，仅允许字母开头。")
+    id: str = Field(
+        ...,
+        pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        description=(
+            "维度 ID，以字母开头且与所有维度/指标全局唯一；禁止 group_id、group_kind、log_count、log_ratio、bucket_start。"
+            "推荐 cnt、events、users 等别名。"
+        ),
+    )
     type: AggregationDimensionType = Field(
         ...,
         description="FIELD 按字段分组且不得传 interval；TIME_BUCKET 只能使用无 keys 的 start_time，interval 默认 AUTO。",
@@ -683,7 +706,14 @@ class AggregationMetric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="指标唯一 ID，仅允许字母开头。")
+    id: str = Field(
+        ...,
+        pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        description=(
+            "指标 ID，以字母开头且与所有维度/指标全局唯一；禁止 group_id、group_kind、log_count、log_ratio、bucket_start。"
+            "推荐 cnt、events、users 等别名。"
+        ),
+    )
     type: AggregationMetricType = Field(
         ...,
         description=(
@@ -740,7 +770,7 @@ class AggregationMetric(BaseModel):
 
         if self.type == AggregationMetricType.DISTINCT_COUNT:
             if self.value_type is not None or self.percentile is not None:
-                raise ValueError("DISTINCT_COUNT does not accept numeric options")
+                raise PydanticCustomError("distinct_options", "DISTINCT_COUNT does not accept numeric options")
             return self
 
         declared_type = AGGREGATION_STANDARD_FIELD_TYPES.get(self.field.raw_name)
@@ -763,7 +793,11 @@ class AggregationOrder(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    target_id: str = Field(..., pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$", description="已声明维度或指标的 ID。")
+    target_id: str = Field(
+        ...,
+        pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        description="类别 TopN 排名目标，只能是已声明的 FIELD 维度或指标 ID；不能引用 TIME_BUCKET，时间桶自动升序。",
+    )
     direction: AggregationOrderDirection = Field(..., description="固定排序方向 ASC 或 DESC。")
 
 
@@ -806,7 +840,9 @@ class AggregateLogsRequest(AgentLogToolRequest):
 
         category_dimensions = [item for item in self.dimensions if item.type == AggregationDimensionType.FIELD]
         if not category_dimensions and ({"top_n", "order_by"} & self.model_fields_set):
-            raise ValueError("no category dimensions: top_n and order_by must be omitted")
+            raise PydanticCustomError(
+                "aggregation_ranking", "no category dimensions: top_n and order_by must be omitted"
+            )
         if category_dimensions and "top_n" not in self.model_fields_set:
             self.top_n = settings.AI_LOG_AGGREGATION_DEFAULT_TOP_N
         elif category_dimensions and self.top_n is None:
@@ -814,15 +850,15 @@ class AggregateLogsRequest(AgentLogToolRequest):
 
         ids = [item.id for item in (*self.dimensions, *self.metrics)]
         if AGGREGATION_RESERVED_COLUMN_IDS.intersection(ids):
-            raise ValueError("reserved aggregation column id")
+            raise PydanticCustomError("aggregation_column_id", "reserved aggregation column id")
         if len(ids) != len(set(ids)):
-            raise ValueError("dimension and metric ids must be globally unique")
+            raise PydanticCustomError("aggregation_column_id", "dimension and metric ids must be globally unique")
         order_ids = [item.target_id for item in self.order_by]
         if len(order_ids) != len(set(order_ids)):
             raise ValueError("duplicate order targets are not allowed")
         ranking_ids = {item.id for item in (*category_dimensions, *self.metrics)}
         if any(item not in ranking_ids for item in order_ids):
-            raise ValueError("order_by must reference category or metric ids")
+            raise PydanticCustomError("aggregation_ranking", "order_by must reference category or metric ids")
         if self.top_n is not None and self.top_n > _bounded_limit(
             settings.AI_LOG_AGGREGATION_MAX_TOP_N, AGGREGATION_MAX_TOP_N, 1
         ):
@@ -928,7 +964,10 @@ class AggregationGroup(BaseModel):
     values: Tuple[AggregationGroupValue, ...] = Field(description="VALUE 按非时间维度声明顺序；其他组为空数组。")
     count: int = Field(ge=0, description='该组在完整检索范围内的日志数量，不是 rows 行数。')
     ratio: Optional[float] = Field(
-        ge=0, le=1, allow_inf_nan=False, description='count / query_summary.total_count，取值 0 至 1；总数为 0 时为 null。'
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description='count / query_summary.total_count，取值 0 至 1；输出保留 4 位小数，总数为 0 时为 null。',
     )
 
     @model_validator(mode="after")
@@ -991,7 +1030,8 @@ class AggregateLogsResponse(BaseModel):
     ] = Field(
         ...,
         description=(
-            "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。"
+            "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；"
+            "log_ratio 分母为全范围日志总数，保留 4 位小数；精确比例可由计数计算。"
             "时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。"
             "结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
         ),
@@ -1002,3 +1042,13 @@ class AggregateLogsResponse(BaseModel):
         default=(),
         description="按指标返回完整检索范围的数值转换质量，不是 rows 中各分组的逐组统计。",
     )
+
+    @model_serializer(mode="wrap")
+    def serialize_compact_ratios(self, handler):
+        """MCP 比例与程序统计统一保留四位小数；计数和指标保持原精度。"""
+        data = handler(self)
+        for rows, key in ((data.get("groups", ()), "ratio"), (data.get("rows", ()), "log_ratio")):
+            for row in rows:
+                if row.get(key) is not None:
+                    row[key] = serialize_statistics_ratio(row[key])
+        return data

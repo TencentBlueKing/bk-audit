@@ -221,6 +221,15 @@ class TestSearchConditionTimeRange(AIAssistantTestCase):
                 end_time="2026-08-13T00:00:00+08:00",
             )
 
+    def test_mcp_mixed_offsets_compare_actual_instants(self):
+        """入口顺序校验不能把UTC重新解释为本地时间。"""
+        valid = dict(scope_id="s1", start_time="2026-09-18T02:00:00+08:00", end_time="2026-09-18T00:00:00Z")
+        self.assertEqual(SearchLogsRequest(condition=valid).condition.start_time, valid["start_time"])
+        with self.assertRaises(PydanticValidationError):
+            SearchLogsRequest(
+                condition=dict(scope_id="s1", start_time="2026-09-18T00:00:00Z", end_time="2026-09-18T02:00:00+08:00")
+            )
+
 
 class TestAgentLogToolRequestCostBoundaries(AIAssistantTestCase):
     """三项 Agent 日志工具共享同一组不可放大的请求成本边界。"""

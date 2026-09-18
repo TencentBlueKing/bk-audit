@@ -33,7 +33,7 @@ class CreateAttachment(AIAssistantResource):
           "raw_name": "username",
           "keys": []
         },
-        "top_n": 100,
+        "top_n": 10,
         "interval": "AUTO"
       }
     }
@@ -59,7 +59,7 @@ class CreateAttachment(AIAssistantResource):
 
     字段路径应使用字段探索返回的引用；duration 仅为示意，不保证业务系统存在该字段。
     无需提交统计类型，后端按全范围真实类型决定是否返回数值摘要；field_type 不能强制转换。
-    top_n 默认 100，OTHER/MISSING 不占名额；显式时间粒度超预算报错，AUTO 可自动选择。
+    top_n 默认 10，OTHER/MISSING 不占名额；显式时间粒度超预算报错，AUTO 可自动选择。
     查询范围固定为来源消息的完整条件，不能在 input_data 中覆盖 condition、用户或租户。
 
     ### Case 3：AI 自定义统计
@@ -78,10 +78,24 @@ class CreateAttachment(AIAssistantResource):
 
     ### 返回后如何处理
 
-    同步执行返回 SUCCESS；异步通常返回 PROCESSING，也可能已经进入终态，始终按 status 判断。
+    FIELD_STATISTICS 和 AI_STATISTICS 当前均异步执行，通常返回 PROCESSING，也可能已进入终态；
+    始终按 status 判断，不能假设创建响应已经包含 output_data。
     保存附件 uid 和 source_message_uid；所有异步附件均可轮询附件详情到 SUCCESS/FAILED。
     is_stream=true 仅表示可选的过程订阅。两种统计均不支持产物编辑和后端导出，失败可人工重试。
     创建请求结果不确定时，先按来源消息查询附件列表核对，避免重复创建。
+
+    ### 创建时的错误与执行失败
+
+    | HTTP / code | 含义 | 前端动作 |
+    | --- | --- | --- |
+    | 400 / 2908017 | input_data 无效，包括 top_n 越界或配置收紧 | 修正参数后重新创建 |
+    | 400 / 2908018 | 来源无效或不是成功 LOG_SEARCH | 重新检索并选择成功卡片 |
+    | 400 / 2926008 | 不支持统计该字段类型 | 换字段或展开 JSON 子字段 |
+
+    其他认证、鉴权、参数及不存在错误遵循平台公共协议，表格不是穷举。
+    创建成功后的查询超时、字段类型变化或预算错误在详情 status=FAILED 的 error_code/error_message 中返回，
+    不是创建接口的 HTTP 错误。不要根据错误文案分支。
+
     """
 
     name = gettext_lazy("创建附件")
@@ -147,6 +161,14 @@ class GetAttachment(AIAssistantResource):
     - AI_STATISTICS：output_data 为 {"content":"最终消息原文"}，图表协议由前端与 Agent 约定。
       解析失败可展示原文，不代表附件执行失败。
     - AI_ANALYSIS：读取 output_data.markdown；不可将此字段用于 AI_STATISTICS。
+
+    ### 错误处理
+
+    详情接口 404 / 2908019 表示当前用户无法取得该附件，应停止轮询并刷新列表。
+    HTTP 200 且 status=FAILED 表示异步任务失败：error_code 为 2926008 时调整字段，
+    2926009/2926010 时减少类别、调粗粒度或缩小范围后新建；2926005/2926006 可稍后重试，
+    持续失败保留附件 UID 排查。权限错误先解决授权，不能通过反复重试绕过。
+
 
     output_data 的 oneOf 由 attachment_type 决定；仅在 SUCCESS 时将其作为有效产物渲染。
     SSE 流结束后也应读取本接口确定业务终态，而不是拼接中间事件作为最终产物。
@@ -220,6 +242,9 @@ class RetryAttachment(AIAssistantResource):
     返回附件对象后按 status 处理。仅轮询时继续查询同一 UID，无需读取执行标识。
     使用 SSE 时先关闭旧流，等待新的 execution_id 后恢复；排队期间旧快照不代表新执行。
     修改输入要求属于创建新附件，不通过本接口完成。
+    HTTP 400 / 2908023 表示当前状态不允许重试（如已经 PROCESSING）；重新读取详情，不重复提交。
+    HTTP 404 / 2908019 表示当前用户无法取得该附件；停止重试并刷新列表。
+
     """
 
     name = gettext_lazy("重试附件")

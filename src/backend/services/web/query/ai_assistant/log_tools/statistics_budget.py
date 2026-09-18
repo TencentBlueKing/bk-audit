@@ -4,7 +4,7 @@
 AUTO 仅选择满足预算的最细粒度，显式粒度始终保持请求或抛出受控建议。
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -14,6 +14,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AGGREGATION_MAX_CELLS,
     AGGREGATION_MAX_TIME_BUCKETS,
 )
+from services.web.query.ai_assistant.log_tools.time_range import parse_log_time
 
 INTERVAL_SECONDS = {"MINUTE": 60, "HOUR": 3600, "DAY": 86400}
 
@@ -68,8 +69,8 @@ def build_time_axis(*, start_time, end_time, interval, group_count, numeric_colu
     if interval not in {"AUTO", *INTERVAL_SECONDS}:
         raise ValueError("invalid statistics interval")
     zone = ZoneInfo(settings.TIME_ZONE)
-    start, end = (datetime.fromisoformat(value) for value in (start_time, end_time))
-    if start.tzinfo is None or end.tzinfo is None or start.timestamp() > end.timestamp():
+    start, end = (parse_log_time(value) for value in (start_time, end_time))
+    if start.timestamp() > end.timestamp():
         raise ValueError("invalid statistics time range")
     start, end = start.astimezone(zone), end.astimezone(zone)
     candidates = {}

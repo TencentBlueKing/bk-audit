@@ -85,6 +85,19 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
         )
         cls.json_schema = cls._to_json_schema(cls.resources)
 
+    def test_statistics_server_exposes_only_metadata_and_aggregation(self):
+        """统计 Agent 的网关工具集不提供明细查询。"""
+        content = (BACKEND_ROOT / "support-files/apigw/definition.yaml").read_text()
+        definition = yaml.safe_load("stages:" + content.split("\nstages:", 1)[1].split("\nrelated_apps:", 1)[0])
+        stages = {stage["name"]: stage for stage in definition["stages"]}
+        for name in ("stag", "prod"):
+            servers = {server["name"]: server for server in stages[name]["mcp_servers"]}
+            self.assertEqual(
+                set(servers["audit-log-statistics"]["resource_names"]),
+                {"mcp_get_log_field_metadata", "mcp_aggregate_logs"},
+            )
+            self.assertEqual(set(servers["audit-log-analysis"]["resource_names"]), set(MCP_LOG_RESOURCES))
+
     def test_log_resources_have_complete_user_apigw_contracts(self):
         for operation_id, (path, backend_path) in MCP_LOG_RESOURCES.items():
             with self.subTest(operation_id=operation_id):

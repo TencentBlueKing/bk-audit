@@ -543,6 +543,20 @@ class TestLogAggregationService(TestCase):
         self.assertEqual(result.groups[2].values, ())
         self.assertEqual(result.rows[2]["flag"], None)
 
+    def test_public_ratios_are_compact_without_rounding_counts(self):
+        """MCP 比例保留四位小数，计数和统计指标保留原值。"""
+        data = frames()
+        data[0]["n"] = "11"
+        data[1]["n"] = "7"
+        data[4].update(n="7", m0="7")
+        self.mock_query.return_value = ({"list": data},)
+        result = self._aggregate().model_dump(mode="json")
+        self.assertEqual(result["groups"][0]["ratio"], 0.6364)
+        self.assertEqual(result["rows"][0]["log_ratio"], 0.6364)
+        self.assertEqual(result["groups"][0]["count"], 7)
+        self.assertEqual(result["rows"][0]["events"], 7)
+        self.assertEqual(result["query_summary"]["total_count"], 11)
+
     def _time_dimensions(self, interval="HOUR", category=True):
         """时间列放首位，验证内部类别索引不会误用请求维度下标。"""
         dimensions = [{"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": interval}]

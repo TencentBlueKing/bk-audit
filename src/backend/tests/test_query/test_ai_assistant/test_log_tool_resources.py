@@ -27,6 +27,7 @@ from services.web.query.ai_assistant.exceptions import (
     SensitiveFieldPermissionDenied,
     UnsupportedAggregation,
     UnsupportedLogField,
+    UnsupportedLogFieldOperator,
 )
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import (
@@ -710,7 +711,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                         ],
                     }
                 },
-                UnsupportedLogField,
+                UnsupportedLogFieldOperator,
             ),
             (
                 "search",
@@ -726,7 +727,7 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                         ],
                     }
                 },
-                UnsupportedLogField,
+                UnsupportedLogFieldOperator,
             ),
             (
                 "search",
@@ -1110,6 +1111,59 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     metrics=[{"id": "events", "type": "COUNT"}],
                     **options,
                 )
+
+    def test_invalid_field_operator_directs_agent_to_allowed_operators(self):
+        """日志中的 result_code eq 不是该字段支持的操作符，应提供修正方向。"""
+        condition = self.condition.model_dump(mode="json")
+        condition["conditions"] = [{"field": {"raw_name": "result_code"}, "operator": "eq", "filters": [107]}]
+        with self.assertRaises(UnsupportedLogField) as caught:
+            MCPSearchLogs().request(namespace="default", condition=condition)
+        self.assertIn("allow_operators", str(caught.exception))
+        self.assertNotIn("107", str(caught.exception))
+
+    def test_distinct_options_and_time_order_errors_explain_recovery(self):
+        """复现 Luna 首轮误用，错误应指出应移除的参数。"""
+        cases = [
+            (
+                {
+                    "metrics": [
+                        {
+                            "id": "users",
+                            "type": "DISTINCT_COUNT",
+                            "field": {"raw_name": "username"},
+                            "value_type": "LONG",
+                        }
+                    ]
+                },
+                "value_type",
+            ),
+            (
+                {
+                    "metrics": [{"id": "cnt", "type": "COUNT"}],
+                    "dimensions": [{"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}}],
+                    "order_by": [{"target_id": "hour", "direction": "ASC"}],
+                },
+                "order_by",
+            ),
+        ]
+        for payload, hint in cases:
+            with self.subTest(payload=payload), self.assertRaises(UnsupportedAggregation) as caught:
+                MCPAggregateLogs().request(
+                    namespace="default", condition=self.condition.model_dump(mode="json"), **payload
+                )
+            self.assertIn(hint, str(caught.exception))
+
+    def test_reserved_metric_id_returns_actionable_safe_error(self):
+        """保留列名误用应指导改名，不泄漏用户条件或变成可重试查询错误。"""
+        with self.assertRaises(UnsupportedAggregation) as caught:
+            MCPAggregateLogs().request(
+                namespace="default",
+                condition=self.condition.model_dump(mode="json"),
+                metrics=[{"id": "log_count", "type": "COUNT"}],
+            )
+        self.assertIn("log_count", str(caught.exception))
+        self.assertIn("cnt", str(caught.exception))
+        self.assertNotIn(self.condition.scope_id, str(caught.exception))
 
     def test_aggregate_http_rejects_non_integer_top_n(self):
         """布尔值、数值字符串与小数不得被 DRF 静默转成类别数量。"""
