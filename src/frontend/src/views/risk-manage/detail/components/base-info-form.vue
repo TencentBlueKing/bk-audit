@@ -100,18 +100,23 @@
                     v-if="eventContentComfig[0]?.typeValue === 'user-selector'"
                     :data="eventContentComfig[0].value || ''"
                     style="display: inline-block;" />
-                  <span v-else> {{ eventContentComfig[0]?.value === '' ? '--' : eventContentComfig[0]?.value }} </span>
+                  <span
+                    v-else
+                    class="multiline-text">
+                    {{ eventContentComfig[0]?.value === '' ? '--' : eventContentComfig[0]?.value }}
+                  </span>
                 </span>
-                <span v-else>
+                <span
+                  v-else
+                  class="multiline-text">
                   {{ handleShowText(data.event_content) || '--' }}
-
                 </span>
               </template>
               <template v-else-if="fieldItem.field_name === 'risk_hazard'">
-                {{ displayEmptyText(data.risk_hazard) }}
+                <span class="multiline-text">{{ displayEmptyText(data.risk_hazard) }}</span>
               </template>
               <template v-else-if="fieldItem.field_name === 'risk_guidance'">
-                {{ displayEmptyText(data.risk_guidance) }}
+                <span class="multiline-text">{{ displayEmptyText(data.risk_guidance) }}</span>
               </template>
               <template v-else-if="fieldItem.field_name === 'status'">
                 <template v-if="statusToMap[data.status]">
@@ -635,6 +640,11 @@
 .risk-field-value.is-drill {
   color: #3a84ff;
   cursor: pointer;
+}
+
+.multiline-text {
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .drill-count-badge {
