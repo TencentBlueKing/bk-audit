@@ -35,13 +35,13 @@ def frames():
     """手算GET6/OTHER3/MISSING1；OTHER平均值来自2+4+12三条原记录。"""
     return [
         {"frame": "META", "n": "10", "a": "3", "b": "3", "c": "1", "d": "0", "e": "0"},
-        {"frame": "GROUP", "key": "1", "kind": "VALUE", "n": "6", "d0_type": "string", "d0_json": '"GET"'},
-        {"frame": "GROUP", "key": "2", "kind": "OTHER", "n": "3", "d0_type": None, "d0_json": None},
-        {"frame": "GROUP", "key": "3", "kind": "MISSING", "n": "1", "d0_type": None, "d0_json": None},
-        {"frame": "ROW", "key": "1", "n": "6", "m0": "6", "m1": "1.5"},
-        {"frame": "ROW", "key": "2", "n": "3", "m0": "3", "m1": "6"},
-        {"frame": "ROW", "key": "3", "n": "1", "m0": "1", "m1": None},
-        {"frame": "QUALITY", "key": "1", "n": "9", "a": "8", "b": "1"},
+        {"frame": "GROUP", "frame_key": "1", "kind": "VALUE", "n": "6", "d0_type": "string", "d0_json": '"GET"'},
+        {"frame": "GROUP", "frame_key": "2", "kind": "OTHER", "n": "3", "d0_type": None, "d0_json": None},
+        {"frame": "GROUP", "frame_key": "3", "kind": "MISSING", "n": "1", "d0_type": None, "d0_json": None},
+        {"frame": "ROW", "frame_key": "1", "n": "6", "m0": "6", "m1": "1.5"},
+        {"frame": "ROW", "frame_key": "2", "n": "3", "m0": "3", "m1": "6"},
+        {"frame": "ROW", "frame_key": "3", "n": "1", "m0": "1", "m1": None},
+        {"frame": "QUALITY", "frame_key": "1", "n": "9", "a": "8", "b": "1"},
     ]
 
 
@@ -136,7 +136,7 @@ class TestLogAggregationService(TestCase):
             (4, "m1", "NaN"),
             (7, "a", "9"),
             (7, "n", "11"),
-            (1, "key", "2"),
+            (1, "frame_key", "2"),
             (1, "d0_json", 1),
             (1, "d0_type", "array"),
         ]:
@@ -168,8 +168,8 @@ class TestLogAggregationService(TestCase):
             {
                 "list": [
                     {"frame": "META", "n": "0", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
-                    {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"},
-                    {"frame": "ROW", "key": "1", "n": "0", "m0": "0"},
+                    {"frame": "GROUP", "frame_key": "1", "kind": "ALL", "n": "0"},
+                    {"frame": "ROW", "frame_key": "1", "n": "0", "m0": "0"},
                 ]
             },
         )
@@ -418,8 +418,8 @@ class TestLogAggregationService(TestCase):
             {
                 "list": [
                     {"frame": "META", "n": "0", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
-                    {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"},
-                    {"frame": "ROW", "key": "1", "n": "0", "m0": "0"},
+                    {"frame": "GROUP", "frame_key": "1", "kind": "ALL", "n": "0"},
+                    {"frame": "ROW", "frame_key": "1", "n": "0", "m0": "0"},
                 ]
             },
         )
@@ -472,14 +472,14 @@ class TestLogAggregationService(TestCase):
             data.append(
                 {
                     "frame": "GROUP",
-                    "key": str(key),
+                    "frame_key": str(key),
                     "kind": "VALUE" if key <= 500 else ("OTHER" if key == 501 else "MISSING"),
                     "n": "1",
                     "d0_type": "string" if key <= 500 else None,
                     "d0_json": json.dumps(str(key)) if key <= 500 else None,
                 }
             )
-            data.append({"frame": "ROW", "key": str(key), "n": "1", "m0": "1"})
+            data.append({"frame": "ROW", "frame_key": str(key), "n": "1", "m0": "1"})
         self.mock_query.return_value = ({"list": data},)
         result = self._aggregate(top_n=500, metrics=[{"id": "events", "type": "COUNT"}])
         self.assertEqual(len(result.groups), 502)
@@ -509,14 +509,14 @@ class TestLogAggregationService(TestCase):
     def test_duplicate_typed_tuple_and_number_output_collisions_reject(self):
         data = frames()
         data[0].update(n="11", a="4", b="4")
-        data[2]["key"] = "3"
-        data[3]["key"] = "4"
-        data[5]["key"] = "3"
-        data[6]["key"] = "4"
+        data[2]["frame_key"] = "3"
+        data[3]["frame_key"] = "4"
+        data[5]["frame_key"] = "3"
+        data[6]["frame_key"] = "4"
         data.extend(
             [
-                {"frame": "GROUP", "key": "2", "kind": "VALUE", "n": "1", "d0_type": "number", "d0_json": "1.0"},
-                {"frame": "ROW", "key": "2", "n": "1", "m0": "1", "m1": "1"},
+                {"frame": "GROUP", "frame_key": "2", "kind": "VALUE", "n": "1", "d0_type": "number", "d0_json": "1.0"},
+                {"frame": "ROW", "frame_key": "2", "n": "1", "m0": "1", "m1": "1"},
             ]
         )
         data[1]["d0_type"] = "number"
@@ -570,8 +570,8 @@ class TestLogAggregationService(TestCase):
                         {
                             "list": [
                                 {"frame": "META", "n": "1", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
-                                {"frame": "GROUP", "key": "1", "kind": "ALL", "n": "1"},
-                                {"frame": "ROW", "key": "1", "bucket": "0", "n": "1", "m0": "1"},
+                                {"frame": "GROUP", "frame_key": "1", "kind": "ALL", "n": "1"},
+                                {"frame": "ROW", "frame_key": "1", "bucket": "0", "n": "1", "m0": "1"},
                             ]
                         },
                     ),
@@ -609,7 +609,7 @@ class TestLogAggregationService(TestCase):
     def test_empty_pure_time_all_has_axis_but_category_empty_has_no_rows(self):
         for category, groups, group_frames in [
             (True, "0", []),
-            (False, "1", [{"frame": "GROUP", "key": "1", "kind": "ALL", "n": "0"}]),
+            (False, "1", [{"frame": "GROUP", "frame_key": "1", "kind": "ALL", "n": "0"}]),
         ]:
             with self.subTest(category=category):
                 data = [{"frame": "META", "n": "0", "a": groups, "b": "0", "c": "0", "d": "0", "e": "0"}] + group_frames
@@ -628,7 +628,7 @@ class TestLogAggregationService(TestCase):
         """纯时序及类别时序空桶的去重计数为零，与有事件桶保留的引擎结果一致。"""
         for category, total in ((False, 0), (False, 2), (True, 2)):
             with self.subTest(category=category, total=total):
-                group = {"frame": "GROUP", "key": "1", "kind": "VALUE" if category else "ALL", "n": str(total)}
+                group = {"frame": "GROUP", "frame_key": "1", "kind": "VALUE" if category else "ALL", "n": str(total)}
                 if category:
                     group.update(d0_type="string", d0_json='"GET"')
                 data = [
@@ -644,7 +644,7 @@ class TestLogAggregationService(TestCase):
                     group,
                 ]
                 if total:
-                    data.append({"frame": "ROW", "key": "1", "bucket": "0", "n": "2", "m0": "2", "m1": "1"})
+                    data.append({"frame": "ROW", "frame_key": "1", "bucket": "0", "n": "2", "m0": "2", "m1": "1"})
                 self.mock_query.side_effect = [
                     ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
                     ({"list": data},),

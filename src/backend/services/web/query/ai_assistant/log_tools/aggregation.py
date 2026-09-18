@@ -10,7 +10,6 @@ from django.conf import settings
 from django.utils import timezone
 from pydantic import ValidationError as PydanticValidationError
 
-from api.bk_base.constants import StorageType
 from services.web.query.ai_assistant.exceptions import (
     StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
@@ -154,11 +153,10 @@ class LogAggregationService:
 
     @staticmethod
     def _query(builder, preflight=False):
-        """仅提交一个最终逻辑 SQL；bulk 保留既有 BKBase 执行链及超时映射。"""
+        """表后缀已指定 Doris，不传 BKBase 拒绝的 prefer_storage；bulk 保留超时映射。"""
         requests = [
             {
                 "sql": builder.build_preflight_sql() if preflight else builder.build_complete_sql(),
-                "prefer_storage": StorageType.DORIS.value,
             }
         ]
         started = time.perf_counter()

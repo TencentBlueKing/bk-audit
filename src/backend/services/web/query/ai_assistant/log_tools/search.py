@@ -9,7 +9,6 @@ from bk_resource.base import Empty
 from django.conf import settings
 from django.utils import timezone
 
-from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME
 from core.utils.data import extract_nested_value
 from services.web.query.ai_assistant.constants import MCP_LOG_DEFAULT_FIELDS
@@ -117,7 +116,7 @@ class LogDetailSearchService:
     def _query(
         cls, *, context: LogQueryContext, request: SearchLogsRequest, fields: Sequence[LogFieldRef]
     ) -> tuple[dict, dict, int]:
-        """以同一授权条件批量执行数据和计数查询。SQL 由公共查询 Resource 按排障策略记录。"""
+        """以同一授权条件批量查询；表后缀指定 Doris，避免重复存储提示被 BKBase 拒绝。"""
 
         if request.sort:
             # 业务时间与采集时间数值一致，复用 Collector 物理列，避免重复时间排序。
@@ -145,8 +144,8 @@ class LogDetailSearchService:
         started_at = time.perf_counter()
         responses = api.bk_base.safe_query_sync.bulk_request(
             [
-                {"sql": builder.build_data_sql(fields), "prefer_storage": StorageType.DORIS.value},
-                {"sql": builder.build_count_sql(), "prefer_storage": StorageType.DORIS.value},
+                {"sql": builder.build_data_sql(fields)},
+                {"sql": builder.build_count_sql()},
             ]
         )
         took_ms = int((time.perf_counter() - started_at) * 1000)

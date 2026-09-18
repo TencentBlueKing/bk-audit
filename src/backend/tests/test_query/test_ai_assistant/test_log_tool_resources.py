@@ -377,13 +377,13 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                         {"frame": "META", "n": "10", "a": "1", "b": "1", "c": "0", "d": "0", "e": "0"},
                         {
                             "frame": "GROUP",
-                            "key": "1",
+                            "frame_key": "1",
                             "kind": "VALUE",
                             "n": "10",
                             "d0_type": "string",
                             "d0_json": '\"GET\"',
                         },
-                        {"frame": "ROW", "key": "1", "n": "10", "m0": "10"},
+                        {"frame": "ROW", "frame_key": "1", "n": "10", "m0": "10"},
                     ]
                 },
             )

@@ -80,6 +80,8 @@ OTHER 的 AVG、DISTINCT_COUNT、近似分位数必须对映射后的原始记�
     → META / GROUP / ROW / QUALITY / SUMMARY 结果帧
 ```
 
+查询 SQL 还需同时兼容 BKBase 前置解析与 Doris。当前表后缀已经指定 `.doris`，查询不重复传 `prefer_storage`；元数据计数通过单行 CTE 关联，避免在 CAST 中嵌入标量子查询；UNION 内部键列使用 `frame_key`，避免保留字 `key`；时间桶使用毫秒差除法取整，避免 BKBase 拒绝的 DIV。上述边界已通过真实查询复现，单独使用本地 SQL 解析器无法覆盖。
+
 这些 CTE 描述逻辑步骤，不保证 Doris 物理执行只扫描一次。时间查询可以先做规划查询，但最终统计数据由同一最终 SQL 重算，避免把预检结果与最终数据拼接。
 
 `statistics_result.py` 校验帧结构、类型、计数闭合和时序闭合，再补齐时间轴。计数类空桶为 0，无有效数值的数值指标为 null。缺帧、截断或预算超限返回错误，不把不完整数据标记为成功。

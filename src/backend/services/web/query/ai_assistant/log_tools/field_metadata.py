@@ -11,7 +11,6 @@ from bk_resource import api
 from django.conf import settings
 from pydantic import ValidationError as PydanticValidationError
 
-from api.bk_base.constants import StorageType
 from apps.meta.utils.fields import START_TIME
 from services.web.query.ai_assistant.constants import EXTENSION_FIELD_DEFAULT_OPERATORS
 from services.web.query.ai_assistant.exceptions import LogQueryResponseTooLarge
@@ -150,7 +149,7 @@ class LogFieldMetadataService:
 
     @classmethod
     def _query_samples(cls, context: LogQueryContext, parent_field: LogFieldRef) -> List[dict]:
-        """只投影待探索 JSON 根字段和脱敏身份列。"""
+        """只投影 JSON 根字段和脱敏身份列；存储由表后缀指定，不重复传 prefer_storage。"""
 
         query_fields = prepare_sensitive_query_fields((parent_field,))
         builder = ProjectedLogSQLBuilder(
@@ -166,7 +165,6 @@ class LogFieldMetadataService:
         )
         records = api.bk_base.safe_query_sync(
             sql=builder.build_data_sql(query_fields),
-            prefer_storage=StorageType.DORIS.value,
         )
         return records.get("list") or []
 
