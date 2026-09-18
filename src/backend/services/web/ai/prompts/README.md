@@ -68,3 +68,11 @@ nl2riskfilter 的 prompt 包含字段表格和枚举值，这些信息直接来�
 会话及后续多轮调用约定见 `api/bk_plugins_ai_agent/README.md`。
 
 日志分析首轮 thread_id 复用已持久化的 `Attachment.stream_config.execution_id`，重新执行时轮换；首轮日志记录附件 UID、thread_id 和提示词 SHA-256。后续接续旧会话应保存并复用对应执行的 thread_id。
+
+### 日志分析与日志统计的独立配置
+
+`log_analysis` 对应日志分析 Agent，使用 `audit-log-analysis`（字段探索、聚合、明细）；
+`log_statistics` 对应 `bp-ai-log-stats`，使用 `audit-log-statistics`（仅字段探索和聚合）。
+两者独立维护范围及输出职责；参数限制由 MCP schema 说明，提示词避免重复协议。
+图表格式由统计 Agent 的 Skill 与前端约定，后端仅保存原文。网关工具集部署后仍需在 Agent 平台绑定。
+提示词会固化到附件上下文；更新用于新附件，历史附件重试沿用原快照。

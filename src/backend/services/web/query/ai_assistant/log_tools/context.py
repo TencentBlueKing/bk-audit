@@ -14,6 +14,7 @@ from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
     LogQueryFailed,
 )
+from services.web.query.ai_assistant.log_tools.time_range import parse_log_time
 from services.web.query.ai_assistant.schemas import Condition, SearchCondition
 from services.web.query.constants import DEFAULT_COLLECTOR_SORT_LIST
 from services.web.query.serializers import CollectorSearchAllReqSerializer
@@ -87,10 +88,16 @@ class LogQueryContextService:
     def _validate_condition(cls, *, condition: SearchCondition, namespace: str) -> dict:
         """复用日志检索 DRF 协议，将 Pydantic 条件标准化为现有查询结构。"""
 
+        try:
+            start_time, end_time = (
+                parse_log_time(value).isoformat() for value in (condition.start_time, condition.end_time)
+            )
+        except (ValueError, TypeError) as err:
+            raise InvalidLogCondition() from err
         payload = {
             "namespace": namespace,
-            "start_time": condition.start_time,
-            "end_time": condition.end_time,
+            "start_time": start_time,
+            "end_time": end_time,
             "conditions": [item.model_dump() for item in condition.conditions],
             "page": 1,
             "page_size": 1,

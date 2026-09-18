@@ -116,6 +116,32 @@ class UnsupportedAggregation(LogToolException):
     MESSAGE = gettext_lazy("不支持的日志聚合方式")
 
 
+class InvalidAggregationColumnId(UnsupportedAggregation):
+    """保留或重复列 ID 的固定修正提示，沿用聚合参数错误码。"""
+
+    MESSAGE = gettext_lazy(
+        "维度和指标 id 必须全局唯一，不能使用 group_id、group_kind、log_count、log_ratio、bucket_start；" "计数指标请使用 cnt 或 events 作为 id"
+    )
+
+
+class UnsupportedLogFieldOperator(UnsupportedLogField):
+    """操作符错误与字段不存在分开提示，不回显用户条件。"""
+
+    MESSAGE = gettext_lazy("该字段不支持此 operator；请使用字段目录 allow_operators 中的值，" "不要假定 eq 对所有字段可用；修正操作符后重试，无需重复获取已有字段目录")
+
+
+class InvalidDistinctOptions(UnsupportedAggregation):
+    """去重不接受数值转换参数，提示移除而非反复尝试字段类型。"""
+
+    MESSAGE = gettext_lazy("DISTINCT_COUNT 只需 id、type、field；请省略 value_type 和 percentile")
+
+
+class InvalidAggregationRanking(UnsupportedAggregation):
+    """类别排名与时间排序分离，沿用聚合参数错误码。"""
+
+    MESSAGE = gettext_lazy("order_by 仅控制类别 TopN 排名，不能引用 TIME_BUCKET；时间桶自动升序。" "无 FIELD 类别时必须省略 top_n 和 order_by")
+
+
 class SensitiveFieldPermissionDenied(LogToolException):
     """当前用户无敏感字段查询权限。"""
 

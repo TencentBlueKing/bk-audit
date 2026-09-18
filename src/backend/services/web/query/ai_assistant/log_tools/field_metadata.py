@@ -140,6 +140,7 @@ class LogFieldMetadataService:
         response = GetLogFieldMetadataResponse(
             fields=fields,
             sample_summary=FieldSampleSummary(
+                sampling_performed=request.parent_field is not None,
                 sampled_count=sampled_count,
                 returned_field_count=len(fields),
                 truncated=truncated,

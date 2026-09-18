@@ -43,7 +43,7 @@ definitions:
         type: string
         x-nullable: true
         enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
-        description: 可选存储字段类型，取值与审计日志公共 FieldType 一致。
+        description: 可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。
   log_tool_field_ref_response:
     description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及\n路径成本；Doris JSON SQL 构建器负责统一转义。"
     type: object
@@ -60,7 +60,7 @@ definitions:
           pattern: '^[^.]+$'
         description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
-        description: "可选存储字段类型，取值与审计日志公共 FieldType 一致。"
+        description: "可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。"
         type: string
         x-nullable: true
         enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
@@ -97,7 +97,7 @@ definitions:
       start_time:
         type: string
         minLength: 1
-        description: "范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按用户时区解释。"
+        description: "范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按服务端默认时区解释。"
       end_time:
         type: string
         minLength: 1
@@ -3074,7 +3074,9 @@ paths:
   /mcp/logs/field_metadata/:
     post:
       operationId: mcp_get_log_field_metadata
-      description: 默认空间日志工具，无需传 namespace。探索当前用户有权限访问日志的字段元信息。仅从最多 50 条已脱敏样例统计，不递归展开 JSON 对象；业务 data 最大 1 MiB，字段含义或 JSON 路径不明确时按需探索，样本未出现不表示总体不存在；未知字段应修正，权限拒绝应停止对应查询。
+      description: >-
+        探索当前用户可查询的日志字段，默认空间无需传 namespace。根目录不采样，sampled_count=0 不表示无日志；目录可复用，总量用 COUNT。
+        JSON 子字段按 parent_field 逐层探索，响应最大 1 MiB；样本未出现不代表总体不存在。筛选使用返回的 allow_operators；权限拒绝时停止对应查询。
       tags: []
       parameters:
         - in: body
@@ -3140,9 +3142,10 @@ paths:
                   sample_summary:
                     description: "字段探索的有界采样摘要。"
                     type: object
-                    required: [sampled_count, returned_field_count, truncated]
+                    required: [sampling_performed, sampled_count, returned_field_count, truncated]
                     properties:
-                      sampled_count: {description: 本次探索实际参与类型推断的脱敏日志数。, type: integer}
+                      sampling_performed: {description: 是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。, type: boolean}
+                      sampled_count: {description: 本次实际采样日志数，不是范围总量；sampling_performed=false 表示未采样，总量应使用 COUNT 查询。, type: integer}
                       returned_field_count: {description: 本次返回字段数量。, type: integer}
                       truncated:
                         type: boolean
@@ -3296,10 +3299,11 @@ paths:
   /mcp/logs/aggregate/:
     post:
       operationId: mcp_aggregate_logs
-      description: 默认空间日志工具，无需传 namespace。对当前用户可访问日志执行类型化、受控的分组聚合。 最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或 拓展数值转换质量按全范围
-        present_count 返回；有类别默认 top_n=10、最大 500，无类别省略。 时序 rows 仅返回有日志的桶，query_summary.sparse_time_buckets=true；缺省桶计数为0、数值指标为null。 完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。
-        groups 返回 VALUE/OTHER/MISSING/ALL，比例分母为完整范围总量；rows 保留全部有日志的时间桶，缺省桶 COUNT、DISTINCT_COUNT 为 0，数值指标为 null。核对 query_summary
-        的实际范围、粒度及 complete；全范围 TopN 默认按日志次数降序，不将 OTHER 当作分页。
+      description: >-
+        对当前用户可查询的日志执行聚合，默认空间无需传 namespace。有类别时默认 Top10，无类别省略 top_n/order_by。
+        TopN 按全范围排名，OTHER 汇总剩余非缺失类别，MISSING 独立；比例分母为全范围总量。
+        时间桶自动升序，仅返回有日志的桶；缺省桶计数为0、数值指标为null。核对 query_summary 的范围、粒度及 complete。
+        响应最大 4 MiB，超预算返回错误而不截断；按错误提示调整请求，敏感字段无权限时停止查询。参数限制见字段说明。
       tags: []
       parameters:
       - in: body
@@ -3325,7 +3329,7 @@ paths:
                   minLength: 1
                   type: string
                 start_time:
-                  description: "范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按用户时区解释。"
+                  description: "范围开始时间：ISO 8601 带时区或 YYYY-MM-DD HH:mm:ss；无时区值按服务端默认时区解释。"
                   minLength: 1
                   type: string
                 end_time:
@@ -3390,7 +3394,7 @@ paths:
                 description: 一个受控分组键；TIME_BUCKET 只能用于 start_time。
                 properties:
                   id:
-                    description: 维度唯一 ID，仅允许字母开头。
+                    description: 维度 ID，以字母开头且与所有维度/指标全局唯一；禁止 group_id、group_kind、log_count、log_ratio、bucket_start。推荐 cnt、events、users 等别名。
                     pattern: ^[A-Za-z][A-Za-z0-9_]{0,63}$
                     type: string
                   type:
@@ -3417,7 +3421,7 @@ paths:
                         maxItems: 16
                         type: array
                       field_type:
-                        description: 可选存储字段类型，取值与审计日志公共 FieldType 一致。
+                        description: 可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。
                         enum:
                         - string
                         - double
@@ -3456,7 +3460,7 @@ paths:
                 description: 一个固定函数的聚合指标，数值转换意图必须显式且有限。
                 properties:
                   id:
-                    description: 指标唯一 ID，仅允许字母开头。
+                    description: 指标 ID，以字母开头且与所有维度/指标全局唯一；禁止 group_id、group_kind、log_count、log_ratio、bucket_start。推荐 cnt、events、users 等别名。
                     pattern: ^[A-Za-z][A-Za-z0-9_]{0,63}$
                     type: string
                   type:
@@ -3490,7 +3494,7 @@ paths:
                         maxItems: 16
                         type: array
                       field_type:
-                        description: 可选存储字段类型，取值与审计日志公共 FieldType 一致。
+                        description: 可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。
                         enum:
                         - string
                         - double
@@ -3539,7 +3543,7 @@ paths:
                 description: 仅引用请求中已声明的安全列 ID，不能传 Doris 排序片段。
                 properties:
                   target_id:
-                    description: 已声明维度或指标的 ID。
+                    description: 类别 TopN 排名目标，只能是已声明的 FIELD 维度或指标 ID；不能引用 TIME_BUCKET，时间桶自动升序。
                     pattern: ^[A-Za-z][A-Za-z0-9_]{0,63}$
                     type: string
                   direction:
@@ -3641,7 +3645,7 @@ paths:
                       type: object
                     type: array
                   rows:
-                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数。时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
+                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数，保留 4 位小数；精确比例可由计数计算。时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
                     items:
                       type: object
                     type: array
@@ -3696,7 +3700,7 @@ paths:
                           minimum: 0
                           type: integer
                         ratio:
-                          description: "count / query_summary.total_count，取值 0 至 1；总数为 0 时为 null。"
+                          description: "count / query_summary.total_count，取值 0 至 1；输出保留 4 位小数，总数为 0 时为 null。"
                           maximum: 1.0
                           minimum: 0.0
                           type: number

@@ -5,7 +5,7 @@
 """
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationEffectiveTimeInterval,
@@ -13,6 +13,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationQuerySummary,
     AggregationTimeInterval,
     StatisticsKind,
+    serialize_statistics_ratio,
 )
 
 
@@ -30,7 +31,14 @@ class FieldStatisticsOverview(BaseModel):
     total_count: int = Field(description='完整检索范围内日志总数，不受 TopN 限制。')
     present_count: int = Field(description='字段存在且非 null 的日志数；空字符串计入存在。')
     missing_count: int = Field(description='字段缺失或为 null 的日志数；与 present_count 之和等于 total_count。')
-    present_ratio: float | None = Field(description='present_count / total_count，范围 0 至 1；总数为 0 时为 null。')
+    present_ratio: float | None = Field(
+        description='present_count / total_count，范围 0 至 1；输出保留 4 位小数，前端展示百分比时建议保留 2 位；总数为 0 时为 null。'
+    )
+
+    @field_serializer("present_ratio")
+    def serialize_present_ratio(self, value):
+        """概览存在率与 MCP 使用相同的四位小数输出精度。"""
+        return serialize_statistics_ratio(value)
 
 
 class FieldDistributionGroup(BaseModel):
@@ -42,7 +50,14 @@ class FieldDistributionGroup(BaseModel):
     value_type: Literal["number", "string", "boolean"] | None = Field(description='VALUE 的标量类型，区分数字、字符串和布尔；合成组为 null。')
     value: str | int | float | bool | None = Field(description='保留原始标量类型和空字符串；OTHER/MISSING 为 null，不能用展示文本区分合成组。')
     count: int = Field(description='完整检索范围内该类别的日志数。')
-    ratio: float | None = Field(description='count / overview.total_count，范围 0 至 1；总数为 0 时为 null。')
+    ratio: float | None = Field(
+        description='count / overview.total_count，范围 0 至 1；输出保留 4 位小数，前端展示百分比时建议保留 2 位；总数为 0 时为 null。'
+    )
+
+    @field_serializer("ratio")
+    def serialize_ratio(self, value):
+        """分布占比与 MCP 使用相同的四位小数输出精度。"""
+        return serialize_statistics_ratio(value)
 
 
 class FieldDistribution(BaseModel):
@@ -88,7 +103,7 @@ class FieldStatisticsResult(BaseModel):
     field: StatisticsField = Field(description='服务端解析的字段标识与展示名。')
     statistics_kind: StatisticsKind = Field(description='NUMERIC 为声明数值字段或全范围存在值均为原生数值；其他为 CATEGORICAL，不依据样本决定。')
     overview: FieldStatisticsOverview = Field(description='完整检索范围的存在性概览。')
-    distribution: FieldDistribution = Field(description='全范围类别分布；默认 TopN 100，额外返回实际存在的 OTHER/MISSING。')
+    distribution: FieldDistribution = Field(description='全范围类别分布；默认 TopN 10，额外返回实际存在的 OTHER/MISSING。')
     time_series: FieldTimeSeries = Field(description='与分布共享类别集合的完整时间序列。')
     numeric_summary: FieldNumericSummary | None = Field(description='仅 NUMERIC 统计包返回数值摘要；CATEGORICAL 为 null。')
     query_summary: AggregationQuerySummary = Field(description='本次统计实际范围、执行时间及预算决策；不代表分页。')

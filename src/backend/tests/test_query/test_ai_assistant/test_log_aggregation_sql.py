@@ -246,14 +246,35 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
         self.assertIn("f0_i_safe AS m0_value", sql)
         self.assertNotIn("f0_d_safe AS m0_value", sql)
 
-    def test_distinct_count_uses_typed_tuple_not_display_text(self):
+    def test_multiple_distinct_metrics_use_lossless_single_column_keys(self):
+        """Doris 多去重要求单列；类型、空串、分隔符和缺失值不能混淆。"""
         request = make_request(
+            dimensions=[],
             metrics=[
-                {"id": "unique", "type": "DISTINCT_COUNT", "field": {"raw_name": "extend_data", "keys": ["value"]}}
-            ]
+                {"id": "users", "type": "DISTINCT_COUNT", "field": {"raw_name": "username"}},
+                {"id": "actions", "type": "DISTINCT_COUNT", "field": {"raw_name": "action_id"}},
+            ],
         )
-        sql = LogAggregationSQLBuilder.from_request(self.context, request).build_complete_sql()
-        self.assertIn("COUNT(DISTINCT f1_type, f1_key)", sql)
+        builder = LogAggregationSQLBuilder.from_request(self.context, request)
+        sql = "SELECT " + ", ".join(builder.metric_aggregate(i) for i in range(2)) + " FROM normalized"
+        tree = sqlglot.parse_one(sql, read="starrocks")
+        for distinct in tree.find_all(sqlglot.exp.Distinct):
+            self.assertEqual(len(distinct.expressions), 1)
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE normalized(f0_type TEXT, f0_key TEXT, f1_type TEXT, f1_key TEXT)")
+            db.executemany(
+                "INSERT INTO normalized VALUES(?,?,?,?)",
+                [
+                    ("string", "1", "string", "a:b"),
+                    ("number", "1", "string", "a:b"),
+                    ("boolean", "true", "string", ""),
+                    ("string", "true", None, None),
+                    ("string", "", "string", "string:a:b"),
+                    (None, None, "string", "a:b"),
+                    ("string", "1", "string", "a:b"),
+                ],
+            )
+            self.assertEqual(db.execute(tree.sql(dialect="sqlite")).fetchone(), (5, 3))
 
     def test_variant_subpath_guards_actual_storage_type_before_cast(self):
         request = make_request(

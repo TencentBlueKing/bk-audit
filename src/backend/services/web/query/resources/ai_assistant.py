@@ -46,7 +46,8 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     ```
 
     将 condition 替换为来源 LOG_SEARCH 消息 input_data.condition 的完整内容，保留过滤条件。
-    省略 parent_field 时返回声明的根字段，不查询 Doris 样本。
+    省略 parent_field 时返回声明的根字段，不查询 Doris 样本；sampling_performed=false，sampled_count=0 不代表无日志。
+    日志总量应调用 COUNT，已取得的字段目录可复用，不要为了确认总量重复探索或扩大时间范围。
 
     ### Case 2：展开拓展字段
 
@@ -76,10 +77,20 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     对象可展开不等于本身可统计。类型和覆盖率可能来自样本，不保证全范围一致；
     执行统计时仍重新校验权限和真实类型。sample_summary.truncated 表示探索有截断，
     不代表目录中不存在其他 key。业务 data 载荷不超过 1 MiB；配置可收紧采样与大小限制。
-    参数、字段和权限错误使用平台标准错误响应。
+    Web 使用登录用户身份，MCP 使用网关用户身份，均重验权限。
+
+    | HTTP / code | 含义 | 调用方动作 |
+    | --- | --- | --- |
+    | 400 / 2926001、2926002 | 条件、字段或操作符非法 | 修正输入，操作符以 allow_operators 为准 |
+    | 403 / 2926004 | 敏感字段权限不足 | 停止该字段查询，重新选择或申请权限 |
+    | 504 / 2926005、502 / 2926006 | 查询超时或失败 | 稍后重试；持续失败保留请求标识排查 |
+    | 413 / 2926007 | 探索响应过大 | 缩小探索范围 |
+
+    认证、系统查询权限等其他错误遵循平台公共协议，以上不是完整错误清单。
+
     """
 
-    name = gettext_lazy("MCP 获取日志字段元信息")
+    name = gettext_lazy("获取日志字段元信息")
     RequestSerializer = GetLogFieldMetadataRequestSerializer
     ResponseSerializer = GetLogFieldMetadataResponseSerializer
     support_data_collect = False
@@ -119,6 +130,8 @@ class MCPSearchLogs(QueryBaseResource):
 class MCPAggregateLogs(QueryBaseResource):
     """对当前用户可访问日志执行类型化、受控的分组聚合。
 
+    维度和指标 id 必须全局唯一，不能使用 group_id/group_kind/log_count/log_ratio/bucket_start；COUNT 示例为 {"id":"cnt","type":"COUNT"}。
+    DISTINCT_COUNT 只需 id/type/field，不传 value_type/percentile；order_by 仅控制类别TopN，不能引用时间维度，时间桶自动升序。
     最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或
     拓展数值转换质量按全范围 present_count 返回；有类别默认 top_n=10、最大 500，无类别省略。
     时序 rows 仅返回有日志的桶，query_summary.sparse_time_buckets=true；缺省桶计数为0、数值指标为null。

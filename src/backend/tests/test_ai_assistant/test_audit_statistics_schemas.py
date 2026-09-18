@@ -8,16 +8,47 @@ from services.web.ai_assistant.schemas.audit_statistics import (
     AIStatisticsAttachmentOutput,
     FieldStatisticsAttachmentInput,
 )
+from services.web.query.ai_assistant.log_tools.field_statistics_schemas import (
+    FieldDistributionGroup,
+    FieldStatisticsOverview,
+)
+from services.web.query.ai_assistant.log_tools.schemas import AggregationGroupKind
 
 
 class FieldStatisticsSchemaTest(SimpleTestCase):
     """输入不能为统计服务引入第二份范围或可信类型。"""
 
+    def test_program_ratios_round_four_decimal_places_only_on_output(self):
+        """概览和分布输出遵守同一精度，保留计数、空值和内部比例。"""
+        for count, total, expected in ((7, 11, 0.6364), (1, 100000, 0.0), (0, 1, 0.0), (0, 0, None)):
+            ratio = count / total if total else None
+            overview = FieldStatisticsOverview(
+                total_count=total, present_count=count, missing_count=total - count, present_ratio=ratio
+            )
+            group = FieldDistributionGroup(
+                group_id="g1",
+                kind=AggregationGroupKind.VALUE,
+                value_type="string",
+                value="value",
+                count=count,
+                ratio=ratio,
+            )
+            self.assertEqual(overview.model_dump()["present_ratio"], expected)
+            self.assertEqual(group.model_dump()["ratio"], expected)
+            self.assertEqual(group.model_dump()["count"], count)
+            self.assertEqual(overview.present_ratio, ratio)
+
     def test_defaults_and_literal_path(self):
         value = FieldStatisticsAttachmentInput(field={"raw_name": "extend_data", "keys": [" 方法 "]})
         self.assertEqual(value.field.keys, [" 方法 "])
-        self.assertEqual(value.top_n, 100)
+        self.assertEqual(value.top_n, 10)
         self.assertEqual(value.interval, "AUTO")
+
+    @override_settings(AI_LOG_AGGREGATION_DEFAULT_TOP_N=7)
+    def test_default_uses_shared_setting_and_explicit_value_survives(self):
+        """仅缺省输入跟随共享配置，历史快照及显式参数不改写。"""
+        self.assertEqual(FieldStatisticsAttachmentInput(field={"raw_name": "username"}).top_n, 7)
+        self.assertEqual(FieldStatisticsAttachmentInput(field={"raw_name": "username"}, top_n=100).top_n, 100)
 
     def test_rejects_invalid_budget_field_and_range(self):
         for patch in (

@@ -14,10 +14,14 @@ from pydantic import ValidationError as PydanticValidationError
 from rest_framework import serializers
 
 from services.web.query.ai_assistant.exceptions import (
+    InvalidAggregationColumnId,
+    InvalidAggregationRanking,
+    InvalidDistinctOptions,
     InvalidLogCondition,
     LogToolException,
     UnsupportedAggregation,
     UnsupportedLogField,
+    UnsupportedLogFieldOperator,
 )
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
@@ -74,6 +78,15 @@ class NamespacePathRequestSerializerMixin(serializers.Serializer):
     def get_domain_validation_error(self, error: PydanticValidationError) -> type[LogToolException] | None:
         """将已知业务字段的校验失败映射为稳定领域异常，未知请求键仍由 DRF 展示。"""
 
+        error_types = {item["type"] for item in error.errors()}
+        if "distinct_options" in error_types:
+            return InvalidDistinctOptions
+        if "aggregation_ranking" in error_types:
+            return InvalidAggregationRanking
+        if "aggregation_column_id" in error_types:
+            return InvalidAggregationColumnId
+        if "log_field_operator" in error_types:
+            return UnsupportedLogFieldOperator
         locations = self._error_locations(error)
         roots = {location[0] for location in locations if location}
         condition_field_error = any(
