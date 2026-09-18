@@ -503,6 +503,16 @@
             </div>
           </bk-exception>
         </div>
+        <div
+          v-else-if="isConversationListEmpty"
+          class="history-list-empty">
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;color: #63656e;"
+            type="empty">
+            暂无历史对话
+          </bk-exception>
+        </div>
       </div>
     </template>
 
@@ -1290,6 +1300,9 @@
       || (filteredGroupedHistory.value[item.group.name] || []).length > 0
     ))
   ));
+
+  /** 无分组且无会话时展示空态 */
+  const isConversationListEmpty = computed(() => displayRootItems.value.length === 0);
 
   const isGroupCollapsedInView = (groupName: string) => {
     if (isSearchActive.value && (filteredGroupedHistory.value[groupName] || []).length > 0) {
@@ -2826,7 +2839,14 @@
             fontSize: '14px',
             color: '#63656e',
           },
-        }, '请输入「确认清空」以继续'),
+        }, [
+          '请输入「',
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: () => copyConfirmName(CLEAR_CONFIRM_TEXT),
+          }, CLEAR_CONFIRM_TEXT),
+          '」以继续',
+        ]),
         h('input', {
           class: 'chat-clear-confirm-input',
           value: confirmText.value,
