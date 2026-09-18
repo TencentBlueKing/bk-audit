@@ -319,9 +319,7 @@
                 class="report-status-row"
                 :class="`is-${item.status}`">
                 <template v-if="item.status === 'loading'">
-                  <span
-                    v-bk-tooltips="t('正在生成中')"
-                    class="status-loading-wrap">
+                  <span class="status-loading-wrap">
                     <audit-icon
                       class="status-icon is-loading"
                       type="loading" />
