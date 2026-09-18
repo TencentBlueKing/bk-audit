@@ -209,7 +209,7 @@ class UpdateAttachment(AIAssistantResource):
 
 
 class RetryAttachment(AIAssistantResource):
-    """原样重试 FAILED 异步附件，复用原 UID 和输入快照，不创建新附件。
+    """原样重试 FAILED 异步附件，复用原 UID 和输入快照，返回原对象，不创建新附件。
 
     ### Case：统计失败后重试
 
