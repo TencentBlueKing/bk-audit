@@ -73,7 +73,7 @@ const CHILD_LOG_RETRY_DELAY_MS = 2000;
 const LOG_SEARCH_CHAIN_TIMEOUT_CODE = 'LOG_SEARCH_CHAIN_TIMEOUT';
 const LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE = '日志检索任务创建超时，请稍后重试或换一种描述';
 const DEFAULT_CONVERSATION_TITLE = '新对话';
-const TITLE_REFRESH_TIMES = 5;
+const TITLE_REFRESH_TIMES = 20;
 const TITLE_REFRESH_INTERVAL_MS = 2000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => {
