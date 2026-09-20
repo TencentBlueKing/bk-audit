@@ -638,9 +638,13 @@
     });
   };
 
-  // 删除成功后刷新列表
+  // 删除成功后重新拉取分组和报表，避免仍展示已删除项
   const handleDeleted = () => {
-    handleSearch();
+    isDataLoading.value = true;
+    fetchGroups({
+      scope_id: getSceneSystemParams().scope_id,
+      scope_type: getSceneSystemParams().scope_type,
+    });
   };
 
   // 排序成功后刷新列表
