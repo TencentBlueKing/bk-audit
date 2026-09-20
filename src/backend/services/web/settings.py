@@ -24,6 +24,10 @@ RENDER_TASK_TIMEOUT = int(os.getenv("BKAPP_RENDER_TASK_TIMEOUT", 30 * 60))
 RENDER_TASK_DELAY = int(os.getenv("BKAPP_RENDER_TASK_DELAY", 60 * 5))
 # 渲染任务限流，格式: "次数/时间单位"，如 "10/m", "100/m", "1000/h"
 RENDER_TASK_RATE_LIMIT = os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "5/m")
+# AI 标题 / 单风险分析 / 多风险分析：默认与风险报告一致，独立环境变量便于分别调配额
+AI_TITLE_TASK_RATE_LIMIT = os.getenv("BKAPP_AI_TITLE_TASK_RATE_LIMIT", "5/m")
+RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT = os.getenv("BKAPP_RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT", "5/m")
+RISK_MULTI_ANALYSE_TASK_RATE_LIMIT = os.getenv("BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT", "5/m")
 # 渲染任务重试延迟时间（秒），默认 10 秒
 RENDER_RETRY_DELAY = int(os.getenv("BKAPP_RENDER_RETRY_DELAY", 10))
 # AI Provider 缓存超时时间（秒），默认 2 小时
