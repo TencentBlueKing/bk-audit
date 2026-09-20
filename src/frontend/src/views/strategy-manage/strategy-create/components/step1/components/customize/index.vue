@@ -327,6 +327,7 @@
     hasFilledWhereConditions,
     normalizeWhereHaving,
     splitWhereAndHaving,
+    useRawNameAsFieldAlias,
   } from '../../../../utils/strategy-protocol';
 
   interface Where {
@@ -1826,10 +1827,10 @@
       }
       params.configs.table_fields = _.cloneDeep(tableFields.value);
       if (!params.configs.select?.length && tableFields.value.length) {
-        params.configs.select = enrichFieldDisplayNames(
+        params.configs.select = useRawNameAsFieldAlias(enrichFieldDisplayNames(
           _.cloneDeep(tableFields.value),
           tableFields.value,
-        );
+        ));
       }
       const tableIdList = params.configs.data_source.rt_id;
       if (params.configs.config_type !== 'EventLog') {
