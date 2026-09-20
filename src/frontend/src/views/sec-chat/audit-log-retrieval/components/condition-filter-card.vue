@@ -119,6 +119,8 @@
 
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
+  import { isRelativeDatetimeOrigin, syncDatetimeFromOrigin } from '@/utils/sync-datetime-from-url';
+
   const props = withDefaults(defineProps<{
     systems?: SelectedSystem[];
     standardFields?: SystemFieldRow[];
@@ -220,8 +222,8 @@
             ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
             : item
         ));
+        // 只更新绝对时间；datetime_origin 由后续 emit 决定（快捷或手选）
         searchModel.value.datetime = formatted;
-        searchModel.value.datetime_origin = formatted;
       }
       return;
     }
@@ -244,6 +246,10 @@
   const handleSearch = async () => {
     if (isSearching.value) return;
 
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
+
     const scopeId = props.systems[0]?.id;
     const condition = buildAiSearchCondition({
       scopeId: scopeId || '',
@@ -260,7 +266,9 @@
     searchError.value = '';
 
     try {
-      const chatMessage = await sendConditionSearch(condition);
+      const chatMessage = await sendConditionSearch(condition, {
+        datetimeOrigin: searchModel.value.datetime_origin,
+      });
 
       if (chatMessage.apiStatus === 'FAILED') {
         searchState.value = 'failed';

@@ -96,7 +96,7 @@
         class="result-body-loading"
         :loading="bodyLoading">
         <div class="result-body">
-          <!-- 过程信息：SUCCESS 时展示 duration_seconds，PROCESSING 为 null 不展示 -->
+          <!-- 过程信息：仅自然语言检索展示思考耗时；条件/字段检索不展示 -->
           <div
             v-if="!embedded && displayResult.thinkSeconds != null"
             class="process-section">
@@ -459,6 +459,8 @@
   import LogStatisticsDrawer from './log-statistics-drawer.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
+  import { isRelativeDatetimeOrigin, syncDatetimeFromOrigin } from '@/utils/sync-datetime-from-url';
+
   const props = withDefaults(defineProps<{
     result: RetrievalResultPayload;
     /** LOG_SEARCH 成功消息 uid，导出接口必填 */
@@ -564,9 +566,9 @@
     .filter(key => key !== 'datetime_origin' && key !== 'system_id' && fieldConfig.value[key]));
 
   const conditionEditable = computed(() => (
+    // tablePending 也走可编辑标签（含快捷文案），避免检索中先闪绝对时间再变回快捷值
     Boolean(displayResult.value.rawCondition)
-    && !displayResult.value.tablePending
-    && Object.keys(fieldConfig.value).length > 1
+    && Boolean(fieldConfig.value.datetime)
   ));
 
   const visibleConditions = computed(() => (
@@ -587,12 +589,13 @@
   });
 
   const syncSearchModelFromResult = () => {
-    const { rawCondition } = displayResult.value;
+    const { rawCondition, datetimeOrigin } = displayResult.value;
     if (!rawCondition) return;
     const nextSearchModel = parseAiSearchConditionToSearchModel(
       rawCondition,
       fieldConfig.value,
       fieldCatalog.value,
+      { datetimeOrigin },
     );
     if ('system_id' in nextSearchModel) {
       delete nextSearchModel.system_id;
@@ -600,13 +603,20 @@
     searchModel.value = nextSearchModel;
   };
 
+  /** 首次检索 tablePending 壳需要回填条件；二次检索 PROCESSING 保留用户刚提交的条件 */
+  const shouldSyncSearchModelFromResult = () => {
+    if (props.apiStatus === 'PROCESSING' && !displayResult.value?.tablePending) {
+      return false;
+    }
+    return true;
+  };
+
   watch(
     () => [props.messageUid, props.result, props.apiStatus] as const,
     () => {
       displayResult.value = props.result;
       displayMessageUid.value = props.messageUid || '';
-      // PROCESSING 时保留用户刚提交的条件，避免被旧结果回填覆盖
-      if (props.apiStatus !== 'PROCESSING') {
+      if (shouldSyncSearchModelFromResult()) {
         syncSearchModelFromResult();
       }
     },
@@ -616,7 +626,9 @@
   watch(
     () => [props.standardFields, props.extensionFields] as const,
     () => {
-      syncSearchModelFromResult();
+      if (shouldSyncSearchModelFromResult()) {
+        syncSearchModelFromResult();
+      }
     },
     { deep: true },
   );
@@ -661,13 +673,23 @@
             ? dayjs(item).format('YYYY-MM-DD HH:mm:ss')
             : item
         ));
+        // 只更新绝对时间；快捷态由 datetime_origin 单独维护
         searchModel.value.datetime = formatted;
-        searchModel.value.datetime_origin = formatted;
       }
       return;
     }
     if (fieldName === 'datetime_origin') {
       searchModel.value.datetime_origin = value;
+      if (isRelativeDatetimeOrigin(value)) {
+        displayResult.value = {
+          ...displayResult.value,
+          datetimeOrigin: [...value],
+        };
+      } else if (displayResult.value.datetimeOrigin) {
+        const next = { ...displayResult.value };
+        delete next.datetimeOrigin;
+        displayResult.value = next;
+      }
       return;
     }
     searchModel.value[fieldName] = value;
@@ -689,6 +711,10 @@
       return;
     }
 
+    if (isRelativeDatetimeOrigin(searchModel.value.datetime_origin)) {
+      searchModel.value.datetime = syncDatetimeFromOrigin(searchModel.value.datetime_origin);
+    }
+
     const scopeId = displayResult.value.rawCondition?.scope_id || props.systems[0]?.id || '';
     const condition = buildAiSearchCondition({
       scopeId,
@@ -702,7 +728,9 @@
 
     resubmitLoading.value = true;
     try {
-      const chatMessage = await rerunLogSearch(messageUid, condition);
+      const chatMessage = await rerunLogSearch(messageUid, condition, {
+        datetimeOrigin: searchModel.value.datetime_origin,
+      });
       // PROCESSING：保留当前表格高度，仅靠卡内 loading 遮罩；终态再刷新结果
       if (chatMessage.result && chatMessage.apiStatus !== 'PROCESSING') {
         displayResult.value = chatMessage.result;
