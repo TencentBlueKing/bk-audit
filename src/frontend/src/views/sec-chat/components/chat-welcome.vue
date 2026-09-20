@@ -43,7 +43,7 @@
               placement: 'top',
             }"
             class="prompt-card"
-            :class="{ 'is-disabled': item.disabled || entering }"
+            :class="{ 'is-disabled': item.disabled }"
             @click="handleCardClick(item)">
             <div class="card-icon">
               <img
