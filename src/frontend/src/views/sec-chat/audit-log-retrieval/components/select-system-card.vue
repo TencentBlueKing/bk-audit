@@ -59,6 +59,12 @@
           @click="handleConfirm">
           确认选择
         </bk-button>
+        <bk-button
+          v-if="selectionReason === 'reselect'"
+          :disabled="confirming"
+          @click="handleCancel">
+          取消
+        </bk-button>
       </div>
     </div>
   </div>
@@ -183,6 +189,11 @@
     if (props.confirming) return;
     const system = selectedSystem.value || { id: selectedId.value, name: selectedId.value };
     emit('confirm', [system.id], [system]);
+  };
+
+  const handleCancel = () => {
+    if (props.confirming) return;
+    emit('close');
   };
 </script>
 
@@ -358,6 +369,7 @@
   .card-actions {
     display: flex;
     justify-content: flex-start;
+    gap: 8px;
 
     .confirm-btn {
       min-width: 88px;
