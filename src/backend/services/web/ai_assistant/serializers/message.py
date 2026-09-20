@@ -188,9 +188,16 @@ class MessageResponseSerializer(serializers.Serializer):
     message_type = serializers.ChoiceField(choices=MessageType.choices, help_text="消息类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="消息执行状态")
     input_data = MessageInputDataField(required=False, help_text="消息类型化输入快照")
-    output_data = MessageOutputDataField(required=False, allow_null=True, help_text="消息类型化输出快照")
-    error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
-    error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
+    output_data = MessageOutputDataField(
+        required=False,
+        allow_null=True,
+        help_text="消息类型化输出快照；USER_INTENT 的 SUCCESS 业务错误位于 output_data.error",
+    )
+    error_code = serializers.CharField(allow_blank=True, help_text="FAILED 消息的稳定公开错误码；SUCCESS 时为空")
+    error_message = serializers.CharField(
+        allow_blank=True,
+        help_text="FAILED 消息的脱敏公开错误信息；SUCCESS 业务提示读取 output_data.error.error_message",
+    )
     attachments = AttachmentSummarySerializer(many=True, help_text="消息关联的附件摘要")
     supports_feedback = serializers.BooleanField(help_text="消息类型是否支持当前用户反馈")
     feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对消息的反馈")

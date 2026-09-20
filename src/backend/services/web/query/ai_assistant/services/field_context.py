@@ -41,6 +41,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.permissions import SearchLogPermission
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
+    AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES,
     AI_ASSISTANT_FIELD_META_CONFIG_KEY,
     AI_ASSISTANT_FIELD_SAMPLE_ENABLED,
     AI_ASSISTANT_FIELD_SAMPLE_ROWS,
@@ -176,7 +177,10 @@ class FieldContextService:
     ) -> SelectionFieldMeta:
         """L0 兜底 + L1 覆盖（nl_name / description / sample_value）；枚举字段附 options"""
         # alias_name 均为字段名本身，中文显示名取 description
-        display_name = str(cfg.field.description or cfg.field.alias_name or cfg.field.field_name)
+        display_name = AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES.get(
+            cfg.field.field_name,
+            str(cfg.field.description or cfg.field.alias_name or cfg.field.field_name),
+        )
         return SelectionFieldMeta(
             raw_name=cfg.field.field_name,
             keys=[],

@@ -60,6 +60,16 @@ class ConversationRequestSerializerTest(TestCase):
                 with self.subTest(serializer=serializer_class.__name__, field=field_name):
                     self.assertTrue(field.help_text)
 
+    def test_create_conversation_accepts_optional_group_uid(self):
+        group_uid = uuid4()
+        serializer = ConversationCreateRequestSerializer(data={"group_uid": str(group_uid)})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["group_uid"], group_uid)
+
+        invalid = ConversationCreateRequestSerializer(data={"group_uid": "not-a-uuid"})
+        self.assertFalse(invalid.is_valid())
+
     def test_search_response_only_declares_conversation_fields(self):
         self.assertEqual(
             set(ConversationSearchResponseSerializer().fields),

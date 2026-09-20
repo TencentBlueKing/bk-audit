@@ -182,7 +182,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
 
         selection = self.create_selection_message()
         message, output, _ = self._run(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
         )
 
         self.assertEqual(output.intent, "log_search")
@@ -200,7 +200,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         """场景②无系统变体：SYSTEM_REQUIRED 守门（AI 动态引导 + 候选清单），不建子消息不派发标题"""
 
         message, output, mock_delay = self._run(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
         )
 
         self.assertEqual(output.intent, "log_search")
@@ -392,6 +392,41 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(output.error.error_code, AIOutputParseFailedError().error_code)
         self.assertTrue(output.error.error_message)
 
+    def test_intent_invalid_budget_exhausted_returns_error_protocol(self):
+        """候选系统非法：重试耗尽后映射为前端可分支处理的系统不可用业务错误。"""
+
+        from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+
+        recognize = mock.MagicMock(side_effect=AIOutputInvalidError())
+        with mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
+        ), mock.patch(
+            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
+            recognize,
+        ), mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
+        ):
+            _, execution = create_intent_message(
+                self,
+                query_text="切换到当前场景外的系统",
+                scope_extra={"scope_type": "scene", "scope_id": "1"},
+            )
+            output = execute_user_intent.run(execution)
+
+        self.assertEqual(recognize.call_count, 3)
+        self.assertEqual(output.intent, "unrecognized")
+        self.assertIsNone(output.condition)
+        self.assertEqual(output.error.error_code, "SYSTEM_UNAVAILABLE")
+        self.assertIn("当前场景", output.error.error_message)
+        self.assertEqual(output.error.candidates, [{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}])
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.conversation,
+                message_type__in=[MessageType.SYSTEM_SELECTION, MessageType.LOG_SEARCH],
+            ).exists()
+        )
+
     def test_select_system_with_search_condition_not_recognized(self):
         """切换并检索（need_search=true）但条件识别失败：切换结果不被掩盖，文案前置切换成功事实"""
 
@@ -569,7 +604,7 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
         """scope 透传候选组装：与检索页场景过滤同口径"""
 
         _, _, load_mock = self._run_with_scope(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
             candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
         )
         load_mock.assert_called_once_with("bkaudit", self.user, scope_type="scene", scope_id="1")
@@ -579,7 +614,7 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
 
         selection = self.create_selection_message()
         _, output, _ = self._run_with_scope(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
             # scope 候选不含当前会话系统（TARGET_SYSTEM_ID）
             candidates=[{"system_id": "other-system", "name": "其他系统"}],
         )
@@ -598,7 +633,7 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
 
         selection = self.create_selection_message()
         _, output, _ = self._run_with_scope(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
             candidates=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
         )
 
@@ -610,7 +645,7 @@ class UserIntentScopeFilterTest(AIAssistantPlatformTestCase):
         """场景内无授权系统：SYSTEM_REQUIRED 专属文案 + 空候选清单"""
 
         _, output, _ = self._run_with_scope(
-            payload=IntentPayload(intent="log_search", system_id="", message="好的，为您检索"),
+            payload=IntentPayload(intent="log_search", system_id="", need_search=True, message="好的，为您检索"),
             candidates=[],
         )
 

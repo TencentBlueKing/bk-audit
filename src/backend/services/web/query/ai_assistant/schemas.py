@@ -228,6 +228,22 @@ class IntentPayload(BaseModel):
         description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",
     )
 
+    @model_validator(mode="after")
+    def validate_intent_fields(self) -> "IntentPayload":
+        """拒绝意图与路由字段互相矛盾的输出，避免下游猜测续链行为。"""
+
+        if self.intent == "select_system":
+            if not self.system_id:
+                raise ValueError("select_system requires system_id")
+            return self
+        if self.intent == "log_search":
+            if self.system_id or not self.need_search:
+                raise ValueError("log_search requires empty system_id and need_search=true")
+            return self
+        if self.system_id or self.need_search:
+            raise ValueError("unrecognized requires empty system_id and need_search=false")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # LOG_SEARCH（协议 §5）

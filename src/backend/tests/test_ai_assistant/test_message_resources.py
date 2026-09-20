@@ -41,6 +41,7 @@ from services.web.ai_assistant.resources.message import (
     UpdateMessage,
 )
 from services.web.ai_assistant.schemas import MessageSchema
+from services.web.ai_assistant.schemas.audit_search import UserIntentErrorSchema
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.serializers.message import (
     AttachmentSummarySerializer,
@@ -187,6 +188,22 @@ class MessageRequestSerializerTest(TestCase):
             for field_name, field in serializer_class().fields.items():
                 with self.subTest(serializer=serializer_class.__name__, field=field_name):
                     self.assertTrue(field.help_text)
+
+    def test_user_intent_business_error_contract_is_documented_for_frontend(self):
+        """Swagger 描述稳定业务错误码，并区分 SUCCESS 业务错误与 FAILED 技术错误。"""
+
+        error_schema = UserIntentErrorSchema.model_json_schema()
+        error_properties = error_schema["properties"]
+        self.assertIn("SYSTEM_UNAVAILABLE", error_properties["error_code"]["description"])
+        self.assertIn("直接展示", error_properties["error_message"]["description"])
+        self.assertIn("SYSTEM_UNAVAILABLE", error_properties["candidates"]["description"])
+        for field_name, field in UserIntentErrorSchema.drf_serializer().fields.items():
+            with self.subTest(field=field_name):
+                self.assertTrue(field.help_text)
+
+        response_fields = MessageResponseSerializer().fields
+        self.assertIn("output_data.error", str(response_fields["output_data"].help_text))
+        self.assertIn("FAILED", str(response_fields["error_code"].help_text))
 
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
         # 保存常驻业务 Handler，测试结束后恢复，避免污染全局单例影响后续测试。

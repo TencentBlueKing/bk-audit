@@ -70,7 +70,9 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
     def test_recognize_log_search(self, mock_chat):
         """当前系统检索意图：system_id 留空"""
 
-        mock_chat.return_value = json.dumps({"intent": "log_search", "system_id": "", "message": "好的，为您检索"})
+        mock_chat.return_value = json.dumps(
+            {"intent": "log_search", "system_id": "", "need_search": True, "message": "好的，为您检索"}
+        )
         payload = self._recognize(current_system_id="bk-audit")
         self.assertEqual(payload.intent, "log_search")
         self.assertEqual(payload.system_id, "")
@@ -94,7 +96,9 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
         即使无检索动词也判 log_search；含条件描述的话语不得判 unrecognized。
         """
 
-        mock_chat.return_value = json.dumps({"intent": "log_search", "system_id": "", "message": "好的，为您检索"})
+        mock_chat.return_value = json.dumps(
+            {"intent": "log_search", "system_id": "", "need_search": True, "message": "好的，为您检索"}
+        )
         payload = IntentRecognitionService.recognize(
             query_text=(
                 'extend.request_data为{"id":"20260910204720871773","pk":"20260910204720871773"},'
@@ -117,7 +121,7 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
     def test_parse_fenced_json(self, mock_chat):
         """代码块包裹输出：三级递进提取（复用 NL2JSON 闸门）"""
 
-        raw = {"intent": "log_search", "system_id": "", "message": "ok"}
+        raw = {"intent": "log_search", "system_id": "", "need_search": True, "message": "ok"}
         mock_chat.return_value = f"识别结果如下：\n```json\n{json.dumps(raw)}\n```"
         payload = self._recognize()
         self.assertEqual(payload.intent, "log_search")
@@ -151,10 +155,32 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
             self._recognize()
 
     def test_select_system_empty_system_id_rejected(self, mock_chat):
-        """select_system 但 system_id 为空：不合法"""
+        """select_system 但 system_id 为空：组合契约在 schema 阶段拒绝。"""
 
         mock_chat.return_value = json.dumps({"intent": "select_system", "system_id": "", "message": "x"})
-        with self.assertRaises(AIOutputInvalidError):
+        with self.assertRaises(AIOutputParseFailedError):
+            self._recognize()
+
+    def test_log_search_requires_need_search_and_empty_system_id(self, mock_chat):
+        """log_search 必须明确检索且不得携带系统，防止下游按矛盾字段续链。"""
+
+        invalid_payloads = [
+            {"intent": "log_search", "system_id": "", "need_search": False, "message": "x"},
+            {"intent": "log_search", "system_id": "bk-audit", "need_search": True, "message": "x"},
+        ]
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                mock_chat.return_value = json.dumps(payload)
+                with self.assertRaises(AIOutputParseFailedError):
+                    self._recognize(current_system_id="bk-audit")
+
+    def test_unrecognized_rejects_system_and_search_flags(self, mock_chat):
+        """unrecognized 不得夹带确定的系统或检索续链标记。"""
+
+        mock_chat.return_value = json.dumps(
+            {"intent": "unrecognized", "system_id": "bk-audit", "need_search": True, "message": "x"}
+        )
+        with self.assertRaises(AIOutputParseFailedError):
             self._recognize()
 
     def test_timeout_and_service_error(self, mock_chat):

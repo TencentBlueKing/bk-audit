@@ -45,6 +45,10 @@ class ConversationCreateRequestSerializer(serializers.Serializer):
         allow_blank=False,
         help_text="会话标题；不传时默认为“新对话”",
     )
+    group_uid = serializers.UUIDField(
+        required=False,
+        help_text="可选所属会话分组对外 UUID；不传时创建在根列表",
+    )
     initial_message = InitialMessageRequestSerializer(
         required=False,
         help_text="可选系统选择初始化消息",

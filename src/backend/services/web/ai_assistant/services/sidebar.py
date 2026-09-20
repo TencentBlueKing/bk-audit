@@ -50,15 +50,18 @@ class ConversationSidebarService:
         *,
         group: ConversationGroup | None = None,
         conversation: Conversation | None = None,
+        parent_node: ConversationSidebarNode | None = None,
     ) -> ConversationSidebarNode:
-        """为一个分组或会话创建根 Node，新节点默认位于最前。"""
+        """为分组创建根 Node，或为会话创建根/组内 Node；新节点位于目标容器最前。"""
 
-        self._validate_create_target(group=group, conversation=conversation)
-        top_node = self._container_queryset(parent_node_id=None).order_by("-position", "-id").first()
+        self._validate_create_target(group=group, conversation=conversation, parent_node=parent_node)
+        parent_node_id = parent_node.id if parent_node is not None else None
+        top_node = self._container_queryset(parent_node_id=parent_node_id).order_by("-position", "-id").first()
         node = ConversationSidebarNode(
             node_type=SidebarNodeType.GROUP if group else SidebarNodeType.CONVERSATION,
             group=group,
             conversation=conversation,
+            parent_node=parent_node,
             position=(top_node.position + 1) if top_node else 1,
             created_by=self.user,
             updated_at=timezone.now(),
@@ -67,6 +70,23 @@ class ConversationSidebarService:
         node.full_clean()
         # 服务已明确传入操作者，避免 OperateRecordModel 从请求上下文再次覆盖。
         node.save(update_record=False, force_insert=True)
+        return node
+
+    def lock_group_node_for_update(self, *, group: ConversationGroup) -> ConversationSidebarNode:
+        """按当前用户锁定分组根节点；调用方须先锁定对应 ConversationGroup 行。"""
+
+        node = (
+            ConversationSidebarNode.objects.select_for_update()
+            .filter(
+                group=group,
+                created_by=self.user,
+                node_type=SidebarNodeType.GROUP,
+                parent_node_id__isnull=True,
+            )
+            .first()
+        )
+        if node is None:
+            raise InvalidSidebarContainer()
         return node
 
     def list_pinned(self) -> QuerySet[ConversationSidebarNode]:
@@ -589,12 +609,15 @@ class ConversationSidebarService:
         *,
         group: ConversationGroup | None,
         conversation: Conversation | None,
+        parent_node: ConversationSidebarNode | None,
     ) -> None:
-        """要求业务对象唯一、已入库且归属当前用户。"""
+        """要求业务对象与可选父容器已入库、归属当前用户且关系合法。"""
 
         if not self.user or (group is None) == (conversation is None):
             raise InvalidSidebarContainer()
         if group is not None:
+            if parent_node is not None:
+                raise InvalidSidebarContainer()
             if (
                 group.created_by != self.user
                 or not ConversationGroup.objects.filter(
@@ -604,6 +627,19 @@ class ConversationSidebarService:
             ):
                 raise InvalidSidebarContainer()
             return
+        if parent_node is not None and (
+            parent_node.created_by != self.user
+            or parent_node.node_type != SidebarNodeType.GROUP
+            or parent_node.group_id is None
+            or not ConversationSidebarNode.objects.filter(
+                id=parent_node.id,
+                created_by=self.user,
+                node_type=SidebarNodeType.GROUP,
+                group_id=parent_node.group_id,
+                parent_node_id__isnull=True,
+            ).exists()
+        ):
+            raise InvalidSidebarContainer()
         if (
             conversation.created_by != self.user
             or conversation.is_deleted

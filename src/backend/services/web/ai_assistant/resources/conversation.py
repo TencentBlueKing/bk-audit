@@ -73,6 +73,7 @@ class CreateConversation(AIAssistantResource):
     def perform_request(self, validated_request_data):
         creation = ConversationService(user=get_request_username()).create_conversation(
             title=validated_request_data["title"],
+            group_uid=validated_request_data.get("group_uid"),
             initial_message=validated_request_data.get("initial_message"),
         )
         # 保持 Django Model 响应路径，使 bk_resource 使用实例序列化并保留 UUID 输出格式。

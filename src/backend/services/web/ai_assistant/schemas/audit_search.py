@@ -45,6 +45,13 @@ __all__ = [
 _NestedListField = serializers.ListField(child=serializers.DictField())
 _NestedObjectField = serializers.DictField()
 _NestedObjectOrNullField = serializers.DictField(allow_null=True)
+_USER_INTENT_CANDIDATES_DESCRIPTION = (
+    "当前范围内可选系统列表，元素为 {system_id, name}；SYSTEM_REQUIRED 和 SYSTEM_UNAVAILABLE 时可用于选择引导，" "其他错误通常为空数组。"
+)
+_UserIntentCandidatesField = serializers.ListField(
+    child=serializers.DictField(),
+    help_text=_USER_INTENT_CANDIDATES_DESCRIPTION,
+)
 
 
 class CommonQuerySchema(MessageSchema):
@@ -170,12 +177,20 @@ class UserIntentContextSchema(MessageSchema):
 
 
 class UserIntentErrorSchema(MessageSchema):
-    """USER_INTENT 结构化错误协议：与 NL error 同构（error_code + AI 动态 error_message）
-    + 候选系统清单（SYSTEM_REQUIRED 引导补系统时携带）。"""
+    """USER_INTENT 成功终态的业务错误协议，前端按 error_code 分支并展示安全文案。"""
 
-    error_code: str  # UNRECOGNIZED_INTENT / SYSTEM_REQUIRED / QUERY_NOT_RECOGNIZED
-    error_message: str
-    candidates: Annotated[list, _NestedListField] = Field(default_factory=list)
+    error_code: str = Field(
+        description=(
+            "稳定业务错误码。编排类：UNRECOGNIZED_INTENT、SYSTEM_REQUIRED、SYSTEM_UNAVAILABLE；"
+            "条件识别类：QUERY_NOT_RECOGNIZED、AI_OUTPUT_PARSE_FAILED、AI_OUTPUT_INVALID、PERMISSION_DENIED。"
+            "前端必须按错误码选择交互，不得解析错误文案。"
+        )
+    )
+    error_message: str = Field(description="经过后端控制和脱敏、适合向当前用户直接展示的业务提示；前端可直接展示，但不得据此判断错误类型。")
+    candidates: Annotated[list, _UserIntentCandidatesField] = Field(
+        default_factory=list,
+        description=_USER_INTENT_CANDIDATES_DESCRIPTION,
+    )
 
 
 class UserIntentOutputSchema(MessageSchema):

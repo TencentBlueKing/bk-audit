@@ -26,6 +26,9 @@ from typing import Any, Mapping, Sequence
 from bk_resource import api
 
 from api.constants import AIAgentCode
+from services.web.query.ai_assistant.constants import (
+    AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES,
+)
 from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,
@@ -83,8 +86,8 @@ def build_condition_title_input(
     """把条件检索消息的 input_data.condition 快照拼为单行中文摘要（标题生成素材）。
 
     摘要 = 系统 + 时间范围 + 逐条件「字段 操作符 值」，字段名动态适配：
-    - 标准/系统/快照字段：中文名取 LOG_SEARCH_ALL_FIELDS_MAP 的 Field.description，
-      与条件筛选回传前端的字段描述同源（field_context 构建逻辑一致），新增字段自动适配；
+    - 默认结果列字段复用结果列产品文案；其余标准/系统/快照字段取
+      LOG_SEARCH_ALL_FIELDS_MAP 的 Field.description，与 field_context 构建逻辑一致；
     - 拓展子键：展示名取父消息系统选择快照的 extension_fields[].display_name，
       缺元数据回退子键名；操作符中文见 CONDITION_OPERATOR_LABELS；
     - 枚举字段值翻译为展示值（操作途径 0 → WebUI 等，见 ENUM_FIELD_VALUE_LABELS）；
@@ -118,9 +121,12 @@ def build_condition_title_input(
             # 拓展子键条件：展示名来自父消息快照，缺元数据回退子键名
             field_label = extension_display_names.get(field_keys[0], field_keys[0])
         else:
-            # 标准/系统/快照字段：与条件筛选回传前端的字段描述同源
+            # 默认结果列复用产品文案，其余字段回退全局元数据，与 field_context 同源
             meta = LOG_SEARCH_ALL_FIELDS_MAP.get(raw_name)
-            field_label = str(meta.description) if meta is not None else raw_name
+            field_label = AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES.get(
+                raw_name,
+                str(meta.description) if meta is not None else raw_name,
+            )
         operator = (cond or {}).get("operator") or ""
         operator_label = CONDITION_OPERATOR_LABELS.get(operator, operator)
         enum_value_labels = ENUM_FIELD_VALUE_LABELS.get(raw_name) or {}

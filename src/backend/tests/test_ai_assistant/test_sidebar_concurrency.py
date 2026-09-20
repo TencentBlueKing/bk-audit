@@ -308,6 +308,71 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
         self.assertFalse(outside.is_deleted)
         self.assertIsNone(outside_node.parent_node_id)
 
+    def test_group_delete_and_direct_create_share_group_locks(self):
+        """删除获胜时组内创建必须等待，并以领域异常回滚全部新对象。"""
+
+        group = ConversationService(user=self.user).create_group(name="deleted")
+        delete_paused = threading.Event()
+        release_delete = threading.Event()
+        create_finished = threading.Event()
+        outcomes = {}
+        original_delete_batches = ConversationService._delete_nodes_in_batches
+
+        def pause_before_node_delete(queryset):
+            delete_paused.set()
+            release_delete.wait(timeout=5)
+            original_delete_batches(queryset)
+
+        def delete_group():
+            close_old_connections()
+            try:
+                ConversationService(user=self.user).delete_group(group_uid=str(group.uid))
+                outcomes["delete"] = "success"
+            except Exception as error:  # noqa: BLE001 - 并发测试保留原始领域异常
+                outcomes["delete"] = error
+            finally:
+                close_old_connections()
+
+        def create_in_group():
+            close_old_connections()
+            try:
+                result = ConversationService(user=self.user).create_conversation(
+                    title="late",
+                    group_uid=str(group.uid),
+                )
+                outcomes["create"] = result.conversation.id
+            except Exception as error:  # noqa: BLE001 - 删除获胜时应返回分组不存在
+                outcomes["create"] = error
+            finally:
+                create_finished.set()
+                close_old_connections()
+
+        with mock.patch.object(
+            ConversationService,
+            "_delete_nodes_in_batches",
+            side_effect=pause_before_node_delete,
+        ):
+            delete_thread = threading.Thread(target=delete_group)
+            delete_thread.start()
+            self.assertTrue(delete_paused.wait(timeout=5))
+
+            create_thread = threading.Thread(target=create_in_group)
+            create_thread.start()
+            time.sleep(0.2)
+            self.assertFalse(create_finished.is_set())
+            release_delete.set()
+            delete_thread.join(timeout=10)
+            create_thread.join(timeout=10)
+
+        self.assertFalse(delete_thread.is_alive())
+        self.assertFalse(create_thread.is_alive())
+        self.assertEqual(outcomes["delete"], "success")
+        self.assertIsInstance(outcomes["create"], ConversationGroupNotFound)
+        self.assertFalse(Conversation.objects.filter(created_by=self.user, title="late").exists())
+        self.assertFalse(
+            ConversationSidebarNode.objects.filter(created_by=self.user, conversation__title="late").exists()
+        )
+
     def test_group_delete_and_move_out_converge_with_reverse_node_id_order(self):
         conversation_service = ConversationService(user=self.user)
         inside = self.create_conversation("inside")
@@ -470,6 +535,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
 
     def test_message_write_rechecks_conversation_after_delete(self):
         handler = EchoSyncHandler()
+        message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         message_handler_registry.register(handler)
         conversation = self.create_conversation("conversation")
         self.service.create_node(conversation=conversation)

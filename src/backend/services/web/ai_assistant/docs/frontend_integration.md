@@ -201,12 +201,45 @@ sequenceDiagram
 
 | 输出语义 | 前端动作 |
 | --- | --- |
-| `output_data.error` 非空 | 展示业务引导；SYSTEM_REQUIRED 可用 candidates 辅助用户选系统，不当作已有检索结果 |
+| `output_data.error` 非空 | 按 `error.error_code` 选择交互，直接展示 `error.error_message`；系统类错误可用 candidates 辅助用户选系统，不当作已有检索结果 |
 | 纯系统切换，condition/error 均空 | 展示 message 和选择结果，按 selection_message_uid 获取选择消息；不再自行触发检索 |
 | condition 存在，auto_execute=true | 展示识别条件，刷新消息窗口等待后端生成 LOG_SEARCH；前端不要重复 POST |
 | condition 存在，auto_execute=false | 展示条件供确认，用户确认后按下节创建 LOG_SEARCH |
 
 业务无法识别可以表现为顶层 SUCCESS + output_data.error；技术执行失败才按顶层 FAILED 处理。自动子消息可能晚于父消息 SUCCESS 出现；不要要求 `log_search_message_uid` 总已填充，使用消息窗口与父子关联发现结果。短暂缺少子消息不等同于失败；持续缺失时保留识别条件并提供用户显式重查，先刷新确认没有已有子消息，不自动重复提交。
+
+USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后端控制并脱敏，可直接展示，但不能用文案判断错误类型：
+
+| `output_data.error.error_code` | 含义 | 建议前端动作 |
+| --- | --- | --- |
+| `UNRECOGNIZED_INTENT` | 无法识别为系统选择或日志检索 | 展示提示，保留输入框让用户补充需求 |
+| `SYSTEM_REQUIRED` | 已识别为检索，但当前会话没有可用系统 | 展示 candidates 供选择；为空时提示切换范围或申请权限 |
+| `SYSTEM_UNAVAILABLE` | AI 选择的目标不在本次候选范围；不推断是场景外、无权限还是不存在 | 展示后端文案和 candidates，引导切换场景或重新选择 |
+| `QUERY_NOT_RECOGNIZED` | 系统已确定，但未得到有效检索条件 | 展示提示，让用户补充字段、值或时间范围 |
+| `AI_OUTPUT_PARSE_FAILED` / `AI_OUTPUT_INVALID` | AI 输出无法按协议解析或条件不合法 | 展示通用识别失败提示，允许用户换一种描述 |
+| `PERMISSION_DENIED` | 执行条件识别时权限校验未通过 | 展示权限提示，不展示受限系统或数据详情 |
+
+例如目标系统不在当前场景候选范围时，消息仍是业务处理完成的 `SUCCESS`：
+
+```json
+{
+  "status": "SUCCESS",
+  "error_code": "",
+  "error_message": "",
+  "output_data": {
+    "intent": "unrecognized",
+    "error": {
+      "error_code": "SYSTEM_UNAVAILABLE",
+      "error_message": "目标系统不在当前场景的可用范围内，请切换场景或重新选择系统",
+      "candidates": [
+        {"system_id": "bk-audit", "name": "审计中心"}
+      ]
+    }
+  }
+}
+```
+
+只有消息顶层 `status=FAILED` 时才读取顶层 `error_code/error_message` 并考虑重试。当前 Swagger 的 `UserIntentErrorSchema` 同步列出了业务错误码、可展示文案和 candidates 语义。
 
 存量 NATURAL_LANGUAGE_SEARCH 消息仍按 condition/error 分支展示，重试与编辑后同样遵循 auto_execute 的续链规则；其父消息是成功的 SYSTEM_SELECTION。新页面的自然语言提交统一使用 USER_INTENT，不另行创建 NATURAL_LANGUAGE_SEARCH。
 

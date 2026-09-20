@@ -111,6 +111,18 @@ class ConversationResourceTest(TestCase):
         # 一期全异步化：初始化消息创建即 PROCESSING（终态由任务收敛，前端轮询）
         self.assertEqual(created["initial_message"]["status"], ExecutionStatus.PROCESSING)
 
+    def test_conversation_can_be_created_directly_in_group(self, _username):
+        """创建接口直接落组内节点，响应协议保持不变。"""
+
+        group = CreateConversationGroup().request({"name": "目标分组"})
+
+        created = CreateConversation().request({"title": "组内会话", "group_uid": group["uid"]})
+
+        self.assertEqual(set(created), {"uid", "title", "created_at", "updated_at", "initial_message"})
+        self.assertIsNone(created["initial_message"])
+        node = ConversationSidebarNode.objects.get(conversation__uid=created["uid"])
+        self.assertEqual(str(node.parent_node.group.uid), str(group["uid"]))
+
     def test_sidebar_list_pin_move_and_search(self, _username):
         group = CreateConversationGroup().request({"name": "目标分组"})
         first = CreateConversation().request({})

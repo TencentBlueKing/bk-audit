@@ -24,6 +24,7 @@ from django.test import override_settings
 
 from apps.meta.models import Field
 from core.sql.constants import Operator
+from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
@@ -128,6 +129,24 @@ class TestFieldContextService(AIAssistantTestCase):
         output = self._build()
         for field in output.systems[0].standard_fields:
             self.assertEqual(field.nl_name, field.display_name)
+
+    def test_snapshot_fields_use_log_result_display_names(
+        self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync
+    ):
+        """系统选择字段与日志结果列复用同一套用户可见名称。"""
+
+        mock_perm.return_value = True
+        mock_meta_get.return_value = {}
+        mock_system_list.return_value = []
+
+        output = self._build()
+        fields_by_name = {field.raw_name: field for field in output.systems[0].standard_fields}
+        for raw_name, expected_display_name in SNAPSHOT_DEFAULT_COLUMNS:
+            if raw_name not in fields_by_name:
+                continue
+            with self.subTest(raw_name=raw_name):
+                self.assertEqual(fields_by_name[raw_name].display_name, expected_display_name)
+                self.assertEqual(fields_by_name[raw_name].nl_name, expected_display_name)
 
     def test_l1_override_standard_field(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
         mock_perm.return_value = True

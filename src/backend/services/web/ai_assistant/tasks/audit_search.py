@@ -19,6 +19,7 @@ from services.web.ai_assistant.constants import (
     ExecutionStatus,
     MessageErrorCode,
     MessageType,
+    UserIntentErrorCode,
 )
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
@@ -259,14 +260,42 @@ def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) 
         )
 
 
+def _build_intent_recognition_error(
+    *,
+    error: AIAssistantError,
+    candidates: list[dict],
+    scope_type: str,
+) -> UserIntentErrorSchema:
+    """把内部识别异常映射为可公开的稳定业务错误，不暴露系统存在性或权限细节。"""
+
+    if not isinstance(error, AIOutputInvalidError):
+        return UserIntentErrorSchema(
+            error_code=error.error_code,
+            error_message="AI 返回内容解析失败，请稍后重试或换一种描述",
+        )
+
+    # 内部仍保留 AI_OUTPUT_INVALID 便于诊断模型输出；对外只声明目标不在本次候选范围，
+    # 不推断它是场景外、无权限还是不存在。
+    if scope_type == "scene":
+        error_message = "目标系统不在当前场景的可用范围内，请切换场景或重新选择系统"
+    elif scope_type == "system":
+        error_message = "目标系统不在当前系统范围内，请切换检索范围或重新选择系统"
+    else:
+        error_message = "目标系统不在当前可用系统范围内，请重新描述系统名称或选择其他系统"
+    return UserIntentErrorSchema(
+        error_code=UserIntentErrorCode.SYSTEM_UNAVAILABLE,
+        error_message=error_message,
+        candidates=candidates,
+    )
+
+
 @celery_app.task(bind=True, base=UserIntentExecutionTask)
 def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSchema:  # noqa: N805
     """用户意图识别：意图（选系统/日志检索/无法识别）→ 按需系统选择 → 条件识别 → 结构化输出。
 
-    解析失败（非合法 JSON / 形态不合契约）预算内自动重试（次数 + 总时长双约束），
-    超限冒泡收敛 FAILED（手动重试恢复预算）；越权 system_id 与 AIDev 暂态故障直接冒泡；
-    unrecognized（AI 判定无法归类）与 SYSTEM_REQUIRED（检索意图明确但会话无系统，
-    平台守门）收敛 SUCCESS + 结构化 error（error_message 动态）。
+    解析失败或候选系统非法输出在预算内自动重试（次数 + 总时长双约束），超限后与
+    unrecognized（AI 判定无法归类）、SYSTEM_REQUIRED（检索意图明确但会话无系统）
+    一样收敛 SUCCESS + 结构化 error；AIDev 超时和服务异常冒泡收敛 FAILED。
     """
 
     # 延迟导入：handlers 依赖本模块的任务函数，反向引用需运行期加载
@@ -301,7 +330,7 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
         if current_system_id not in {candidate["system_id"] for candidate in candidates}:
             current_selection = None
             current_system_id = ""
-    # ① 意图识别（解析失败预算重试，超限转结构化错误协议；越权/暂态冒泡 FAILED）
+    # ① 意图识别（格式/权限非法输出预算重试，超限转结构化错误协议；暂态故障冒泡 FAILED）
     deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
     intent_error: AIAssistantError | None = None
     try:
@@ -313,8 +342,8 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     current_system_id=current_system_id,
                     username=context_data.username,
                 )
-            except AIOutputParseFailedError as error:
-                # 解析失败具随机性：预算内自动重试（超次数/超时长/含 sleep 后即超
+            except (AIOutputParseFailedError, AIOutputInvalidError) as error:
+                # 非法输出具随机性：预算内自动重试（超次数/超时长/含 sleep 后即超
                 # 预算的前置检查——防 19s 失败 + 2s 等待后仍发起突破 20s 预算的下一轮）
                 if (
                     attempt >= NL_PARSE_MAX_RETRIES
@@ -322,13 +351,13 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                     or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
                 ):
                     logger.error(
-                        "[execute_user_intent] intent parse retry budget exhausted, message_id=%s, attempt=%s",
+                        "[execute_user_intent] intent output retry budget exhausted, message_id=%s, attempt=%s",
                         execution.message.id,
                         attempt + 1,
                         # raw_output 进结构化日志 extra：定位失败形态（嵌套引号未转义 vs 输出截断）的唯一直接证据
                         extra={"raw_output": error.extra.get("raw_output", "")},
                     )
-                    # 解析失败超预算 = 确定性失败（模型能力边界，重试同输入大概率仍失败）：
+                    # 非法输出超预算 = 确定性失败（模型能力边界，重试同输入大概率仍失败）：
                     # 收敛 SUCCESS + 结构化 error（前端错误卡有现成渲染，用户有反馈），
                     # 不收敛 FAILED——FAILED 仅保留给可恢复的暂态故障（重试才有意义）
                     intent_error = error
@@ -336,15 +365,16 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
                 time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
             else:
                 break
-    except (AITimeoutError, AIServiceError, AIOutputInvalidError):
+    except (AITimeoutError, AIServiceError):
         logger.exception("[execute_user_intent] intent recognition failed, message_id=%s", execution.message.id)
         raise
     if intent_error is not None:
         return UserIntentOutputSchema(
             intent="unrecognized",
-            error=UserIntentErrorSchema(
-                error_code=intent_error.error_code,
-                error_message="AI 返回内容解析失败，请稍后重试或换一种描述",
+            error=_build_intent_recognition_error(
+                error=intent_error,
+                candidates=candidates,
+                scope_type=context_data.scope_type,
             ),
         )
     # ② 无法识别：AI 动态说明为什么不行
@@ -352,7 +382,7 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
         return UserIntentOutputSchema(
             intent="unrecognized",
             error=UserIntentErrorSchema(
-                error_code="UNRECOGNIZED_INTENT",
+                error_code=UserIntentErrorCode.UNRECOGNIZED_INTENT,
                 error_message=payload.message or "未能理解您的需求，请描述要查询的系统或日志内容",
             ),
         )
@@ -434,7 +464,7 @@ def execute_user_intent(self, execution: MessageExecution) -> UserIntentOutputSc
         return UserIntentOutputSchema(
             intent="log_search",
             error=UserIntentErrorSchema(
-                error_code="SYSTEM_REQUIRED",
+                error_code=UserIntentErrorCode.SYSTEM_REQUIRED,
                 error_message=error_message,
                 candidates=candidates,
             ),
