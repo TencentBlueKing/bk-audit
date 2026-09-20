@@ -27,19 +27,13 @@
         class="condition-section">
         <selected-systems-panel
           v-if="systems.length"
-          action-placement="header"
           action-text="重新选择"
           class="result-systems-section"
-          :default-expanded="false"
           :systems="systems"
-          :title="`已选 ${systems.length} 个系统`"
           @action="$emit('reselectSystem')" />
 
         <div class="condition-header">
           <div class="condition-header-main">
-            <audit-icon
-              class="condition-icon"
-              type="search1" />
             <span>{{ conditionHeaderText }}</span>
           </div>
         </div>
@@ -1019,12 +1013,6 @@
     line-height: 22px;
     color: #313238;
     align-items: center;
-    gap: 8px;
-
-    .condition-icon {
-      font-size: 18px;
-      color: #979ba5;
-    }
   }
 
   .condition-tags {

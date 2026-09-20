@@ -18,19 +18,13 @@
   <div class="condition-filter-card">
     <selected-systems-panel
       v-if="systems.length"
-      action-placement="header"
       action-text="重新选择"
       class="filter-systems-section"
-      :default-expanded="false"
       :systems="systems"
-      :title="`已选 ${systems.length} 个系统`"
       @action="$emit('reselectSystem')" />
 
     <div class="card-title-row">
-      <audit-icon
-        class="title-icon"
-        type="search1" />
-      <span class="card-title">请输入条件进行检索</span>
+      <span class="card-title">请添加条件进行检索</span>
     </div>
 
     <div class="condition-area">
@@ -336,13 +330,6 @@
     display: flex;
     margin-bottom: 12px;
     align-items: center;
-
-    .title-icon {
-      margin-right: 8px;
-      font-size: 16px;
-      color: #979ba5;
-      flex-shrink: 0;
-    }
 
     .card-title {
       font-size: 14px;
