@@ -1,6 +1,6 @@
 # AI 助手模块功能与架构设计
 
-面向维护 `services.web.ai_assistant` 的开发者。本文描述当前分支实现；部署环境的 Doris、统计 Agent 和前端完整端到端验证尚待完成。接口使用见[公共前端指南](frontend_integration.md)和[统计联调指南](frontend_statistics.md)。
+面向维护 `services.web.ai_assistant` 的开发者。本文描述当前实现的模块边界、执行模型和稳定性约束。接口使用见[公共前端指南](frontend_integration.md)和[统计联调指南](frontend_statistics.md)。
 
 ## 1. 功能与领域边界
 
@@ -27,24 +27,23 @@
 
 ```mermaid
 flowchart TD
-    UI[前端] --> API[Resource / Serializer]
-    API --> Service[领域 Service]
-    Service --> Registry[Handler Registry / Pydantic 快照]
-    Service --> DB[(MySQL)]
-    Service -->|事务提交后投递| Task[AttachmentExecutionTask]
-    Task --> Program[程序统计任务]
-    Task --> AI[AI 统计任务]
-    Program --> Kernel[查询与统计内核]
-    AI --> Agent[bp-ai-log-stats]
-    Agent --> MCP[字段探索 / 聚合 MCP]
+    UI[前端统计卡片] -->|创建 / 重试 / 轮询详情| API[Resource / Serializer]
+    API --> Service[AttachmentService / Handler Registry]
+    Source[成功 LOG_SEARCH] -->|来源归属与条件快照| Service
+    Service -->|创建 PROCESSING / 提交后投递| Worker[统计 Worker<br/>ai_assistant_statistics]
+    Worker --> Program[FIELD_STATISTICS<br/>完整来源条件]
+    Worker --> AI[AI_STATISTICS<br/>bp-ai-log-stats]
+    Program --> Kernel[共享查询与统计内核<br/>实际用户鉴权 / SQL / 预算]
+    AI -->|可按需求调整查询条件| MCP[audit-log-statistics<br/>字段元数据 / 聚合]
     MCP --> Kernel
-    Kernel --> Doris[(Doris)]
-    AI --> Stream[UIStreamRuntime]
-    Stream --> Redis[(Redis 实时流)]
+    Kernel --> BKBase[SafeQuerySyncResource<br/>prefer_storage=doris]
+    BKBase --> Doris[(Doris)]
+    Worker -->|校验输出 / 终态 CAS| DB[(MySQL<br/>状态 / 产物 / 历史事件)]
+    AI -->|原始事件与末条闭合文本| Stream[UIStreamRuntime / 文本提取]
     Stream --> DB
-    Redis --> SSE[SSE]
-    SSE --> UI
-    Task -->|校验输出与 CAS| DB
+    Stream --> Redis[(Redis 实时流)]
+    DB -->|详情 / 过程快照| API
+    Redis -->|可选 SSE 增量| UI
 ```
 
 | 代码入口（相对本模块） | 应在这里修改的内容 |
@@ -83,11 +82,38 @@ flowchart TD
 
 ## 5. AI 文本与流式执行
 
-AI 统计把用户需求、初始条件和轻量查询摘要交给 `bp-ai-log-stats`。统计 Agent 绑定 `audit-log-statistics` 工具集，仅包含字段探索和聚合；日志分析 Agent 使用 `audit-log-analysis`，额外提供明细取证。两套工具集在 stag/prod 均有网关声明，真实环境仍需同步网关并核对 Agent 绑定。
+AI 统计把用户需求、初始条件和轻量查询摘要交给 `bp-ai-log-stats`。统计 Agent 绑定 `audit-log-statistics` 工具集，仅包含字段探索和聚合；日志分析 Agent 使用 `audit-log-analysis`，额外提供明细取证。两套工具集在 stag/prod 均有网关声明，部署时仍需核对实际网关发布和 Agent 工具绑定。
 
 任务先将原始 Agent 事件交给平台流服务，再提取最后一条闭合的 assistant 消息作为 `content`。中间说明和工具结果不拼进最终产物；末条消息未闭合、运行错误、空文本或超限不能以之前的消息冒充成功。
 
-MySQL 保存最终产物与历史过程快照，Redis 提供实时尾流。所有异步附件均可直接轮询详情获取最终产物，is_stream=true 仅表示支持过程订阅。选择展示过程时，前端通过快照恢复，再携带 execution_id 和游标订阅；流结束后重新读详情确定业务终态。详见[流式设计](../streaming/README.md)。
+MySQL 保存最终产物与历史过程快照，Redis 提供实时尾流。所有异步附件均可直接轮询详情获取最终产物，is_stream=true 仅表示支持过程订阅。选择展示过程时，前端通过快照恢复，再携带 execution_id 和游标订阅；流结束后重新读详情确定业务终态。`archive_status=COMPLETE` 仅表示已归档内容未降级/截断，不代表任务终态；运行中的快照可落后于实时流。任务在快照读取后、SSE 建连前结束时，新连接只返回无游标的 `platform.stream_end`，不会补发历史。需要完整过程时重新读取终态快照，最终产物始终读取详情。详见[流式设计](../streaming/README.md)。
+
+```mermaid
+sequenceDiagram
+    participant UI as 前端
+    participant API as 附件接口
+    participant Store as MySQL / Redis
+    UI->>API: 读取附件详情
+    API-->>UI: status / output_data
+    alt PROCESSING 且只需结果
+        loop 合理间隔，网络异常退避
+            UI->>API: 轮询同一附件 UID
+            API-->>UI: 当前状态或最终产物
+        end
+    else PROCESSING 且展示 AI 过程
+        UI->>API: 读取 snapshot
+        API->>Store: 获取已持久化过程
+        API-->>UI: events / execution_id / latest_stream_id
+        UI->>API: SSE 订阅，携带执行标识与游标
+        alt 建连时仍在执行
+            Store-->>UI: 游标后的增量，经 SSE 接口返回
+        else 建连时已进入终态
+            API-->>UI: 无游标 platform.stream_end
+        end
+        UI->>API: 结束或重连时重读详情；需要历史则重读快照
+        API-->>UI: 最终 output_data / 过程快照
+    end
+```
 
 ## 6. 扩展、排障与验证
 
@@ -95,6 +121,4 @@ MySQL 保存最终产物与历史过程快照，Redis 提供实时尾流。所�
 
 排障依次核对附件 UID/状态、task_id、execution_id、Worker 队列、流快照和查询错误。对外错误脱敏；指标使用有界维度，不把用户、字段 key 或附件 UID 作为无限增长的指标标签。详见[可观测性](observability.md)。
 
-测试分层：协议/权限/类型/SQL/结果闭合单测；Resource 完整序列化链路测试；任务重试、CAS 和流恢复测试；special 使用真实 Worker、MySQL、Redis、RabbitMQ 与本地模拟 Agent，但部分外部边界仍使用替身。
-
-本轮仅补文档。此前常规回归 3987 passed，special 35 passed；后续字段映射修复的相关回归 463 passed，不能理解为所有测试都在本文编写时重新执行。真实 Doris 类型与精度、真实 Agent 工具/skills、前端渲染恢复、统计任务故障恢复和容量边界仍需最终端到端验证。Agent 生成质量评估另行跟进。
+测试分层：协议/权限/类型/SQL/结果闭合单测；Resource 完整序列化链路测试；任务重试、CAS 和流恢复测试；special 使用真实 Worker、MySQL、Redis、RabbitMQ 与本地模拟 Agent，但部分外部边界仍使用替身。真实查询引擎、Agent、IAM、跨用户权限、并发容量、基础设施故障和前端渲染应在对应环境独立验收。

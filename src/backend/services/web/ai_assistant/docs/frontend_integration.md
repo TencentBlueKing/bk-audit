@@ -304,6 +304,8 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 5. execution_id 非空时保存该值；携带同一快照的 latest_stream_id 建立连接。latest_stream_id 为空时省略该参数，不传字符串 `null`。
 6. 业务增量更新过程；平台结束事件关闭连接并刷新详情；平台重置事件重新走恢复流程。
 
+任务可能在快照读取后、SSE 建连前进入终态。此时新连接只返回无游标的 `platform.stream_end`，不会重放快照之后的历史事件。最终产物直接从详情展示；若页面还需要完整过程，重新读取终态快照并重建过程区域。不要仅凭收到结束事件就认定本地已收齐全部历史。
+
 ```text
 GET /api/v1/ai_assistant/attachments/{attachment_uid}/stream/
     ?execution_id={snapshot.execution_id}
@@ -380,7 +382,7 @@ source.onerror = () => {
 | 刷新页面/重新打开 | 查详情 → 终态展示结果；处理中读快照 → 重建过程 → 连接增量 |
 | 网络断开/onerror | 关旧连接 → 有限退避 → 查详情 → 仍处理中才读快照并重连；登录或权限失败停止自动重试 |
 | platform.stream_reset | 关旧连接 → 使旧请求回调失效 → 查详情与新快照 → 替换过程 → 按新的执行标识订阅 |
-| platform.stream_end | 关连接 → 查详情 → SUCCESS 展示 output_data，FAILED 展示错误；详情请求失败可重试详情，不重跑业务 |
+| platform.stream_end | 关连接 → 查详情 → SUCCESS 展示 output_data，FAILED 展示错误；需要完整过程时重读终态快照并重建；详情请求失败只重试读取，不重跑业务 |
 | 用户重试 FAILED 附件 | 先关旧连接 → POST retry → 保留附件 UID、清空旧错误/过程 → 查详情和快照，等待新 execution_id |
 | 离开页面/删除会话 | 关闭连接、取消请求和退避定时器；忽略迟到响应，防止覆盖新页面 |
 
@@ -389,6 +391,8 @@ source.onerror = () => {
 如果使用 EventSource 自带重连，Last-Event-ID 请求头优先于 URL 游标。本指南示例在 onerror 中主动 close，再通过详情/快照恢复；不要同时保留浏览器自动重连和应用自己的重连循环。
 
 关闭浏览器连接只停止本地观看，不会取消附件生成。页面恢复不应重新 POST 创建或重试附件。
+
+`archive_status=COMPLETE` 表示已归档内容未降级/截断，不代表附件已完成。运行中的快照可能落后于 Redis 实时流，不能因增量事件尚未出现在当前快照中就判断数据异常；完成状态仍看附件详情。
 
 快照 archive_status 非 COMPLETE 表示过程记录可能不完整：可提示“部分生成过程不可恢复”，最终是否成功仍看附件详情。不要因过程缺失隐藏已成功的报告，也不要承诺刷新后能恢复每一个中间事件。
 
