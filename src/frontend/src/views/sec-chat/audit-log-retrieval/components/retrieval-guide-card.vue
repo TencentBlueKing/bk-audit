@@ -506,7 +506,7 @@
 
   const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
     if (mode === 'filter') {
-      // 条件筛选：每次点击产出条件卡；未检索时由父级覆盖草稿，不向已有卡追加字段
+      // 条件筛选：首次点击产出条件卡；已有未检索草稿时由父级向现有卡追加字段
       // 回填必须用原始值，避免把展示文案写进筛选条件
       // 扩展字段须带 keys，否则会误命中父字段（如 instance_data →「实例当前内容」）
       emit('open-condition-filter', {
