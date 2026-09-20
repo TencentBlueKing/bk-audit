@@ -249,7 +249,7 @@
       display: flex;
       min-width: 0;
       min-height: 98px;
-      padding: 16px;
+      padding: 24px;
       cursor: pointer;
       background: #fff;
       border: 1px solid #eaebf0;
@@ -261,10 +261,6 @@
 
       &:hover:not(.is-disabled) {
         box-shadow: 0 2px 10px 0 rgb(0 0 0 / 16%);
-      }
-
-      &.is-disabled {
-        cursor: not-allowed;
       }
 
       .card-icon {
@@ -280,7 +276,7 @@
         i,
         .audit-icon,
         .card-icon-img {
-          font-size: 20px;
+          font-size: 22px;
           color: #3a84ff;
         }
 
@@ -307,6 +303,31 @@
           font-size: 14px;
           line-height: 20px;
           color: #4D4F56;
+        }
+      }
+
+      /* 未开发态：标题/描述/图标均用灰，不以黑色标题突出 */
+      &.is-disabled {
+        cursor: not-allowed;
+
+        .card-icon {
+          background: #f5f7fa;
+
+          i,
+          .audit-icon {
+            color: #c4c6cc;
+          }
+
+          .card-icon-img {
+            filter: brightness(0) saturate(100%) invert(86%) sepia(6%) saturate(193%) hue-rotate(185deg) brightness(93%) contrast(87%);
+          }
+        }
+
+        .card-content {
+          .card-title,
+          .card-desc {
+            color: #c4c6cc;
+          }
         }
       }
     }
