@@ -28,9 +28,12 @@ import type {
   AiUserIntentInput,
 } from '@model/ai-assistant/types';
 
+import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
+
 import type {
   Conversation,
   Group,
+  RetrievalResultPayload,
   RootReorderPayload,
   RootSidebarItem,
   SelectedSystem,
@@ -45,6 +48,20 @@ import {
 } from '../utils/map-ai-message';
 
 import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
+
+/** 把用户点选的时间快捷项挂到结果上（仅前端交互态；非相对则清除） */
+const attachDatetimeOriginToMessage = (
+  conversationId: string,
+  messageUid: string,
+  datetimeOrigin?: string[],
+) => {
+  rememberLogSearchDatetimeOrigin(messageUid, datetimeOrigin);
+  const conv = conversations.value.find(c => c.id === conversationId)
+    || (draftConversation.value?.id === conversationId ? draftConversation.value : null);
+  if (!conv) return;
+  const target = conv.messages.find(item => item.id === messageUid);
+  applyRememberedDatetimeOrigin(messageUid, target?.result);
+};
 
 /** 组装 USER_INTENT input_data（附带当前场景选择器 scope） */
 const buildUserIntentInputData = (queryText: string): AiUserIntentInput => {
@@ -139,8 +156,76 @@ const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
 /** 后端未下发 visible 时的会话内兜底（如选系统后待补发检索） */
 const hiddenCardMessageIds = new Set<string>();
+/**
+ * 条件筛选点选的时间快捷项（按 LOG_SEARCH uid 记忆）。
+ * 后端只回绝对起止，轮询 remap / 刷新会丢交互态，需本地持久化后在 upsert 时回挂。
+ */
+const DATETIME_ORIGIN_STORAGE_KEY = 'bk-audit-sec-chat-log-search-datetime-origin';
+const logSearchDatetimeOriginByUid = new Map<string, string[]>();
+
+const hydrateDatetimeOriginMemory = () => {
+  try {
+    const raw = localStorage.getItem(DATETIME_ORIGIN_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, string[]>;
+    Object.entries(parsed || {}).forEach(([uid, origin]) => {
+      if (Array.isArray(origin) && isRelativeDatetimeOrigin(origin)) {
+        logSearchDatetimeOriginByUid.set(uid, [...origin]);
+      }
+    });
+  } catch {
+    // localStorage 不可用或数据损坏时忽略
+  }
+};
+
+const persistDatetimeOriginMemory = () => {
+  try {
+    const payload: Record<string, string[]> = {};
+    logSearchDatetimeOriginByUid.forEach((origin, uid) => {
+      payload[uid] = origin;
+    });
+    localStorage.setItem(DATETIME_ORIGIN_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // localStorage 不可用时忽略
+  }
+};
+
+hydrateDatetimeOriginMemory();
+
 /** 首页建会话进行中的 Promise，避免连点重复创建 */
 let createLogConversationInflight: Promise<Conversation> | null = null;
+
+/** 记住 / 清除某条 LOG_SEARCH 的时间快捷交互态 */
+const rememberLogSearchDatetimeOrigin = (messageUid: string, datetimeOrigin?: string[]) => {
+  if (datetimeOrigin && isRelativeDatetimeOrigin(datetimeOrigin)) {
+    logSearchDatetimeOriginByUid.set(messageUid, [...datetimeOrigin]);
+    persistDatetimeOriginMemory();
+    return;
+  }
+  if (logSearchDatetimeOriginByUid.delete(messageUid)) {
+    persistDatetimeOriginMemory();
+  }
+};
+
+/** 把记忆中的快捷项挂到结果 payload */
+const applyRememberedDatetimeOrigin = (
+  messageUid: string,
+  result?: RetrievalResultPayload,
+  fallback?: string[],
+) => {
+  if (!result) return;
+  const remembered = logSearchDatetimeOriginByUid.get(messageUid)
+    || (fallback && isRelativeDatetimeOrigin(fallback) ? fallback : undefined);
+  if (remembered) {
+    result.datetimeOrigin = [...remembered];
+    if (!logSearchDatetimeOriginByUid.has(messageUid)) {
+      logSearchDatetimeOriginByUid.set(messageUid, [...remembered]);
+      persistDatetimeOriginMemory();
+    }
+    return;
+  }
+  delete result.datetimeOrigin;
+};
 
 const activeConversation = computed(() => {
   if (draftConversation.value && activeConversationId.value === draftConversation.value.id) {
@@ -243,8 +328,14 @@ const upsertConversationMessage = (
     ) {
       chatMessage.result = prev.result;
     }
+    applyRememberedDatetimeOrigin(
+      message.uid,
+      chatMessage.result,
+      prev.result?.datetimeOrigin,
+    );
     conv.messages.splice(idx, 1, chatMessage);
   } else {
+    applyRememberedDatetimeOrigin(message.uid, chatMessage.result);
     conv.messages.push(chatMessage);
   }
 
@@ -582,10 +673,13 @@ const applyMessageWindow = (conv: Conversation, windowData: {
         content: String(message.input_data.query_text),
       });
     }
-    mapped.push(mapAiMessageToChatMessage(message, {
+    const chatMessage = mapAiMessageToChatMessage(message, {
       fieldCatalog,
       hiddenCardMessageIds,
-    }));
+    });
+    // 刷新/历史窗口不经 upsert，需单独回挂本地记忆的时间快捷项
+    applyRememberedDatetimeOrigin(message.uid, chatMessage.result);
+    mapped.push(chatMessage);
   });
   /* eslint-disable no-param-reassign -- 原地更新会话消息窗口与系统上下文 */
   if (mode === 'replace') {
@@ -1383,8 +1477,12 @@ export function useSecChatStore() {
   /**
    * 条件筛选检索：POST LOG_SEARCH，写入消息列表，顺序跟随后端返回。
    * 引导卡「条件筛选」首次检索走此路径（不传已有 uid，生成新卡）。
+   * @param datetimeOrigin 用户点选的时间快捷项；仅前端保留用于标签展示
    */
-  const sendConditionSearch = async (condition: AiSearchCondition) => {
+  const sendConditionSearch = async (
+    condition: AiSearchCondition,
+    options?: { datetimeOrigin?: string[] },
+  ) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) {
       throw new Error('请先选择系统并创建会话');
@@ -1394,7 +1492,10 @@ export function useSecChatStore() {
       message_type: 'LOG_SEARCH',
       input_data: { condition },
     });
+    // 先于 upsert 记住快捷项，避免首帧 remap 丢交互态
+    rememberLogSearchDatetimeOrigin(message.uid, options?.datetimeOrigin);
     upsertConversationMessage(conv.id, message);
+    attachDatetimeOriginToMessage(conv.id, message.uid, options?.datetimeOrigin);
     // 与 rerunLogSearch 一致：异步检索需轮询至终态，否则页面会一直 loading
     if (message.status === 'PROCESSING') {
       startMessagePoll(conv.id, message.uid);
@@ -1402,13 +1503,26 @@ export function useSecChatStore() {
       void refreshConversationTitle(conv.id);
     }
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
-    return mapAiMessageToChatMessage(message, { fieldCatalog });
+    const mapped = mapAiMessageToChatMessage(message, { fieldCatalog });
+    if (
+      mapped.result
+      && options?.datetimeOrigin
+      && isRelativeDatetimeOrigin(options.datetimeOrigin)
+    ) {
+      mapped.result.datetimeOrigin = [...options.datetimeOrigin];
+    }
+    return mapped;
   };
 
   /**
    * 结果卡二次修改条件：PATCH 已有 LOG_SEARCH uid，覆盖同条消息快照，不新建卡。
+   * @param datetimeOrigin 用户点选的时间快捷项；仅前端保留用于标签展示
    */
-  const rerunLogSearch = async (messageUid: string, condition: AiSearchCondition) => {
+  const rerunLogSearch = async (
+    messageUid: string,
+    condition: AiSearchCondition,
+    options?: { datetimeOrigin?: string[] },
+  ) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) {
       throw new Error('请先选择系统并创建会话');
@@ -1420,7 +1534,9 @@ export function useSecChatStore() {
       message_uid: messageUid,
       input_data: { condition },
     });
+    rememberLogSearchDatetimeOrigin(messageUid, options?.datetimeOrigin);
     upsertConversationMessage(conv.id, message);
+    attachDatetimeOriginToMessage(conv.id, message.uid, options?.datetimeOrigin);
     if (message.status === 'PROCESSING') {
       startMessagePoll(conv.id, message.uid);
     } else if (message.status === 'SUCCESS') {
@@ -1430,7 +1546,15 @@ export function useSecChatStore() {
     const updated = conv.messages.find(item => item.id === message.uid);
     if (updated) return updated;
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
-    return mapAiMessageToChatMessage(message, { fieldCatalog });
+    const mapped = mapAiMessageToChatMessage(message, { fieldCatalog });
+    if (
+      mapped.result
+      && options?.datetimeOrigin
+      && isRelativeDatetimeOrigin(options.datetimeOrigin)
+    ) {
+      mapped.result.datetimeOrigin = [...options.datetimeOrigin];
+    }
+    return mapped;
   };
 
   const retryMessage = async (messageUid: string) => {
