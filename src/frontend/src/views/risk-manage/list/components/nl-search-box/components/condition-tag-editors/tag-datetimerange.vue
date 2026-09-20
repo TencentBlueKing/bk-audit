@@ -190,7 +190,7 @@
   const shortcutSelectedIndex = computed(() => (
     pendingShortcutSelectedIndex.value
     ?? (resolvedShortcutSelectedIndex.value >= 0 ? resolvedShortcutSelectedIndex.value : null)
-    ?? inferredShortcutSelectedIndex.value
+    ?? -1
   ));
 
   const parseDateValue = (val: any) => {
@@ -207,23 +207,19 @@
 
   const localValue = ref<any>(parseDateValue(props.tag.value));
 
-  const inferredShortcutSelectedIndex = computed(() => {
-    if (!Array.isArray(localValue.value) || localValue.value.length < 2) {
-      return -1;
-    }
-    const start = dayjs(localValue.value[0]);
-    const end = dayjs(localValue.value[1]);
-    if (!start.isValid() || !end.isValid()) {
-      return -1;
-    }
-    const now = dayjs();
-    const endDiffMinutes = Math.abs(end.diff(now, 'minute'));
-    if (endDiffMinutes > 5) {
-      return -1;
-    }
+  /** 面板内选区若命中快捷时长，回写相对 origin（仅交互态，不用于接口回填反推） */
+  const matchShortcutOriginFromRange = (range: string[]): string[] | null => {
+    if (!Array.isArray(range) || range.length < 2) return null;
+    const start = dayjs(range[0]);
+    const end = dayjs(range[1]);
+    if (!start.isValid() || !end.isValid()) return null;
+    if (Math.abs(end.diff(dayjs(), 'minute')) > 5) return null;
     const diffMinutes = end.diff(start, 'minute');
-    return shortcutConfigs.findIndex(item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2);
-  });
+    const matched = shortcutConfigs.find(item => (
+      Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2
+    ));
+    return matched ? [matched.origin, 'now'] : null;
+  };
 
   const handleChange = (value: any) => {
     if (!value || !Array.isArray(value) || value.length < 2) return;
@@ -234,10 +230,25 @@
     ));
     localValue.value = formatted;
     emit('update', props.tag.fieldName, formatted);
+
     if (pendingShortcutOrigin.value) {
       emit('update', 'datetime_origin', pendingShortcutOrigin.value);
+      pendingShortcutOrigin.value = null;
+      pendingShortcutSelectedIndex.value = null;
       return;
     }
+
+    // 点击快捷项时部分版本只触发 change：按时长回写快捷 origin，保证切换即时生效
+    const matchedOrigin = matchShortcutOriginFromRange(formatted);
+    if (matchedOrigin) {
+      const matchedIdx = shortcutOriginMap[matchedOrigin[0]];
+      if (matchedIdx !== undefined) {
+        pendingShortcutSelectedIndex.value = matchedIdx;
+      }
+      emit('update', 'datetime_origin', matchedOrigin);
+      return;
+    }
+
     pendingShortcutSelectedIndex.value = null;
     emit('update', 'datetime_origin', formatted);
   };
@@ -250,9 +261,14 @@
     if (!shortcutConfig || typeof shortcut?.value !== 'function') {
       return;
     }
+    const range = shortcut.value();
+    const formatted = range.map(item => dayjs(item).format('YYYY-MM-DD HH:mm:ss'));
     pendingShortcutSelectedIndex.value = index;
     pendingShortcutOrigin.value = [shortcutConfig.origin, 'now'];
-    localValue.value = shortcut.value();
+    localValue.value = formatted;
+    // 同时写入绝对时间与快捷 origin，不依赖随后的 @change 时序
+    emit('update', props.tag.fieldName, formatted);
+    emit('update', 'datetime_origin', pendingShortcutOrigin.value);
     updateEditorWidth();
   };
 
@@ -277,8 +293,7 @@
     const origin = Array.isArray(val) ? val : [];
     const pendingOrigin = pendingShortcutOrigin.value;
     if (pendingOrigin && pendingOrigin.join(',') === origin.join(',')) {
-      pendingShortcutOrigin.value = null;
-      pendingShortcutSelectedIndex.value = null;
+      // origin 已落到父级；保留 pendingShortcutOrigin 供随后 @change 再消费一次
       return;
     }
     if (pendingOrigin) {
