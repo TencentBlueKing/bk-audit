@@ -371,7 +371,7 @@
     justify-content: flex-start;
     gap: 8px;
 
-    .confirm-btn {
+    :deep(.bk-button) {
       min-width: 88px;
       height: 32px;
       padding: 0 16px;
