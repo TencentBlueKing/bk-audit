@@ -24,6 +24,7 @@ from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.utils.encoding import force_str
 
 from core.lock import lock
 from services.web.analyze.constants import FlowNodeStatusChoices
@@ -229,7 +230,7 @@ def check_strategy_status_anomalies():
                         "target": strategy.strategy_id,
                         "event_name": "strategy_exception",
                         "event": {
-                            "content": reason,
+                            "content": force_str(reason),
                         },
                         "dimension": {
                             "strategy_id": str(strategy.strategy_id),
