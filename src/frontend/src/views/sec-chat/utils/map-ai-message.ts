@@ -334,6 +334,28 @@ export const mapLogSearchOutputToResult = (
   };
 };
 
+/** 仅条件就绪、表格未到：撑起结果卡壳，正文 tablePending loading */
+export const mapConditionPendingResult = (
+  condition?: AiSearchCondition | null,
+  fieldCatalog: SystemFieldRow[] = [],
+  options?: { toolCount?: number },
+): RetrievalResultPayload | undefined => {
+  if (!condition || typeof condition !== 'object') return undefined;
+  return {
+    conditions: mapConditionToFilterTags(condition, fieldCatalog),
+    rawCondition: condition,
+    toolCount: options?.toolCount ?? 3,
+    thinkSeconds: null,
+    title: '审计日志检索结果',
+    totalHit: 0,
+    previewCount: 0,
+    showPreviewHint: false,
+    columns: [],
+    rows: [],
+    tablePending: true,
+  };
+};
+
 /** LOG_SEARCH FAILED：用 input 条件撑起结果卡，正文展示失败态（对齐条件检索失败） */
 export const mapLogSearchFailedToResult = (
   message: AiMessage,
@@ -426,6 +448,21 @@ export const mapAiMessageToChatMessage = (
   };
 
   if (message.message_type === 'SYSTEM_SELECTION') {
+    // PROCESSING：已选系统可先出壳；建议/字段等 SUCCESS 再填
+    if (message.status === 'PROCESSING' && systems.length) {
+      return {
+        id: message.uid,
+        role: 'assistant',
+        type: 'retrieval-guide',
+        systems,
+        systemIds,
+        commonOperations: [],
+        historicalOperations: [],
+        standardFields: [],
+        extensionFields: [],
+        ...baseMeta,
+      };
+    }
     if (message.status === 'SUCCESS' && (systems.length || message.output_data)) {
       const { standardFields, extensionFields } = pickSystemFields(message.output_data);
       return {
@@ -485,13 +522,16 @@ export const mapAiMessageToChatMessage = (
         ...baseMeta,
       };
     }
+    // 识别成功：条件先出壳；表格等子 LOG_SEARCH（有子卡后本卡不再渲染结果）
+    const nlCondition = message.status === 'SUCCESS'
+      ? (message.output_data?.condition as AiSearchCondition | null | undefined)
+      : undefined;
     return {
       id: message.uid,
       role: 'assistant',
       type: 'retrieval-result',
       content: queryText,
-      // NL SUCCESS 的表格在子 LOG_SEARCH；此处不填 result，避免双卡
-      result: undefined,
+      result: mapConditionPendingResult(nlCondition, fieldCatalog),
       ...baseMeta,
     };
   }
@@ -558,12 +598,17 @@ export const mapAiMessageToChatMessage = (
       };
     }
 
+    // 意图成功且已识别条件：先出条件区，表格等续链 LOG_SEARCH
+    const pendingResult = message.status === 'SUCCESS'
+      ? mapConditionPendingResult(output.condition, fieldCatalog)
+      : undefined;
+
     return {
       id: message.uid,
       role: 'assistant',
       type: 'retrieval-result',
       content: queryText,
-      result: undefined,
+      result: pendingResult,
       aiMessage: output.message ? String(output.message) : undefined,
       intent: output.intent,
       candidateSystems,
@@ -575,6 +620,12 @@ export const mapAiMessageToChatMessage = (
     let result: RetrievalResultPayload | undefined;
     if (message.status === 'SUCCESS') {
       result = mapLogSearchOutputToResult(message, fieldCatalog);
+    } else if (message.status === 'PROCESSING') {
+      result = mapConditionPendingResult(
+        message.input_data?.condition as AiSearchCondition | undefined,
+        fieldCatalog,
+        { toolCount: 2 },
+      );
     } else if (message.status === 'FAILED') {
       result = mapLogSearchFailedToResult(message, fieldCatalog);
     }
