@@ -24,10 +24,6 @@
           <bk-tag
             v-for="(item) in renderData"
             :key="item"
-            v-bk-tooltips="{
-              content: item,
-              disabled: item.length < 12,
-            }"
             class="audit-edit-tag__label"
             @click="handlerClick">
             {{ item }}
@@ -359,7 +355,7 @@
     }
 
     .audit-edit-tag__label {
-      flex-shrink: 0;
+      min-width: 0;
     }
 
     &:hover {
@@ -404,23 +400,20 @@
   }
 
   :deep(.audit-edit-tag__label.bk-tag) {
-    width: auto !important;
-    max-width: none !important;
+    width: auto;
     margin-right: 0;
-    overflow: visible;
+    overflow: hidden;
     vertical-align: middle;
   }
 </style>
 
 <style lang="postcss">
-  /* 测量节点与展示标签同宽，避免默认 bk-tag max-width 导致可放数量算多 */
+  /* 测量节点与展示标签同宽，保证可放数量按截断后的实际宽度计算 */
   .audit-edit-tag-measure {
     .audit-edit-tag__label.bk-tag {
-      width: auto !important;
-      max-width: none !important;
+      width: auto;
       margin-right: 0;
       margin-left: 0;
-      overflow: visible;
 
       & ~ .bk-tag {
         margin-left: 6px;

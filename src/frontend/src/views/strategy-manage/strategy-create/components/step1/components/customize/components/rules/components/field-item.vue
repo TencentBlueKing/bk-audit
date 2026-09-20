@@ -176,6 +176,7 @@
     enrichFieldDisplayNames,
     formatFieldDisplayLabel,
     formatHitConditionFieldBase,
+    useRawNameAsFieldAlias,
   } from '../../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
@@ -496,11 +497,12 @@
   ) => {
     const expected = (expectedResult || []).filter(item => item?.raw_name || item?.display_name);
     const source = expected.length ? expected : (tableFields || []);
-    // 回填数据源中文名，统一展示为「中文名(raw_name)」
-    localTableFields.value = enrichFieldDisplayNames(
+    const enriched = enrichFieldDisplayNames(
       source.map(item => ({ ...item })),
       tableFields || [],
     );
+    // 未配置预期结果时不使用字段别名
+    localTableFields.value = expected.length ? enriched : useRawNameAsFieldAlias(enriched);
   };
 
   const tableFieldsSign = computed(() => localTableFields.value
