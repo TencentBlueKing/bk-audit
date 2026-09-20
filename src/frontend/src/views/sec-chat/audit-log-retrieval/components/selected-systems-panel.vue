@@ -16,46 +16,24 @@
 -->
 <template>
   <div class="selected-systems-panel">
-    <div
-      class="systems-header"
-      @click="expanded = !expanded">
+    <div class="systems-header">
       <div class="systems-title">
         <img
           alt=""
           class="title-icon"
           :src="wenhaoIcon">
-        <span>{{ title }}</span>
-      </div>
-      <div class="systems-header-right">
-        <button
-          v-if="actionText && actionPlacement === 'header'"
-          class="reselect-link is-header"
-          :disabled="actionDisabled"
-          type="button"
-          @click.stop="$emit('action')">
-          <audit-icon
-            class="reselect-icon"
-            type="refresh" />
-          <span>{{ actionText }}</span>
-        </button>
-        <audit-icon
-          class="expand-icon"
-          :class="{ 'is-collapsed': !expanded }"
-          type="angle-line-down" />
-      </div>
-    </div>
-
-    <template v-if="expanded">
-      <div class="system-tags">
-        <span
-          v-for="item in systems"
-          :key="item.id"
-          class="system-tag">
-          {{ item.name }}({{ item.id }})
+        <span class="title-text">
+          <span class="title-label">{{ title }}</span>
+          <template v-if="selectedSystemLabel">
+            <span>：</span>
+            <span
+              class="system-name"
+              :title="selectedSystemLabel">{{ selectedSystemLabel }}</span>
+          </template>
         </span>
       </div>
       <button
-        v-if="actionText && actionPlacement === 'footer'"
+        v-if="actionText"
         class="reselect-link"
         :disabled="actionDisabled"
         type="button"
@@ -65,12 +43,12 @@
           type="refresh" />
         <span>{{ actionText }}</span>
       </button>
-    </template>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-  import { ref } from 'vue';
+  import { computed } from 'vue';
 
   import type { SelectedSystem } from '../../types';
 
@@ -78,15 +56,18 @@
 
   const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
-    title: string;
+    title?: string;
+    /** @deprecated 单选后标题行直接展示系统名，不再折叠 */
     defaultExpanded?: boolean;
     actionText?: string;
+    /** @deprecated 单选后操作固定在标题右侧 */
     actionPlacement?: 'header' | 'footer';
     actionDisabled?: boolean;
   }>(), {
+    title: '已选系统',
     defaultExpanded: true,
     actionText: '',
-    actionPlacement: 'footer',
+    actionPlacement: 'header',
     actionDisabled: false,
   });
 
@@ -94,7 +75,13 @@
     action: [];
   }>();
 
-  const expanded = ref(props.defaultExpanded);
+  const selectedSystemLabel = computed(() => {
+    const system = props.systems[0];
+    if (!system) return '';
+    const { name, id } = system;
+    if (name && id && name !== id) return `${name}(${id})`;
+    return name || id || '';
+  });
 </script>
 
 <style lang="postcss" scoped>
@@ -107,8 +94,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    cursor: pointer;
-    user-select: none;
   }
 
   .systems-title {
@@ -120,60 +105,34 @@
     font-weight: 500;
     line-height: 22px;
     color: #313238;
-
-    .title-icon {
-      display: block;
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-    }
   }
 
-  .systems-header-right {
-    display: inline-flex;
+  .title-icon {
+    display: block;
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
-    align-items: center;
-    gap: 8px;
   }
 
-  .expand-icon {
-    font-size: 14px;
-    color: #979ba5;
-    transition: transform .2s;
-
-    &.is-collapsed {
-      transform: rotate(-90deg);
-    }
-  }
-
-  .system-tags {
+  .title-text {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 12px;
-    background: #f0f5ff;
-    border-radius: 4px;
+    min-width: 0;
+    align-items: center;
   }
 
-  .system-tag {
-    display: inline-flex;
-    max-width: 100%;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 12px;
-    line-height: 22px;
-    color: #63656e;
-    letter-spacing: 0;
-    background: #fff;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
-    box-sizing: border-box;
+  .title-label {
+    flex-shrink: 0;
+  }
+
+  .system-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .reselect-link {
     display: inline-flex;
-    margin-top: 12px;
+    flex-shrink: 0;
     padding: 0;
     font-size: 14px;
     line-height: 22px;
@@ -192,10 +151,6 @@
       color: #c4c6cc;
       cursor: not-allowed;
       opacity: 1;
-    }
-
-    &.is-header {
-      margin-top: 0;
     }
 
     .reselect-icon {
