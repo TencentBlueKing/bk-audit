@@ -533,9 +533,11 @@
   const { messageSuccess, messageError, messageWarn } = useMessage();
   const exporting = ref(false);
   const resubmitLoading = ref(false);
-  /** 本地提交中或后端仍在 PROCESSING：统一走卡内 loading，避免切到全局检索 loading */
+  /** 本地提交中或后端 PROCESSING：卡内遮罩；tablePending 仅用于首次尚无表格的条件壳 */
   const bodyLoading = computed(() => (
-    resubmitLoading.value || props.apiStatus === 'PROCESSING'
+    resubmitLoading.value
+    || props.apiStatus === 'PROCESSING'
+    || Boolean(displayResult.value?.tablePending)
   ));
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const searchModel = ref<Record<string, any>>({
@@ -569,6 +571,7 @@
 
   const conditionEditable = computed(() => (
     Boolean(displayResult.value.rawCondition)
+    && !displayResult.value.tablePending
     && Object.keys(fieldConfig.value).length > 1
   ));
 
@@ -706,8 +709,8 @@
     resubmitLoading.value = true;
     try {
       const chatMessage = await rerunLogSearch(messageUid, condition);
-      // 同 uid 覆盖：成功/失败都刷新本卡；失败走卡内失败态，不再额外 toast
-      if (chatMessage.result) {
+      // PROCESSING：保留当前表格高度，仅靠卡内 loading 遮罩；终态再刷新结果
+      if (chatMessage.result && chatMessage.apiStatus !== 'PROCESSING') {
         displayResult.value = chatMessage.result;
         displayMessageUid.value = chatMessage.id;
         if (chatMessage.apiStatus !== 'FAILED') {
@@ -725,7 +728,12 @@
   };
 
   const isFailed = computed(() => props.apiStatus === 'FAILED');
-  const isEmpty = computed(() => !isFailed.value && displayResult.value.totalHit <= 0);
+  const isEmpty = computed(() => (
+    !isFailed.value
+    && !displayResult.value.tablePending
+    && !bodyLoading.value
+    && displayResult.value.totalHit <= 0
+  ));
   const canExport = computed(() => (
     Boolean(displayMessageUid.value)
     && !isFailed.value

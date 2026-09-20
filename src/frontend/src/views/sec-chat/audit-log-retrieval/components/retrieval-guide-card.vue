@@ -68,7 +68,7 @@
         <selected-systems-panel
           v-else
           action-placement="header"
-          action-text="重新选择"
+          :action-text="contentLoading ? '' : '重新选择'"
           :systems="systems"
           title="已选系统"
           @action="handleStartEditSystem" />
@@ -79,7 +79,20 @@
         <div class="suggest-title">
           可按以下建议进行后续操作
         </div>
-        <div class="suggest-columns">
+        <div
+          v-if="contentLoading"
+          aria-busy="true"
+          aria-label="建议加载中"
+          class="section-skeleton">
+          <div
+            v-for="n in 4"
+            :key="`suggest-bone-${n}`"
+            class="bone bone-line"
+            :style="{ width: suggestBoneWidths[n - 1] }" />
+        </div>
+        <div
+          v-else
+          class="suggest-columns">
           <div class="suggest-column">
             <div class="column-label">
               常用操作
@@ -129,13 +142,13 @@
         <div class="field-toolbar">
           <div
             class="field-title"
-            @click="fieldExpanded = !fieldExpanded">
+            @click="!contentLoading && (fieldExpanded = !fieldExpanded)">
             <span
               class="field-arrow"
               :class="{ 'is-collapsed': !fieldExpanded }" />
             <span>按字段检索</span>
           </div>
-          <template v-if="fieldExpanded">
+          <template v-if="fieldExpanded && !contentLoading">
             <div class="field-tabs">
               <button
                 class="field-tab"
@@ -162,7 +175,18 @@
         </div>
 
         <div
-          v-if="fieldExpanded"
+          v-if="contentLoading"
+          aria-busy="true"
+          aria-label="字段加载中"
+          class="section-skeleton field-skeleton">
+          <div
+            v-for="n in 5"
+            :key="`field-bone-${n}`"
+            class="bone bone-line"
+            :style="{ width: fieldBoneWidths[n - 1] }" />
+        </div>
+        <div
+          v-else-if="fieldExpanded"
           class="field-table-wrap">
           <table
             class="field-table"
@@ -279,12 +303,15 @@
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
     confirmingSystem?: boolean;
+    /** SYSTEM_SELECTION PROCESSING：已选系统可见，建议/字段局部 loading */
+    contentLoading?: boolean;
   }>(), {
     commonOperations: () => [],
     historicalOperations: () => [],
     standardFields: () => [],
     extensionFields: () => [],
     confirmingSystem: false,
+    contentLoading: false,
   });
 
   const emit = defineEmits<{
@@ -332,15 +359,20 @@
   const route = useRoute();
   const { messageWarn } = useMessage();
 
-  /** 有真实数据则展示（最多 4 条）；否则用 demo 兜底空态 */
+  /** 有真实数据则展示（最多 4 条）；加载中不展示 demo，避免误认为已就绪 */
   const commonSuggestions = computed(() => {
+    if (props.contentLoading) return [];
     const real = props.commonOperations.slice(0, SUGGESTION_LIMIT);
     return real.length > 0 ? real : COMMON_OPERATION_DEMOS;
   });
 
-  const historySuggestions = computed(() => (
-    props.historicalOperations.slice(0, SUGGESTION_LIMIT)
-  ));
+  const historySuggestions = computed(() => {
+    if (props.contentLoading) return [];
+    return props.historicalOperations.slice(0, SUGGESTION_LIMIT);
+  });
+
+  const suggestBoneWidths = ['72%', '88%', '64%', '80%'];
+  const fieldBoneWidths = ['100%', '92%', '78%', '86%', '70%'];
 
   const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
     name: resolveSystemFieldDisplayLabel(field, [
@@ -433,6 +465,7 @@
   );
 
   const handleStartEditSystem = () => {
+    if (props.contentLoading) return;
     isEditingSystem.value = true;
     editingSystemId.value = currentSystemId.value;
     fetchSystemList();
@@ -517,6 +550,48 @@
   .systems-section {
     margin-bottom: 20px;
     flex-shrink: 0;
+  }
+
+  .section-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 8px;
+  }
+
+  .field-skeleton {
+    margin-top: 12px;
+  }
+
+  .bone {
+    position: relative;
+    overflow: hidden;
+    background: #ebecf3;
+    border-radius: 2px;
+
+    &::after {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgb(246 247 251 / 80%) 50%,
+        transparent 100%
+      );
+      content: '';
+      transform: translateX(-100%);
+      animation: guide-skeleton-shimmer 1.6s ease-in-out infinite;
+    }
+  }
+
+  .bone-line {
+    height: 12px;
+  }
+
+  @keyframes guide-skeleton-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
   }
 
   .systems-edit-header {

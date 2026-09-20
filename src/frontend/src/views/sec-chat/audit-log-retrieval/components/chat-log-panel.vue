@@ -58,13 +58,6 @@
                 {{ msg.content }}
               </div>
 
-              <!-- 系统确认/引导异步处理中：整条骨架占位，避免终态卡片突然撑开 -->
-              <retrieval-card-skeleton
-                v-else-if="msg.messageType === 'SYSTEM_SELECTION'
-                  && msg.apiStatus === 'PROCESSING'
-                  && msg.visible !== false"
-                status-text="正在加载检索引导…" />
-
               <!-- 内联选择系统卡片 -->
               <select-system-card
                 v-else-if="msg.type === 'select-system' && msg.status === 'pending' && msg.visible !== false"
@@ -76,11 +69,12 @@
                 @close="$emit('close-select-system', msg.id)"
                 @confirm="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)" />
 
-              <!-- 显式选系统后的检索引导卡片 -->
+              <!-- 显式选系统后的检索引导卡片（含 PROCESSING：已选系统先出，建议/字段局部 loading） -->
               <retrieval-guide-card
                 v-else-if="msg.type === 'retrieval-guide' && msg.visible !== false"
                 :common-operations="msg.commonOperations || []"
                 :confirming-system="confirmingSystemMessageId === msg.id"
+                :content-loading="msg.apiStatus === 'PROCESSING'"
                 :extension-fields="msg.extensionFields || []"
                 :historical-operations="msg.historicalOperations || []"
                 :standard-fields="msg.standardFields || []"
@@ -90,7 +84,7 @@
                 @open-condition-filter="handleOpenConditionFilter"
                 @select-suggestion="handleSelectSuggestion" />
 
-              <!-- NL 处理中：整条骨架占位，避免终态卡片突然撑开 -->
+              <!-- 意图理解中且尚无条件：整条骨架；有条件后走结果卡局部 loading -->
               <retrieval-card-skeleton
                 v-else-if="shouldShowRetrievalLoading(msg)"
                 :status-text="getRetrievalLoadingText(msg)" />
@@ -141,14 +135,14 @@
                 </div>
               </div>
 
-              <!-- 查询后的结构化结果卡片（含 LOG_SEARCH FAILED：条件区 + 卡内失败态） -->
+              <!-- 查询后的结构化结果卡片（含条件壳 / LOG_SEARCH FAILED）；意图卡在子 LOG 出现后让位避免双卡 -->
               <retrieval-result-card
-                v-else-if="msg.type === 'retrieval-result' && msg.result"
+                v-else-if="shouldShowRetrievalResultCard(msg)"
                 :api-status="msg.apiStatus"
                 :error-message="msg.errorMessage || msg.aiMessage || ''"
                 :extension-fields="extensionFields"
-                :message-uid="msg.id"
-                :result="msg.result"
+                :message-uid="resolveResultMessageUid(msg)"
+                :result="getRetrievalResultPayload(msg)"
                 :standard-fields="standardFields"
                 :systems="systems"
                 @regenerate="handleRegenerate(msg.content || '')"
@@ -230,7 +224,12 @@
   import ConditionFilterCard from './condition-filter-card.vue';
   import RetrievalResultCard from './retrieval-result-card.vue';
   import SelectSystemCard from './select-system-card.vue';
-  import type { ChatMessage, SelectedSystem, SystemFieldRow } from '../../types';
+  import type {
+    ChatMessage,
+    RetrievalResultPayload,
+    SelectedSystem,
+    SystemFieldRow,
+  } from '../../types';
 
   const props = withDefaults(defineProps<{
     conversationId?: string;
@@ -360,9 +359,32 @@
     props.messages.some(item => item.parentMessageUid === messageId && item.type === 'retrieval-result')
   );
 
-  /** 无结果卡时才展示全局检索 loading；已有结果卡则由卡内 loading 承接二次检索 */
+  /** 意图/NL 条件壳在子 LOG_SEARCH 出现后让位，避免双卡 */
+  const isIntentResultSuperseded = (msg: ChatMessage) => (
+    (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
+    && hasChildRetrievalMessage(msg.id)
+  );
+
+  const shouldShowRetrievalResultCard = (msg: ChatMessage) => (
+    msg.type === 'retrieval-result'
+    && Boolean(msg.result)
+    && !isIntentResultSuperseded(msg)
+  );
+
+  /** 供模板绑定；已由 shouldShowRetrievalResultCard 保证非空 */
+  const getRetrievalResultPayload = (msg: ChatMessage): RetrievalResultPayload => (
+    msg.result as RetrievalResultPayload
+  );
+
+  /** 结果卡导出/二次检索需 LOG_SEARCH uid；意图条件壳阶段先空着 */
+  const resolveResultMessageUid = (msg: ChatMessage) => (
+    msg.messageType === 'LOG_SEARCH' ? msg.id : ''
+  );
+
+  /** 无条件壳时才展示全局骨架；已有 result（含 tablePending）走卡内 loading */
   const shouldShowRetrievalLoading = (msg: ChatMessage) => {
     if (msg.type !== 'retrieval-result' || msg.recognitionError || msg.result) return false;
+    if (isIntentResultSuperseded(msg)) return false;
     if (msg.apiStatus === 'PROCESSING') return true;
     if (msg.apiStatus !== 'SUCCESS') return false;
     return (
@@ -385,13 +407,12 @@
   const isMessageRowVisible = (msg: ChatMessage) => {
     if (msg.visible === false) return false;
     if (msg.role === 'user' && msg.type === 'text') return true;
-    if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return true;
     if (msg.type === 'select-system' && msg.status === 'pending') return true;
     if (msg.type === 'retrieval-guide') return true;
     if (shouldShowRetrievalLoading(msg)) return true;
     if (msg.type === 'retrieval-result' && msg.recognitionError) return true;
-    if (msg.type === 'retrieval-result' && msg.result) return true;
-    if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') return true;
+    if (shouldShowRetrievalResultCard(msg)) return true;
+    if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED' && !msg.result) return true;
     return false;
   };
 
@@ -399,15 +420,21 @@
     const visibleKind = (() => {
       if (msg.visible === false) return 'hidden';
       if (msg.role === 'user' && msg.type === 'text') return 'user-text';
-      if (msg.messageType === 'SYSTEM_SELECTION' && msg.apiStatus === 'PROCESSING') return 'system-selection-loading';
       if (msg.type === 'select-system' && msg.status === 'pending') return 'select-system-card';
-      if (msg.type === 'retrieval-guide') return 'retrieval-guide-card';
-      if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
-      if (msg.type === 'retrieval-result' && msg.recognitionError) return `recognition-error:${msg.recognitionError.code || ''}`;
-      if (msg.type === 'retrieval-result' && msg.result) {
-        return msg.apiStatus === 'FAILED' ? 'retrieval-result-failed' : 'retrieval-result-card';
+      if (msg.type === 'retrieval-guide') {
+        return msg.apiStatus === 'PROCESSING' ? 'retrieval-guide-loading' : 'retrieval-guide-card';
       }
-      if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') return `retrieval-failed:${msg.messageType || ''}`;
+      if (shouldShowRetrievalLoading(msg)) return 'retrieval-loading';
+      if (msg.type === 'retrieval-result' && msg.recognitionError) {
+        return `recognition-error:${msg.recognitionError.code || ''}`;
+      }
+      if (shouldShowRetrievalResultCard(msg)) {
+        if (msg.apiStatus === 'FAILED') return 'retrieval-result-failed';
+        return msg.result?.tablePending ? 'retrieval-result-pending' : 'retrieval-result-card';
+      }
+      if (msg.type === 'retrieval-result' && msg.apiStatus === 'FAILED') {
+        return `retrieval-failed:${msg.messageType || ''}`;
+      }
       return 'hidden';
     })();
 

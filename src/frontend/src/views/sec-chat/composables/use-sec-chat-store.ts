@@ -217,15 +217,29 @@ const upsertConversationMessage = (
     fieldCatalog,
     hiddenCardMessageIds,
   });
+
+  // PROCESSING 引导卡：用会话已选系统补全名称（input 往往只有 system_ids）
+  if (
+    message.message_type === 'SYSTEM_SELECTION'
+    && chatMessage.type === 'retrieval-guide'
+    && chatMessage.systems?.length
+  ) {
+    const nameById = new Map(conv.systems.map(item => [item.id, item.name]));
+    chatMessage.systems = chatMessage.systems.map(item => ({
+      id: item.id,
+      name: nameById.get(item.id) || item.name,
+    }));
+  }
+
   const idx = conv.messages.findIndex(item => item.id === message.uid);
   if (idx >= 0) {
     const prev = conv.messages[idx];
-    // 二次检索 PROCESSING 时保留上一份结果，避免结果卡被替换成全局「正在检索日志…」
+    // 二次检索 PROCESSING：保留上一份完整结果，卡内 loading；勿用仅条件壳替换表格
     if (
       message.message_type === 'LOG_SEARCH'
       && message.status === 'PROCESSING'
-      && !chatMessage.result
       && prev.result
+      && !prev.result.tablePending
     ) {
       chatMessage.result = prev.result;
     }
@@ -236,6 +250,15 @@ const upsertConversationMessage = (
 
   if (message.message_type === 'SYSTEM_SELECTION' && message.status === 'SUCCESS') {
     applySystemSelectionContext(conv, chatMessage);
+  } else if (
+    message.message_type === 'SYSTEM_SELECTION'
+    && message.status === 'PROCESSING'
+    && chatMessage.type === 'retrieval-guide'
+  ) {
+    /* eslint-disable no-param-reassign -- 乐观更新已选系统，字段等 SUCCESS 再写入 */
+    conv.systems = chatMessage.systems || [];
+    conv.systemIds = (chatMessage.systems || []).map(item => item.id);
+    /* eslint-enable no-param-reassign */
   }
 };
 
@@ -1294,6 +1317,8 @@ export function useSecChatStore() {
     }
 
     // 已有会话切系统：落库新的 SYSTEM_SELECTION
+    conv.systemIds = [...systemIds];
+    conv.systems = [...systems];
     conv.messages = conv.messages.filter((item) => {
       if (item.id === (msg?.id || sourceMessage?.id)) return false;
       if (!msg && item.type === 'select-system') return false;
@@ -1401,6 +1426,9 @@ export function useSecChatStore() {
     } else if (message.status === 'SUCCESS') {
       void refreshConversationTitle(conv.id);
     }
+    // 返回会话内消息（PROCESSING 时已保留上一份完整 result），避免把条件空壳回写到卡片
+    const updated = conv.messages.find(item => item.id === message.uid);
+    if (updated) return updated;
     const fieldCatalog = buildFieldCatalog(conv.standardFields, conv.extensionFields);
     return mapAiMessageToChatMessage(message, { fieldCatalog });
   };

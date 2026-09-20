@@ -82,6 +82,7 @@ export interface RetrievalResultPayload {
   columns: RetrievalResultColumn[];
   /** 行数据：key 为 column.rawName */
   rows: Record<string, any>[];
+  tablePending?: boolean;
 }
 
 export interface ChatMessage {

@@ -30,6 +30,7 @@
         <button
           v-if="actionText && actionPlacement === 'header'"
           class="reselect-link is-header"
+          :disabled="actionDisabled"
           type="button"
           @click.stop="$emit('action')">
           <audit-icon
@@ -56,6 +57,7 @@
       <button
         v-if="actionText && actionPlacement === 'footer'"
         class="reselect-link"
+        :disabled="actionDisabled"
         type="button"
         @click.stop="$emit('action')">
         <audit-icon
@@ -80,10 +82,12 @@
     defaultExpanded?: boolean;
     actionText?: string;
     actionPlacement?: 'header' | 'footer';
+    actionDisabled?: boolean;
   }>(), {
     defaultExpanded: true,
     actionText: '',
     actionPlacement: 'footer',
+    actionDisabled: false,
   });
 
   defineEmits<{
@@ -182,6 +186,12 @@
 
     &:hover {
       opacity: .85;
+    }
+
+    &:disabled {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      opacity: 1;
     }
 
     &.is-header {
