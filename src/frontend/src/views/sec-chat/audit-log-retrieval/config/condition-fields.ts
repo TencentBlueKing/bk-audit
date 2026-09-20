@@ -27,6 +27,9 @@ import {
   resolveSystemFieldDisplayLabel,
 } from '../../utils/map-ai-message';
 
+import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
+
+/** 前端时间快捷项映射（展示用）；后端只存绝对起止，不回传快捷值 */
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
   'now-3d': '近3天',
@@ -148,42 +151,32 @@ export const createDefaultDatetimeOrigin = () => ([
   'now',
 ]);
 
-const DATETIME_SHORTCUT_CONFIGS = [
-  { days: 1, origin: 'now-1d' },
-  { days: 3, origin: 'now-3d' },
-  { days: 7, origin: 'now-7d' },
-  { days: 14, origin: 'now-14d' },
-  { days: 30, origin: 'now-1M' },
-  { days: 90, origin: 'now-3M' },
-  { days: 182, origin: 'now-6M' },
-  { days: 365, origin: 'now-12M' },
-];
-
-/** 根据 start/end 推断 datetime_origin，避免回显固定为「近1天」 */
-export const inferDatetimeOrigin = (startTime?: string, endTime?: string): string[] => {
+/** 将后端绝对起止转为展示用 datetime_origin（不做快捷项反推） */
+export const absoluteDatetimeOriginFromCondition = (
+  startTime?: string,
+  endTime?: string,
+): string[] => {
   const start = dayjs(startTime);
   const end = dayjs(endTime);
   if (!start.isValid() || !end.isValid()) {
-    return createDefaultDatetimeOrigin();
+    // 无效时退回绝对默认窗口，避免误显示「近1天」快捷文案
+    return createDefaultDatetime();
   }
-
-  const formatted = [
+  return [
     start.format('YYYY-MM-DD HH:mm:ss'),
     end.format('YYYY-MM-DD HH:mm:ss'),
   ];
+};
 
-  const now = dayjs();
-  if (Math.abs(end.diff(now, 'minute')) > 5) {
-    return formatted;
+export const resolveDatetimeOriginForDisplay = (
+  startTime?: string,
+  endTime?: string,
+  preferredOrigin?: string[],
+): string[] => {
+  if (preferredOrigin && isRelativeDatetimeOrigin(preferredOrigin)) {
+    return [...preferredOrigin];
   }
-
-  const diffMinutes = end.diff(start, 'minute');
-  const matched = DATETIME_SHORTCUT_CONFIGS.find(item => Math.abs(diffMinutes - (item.days * 24 * 60)) <= 2);
-  if (matched) {
-    return [matched.origin, 'now'];
-  }
-
-  return formatted;
+  return absoluteDatetimeOriginFromCondition(startTime, endTime);
 };
 
 const toIsoTime = (value: string) => {
@@ -484,13 +477,18 @@ export const parseAiSearchConditionToSearchModel = (
   condition: AiSearchCondition,
   fieldConfig: Record<string, IFieldConfig>,
   fieldCatalog: SystemFieldRow[] = [],
+  options?: { datetimeOrigin?: string[] },
 ): Record<string, any> => {
   const searchModel: Record<string, any> = {
     datetime: [
       fromIsoTime(condition.start_time),
       fromIsoTime(condition.end_time),
     ],
-    datetime_origin: inferDatetimeOrigin(condition.start_time, condition.end_time),
+    datetime_origin: resolveDatetimeOriginForDisplay(
+      condition.start_time,
+      condition.end_time,
+      options?.datetimeOrigin,
+    ),
   };
 
   (condition.conditions || []).forEach((item) => {
