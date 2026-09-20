@@ -1,6 +1,6 @@
 # 日志详情、字段探索、聚合与统计实现架构
 
-本文面向 query 领域维护者，解释 `ai_assistant/log_tools` 的实现和算法；它不是前端接口契约。附件生命周期见 [AI 助手架构](../../../ai_assistant/docs/architecture.md)，前端调用见 [统计联调指南](../../../ai_assistant/docs/frontend_statistics.md)。当前真实 Doris 与 Agent 端到端验证仍待完成。
+本文面向 query 领域维护者，解释 `ai_assistant/log_tools` 的实现和算法；它不是前端接口契约。附件生命周期见 [AI 助手架构](../../../ai_assistant/docs/architecture.md)，前端调用见 [统计联调指南](../../../ai_assistant/docs/frontend_statistics.md)。
 
 ## 1. 能力边界与代码导航
 
@@ -26,7 +26,11 @@ flowchart TD
     Metadata --> Sample[按需采样与脱敏]
     Detail --> Project[查询补列 / 脱敏 / 最终投影]
     Aggregate --> SQL[规范化 / 全局 TopN / 原记录重聚合]
-    SQL --> Result[帧解析 / 完整性与预算校验]
+    SQL --> BKBase[SafeQuerySyncResource<br/>prefer_storage=doris]
+    BKBase --> Doris[(Doris)]
+    Doris --> Result[帧解析 / 完整性与预算校验]
+    Result --> Fixed[程序统计固定包 / 密集时间轴]
+    Result --> Compact[MCP columns / rows / 稀疏时间桶]
 ```
 
 这是当前新增日志工具能力的实现范围，不表示所有历史 collector 查询/导出都迁移到这里。明细查询服务可被日志分析 Agent 使用；统计 Agent 的预期工具配置仅含字段探索和聚合。
@@ -66,6 +70,36 @@ flowchart TD
 以 8 条日志为例：GET 3、POST 2、PUT 1、DELETE 1、缺失 1。`top_n=2` 时，结果是 GET 3、POST 2、OTHER 2、MISSING 1。
 
 算法先对**完整时间范围**的非缺失类别排序，默认按日志数降序并使用稳定的类型/值排序处理并列；选出 TopN 后，把每条原始记录映射为入选类别、OTHER 或 MISSING。时序始终复用这一组类别，不在每个时间桶重新选 TopN。
+
+这不是普通的 `GROUP BY ... LIMIT N`。直接截断只能得到前 N 组，无法同时保证 OTHER 精确、每个时间桶使用同一组图例，以及 AVG、去重数、近似分位数等非可加指标的正确性。实现采用以下顺序：
+
+```text
+字段值提取
+  → 按原始标量类型规范化类别身份
+  → 在完整范围内统计类别并选择 TopN
+  → 将每条原始日志映射到 VALUE / OTHER / MISSING
+  → 从映射后的原始记录计算分组指标和时间桶
+  → 校验总数、分组和时序闭合
+```
+
+以下两小时数据可以直观看出“先全局选组，再画时序”的含义：
+
+| 时间桶 | GET | POST | PUT | DELETE | 缺失 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 10:00 | 2 | 1 | 1 | 0 | 1 |
+| 11:00 | 1 | 1 | 0 | 1 | 0 |
+| 完整范围 | 3 | 2 | 1 | 1 | 1 |
+
+`top_n=2` 在完整范围选中 GET、POST，随后得到：
+
+| 组 | 总数 | 10:00 | 11:00 |
+| --- | ---: | ---: | ---: |
+| GET（VALUE） | 3 | 2 | 1 |
+| POST（VALUE） | 2 | 1 | 1 |
+| OTHER（PUT + DELETE） | 2 | 1 | 1 |
+| MISSING | 1 | 1 | 0 |
+
+因此前端固定图例不会随时间桶跳变，且每组时序求和等于该组完整范围总数。若分别在每个桶内选择 TopN，类别可能在相邻桶中进入或退出图例，OTHER 的含义也会发生变化。
 
 OTHER 的 AVG、DISTINCT_COUNT、近似分位数必须对映射后的原始记录重算。例如两组分别有 1 条数值 100 和 9 条数值 0，合并平均值是 10，不能对两个组的平均值求平均得到 50。
 
@@ -107,7 +141,7 @@ MCP：`aggregation.py` 消费统一 DSL，支持最多 2 个维度、5 个指标
 - SQL 优化：保留全范围类别选择与最终查询口径一致，不能把预检统计直接拼成最终结果；以实际 Doris 执行计划验证性能。
 - 新消费者：复用服务与领域结果，图表协议留在消费者侧，查询内核不引入 ECharts。
 
-测试主要位于 `tests/test_query/test_ai_assistant/`，覆盖协议、Resource、字段权限、明细脱敏、SQL 构造、类型、预算和结果闭合；程序附件链路测试位于 `tests/test_ai_assistant/`。真实 Doris 的 JSON/VARIANT、数值精度、近似分位数、查询超时和数据量边界仍需环境验证，SQL 字符串单测无法替代这些检查。
+测试主要位于 `tests/test_query/test_ai_assistant/`，覆盖协议、Resource、字段权限、明细脱敏、SQL 构造、类型、预算和结果闭合；程序附件链路测试位于 `tests/test_ai_assistant/`。SQL 字符串单测只能校验构造约束，JSON/VARIANT、数值精度、近似分位数、查询超时和数据量边界仍需在实际查询引擎验证。
 
 ### MCP 故障恢复与上下文成本
 
