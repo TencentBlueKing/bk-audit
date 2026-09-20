@@ -882,20 +882,19 @@ export const findSelectField = <T extends SelectFieldLike>(
   fieldKey?: string | null,
 ) => select.find(item => isSameSelectField(item, fieldKey));
 
-/** 仅补齐字段显示名元数据；「显示名(raw_name)」由展示层格式化，避免污染提交值 */
-const toStandardFieldDisplayName = (
-  rawName: string,
-  ownDisplayName: string,
-  displayNameByRaw: Map<string, string>,
-) => resolveSelectFieldDisplayName(rawName, ownDisplayName, displayNameByRaw);
+/** 已配置别名保持原样；未配置或等于字段名时使用 raw_name，不再默认改成中文名 */
+const toStandardFieldDisplayName = (rawName: string, ownDisplayName: string) => {
+  if (!ownDisplayName || ownDisplayName === rawName) {
+    return rawName;
+  }
+  return ownDisplayName;
+};
 
 /** 用数据源字段回填中文名和类型图标（编辑回显的 select 不含 spec_field_type） */
 export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
   fields: T[] = [],
   tableFields: SelectFieldLike[] = [],
-): T[] => {
-  const displayNameByRaw = collectFieldDisplayNames(tableFields);
-  return fields.map((field) => {
+): T[] => fields.map((field) => {
     const rawName = pickFieldRawName(field);
     if (!rawName) {
       return { ...field };
@@ -905,21 +904,30 @@ export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
     const hasSubKeys = Array.isArray(subKeys) && subKeys.length > 0;
     return {
       ...field,
-      display_name: toStandardFieldDisplayName(
-        rawName,
-        pickFieldDisplayName(field),
-        displayNameByRaw,
-      ),
+      display_name: toStandardFieldDisplayName(rawName, pickFieldDisplayName(field)),
       spec_field_type: field.spec_field_type
-        || schema?.spec_field_type
-        || schema?.field_type
-        || field.field_type
-        || '',
+      || schema?.spec_field_type
+      || schema?.field_type
+      || field.field_type
+      || '',
       field_type: field.field_type || schema?.field_type || '',
       property: hasSubKeys ? field.property : (schema?.property || field.property),
     };
   });
-};
+
+/** 未配置预期结果时不使用字段别名，入库字段名保持 raw_name */
+export const useRawNameAsFieldAlias = <T extends SelectFieldLike>(fields: T[] = []): T[] => (
+  fields.map((field) => {
+    const rawName = pickFieldRawName(field);
+    if (!rawName) {
+      return { ...field };
+    }
+    return {
+      ...field,
+      display_name: rawName,
+    };
+  })
+);
 
 /** 分派规则命中条件：仅使用风险发现规则中的预期结果字段（configs.select）
  * 展示格式与风险发现规则一致：中文名(raw_name)；值为 raw_name，便于搜索中英文
