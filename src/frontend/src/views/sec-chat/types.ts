@@ -71,8 +71,10 @@ export interface RetrievalResultPayload {
   conditions: RetrievalFilterCondition[];
   /** 原始结构化条件，供二次编辑后重新检索 */
   rawCondition?: AiSearchCondition;
+
+  datetimeOrigin?: string[];
   toolCount: number;
-  /** 思考耗时（秒）；来自消息 duration_seconds，PROCESSING 时为 null */
+  /** 思考耗时（秒）；仅自然语言检索有值，条件检索为 null；PROCESSING 时为 null */
   thinkSeconds: number | null;
   title: string;
   totalHit: number;

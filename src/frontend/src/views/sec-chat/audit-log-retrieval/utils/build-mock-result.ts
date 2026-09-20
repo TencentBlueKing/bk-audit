@@ -34,7 +34,7 @@ export const buildMockRetrievalResult = (query: string): RetrievalResultPayload 
   return {
     conditions,
     toolCount: 2,
-    thinkSeconds: 1,
+    thinkSeconds: null,
     title: '审计日志检索结果',
     totalHit: rows.length,
     previewCount: rows.length,
