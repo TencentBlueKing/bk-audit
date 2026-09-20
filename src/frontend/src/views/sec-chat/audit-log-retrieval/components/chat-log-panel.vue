@@ -174,13 +174,14 @@
             </div>
           </template>
 
-          <!-- 条件检索卡：未检索草稿；发 NL / 出现 NL 结果时收起；检索成功后收起，再点新建 -->
+          <!-- 条件检索卡：未检索草稿；多字段追加到同一草稿；发 NL / 出现 NL 结果时收起；检索成功后收起，再点新建 -->
           <div
             v-for="card in conditionFilterCards"
             :id="`condition-filter-${card.id}`"
             :key="card.id"
             class="message-row is-assistant condition-filter-row">
             <condition-filter-card
+              :ref="(el) => setConditionFilterCardRef(card.id, el)"
               :extension-fields="extensionFields"
               :initial-field-name="card.fieldName"
               :initial-sample="card.sample"
@@ -276,6 +277,17 @@
     fieldName: string
     sample?: string
   }>>([]);
+  type ConditionFilterCardExpose = {
+    addOrFocusField:(fieldName: string, sample?: string) => Promise<void>
+  };
+  const conditionFilterCardRefs = ref<Record<string, ConditionFilterCardExpose>>({});
+  const setConditionFilterCardRef = (cardId: string, el: unknown) => {
+    if (el) {
+      conditionFilterCardRefs.value[cardId] = el as ConditionFilterCardExpose;
+      return;
+    }
+    delete conditionFilterCardRefs.value[cardId];
+  };
   /** prepend 历史消息后用于恢复滚动位置 */
   const scrollAnchor = ref<{ height: number; top: number } | null>(null);
   /** 避免 scroll 事件在 loading 状态生效前重复触发 */
@@ -497,8 +509,17 @@
   );
 
   const handleOpenConditionFilter = async (payload: { fieldName: string; sample?: string }) => {
+    // 已有未检索草稿：向现有条件卡追加字段（与自然语言「追加」一致，不再整卡替换）
+    const existing = conditionFilterCards.value[0];
+    if (existing) {
+      await conditionFilterCardRefs.value[existing.id]?.addOrFocusField(
+        payload.fieldName,
+        payload.sample,
+      );
+      await scrollConditionFilterIntoView(existing.id, true);
+      return;
+    }
     const cardId = createConditionFilterCardId();
-    // 未检索：用新 id 覆盖当前草稿（强制重挂载重置条件）；已检索后列表为空则视为新建
     conditionFilterCards.value = [{
       id: cardId,
       fieldName: payload.fieldName,
