@@ -41,7 +41,10 @@ from services.web.ai_assistant.resources.message import (
     UpdateMessage,
 )
 from services.web.ai_assistant.schemas import MessageSchema
-from services.web.ai_assistant.schemas.audit_search import UserIntentErrorSchema
+from services.web.ai_assistant.schemas.audit_search import (
+    UserIntentErrorSchema,
+    UserIntentOutputSchema,
+)
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
 from services.web.ai_assistant.serializers.message import (
     AttachmentSummarySerializer,
@@ -204,6 +207,16 @@ class MessageRequestSerializerTest(TestCase):
         response_fields = MessageResponseSerializer().fields
         self.assertIn("output_data.error", str(response_fields["output_data"].help_text))
         self.assertIn("FAILED", str(response_fields["error_code"].help_text))
+
+        output_schema = UserIntentOutputSchema.model_json_schema()
+        summary_ref = output_schema["properties"]["derived_messages"]["items"]["$ref"]
+        summary_schema = output_schema["$defs"][summary_ref.rsplit("/", 1)[-1]]
+        self.assertEqual(
+            set(summary_schema["properties"]),
+            {"message_uid", "message_type", "status", "visible"},
+        )
+        self.assertIn("计划顺序", output_schema["properties"]["derived_messages"]["description"])
+        self.assertIn("复合计划", str(response_fields["visible"].help_text))
 
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
         # 保存常驻业务 Handler，测试结束后恢复，避免污染全局单例影响后续测试。
@@ -474,7 +487,7 @@ class MessageResourceTest(TestCase):
         self.assertIsNone(response["output_data"])
 
     def test_create_sync_message_returns_success_without_internal_fields(self, _username):
-        """一期全异步化：创建即返回 PROCESSING（终态由任务收敛，前端轮询）。"""
+        """同步 Handler 创建即返回 SUCCESS，接口不暴露内部执行字段。"""
 
         response = CreateMessage().request(
             {
@@ -484,10 +497,10 @@ class MessageResourceTest(TestCase):
             }
         )
 
-        self.assertEqual(response["status"], ExecutionStatus.PROCESSING)
+        self.assertEqual(response["status"], ExecutionStatus.SUCCESS)
         self.assertEqual(response["input_data"], {"text": "system-a"})
         self.assertNotIn("context_data", response)
-        self.assertIsNone(response["output_data"])
+        self.assertEqual(response["output_data"], {"content": "system:system-a"})
         self.assertIsNone(response["parent_message_uid"])
         self.assertEqual(response["attachments"], [])
         for internal_field in ("id", "task_id", "stream_config", "stream_archive"):
@@ -579,8 +592,7 @@ class MessageResourceTest(TestCase):
         self.assertEqual(window["first_uid"], created["uid"])
         self.assertEqual(window["last_uid"], created["uid"])
         item = window["results"][0]
-        # 一期全异步化：创建即 PROCESSING（隐藏内容但保留状态与附件摘要的核心断言不变）
-        self.assertEqual(item["status"], ExecutionStatus.PROCESSING)
+        self.assertEqual(item["status"], ExecutionStatus.SUCCESS)
         self.assertNotIn("input_data", item)
         self.assertNotIn("context_data", item)
         self.assertNotIn("output_data", item)

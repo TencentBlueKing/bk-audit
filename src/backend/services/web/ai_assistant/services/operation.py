@@ -163,8 +163,9 @@ class OperationContextService:
         """迭代最近成功检索样例（NL + USER_INTENT 统一入口），产出 (query_text, system_ids, created_by)。
 
         - NL 消息：系统取 context_data.system_selection.systems
-        - USER_INTENT：系统取 output_data.system_id；仅 condition 非空（真正产出检索并续链）
-          才收录——SYSTEM_REQUIRED / unrecognized 等引导性输出不是检索，不进榜单
+        - 新 USER_INTENT：系统取 output_data.system_id，且必须存在 SUCCESS 的来源 LOG_SEARCH；
+          失败消息后续重试成功也能进入榜单，不依赖入口消息内的派生状态摘要
+        - 历史 USER_INTENT：仍以 output_data.condition 非空识别成功检索
         - since：时间下界（常用操作刷新传"当天 0 点"，只迭代当天消息）
         """
 
@@ -176,19 +177,32 @@ class OperationContextService:
             filters["created_by"] = username
         if since is not None:
             filters["created_at__gte"] = since
-        messages = (
+        messages = list(
             Message.objects.filter(**filters)
             .order_by("-id")
-            .values_list("message_type", "input_data", "context_data", "output_data", "created_by")[:scan_limit]
+            .values_list("id", "message_type", "input_data", "context_data", "output_data", "created_by")[:scan_limit]
         )
-        for message_type, input_data, context_data, output_data, created_by in messages:
+        intent_message_ids = [
+            message_id for message_id, message_type, *_ in messages if message_type == MessageType.USER_INTENT
+        ]
+        successful_intent_ids = set(
+            Message.objects.filter(
+                parent_message_id__in=intent_message_ids,
+                message_type=MessageType.LOG_SEARCH,
+                status=ExecutionStatus.SUCCESS,
+            ).values_list("parent_message_id", flat=True)
+        )
+        for message_id, message_type, input_data, context_data, output_data, created_by in messages:
             query_text = (input_data or {}).get("query_text") or ""
             if not query_text:
                 continue
             if message_type == MessageType.USER_INTENT:
                 output = output_data if isinstance(output_data, dict) else {}
                 system_id = str(output.get("system_id") or "")
-                if output.get("condition") is None or not system_id:
+                is_new_protocol = "derived_messages" in output
+                has_successful_search = message_id in successful_intent_ids
+                has_legacy_condition = not is_new_protocol and output.get("condition") is not None
+                if (not has_successful_search and not has_legacy_condition) or not system_id:
                     continue
                 system_ids = {system_id}
             else:

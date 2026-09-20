@@ -1,6 +1,7 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, TypeVar
 from uuid import uuid4
 
@@ -56,6 +57,8 @@ class PreparedMessage:
     input_data: dict[str, Any]
     context_data: dict[str, Any]
     output_data: dict[str, Any] | None
+    visible: bool = True
+    timeline_started_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,8 @@ class MessageService:
             conversation=conversation,
             parent_message_uid=parent_message_uid,
         )
+        if parent_message is not None and parent_message.message_type == MessageType.USER_INTENT:
+            raise InvalidParentMessage(message="意图识别的计划子消息只能由任务内部创建")
         handler = message_handler_registry.require(message_type)
 
         prepared = self._prepare(
@@ -137,7 +142,7 @@ class MessageService:
                 conversation_id=message.conversation_id,
                 query_text=build_condition_title_input(
                     message.input_data or {},
-                    extension_fields=self._extract_parent_extension_fields(message.parent_message),
+                    extension_fields=self._extract_message_extension_fields(message),
                 ),
                 source="field_condition",
             )
@@ -148,13 +153,17 @@ class MessageService:
             )
 
     @staticmethod
-    def _extract_parent_extension_fields(parent: Message | None) -> list[dict[str, Any]]:
-        """从父消息（系统选择/自然语言）的系统选择快照提取拓展字段元数据。
+    def _extract_message_extension_fields(message: Message) -> list[dict[str, Any]]:
+        """读取 LOG_SEARCH 自身固化的拓展字段；旧消息再从父消息兼容恢复。
 
-        拓展子键的展示名不在检索条件快照内，需回到父消息的系统选择快照取
-        extension_fields（SelectionFieldMeta dict 形态：raw_name + keys + display_name）。
+        新消息创建后即自包含，标题生成不依赖其他消息是否完成。历史消息没有
+        ``extension_fields`` 键时才读取父消息的旧快照。
         """
 
+        context = message.context_data if isinstance(message.context_data, dict) else {}
+        if "extension_fields" in context:
+            return [field for field in context["extension_fields"] if isinstance(field, dict)]
+        parent = message.parent_message
         if parent is None:
             return []
         if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
@@ -195,90 +204,30 @@ class MessageService:
         return prepared
 
     def create_prepared(self, *, conversation: Conversation, prepared: PreparedMessage) -> Message:
-        """持久化已准备的消息；统一异步（事务提交后投递业务任务，前端轮询终态）。
-
-        一期全异步化：所有消息类型创建即返回 PROCESSING；
-        任务内编排（NL 续链 / 意图识别子链）请使用 create_executed（同步执行保证时序）。
-        """
+        """持久化已准备消息，并遵循 Handler 声明的同步或异步执行方式。"""
 
         self._validate_conversation(conversation=conversation)
         with transaction.atomic():
             # prepare 可能较慢，最终写入前再锁定会话，与删除/清空串行化。
-            self._lock_active_conversation(conversation=conversation)
-            handler = message_handler_registry.require(prepared.message_type)
-            return self._create_async(
+            self.lock_active_conversation(conversation=conversation)
+            return self._create_prepared_locked(
                 conversation=conversation,
-                handler=handler,
-                parent_message=prepared.parent_message,
-                input_snapshot=prepared.input_data,
-                context_snapshot=prepared.context_data,
+                prepared=prepared,
             )
 
-    def create_executed(
+    def create_prepared_batch_locked(
         self,
         *,
         conversation: Conversation,
-        message_type: str | MessageType,
-        input_data: Mapping[str, Any],
-        parent_message: Message | None = None,
-        timeline_started_at=None,
-        visible: bool = True,
-    ) -> Message:
-        """任务内编排专用：同步执行业务并直接落库成功消息（不经 Celery 派发）。
+        messages: Sequence[PreparedMessage],
+    ) -> list[Message]:
+        """在调用方已锁定会话的事务内，按计划顺序持久化完整消息快照。
 
-        用于异步任务内创建子消息（NL 续链 / 意图识别子链的 SELECTION 与 LOG_SEARCH），
-        保证父消息收敛时整条链完成（时序一致）；对外创建一律走 create（全异步）。
-
-        :param timeline_started_at: 时间线起点（用户发问消息的 created_at）：回写为本消息
-            created_at，使 duration_seconds 表达「用户发问 → 本条 AI 输出完成」的真实耗时
-            （含此前所有 LLM 编排）；缺省为落库时刻（耗时≈0）。
-        :param visible: 消息卡片可见性（通用显隐协议，默认 True 展示）：仅特定编排场景
-            置 False（如复合意图自动创建的 SELECTION 仅展示检索消息）；随消息持久化，
-            刷新/重试/编辑保持，序列化层顶层输出
+        该入口不再读取来源消息的内部状态。调用方负责一次性校验整份计划和
+        USER_INTENT 任务栅栏；这里仅复用各消息既有的持久化与提交后投递逻辑。
         """
 
-        # 编排场景父消息可能刚收敛终态（内存实例仍是 PROCESSING），刷新后校验
-        if parent_message is not None:
-            parent_message.refresh_from_db()
-        handler = message_handler_registry.require(message_type)
-        parsed_input = parse_snapshot(handler.input_model, input_data, field_name="input_data")
-        preparation = handler.prepare(
-            user=self.user,
-            conversation=conversation,
-            parent_message=parent_message,
-            input_data=parsed_input,
-        )
-        parsed_context = parse_snapshot(
-            handler.context_model,
-            preparation.context_data,
-            field_name="context_data",
-        )
-        output_data = handler.execute(input_data=parsed_input, context_data=parsed_context)
-        output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
-        with transaction.atomic():
-            self._validate_conversation(conversation=conversation)
-            self._lock_active_conversation(conversation=conversation)
-            now = timezone.now()
-            message = Message.objects.create(
-                conversation=conversation,
-                parent_message=preparation.parent_message,
-                message_type=handler.message_type,
-                status=ExecutionStatus.SUCCESS,
-                input_data=parsed_input.model_dump(mode="json"),
-                context_data=parsed_context.model_dump(mode="json"),
-                output_data=output_snapshot,
-                last_activity_at=now,
-                finished_at=now,
-                visible=visible,
-                created_by=self.user,
-                updated_by=self.user,
-            )
-            if timeline_started_at is not None:
-                # auto_now_add 会覆盖显式传值，落库后回写时间线起点
-                Message.objects.filter(id=message.id).update(created_at=timeline_started_at)
-                message.created_at = timeline_started_at
-        self._maybe_dispatch_field_condition_title(message)
-        return message
+        return [self._create_prepared_locked(conversation=conversation, prepared=prepared) for prepared in messages]
 
     def get(self, *, message_uid: str) -> Message:
         """按外部 UID 获取当前用户有效会话中的一条消息。"""
@@ -373,6 +322,8 @@ class MessageService:
         message = self.get(message_uid=message_uid)
         if message.status not in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
             raise InvalidMessageState()
+        if message.message_type == MessageType.USER_INTENT and message.child_messages.exists():
+            raise InvalidMessageState(message="已有派生消息的意图识别消息不能编辑")
         handler = message_handler_registry.require(message.message_type)
         prepared = self._prepare(
             conversation=message.conversation,
@@ -386,7 +337,7 @@ class MessageService:
         is_async = prepared.execution_mode == ExecutionMode.ASYNC
         now = timezone.now()
         with transaction.atomic():
-            self._lock_active_conversation(conversation=message.conversation)
+            self.lock_active_conversation(conversation=message.conversation)
             updated = Message.objects.filter(
                 id=message.id,
                 status=message.status,
@@ -435,7 +386,7 @@ class MessageService:
         now = timezone.now()
         with transaction.atomic():
             # 重试与会话删除共用同一行锁，删除提交后不得重新投递隐藏消息任务。
-            self._lock_active_conversation(conversation=message.conversation)
+            self.lock_active_conversation(conversation=message.conversation)
             updated = Message.restart_failed(
                 instance_id=message.id,
                 old_task_id=old_task_id,
@@ -510,7 +461,7 @@ class MessageService:
         ):
             raise InvalidParentMessage(message="会话无效")
 
-    def _lock_active_conversation(self, *, conversation: Conversation) -> None:
+    def lock_active_conversation(self, *, conversation: Conversation) -> None:
         """锁定最终写入所属会话，阻止删除成功后继续创建隐藏消息。"""
 
         if (
@@ -554,7 +505,7 @@ class MessageService:
         input_data: Mapping[str, Any] | MessageSchema,
         parent_message: Message | None,
     ) -> PreparedMessage:
-        """统一构造输入和上下文快照（SYNC Handler 就地执行供编辑链路复用；创建链路全异步忽略输出）。"""
+        """统一构造输入、上下文及同步输出快照。"""
 
         parsed_input = parse_snapshot(handler.input_model, input_data, field_name="input_data")
         preparation = handler.prepare(
@@ -570,7 +521,6 @@ class MessageService:
         )
         output_snapshot = None
         if handler.execution_mode == ExecutionMode.SYNC:
-            # raja 编辑链路语义：同步消息编辑就地执行立即产出（创建链路全异步不消费该字段）
             output_data = handler.execute(input_data=parsed_input, context_data=parsed_context)
             output_snapshot = dump_snapshot(handler.output_model, output_data, field_name="output_data")
         return PreparedMessage(
@@ -582,6 +532,45 @@ class MessageService:
             output_data=output_snapshot,
         )
 
+    def _create_prepared_locked(
+        self,
+        *,
+        conversation: Conversation,
+        prepared: PreparedMessage,
+    ) -> Message:
+        """在已锁定会话的事务内持久化消息；异步任务在事务提交后投递。"""
+
+        handler = message_handler_registry.require(prepared.message_type)
+        if prepared.execution_mode == ExecutionMode.SYNC:
+            now = timezone.now()
+            message = Message.objects.create(
+                conversation=conversation,
+                parent_message=prepared.parent_message,
+                message_type=handler.message_type,
+                status=ExecutionStatus.SUCCESS,
+                input_data=prepared.input_data,
+                context_data=prepared.context_data,
+                output_data=prepared.output_data,
+                last_activity_at=now,
+                finished_at=now,
+                visible=prepared.visible,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+            if prepared.timeline_started_at is not None:
+                Message.objects.filter(id=message.id).update(created_at=prepared.timeline_started_at)
+                message.created_at = prepared.timeline_started_at
+            return message
+        return self._create_async(
+            conversation=conversation,
+            handler=handler,
+            parent_message=prepared.parent_message,
+            input_snapshot=prepared.input_data,
+            context_snapshot=prepared.context_data,
+            visible=prepared.visible,
+            timeline_started_at=prepared.timeline_started_at,
+        )
+
     def _create_async(
         self,
         *,
@@ -590,6 +579,8 @@ class MessageService:
         parent_message: Message | None,
         input_snapshot: dict[str, Any],
         context_snapshot: dict[str, Any],
+        visible: bool = True,
+        timeline_started_at=None,
     ) -> Message:
         """先持久化 PROCESSING 消息，并在事务提交后投递绑定的业务任务。"""
 
@@ -606,9 +597,13 @@ class MessageService:
             output_data=None,
             queued_at=now,
             last_activity_at=now,
+            visible=visible,
             created_by=self.user,
             updated_by=self.user,
         )
+        if timeline_started_at is not None:
+            Message.objects.filter(id=message.id).update(created_at=timeline_started_at)
+            message.created_at = timeline_started_at
         transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
         return message
 

@@ -17,6 +17,7 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchContextSchema,
     LogSearchInputSchema,
     LogSearchOutputSchema,
 )
@@ -122,49 +123,52 @@ class MessageExportService:
 
     @staticmethod
     def _extract_extension_keys(message: Message) -> list:
-        """从消息树聚合 extend_data 单层子键清单（保序去重）。
+        """从 LOG_SEARCH 自身上下文聚合 extend_data 子键，兼容旧消息父快照。
 
-        按父消息类型取来源：自然语言父消息的 context_data.system_selection.systems；
-        系统选择父消息的 output_data.systems。用户意图父消息（一期主链路）无
-        systems 快照——SELECTION 与日志检索为兄弟消息（同父意图消息）：取
-        「检索消息创建时点的最新成功系统选择」（id 上界限定，防导出前用户切换
-        系统干扰取值）的 output_data.systems：复合意图轮为本轮新建选择、纯检索轮
-        为会话当前系统，两形态均正确。三者均为 systems[].extension_fields[]
-        （SelectionFieldMeta dict 形态，raw_name+keys）。
+        新消息在创建时固化 ``extension_fields``，导出不依赖同级系统选择是否完成。
+        旧消息没有该键时，再按历史父消息结构回退。
         """
 
-        parent = message.parent_message
-        if parent is None:
-            return []
-        if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-            systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
-        elif parent.message_type == MessageType.USER_INTENT:
-            selection = (
-                Message.objects.filter(
-                    conversation=parent.conversation,
-                    created_by=parent.created_by,
-                    message_type=MessageType.SYSTEM_SELECTION,
-                    status=ExecutionStatus.SUCCESS,
-                    id__lte=message.id,
-                )
-                .order_by("-id")
-                .first()
-            )
-            systems = ((selection.output_data if selection else None) or {}).get("systems") or []
+        context_data = message.context_data if isinstance(message.context_data, dict) else {}
+        if "extension_fields" in context_data:
+            try:
+                fields = LogSearchContextSchema.model_validate(context_data).extension_fields
+            except ValidationError as error:
+                raise InvalidMessageSnapshot() from error
         else:
-            systems = (parent.output_data or {}).get("systems") or []
+            parent = message.parent_message
+            if parent is None:
+                return []
+            if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
+                systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
+            elif parent.message_type == MessageType.USER_INTENT:
+                selection = (
+                    Message.objects.filter(
+                        conversation=parent.conversation,
+                        created_by=parent.created_by,
+                        message_type=MessageType.SYSTEM_SELECTION,
+                        status=ExecutionStatus.SUCCESS,
+                        id__lte=message.id,
+                    )
+                    .order_by("-id")
+                    .first()
+                )
+                systems = ((selection.output_data if selection else None) or {}).get("systems") or []
+            else:
+                systems = (parent.output_data or {}).get("systems") or []
+            fields = [field for system in systems for field in (system or {}).get("extension_fields") or []]
         keys: list = []
         seen: set = set()
-        for system in systems:
-            for field in (system or {}).get("extension_fields") or []:
-                if not isinstance(field, dict) or field.get("raw_name") != "extend_data":
-                    continue
-                # 一期下钻协议限单层，仅取第一层子键
-                field_keys = field.get("keys") or []
-                key = field_keys[0] if field_keys else ""
-                if isinstance(key, str) and key and key not in seen:
-                    seen.add(key)
-                    keys.append(key)
+        for field in fields:
+            payload = field.model_dump(mode="json") if hasattr(field, "model_dump") else field
+            if not isinstance(payload, dict) or payload.get("raw_name") != "extend_data":
+                continue
+            # 一期下钻协议限单层，仅取第一层子键
+            field_keys = payload.get("keys") or []
+            key = field_keys[0] if field_keys else ""
+            if isinstance(key, str) and key and key not in seen:
+                seen.add(key)
+                keys.append(key)
         return keys
 
     def _get_success_log_search(self, *, message_uid: str) -> Message:

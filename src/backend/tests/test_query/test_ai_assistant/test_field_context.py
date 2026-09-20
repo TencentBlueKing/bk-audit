@@ -26,6 +26,10 @@ from apps.meta.models import Field
 from core.sql.constants import Operator
 from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
+from services.web.query.ai_assistant.schemas import (
+    SelectionSystem,
+    SystemSelectionOutput,
+)
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.utils.field_map import FieldMapHandler
@@ -36,6 +40,34 @@ from services.web.query.utils.search_config import (
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 FIELD_CONTEXT_MODULE = "services.web.query.ai_assistant.services.field_context"
+
+
+class TestPlanningFieldContext(AIAssistantTestCase):
+    """规划上下文按授权候选顺序合并多个单系统字段快照。"""
+
+    def test_build_planning_context_reuses_single_system_contract(self):
+        with mock.patch.object(
+            FieldContextService,
+            "build_selection",
+            side_effect=[
+                SystemSelectionOutput(systems=[SelectionSystem(system_id="bk-audit", name="审计中心")]),
+                SystemSelectionOutput(systems=[SelectionSystem(system_id="bcs", name="蓝盾")]),
+            ],
+        ) as build_selection:
+            output = FieldContextService.build_planning_context(
+                namespace=self.namespace,
+                system_ids=["bk-audit", "bcs"],
+                username=self.username,
+            )
+
+        self.assertEqual([system.system_id for system in output.systems], ["bk-audit", "bcs"])
+        self.assertEqual(
+            build_selection.call_args_list,
+            [
+                mock.call(namespace=self.namespace, system_ids=["bk-audit"], username=self.username),
+                mock.call(namespace=self.namespace, system_ids=["bcs"], username=self.username),
+            ],
+        )
 
 
 @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=False)
@@ -57,7 +89,13 @@ class TestFieldContextService(AIAssistantTestCase):
     def test_build_selection_success(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
         mock_perm.return_value = True
         mock_meta_get.return_value = {}
-        mock_system_list.return_value = [{"system_id": self.target_system_id, "name": self.target_system_name}]
+        mock_system_list.return_value = [
+            {
+                "system_id": self.target_system_id,
+                "name": self.target_system_name,
+                "description": "审计中心系统描述",
+            }
+        ]
 
         output = self._build()
 
@@ -65,6 +103,7 @@ class TestFieldContextService(AIAssistantTestCase):
         system = output.systems[0]
         self.assertEqual(system.system_id, self.target_system_id)
         self.assertEqual(system.name, self.target_system_name)
+        self.assertEqual(system.description, "审计中心系统描述")
         # 字段清单与检索白名单同源全量
         self.assertEqual(len(system.standard_fields), len(COLLECT_SEARCH_CONFIG.field_configs))
         raw_names = {field.raw_name for field in system.standard_fields}

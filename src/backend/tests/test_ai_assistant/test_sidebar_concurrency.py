@@ -542,7 +542,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
         write_paused = threading.Event()
         release_write = threading.Event()
         errors = []
-        original_lock = MessageService._lock_active_conversation
+        original_lock = MessageService.lock_active_conversation
 
         def pause_before_lock(service, *, conversation):
             write_paused.set()
@@ -563,7 +563,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
                 close_old_connections()
 
         try:
-            with mock.patch.object(MessageService, "_lock_active_conversation", pause_before_lock):
+            with mock.patch.object(MessageService, "lock_active_conversation", pause_before_lock):
                 thread = threading.Thread(target=create_message)
                 thread.start()
                 self.assertTrue(write_paused.wait(timeout=5))

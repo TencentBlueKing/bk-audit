@@ -16,21 +16,29 @@ from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_search import (
     SystemSelectionInputSchema,
     UserIntentInputSchema,
+    UserIntentOutputSchema,
 )
 from services.web.ai_assistant.serializers.message import MessageResponseSerializer
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.tasks.audit_search import execute_user_intent
+from services.web.query.ai_assistant.schemas import (
+    AIConditionItem,
+    AIConditionPayload,
+    MessagePlan,
+    PlannedLogSearchInput,
+    PlannedLogSearchMessage,
+    PlannedSystemSelectionMessage,
+    SystemSelectionInput,
+)
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
-    make_condition,
     make_log_search_output,
     make_selection_output,
 )
 
 HANDLERS_MODULE = "services.web.ai_assistant.handlers.audit_search"
 TITLE_DELAY = "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay"
-CONVERT_MOCK = "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
 
 
 class MessageDurationTest(AIAssistantPlatformTestCase):
@@ -82,7 +90,7 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
         self.assertIsNone(data["finished_at"])
 
     def test_duration_seconds_clamped_on_timestamp_inversion(self):
-        """时间戳微秒倒挂（create_executed 同步落库：finished_at 早于 created_at）钳位为 0.0。"""
+        """历史时间戳微秒倒挂时钳位为 0.0。"""
 
         from datetime import timedelta
 
@@ -98,44 +106,9 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
         message.refresh_from_db()
 
         data = MessageResponseSerializer(message).data
-        # 不再出现 -0.0，钳位为 0.0（同步编排子消息耗时≈0 属正常）
+        # 不再出现 -0.0，钳位为 0.0
         self.assertEqual(data["duration_seconds"], 0.0)
         self.assertNotEqual(str(data["duration_seconds"]), "-0.0")
-
-    def test_create_executed_timeline_started_at(self):
-        """任务内编排子消息：created_at 回写为用户发问时刻，duration = 全链真实耗时。"""
-
-        from datetime import timedelta
-
-        from django.utils import timezone as dj_timezone
-
-        from services.web.ai_assistant.constants import MessageType
-        from services.web.ai_assistant.handlers import message_handler_registry
-        from services.web.ai_assistant.schemas.audit_search import (
-            SystemSelectionOutputSchema,
-        )
-        from services.web.ai_assistant.services.message import MessageService
-
-        # 用户 9.8 秒前发问（父消息创建时刻即时间线起点）
-        origin = dj_timezone.now() - timedelta(seconds=9.8)
-        handler = message_handler_registry.require(MessageType.SYSTEM_SELECTION)
-        with mock.patch.object(
-            type(handler),
-            "execute",
-            return_value=SystemSelectionOutputSchema(systems=[], common_operations=[], historical_operations=[]),
-        ):
-            message = MessageService(user=self.user).create_executed(
-                conversation=self.conversation,
-                message_type=MessageType.SYSTEM_SELECTION,
-                input_data={"system_ids": [TARGET_SYSTEM_ID], "scope_type": "cross_system"},
-                timeline_started_at=origin,
-            )
-
-        # created_at 回写为发问时刻：duration ≈ 9.8s（含此前全部 LLM 编排等待）
-        self.assertEqual(message.created_at, origin)
-        data = MessageResponseSerializer(message).data
-        self.assertGreaterEqual(data["duration_seconds"], 9.0)
-        self.assertLess(data["duration_seconds"], 11.0)
 
     """历史 input_data（无 scope 字段）的 schema 层宽松解析。"""
 
@@ -234,20 +207,38 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
             context_data=parse_snapshot(handler.context_model, message.context_data, field_name="context_data"),
         )
 
-        from services.web.query.ai_assistant.schemas import IntentPayload
-
         with mock.patch(
             "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
         ), mock.patch(
-            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.recognize",
-            mock.MagicMock(
-                return_value=IntentPayload(
-                    intent="select_system", system_id=TARGET_SYSTEM_ID, need_search=True, message="ok"
-                )
-            ),
+            "services.web.ai_assistant.tasks.audit_search.FieldContextService.build_planning_context",
+            return_value=make_selection_output(),
         ), mock.patch(
-            CONVERT_MOCK, mock.MagicMock(return_value=make_condition())
+            "services.web.ai_assistant.tasks.audit_search.MessagePlanningService.plan",
+            return_value=MessagePlan(
+                outcome="dispatch",
+                messages=[
+                    PlannedSystemSelectionMessage(
+                        message_type="SYSTEM_SELECTION",
+                        message_input=SystemSelectionInput(system_ids=[TARGET_SYSTEM_ID]),
+                    ),
+                    PlannedLogSearchMessage(
+                        message_type="LOG_SEARCH",
+                        message_input=PlannedLogSearchInput(
+                            condition=AIConditionPayload(
+                                conditions=[
+                                    AIConditionItem(
+                                        raw_name="username",
+                                        field_type="string",
+                                        operator="eq",
+                                        filters=["admin"],
+                                    )
+                                ]
+                            )
+                        ),
+                    ),
+                ],
+            ),
         ), mock.patch(
             f"{HANDLERS_MODULE}.LogSearchService.search", return_value=make_log_search_output()
         ), mock.patch(
@@ -260,12 +251,20 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
         ), mock.patch(
             TITLE_DELAY
         ):
-            output = execute_user_intent.run(execution)
+            resolved = execute_user_intent.run(execution)
+            output = UserIntentOutputSchema.model_validate(
+                execute_user_intent._finish_success(
+                    execution=execution,
+                    task_id=message.task_id,
+                    output_data=resolved,
+                )
+            )
 
         # v1 兜底：无 scope 时系统路由仍成功，SELECTION 以 cross_system 宽口径建链
         self.assertEqual(output.intent, "select_system")
         self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
-        self.assertIsNotNone(output.condition)
+        self.assertIsNone(output.condition)
+        self.assertTrue(output.log_search_message_uid)
         new_selection = (
             Message.objects.filter(conversation=self.conversation, message_type=MessageType.SYSTEM_SELECTION)
             .order_by("-id")

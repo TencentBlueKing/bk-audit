@@ -28,7 +28,7 @@ full_key（raw_name 与 keys 以 LOG_FIELD_KEY_JOIN_CHAR 连接），与导出�
 """
 
 import re
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -150,6 +150,7 @@ class SelectionSystem(BaseModel):
 
     system_id: str
     name: str = ""
+    description: str = ""
     standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
     extension_fields: List[SelectionFieldMeta] = Field(default_factory=list)
 
@@ -201,6 +202,61 @@ class AIConditionPayload(BaseModel):
     conditions: List[AIConditionItem] = Field(default_factory=list, description="检索条件列表，无字段条件时为空数组")
     start_time: Optional[str] = Field(None, description="开始时间，ISO 8601 带时区")
     end_time: Optional[str] = Field(None, description="结束时间，ISO 8601 带时区")
+
+
+class PlannedSystemSelectionMessage(BaseModel):
+    """Agent 规划的系统选择消息；scope 由服务端注入。"""
+
+    message_type: Literal["SYSTEM_SELECTION"] = Field(description="选择或切换系统")
+    message_input: SystemSelectionInput
+
+
+class PlannedLogSearchInput(BaseModel):
+    """Agent 可写的日志检索输入；检索系统由计划上下文确定。"""
+
+    condition: AIConditionPayload
+
+
+class PlannedLogSearchMessage(BaseModel):
+    """Agent 规划的日志检索消息。"""
+
+    message_type: Literal["LOG_SEARCH"] = Field(description="按结构化条件检索日志")
+    message_input: PlannedLogSearchInput
+
+
+PlannedMessage = Annotated[
+    Union[PlannedSystemSelectionMessage, PlannedLogSearchMessage],
+    Field(discriminator="message_type"),
+]
+
+
+class MessagePlan(BaseModel):
+    """通用消息规划 Agent 的输出契约，一期最多生成系统选择和日志检索两条消息。"""
+
+    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行消息计划，error 表示业务上无法形成计划")
+    messages: List[PlannedMessage] = Field(default_factory=list, max_length=2, description="按执行顺序排列的业务消息")
+    error_code: Optional[Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE"]] = Field(
+        default=None, description="outcome=error 时必填的稳定业务错误码"
+    )
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> "MessagePlan":
+        """校验结果分支和一期允许的消息序列，避免执行层猜测依赖关系。"""
+
+        if self.outcome == "error":
+            if self.messages or not self.error_code:
+                raise ValueError("error outcome requires empty messages and error_code")
+            return self
+        if not self.messages or self.error_code:
+            raise ValueError("dispatch outcome requires messages and no error_code")
+        sequence = tuple(message.message_type for message in self.messages)
+        if sequence not in (
+            ("SYSTEM_SELECTION",),
+            ("LOG_SEARCH",),
+            ("SYSTEM_SELECTION", "LOG_SEARCH"),
+        ):
+            raise ValueError("unsupported message plan sequence")
+        return self
 
 
 class IntentPayload(BaseModel):

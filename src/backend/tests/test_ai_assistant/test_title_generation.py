@@ -439,7 +439,7 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
             conversation_id=self.conversation.id,
             query_text=build_condition_title_input(
                 message.input_data,
-                extension_fields=MessageService._extract_parent_extension_fields(message.parent_message),
+                extension_fields=MessageService._extract_message_extension_fields(message),
             ),
             source="field_condition",
         )

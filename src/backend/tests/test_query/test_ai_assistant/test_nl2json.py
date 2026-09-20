@@ -34,6 +34,7 @@ from services.web.query.ai_assistant.exceptions import (
     AITimeoutError,
     QueryNotRecognizedError,
 )
+from services.web.query.ai_assistant.schemas import AIConditionPayload
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
@@ -234,6 +235,22 @@ class TestNL2JSONService(AIAssistantTestCase):
         with self.assertRaises(QueryNotRecognizedError) as ctx:
             self._convert()
         self.assertEqual(ctx.exception.error_code, "QUERY_NOT_RECOGNIZED")
+
+    def test_message_plan_can_confirm_empty_search_and_apply_default_window(self, mock_chat):
+        """消息规划已确认检索意图时，空条件由后端补最近一天。"""
+
+        reference_time = datetime(2026, 9, 20, 10, 0, tzinfo=datetime_timezone(timedelta(hours=8)))
+        condition = NL2JSONService.validate_and_assemble(
+            payload=AIConditionPayload(),
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            reference_time=reference_time,
+            allow_empty=True,
+        )
+
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(parse_datetime(condition.end_time), reference_time)
+        self.assertEqual(parse_datetime(condition.end_time) - parse_datetime(condition.start_time), timedelta(days=1))
 
     def test_unknown_field_rejected(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)

@@ -205,6 +205,27 @@ class NL2JSONService:
         payload = cls._parse_and_validate(content, selection)
         return cls._assemble(payload, scope_id, reference_time)
 
+    @classmethod
+    def validate_and_assemble(
+        cls,
+        payload: AIConditionPayload,
+        selection: SystemSelectionOutput,
+        scope_id: str,
+        reference_time: datetime,
+        allow_empty: bool = False,
+    ) -> SearchCondition:
+        """校验 Agent 已生成的条件并补齐服务端范围与默认时间，不再次调用 Agent。
+
+        Args:
+            allow_empty: 上游已通过消息计划确认检索意图时，允许空条件并采用默认时间窗。
+        """
+
+        normalized = payload.model_copy(deep=True)
+        if allow_empty and not normalized.conditions and not cls._payload_has_valid_time(normalized):
+            return cls._assemble(normalized, scope_id, reference_time)
+        cls._validate_semantics(normalized, selection)
+        return cls._assemble(normalized, scope_id, reference_time)
+
     # ------------------------------------------------------------------
     # ① User Message 组装
     # ------------------------------------------------------------------

@@ -105,6 +105,19 @@ class FieldContextService:
         systems = [cls._build_system(namespace, system_id, system_map.get(system_id, {})) for system_id in allowed_ids]
         return SystemSelectionOutput(systems=systems)
 
+    @classmethod
+    def build_planning_context(cls, namespace: str, system_ids: List[str], username: str) -> SystemSelectionOutput:
+        """按候选顺序构造消息规划使用的全系统字段上下文。
+
+        设计意图：实际系统选择仍由 ``SystemSelectionInput`` 限制为单系统；规划阶段
+        需要同时理解所有授权候选，逐个复用单系统构建入口，避免放宽业务消息协议。
+        """
+
+        systems = []
+        for system_id in system_ids:
+            systems.extend(cls.build_selection(namespace=namespace, system_ids=[system_id], username=username).systems)
+        return SystemSelectionOutput(systems=systems)
+
     # ------------------------------------------------------------------
     # 系统信息
     # ------------------------------------------------------------------
@@ -149,6 +162,7 @@ class FieldContextService:
         return SelectionSystem(
             system_id=system_id,
             name=system.get("name", ""),
+            description=system.get("description", ""),
             standard_fields=standard_fields,
             extension_fields=extension_fields,
         )
