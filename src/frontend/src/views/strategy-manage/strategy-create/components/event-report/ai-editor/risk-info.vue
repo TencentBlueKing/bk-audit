@@ -108,7 +108,7 @@
       width: 200,
     },
     {
-      title: t('应用方式'),
+      title: t('引用方式'),
       colKey: 'field',
       width: 200,
       cell: (h: any, { row }: { row: { field: string } }) => (

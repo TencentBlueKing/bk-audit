@@ -129,16 +129,30 @@
     width: 180,
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
-      <auth-button
-        text
-        theme='primary'
-        class='mr16'
-        permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-        action-id='process_risk'
-        resource={row.risk_id}
-        onClick={() => handleToDetail(row)}>
-        {t('处理')}
-      </auth-button>
+      {
+        ['for_approve', 'auto_process'].includes(row.status)
+          ? (
+            <bk-button
+              v-bk-tooltips={t('当前状态不支持人工处理')}
+              text
+              theme='primary'
+              class='mr16 is-disabled'>
+              {t('处理')}
+            </bk-button>
+          )
+          : (
+            <auth-button
+              text
+              theme='primary'
+              class='mr16'
+              permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+              action-id='process_risk'
+              resource={row.risk_id}
+              onClick={() => handleToDetail(row)}>
+              {t('处理')}
+            </auth-button>
+          )
+      }
       {
         row.status === 'auto_process'
           ? <bk-button text theme='primary'
