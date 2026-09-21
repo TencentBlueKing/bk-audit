@@ -48,26 +48,27 @@ from services.web.query.ai_assistant.services.nl2json import (  # noqa: E402
 )
 
 _CHAT_COMPLETION_PATH = "services.web.query.ai_assistant.services.intent.api.bk_plugins_ai_agent.chat_completion"
+EVAL_CONTEXT_USERNAME = "eval_actor"
 
 CANDIDATES = [
-    {"system_id": "eval_audit_system", "name": "审计中心", "description": "审计日志与操作记录"},
-    {"system_id": "eval_bcs_system", "name": "蓝盾", "description": "持续集成与发布流水线"},
-    {"system_id": "eval_config_system", "name": "配置平台", "description": "配置与资源管理"},
-    {"system_id": "eval_monitor_system", "name": "监控平台", "description": "监控告警与观测数据"},
+    {"system_id": "eval_audit_system", "name": "示例审计系统", "description": "审计日志与操作记录"},
+    {"system_id": "eval_pipeline_system", "name": "示例流水线系统", "description": "持续集成与发布流水线"},
+    {"system_id": "eval_config_system", "name": "示例配置系统", "description": "配置与资源管理"},
+    {"system_id": "eval_monitor_system", "name": "示例监控系统", "description": "监控告警与观测数据"},
 ]
 
 LINE_CANDIDATES = [
-    {"system_id": "bk-audit", "name": "审计中心"},
-    {"system_id": "iam_v4_bk-audit", "name": "iam v4 bk audit"},
-    {"system_id": "bk-ci", "name": "蓝盾"},
-    {"system_id": "bk_sops", "name": "标准运维"},
-    {"system_id": "bk_cmdb", "name": "配置平台"},
-    {"system_id": "bk_monitorv3", "name": "监控平台"},
-    {"system_id": "bk_userman", "name": "用户管理"},
-    {"system_id": "bk_iam", "name": "权限中心"},
-    {"system_id": "bk_nodeman", "name": "节点管理"},
-    {"system_id": "dry_test", "name": "dry_test"},
-    {"system_id": "bk_ops_base", "name": "运维基础计算平台"},
+    {"system_id": "eval_audit_primary", "name": "示例审计系统"},
+    {"system_id": "eval_audit_shadow", "name": "示例审计影子系统"},
+    {"system_id": "eval_ci_system", "name": "示例流水线系统"},
+    {"system_id": "eval_ops_system", "name": "示例运维系统"},
+    {"system_id": "eval_asset_system", "name": "示例配置系统"},
+    {"system_id": "eval_monitor_system", "name": "示例监控系统"},
+    {"system_id": "eval_user_management_system", "name": "示例用户系统"},
+    {"system_id": "eval_permission_system", "name": "示例权限系统"},
+    {"system_id": "eval_node_system", "name": "示例节点系统"},
+    {"system_id": "eval_sandbox_system", "name": "eval_sandbox_system"},
+    {"system_id": "eval_ops_base_system", "name": "示例基础系统"},
 ]
 
 _PROGRESS_LOG = os.path.join(_BACKEND_ROOT, "evals", "intent-recognition", "output", "progress.log")
@@ -142,7 +143,7 @@ def _build_fields(system_id: str):
             display_name="操作人",
             nl_name="操作人",
             allow_operators=["eq", "include"],
-            sample_value="张三",
+            sample_value="eval_user_alpha",
         ),
         SelectionFieldMeta(
             raw_name="action_id",
@@ -287,6 +288,15 @@ def call_api(prompt, options, context):
     try:
         max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
         system_context = _resolve_system_context(vars_)
+        user_message = MessagePlanningService.build_user_message(
+            query_text=query,
+            system_context=system_context,
+            current_system_id=current_system_id,
+            username=EVAL_CONTEXT_USERNAME,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            reference_time=current_time,
+        )
         original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):
@@ -299,6 +309,7 @@ def call_api(prompt, options, context):
                         scope_type=scope_type,
                         scope_id=scope_id,
                         reference_time=current_time,
+                        user_message=user_message,
                     )
                     payload = _materialize_output(
                         plan=plan,

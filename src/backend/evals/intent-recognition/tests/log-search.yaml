@@ -9,11 +9,11 @@
 
 - description: '纯检索需求（时间+条件，未提系统）'
   vars:
-    query: '看下张三近七天的操作日志'
-    current_system_id: 'eval_bcs_system'
+    query: '看下eval_user_alpha近七天的操作日志'
+    current_system_id: 'eval_pipeline_system'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.system_id === "eval_bcs_system"'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.system_id === "eval_pipeline_system"'
 
 - description: '纯检索需求（新对话未选系统，识别层仍应判 log_search——SYSTEM_REQUIRED 由平台守门）'
   vars:

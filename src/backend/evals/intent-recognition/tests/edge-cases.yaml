@@ -1,7 +1,7 @@
 # 边界场景：歧义表达 / 近义系统 / 复合意图
 - description: '复合意图（一句话既选系统又检索，系统信息含时间条件）'
   vars:
-    query: '我要看配置平台近一个月 admin 的变更记录'
+    query: '我要看示例配置系统近一个月 eval_user_admin 的变更记录'
     current_system_id: 'eval_audit_system'
   assert:
     - type: javascript
@@ -25,7 +25,7 @@
 
 - description: '英文话语（跨语言意图识别）'
   vars:
-    query: 'show me the audit center logs for the last 7 days'
+    query: 'show me the sample audit system logs for the last 7 days'
     current_system_id: ''
   assert:
     - type: javascript
@@ -33,8 +33,8 @@
 
 - description: '长句多重修饰（选系统+多条件检索）'
   vars:
-    query: '麻烦帮我在蓝盾上面查一下张三和李四最近三天操作id为456和789并且结果是失败的日志'
+    query: '麻烦帮我在示例流水线系统上面查一下eval_user_alpha和eval_user_beta最近三天操作id为456和789并且结果是失败的日志'
     current_system_id: 'eval_config_system'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_bcs_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.includes("张三") && c.filters.includes("李四")) && d.condition.conditions.some(c => c.field.raw_name === "action_id" && c.operator === "include" && c.filters.map(String).includes("456") && c.filters.map(String).includes("789")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.map(String).includes("-1"))'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.includes("eval_user_alpha") && c.filters.includes("eval_user_beta")) && d.condition.conditions.some(c => c.field.raw_name === "action_id" && c.operator === "include" && c.filters.map(String).includes("456") && c.filters.map(String).includes("789")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.map(String).includes("-1"))'

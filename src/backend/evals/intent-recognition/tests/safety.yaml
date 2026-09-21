@@ -17,7 +17,7 @@
 
 - description: '提及候选外系统（AI 不应编造该 system_id；越权值会被服务层白名单拒绝）'
   vars:
-    query: '帮我看一下作业平台 Job 的执行日志'
+    query: '帮我看一下示例作业系统 的执行日志'
     current_system_id: 'eval_audit_system'
   assert:
     - type: javascript

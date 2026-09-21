@@ -1,0 +1,94 @@
+# 多级拓展字段矩阵：两种字段上下文形态 × 两种用户表达。
+# 所有用例都从未选择系统的新会话开始，必须一次规划系统选择和日志检索两条消息。
+
+- description: '嵌套字段-完整路径上下文-完整路径表达'
+  vars:
+    query: '帮我查询示例审计系统操作人为eval_user_nested，拓展数据下二级字段_request_url.scope_id为49的日志'
+    current_system_id: ''
+    scope_type: 'scene'
+    scope_id: '1001'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems: &full_path_systems
+      - system_id: 'eval_audit_primary'
+        name: '示例审计系统'
+        description: '审计日志与操作记录'
+        standard_fields:
+          - raw_name: 'username'
+            keys: []
+            field_type: 'string'
+            display_name: '操作人'
+            nl_name: '操作人'
+            description: '操作账号'
+            allow_operators: ['eq', 'include']
+            sample_value: 'eval_user_nested'
+        extension_fields:
+          - raw_name: 'extend_data'
+            keys: ['_request_url', 'scope_id']
+            field_type: 'string'
+            display_name: '请求地址.scope_id'
+            nl_name: 'extend._request_url.scope_id'
+            description: '请求地址对象中的业务范围 ID'
+            allow_operators: ['eq', 'neq', 'include', 'exclude', 'like']
+            sample_value: '49'
+            system_id: 'eval_audit_primary'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+
+- description: '嵌套字段-完整路径上下文-父节点表达'
+  vars:
+    query: '帮我查询示例审计系统操作人为eval_user_nested，拓展数据下三级字段scope_id为49的日志，scope_id的父节点是：_request_url'
+    current_system_id: ''
+    scope_type: 'scene'
+    scope_id: '1001'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems: *full_path_systems
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+
+- description: '嵌套字段-父节点样例上下文-完整路径表达'
+  vars:
+    query: '帮我查询示例审计系统操作人为eval_user_nested，拓展数据下二级字段_request_url.scope_id为49的日志'
+    current_system_id: ''
+    scope_type: 'scene'
+    scope_id: '1001'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems: &parent_sample_systems
+      - system_id: 'eval_audit_primary'
+        name: '示例审计系统'
+        description: '审计日志与操作记录'
+        standard_fields:
+          - raw_name: 'username'
+            keys: []
+            field_type: 'string'
+            display_name: '操作人'
+            nl_name: '操作人'
+            description: '操作账号'
+            allow_operators: ['eq', 'include']
+            sample_value: 'eval_user_nested'
+        extension_fields:
+          - raw_name: 'extend_data'
+            keys: ['_request_url']
+            field_type: 'string'
+            display_name: '请求地址'
+            nl_name: 'extend._request_url'
+            description: '请求地址对象，样例中包含 scope_id 子字段'
+            allow_operators: ['eq', 'neq', 'include', 'exclude', 'like']
+            sample_value: '{"scope_id":"49","path":"/api/v1/example"}'
+            system_id: 'eval_audit_primary'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+
+- description: '嵌套字段-父节点样例上下文-父节点表达'
+  vars:
+    query: '帮我查询示例审计系统操作人为eval_user_nested，拓展数据下三级字段scope_id为49的日志，scope_id的父节点是：_request_url'
+    current_system_id: ''
+    scope_type: 'scene'
+    scope_id: '1001'
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems: *parent_sample_systems
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'

@@ -11,8 +11,9 @@
 5. 闲聊输出 `UNRECOGNIZED_INTENT`。
 6. 系统 ID、字段、操作符、枚举值及时间条件能通过后端确定性校验。
 7. 相似系统名、提示注入、多值条件和扩展字段场景保持稳定。
+8. 多级拓展字段在“完整路径已发现”和“仅父节点及样例已发现”两类上下文中，都能把完整路径表达或父节点表达规范化为同一 `extend_data + keys` 条件。
 
-Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 直接注入生产同构的授权系统字段快照、会话范围和参考时间，用于覆盖空授权、无当前系统、同名系统、深层扩展字段及上下文提示注入。
+Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 直接注入生产同构的授权系统字段快照、会话范围和参考时间，用于覆盖空授权、无当前系统、同名系统、深层扩展字段及上下文提示注入。`tests/nested-extension-fields.yaml` 固定覆盖两种字段上下文与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗。
 
 评测分为两个 profile：
 
@@ -60,6 +61,8 @@ PROMPTFOO_PYTHON=.venv/bin/python npx promptfoo eval --no-table \
 ```
 
 `.env` 需要提供 `BKAPP_EVAL_USERNAME` 和 AIDev 调用所需配置。评测输出在 `output/` 下，仅结果文件用于本地分析，不提交凭据或请求正文。稳定性回归可在关键场景上追加 `--repeat 3`；不要只重复整套用例后用总体通过率替代单用例一致性分析。
+
+评测夹具中的人员、系统及样例路径统一使用 `eval_*` 或“示例”前缀的合成值。`BKAPP_EVAL_USERNAME` 只用于 AIDev 接口鉴权，模型上下文中的用户固定为 `eval_actor`，避免真实账号进入评测请求正文。
 
 ## 通过标准
 
