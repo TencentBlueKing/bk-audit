@@ -51,6 +51,7 @@
             <bk-dropdown-menu>
               <!-- 本期仅开放「清空所有会话」，其余配置项禁用且不可点 -->
               <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                 ext-cls="is-config-disabled"
                 @click.stop.prevent="onDisabledConfigClick"
                 @mousedown.stop.prevent>
@@ -60,12 +61,14 @@
                 </div>
               </bk-dropdown-item>
               <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                 ext-cls="is-config-disabled"
                 @click.stop.prevent="onDisabledConfigClick"
                 @mousedown.stop.prevent>
                 导入会话
               </bk-dropdown-item>
               <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                 ext-cls="is-config-disabled"
                 @click.stop.prevent="onDisabledConfigClick"
                 @mousedown.stop.prevent>
@@ -260,6 +263,7 @@
                         </bk-dropdown>
                       </bk-dropdown-item>
                       <bk-dropdown-item
+                        v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                         ext-cls="sub-menu-item is-dropdown-disabled"
                         @click.stop.prevent="onDisabledConfigClick"
                         @mousedown.stop.prevent>
@@ -345,6 +349,7 @@
                           重命名
                         </bk-dropdown-item>
                         <bk-dropdown-item
+                          v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                           ext-cls="sub-menu-item is-dropdown-disabled"
                           @click.stop.prevent="onDisabledConfigClick"
                           @mousedown.stop.prevent>
@@ -460,6 +465,7 @@
                             </bk-dropdown>
                           </bk-dropdown-item>
                           <bk-dropdown-item
+                            v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
                             ext-cls="sub-menu-item is-dropdown-disabled"
                             @click.stop.prevent="onDisabledConfigClick"
                             @mousedown.stop.prevent>
