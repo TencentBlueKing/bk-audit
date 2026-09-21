@@ -57,23 +57,23 @@
           </span>
         </div>
 
-      <div
-        v-if="isSourceEmpty"
-        class="dsp-empty">
-        <img
-          class="dsp-empty-img"
-          :src="emptySvg">
-        <div class="dsp-empty-title">
-          {{ t('暂无数据源') }}
+        <div
+          v-if="isSourceEmpty"
+          class="dsp-empty">
+          <img
+            class="dsp-empty-img"
+            :src="emptySvg">
+          <div class="dsp-empty-title">
+            {{ t('暂无数据源') }}
+          </div>
+          <div class="dsp-empty-desc">
+            <span>{{ t('请在企微联系') }}</span>
+            <span
+              class="dsp-empty-contact"
+              @click.stop="contactHelper">iegsec_helper</span>
+            <span>{{ t('数据源空态联系后缀') }}</span>
+          </div>
         </div>
-        <div class="dsp-empty-desc">
-          <span>{{ t('请在企微联系') }}</span>
-          <span
-            class="dsp-empty-contact"
-            @click.stop="contactHelper">iegsec_helper</span>
-          <span>{{ t('数据源空态联系后缀') }}</span>
-        </div>
-      </div>
 
         <div
           v-else

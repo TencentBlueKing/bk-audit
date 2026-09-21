@@ -181,7 +181,7 @@
             :key="card.id"
             class="message-row is-assistant condition-filter-row">
             <condition-filter-card
-              :ref="(el) => setConditionFilterCardRef(card.id, el)"
+              :ref="(el: unknown) => setConditionFilterCardRef(card.id, el)"
               :extension-fields="extensionFields"
               :initial-field-name="card.fieldName"
               :initial-sample="card.sample"
