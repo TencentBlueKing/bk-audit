@@ -28,8 +28,6 @@ import type {
   AiUserIntentInput,
 } from '@model/ai-assistant/types';
 
-import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
-
 import type {
   Conversation,
   Group,
@@ -48,6 +46,7 @@ import {
 } from '../utils/map-ai-message';
 
 import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
+import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
 
 /** 把用户点选的时间快捷项挂到结果上（仅前端交互态；非相对则清除） */
 const attachDatetimeOriginToMessage = (
@@ -217,13 +216,16 @@ const applyRememberedDatetimeOrigin = (
   const remembered = logSearchDatetimeOriginByUid.get(messageUid)
     || (fallback && isRelativeDatetimeOrigin(fallback) ? fallback : undefined);
   if (remembered) {
+    /* eslint-disable no-param-reassign -- 原地补齐结果 payload 的快捷时间 */
     result.datetimeOrigin = [...remembered];
     if (!logSearchDatetimeOriginByUid.has(messageUid)) {
       logSearchDatetimeOriginByUid.set(messageUid, [...remembered]);
       persistDatetimeOriginMemory();
     }
+    /* eslint-enable no-param-reassign */
     return;
   }
+  // eslint-disable-next-line no-param-reassign -- 无记忆时清理快捷时间
   delete result.datetimeOrigin;
 };
 

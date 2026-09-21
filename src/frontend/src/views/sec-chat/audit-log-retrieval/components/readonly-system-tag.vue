@@ -34,13 +34,13 @@
 
   import type { SelectedSystem } from '../../types';
 
-  const SYSTEM_TIP = '更换系统请点击上方「重新选择」';
-
   const props = withDefaults(defineProps<{
     systems?: SelectedSystem[];
   }>(), {
     systems: () => [],
   });
+
+  const SYSTEM_TIP = '更换系统请点击上方「重新选择」';
 
   const displayValue = computed(() => {
     const system = props.systems[0];

@@ -434,6 +434,7 @@ export const ensureNestedConditionFieldConfig = (
     isExtension: true,
   };
   // 动态挂载到传入的 fieldConfig（调用方持有可变副本）
+  // eslint-disable-next-line no-param-reassign -- 原地补齐下钻字段配置
   fieldConfig[exactKey] = fieldConfigFromRow(syntheticField, fieldCatalog);
   return exactKey;
 };
