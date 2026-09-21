@@ -251,22 +251,7 @@
     prompt_template: '',
     risk_id: '',
   });
-  const namePattern = /^[a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]*$/;
-  const rules = ref({
-    name: [
-      {
-        validator: (value: string) => {
-          const trimmed = (value || '').trim();
-          if (!trimmed) {
-            return true;
-          }
-          return namePattern.test(trimmed);
-        },
-        message: t('名称需以字母、下划线或中文开头，只能包含字母、数字、下划线和中文'),
-        trigger: 'blur',
-      },
-    ],
-  });
+  const rules = ref({});
 
   const concent = ref('');
   const timerId = ref<number | null>(null);
