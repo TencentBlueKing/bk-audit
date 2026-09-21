@@ -57,17 +57,11 @@
   const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
     title?: string;
-    /** @deprecated 单选后标题行直接展示系统名，不再折叠 */
-    defaultExpanded?: boolean;
     actionText?: string;
-    /** @deprecated 单选后操作固定在标题右侧 */
-    actionPlacement?: 'header' | 'footer';
     actionDisabled?: boolean;
   }>(), {
     title: '已选系统',
-    defaultExpanded: true,
     actionText: '',
-    actionPlacement: 'header',
     actionDisabled: false,
   });
 
