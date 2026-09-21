@@ -242,7 +242,7 @@
                             #suffix>
                             <span
                               v-bk-tooltips="{
-                                content: t('只允许中英文、数字、空格、括号（中英文）、下划线、点、中划线')
+                                content: t('不能为空，且不超过50个字符')
                               }"
                               class="invalid-icon">
                               {{ t('输入不合法') }}
@@ -384,12 +384,6 @@
 
     // 检查长度限制（例如：最大50个字符）
     if (value.length > 50) {
-      return false;
-    }
-
-    // 只允许中英文、数字、空格、括号、下划线、点、中划线（字段名/联表前缀可能含点与数字）
-    const validChars = /^[\u4e00-\u9fffa-zA-Z0-9\s()（）_.-]*$/;
-    if (!validChars.test(value)) {
       return false;
     }
 

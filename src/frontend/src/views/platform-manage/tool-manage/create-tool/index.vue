@@ -341,25 +341,7 @@
   };
 
   const rules = {
-    name: [
-      {
-        validator: (value: string) => {
-          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
-          return reg.test(value);
-        },
-        message: t('工具名称只允许中文、字母、数字、中划线或下划线组成'),
-        trigger: 'change',
-      },
-    ],
     tags: [
-      {
-        validator: (value: Array<string>) => {
-          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
-          return value.every(item => reg.test(allTagMap.value[item] ? allTagMap.value[item] : item));
-        },
-        message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
-        trigger: 'change',
-      },
       {
         validator: (value: Array<string>) => {
           const reg = /\D+/;

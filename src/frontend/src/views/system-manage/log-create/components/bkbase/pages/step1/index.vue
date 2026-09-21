@@ -113,7 +113,7 @@
             <bk-input
               v-model="localFormData.custom_collector_ch_name"
               :maxlength="50"
-              :placeholder="t('支持汉字、数字、字母、下划线,长短5~50字符')"
+              :placeholder="t('5~50字符')"
               show-word-limit />
           </bk-form-item>
 
