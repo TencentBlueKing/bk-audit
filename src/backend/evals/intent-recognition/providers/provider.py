@@ -281,12 +281,12 @@ def call_api(prompt, options, context):
         return {"error": f"current_time 无效: {error}"}
 
     model = config.get("model") or None
-    max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
-    system_context = _resolve_system_context(vars_)
     start = time.perf_counter()
     attempt_count = 0
     _log_progress(query, "START")
     try:
+        max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
+        system_context = _resolve_system_context(vars_)
         original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):

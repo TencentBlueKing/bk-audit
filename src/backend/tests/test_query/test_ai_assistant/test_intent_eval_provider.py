@@ -170,6 +170,20 @@ class IntentEvalProviderTest(SimpleTestCase):
         self.assertEqual(result["metadata"]["attempt_count"], 1)
         self.assertIn('"status": "error"', result["output"])
 
+    def test_invalid_max_attempts_returns_structured_error(self):
+        """评测变量错误也必须形成单条结果，不能中断整批 Promptfoo。"""
+
+        result = self.provider.call_api(
+            "你好",
+            {"config": {"username": "alice", "max_attempts": "invalid"}},
+            {"vars": {"query": "你好"}},
+        )
+
+        self.assertNotIn("error", result)
+        self.assertEqual(result["metadata"]["attempt_count"], 0)
+        self.assertIn('"status": "error"', result["output"])
+        self.assertIn('"error_code": "UNEXPECTED_ERROR"', result["output"])
+
     def test_promptfoo_executes_real_context_cases(self):
         """真实上下文场景必须由 Promptfoo 配置直接加载，而非只做静态 fixture 检查。"""
 

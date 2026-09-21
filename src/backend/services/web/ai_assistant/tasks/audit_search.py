@@ -6,20 +6,26 @@
 
 import logging
 import time
+from uuid import uuid4
 
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from celery.schedules import crontab
+from django.db import transaction
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     NL_PARSE_MAX_RETRIES,
     NL_PARSE_RETRY_INTERVAL_SECONDS,
     NL_PARSE_RETRY_TIMEOUT_SECONDS,
+    ExecutionStatus,
+    MessageErrorCode,
     MessageType,
     UserIntentErrorCode,
 )
+from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchContextSchema,
     LogSearchOutputSchema,
     NLSearchErrorSchema,
     NLSearchOutputSchema,
@@ -67,7 +73,7 @@ def _create_log_search_with_fallback(
     condition,
     log_prefix: str,
 ) -> None:
-    """复用统一消息创建链路续链 LOG_SEARCH；实际检索由消息任务异步执行。"""
+    """续链 LOG_SEARCH；创建前置失败时固化可见、可重试的失败消息。"""
 
     message = execution.message
     try:
@@ -76,6 +82,7 @@ def _create_log_search_with_fallback(
             message_type=MessageType.LOG_SEARCH,
             input_data={"condition": condition.model_dump(mode="json")},
             parent_message_uid=str(message.uid),
+            timeline_started_at=message.created_at,
         )
     except Exception:
         logger.exception(
@@ -83,7 +90,46 @@ def _create_log_search_with_fallback(
             log_prefix,
             message.id,
         )
-        raise
+        service = MessageService(user=message.created_by)
+        with transaction.atomic():
+            service.lock_active_conversation(conversation=message.conversation)
+            if Message.objects.filter(parent_message=message, message_type=MessageType.LOG_SEARCH).exists():
+                return
+            target_system = next(
+                (
+                    system
+                    for system in execution.context_data.system_selection.systems
+                    if system.system_id == condition.scope_id
+                ),
+                None,
+            )
+            context = LogSearchContextSchema(
+                username=execution.context_data.username,
+                namespace=execution.context_data.namespace,
+                system_id=condition.scope_id,
+                source="natural_language",
+                session_scope_type=execution.context_data.session_scope_type,
+                session_scope_id=execution.context_data.session_scope_id,
+                extension_fields=target_system.extension_fields if target_system is not None else [],
+            )
+            now = timezone.now()
+            fallback = Message.objects.create(
+                conversation=message.conversation,
+                parent_message=message,
+                message_type=MessageType.LOG_SEARCH,
+                status=ExecutionStatus.FAILED,
+                task_id=str(uuid4()),
+                input_data={"condition": condition.model_dump(mode="json")},
+                context_data=context.model_dump(mode="json"),
+                output_data=None,
+                error_code=str(MessageErrorCode.TASK_EXECUTION_FAILED),
+                error_message="日志检索消息创建失败，请重试",
+                last_activity_at=now,
+                finished_at=now,
+                created_by=message.created_by,
+                updated_by=message.created_by,
+            )
+            Message.objects.filter(id=fallback.id).update(created_at=message.created_at, updated_at=now)
 
 
 class NLSearchExecutionTask(MessageExecutionTask):
@@ -184,6 +230,8 @@ def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) 
         generate_conversation_title.delay(
             conversation_id=execution.message.conversation_id,
             query_text=execution.input_data.query_text,
+            source_message_id=execution.message.id,
+            source_message_task_id=execution.message.task_id or "",
         )
     except Exception:
         logger.exception(
@@ -346,8 +394,20 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
             duration_ms,
             planning_error.error_code,
         )
+        error_output = _planning_error_output(error=planning_error, system_context=system_context)
+        selection_fallback = MessagePlanExecutionService.resolve_valid_selection_fallback(
+            execution=execution,
+            plan=plan,
+            system_context=system_context,
+            reference_time=reference_time,
+            current_selection=current_selection,
+            error_output=error_output,
+            agent_trace=failed_trace,
+        )
+        if selection_fallback is not None:
+            return selection_fallback
         return ResolvedIntentPlan(
-            output=_planning_error_output(error=planning_error, system_context=system_context),
+            output=error_output,
             messages=(),
             agent_trace=failed_trace,
         )

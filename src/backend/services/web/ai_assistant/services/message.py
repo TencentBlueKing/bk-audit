@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, TypeVar
 from uuid import uuid4
@@ -86,8 +86,13 @@ class MessageService:
         message_type: str | MessageType,
         input_data: Mapping[str, Any],
         parent_message_uid: str | None = None,
+        timeline_started_at: datetime | None = None,
     ) -> Message:
-        """校验请求和业务上下文，并按 Handler 的执行方式创建消息。"""
+        """校验请求和业务上下文，并按 Handler 的执行方式创建消息。
+
+        ``timeline_started_at`` 仅供后端续链复用父消息的全链路耗时起点；
+        外部创建接口始终使用当前消息自身的创建时间。
+        """
 
         self._validate_conversation(conversation=conversation)
         parent_message = self._resolve_parent(
@@ -104,6 +109,8 @@ class MessageService:
             input_data=input_data,
             parent_message=parent_message,
         )
+        if timeline_started_at is not None:
+            prepared = replace(prepared, timeline_started_at=timeline_started_at)
         message = self.create_prepared(conversation=conversation, prepared=prepared)
         self._maybe_dispatch_field_condition_title(message)
         logger.info(
@@ -145,6 +152,8 @@ class MessageService:
                     extension_fields=self._extract_message_extension_fields(message),
                 ),
                 source="field_condition",
+                source_message_id=message.id,
+                source_message_task_id=message.task_id or "",
             )
         except Exception:
             logger.exception(
@@ -367,6 +376,7 @@ class MessageService:
             message.refresh_from_db()
             if is_async:
                 transaction.on_commit(lambda: self._dispatch(handler=handler, message=message))
+        self._maybe_dispatch_field_condition_title(message)
         return message
 
     def retry(self, *, message_uid: str) -> Message:
