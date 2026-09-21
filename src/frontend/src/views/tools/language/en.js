@@ -38,6 +38,7 @@ export default {
     工具名称: 'Tool name',
     创建工具: 'Create tool',
     '请输入，32字符内，可由汉字、小写字母、数字、“_”组成': 'Please enter, within 32 characters, can be composed of letters, numbers, and "_"',
+    '请输入，32字符内': 'Please enter, within 32 characters',
     工具标签: 'Tool label',
     工具说明: 'Tool description',
     工具类型: 'Tool type',
