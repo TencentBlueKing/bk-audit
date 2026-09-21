@@ -152,7 +152,7 @@ Event。Event 只表达需要维护者处理的平台异常，例如长期失活
 尾部收敛。业务超时应表现为 `LogAnalysisTimeout` 失败并在 29 分钟附近收敛，30 分钟 Celery
 hard limit 只作为最终保险。
 
-部署监控还应覆盖专属 RabbitMQ 队列的 ready/unacked 数、最老消息等待时间、`ai-log-analysis`
+部署监控还应覆盖专属 RabbitMQ 队列的 ready/unacked 数、最老消息等待时间、`ai-log`
 Worker 在线数/重启数和 Worker 实例级 `5/m` rate limit 饱和。以下异常需要联合排查：
 
 - 队列积压增长但 Worker 在线：检查限流、Agent 延迟和 gevent 并发占用；

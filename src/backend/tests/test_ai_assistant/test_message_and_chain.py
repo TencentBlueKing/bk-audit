@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""消息服务集成与 NL 续链测试（同步失败不创建 / 续链同步执行）。"""
+"""消息服务集成与 NL 续链测试（子消息创建与执行生命周期解耦）。"""
 
 from unittest import mock
 
@@ -159,7 +159,9 @@ class TestMessageCreation(AIAssistantPlatformTestCase):
         self.assertEqual(updated.status, ExecutionStatus.SUCCESS)
         self.assertEqual(updated.output_data["condition"]["conditions"][0]["filters"], ["bob"])
         self.assertEqual(updated.child_messages.count(), 2)
-        self.assertEqual(updated.child_messages.order_by("-id").first().output_data["total"], 7)
+        new_child = updated.child_messages.order_by("-id").first()
+        self.assertEqual(new_child.status, ExecutionStatus.PROCESSING)
+        self.assertEqual(new_child.input_data["condition"]["conditions"][0]["filters"], ["bob"])
         self.assertEqual(Message.objects.filter(pk=old_child.pk).values().get(), old_child_snapshot)
 
     def test_edit_log_search_reexecutes_and_replaces_same_message(self):
@@ -225,7 +227,7 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         return nl_message, execution
 
     def test_nl_success_with_auto_log_search(self):
-        """NL 成功后续链同步执行 LOG_SEARCH 子消息。"""
+        """NL 成功后只创建 LOG_SEARCH，检索由子消息自己的异步任务执行。"""
 
         nl_message, execution = self._create_processing_nl(auto_execute=True)
         condition = make_condition()
@@ -235,7 +237,7 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         ), mock.patch(
             "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
             return_value=make_log_search_output(total=5),
-        ):
+        ) as mock_search:
             output = execute_natural_language_search.run(execution)
             execute_natural_language_search._finish_success(
                 execution=execution, task_id=nl_message.task_id, output_data=output
@@ -243,12 +245,13 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         nl_message.refresh_from_db()
         self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
         self.assertIsNotNone(nl_message.output_data)
-        # 续链子消息：parent 为 NL，同步执行已 SUCCESS
+        # 续链只负责创建；LOG_SEARCH 不阻塞 NL 消息收敛。
         child = Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).first()
         self.assertIsNotNone(child)
-        self.assertEqual(child.status, ExecutionStatus.SUCCESS)
-        self.assertEqual(child.output_data["total"], 5)
+        self.assertEqual(child.status, ExecutionStatus.PROCESSING)
+        self.assertIsNone(child.output_data)
         self.assertEqual(child.context_data["source"], "natural_language")
+        mock_search.assert_not_called()
 
     def test_auto_execute_false_skips_chain(self):
         """auto_execute=False 时不创建续链子消息。"""
@@ -269,15 +272,12 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         )
 
     def test_chain_failure_keeps_nl_success(self):
-        """续链失败不影响 NL 消息 SUCCESS，且降级固化 FAILED 子消息（不再静默消失）。"""
+        """LOG_SEARCH 独立执行失败不回滚已经成功的 NL 父消息。"""
 
         nl_message, execution = self._create_processing_nl(auto_execute=True)
         with mock.patch(
             "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
             return_value=make_condition(),
-        ), mock.patch(
-            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
-            side_effect=AIOutputInvalidError(),
         ):
             output = execute_natural_language_search.run(execution)
             execute_natural_language_search._finish_success(
@@ -285,12 +285,35 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
             )
         nl_message.refresh_from_db()
         self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
-        # 降级 FAILED 子消息：可见可重试（condition 固化），防前端轮询死等超时
         log_search = Message.objects.filter(parent_message=nl_message, message_type=MessageType.LOG_SEARCH).first()
         self.assertIsNotNone(log_search)
+        log_execution = load_message_execution(
+            message_id=log_search.id,
+            task_id=log_search.task_id,
+            celery_task_id=log_search.task_id,
+        )
+        error = RuntimeError("search failed")
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
+            side_effect=error,
+        ), self.assertRaises(RuntimeError):
+            execute_log_search.run(log_execution)
+        execute_log_search._finish_failure(
+            execution=log_execution,
+            instance_id=log_search.id,
+            task_id=log_search.task_id,
+            exception=error,
+        )
+        log_search.refresh_from_db()
         self.assertEqual(log_search.status, ExecutionStatus.FAILED)
         self.assertEqual(log_search.error_code, str(MessageErrorCode.TASK_EXECUTION_FAILED))
         self.assertEqual(log_search.context_data["source"], "natural_language")
+        self.assertTrue(log_search.task_id)
+        with mock.patch.object(MessageService, "_dispatch") as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = MessageService(user=self.user).retry(message_uid=str(log_search.uid))
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        dispatch.assert_called_once()
 
     def test_nl_recognized_failure_returns_structured_error(self):
         """预期内识别失败（AI 未识别）：消息任务 SUCCESS + 结构化 error 协议，不 FAILED。"""

@@ -90,6 +90,40 @@ class ConversationSidebarContainerTest(TestCase):
                 with self.assertRaises(InvalidSidebarContainer):
                     self.service.create_node(**kwargs)
 
+    def test_create_conversation_node_in_group_container(self):
+        group = self.create_group(user=self.user)
+        group_node = self.service.create_node(group=group)
+        first = self.create_conversation(user=self.user, title="first")
+        second = self.create_conversation(user=self.user, title="second")
+
+        first_node = self.service.create_node(conversation=first, parent_node=group_node)
+        second_node = self.service.create_node(conversation=second, parent_node=group_node)
+
+        self.assertEqual(first_node.parent_node_id, group_node.id)
+        self.assertEqual(second_node.parent_node_id, group_node.id)
+        self.assertEqual(self.positions(user=self.user, parent_node_id=group_node.id), [2, 1])
+
+    def test_create_node_rejects_invalid_parent_container(self):
+        group = self.create_group(user=self.user)
+        group_node = self.service.create_node(group=group)
+        root_conversation = self.create_conversation(user=self.user, title="root")
+        root_node = self.service.create_node(conversation=root_conversation)
+        other_group = self.create_group(user=self.other_user)
+        other_group_node = self.other_service.create_node(group=other_group)
+
+        invalid_cases = (
+            {"group": self.create_group(user=self.user, name="nested"), "parent_node": group_node},
+            {"conversation": self.create_conversation(user=self.user, title="bad-parent"), "parent_node": root_node},
+            {
+                "conversation": self.create_conversation(user=self.user, title="foreign-parent"),
+                "parent_node": other_group_node,
+            },
+        )
+        for kwargs in invalid_cases:
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(InvalidSidebarContainer):
+                    self.service.create_node(**kwargs)
+
     def test_create_node_uses_current_max_without_rewriting_existing_positions(self):
         old_group = self.create_group(user=self.user, name="old")
         old_conversation = self.create_conversation(user=self.user, title="old")

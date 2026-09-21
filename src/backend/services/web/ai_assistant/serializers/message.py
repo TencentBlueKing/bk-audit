@@ -186,11 +186,19 @@ class MessageResponseSerializer(serializers.Serializer):
     conversation_uid = serializers.UUIDField(help_text="所属会话对外 UUID")
     parent_message_uid = serializers.UUIDField(allow_null=True, help_text="直接父消息对外 UUID")
     message_type = serializers.ChoiceField(choices=MessageType.choices, help_text="消息类型")
+    visible = serializers.BooleanField(help_text="是否展示消息卡片；复合计划中的系统选择为 false")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="消息执行状态")
     input_data = MessageInputDataField(required=False, help_text="消息类型化输入快照")
-    output_data = MessageOutputDataField(required=False, allow_null=True, help_text="消息类型化输出快照")
-    error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
-    error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
+    output_data = MessageOutputDataField(
+        required=False,
+        allow_null=True,
+        help_text="消息类型化输出快照；USER_INTENT 的 SUCCESS 业务错误位于 output_data.error",
+    )
+    error_code = serializers.CharField(allow_blank=True, help_text="FAILED 消息的稳定公开错误码；SUCCESS 时为空")
+    error_message = serializers.CharField(
+        allow_blank=True,
+        help_text="FAILED 消息的脱敏公开错误信息；SUCCESS 业务提示读取 output_data.error.error_message",
+    )
     attachments = AttachmentSummarySerializer(many=True, help_text="消息关联的附件摘要")
     supports_feedback = serializers.BooleanField(help_text="消息类型是否支持当前用户反馈")
     feedback = FeedbackResponseSerializer(allow_null=True, help_text="当前用户对消息的反馈")
@@ -213,10 +221,7 @@ class MessageResponseSerializer(serializers.Serializer):
         # 端到端耗时：终态用 finished_at - created_at（含排队与 LLM 编排全链路）；
         # 不用 query_summary.took_ms——那只计最终 Doris SQL 检索（约 1s），
         # 与用户体感（意图识别 + 条件识别两段 LLM + 检索）严重不符。
-        # 语义边界：仅对外异步消息（USER_INTENT/NL/LOG_SEARCH 直建）有真实值；
-        # 任务内编排（create_executed）同步落库的子消息耗时≈0（LLM 时间计入父消息），
-        # 且 finished_at 取样早于 auto_now_add 的 created_at（微秒倒挂）——max 钳位
-        # 消除 -0.0，展示 0.0
+        # max 钳位兼容历史同步消息 finished_at/created_at 微秒倒挂数据。
         duration_seconds = None
         if instance.finished_at is not None:
             duration_seconds = round(max((instance.finished_at - instance.created_at).total_seconds(), 0), 1)

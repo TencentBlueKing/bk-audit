@@ -64,6 +64,7 @@ from services.web.risk.constants import (
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
+    RiskAICeleryQueue,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -126,7 +127,7 @@ def _validate_analyse_report_content(content: str, report_id: int) -> str:
 
 @celery_app.task(
     bind=True,
-    queue="risk_report",
+    queue=RiskAICeleryQueue.RISK_REPORT,
     time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
     max_retries=settings.RENDER_MAX_RETRY,
     acks_late=True,  # 任务级别的延迟确认
@@ -789,10 +790,11 @@ def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
 
 @celery_app.task(
     bind=True,
-    queue="risk_render",
+    queue=RiskAICeleryQueue.MULTI_ANALYSE,
     time_limit=settings.ANALYSE_REPORT_TIME_LIMIT,
     max_retries=2,
     acks_late=True,
+    rate_limit=settings.RISK_MULTI_ANALYSE_TASK_RATE_LIMIT,
 )
 def generate_analyse_report(self, report_id: int):
     """
@@ -974,7 +976,13 @@ def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:
     return title
 
 
-@celery_app.task(bind=True, queue="risk_render", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT, acks_late=True)
+@celery_app.task(
+    bind=True,
+    queue=RiskAICeleryQueue.TITLE,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    acks_late=True,
+    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
+)
 def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
     """异步生成 AI 分析报告标题"""
     from services.web.risk.models import AnalyseReport
@@ -1020,7 +1028,11 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
         raise
 
 
-@celery_app.task(queue="risk_render")
+@celery_app.task(
+    queue=RiskAICeleryQueue.RISK_REPORT,
+    acks_late=True,
+    rate_limit=settings.RENDER_TASK_RATE_LIMIT,
+)
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
 

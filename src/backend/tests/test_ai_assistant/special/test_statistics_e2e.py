@@ -169,6 +169,6 @@ def test_field_statistics_process_route_persists_complete_snapshot(statistics_st
 def test_statistics_declared_worker_subscribes_production_queue():
     """只验证仓库部署声明与任务路由匹配，不声称部署已生效。"""
     definition = yaml.safe_load((Path(__file__).resolve().parents[3] / "app_desc.yaml").read_text())
-    command = shlex.split(definition["modules"]["api"]["processes"]["ai-statistics"]["command"])
+    command = shlex.split(definition["modules"]["api"]["processes"]["ai-stats"]["command"])
     assert command[command.index("-Q") + 1] == "ai_assistant_statistics"
     assert command[command.index("-P") + 1] == "gevent"

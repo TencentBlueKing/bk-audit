@@ -48,6 +48,7 @@ class RecordingSyncHandler(EchoSyncHandler):
         self.prepared_input = None
         self.prepared_parent = None
         self.executed_context = None
+        self.execute_count = 0
 
     def prepare(
         self,
@@ -65,6 +66,7 @@ class RecordingSyncHandler(EchoSyncHandler):
         )
 
     def execute(self, *, input_data: EchoInput, context_data: EchoContext) -> EchoOutput:
+        self.execute_count += 1
         self.executed_context = context_data
         return EchoOutput(content=f"{context_data.prefix}:{input_data.text}")
 
@@ -145,8 +147,8 @@ class MessageServiceTest(TestCase):
         self.assertFalse(Message.objects.exists())
         self.assertIsNone(unsaved_conversation.pk)
 
-    def test_create_prepared_does_not_execute_handler_again(self):
-        """一期全异步化：create_prepared 统一落 PROCESSING 并派发任务，不再预执行 Handler。"""
+    def test_create_prepared_honors_sync_execution_mode_without_reexecution(self):
+        """同步 Handler 使用 prepare 阶段已经校验的输出创建成功消息。"""
 
         unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
         prepared = self.service.prepare_initial(
@@ -162,8 +164,9 @@ class MessageServiceTest(TestCase):
                 prepared=prepared,
             )
 
-        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
-        self.assertTrue(message.task_id)
+        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
+        self.assertIsNone(message.task_id)
+        self.assertEqual(message.output_data, {"content": "alice:sync:hello"})
 
     def test_prepare_initial_only_accepts_owned_unsaved_system_selection(self):
         parent = self.create_parent()
@@ -203,9 +206,9 @@ class MessageServiceTest(TestCase):
             )
 
     def test_sync_create_validates_and_saves_all_snapshots(self):
-        """全异步化后快照语义由 create_executed 承载（任务内编排同步执行路径）。"""
+        """普通创建遵循同步 Handler 的执行模式并保存完整快照。"""
 
-        message = self.service.create_executed(
+        message = self.service.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
             input_data={"text": "hello"},
@@ -221,13 +224,13 @@ class MessageServiceTest(TestCase):
         self.assertIsInstance(self.sync_handler.executed_context, EchoContext)
 
     def test_sync_execute_failure_does_not_create_message(self):
-        """执行失败在 create_executed 冒泡且不落库（任务内编排的失败语义）。"""
+        """同步 Handler 执行失败时不创建消息。"""
 
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         register_test_message_handler(FailingSyncHandler())
 
         with self.assertRaises(RuntimeError):
-            self.service.create_executed(
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -236,13 +239,13 @@ class MessageServiceTest(TestCase):
         self.assertFalse(Message.objects.exists())
 
     def test_sync_invalid_output_does_not_create_message(self):
-        """全异步化后非法输出校验在 create_executed 冒泡且不落库（任务内编排失败语义）。"""
+        """同步 Handler 输出非法时不创建消息。"""
 
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         register_test_message_handler(InvalidOutputSyncHandler())
 
         with self.assertRaises(MessageSnapshotValidationError):
-            self.service.create_executed(
+            self.service.create(
                 conversation=self.conversation,
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
@@ -751,6 +754,25 @@ class MessageServiceTest(TestCase):
             with self.assertRaises(InvalidMessageState):
                 self.service.update(message_uid=str(message.uid), input_data={"text": "new"})
 
+    def test_update_user_intent_with_derived_messages_is_rejected(self):
+        """根计划已有派生消息时禁止编辑，避免新计划复用旧子消息。"""
+
+        intent = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.USER_INTENT,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"query_text": "old"},
+            context_data={},
+            output_data={},
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        child = self.create_parent(status=ExecutionStatus.SUCCESS)
+        Message.objects.filter(pk=child.pk).update(parent_message=intent)
+
+        with self.assertRaises(InvalidMessageState):
+            self.service.update(message_uid=str(intent.uid), input_data={"query_text": "new"})
+
     def test_update_hides_foreign_deleted_and_missing_messages(self):
         foreign = self.create_parent(user="bob")
         deleted = self.create_parent()
@@ -916,7 +938,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
     def test_retry_rechecks_conversation_after_delete(self):
         retry_paused = threading.Event()
         release_retry = threading.Event()
-        original_lock = MessageService._lock_active_conversation
+        original_lock = MessageService.lock_active_conversation
 
         def pause_before_lock(service, *, conversation):
             retry_paused.set()
@@ -934,7 +956,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
             finally:
                 close_old_connections()
 
-        with mock.patch.object(MessageService, "_lock_active_conversation", pause_before_lock), mock.patch.object(
+        with mock.patch.object(MessageService, "lock_active_conversation", pause_before_lock), mock.patch.object(
             MessageService, "_dispatch"
         ) as dispatch:
             thread = threading.Thread(target=retry_message)

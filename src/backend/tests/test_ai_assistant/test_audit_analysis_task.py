@@ -633,7 +633,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
         self.assertTrue(execute_log_analysis.acks_late)
 
         with open("app_desc.yaml", encoding="utf-8") as stream:
-            process = yaml.safe_load(stream)["modules"]["api"]["processes"]["ai-log-analysis"]
+            process = yaml.safe_load(stream)["modules"]["api"]["processes"]["ai-log"]
         self.assertIn("-Q ai_assistant_log_analysis", process["command"])
         self.assertIn("-P gevent", process["command"])
         self.assertIn("--prefetch-multiplier=1", process["command"])

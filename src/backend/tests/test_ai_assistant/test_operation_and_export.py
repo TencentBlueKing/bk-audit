@@ -212,12 +212,19 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         self.assertEqual(replace_calls.get((TARGET_SYSTEM_ID, "other_user")), {"other-q": 1})
         self.assertEqual(result, {"refreshed_systems": 2, "scanned_messages": 4})
 
-    def _create_intent_message(self, *, query_text: str, output: dict, status: str = ExecutionStatus.SUCCESS):
-        """构造 USER_INTENT 消息（统一入口链路，成功检索输出含 condition + system_id）。"""
+    def _create_intent_message(
+        self,
+        *,
+        query_text: str,
+        output: dict,
+        status: str = ExecutionStatus.SUCCESS,
+        log_status: str | None = None,
+    ):
+        """构造 USER_INTENT；log_status 非空时同时创建直接子 LOG_SEARCH。"""
         from services.web.ai_assistant.constants import MessageType
         from services.web.ai_assistant.models import Message
 
-        return Message.objects.create(
+        intent = Message.objects.create(
             conversation=self.conversation,
             parent_message=None,
             message_type=MessageType.USER_INTENT,
@@ -229,22 +236,27 @@ class TestOperationContext(AIAssistantPlatformTestCase):
             created_by=self.user,
             updated_by=self.user,
         )
+        if log_status is not None:
+            Message.objects.create(
+                conversation=self.conversation,
+                parent_message=intent,
+                message_type=MessageType.LOG_SEARCH,
+                status=log_status,
+                input_data={},
+                context_data={},
+                output_data={} if log_status == ExecutionStatus.SUCCESS else None,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        return intent
 
     def test_build_historical_includes_user_intent_queries(self):
-        """历史操作：USER_INTENT 统一入口的成功检索（output 带 condition + system_id）进榜单。"""
+        """历史操作：新协议仅收录真实成功的派生 LOG_SEARCH。"""
 
-        from services.web.query.ai_assistant.schemas import SearchCondition
-
-        condition = SearchCondition(
-            scope_type="system",
-            scope_id=TARGET_SYSTEM_ID,
-            start_time="2026-09-01T00:00:00+08:00",
-            end_time="2026-09-09T00:00:00+08:00",
-        ).model_dump(mode="json")
-        # 意图识别成功检索（select_system + condition）
         self._create_intent_message(
             query_text="查一下审计中心近七天的操作记录",
-            output={"intent": "select_system", "system_id": TARGET_SYSTEM_ID, "condition": condition},
+            output={"intent": "select_system", "system_id": TARGET_SYSTEM_ID, "derived_messages": []},
+            log_status=ExecutionStatus.SUCCESS,
         )
         # 引导性输出（SYSTEM_REQUIRED 无 condition）不是检索，不进榜单
         self._create_intent_message(
@@ -274,8 +286,9 @@ class TestOperationContext(AIAssistantPlatformTestCase):
             output={
                 "intent": "log_search",
                 "system_id": TARGET_SYSTEM_ID,
-                "condition": {"scope_type": "system", "scope_id": TARGET_SYSTEM_ID, "conditions": []},
+                "derived_messages": [],
             },
+            log_status=ExecutionStatus.SUCCESS,
         )
         self._create_intent_message(
             query_text="intent-guidance",
@@ -453,6 +466,40 @@ class TestMessageExport(AIAssistantPlatformTestCase):
 
         keys = MessageExportService._extract_extension_keys(message)
         self.assertEqual(keys, ["ticket_id"])
+
+    def test_extract_extension_keys_uses_log_search_own_context(self):
+        """当前协议直接读取 LOG_SEARCH 字段快照，不依赖同级系统选择完成。"""
+
+        intent_parent = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.USER_INTENT,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"query_text": "查一下最近日志", "auto_execute": True},
+            context_data={"username": self.user, "namespace": "bkaudit"},
+            output_data={"intent": "log_search", "system_id": TARGET_SYSTEM_ID},
+            created_by=self.user,
+        )
+        message = self.create_log_search_message(parent=intent_parent)
+        message.context_data.update(
+            {
+                "extension_fields": [
+                    {"raw_name": "extend_data", "keys": ["ticket_id"]},
+                    {"raw_name": "extend_data", "keys": ["operator"]},
+                ]
+            }
+        )
+        message.save(update_fields=["context_data"])
+        Message.objects.create(
+            conversation=self.conversation,
+            parent_message=intent_parent,
+            message_type=MessageType.SYSTEM_SELECTION,
+            status=ExecutionStatus.PROCESSING,
+            input_data={"system_ids": [TARGET_SYSTEM_ID]},
+            context_data={},
+            created_by=self.user,
+        )
+
+        self.assertEqual(MessageExportService._extract_extension_keys(message), ["ticket_id", "operator"])
 
     def test_full_export_explicit_extension_keys_not_overridden(self):
         """显式传 extension_keys：后端不覆盖调用方清单"""

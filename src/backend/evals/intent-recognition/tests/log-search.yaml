@@ -1,12 +1,11 @@
-# 场景②：纯日志检索（已有系统，话语不提系统 → 默认当前系统）
-# 期望：intent=log_search 且 system_id 留空（默认系统由平台路由，识别层只判话语）
+# 场景②：纯日志检索（已有系统，话语不提系统 → 计划直接使用当前系统）
 - description: '纯检索需求（未提及系统，已有当前系统）'
   vars:
     query: '查一下最近登录失败的记录'
     current_system_id: 'eval_audit_system'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === ""'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.system_id === "eval_audit_system"'
 
 - description: '纯检索需求（时间+条件，未提系统）'
   vars:
@@ -14,7 +13,7 @@
     current_system_id: 'eval_bcs_system'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === ""'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.system_id === "eval_bcs_system"'
 
 - description: '纯检索需求（新对话未选系统，识别层仍应判 log_search——SYSTEM_REQUIRED 由平台守门）'
   vars:
@@ -22,7 +21,7 @@
     current_system_id: ''
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === ""'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "error" && d.error_code === "SYSTEM_REQUIRED"'
 
 - description: '纯检索需求（关键词检索，未提系统）'
   vars:
@@ -30,4 +29,4 @@
     current_system_id: 'eval_config_system'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === ""'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.system_id === "eval_config_system"'

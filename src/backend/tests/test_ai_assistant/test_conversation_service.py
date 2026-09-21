@@ -73,6 +73,56 @@ class ConversationServiceTest(TestCase):
         self.assertTrue(Conversation.objects.filter(id=result.conversation.id).exists())
         self.assertTrue(ConversationSidebarNode.objects.filter(conversation=result.conversation).exists())
 
+    def test_create_conversation_in_group(self):
+        group = self.service.create_group(name="目标分组")
+
+        first = self.service.create_conversation(title="first", group_uid=str(group.uid)).conversation
+        second = self.service.create_conversation(title="second", group_uid=str(group.uid)).conversation
+
+        self.assertEqual(first.sidebar_node.parent_node_id, group.sidebar_node.id)
+        self.assertEqual(second.sidebar_node.parent_node_id, group.sidebar_node.id)
+        self.assertEqual(first.sidebar_node.position, 1)
+        self.assertEqual(second.sidebar_node.position, 2)
+        self.assertFalse(
+            ConversationSidebarNode.objects.filter(conversation__in=[first, second], parent_node__isnull=True).exists()
+        )
+
+    def test_create_conversation_rejects_missing_or_foreign_group_without_residue(self):
+        foreign_group = self.other_service.create_group(name="其他用户分组")
+
+        for group_uid in (str(foreign_group.uid), "00000000-0000-0000-0000-000000000000"):
+            with self.subTest(group_uid=group_uid):
+                with self.assertRaises(ConversationGroupNotFound):
+                    self.service.create_conversation(title="不应创建", group_uid=group_uid)
+
+        self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
+        self.assertFalse(
+            ConversationSidebarNode.objects.filter(
+                created_by=self.user, node_type=SidebarNodeType.CONVERSATION
+            ).exists()
+        )
+
+    def test_grouped_initial_message_failure_rolls_back_conversation_and_child_node(self):
+        group = self.service.create_group(name="目标分组")
+        with mock.patch.object(
+            self.service.message_service,
+            "create_prepared",
+            side_effect=IntegrityError("message write failed"),
+        ):
+            with self.assertRaises(IntegrityError):
+                self.service.create_conversation(
+                    title="新对话",
+                    group_uid=str(group.uid),
+                    initial_message={
+                        "message_type": MessageType.SYSTEM_SELECTION,
+                        "input_data": {"text": "system-a"},
+                    },
+                )
+
+        self.assertTrue(ConversationGroup.objects.filter(id=group.id).exists())
+        self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
+        self.assertFalse(ConversationSidebarNode.objects.filter(parent_node=group.sidebar_node).exists())
+
     def test_create_conversation_with_initial_message_is_atomic(self):
         result = self.service.create_conversation(
             title="新对话",
@@ -83,8 +133,8 @@ class ConversationServiceTest(TestCase):
         )
 
         self.assertEqual(result.initial_message.conversation, result.conversation)
-        # 一期全异步化：初始化消息创建即 PROCESSING（终态由任务收敛，前端轮询）
-        self.assertEqual(result.initial_message.status, ExecutionStatus.PROCESSING)
+        # 初始化消息复用统一创建链路，同步 Handler 在事务内直接收敛为终态。
+        self.assertEqual(result.initial_message.status, ExecutionStatus.SUCCESS)
 
     def test_create_conversation_supports_async_initial_message(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)

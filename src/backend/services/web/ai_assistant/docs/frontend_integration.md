@@ -17,9 +17,9 @@
 ```text
 侧栏分组
  └─ 会话 conversation_uid
-     ├─ 系统选择消息 selectionUid
      ├─ 用户意图消息 intentUid
-     │   └─ 日志检索消息 searchUid（parent_message_uid = intentUid）
+     │   ├─ 系统选择消息 selectionUid（复合请求中可隐藏）
+     │   └─ 日志检索消息 searchUid（两者均以 intentUid 为 parent_message_uid）
      │       ├─ 附件 attachmentUidA
      │       └─ 附件 attachmentUidB
      └─ 后续消息……
@@ -89,7 +89,7 @@ flowchart TD
 
 页面初始化可并行请求 `GET /conversation_sidebar/pinned/` 和 `GET /conversation_sidebar/nodes/`。置顶单独展示，普通列表不重复展示；按响应顺序分页，展开分组时再请求对应容器。搜索使用 `GET /conversation_sidebar/search/`，结果只用于定位会话。
 
-用户确认系统后再调用 `POST /conversations/`，同时携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应 input_data。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
+用户确认系统后再调用 `POST /conversations/`，同时携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应 input_data。若从某个分组内新建会话，同一请求传该分组的 `group_uid`，无需创建后再调用移动接口。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
 
 若产品使用直接自然语言入口，可先 `POST /conversations/` 创建空会话，再提交 USER_INTENT；缺少系统时由识别结果引导补全。不要同时创建手工系统选择和语义相同的意图消息。
 
@@ -191,9 +191,9 @@ sequenceDiagram
         FE->>API: GET messages/{uid}/
         API-->>FE: 状态 + output_data
     end
-    opt condition 存在且 auto_execute=true
-        FE->>API: GET messages/ AFTER 窗口
-        API-->>FE: 新消息与 parent_message_uid
+    opt derived_messages 非空
+        FE->>API: 按 message_uid 获取派生消息
+        API-->>FE: SYSTEM_SELECTION / LOG_SEARCH 状态与内容
     end
 ```
 
@@ -201,12 +201,65 @@ sequenceDiagram
 
 | 输出语义 | 前端动作 |
 | --- | --- |
-| `output_data.error` 非空 | 展示业务引导；SYSTEM_REQUIRED 可用 candidates 辅助用户选系统，不当作已有检索结果 |
-| 纯系统切换，condition/error 均空 | 展示 message 和选择结果，按 selection_message_uid 获取选择消息；不再自行触发检索 |
-| condition 存在，auto_execute=true | 展示识别条件，刷新消息窗口等待后端生成 LOG_SEARCH；前端不要重复 POST |
-| condition 存在，auto_execute=false | 展示条件供确认，用户确认后按下节创建 LOG_SEARCH |
+| `output_data.error` 非空 | 按 `error.error_code` 选择交互，直接展示 `error.error_message`；系统类错误可用 candidates 辅助用户选系统，不当作已有检索结果 |
+| `derived_messages=[SYSTEM_SELECTION]` | 按 UID 获取并展示系统选择卡；该消息 `visible=true`，本轮不再自行触发检索 |
+| `derived_messages=[LOG_SEARCH]` | 当前系统直接检索；按 UID 获取并展示日志结果 |
+| `derived_messages=[SYSTEM_SELECTION, LOG_SEARCH]` | 切换并检索；前一项 `visible=false` 不渲染，后一项 `visible=true` 展示结果 |
+| `condition` 非空且 `auto_execute=false` | 展示规范化条件供确认；使用 `selection_message_uid` 对应的系统选择作为父消息创建 LOG_SEARCH |
 
-业务无法识别可以表现为顶层 SUCCESS + output_data.error；技术执行失败才按顶层 FAILED 处理。自动子消息可能晚于父消息 SUCCESS 出现；不要要求 `log_search_message_uid` 总已填充，使用消息窗口与父子关联发现结果。短暂缺少子消息不等同于失败；持续缺失时保留识别条件并提供用户显式重查，先刷新确认没有已有子消息，不自动重复提交。
+`derived_messages` 数组顺序就是消息计划顺序，元素包含 `message_uid/message_type/status/visible`。其中 status 是派生消息创建时的状态摘要，不会随子消息执行回写；前端按 `visible` 决定是否渲染，并按 UID 获取最新状态和内容，不通过“是否看到系统选择卡”推断计划。`message` 等旧字段只用于兼容历史快照，新页面不依赖它们驱动流程。
+
+本轮由 USER_INTENT 规划出的 SYSTEM_SELECTION、LOG_SEARCH 都以该 USER_INTENT 为 `parent_message_uid`。两条消息按计划顺序创建，但各自按照消息类型定义的执行模式独立执行；USER_INTENT 成功只表示计划已冻结且子消息已创建，不表示日志检索已经完成。
+
+复合请求的典型成功输出：
+
+```json
+{
+  "intent": "select_system",
+  "system_id": "bk-audit",
+  "selection_message_uid": "<hidden-selection-uid>",
+  "log_search_message_uid": "<log-search-uid>",
+  "derived_messages": [
+    {"message_uid": "<hidden-selection-uid>", "message_type": "SYSTEM_SELECTION", "status": "PROCESSING", "visible": false},
+    {"message_uid": "<log-search-uid>", "message_type": "LOG_SEARCH", "status": "PROCESSING", "visible": true}
+  ]
+}
+```
+
+派生消息独立收敛状态：SYSTEM_SELECTION 或 LOG_SEARCH 执行失败时，已完成规划的 USER_INTENT 仍为 SUCCESS；前端读取失败派生消息顶层 `error_code/error_message` 并提供重试。AIDev 超时、服务异常或未捕获的程序异常会使 USER_INTENT 顶层为 FAILED；计划解析或确定性校验错误在任务内耗尽重试后，以 USER_INTENT SUCCESS + `output_data.error` 返回。
+
+USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后端控制并脱敏，可直接展示，但不能用文案判断错误类型：
+
+| `output_data.error.error_code` | 含义 | 建议前端动作 |
+| --- | --- | --- |
+| `UNRECOGNIZED_INTENT` | 无法识别为系统选择或日志检索 | 展示提示，保留输入框让用户补充需求 |
+| `SYSTEM_REQUIRED` | 已识别为检索，但当前会话没有可用系统 | 展示 candidates 供选择；为空时提示切换范围或申请权限 |
+| `SYSTEM_UNAVAILABLE` | AI 选择的目标不在本次候选范围；不推断是场景外、无权限还是不存在 | 展示后端文案和 candidates，引导切换场景或重新选择 |
+| `QUERY_NOT_RECOGNIZED` | 系统已确定，但未得到有效检索条件 | 展示提示，让用户补充字段、值或时间范围 |
+| `AI_OUTPUT_PARSE_FAILED` / `AI_OUTPUT_INVALID` | AI 输出无法按协议解析或条件不合法 | 展示通用识别失败提示，允许用户换一种描述 |
+| `PERMISSION_DENIED` | 执行条件识别时权限校验未通过 | 展示权限提示，不展示受限系统或数据详情 |
+
+例如目标系统不在当前场景候选范围时，消息仍是业务处理完成的 `SUCCESS`：
+
+```json
+{
+  "status": "SUCCESS",
+  "error_code": "",
+  "error_message": "",
+  "output_data": {
+    "intent": "log_search",
+    "error": {
+      "error_code": "SYSTEM_UNAVAILABLE",
+      "error_message": "目标系统不在当前场景的可用范围内，请切换场景或重新选择系统",
+      "candidates": [
+        {"system_id": "bk-audit", "name": "审计中心"}
+      ]
+    }
+  }
+}
+```
+
+只有具体消息顶层 `status=FAILED` 时才读取该消息的顶层 `error_code/error_message` 并考虑重试。当前 Swagger 的 `UserIntentErrorSchema` 同步列出了业务错误码、可展示文案和 candidates 语义。
 
 存量 NATURAL_LANGUAGE_SEARCH 消息仍按 condition/error 分支展示，重试与编辑后同样遵循 auto_execute 的续链规则；其父消息是成功的 SYSTEM_SELECTION。新页面的自然语言提交统一使用 USER_INTENT，不另行创建 NATURAL_LANGUAGE_SEARCH。
 
@@ -215,7 +268,8 @@ sequenceDiagram
 手工选择系统后直接检索，或识别后用户确认条件，调用 `POST /messages/` 创建 LOG_SEARCH，传会话 UID、完整 `input_data.condition` 和正确的直接父消息：
 
 - 手工条件检索引用成功 SYSTEM_SELECTION。
-- 识别条件后的手工执行引用产生该条件的成功 USER_INTENT/NATURAL_LANGUAGE_SEARCH。
+- USER_INTENT 预览条件后的手工执行先等待 `selection_message_uid` 对应的 SYSTEM_SELECTION 成功，再引用它创建 LOG_SEARCH。
+- 存量 NATURAL_LANGUAGE_SEARCH 预览仍引用该成功自然语言消息。
 - 不把上一条 LOG_SEARCH 当作父消息；不要给 parent_message_uid 传会话 UID。
 
 手工切系统时创建新的 SYSTEM_SELECTION 消息，历史选择和检索保留。不要用修改旧选择的方式重写历史上下文。
@@ -228,7 +282,7 @@ sequenceDiagram
 | 追加一次查询 | `POST /messages/`，生成新 UID，选取允许的父消息 |
 | 失败原消息重试 | `POST /messages/{message_uid}/retry/`，复用原 UID 和快照输入；不是修改条件 |
 
-仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。编辑保留已有子消息、附件和反馈，不会自动重算这些历史快照；自然语言编辑若 auto_execute=true，可能新增一条检索子消息。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
+仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。已有 `derived_messages` 的 USER_INTENT 禁止编辑，前端应隐藏其编辑入口；没有派生消息的业务错误 USER_INTENT 可以修改后重跑。派生的 SYSTEM_SELECTION/LOG_SEARCH 仍按各自消息规则编辑。存量 NATURAL_LANGUAGE_SEARCH 编辑若 auto_execute=true，可能新增一条检索子消息。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
 
 ## 状态刷新、结果列与反馈
 

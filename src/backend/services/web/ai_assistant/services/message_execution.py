@@ -29,6 +29,7 @@ from services.web.ai_assistant.schemas import (
     dump_snapshot,
     parse_snapshot,
 )
+from services.web.query.ai_assistant.exceptions import AIServiceError, AITimeoutError
 
 InputT = TypeVar("InputT", bound=MessageSchema)
 ContextT = TypeVar("ContextT", bound=MessageSchema)
@@ -145,6 +146,9 @@ def finish_message_failure(
     elif isinstance(exception, AIAssistantException):
         public_message = exception.message
         error_code = exception.code
+    elif isinstance(exception, (AITimeoutError, AIServiceError)):
+        public_message = exception.message
+        error_code = exception.error_code
     else:
         public_message = "消息执行失败，请稍后重试"
     now = timezone.now()

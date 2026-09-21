@@ -147,14 +147,14 @@ class TitleAgentServiceTest(AIAssistantPlatformTestCase):
             }
         )
 
-        # 标准字段（username=操作人用户名）、系统字段（log=原始数据内容）、
+        # 默认结果列字段复用产品展示名；非默认列仍动态取 Field.description。
         # 对象字段（instance_origin_data=实例变更前内容）、快照字段（snapshot_resource_type_info=资源类型快照）
-        # 均动态取 Field.description；未知字段/操作符回退原文；时间为日期级（同日单值）
+        # 未知字段/操作符回退原文；时间为日期级（同日单值）
         self.assertEqual(
             summary,
             "系统 bk-audit，时间 2026-09-01，"
-            "操作人用户名 等于 admin，操作ID 包含 login,logout，"
-            "原始数据内容 任一包含 登录，实例变更前内容 包含 v1，"
+            "操作人 等于 admin，操作事件名(ID) 包含 login,logout，"
+            "操作（完整日志） 任一包含 登录，实例变更前内容 包含 v1，"
             "资源类型快照 等于 host，custom_field weird_op v1",
         )
 
@@ -197,8 +197,8 @@ class TitleAgentServiceTest(AIAssistantPlatformTestCase):
         self.assertEqual(
             summary,
             "系统 bk-audit，时间 2026-09-01 至 2026-09-02，"
-            "操作途径 包含 WebUI,Console，操作结果 等于 其他，"
-            "操作人账号类型 等于 平台账号，操作人用户名 等于 admin",
+            "操作途径 包含 WebUI,Console，操作结果(Code) 等于 其他，"
+            "操作人账号类型 等于 平台账号，操作人 等于 admin",
         )
 
     def test_build_condition_title_input_extension_subkey(self):
@@ -439,14 +439,14 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
             conversation_id=self.conversation.id,
             query_text=build_condition_title_input(
                 message.input_data,
-                extension_fields=MessageService._extract_parent_extension_fields(message.parent_message),
+                extension_fields=MessageService._extract_message_extension_fields(message),
             ),
             source="field_condition",
         )
         # 素材内容：系统 + 时间 + 条件摘要（字段中文名动态取字段元数据，与条件筛选回传前端同源）
         dispatched_text = mock_delay.call_args.kwargs["query_text"]
         self.assertIn(f"系统 {TARGET_SYSTEM_ID}", dispatched_text)
-        self.assertIn("操作人用户名 等于 admin", dispatched_text)
+        self.assertIn("操作人 等于 admin", dispatched_text)
 
     def test_nl_chained_log_search_not_dispatched(self):
         """NL 续链子消息（source=natural_language）：标题由父 NL 消息链路派发，此处不重复"""

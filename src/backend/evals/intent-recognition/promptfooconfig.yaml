@@ -1,14 +1,15 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
-description: 'AI 用户意图判断能力评估'
+description: '通用消息规划 Agent 能力评估'
 
 prompts:
   - '{{query}}'
 
 providers:
   - id: 'python:providers/provider.py'
-    label: 'aid-log-intent'
+    label: 'aidev-message-planning'
     config:
       model: ''
+      max_attempts: 3
 
 defaultTest:
   assert:
@@ -22,3 +23,4 @@ tests:
   - file://tests/safety.yaml
   - file://tests/chain-scenarios.yaml
   - file://tests/regression-incidents.yaml
+  - file://tests/context-boundaries.yaml

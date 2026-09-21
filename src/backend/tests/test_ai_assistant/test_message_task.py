@@ -25,6 +25,7 @@ from services.web.ai_assistant.services.message_execution import (
     load_message_execution,
 )
 from services.web.ai_assistant.tasks import BaseExecutionTask, MessageExecutionTask
+from services.web.query.ai_assistant.exceptions import AIServiceError, AITimeoutError
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
@@ -240,6 +241,24 @@ class MessageTaskTest(TestCase):
         self.assertTrue(updated)
         self.assertEqual(message.error_code, error.code)
         self.assertEqual(message.error_message, "可公开的任务错误")
+
+    def test_query_transient_error_keeps_domain_code_and_message(self):
+        """查询 AI 暂态异常进入 FAILED 时保留公开领域码，供前端区分重试提示。"""
+
+        for error in (AITimeoutError(), AIServiceError()):
+            with self.subTest(error=type(error).__name__):
+                message = self.create_message(task_id=f"task-{error.error_code.lower()}")
+
+                updated = finish_message_failure(
+                    message_id=message.id,
+                    task_id=message.task_id,
+                    exception=error,
+                )
+
+                message.refresh_from_db()
+                self.assertTrue(updated)
+                self.assertEqual(message.error_code, error.error_code)
+                self.assertEqual(message.error_message, error.message)
 
     def test_non_platform_blue_exception_is_sanitized(self):
         message = self.create_message()

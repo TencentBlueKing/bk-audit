@@ -19,6 +19,8 @@ F2 NL2JSON 服务测试
 """
 
 import json
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 from unittest import mock
 
 from requests.exceptions import Timeout
@@ -32,6 +34,7 @@ from services.web.query.ai_assistant.exceptions import (
     AITimeoutError,
     QueryNotRecognizedError,
 )
+from services.web.query.ai_assistant.schemas import AIConditionPayload
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
@@ -233,6 +236,22 @@ class TestNL2JSONService(AIAssistantTestCase):
             self._convert()
         self.assertEqual(ctx.exception.error_code, "QUERY_NOT_RECOGNIZED")
 
+    def test_message_plan_can_confirm_empty_search_and_apply_default_window(self, mock_chat):
+        """消息规划已确认检索意图时，空条件由后端补最近一天。"""
+
+        reference_time = datetime(2026, 9, 20, 10, 0, tzinfo=datetime_timezone(timedelta(hours=8)))
+        condition = NL2JSONService.validate_and_assemble(
+            payload=AIConditionPayload(),
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            reference_time=reference_time,
+            allow_empty=True,
+        )
+
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(parse_datetime(condition.end_time), reference_time)
+        self.assertEqual(parse_datetime(condition.end_time) - parse_datetime(condition.start_time), timedelta(days=1))
+
     def test_unknown_field_rejected(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "not_a_field", "keys": [], "operator": "eq", "filters": ["x"]}]
@@ -371,7 +390,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
 
     def test_default_time_window(self, mock_chat):
-        """D2 默认实现：AI 未输出时间时后端补默认窗口（与采样窗口对齐，30 天）"""
+        """AI 未输出时间时，后端以同一时间锚点补最近 1 天。"""
         output = dict(VALID_AI_OUTPUT)
         output["start_time"] = None
         output["end_time"] = None
@@ -380,7 +399,28 @@ class TestNL2JSONService(AIAssistantTestCase):
         condition = self._convert()
         start_dt = parse_datetime(condition.start_time)
         end_dt = parse_datetime(condition.end_time)
-        self.assertEqual((end_dt - start_dt).days, DEFAULT_SEARCH_WINDOW_DAYS)
+        self.assertEqual(DEFAULT_SEARCH_WINDOW_DAYS, 1)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
+
+    def test_default_window_reuses_prompt_reference_time(self, mock_chat):
+        """Prompt 当前时间与后端默认窗口共享一次冻结值，避免长调用造成时间漂移。"""
+
+        reference_time = datetime(2026, 9, 20, 10, 30, tzinfo=datetime_timezone(timedelta(hours=8)))
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = None
+        output["end_time"] = None
+        mock_chat.return_value = json.dumps(output)
+
+        with mock.patch(f"{NL2JSON_MODULE}.timezone.localtime", return_value=reference_time):
+            condition = self._convert()
+
+        _, kwargs = mock_chat.call_args
+        self.assertIn(reference_time.isoformat(), kwargs["input"])
+        self.assertEqual(condition.end_time, reference_time.isoformat())
+        self.assertEqual(
+            condition.start_time,
+            (reference_time - timedelta(days=1)).isoformat(),
+        )
 
     def test_invalid_time_falls_back_to_default(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)
@@ -390,7 +430,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         condition = self._convert()
         start_dt = parse_datetime(condition.start_time)
         end_dt = parse_datetime(condition.end_time)
-        self.assertEqual((end_dt - start_dt).days, DEFAULT_SEARCH_WINDOW_DAYS)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
 
     def test_agent_timeout(self, mock_chat):
         mock_chat.side_effect = Timeout("read timeout")
@@ -676,11 +716,11 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
         self.assertEqual((end_dt - start_dt).days, 0)
 
     def test_vague_intent_default_window(self, mock_chat):
-        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 30 天窗口 → 放行"""
+        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 1 天窗口 → 放行"""
         mock_chat.return_value = json.dumps(
             {
                 "conditions": [],
-                "start_time": "2026-07-29T18:00:00+08:00",
+                "start_time": "2026-08-27T18:00:00+08:00",
                 "end_time": "2026-08-28T18:00:00+08:00",
             }
         )
@@ -689,7 +729,7 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
         self.assertEqual(condition.conditions, [])
         start_dt = parse_datetime(condition.start_time)
         end_dt = parse_datetime(condition.end_time)
-        self.assertEqual((end_dt - start_dt).days, DEFAULT_SEARCH_WINDOW_DAYS)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
 
     def test_start_time_only_fills_end_with_now(self, mock_chat):
         """AI 仅输出 start_time（end 缺失）→ 时间意图成立，end 由后端兜底当前时间"""

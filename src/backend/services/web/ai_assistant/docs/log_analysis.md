@@ -13,7 +13,7 @@ flowchart LR
     SVC --> HANDLER[AIAnalysisHandler]
     SVC --> DB[(MySQL)]
     SVC -->|transaction.on_commit| MQ[(RabbitMQ)]
-    MQ --> WORKER[ai-log-analysis gevent Worker]
+    MQ --> WORKER[ai-log gevent Worker]
     WORKER --> TASK[execute_log_analysis]
     TASK --> AGENT[日志分析 Agent]
     AGENT -->|AG-UI JSON events| RELAY[ChatCompletion + on_event]
@@ -151,7 +151,7 @@ MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
 
 ## 超时与部署
 
-生产 Worker 在 `app_desc.yaml` 中以 `ai-log-analysis` 独立进程部署：监听
+生产 Worker 在 `app_desc.yaml` 中以 `ai-log` 独立进程部署：监听
 `ai_assistant_log_analysis`，gevent pool，`--prefetch-multiplier=1`，默认并发 32、2 个副本。
 
 | 配置 | 默认值 | 语义 |

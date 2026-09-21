@@ -1,7 +1,7 @@
 """审计日志检索三类消息的业务处理器。
 
 设计约定：
-- LOG_SEARCH 为 SYNC（成功才创建消息，失败抛异常不落库）；
+- SYSTEM_SELECTION 与 LOG_SEARCH 先持久化为 PROCESSING，再由各自任务独立收敛终态；
 - 前端不传 parent 时，后端绑定当前会话最新成功 SYSTEM_SELECTION；
 - SYSTEM_SELECTION 输出组装常见/历史操作上下文。
 """
@@ -126,7 +126,6 @@ def extract_selection_system_ids(message: Message) -> set[str]:
         context_data = message.context_data if isinstance(message.context_data, dict) else {}
         systems = (context_data.get("system_selection") or {}).get("systems") or []
     elif message.message_type == MessageType.USER_INTENT:
-        # 意图识别消息：路由结果系统在 output_data.system_id（条件识别即按该系统组装）
         output_data = message.output_data if isinstance(message.output_data, dict) else {}
         system_id = str(output_data.get("system_id") or "")
         return {system_id} if system_id else set()
@@ -141,8 +140,7 @@ class SystemSelectionHandler(
 ):
     """系统选择消息：构建字段上下文与操作上下文（根消息）。
 
-    一期全异步化：对外创建即返回 PROCESSING（前端轮询终态）；
-    任务内编排（意图识别子链）经 MessageService.create_executed 同步执行保证时序。
+    创建后返回 PROCESSING，由独立任务构建字段上下文；意图识别只负责创建计划消息。
     """
 
     message_type = MessageType.SYSTEM_SELECTION
@@ -161,12 +159,16 @@ class SystemSelectionHandler(
         input_data: SystemSelectionInputSchema,
     ) -> MessagePreparation[SystemSelectionContextSchema]:
         if parent_message is not None:
-            raise InvalidParentMessage(message="系统选择是根消息，不能引用父消息")
+            if (
+                parent_message.message_type != MessageType.USER_INTENT
+                or parent_message.status != ExecutionStatus.SUCCESS
+            ):
+                raise InvalidParentMessage(message="系统选择只能作为根消息或成功意图识别消息的子消息")
         # 创建/编辑强约束（schema 层宽松仅为兼容历史消息快照的读取/重试）
         if not input_data.scope_type:
             raise ScopeContextRequired()
         return MessagePreparation(
-            parent_message=None,
+            parent_message=parent_message,
             context_data=SystemSelectionContextSchema(
                 username=user,
                 namespace=settings.DEFAULT_NAMESPACE,
@@ -226,9 +228,8 @@ class SystemSelectionHandler(
 class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentContextSchema, UserIntentOutputSchema]):
     """用户意图识别消息：统一自然语言入口（新会话/中途均可，无父消息）。
 
-    任务内完成意图识别（选系统 / 日志检索 / 无法识别）→ 按需建/复用系统选择 →
-    条件识别 → 续链日志检索；上下文不含 system_selection（意图识别前系统未定，
-    任务内按路由结果加载，详见 execute_user_intent）。
+    任务内由通用 Agent 一次生成系统选择、日志检索或二者组合，再由后端校验并按序
+    创建派生消息；上下文不含 system_selection，任务运行时从会话读取当前选择。
     """
 
     message_type = MessageType.USER_INTENT
@@ -312,8 +313,7 @@ class NaturalLanguageSearchHandler(
 class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContextSchema, LogSearchOutputSchema]):
     """日志检索消息：父消息为系统选择、自然语言或用户意图消息。
 
-    一期全异步化：对外创建即返回 PROCESSING（前端轮询终态）；
-    任务内编排（NL / 意图识别续链）经 MessageService.create_executed 同步执行保证时序。
+    创建后返回 PROCESSING，由独立任务执行检索；意图识别与自然语言链路不等待结果。
     """
 
     message_type = MessageType.LOG_SEARCH
@@ -353,11 +353,16 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
                 source=source,
                 session_scope_type=session_scope_type,
                 session_scope_id=session_scope_id,
+                extension_fields=self._load_extension_fields(
+                    user=user,
+                    parent=parent,
+                    system_id=input_data.condition.scope_id,
+                ),
             ),
         )
 
     def execute(self, *, input_data: LogSearchInputSchema, context_data: LogSearchContextSchema):
-        """同步执行检索；执行失败直接抛出异常，消息不创建。"""
+        """在异步任务中执行检索；异常由统一任务基类写入当前消息失败状态。"""
 
         output = LogSearchService.search(
             condition=input_data.condition,
@@ -387,6 +392,31 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
                 raise InvalidParentMessage(message="父消息必须执行成功")
             return parent_message
         return resolve_selection_parent(user=user, conversation=conversation, parent_message=None)
+
+    @staticmethod
+    def _load_extension_fields(*, user: str, parent: Message, system_id: str):
+        """在创建时固化目标系统拓展字段，使 LOG_SEARCH 后续能力只读自身上下文。"""
+
+        if parent.message_type == MessageType.SYSTEM_SELECTION:
+            systems = load_selection_snapshot(parent).systems
+        elif parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
+            try:
+                systems = NLSearchContextSchema.model_validate(parent.context_data).system_selection.systems
+            except ValidationError as error:
+                raise InvalidMessageSnapshot() from error
+        else:
+            try:
+                systems = FieldContextService.build_selection(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    system_ids=[system_id],
+                    username=user,
+                ).systems
+            except AIPermissionDeniedError as error:
+                raise SystemSelectionPermissionDenied() from error
+        target = next((system for system in systems if system.system_id == system_id), None)
+        if target is None:
+            raise InvalidMessageSnapshot()
+        return target.extension_fields
 
     @staticmethod
     def _validate_scope(*, parent: Message, condition: SearchCondition) -> None:

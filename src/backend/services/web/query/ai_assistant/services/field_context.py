@@ -41,6 +41,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.permissions import SearchLogPermission
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
+    AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES,
     AI_ASSISTANT_FIELD_META_CONFIG_KEY,
     AI_ASSISTANT_FIELD_SAMPLE_ENABLED,
     AI_ASSISTANT_FIELD_SAMPLE_ROWS,
@@ -104,6 +105,19 @@ class FieldContextService:
         systems = [cls._build_system(namespace, system_id, system_map.get(system_id, {})) for system_id in allowed_ids]
         return SystemSelectionOutput(systems=systems)
 
+    @classmethod
+    def build_planning_context(cls, namespace: str, system_ids: List[str], username: str) -> SystemSelectionOutput:
+        """按候选顺序构造消息规划使用的全系统字段上下文。
+
+        设计意图：实际系统选择仍由 ``SystemSelectionInput`` 限制为单系统；规划阶段
+        需要同时理解所有授权候选，逐个复用单系统构建入口，避免放宽业务消息协议。
+        """
+
+        systems = []
+        for system_id in system_ids:
+            systems.extend(cls.build_selection(namespace=namespace, system_ids=[system_id], username=username).systems)
+        return SystemSelectionOutput(systems=systems)
+
     # ------------------------------------------------------------------
     # 系统信息
     # ------------------------------------------------------------------
@@ -148,6 +162,7 @@ class FieldContextService:
         return SelectionSystem(
             system_id=system_id,
             name=system.get("name", ""),
+            description=system.get("description", ""),
             standard_fields=standard_fields,
             extension_fields=extension_fields,
         )
@@ -176,7 +191,10 @@ class FieldContextService:
     ) -> SelectionFieldMeta:
         """L0 兜底 + L1 覆盖（nl_name / description / sample_value）；枚举字段附 options"""
         # alias_name 均为字段名本身，中文显示名取 description
-        display_name = str(cfg.field.description or cfg.field.alias_name or cfg.field.field_name)
+        display_name = AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES.get(
+            cfg.field.field_name,
+            str(cfg.field.description or cfg.field.alias_name or cfg.field.field_name),
+        )
         return SelectionFieldMeta(
             raw_name=cfg.field.field_name,
             keys=[],

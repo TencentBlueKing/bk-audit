@@ -16,15 +16,18 @@ from rest_framework import serializers
 from services.web.ai_assistant.schemas.message import MessageSchema
 from services.web.query.ai_assistant.schemas import (
     LogSearchOutput,
+    MessagePlan,
     QuerySummary,
     ResultColumn,
     SearchCondition,
+    SelectionFieldMeta,
     SelectionSystem,
     SystemSelectionOutput,
 )
 
 __all__ = [
     "CommonQuerySchema",
+    "DerivedMessageSummarySchema",
     "LogSearchContextSchema",
     "LogSearchInputSchema",
     "LogSearchOutputSchema",
@@ -36,6 +39,7 @@ __all__ = [
     "SystemSelectionInputSchema",
     "SystemSelectionOutputSchema",
     "UserIntentContextSchema",
+    "UserIntentAgentTraceSchema",
     "UserIntentErrorSchema",
     "UserIntentInputSchema",
     "UserIntentOutputSchema",
@@ -45,6 +49,13 @@ __all__ = [
 _NestedListField = serializers.ListField(child=serializers.DictField())
 _NestedObjectField = serializers.DictField()
 _NestedObjectOrNullField = serializers.DictField(allow_null=True)
+_USER_INTENT_CANDIDATES_DESCRIPTION = (
+    "当前范围内可选系统列表，元素为 {system_id, name}；SYSTEM_REQUIRED 和 SYSTEM_UNAVAILABLE 时可用于选择引导，" "其他错误通常为空数组。"
+)
+_UserIntentCandidatesField = serializers.ListField(
+    child=serializers.DictField(),
+    help_text=_USER_INTENT_CANDIDATES_DESCRIPTION,
+)
 
 
 class CommonQuerySchema(MessageSchema):
@@ -157,8 +168,28 @@ class UserIntentInputSchema(MessageSchema):
         return self
 
 
+class UserIntentAgentTraceSchema(MessageSchema):
+    """一次意图规划调用的可复现诊断快照，不参与消息执行或重投决策。"""
+
+    status: Literal["processing", "success", "failed"] = Field(description="Agent 调用状态")
+    agent_code: str = Field(description="实际调用的 Agent 标识")
+    system_prompt: str = Field(description="通过 role 消息注入的完整系统提示词")
+    user_prompt: str = Field(description="发送给 Agent 的完整动态用户提示词")
+    reference_time: str = Field(description="规划相对时间使用的带时区基准时间")
+    plan: Annotated[MessagePlan | None, _NestedObjectOrNullField] = Field(
+        default=None,
+        description="通过输出协议校验后的消息计划；失败时为空",
+    )
+    attempt_count: int = Field(default=0, ge=0, description="本次任务已发起的 Agent 调用次数")
+    duration_ms: int = Field(default=0, ge=0, description="从首次调用到结束的总耗时（毫秒）")
+    error_code: str = Field(default="", description="失败时的稳定错误码")
+    error_message: str = Field(default="", description="失败时的受控错误信息")
+    reason: str = Field(default="", description="后端确定性校验失败原因")
+    raw_output: str = Field(default="", description="无法解析时保留的 Agent 原始输出")
+
+
 class UserIntentContextSchema(MessageSchema):
-    """USER_INTENT 上下文：意图识别前系统未定，无 system_selection（任务内按路由结果加载）。"""
+    """USER_INTENT 自身执行所需上下文，以及不参与续链决策的 Agent 诊断快照。"""
 
     username: str
     namespace: str
@@ -167,20 +198,37 @@ class UserIntentContextSchema(MessageSchema):
     # 都按此 scope 收窄，与前端 UI 可见系统保持一致
     scope_type: str = ""
     scope_id: str = ""
+    agent_trace: Annotated[UserIntentAgentTraceSchema | None, _NestedObjectOrNullField] = None
 
 
 class UserIntentErrorSchema(MessageSchema):
-    """USER_INTENT 结构化错误协议：与 NL error 同构（error_code + AI 动态 error_message）
-    + 候选系统清单（SYSTEM_REQUIRED 引导补系统时携带）。"""
+    """USER_INTENT 成功终态的业务错误协议，前端按 error_code 分支并展示安全文案。"""
 
-    error_code: str  # UNRECOGNIZED_INTENT / SYSTEM_REQUIRED / QUERY_NOT_RECOGNIZED
-    error_message: str
-    candidates: Annotated[list, _NestedListField] = Field(default_factory=list)
+    error_code: str = Field(
+        description=(
+            "稳定业务错误码。编排类：UNRECOGNIZED_INTENT、SYSTEM_REQUIRED、SYSTEM_UNAVAILABLE；"
+            "条件识别类：QUERY_NOT_RECOGNIZED、AI_OUTPUT_PARSE_FAILED、AI_OUTPUT_INVALID、PERMISSION_DENIED。"
+            "前端必须按错误码选择交互，不得解析错误文案。"
+        )
+    )
+    error_message: str = Field(description="经过后端控制和脱敏、适合向当前用户直接展示的业务提示；前端可直接展示，但不得据此判断错误类型。")
+    candidates: Annotated[list, _UserIntentCandidatesField] = Field(
+        default_factory=list,
+        description=_USER_INTENT_CANDIDATES_DESCRIPTION,
+    )
+
+
+class DerivedMessageSummarySchema(MessageSchema):
+    """USER_INTENT 按计划顺序生成的业务消息摘要。"""
+
+    message_uid: str = Field(description="派生业务消息 UID")
+    message_type: Literal["SYSTEM_SELECTION", "LOG_SEARCH"] = Field(description="派生业务消息类型")
+    status: str = Field(description="派生业务消息执行状态")
+    visible: bool = Field(description="前端是否展示该消息卡片")
 
 
 class UserIntentOutputSchema(MessageSchema):
-    """USER_INTENT 输出：condition/error 与 NL 输出同构（前端卡片渲染复用 NL 逻辑），
-    附加意图扩展字段（intent/system_id/message/子消息锚点，前端渐进增强）。"""
+    """USER_INTENT 输出：新链路以派生消息摘要为主，旧字段保留用于历史快照和条件预览。"""
 
     intent: str = ""
     system_id: str = ""
@@ -189,12 +237,14 @@ class UserIntentOutputSchema(MessageSchema):
     error: UserIntentErrorSchema | None = None
     selection_message_uid: str = ""
     log_search_message_uid: str = ""
+    derived_messages: list[DerivedMessageSummarySchema] = Field(
+        default_factory=list,
+        description="按消息计划顺序排列的派生业务消息；历史输出缺失时为空数组",
+    )
 
     @model_validator(mode="after")
     def _validate_payload_exclusive(self) -> "UserIntentOutputSchema":
-        """condition 与 error 互斥且至多其一：均识别成功带 condition；识别失败带错误协议；
-        纯切换（select_system 无检索诉求，need_search=false）两者皆空，仅携带
-        message 与切换结果（selection_message_uid）。"""
+        """condition 与 error 互斥；condition 仅用于 auto_execute=false 的条件预览。"""
 
         if self.condition is not None and self.error is not None:
             raise ValueError("USER_INTENT 输出不能同时携带 condition 和 error")
@@ -217,6 +267,10 @@ class LogSearchContextSchema(MessageSchema):
     # session scope（从父消息继承）固化到上下文：LogSearchService 按此过滤 system_id
     session_scope_type: str = ""
     session_scope_id: str = ""
+    extension_fields: Annotated[list[SelectionFieldMeta], _NestedListField] = Field(
+        default_factory=list,
+        description="目标系统的拓展字段快照，供当前消息的标题和导出使用",
+    )
 
 
 class LogSearchOutputSchema(MessageSchema):

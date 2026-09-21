@@ -28,7 +28,7 @@ F2 NL2JSON 服务（NATURAL_LANGUAGE_SEARCH 消息核心组件）
 
 import json
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from bk_resource import api
@@ -110,7 +110,7 @@ NL2JSON_USER_MESSAGE_TEMPLATE = """# 审计日志检索条件提取任务
    - 英文时间词与中文同义换算：last week=上周（上个自然周，非当前时刻前推7天）、yesterday=昨天、this week=本周、last month=上个月
    - 时段表述（今天上午/昨天下午等）→ 该时段起点至该时段终点
    - 具体日期区间（如"8月1日到8月15日"）→ 按给出的起止边界换算
-   - 用户有检索意图（想查日志）但未提任何时间 → 输出最近 30 天（一个月）滚动窗口
+   - 用户有检索意图（想查日志）但未提任何时间 → 输出最近 1 天滚动窗口
    - 仅当用户输入与日志检索完全无关（寒暄/闲聊）时才输出 null
 7. 关键词全文检索用 log 字段的 match_all/match_any 操作符表达：多个关键词需同时满足用 match_all，任一满足用 match_any；
    当用户以中文或口语描述操作类型、资源类型等，而字段上下文的 options 与 sample_value 均无法确定该字段确切取值时，禁止猜测字段值，改用 log 的 match_any 表达该关键词需求；
@@ -199,17 +199,45 @@ class NL2JSONService:
         span.set_attribute("ai.nl2json.query_length", len(query_text))
         span.set_attribute("ai.nl2json.scope_id", scope_id)
 
-        user_message = cls._build_user_message(query_text, selection, scope_id)
+        reference_time = timezone.localtime()
+        user_message = cls._build_user_message(query_text, selection, scope_id, reference_time)
         content = cls._call_agent(user_message, username)
         payload = cls._parse_and_validate(content, selection)
-        return cls._assemble(payload, scope_id)
+        return cls._assemble(payload, scope_id, reference_time)
+
+    @classmethod
+    def validate_and_assemble(
+        cls,
+        payload: AIConditionPayload,
+        selection: SystemSelectionOutput,
+        scope_id: str,
+        reference_time: datetime,
+        allow_empty: bool = False,
+    ) -> SearchCondition:
+        """校验 Agent 已生成的条件并补齐服务端范围与默认时间，不再次调用 Agent。
+
+        Args:
+            allow_empty: 上游已通过消息计划确认检索意图时，允许空条件并采用默认时间窗。
+        """
+
+        normalized = payload.model_copy(deep=True)
+        if allow_empty and not normalized.conditions and not cls._payload_has_valid_time(normalized):
+            return cls._assemble(normalized, scope_id, reference_time)
+        cls._validate_semantics(normalized, selection)
+        return cls._assemble(normalized, scope_id, reference_time)
 
     # ------------------------------------------------------------------
     # ① User Message 组装
     # ------------------------------------------------------------------
 
     @classmethod
-    def _build_user_message(cls, query_text: str, selection: SystemSelectionOutput, scope_id: str) -> str:
+    def _build_user_message(
+        cls,
+        query_text: str,
+        selection: SystemSelectionOutput,
+        scope_id: str,
+        reference_time: datetime,
+    ) -> str:
         # autoescape=False：Context 默认开启 HTML 转义，会把用户输入与字段上下文 JSON 中的
         # & < > " ' 转成 &amp; 等实体注入 prompt，扭曲检索语义
         # output_schema_json：AIConditionPayload.model_json_schema()（single source of truth，
@@ -218,7 +246,7 @@ class NL2JSONService:
             Context(
                 {
                     "query_text": query_text,
-                    "current_time": timezone.localtime().isoformat(),
+                    "current_time": reference_time.isoformat(),
                     "scope_id": scope_id,
                     "field_context_json": cls._serialize_field_context(selection),
                     "output_schema_json": json.dumps(AIConditionPayload.model_json_schema(), ensure_ascii=False),
@@ -438,9 +466,10 @@ class NL2JSONService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _assemble(cls, payload: AIConditionPayload, scope_id: str) -> SearchCondition:
-        """scope 取入参（不信任 AI）；时间 AI 优先，缺省/非法补默认窗口（D2）"""
-        end_time = cls._safe_parse_time(payload.end_time) or timezone.now()
+    def _assemble(cls, payload: AIConditionPayload, scope_id: str, reference_time: datetime) -> SearchCondition:
+        """scope 取入参；AI 时间优先，缺省时间基于本次转换的同一锚点补齐。"""
+
+        end_time = cls._safe_parse_time(payload.end_time) or reference_time
         start_time = cls._safe_parse_time(payload.start_time) or (end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS))
         if start_time > end_time:
             # 防御：AI 时间换算倒置（LLM 常见笔误），Doris 链路无倒置校验、SQL 恒假零命中，交换保窗口有效

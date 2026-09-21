@@ -123,11 +123,11 @@
               </div>
               <div class="rule-field-row">
                 <span class="rule-field-label">{{ t('风险危害') }}:</span>
-                <span class="rule-field-value">{{ selectedRule.risk_hazard || '--' }}</span>
+                <span class="rule-field-value multiline-text">{{ selectedRule.risk_hazard || '--' }}</span>
               </div>
               <div class="rule-field-row">
                 <span class="rule-field-label">{{ t('处理指引') }}:</span>
-                <span class="rule-field-value">{{ selectedRule.risk_guidance || '--' }}</span>
+                <span class="rule-field-value multiline-text">{{ selectedRule.risk_guidance || '--' }}</span>
               </div>
             </div>
 
@@ -631,6 +631,11 @@
         padding-left: 14px;
         color: #63656e;
         word-break: break-all;
+
+        &.multiline-text {
+          white-space: pre-line;
+          word-break: break-word;
+        }
       }
 
       .risk-level-tag {

@@ -85,6 +85,10 @@ SNAPSHOT_DEFAULT_COLUMNS = (
     ("log", "操作（完整日志）"),
 )
 
+# AI 助手默认结果列的产品文案同时用于字段上下文和条件摘要，保证筛选条件与结果列同名。
+# 非默认结果列仍回退全局 Field.description；该覆盖只在助手链路生效，不影响普通日志检索页。
+AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES = dict(SNAPSHOT_DEFAULT_COLUMNS)
+
 # ---------------------------------------------------------------------------
 # F2 NL2JSON
 # ---------------------------------------------------------------------------
@@ -93,10 +97,8 @@ SNAPSHOT_DEFAULT_COLUMNS = (
 AI_NL2JSON_AGENT_TIMEOUT = 10
 # thread_id 前缀（AIDev 会话标识）
 AI_NL2JSON_THREAD_ID_PREFIX = "ai-log-search"
-# D2 默认实现：AI 未输出时间时后端补最近 N 天窗口
-# 取值与字段采样回看窗口 FIELD_SAMPLE_LOOKBACK_DAYS 对齐：字段上下文的 sample_value
-# 采样自最近 30 天，若默认检索窗口短于采样窗口，用户会看到采样值却查不到数据
-DEFAULT_SEARCH_WINDOW_DAYS = 30
+# AI 未输出开始时间时，后端补最近 N 天检索窗口。该业务默认值与 30 天字段采样窗口相互独立。
+DEFAULT_SEARCH_WINDOW_DAYS = 1
 # AI 输出中禁止出现的时间字段（出现后端剔除并告警，时间由后端统一管理）
 AI_FORBIDDEN_TIME_FIELDS = ("thedate", "dtEventTimeStamp")
 # AI 输出中禁止出现的条件字段（后端剔除并告警）：

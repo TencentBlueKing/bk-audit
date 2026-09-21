@@ -108,10 +108,7 @@ class ConversationService:
         group = self._get_group(group_uid=group_uid, for_update=True)
         # 删除和移动统一锁 Group Node。只有会话 Node 才允许以它为父节点，
         # 因此该精确行锁足以阻止删除过程中有会话移入或移出。
-        ConversationSidebarNode.objects.select_for_update().filter(
-            group=group,
-            created_by=self.user,
-        ).first()
+        self.sidebar_service.lock_group_node_for_update(group=group)
         child_nodes = ConversationSidebarNode.objects.filter(
             parent_node__group=group,
             created_by=self.user,
@@ -131,9 +128,10 @@ class ConversationService:
         self,
         *,
         title: str,
+        group_uid: str | None = None,
         initial_message: Mapping[str, Any] | None = None,
     ) -> ConversationCreation:
-        """创建会话、根 Node 和可选初始化消息，数据库写入保持原子性。"""
+        """创建会话、目标容器 Node 和可选初始化消息，数据库写入保持原子性。"""
 
         operation_time = timezone.now()
         conversation = Conversation(
@@ -152,8 +150,12 @@ class ConversationService:
             )
 
         with transaction.atomic():
+            parent_node = None
+            if group_uid is not None:
+                group = self._get_group(group_uid=group_uid, for_update=True)
+                parent_node = self.sidebar_service.lock_group_node_for_update(group=group)
             conversation.save(update_record=False, force_insert=True)
-            self.sidebar_service.create_node(conversation=conversation)
+            self.sidebar_service.create_node(conversation=conversation, parent_node=parent_node)
             message = None
             if prepared is not None:
                 message = self.message_service.create_prepared(
