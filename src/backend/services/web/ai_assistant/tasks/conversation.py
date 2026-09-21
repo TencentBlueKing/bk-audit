@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 # 会话侧异步任务：根据检索输入生成会话标题（共用智能体 ALS_TITLE_SUM）。
+# 任务挂 ai_title，与风险报告标题共用轻量队列，避免落入 celery/default 被重任务堵住。
 
 import logging
 
@@ -27,11 +28,15 @@ from services.web.ai_assistant.models import Conversation
 from services.web.ai_assistant.serializers.conversation import (
     DEFAULT_CONVERSATION_TITLE,
 )
+from services.web.risk.constants import RiskAICeleryQueue
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task()
+@celery_app.task(
+    queue=RiskAICeleryQueue.TITLE,
+    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
+)
 def generate_conversation_title(conversation_id: int, query_text: str, source: str = "natural_language") -> dict:
     """根据检索输入生成会话标题（失败静默降级，标题非关键路径）。
 
