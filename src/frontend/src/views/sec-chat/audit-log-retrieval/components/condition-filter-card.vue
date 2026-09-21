@@ -38,6 +38,11 @@
         @clear-all="handleClear"
         @remove="handleRemoveCondition"
         @update="handleUpdateCondition">
+        <template #before-all>
+          <readonly-system-tag
+            v-if="showSystemTag"
+            :systems="systems" />
+        </template>
         <add-condition
           accent
           :event-fields="[]"
@@ -106,8 +111,8 @@
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
   import {
-    buildAiSearchCondition,
     appendSearchModelField,
+    buildAiSearchCondition,
     createConditionFieldConfigFromSystemFields,
     createDefaultDatetime,
     createDefaultDatetimeOrigin,
@@ -116,7 +121,7 @@
     getSecondaryFieldNames,
     sampleToConditionValue,
   } from '../config/condition-fields';
-
+  import ReadonlySystemTag from './readonly-system-tag.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
   import { isRelativeDatetimeOrigin, syncDatetimeFromOrigin } from '@/utils/sync-datetime-from-url';
@@ -141,9 +146,12 @@
     reselectSystem: [];
   }>();
 
+  const SYSTEM_FIELD_KEYS = new Set(['system_id', '来源系统']);
+
   const { sendConditionSearch } = useSecChatStore();
 
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
+  const showSystemTag = ref(false);
   const searchState = ref<'idle' | 'loading' | 'failed'>('idle');
   const searchError = ref('');
   const searchModel = ref<Record<string, any>>({
@@ -171,6 +179,8 @@
   const selectedFieldNames = computed(() => Object.keys(searchModel.value)
     .filter(key => key !== 'datetime_origin' && key !== 'system_id' && fieldConfig.value[key]));
 
+  const isSystemFieldName = (fieldName: string) => SYSTEM_FIELD_KEYS.has(fieldName);
+
   const getDefaultValue = (config: IFieldConfig) => getConditionDefaultValue(config);
 
   const sampleToValue = (config: IFieldConfig, sample?: string) => (
@@ -178,6 +188,7 @@
   );
 
   const resolveFieldKey = (fieldNameOrLabel: string) => {
+    if (isSystemFieldName(fieldNameOrLabel)) return 'system_id';
     if (fieldConfig.value[fieldNameOrLabel]) return fieldNameOrLabel;
     const matched = Object.entries(fieldConfig.value)
       .find(([, config]) => config.label === fieldNameOrLabel);
@@ -208,7 +219,7 @@
   };
 
   const handleRemoveCondition = (fieldName: string) => {
-    if (fieldName === 'datetime') return;
+    if (fieldName === 'datetime' || fieldName === 'system_id') return;
     const next = { ...searchModel.value };
     delete next[fieldName];
     searchModel.value = next;
@@ -289,6 +300,12 @@
 
   const addOrFocusField = async (fieldNameOrLabel: string, sample?: string) => {
     const fieldName = resolveFieldKey(fieldNameOrLabel);
+    // 来源系统：点选后才展示只读标签（排最前），不可编辑
+    if (fieldName === 'system_id' || isSystemFieldName(fieldNameOrLabel)) {
+      showSystemTag.value = true;
+      return;
+    }
+
     const config = fieldConfig.value[fieldName];
     if (!config) return;
 
@@ -469,6 +486,11 @@
         .tag-value-wrapper {
           background: transparent;
         }
+      }
+
+      &.is-readonly-system {
+        cursor: default;
+        padding-right: 12px;
       }
     }
 
