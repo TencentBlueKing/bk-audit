@@ -244,6 +244,7 @@
                       <bk-dropdown-item ext-cls="sub-menu-item">
                         <bk-dropdown
                           placement="right-start"
+                          :popover-options="{ extCls: 'chat-conv-submenu-pop' }"
                           style="width: 100%"
                           trigger="hover">
                           <div class="dropdown-sub-trigger">
@@ -443,6 +444,7 @@
                           <bk-dropdown-item ext-cls="sub-menu-item">
                             <bk-dropdown
                               placement="right-start"
+                              :popover-options="{ extCls: 'chat-conv-submenu-pop' }"
                               style="width: 100%"
                               trigger="hover">
                               <div class="dropdown-sub-trigger">
@@ -2529,7 +2531,9 @@
   const isSidebarMenuInteractiveArea = (target: EventTarget | null) => {
     const el = target instanceof HTMLElement ? target : null;
     if (!el) return false;
+    // 含子菜单 popover（teleport 到 body，与主菜单不是同一节点）
     return !!(el.closest('.chat-conv-dropdown-pop')
+      || el.closest('.chat-conv-submenu-pop')
       || el.closest('.chat-group-dropdown-pop')
       || el.closest('.action-btn')
       || el.closest('.group-more'));
