@@ -95,8 +95,7 @@
   const formData = defineModel<FormData>('formData', { required: true });
 
   const { t } = useI18n();
-  // eslint-disable-next-line no-useless-concat
-  const namePlaceholder = t('请输入，32字符内，可由汉字、小写字母、数字、' + '"_"' + '组成');
+  const namePlaceholder = t('请输入，32字符内');
 </script>
 
 <style lang="postcss" scoped>

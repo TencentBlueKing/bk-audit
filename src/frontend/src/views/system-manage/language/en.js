@@ -477,6 +477,7 @@ export default {
     '根据上报数据,配置字段映射后生成标准化日志': 'Configure field mapping based on reported data to generate standardized logs',
     验证上报数据是否有和是否正确: 'Verify whether the reported data exists and is correct',
     '支持汉字、数字、字母、下划线,长短5~50字符': 'Supports Chinese characters, numbers, letters, underscores, length 5-50 characters',
+    '5~50字符': '5-50 characters',
     请输入关键字: 'Please enter keyword',
   },
 };
