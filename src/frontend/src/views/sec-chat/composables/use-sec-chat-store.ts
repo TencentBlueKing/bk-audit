@@ -223,15 +223,16 @@ const applyRememberedDatetimeOrigin = (
   const remembered = logSearchDatetimeOriginByUid.get(messageUid)
     || (fallback && isRelativeDatetimeOrigin(fallback) ? fallback : undefined);
   if (remembered) {
-    // eslint-disable-next-line no-param-reassign
+    /* eslint-disable no-param-reassign -- 原地补齐结果 payload 的快捷时间 */
     result.datetimeOrigin = [...remembered];
     if (!logSearchDatetimeOriginByUid.has(messageUid)) {
       logSearchDatetimeOriginByUid.set(messageUid, [...remembered]);
       persistDatetimeOriginMemory();
     }
+    /* eslint-enable no-param-reassign */
     return;
   }
-  // eslint-disable-next-line no-param-reassign
+  // eslint-disable-next-line no-param-reassign -- 无记忆时清理快捷时间
   delete result.datetimeOrigin;
 };
 
