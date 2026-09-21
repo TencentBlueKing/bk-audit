@@ -201,7 +201,7 @@ sequenceDiagram
 
 | 输出语义 | 前端动作 |
 | --- | --- |
-| `output_data.error` 非空 | 按 `error.error_code` 选择交互，直接展示 `error.error_message`；系统类错误可用 candidates 辅助用户选系统，不当作已有检索结果 |
+| `output_data.error` 非空 | 按 `error.error_code` 选择交互，直接展示 `error.error_message`；系统类错误可用 candidates 辅助用户选系统。若同时存在 `derived_messages`，继续按 UID 展示其中已独立成立的消息，但不当作已有检索结果 |
 | `derived_messages=[SYSTEM_SELECTION]` | 按 UID 获取并展示系统选择卡；该消息 `visible=true`，本轮不再自行触发检索 |
 | `derived_messages=[LOG_SEARCH]` | 当前系统直接检索；按 UID 获取并展示日志结果 |
 | `derived_messages=[SYSTEM_SELECTION, LOG_SEARCH]` | 切换并检索；前一项 `visible=false` 不渲染，后一项 `visible=true` 展示结果 |
@@ -210,6 +210,10 @@ sequenceDiagram
 `derived_messages` 数组顺序就是消息计划顺序，元素包含 `message_uid/message_type/status/visible`。其中 status 是派生消息创建时的状态摘要，不会随子消息执行回写；前端按 `visible` 决定是否渲染，并按 UID 获取最新状态和内容，不通过“是否看到系统选择卡”推断计划。`message` 等旧字段只用于兼容历史快照，新页面不依赖它们驱动流程。
 
 本轮由 USER_INTENT 规划出的 SYSTEM_SELECTION、LOG_SEARCH 都以该 USER_INTENT 为 `parent_message_uid`。两条消息按计划顺序创建，但各自按照消息类型定义的执行模式独立执行；USER_INTENT 成功只表示计划已冻结且子消息已创建，不表示日志检索已经完成。
+
+如果用户没有表达起始时间，后端以本次规划的 `reference_time` 为结束时间补齐最近 1 天的滚动窗口。前端不要自行补时间，也不要沿用旧自然语言检索曾使用的 30 天默认值；最终展示和重试均以返回条件快照为准。
+
+复合计划的日志条件在重试后仍未通过确定性校验时，合法的系统选择仍可独立创建。此时 USER_INTENT 为 SUCCESS，`output_data.error` 描述检索条件错误，同时 `derived_messages` 只包含可见的 SYSTEM_SELECTION；前端既展示错误提示，也按 UID 展示系统选择卡。
 
 复合请求的典型成功输出：
 

@@ -24,3 +24,4 @@ tests:
   - file://tests/chain-scenarios.yaml
   - file://tests/regression-incidents.yaml
   - file://tests/context-boundaries.yaml
+  - file://tests/nested-extension-fields.yaml

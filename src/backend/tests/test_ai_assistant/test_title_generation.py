@@ -20,7 +20,7 @@ from unittest import mock
 
 from api.constants import AIAgentCode
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
-from services.web.ai_assistant.models import Conversation
+from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
@@ -352,6 +352,24 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
         _, kwargs = mock_generate.call_args
         self.assertEqual(kwargs["source"], "field_condition")
 
+    def test_task_skips_stale_source_message_version(self):
+        """消息编辑后，旧版本延迟标题任务不得使用旧 query_text 命名会话。"""
+
+        message = self.create_nl_message(status=ExecutionStatus.PROCESSING)
+        stale_task_id = message.task_id
+        Message.objects.filter(id=message.id).update(task_id="new-task-id")
+
+        with mock.patch.object(TitleAgentService, "generate_title") as mock_generate:
+            result = generate_conversation_title.run(
+                self.conversation.id,
+                "旧查询",
+                source_message_id=message.id,
+                source_message_task_id=stale_task_id,
+            )
+
+        self.assertTrue(result["skipped"])
+        mock_generate.assert_not_called()
+
 
 class NLTitleDispatchTest(AIAssistantPlatformTestCase):
     """NL 消息成功后触发标题任务派发（不阻塞消息终态）"""
@@ -392,6 +410,8 @@ class NLTitleDispatchTest(AIAssistantPlatformTestCase):
         mock_delay.assert_called_once_with(
             conversation_id=self.conversation.id,
             query_text="查一下张三和王五最近三天的登录失败记录",
+            source_message_id=nl_message.id,
+            source_message_task_id=nl_message.task_id,
         )
 
     def test_dispatch_failure_does_not_break_finish(self):
@@ -442,6 +462,8 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
                 extension_fields=MessageService._extract_message_extension_fields(message),
             ),
             source="field_condition",
+            source_message_id=message.id,
+            source_message_task_id=message.task_id,
         )
         # 素材内容：系统 + 时间 + 条件摘要（字段中文名动态取字段元数据，与条件筛选回传前端同源）
         dispatched_text = mock_delay.call_args.kwargs["query_text"]
@@ -484,3 +506,24 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
             )
 
         self.assertEqual(message.status, ExecutionStatus.PROCESSING)
+
+    def test_edit_field_condition_redispatches_title_for_new_version(self):
+        """条件消息编辑会生成新 task_id，并用新条件重新派发带版本栅栏的标题任务。"""
+
+        parent = self.create_selection_message()
+        message = self.create_log_search_message(parent=parent)
+        condition = make_condition()
+        condition.conditions[0].filters = ["bob"]
+        with mock.patch.object(MessageService, "_dispatch"), mock.patch(
+            "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay"
+        ) as mock_delay:
+            updated = MessageService(user=self.user).update(
+                message_uid=str(message.uid),
+                input_data={"condition": condition.model_dump(mode="json")},
+            )
+
+        self.assertNotEqual(updated.task_id, message.task_id)
+        mock_delay.assert_called_once()
+        self.assertEqual(mock_delay.call_args.kwargs["source_message_id"], updated.id)
+        self.assertEqual(mock_delay.call_args.kwargs["source_message_task_id"], updated.task_id)
+        self.assertIn("bob", mock_delay.call_args.kwargs["query_text"])

@@ -395,6 +395,39 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(root.context_data["agent_trace"]["attempt_count"], 3)
         self.assertEqual(root.context_data["agent_trace"]["reason"], "system_id not in candidates")
 
+    def test_invalid_log_condition_keeps_valid_planned_selection(self):
+        """复合计划的检索条件无效时，重试耗尽后仍创建已确定合法的系统选择。"""
+
+        invalid_log = PlannedLogSearchMessage(
+            message_type="LOG_SEARCH",
+            message_input=PlannedLogSearchInput(
+                condition=AIConditionPayload(
+                    conditions=[
+                        AIConditionItem(
+                            raw_name="unknown_field",
+                            field_type="string",
+                            operator="eq",
+                            filters=["admin"],
+                        )
+                    ]
+                )
+            ),
+        )
+        plan = MessagePlan(
+            outcome="dispatch",
+            messages=[selection_plan().messages[0], invalid_log],
+        )
+        with mock.patch(f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
+            root, _, output, _ = self._run(plan, expected_planner_calls=3)
+
+        self.assertEqual(output.error.error_code, "AI_OUTPUT_INVALID")
+        derived = list(Message.objects.filter(parent_message=root).order_by("id"))
+        self.assertEqual(len(derived), 1)
+        self.assertEqual(derived[0].message_type, MessageType.SYSTEM_SELECTION)
+        self.assertTrue(derived[0].visible)
+        self.assertEqual(output.selection_message_uid, str(derived[0].uid))
+        self.assertEqual(output.derived_messages[0].message_type, MessageType.SYSTEM_SELECTION)
+
     def test_finish_is_atomic_when_second_message_creation_fails(self):
         """派生消息批量落库中途失败时，已创建消息和入口终态必须一起回滚。"""
 

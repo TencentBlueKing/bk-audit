@@ -220,6 +220,57 @@ class MessagePlanExecutionService:
         return ResolvedIntentPlan(output=output, messages=tuple(messages), agent_trace=agent_trace)
 
     @classmethod
+    def resolve_valid_selection_fallback(
+        cls,
+        *,
+        execution: MessageExecution,
+        plan: MessagePlan | None,
+        system_context: SystemSelectionOutput,
+        reference_time: datetime,
+        current_selection: Message | None,
+        error_output: UserIntentOutputSchema,
+        agent_trace: UserIntentAgentTraceSchema,
+    ) -> ResolvedIntentPlan | None:
+        """复合计划的检索条件无效时，保留可独立成立的系统选择消息。
+
+        仅接受恰好由系统选择和日志检索组成的计划。系统选择仍走完整权限校验；
+        校验失败时返回 ``None``，调用方继续使用原来的整体错误结果。
+        """
+
+        if plan is None or plan.outcome != "dispatch" or len(plan.messages) != 2:
+            return None
+        selection = next(
+            (item for item in plan.messages if item.message_type == MessageType.SYSTEM_SELECTION),
+            None,
+        )
+        log_search = next(
+            (item for item in plan.messages if item.message_type == MessageType.LOG_SEARCH),
+            None,
+        )
+        if selection is None or log_search is None:
+            return None
+        selection_plan = MessagePlan(outcome="dispatch", messages=[selection])
+        try:
+            validated = cls.validate(
+                plan=selection_plan,
+                system_context=system_context,
+                reference_time=reference_time,
+                current_selection=current_selection,
+            )
+        except AIOutputInvalidError:
+            return None
+        resolved = cls.resolve(
+            execution=execution,
+            validated=validated,
+            agent_trace=agent_trace,
+        )
+        return ResolvedIntentPlan(
+            output=resolved.output.model_copy(update={"error": error_output.error}),
+            messages=resolved.messages,
+            agent_trace=agent_trace,
+        )
+
+    @classmethod
     def finish(
         cls,
         *,

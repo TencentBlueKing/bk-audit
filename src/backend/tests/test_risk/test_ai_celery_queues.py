@@ -46,6 +46,9 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(generate_conversation_title.queue, RiskAICeleryQueue.TITLE)
         self.assertEqual(generate_conversation_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
         self.assertEqual(generate_conversation_title.queue, generate_analyse_report_title.queue)
+        self.assertEqual(generate_conversation_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+        self.assertEqual(generate_conversation_title.time_limit, generate_analyse_report_title.time_limit)
+        self.assertTrue(generate_conversation_title.acks_late)
 
     def test_single_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)

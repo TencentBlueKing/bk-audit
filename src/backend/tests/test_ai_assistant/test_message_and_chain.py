@@ -251,7 +251,39 @@ class TestNLExecutionChain(AIAssistantPlatformTestCase):
         self.assertEqual(child.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(child.output_data)
         self.assertEqual(child.context_data["source"], "natural_language")
+        self.assertEqual(child.created_at, nl_message.created_at)
         mock_search.assert_not_called()
+
+    def test_chain_creation_failure_creates_retryable_failed_child(self):
+        """续链前置校验异常时保留可见 FAILED 子消息，避免前端无反馈。"""
+
+        nl_message, execution = self._create_processing_nl(auto_execute=True)
+        with mock.patch(
+            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
+            return_value=make_condition(),
+        ), mock.patch.object(MessageService, "create", side_effect=RuntimeError("prepare failed")):
+            output = execute_natural_language_search.run(execution)
+            execute_natural_language_search._finish_success(
+                execution=execution,
+                task_id=nl_message.task_id,
+                output_data=output,
+            )
+
+        nl_message.refresh_from_db()
+        child = Message.objects.get(parent_message=nl_message, message_type=MessageType.LOG_SEARCH)
+        self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(child.status, ExecutionStatus.FAILED)
+        self.assertTrue(child.visible)
+        self.assertTrue(child.task_id)
+        self.assertEqual(child.error_code, str(MessageErrorCode.TASK_EXECUTION_FAILED))
+        self.assertEqual(child.created_at, nl_message.created_at)
+        self.assertEqual(child.context_data["source"], "natural_language")
+
+        with mock.patch.object(MessageService, "_dispatch") as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = MessageService(user=self.user).retry(message_uid=str(child.uid))
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        dispatch.assert_called_once()
 
     def test_auto_execute_false_skips_chain(self):
         """auto_execute=False 时不创建续链子消息。"""
