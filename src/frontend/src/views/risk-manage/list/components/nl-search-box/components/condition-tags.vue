@@ -21,25 +21,28 @@
     <!-- 第一行：首个条件标签 + 清空按钮固定在最右侧 -->
     <div class="nl-condition-tags-first-row">
       <div class="nl-condition-tags-content">
-        <!-- 条件标签列表 -->
-        <template
-          v-for="tag in conditionTags"
-          :key="tag.fieldName">
-          <!-- 日期类型 -->
-          <tag-datetimerange
-            v-if="tag.type === 'datetimerange'"
-            :is-editing="editingField === tag.fieldName"
-            :removable="tag.removable"
-            :search-model="searchModel"
-            :tag="tag"
-            @finish-edit="handleDateFinishEdit"
-            @remove="handleRemove"
-            @start-edit="handleDateStartEdit"
-            @update="handleUpdate" />
+        <!-- 最前插槽：如只读「来源系统」标签 -->
+        <slot name="before-all" />
 
-          <!-- 下拉选择类型 -->
+        <!-- 日期标签 -->
+        <tag-datetimerange
+          v-for="tag in datetimeConditionTags"
+          :key="tag.fieldName"
+          :is-editing="editingField === tag.fieldName"
+          :removable="tag.removable"
+          :search-model="searchModel"
+          :tag="tag"
+          @finish-edit="handleDateFinishEdit"
+          @remove="handleRemove"
+          @start-edit="handleDateStartEdit"
+          @update="handleUpdate" />
+
+        <!-- 其余可编辑条件标签 -->
+        <template
+          v-for="tag in otherConditionTags"
+          :key="tag.fieldName">
           <tag-select
-            v-else-if="tag.type === 'select'"
+            v-if="tag.type === 'select'"
             :compact="compactSelectPopover"
             :is-editing="editingField === tag.fieldName"
             :options-cache="optionsCache"
@@ -51,7 +54,6 @@
             @update="handleUpdate"
             @update-cache="handleUpdateCache" />
 
-          <!-- 人员选择类型 -->
           <tag-user-selector
             v-else-if="tag.type === 'user-selector'"
             :is-editing="editingField === tag.fieldName"
@@ -62,7 +64,6 @@
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
 
-          <!-- 日志扩展字段（带操作符） -->
           <tag-log-field
             v-else-if="tag.type === 'log-field'"
             :is-editing="editingField === tag.fieldName"
@@ -72,7 +73,6 @@
             @start-edit="handleStartEdit"
             @update="handleUpdate" />
 
-          <!-- 输入类型 -->
           <tag-input
             v-else
             :is-editing="editingField === tag.fieldName"
@@ -216,6 +216,13 @@
     // 日期标签排第一，其余按 searchModel 中的添加顺序
     return [...datetimeTags, ...otherTags];
   });
+
+  const datetimeConditionTags = computed(() => (
+    conditionTags.value.filter(tag => tag.type === 'datetimerange')
+  ));
+  const otherConditionTags = computed(() => (
+    conditionTags.value.filter(tag => tag.type !== 'datetimerange')
+  ));
 
   // 有条件才显示
   const hasConditions = computed(() => conditionTags.value.length > 0);
