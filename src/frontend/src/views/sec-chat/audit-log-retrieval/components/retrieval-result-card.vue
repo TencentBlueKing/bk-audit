@@ -264,31 +264,37 @@
 
             <!-- 后续操作：本期先禁用智能分析 / 数据统计 -->
             <div class="action-section">
-              <bk-button
-                class="analyze-btn"
-                disabled
-                outline
-                title="暂未开放"
-                @click="analyzeDialogShow = true">
-                <img
-                  alt=""
-                  class="ai-agent-ai"
-                  height="14"
-                  :src="aiSvg"
-                  width="24">
-                智能分析
-              </bk-button>
-              <bk-button
-                class="statistics-btn"
-                disabled
-                outline
-                title="暂未开放"
-                @click="handleStatistics">
-                <audit-icon
-                  class="action-icon"
-                  type="shujutongji" />
-                数据统计
-              </bk-button>
+              <span
+                v-bk-tooltips="{ content: '功能开发中', placement: 'top' }"
+                class="action-btn-tip-wrap">
+                <bk-button
+                  class="analyze-btn"
+                  disabled
+                  outline
+                  @click="analyzeDialogShow = true">
+                  <img
+                    alt=""
+                    class="ai-agent-ai"
+                    height="14"
+                    :src="aiSvg"
+                    width="24">
+                  智能分析
+                </bk-button>
+              </span>
+              <span
+                v-bk-tooltips="{ content: '功能开发中', placement: 'top' }"
+                class="action-btn-tip-wrap">
+                <bk-button
+                  class="statistics-btn"
+                  disabled
+                  outline
+                  @click="handleStatistics">
+                  <audit-icon
+                    class="action-icon"
+                    type="shujutongji" />
+                  数据统计
+                </bk-button>
+              </span>
             </div>
 
             <!-- 报告生成状态 -->
@@ -1318,6 +1324,10 @@
     display: flex;
     margin-bottom: 0;
     gap: 12px;
+  }
+
+  .action-btn-tip-wrap {
+    display: inline-flex;
   }
 
   .analyze-btn {
