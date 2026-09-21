@@ -930,9 +930,12 @@ class MultiRuleValidateMixin:
             self._validate_condition_tree(where_tree, WhereCondition, "where")
             self._validate_condition_tree(having_tree, HavingCondition, "having")
 
-            # 规则 where 必填
-            if self._condition_tree_is_empty(where_tree):
-                raise serializers.ValidationError(gettext("规则[%s]缺少where过滤条件（规则where必填）") % rule.get("rule_name"))
+            # where 允许为空：空 = 不过滤明细行（全量参与聚合），命中由 having 决定；
+            # 但 where/having 二者皆空 = 恒真规则（全部事件命中），无检测意义，拒绝
+            if self._condition_tree_is_empty(where_tree) and self._condition_tree_is_empty(having_tree):
+                raise serializers.ValidationError(
+                    gettext("规则[%s]的where与having不能同时为空（至少配置一个检测条件）") % rule.get("rule_name")
+                )
 
             # having 叶子校验：字段必须带 aggregate 且存在于策略级 select 聚合字段
             for leaf in self._walk_tree_leaves(having_tree):

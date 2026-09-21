@@ -24,11 +24,13 @@ from typing import Any, Type
 
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
+from django.conf import settings
 from jinja2 import nodes
 from markupsafe import Markup
 
 from core.observability import submit_with_observation_context
 from core.render import jinja2_environment
+from services.web.risk.constants import RiskAICeleryQueue
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.providers import Provider
 
@@ -354,7 +356,12 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
     return final_result
 
 
-@celery_app.task(queue="risk_render")
+@celery_app.task(
+    queue=RiskAICeleryQueue.SINGLE_ANALYSE,
+    acks_late=True,
+    rate_limit=settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT,
+    time_limit=settings.RENDER_TASK_TIMEOUT,
+)
 def render_template(*args, **kwargs) -> str:
     """Celery任务：渲染报告模板
 

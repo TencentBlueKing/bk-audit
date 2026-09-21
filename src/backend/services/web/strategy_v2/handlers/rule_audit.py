@@ -267,18 +267,27 @@ class RuleAuditSQLBuilder:
             conditions = rule.conditions or {}
             where_json = conditions.get("where")
             having_json = conditions.get("having")
-            if not where_json:
-                # 规则 where 必填（无兜底规则概念），缺失即数据异常
+            # where 允许为空：空树 = 不过滤明细行（全量参与聚合），命中由 having 决定；
+            # 但 where/having 二者皆空 = 恒真规则（全部事件命中），拒绝生成
+            where_cond = WhereCondition(**where_json) if where_json else WhereCondition()
+            having_cond = HavingCondition(**having_json) if having_json else None
+            if (
+                not where_cond.condition
+                and not where_cond.conditions
+                and (having_cond is None or (not having_cond.condition and not having_cond.conditions))
+            ):
                 raise RuleAuditSqlGeneratorError(
                     gettext(
-                        "strategy {} rule {} missing where conditions".format(self.strategy.strategy_id, rule.rule_id)
+                        "strategy {} rule {} where与having不能同时为空（至少配置一个检测条件）".format(
+                            self.strategy.strategy_id, rule.rule_id
+                        )
                     )
                 )
             configs.append(
                 RuleFilterConfig(
                     rule_id=rule.rule_id,
-                    where=WhereCondition(**where_json),
-                    having=HavingCondition(**having_json) if having_json else None,
+                    where=where_cond,
+                    having=having_cond,
                 )
             )
         return configs

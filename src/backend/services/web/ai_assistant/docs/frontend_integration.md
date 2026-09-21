@@ -89,7 +89,7 @@ flowchart TD
 
 页面初始化可并行请求 `GET /conversation_sidebar/pinned/` 和 `GET /conversation_sidebar/nodes/`。置顶单独展示，普通列表不重复展示；按响应顺序分页，展开分组时再请求对应容器。搜索使用 `GET /conversation_sidebar/search/`，结果只用于定位会话。
 
-用户确认系统后再调用 `POST /conversations/`，同时携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应 input_data。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
+用户确认系统后再调用 `POST /conversations/`，同时携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应 input_data。若从某个分组内新建会话，同一请求传该分组的 `group_uid`，无需创建后再调用移动接口。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
 
 若产品使用直接自然语言入口，可先 `POST /conversations/` 创建空会话，再提交 USER_INTENT；缺少系统时由识别结果引导补全。不要同时创建手工系统选择和语义相同的意图消息。
 
@@ -207,7 +207,7 @@ sequenceDiagram
 | `derived_messages=[SYSTEM_SELECTION, LOG_SEARCH]` | 切换并检索；前一项 `visible=false` 不渲染，后一项 `visible=true` 展示结果 |
 | `condition` 非空且 `auto_execute=false` | 展示规范化条件供确认；使用 `selection_message_uid` 对应的系统选择作为父消息创建 LOG_SEARCH |
 
-`derived_messages` 数组顺序就是消息计划顺序，元素包含 `message_uid/message_type/status/visible`。前端按 `visible` 决定是否渲染，按 UID 获取内容，不通过“是否看到系统选择卡”推断计划。
+`derived_messages` 数组顺序就是消息计划顺序，元素包含 `message_uid/message_type/status/visible`。其中 status 是派生消息创建时的状态摘要，不会随子消息执行回写；前端按 `visible` 决定是否渲染，并按 UID 获取最新状态和内容，不通过“是否看到系统选择卡”推断计划。`message` 等旧字段只用于兼容历史快照，新页面不依赖它们驱动流程。
 
 本轮由 USER_INTENT 规划出的 SYSTEM_SELECTION、LOG_SEARCH 都以该 USER_INTENT 为 `parent_message_uid`。两条消息按计划顺序创建，但各自按照消息类型定义的执行模式独立执行；USER_INTENT 成功只表示计划已冻结且子消息已创建，不表示日志检索已经完成。
 
@@ -226,7 +226,7 @@ sequenceDiagram
 }
 ```
 
-派生消息独立收敛状态：SYSTEM_SELECTION 或 LOG_SEARCH 执行失败时，已完成规划的 USER_INTENT 仍为 SUCCESS；前端读取失败派生消息顶层 `error_code/error_message` 并提供重试。只有 AIDev 调用、计划解析或计划校验阶段的技术失败会使 USER_INTENT 顶层为 FAILED；可预期的业务错误仍以 USER_INTENT SUCCESS + `output_data.error` 返回。
+派生消息独立收敛状态：SYSTEM_SELECTION 或 LOG_SEARCH 执行失败时，已完成规划的 USER_INTENT 仍为 SUCCESS；前端读取失败派生消息顶层 `error_code/error_message` 并提供重试。AIDev 超时、服务异常或未捕获的程序异常会使 USER_INTENT 顶层为 FAILED；计划解析或确定性校验错误在任务内耗尽重试后，以 USER_INTENT SUCCESS + `output_data.error` 返回。
 
 USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后端控制并脱敏，可直接展示，但不能用文案判断错误类型：
 
@@ -247,7 +247,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
   "error_code": "",
   "error_message": "",
   "output_data": {
-    "intent": "unrecognized",
+    "intent": "log_search",
     "error": {
       "error_code": "SYSTEM_UNAVAILABLE",
       "error_message": "目标系统不在当前场景的可用范围内，请切换场景或重新选择系统",
@@ -268,7 +268,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 手工选择系统后直接检索，或识别后用户确认条件，调用 `POST /messages/` 创建 LOG_SEARCH，传会话 UID、完整 `input_data.condition` 和正确的直接父消息：
 
 - 手工条件检索引用成功 SYSTEM_SELECTION。
-- USER_INTENT 预览条件后的手工执行引用 `selection_message_uid` 对应的成功 SYSTEM_SELECTION。
+- USER_INTENT 预览条件后的手工执行先等待 `selection_message_uid` 对应的 SYSTEM_SELECTION 成功，再引用它创建 LOG_SEARCH。
 - 存量 NATURAL_LANGUAGE_SEARCH 预览仍引用该成功自然语言消息。
 - 不把上一条 LOG_SEARCH 当作父消息；不要给 parent_message_uid 传会话 UID。
 
@@ -282,7 +282,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 | 追加一次查询 | `POST /messages/`，生成新 UID，选取允许的父消息 |
 | 失败原消息重试 | `POST /messages/{message_uid}/retry/`，复用原 UID 和快照输入；不是修改条件 |
 
-仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。编辑保留已有子消息、附件和反馈，不会自动重算这些历史快照；自然语言编辑若 auto_execute=true，可能新增一条检索子消息。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
+仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。已有 `derived_messages` 的 USER_INTENT 禁止编辑，前端应隐藏其编辑入口；没有派生消息的业务错误 USER_INTENT 可以修改后重跑。派生的 SYSTEM_SELECTION/LOG_SEARCH 仍按各自消息规则编辑。存量 NATURAL_LANGUAGE_SEARCH 编辑若 auto_execute=true，可能新增一条检索子消息。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
 
 ## 状态刷新、结果列与反馈
 

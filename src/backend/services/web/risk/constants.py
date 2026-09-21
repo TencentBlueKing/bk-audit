@@ -849,6 +849,19 @@ class RiskReportStatus(TextChoices):
     MANUAL = "manual", gettext_lazy("人工编辑")
 
 
+class RiskAICeleryQueue(TextChoices):
+    """风险侧 AI 相关 Celery 队列。
+
+    标题共用一条轻量队列；单风险 / 多风险分析各自独立，避免互相抢占。
+    预览与报告编排仍走 RISK_REPORT。
+    """
+
+    TITLE = "ai_title", gettext_lazy("AI标题")
+    SINGLE_ANALYSE = "risk_single_analyse", gettext_lazy("单风险分析")
+    MULTI_ANALYSE = "risk_multi_analyse", gettext_lazy("多风险分析")
+    RISK_REPORT = "risk_report", gettext_lazy("风险报告编排")
+
+
 class ContentQualityIssueType(TextChoices):
     """
     报告内容质量问题类型
