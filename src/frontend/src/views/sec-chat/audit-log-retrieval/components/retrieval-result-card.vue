@@ -659,7 +659,7 @@
   };
 
   const handleRemoveCondition = (fieldName: string) => {
-    if (fieldName === 'datetime') return;
+    if (fieldName === 'datetime' || fieldName === 'system_id') return;
     const next = { ...searchModel.value };
     delete next[fieldName];
     searchModel.value = next;
