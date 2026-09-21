@@ -10,7 +10,10 @@ from pathlib import Path
 import yaml
 from django.conf import settings
 
-from services.web.ai_assistant.tasks.audit_analysis import execute_log_analysis
+from services.web.ai_assistant.tasks.audit_analysis import (
+    execute_log_analysis,
+    generate_log_analysis_title,
+)
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
     execute_natural_language_search,
@@ -45,10 +48,14 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(generate_analyse_report_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
         self.assertEqual(generate_conversation_title.queue, RiskAICeleryQueue.TITLE)
         self.assertEqual(generate_conversation_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_log_analysis_title.queue, RiskAICeleryQueue.TITLE)
+        self.assertEqual(generate_log_analysis_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_log_analysis_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
         self.assertEqual(generate_conversation_title.queue, generate_analyse_report_title.queue)
         self.assertEqual(generate_conversation_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
         self.assertEqual(generate_conversation_title.time_limit, generate_analyse_report_title.time_limit)
         self.assertTrue(generate_conversation_title.acks_late)
+        self.assertEqual(generate_log_analysis_title.queue, generate_analyse_report_title.queue)
 
     def test_single_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)
@@ -62,6 +69,7 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(render_ai_variable.queue, RiskAICeleryQueue.RISK_REPORT)
         self.assertEqual(render_risk_report.queue, RiskAICeleryQueue.RISK_REPORT)
         self.assertEqual(render_ai_variable.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
+        self.assertEqual(render_ai_variable.time_limit, settings.RENDER_TASK_TIMEOUT)
         self.assertEqual(render_risk_report.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
 
     def test_title_single_and_multi_queues_are_distinct(self):
@@ -69,6 +77,7 @@ class TestAICeleryQueueIsolation(TestCase):
             {
                 generate_analyse_report_title.queue,
                 generate_conversation_title.queue,
+                generate_log_analysis_title.queue,
                 render_template.queue,
                 generate_analyse_report.queue,
                 render_risk_report.queue,

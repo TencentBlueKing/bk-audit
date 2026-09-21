@@ -43,6 +43,7 @@ from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisOutputSchema,
 )
 from services.web.ai_assistant.tasks.attachment import AttachmentExecutionTask
+from services.web.risk.constants import RiskAICeleryQueue
 
 if TYPE_CHECKING:
     from services.web.ai_assistant.services.attachment_execution import (
@@ -52,7 +53,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="ai_assistant.generate_log_analysis_title", ignore_result=True)
+@celery_app.task(
+    name="ai_assistant.generate_log_analysis_title",
+    queue=RiskAICeleryQueue.TITLE,
+    ignore_result=True,
+    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
 def generate_log_analysis_title(attachment_id: int) -> dict:
     """为默认标题的日志分析附件生成标题，失败时静默保留原值。
 
