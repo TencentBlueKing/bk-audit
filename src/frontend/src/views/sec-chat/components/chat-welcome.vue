@@ -319,7 +319,8 @@
           }
 
           .card-icon-img {
-            filter: brightness(0) saturate(100%) invert(86%) sepia(6%) saturate(193%) hue-rotate(185deg) brightness(93%) contrast(87%);
+            filter: brightness(0) saturate(100%) invert(86%) sepia(6%)
+              saturate(193%) hue-rotate(185deg) brightness(93%) contrast(87%);
           }
         }
 
