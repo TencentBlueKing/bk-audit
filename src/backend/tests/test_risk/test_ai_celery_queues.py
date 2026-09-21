@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+import yaml
 from django.conf import settings
 
 from services.web.risk.constants import RiskAICeleryQueue
@@ -16,6 +17,8 @@ from services.web.risk.tasks import (
 from tests.base import TestCase
 
 APP_DESC = Path(__file__).resolve().parents[2] / "app_desc.yaml"
+# 蓝鲸 PaaS / Heroku 对 process type 的硬限制
+PAAS_PROC_TYPE_MAX_LENGTH = 12
 
 
 class TestAICeleryQueueIsolation(TestCase):
@@ -66,3 +69,21 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertIn("BKAPP_RISK_MULTI_ANALYSE_CONCURRENCY", content)
         self.assertNotIn("-Q risk_render", content)
         self.assertNotIn("risk-render:", content)
+        self.assertIn("risk-single:", content)
+        self.assertIn("risk-multi:", content)
+
+    def test_app_desc_process_types_fit_paas_length_limit(self):
+        desc = yaml.safe_load(APP_DESC.read_text())
+        oversize = []
+        for module_name, module in desc["modules"].items():
+            for proc_type in module.get("processes") or {}:
+                if len(proc_type) > PAAS_PROC_TYPE_MAX_LENGTH:
+                    oversize.append(f"{module_name}.{proc_type}({len(proc_type)})")
+        self.assertEqual(
+            oversize,
+            [],
+            msg=(
+                "processes: Invalid proc type, cannot be longer than "
+                f"{PAAS_PROC_TYPE_MAX_LENGTH} characters: {oversize}"
+            ),
+        )
