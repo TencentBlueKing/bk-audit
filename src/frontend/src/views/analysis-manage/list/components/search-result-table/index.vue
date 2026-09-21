@@ -395,7 +395,7 @@
   /**
    * 合并新设置的列
    */
-  const formatFields = () => {
+  const formatFields = (): Column[] => {
     if (targetList.value.length) {
       // 获取已有列的field集合，用于去重
       const existingFields = new Set(initColumn?.map(col => col.field) || []);
@@ -432,7 +432,7 @@
                 maxWidth={480} />
             );
           },
-        }));
+        })) as Column[];
       return lists;
     }
     return [];
