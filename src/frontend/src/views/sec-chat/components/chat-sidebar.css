@@ -997,6 +997,10 @@ body.is-chat-sidebar-dragging .tippy-box {
   box-shadow: 0 2px 4px 0 #1919290d !important;
 }
 
+.chat-conv-submenu-pop {
+  box-shadow: 0 2px 4px 0 #1919290d !important;
+}
+
 .chat-group-dropdown-pop {
   left: 80px !important;
   box-shadow: 0 2px 4px 0 #1919290d !important;
