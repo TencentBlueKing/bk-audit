@@ -450,7 +450,7 @@
     defaultValue: [],
     onSuccess: (data) => {
       targetList.value = data || [];
-      const customList = formatFields();
+      const customList = formatFields() as Column[];
       // 从倒数第二个元素开始拼接
       const clonedInitColumn = _.cloneDeep(initColumn);
       clonedInitColumn?.splice(clonedInitColumn?.length - 1, 0, ...customList);
