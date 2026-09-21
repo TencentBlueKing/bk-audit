@@ -237,17 +237,16 @@
     reports: AiAttachmentListItem[];
   }
 
+  const emit = defineEmits<{
+    close: [];
+    select: [conversationUid: string];
+  }>();
   const SESSION_PAGE_SIZE = 10;
   const PANEL_DEFAULT_WIDTH = 400;
   const PANEL_MIN_WIDTH = 400;
   const PANEL_MAX_WIDTH = 600;
   const SEARCH_DEBOUNCE_MS = 300;
   const { CancelToken } = axios;
-
-  const emit = defineEmits<{
-    close: [];
-    select: [conversationUid: string];
-  }>();
 
   const { t } = useI18n();
   const { messageError, messageWarn } = useMessage();
