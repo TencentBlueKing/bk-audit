@@ -103,9 +103,6 @@
             v-if="!embedded && displayResult.thinkSeconds != null"
             class="process-section">
             <div class="process-row">
-              <audit-icon
-                class="process-arrow"
-                type="angle-line-down" />
               <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
             </div>
           </div>
@@ -1122,11 +1119,6 @@
     line-height: 28px;
     color: #979ba5;
     align-items: center;
-    gap: 4px;
-
-    .process-arrow {
-      font-size: 14px;
-    }
   }
 
   .status-panel {
