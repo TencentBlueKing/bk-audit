@@ -58,7 +58,8 @@
           :risk-id="riskData.risk_id"
           @update="handleUpdate" />
         <risk-handle
-          v-else
+          v-else-if="!!riskData.risk_id"
+          :key="`risk-handle-${riskData.risk_id}`"
           :data="riskData"
           embedded
           :event-data-list="eventDataList"
@@ -133,6 +134,7 @@
   } from '@utils/assist';
 
   import ConfirmRiskHandle from '@views/confirm-manage/components/confirm-risk-handle/index.vue';
+  import { isPendingConfirmStatus } from '@views/risk-manage/constants';
   import {
     getRiskViewTypeByDetailRoute,
     useRiskListStrategyList,
@@ -162,6 +164,8 @@
     closed: t('风险单关闭'),
     new: t('风险单产生'),
     stand_by: t('风险创建中'),
+    pending_confirm: t('风险确认'),
+    await_confirm: t('风险确认'),
   };
 
   const comMap: Record<string, any> = {
@@ -236,10 +240,6 @@
     },
     manual: true,
   });
-
-  const isPendingConfirmStatus = (status: string) => (
-    status === 'await_confirm' || status === 'pending_confirm'
-  );
 
   const showConfirmHandle = computed(() => (
     route.name === 'riskManageDetail' && isPendingConfirmStatus(riskData.value.status)
