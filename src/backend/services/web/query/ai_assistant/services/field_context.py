@@ -98,24 +98,41 @@ class FieldContextService:
                 extra={"system_ids": payload.system_ids, "username": username},
             )
 
-        # ② 系统信息（与 CollectorSearchAllResource 同款 system_list 链路）
-        system_map = cls._load_system_map(namespace, allowed_ids)
-
-        # ③ 逐系统构建字段上下文（L0+L1+L2）；常见/历史操作由平台层组装
-        systems = [cls._build_system(namespace, system_id, system_map.get(system_id, {})) for system_id in allowed_ids]
-        return SystemSelectionOutput(systems=systems)
+        return cls._build_context(namespace=namespace, system_ids=allowed_ids)
 
     @classmethod
-    def build_planning_context(cls, namespace: str, system_ids: List[str], username: str) -> SystemSelectionOutput:
-        """按候选顺序构造消息规划使用的全系统字段上下文。
+    def build_common_fields(cls, namespace: str) -> List[SelectionFieldMeta]:
+        """构建所有系统共享的标准字段目录，不读取系统详情或日志样例。
 
-        设计意图：实际系统选择仍由 ``SystemSelectionInput`` 限制为单系统；规划阶段
-        需要同时理解所有授权候选，逐个复用单系统构建入口，避免放宽业务消息协议。
+        系统级 L1 覆盖、拓展字段和样例只属于当前或最终目标系统，不能在
+        授权候选维度展开。枚举值仍与检索页 field_map 保持同源。
         """
 
-        systems = []
-        for system_id in system_ids:
-            systems.extend(cls.build_selection(namespace=namespace, system_ids=[system_id], username=username).systems)
+        options_map = cls._load_enum_options(namespace)
+        return [
+            cls._to_standard_field(cfg, {}, options_map.get(cfg.field.field_name))
+            for cfg in COLLECT_SEARCH_CONFIG.field_configs
+        ]
+
+    @classmethod
+    def _build_context(cls, namespace: str, system_ids: List[str]) -> SystemSelectionOutput:
+        """批量加载公共依赖后构造各系统字段快照。"""
+
+        system_map = cls._load_system_map(namespace, system_ids)
+        all_system_configs = GlobalMetaConfig.get(config_key=AI_ASSISTANT_FIELD_META_CONFIG_KEY, default={}).get(
+            "systems", {}
+        )
+        options_map = cls._load_enum_options(namespace)
+        systems = [
+            cls._build_system(
+                namespace=namespace,
+                system_id=system_id,
+                system=system_map.get(system_id, {}),
+                sys_cfg=all_system_configs.get(system_id, {}),
+                options_map=options_map,
+            )
+            for system_id in system_ids
+        ]
         return SystemSelectionOutput(systems=systems)
 
     # ------------------------------------------------------------------
@@ -132,12 +149,18 @@ class FieldContextService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _build_system(cls, namespace: str, system_id: str, system: dict) -> SelectionSystem:
-        sys_cfg = cls._load_l1_config(system_id)
+    def _build_system(
+        cls,
+        namespace: str,
+        system_id: str,
+        system: dict,
+        sys_cfg: dict,
+        options_map: Dict[str, List[dict]],
+    ) -> SelectionSystem:
+        """使用已批量加载的公共配置构造单个系统字段快照。"""
 
         # L0 + L1：通用字段（白名单同源全量）；枚举字段 options 与日志检索页 field_map 同源
         field_overrides = sys_cfg.get("fields", {})
-        options_map = cls._load_enum_options(namespace)
         standard_fields = [
             cls._to_standard_field(
                 cfg, field_overrides.get(cfg.field.field_name, {}), options_map.get(cfg.field.field_name)
@@ -145,7 +168,7 @@ class FieldContextService:
             for cfg in COLLECT_SEARCH_CONFIG.field_configs
         ]
 
-        # L2：采样回填 sample_value（原始查询值）+ 多行融合发现拓展字段（默认关闭）
+        # L2：采样回填 sample_value（原始查询值）+ 多行融合发现拓展字段（默认开启，可配置关闭）
         sample_rows = cls._sample_system_logs(namespace, system_id)
         extension_fields = []
         if sample_rows:
@@ -166,12 +189,6 @@ class FieldContextService:
             standard_fields=standard_fields,
             extension_fields=extension_fields,
         )
-
-    @classmethod
-    def _load_l1_config(cls, system_id: str) -> dict:
-        """L1 人工配置（GlobalMetaConfig，运行时写入立即生效）"""
-        config = GlobalMetaConfig.get(config_key=AI_ASSISTANT_FIELD_META_CONFIG_KEY, default={})
-        return config.get("systems", {}).get(system_id, {})
 
     @staticmethod
     def _load_enum_options(namespace: str) -> Dict[str, List[dict]]:
@@ -226,7 +243,7 @@ class FieldContextService:
         )
 
     # ------------------------------------------------------------------
-    # L2 采样（默认关闭）
+    # L2 采样（默认开启，可配置关闭）
     # ------------------------------------------------------------------
 
     @classmethod

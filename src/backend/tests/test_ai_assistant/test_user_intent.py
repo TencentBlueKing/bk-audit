@@ -22,6 +22,8 @@ from services.web.ai_assistant.services.message_execution import MessageExecutio
 from services.web.ai_assistant.tasks.audit_search import execute_user_intent
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
+    AIOutputParseFailedError,
+    AIPermissionDeniedError,
     AITimeoutError,
 )
 from services.web.query.ai_assistant.schemas import (
@@ -36,6 +38,7 @@ from services.web.query.ai_assistant.schemas import (
     SystemSelectionInput,
     SystemSelectionOutput,
 )
+from services.web.query.ai_assistant.services.intent import MessagePlanningService
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
@@ -140,23 +143,28 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         message, execution = create_intent_message(self, auto_execute=auto_execute)
         planner = mock.MagicMock(return_value=plan)
         log_result = mock.MagicMock(return_value=make_log_search_output())
+        target_context = make_selection_output()
+        common_fields = target_context.systems[0].standard_fields
         if log_error is not None:
             log_result.side_effect = log_error
         with mock.patch(
             f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
-            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统", "description": "合成系统"}],
         ), mock.patch(
-            f"{TASK_MODULE}.FieldContextService.build_planning_context",
-            return_value=make_selection_output(),
+            f"{TASK_MODULE}.FieldContextService.build_common_fields",
+            return_value=common_fields,
+        ), mock.patch(
+            f"{TASK_MODULE}.FieldContextService.build_selection",
+            return_value=target_context,
+        ) as load_system_detail, mock.patch(
+            f"{TASK_MODULE}.MessagePlanningService.build_context",
+            wraps=MessagePlanningService.build_context,
         ), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
             planner,
         ), mock.patch(
             "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
         ) as legacy_convert, mock.patch(
-            f"{HANDLERS_MODULE}.FieldContextService.build_selection",
-            return_value=make_selection_output(),
-        ), mock.patch(
             f"{HANDLERS_MODULE}.OperationContextService.build",
             return_value=([], []),
         ), mock.patch(
@@ -181,6 +189,22 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             else:
                 output = resolved.output
         self.assertEqual(planner.call_count, expected_planner_calls)
+        expected_system_ids = []
+        if plan.outcome == "dispatch" and any(item.message_type == MessageType.LOG_SEARCH for item in plan.messages):
+            selected = next(
+                (
+                    item.message_input.system_ids[0]
+                    for item in plan.messages
+                    if item.message_type == MessageType.SYSTEM_SELECTION
+                ),
+                TARGET_SYSTEM_ID,
+            )
+            if not with_selection or selected != TARGET_SYSTEM_ID:
+                expected_system_ids.append([selected])
+        self.assertEqual(
+            [call.kwargs["system_ids"] for call in load_system_detail.call_args_list],
+            expected_system_ids,
+        )
         legacy_convert.assert_not_called()
         log_result.assert_not_called()
         return message, current_selection, output, title_delay
@@ -340,26 +364,26 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertTrue(output.error.candidates)
         self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
-    def test_system_required_conflicts_with_current_selection(self):
+    def test_system_required_can_request_disambiguation_with_current_selection(self):
         plan = MessagePlan(outcome="error", messages=[], error_code="SYSTEM_REQUIRED")
-        with mock.patch(f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
-            root, _, output, _ = self._run(plan, with_selection=True, expected_planner_calls=3)
+        root, _, output, _ = self._run(plan, with_selection=True)
 
-        self.assertEqual(output.error.error_code, "AI_OUTPUT_INVALID")
+        self.assertEqual(output.error.error_code, "SYSTEM_REQUIRED")
+        self.assertEqual(output.error.error_message, "请明确要查询哪个系统的日志")
         self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
-    def test_system_required_without_candidates_maps_to_system_unavailable(self):
+    def test_empty_candidates_short_circuits_as_system_unavailable(self):
         plan = MessagePlan(outcome="error", messages=[], error_code="SYSTEM_REQUIRED")
         root, execution = create_intent_message(self)
         with mock.patch(f"{TASK_MODULE}.IntentRecognitionService.load_candidates", return_value=[],), mock.patch(
-            f"{TASK_MODULE}.FieldContextService.build_planning_context",
-            return_value=SystemSelectionOutput(systems=[]),
+            f"{TASK_MODULE}.FieldContextService.build_common_fields",
+            return_value=[],
         ), mock.patch(f"{TASK_MODULE}.MessagePlanningService.plan", return_value=plan,) as planner, mock.patch(
             f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
         ):
             output = execute_user_intent.run(execution).output
 
-        self.assertEqual(planner.call_count, 3)
+        self.assertEqual(planner.call_count, 0)
         self.assertEqual(output.error.error_code, "SYSTEM_UNAVAILABLE")
         self.assertEqual(output.error.candidates, [])
         self.assertFalse(Message.objects.filter(parent_message=root).exists())
@@ -369,10 +393,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         with mock.patch(
             f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
-        ), mock.patch(
-            f"{TASK_MODULE}.FieldContextService.build_planning_context",
-            return_value=make_selection_output(),
-        ), mock.patch(
+        ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
             side_effect=AITimeoutError(),
         ):
@@ -382,6 +403,30 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         message.refresh_from_db()
         self.assertEqual(message.context_data["agent_trace"]["status"], "failed")
         self.assertEqual(message.context_data["agent_trace"]["attempt_count"], 1)
+
+    def test_permission_change_returns_business_error_without_retry(self):
+        """候选加载后权限变化时返回可展示业务错误，不把根消息降级为通用技术失败。"""
+
+        root, execution = create_intent_message(self)
+        with mock.patch(
+            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
+        ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
+            f"{TASK_MODULE}.MessagePlanningService.plan",
+            return_value=selection_and_log_plan(),
+        ) as planner, mock.patch(
+            f"{TASK_MODULE}.FieldContextService.build_selection",
+            side_effect=AIPermissionDeniedError(),
+        ):
+            resolved = execute_user_intent.run(execution)
+
+        self.assertEqual(planner.call_count, 1)
+        self.assertEqual(resolved.output.error.error_code, "PERMISSION_DENIED")
+        self.assertEqual(resolved.output.error.error_message, "无目标系统的日志检索权限")
+        self.assertEqual(resolved.messages, ())
+        self.assertEqual(resolved.agent_trace.status, "failed")
+        self.assertEqual(resolved.agent_trace.attempt_count, 1)
+        self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
     def test_invalid_system_retries_then_returns_unavailable(self):
         invalid = selection_plan("outside-system")
@@ -394,6 +439,36 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(root.context_data["agent_trace"]["status"], "failed")
         self.assertEqual(root.context_data["agent_trace"]["attempt_count"], 3)
         self.assertEqual(root.context_data["agent_trace"]["reason"], "system_id not in candidates")
+
+    def test_recoverable_planning_failure_logs_each_retry(self):
+        """非最终失败也保留定位信息，避免成功重试吞掉前序异常。"""
+
+        message, execution = create_intent_message(self)
+        parse_error = AIOutputParseFailedError(
+            extra={"reason": "invalid json", "raw_output": "not-json"},
+        )
+        with mock.patch(
+            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
+        ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
+            f"{TASK_MODULE}.MessagePlanningService.plan",
+            side_effect=[parse_error, selection_plan()],
+        ), mock.patch(
+            f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS",
+            0,
+        ), self.assertLogs(
+            TASK_MODULE, level="WARNING"
+        ) as captured:
+            resolved = execute_user_intent.run(execution)
+
+        retry_record = next(record for record in captured.records if "planning attempt rejected" in record.getMessage())
+        self.assertEqual(retry_record.message_id, message.id)
+        self.assertEqual(retry_record.attempt, 1)
+        self.assertEqual(retry_record.error_code, "AI_OUTPUT_PARSE_FAILED")
+        self.assertEqual(retry_record.reason, "invalid json")
+        self.assertEqual(retry_record.raw_output, "not-json")
+        self.assertGreaterEqual(retry_record.duration_ms, 0)
+        self.assertEqual(resolved.agent_trace.attempt_count, 2)
 
     def test_invalid_log_condition_keeps_valid_planned_selection(self):
         """复合计划的检索条件无效时，重试耗尽后仍创建已确定合法的系统选择。"""
@@ -490,8 +565,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             name="蓝盾",
             standard_fields=[SelectionFieldMeta(raw_name="username", field_type="string", allow_operators=["eq"])],
         )
-        planning_context = make_selection_output()
-        planning_context.systems.append(second_system)
         root, execution = create_intent_message(self)
         candidates = [
             {"system_id": TARGET_SYSTEM_ID, "name": "测试系统"},
@@ -501,8 +574,11 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
             return_value=candidates,
         ), mock.patch(
-            f"{TASK_MODULE}.FieldContextService.build_planning_context",
-            return_value=planning_context,
+            f"{TASK_MODULE}.FieldContextService.build_common_fields",
+            return_value=make_selection_output().systems[0].standard_fields,
+        ), mock.patch(
+            f"{TASK_MODULE}.FieldContextService.build_selection",
+            return_value=make_selection_output(),
         ), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
             return_value=log_plan(),
@@ -532,7 +608,13 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         )
         stack.enter_context(
             mock.patch(
-                f"{TASK_MODULE}.FieldContextService.build_planning_context",
+                f"{TASK_MODULE}.FieldContextService.build_common_fields",
+                return_value=make_selection_output().systems[0].standard_fields,
+            )
+        )
+        stack.enter_context(
+            mock.patch(
+                f"{TASK_MODULE}.FieldContextService.build_selection",
                 return_value=make_selection_output(),
             )
         )

@@ -53,9 +53,14 @@ from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
     AIOutputInvalidError,
     AIOutputParseFailedError,
+    AIPermissionDeniedError,
     AIServiceError,
     AITimeoutError,
     QueryNotRecognizedError,
+)
+from services.web.query.ai_assistant.schemas import (
+    SelectionSystem,
+    SystemSelectionOutput,
 )
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.ai_assistant.services.intent import (
@@ -276,26 +281,39 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
         scope_type=context_data.scope_type,
         scope_id=context_data.scope_id,
     )
-    system_context = FieldContextService.build_planning_context(
-        namespace=context_data.namespace,
-        system_ids=[candidate["system_id"] for candidate in candidates],
-        username=context_data.username,
+    candidate_context = SystemSelectionOutput(
+        systems=[
+            SelectionSystem(
+                system_id=candidate["system_id"],
+                name=candidate.get("name", ""),
+                description=candidate.get("description", ""),
+            )
+            for candidate in candidates
+        ]
     )
+    candidate_system_ids = {candidate["system_id"] for candidate in candidates}
     current_selection = MessagePlanExecutionService.load_current_selection(
         execution=execution,
-        system_context=system_context,
+        candidate_system_ids=candidate_system_ids,
     )
     current_system_id = MessagePlanExecutionService.selection_system_id(current_selection)
+    system_context_cache: dict[str, SystemSelectionOutput] = {}
+    current_system = None
+    if current_selection is not None:
+        current_system_context = MessagePlanExecutionService.selection_system_context(current_selection)
+        system_context_cache[current_system_id] = current_system_context
+        current_system = current_system_context.systems[0]
+    common_fields = FieldContextService.build_common_fields(namespace=context_data.namespace)
     reference_time = timezone.localtime()
-    planning_context = MessagePlanningService.build_user_message(
+    agent_context = MessagePlanningService.build_context(
         query_text=execution.input_data.query_text,
-        system_context=system_context,
-        current_system_id=current_system_id,
+        candidates=candidates,
+        common_fields=common_fields,
+        current_system=current_system,
         username=context_data.username,
-        scope_type=context_data.scope_type,
-        scope_id=context_data.scope_id,
         reference_time=reference_time,
     )
+    planning_context = MessagePlanningService.build_user_message(agent_context)
     agent_trace = UserIntentAgentTraceSchema(
         status="processing",
         agent_code=str(MessagePlanningService.agent_code.value),
@@ -304,6 +322,25 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
         reference_time=reference_time.isoformat(),
     )
     MessagePlanExecutionService.persist_agent_trace(execution=execution, agent_trace=agent_trace)
+
+    if not candidates:
+        unavailable_output = MessagePlanExecutionService.build_error_output(
+            error_code=UserIntentErrorCode.SYSTEM_UNAVAILABLE,
+            system_context=candidate_context,
+        )
+        unavailable_trace = agent_trace.model_copy(
+            update={
+                "status": "failed",
+                "error_code": str(UserIntentErrorCode.SYSTEM_UNAVAILABLE),
+                "error_message": unavailable_output.error.error_message,
+                "reason": "no authorized systems",
+            }
+        )
+        return ResolvedIntentPlan(
+            output=unavailable_output,
+            messages=(),
+            agent_trace=unavailable_trace,
+        )
 
     planning_started_at = time.monotonic()
     deadline = planning_started_at + NL_PARSE_RETRY_TIMEOUT_SECONDS
@@ -314,18 +351,30 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
         planning_attempt_count = attempt + 1
         try:
             plan = MessagePlanningService.plan(
-                query_text=execution.input_data.query_text,
-                system_context=system_context,
-                current_system_id=current_system_id,
-                username=context_data.username,
-                scope_type=context_data.scope_type,
-                scope_id=context_data.scope_id,
-                reference_time=reference_time,
+                context=agent_context,
                 user_message=planning_context,
             )
+            validation_context = candidate_context
+            if plan.outcome == "dispatch" and any(
+                item.message_type == MessageType.LOG_SEARCH for item in plan.messages
+            ):
+                target_system_id = MessagePlanExecutionService.target_system_id(
+                    plan=plan,
+                    current_selection=current_selection,
+                )
+                if target_system_id not in candidate_system_ids:
+                    validation_context = candidate_context
+                else:
+                    if target_system_id not in system_context_cache:
+                        system_context_cache[target_system_id] = FieldContextService.build_selection(
+                            namespace=context_data.namespace,
+                            system_ids=[target_system_id],
+                            username=context_data.username,
+                        )
+                    validation_context = system_context_cache[target_system_id]
             validated = MessagePlanExecutionService.validate(
                 plan=plan,
-                system_context=system_context,
+                system_context=validation_context,
                 reference_time=reference_time,
                 current_selection=current_selection,
             )
@@ -343,7 +392,28 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
                     extra={"raw_output": error.extra.get("raw_output", "")},
                 )
                 break
+            attempt_duration_ms = int((time.monotonic() - planning_started_at) * 1000)
+            logger.warning(
+                "[execute_user_intent] planning attempt rejected, "
+                "message_id=%s, attempt=%s, duration_ms=%s, error_code=%s",
+                execution.message.id,
+                attempt + 1,
+                attempt_duration_ms,
+                error.error_code,
+                extra={
+                    "message_id": execution.message.id,
+                    "attempt": attempt + 1,
+                    "duration_ms": attempt_duration_ms,
+                    "error_code": str(error.error_code),
+                    "reason": str(error.extra.get("reason") or ""),
+                    "raw_output": str(error.extra.get("raw_output") or ""),
+                },
+            )
             time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
+        except AIPermissionDeniedError as error:
+            # 候选加载后权限可能发生变化；这是可展示的确定性业务错误，无需重试 Agent。
+            planning_error = error
+            break
         except (AITimeoutError, AIServiceError) as error:
             duration_ms = int((time.monotonic() - planning_started_at) * 1000)
             failed_trace = agent_trace.model_copy(
@@ -394,16 +464,18 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
             duration_ms,
             planning_error.error_code,
         )
-        error_output = _planning_error_output(error=planning_error, system_context=system_context)
-        selection_fallback = MessagePlanExecutionService.resolve_valid_selection_fallback(
-            execution=execution,
-            plan=plan,
-            system_context=system_context,
-            reference_time=reference_time,
-            current_selection=current_selection,
-            error_output=error_output,
-            agent_trace=failed_trace,
-        )
+        error_output = _planning_error_output(error=planning_error, system_context=candidate_context)
+        selection_fallback = None
+        if not isinstance(planning_error, AIPermissionDeniedError):
+            selection_fallback = MessagePlanExecutionService.resolve_valid_selection_fallback(
+                execution=execution,
+                plan=plan,
+                system_context=candidate_context,
+                reference_time=reference_time,
+                current_selection=current_selection,
+                error_output=error_output,
+                agent_trace=failed_trace,
+            )
         if selection_fallback is not None:
             return selection_fallback
         return ResolvedIntentPlan(

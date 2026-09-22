@@ -36,6 +36,7 @@ from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.template import Context, Template
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from opentelemetry import trace
 from pydantic import ValidationError
 from requests.exceptions import Timeout
@@ -43,7 +44,6 @@ from requests.exceptions import Timeout
 from api.constants import AIAgentCode
 from core.sql.constants import FieldType
 from core.utils.data import unique_id
-from core.utils.time import parse_datetime
 from services.web.query.ai_assistant.constants import (
     AI_FORBIDDEN_CONDITION_FIELDS,
     AI_NL2JSON_THREAD_ID_PREFIX,
@@ -492,10 +492,17 @@ class NL2JSONService:
 
     @staticmethod
     def _safe_parse_time(value: Optional[str]):
+        """解析 Agent 输出的 ISO 时间并保留绝对时刻；无时区值按当前服务时区解释。"""
+
         if not value:
             return None
         try:
-            return parse_datetime(value)
+            parsed = parse_datetime(value)
+            if parsed is None:
+                return None
+            if timezone.is_naive(parsed):
+                return timezone.make_aware(parsed, timezone.get_current_timezone())
+            return parsed
         except Exception:  # noqa: BLE001
             logger.warning(f"[NL2JSONService] invalid time from AI output: {value}")
             return None

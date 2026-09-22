@@ -25,7 +25,11 @@ from services.web.ai_assistant.services.message_execution import (
     load_message_execution,
 )
 from services.web.ai_assistant.tasks import BaseExecutionTask, MessageExecutionTask
-from services.web.query.ai_assistant.exceptions import AIServiceError, AITimeoutError
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputInvalidError,
+    AIServiceError,
+    AITimeoutError,
+)
 from tests.base import TestCase
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
@@ -259,6 +263,23 @@ class MessageTaskTest(TestCase):
                 self.assertTrue(updated)
                 self.assertEqual(message.error_code, error.error_code)
                 self.assertEqual(message.error_message, error.message)
+
+    def test_query_business_error_keeps_domain_code_and_message(self):
+        """查询域确定性错误进入 FAILED 时保留稳定业务码，供前端引导用户修正。"""
+
+        error = AIOutputInvalidError()
+        message = self.create_message(task_id="task-ai-output-invalid")
+
+        updated = finish_message_failure(
+            message_id=message.id,
+            task_id=message.task_id,
+            exception=error,
+        )
+
+        message.refresh_from_db()
+        self.assertTrue(updated)
+        self.assertEqual(message.error_code, error.error_code)
+        self.assertEqual(message.error_message, error.message)
 
     def test_non_platform_blue_exception_is_sanitized(self):
         message = self.create_message()

@@ -1,6 +1,6 @@
 # 通用消息规划 Agent 效果评估
 
-本套件验证生产 `MessagePlanningService` 的真实调用链：用户自然语言、当前系统、授权系统及字段上下文一次提交给 AIDev Agent，Agent 返回 `MessagePlan`，后端继续执行 Pydantic、系统白名单与检索条件校验。
+本套件验证生产 `MessagePlanningService` 的真实调用链：用户自然语言、会话阶段、授权系统摘要、公共标准字段及当前系统详情一次提交给 AIDev Agent，Agent 返回 `MessagePlan`，后端再按目标系统执行 Pydantic、权限和检索条件校验。
 
 ## 评估目标
 
@@ -11,9 +11,9 @@
 5. 闲聊输出 `UNRECOGNIZED_INTENT`。
 6. 系统 ID、字段、操作符、枚举值及时间条件能通过后端确定性校验。
 7. 相似系统名、提示注入、多值条件和扩展字段场景保持稳定。
-8. 多级拓展字段在“完整路径已发现”和“仅父节点及样例已发现”两类上下文中，都能把完整路径表达或父节点表达规范化为同一 `extend_data + keys` 条件。
+8. 用户明确表达多级拓展路径时，Agent 能基于公共 `extend_data` 容器生成 `extend_data + keys` 条件，并在“完整路径已发现”和“仅父节点及样例已发现”两类目标系统快照上通过后端校验。
 
-Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 直接注入生产同构的授权系统字段快照、会话范围和参考时间，用于覆盖空授权、无当前系统、同名系统、深层扩展字段及上下文提示注入。`tests/nested-extension-fields.yaml` 固定覆盖两种字段上下文与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗。
+Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的专属字段、拓展字段和样例会进入 Agent 上下文。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗。
 
 评测分为两个 profile：
 
@@ -29,14 +29,14 @@ Provider 在 metadata 中记录 `attempt_count` 和 `latency_ms`。报告必须�
 ```json
 {
   "chat_history": [
-    {"role": "role", "content": "代码仓库中的 SYSTEM_PROMPT"},
+    {"role": "role", "content": "代码仓库中的 SYSTEM_PROMPT_TEMPLATE"},
     {"role": "user", "content": "本轮完整动态上下文"}
   ],
   "execute_kwargs": {"stream": false, "thread_id": "intent-planning-<uuid>"}
 }
 ```
 
-系统提示词来自 `services/web/ai/prompts/intent_recognition/__init__.py`，不依赖远端 Agent 固定提示词。每个独立规划请求使用新的 `thread_id`。
+系统提示词和用户提示词都定义在 `services/web/ai/prompts/intent_recognition/templates.py` 的独立多行字符串模板中，运行时只注入强类型上下文和 `MessagePlan` Schema，不执行本地文件读取，也不依赖远端 Agent 固定提示词。每个独立规划请求使用新的 `thread_id`。
 
 ## 运行
 

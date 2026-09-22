@@ -38,7 +38,7 @@ class UserIntentErrorCode(TextChoices):
     """USER_INTENT 成功终态中的稳定业务错误码，供前端选择交互分支。"""
 
     UNRECOGNIZED_INTENT = "UNRECOGNIZED_INTENT", gettext_lazy("无法识别用户意图")
-    SYSTEM_REQUIRED = "SYSTEM_REQUIRED", gettext_lazy("需要先选择系统")
+    SYSTEM_REQUIRED = "SYSTEM_REQUIRED", gettext_lazy("需要明确系统")
     SYSTEM_UNAVAILABLE = "SYSTEM_UNAVAILABLE", gettext_lazy("目标系统不在当前可用范围")
 
 
