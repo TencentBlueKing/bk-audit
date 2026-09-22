@@ -127,15 +127,17 @@
                     :key="item.id"
                     v-bk-tooltips="getEmptyFieldTooltip(getCurrentValue(item.id))"
                     class="field-insert-item"
-                    :class="{ 'is-disabled': isFieldValueEmpty(getCurrentValue(item.id)) }"
-                    @click="handleInsertFieldItem(getCurrentValue(item.id))">
+                    :class="{ 'is-disabled': !insertByFieldName && isFieldValueEmpty(getCurrentValue(item.id)) }"
+                    @click="insertRiskField(item)">
                     <span class="field-insert-item__name">{{ item.name }}</span>
-                    <span class="field-insert-item__sep"> : </span>
-                    <span
-                      v-bk-tooltips="getFieldValueTooltip(getCurrentValue(item.id))"
-                      class="field-insert-item__value">
-                      {{ formatFieldDisplayValue(getCurrentValue(item.id)) }}
-                    </span>
+                    <template v-if="!insertByFieldName">
+                      <span class="field-insert-item__sep"> : </span>
+                      <span
+                        v-bk-tooltips="getFieldValueTooltip(getCurrentValue(item.id))"
+                        class="field-insert-item__value">
+                        {{ formatFieldDisplayValue(getCurrentValue(item.id)) }}
+                      </span>
+                    </template>
                   </div>
                 </div>
                 <div
@@ -149,15 +151,17 @@
                     :key="`${item.lable}-${index}`"
                     v-bk-tooltips="getEmptyFieldTooltip(item.value)"
                     class="field-insert-item"
-                    :class="{ 'is-disabled': isFieldValueEmpty(item.value) }"
-                    @click="handleInsertFieldItem(item.value)">
+                    :class="{ 'is-disabled': !insertByFieldName && isFieldValueEmpty(item.value) }"
+                    @click="insertEventField(item)">
                     <span class="field-insert-item__name">{{ item.lable }}</span>
-                    <span class="field-insert-item__sep"> : </span>
-                    <span
-                      v-bk-tooltips="getFieldValueTooltip(item.value)"
-                      class="field-insert-item__value">
-                      {{ formatFieldDisplayValue(item.value) }}
-                    </span>
+                    <template v-if="!insertByFieldName">
+                      <span class="field-insert-item__sep"> : </span>
+                      <span
+                        v-bk-tooltips="getFieldValueTooltip(item.value)"
+                        class="field-insert-item__value">
+                        {{ formatFieldDisplayValue(item.value) }}
+                      </span>
+                    </template>
                   </div>
                 </div>
                 <div
@@ -256,7 +260,9 @@
           allow-create
           class="consition-value pa-user-selector"
           :model-value="userSelectorValue"
-          :placeholder="t('请输入人员进行搜索')"
+          :placeholder="userGroup.length ? t('请输入用户名，或通过输入$使用变量') : t('请输入人员进行搜索')"
+          :user-group="userGroup"
+          :user-group-name="userGroupName"
           @update:model-value="handlerUserChange" />
 
         <div
@@ -323,6 +329,10 @@
     eventDataList?: any,
     detailData: any,
     useFieldInsert?: boolean,
+    /** 批量场景没有单条当前值时，面板只列字段名，插入 {{字段}} */
+    insertByFieldName?: boolean,
+    userGroup?: Array<{ id: string; name: string }>,
+    userGroupName?: string,
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -331,6 +341,9 @@
     eventDataList: () => ([]),
     detailData: () => ({}),
     useFieldInsert: false,
+    insertByFieldName: false,
+    userGroup: () => [],
+    userGroupName: '可使用变量',
   });
   const { t } = useI18n();
   const tipText = ref('');
@@ -457,7 +470,7 @@
     content: t('当前值为空'),
     maxWidth: fieldInsertTooltipMaxWidth,
     extCls: fieldInsertTooltipExtCls,
-    disabled: !isFieldValueEmpty(value),
+    disabled: props.insertByFieldName || !isFieldValueEmpty(value),
   });
 
   const getFieldValueTooltip = (value: unknown) => ({
@@ -641,6 +654,37 @@
     };
     handleFieldInsertHidden();
     adjustTextareaHeight();
+  };
+
+  const appendFieldToken = (id: string) => {
+    if (!id) {
+      return;
+    }
+    const token = `{{${id}}}`;
+    const current = modelValue.value.value;
+    const text = current === undefined || current === null ? '' : String(current);
+    modelValue.value = {
+      field: '',
+      value: text ? `${text}${token}` : token,
+    };
+    handleFieldInsertHidden();
+    adjustTextareaHeight();
+  };
+
+  const insertRiskField = (item: { id: string }) => {
+    if (props.insertByFieldName) {
+      appendFieldToken(item.id);
+      return;
+    }
+    handleInsertFieldItem(getCurrentValue(item.id));
+  };
+
+  const insertEventField = (item: { id?: string; lable?: string; value?: unknown }) => {
+    if (props.insertByFieldName) {
+      appendFieldToken(String(item.id || item.lable || ''));
+      return;
+    }
+    handleInsertFieldItem(item.value);
   };
 
   const handleInsertFieldItem = (value: unknown) => {
@@ -827,13 +871,8 @@
   grid-template-columns: minmax(0, 1fr) 32px;
   align-items: stretch;
 
-  :deep(.field-insert-wrapper__control .bk-input--text) {
-    border-right: none;
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  :deep(.field-insert-wrapper__control .bk-textarea textarea) {
+  :deep(.bk-input.field-insert-wrapper__control),
+  :deep(.bk-textarea.field-insert-wrapper__control) {
     border-right: none;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
@@ -843,6 +882,26 @@
     border-right: none;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+  }
+
+  &:hover .field-insert-wrapper__suffix {
+    border-color: #979ba5;
+  }
+
+  &:focus-within {
+    border-radius: 2px;
+    box-shadow: 0 0 3px 0 #a3c5fd;
+  }
+
+  &:focus-within :deep(.bk-input.field-insert-wrapper__control),
+  &:focus-within :deep(.bk-textarea.field-insert-wrapper__control),
+  &:focus-within :deep(.field-insert-wrapper__control.bk-date-picker .bk-date-picker-editor) {
+    border-color: #3a84ff;
+    box-shadow: none;
+  }
+
+  &:focus-within .field-insert-wrapper__suffix {
+    border-color: #3a84ff;
   }
 }
 
@@ -1092,5 +1151,20 @@
   max-width: 30vw !important;
   word-break: break-all;
   white-space: pre-wrap;
+}
+
+.bk-form-item.is-error .field-insert-wrapper.has-suffix {
+  box-shadow: none;
+}
+
+.bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-input.field-insert-wrapper__control,
+.bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-textarea.field-insert-wrapper__control,
+.bk-form-item.is-error .field-insert-wrapper.has-suffix .bk-date-picker-editor {
+  border-color: #ea3636;
+  box-shadow: none;
+}
+
+.bk-form-item.is-error .field-insert-wrapper.has-suffix .field-insert-wrapper__suffix {
+  border-color: #ea3636;
 }
 </style>
