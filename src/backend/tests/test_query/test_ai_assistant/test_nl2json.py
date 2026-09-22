@@ -28,10 +28,10 @@ from requests.exceptions import Timeout
 from core.utils.time import parse_datetime
 from services.web.query.ai_assistant.constants import DEFAULT_SEARCH_WINDOW_DAYS
 from services.web.query.ai_assistant.exceptions import (
-    AIOutputInvalidError,
     AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
+    InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import AIConditionPayload
@@ -71,7 +71,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertIn('"conditions"', user_message)
         self.assertIn('"start_time"', user_message)
         self.assertIn("检索条件列表，无字段条件时为空数组", user_message)
-        self.assertIn("操作符，必须在该字段 allow_operators 内", user_message)
+        self.assertIn("查询执行层支持的全局操作符", user_message)
 
         # scope 取入参（不信任 AI）
         self.assertEqual(condition.scope_id, self.target_system_id)
@@ -197,7 +197,13 @@ class TestNL2JSONService(AIAssistantTestCase):
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [
             {"raw_name": "username", "keys": [], "operator": "include", "filters": ["张三", "李四", "王五"]},
-            {"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]},
+            {
+                "raw_name": "result_code",
+                "keys": [],
+                "field_type": "int",
+                "operator": "include",
+                "filters": [-1],
+            },
             {"raw_name": "access_source_ip", "keys": [], "operator": "eq", "filters": ["192.0.2.10"]},
         ]
         mock_chat.return_value = json.dumps(output)
@@ -256,23 +262,23 @@ class TestNL2JSONService(AIAssistantTestCase):
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "not_a_field", "keys": [], "operator": "eq", "filters": ["x"]}]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError) as ctx:
+        with self.assertRaises(InvalidConditionError) as ctx:
             self._convert()
-        self.assertEqual(ctx.exception.error_code, "AI_OUTPUT_INVALID")
+        self.assertEqual(ctx.exception.error_code, "INVALID_CONDITION")
 
     def test_operator_not_allowed_rejected(self, mock_chat):
         # username allow_operators 为 ["eq", "include"]，like 越权
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "like", "filters": ["adm"]}]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
+        with self.assertRaises(InvalidConditionError):
             self._convert()
 
     def test_unknown_operator_rejected(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "regex", "filters": ["adm.*"]}]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
+        with self.assertRaises(InvalidConditionError):
             self._convert()
 
     def test_extension_condition_success(self, mock_chat):
@@ -302,20 +308,33 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(condition.conditions[0].field.keys, ["not_exist"])
         self.assertEqual(condition.conditions[0].filters, ["x"])
 
-    def test_extension_user_specified_invalid_operator_rejected(self, mock_chat):
-        """未采样发现的子键：操作符仍按拓展字段默认集合校验（gt 数值比较拒绝）"""
+    def test_unknown_extension_path_accepts_agent_selected_numeric_type(self, mock_chat):
+        """未知拓展字段允许 Agent 根据用户需求选择查询类型和全局合法操作符。"""
+
         output = dict(VALID_AI_OUTPUT)
-        output["conditions"] = [{"raw_name": "extend_data", "keys": ["not_exist"], "operator": "gt", "filters": ["1"]}]
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["_request_url", "scope_id"],
+                "field_type": "int",
+                "operator": "gt",
+                "filters": [49],
+            }
+        ]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
-            self._convert()
+
+        condition = self._convert()
+
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
+        self.assertEqual(condition.conditions[0].operator, "gt")
+        self.assertEqual(condition.conditions[0].filters, [49])
 
     def test_extension_keys_on_non_json_field_rejected(self, mock_chat):
         """容器白名单保留：非 JSON 容器字段带下钻 keys 仍拒绝（防编造容器）"""
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [{"raw_name": "username", "keys": ["hijack"], "operator": "eq", "filters": ["x"]}]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
+        with self.assertRaises(InvalidConditionError):
             self._convert()
 
     def test_extension_multilayer_keys_accepted(self, mock_chat):
@@ -353,15 +372,24 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertIn("支持多层路径", NL2JSON_USER_MESSAGE_TEMPLATE)
         self.assertIn("多层路径逐层写入 keys", NL2JSON_USER_MESSAGE_TEMPLATE)
 
-    def test_numeric_operator_on_string_extension_rejected(self, mock_chat):
+    def test_known_extension_accepts_agent_selected_numeric_type(self, mock_chat):
         selection = self.make_selection(extension_fields=[self.make_extension_field(allow_operators=["eq", "gt"])])
         output = dict(VALID_AI_OUTPUT)
         output["conditions"] = [
-            {"raw_name": "extend_data", "keys": ["ticket_id"], "operator": "gt", "filters": ["100"]}
+            {
+                "raw_name": "extend_data",
+                "keys": ["ticket_id"],
+                "field_type": "long",
+                "operator": "gt",
+                "filters": [100],
+            }
         ]
         mock_chat.return_value = json.dumps(output)
-        with self.assertRaises(AIOutputInvalidError):
-            self._convert(selection=selection)
+
+        condition = self._convert(selection=selection)
+
+        self.assertEqual(condition.conditions[0].field.field_type, "long")
+        self.assertEqual(condition.conditions[0].operator, "gt")
 
     def test_time_field_condition_stripped(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)
@@ -825,6 +853,29 @@ class TestNL2JSONAdversarial(AIAssistantTestCase):
         mock_chat.return_value = json.dumps(output)
         condition = self._convert(selection=selection)
         self.assertEqual(condition.conditions[0].filters, [0])
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
+
+    def test_legacy_null_field_type_uses_standard_field_metadata(self, mock_chat):
+        """旧 Agent 显式输出 null 时，标准字段仍由权威元数据补全。"""
+
+        selection = self.make_selection(
+            standard_fields=[self.make_standard_field(raw_name="result_code", allow_operators=["eq"])]
+        )
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "result_code",
+                "keys": [],
+                "field_type": None,
+                "operator": "eq",
+                "filters": [0],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
 
     def test_deeply_nested_malformed_keys(self, mock_chat):
         """深层嵌套 keys 放行（产品取消层级限制：SQL 层逐级提取天然支持任意深度）"""

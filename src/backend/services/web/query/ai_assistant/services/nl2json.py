@@ -48,13 +48,12 @@ from services.web.query.ai_assistant.constants import (
     AI_FORBIDDEN_CONDITION_FIELDS,
     AI_NL2JSON_THREAD_ID_PREFIX,
     DEFAULT_SEARCH_WINDOW_DAYS,
-    EXTENSION_FIELD_DEFAULT_OPERATORS,
 )
 from services.web.query.ai_assistant.exceptions import (
-    AIOutputInvalidError,
     AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
+    InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (
@@ -132,14 +131,15 @@ INVALID_REASON_MESSAGES = {
     "unknown operator": "不支持的操作符",
     "filters required": "筛选条件缺少比较值",
     "between needs 2 filters": "区间筛选需要恰好 2 个值",
+    "field type does not match field context": "字段类型与当前系统字段定义不一致",
 }
 
 
-def _invalid_condition_error(cond: "AIConditionItem", reason: str) -> AIOutputInvalidError:
+def _invalid_condition_error(cond: "AIConditionItem", reason: str) -> InvalidConditionError:
     """语义校验失败统一构造：message 面向用户可读（前端错误卡直显），extra 保留机器 reason。"""
 
-    return AIOutputInvalidError(
-        message=INVALID_REASON_MESSAGES.get(reason, AIOutputInvalidError.error_message),
+    return InvalidConditionError(
+        message=INVALID_REASON_MESSAGES.get(reason, InvalidConditionError.error_message),
         extra={"condition": cond.model_dump(), "reason": reason},
     )
 
@@ -191,7 +191,7 @@ class NL2JSONService:
         :return: SearchCondition
         :raises QueryNotRecognizedError: 空识别
         :raises AIOutputParseFailedError: AI 返回非合法 JSON
-        :raises AIOutputInvalidError: 字段/操作符/取值形态非法
+        :raises InvalidConditionError: 字段、操作符或取值形态非法
         :raises AIServiceError: AIDev 调用错误
         :raises AITimeoutError: AIDev 调用超时
         """
@@ -329,8 +329,19 @@ class NL2JSONService:
         try:
             parsed = AIConditionPayload.model_validate(payload)
         except ValidationError as err:
-            raise AIOutputParseFailedError(
-                extra={"raw_output": content[:RAW_OUTPUT_KEEP_LENGTH], "validation_error": str(err)},
+            raise InvalidConditionError(
+                extra={
+                    "raw_output": content[:RAW_OUTPUT_KEEP_LENGTH],
+                    "validation_error": str(err),
+                    "validation_errors": [
+                        {
+                            "path": ".".join(str(part) for part in item["loc"]),
+                            "code": str(item["type"]),
+                            "message": str(item["msg"]),
+                        }
+                        for item in err.errors(include_input=False, include_url=False)
+                    ],
+                },
             )
         cls._validate_semantics(parsed, selection)
         return parsed
@@ -371,16 +382,15 @@ class NL2JSONService:
     @classmethod
     def _validate_semantics(cls, payload: AIConditionPayload, selection: SystemSelectionOutput) -> None:
         """
-        语义校验（AIOutputInvalidError 抛出点）。
+        语义校验（InvalidConditionError 抛出点）。
 
         规则与 QuerySearchConditionSerializer.validate 同源：
         - raw_name 白名单（通用字段清单 = COLLECT_SEARCH_CONFIG 同源）
         - 下钻条件的容器字段必须在 is_json 白名单内；子键采样发现或用户显式指定均放行
-        - operator ∈ 该字段 allow_operators（未采样发现的子键按拓展字段默认操作符集合校验）
-        - 数值比较操作符仅数值类型字段可用（拓展字段一期恒 string 不支持）
+        - 标准字段 operator 遵循字段上下文；拓展字段 operator 使用查询层全局枚举
+        - 标准字段按元数据校验类型和操作符；拓展叶子字段允许 Agent 在查询契约内推断
         """
         standard_map = {f.raw_name: f for s in selection.systems for f in s.standard_fields}
-        extension_map = {(f.raw_name, tuple(f.keys)): f for s in selection.systems for f in s.extension_fields}
         json_containers = {cfg.field.field_name for cfg in COLLECT_SEARCH_CONFIG.field_configs if cfg.field.is_json}
         valid_operators = {choice[0] for choice in QueryConditionOperator.choices}
 
@@ -393,7 +403,7 @@ class NL2JSONService:
                 continue
             cls._validate_operator_shape(cond, valid_operators)
             if cond.keys:
-                cls._validate_extension_condition(cond, extension_map, json_containers)
+                cls._validate_extension_condition(cond, json_containers)
             else:
                 cls._validate_standard_condition(cond, standard_map)
             valid_conditions.append(cond)
@@ -427,24 +437,17 @@ class NL2JSONService:
             raise _invalid_condition_error(cond, "between needs 2 filters")
 
     @classmethod
-    def _validate_extension_condition(cls, cond: AIConditionItem, extension_map: dict, json_containers: set) -> None:
+    def _validate_extension_condition(cls, cond: AIConditionItem, json_containers: set) -> None:
         """拓展子键信任边界：容器字段必须在白名单（防编造容器），子键路径采样发现或用户显式指定均放行。
 
         采样覆盖率有限（单系统子键集合远大于 N 条样本），用户显式指定的下钻路径
         不因「字段上下文未列出」被拒绝；下钻路径支持多层（产品确认不做层级限制——
         Doris SQL 层 variant 逐级拼接 / JSON Path 均天然支持任意深度，见
         core/sql/builder/terms.py::DorisVariantField.format_keys_quote）；未发现
-        子键路径的操作符按拓展字段默认集合校验。
+        子键路径的类型与操作符由 Agent 在查询层 Schema 范围内结合用户表达推断。
         """
         if cond.raw_name not in json_containers:
             raise _invalid_condition_error(cond, "keys on non-json field")
-        meta = extension_map.get((cond.raw_name, tuple(cond.keys)))
-        allowed_operators = meta.allow_operators if meta is not None else EXTENSION_FIELD_DEFAULT_OPERATORS
-        if cond.operator not in allowed_operators:
-            raise _invalid_condition_error(cond, "operator not allowed for extension field")
-        # 拓展字段一期恒 string：数值比较不支持
-        if cond.operator in NUMERIC_OPERATORS:
-            raise _invalid_condition_error(cond, "numeric operator on string extension field")
 
     @classmethod
     def _validate_standard_condition(cls, cond: AIConditionItem, standard_map: dict) -> None:
@@ -457,9 +460,12 @@ class NL2JSONService:
         field_type = field_cfg.field.field_type if field_cfg else None
         if cond.operator in NUMERIC_OPERATORS and field_type not in NUMERIC_FIELD_TYPES:
             raise _invalid_condition_error(cond, "numeric operator on non-numeric field")
-        # field_type 缺省补全（协议：服务端按字段元数据补全）
-        if not cond.field_type and field_cfg:
-            cond.field_type = field_cfg.field.field_type
+        if field_type in FieldType.values:
+            if "field_type" not in cond.model_fields_set:
+                # 兼容旧 NL2JSON 输出未携带类型；标准字段元数据是权威来源。
+                cond.field_type = field_type
+            elif cond.field_type != field_type:
+                raise _invalid_condition_error(cond, "field type does not match field context")
 
     # ------------------------------------------------------------------
     # ④ 组装 condition

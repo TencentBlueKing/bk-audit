@@ -56,10 +56,17 @@ class AIOutputParseFailedError(AIAssistantError):
 
 
 class AIOutputInvalidError(AIAssistantError):
-    """AI 返回 JSON 合法但字段/操作符/取值形态非法"""
+    """AI 输出通过基础解析但不符合当前业务协议。"""
 
     error_code = "AI_OUTPUT_INVALID"
-    error_message = "AI 生成的检索条件不合法"
+    error_message = "AI 生成的内容不合法"
+
+
+class InvalidConditionError(AIAssistantError):
+    """Agent 条件结构或确定性条件规则不合法。"""
+
+    error_code = "INVALID_CONDITION"
+    error_message = "检索条件暂不支持，请调整字段、操作符或条件值"
 
 
 class AIServiceError(AIAssistantError):

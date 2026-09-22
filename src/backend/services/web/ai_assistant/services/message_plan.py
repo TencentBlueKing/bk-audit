@@ -415,6 +415,8 @@ class MessagePlanExecutionService:
             UserIntentErrorCode.SYSTEM_REQUIRED: "请明确要查询哪个系统的日志",
             UserIntentErrorCode.SYSTEM_UNAVAILABLE: "目标系统不在当前可用系统范围内，请重新选择系统",
             UserIntentErrorCode.INVALID_CONDITION: "检索条件暂不支持，请调整字段、操作符或条件值",
+            UserIntentErrorCode.AI_OUTPUT_INVALID: "AI 输出无法按消息协议解析，请稍后重试或换一种描述",
+            UserIntentErrorCode.PERMISSION_DENIED: "无目标系统的日志检索权限",
         }
         include_candidates = error_code in {
             UserIntentErrorCode.SYSTEM_REQUIRED,

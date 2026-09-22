@@ -41,6 +41,8 @@ class UserIntentErrorCode(TextChoices):
     SYSTEM_REQUIRED = "SYSTEM_REQUIRED", gettext_lazy("需要明确系统")
     SYSTEM_UNAVAILABLE = "SYSTEM_UNAVAILABLE", gettext_lazy("目标系统不在当前可用范围")
     INVALID_CONDITION = "INVALID_CONDITION", gettext_lazy("检索条件不支持")
+    AI_OUTPUT_INVALID = "AI_OUTPUT_INVALID", gettext_lazy("AI 输出不符合协议")
+    PERMISSION_DENIED = "PERMISSION_DENIED", gettext_lazy("无日志检索权限")
 
 
 class AttachmentErrorCode(TextChoices):

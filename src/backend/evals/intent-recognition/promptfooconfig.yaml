@@ -25,4 +25,5 @@ tests:
   - file://tests/regression-incidents.yaml
   - file://tests/context-boundaries.yaml
   - file://tests/nested-extension-fields.yaml
+  - file://tests/extension-type-operators.yaml
   - file://tests/invalid-conditions.yaml

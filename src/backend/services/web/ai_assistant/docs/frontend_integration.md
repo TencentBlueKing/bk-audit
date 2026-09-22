@@ -232,7 +232,7 @@ sequenceDiagram
 
 派生消息独立收敛状态：SYSTEM_SELECTION 或 LOG_SEARCH 执行失败时，已完成规划的 USER_INTENT 仍为 SUCCESS；前端读取失败派生消息顶层 `error_code/error_message` 并提供重试。AIDev 超时、服务异常或未捕获的程序异常会使 USER_INTENT 顶层为 FAILED；计划解析或确定性校验错误在任务内耗尽重试后，以 USER_INTENT SUCCESS + `output_data.error` 返回。
 
-LOG_SEARCH 执行阶段发现字段、操作符或筛选值不符合契约时，派生消息顶层返回 `AI_OUTPUT_INVALID`；执行前权限发生变化时返回 `PERMISSION_DENIED`。这两类 `error_message` 均为后端控制的可展示文案，前端按 `error_code` 区分“修改条件”和“检查权限”，不要统一提示为系统异常。
+LOG_SEARCH 执行阶段发现字段、操作符或筛选值不符合契约时，派生消息顶层返回 `INVALID_CONDITION`；执行前权限发生变化时返回 `PERMISSION_DENIED`。这两类 `error_message` 均为后端控制的可展示文案，前端按 `error_code` 区分“修改条件”和“检查权限”，不要统一提示为系统异常。
 
 USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后端控制并脱敏，可直接展示，但不能用文案判断错误类型：
 
@@ -242,8 +242,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 | `SYSTEM_REQUIRED` | 已识别为检索，但当前没有已选系统，用户也没有提供足够的系统信息 | 展示 candidates 供用户选择；为空时提示切换范围或申请权限 |
 | `SYSTEM_UNAVAILABLE` | AI 选择的目标不在本次候选范围；不推断是场景外、无权限还是不存在 | 展示后端文案和 candidates，引导切换场景或重新选择 |
 | `INVALID_CONDITION` | 已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达 | 保留原输入并提示用户修改条件，不创建派生消息 |
-| `QUERY_NOT_RECOGNIZED` | 系统已确定，但未得到有效检索条件 | 展示提示，让用户补充字段、值或时间范围 |
-| `AI_OUTPUT_PARSE_FAILED` / `AI_OUTPUT_INVALID` | AI 输出无法按协议解析或条件不合法 | 展示通用识别失败提示，允许用户换一种描述 |
+| `AI_OUTPUT_INVALID` | AI 输出无法按 MessagePlan 协议解析 | 展示通用识别失败提示，允许用户重试或换一种描述 |
 | `PERMISSION_DENIED` | 执行条件识别时权限校验未通过 | 展示权限提示，不展示受限系统或数据详情 |
 
 例如目标系统不在当前场景候选范围时，消息仍是业务处理完成的 `SUCCESS`：
