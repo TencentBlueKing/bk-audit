@@ -339,6 +339,7 @@
     SYSTEM_UNAVAILABLE: '暂无权限',
     UNRECOGNIZED_INTENT: '未能理解当前意图',
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
+    INVALID_CONDITION: '检索条件无法表达',
     AT_OUTPUT_PARSE_FAILED: '检索条件解析失败',
     AT_OUTPUT_INVALID: '检索条件无效',
     AI_OUTPUT_PARSE_FAILED: '检索条件解析失败',
@@ -354,6 +355,7 @@
     SYSTEM_UNAVAILABLE: '暂无权限查询此数据，请联系场景管理员',
     UNRECOGNIZED_INTENT: '请换一种描述方式重新发送',
     QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
+    INVALID_CONDITION: '请修改条件后重新发送',
     AT_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
     AT_OUTPUT_INVALID: '请修改描述后重试',
     AI_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
@@ -430,6 +432,7 @@
   const showRecognitionSuggestions = (code: string) => (
     code === 'UNRECOGNIZED_INTENT'
     || code === 'QUERY_NOT_RECOGNIZED'
+    || code === 'INVALID_CONDITION'
     || code === 'AT_OUTPUT_INVALID'
     || code === 'AI_OUTPUT_INVALID'
   );
@@ -438,6 +441,7 @@
    * 业务错误且无派生消息时可「编辑后重发」（产品约定：填回输入框后 POST 新意图，非 PATCH）。
    * 已有 derived_messages 的意图不可编辑原文。
    * SYSTEM_UNAVAILABLE / PERMISSION_DENIED 为权限提示，不提供重发。
+   * INVALID_CONDITION：保留原输入，引导用户修改条件后重发。
    */
   const showRecognitionResend = (code: string, msg: ChatMessage) => {
     if (msg.hasDerivedMessages) return false;
@@ -450,6 +454,7 @@
       || code === 'LOG_SEARCH_CHAIN_TIMEOUT'
       || code === 'UNRECOGNIZED_INTENT'
       || code === 'QUERY_NOT_RECOGNIZED'
+      || code === 'INVALID_CONDITION'
       || code === 'AT_OUTPUT_INVALID'
       || code === 'AI_OUTPUT_INVALID'
     );
