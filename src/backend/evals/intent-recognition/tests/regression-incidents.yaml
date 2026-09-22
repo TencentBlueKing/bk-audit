@@ -63,9 +63,9 @@
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "error" && d.messages.length === 0 && d.error_code === "SYSTEM_REQUIRED" && d.intent === "log_search" && d.system_id === "" && d.condition === null && d.error !== null && d.error.error_code === "SYSTEM_REQUIRED"'
 
-# ---- 同名候选回归场景：同名歧义 ----
-# 候选同名且无描述差异时没有确定性依据，允许要求用户补充系统，也允许任选同名授权候选。
-- description: '回归-同名歧义：两候选 name 均为示例审计系统，查最近七天的数据（不强制具体 ID）'
+# ---- 同名候选回归场景：按候选顺序稳定选择 ----
+# 候选同名且无描述差异时，授权系统列表顺序就是兜底选择优先级。
+- description: '回归-同名歧义：两候选 name 相同，最近七天查询选择第一个'
   vars:
     query: '查询示例审计系统最近七天的数据'
     current_system_id: ''
@@ -79,9 +79,9 @@
       - {system_id: 'eval_ops_base_system', name: '示例基础系统'}
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); const selected = d.outcome === "dispatch" && ["eval_audit_primary","eval_audit_shadow"].includes(d.system_id) && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]); const asks = d.outcome === "error" && d.error_code === "SYSTEM_REQUIRED" && d.messages.length === 0; d.status === "success" && (selected || asks)'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"])'
 
-- description: '回归-同名歧义：两候选 name 均为示例审计系统，查最近一个月数据（不强制具体 ID）'
+- description: '回归-同名歧义：两候选 name 相同，按候选顺序选择第一个'
   vars:
     query: '查询示例审计系统最近一个月eval_user_regression的数据'
     current_system_id: ''
@@ -95,7 +95,7 @@
       - {system_id: 'eval_ops_base_system', name: '示例基础系统'}
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); const selected = d.outcome === "dispatch" && ["eval_audit_primary","eval_audit_shadow"].includes(d.system_id) && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]); const asks = d.outcome === "error" && d.error_code === "SYSTEM_REQUIRED" && d.messages.length === 0; d.status === "success" && (selected || asks)'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"])'
 
 - description: '回归-近名歧义：影子候选 name 为「示例审计系统（影子）」变体时仍选本体'
   vars:

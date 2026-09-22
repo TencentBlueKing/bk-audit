@@ -326,10 +326,25 @@ PlannedMessage = Annotated[
 class MessagePlan(BaseModel):
     """通用消息规划 Agent 的输出契约，一期最多生成系统选择和日志检索两条消息。"""
 
-    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行消息计划，error 表示业务上无法形成计划")
-    messages: List[PlannedMessage] = Field(default_factory=list, max_length=2, description="按执行顺序排列的业务消息")
-    error_code: Optional[Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE"]] = Field(
-        default=None, description="outcome=error 时必填的稳定业务错误码"
+    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行 messages；error 表示业务意图已完成判断但无法形成可执行计划")
+    messages: List[PlannedMessage] = Field(
+        default_factory=list,
+        max_length=2,
+        description=(
+            "outcome=dispatch 时按执行顺序填写；只允许 [SYSTEM_SELECTION]、[LOG_SEARCH]、"
+            "[SYSTEM_SELECTION, LOG_SEARCH] 三种序列。outcome=error 时必须为空"
+        ),
+    )
+    error_code: Optional[
+        Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE", "INVALID_CONDITION"]
+    ] = Field(
+        default=None,
+        description=(
+            "outcome=error 时必填：UNRECOGNIZED_INTENT 表示输入与系统选择、日志检索无关；"
+            "SYSTEM_REQUIRED 表示检索需要系统，但用户没有提供足够信息且当前没有已选系统；"
+            "SYSTEM_UNAVAILABLE 表示用户明确指向的系统不在当前可选系统中；"
+            "INVALID_CONDITION 表示已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达"
+        ),
     )
 
     @model_validator(mode="after")

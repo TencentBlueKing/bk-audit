@@ -206,7 +206,7 @@ class UserIntentErrorSchema(MessageSchema):
 
     error_code: str = Field(
         description=(
-            "稳定业务错误码。编排类：UNRECOGNIZED_INTENT、SYSTEM_REQUIRED、SYSTEM_UNAVAILABLE；"
+            "稳定业务错误码。编排类：UNRECOGNIZED_INTENT、SYSTEM_REQUIRED、SYSTEM_UNAVAILABLE、INVALID_CONDITION；"
             "条件识别类：QUERY_NOT_RECOGNIZED、AI_OUTPUT_PARSE_FAILED、AI_OUTPUT_INVALID、PERMISSION_DENIED。"
             "前端必须按错误码选择交互，不得解析错误文案。"
         )

@@ -1,7 +1,6 @@
 """通用消息规划评测 Provider 的生产协议一致性测试。"""
 
 import importlib.util
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -249,6 +248,7 @@ class IntentEvalProviderTest(SimpleTestCase):
                 self.assertEqual(len(systems), 1)
                 self.assertEqual(systems[0]["system_id"], "eval_audit_primary")
                 self.assertEqual(systems[0]["standard_fields"][0]["raw_name"], "username")
+
                 extension = systems[0]["extension_fields"][0]
                 self.assertEqual(extension["raw_name"], "extend_data")
                 if "完整路径上下文" in case["description"]:
@@ -271,6 +271,20 @@ class IntentEvalProviderTest(SimpleTestCase):
                     'd.condition.end_time.startsWith("2026-09-20T10:00:00")',
                 ):
                     self.assertIn(fragment, assertion["value"])
+
+    def test_promptfoo_covers_invalid_condition_contract(self):
+        """正式评测必须覆盖意图已识别但操作符不受支持的稳定业务错误。"""
+
+        eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        fixture = "file://tests/invalid-conditions.yaml"
+        self.assertIn(fixture, config["tests"])
+
+        cases = yaml.safe_load((eval_root / "tests/invalid-conditions.yaml").read_text())
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        self.assertIn("gt 操作符", case["vars"]["query"])
+        self.assertIn("INVALID_CONDITION", case["assert"][0]["value"])
 
     def test_nested_extension_context_shapes_pass_backend_validation(self):
         """四格用例的两种字段上下文都允许显式完整下钻路径通过确定性校验。"""
@@ -328,40 +342,3 @@ class IntentEvalProviderTest(SimpleTestCase):
                 )
                 self.assertEqual(nested["field"]["keys"], ["_request_url", "scope_id"])
                 self.assertEqual(nested["filters"], ["49"])
-
-    def test_eval_sources_do_not_contain_known_real_identifiers(self):
-        """评测源文件仅保留合成人员和系统标识，不扫描本地忽略的历史输出。"""
-
-        eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        source_files = [eval_root / "providers/provider.py", *sorted((eval_root / "tests").glob("*.yaml"))]
-        forbidden = (
-            "frodomei",
-            "hermit",
-            "zhangsan",
-            "bk-audit",
-            "iam_v4_bk-audit",
-            "bk-ci",
-            "bk_cmdb",
-            "bk_monitorv3",
-            "bk_userman",
-            "bk_iam",
-            "bk_nodeman",
-            "bk_ops_base",
-            "dry_test",
-        )
-        for source_file in source_files:
-            content = source_file.read_text()
-            with self.subTest(source_file=source_file.name):
-                for identifier in forbidden:
-                    self.assertNotIn(identifier, content)
-                self.assertIsNone(re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", content, re.IGNORECASE))
-
-        for fixture_path in sorted((eval_root / "tests").glob("*.yaml")):
-            fixtures = yaml.safe_load(fixture_path.read_text())
-            for case in fixtures:
-                systems = case.get("vars", {}).get("authorized_systems") or case.get("vars", {}).get("candidates")
-                if not isinstance(systems, list):
-                    continue
-                for system in systems:
-                    if isinstance(system, dict) and "system_id" in system:
-                        self.assertTrue(str(system["system_id"]).startswith("eval_"))

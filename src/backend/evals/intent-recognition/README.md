@@ -13,7 +13,7 @@
 7. 相似系统名、提示注入、多值条件和扩展字段场景保持稳定。
 8. 用户明确表达多级拓展路径时，Agent 能基于公共 `extend_data` 容器生成 `extend_data + keys` 条件，并在“完整路径已发现”和“仅父节点及样例已发现”两类目标系统快照上通过后端校验。
 
-Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的专属字段、拓展字段和样例会进入 Agent 上下文。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗。
+Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的字段差异和拓展字段受控样例会进入 Agent 上下文，普通标准字段运行时样例不进入 Prompt。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗；`tests/invalid-conditions.yaml` 验证意图已识别但操作符不受支持时稳定返回 `INVALID_CONDITION`。
 
 评测分为两个 profile：
 
