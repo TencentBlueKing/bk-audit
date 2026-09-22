@@ -1,4 +1,4 @@
-from services.web.ai_assistant.constants import MessageType
+from services.web.ai_assistant.constants import AttachmentType, MessageType
 from services.web.ai_assistant.handlers import (
     AttachmentTypeHandler,
     MessageTypeHandler,
@@ -21,7 +21,17 @@ MESSAGE_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
         test_case_path="tests.test_ai_assistant.production_handler_contract_cases.LogSearchHandlerContract"
     ),
 }
-ATTACHMENT_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {}
+ATTACHMENT_HANDLER_CONTRACTS: dict[str, HandlerContractSpec] = {
+    AttachmentType.AI_STATISTICS: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.test_audit_statistics_task.AIStatisticsTaskTest"
+    ),
+    AttachmentType.FIELD_STATISTICS: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.test_audit_statistics_task.FieldStatisticsTaskTest"
+    ),
+    AttachmentType.AI_ANALYSIS: HandlerContractSpec(
+        test_case_path="tests.test_ai_assistant.test_audit_analysis_task.AIAnalysisTaskTest"
+    ),
+}
 
 _CAPTURED_MESSAGE_HANDLERS: dict[str, MessageTypeHandler] | None = None
 _CAPTURED_ATTACHMENT_HANDLERS: dict[str, AttachmentTypeHandler] | None = None

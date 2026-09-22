@@ -6,13 +6,16 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
 from amqp.exceptions import ChannelError
 from blueapps.core.celery import celery_app
+from celery import signals
 from django.conf import settings
+from django.db import connections
+from django_redis import get_redis_connection
 
 from tests.test_ai_assistant.celery_integration import _reset_broker_pools
 
@@ -21,6 +24,78 @@ SPECIAL_HANDLERS_ENV = "BKAPP_AI_ASSISTANT_SPECIAL_HANDLERS"
 SPECIAL_QUEUE_ENV = "BKAPP_AI_ASSISTANT_SPECIAL_QUEUE"
 SPECIAL_LOG_DIR_ENV = "BKAPP_AI_ASSISTANT_SPECIAL_LOG_DIR"
 TEST_DATABASE_ENV = "BKAPP_TEST_DATABASE_NAME"
+SPECIAL_TASK_POSTRUN_ENV = "BKAPP_AI_ASSISTANT_SPECIAL_TASK_POSTRUN"
+LOG_ANALYSIS_TASK_NAME = "ai_assistant.execute_log_analysis"
+
+
+def _bind_test_database() -> None:
+    """让独立 Worker 使用 pytest 已创建的 MySQL 测试库。"""
+
+    database_name = os.environ.get(TEST_DATABASE_ENV)
+    if not database_name:
+        return
+    settings.DATABASES["default"]["NAME"] = database_name
+    connections.close_all()
+
+
+_bind_test_database()
+
+
+def process_task_postrun_key(task_id: str) -> str:
+    return f"{settings.CELERY_TEST_QUEUE_PREFIX}:process-task-postrun:{task_id}"
+
+
+def process_task_postrun_observer_key(task_id: str) -> str:
+    return f"{settings.CELERY_TEST_QUEUE_PREFIX}:process-task-postrun-observer:{task_id}"
+
+
+def observe_process_task_postrun(task_id: str) -> None:
+    """显式登记需要跨进程观察的 task，避免普通任务产生测试 Redis key。"""
+
+    get_redis_connection("redis").set(
+        process_task_postrun_observer_key(task_id),
+        "1",
+        ex=int(settings.CELERY_TEST_TASK_TIMEOUT * 2),
+    )
+
+
+def clear_process_task_postrun(task_id: str) -> None:
+    get_redis_connection("redis").delete(
+        process_task_postrun_key(task_id),
+        process_task_postrun_observer_key(task_id),
+    )
+
+
+def wait_for_process_task_postrun(*, task_id: str, expected_count: int) -> list[str]:
+    """等待独立 Worker 中同一 task ID 的执行全部退出。"""
+
+    client = get_redis_connection("redis")
+    key = process_task_postrun_key(task_id)
+    deadline = time.monotonic() + settings.CELERY_TEST_TASK_TIMEOUT
+    while time.monotonic() < deadline:
+        states = client.lrange(key, 0, -1)
+        if len(states) >= expected_count:
+            return [value.decode() if isinstance(value, bytes) else str(value) for value in states]
+        time.sleep(0.05)
+    raise AssertionError(
+        f"等待独立 Worker task_postrun 超时: task_id={task_id}, " f"expected={expected_count}, observed={client.llen(key)}"
+    )
+
+
+@signals.task_postrun.connect(weak=False)
+def record_process_task_postrun(*, sender=None, task_id=None, state=None, **kwargs) -> None:
+    """将生产日志分析 Task 的进程内退出信号写入测试 Redis。"""
+
+    if not os.environ.get(SPECIAL_TASK_POSTRUN_ENV):
+        return
+    if not task_id or getattr(sender, "name", "") != LOG_ANALYSIS_TASK_NAME:
+        return
+    client = get_redis_connection("redis")
+    if not client.get(process_task_postrun_observer_key(task_id)):
+        return
+    key = process_task_postrun_key(task_id)
+    client.rpush(key, state or "")
+    client.expire(key, int(settings.CELERY_TEST_TASK_TIMEOUT * 2))
 
 
 def sanitize_special_worker_log_lines(lines: list[str]) -> list[str]:
@@ -166,16 +241,36 @@ def _wait_until_ready(process: subprocess.Popen[str], *, queue_name: str, logs: 
 
 
 @contextmanager
-def running_worker_process(*, queue_name: str) -> Iterator[subprocess.Popen[str]]:
-    """启动 solo Worker 子进程，等待 ready 后交给调用方；退出时回收进程组。"""
+def running_worker_process(
+    *,
+    queue_name: str,
+    include_modules: tuple[str, ...] = ("tests.test_ai_assistant.special_handlers",),
+    extra_env: Mapping[str, str] | None = None,
+    enable_special_handlers: bool = True,
+    pool: str = "solo",
+    concurrency: int = 1,
+    log_scene: str = "worker-redelivery",
+    observe_task_postrun: bool = False,
+) -> Iterator[subprocess.Popen[str]]:
+    """启动可选择生产或专项 Task 的独立 Worker，并在退出时回收进程组。"""
 
     env = os.environ.copy()
     env["BKAPP_CELERY_BROKER_URL"] = settings.CELERY_TEST_BROKER_URL
     env[TEST_DATABASE_ENV] = settings.DATABASES["default"]["NAME"]
-    env[SPECIAL_HANDLERS_ENV] = "1"
+    if enable_special_handlers:
+        env[SPECIAL_HANDLERS_ENV] = "1"
+    else:
+        env.pop(SPECIAL_HANDLERS_ENV, None)
     env[SPECIAL_QUEUE_ENV] = queue_name
     env["PYTHONUNBUFFERED"] = "1"
+    if observe_task_postrun:
+        env[SPECIAL_TASK_POSTRUN_ENV] = "1"
+    else:
+        env.pop(SPECIAL_TASK_POSTRUN_ENV, None)
     env.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+    if extra_env:
+        env.update(extra_env)
+    worker_includes = ("tests.test_ai_assistant.special.process_worker", *include_modules)
     command = [
         sys.executable,
         "-m",
@@ -185,14 +280,14 @@ def running_worker_process(*, queue_name: str) -> Iterator[subprocess.Popen[str]
         "-b",
         settings.CELERY_TEST_BROKER_URL,
         "worker",
-        "--pool=solo",
-        "--concurrency=1",
+        f"--pool={pool}",
+        f"--concurrency={concurrency}",
         "--without-gossip",
         "--without-mingle",
         "--without-heartbeat",
         "--loglevel=INFO",
         f"--queues={queue_name}",
-        "--include=tests.test_ai_assistant.special_handlers",
+        f"--include={','.join(worker_includes)}",
     ]
     process = subprocess.Popen(
         command,
@@ -214,5 +309,5 @@ def running_worker_process(*, queue_name: str) -> Iterator[subprocess.Popen[str]
             ) from sys.exc_info()[1]
         raise
     finally:
-        write_special_worker_log(scene="worker-redelivery", pid=process.pid, lines=logs)
+        write_special_worker_log(scene=log_scene, pid=process.pid, lines=logs)
         _reap_worker_process(process)

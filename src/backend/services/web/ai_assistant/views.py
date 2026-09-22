@@ -23,6 +23,7 @@ from services.web.ai_assistant.resources.conversation import (
     DeleteConversation,
     DeleteConversationGroup,
     GetConversation,
+    ListConversations,
     ListConversationSidebarNodes,
     ListPinnedConversations,
     MoveConversationSidebarNode,
@@ -105,11 +106,14 @@ class ConversationGroupsViewSet(ResourceViewSet):
 
 
 class ConversationsViewSet(ResourceViewSet):
-    """会话生命周期接口。"""
+    """会话生命周期及全量摘要查询接口。"""
+
+    pagination_class = None
 
     lookup_field = "conversation_uid"
     resource_routes = [
         ResourceRoute("POST", CreateConversation),
+        ResourceRoute("GET", ListConversations),
         ResourceRoute("GET", GetConversation, pk_field="conversation_uid"),
         ResourceRoute("PATCH", UpdateConversation, pk_field="conversation_uid"),
         ResourceRoute("DELETE", DeleteConversation, pk_field="conversation_uid"),

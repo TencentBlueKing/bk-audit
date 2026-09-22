@@ -162,8 +162,13 @@ def ready(self):
 - Retry `countdown`/`eta` 小于对应消息或附件的巡检硬失效阈值；
 - 业务异常中不得携带敏感输入或日志正文。
 
-手动重试不重新调用 `prepare()`，而是复用持久化 input/context 快照并投递新 task ID。若权限或
+所有失败异步附件均支持手动重试，不需要 Handler 声明类型开关。手动重试不重新调用
+`prepare()`，而是复用持久化 input/context 快照并投递新 task ID。若权限或
 依赖必须实时检查，应在业务 Task 中执行。
+
+附件 Task 仍返回业务 output 模型或字典供平台校验持久化；`AttachmentExecutionTask`
+在成功持久化后统一向 Celery 返回 `{"status": "SUCCESS"}`，避免任务成功事件携带业务正文。
+调用方通过附件详情接口读取最终输出，不从 Celery 返回值读取产物。
 
 ## 8. 接入测试清单
 

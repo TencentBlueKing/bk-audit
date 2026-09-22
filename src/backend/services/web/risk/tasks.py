@@ -1032,6 +1032,7 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
     queue=RiskAICeleryQueue.RISK_REPORT,
     acks_late=True,
     rate_limit=settings.RENDER_TASK_RATE_LIMIT,
+    time_limit=settings.RENDER_TASK_TIMEOUT,
 )
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量

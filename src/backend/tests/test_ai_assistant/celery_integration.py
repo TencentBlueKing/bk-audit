@@ -99,6 +99,8 @@ def running_celery_worker(*, queue_name: str) -> Iterator[None]:
         with start_worker(
             celery_app,
             pool="threads",
+            # 同进程多Worker会复用旧Hub绑定的timer；线程池使用独立定时线程驱动限流重投。
+            use_eventloop=False,
             concurrency=2,
             queues=[queue_name],
             perform_ping_check=False,

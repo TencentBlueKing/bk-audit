@@ -1,9 +1,12 @@
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from rest_framework import serializers
 
-from core.serializers import FlexibleListField
+from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from services.web.ai_assistant.constants import (
+    ATTACHMENT_DEFAULT_ORDER_FIELDS,
+    ATTACHMENT_LIST_MAX_LIMIT,
     AttachmentExportFormat,
+    AttachmentSortField,
     AttachmentType,
     ExecutionStatus,
     MessageType,
@@ -77,7 +80,11 @@ class AttachmentCreateRequestSerializer(serializers.Serializer):
 
     message_uid = serializers.UUIDField(help_text="来源消息对外 UUID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
-    input_data = AttachmentInputDataField(help_text="由附件类型对应 Pydantic 输入模型校验的业务数据")
+    input_data = AttachmentInputDataField(
+        help_text=(
+            "按外层 attachment_type 选择输入 schema：FIELD_STATISTICS 传 field 及可选 top_n/interval；" "AI_STATISTICS 传 instruction"
+        )
+    )
 
 
 class AttachmentDetailRequestSerializer(serializers.Serializer):
@@ -94,7 +101,7 @@ class AttachmentExportRequestSerializer(serializers.Serializer):
     )
 
 
-class AttachmentListRequestSerializer(serializers.Serializer):
+class AttachmentListRequestSerializer(SortSerializerMixin, serializers.Serializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
 
     attachment_type = FlexibleListField(
@@ -110,6 +117,17 @@ class AttachmentListRequestSerializer(serializers.Serializer):
     keyword = serializers.CharField(required=False, allow_blank=True, help_text="附件标题关键词")
     conversation_uid = serializers.UUIDField(required=False, help_text="所属会话对外 UUID")
     source_message_uid = serializers.UUIDField(required=False, help_text="来源消息对外 UUID")
+    limit = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=ATTACHMENT_LIST_MAX_LIMIT,
+        help_text=f"最多返回的附件数量，范围 1–{ATTACHMENT_LIST_MAX_LIMIT}，不传返回全部匹配附件",
+    )
+    sort = SortListField(
+        allowed_fields=AttachmentSortField.values,
+        default_sort=ATTACHMENT_DEFAULT_ORDER_FIELDS,
+        field_descriptions=dict(AttachmentSortField.choices),
+    )
 
 
 class AttachmentUpdateRequestSerializer(serializers.Serializer):
@@ -157,12 +175,12 @@ class AttachmentResponseSerializer(serializers.Serializer):
     output_data = AttachmentOutputDataField(
         allow_null=True,
         required=False,
-        help_text="附件类型化输出快照",
+        help_text="按 attachment_type 选择输出 schema；SUCCESS 时使用，FIELD_STATISTICS 为固定统计包，AI_STATISTICS 为 content 原文",
     )
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
-    is_stream = serializers.BooleanField(help_text="是否使用流式输出；为真时可订阅流快照与 SSE 接口")
+    is_stream = serializers.BooleanField(help_text="是否支持可选的流式过程；为真也可仅轮询详情获取最终产物")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
         help_text="当前类型支持的后端导出格式",
@@ -219,6 +237,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="附件执行状态")
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
+    error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
+    error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
@@ -237,6 +257,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
             "attachment_type": instance.attachment_type,
             "status": instance.status,
             "title": instance.title,
+            "error_code": instance.error_code,
+            "error_message": instance.error_message,
             "created_at": instance.created_at,
             "content_updated_at": instance.content_updated_at,
             "source_message": {

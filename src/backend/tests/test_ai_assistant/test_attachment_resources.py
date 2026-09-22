@@ -64,16 +64,18 @@ from tests.test_ai_assistant.handlers import (
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
     FeedbackAttachmentEchoHandler,
+    preserve_attachment_handler_registry,
     use_attachment_handler,
 )
 
 
 class AttachmentRequestSerializerTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.message_uid = str(uuid4())
         self.attachment_uid = str(uuid4())
-        attachment_handler_registry.register(EditableAttachmentEchoHandler())
-        attachment_handler_registry.register(EchoAttachmentAsyncHandler())
+        use_attachment_handler(self, EditableAttachmentEchoHandler())
+        use_attachment_handler(self, EchoAttachmentAsyncHandler())
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -249,6 +251,8 @@ class AttachmentRequestSerializerTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "error_code",
+                "error_message",
                 "supports_feedback",
                 "export_formats",
             },
@@ -342,6 +346,29 @@ class AttachmentRequestSerializerTest(TestCase):
             parameter["name"]: parameter
             for parameter in schema["paths"]["/api/v1/ai_assistant/attachments/"]["get"]["parameters"]
         }
+        self.assertEqual(parameters["sort"]["schema"]["type"], "array")
+        self.assertEqual(parameters["limit"]["schema"]["type"], "integer")
+        conversation_list = schema["paths"]["/api/v1/ai_assistant/conversations/"]["get"]
+        self.assertEqual(
+            conversation_list["responses"]["200"]["content"]["application/json"]["schema"]["type"], "array"
+        )
+        self.assertTrue(
+            {"has_attachments", "attachment_type"}.issubset(
+                {parameter["name"] for parameter in conversation_list["parameters"]}
+            )
+        )
+        counts_schema = schema["components"]["schemas"]["ConversationListItem"]["properties"][
+            "attachment_counts_by_type"
+        ]
+        if "allOf" in counts_schema:
+            counts_schema = counts_schema["allOf"][0]
+        if "$ref" in counts_schema:
+            counts_schema = schema["components"]["schemas"][counts_schema["$ref"].rsplit("/", 1)[-1]]
+        self.assertEqual(set(counts_schema["properties"]), set(AttachmentType.values))
+        self.assertEqual(set(counts_schema["required"]), set(AttachmentType.values))
+        for attachment_type in AttachmentType.values:
+            self.assertEqual(counts_schema["properties"][attachment_type]["type"], "integer")
+            self.assertEqual(counts_schema["properties"][attachment_type]["minimum"], 0)
         expected_enums = {
             "attachment_type": set(AttachmentType.values),
             "status": set(ExecutionStatus.values),
@@ -496,13 +523,16 @@ def _map_attachment_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
 
 
 class AttachmentOpenAPIStartupContractTest(SimpleTestCase):
+    def setUp(self):
+        preserve_attachment_handler_registry(self)
+
     def tearDown(self):
         for attachment_type in AttachmentType.values:
             attachment_handler_registry.unregister(attachment_type)
 
     def test_first_openapi_generation_includes_registered_handlers_and_freezes(self):
-        attachment_handler_registry.register(StartupAlphaAttachmentHandler())
-        attachment_handler_registry.register(StartupBetaAttachmentHandler())
+        use_attachment_handler(self, StartupAlphaAttachmentHandler())
+        use_attachment_handler(self, StartupBetaAttachmentHandler())
         input_proxy = PolymorphicProxySerializer(
             component_name="AIAttachmentInputDataStartupGate",
             serializers=lambda: _unique_schema_models(_attachment_schema_mapping("input_model")),
@@ -526,7 +556,7 @@ class AttachmentOpenAPIStartupContractTest(SimpleTestCase):
 
         frozen_input = input_proxy.serializers
         frozen_output = output_proxy.serializers
-        attachment_handler_registry.register(StartupGammaAttachmentHandler())
+        use_attachment_handler(self, StartupGammaAttachmentHandler())
 
         self.assertIs(input_proxy.serializers, frozen_input)
         self.assertIs(output_proxy.serializers, frozen_output)
@@ -543,6 +573,7 @@ class EditableAnalysisAttachmentHandler(EditableAttachmentEchoHandler):
 @mock.patch("services.web.ai_assistant.resources.attachment.get_request_username", return_value="alice")
 class AttachmentResourceTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.conversation = Conversation.objects.create(
             title="查询用户登录日志",
             created_by="alice",
@@ -561,8 +592,8 @@ class AttachmentResourceTest(TestCase):
         )
         self.sync_handler = FeedbackAttachmentEchoHandler()
         self.async_handler = EchoAttachmentAsyncHandler()
-        attachment_handler_registry.register(self.sync_handler)
-        attachment_handler_registry.register(self.async_handler)
+        use_attachment_handler(self, self.sync_handler)
+        use_attachment_handler(self, self.async_handler)
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -720,10 +751,16 @@ class AttachmentResourceTest(TestCase):
                 "content_updated_at",
                 "source_message",
                 "conversation",
+                "error_code",
+                "error_message",
                 "supports_feedback",
                 "export_formats",
             },
         )
+        self.assertEqual(response[0]["error_code"], "OLD_CODE")
+        self.assertEqual(response[0]["error_message"], "old error")
+        self.assertEqual(response[1]["error_code"], "")
+        self.assertEqual(response[1]["error_message"], "")
         self.assertEqual(response[0]["export_formats"], [])
         self.assertNotIn("input_data", response[0])
         self.assertNotIn("output_data", response[0])
@@ -945,6 +982,7 @@ class AttachmentResourceTransactionTest(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.conversation = Conversation.objects.create(
             title="查询用户登录日志",
             created_by="alice",
@@ -962,7 +1000,7 @@ class AttachmentResourceTransactionTest(TransactionTestCase):
             updated_by="alice",
         )
         self.async_handler = EchoAttachmentAsyncHandler()
-        attachment_handler_registry.register(self.async_handler)
+        use_attachment_handler(self, self.async_handler)
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:

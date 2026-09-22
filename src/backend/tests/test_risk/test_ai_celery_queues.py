@@ -2,7 +2,7 @@
 """AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。
 
 助手会话标题与风险报告标题共用 ai_title；意图识别等 Message Task 仍走 default。
-日志分析 / 统计专属队列不在本分支，合入后再补五类互异断言。
+日志分析 / 统计继续使用各自专属队列，与标题、单风险、多风险等队列互不抢占。
 """
 
 from pathlib import Path
@@ -10,11 +10,19 @@ from pathlib import Path
 import yaml
 from django.conf import settings
 
+from services.web.ai_assistant.tasks.audit_analysis import (
+    execute_log_analysis,
+    generate_log_analysis_title,
+)
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
     execute_natural_language_search,
     execute_system_selection,
     execute_user_intent,
+)
+from services.web.ai_assistant.tasks.audit_statistics import (
+    generate_ai_statistics,
+    generate_field_statistics,
 )
 from services.web.ai_assistant.tasks.conversation import generate_conversation_title
 from services.web.risk.constants import RiskAICeleryQueue
@@ -40,10 +48,14 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(generate_analyse_report_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
         self.assertEqual(generate_conversation_title.queue, RiskAICeleryQueue.TITLE)
         self.assertEqual(generate_conversation_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_log_analysis_title.queue, RiskAICeleryQueue.TITLE)
+        self.assertEqual(generate_log_analysis_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_log_analysis_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
         self.assertEqual(generate_conversation_title.queue, generate_analyse_report_title.queue)
         self.assertEqual(generate_conversation_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
         self.assertEqual(generate_conversation_title.time_limit, generate_analyse_report_title.time_limit)
         self.assertTrue(generate_conversation_title.acks_late)
+        self.assertEqual(generate_log_analysis_title.queue, generate_analyse_report_title.queue)
 
     def test_single_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)
@@ -57,6 +69,7 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(render_ai_variable.queue, RiskAICeleryQueue.RISK_REPORT)
         self.assertEqual(render_risk_report.queue, RiskAICeleryQueue.RISK_REPORT)
         self.assertEqual(render_ai_variable.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
+        self.assertEqual(render_ai_variable.time_limit, settings.RENDER_TASK_TIMEOUT)
         self.assertEqual(render_risk_report.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
 
     def test_title_single_and_multi_queues_are_distinct(self):
@@ -64,6 +77,7 @@ class TestAICeleryQueueIsolation(TestCase):
             {
                 generate_analyse_report_title.queue,
                 generate_conversation_title.queue,
+                generate_log_analysis_title.queue,
                 render_template.queue,
                 generate_analyse_report.queue,
                 render_risk_report.queue,
@@ -74,6 +88,24 @@ class TestAICeleryQueueIsolation(TestCase):
                 RiskAICeleryQueue.MULTI_ANALYSE,
                 RiskAICeleryQueue.RISK_REPORT,
             },
+        )
+
+    def test_feature_heavy_tasks_keep_dedicated_queues(self):
+        self.assertEqual(execute_log_analysis.queue, "ai_assistant_log_analysis")
+        self.assertEqual(generate_ai_statistics.queue, "ai_assistant_statistics")
+        self.assertEqual(generate_field_statistics.queue, generate_ai_statistics.queue)
+        self.assertEqual(
+            len(
+                {
+                    RiskAICeleryQueue.TITLE,
+                    RiskAICeleryQueue.SINGLE_ANALYSE,
+                    RiskAICeleryQueue.MULTI_ANALYSE,
+                    RiskAICeleryQueue.RISK_REPORT,
+                    execute_log_analysis.queue,
+                    generate_ai_statistics.queue,
+                }
+            ),
+            6,
         )
 
     def test_message_tasks_stay_off_isolated_ai_queues(self):
@@ -100,6 +132,8 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertIn("-Q risk_single_analyse", content)
         self.assertIn("-Q risk_multi_analyse", content)
         self.assertIn("-Q risk_report", content)
+        self.assertIn("-Q ai_assistant_log_analysis", content)
+        self.assertIn("-Q ai_assistant_statistics", content)
         self.assertIn("BKAPP_AI_TITLE_CONCURRENCY", content)
         self.assertIn("BKAPP_RISK_SINGLE_ANALYSE_CONCURRENCY", content)
         self.assertIn("BKAPP_RISK_MULTI_ANALYSE_CONCURRENCY", content)
