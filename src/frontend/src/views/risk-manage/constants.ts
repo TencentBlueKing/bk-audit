@@ -110,6 +110,12 @@ const RISK_STATUS_FALLBACK_NAME: Record<string, string> = {
   pending_confirm: '待确认',
 };
 
+const PENDING_CONFIRM_STATUSES = new Set(['pending_confirm', 'await_confirm']);
+
+export const isPendingConfirmStatus = (status?: string) => (
+  PENDING_CONFIRM_STATUSES.has(status || '')
+);
+
 export const resolveRiskStatusName = (
   status: string,
   list: Array<{ id: string; name: string }> = [],
