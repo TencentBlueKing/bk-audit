@@ -19,6 +19,7 @@ import { computed, ref } from 'vue';
 import AiAssistantManageService from '@service/ai-assistant-manage';
 
 import type {
+  AiDerivedMessageRef,
   AiMessage,
   AiSearchCondition,
   AiSidebarConversationNode,
@@ -26,6 +27,7 @@ import type {
   AiSidebarNode,
   AiSystemSelectionInput,
   AiUserIntentInput,
+  AiUserIntentOutput,
 } from '@model/ai-assistant/types';
 
 import type {
@@ -43,6 +45,7 @@ import {
   getNlRecognitionError,
   isPureSystemSwitchIntent,
   mapAiMessageToChatMessage,
+  resolveDerivedMessageRefs,
 } from '../utils/map-ai-message';
 
 import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
@@ -82,7 +85,7 @@ const buildSystemSelectionInputData = (systemIds: string[]): AiSystemSelectionIn
 };
 
 const MESSAGE_POLL_INTERVAL_MS = 2000;
-/** 意图 SUCCESS 后等后端续链 LOG_SEARCH：约 60s，兼容合法慢续链 */
+/** 无 derived_messages 时 AFTER 兜底等子 LOG：约 60s */
 const CHILD_LOG_RETRY_TIMES = 30;
 const CHILD_LOG_RETRY_DELAY_MS = 2000;
 /** 超时仍无子消息时写入本地识别错误，结束无限「检索中」 */
@@ -149,7 +152,9 @@ const messageLoadInflight = new Map<string, Promise<void>>();
 const groupLoadInflight = new Map<string, Promise<void>>();
 /** 同一会话标题刷新进行中的 Promise，避免并发叠打 */
 const titleRefreshInflight = new Map<string, Promise<void>>();
-/** 同一 NL uid 拉子 LOG_SEARCH 进行中的 Promise，避免长轮询叠打 */
+/** 同一意图 uid 拉派生消息进行中的 Promise，避免叠打 */
+const derivedHydrateInflight = new Map<string, Promise<AiDerivedMessageRef[]>>();
+/** 同一 NL uid 拉子 LOG_SEARCH 进行中的 Promise（无 derived 时 AFTER 兜底） */
 const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 /** 异步 SYSTEM_SELECTION 成功后补发原始 NL 查询 */
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
@@ -470,6 +475,49 @@ const fetchSelectionMessage = async (
   }
 };
 
+/**
+ * 按 derived_messages（或兼容 uid）并行拉取派生消息并启动轮询。
+ * SYSTEM_SELECTION 与 LOG_SEARCH 互不等待。
+ */
+const hydrateDerivedMessages = async (
+  conversationId: string,
+  intentMessage: AiMessage,
+): Promise<AiDerivedMessageRef[]> => {
+  const output = (intentMessage.output_data || {}) as AiUserIntentOutput;
+  const refs = resolveDerivedMessageRefs(output);
+  if (!refs.length) return [];
+
+  const existing = derivedHydrateInflight.get(intentMessage.uid);
+  if (existing) return existing;
+
+  const task = (async () => {
+    await Promise.all(refs.map(async (ref) => {
+      const detail = await fetchSelectionMessage(conversationId, ref.message_uid);
+      // 协议缺 visible 时，用名单快照兜底（常见：选系统卡隐藏）
+      if (
+        detail
+        && typeof detail.visible !== 'boolean'
+        && typeof ref.visible === 'boolean'
+      ) {
+        upsertConversationMessage(conversationId, detail, { visible: ref.visible });
+      }
+    }));
+    return refs;
+  })();
+
+  derivedHydrateInflight.set(intentMessage.uid, task);
+  try {
+    return await task;
+  } finally {
+    derivedHydrateInflight.delete(intentMessage.uid);
+  }
+};
+
+/** 意图是否期望自动续链 LOG_SEARCH（auto_execute 缺省 true） */
+const shouldAutoExecuteLogSearch = (message: AiMessage) => (
+  message.input_data?.auto_execute !== false
+);
+
 const findStoredConversation = (conversationId: string) => (
   conversations.value.find(c => c.id === conversationId)
   || (draftConversation.value?.id === conversationId ? draftConversation.value : null)
@@ -602,16 +650,44 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
   if (detail.message_type !== 'USER_INTENT' && detail.message_type !== 'NATURAL_LANGUAGE_SEARCH') return;
   const mapped = mapAiMessageToChatMessage(detail);
   if (mapped.type === 'select-system') return;
-  if (detail.status === 'SUCCESS' && !getNlRecognitionError(detail)) {
-    const pureSystemSwitch = isPureSystemSwitchIntent(detail);
-    const selectionMessageUid = String(detail.output_data?.selection_message_uid || '');
-    if (selectionMessageUid) {
-      // 是否展示卡片由消息顶层 visible 决定
-      await fetchSelectionMessage(conversationId, selectionMessageUid);
+  if (detail.status !== 'SUCCESS' || getNlRecognitionError(detail)) return;
+
+  const pureSystemSwitch = isPureSystemSwitchIntent(detail);
+  const derivedRefs = await hydrateDerivedMessages(conversationId, detail);
+  const hasDerivedLogSearch = derivedRefs.some(item => item.message_type === 'LOG_SEARCH');
+
+  // 已有派生名单：信任后端，不再长 AFTER 翻找；子消息各自 poll
+  if (derivedRefs.length) {
+    // auto_execute=false 且名单里没有 LOG_SEARCH：只展示条件 / 选系统，等用户确认后再手动建检索
+    if (!shouldAutoExecuteLogSearch(detail) && !hasDerivedLogSearch) {
+      return;
     }
-    if (!pureSystemSwitch) {
-      await ensureChildLogSearch(conversationId, detail.uid);
+    const conv = findStoredConversation(conversationId);
+    const hasChild = conv?.messages.some(item => (
+      item.messageType === 'LOG_SEARCH' && item.parentMessageUid === detail.uid
+    ));
+    if (hasDerivedLogSearch) {
+      // 名单声明了 LOG_SEARCH 但拉取失败时，短兜底一次，避免漏卡
+      if (!hasChild) {
+        await ensureChildLogSearch(conversationId, detail.uid, { maxAttempts: 5 });
+      }
+      return;
     }
+    // 名单只有选系统、但意图带 condition 且 auto_execute：过渡期短 AFTER 兜底
+    if (
+      !pureSystemSwitch
+      && shouldAutoExecuteLogSearch(detail)
+      && Boolean((detail.output_data as AiUserIntentOutput | undefined)?.condition)
+      && !hasChild
+    ) {
+      await ensureChildLogSearch(conversationId, detail.uid, { maxAttempts: 5 });
+    }
+    return;
+  }
+
+  // 无 derived / 兼容 uid：旧协议 AFTER 兜底（纯切系统不找 LOG）
+  if (!pureSystemSwitch && shouldAutoExecuteLogSearch(detail)) {
+    await ensureChildLogSearch(conversationId, detail.uid);
   }
 };
 
@@ -717,23 +793,45 @@ const applyMessageWindow = (conv: Conversation, windowData: {
 
   resumeProcessingPolls(conv.id, windowData.results);
 
-  // 历史里若已有 SUCCESS 的 NL 但尚未带上子 LOG，补拉一次（识别失败 / 纯切系统除外）
+  // 历史里 SUCCESS 的意图：优先 hydrate derived；无名单时再短 AFTER 兜底
   windowData.results.forEach((message) => {
-    if ((message.message_type === 'USER_INTENT' || message.message_type === 'NATURAL_LANGUAGE_SEARCH')
-      && message.status === 'SUCCESS'
-      && !getNlRecognitionError(message)
-      && !isPureSystemSwitchIntent(message)) {
-      const mappedMessage = mapAiMessageToChatMessage(message);
-      if (mappedMessage.type === 'select-system') return;
-      const hasChild = windowData.results.some(item => (
-        item.message_type === 'LOG_SEARCH' && item.parent_message_uid === message.uid
-      )) || conv.messages.some(item => (
-        item.messageType === 'LOG_SEARCH' && item.parentMessageUid === message.uid
+    if ((message.message_type !== 'USER_INTENT' && message.message_type !== 'NATURAL_LANGUAGE_SEARCH')
+      || message.status !== 'SUCCESS'
+      || getNlRecognitionError(message)
+      || isPureSystemSwitchIntent(message)) {
+      return;
+    }
+    const mappedMessage = mapAiMessageToChatMessage(message);
+    if (mappedMessage.type === 'select-system') return;
+
+    const derivedRefs = resolveDerivedMessageRefs((message.output_data || {}) as AiUserIntentOutput);
+    if (derivedRefs.length) {
+      const missing = derivedRefs.some(ref => (
+        !windowData.results.some(item => item.uid === ref.message_uid)
+        && !conv.messages.some(item => item.id === ref.message_uid)
       ));
-      if (!hasChild) {
-        // 历史窗口补拉：短等即可；实时续链走默认约 60s
-        void ensureChildLogSearch(conv.id, message.uid, { maxAttempts: 5 });
+      if (missing) {
+        void hydrateDerivedMessages(conv.id, message);
+      } else {
+        // 窗口已带派生消息时，对仍 PROCESSING 的补轮询（resumeProcessingPolls 已覆盖）
+        derivedRefs.forEach((ref) => {
+          const raw = windowData.results.find(item => item.uid === ref.message_uid);
+          if (raw?.status === 'PROCESSING') {
+            startMessagePoll(conv.id, raw.uid);
+          }
+        });
       }
+      return;
+    }
+
+    if (!shouldAutoExecuteLogSearch(message)) return;
+    const hasChild = windowData.results.some(item => (
+      item.message_type === 'LOG_SEARCH' && item.parent_message_uid === message.uid
+    )) || conv.messages.some(item => (
+      item.messageType === 'LOG_SEARCH' && item.parentMessageUid === message.uid
+    ));
+    if (!hasChild) {
+      void ensureChildLogSearch(conv.id, message.uid, { maxAttempts: 5 });
     }
   });
 };
@@ -1311,20 +1409,29 @@ export function useSecChatStore() {
   /**
    * 新协议下首页先创建真实会话，再按需发送 USER_INTENT。
    * 进行中复用同一 Promise，避免欢迎页连点重复建会话。
+   * @param groupUid 分组内新建时直接挂入，避免建完再 move
    */
-  const createLogConversation = async (options?: { showInitialSelectSystem?: boolean }) => {
+  const createLogConversation = async (options?: {
+    showInitialSelectSystem?: boolean;
+    groupUid?: string;
+  }) => {
     if (createLogConversationInflight) {
       return createLogConversationInflight;
     }
     createLogConversationInflight = (async () => {
       const created = await AiAssistantManageService.createConversation({
         title: DEFAULT_CONVERSATION_TITLE,
+        ...(options?.groupUid ? { group_uid: options.groupUid } : {}),
       });
+      const groupName = options?.groupUid
+        ? groups.value.find(g => g.id === options.groupUid)?.name
+        : undefined;
       const conversation = createEmptyConversation({
         id: created.uid,
         title: created.title || DEFAULT_CONVERSATION_TITLE,
         pinned: false,
         sceneType: 'log',
+        ...(groupName ? { groupName } : {}),
         messages: options?.showInitialSelectSystem === false ? [] : [createPendingSelectSystemMessage(created.uid)],
         messagesHydrated: true,
         createdAt: created.created_at ? Date.parse(created.created_at) || Date.now() : Date.now(),
@@ -1333,6 +1440,9 @@ export function useSecChatStore() {
       conversations.value.unshift(conversation);
       activeConversationId.value = conversation.id;
       await initSidebar();
+      if (options?.groupUid) {
+        await loadGroupConversations(options.groupUid, { force: true });
+      }
       return conversation;
     })().finally(() => {
       createLogConversationInflight = null;
@@ -1464,7 +1574,7 @@ export function useSecChatStore() {
   };
 
   /**
-   * 自然语言检索：POST NL → PROCESSING 轮询 → SUCCESS 后 AFTER 拉子 LOG_SEARCH。
+   * 自然语言检索：POST USER_INTENT → PROCESSING 轮询 → SUCCESS 后按 derived_messages 并行拉派生消息。
    */
   const sendLogQuery = async (
     content: string,
