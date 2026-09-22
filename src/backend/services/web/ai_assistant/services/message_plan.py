@@ -414,12 +414,17 @@ class MessagePlanExecutionService:
             UserIntentErrorCode.UNRECOGNIZED_INTENT: "未能理解您的需求，请描述要查询的系统或日志内容",
             UserIntentErrorCode.SYSTEM_REQUIRED: "请明确要查询哪个系统的日志",
             UserIntentErrorCode.SYSTEM_UNAVAILABLE: "目标系统不在当前可用系统范围内，请重新选择系统",
+            UserIntentErrorCode.INVALID_CONDITION: "检索条件暂不支持，请调整字段、操作符或条件值",
+        }
+        include_candidates = error_code in {
+            UserIntentErrorCode.SYSTEM_REQUIRED,
+            UserIntentErrorCode.SYSTEM_UNAVAILABLE,
         }
         return UserIntentOutputSchema(
             intent="unrecognized" if error_code == UserIntentErrorCode.UNRECOGNIZED_INTENT else "log_search",
             error=UserIntentErrorSchema(
                 error_code=str(error_code),
                 error_message=messages.get(error_code, "未能生成可执行的消息，请换一种描述"),
-                candidates=candidates,
+                candidates=candidates if include_candidates else [],
             ),
         )

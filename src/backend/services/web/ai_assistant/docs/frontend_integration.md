@@ -239,8 +239,9 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 | `output_data.error.error_code` | 含义 | 建议前端动作 |
 | --- | --- | --- |
 | `UNRECOGNIZED_INTENT` | 无法识别为系统选择或日志检索 | 展示提示，保留输入框让用户补充需求 |
-| `SYSTEM_REQUIRED` | 已识别为检索，但未指定系统，或明确提到的系统无法唯一确定 | 展示 candidates 供用户选择；为空时提示切换范围或申请权限 |
+| `SYSTEM_REQUIRED` | 已识别为检索，但当前没有已选系统，用户也没有提供足够的系统信息 | 展示 candidates 供用户选择；为空时提示切换范围或申请权限 |
 | `SYSTEM_UNAVAILABLE` | AI 选择的目标不在本次候选范围；不推断是场景外、无权限还是不存在 | 展示后端文案和 candidates，引导切换场景或重新选择 |
+| `INVALID_CONDITION` | 已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达 | 保留原输入并提示用户修改条件，不创建派生消息 |
 | `QUERY_NOT_RECOGNIZED` | 系统已确定，但未得到有效检索条件 | 展示提示，让用户补充字段、值或时间范围 |
 | `AI_OUTPUT_PARSE_FAILED` / `AI_OUTPUT_INVALID` | AI 输出无法按协议解析或条件不合法 | 展示通用识别失败提示，允许用户换一种描述 |
 | `PERMISSION_DENIED` | 执行条件识别时权限校验未通过 | 展示权限提示，不展示受限系统或数据详情 |

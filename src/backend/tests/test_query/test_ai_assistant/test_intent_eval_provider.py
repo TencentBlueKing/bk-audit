@@ -248,6 +248,7 @@ class IntentEvalProviderTest(SimpleTestCase):
                 self.assertEqual(len(systems), 1)
                 self.assertEqual(systems[0]["system_id"], "eval_audit_primary")
                 self.assertEqual(systems[0]["standard_fields"][0]["raw_name"], "username")
+
                 extension = systems[0]["extension_fields"][0]
                 self.assertEqual(extension["raw_name"], "extend_data")
                 if "完整路径上下文" in case["description"]:
@@ -270,6 +271,20 @@ class IntentEvalProviderTest(SimpleTestCase):
                     'd.condition.end_time.startsWith("2026-09-20T10:00:00")',
                 ):
                     self.assertIn(fragment, assertion["value"])
+
+    def test_promptfoo_covers_invalid_condition_contract(self):
+        """正式评测必须覆盖意图已识别但操作符不受支持的稳定业务错误。"""
+
+        eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        fixture = "file://tests/invalid-conditions.yaml"
+        self.assertIn(fixture, config["tests"])
+
+        cases = yaml.safe_load((eval_root / "tests/invalid-conditions.yaml").read_text())
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        self.assertIn("gt 操作符", case["vars"]["query"])
+        self.assertIn("INVALID_CONDITION", case["assert"][0]["value"])
 
     def test_nested_extension_context_shapes_pass_backend_validation(self):
         """四格用例的两种字段上下文都允许显式完整下钻路径通过确定性校验。"""

@@ -182,29 +182,22 @@ def _serialize_current_system_detail(
     current_system: SelectionSystem | None,
     common_fields: list[SelectionFieldMeta],
 ) -> dict | None:
-    """只表达当前系统相对公共字段的差异、拓展字段和受控样例。"""
+    """只表达当前系统相对公共字段的差异，以及路径探索需要的拓展字段样例。"""
 
     if current_system is None:
         return None
     common_definitions = {field.raw_name: _field_definition(field) for field in common_fields}
     field_overrides = []
-    field_samples = []
     for field in current_system.standard_fields:
         definition = _field_definition(field)
         if common_definitions.get(field.raw_name) != definition:
             field_overrides.append(definition)
-        serialized = _serialize_planning_field(field)
-        if "sample_value" in serialized:
-            field_samples.append(
-                {key: serialized[key] for key in ("raw_name", "sample_value", "sample_value_meta") if key in serialized}
-            )
     return {
         "system_id": current_system.system_id,
         "name": current_system.name,
         "description": current_system.description[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
         "field_overrides": field_overrides,
         "extension_fields": [_serialize_planning_field(field) for field in current_system.extension_fields],
-        "field_samples": field_samples,
     }
 
 
@@ -430,7 +423,7 @@ class MessagePlanningService:
     )
 
     _PHASE_DECISION_RULES = {
-        "SYSTEM_UNSELECTED": "当前会话没有有效系统；无法从用户原话确定授权系统时返回 SYSTEM_REQUIRED",
+        "SYSTEM_UNSELECTED": "当前会话没有有效系统；用户未提供可匹配系统时返回 SYSTEM_REQUIRED",
         "SYSTEM_SELECTED": "用户未点名其他系统的检索默认使用 current_system_id",
     }
 

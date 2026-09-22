@@ -88,6 +88,17 @@ class MessagePlanSchemaTest(AIAssistantTestCase):
                 }
             )
 
+    def test_invalid_condition_is_a_supported_business_error(self):
+        """已识别检索意图但条件无法表达时，Schema 提供稳定业务分支。"""
+
+        plan = MessagePlan.model_validate({"outcome": "error", "messages": [], "error_code": "INVALID_CONDITION"})
+
+        self.assertEqual(plan.error_code, "INVALID_CONDITION")
+        schema = MessagePlan.model_json_schema()
+        error_description = schema["properties"]["error_code"]["description"]
+        self.assertIn("INVALID_CONDITION", error_description)
+        self.assertIn("字段、操作符或条件值", error_description)
+
 
 @mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
 class MessagePlanningContextTest(AIAssistantTestCase):
@@ -149,11 +160,11 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         self.assertEqual(request["chat_history"][1]["role"], "user")
         self.assertTrue(request["execute_kwargs"]["thread_id"].startswith("intent-planning-"))
         user_message = request["chat_history"][1]["content"]
-        self.assertIn("# 用户原话", user_message)
-        self.assertIn("# 会话状态", user_message)
-        self.assertIn("# 授权系统摘要", user_message)
-        self.assertIn("# 公共标准字段", user_message)
-        self.assertIn("# 当前系统详情", user_message)
+        self.assertIn("# 本轮用户输入", user_message)
+        self.assertIn("# 当前会话状态", user_message)
+        self.assertIn("# 当前可选系统（按选择优先级排序）", user_message)
+        self.assertIn("# 日志检索公共字段", user_message)
+        self.assertIn("# 当前已选系统字段上下文", user_message)
         self.assertIn('"system_id": "bk-audit"', user_message)
         self.assertIn('"system_id": "bcs"', user_message)
         self.assertIn('"raw_name": "action_id"', user_message)
@@ -173,15 +184,20 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         self.assertIn('"PlannedLogSearchMessage"', system_prompt)
         self.assertIn("SYSTEM_UNSELECTED", system_prompt)
         self.assertIn("SYSTEM_SELECTED", system_prompt)
-        self.assertIn("唯一候选", system_prompt)
+        self.assertIn("error_code=SYSTEM_REQUIRED、messages=[]", system_prompt)
+        self.assertIn("候选系统的数量不改变这条规则", system_prompt)
+        self.assertIn('"error_code":"SYSTEM_REQUIRED"', system_prompt)
+        self.assertIn("顺序最靠前", system_prompt)
+        self.assertIn("即使当前只有一个候选，也不得自动选择", system_prompt)
         self.assertIn("未指定时间时默认最近一天", system_prompt)
         self.assertIn("raw_name 固定为 extend_data", system_prompt)
         self.assertIn("每个检索条件都必须完整保留", system_prompt)
+        self.assertIn("INVALID_CONDITION", system_prompt)
 
     def test_system_prompt_is_generic_message_planner(self, mock_chat):
         self.assertIn("消息决策", MessagePlanningService.system_prompt)
         self.assertIn("username 仅表示当前请求用户身份", MessagePlanningService.system_prompt)
-        self.assertIn("授权系统摘要", MessagePlanningService.system_prompt)
+        self.assertIn("当前可选系统", MessagePlanningService.system_prompt)
         self.assertNotIn(
             "你的任务是把用户的自然语言检索需求转换成结构化的日志检索条件 JSON",
             MessagePlanningService.system_prompt,
@@ -200,8 +216,8 @@ class MessagePlanningContextTest(AIAssistantTestCase):
                 reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
             )
 
-    def test_planning_context_deterministically_summarizes_large_samples(self, mock_chat):
-        """规划上下文限制描述和样例体积，并为每次裁剪保留可诊断元数据。"""
+    def test_planning_context_only_summarizes_extension_samples(self, mock_chat):
+        """普通字段不携带运行时样例，只有路径探索需要的拓展样例进入上下文。"""
 
         context = MessagePlanningService.build_context(
             query_text="查日志",
@@ -216,10 +232,13 @@ class MessagePlanningContextTest(AIAssistantTestCase):
                 description="描" * 300,
                 standard_fields=[
                     SelectionFieldMeta(raw_name="long_text", sample_value="x" * 200),
+                ],
+                extension_fields=[
                     SelectionFieldMeta(
-                        raw_name="nested",
+                        raw_name="extend_data",
+                        keys=["request_data"],
                         sample_value={"level1": {"level2": {"secret": "value"}}},
-                    ),
+                    )
                 ],
             ),
             username=self.username,
@@ -229,22 +248,17 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         user_message = MessagePlanningService.build_user_message(context)
         current_json = user_message.split("<current_system_detail>\n", 1)[1].split("\n</current_system_detail>", 1)[0]
         current_system = json.loads(current_json)
-        samples = {item["raw_name"]: item for item in current_system["field_samples"]}
-        long_text = samples["long_text"]
-        nested = samples["nested"]
+        extension = current_system["extension_fields"][0]
 
         self.assertEqual(len(current_system["description"]), 256)
         self.assertEqual(current_system["field_overrides"], [])
-        self.assertEqual(len(long_text["sample_value"]), 128)
+        self.assertNotIn("field_samples", current_system)
+        self.assertNotIn("x" * 128, user_message)
         self.assertEqual(
-            long_text["sample_value_meta"],
-            {"truncated": True, "original_type": "string", "original_length": 200},
-        )
-        self.assertEqual(
-            nested["sample_value"]["level1"]["level2"],
+            extension["sample_value"]["level1"]["level2"],
             {"truncated": True, "original_type": "object", "item_count": 1},
         )
-        self.assertTrue(nested["sample_value_meta"]["truncated"])
+        self.assertTrue(extension["sample_value_meta"]["truncated"])
 
     def test_current_system_detail_only_keeps_differences_from_common_fields(self, mock_chat):
         context = MessagePlanningService.build_context(
@@ -265,7 +279,8 @@ class MessagePlanningContextTest(AIAssistantTestCase):
 
         self.assertEqual(current_system["field_overrides"][0]["raw_name"], "username")
         self.assertEqual(current_system["field_overrides"][0]["nl_name"], "执行人")
-        self.assertEqual(current_system["field_samples"][0]["sample_value"], "user_a")
+        self.assertNotIn("field_samples", current_system)
+        self.assertNotIn("user_a", user_message)
 
 
 @mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
@@ -448,6 +463,25 @@ class LoadCandidatesTest(AIAssistantTestCase):
         ):
             candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
         self.assertEqual(candidates, CANDIDATES)
+
+    def test_load_candidates_preserves_given_priority_order(self):
+        """候选顺序是同等匹配时的产品优先级，意图识别层不得重新排序。"""
+
+        all_systems = [
+            {"id": "iam_v4_bk-audit", "name": "审计中心"},
+            {"id": "bk-audit", "name": "审计中心"},
+            {"id": "bcs", "name": "蓝盾"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["iam_v4_bk-audit", "bk-audit", "bcs"]),
+        ):
+            candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
+
+        self.assertEqual(
+            [candidate["system_id"] for candidate in candidates],
+            ["iam_v4_bk-audit", "bk-audit", "bcs"],
+        )
 
     def test_load_candidates_with_scope(self):
         """传 scope：候选与检索页场景过滤同口径（get_scope_auth_systems），仅保留场景授权系统"""

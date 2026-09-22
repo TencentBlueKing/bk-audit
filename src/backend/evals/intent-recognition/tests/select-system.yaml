@@ -10,7 +10,7 @@
 
 - description: '选系统+日志检索（中途切换，已选示例审计系统说示例流水线系统）'
   vars:
-    query: '我现在要看示例流水线系统 eval_user_beta 近七天的操作id是123的日志'
+    query: '我现在要看示例流水线系统操作人为 eval_user_beta、近七天操作id是123的日志'
     current_system_id: 'eval_audit_system'
   assert:
     - type: javascript

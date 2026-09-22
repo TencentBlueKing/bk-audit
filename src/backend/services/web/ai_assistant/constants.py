@@ -40,6 +40,7 @@ class UserIntentErrorCode(TextChoices):
     UNRECOGNIZED_INTENT = "UNRECOGNIZED_INTENT", gettext_lazy("无法识别用户意图")
     SYSTEM_REQUIRED = "SYSTEM_REQUIRED", gettext_lazy("需要明确系统")
     SYSTEM_UNAVAILABLE = "SYSTEM_UNAVAILABLE", gettext_lazy("目标系统不在当前可用范围")
+    INVALID_CONDITION = "INVALID_CONDITION", gettext_lazy("检索条件不支持")
 
 
 class AttachmentErrorCode(TextChoices):

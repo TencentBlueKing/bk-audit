@@ -364,6 +364,17 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertTrue(output.error.candidates)
         self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
+    def test_invalid_condition_is_a_business_error_without_side_effects(self):
+        """用户条件无法合法表达时返回可编辑错误，不执行隐式系统切换。"""
+
+        plan = MessagePlan(outcome="error", messages=[], error_code="INVALID_CONDITION")
+        root, _, output, _ = self._run(plan)
+
+        self.assertEqual(output.error.error_code, "INVALID_CONDITION")
+        self.assertEqual(output.error.error_message, "检索条件暂不支持，请调整字段、操作符或条件值")
+        self.assertEqual(output.error.candidates, [])
+        self.assertFalse(Message.objects.filter(parent_message=root).exists())
+
     def test_system_required_can_request_disambiguation_with_current_selection(self):
         plan = MessagePlan(outcome="error", messages=[], error_code="SYSTEM_REQUIRED")
         root, _, output, _ = self._run(plan, with_selection=True)
