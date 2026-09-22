@@ -314,6 +314,8 @@
       isSelectAll: boolean,
     },
     resolveSelectedRowKeys: (options?: { maxCount?: number }) => Promise<Array<string | number>>,
+    getSelectedKeys: () => Array<string | number>,
+    clearSelection: () => void,
     resolveExportSelection: () => Promise<{
       keys: Array<string | number>,
       truncated: boolean,
@@ -1505,6 +1507,12 @@
       });
     },
     getSelectionMeta,
+    getSelectedKeys() {
+      return [...selectedRowKeys.value];
+    },
+    clearSelection() {
+      clearAllSelection();
+    },
     resolveSelectedRowKeys,
     resolveExportSelection,
     initTableHeight() {
