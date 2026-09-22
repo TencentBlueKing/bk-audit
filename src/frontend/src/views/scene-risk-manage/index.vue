@@ -40,6 +40,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="scene"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runExport"
@@ -103,6 +109,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
   import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
@@ -257,7 +264,12 @@
     }
     return result;
   });
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
@@ -273,6 +285,7 @@
 
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
+    nextTick(() => batchHandleRef.value?.sync());
   };
 
   const {
@@ -444,7 +457,9 @@
     defaultValue: [],
   });
 
-  const handleRequestSuccess = () => {};
+  const handleRequestSuccess = () => {
+    nextTick(() => batchHandleRef.value?.sync());
+  };
 
   const handleModelValueWatch = (val: any) => {
     if (val?.strategy_id?.length) {

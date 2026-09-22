@@ -92,6 +92,8 @@ declare module 'vue' {
     TypeTab: typeof import('./src/components/ip-selector/selector-box/components/type-tab.vue')['default']
     UserSelector: typeof import('./src/components/search-box/components/render-field-config/components/user-selector.vue')['default']
     ValueTag: typeof import('./src/components/search-box/components/render-value/value-tag.vue')['default']
+    VariableFieldList: typeof import('./src/components/editor/variable-field-list.vue')['default']
+    VariableInset: typeof import('./src/components/editor/variable-inset.vue')['default']
     VersionLog: typeof import('./src/components/version-log/index.vue')['default']
     ViewHost: typeof import('./src/components/ip-selector/selector-box/components/preview-result/view-host.vue')['default']
     ViewNode: typeof import('./src/components/ip-selector/selector-box/components/preview-result/view-node.vue')['default']

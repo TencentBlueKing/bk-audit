@@ -51,7 +51,14 @@
         v-if="route.name !== 'attentionManageDetail'"
         :current-stage-name="currentStageName"
         :default-expanded="shouldExpandHandleDock">
+        <confirm-risk-handle
+          v-if="showConfirmHandle"
+          :key="`confirm-handle-${riskData.risk_id}`"
+          :data="riskData"
+          :risk-id="riskData.risk_id"
+          @update="handleUpdate" />
         <risk-handle
+          v-else
           :data="riskData"
           embedded
           :event-data-list="eventDataList"
@@ -125,6 +132,7 @@
     execCopy,
   } from '@utils/assist';
 
+  import ConfirmRiskHandle from '@views/confirm-manage/components/confirm-risk-handle/index.vue';
   import {
     getRiskViewTypeByDetailRoute,
     useRiskListStrategyList,
@@ -229,7 +237,19 @@
     manual: true,
   });
 
-  const currentStageName = computed(() => stageNameMap[riskData.value.status] || t('人工处理'));
+  const isPendingConfirmStatus = (status: string) => (
+    status === 'await_confirm' || status === 'pending_confirm'
+  );
+
+  const showConfirmHandle = computed(() => (
+    route.name === 'riskManageDetail' && isPendingConfirmStatus(riskData.value.status)
+  ));
+
+  const currentStageName = computed(() => (
+    showConfirmHandle.value
+      ? t('风险确认')
+      : (stageNameMap[riskData.value.status] || t('人工处理'))
+  ));
 
   // 列表「处理」入口带 tab=handleRisk，进入详情时默认展开工单处理
   const shouldExpandHandleDock = computed(() => route.query.tab === 'handleRisk');
