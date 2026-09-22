@@ -80,6 +80,7 @@ from services.web.risk.handlers.ticket import (
     ForApprove,
     NewRisk,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     AnalyseReportAgentRequestInfo,
@@ -631,9 +632,9 @@ def sync_auto_result(node_id: str = None):
                 node = TicketNode.objects.select_for_update().get(id=node.id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
-                    sn = node.process_result.get("ticket", {}).get("sn")
-                    if sn:
-                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+                    ticket_id = node.process_result.get("ticket", {}).get("id")
+                    if ticket_id:
+                        status = get_itsm_ticket_status(ticket_id)
                         node.process_result["status"] = status
                         node.status = (
                             TicketNodeStatus.FINISHED
