@@ -112,6 +112,8 @@ export type AiNlRecognitionErrorCode =
   | 'SYSTEM_REQUIRED'
   | 'SYSTEM_UNAVAILABLE'
   | 'QUERY_NOT_RECOGNIZED'
+  /** 已识别意图，但字段/操作符/条件值无法合法表达；不创建派生消息 */
+  | 'INVALID_CONDITION'
   /** 新旧码并存：后端可能下发 AT_* 或历史 AI_* */
   | 'AT_OUTPUT_PARSE_FAILED'
   | 'AT_OUTPUT_INVALID'
