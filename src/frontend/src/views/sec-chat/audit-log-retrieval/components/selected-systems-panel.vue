@@ -18,10 +18,6 @@
   <div class="selected-systems-panel">
     <div class="systems-header">
       <div class="systems-title">
-        <img
-          alt=""
-          class="title-icon"
-          :src="wenhaoIcon">
         <span class="title-text">
           <span class="title-label">{{ title }}</span>
           <template v-if="selectedSystemLabel">
@@ -51,8 +47,6 @@
   import { computed } from 'vue';
 
   import type { SelectedSystem } from '../../types';
-
-  import wenhaoIcon from '@images/wenhao.svg';
 
   const props = withDefaults(defineProps<{
     systems: SelectedSystem[];
@@ -94,18 +88,10 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 8px;
     font-size: 14px;
     font-weight: 500;
     line-height: 22px;
     color: #313238;
-  }
-
-  .title-icon {
-    display: block;
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
   }
 
   .title-text {
