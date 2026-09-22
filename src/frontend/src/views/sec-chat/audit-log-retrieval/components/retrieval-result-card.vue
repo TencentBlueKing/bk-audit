@@ -1032,6 +1032,8 @@
 
   .condition-section {
     margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
   }
 
   .result-systems-section {
