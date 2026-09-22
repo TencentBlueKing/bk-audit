@@ -535,9 +535,10 @@ export const mapAiMessageToChatMessage = (
     const queryText = String(message.input_data?.query_text ?? '');
     const recognitionError = getNlRecognitionError(message);
     const candidateSystems = pickCandidateSystems(message);
+    // 协议：SYSTEM_REQUIRED 有 candidates 时引导选系统
+    // SYSTEM_UNAVAILABLE（无权限系统）：走权限错误卡，不引导选系统
     const shouldPromptSystemSelection = (
-      recognitionError?.error_code === 'SYSTEM_REQUIRED'
-      || (recognitionError?.error_code === 'SYSTEM_UNAVAILABLE' && candidateSystems.length > 0)
+      recognitionError?.error_code === 'SYSTEM_REQUIRED' && candidateSystems.length > 0
     );
     if (shouldPromptSystemSelection) {
       return {
@@ -550,11 +551,9 @@ export const mapAiMessageToChatMessage = (
         systemIds: candidateSystems.map(item => item.id),
         candidateSystems,
         content: queryText,
-        // SYSTEM_REQUIRED 不透出 error_message 作 tip；SYSTEM_UNAVAILABLE 可展示后端引导文案
-        aiMessage: recognitionError?.error_code === 'SYSTEM_UNAVAILABLE'
-          ? (recognitionError.error_message || undefined)
-          : undefined,
+        aiMessage: recognitionError?.error_message || undefined,
         ...baseMeta,
+        errorCode: recognitionError?.error_code || baseMeta.errorCode,
       };
     }
     if (recognitionError) {
@@ -569,6 +568,7 @@ export const mapAiMessageToChatMessage = (
           message: recognitionError.error_message,
         },
         ...baseMeta,
+        errorCode: recognitionError.error_code || baseMeta.errorCode,
       };
     }
     // 识别成功：条件先出壳；表格等子 LOG_SEARCH（有子卡后本卡不再渲染结果）
@@ -593,18 +593,15 @@ export const mapAiMessageToChatMessage = (
     const resolvedSystemId = String(output.system_id || '').trim();
     const hasDerived = hasIntentDerivedMessages(message);
     const shouldPromptSystemSelection = (
-      recognitionError?.error_code === 'SYSTEM_REQUIRED'
-      || (recognitionError?.error_code === 'SYSTEM_UNAVAILABLE' && candidateSystems.length > 0)
+      (recognitionError?.error_code === 'SYSTEM_REQUIRED' && candidateSystems.length > 0)
       || (output.intent === 'select_system' && !resolvedSystemId)
     );
 
     if (shouldPromptSystemSelection) {
-      const isSystemRequired = recognitionError?.error_code === 'SYSTEM_REQUIRED';
-      const isSystemUnavailable = recognitionError?.error_code === 'SYSTEM_UNAVAILABLE';
       let systemPromptTip: string | undefined;
-      if (isSystemUnavailable) {
+      if (recognitionError?.error_code === 'SYSTEM_REQUIRED') {
         systemPromptTip = recognitionError?.error_message || undefined;
-      } else if (!isSystemRequired && output.message) {
+      } else if (output.message) {
         systemPromptTip = String(output.message);
       }
       return {
@@ -617,11 +614,11 @@ export const mapAiMessageToChatMessage = (
         systemIds: candidateSystems.map(item => item.id),
         candidateSystems,
         content: queryText,
-        // SYSTEM_REQUIRED 不透出过长 tip；SYSTEM_UNAVAILABLE / 其它可展示引导文案
         aiMessage: systemPromptTip,
         intent: output.intent,
         hasDerivedMessages: hasDerived,
         ...baseMeta,
+        errorCode: recognitionError?.error_code || baseMeta.errorCode,
       };
     }
 
@@ -641,6 +638,7 @@ export const mapAiMessageToChatMessage = (
           message: recognitionError.error_message,
         },
         ...baseMeta,
+        errorCode: recognitionError.error_code || baseMeta.errorCode,
       };
     }
 

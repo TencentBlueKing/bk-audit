@@ -101,12 +101,31 @@
                   <div class="status-title">
                     {{ getRecognitionTitle(msg.recognitionError.code) }}
                   </div>
-                  <div class="status-desc">
-                    {{
-                      msg.recognitionError.message
-                        || msg.aiMessage
-                        || getRecognitionFallback(msg.recognitionError.code)
-                    }}
+                  <div
+                    v-if="isPermissionTipError(msg.recognitionError.code)"
+                    class="status-desc permission-denied-desc">
+                    <span>暂无权限查询此数据，请联系场景管理员</span>
+                    <span
+                      v-if="sceneManagers.length"
+                      class="scene-admin-list">
+                      <span class="admin-name">
+                        {{ sceneManagers.slice(0, 3).join(' , ') }}
+                      </span>
+                      <span
+                        v-if="sceneManagers.length > 3"
+                        v-bk-tooltips="{
+                          content: sceneManagers.slice(3).join(' , '),
+                          placement: 'top',
+                        }"
+                        class="admin-more">
+                        +{{ sceneManagers.length - 3 }}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    v-else
+                    class="status-desc">
+                    {{ getRecognitionDesc(msg) }}
                   </div>
                   <bk-button
                     v-if="showRecognitionResend(msg.recognitionError.code, msg) && msg.content"
@@ -219,7 +238,13 @@
 
   import ChatInput from '@views/sec-chat/components/chat-input.vue';
 
+  import SceneManageService from '@service/scene-manage';
+
+  import useRequest from '@hooks/use-request';
+
   import errorSearchIcon from '@images/error-search.svg';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
   import RetrievalCardSkeleton from './retrieval-card-skeleton.vue';
@@ -311,7 +336,7 @@
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
     SYSTEM_REQUIRED: '需要补充系统信息',
-    SYSTEM_UNAVAILABLE: '目标系统暂不可用',
+    SYSTEM_UNAVAILABLE: '暂无权限',
     UNRECOGNIZED_INTENT: '未能理解当前意图',
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
     AT_OUTPUT_PARSE_FAILED: '检索条件解析失败',
@@ -321,12 +346,12 @@
     AI_SERVICE_ERROR: 'AI 服务暂不可用',
     AI_TIMEOUT: 'AI 服务响应超时',
     LOG_SEARCH_CHAIN_TIMEOUT: '日志检索启动超时',
-    PERMISSION_DENIED: '无日志检索权限',
+    PERMISSION_DENIED: '暂无权限',
   };
 
   const NL_RECOGNITION_FALLBACKS: Record<string, string> = {
-    SYSTEM_REQUIRED: '请选择目标系统后继续检索',
-    SYSTEM_UNAVAILABLE: '请更换系统或稍后重试',
+    SYSTEM_REQUIRED: '当前场景暂无可用系统，请切换场景或申请权限',
+    SYSTEM_UNAVAILABLE: '暂无权限查询此数据，请联系场景管理员',
     UNRECOGNIZED_INTENT: '请换一种描述方式重新发送',
     QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
     AT_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
@@ -336,10 +361,51 @@
     AI_SERVICE_ERROR: '请稍后重试',
     AI_TIMEOUT: '请稍后重试',
     LOG_SEARCH_CHAIN_TIMEOUT: '请稍后重试或换一种描述',
-    PERMISSION_DENIED: '请联系管理员申请目标系统的日志检索权限',
+    PERMISSION_DENIED: '暂无权限查询此数据，请联系场景管理员',
   };
 
   const SUGGESTION_LIMIT = 4;
+
+  /** 无权限类错误：展示联系场景管理员 */
+  const isPermissionTipError = (code: string) => (
+    code === 'SYSTEM_UNAVAILABLE' || code === 'PERMISSION_DENIED'
+  );
+
+  const sceneManagers = ref<string[]>([]);
+  const {
+    run: fetchSceneList,
+  } = useRequest(SceneManageService.fetchSceneAll, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const loadSceneManagersForPermissionTip = () => {
+    const hasPermissionTip = props.messages.some(msg => (
+      msg.type === 'retrieval-result'
+      && isPermissionTipError(msg.recognitionError?.code || '')
+    ));
+    if (!hasPermissionTip) {
+      sceneManagers.value = [];
+      return;
+    }
+    fetchSceneList({ status: 'enabled' }).then((list) => {
+      const params = getSceneSystemParams();
+      if (params.scope_type !== 'scene' || !params.scope_id) {
+        sceneManagers.value = [];
+        return;
+      }
+      const scene = (list || []).find(item => String(item.scene_id) === String(params.scope_id));
+      sceneManagers.value = (scene?.managers || []).filter(Boolean);
+    });
+  };
+
+  watch(
+    () => props.messages.map(msg => `${msg.id}:${msg.recognitionError?.code || ''}`).join('|'),
+    () => {
+      loadSceneManagersForPermissionTip();
+    },
+    { immediate: true },
+  );
 
   /** 「试试这样说」：复用会话里 SYSTEM_SELECTION 的常用操作 */
   const recognitionSuggestions = computed(() => (
@@ -354,22 +420,28 @@
     NL_RECOGNITION_FALLBACKS[code] || '请修改描述后重新发送'
   );
 
+  const getRecognitionDesc = (msg: ChatMessage) => (
+    msg.recognitionError?.message
+    || msg.aiMessage
+    || getRecognitionFallback(msg.recognitionError?.code || '')
+  );
+
   /** 意图不明 / 条件未识别 / 条件无效：展示固定「试试这样说」 */
   const showRecognitionSuggestions = (code: string) => (
     code === 'UNRECOGNIZED_INTENT'
     || code === 'QUERY_NOT_RECOGNIZED'
     || code === 'AT_OUTPUT_INVALID'
     || code === 'AI_OUTPUT_INVALID'
-    || code === 'SYSTEM_UNAVAILABLE'
   );
 
   /**
    * 业务错误且无派生消息时可「编辑后重发」（产品约定：填回输入框后 POST 新意图，非 PATCH）。
    * 已有 derived_messages 的意图不可编辑原文。
-   * SYSTEM_UNAVAILABLE 有 candidates 时走选系统卡，此处仅覆盖无候选的失败态。
+   * SYSTEM_UNAVAILABLE / PERMISSION_DENIED 为权限提示，不提供重发。
    */
   const showRecognitionResend = (code: string, msg: ChatMessage) => {
     if (msg.hasDerivedMessages) return false;
+    if (isPermissionTipError(code)) return false;
     return (
       code === 'AI_TIMEOUT'
       || code === 'AI_SERVICE_ERROR'
@@ -380,7 +452,6 @@
       || code === 'QUERY_NOT_RECOGNIZED'
       || code === 'AT_OUTPUT_INVALID'
       || code === 'AI_OUTPUT_INVALID'
-      || code === 'SYSTEM_UNAVAILABLE'
     );
   };
 
@@ -898,6 +969,36 @@
       .status-title,
       .status-desc {
         text-align: center;
+      }
+
+      .system-required-desc,
+      .permission-denied-desc {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .scene-admin-list {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .admin-name {
+        font-size: 12px;
+        color: #979ba5;
+      }
+
+      .admin-more {
+        font-size: 12px;
+        line-height: 20px;
+        color: #979ba5;
+        text-decoration: underline;
+        text-decoration-style: dashed;
+        text-underline-offset: 2px;
+        cursor: pointer;
       }
 
       .recognition-resend-btn {
