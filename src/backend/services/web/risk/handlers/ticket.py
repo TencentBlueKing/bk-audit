@@ -383,11 +383,21 @@ class ForApprove(RiskFlowBaseHandler):
         3. 自动更新审批状态
         """
 
-        # 获取单据ID
+        # 获取单据ID（V4 的 ticket_detail 仅支持按工单 ID 查询，不再支持按 sn 查询）
         ticket_id = self.load_approve_ticket_id()
         # 已发起则获取单据状态
         if ticket_id:
             return {"status": get_itsm_ticket_status(ticket_id)}
+        # 兼容历史在途单据：V3 遗留单据只有 sn、没有 V4 工单 ID，无法用 V4 查询。
+        # 此时必须保持审批中并告警，否则会被误判为「未发起」而重复建单
+        sn = self.load_approve_sn()
+        if sn:
+            logger.warning(
+                "[ForApprove] risk %s has legacy itsm ticket without v4 id, skip creating: sn=%s",
+                self.risk.risk_id,
+                sn,
+            )
+            return {"status": build_legacy_ticket_status(sn)}
         # 手动传入处理套餐需要重新初始化处理套餐
         if pa_config:
             self.init_process_application(pa_config["pa_id"])
@@ -428,6 +438,7 @@ class ForApprove(RiskFlowBaseHandler):
             # 获取风险字段，以配置优先；key 与 bare_key 均尝试回退到风险对象属性
             value = (
                 self.process_application.approve_config.get(key, {}).get("value")
+                or self.process_application.approve_config.get(bare_key, {}).get("value")
                 or getattr(self.risk, key, "")
                 or getattr(self.risk, bare_key, "")
             )
@@ -481,10 +492,18 @@ class ForApprove(RiskFlowBaseHandler):
         self.risk.save(update_fields=["current_operator"])
 
     def load_approve_ticket_id(self) -> str:
-        return self.risk.last_history.process_result.get("ticket", {}).get("id", "")
+        """
+        V4 的 ticket_detail 仅支持按工单 ID 查询，故以 ID 作为「是否已发起」的判断依据。
+        """
+
+        return str(self.risk.last_history.process_result.get("ticket", {}).get("id") or "")
 
     def load_approve_sn(self) -> str:
-        return self.risk.last_history.process_result.get("ticket", {}).get("sn", "")
+        """
+        工单编号。V4 不再按 sn 查询，仅用于识别 V3 遗留的历史在途单据（无 V4 工单 ID）。
+        """
+
+        return self.risk.last_history.process_result.get("ticket", {}).get("sn", "") or ""
 
     def update_status(self, process_result: dict, **kwargs) -> None:
         status = process_result.get("status", {})
@@ -533,19 +552,67 @@ ITSM_V4_STATUS_MAPPING = {
 }
 
 
+def extract_current_processor(detail: dict) -> str:
+    """
+    从 V4 工单详情里取当前处理人。
+
+    V4 没有 V3 的 updated_by 字段，此处用当前处理人近似替代，
+    以保证返回结构与 V3 的 ticket_approve_result 一致。
+    """
+
+    for item in detail.get("current_processors") or []:
+        if not isinstance(item, dict) or item.get("processor_type") != "user":
+            continue
+        processor = item.get("processor")
+        if isinstance(processor, (list, tuple)):
+            return ";".join(str(p) for p in processor)
+        return str(processor or "")
+    return ""
+
+
 def get_itsm_ticket_status(ticket_id: str) -> dict:
     """
     通过 ITSM V4 的 ticket_detail 接口获取工单审批状态。
+
+    返回结构与 V3 的 ticket_approve_result 对齐（id/title/update_at/ticket_url/
+    updated_by/approve_result/current_status），避免下游 sync_auto_result 与前端
+    节点展示因字段缺失取不到值。
     """
+
     detail = api.bk_itsm_v4.ticket_detail(id=ticket_id)
     current_status = ITSM_V4_STATUS_MAPPING.get((detail.get("status") or "").lower())
     if not current_status:
         logger.warning("unmapped V4 itsm status: %s", detail.get("status"))
         current_status = detail.get("status")
     return {
+        "id": detail.get("id"),
         "sn": detail.get("sn"),
-        "current_status": current_status,
+        "title": detail.get("title") or "",
+        "update_at": detail.get("updated_at") or "",
+        "ticket_url": detail.get("frontend_url") or "",
+        "updated_by": extract_current_processor(detail),
         "approve_result": detail.get("approve_result"),
+        "current_status": current_status,
+    }
+
+
+def build_legacy_ticket_status(sn: str) -> dict:
+    """
+    构造 V3 遗留单据（只有 sn、无 V4 工单 ID）的占位状态。
+
+    状态取 RUNNING，使风险单保持「审批中」，避免 ForApprove 误判为
+    「未发起」而重复建单。
+    """
+
+    return {
+        "id": "",
+        "sn": sn,
+        "title": "",
+        "update_at": "",
+        "ticket_url": "",
+        "updated_by": "",
+        "approve_result": False,
+        "current_status": TicketStatus.RUNNING.value,
     }
 
 

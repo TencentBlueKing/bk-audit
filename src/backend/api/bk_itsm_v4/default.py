@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
+import os
 
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
@@ -38,6 +39,19 @@ class BKITSMV4(AuditBkApiResource, abc.ABC):
         if self.use_multi_tenant_mode():
             return get_endpoint(settings.BK_CW_AITSM_APIGW_NAME, APIProvider.APIGW, stage="prod")
         return BK_ITSM_V4_API_URL
+
+    def build_header(self, validated_request_data):
+        """构建请求头，当传入system_id时添加SYSTEM-TOKEN"""
+        headers = super().build_header(validated_request_data)
+
+        # 如果请求参数中包含system_id，则添加SYSTEM-TOKEN请求头
+        system_id = validated_request_data.get("system_id")
+        if system_id:
+            system_token = validated_request_data.get("system_token") or os.getenv("SYSTEM_TOKEN")
+            if system_token:
+                headers["SYSTEM-TOKEN"] = system_token
+
+        return headers
 
     def perform_request(self, validated_request_data):
         return Throttler(

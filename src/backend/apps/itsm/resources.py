@@ -19,11 +19,17 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
+from blueapps.utils.logger import logger
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketStatus
-from apps.itsm.serializers import GetServicesRespSerializer
+from apps.itsm.serializers import (
+    GetServiceDetailReqSerializer,
+    GetServicesReqsSerializer,
+    GetServicesRespSerializer,
+)
+from apps.itsm.utils import adapt_v4_workflow_to_service_detail
 from core.utils.data import choices_to_dict
 
 
@@ -34,25 +40,59 @@ class ITSMMeta(AuditMixinResource, abc.ABC):
 class GetServices(ITSMMeta):
     name = gettext_lazy("获取服务列表")
     ResponseSerializer = GetServicesRespSerializer
+    RequestSerializer = GetServicesReqsSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         # 使用 ITSM V4 的系统流程列表接口代替原 get_services 接口
-        resp = api.bk_itsm_v4.system_workflow_list()
-        services = [{"id": s["key"], "name": s["name"], "url": s.get("frontend_url")} for s in resp["results"]]
-        services.sort(key=lambda s: s["name"])
+        system_id = validated_request_data.get("system_id")
+        services, page = [], 1
+        while True:
+            resp = api.bk_itsm_v4.system_workflow_list(system_id=system_id, page=page, page_size=100)
+            services.extend({"id": s["key"], "name": s["name"], "url": s.get("frontend_url")} for s in resp["results"])
+            if len(services) >= resp["count"]:
+                break
+            page += 1
         return services
 
 
 class GetServiceDetail(ITSMMeta):
     name = gettext_lazy("获取服务详情")
+    RequestSerializer = GetServiceDetailReqSerializer
 
     def perform_request(self, validated_request_data):
         # 使用 ITSM V4 的获取流程启用版本详情接口代替原 get_service_detail 接口
-        # Workflows 接口返回 data.items（流程详情数组），此处按单个流程标识取首个详情
-        resp = api.bk_itsm_v4.workflows(workflow_keys=validated_request_data["id"])
+        # Workflows 接口返回 items（流程详情数组），此处按单个流程标识取首个详情
+        workflow_key = validated_request_data["id"]
+        resp = api.bk_itsm_v4.workflows(workflow_keys=workflow_key)
         items = resp.get("items") or []
-        return items[0] if items else {}
+        if not items:
+            return {}
+        # V4 的 workflow dict 与 V3 的 service detail 结构不同（字段在
+        # form_canvas_data 里且 key 带 ticket__ 前缀），此处适配成 V3 结构，
+        # 保证前端审批字段配置与 ProcessApplication.approve_config 无需改动
+        return adapt_v4_workflow_to_service_detail(
+            items[0],
+            name=self.load_workflow_name(workflow_key, validated_request_data.get("system_id")),
+        )
+
+    @staticmethod
+    def load_workflow_name(workflow_key: str, system_id: str = "") -> str:
+        """
+        V4 的 workflows 响应不含流程名称，需从系统流程列表带回。
+        列表接口依赖 system_id 与 SYSTEM-TOKEN，取不到时降级为流程标识。
+        """
+
+        if not system_id:
+            return ""
+        try:
+            resp = api.bk_itsm_v4.system_workflow_list(system_id=system_id, key__in=workflow_key)
+            for item in resp.get("results") or []:
+                if item.get("key") == workflow_key:
+                    return item.get("name") or ""
+        except Exception as err:  # NOCC:broad-except(名称缺失可降级为流程标识)
+            logger.warning("[GetServiceDetail] load workflow name failed: %s, %s", workflow_key, err)
+        return ""
 
 
 class GetTicketStatusCommon(ITSMMeta):
