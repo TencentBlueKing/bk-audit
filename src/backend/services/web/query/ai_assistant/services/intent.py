@@ -46,7 +46,10 @@ from pydantic import ValidationError
 from requests.exceptions import Timeout
 
 from api.constants import AIAgentCode
-from services.web.ai.prompts.intent_recognition import SYSTEM_PROMPT
+from services.web.ai.prompts.intent_recognition import (
+    SYSTEM_PROMPT_TEMPLATE,
+    USER_PROMPT_TEMPLATE,
+)
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIOutputParseFailedError,
@@ -56,7 +59,12 @@ from services.web.query.ai_assistant.exceptions import (
 from services.web.query.ai_assistant.schemas import (
     IntentPayload,
     MessagePlan,
-    SystemSelectionOutput,
+    MessagePlanningClock,
+    MessagePlanningContext,
+    MessagePlanningConversation,
+    MessagePlanningSystemSummary,
+    SelectionFieldMeta,
+    SelectionSystem,
 )
 from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 
@@ -65,9 +73,6 @@ logger = logging.getLogger(__name__)
 # AI 输出原文在日志/异常 extra 中的最大保留长度（对齐 NL2JSON）
 INTENT_RAW_OUTPUT_KEEP_LENGTH = 2048
 
-MESSAGE_PLANNING_CONTEXT_VERSION = "message-planning-context-v1"
-MESSAGE_PLANNING_PROMPT_VERSION = "message-planner-v1"
-MESSAGE_PLAN_SCHEMA_VERSION = "message-plan-v1"
 PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH = 256
 PLANNING_SAMPLE_STRING_MAX_LENGTH = 128
 PLANNING_SAMPLE_MAX_DEPTH = 2
@@ -161,6 +166,52 @@ def _serialize_planning_field(field) -> dict:
             metadata["item_count"] = len(original)
         payload["sample_value_meta"] = metadata
     return payload
+
+
+def _field_definition(field: SelectionFieldMeta) -> dict:
+    """返回不含样例的 Agent 字段定义，用于公共字段与系统差异比较。"""
+
+    return {
+        key: value
+        for key, value in _serialize_planning_field(field).items()
+        if key not in {"sample_value", "sample_value_meta"}
+    }
+
+
+def _serialize_current_system_detail(
+    current_system: SelectionSystem | None,
+    common_fields: list[SelectionFieldMeta],
+) -> dict | None:
+    """只表达当前系统相对公共字段的差异、拓展字段和受控样例。"""
+
+    if current_system is None:
+        return None
+    common_definitions = {field.raw_name: _field_definition(field) for field in common_fields}
+    field_overrides = []
+    field_samples = []
+    for field in current_system.standard_fields:
+        definition = _field_definition(field)
+        if common_definitions.get(field.raw_name) != definition:
+            field_overrides.append(definition)
+        serialized = _serialize_planning_field(field)
+        if "sample_value" in serialized:
+            field_samples.append(
+                {key: serialized[key] for key in ("raw_name", "sample_value", "sample_value_meta") if key in serialized}
+            )
+    return {
+        "system_id": current_system.system_id,
+        "name": current_system.name,
+        "description": current_system.description[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
+        "field_overrides": field_overrides,
+        "extension_fields": [_serialize_planning_field(field) for field in current_system.extension_fields],
+        "field_samples": field_samples,
+    }
+
+
+def _render_prompt(template: str, **variables: str) -> str:
+    """关闭 HTML 转义后渲染提示词模板，保持 JSON 和用户原话不失真。"""
+
+    return Template(template).render(Context(variables, autoescape=False)).strip()
 
 
 INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
@@ -359,7 +410,11 @@ class IntentRecognitionService:
             systems, authorized_system_ids = SearchLogPermission.get_auth_systems_by_username(namespace, username)
             allowed_ids = set(authorized_system_ids)
         return [
-            {"system_id": str(system["id"]), "name": str(system.get("name") or system["id"])}
+            {
+                "system_id": str(system["id"]),
+                "name": str(system.get("name") or system["id"]),
+                "description": str(system.get("description") or ""),
+            }
             for system in systems
             if str(system["id"]) in allowed_ids
         ]
@@ -369,138 +424,102 @@ class MessagePlanningService:
     """通用消息规划：一次调用生成系统选择、日志检索或二者组合。"""
 
     agent_code = resolve_intent_agent_code()
-    system_prompt = SYSTEM_PROMPT
+    system_prompt = _render_prompt(
+        SYSTEM_PROMPT_TEMPLATE,
+        message_plan_schema=json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2),
+    )
+
+    _PHASE_DECISION_RULES = {
+        "SYSTEM_UNSELECTED": "当前会话没有有效系统；无法从用户原话确定授权系统时返回 SYSTEM_REQUIRED",
+        "SYSTEM_SELECTED": "用户未点名其他系统的检索默认使用 current_system_id",
+    }
+
+    @classmethod
+    def build_context(
+        cls,
+        *,
+        query_text: str,
+        candidates: list[dict],
+        common_fields: list[SelectionFieldMeta],
+        current_system: SelectionSystem | None,
+        username: str,
+        reference_time: datetime,
+    ) -> MessagePlanningContext:
+        """由后端可信事实构造强类型的单次规划上下文。"""
+
+        current_system_id = current_system.system_id if current_system is not None else ""
+        phase = "SYSTEM_SELECTED" if current_system_id else "SYSTEM_UNSELECTED"
+        current_week_start = reference_time.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+            days=reference_time.weekday()
+        )
+        return MessagePlanningContext(
+            user_query=query_text,
+            conversation=MessagePlanningConversation(
+                username=username,
+                phase=phase,
+                phase_decision_rule=cls._PHASE_DECISION_RULES[phase],
+                has_selected_system=bool(current_system_id),
+                current_system_id=current_system_id,
+            ),
+            authorized_systems=[
+                MessagePlanningSystemSummary(
+                    system_id=str(candidate["system_id"]),
+                    name=str(candidate.get("name") or candidate["system_id"]),
+                    description=str(candidate.get("description") or "")[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
+                )
+                for candidate in candidates
+            ],
+            common_standard_fields=common_fields,
+            current_system_detail=current_system,
+            clock=MessagePlanningClock(
+                current_time=reference_time.isoformat(),
+                timezone=str(reference_time.tzinfo),
+                default_start_time=(reference_time - timedelta(days=1)).isoformat(),
+                current_week_start=current_week_start.isoformat(),
+                previous_week_start=(current_week_start - timedelta(days=7)).isoformat(),
+                previous_week_end=current_week_start.isoformat(),
+            ),
+        )
 
     @classmethod
     def plan(
         cls,
         *,
-        query_text: str,
-        system_context: SystemSelectionOutput,
-        current_system_id: str,
-        username: str,
-        scope_type: str,
-        scope_id: str,
-        reference_time: datetime,
+        context: MessagePlanningContext,
         user_message: str | None = None,
+        agent_user: str | None = None,
     ) -> MessagePlan:
-        """构造完整规划上下文并返回通过候选范围校验的消息计划。"""
+        """调用 Agent 并返回通过授权候选范围校验的消息计划。"""
 
         if user_message is None:
-            user_message = cls.build_user_message(
-                query_text=query_text,
-                system_context=system_context,
-                current_system_id=current_system_id,
-                username=username,
-                scope_type=scope_type,
-                scope_id=scope_id,
-                reference_time=reference_time,
-            )
-        content = cls._call_agent(user_message, username)
+            user_message = cls.build_user_message(context)
+        content = cls._call_agent(user_message, agent_user or context.conversation.username)
         plan = cls._parse_and_validate(content)
-        plan = cls._normalize_redundant_selection(plan, current_system_id)
-        cls._validate_system_scope(plan, system_context, current_system_id)
+        plan = cls._normalize_redundant_selection(plan, context.conversation.current_system_id)
+        cls._validate_system_scope(plan, context)
         return plan
 
-    @classmethod
-    def build_user_message(
-        cls,
-        *,
-        query_text: str,
-        system_context: SystemSelectionOutput,
-        current_system_id: str,
-        username: str,
-        scope_type: str,
-        scope_id: str,
-        reference_time: datetime,
-    ) -> str:
-        """以分层文本组织动态上下文，输出契约只注入一次 MessagePlan schema。"""
+    @staticmethod
+    def build_user_message(context: MessagePlanningContext) -> str:
+        """按固定层级序列化本轮动态事实，不重复稳定规则和输出契约。"""
 
-        systems = []
-        for system in system_context.systems:
-            description = system.description
-            description_truncated = len(description) > PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH
-            systems.append(
-                {
-                    "system_id": system.system_id,
-                    "name": system.name,
-                    "description": description[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
-                    **(
-                        {
-                            "description_meta": {
-                                "truncated": True,
-                                "original_length": len(description),
-                            }
-                        }
-                        if description_truncated
-                        else {}
-                    ),
-                    "standard_fields": [_serialize_planning_field(field) for field in system.standard_fields],
-                    "extension_fields": [_serialize_planning_field(field) for field in system.extension_fields],
-                }
-            )
-        current_week_start = reference_time.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
-            days=reference_time.weekday()
+        common_fields = [_field_definition(field) for field in context.common_standard_fields]
+        current_system_detail = _serialize_current_system_detail(
+            context.current_system_detail,
+            context.common_standard_fields,
         )
-        conversation_context = {
-            "username": username,
-            "phase": "SYSTEM_SELECTED" if current_system_id else "SYSTEM_UNSELECTED",
-            "scope_type": scope_type,
-            "scope_id": scope_id,
-            "current_system_id": current_system_id,
-        }
-        clock = {
-            "current_time": reference_time.isoformat(),
-            "timezone": str(reference_time.tzinfo),
-            "default_start_time": (reference_time - timedelta(days=1)).isoformat(),
-            "current_week_start": current_week_start.isoformat(),
-            "previous_week_start": (current_week_start - timedelta(days=7)).isoformat(),
-            "previous_week_end": current_week_start.isoformat(),
-        }
-        rules = (
-            "- 当前系统 ID 必须存在于授权系统列表中才算有效；否则按当前无有效系统处理。\n"
-            "- 仅切换系统时生成 SYSTEM_SELECTION。\n"
-            "- 已有有效系统且用户未明确点名另一个系统时，只生成 LOG_SEARCH。\n"
-            "- 指定新系统并检索时，依次生成 SYSTEM_SELECTION、LOG_SEARCH。\n"
-            "- 未指定系统且当前无有效系统时返回 SYSTEM_REQUIRED。\n"
-            "- 不得因授权系统只有一个或位于列表首位就自动选择；SYSTEM_SELECTION 必须有用户点名系统的依据。\n"
-            "- 用户明确点名的系统不在授权系统中时返回 SYSTEM_UNAVAILABLE，不得映射到当前系统。\n"
-            "- 错误分支先判断用户是否点名系统：授权列表无匹配（包括授权列表为空）时优先返回 SYSTEM_UNAVAILABLE；只有未点名且无有效当前系统时才返回 SYSTEM_REQUIRED。\n"
-            "- 寒暄、闲聊及无关请求返回 UNRECOGNIZED_INTENT；即使已有系统，也不得据此生成 LOG_SEARCH。\n"
-            "- 未指定时间时默认最近一天；相对时间只以 clock.current_time 和 timezone 为基准。\n"
-            "- 近 N 天表示 current_time 前 N×24 小时；上周直接使用 previous_week_start/previous_week_end。\n"
-            "- 用户已表达日志检索但未给字段和时间时仍生成 LOG_SEARCH，空 condition 由后端补齐。"
-        )
-        return (
-            "# 任务\n"
-            "根据当前会话、授权系统与用户请求，生成下一批业务消息。\n\n"
-            "# 当前会话\n"
-            "<conversation>\n"
-            f"{json.dumps(conversation_context, ensure_ascii=False, indent=2)}\n"
-            "</conversation>\n\n"
-            "# 当前时间\n"
-            "<clock>\n"
-            f"{json.dumps(clock, ensure_ascii=False, indent=2)}\n"
-            "</clock>\n\n"
-            "# 授权系统与字段\n"
-            "以下列表已经过权限过滤，SYSTEM_SELECTION 的 system_id 只能取自此处。\n"
-            "<authorized_systems>\n"
-            f"{json.dumps(systems, ensure_ascii=False, indent=2)}\n"
-            "</authorized_systems>\n\n"
-            "# 支持的消息\n"
-            "- SYSTEM_SELECTION：选择或切换一个授权系统；scope 与 visible 由后端补齐。\n"
-            "- LOG_SEARCH：在目标系统中检索日志；scope 与 visible 由后端补齐。\n\n"
-            "# 业务规则\n"
-            f"{rules}\n\n"
-            "# 用户请求\n"
-            "<user_query>\n"
-            f"{query_text}\n"
-            "</user_query>\n\n"
-            "# 输出 JSON Schema\n"
-            "只输出一个符合以下 schema 的 JSON 对象，不要输出解释或 Markdown。\n"
-            "<message_plan_schema>\n"
-            f"{json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2)}\n"
-            "</message_plan_schema>"
+        return _render_prompt(
+            USER_PROMPT_TEMPLATE,
+            user_query=context.user_query,
+            conversation_json=json.dumps(context.conversation.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            authorized_systems_json=json.dumps(
+                [item.model_dump(mode="json") for item in context.authorized_systems],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            common_standard_fields_json=json.dumps(common_fields, ensure_ascii=False, indent=2),
+            current_system_detail_json=json.dumps(current_system_detail, ensure_ascii=False, indent=2),
+            clock_json=json.dumps(context.clock.model_dump(mode="json"), ensure_ascii=False, indent=2),
         )
 
     @classmethod
@@ -563,14 +582,14 @@ class MessagePlanningService:
     @staticmethod
     def _validate_system_scope(
         plan: MessagePlan,
-        system_context: SystemSelectionOutput,
-        current_system_id: str,
+        context: MessagePlanningContext,
     ) -> None:
         """拒绝候选外系统及缺失有效系统的检索计划。"""
 
         if plan.outcome == "error":
             return
-        candidate_ids = {system.system_id for system in system_context.systems}
+        candidate_ids = {system.system_id for system in context.authorized_systems}
+        current_system_id = context.conversation.current_system_id
         selection = next(
             (message for message in plan.messages if message.message_type == "SYSTEM_SELECTION"),
             None,

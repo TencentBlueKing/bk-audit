@@ -178,6 +178,73 @@ class SystemSelectionOutput(BaseModel):
     systems: List[SelectionSystem] = Field(default_factory=list)
 
 
+class MessagePlanningConversation(BaseModel):
+    """Agent 可见的当前会话状态，字段之间必须保持一致。"""
+
+    username: str = Field(description="当前请求用户身份，仅用于理解请求主体，不作为授权依据")
+    phase: Literal["SYSTEM_UNSELECTED", "SYSTEM_SELECTED"]
+    phase_decision_rule: str = Field(description="当前阶段直接影响下一条消息的决策规则")
+    has_selected_system: bool
+    current_system_id: str = ""
+
+    @model_validator(mode="after")
+    def validate_selection_state(self) -> "MessagePlanningConversation":
+        """拒绝阶段、选择标记和当前系统 ID 相互矛盾的上下文。"""
+
+        selected = bool(self.current_system_id)
+        if self.has_selected_system != selected:
+            raise ValueError("has_selected_system conflicts with current_system_id")
+        expected_phase = "SYSTEM_SELECTED" if selected else "SYSTEM_UNSELECTED"
+        if self.phase != expected_phase:
+            raise ValueError("phase conflicts with current_system_id")
+        return self
+
+
+class MessagePlanningSystemSummary(BaseModel):
+    """Agent 用于选择系统的最小授权候选摘要。"""
+
+    system_id: str = Field(..., min_length=1)
+    name: str = ""
+    description: str = ""
+
+
+class MessagePlanningClock(BaseModel):
+    """Agent 解释自然语言时间所需的确定性时间锚点。"""
+
+    current_time: str
+    timezone: str
+    default_start_time: str
+    current_week_start: str
+    previous_week_start: str
+    previous_week_end: str
+
+
+class MessagePlanningContext(BaseModel):
+    """单次 MessagePlan 决策所需的全部动态上下文。"""
+
+    user_query: str = Field(..., min_length=1)
+    conversation: MessagePlanningConversation
+    authorized_systems: List[MessagePlanningSystemSummary] = Field(default_factory=list)
+    common_standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
+    current_system_detail: Optional[SelectionSystem] = None
+    clock: MessagePlanningClock
+
+    @model_validator(mode="after")
+    def validate_current_system_detail(self) -> "MessagePlanningContext":
+        """当前系统详情必须与会话状态和本轮授权候选完全对应。"""
+
+        if self.current_system_detail is None:
+            if self.conversation.has_selected_system:
+                raise ValueError("selected conversation requires current_system_detail")
+            return self
+        if self.current_system_detail.system_id != self.conversation.current_system_id:
+            raise ValueError("current_system_detail conflicts with current_system_id")
+        authorized_system_ids = {system.system_id for system in self.authorized_systems}
+        if self.conversation.current_system_id not in authorized_system_ids:
+            raise ValueError("current_system_id not in authorized_systems")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # NATURAL_LANGUAGE_SEARCH（协议 §4）
 # ---------------------------------------------------------------------------
@@ -199,8 +266,17 @@ class NLSearchOutput(BaseModel):
 class AIConditionItem(BaseModel):
     """AI 生成的单条条件（AIDev 返回契约，不进 output_data）"""
 
-    raw_name: str = Field(..., min_length=1, description="字段名，必须来自字段上下文 standard_fields/extension_fields")
-    keys: List[str] = Field(default_factory=list, description="下钻子键，仅 JSON 容器字段使用，通用字段为空数组")
+    raw_name: str = Field(
+        ...,
+        min_length=1,
+        description="字段名，必须来自字段上下文；拓展数据下钻时 raw_name 固定为 extend_data，不得填写子键名",
+        examples=["username", "extend_data"],
+    )
+    keys: List[str] = Field(
+        default_factory=list,
+        description="下钻子键路径，仅 JSON 容器字段使用；普通字段为空数组，extend_data 多级路径按层拆分",
+        examples=[[], ["_request_url", "scope_id"]],
+    )
     field_type: Optional[str] = Field(None, description="字段类型，可缺省由服务端按字段元数据补全")
     operator: str = Field(..., min_length=1, description="操作符，必须在该字段 allow_operators 内")
     filters: List[Any] = Field(

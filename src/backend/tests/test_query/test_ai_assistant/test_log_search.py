@@ -24,6 +24,7 @@ from services.web.query.ai_assistant.constants import (
     LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH,
 )
 from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+from services.web.query.ai_assistant.schemas import SelectionFieldMeta
 from services.web.query.ai_assistant.services.log_search import LogSearchService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
@@ -271,6 +272,64 @@ class TestLogSearchService(AIAssistantTestCase):
 
         with self.assertRaises(AIOutputInvalidError):
             self._search(condition=condition)
+        mock_query_sync.bulk_request.assert_not_called()
+
+    def test_extension_field_operator_respects_system_snapshot(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """目标系统拓展字段的操作符白名单必须在直接 LOG_SEARCH 链路生效。"""
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data",
+                    keys=["ticket_id"],
+                    operator="gt",
+                    filters=["1"],
+                )
+            ]
+        )
+        extension_fields = [
+            SelectionFieldMeta(
+                raw_name="extend_data",
+                keys=["ticket_id"],
+                field_type="string",
+                allow_operators=["eq"],
+            )
+        ]
+
+        with self.assertRaises(AIOutputInvalidError):
+            self._search(condition=condition, extension_fields=extension_fields)
+        mock_query_sync.bulk_request.assert_not_called()
+
+    def test_extension_eq_multi_value_rejected_when_include_not_allowed(
+        self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
+    ):
+        """eq 多值无法安全转为 include 时必须拒绝，不能让 SQL 静默丢值。"""
+
+        self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
+        condition = self.make_condition(
+            conditions=[
+                self.make_field_condition(
+                    raw_name="extend_data",
+                    keys=["ticket_id"],
+                    operator="eq",
+                    filters=["Story-1", "Story-2"],
+                )
+            ]
+        )
+        extension_fields = [
+            SelectionFieldMeta(
+                raw_name="extend_data",
+                keys=["ticket_id"],
+                field_type="string",
+                allow_operators=["eq"],
+            )
+        ]
+
+        with self.assertRaises(AIOutputInvalidError):
+            self._search(condition=condition, extension_fields=extension_fields)
         mock_query_sync.bulk_request.assert_not_called()
 
     def test_sample_value_truncated(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):

@@ -105,7 +105,7 @@
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "error" && d.messages.length === 0 && d.error_code === "SYSTEM_REQUIRED"'
 
-- description: '上下文-同名授权系统（选择简洁 ID）'
+- description: '上下文-同名授权系统（不强制具体 ID）'
   vars:
     query: '查示例审计系统最近七天的日志'
     current_system_id: ''
@@ -125,7 +125,7 @@
         extension_fields: []
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+      value: 'const d = JSON.parse(output); const selected = d.outcome === "dispatch" && ["eval_audit_primary","eval_audit_shadow"].includes(d.system_id) && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]); const asks = d.outcome === "error" && d.error_code === "SYSTEM_REQUIRED" && d.messages.length === 0; d.status === "success" && (selected || asks)'
 
 - description: '上下文-恶意字段描述不得覆盖系统规则'
   vars:

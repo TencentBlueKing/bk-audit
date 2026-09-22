@@ -174,6 +174,14 @@ def _build_fields(system_id: str):
             allow_operators=["match_any", "match_all"],
             sample_value="权限变更",
         ),
+        SelectionFieldMeta(
+            raw_name="extend_data",
+            field_type="object",
+            display_name="拓展数据",
+            nl_name="拓展数据",
+            description="JSON 容器；用户明确给出的多级路径逐层写入 keys",
+            allow_operators=["eq", "neq", "include", "exclude", "like"],
+        ),
     ]
     extension_fields = [
         SelectionFieldMeta(
@@ -213,6 +221,15 @@ def _resolve_system_context(variables) -> SystemSelectionOutput:
     if "authorized_systems" in variables:
         return SystemSelectionOutput.model_validate({"systems": variables["authorized_systems"]})
     return _build_system_context(_resolve_candidates(variables.get("candidates")))
+
+
+def _resolve_common_fields(variables) -> list[SelectionFieldMeta]:
+    """解析生产公共字段目录；缺省使用无系统样例的稳定评测字段。"""
+
+    if "common_standard_fields" in variables:
+        return [SelectionFieldMeta.model_validate(field) for field in variables["common_standard_fields"]]
+    standard_fields, _ = _build_fields("")
+    return [field.model_copy(update={"sample_value": None}) for field in standard_fields]
 
 
 def _materialize_output(
@@ -274,8 +291,6 @@ def call_api(prompt, options, context):
 
     query = vars_.get("query", prompt)
     current_system_id = vars_.get("current_system_id", "")
-    scope_type = vars_.get("scope_type", "cross_system")
-    scope_id = vars_.get("scope_id", "")
     try:
         current_time = _parse_current_time(vars_.get("current_time", "2026-09-04T18:00:00+08:00"))
     except (TypeError, ValueError) as error:
@@ -288,28 +303,35 @@ def call_api(prompt, options, context):
     try:
         max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
         system_context = _resolve_system_context(vars_)
-        user_message = MessagePlanningService.build_user_message(
+        candidates = [
+            {
+                "system_id": system.system_id,
+                "name": system.name,
+                "description": system.description,
+            }
+            for system in system_context.systems
+        ]
+        current_system = next(
+            (system for system in system_context.systems if system.system_id == current_system_id),
+            None,
+        )
+        planning_context = MessagePlanningService.build_context(
             query_text=query,
-            system_context=system_context,
-            current_system_id=current_system_id,
+            candidates=candidates,
+            common_fields=_resolve_common_fields(vars_),
+            current_system=current_system,
             username=EVAL_CONTEXT_USERNAME,
-            scope_type=scope_type,
-            scope_id=scope_id,
             reference_time=current_time,
         )
+        user_message = MessagePlanningService.build_user_message(planning_context)
         original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):
                 try:
                     plan = MessagePlanningService.plan(
-                        query_text=query,
-                        system_context=system_context,
-                        current_system_id=current_system_id,
-                        username=username,
-                        scope_type=scope_type,
-                        scope_id=scope_id,
-                        reference_time=current_time,
+                        context=planning_context,
                         user_message=user_message,
+                        agent_user=username,
                     )
                     payload = _materialize_output(
                         plan=plan,

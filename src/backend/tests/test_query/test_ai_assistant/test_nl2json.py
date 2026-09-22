@@ -422,6 +422,19 @@ class TestNL2JSONService(AIAssistantTestCase):
             (reference_time - timedelta(days=1)).isoformat(),
         )
 
+    def test_utc_z_time_preserves_absolute_instant(self, mock_chat):
+        """ISO 8601 的 Z 表示 UTC，解析时不得只替换为本地时区标签。"""
+
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = "2026-08-31T10:00:00Z"
+        output["end_time"] = "2026-08-31T11:00:00Z"
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        self.assertEqual(datetime.fromisoformat(condition.start_time), datetime.fromisoformat("2026-08-31T10:00:00Z"))
+        self.assertEqual(datetime.fromisoformat(condition.end_time), datetime.fromisoformat("2026-08-31T11:00:00Z"))
+
     def test_invalid_time_falls_back_to_default(self, mock_chat):
         output = dict(VALID_AI_OUTPUT)
         output["start_time"] = "不是时间"

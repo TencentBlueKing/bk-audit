@@ -79,8 +79,6 @@ class MessagePlanExecutionService:
 
         if plan.outcome == "error":
             if plan.error_code == UserIntentErrorCode.SYSTEM_REQUIRED:
-                if current_selection is not None:
-                    raise AIOutputInvalidError(extra={"reason": "SYSTEM_REQUIRED conflicts with current selection"})
                 if not system_context.systems:
                     raise AIOutputInvalidError(extra={"reason": "system_id not in candidates"})
             return ValidatedMessagePlan(
@@ -91,16 +89,8 @@ class MessagePlanExecutionService:
                 system_context=system_context,
             )
 
-        selection_item = next(
-            (item for item in plan.messages if item.message_type == MessageType.SYSTEM_SELECTION),
-            None,
-        )
         log_item = next((item for item in plan.messages if item.message_type == MessageType.LOG_SEARCH), None)
-        target_system_id = (
-            selection_item.message_input.system_ids[0]
-            if selection_item is not None
-            else cls.selection_system_id(current_selection)
-        )
+        target_system_id = cls.target_system_id(plan=plan, current_selection=current_selection)
         candidate_map = {system.system_id: system for system in system_context.systems}
         if not target_system_id:
             raise AIOutputInvalidError(extra={"reason": "system required"})
@@ -366,7 +356,7 @@ class MessagePlanExecutionService:
     def load_current_selection(
         *,
         execution: MessageExecution,
-        system_context: SystemSelectionOutput,
+        candidate_system_ids: set[str],
     ) -> Message | None:
         """读取当前范围内最新成功系统选择；范围外历史选择视为无选择。"""
 
@@ -382,9 +372,7 @@ class MessagePlanExecutionService:
         )
         if selection is None:
             return None
-        if MessagePlanExecutionService.selection_system_id(selection) not in {
-            system.system_id for system in system_context.systems
-        }:
+        if MessagePlanExecutionService.selection_system_id(selection) not in candidate_system_ids:
             return None
         return selection
 
@@ -398,6 +386,24 @@ class MessagePlanExecutionService:
         return str((systems[0] or {}).get("system_id") or "") if systems else ""
 
     @staticmethod
+    def selection_system_context(selection: Message) -> SystemSelectionOutput:
+        """把成功系统选择消息中固化的字段快照恢复为强类型上下文。"""
+
+        return SystemSelectionOutput.model_validate(selection.output_data)
+
+    @classmethod
+    def target_system_id(cls, *, plan: MessagePlan, current_selection: Message | None) -> str:
+        """从计划中的显式选择或当前会话选择确定本轮目标系统。"""
+
+        selection = next(
+            (item for item in plan.messages if item.message_type == MessageType.SYSTEM_SELECTION),
+            None,
+        )
+        if selection is not None:
+            return selection.message_input.system_ids[0]
+        return cls.selection_system_id(current_selection)
+
+    @staticmethod
     def build_error_output(*, error_code: str, system_context: SystemSelectionOutput | None) -> UserIntentOutputSchema:
         """将稳定计划错误码转换为前端可直接展示的业务错误。"""
 
@@ -406,7 +412,7 @@ class MessagePlanExecutionService:
             candidates = [{"system_id": system.system_id, "name": system.name} for system in system_context.systems]
         messages = {
             UserIntentErrorCode.UNRECOGNIZED_INTENT: "未能理解您的需求，请描述要查询的系统或日志内容",
-            UserIntentErrorCode.SYSTEM_REQUIRED: "请先告诉我要查哪个系统的日志",
+            UserIntentErrorCode.SYSTEM_REQUIRED: "请明确要查询哪个系统的日志",
             UserIntentErrorCode.SYSTEM_UNAVAILABLE: "目标系统不在当前可用系统范围内，请重新选择系统",
         }
         return UserIntentOutputSchema(

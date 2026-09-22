@@ -105,14 +105,28 @@ class IntentEvalProviderTest(SimpleTestCase):
 
         self.assertEqual(planning.call_count, 2)
         self.assertEqual(result["metadata"]["attempt_count"], 2)
-        self.assertEqual(planning.call_args.kwargs["username"], "auth_eval_user")
+        self.assertEqual(planning.call_args.kwargs["agent_user"], "auth_eval_user")
+        self.assertEqual(
+            planning.call_args.kwargs["context"].conversation.username, self.provider.EVAL_CONTEXT_USERNAME
+        )
         self.assertIn(self.provider.EVAL_CONTEXT_USERNAME, planning.call_args.kwargs["user_message"])
         self.assertNotIn('"username": "auth_eval_user"', planning.call_args.kwargs["user_message"])
+        self.assertNotIn("scope_type", planning.call_args.kwargs["user_message"])
+        self.assertNotIn("scope_id", planning.call_args.kwargs["user_message"])
 
     def test_explicit_empty_candidates_stay_empty(self):
         """显式空授权列表必须保留，不能回退到评测默认系统。"""
 
         self.assertEqual(self.provider._resolve_candidates([]), [])
+
+    def test_default_common_fields_include_extension_container(self):
+        """评测公共字段必须包含生产同源的拓展数据 JSON 容器。"""
+
+        fields = {field.raw_name: field for field in self.provider._resolve_common_fields({})}
+
+        self.assertIn("extend_data", fields)
+        self.assertEqual(fields["extend_data"].field_type, "object")
+        self.assertIn("eq", fields["extend_data"].allow_operators)
 
     def test_full_authorized_system_context_keeps_per_system_fields(self):
         """评测可以注入生产同构的完整系统字段快照。"""
@@ -204,8 +218,6 @@ class IntentEvalProviderTest(SimpleTestCase):
             with self.subTest(case=case["description"]):
                 variables = case["vars"]
                 self.assertIn("authorized_systems", variables)
-                self.assertIn("scope_type", variables)
-                self.assertIn("scope_id", variables)
                 self.assertIn("current_time", variables)
 
     def test_promptfoo_covers_nested_extension_field_matrix(self):

@@ -375,6 +375,7 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
             # 不再以 condition.scope_id 的 system 维度权限为兜底（避免跨场景越权）
             session_scope_type=context_data.session_scope_type,
             session_scope_id=context_data.session_scope_id,
+            extension_fields=context_data.extension_fields,
         )
         return LogSearchOutputSchema.from_query_output(output)
 
