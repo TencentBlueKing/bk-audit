@@ -46,6 +46,7 @@ export default {
     '已填写“风险总结”': 'Risk summary',
     人工处理: 'Manual Processing',
     风险单产生: 'Ticket Generated',
+    风险确认: 'Risk Confirmation',
     误报: 'False Positive',
     重开单据: 'Reopen ticket',
     执行前审批: 'Pre-Approval',
