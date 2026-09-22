@@ -38,10 +38,11 @@
           </div>
         </div>
 
-        <!-- 可编辑：复用条件检索组件 -->
+        <!-- 可编辑：复用条件检索组件；PROCESSING / 提交中禁用交互，避免并发编辑 -->
         <div
           v-if="conditionEditable"
-          class="condition-editor">
+          class="condition-editor"
+          :class="{ 'is-editing-locked': !canMutateCondition }">
           <condition-tags
             ref="conditionTagsRef"
             compact-select-popover
@@ -69,6 +70,7 @@
           <div class="condition-actions">
             <bk-button
               class="resubmit-btn"
+              :disabled="!canMutateCondition"
               :loading="bodyLoading"
               theme="primary"
               @click="handleResubmit">
@@ -386,6 +388,7 @@
           </svg>
         </button>
         <button
+          v-if="showRegenerate"
           class="feedback-btn"
           title="重新生成"
           type="button"
@@ -476,6 +479,8 @@
     /** 任务失败文案（apiStatus=FAILED） */
     errorMessage?: string;
     embedded?: boolean;
+    /** 是否展示「重新生成」；已有派生消息的意图应隐藏 */
+    showRegenerate?: boolean;
     standardFields?: SystemFieldRow[];
     extensionFields?: SystemFieldRow[];
     systems?: SelectedSystem[];
@@ -484,6 +489,7 @@
     apiStatus: undefined,
     errorMessage: '',
     embedded: false,
+    showRegenerate: true,
     standardFields: () => [],
     extensionFields: () => [],
     systems: () => [],
@@ -540,6 +546,11 @@
     resubmitLoading.value
     || props.apiStatus === 'PROCESSING'
     || Boolean(displayResult.value?.tablePending)
+  ));
+  /** 仅 SUCCESS / FAILED 可改条件；PROCESSING 与本地提交中锁定 */
+  const canMutateCondition = computed(() => (
+    (props.apiStatus === 'SUCCESS' || props.apiStatus === 'FAILED')
+    && !resubmitLoading.value
   ));
   const conditionTagsRef = ref<{ startEditField?:(fieldName: string) => void }>();
   const searchModel = ref<Record<string, any>>({
@@ -654,6 +665,7 @@
   };
 
   const handleAddField = async (fieldName: string, config: IFieldConfig, initialValue?: any) => {
+    if (!canMutateCondition.value) return;
     if (fieldName !== 'datetime' && searchModel.value[fieldName] !== undefined) {
       conditionTagsRef.value?.startEditField?.(fieldName);
       return;
@@ -665,6 +677,7 @@
   };
 
   const handleRemoveCondition = (fieldName: string) => {
+    if (!canMutateCondition.value) return;
     if (fieldName === 'datetime' || fieldName === 'system_id') return;
     const next = { ...searchModel.value };
     delete next[fieldName];
@@ -672,6 +685,7 @@
   };
 
   const handleUpdateCondition = (fieldName: string, value: any) => {
+    if (!canMutateCondition.value) return;
     if (fieldName === 'datetime') {
       if (Array.isArray(value) && value.length >= 2) {
         const formatted = value.map((item: any) => (
@@ -702,6 +716,7 @@
   };
 
   const handleClearConditions = () => {
+    if (!canMutateCondition.value) return;
     searchModel.value = {
       datetime: createDefaultDatetime(),
       datetime_origin: createDefaultDatetimeOrigin(),
@@ -709,7 +724,7 @@
   };
 
   const handleResubmit = async () => {
-    if (bodyLoading.value) return;
+    if (!canMutateCondition.value || bodyLoading.value) return;
 
     const messageUid = displayMessageUid.value || props.messageUid;
     if (!messageUid) {
@@ -1494,6 +1509,11 @@
 <style lang="postcss">
   /* 结果卡内可编辑条件：与条件筛选卡视觉对齐 */
   .retrieval-result-card .condition-editor {
+    &.is-editing-locked {
+      pointer-events: none;
+      opacity: 0.72;
+    }
+
     .nl-condition-tags {
       flex: 1;
       min-width: 0;

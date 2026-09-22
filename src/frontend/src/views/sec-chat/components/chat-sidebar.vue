@@ -325,46 +325,55 @@
                     @enter="(_val, evt) => handleEditGroupEnter(item.group.name, evt)" />
                 </template>
                 <template v-else>
-                  <span class="group-name">
-                    {{ item.group.name }}
-                    <span class="group-count">({{ getGroupDisplayCount(item.group) }})</span>
-                  </span>
-                  <bk-dropdown
-                    class="group-more-dropdown"
-                    :is-show="activeGroupMenuId === item.group.name"
-                    placement="bottom-end"
-                    :popover-options="{ extCls: 'chat-group-dropdown-pop' }"
-                    trigger="manual"
-                    @click.stop
-                    @hide="hideGroupMenu"
-                    @mousedown.stop>
+                  <span class="group-name">{{ item.group.name }}</span>
+                  <span class="group-count">{{ getGroupDisplayCount(item.group) }}</span>
+                  <div class="group-actions">
                     <div
-                      class="group-more"
-                      :class="{ 'is-active': activeGroupMenuId === item.group.name }"
-                      @click.stop="toggleGroupMenu(item.group.name)">
-                      <audit-icon type="more" />
+                      v-bk-tooltips="{ content: '新对话', placement: 'top' }"
+                      class="group-new-chat"
+                      @click.stop="handleNewChatInGroup(item.group)">
+                      <img
+                        alt=""
+                        class="group-new-chat-icon"
+                        :src="huihuaIcon">
                     </div>
-                    <template #content>
-                      <bk-dropdown-menu>
-                        <bk-dropdown-item @click="startEditGroup(item.group.name)">
-                          重命名
-                        </bk-dropdown-item>
-                        <bk-dropdown-item
-                          v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
-                          ext-cls="sub-menu-item is-dropdown-disabled"
-                          @click.stop.prevent="onDisabledConfigClick"
-                          @mousedown.stop.prevent>
-                          <div class="dropdown-sub-trigger">
-                            <span>导出会话</span>
-                            <angle-right class="sub-icon" />
-                          </div>
-                        </bk-dropdown-item>
-                        <bk-dropdown-item @click="showDeleteGroup(item.group.name)">
-                          删除分组
-                        </bk-dropdown-item>
-                      </bk-dropdown-menu>
-                    </template>
-                  </bk-dropdown>
+                    <bk-dropdown
+                      class="group-more-dropdown"
+                      :is-show="activeGroupMenuId === item.group.name"
+                      placement="bottom-end"
+                      :popover-options="{ extCls: 'chat-group-dropdown-pop' }"
+                      trigger="manual"
+                      @click.stop
+                      @hide="hideGroupMenu"
+                      @mousedown.stop>
+                      <div
+                        class="group-more"
+                        :class="{ 'is-active': activeGroupMenuId === item.group.name }"
+                        @click.stop="toggleGroupMenu(item.group.name)">
+                        <audit-icon type="more" />
+                      </div>
+                      <template #content>
+                        <bk-dropdown-menu>
+                          <bk-dropdown-item @click="startEditGroup(item.group.name)">
+                            重命名
+                          </bk-dropdown-item>
+                          <bk-dropdown-item
+                            v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                            ext-cls="sub-menu-item is-dropdown-disabled"
+                            @click.stop.prevent="onDisabledConfigClick"
+                            @mousedown.stop.prevent>
+                            <div class="dropdown-sub-trigger">
+                              <span>导出会话</span>
+                              <angle-right class="sub-icon" />
+                            </div>
+                          </bk-dropdown-item>
+                          <bk-dropdown-item @click="showDeleteGroup(item.group.name)">
+                            删除分组
+                          </bk-dropdown-item>
+                        </bk-dropdown-menu>
+                      </template>
+                    </bk-dropdown>
+                  </div>
                 </template>
               </div>
 
@@ -848,6 +857,7 @@
   import aiSettingIcon from '@images/ai-setting.svg';
   import folderEmptyIcon from '@images/folder-empty.svg?inline';
   import folderIcon from '@images/folder.svg';
+  import huihuaIcon from '@images/huihua.svg';
   import searchIcon from '@images/search.svg';
 
   import { useSecChatStore } from '../composables/use-sec-chat-store';
@@ -893,6 +903,8 @@
   const emit = defineEmits<{
     toggle: [];
     'new-chat': [];
+    /** 分组内新建会话，携带分组 uid */
+    'new-chat-in-group': [groupId: string];
     select: [id: string];
     delete: [id: string];
     'update-group': [id: string, groupName?: string];
@@ -906,6 +918,12 @@
     'import': [ids: string[]];
     'update-conv-title': [id: string, title: string];
   }>();
+
+  const handleNewChatInGroup = (group: Group) => {
+    if (!group?.id) return;
+    hideGroupMenu();
+    emit('new-chat-in-group', group.id);
+  };
 
   const legacySearchPropCompat = computed(() => props.searchLoading || props.searchResults.length > 0);
   void legacySearchPropCompat.value;
@@ -2536,7 +2554,8 @@
       || el.closest('.chat-conv-submenu-pop')
       || el.closest('.chat-group-dropdown-pop')
       || el.closest('.action-btn')
-      || el.closest('.group-more'));
+      || el.closest('.group-more')
+      || el.closest('.group-new-chat'));
   };
 
   watch(

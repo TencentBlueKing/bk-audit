@@ -118,6 +118,11 @@ export interface ChatMessage {
   /** 卡片是否可见；对应协议 visible，false 时不渲染整张卡片 */
   visible?: boolean;
   parentMessageUid?: string | null;
+  /**
+   * USER_INTENT 是否已产生派生消息（derived_messages / 兼容 uid）。
+   * 有派生时不可编辑意图原文；仅业务错误且无派生时可「编辑后重发」。
+   */
+  hasDerivedMessages?: boolean;
 }
 
 export interface Conversation {

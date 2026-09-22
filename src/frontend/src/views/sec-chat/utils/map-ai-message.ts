@@ -17,6 +17,7 @@
 import dayjs from 'dayjs';
 
 import type {
+  AiDerivedMessageRef,
   AiMessage,
   AiNlRecognitionError,
   AiSearchCondition,
@@ -412,6 +413,43 @@ export const getNlRecognitionError = (message: AiMessage): AiNlRecognitionError 
 };
 
 /**
+ * 从 USER_INTENT output 解析派生消息名单。
+ * 优先 derived_messages；否则回退 selection_message_uid / log_search_message_uid。
+ */
+export const resolveDerivedMessageRefs = (output?: AiUserIntentOutput | null): AiDerivedMessageRef[] => {
+  if (!output) return [];
+  const derived = Array.isArray(output.derived_messages)
+    ? output.derived_messages.filter(item => Boolean(item?.message_uid))
+    : [];
+  if (derived.length) return derived;
+
+  const refs: AiDerivedMessageRef[] = [];
+  const selectionUid = String(output.selection_message_uid || '').trim();
+  if (selectionUid) {
+    refs.push({
+      message_uid: selectionUid,
+      message_type: 'SYSTEM_SELECTION',
+    });
+  }
+  const logSearchUid = String(output.log_search_message_uid || '').trim();
+  if (logSearchUid) {
+    refs.push({
+      message_uid: logSearchUid,
+      message_type: 'LOG_SEARCH',
+    });
+  }
+  return refs;
+};
+
+/** 意图是否已声明派生消息（含兼容 uid） */
+export const hasIntentDerivedMessages = (message: AiMessage): boolean => {
+  if (message.message_type !== 'USER_INTENT' && message.message_type !== 'NATURAL_LANGUAGE_SEARCH') {
+    return false;
+  }
+  return resolveDerivedMessageRefs((message.output_data || {}) as AiUserIntentOutput).length > 0;
+};
+
+/**
  * 纯切系统：intent=select_system 且已解析 system_id，无检索条件 / 识别错误。
  * 此类消息不会续链 LOG_SEARCH，不应进入检索 loading。
  */
@@ -419,6 +457,9 @@ export const isPureSystemSwitchIntent = (message: AiMessage): boolean => {
   if (message.message_type !== 'USER_INTENT' || message.status !== 'SUCCESS') return false;
   if (getNlRecognitionError(message)) return false;
   const output = (message.output_data || {}) as AiUserIntentOutput;
+  // 若派生名单里已有 LOG_SEARCH，说明同时还要检索，不算纯切系统
+  const derived = resolveDerivedMessageRefs(output);
+  if (derived.some(item => item.message_type === 'LOG_SEARCH')) return false;
   return (
     output.intent === 'select_system'
     && Boolean(String(output.system_id || '').trim())
@@ -493,8 +534,12 @@ export const mapAiMessageToChatMessage = (
   if (message.message_type === 'NATURAL_LANGUAGE_SEARCH') {
     const queryText = String(message.input_data?.query_text ?? '');
     const recognitionError = getNlRecognitionError(message);
-    if (recognitionError?.error_code === 'SYSTEM_REQUIRED') {
-      const candidateSystems = pickCandidateSystems(message);
+    const candidateSystems = pickCandidateSystems(message);
+    const shouldPromptSystemSelection = (
+      recognitionError?.error_code === 'SYSTEM_REQUIRED'
+      || (recognitionError?.error_code === 'SYSTEM_UNAVAILABLE' && candidateSystems.length > 0)
+    );
+    if (shouldPromptSystemSelection) {
       return {
         id: message.uid,
         role: 'assistant',
@@ -505,7 +550,10 @@ export const mapAiMessageToChatMessage = (
         systemIds: candidateSystems.map(item => item.id),
         candidateSystems,
         content: queryText,
-        // SYSTEM_REQUIRED 不透出 error_message 作 tip（后端文案过长，走选系统卡默认提示）
+        // SYSTEM_REQUIRED 不透出 error_message 作 tip；SYSTEM_UNAVAILABLE 可展示后端引导文案
+        aiMessage: recognitionError?.error_code === 'SYSTEM_UNAVAILABLE'
+          ? (recognitionError.error_message || undefined)
+          : undefined,
         ...baseMeta,
       };
     }
@@ -543,13 +591,22 @@ export const mapAiMessageToChatMessage = (
     const recognitionError = getNlRecognitionError(message);
     const candidateSystems = pickCandidateSystems(message);
     const resolvedSystemId = String(output.system_id || '').trim();
+    const hasDerived = hasIntentDerivedMessages(message);
     const shouldPromptSystemSelection = (
       recognitionError?.error_code === 'SYSTEM_REQUIRED'
+      || (recognitionError?.error_code === 'SYSTEM_UNAVAILABLE' && candidateSystems.length > 0)
       || (output.intent === 'select_system' && !resolvedSystemId)
     );
 
     if (shouldPromptSystemSelection) {
       const isSystemRequired = recognitionError?.error_code === 'SYSTEM_REQUIRED';
+      const isSystemUnavailable = recognitionError?.error_code === 'SYSTEM_UNAVAILABLE';
+      let systemPromptTip: string | undefined;
+      if (isSystemUnavailable) {
+        systemPromptTip = recognitionError?.error_message || undefined;
+      } else if (!isSystemRequired && output.message) {
+        systemPromptTip = String(output.message);
+      }
       return {
         id: message.uid,
         role: 'assistant',
@@ -560,11 +617,10 @@ export const mapAiMessageToChatMessage = (
         systemIds: candidateSystems.map(item => item.id),
         candidateSystems,
         content: queryText,
-        // SYSTEM_REQUIRED 不透出 error_message 作 tip（后端文案过长，走选系统卡默认提示）
-        aiMessage: (!isSystemRequired && output.message)
-          ? String(output.message)
-          : undefined,
+        // SYSTEM_REQUIRED 不透出过长 tip；SYSTEM_UNAVAILABLE / 其它可展示引导文案
+        aiMessage: systemPromptTip,
         intent: output.intent,
+        hasDerivedMessages: hasDerived,
         ...baseMeta,
       };
     }
@@ -579,6 +635,7 @@ export const mapAiMessageToChatMessage = (
         aiMessage: output.message ? String(output.message) : undefined,
         intent: output.intent,
         candidateSystems,
+        hasDerivedMessages: hasDerived,
         recognitionError: {
           code: recognitionError.error_code,
           message: recognitionError.error_message,
@@ -587,7 +644,7 @@ export const mapAiMessageToChatMessage = (
       };
     }
 
-    // 纯切系统：不渲染确认气泡；检索引导由 selection_message_uid 的 SYSTEM_SELECTION 承接
+    // 纯切系统：不渲染确认气泡；检索引导由 selection / derived SYSTEM_SELECTION 承接
     if (isPureSystemSwitchIntent(message)) {
       return {
         id: message.uid,
@@ -595,11 +652,12 @@ export const mapAiMessageToChatMessage = (
         type: 'text',
         content: '',
         intent: output.intent,
+        hasDerivedMessages: hasDerived,
         ...baseMeta,
       };
     }
 
-    // 意图成功且已识别条件：先出条件区，表格等续链 LOG_SEARCH
+    // 意图成功且已识别条件：先出条件区，表格等派生 LOG_SEARCH
     const pendingResult = message.status === 'SUCCESS'
       ? mapConditionPendingResult(output.condition, fieldCatalog)
       : undefined;
@@ -613,6 +671,7 @@ export const mapAiMessageToChatMessage = (
       aiMessage: output.message ? String(output.message) : undefined,
       intent: output.intent,
       candidateSystems,
+      hasDerivedMessages: hasDerived,
       ...baseMeta,
     };
   }
