@@ -22,10 +22,6 @@
         <template v-if="isEditingSystem">
           <div class="systems-edit-header">
             <div class="systems-edit-title">
-              <img
-                alt=""
-                class="title-icon"
-                :src="wenhaoIcon">
               <span>已选系统</span>
             </div>
           </div>
@@ -289,7 +285,6 @@
   } from '../../utils/map-ai-message';
   import type { SelectedSystem, SystemFieldRow } from '../../types';
 
-  import wenhaoIcon from '@images/wenhao.svg';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
   import JsonFieldPreview from './json-field-preview.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
@@ -544,6 +539,8 @@
 
   .systems-section {
     margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
     flex-shrink: 0;
   }
 
@@ -600,18 +597,10 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 8px;
     font-size: 14px;
     font-weight: 500;
     line-height: 22px;
     color: #313238;
-
-    .title-icon {
-      display: block;
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-    }
   }
 
   .system-edit-panel {
