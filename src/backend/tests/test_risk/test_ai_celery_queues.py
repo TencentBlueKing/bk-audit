@@ -157,3 +157,39 @@ class TestAICeleryQueueIsolation(TestCase):
                 f"{PAAS_PROC_TYPE_MAX_LENGTH} characters: {oversize}"
             ),
         )
+
+    def test_app_desc_replicas_prefer_gevent_over_scale_out(self):
+        """I/O 队列用 gevent 并发换吞吐，副本与线上一致压在 2，避免 RabbitMQ 常驻连接打满。"""
+        desc = yaml.safe_load(APP_DESC.read_text())
+        processes = desc["modules"]["api"]["processes"]
+        self.assertEqual(
+            {
+                name: processes[name]["replicas"]
+                for name in (
+                    "worker",
+                    "risk-worker",
+                    "log-export",
+                    "risk-report",
+                    "ai-title",
+                    "risk-single",
+                    "risk-multi",
+                    "notice",
+                    "beat",
+                    "gen-risk",
+                    "web",
+                )
+            },
+            {
+                "worker": 2,
+                "risk-worker": 2,
+                "log-export": 2,
+                "risk-report": 2,
+                "ai-title": 2,
+                "risk-single": 2,
+                "risk-multi": 2,
+                "notice": 1,
+                "beat": 1,
+                "gen-risk": 2,
+                "web": 5,
+            },
+        )
