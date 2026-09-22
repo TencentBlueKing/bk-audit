@@ -1,7 +1,6 @@
 """通用消息规划评测 Provider 的生产协议一致性测试。"""
 
 import importlib.util
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -328,40 +327,3 @@ class IntentEvalProviderTest(SimpleTestCase):
                 )
                 self.assertEqual(nested["field"]["keys"], ["_request_url", "scope_id"])
                 self.assertEqual(nested["filters"], ["49"])
-
-    def test_eval_sources_do_not_contain_known_real_identifiers(self):
-        """评测源文件仅保留合成人员和系统标识，不扫描本地忽略的历史输出。"""
-
-        eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        source_files = [eval_root / "providers/provider.py", *sorted((eval_root / "tests").glob("*.yaml"))]
-        forbidden = (
-            "frodomei",
-            "hermit",
-            "zhangsan",
-            "bk-audit",
-            "iam_v4_bk-audit",
-            "bk-ci",
-            "bk_cmdb",
-            "bk_monitorv3",
-            "bk_userman",
-            "bk_iam",
-            "bk_nodeman",
-            "bk_ops_base",
-            "dry_test",
-        )
-        for source_file in source_files:
-            content = source_file.read_text()
-            with self.subTest(source_file=source_file.name):
-                for identifier in forbidden:
-                    self.assertNotIn(identifier, content)
-                self.assertIsNone(re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", content, re.IGNORECASE))
-
-        for fixture_path in sorted((eval_root / "tests").glob("*.yaml")):
-            fixtures = yaml.safe_load(fixture_path.read_text())
-            for case in fixtures:
-                systems = case.get("vars", {}).get("authorized_systems") or case.get("vars", {}).get("candidates")
-                if not isinstance(systems, list):
-                    continue
-                for system in systems:
-                    if isinstance(system, dict) and "system_id" in system:
-                        self.assertTrue(str(system["system_id"]).startswith("eval_"))

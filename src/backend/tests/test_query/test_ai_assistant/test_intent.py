@@ -274,7 +274,7 @@ class IntentRecognitionServiceTest(AIAssistantTestCase):
 
     def _recognize(self, current_system_id="", candidates=CANDIDATES):
         return IntentRecognitionService.recognize(
-            query_text="我要看审计中心近七天 hermit 的操作记录",
+            query_text="我要看审计中心近七天 eval_user_alpha 的操作记录",
             candidates=candidates,
             current_system_id=current_system_id,
             username=self.username,
