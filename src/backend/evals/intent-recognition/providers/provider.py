@@ -31,6 +31,9 @@ django.setup()
 from services.web.query.ai_assistant.exceptions import (  # noqa: E402
     AIOutputInvalidError,
     AIOutputParseFailedError,
+    AIServiceError,
+    AITimeoutError,
+    InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (  # noqa: E402
@@ -156,7 +159,7 @@ def _build_fields(system_id: str):
         ),
         SelectionFieldMeta(
             raw_name="result_code",
-            field_type="string",
+            field_type="int",
             display_name="执行结果",
             nl_name="执行结果",
             allow_operators=["include"],
@@ -325,13 +328,16 @@ def call_api(prompt, options, context):
         )
         user_message = MessagePlanningService.build_user_message(planning_context)
         original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
+        retry_feedback = None
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):
+                plan = None
                 try:
                     plan = MessagePlanningService.plan(
                         context=planning_context,
                         user_message=user_message,
                         agent_user=username,
+                        retry_feedback=retry_feedback,
                     )
                     payload = _materialize_output(
                         plan=plan,
@@ -340,7 +346,16 @@ def call_api(prompt, options, context):
                         reference_time=current_time,
                     )
                     break
-                except (AIOutputParseFailedError, AIOutputInvalidError, QueryNotRecognizedError):
+                except (
+                    AIOutputParseFailedError,
+                    AIOutputInvalidError,
+                    InvalidConditionError,
+                    QueryNotRecognizedError,
+                ) as error:
+                    if attempt_count >= max_attempts:
+                        raise
+                    retry_feedback = MessagePlanningService.build_retry_feedback(error=error, plan=plan)
+                except (AITimeoutError, AIServiceError):
                     if attempt_count >= max_attempts:
                         raise
     except Exception as error:  # 业务异常进入评测输出，由断言判定是否符合预期

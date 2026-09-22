@@ -32,6 +32,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from core.sql.constants import FieldType
 from core.utils.time import parse_datetime
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
 from services.web.query.utils.search_config import QueryConditionOperator
@@ -260,12 +261,28 @@ class AIConditionItem(BaseModel):
         description="下钻子键路径，仅 JSON 容器字段使用；普通字段为空数组，extend_data 多级路径按层拆分",
         examples=[[], ["_request_url", "scope_id"]],
     )
-    field_type: Optional[str] = Field(None, description="字段类型，可缺省由服务端按字段元数据补全")
-    operator: str = Field(..., min_length=1, description="操作符，必须在该字段 allow_operators 内")
+    field_type: FieldType = Field(
+        default=FieldType.STRING,
+        description=("下发给查询执行层的叶子字段类型；上下文中的 object 表示 JSON 容器，不是可输出的查询类型。" "拓展字段类型不明确时结合用户表达与样例判断，缺省使用 string"),
+    )
+    operator: QueryConditionOperator = Field(
+        ...,
+        description="查询执行层支持的全局操作符；标准字段还必须遵循字段上下文中的 allow_operators",
+    )
     filters: List[Any] = Field(
         default_factory=list,
         description="原始查询值列表，形态匹配操作符；值保持原样：JSON 对象字面量整体作为一个字符串" "（内部双引号转义），URL 与特殊字符文本不截断不改写",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_legacy_null_field_type(cls, value):
+        """兼容旧 Agent 显式输出 null；新 Schema 只向模型暴露查询类型枚举。"""
+
+        if isinstance(value, dict) and value.get("field_type") is None:
+            value = dict(value)
+            value.pop("field_type", None)
+        return value
 
 
 class AIConditionPayload(BaseModel):

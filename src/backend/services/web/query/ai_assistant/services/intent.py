@@ -32,6 +32,7 @@ settings.AI_USER_INTENT_AGENT_CODE 可按环境覆盖路由到其他智能体（
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import islice
 from typing import Any
@@ -46,15 +47,19 @@ from pydantic import ValidationError
 from requests.exceptions import Timeout
 
 from api.constants import AIAgentCode
+from apps.meta.constants import SystemAuditStatusEnum
 from services.web.ai.prompts.intent_recognition import (
+    RETRY_PROMPT_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE,
     USER_PROMPT_TEMPLATE,
 )
 from services.web.query.ai_assistant.exceptions import (
+    AIAssistantError,
     AIOutputInvalidError,
     AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
+    InvalidConditionError,
 )
 from services.web.query.ai_assistant.schemas import (
     IntentPayload,
@@ -77,6 +82,14 @@ PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH = 256
 PLANNING_SAMPLE_STRING_MAX_LENGTH = 128
 PLANNING_SAMPLE_MAX_DEPTH = 2
 PLANNING_SAMPLE_COLLECTION_MAX_ITEMS = 20
+
+
+@dataclass(frozen=True, slots=True)
+class PlanningRetryFeedback:
+    """下一次 Agent 调用所需的上一轮输出和安全校验反馈。"""
+
+    previous_output: str
+    validation_errors: tuple[dict[str, str], ...]
 
 
 def _sample_type(value: Any) -> str:
@@ -381,12 +394,12 @@ class IntentRecognitionService:
 
     @staticmethod
     def load_candidates(namespace: str, username: str, scope_type: str = "", scope_id: str = "") -> list[dict]:
-        """组装候选系统清单：全量系统 ∩ 用户检索权限（无权限系统不进候选，AI 无法越权）。
+        """组装候选系统：当前场景授权范围 ∩ 已接入审计系统。
 
         传 scope_type 时与检索页场景过滤同源（SearchLogPermission.get_scope_auth_systems，
         即 ``_build_system_conditions`` 同一权限口径）：候选限定为该场景/scope 下授权的系统，
-        意图识别无法路由到场景外系统；未传时保持既有行为（系统方向 ∪ 场景方向权限并集，
-        旧前端兼容）。
+        意图识别无法路由到场景外系统；未传时沿用系统方向 ∪ 场景方向权限并集，
+        两种入口最终都剔除尚未接入审计的系统。
 
         供 Celery 任务等无请求上下文场景使用（权限组件依赖请求上下文取用户名，
         此处走显式 username 的参数化版本）。
@@ -398,7 +411,10 @@ class IntentRecognitionService:
             # get_scope_auth_systems 无权限时返回 [""]（ES filter 兜底语义），候选清单置空
             allowed_ids = set(SearchLogPermission.get_scope_auth_systems(scope_type, scope_id, username))
             allowed_ids.discard("")
-            systems = resource.meta.system_list_all(namespace=namespace)
+            systems = resource.meta.system_list_all(
+                namespace=namespace,
+                audit_status__in=SystemAuditStatusEnum.ACCESSED.value,
+            )
         else:
             systems, authorized_system_ids = SearchLogPermission.get_auth_systems_by_username(namespace, username)
             allowed_ids = set(authorized_system_ids)
@@ -410,6 +426,7 @@ class IntentRecognitionService:
             }
             for system in systems
             if str(system["id"]) in allowed_ids
+            and str(system.get("audit_status") or "") == SystemAuditStatusEnum.ACCESSED.value
         ]
 
 
@@ -481,15 +498,26 @@ class MessagePlanningService:
         context: MessagePlanningContext,
         user_message: str | None = None,
         agent_user: str | None = None,
+        retry_feedback: PlanningRetryFeedback | None = None,
     ) -> MessagePlan:
         """调用 Agent 并返回通过授权候选范围校验的消息计划。"""
 
         if user_message is None:
             user_message = cls.build_user_message(context)
-        content = cls._call_agent(user_message, agent_user or context.conversation.username)
-        plan = cls._parse_and_validate(content)
-        plan = cls._normalize_redundant_selection(plan, context.conversation.current_system_id)
-        cls._validate_system_scope(plan, context)
+        content = cls._call_agent(
+            user_message,
+            agent_user or context.conversation.username,
+            retry_feedback=retry_feedback,
+        )
+        try:
+            plan = cls._parse_and_validate(content)
+            plan = cls._normalize_redundant_selection(plan, context.conversation.current_system_id)
+            cls._validate_system_scope(plan, context)
+        except AIAssistantError as error:
+            # plan() 内部的范围校验发生在赋值返回前，调用方拿不到 plan；把原始输出
+            # 固化到异常中，保证下一轮仍能看到需要修正的完整 MessagePlan。
+            error.extra.setdefault("raw_output", content[:INTENT_RAW_OUTPUT_KEEP_LENGTH])
+            raise
         return plan
 
     @staticmethod
@@ -516,17 +544,40 @@ class MessagePlanningService:
         )
 
     @classmethod
-    def _call_agent(cls, user_message: str, username: str) -> str:
+    def _call_agent(
+        cls,
+        user_message: str,
+        username: str,
+        *,
+        retry_feedback: PlanningRetryFeedback | None = None,
+    ) -> str:
         """调用通用 Agent 并统一映射基础设施异常。"""
+
+        chat_history = [
+            {"role": "role", "content": cls.system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+        if retry_feedback is not None:
+            retry_message = _render_prompt(
+                RETRY_PROMPT_TEMPLATE,
+                validation_errors_json=json.dumps(
+                    retry_feedback.validation_errors,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+            chat_history.extend(
+                [
+                    {"role": "assistant", "content": retry_feedback.previous_output},
+                    {"role": "user", "content": retry_message},
+                ]
+            )
 
         try:
             response = api.bk_plugins_ai_agent.chat_completion(
                 agent_code=cls.agent_code,
                 user=username,
-                chat_history=[
-                    {"role": "role", "content": cls.system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
+                chat_history=chat_history,
                 execute_kwargs={"stream": False, "thread_id": f"intent-planning-{uuid4().hex}"},
             )
         except Timeout as error:
@@ -535,10 +586,17 @@ class MessagePlanningService:
             logger.exception("[MessagePlanningService] chat_completion failed")
             raise AIServiceError(extra={"error": str(error)})
         if not isinstance(response, str):
-            raise AIOutputParseFailedError(
+            raise AIOutputInvalidError(
                 extra={
                     "raw_type": type(response).__name__,
                     "raw_output": str(response)[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
+                    "validation_errors": [
+                        {
+                            "path": "$",
+                            "code": "invalid_response_type",
+                            "message": "Agent response must be a JSON string",
+                        }
+                    ],
                 },
             )
         return response
@@ -549,13 +607,81 @@ class MessagePlanningService:
 
         raw_plan = NL2JSONService._extract_json(content)
         if raw_plan is None:
-            raise AIOutputParseFailedError(extra={"raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH]})
+            raise AIOutputInvalidError(
+                extra={
+                    "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
+                    "validation_errors": [{"path": "$", "code": "invalid_json", "message": "输出必须是完整 JSON 对象"}],
+                }
+            )
         try:
             return MessagePlan.model_validate(raw_plan)
         except ValidationError as error:
-            raise AIOutputParseFailedError(
-                extra={"raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH], "validation_error": str(error)},
+            validation_errors = cls._normalize_validation_errors(error)
+            exception_class = (
+                InvalidConditionError
+                if any(cls._is_condition_error(item["path"]) for item in validation_errors)
+                else AIOutputInvalidError
             )
+            raise exception_class(
+                extra={
+                    "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
+                    "validation_error": str(error),
+                    "validation_errors": validation_errors,
+                }
+            ) from error
+
+    @staticmethod
+    def _normalize_validation_errors(error: ValidationError) -> list[dict[str, str]]:
+        """把 Pydantic 错误压缩为可安全回传给 Agent 的稳定结构。"""
+
+        return [
+            {
+                "path": ".".join(str(part) for part in item["loc"]) or "$",
+                "code": str(item["type"]),
+                "message": str(item["msg"]),
+            }
+            for item in error.errors(include_input=False, include_url=False)
+        ]
+
+    @staticmethod
+    def _is_condition_error(path: str) -> bool:
+        """判断 MessagePlan 校验错误是否位于 LOG_SEARCH 条件载荷。"""
+
+        parts = set(path.split("."))
+        return "condition" in parts or "conditions" in parts
+
+    @staticmethod
+    def build_retry_feedback(
+        *,
+        error: AIAssistantError,
+        plan: MessagePlan | None,
+    ) -> PlanningRetryFeedback:
+        """从本轮失败构造下一轮完整纠错上下文。"""
+
+        previous_output = str(error.extra.get("raw_output") or "")
+        if not previous_output and plan is not None:
+            previous_output = plan.model_dump_json()
+        validation_errors = error.extra.get("validation_errors")
+        if not isinstance(validation_errors, list) or not validation_errors:
+            validation_errors = [
+                {
+                    "path": "messages.LOG_SEARCH.message_input.condition",
+                    "code": str(error.extra.get("reason") or error.error_code),
+                    "message": str(error.message),
+                }
+            ]
+        normalized = tuple(
+            {
+                "path": str(item.get("path") or "$"),
+                "code": str(item.get("code") or error.error_code),
+                "message": str(item.get("message") or error.message),
+            }
+            for item in validation_errors
+        )
+        return PlanningRetryFeedback(
+            previous_output=previous_output or "{}",
+            validation_errors=normalized,
+        )
 
     @staticmethod
     def _normalize_redundant_selection(plan: MessagePlan, current_system_id: str) -> MessagePlan:

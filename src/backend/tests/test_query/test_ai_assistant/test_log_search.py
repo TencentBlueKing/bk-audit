@@ -23,7 +23,7 @@ from unittest import mock
 from services.web.query.ai_assistant.constants import (
     LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH,
 )
-from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+from services.web.query.ai_assistant.exceptions import InvalidConditionError
 from services.web.query.ai_assistant.schemas import SelectionFieldMeta
 from services.web.query.ai_assistant.services.log_search import LogSearchService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -258,9 +258,9 @@ class TestLogSearchService(AIAssistantTestCase):
         self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
         condition = self.make_condition(conditions=[self.make_field_condition(raw_name="not_a_field")])
 
-        with self.assertRaises(AIOutputInvalidError) as ctx:
+        with self.assertRaises(InvalidConditionError) as ctx:
             self._search(condition=condition)
-        self.assertEqual(ctx.exception.error_code, "AI_OUTPUT_INVALID")
+        self.assertEqual(ctx.exception.error_code, "INVALID_CONDITION")
         mock_query_sync.bulk_request.assert_not_called()
 
     def test_invalid_operator_rejected(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
@@ -270,14 +270,14 @@ class TestLogSearchService(AIAssistantTestCase):
             conditions=[self.make_field_condition(raw_name="username", operator="like", filters=["adm"])]
         )
 
-        with self.assertRaises(AIOutputInvalidError):
+        with self.assertRaises(InvalidConditionError):
             self._search(condition=condition)
         mock_query_sync.bulk_request.assert_not_called()
 
-    def test_extension_field_operator_respects_system_snapshot(
+    def test_extension_field_accepts_global_operator_beyond_sample_hint(
         self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
     ):
-        """目标系统拓展字段的操作符白名单必须在直接 LOG_SEARCH 链路生效。"""
+        """采样快照中的操作符是提示，不限制 Agent 选择查询层支持的操作符。"""
 
         self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
         condition = self.make_condition(
@@ -285,8 +285,9 @@ class TestLogSearchService(AIAssistantTestCase):
                 self.make_field_condition(
                     raw_name="extend_data",
                     keys=["ticket_id"],
+                    field_type="int",
                     operator="gt",
-                    filters=["1"],
+                    filters=[1],
                 )
             ]
         )
@@ -299,14 +300,14 @@ class TestLogSearchService(AIAssistantTestCase):
             )
         ]
 
-        with self.assertRaises(AIOutputInvalidError):
-            self._search(condition=condition, extension_fields=extension_fields)
-        mock_query_sync.bulk_request.assert_not_called()
+        self._search(condition=condition, extension_fields=extension_fields)
 
-    def test_extension_eq_multi_value_rejected_when_include_not_allowed(
+        mock_query_sync.bulk_request.assert_called_once()
+
+    def test_extension_eq_multi_value_uses_global_include_operator(
         self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list
     ):
-        """eq 多值无法安全转为 include 时必须拒绝，不能让 SQL 静默丢值。"""
+        """拓展字段的采样提示不阻止多值 eq 安全归一为 include。"""
 
         self._setup_mocks(mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list)
         condition = self.make_condition(
@@ -328,9 +329,9 @@ class TestLogSearchService(AIAssistantTestCase):
             )
         ]
 
-        with self.assertRaises(AIOutputInvalidError):
-            self._search(condition=condition, extension_fields=extension_fields)
-        mock_query_sync.bulk_request.assert_not_called()
+        self._search(condition=condition, extension_fields=extension_fields)
+
+        self.assertIn("IN", self._data_sql(mock_query_sync))
 
     def test_sample_value_truncated(self, mock_build_rt, mock_get_authed, mock_query_sync, mock_system_list):
         long_value = "x" * (LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH + 100)

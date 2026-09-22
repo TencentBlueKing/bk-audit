@@ -31,7 +31,6 @@ from services.web.ai_assistant.schemas.audit_search import (
     NLSearchOutputSchema,
     SystemSelectionOutputSchema,
     UserIntentAgentTraceSchema,
-    UserIntentErrorSchema,
     UserIntentOutputSchema,
 )
 
@@ -56,6 +55,7 @@ from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError,
     AIServiceError,
     AITimeoutError,
+    InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (
@@ -247,23 +247,21 @@ def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) 
 
 
 def _planning_error_output(*, error: AIAssistantError, system_context) -> UserIntentOutputSchema:
-    """把计划或条件校验失败映射为稳定业务错误，保留字段类错误的具体错误码。"""
+    """把内部异常收敛为 USER_INTENT 稳定公开错误。"""
 
     reason = str(error.extra.get("reason") or "")
     if reason == "system required":
         error_code = UserIntentErrorCode.SYSTEM_REQUIRED
     elif reason in {"system_id not in candidates", "current system not in candidates"}:
         error_code = UserIntentErrorCode.SYSTEM_UNAVAILABLE
+    elif isinstance(error, InvalidConditionError):
+        error_code = UserIntentErrorCode.INVALID_CONDITION
+    elif isinstance(error, QueryNotRecognizedError):
+        error_code = UserIntentErrorCode.UNRECOGNIZED_INTENT
+    elif isinstance(error, AIPermissionDeniedError):
+        error_code = UserIntentErrorCode.PERMISSION_DENIED
     else:
-        candidates = [{"system_id": system.system_id, "name": system.name} for system in system_context.systems]
-        return UserIntentOutputSchema(
-            intent="unrecognized",
-            error=UserIntentErrorSchema(
-                error_code=error.error_code,
-                error_message=error.message or "AI 返回内容解析失败，请稍后重试或换一种描述",
-                candidates=candidates if isinstance(error, AIOutputInvalidError) else [],
-            ),
-        )
+        error_code = UserIntentErrorCode.AI_OUTPUT_INVALID
     return MessagePlanExecutionService.build_error_output(
         error_code=error_code,
         system_context=system_context,
@@ -347,12 +345,15 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
     planning_error = None
     planning_attempt_count = 0
     plan = None
+    retry_feedback = None
     for attempt in range(NL_PARSE_MAX_RETRIES + 1):
         planning_attempt_count = attempt + 1
+        plan = None
         try:
             plan = MessagePlanningService.plan(
                 context=agent_context,
                 user_message=planning_context,
+                retry_feedback=retry_feedback,
             )
             validation_context = candidate_context
             if plan.outcome == "dispatch" and any(
@@ -378,7 +379,12 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
                 reference_time=reference_time,
                 current_selection=current_selection,
             )
-        except (AIOutputParseFailedError, AIOutputInvalidError, QueryNotRecognizedError) as error:
+        except (
+            AIOutputParseFailedError,
+            AIOutputInvalidError,
+            InvalidConditionError,
+            QueryNotRecognizedError,
+        ) as error:
             if (
                 attempt >= NL_PARSE_MAX_RETRIES
                 or time.monotonic() >= deadline
@@ -392,6 +398,7 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
                     extra={"raw_output": error.extra.get("raw_output", "")},
                 )
                 break
+            retry_feedback = MessagePlanningService.build_retry_feedback(error=error, plan=plan)
             attempt_duration_ms = int((time.monotonic() - planning_started_at) * 1000)
             logger.warning(
                 "[execute_user_intent] planning attempt rejected, "
@@ -416,30 +423,44 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
             break
         except (AITimeoutError, AIServiceError) as error:
             duration_ms = int((time.monotonic() - planning_started_at) * 1000)
-            failed_trace = agent_trace.model_copy(
-                update={
-                    "status": "failed",
-                    "attempt_count": planning_attempt_count,
-                    "duration_ms": duration_ms,
-                    "error_code": str(error.error_code),
-                    "error_message": str(error.message),
-                    "reason": str(error.extra.get("reason") or ""),
-                    "raw_output": str(error.extra.get("raw_output") or ""),
-                }
-            )
-            MessagePlanExecutionService.persist_agent_trace(
-                execution=execution,
-                agent_trace=failed_trace,
-            )
+            if (
+                attempt >= NL_PARSE_MAX_RETRIES
+                or time.monotonic() >= deadline
+                or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
+            ):
+                failed_trace = agent_trace.model_copy(
+                    update={
+                        "status": "failed",
+                        "attempt_count": planning_attempt_count,
+                        "duration_ms": duration_ms,
+                        "error_code": str(error.error_code),
+                        "error_message": str(error.message),
+                        "reason": str(error.extra.get("reason") or ""),
+                        "raw_output": str(error.extra.get("raw_output") or ""),
+                    }
+                )
+                MessagePlanExecutionService.persist_agent_trace(
+                    execution=execution,
+                    agent_trace=failed_trace,
+                )
+                logger.warning(
+                    "[execute_user_intent] planning service retry budget exhausted, "
+                    "message_id=%s, attempt=%s, duration_ms=%s, error_code=%s",
+                    execution.message.id,
+                    planning_attempt_count,
+                    duration_ms,
+                    error.error_code,
+                )
+                raise
             logger.warning(
-                "[execute_user_intent] planning service failed, "
+                "[execute_user_intent] planning service failed, retrying, "
                 "message_id=%s, attempt=%s, duration_ms=%s, error_code=%s",
                 execution.message.id,
                 planning_attempt_count,
                 duration_ms,
                 error.error_code,
             )
-            raise
+            time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
         else:
             break
 

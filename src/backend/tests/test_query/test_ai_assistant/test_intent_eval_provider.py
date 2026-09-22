@@ -8,7 +8,7 @@ from unittest import mock
 import yaml
 from django.test import SimpleTestCase
 
-from services.web.query.ai_assistant.exceptions import AIOutputParseFailedError
+from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
 from services.web.query.ai_assistant.schemas import (
     AIConditionItem,
     AIConditionPayload,
@@ -91,10 +91,25 @@ class IntentEvalProviderTest(SimpleTestCase):
 
     def test_call_api_retries_contract_failure_with_production_budget(self):
         plan = MessagePlan(outcome="error", error_code="UNRECOGNIZED_INTENT")
+        invalid_output = '{"outcome":"dispatch","messages":[]}'
         with mock.patch.object(
             self.provider.MessagePlanningService,
             "plan",
-            side_effect=[AIOutputParseFailedError(), plan],
+            side_effect=[
+                AIOutputInvalidError(
+                    extra={
+                        "raw_output": invalid_output,
+                        "validation_errors": [
+                            {
+                                "path": "messages",
+                                "code": "value_error",
+                                "message": "dispatch outcome requires messages",
+                            }
+                        ],
+                    }
+                ),
+                plan,
+            ],
         ) as planning:
             result = self.provider.call_api(
                 "你好",
@@ -105,6 +120,9 @@ class IntentEvalProviderTest(SimpleTestCase):
         self.assertEqual(planning.call_count, 2)
         self.assertEqual(result["metadata"]["attempt_count"], 2)
         self.assertEqual(planning.call_args.kwargs["agent_user"], "auth_eval_user")
+        retry_feedback = planning.call_args.kwargs["retry_feedback"]
+        self.assertEqual(retry_feedback.previous_output, invalid_output)
+        self.assertEqual(retry_feedback.validation_errors[0]["path"], "messages")
         self.assertEqual(
             planning.call_args.kwargs["context"].conversation.username, self.provider.EVAL_CONTEXT_USERNAME
         )
@@ -178,7 +196,7 @@ class IntentEvalProviderTest(SimpleTestCase):
         with mock.patch.object(
             self.provider.MessagePlanningService,
             "plan",
-            side_effect=[AIOutputParseFailedError(), plan],
+            side_effect=[AIOutputInvalidError(), plan],
         ) as planning:
             result = self.provider.call_api(
                 "你好",
@@ -285,6 +303,20 @@ class IntentEvalProviderTest(SimpleTestCase):
         case = cases[0]
         self.assertIn("gt 操作符", case["vars"]["query"])
         self.assertIn("INVALID_CONDITION", case["assert"][0]["value"])
+
+    def test_promptfoo_covers_extension_type_and_operator_inference(self):
+        """正式评测覆盖采样提示与用户明确语义冲突及未知路径两类场景。"""
+
+        eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        fixture = "file://tests/extension-type-operators.yaml"
+        self.assertIn(fixture, config["tests"])
+
+        cases = yaml.safe_load((eval_root / "tests/extension-type-operators.yaml").read_text())
+        self.assertEqual(len(cases), 3)
+        self.assertTrue(all("eval_" in str(case["vars"]["authorized_systems"]) for case in cases))
+        self.assertTrue(any("未知路径" in case["description"] for case in cases))
+        self.assertTrue(any("数值比较" in case["description"] for case in cases))
 
     def test_nested_extension_context_shapes_pass_backend_validation(self):
         """四格用例的两种字段上下文都允许显式完整下钻路径通过确定性校验。"""

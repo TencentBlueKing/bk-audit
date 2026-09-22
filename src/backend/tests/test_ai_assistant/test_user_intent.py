@@ -24,6 +24,7 @@ from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIOutputParseFailedError,
     AIPermissionDeniedError,
+    AIServiceError,
     AITimeoutError,
 )
 from services.web.query.ai_assistant.schemas import (
@@ -38,7 +39,10 @@ from services.web.query.ai_assistant.schemas import (
     SystemSelectionInput,
     SystemSelectionOutput,
 )
-from services.web.query.ai_assistant.services.intent import MessagePlanningService
+from services.web.query.ai_assistant.services.intent import (
+    MessagePlanningService,
+    PlanningRetryFeedback,
+)
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
@@ -399,21 +403,70 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(output.error.candidates, [])
         self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
-    def test_transient_agent_failure_propagates(self):
+    def test_transient_agent_failure_retries_and_recovers(self):
         message, execution = create_intent_message(self)
+        planner = mock.MagicMock(side_effect=[AITimeoutError(), AIServiceError(), selection_plan()])
         with mock.patch(
             f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
         ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
-            side_effect=AITimeoutError(),
+            planner,
+        ), mock.patch(
+            f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
         ):
-            with self.assertRaises(AITimeoutError):
-                execute_user_intent.run(execution)
+            resolved = execute_user_intent.run(execution)
+
+        self.assertEqual(planner.call_count, 3)
+        self.assertEqual(resolved.output.system_id, TARGET_SYSTEM_ID)
         self.assertFalse(Message.objects.filter(parent_message=message).exists())
         message.refresh_from_db()
-        self.assertEqual(message.context_data["agent_trace"]["status"], "failed")
-        self.assertEqual(message.context_data["agent_trace"]["attempt_count"], 1)
+        self.assertEqual(message.context_data["agent_trace"]["status"], "processing")
+
+    def test_planning_retry_receives_previous_output_and_validation_errors(self):
+        """确定性输出错误的下一轮调用必须拿到上一轮输出和校验反馈。"""
+
+        message, execution = create_intent_message(self)
+        first_error = AIOutputInvalidError(
+            extra={
+                "raw_output": '{"outcome":"dispatch","messages":[]}',
+                "validation_errors": [
+                    {
+                        "path": "messages",
+                        "code": "value_error",
+                        "message": "dispatch outcome requires messages",
+                    }
+                ],
+            }
+        )
+        calls = 0
+
+        def plan_with_feedback(**kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                self.assertIsNone(kwargs.get("retry_feedback"))
+                raise first_error
+            feedback = kwargs.get("retry_feedback")
+            self.assertIsInstance(feedback, PlanningRetryFeedback)
+            self.assertEqual(feedback.previous_output, first_error.extra["raw_output"])
+            self.assertEqual(feedback.validation_errors[0]["path"], "messages")
+            return selection_plan()
+
+        with mock.patch(
+            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
+        ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
+            f"{TASK_MODULE}.MessagePlanningService.plan",
+            side_effect=plan_with_feedback,
+        ), mock.patch(
+            f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
+        ):
+            resolved = execute_user_intent.run(execution)
+
+        self.assertEqual(calls, 2)
+        self.assertEqual(resolved.output.system_id, TARGET_SYSTEM_ID)
+        self.assertFalse(Message.objects.filter(parent_message=message).exists())
 
     def test_permission_change_returns_business_error_without_retry(self):
         """候选加载后权限变化时返回可展示业务错误，不把根消息降级为通用技术失败。"""
@@ -506,7 +559,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         with mock.patch(f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0):
             root, _, output, _ = self._run(plan, expected_planner_calls=3)
 
-        self.assertEqual(output.error.error_code, "AI_OUTPUT_INVALID")
+        self.assertEqual(output.error.error_code, "INVALID_CONDITION")
         derived = list(Message.objects.filter(parent_message=root).order_by("id"))
         self.assertEqual(len(derived), 1)
         self.assertEqual(derived[0].message_type, MessageType.SYSTEM_SELECTION)

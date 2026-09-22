@@ -12,13 +12,14 @@
 6. 系统 ID、字段、操作符、枚举值及时间条件能通过后端确定性校验。
 7. 相似系统名、提示注入、多值条件和扩展字段场景保持稳定。
 8. 用户明确表达多级拓展路径时，Agent 能基于公共 `extend_data` 容器生成 `extend_data + keys` 条件，并在“完整路径已发现”和“仅父节点及样例已发现”两类目标系统快照上通过后端校验。
+9. 拓展字段类型或操作符不明确时，Agent 可结合用户表达和样例在查询 Schema 的全局枚举内选择；采样元数据不作为错误的强限制。
 
 Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的字段差异和拓展字段受控样例会进入 Agent 上下文，普通标准字段运行时样例不进入 Prompt。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗；`tests/invalid-conditions.yaml` 验证意图已识别但操作符不受支持时稳定返回 `INVALID_CONDITION`。
 
 评测分为两个 profile：
 
 - 首轮能力：`max_attempts=1`，衡量 Agent 第一次输出的准确率，不能被重试掩盖。
-- 生产可用性：`max_attempts=3`，与生产任务的解析错误、越权输出和条件语义错误重试预算一致。
+- 生产可用性：`max_attempts=3`，与生产任务的解析错误、越权输出和条件语义错误重试预算一致。纠错轮次会携带上一轮完整输出和结构化校验错误；AIDev 超时或服务异常只重放原始请求。
 
 Provider 在 metadata 中记录 `attempt_count` 和 `latency_ms`。报告必须同时给出首轮通过率、生产重试后通过率、重试分布和延迟分布。
 
