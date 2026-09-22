@@ -110,13 +110,25 @@ export interface AiNaturalLanguageSearchInput {
 export type AiNlRecognitionErrorCode =
   | 'UNRECOGNIZED_INTENT'
   | 'SYSTEM_REQUIRED'
+  | 'SYSTEM_UNAVAILABLE'
   | 'QUERY_NOT_RECOGNIZED'
+  /** 新旧码并存：后端可能下发 AT_* 或历史 AI_* */
+  | 'AT_OUTPUT_PARSE_FAILED'
+  | 'AT_OUTPUT_INVALID'
   | 'AI_OUTPUT_PARSE_FAILED'
   | 'AI_OUTPUT_INVALID'
   | 'AI_SERVICE_ERROR'
   | 'AI_TIMEOUT'
   | 'PERMISSION_DENIED'
   | string;
+
+/** USER_INTENT SUCCESS 时 output_data.derived_messages 单项（创建时 status 仅为快照） */
+export interface AiDerivedMessageRef {
+  message_uid: string;
+  message_type: AiMessageType;
+  status?: AiMessageStatus;
+  visible?: boolean | null;
+}
 
 export interface AiNlRecognitionError {
   error_code: AiNlRecognitionErrorCode;
@@ -150,6 +162,12 @@ export interface AiUserIntentOutput {
   message?: string;
   condition?: AiSearchCondition | null;
   error?: AiNlRecognitionError | null;
+  /**
+   * 意图成功后后端已创建的派生消息名单。
+   * 前端应按 message_uid 分别拉取/轮询最新状态；列表内 status 仅创建快照。
+   */
+  derived_messages?: AiDerivedMessageRef[];
+  /** 兼容旧字段；有 derived_messages 时优先用名单 */
   log_search_message_uid?: string;
   selection_message_uid?: string;
 }
@@ -265,6 +283,8 @@ export interface AiSidebarNodePage {
 
 export interface AiCreateConversationParams {
   title?: string;
+  /** 分组内新建时直接挂入，避免建完再 move */
+  group_uid?: string;
   initial_message?: {
     message_type: AiMessageType;
     input_data?: Record<string, any>;
