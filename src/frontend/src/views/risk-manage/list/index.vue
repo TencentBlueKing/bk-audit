@@ -41,6 +41,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="all"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <all-risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runAllRiskExport"
@@ -113,6 +119,8 @@
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
 
   import addRisk from './add-risk/index.vue';
   import AllRiskExportButton from './components/all-risk-export-button.vue';
@@ -388,7 +396,12 @@
     return result;
   });
 
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const newAddedRiskIds = ref<string[]>([]);
   const searchBoxRef = ref();
@@ -406,6 +419,7 @@
 
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
+    nextTick(() => batchHandleRef.value?.sync());
   };
 
   const {
@@ -517,6 +531,7 @@
   });
 
   const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
+    nextTick(() => batchHandleRef.value?.sync());
     aiAnalyzesRef.value?.changeIsSearch();
     window.changeConfirm = false;
     totalCount.value = total || 0;
