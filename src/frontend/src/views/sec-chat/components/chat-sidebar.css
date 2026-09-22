@@ -93,8 +93,10 @@
     .conv-dot,
     .group-icon,
     .group-name,
+    .group-count,
     .conv-actions,
-    .group-more-dropdown {
+    .group-more-dropdown,
+    .group-actions {
       pointer-events: none !important;
     }
   }
@@ -439,7 +441,7 @@
       .group-header {
         position: relative;
         display: flex;
-        padding: 7px 22px;
+        padding: 7px 8px 7px 22px;
         color: #63656e;
         cursor: grab;
         border-radius: 4px;
@@ -460,7 +462,7 @@
         &.is-menu-open {
           background: #f5f7fa;
 
-          .group-more-dropdown {
+          .group-actions {
             pointer-events: auto;
             opacity: 100%;
           }
@@ -489,25 +491,62 @@
           white-space: nowrap;
           pointer-events: none;
           -webkit-user-drag: none;
-          flex: 1;
+          flex: 0 1 auto;
+        }
 
-          .group-count {
-            margin-left: 4px;
-            font-size: 14px;
-            color: #979ba5;
+        .group-count {
+          display: inline-flex;
+          height: 16px;
+          min-width: 18px;
+          padding: 0 6px;
+          margin-left: 6px;
+          font-size: 11px;
+          line-height: 16px;
+          color: #4d4f56;
+          pointer-events: none;
+          background: #eaecf0;
+          border-radius: 8px;
+          -webkit-user-drag: none;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          box-sizing: border-box;
+        }
+
+        .group-actions {
+          display: flex;
+          margin-left: auto;
+          pointer-events: none;
+          opacity: 0%;
+          transition: opacity .15s;
+          flex-shrink: 0;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .group-new-chat {
+          display: flex;
+          width: 20px;
+          height: 20px;
+          cursor: pointer;
+          border-radius: 50%;
+          transition: all .2s;
+          align-items: center;
+          justify-content: center;
+
+          &:hover {
+            background: #eaecf0;
+          }
+
+          .group-new-chat-icon {
+            width: 14px;
+            height: 15px;
           }
         }
 
         .group-more-dropdown {
-          position: absolute;
-          top: 50%;
-          right: 8px;
-          z-index: 1;
           display: block;
-          pointer-events: none;
-          opacity: 0%;
-          transform: translateY(-50%);
-          transition: opacity .15s;
         }
 
         .group-more {

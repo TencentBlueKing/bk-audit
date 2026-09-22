@@ -109,7 +109,7 @@
                     }}
                   </div>
                   <bk-button
-                    v-if="showRecognitionResend(msg.recognitionError.code) && msg.content"
+                    v-if="showRecognitionResend(msg.recognitionError.code, msg) && msg.content"
                     class="recognition-resend-btn"
                     size="small"
                     theme="primary"
@@ -143,6 +143,7 @@
                 :extension-fields="extensionFields"
                 :message-uid="resolveResultMessageUid(msg)"
                 :result="getRetrievalResultPayload(msg)"
+                :show-regenerate="canShowIntentRegenerate(msg)"
                 :standard-fields="standardFields"
                 :systems="systems"
                 @regenerate="handleRegenerate(msg.content || '')"
@@ -310,8 +311,11 @@
 
   const NL_RECOGNITION_TITLES: Record<string, string> = {
     SYSTEM_REQUIRED: '需要补充系统信息',
+    SYSTEM_UNAVAILABLE: '目标系统暂不可用',
     UNRECOGNIZED_INTENT: '未能理解当前意图',
     QUERY_NOT_RECOGNIZED: '未能理解检索需求',
+    AT_OUTPUT_PARSE_FAILED: '检索条件解析失败',
+    AT_OUTPUT_INVALID: '检索条件无效',
     AI_OUTPUT_PARSE_FAILED: '检索条件解析失败',
     AI_OUTPUT_INVALID: '检索条件无效',
     AI_SERVICE_ERROR: 'AI 服务暂不可用',
@@ -322,8 +326,11 @@
 
   const NL_RECOGNITION_FALLBACKS: Record<string, string> = {
     SYSTEM_REQUIRED: '请选择目标系统后继续检索',
+    SYSTEM_UNAVAILABLE: '请更换系统或稍后重试',
     UNRECOGNIZED_INTENT: '请换一种描述方式重新发送',
     QUERY_NOT_RECOGNIZED: '请换一种描述或补充关键信息',
+    AT_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
+    AT_OUTPUT_INVALID: '请修改描述后重试',
     AI_OUTPUT_PARSE_FAILED: '请重新描述检索需求',
     AI_OUTPUT_INVALID: '请修改描述后重试',
     AI_SERVICE_ERROR: '请稍后重试',
@@ -351,16 +358,31 @@
   const showRecognitionSuggestions = (code: string) => (
     code === 'UNRECOGNIZED_INTENT'
     || code === 'QUERY_NOT_RECOGNIZED'
+    || code === 'AT_OUTPUT_INVALID'
     || code === 'AI_OUTPUT_INVALID'
+    || code === 'SYSTEM_UNAVAILABLE'
   );
 
-  /** AI 瞬时失败 / 续链超时：回填原句到输入框，由用户编辑后重发（不走 RetryMessage） */
-  const showRecognitionResend = (code: string) => (
-    code === 'AI_TIMEOUT'
-    || code === 'AI_SERVICE_ERROR'
-    || code === 'AI_OUTPUT_PARSE_FAILED'
-    || code === 'LOG_SEARCH_CHAIN_TIMEOUT'
-  );
+  /**
+   * 业务错误且无派生消息时可「编辑后重发」（产品约定：填回输入框后 POST 新意图，非 PATCH）。
+   * 已有 derived_messages 的意图不可编辑原文。
+   * SYSTEM_UNAVAILABLE 有 candidates 时走选系统卡，此处仅覆盖无候选的失败态。
+   */
+  const showRecognitionResend = (code: string, msg: ChatMessage) => {
+    if (msg.hasDerivedMessages) return false;
+    return (
+      code === 'AI_TIMEOUT'
+      || code === 'AI_SERVICE_ERROR'
+      || code === 'AT_OUTPUT_PARSE_FAILED'
+      || code === 'AI_OUTPUT_PARSE_FAILED'
+      || code === 'LOG_SEARCH_CHAIN_TIMEOUT'
+      || code === 'UNRECOGNIZED_INTENT'
+      || code === 'QUERY_NOT_RECOGNIZED'
+      || code === 'AT_OUTPUT_INVALID'
+      || code === 'AI_OUTPUT_INVALID'
+      || code === 'SYSTEM_UNAVAILABLE'
+    );
+  };
 
   const getProcessingText = (messageType?: string) => {
     if (messageType === 'LOG_SEARCH') return '正在检索日志…';
@@ -376,6 +398,14 @@
     (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH')
     && hasChildRetrievalMessage(msg.id)
   );
+
+  /** 已有派生消息的意图不可「重新生成」原文；LOG_SEARCH 结果卡仍可 */
+  const canShowIntentRegenerate = (msg: ChatMessage) => {
+    if (msg.messageType === 'USER_INTENT' || msg.messageType === 'NATURAL_LANGUAGE_SEARCH') {
+      return !msg.hasDerivedMessages;
+    }
+    return true;
+  };
 
   const shouldShowRetrievalResultCard = (msg: ChatMessage) => (
     msg.type === 'retrieval-result'
