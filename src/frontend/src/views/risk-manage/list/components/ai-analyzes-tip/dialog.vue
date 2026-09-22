@@ -17,6 +17,10 @@
         v-for="(item, index) in recommendReports"
         :key="`recommend-${index}`"
         class="report-card recommend"
+        :class="{
+          'is-disabled': isSubmitting,
+          'is-loading': isReportSubmitting(item),
+        }"
         @click="handleReport(item)">
         <div class="report-info">
           <div class="report-title">
@@ -30,6 +34,13 @@
           v-if="item.icon"
           class="report-icon"
           :src="item.icon">
+        <div
+          v-if="isReportSubmitting(item)"
+          class="report-card-mask">
+          <bk-loading
+            loading
+            size="small" />
+        </div>
       </div>
 
       <div
@@ -42,6 +53,10 @@
         v-for="(item, index) in otherReports"
         :key="`other-${index}`"
         class="report-card"
+        :class="{
+          'is-disabled': isSubmitting,
+          'is-loading': isReportSubmitting(item),
+        }"
         @click="handleReport(item)">
         <div class="report-info">
           <div class="report-title">
@@ -55,6 +70,13 @@
           v-if="item.icon"
           class="report-icon"
           :src="item.icon">
+        <div
+          v-if="isReportSubmitting(item)"
+          class="report-card-mask">
+          <bk-loading
+            loading
+            size="small" />
+        </div>
       </div>
 
       <div class="divider-wrapper">
@@ -68,6 +90,7 @@
       <div class="custom-analysis">
         <div
           class="custom-header"
+          :class="{ 'is-disabled': isSubmitting }"
           @click="toggleCustom">
           <audit-icon
             class="collapse-icon"
@@ -82,11 +105,14 @@
             <bk-input
               v-model="customRequirement"
               class="custom-input"
+              :disabled="isSubmitting"
               :placeholder="t('输入你想分析的内容，例如：分析张三在英雄联盟业务的资产转移报告')"
               :rows="3"
               type="textarea" />
             <bk-button
               class="custom-analysis-btn"
+              :disabled="isSubmitting"
+              :loading="isCustomSubmitting"
               theme="primary"
               @click.stop="handleCustomReport">
               {{ t('分析') }}
@@ -99,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import dayjs from 'dayjs';
 
@@ -155,6 +181,8 @@
   const isShow = ref(false);
   const isCustomExpanded = ref(true);
   const customRequirement = ref('');
+  const isSubmitting = ref(false);
+  const submittingKey = ref('');
   const recommendReports = ref<reportsItem[]>([]);
 
   const otherReports = ref<reportsItem[]>([]);
@@ -262,33 +290,52 @@
     };
   });
 
+  const CUSTOM_SUBMITTING_KEY = 'custom';
+
+  const getReportKey = (item: reportsItem) => String(item.scenario_key || item.scenario_id || item.name);
+
+  const isReportSubmitting = (item: reportsItem) => (
+    isSubmitting.value && submittingKey.value === getReportKey(item)
+  );
+
+  const isCustomSubmitting = computed(() => (
+    isSubmitting.value && submittingKey.value === CUSTOM_SUBMITTING_KEY
+  ));
+
+  const resetSubmitting = () => {
+    isSubmitting.value = false;
+    submittingKey.value = '';
+  };
+
   // 提交分析报告请求
   const submitAnalyseReport = async (params: Record<string, any>) => {
-    const analysisScope = JSON.stringify(buildAnalysisScope());
-    const selectedRiskIds = await props.resolveSelectedRiskIds();
-    isShow.value = false;
-    getAiAnalyseReport({
-      ...params,
-      analysis_scope: analysisScope,
-      target_risks_filter: {
-        ...props.searchParams,
-        risk_id: selectedRiskIds.join(','),
-      },
-      generate_title: params.report_type === 'custom',
-    }).then((data) => {
+    try {
+      const analysisScope = JSON.stringify(buildAnalysisScope());
+      const selectedRiskIds = await props.resolveSelectedRiskIds();
+      const data = await getAiAnalyseReport({
+        ...params,
+        analysis_scope: analysisScope,
+        target_risks_filter: {
+          ...props.searchParams,
+          risk_id: selectedRiskIds.join(','),
+        },
+        generate_title: params.report_type === 'custom',
+      });
       const reportId = data?.report_id ?? data?.id;
       if (!reportId) {
         emit('analyze-failed', { title: params.title });
         return;
       }
+      isShow.value = false;
       emit('analyze-started', {
         title: params.title,
         reportId,
       });
-    })
-      .catch(() => {
-        emit('analyze-failed', { title: params.title });
-      });
+    } catch {
+      emit('analyze-failed', { title: params.title });
+    } finally {
+      resetSubmitting();
+    }
   };
 
   const getReportDateSuffix = () => dayjs().format('YYYYMMDD');
@@ -315,6 +362,9 @@
   };
 
   const handleReport = (item: reportsItem) => {
+    if (isSubmitting.value) return;
+    isSubmitting.value = true;
+    submittingKey.value = getReportKey(item);
     submitAnalyseReport({
       scenario_key: item.scenario_key,
       report_type: item.report_type,
@@ -324,7 +374,10 @@
   };
 
   const handleCustomReport = () => {
+    if (isSubmitting.value) return;
     if (!customRequirement.value.trim()) return;
+    isSubmitting.value = true;
+    submittingKey.value = CUSTOM_SUBMITTING_KEY;
     submitAnalyseReport({
       scenario_key: '',
       report_type: 'custom',
@@ -353,6 +406,7 @@
     defaultValue: [],
   });
   const toggleCustom = () => {
+    if (isSubmitting.value) return;
     isCustomExpanded.value = !isCustomExpanded.value;
   };
 
@@ -395,6 +449,36 @@
       border-color: #3a84ff;
       box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
 
+    }
+
+    &.is-disabled {
+      cursor: not-allowed;
+      pointer-events: none;
+      box-shadow: none;
+
+      &:not(.is-loading) {
+        opacity: 70%;
+      }
+
+      &:hover {
+        background: linear-gradient(90deg, #f0f1f5 0%, #fafbfd 100%);
+        border-color: #dcdee5;
+        box-shadow: none;
+      }
+
+      &.recommend:hover {
+        border-color: #c4d9ff;
+      }
+    }
+
+    .report-card-mask {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: flex;
+      background: rgb(255 255 255 / 60%);
+      align-items: center;
+      justify-content: center;
     }
 
     &.recommend {
@@ -458,6 +542,12 @@
       align-items: center;
       cursor: pointer;
       user-select: none;
+
+      &.is-disabled {
+        cursor: not-allowed;
+        pointer-events: none;
+        opacity: 70%;
+      }
 
       .collapse-icon {
         margin-right: 6px;
