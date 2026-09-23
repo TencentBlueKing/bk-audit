@@ -903,7 +903,7 @@
   const emit = defineEmits<{
     toggle: [];
     'new-chat': [];
-    /** 分组内新建会话，携带分组 uid */
+    /** 分组内新建：进首页选功能，携带分组 uid 供建会话时落组 */
     'new-chat-in-group': [groupId: string];
     select: [id: string];
     delete: [id: string];

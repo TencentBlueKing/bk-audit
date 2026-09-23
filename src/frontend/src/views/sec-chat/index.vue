@@ -58,15 +58,12 @@
   import { onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
 
-  import useMessage from '@hooks/use-message';
-
   import { useSecChatStore } from './composables/use-sec-chat-store';
   import { preserveSecChatQuery, saveSecChatLastRoute } from './utils/last-route';
   import ChatSidebar from './components/chat-sidebar.vue';
 
   const route = useRoute();
   const router = useRouter();
-  const { messageError } = useMessage();
   const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
   const withQuery = (to: { name: string; params?: Record<string, string> }) => ({
     ...to,
@@ -94,7 +91,7 @@
     deleteGroup,
     clearAllConversations,
     stopAllMessagePolls,
-    createLogConversation,
+    setPendingNewChatGroupUid,
   } = useSecChatStore();
 
   /** keep-alive 切走时关掉 teleport 到 body 的弹层，避免遮罩残留导致整页无法点击 */
@@ -131,30 +128,21 @@
   });
 
   const handleNewChat = () => {
+    setPendingNewChatGroupUid(null);
     setActiveConversation(null);
     router.push(withQuery({ name: 'secChatHome' }));
   };
 
-  /** 分组内新建：带 group_uid 直接落组，进入会话页并展示选系统引导 */
-  const handleNewChatInGroup = async (groupId: string) => {
-    try {
-      const conversation = await createLogConversation({
-        showInitialSelectSystem: true,
-        groupUid: groupId,
-      });
-      await router.push(withQuery({
-        name: 'secChatAuditLog',
-        params: { conversationId: conversation.id },
-      }));
-    } catch (error: any) {
-      messageError(error?.message
-        || error?.data?.message
-        || '分组不存在或无权限，无法在该分组下新建会话');
-    }
+  /** 分组内新建：与顶部一致，进首页六卡选功能；建会话时再挂到该分组 */
+  const handleNewChatInGroup = (groupId: string) => {
+    setPendingNewChatGroupUid(groupId);
+    setActiveConversation(null);
+    router.push(withQuery({ name: 'secChatHome' }));
   };
 
   /** 仅改路由；消息拉取由子页 watch conversationId 单源触发，避免侧栏+路由叠打 */
   const handleSelectConversation = (id: string) => {
+    setPendingNewChatGroupUid(null);
     const conv = conversations.value.find(c => c.id === id);
     if (conv?.sceneType === 'log' || id.startsWith('draft-')) {
       router.push(withQuery({
