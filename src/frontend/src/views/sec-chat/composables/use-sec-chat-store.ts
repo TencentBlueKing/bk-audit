@@ -131,6 +131,8 @@ const ensureBootstrapSelectSystem = (conv: Conversation) => {
 
 const sidebarCollapsed = ref(false);
 const activeConversationId = ref<string | null>(null);
+/** 分组内点「新对话」进首页时暂存目标分组，选功能建会话后再消费 */
+const pendingNewChatGroupUid = ref<string | null>(null);
 const sidebarLoading = ref(false);
 const messageLoading = ref(false);
 const olderMessagesLoading = ref(false);
@@ -1406,10 +1408,14 @@ export function useSecChatStore() {
     await initSidebar();
   };
 
+  const setPendingNewChatGroupUid = (groupUid: string | null) => {
+    pendingNewChatGroupUid.value = groupUid;
+  };
+
   /**
    * 新协议下首页先创建真实会话，再按需发送 USER_INTENT。
    * 进行中复用同一 Promise，避免欢迎页连点重复建会话。
-   * @param groupUid 分组内新建时直接挂入，避免建完再 move
+   * @param groupUid 分组内新建时直接挂入，避免建完再 move；未传时消费 pendingNewChatGroupUid
    */
   const createLogConversation = async (options?: {
     showInitialSelectSystem?: boolean;
@@ -1419,12 +1425,15 @@ export function useSecChatStore() {
       return createLogConversationInflight;
     }
     createLogConversationInflight = (async () => {
+      const groupUid = options?.groupUid || pendingNewChatGroupUid.value || undefined;
       const created = await AiAssistantManageService.createConversation({
         title: DEFAULT_CONVERSATION_TITLE,
-        ...(options?.groupUid ? { group_uid: options.groupUid } : {}),
+        ...(groupUid ? { group_uid: groupUid } : {}),
       });
-      const groupName = options?.groupUid
-        ? groups.value.find(g => g.id === options.groupUid)?.name
+      // 建会话成功后清 pending，失败可重试仍落原分组
+      pendingNewChatGroupUid.value = null;
+      const groupName = groupUid
+        ? groups.value.find(g => g.id === groupUid)?.name
         : undefined;
       const conversation = createEmptyConversation({
         id: created.uid,
@@ -1440,8 +1449,8 @@ export function useSecChatStore() {
       conversations.value.unshift(conversation);
       activeConversationId.value = conversation.id;
       await initSidebar();
-      if (options?.groupUid) {
-        await loadGroupConversations(options.groupUid, { force: true });
+      if (groupUid) {
+        await loadGroupConversations(groupUid, { force: true });
       }
       return conversation;
     })().finally(() => {
@@ -1711,6 +1720,7 @@ export function useSecChatStore() {
     renameGroup,
     deleteGroup,
     clearAllConversations,
+    setPendingNewChatGroupUid,
     createLogConversation,
     confirmSystem,
     closeSelectSystem,
