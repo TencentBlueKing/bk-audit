@@ -912,12 +912,6 @@ class ConfirmRisk(RiskFlowBaseHandler):
         # 检查 allowed_status
         if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
-        # 验证只能由 confirmer 操作
-        username = kwargs.get("username")
-        if username and username not in self.risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认风险")
 
     def process(self, description: str = "", *args, **kwargs) -> dict:
         # 事务内使用 select_for_update 重新校验状态，防止并发确认
@@ -977,12 +971,6 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         # 检查 allowed_status
         if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
-        # 验证只能由 confirmer 操作
-        username = kwargs.get("username")
-        if username and username not in self.risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认误报")
 
     def process(self, description: str = "", *args, **kwargs) -> dict:
         with transaction.atomic():
