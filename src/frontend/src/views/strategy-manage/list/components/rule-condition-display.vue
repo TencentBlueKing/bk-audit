@@ -117,30 +117,33 @@
     align-items: center;
 
     .condition-key {
-      padding: 2px 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #788779;
+      height: 22px;
+      padding: 0 var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      line-height: 22px;
+      color: #326746;
       background: #dde9de;
-      border-radius: 2px;
+      border-radius: var(--audit-radius-control);
     }
 
     .condition-method {
-      padding: 2px 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #fe9c00;
-      background: #fff1db;
-      border-radius: 2px;
+      height: 22px;
+      padding: 0 var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      line-height: 22px;
+      color: var(--audit-warn-01);
+      background: var(--audit-warn-06);
+      border-radius: var(--audit-radius-control);
     }
 
     .condition-value {
-      padding: 2px 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
-      background: #f0f1f5;
-      border-radius: 2px;
+      height: 22px;
+      padding: 0 var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      line-height: 22px;
+      color: var(--audit-neutral-text-02);
+      background: var(--audit-neutral-bg-01);
+      border-radius: var(--audit-radius-control);
     }
   }
 }

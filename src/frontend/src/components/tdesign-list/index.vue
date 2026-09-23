@@ -18,9 +18,16 @@
   <div
     ref="rootRef"
     class="audit-tdesign-list"
-    :class="[{ 'is-loading': isLoading }]">
+    :class="[{ 'is-loading': isLoading && !showSkeleton }]">
+    <table-skeleton
+      v-if="showSkeleton"
+      :columns="skeletonColumns"
+      :row-count="skeletonRowCount"
+      row-size="medium"
+      :style="skeletonBoxStyle" />
     <bk-loading
-      :loading="isLoading"
+      v-show="!showSkeleton"
+      :loading="useSkeleton ? false : isLoading"
       style="z-index: 1999;">
       <div
         v-if="settings.length > 0"
@@ -236,6 +243,8 @@
 
   import { PrimaryTable } from '@blueking/tdesign-ui';
 
+  import TableSkeleton from '@components/table-skeleton/index.vue';
+
   import {
     getOffset,
     isPageReload,
@@ -285,6 +294,10 @@
     persistTableFilters?: boolean,
     /** 表头筛选 sessionStorage 键后缀，默认使用 pathname */
     tableFilterPersistKey?: string,
+    /** 用表格骨架替代 bk-loading，默认关闭 */
+    useSkeleton?: boolean,
+    /** 按视口计算最大高度和每页条数。侧滑等固定容器传 false，避免表头被撑出空白 */
+    fitViewportHeight?: boolean,
   }
 
   interface Emits {
@@ -350,6 +363,8 @@
     enableCrossPageSelect: false,
     persistTableFilters: true,
     tableFilterPersistKey: undefined,
+    useSkeleton: false,
+    fitViewportHeight: true,
   });
   const emits = defineEmits<Emits>();
   const attrs = useAttrs();
@@ -553,6 +568,100 @@
       }
     },
   });
+  const showSkeleton = ref(props.useSkeleton);
+  const lastSkeletonRowCount = ref(3);
+  // 淡入 0.3s。请求在首帧前结束时，骨架会停在 opacity: 0，需要至少撑过这段动画
+  const SKELETON_MIN_VISIBLE_MS = 300;
+  let skeletonShownAt = props.useSkeleton ? Date.now() : 0;
+  let skeletonHideToken = 0;
+  const waitForPaint = () => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+  const readColumnSize = (value: unknown) => {
+    const num = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  };
+  const skeletonColumns = computed(() => {
+    const source = props.settings.length === 0
+      ? props.columns
+      : props.columns.filter((column) => {
+        if (!column.colKey || column.colKey === 'row-select' || column.colKey === 'action') {
+          return true;
+        }
+        if (String(column.colKey).startsWith('event_data.')) {
+          return true;
+        }
+        if (!visibleColumnKeys.value.length) {
+          return true;
+        }
+        return visibleColumnKeys.value.includes(column.colKey);
+      });
+    const columns = source.map((column) => {
+      const width = readColumnSize(column.width);
+      const minWidth = readColumnSize(column.minWidth);
+      if (column.colKey === 'row-select' && width <= 0) {
+        return { width: 50, grow: false };
+      }
+      if (width > 0) {
+        return { width, grow: false };
+      }
+      return { width: minWidth || 160, grow: true };
+    });
+    return columns.length ? columns : [{ width: 160, grow: true }];
+  });
+  const skeletonRowCount = computed(() => Math.max(lastSkeletonRowCount.value, 1));
+  const skeletonBoxStyle = computed(() => {
+    const raw = props.height !== 'auto' && props.height !== undefined && props.height !== null
+      ? props.height
+      : effectiveTableMaxHeight.value;
+    const num = typeof raw === 'number' ? raw : Number.parseInt(String(raw ?? ''), 10);
+    if (!Number.isFinite(num) || num <= 0) {
+      // 侧滑不按视口算高度时，骨架跟着列表容器铺满，避免表体 flex 基线为 0 把行裁掉
+      return {
+        flex: '1 1 auto',
+        height: '100%',
+        minHeight: '0',
+        overflow: 'hidden',
+      };
+    }
+    return {
+      height: `${num}px`,
+      overflow: 'hidden',
+    };
+  });
+  watch(isLoading, async (loading) => {
+    if (!props.useSkeleton) {
+      showSkeleton.value = false;
+      return;
+    }
+    if (loading) {
+      skeletonHideToken += 1;
+      if (!showSkeleton.value) {
+        skeletonShownAt = Date.now();
+      }
+      showSkeleton.value = true;
+      return;
+    }
+    if (!showSkeleton.value) {
+      return;
+    }
+    const token = skeletonHideToken;
+    const elapsed = Date.now() - skeletonShownAt;
+    const remain = Math.max(0, SKELETON_MIN_VISIBLE_MS - elapsed);
+    if (remain > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, remain);
+      });
+    }
+    await nextTick();
+    await waitForPaint();
+    if (token !== skeletonHideToken || isLoading.value) {
+      return;
+    }
+    showSkeleton.value = false;
+  });
 
   // 计算表格数据，处理 noUseRresults 的情况
   const tableData = computed(() => {
@@ -632,6 +741,9 @@
         }
       });
       tableFilterValue.value = getColumnsResetValue(tableColumns.value);
+      if (props.searchParams) {
+        syncTableFilterValueFromParams(props.searchParams);
+      }
       saveTableFilterState();
     } else {
       paramsMemo = {
@@ -766,6 +878,10 @@
   watch(listData, (newData) => {
     if (newData && typeof newData.total === 'number') {
       pagination.count = newData.total;
+    }
+    const length = Array.isArray(newData) ? newData.length : newData?.results?.length;
+    if (length > 0) {
+      lastSkeletonRowCount.value = length;
     }
   }, { deep: true, immediate: true });
 
@@ -1354,9 +1470,6 @@
     nextTick(() => {
       fetchListData();
     });
-    setTimeout(() => {
-      isLoading.value = true;
-    }, 0);
   });
 
   // 监听通知中心状态，重新计算表格高度
@@ -1430,6 +1543,10 @@
   };
 
   const calcTableHeight = () => {
+    if (!props.fitViewportHeight) {
+      internalTableMaxHeight.value = 'auto';
+      return;
+    }
     nextTick(() => {
       const dimensions = calculateTableDimensions();
       // 传入 tableMaxHeight 时，根据传入高度计算行数；默认时也 -1（已在 calculateTableDimensions 中处理）

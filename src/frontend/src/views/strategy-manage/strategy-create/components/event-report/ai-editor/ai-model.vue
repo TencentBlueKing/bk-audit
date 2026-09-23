@@ -33,7 +33,7 @@
           class="tips-title">
           <audit-icon
             class="info-fill-icon"
-            type="info-fill" />
+            type="tishi" />
           <span>{{ t('当前策略尚未产生风险单，暂时无法预览 AI 生成的内容') }}</span>
         </div>
 

@@ -434,15 +434,20 @@
 .field-cell {
   display: flex;
   width: 100%;
+  min-width: 0;
   height: 100%;
   align-items: center;
 
-  :deep(.bk-input) {
-    height: 40px;
-    border: none;
+  :deep(.bk-select),
+  :deep(.field-input) {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
   }
 
-  .description-input {
+  :deep(.bk-input.description-input) {
+    width: 100%;
+    height: 32px;
     border: none;
   }
 
@@ -452,7 +457,7 @@
     align-items: center;
     width: 100%;
     height: 100%;
-    padding: 0 8px;
+    padding: 0 12px;
     line-height: 33px;
     cursor: pointer;
 

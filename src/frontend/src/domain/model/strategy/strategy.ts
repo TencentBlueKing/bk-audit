@@ -117,6 +117,9 @@ export default class Strategy {
   binding_type?: string;
   visibility?: Record<string, any>;
   scene_id?: string | number;
+  bksecEnabled: boolean;
+  bksecRiskTypeId: number | null;
+  bksecFieldValues: Record<string, string>;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -162,6 +165,14 @@ export default class Strategy {
     this.binding_type = payload.binding_type;
     this.visibility = payload.visibility;
     this.scene_id = payload.scene_id;
+    const raw = payload as Strategy & {
+      bksec_enabled?: boolean;
+      bksec_risk_type_id?: number | null;
+      bksec_field_values?: Record<string, string>;
+    };
+    this.bksecEnabled = !!(payload.bksecEnabled ?? raw.bksec_enabled);
+    this.bksecRiskTypeId = payload.bksecRiskTypeId ?? raw.bksec_risk_type_id ?? null;
+    this.bksecFieldValues = payload.bksecFieldValues ?? raw.bksec_field_values ?? {};
   }
   get isDraft() {
     return this.status === 'draft';

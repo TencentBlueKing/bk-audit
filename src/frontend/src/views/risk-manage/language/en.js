@@ -370,6 +370,7 @@ export default {
     风险单标题: 'Risk Ticket Title',
     风险危害: 'Risk Hazard',
     处理指引: 'Handling Guidance',
+    套餐执行记录: 'Package execution records',
     批量处理: 'Batch process',
     '所选风险包含未加载数据，暂无法批量处理': 'Selected risks include unloaded rows and cannot be batch processed yet',
     所选风险无法批量处理: 'Selected risks cannot be batch processed',

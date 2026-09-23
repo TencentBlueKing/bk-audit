@@ -42,7 +42,6 @@
                       v-model.trim="formData.strategy_name"
                       :maxlength="32"
                       :placeholder="t('请输入')"
-                      show-word-limit
                       style="width: 100%;" />
                   </bk-form-item>
                   <bk-form-item
@@ -67,6 +66,7 @@
                   </bk-form-item>
                 </div>
                 <bk-form-item
+                  class="basic-info-desc"
                   :label="t('描述')"
                   property="description">
                   <bk-input
@@ -74,6 +74,7 @@
                     autosize
                     :maxlength="2000"
                     :placeholder="t('请输入')"
+                    :rows="2"
                     show-word-limit
                     style="width: 100%;"
                     type="textarea" />
@@ -750,6 +751,12 @@
       width: 100%;
       max-width: none;
     }
+
+    .basic-info-desc {
+      width: 624px;
+      max-width: 100%;
+      margin-bottom: 0;
+    }
   }
 
   .scheme-fields {
@@ -763,8 +770,11 @@
       width: 100%;
     }
 
-    :deep(.strategy-customize.customize-basic-mode > .customize-rule > .bk-form-item),
-    :deep(.strategy-customize.customize-basic-mode > .dispatch-wrap > .bk-form-item),
+    :deep(.strategy-customize.customize-basic-mode > .customize-rule > .bk-form-item) {
+      width: 624px;
+      max-width: 100%;
+    }
+
     :deep(.strategy-reference-model > .bk-form-item) {
       width: 100%;
     }
@@ -772,6 +782,7 @@
     :deep(.schedule-period-row .bk-form-item),
     :deep(.schedule-period-row .bk-form-content) {
       width: auto;
+      margin-bottom: 0;
     }
   }
 
@@ -781,7 +792,7 @@
     :deep(.bk-form-item) {
       flex: 1;
       min-width: 0;
-      margin-bottom: 20px;
+      margin-bottom: var(--audit-space-24);
     }
   }
 
@@ -797,17 +808,48 @@
       overflow: visible;
 
       :deep(.bk-form-item) {
-        margin-bottom: 20px;
+        margin-bottom: var(--audit-space-24);
         overflow: visible;
+      }
+
+      :deep(.basic-info-desc.bk-form-item),
+      :deep(.dispatch-section .bk-form-item) {
+        margin-bottom: 0;
+      }
+
+      :deep(.bk-form-label) {
+        height: auto;
+        padding-bottom: 0;
+        margin-bottom: 6px;
+        font-size: var(--audit-font-size-sm);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-neutral-text-02);
+      }
+
+      :deep(.bk-form-item.is-required .bk-form-label::after) {
+        color: var(--audit-danger-02);
       }
 
       :deep(.data-source-form-item),
       :deep(.expected-result-form-item) {
-        margin-bottom: 16px;
+        width: 624px;
+        max-width: 100%;
+        margin-bottom: var(--audit-space-24);
+      }
+
+      :deep(.data-source-form-item:has(+ .other-table-detail)),
+      :deep(.data-source-form-item:has(+ .link-data-detail)) {
+        margin-bottom: 0;
+      }
+
+      :deep(.other-table-detail),
+      :deep(.link-data-detail) {
+        margin-top: var(--audit-space-8);
+        margin-bottom: var(--audit-space-24);
       }
 
       :deep(.expected-result-form-item) {
-        margin-top: 16px;
+        margin-top: 0;
       }
 
       :deep(.data-source-form-item .bk-form-content) {
@@ -827,14 +869,19 @@
 
         .select-group,
         .data-source-picker {
-          width: 100%;
+          width: 624px;
+          max-width: 100%;
           overflow: visible;
         }
 
         .data-source-picker :deep(.dsp-trigger),
         .other-table-detail,
-        .link-data-detail,
         .panel-edit {
+          width: 624px;
+          max-width: 100%;
+        }
+
+        .link-data-detail {
           width: 100%;
           max-width: none;
         }

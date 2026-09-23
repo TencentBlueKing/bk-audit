@@ -68,29 +68,34 @@
 <style scoped lang="postcss">
 .strategy-way-selector {
   display: inline-flex;
-  gap: 16px;
+  gap: var(--audit-space-16);
 }
 
 .strategy-way-card {
   display: flex;
-  width: 240px;
-  height: 56px;
-  padding: 0 20px;
+  width: 200px;
+  height: 48px;
+  padding: 0 var(--audit-space-16);
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #dcdee5;
-  border-radius: 2px;
-  transition: all .2s ease;
+  background: var(--audit-neutral-bg-04);
+  border: 1px solid var(--audit-neutral-border-01);
+  border-radius: var(--audit-radius-container);
+  transition: border-color .2s ease, background-color .2s ease;
   align-items: center;
+  gap: var(--audit-space-8);
   flex: none;
 
   &:hover:not(.is-disabled):not(.is-active) {
-    border-color: #3a84ff;
+    border-color: var(--audit-brand-02);
   }
 
   &.is-active {
-    background: #f0f5ff;
-    border-color: #3a84ff;
+    background: var(--audit-brand-06);
+    border-color: var(--audit-brand-02);
+
+    .strategy-way-card-label {
+      color: var(--audit-brand-02);
+    }
   }
 
   &.is-disabled {
@@ -103,7 +108,6 @@
   display: flex;
   width: 24px;
   height: 24px;
-  margin-right: 12px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -117,12 +121,12 @@
 
 .strategy-way-card-label {
   overflow: hidden;
-  font-size: 14px;
-  line-height: 22px;
-  color: #313238;
+  font-size: var(--audit-font-size-sm);
+  font-weight: var(--audit-font-weight-bold);
+  line-height: var(--audit-line-height-sm);
+  color: var(--audit-neutral-text-02);
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-bottom: 1px dashed #979ba5;
 }
 </style>
 

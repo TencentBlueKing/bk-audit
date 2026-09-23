@@ -142,6 +142,15 @@ export const assignConditionFormToWhereDisplay = (
   })).filter(group => group.conditions.length),
 });
 
+const isNestedWhereTree = (value: unknown): value is RuleWhereDisplay => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, any>;
+  if (Array.isArray(record.groups) || !Array.isArray(record.conditions)) return false;
+  return record.conditions.some((group: Record<string, any>) => (
+    Array.isArray(group?.conditions) || !!group?.condition
+  ));
+};
+
 export const dispatchConditionsToWhere = (
   conditions: Record<string, any> | AssignConditionForm | undefined,
   getFieldLabel: (fieldName: string) => string,
@@ -151,6 +160,11 @@ export const dispatchConditionsToWhere = (
       mergeHavingIntoWhere(conditions.where, conditions.having),
       getFieldLabel,
     );
+  }
+  // 属于/不属于的多值在 filters 上，filter 是空字符串。
+  // 收成单个 value 时空字符串会挡住 filters，查看态就没有值。
+  if (isNestedWhereTree(conditions)) {
+    return conditions;
   }
   const form = dispatchToAssignConditionForm(conditions);
   if (!form.groups.some(group => group.conditions.some(row => row.field))) {
