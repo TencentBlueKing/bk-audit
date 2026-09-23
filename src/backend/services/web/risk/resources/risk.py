@@ -1924,12 +1924,7 @@ class ConfirmRiskResource(RiskMeta):
 
             raise ValidationError("风险状态不是待确认")
 
-        # 验证权限
         username = get_request_username(validated_request_data.get("_request"))
-        if username not in risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认")
 
         # 执行确认
         from services.web.risk.handlers.ticket import ConfirmRisk
@@ -1945,7 +1940,6 @@ class BatchConfirmRiskResource(RiskMeta):
     RequestSerializer = BatchConfirmRiskRequestSerializer
 
     def perform_request(self, validated_request_data):
-        username = get_request_username()
         risk_ids = validated_request_data["risk_ids"]
         description = validated_request_data.get("description", "")
 
@@ -1959,14 +1953,7 @@ class BatchConfirmRiskResource(RiskMeta):
 
             raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
 
-        # 验证：当前用户必须是所有风险的确认人
-        for risk in risks:
-            if username not in risk.confirmer:
-                from rest_framework.exceptions import PermissionDenied
-
-                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认")
-
-        # 4. 校验状态：所有风险必须是待确认状态
+        # 校验状态：所有风险必须是待确认状态
         invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
         if invalid_status_risks:
             from rest_framework.exceptions import ValidationError
@@ -1998,12 +1985,7 @@ class ConfirmAsMisReportResource(RiskMeta):
 
             raise ValidationError("风险状态不是待确认")
 
-        # 验证权限
         username = get_request_username(validated_request_data.get("_request"))
-        if username not in risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认误报")
 
         # 执行误报确认
         from services.web.risk.handlers.ticket import ConfirmAsMisReport
@@ -2019,7 +2001,6 @@ class BatchConfirmAsMisReportResource(RiskMeta):
     RequestSerializer = BatchConfirmAsMisReportRequestSerializer
 
     def perform_request(self, validated_request_data):
-        username = get_request_username()
         risk_ids = validated_request_data["risk_ids"]
         description = validated_request_data.get("description", "")
 
@@ -2032,13 +2013,6 @@ class BatchConfirmAsMisReportResource(RiskMeta):
             from rest_framework.exceptions import ValidationError
 
             raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
-
-        # 3. 校验权限：当前用户必须是所有风险的确认人
-        for risk in risks:
-            if username not in risk.confirmer:
-                from rest_framework.exceptions import PermissionDenied
-
-                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认为误报")
 
         # 4. 校验状态：所有风险必须是待确认状态
         invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
