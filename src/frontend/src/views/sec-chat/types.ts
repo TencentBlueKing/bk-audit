@@ -74,7 +74,7 @@ export interface RetrievalResultPayload {
 
   datetimeOrigin?: string[];
   toolCount: number;
-  /** 思考耗时（秒）；仅自然语言检索有值，条件检索为 null；PROCESSING 时为 null */
+  /** 思考耗时（秒）；各检索方式均不再展示，固定为 null */
   thinkSeconds: number | null;
   title: string;
   totalHit: number;

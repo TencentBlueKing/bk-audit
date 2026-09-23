@@ -313,20 +313,13 @@ export const mapLogSearchOutputToResult = (
   ) as AiSearchCondition | undefined;
   const conditionTags = mapConditionToFilterTags(condition, fieldCatalog);
   const isNaturalLanguage = output.query_summary?.source === 'natural_language';
-  // 仅自然语言（大模型）检索展示「思考了 X 秒」；条件/字段检索不走模型，不展示
-  const durationSeconds = message.duration_seconds;
-  const thinkSeconds = !isNaturalLanguage
-    || durationSeconds === null
-    || durationSeconds === undefined
-    || Number.isNaN(Number(durationSeconds))
-    ? null
-    : Math.max(0, Math.round(Number(durationSeconds)));
 
   return {
     conditions: conditionTags,
     rawCondition: condition || undefined,
     toolCount: isNaturalLanguage ? 3 : 2,
-    thinkSeconds,
+    // 各检索方式均不再展示「思考了 X 秒」
+    thinkSeconds: null,
     title: '日志检索结果',
     totalHit,
     previewCount,
