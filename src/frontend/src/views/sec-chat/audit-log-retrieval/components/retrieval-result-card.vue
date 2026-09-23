@@ -98,15 +98,6 @@
         class="result-body-loading"
         :loading="bodyLoading">
         <div class="result-body">
-          <!-- 过程信息：仅自然语言检索展示思考耗时；条件/字段检索不展示 -->
-          <div
-            v-if="!embedded && displayResult.thinkSeconds != null"
-            class="process-section">
-            <div class="process-row">
-              <span>思考了 {{ displayResult.thinkSeconds }} 秒</span>
-            </div>
-          </div>
-
           <!-- 检索失败：对齐条件检索失败态，条件区保持可改后重新检索 -->
           <div
             v-if="isFailed"
@@ -1106,19 +1097,6 @@
       background: #f0f5ff;
       border-color: #c5d8ff;
     }
-  }
-
-  .process-section {
-    margin-bottom: 20px;
-  }
-
-  .process-row {
-    display: flex;
-    height: 28px;
-    font-size: 12px;
-    line-height: 28px;
-    color: #979ba5;
-    align-items: center;
   }
 
   .status-panel {
