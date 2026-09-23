@@ -24,12 +24,12 @@ from requests.exceptions import ConnectionError, Timeout
 from api.bk_base.default import SafeQuerySyncResource
 from api.bk_plugins_ai_agent.default import ChatCompletion
 from core.exceptions import PermissionException
-from services.web.ai_assistant.constants import AttachmentType
+from services.web.ai_assistant.constants import AttachmentType, ExecutionStatus
 from services.web.ai_assistant.exceptions import (
+    AIStatisticsOutputParseError,
     AIStatisticsTimeout,
     AttachmentExportNotSupported,
     AttachmentNotEditable,
-    AttachmentOutputValidationError,
     FeedbackNotSupported,
     InvalidAttachmentSource,
 )
@@ -517,6 +517,14 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         self.stream_uids.append(str(attachment.uid))
         return attachment
 
+    CHART_START_TAG = "<!--DASH_AI_CHART_CONFIG-->"
+    CHART_END_TAG = "<!--/DASH_AI_CHART_CONFIG-->"
+
+    @classmethod
+    def tagged(cls, inner: str) -> str:
+        """用默认起止标签包裹标签内原文，不修剪空白。"""
+        return f"{cls.CHART_START_TAG}{inner}{cls.CHART_END_TAG}"
+
     @staticmethod
     def events(content, message_id="final", closed=True):
         """构造 Agent 标准文本帧，不对正文格式作预处理。"""
@@ -573,19 +581,20 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
 
     def test_success_contract(self):
         attachment = self.processing()
-        content = "  ```custom-chart\nnot-json\n```\n"
+        inner_content = "  not-json\n"
+        full_content = "过程说明\n" "<!--DASH_AI_CHART_CONFIG-->" f"{inner_content}" "<!--/DASH_AI_CHART_CONFIG-->" "\n后置说明"
         events = [
             *self.events("过程", "first"),
             {"type": "CUSTOM", "name": "arbitrary", "value": {"x": 1}},
-            *self.events(content),
+            *self.events(full_content),
             {"type": "RUN_FINISHED", "result": {"ignored": True}},
         ]
         result, request = self.run_events(attachment, events)
         attachment.refresh_from_db()
         self.assertEqual(result, {"status": "SUCCESS"})
-        self.assertEqual(attachment.output_data, {"content": content})
+        self.assertEqual(attachment.output_data, {"content": inner_content})
         self.assertEqual(
-            GetAttachment().request(attachment_uid=str(attachment.uid))["output_data"], {"content": content}
+            GetAttachment().request(attachment_uid=str(attachment.uid))["output_data"], {"content": inner_content}
         )
         self.assertEqual(request["agent_code"], "bp-ai-log-stats")
         self.assertEqual(request["user"], self.user)
@@ -610,11 +619,55 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         ]
         self.assertEqual(archived, events)
 
+    def test_tag_extraction_failures_become_sanitized_retryable_attachment_failure(self):
+        cases = (
+            "无标签",
+            "<!--DASH_AI_CHART_CONFIG-->missing-end",
+            "<!--DASH_AI_CHART_CONFIG--> \n <!--/DASH_AI_CHART_CONFIG-->",
+            (
+                "<!--DASH_AI_CHART_CONFIG-->a<!--/DASH_AI_CHART_CONFIG-->"
+                "<!--DASH_AI_CHART_CONFIG-->b<!--/DASH_AI_CHART_CONFIG-->"
+            ),
+        )
+        for content in cases:
+            with self.subTest(content=content):
+                attachment = self.processing()
+                with self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as logs:
+                    with self.assertRaises(AIStatisticsOutputParseError):
+                        self.run_events(attachment, self.events(content), retries=self.handler.async_task.max_retries)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+                self.assertIsNone(attachment.output_data)
+                self.assertEqual(attachment.error_code, AIStatisticsOutputParseError().code)
+                self.assertEqual(attachment.error_message, "AI 统计结果格式异常，请重试")
+                self.assertNotIn(content, "\n".join(logs.output))
+
+    @override_settings(
+        AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG="<chart>",
+        AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG="</chart>",
+    )
+    def test_custom_chart_tags_are_used_without_parsing_inner_content(self):
+        attachment = self.processing()
+        self.run_events(attachment, self.events('ignore<chart>[{"x": 1}]</chart>tail'))
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.output_data, {"content": '[{"x": 1}]'})
+
+    def test_tag_extraction_error_uses_existing_automatic_retry_budget(self):
+        attachment = self.processing()
+        with self.assertRaises(Retry):
+            self.run_events(attachment, self.events("无标签"), retries=0)
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+
     def test_failure_contract(self):
-        for events in (self.events(" \n"), self.events("完整", "a") + self.events("未闭合", "b", False), []):
+        for events in (
+            self.events("完整", "a") + self.events("未闭合", "b", False),
+            [],
+            self.events("无标签"),
+        ):
             with self.subTest(events=events):
                 attachment = self.processing()
-                with self.assertRaises(AttachmentOutputValidationError):
+                with self.assertRaises(AIStatisticsOutputParseError):
                     self.run_events(attachment, events, retries=self.handler.async_task.max_retries)
                 attachment.refresh_from_db()
                 self.assertEqual(attachment.status, "FAILED")
@@ -634,9 +687,10 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         first_execution = attachment.stream_config["execution_id"]
         self.assertEqual(attachment.status, "PROCESSING")
         self.assertEqual(caught.exception.sig.kwargs, {"attachment_id": attachment.pk, "task_id": task_id})
-        result, second = self.run_events(attachment, self.events(" 无数据\n"), retries=1)
+        result, second = self.run_events(attachment, self.events(self.tagged(" 无数据\n")), retries=1)
         attachment.refresh_from_db()
         self.assertEqual(result, {"status": "SUCCESS"})
+        self.assertEqual(attachment.output_data, {"content": " 无数据\n"})
         self.assertEqual(attachment.task_id, task_id)
         self.assertNotEqual(attachment.stream_config["execution_id"], first_execution)
         self.assertEqual(attachment.context_data, original_context)
@@ -649,7 +703,7 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
     def test_manual_retry_rotates_task_and_agent_execution_then_keeps_history(self):
         """失败原对象经公开手动重试后更换两层执行 ID，历史文本独立保存。"""
         attachment = self.processing()
-        with self.assertRaises(AttachmentOutputValidationError):
+        with self.assertRaises(AIStatisticsOutputParseError):
             self.run_events(attachment, self.events("未闭合", closed=False), retries=self.handler.async_task.max_retries)
         attachment.refresh_from_db()
         old_task = attachment.task_id
@@ -658,12 +712,12 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
             RetryAttachment().request(attachment_uid=str(attachment.uid))
         attachment.refresh_from_db()
         self.assertNotEqual(attachment.task_id, old_task)
-        _, request = self.run_events(attachment, self.events("历史正文"))
+        _, request = self.run_events(attachment, self.events(self.tagged("历史正文")))
         attachment.refresh_from_db()
         self.assertNotEqual(request["execute_kwargs"]["thread_id"], old_execution)
         self.assertEqual(attachment.output_data, {"content": "历史正文"})
         other = self.processing()
-        self.run_events(other, self.events("另一个统计"))
+        self.run_events(other, self.events(self.tagged("另一个统计")))
         detail = GetAttachment().request(attachment_uid=str(attachment.uid))
         self.assertEqual(detail["output_data"], {"content": "历史正文"})
 
@@ -719,21 +773,23 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         self.assertEqual(attachment.error_code, AIStatisticsTimeout().code)
         self.assertEqual(attachment.stream_archive[-1]["data"], {"status": "FAILED"})
 
-    @override_settings(AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES=6)
+    @override_settings(AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES=80)
     def test_content_budget_failure_is_sanitized_and_later_complete_message_can_recover(self):
         """UTF-8 超预算只作废候选；安全异常不泄露原文，后续闭合文本可恢复。"""
-        sentinel = "PRIVATE_STATISTICS_SENTINEL"
+        sentinel = "PRIVATE_STATISTICS_SENTINEL" + ("x" * 80)
+        recovery = self.tagged("中文")
         attachment = self.processing()
         with self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as logs:
-            with self.assertRaises(AttachmentOutputValidationError):
+            with self.assertRaises(AIStatisticsOutputParseError) as raised:
                 self.run_events(attachment, self.events(sentinel), retries=self.handler.async_task.max_retries)
         self.assertNotIn(sentinel, "\n".join(logs.output))
         self.assertNotIn("input_value", "\n".join(logs.output))
+        self.assertNotIn(sentinel, str(raised.exception))
         attachment.refresh_from_db()
         self.assertEqual(attachment.status, "FAILED")
         self.assertNotIn(sentinel, attachment.error_message)
         second = self.processing()
-        self.run_events(second, self.events(sentinel, "large") + self.events("中文", "valid"))
+        self.run_events(second, self.events(sentinel, "large") + self.events(recovery, "valid"))
         second.refresh_from_db()
         self.assertEqual(second.output_data, {"content": "中文"})
 
@@ -743,7 +799,7 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
 
         def respond(**request):
             Attachment.objects.filter(pk=attachment.pk).update(task_id="new-task", output_data=None)
-            for event in self.events("旧正文"):
+            for event in self.events(self.tagged("旧正文")):
                 request["on_event"](event)
 
         with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond), self.assertRaises(
@@ -758,7 +814,7 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
     def test_archive_recovers_raw_text_when_live_redis_fails(self):
         """实时写入降级后仍成功保存文本及原始事件，快照可重建展示。"""
         attachment = self.processing()
-        events = self.events("  无数据\n")
+        events = self.events(self.tagged("  无数据\n"))
         with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("offline")):
             self.run_events(attachment, events)
         attachment.refresh_from_db()
@@ -771,7 +827,7 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
     def test_success_supports_feedback_but_not_report_edit_or_export(self):
         """AI 统计反馈独立启用，固定文本不能被报告编辑或导出入口改写。"""
         attachment = self.processing()
-        self.run_events(attachment, self.events("结果"))
+        self.run_events(attachment, self.events(self.tagged("结果")))
         uid = str(attachment.uid)
         with self.assertRaises(AttachmentNotEditable):
             UpdateAttachment().request(attachment_uid=uid, output_data={"content": "overwrite"})

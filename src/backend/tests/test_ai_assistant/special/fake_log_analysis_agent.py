@@ -89,13 +89,21 @@ def _complete_events(markdown: str) -> list[dict[str, Any]]:
     ]
 
 
+def _statistics_tagged(inner: str) -> str:
+    """用与生产默认一致的起止标签包裹统计内文，供 special 替身使用。"""
+    return f"<!--DASH_AI_CHART_CONFIG-->{inner}<!--/DASH_AI_CHART_CONFIG-->"
+
+
 def _scenario_events(instruction: str, attempt: int) -> list[dict[str, Any]]:
     if instruction == "analysis-truncate-once":
         return _complete_events("# 首轮不可采纳")[:-1] if attempt == 1 else _complete_events("# 自动重试结论")
     if instruction == "statistics-success":
-        return _complete_events("  ```custom-chart\n非 JSON 原文\n```\n")
+        return _complete_events(_statistics_tagged("  ```custom-chart\n非 JSON 原文\n```\n"))
     if instruction == "statistics-truncate-once":
-        return _complete_events("首轮不可采纳" if attempt == 1 else "  重试后的统计正文\n")
+        # 首轮故意无标签/截断路径失败；次轮带标签成功，落库仅保留标签内原文。
+        if attempt == 1:
+            return _complete_events("首轮不可采纳")
+        return _complete_events(_statistics_tagged("  重试后的统计正文\n"))
     if instruction == "run-error":
         return [
             {"type": "RUN_STARTED", "threadId": "thread-error", "runId": "run-error"},

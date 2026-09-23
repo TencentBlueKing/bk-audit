@@ -210,6 +210,63 @@ class ExecutionSnapshotModelTest(TestCase):
         self.assertEqual(self.attachment.task_id, "task-old")
         self.assertEqual(self.message.task_id, "task-current")
 
+    def test_restart_terminal_accepts_exact_success_or_failed_status(self):
+        for status in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            with self.subTest(status=status):
+                attachment = Attachment.objects.create(
+                    source_message=self.attachment.source_message,
+                    attachment_type=AttachmentType.AI_ANALYSIS,
+                    status=status,
+                    task_id=f"old-{status}",
+                    input_data={"prompt": "same"},
+                    context_data={"scope": "same"},
+                    output_data={"content": "old"},
+                    error_code="OLD",
+                    error_message="old",
+                    created_by="alice",
+                    updated_by="alice",
+                )
+                self.assertTrue(
+                    Attachment.restart_terminal(
+                        instance_id=attachment.id,
+                        expected_status=status,
+                        old_task_id=f"old-{status}",
+                        new_task_id=f"new-{status}",
+                    )
+                )
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+                self.assertIsNone(attachment.output_data)
+                self.assertEqual(attachment.error_code, "")
+
+    def test_restart_terminal_rejects_wrong_status_stale_task_and_processing(self):
+        self.attachment.status = ExecutionStatus.SUCCESS
+        self.attachment.task_id = "task-current"
+        self.attachment.save(update_fields=["status", "task_id"])
+        self.assertFalse(
+            Attachment.restart_terminal(
+                instance_id=self.attachment.id,
+                expected_status=ExecutionStatus.FAILED,
+                old_task_id="task-current",
+                new_task_id="task-new",
+            )
+        )
+        self.assertFalse(
+            Attachment.restart_terminal(
+                instance_id=self.attachment.id,
+                expected_status=ExecutionStatus.SUCCESS,
+                old_task_id="task-stale",
+                new_task_id="task-new",
+            )
+        )
+        with self.assertRaises(ValueError):
+            Attachment.restart_terminal(
+                instance_id=self.attachment.id,
+                expected_status=ExecutionStatus.PROCESSING,
+                old_task_id="task-current",
+                new_task_id="task-new",
+            )
+
     def test_mark_processing_started_preserves_first_start_and_refreshes_activity(self):
         first = timezone.now()
         second = first + timedelta(seconds=30)

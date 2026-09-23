@@ -307,3 +307,10 @@ class AIStatisticsTimeout(AIAssistantException):
 
     MESSAGE = gettext_lazy("AI 统计超时，请重试")
     ERROR_CODE = "045"
+
+
+class AIStatisticsOutputParseError(AIAssistantException):
+    """AI 统计最终消息不满足标签产物协议。"""
+
+    MESSAGE = gettext_lazy("AI 统计结果格式异常，请重试")
+    ERROR_CODE = "046"

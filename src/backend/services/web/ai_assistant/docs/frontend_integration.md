@@ -68,7 +68,7 @@ flowchart TD
 | 恢复生成过程 | `GET /attachments/{attachment_uid}/stream/snapshot/` | 展示历史事件，拿本次执行和游标 |
 | 接收生成增量 | `GET /attachments/{attachment_uid}/stream/` | 处理业务事件与两个具名控制事件 |
 | 编辑报告 | `PATCH /attachments/{attachment_uid}/` | 更新同一附件的标题/正文 |
-| 重试失败附件 | `POST /attachments/{attachment_uid}/retry/` | 原 UID，重新获取本次执行 |
+| 重试失败或重新生成成功附件 | `POST /attachments/{attachment_uid}/retry/` | 原 UID，清空旧产物后重新获取本次执行 |
 | 下载附件 | `GET /attachments/{attachment_uid}/export/` | 直接保存文件，无导出轮询 |
 | 赞踩/取消 | `POST /feedback/`、`DELETE /feedback/{feedback_uid}/` | 更新来源卡片反馈 |
 
@@ -317,12 +317,12 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 2. 调用 `POST /messages/{message_uid}/attachments/`，请求体只提交对应 attachment_type 与 input_data，具体业务字段见 Swagger。
 3. 保存返回附件 uid 与 source_message_uid，将它挂到来源卡片；创建完成后也可刷新消息详情确认 attachments 摘要。
 4. 按返回状态处理：SUCCESS 直接渲染 output_data；FAILED 显示错误；PROCESSING 显示生成中，再根据 is_stream 选择下表链路。
-5. 用户再次创建会得到另一个附件。双击防重在请求期间处理；需要重试原失败产物时调用 retry，不再调用创建接口。
+5. 用户再次创建会得到另一个附件。双击防重在请求期间处理；需要重试失败产物或重新生成成功产物时调用 retry，不再调用创建接口。
 
 | 返回状态 | is_stream | 接下来做什么 |
 | --- | --- | --- |
-| SUCCESS | 任意 | 展示最终正文/图表，按能力显示编辑、反馈、下载 |
-| FAILED | 任意 | 展示 error_message，允许适用类型重试；过程可按需查看 |
+| SUCCESS | 任意 | 展示最终正文/图表，按能力显示编辑、反馈、下载；渲染异常时可对原 UID 重新生成 |
+| FAILED | 任意 | 展示 error_message，允许异步类型重试；过程可按需查看 |
 | PROCESSING | false | 轮询附件详情，直到 SUCCESS/FAILED |
 | PROCESSING | true | 可直接轮询详情获取产物；需要过程时先读快照，再订阅 SSE，结束后查详情 |
 
@@ -441,7 +441,7 @@ source.onerror = () => {
 | 网络断开/onerror | 关旧连接 → 有限退避 → 查详情 → 仍处理中才读快照并重连；登录或权限失败停止自动重试 |
 | platform.stream_reset | 关旧连接 → 使旧请求回调失效 → 查详情与新快照 → 替换过程 → 按新的执行标识订阅 |
 | platform.stream_end | 关连接 → 查详情 → SUCCESS 展示 output_data，FAILED 展示错误；需要完整过程时重读终态快照并重建；详情请求失败只重试读取，不重跑业务 |
-| 用户重试 FAILED 附件 | 先关旧连接 → POST retry → 保留附件 UID、清空旧错误/过程 → 查详情和快照，等待新 execution_id |
+| 用户重试 FAILED 或重新生成 SUCCESS 附件 | 先关旧连接 → POST retry → 保留附件 UID，立即清空旧产物/错误/过程/反馈 → 查详情和快照，等待新 execution_id |
 | 离开页面/删除会话 | 关闭连接、取消请求和退避定时器；忽略迟到响应，防止覆盖新页面 |
 
 重试排队期间可能暂时仍读到旧 execution_id 和旧过程。记录重试前的 execution_id；再次读到相同值时保持“等待重新生成”，不要把旧结束事件或旧正文当成本轮结果。取得新的 execution_id 后再重建和订阅。
@@ -464,7 +464,9 @@ source.onerror = () => {
 4. 保存成功后使用最新响应更新同一附件；保存失败保留编辑草稿，不能显示“已保存”。
 5. 编辑不会重新生成，也不改变当时的流式过程。查看过程和查看当前正文允许不同。
 
-失败重试用 `POST /attachments/{attachment_uid}/retry/`，保留原附件位置和 UID。仅轮询的页面继续查询原附件详情；使用 SSE 的页面按上面的新执行恢复流程处理。修改输入要求并重新生成应创建新附件，不用 PATCH output_data 代替执行。
+SUCCESS 或 FAILED 的异步附件可用 `POST /attachments/{attachment_uid}/retry/` 覆盖式重跑：保留原附件位置和 UID，立即清空旧产物、错误、过程归档和反馈；本期不保留产物版本，新执行失败不恢复旧成功产物。Message 重试仍仅允许 FAILED，不得把附件的成功态重生语义扩展到 Message。仅轮询的页面继续查询原附件详情；使用 SSE 的页面按上面的新执行恢复流程处理。修改输入要求并重新生成应创建新附件，不用 PATCH output_data 代替执行。
+
+编辑和反馈按实际落库顺序以后写为准，不与重新生成绑定同一执行轮次。重试时的清理只保证该次事务提交时的快照；若此前发出的编辑或反馈请求更晚落库，旧正文或旧反馈可能再次出现。前端发起重新生成时应避免同一附件的编辑、反馈请求并行提交，并在迟到响应后回读详情；异步任务的结果仍由服务端按当前 task_id 和执行标识校验，不接受旧任务回写。
 
 ### 下载已有产物
 

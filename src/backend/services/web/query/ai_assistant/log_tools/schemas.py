@@ -6,7 +6,6 @@ Unicode 与标点 key，但点号保留为现有跨模块路径分隔符；SQL �
 
 import json
 import math
-from enum import StrEnum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
 from django.conf import settings
@@ -27,6 +26,24 @@ from pydantic_core import PydanticCustomError
 from rest_framework import serializers
 
 from apps.meta.utils.fields import START_TIME
+from services.web.query.ai_assistant.log_tools.constants import (
+    AggregationColumnRole,
+    AggregationDimensionType,
+    AggregationEffectiveTimeInterval,
+    AggregationGroupKind,
+    AggregationMetricType,
+    AggregationOrderDirection,
+    AggregationResultDataType,
+    AggregationTimeInterval,
+    AggregationValueType,
+    JSONValueType,
+    LogFieldCategory,
+    LogFieldMetadataTypeSource,
+    LogFieldType,
+    LogSortDirection,
+    StatisticsKind,
+    StatisticsUnsupportedReason,
+)
 from services.web.query.ai_assistant.log_tools.time_range import parse_log_time
 from services.web.query.ai_assistant.schemas import (
     Condition,
@@ -277,21 +294,6 @@ class AgentLogToolRequest(BaseModel):
         return condition
 
 
-class LogFieldType(StrEnum):
-    """日志检索可见字段的存储类型，兼容 BKBase JSON 与索引字段类型。"""
-
-    STRING = "string"
-    DOUBLE = "double"
-    INT = "int"
-    LONG = "long"
-    TEXT = "text"
-    TIMESTAMP = "timestamp"
-    FLOAT = "float"
-    OBJECT = "object"
-    NESTED = "nested"
-    KEYWORD = "keyword"
-
-
 class LogFieldRef(BaseModel):
     """受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。
 
@@ -335,39 +337,6 @@ class LogFieldRef(BaseModel):
         return self
 
 
-class LogFieldCategory(StrEnum):
-    """字段探索响应分类，不返回请求专用的 ALL。"""
-
-    BASIC = "BASIC"
-    EXTENDED = "EXTENDED"
-
-
-class LogFieldMetadataTypeSource(StrEnum):
-    """字段类型的来源，避免把采样观察误表述为全量定义。"""
-
-    DECLARED = "DECLARED"
-    INFERRED = "INFERRED"
-
-
-class JSONValueType(StrEnum):
-    """JSON 样本中的值类型，避免调用方解释任意类型字符串。"""
-
-    BOOLEAN = "boolean"
-    INTEGER = "integer"
-    NUMBER = "number"
-    STRING = "string"
-    ARRAY = "array"
-    OBJECT = "object"
-    NULL = "null"
-
-
-class LogSortDirection(StrEnum):
-    """日志明细排序方向。"""
-
-    ASC = "asc"
-    DESC = "desc"
-
-
 class GetLogFieldMetadataRequest(AgentLogToolRequest):
     """字段元信息探索请求；省略父字段时列出根字段，否则探索下一层。"""
 
@@ -382,34 +351,6 @@ class GetLogFieldMetadataRequest(AgentLogToolRequest):
         if parent_field is not None and parent_field.raw_name not in LOG_TOOL_NESTED_FIELD_NAMES:
             raise ValueError("parent_field must reference a visible JSON field")
         return parent_field
-
-
-class StatisticsKind(StrEnum):
-    """字段可使用的统计包类型。"""
-
-    CATEGORICAL = "CATEGORICAL"
-    NUMERIC = "NUMERIC"
-
-
-class StatisticsUnsupportedReason(StrEnum):
-    """字段目录不可直接统计的稳定原因，不披露敏感规则。"""
-
-    OBJECT = "OBJECT"
-    ARRAY = "ARRAY"
-    UNKNOWN_TYPE = "UNKNOWN_TYPE"
-    PERMISSION_DENIED = "PERMISSION_DENIED"
-
-
-class AggregationMetricType(StrEnum):
-    """聚合函数枚举，禁止接收调用方给出的函数名。"""
-
-    COUNT = "COUNT"
-    DISTINCT_COUNT = "DISTINCT_COUNT"
-    MIN = "MIN"
-    MAX = "MAX"
-    AVG = "AVG"
-    SUM = "SUM"
-    PERCENTILE_APPROX = "PERCENTILE_APPROX"
 
 
 class LogFieldMetadataItem(BaseModel):
@@ -581,67 +522,6 @@ class SearchLogsResponse(BaseModel):
     ] = Field(default=(), description="脱敏后的日志行，仅含 columns 声明的稳定 key。")
     pagination: LogSearchPagination
     query_summary: LogQueryExecutionSummary
-
-
-class AggregationDimensionType(StrEnum):
-    """聚合维度只允许字段或受控时间桶。"""
-
-    FIELD = "FIELD"
-    TIME_BUCKET = "TIME_BUCKET"
-
-
-class AggregationValueType(StrEnum):
-    """字符串或拓展数值转换的固定 Doris 目标类型。"""
-
-    LONG = "LONG"
-    DOUBLE = "DOUBLE"
-
-
-class AggregationTimeInterval(StrEnum):
-    """时间桶粒度；AUTO 只存在于请求阶段。"""
-
-    AUTO = "AUTO"
-    MINUTE = "MINUTE"
-    HOUR = "HOUR"
-    DAY = "DAY"
-
-
-class AggregationEffectiveTimeInterval(StrEnum):
-    """聚合响应中的实际时间桶粒度，不含请求专用的 AUTO。"""
-
-    MINUTE = "MINUTE"
-    HOUR = "HOUR"
-    DAY = "DAY"
-
-
-class AggregationOrderDirection(StrEnum):
-    """排序方向固定为 Doris 可映射的两个枚举值。"""
-
-    ASC = "ASC"
-    DESC = "DESC"
-
-
-class AggregationColumnRole(StrEnum):
-    """聚合响应列的语义角色。"""
-
-    DIMENSION = "DIMENSION"
-    METRIC = "METRIC"
-
-
-class AggregationResultDataType(StrEnum):
-    """聚合列对外声明的数据类型。"""
-
-    STRING = "string"
-    DOUBLE = "double"
-    INT = "int"
-    LONG = "long"
-    TEXT = "text"
-    TIMESTAMP = "timestamp"
-    FLOAT = "float"
-    DATETIME = "datetime"
-    BOOLEAN = "boolean"
-    NUMBER = "number"
-    SCALAR = "scalar"
 
 
 class AggregationDimension(BaseModel):
@@ -887,15 +767,6 @@ class AggregationColumn(BaseModel):
     effective_time_interval: Optional[AggregationEffectiveTimeInterval] = Field(
         default=None, description='仅时间维度返回实际粒度；其他列为 null。'
     )
-
-
-class AggregationGroupKind(StrEnum):
-    """完整聚合的真实类别与合成分组。"""
-
-    VALUE = "VALUE"
-    OTHER = "OTHER"
-    MISSING = "MISSING"
-    ALL = "ALL"
 
 
 class AggregationGroupValue(BaseModel):

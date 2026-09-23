@@ -75,10 +75,10 @@ class FieldStatisticsSchemaTest(SimpleTestCase):
 
 
 class AIStatisticsSchemaTest(SimpleTestCase):
-    """AI 正文不解释格式；指令和字节预算在独立边界验证。"""
+    """输出 Schema 不解释已提取内容。"""
 
     def test_preserves_any_nonblank_content_exactly(self):
-        for content in ("  ```custom-chart\nnot-json\n```\n", "无法满足需求", "{invalid JSON", "\t无数据\n"):
+        for content in ('{"x": 1}', '[{"x": 1}]', "{invalid JSON", "\t无数据\n"):
             with self.subTest(content=content):
                 self.assertEqual(AIStatisticsAttachmentOutput(content=content).model_dump(), {"content": content})
 

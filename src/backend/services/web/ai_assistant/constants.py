@@ -51,6 +51,15 @@ class AttachmentErrorCode(TextChoices):
     OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
 
 
+class AIStatisticsArtifactErrorReason(TextChoices):
+    """AI 统计最终产物的标签提取失败原因；日志只记录稳定原因值。"""
+
+    START_TAG_COUNT_INVALID = "START_TAG_COUNT_INVALID", gettext_lazy("起始标签缺失或重复")
+    END_TAG_COUNT_INVALID = "END_TAG_COUNT_INVALID", gettext_lazy("结束标签缺失或重复")
+    TAG_ORDER_INVALID = "TAG_ORDER_INVALID", gettext_lazy("起止标签顺序错误")
+    EMPTY_CONTENT = "EMPTY_CONTENT", gettext_lazy("标签内没有有效内容")
+
+
 class MessageType(TextChoices):
     """平台首期支持的消息类型。"""
 

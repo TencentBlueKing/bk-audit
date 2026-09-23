@@ -12,7 +12,7 @@
 | 日志详情 | search.py | 脱敏、投影后的分页日志及总数，供分析取证 |
 | 通用聚合 | aggregation.py | columns/rows/groups 等统计数据，供 Agent 使用 |
 | 程序字段统计 | statistics.py | 单字段固定统计包，供附件保存和前端渲染 |
-| 共用规则 | context.py、sensitive.py、schemas.py | 可信条件、权限与参数边界 |
+| 共用规则 | context.py、sensitive.py、schemas.py、constants.py | 可信条件、权限、参数边界及带说明的协议枚举 |
 | 查询构造 | sql.py、statistics_sql.py、statistics_fields.py | 明细投影、聚合 SQL、字段表达式 |
 | 结果与预算 | statistics_result.py、statistics_budget.py、statistics_summary.py、statistics_types.py | 完整性、时间轴、数值摘要、标量保真 |
 

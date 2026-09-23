@@ -68,8 +68,9 @@ flowchart LR
   Node，避免删除成功后继续产生隐藏对象或孤立节点。
 - Message 显式父消息由平台校验同用户、同会话；状态、类型、先后关系和省略参数时的兜底
   由具体 Handler 在 `prepare()` 中决定。平台不做第二次业务校验。
-- 手动重试复用原 Message/Attachment，生成新 `task_id`，不重新执行 `prepare()`；业务 Task
-  需要自行重新校验易变权限或外部条件。
+- 附件手动重试允许 `SUCCESS` / `FAILED` 异步对象：复用原 UID、输入和上下文快照，生成新
+  `task_id`，清空旧产物、错误、过程归档和反馈后进入 `PROCESSING`；不重新执行 `prepare()`。
+  Message 手动重试仍仅允许 `FAILED + ASYNC`。业务 Task 需要自行重新校验易变权限或外部条件。
 - 编辑重跑通过 `PATCH /api/v1/ai_assistant/messages/{message_uid}/` 提交完整 `input_data`，
   重新调用原类型 Handler 的 `prepare()`，沿用原父消息绑定构造上下文，覆盖当前消息的输入、
   上下文、输出和执行状态；UID、创建时间及历史位置保持不变。仅 `SUCCESS` / `FAILED` 可编辑。

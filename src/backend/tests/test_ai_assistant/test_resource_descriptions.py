@@ -70,7 +70,7 @@ class ResourceDescriptionTest(SimpleTestCase):
             (
                 "/api/v1/ai_assistant/attachments/{attachment_uid}/retry/",
                 "post",
-                "原对象",
+                "重新生成",
                 AttachmentsViewSet,
             ),
             (

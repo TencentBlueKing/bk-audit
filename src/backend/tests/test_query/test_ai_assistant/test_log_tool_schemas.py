@@ -6,9 +6,11 @@ import json
 import os
 import subprocess
 import sys
+from importlib import import_module
 from pathlib import Path
 
 from django.conf import settings
+from django.db.models import TextChoices
 from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError as PydanticValidationError
 
@@ -22,6 +24,7 @@ from services.web.query.ai_assistant.exceptions import (
     UnsupportedAggregation,
     UnsupportedLogField,
 )
+from services.web.query.ai_assistant.log_tools import schemas as log_tool_schemas
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
@@ -38,6 +41,45 @@ from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 LOG_TOOL_EXCEPTIONS = Path("services/web/query/ai_assistant/exceptions.py")
 PRODUCTION_SOURCE_DIRECTORIES = ("api", "apps", "blueking", "core", "services")
+
+
+class TestLogToolEnumChoices(SimpleTestCase):
+    """共享协议枚举保留旧导入路径，同时给每个 value 提供可读说明。"""
+
+    ENUM_NAMES = (
+        "LogFieldType",
+        "LogFieldCategory",
+        "LogFieldMetadataTypeSource",
+        "JSONValueType",
+        "LogSortDirection",
+        "StatisticsKind",
+        "StatisticsUnsupportedReason",
+        "AggregationMetricType",
+        "AggregationDimensionType",
+        "AggregationValueType",
+        "AggregationTimeInterval",
+        "AggregationEffectiveTimeInterval",
+        "AggregationOrderDirection",
+        "AggregationColumnRole",
+        "AggregationResultDataType",
+        "AggregationGroupKind",
+    )
+
+    def test_protocol_enums_are_labeled_choices_in_constants(self):
+        """协议枚举提供中文说明且旧 Schema 导入路径仍引用同一类型。"""
+
+        for enum_name in self.ENUM_NAMES:
+            with self.subTest(enum=enum_name):
+                enum_type = getattr(log_tool_schemas, enum_name)
+                self.assertTrue(issubclass(enum_type, TextChoices))
+                self.assertEqual(len(enum_type.choices), len(list(enum_type)))
+                for member in enum_type:
+                    self.assertRegex(str(member.label), r"[\u4e00-\u9fff]")
+
+        constants = import_module("services.web.query.ai_assistant.log_tools.constants")
+        for enum_name in self.ENUM_NAMES:
+            with self.subTest(shared_constant=enum_name):
+                self.assertIs(getattr(constants, enum_name), getattr(log_tool_schemas, enum_name))
 
 
 class TestLogToolSettings(SimpleTestCase):

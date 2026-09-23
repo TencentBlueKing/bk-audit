@@ -56,8 +56,8 @@ class AttachmentAdminTest(TransactionTestCase):
             updated_by="alice",
         )
 
-    def test_action_retries_failed_attachment_and_skips_other_states(self):
-        """批量操作只重试失败附件，原快照/身份不变并记录实际管理员。"""
+    def test_action_retries_failed_async_attachments_and_skips_other_states(self):
+        """批量操作只重试 FAILED 异步附件，SUCCESS 与 PROCESSING 保持原状。"""
         failed = self.create_attachment()
         success = self.create_attachment(ExecutionStatus.SUCCESS)
         processing = self.create_attachment(ExecutionStatus.PROCESSING)
@@ -67,22 +67,24 @@ class AttachmentAdminTest(TransactionTestCase):
         success.refresh_from_db()
         processing.refresh_from_db()
         self.assertEqual(failed.status, ExecutionStatus.PROCESSING)
+        self.assertEqual(success.status, ExecutionStatus.SUCCESS)
         self.assertNotEqual(failed.task_id, "old-task")
+        self.assertEqual(success.task_id, "old-task")
         self.assertEqual(failed.input_data, {"text": "hello"})
         self.assertEqual(failed.context_data, {"prefix": "alice"})
         self.assertEqual(failed.created_by, "alice")
         self.assertEqual(failed.updated_by, "alice")
         self.assertEqual(failed.error_code, "")
-        self.assertEqual(success.task_id, "old-task")
         self.assertEqual(processing.task_id, "old-task")
-        dispatch.assert_called_once_with(
-            kwargs={"attachment_id": failed.id, "task_id": failed.task_id}, task_id=failed.task_id
-        )
+        self.assertEqual(processing.status, ExecutionStatus.PROCESSING)
+        dispatch.assert_called_once()
+        self.assertEqual(dispatch.call_args.kwargs["kwargs"]["attachment_id"], failed.id)
         entry = LogEntry.objects.get(object_id=str(failed.pk))
         self.assertEqual(entry.user_id, self.request.user.pk)
         self.assertIn(failed.task_id, entry.change_message)
-        notices = list(messages.get_messages(self.request))
-        self.assertIn("已提交重试 1 个，未提交 2 个", str(notices[-1]))
+        notices = [str(notice) for notice in messages.get_messages(self.request)]
+        self.assertTrue(any("批量动作只处理 FAILED" in notice for notice in notices))
+        self.assertIn("已提交重试 1 个，未提交 2 个", notices[-1])
 
     def test_broker_failure_is_reported_as_not_submitted(self):
         """投递失败后保留领域失败终态，Admin 不显示提交成功。"""

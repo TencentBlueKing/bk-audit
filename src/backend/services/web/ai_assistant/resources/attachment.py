@@ -74,14 +74,14 @@ class CreateAttachment(AIAssistantResource):
     ```
 
     instruction 必填且不能为纯空白。来源检索仅提供初始上下文，Agent 可调整实际查询范围。
-    最终产物是 output_data.content 原文，后端不约定 ECharts 格式，也不保证该文本为 JSON。
+    最终产物是 Agent 最后闭合消息中指定标签内的未解析原文（output_data.content）；后端只提取标签内文本，不约定 ECharts 格式，也不保证该文本为 JSON。
 
     ### 返回后如何处理
 
     FIELD_STATISTICS 和 AI_STATISTICS 当前均异步执行，通常返回 PROCESSING，也可能已进入终态；
     始终按 status 判断，不能假设创建响应已经包含 output_data。
     保存附件 uid 和 source_message_uid；所有异步附件均可轮询附件详情到 SUCCESS/FAILED。
-    is_stream=true 仅表示可选的过程订阅。两种统计均不支持产物编辑和后端导出，失败可人工重试。
+    is_stream=true 仅表示可选的过程订阅。两种统计均不支持产物编辑和后端导出；FAILED 可重试，SUCCESS 可重新生成。
     创建请求结果不确定时，先按来源消息查询附件列表核对，避免重复创建。
 
     ### 创建时的错误与执行失败
@@ -231,13 +231,15 @@ class UpdateAttachment(AIAssistantResource):
 
 
 class RetryAttachment(AIAssistantResource):
-    """原样重试 FAILED 异步附件，复用原 UID 和输入快照，返回原对象，不创建新附件。
+    """重新执行 SUCCESS 或 FAILED 的异步附件，复用原 UID、输入和上下文快照。
+    SUCCESS 态用于“重新生成”，FAILED 态用于“重试”；两者都会立即清空旧产物、旧错误、旧过程和旧反馈，进入 PROCESSING。
+    PROCESSING、同步附件和缺少有效 task_id 的历史对象返回 InvalidAttachmentState。
 
-    ### Case：统计失败后重试
+    ### Case：统计失败后重试 / 成功后重新生成
 
     `POST /api/v1/ai_assistant/attachments/{attachment_uid}/retry/`，无需业务请求体。
-    FIELD_STATISTICS 和 AI_STATISTICS 都支持人工重试，没有 supports_retry 开关；
-    非 FAILED 状态或同步类型不能重试，执行仍需通过权限和来源有效性校验。
+    FIELD_STATISTICS 和 AI_STATISTICS 都支持人工重试或重新生成，没有 supports_retry 开关；
+    PROCESSING、同步类型或缺少有效 task_id 不能重试，执行仍需通过权限和来源有效性校验。
 
     返回附件对象后按 status 处理。仅轮询时继续查询同一 UID，无需读取执行标识。
     使用 SSE 时先关闭旧流，等待新的 execution_id 后恢复；排队期间旧快照不代表新执行。

@@ -132,8 +132,10 @@ MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
 - Agent `RUN_ERROR` 仅作为业务事件归档和透传；若后续没有形成完整报告，流关闭后由产物校验
   将任务收敛为 `FAILED` 并追加 `stream_end`。HTTP 中断、非法 JSON 或非法最终内容同样由平台
   失败链路收口。
-- 手动重试仅允许 `FAILED` 异步 Attachment。重试接口复用原对象和创建时快照，只把状态改回
-  `PROCESSING`、生成新的 `task_id` 并投递任务；此时响应不保证已经出现新 `execution_id`。
+- 异步 Attachment 的手动重试允许 `SUCCESS` 或 `FAILED`：复用原对象和创建时快照，立即清空旧产物、
+  错误、过程归档和反馈，把状态改回 `PROCESSING`、生成新的 `task_id` 并投递任务；本期不保留产物版本，
+  新执行失败不恢复旧成功产物。响应不保证已经出现新 `execution_id`。Message 手动重试仍仅允许
+  `FAILED + ASYNC`，不得把附件的成功态重生语义扩展到 Message。
 - 新 Worker 开始执行后才建立新的 `execution_id` 和 Redis key，并向旧流写入 `stream_reset`；
   旧 Worker 的终态回写由 task fencing 拒绝。前端重试后继续轮询 stream snapshot，拿到新
   `execution_id` 后再订阅新流。

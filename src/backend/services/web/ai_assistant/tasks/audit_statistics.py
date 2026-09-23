@@ -1,12 +1,14 @@
 """程序与 AI 统计附件的独立业务任务。
 
-平台负责任务 fencing、重投和持久化；程序统计调用共享统计服务，AI 统计透传 Agent 原文。
+平台负责任务 fencing、重投和持久化；程序统计调用共享统计服务，
+AI 统计仅持久化图表配置标签内原文。
 Celery 成功事件仅携带状态，统计数据保留在附件输出快照。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -22,7 +24,12 @@ from requests.exceptions import Timeout as RequestsTimeout
 
 from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.constants import AIAgentCode
+from services.web.ai_assistant.ai_statistics_artifact import (
+    AIStatisticsArtifactExtractionError,
+    extract_ai_statistics_chart_config,
+)
 from services.web.ai_assistant.exceptions import (
+    AIStatisticsOutputParseError,
     AIStatisticsTimeout,
     AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
@@ -48,6 +55,8 @@ if TYPE_CHECKING:
     from services.web.ai_assistant.services.attachment_execution import (
         AttachmentExecution,
     )
+
+logger = logging.getLogger(__name__)
 
 
 def is_temporary_statistics_error(error: Exception) -> bool:
@@ -166,6 +175,7 @@ def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatistics
         AGUIStreamProtocolError,
         AIStatisticsTimeout,
         AttachmentOutputValidationError,
+        AIStatisticsOutputParseError,
     ) as error:
         status_code = None
         if isinstance(error, APIRequestError):
@@ -196,7 +206,7 @@ def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatistics
 
 
 def _execute_ai_statistics(execution: AttachmentExecution) -> AIStatisticsAttachmentOutput:
-    """复验来源后透传事件，仅持久化最后闭合 assistant 消息的原始文本。"""
+    """复验来源后透传事件，仅持久化图表配置标签内原文。"""
     # tasks 冷启动经 services 回到 handlers，来源 helper 在注册完成后加载。
     from services.web.ai_assistant.handlers.log_search_source import (
         parse_log_search_source,
@@ -239,9 +249,26 @@ def _execute_ai_statistics(execution: AttachmentExecution) -> AIStatisticsAttach
             on_event=on_event,
         )
     try:
+        chart_config = extract_ai_statistics_chart_config(
+            extractor.final_content,
+            start_tag=settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG,
+            end_tag=settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG,
+        )
+    except AIStatisticsArtifactExtractionError as error:
+        logger.warning(
+            "AI 统计产物标签提取失败",
+            extra={
+                "attachment_id": execution.attachment.id,
+                "task_id": execution.attachment.task_id,
+                "reason": error.reason.value,
+            },
+        )
+        raise AIStatisticsOutputParseError() from error
+
+    try:
         return parse_snapshot(
             AIStatisticsAttachmentOutput,
-            {"content": extractor.final_content},
+            {"content": chart_config},
             field_name="output_data",
             error_type=AttachmentSnapshotValidationError,
         )

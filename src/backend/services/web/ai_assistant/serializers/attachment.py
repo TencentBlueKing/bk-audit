@@ -175,7 +175,12 @@ class AttachmentResponseSerializer(serializers.Serializer):
     output_data = AttachmentOutputDataField(
         allow_null=True,
         required=False,
-        help_text="按 attachment_type 选择输出 schema；SUCCESS 时使用，FIELD_STATISTICS 为固定统计包，AI_STATISTICS 为 content 原文",
+        help_text=(
+            "按 attachment_type 选择输出 schema；SUCCESS 时使用，"
+            "FIELD_STATISTICS 为固定统计包，"
+            "AI_STATISTICS 为 Agent 最后闭合消息中指定标签内的未解析原文；"
+            "字节预算作用在该消息全文，不只是标签内原文"
+        ),
     )
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")

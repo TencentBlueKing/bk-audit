@@ -282,6 +282,44 @@ class StatisticsRuntimeSettingsTest(SimpleTestCase):
         self.assertGreater(thresholds["FIELD_STATISTICS"]["failure_seconds"], 4500)
         self.assertLess(thresholds["AI_STATISTICS"]["failure_seconds"], 4500)
 
+    def test_ai_statistics_chart_tags_have_defaults_and_allow_environment_override(self):
+        start_env = "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG"
+        end_env = "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG"
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(start_env, None)
+            os.environ.pop(end_env, None)
+            config = runpy.run_path(str(Path(settings.BASE_DIR) / "services/web/settings.py"))
+        self.assertEqual(config["AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG"], "<!--DASH_AI_CHART_CONFIG-->")
+        self.assertEqual(config["AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG"], "<!--/DASH_AI_CHART_CONFIG-->")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG": "<chart>",
+                "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG": "</chart>",
+            },
+        ):
+            configured = runpy.run_path(str(Path(settings.BASE_DIR) / "services/web/settings.py"))
+        self.assertEqual(configured["AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG"], "<chart>")
+        self.assertEqual(configured["AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG"], "</chart>")
+
+    def test_ai_statistics_chart_tags_reject_empty_or_equal_values(self):
+        for start_tag, end_tag in (
+            ("", "</chart>"),
+            ("<chart>", ""),
+            ("same", "same"),
+            ("CHART", "CHART_END"),
+            ("CHART_END", "CHART"),
+        ):
+            with self.subTest(start_tag=start_tag, end_tag=end_tag), mock.patch.dict(
+                os.environ,
+                {
+                    "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG": start_tag,
+                    "BKAPP_AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG": end_tag,
+                },
+            ), self.assertRaises(ImproperlyConfigured):
+                runpy.run_path(str(Path(settings.BASE_DIR) / "services/web/settings.py"))
+
 
 class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
     def setUp(self):

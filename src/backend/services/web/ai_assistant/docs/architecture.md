@@ -66,9 +66,9 @@ flowchart TD
 2. 事务内创建 PROCESSING 附件，提交后投递任务。输入与上下文固化，便于重试和追踪。
 3. Worker 按附件及当前 task_id 加载执行；业务执行重新校验来源或实际工具权限。
 4. 输出通过类型模型校验后，以条件更新（CAS）提交 SUCCESS；最终异常提交脱敏 FAILED。自动重试期间保持 PROCESSING。
-5. 人工重试只允许符合平台约束的 FAILED 异步对象，保留 UID，生成新 task_id。两种统计都支持，不存在 `supports_retry` 开关。
+5. 人工重试允许符合平台约束的 SUCCESS 或 FAILED 异步附件：保留 UID，清空旧产物、错误、过程归档和反馈，生成新 task_id 后进入 PROCESSING。SUCCESS 用于重新生成，FAILED 用于重试；两种统计都支持，不存在 `supports_retry` 开关。Message 重试仍仅允许 FAILED + ASYNC。
 
-旧 task_id 的结果不能覆盖新任务；并发重复投递可能重复执行外部查询，终态 CAS 只保证有效结果唯一，不等同于外部调用恰好一次。会话删除与最终写入共享锁边界。
+旧 task_id 的结果不能覆盖新任务；并发重复投递可能重复执行外部查询，终态 CAS 只保证有效结果唯一，不等同于外部调用恰好一次。会话删除与最终写入共享锁边界。CAS 失败时不清理反馈、不注册 on_commit、不投递新任务。
 
 两种统计直接使用 `AttachmentExecutionTask`。基类持久化业务结果后只向 Celery 返回轻量状态，避免把大结果再次写入成功事件；无需为这一通用规则创建统计专属任务父类。业务数据从附件详情读取。
 
@@ -84,7 +84,7 @@ flowchart TD
 
 AI 统计把用户需求、初始条件和轻量查询摘要交给 `bp-ai-log-stats`。统计 Agent 绑定 `audit-log-statistics` 工具集，仅包含字段探索和聚合；日志分析 Agent 使用 `audit-log-analysis`，额外提供明细取证。两套工具集在 stag/prod 均有网关声明，部署时仍需核对实际网关发布和 Agent 工具绑定。
 
-任务先将原始 Agent 事件交给平台流服务，再提取最后一条闭合的 assistant 消息作为 `content`。中间说明和工具结果不拼进最终产物；末条消息未闭合、运行错误、空文本或超限不能以之前的消息冒充成功。
+任务先将原始 Agent 事件交给平台流服务，再从最后一条闭合的 assistant 消息中提取指定起止标签内的未解析原文作为 `content`。后端只做标签切分，不执行 JSON、dict/list 或 ECharts 校验；中间说明和工具结果不拼进最终产物。标签协议失败（缺失、重复、空内文等）写入 `AIStatisticsOutputParseError`，消耗现有自动重试预算后终态为 FAILED；标签提取成功即 SUCCESS，前端无法渲染也不改状态。末条消息未闭合、运行错误、空文本或超限不能以之前的消息冒充成功。单轮 AG-UI 事件仍原样归档到 `stream_archive`；人工重试开始时清理上一轮归档并等待新 `execution_id`。
 
 MySQL 保存最终产物与历史过程快照，Redis 提供实时尾流。所有异步附件均可直接轮询详情获取最终产物，is_stream=true 仅表示支持过程订阅。选择展示过程时，前端通过快照恢复，再携带 execution_id 和游标订阅；流结束后重新读详情确定业务终态。`archive_status=COMPLETE` 仅表示已归档内容未降级/截断，不代表任务终态；运行中的快照可落后于实时流。任务在快照读取后、SSE 建连前结束时，新连接只返回无游标的 `platform.stream_end`，不会补发历史。需要完整过程时重新读取终态快照，最终产物始终读取详情。详见[流式设计](../streaming/README.md)。
 

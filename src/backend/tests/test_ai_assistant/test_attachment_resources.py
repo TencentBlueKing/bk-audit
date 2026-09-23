@@ -26,6 +26,7 @@ from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
     AttachmentSnapshotValidationError,
     InvalidAttachmentSource,
+    InvalidAttachmentState,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
@@ -570,6 +571,12 @@ class EditableAnalysisAttachmentHandler(EditableAttachmentEchoHandler):
     attachment_type = AttachmentType.AI_ANALYSIS
 
 
+class FeedbackAsyncAttachmentHandler(EchoAttachmentAsyncHandler):
+    """异步附件 Handler，显式开放反馈能力供终态重试资源用例使用。"""
+
+    supports_feedback = True
+
+
 @mock.patch("services.web.ai_assistant.resources.attachment.get_request_username", return_value="alice")
 class AttachmentResourceTest(TestCase):
     def setUp(self):
@@ -591,7 +598,7 @@ class AttachmentResourceTest(TestCase):
             updated_by="alice",
         )
         self.sync_handler = FeedbackAttachmentEchoHandler()
-        self.async_handler = EchoAttachmentAsyncHandler()
+        self.async_handler = FeedbackAsyncAttachmentHandler()
         use_attachment_handler(self, self.sync_handler)
         use_attachment_handler(self, self.async_handler)
 
@@ -852,6 +859,58 @@ class AttachmentResourceTest(TestCase):
         self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
         self.assertNotEqual(attachment.task_id, "task-old")
         self.assertNotIn("task_id", retried)
+
+    def test_retry_success_async_attachment_clears_feedback_and_rejects_invalid_states(self, _username):
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            task_id="task-success",
+            title="AI 分析",
+            output_data={"content": "old success"},
+        )
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.ATTACHMENT,
+            source_id=attachment.id,
+            feedback_type=FeedbackType.DISLIKE,
+            comment="old feedback",
+            created_by="alice",
+            updated_by="alice",
+        )
+
+        detail = GetAttachment().request({"attachment_uid": str(attachment.uid)})
+        self.assertIsNotNone(detail["feedback"])
+
+        with mock.patch.object(self.async_handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = RetryAttachment().request({"attachment_uid": str(attachment.uid)})
+
+        self.assertEqual(retried["uid"], str(attachment.uid))
+        self.assertEqual(retried["status"], ExecutionStatus.PROCESSING)
+        self.assertIsNone(retried["output_data"])
+        self.assertIsNone(retried["feedback"])
+        self.assertFalse(
+            Feedback.objects.filter(
+                source_type=FeedbackSourceType.ATTACHMENT,
+                source_id=attachment.id,
+            ).exists()
+        )
+
+        processing_attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.PROCESSING,
+            task_id="task-processing",
+            output_data=None,
+        )
+        sync_attachment = self.create_attachment(
+            attachment_type=AttachmentType.FIELD_STATISTICS,
+            status=ExecutionStatus.SUCCESS,
+            task_id="task-sync",
+            output_data={"content": "sync"},
+        )
+        for invalid_attachment in (processing_attachment, sync_attachment):
+            with self.subTest(attachment_uid=str(invalid_attachment.uid)):
+                with self.assertRaises(InvalidAttachmentState):
+                    RetryAttachment().request({"attachment_uid": str(invalid_attachment.uid)})
 
     def test_cross_user_soft_deleted_and_corrupted_snapshots_are_rejected(self, _username):
         foreign_conversation = Conversation.objects.create(

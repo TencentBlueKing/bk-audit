@@ -78,7 +78,9 @@ def test_ai_statistics_preserves_raw_content_and_http_replay(statistics_stack):
         assert [frame.data for frame in frames] == [event["data"] for event in result.stream_archive]
         assert frames[-1].data == {"status": "SUCCESS"}
         content = [frame.data["delta"] for frame in frames if frame.data.get("type") == "TEXT_MESSAGE_CONTENT"]
-        assert content == [result.output_data["content"]]
+        tagged = "<!--DASH_AI_CHART_CONFIG-->" "  ```custom-chart\n非 JSON 原文\n```\n" "<!--/DASH_AI_CHART_CONFIG-->"
+        assert content == [tagged]
+        assert "DASH_AI_CHART_CONFIG" not in result.output_data["content"]
         snapshot = session.get(
             f"{stack.web_url}/api/v1/ai_assistant/attachments/{attachment.uid}/stream/snapshot/", timeout=10
         )

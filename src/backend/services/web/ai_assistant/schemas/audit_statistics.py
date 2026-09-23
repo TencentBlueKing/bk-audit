@@ -142,9 +142,16 @@ class AIStatisticsAttachmentContext(MessageSchema):
 
 
 class AIStatisticsAttachmentOutput(MessageSchema):
-    """Agent 最后闭合消息全文；后端不解释格式或前端渲染协议。"""
+    """输出 Schema 不解释已提取内容。"""
 
-    content: str = Field(min_length=1, description='Agent 最后闭合消息的完整原文；后端不解析图表标识或 ECharts 协议。非空且 UTF-8 字节数受部署配置限制。')
+    content: str = Field(
+        min_length=1,
+        description=(
+            "已提取的图表配置标签内原文；后端不解析图表标识或 ECharts 协议。"
+            "任务层 UTF-8 字节预算作用在 Agent 最后闭合消息全文（含起止标签和标签外说明），"
+            "超限会丢弃候选并表现为格式异常；本字段仍拒绝超出同一预算的内文。"
+        ),
+    )
 
     @field_validator("content")
     @classmethod

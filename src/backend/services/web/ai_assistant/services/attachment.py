@@ -33,7 +33,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentExportResult,
     attachment_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.schemas import dump_snapshot, parse_snapshot
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
@@ -344,17 +344,19 @@ class AttachmentService:
         return attachment
 
     def retry(self, *, attachment_uid: str) -> Attachment:
-        """所有 FAILED + ASYNC 附件均允许重试，用旧 task_id 做 CAS 抢占。"""
+        """终态 SUCCESS/FAILED 的异步附件允许覆盖式重试，用旧 task_id 做 CAS 抢占。"""
 
         attachment = self.get(attachment_uid=attachment_uid)
         handler = attachment_handler_registry.require(attachment.attachment_type)
+        retryable_statuses = (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED)
         if (
-            attachment.status != ExecutionStatus.FAILED
+            attachment.status not in retryable_statuses
             or handler.execution_mode != ExecutionMode.ASYNC
             or not attachment.task_id
         ):
             raise InvalidAttachmentState()
 
+        expected_status = attachment.status
         old_task_id = attachment.task_id
         new_task_id = str(uuid4())
         now = timezone.now()
@@ -363,10 +365,11 @@ class AttachmentService:
         if not attachment.is_stream:
             stream_updates["stream_config"] = {}
         with transaction.atomic():
-            # 会话锁隔离删除竞态；附件本身仍依赖 FAILED + old task_id CAS 抢占重试。
+            # 会话锁隔离删除竞态；附件本身仍依赖终态 + old task_id CAS 抢占重试。
             self._lock_active_source(source_message=attachment.source_message)
-            updated = Attachment.restart_failed(
+            updated = Attachment.restart_terminal(
                 instance_id=attachment.id,
+                expected_status=expected_status,
                 old_task_id=old_task_id,
                 new_task_id=new_task_id,
                 extra_updates={
@@ -379,6 +382,12 @@ class AttachmentService:
             )
             if not updated:
                 raise InvalidAttachmentState()
+            Feedback.objects.filter(
+                source_type=FeedbackSourceType.ATTACHMENT,
+                source_id=attachment.id,
+            ).delete()
+            # get() 可能已绑定旧反馈；删除后清掉临时属性，避免响应序列化读到脏缓存。
+            attachment._current_feedback = None
             # CAS 使用 QuerySet 原子抢占；刷新实例供 on_commit 投递和接口返回共同使用。
             attachment.refresh_from_db()
 

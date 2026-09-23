@@ -159,17 +159,26 @@ class AttachmentAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
         "updated_at",
     ]
 
-    @admin.action(description="重试选中的失败附件", permissions=["change"])
+    @admin.action(description="重试选中的失败异步附件", permissions=["change"])
     def retry_attachments(self, request, queryset):
-        """按附件原用户身份提交重试，并将实际管理员记录到 Admin 操作日志。
+        """按附件原用户身份提交失败件重试，并将实际管理员记录到 Admin 操作日志。
 
-        重试资格、快照复用、并发抢占和事务后投递均由领域服务负责；业务拒绝
-        逐项提示，不影响其他选中附件。任务投递失败也计入未提交数量。
+        批量动作只处理 FAILED。SUCCESS 重新生成会清空产物和反馈，只走单个附件重试接口，
+        避免误选整表。资格校验、快照复用、并发抢占和事务后投递均由领域服务负责。
+        业务拒绝逐项提示，不影响其他选中附件。任务投递失败也计入未提交数量。
         """
 
         submitted = 0
         rejected = 0
-        for attachment in queryset.only("uid", "created_by").iterator():
+        for attachment in queryset.only("uid", "created_by", "status").iterator():
+            if attachment.status != ExecutionStatus.FAILED:
+                rejected += 1
+                self.message_user(
+                    request,
+                    f"附件 {attachment.uid} 未提交重试：批量动作只处理 FAILED，成功件请使用单个重试接口重新生成",
+                    level=messages.WARNING,
+                )
+                continue
             try:
                 retried = AttachmentService(user=attachment.created_by).retry(attachment_uid=str(attachment.uid))
             except AIAssistantException as error:

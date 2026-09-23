@@ -162,9 +162,9 @@ def ready(self):
 - Retry `countdown`/`eta` 小于对应消息或附件的巡检硬失效阈值；
 - 业务异常中不得携带敏感输入或日志正文。
 
-所有失败异步附件均支持手动重试，不需要 Handler 声明类型开关。手动重试不重新调用
-`prepare()`，而是复用持久化 input/context 快照并投递新 task ID。若权限或
-依赖必须实时检查，应在业务 Task 中执行。
+所有 SUCCESS 或 FAILED 的异步附件均支持手动重试/重新生成，不需要 Handler 声明类型开关。手动重试不重新调用
+`prepare()`，而是复用持久化 input/context 快照，清空旧产物、错误、过程归档和反馈后投递新 task ID。
+Message 手动重试仍仅允许 `FAILED + ASYNC`。若权限或依赖必须实时检查，应在业务 Task 中执行。
 
 附件 Task 仍返回业务 output 模型或字典供平台校验持久化；`AttachmentExecutionTask`
 在成功持久化后统一向 Celery 返回 `{"status": "SUCCESS"}`，避免任务成功事件携带业务正文。
@@ -178,7 +178,7 @@ def ready(self):
 2. input/context/output 的合法与非法快照；
 3. 同步成功、异常和输出契约失败；
 4. 异步成功、最终失败、`self.retry()`、重试耗尽、重复投递及 Retry 等待时间约束；
-5. 手动重试只允许 `FAILED + ASYNC`，旧 task ID 不能回写；
+5. 附件手动重试允许 `SUCCESS/FAILED + ASYNC`，Message 仍仅 `FAILED + ASYNC`；旧 task ID 不能回写；CAS 失败时不清理反馈、不投递；
 6. 用户、会话、父消息或来源消息越权；
 7. 开放的反馈、编辑、导出和流式能力；
 8. 真实 RabbitMQ/Celery 集成测试，验证接入任务而不只 mock 平台方法。
