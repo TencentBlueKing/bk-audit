@@ -51,7 +51,7 @@
         v-model:content="content"
         class="risk-summary-rich-editor"
         :default="content"
-        :max-len="1000"
+        :max-len="2000"
         :show-image-preview="false"
         :support-fullscreen="false" />
 

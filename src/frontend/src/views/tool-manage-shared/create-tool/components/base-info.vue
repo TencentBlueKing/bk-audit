@@ -66,7 +66,7 @@
         required>
         <bk-input
           v-model.trim="formData.description"
-          :maxlength="100"
+          :maxlength="2000"
           :placeholder="t('请输入说明')"
           :resize="false"
           show-word-limit
