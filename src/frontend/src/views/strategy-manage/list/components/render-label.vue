@@ -24,50 +24,76 @@
           v-if="showLabel"
           class="render-label">
           <div
-            v-for="(item, index) in labelList"
-            :key="index"
-            class="label-item"
-            :class="[
-              {active: active===item.tag_id},
-              {final: index === final}
-            ]"
-            @click="handleSelect(item.tag_id)">
-            <div class="label-box">
-              <audit-icon
-                v-if="item?.icon"
-                class="tag-icon"
-                :class="[{active: active===item.tag_id}]"
-                :type="item?.icon" />
-              <span v-else>
-                <audit-icon
-                  v-if="index !== 0"
-                  class="tag-icon"
-                  :class="[{active: active===item.tag_id}]"
-                  type="tag" />
-                <audit-icon
-                  v-else
-                  class="tag-icon"
-                  :class="[{active: active===item.tag_id}]"
-                  type="quanbu" />
-              </span>
-              <span
-                v-if="showTipObjects[item.tag_id]"
-                v-bk-tooltips="{content:item.tag_name, placement: 'top-start'}"
-                class="label-text"
-                :class="`item-text-${index}`">
-                {{ te( item.tag_name) ? t(item.tag_name) : item.tag_name }}
-              </span>
-              <span
-                v-else
-                class="label-text"
-                :class="`item-text-${index}`">
-                {{ te( item.tag_name) ? t(item.tag_name) : item.tag_name }}
-              </span>
-            </div>
-            <div style="margin-left: auto;color: #c4c6cc;">
-              <span :class="[{active: active===item.tag_id}]">{{ item?.strategy_count }}</span>
+            v-if="loading"
+            class="label-menu-skeleton"
+            data-testid="label-menu-skeleton">
+            <div
+              v-for="item in menuSkeletonRows"
+              :key="item.id"
+              class="label-item">
+              <div class="label-box">
+                <skeleton
+                  custom-class="label-menu-skeleton-icon"
+                  :height="16"
+                  :width="16" />
+                <skeleton
+                  custom-class="label-menu-skeleton-text"
+                  :height="14"
+                  :width="item.textWidth" />
+              </div>
+              <skeleton
+                custom-class="label-menu-skeleton-count"
+                :height="14"
+                :width="16" />
             </div>
           </div>
+          <template v-else>
+            <div
+              v-for="(item, index) in labelList"
+              :key="index"
+              class="label-item"
+              :class="[
+                {active: active===item.tag_id},
+                {final: index === final}
+              ]"
+              @click="handleSelect(item.tag_id)">
+              <div class="label-box">
+                <audit-icon
+                  v-if="item?.icon"
+                  class="tag-icon"
+                  :class="[{active: active===item.tag_id}]"
+                  :type="item?.icon" />
+                <span v-else>
+                  <audit-icon
+                    v-if="index !== 0"
+                    class="tag-icon"
+                    :class="[{active: active===item.tag_id}]"
+                    type="tag" />
+                  <audit-icon
+                    v-else
+                    class="tag-icon"
+                    :class="[{active: active===item.tag_id}]"
+                    type="quanbu" />
+                </span>
+                <span
+                  v-if="showTipObjects[item.tag_id]"
+                  v-bk-tooltips="{content:item.tag_name, placement: 'top-start'}"
+                  class="label-text"
+                  :class="`item-text-${index}`">
+                  {{ te( item.tag_name) ? t(item.tag_name) : item.tag_name }}
+                </span>
+                <span
+                  v-else
+                  class="label-text"
+                  :class="`item-text-${index}`">
+                  {{ te( item.tag_name) ? t(item.tag_name) : item.tag_name }}
+                </span>
+              </div>
+              <div style="margin-left: auto;color: #c4c6cc;">
+                <span :class="[{active: active===item.tag_id}]">{{ item?.strategy_count }}</span>
+              </div>
+            </div>
+          </template>
         </div>
       </transition>
     </scroll-faker>
@@ -93,6 +119,8 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute  } from 'vue-router';
 
+  import Skeleton from '@components/skeleton/index.vue';
+
   import { isStrategyListRoute } from '../../utils/strategy-routes';
 
   interface TagItem {
@@ -117,13 +145,25 @@
     final?: number;
     renderStyle?: Record<string, any>;
     active?: string|number;
+    loading?: boolean;
   }
   const props = withDefaults(defineProps<Props>(), {
     final: 1,
     renderStyle: () => ({}),
     active: 'all',
+    loading: false,
   });
   const emits = defineEmits<Emits>();
+  const menuSkeletonRows = [
+    { id: 'menu-strategy', textWidth: 96 },
+    { id: 'menu-risk', textWidth: 128 },
+    { id: 'menu-rule', textWidth: 72 },
+    { id: 'menu-notice', textWidth: 140 },
+    { id: 'menu-link', textWidth: 88 },
+    { id: 'menu-tool', textWidth: 112 },
+    { id: 'menu-report', textWidth: 80 },
+    { id: 'menu-scene', textWidth: 120 },
+  ];
   const route = useRoute();
   const showTipObjects = ref({} as Record<string, boolean>);
 
@@ -233,7 +273,9 @@
 <style lang="postcss" scoped>
 .render-label-box {
   position: relative;
-  height: calc(100vh);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 
   .render-label {
     position: relative;
@@ -285,6 +327,41 @@
         margin-right: 5px;
         font-size: 16px;
         color: #dcdee5;
+      }
+    }
+
+    .label-menu-skeleton {
+      .label-item {
+        line-height: 1;
+        cursor: default;
+
+        &:hover {
+          background: transparent;
+        }
+      }
+
+      .label-box {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+
+      :deep(.audit-skeleton) {
+        display: block;
+        flex-shrink: 0;
+        align-self: center;
+        /* 灰底上比表格骨架深一档，底色用表格高光色 #E4E9F2 */
+        background: linear-gradient(90deg, #e4e9f2 0%, #d3dbe8 50%, #e4e9f2 100%);
+        background-position: -200% 0;
+        background-size: 200% 100%;
+      }
+
+      :deep(.label-menu-skeleton-icon) {
+        margin-right: 5px;
+      }
+
+      :deep(.label-menu-skeleton-count) {
+        margin-left: auto;
       }
     }
   }

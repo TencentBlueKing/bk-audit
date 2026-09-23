@@ -369,5 +369,6 @@ export default {
     风险单标题: 'Risk Ticket Title',
     风险危害: 'Risk Hazard',
     处理指引: 'Handling Guidance',
+    套餐执行记录: 'Package execution records',
   },
 };

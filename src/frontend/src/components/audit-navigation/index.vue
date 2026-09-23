@@ -77,7 +77,7 @@
     <div
       class="audit-navigation-main"
       :class="{
-        'show-notice-navigation-main': showNotice.enabled
+        'show-notice-navigation-main': showNotice.enabled && showAlert
       }"
       :style="mainStyles">
       <div
@@ -180,11 +180,8 @@
 
 
   const scrollStyles = computed(() => {
-    let headerTipsHeight = 0;
-    if (headerTipsRef.value) {
-      headerTipsHeight = 32;
-    }
-
+    // 提示节点始终存在，没有内容时高度是 0，不能按 32px 预扣，否则滚动区比视口矮一截
+    const headerTipsHeight = headerTipsRef.value?.offsetHeight ?? 0;
     const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
@@ -394,8 +391,12 @@
   }
 
   .audit-navigation-content {
+    height: 100%;
+
     .navigation-content-wrapper {
       position: relative;
+      box-sizing: border-box;
+      height: 100%;
       padding: 20px 24px 0;
     }
   }

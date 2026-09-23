@@ -1382,6 +1382,19 @@ export const buildStrategyCreatePayload = (
     next.configs = applyScheduleConfigForSubmit(next.configs) ?? next.configs;
   }
 
+  if (scope.isPlatform) {
+    delete next.bksecEnabled;
+    delete next.bksecRiskTypeId;
+    delete next.bksecFieldValues;
+    delete next.bksec_enabled;
+    delete next.bksec_risk_type_id;
+    delete next.bksec_field_values;
+  } else {
+    next.bksecEnabled = !!params.bksecEnabled;
+    next.bksecRiskTypeId = params.bksecRiskTypeId ?? null;
+    next.bksecFieldValues = params.bksecFieldValues ?? {};
+  }
+
   return next;
 };
 
@@ -1471,5 +1484,8 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
     risk_level: firstRule?.risk_level ?? d.risk_level ?? '',
     risk_hazard: firstRule?.risk_hazard ?? d.risk_hazard ?? '',
     risk_guidance: firstRule?.risk_guidance ?? d.risk_guidance ?? '',
+    bksecEnabled: !!(d.bksecEnabled ?? d.bksec_enabled),
+    bksecRiskTypeId: d.bksecRiskTypeId ?? d.bksec_risk_type_id ?? null,
+    bksecFieldValues: d.bksecFieldValues ?? d.bksec_field_values ?? {},
   };
 };

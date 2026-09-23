@@ -68,7 +68,7 @@
       class="add-rule-item"
       @click="handleAddRuleItem">
       <audit-icon
-        style="margin: 0 6px;"
+        class="add-rule-icon"
         type="add" />
       <span>{{ t('添加条件组') }}</span>
     </div>
@@ -317,12 +317,18 @@
     width: fit-content;
     height: 32px;
     padding: 0 12px 0 6px;
+    font-size: 12px;
     color: #3a84ff;
     cursor: pointer;
     background: #fafbfd;
     border: 1px dashed #dcdee5;
     border-radius: 2px;
     align-items: center;
+
+    .add-rule-icon {
+      margin: 0 6px;
+      font-size: 16px;
+    }
   }
 }
 

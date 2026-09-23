@@ -887,9 +887,9 @@
   display: flex;
   width: 100%;
   height: 32px;
-  padding: 0 10px;
-  font-size: 12px;
-  color: #63656e;
+  padding: 0 var(--audit-space-8);
+  font-size: var(--audit-font-size-sm);
+  color: var(--audit-neutral-text-02);
   cursor: pointer;
   background: #fff;
   border: 1px solid #c4c6cc;

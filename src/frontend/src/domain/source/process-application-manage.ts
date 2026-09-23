@@ -26,6 +26,22 @@ import ModuleBase from './module-base';
 
 import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
+interface ExecutionQuery {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  task_id?: string;
+  task_name?: string;
+  application_id?: string;
+  application_name?: string;
+  risk_id?: string;
+  trigger_type?: string;
+  status?: string;
+  executor?: string;
+  sort?: string | string[];
+  scene_id?: string;
+}
+
 class ProcessApplicationManage extends ModuleBase {
   constructor() {
     super();
@@ -102,6 +118,19 @@ class ProcessApplicationManage extends ModuleBase {
       params,
       payload,
     });
+  }
+
+  // 执行记录。getRisks 是套餐命中风险，不能复用。
+  getExecutionRecords(params: ExecutionQuery) {
+    return Request.get(`${this.module}/execution_records/`, { params });
+  }
+
+  getExecutionDetail(params: { task_id: string }) {
+    return Request.get(`${this.module}/execution_records/${params.task_id}/`);
+  }
+
+  retryExecution(params: { task_id: string; reason: string }) {
+    return Request.post(`${this.module}/execution_records/${params.task_id}/retry/`, { params });
   }
 
   // 启停处理套餐
