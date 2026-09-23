@@ -145,11 +145,7 @@
               extCls: 'strategy-config-type-tooltips',
               placement: 'top-start'
             }"
-            style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
+            class="expected-result-label">
             {{ t('预期结果') }}
           </span>
         </template>
@@ -161,21 +157,19 @@
           @update-expected-result="handleUpdateExpectedResult" />
       </bk-form-item>
     </div>
-    <auth-collapse-panel
+    <div
       v-if="stepMode === 'basic'"
-      is-active
-      :label="t('调度配置')"
-      style="margin-bottom: 12px">
-      <div class="dispatch-wrap">
-        <bk-form-item
-          :label="t('调度方式')"
-          property="configs.data_source.source_type"
-          style="margin-bottom: 12px">
-          <bk-radio-group
-            v-model="formData.configs.data_source.source_type"
-            class="source-type-radio-group"
-            :disabled="isStrategyConfigLocked"
-            @change="handleSourceTypeChange">
+      class="dispatch-section">
+      <bk-form-item
+        class="dispatch-type-item"
+        :label="t('调度方式')"
+        property="configs.data_source.source_type">
+        <bk-radio-group
+          v-model="formData.configs.data_source.source_type"
+          class="source-type-radio-group"
+          :disabled="isStrategyConfigLocked"
+          @change="handleSourceTypeChange">
+          <span class="source-type-option">
             <bk-radio
               v-bk-tooltips="{
                 content: getSourceTypeStatus('batch_join_source').tips,
@@ -192,18 +186,15 @@
                 extCls: 'strategy-config-type-tooltips',
                 placement: 'top-start',
               }"
-              :style="{
-                color: (isStrategyConfigLocked
-                  || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isStrategyConfigLocked
-                  || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
-                  ? '#c4c6cc' : '#979ba5'}`,
-                marginLeft: '6px',
-                lineHeight: '12px',
+              class="source-type-label"
+              :class="{
+                'is-disabled': isStrategyConfigLocked
+                  || getSourceTypeStatus('batch_join_source').disabled,
               }">
               {{ t('固定周期调度') }}
             </span>
+          </span>
+          <span class="source-type-option">
             <bk-radio
               v-bk-tooltips="{
                 content: getSourceTypeStatus('stream_source').tips,
@@ -217,64 +208,56 @@
                 content: t('策略实时运行'),
                 placement: 'top-start',
               }"
-              :style="{
-                color: (isStrategyConfigLocked
-                  || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
-                cursor: (isStrategyConfigLocked
-                  || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
-                borderBottom: `1px dashed ${(isStrategyConfigLocked || getSourceTypeStatus('stream_source').disabled)
-                  ? '#c4c6cc' : '#979ba5'}`,
-                marginLeft: '6px',
-                lineHeight: '12px',
+              class="source-type-label"
+              :class="{
+                'is-disabled': isStrategyConfigLocked
+                  || getSourceTypeStatus('stream_source').disabled,
               }">
               {{ t('实时调度') }}
             </span>
-          </bk-radio-group>
-        </bk-form-item>
-        <template
-          v-if="
-            formData.configs.data_source.source_type === 'batch_join_source'
-          ">
-          <span
-            v-bk-tooltips="t('策略运行的周期')"
-            class="label-is-required circle">
-            {{ t('调度周期') }}
           </span>
-          <div class="flex-center">
-            <bk-form-item
-              class="is-required no-label"
-              label-width="0"
-              property="configs.schedule_config.count_freq"
-              style="margin-bottom: 0">
-              <bk-input
-                v-model="formData.configs.schedule_config.count_freq"
-                class="schedule-input"
-                :min="1"
-                onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
-                :placeholder="t('请输入')"
-                type="number" />
-            </bk-form-item>
-            <bk-form-item
-              class="is-required no-label"
-              label-width="0"
-              property="configs.schedule_config.schedule_period"
-              style="margin-bottom: 0">
-              <bk-select
-                v-model="formData.configs.schedule_config.schedule_period"
-                class="schedule-select"
-                :clearable="false"
-                style="width: 68px">
-                <bk-option
-                  v-for="(item, index) in schedulePeriodOptions"
-                  :key="index"
-                  :label="item.label"
-                  :value="item.value" />
-              </bk-select>
-            </bk-form-item>
-          </div>
-        </template>
+        </bk-radio-group>
+      </bk-form-item>
+      <div
+        v-if="formData.configs.data_source.source_type === 'batch_join_source'"
+        class="schedule-period">
+        <div
+          v-bk-tooltips="t('策略运行的周期')"
+          class="schedule-period-label">
+          <span class="schedule-period-text">{{ t('调度周期') }}</span>
+          <span class="schedule-period-required">*</span>
+        </div>
+        <div class="schedule-period-row">
+          <bk-form-item
+            class="is-required no-label"
+            label-width="0"
+            property="configs.schedule_config.count_freq">
+            <bk-input
+              v-model="formData.configs.schedule_config.count_freq"
+              class="schedule-input"
+              :min="1"
+              onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
+              :placeholder="t('请输入')"
+              type="number" />
+          </bk-form-item>
+          <bk-form-item
+            class="is-required no-label"
+            label-width="0"
+            property="configs.schedule_config.schedule_period">
+            <bk-select
+              v-model="formData.configs.schedule_config.schedule_period"
+              class="schedule-select"
+              :clearable="false">
+              <bk-option
+                v-for="(item, index) in schedulePeriodOptions"
+                :key="index"
+                :label="item.label"
+                :value="item.value" />
+            </bk-select>
+          </bk-form-item>
+        </div>
       </div>
-    </auth-collapse-panel>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -1955,15 +1938,6 @@
 </script>
 <style scoped lang="postcss">
 .strategy-customize {
-  .label-is-required::after {
-    position: absolute;
-    width: 14px;
-    line-height: 32px;
-    color: #ea3636;
-    text-align: center;
-    content: '*';
-  }
-
   .no-label .bk-form-label::after {
     content: '';
   }
@@ -1987,17 +1961,22 @@
       overflow: visible;
     }
 
+    :deep(.data-source-picker),
     :deep(.data-source-picker .dsp-trigger),
     :deep(.other-table-detail),
-    :deep(.link-data-detail),
     :deep(.panel-edit) {
+      width: 624px;
+      max-width: 100%;
+    }
+
+    :deep(.link-data-detail) {
       width: 100%;
       max-width: none;
     }
   }
 
   .customize-rule-only {
-    padding: 0 8px 0 8px;
+    padding: 0;
     overflow: visible;
 
     :deep(.bk-form-item) {
@@ -2014,11 +1993,24 @@
 
       > :deep(.data-source-form-item),
       > :deep(.expected-result-form-item) {
-        margin-bottom: 16px;
+        width: 624px;
+        max-width: 100%;
+        margin-bottom: var(--audit-space-24);
+      }
+
+      > :deep(.data-source-form-item:has(+ .other-table-detail)),
+      > :deep(.data-source-form-item:has(+ .link-data-detail)) {
+        margin-bottom: 0;
+      }
+
+      > :deep(.other-table-detail),
+      > :deep(.link-data-detail) {
+        margin-top: var(--audit-space-8);
+        margin-bottom: var(--audit-space-24);
       }
 
       > :deep(.expected-result-form-item) {
-        margin-top: 16px;
+        margin-top: 0;
       }
 
       :deep(.data-source-form-item .bk-form-content) {
@@ -2038,10 +2030,14 @@
       }
     }
 
-    .form-label-tip {
-      color: #63656e;
+    .form-label-tip,
+    .expected-result-label {
+      color: var(--audit-neutral-text-02);
       cursor: pointer;
-      border-bottom: 1px dashed #979ba5;
+    }
+
+    .expected-result-label {
+      border-bottom: 1px dashed var(--audit-neutral-text-03);
     }
 
     .select-group {
@@ -2054,33 +2050,76 @@
     }
   }
 
-  .dispatch-wrap {
-    padding: 16px 24px;
+  .dispatch-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--audit-space-24);
 
-    &.dispatch-wrap-basic {
-      padding: 0;
+    .dispatch-type-item {
+      margin-bottom: 0;
     }
 
     :deep(.source-type-radio-group) {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--audit-space-24);
+
+      .bk-radio {
+        margin-right: 0;
+      }
+
       .bk-radio-label {
         display: none;
       }
     }
 
-    .flex-center {
-      display: flex;
+    .source-type-option {
+      display: inline-flex;
       align-items: center;
-      justify-content: left;
+      gap: 6px;
+    }
+
+    .source-type-label {
+      font-size: var(--audit-font-size-sm);
+      line-height: 16px;
+      color: var(--audit-neutral-text-02);
+      cursor: pointer;
+      border-bottom: 1px dashed var(--audit-neutral-text-03);
+
+      &.is-disabled {
+        color: var(--audit-neutral-text-04);
+        cursor: not-allowed;
+        border-bottom-color: var(--audit-neutral-text-04);
+      }
+    }
+
+    .schedule-period-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      margin-bottom: 6px;
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
+      cursor: pointer;
+    }
+
+    .schedule-period-text {
+      line-height: 16px;
+      border-bottom: 1px dashed var(--audit-neutral-text-03);
+    }
+
+    .schedule-period-required {
+      color: var(--audit-danger-02);
     }
 
     .schedule-period-row {
-      display: inline-flex;
-      width: auto;
+      display: flex;
+      width: 428px;
+      max-width: 100%;
       align-items: center;
-      gap: 0;
 
       :deep(.bk-form-item) {
-        width: auto;
         margin-bottom: 0;
         flex: none;
       }
@@ -2090,28 +2129,23 @@
       }
 
       .schedule-input {
-        width: 120px;
+        width: 360px;
+        max-width: calc(100% - 68px);
 
         :deep(.bk-input) {
           border-right: 0;
-          border-radius: 2px 0 0 2px;
+          border-radius: var(--audit-radius-control) 0 0 var(--audit-radius-control);
         }
       }
 
       .schedule-select {
         width: 68px;
+        flex: none;
 
         :deep(.bk-input) {
-          border-radius: 0 2px 2px 0;
+          border-radius: 0 var(--audit-radius-control) var(--audit-radius-control) 0;
         }
       }
-    }
-
-    .circle {
-      line-height: 32px;
-      color: #63656e;
-      cursor: pointer;
-      border-bottom: 1px dashed #979ba5;
     }
   }
 }

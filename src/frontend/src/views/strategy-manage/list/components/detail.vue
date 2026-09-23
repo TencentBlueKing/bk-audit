@@ -59,6 +59,7 @@
   import RiskDiscoveryRules from './risk-discovery-rules.vue';
   import RiskDisplay from './risk-display.vue';
   import RiskOther from './risk-other.vue';
+  import BksecTicket from './bksec-ticket.vue';
   import StrategyEventReport from './strategy-event-report.vue';
 
   import { isPlatformStrategyRoute } from '../../utils/strategy-routes';
@@ -82,6 +83,7 @@
     riskDiscoveryRules: RiskDiscoveryRules,
     riskDisplay: RiskDisplay,
     eventReport: StrategyEventReport,
+    bksecTicket: BksecTicket,
     riskOther: RiskOther,
   };
 
@@ -92,6 +94,9 @@
       { name: 'riskDisplay', label: t('单据展示') },
       { name: 'eventReport', label: t('事件调查报告') },
     ];
+    if (!isPlatformStrategyRoute(route.name)) {
+      list.push({ name: 'bksecTicket', label: t('BKSEC安全工单') });
+    }
     if (isPlatformStrategyRoute(route.name)) {
       list.push({ name: 'riskOther', label: t('风险分派规则') });
     }
@@ -154,7 +159,7 @@
     .bk-tab-content {
       flex: 1;
       min-height: 0;
-      padding: 0 24px 0;
+      padding: 24px 40px 24px;
       overflow-y: auto;
       background: #fff;
       box-sizing: border-box;
@@ -168,6 +173,38 @@
 
   .strategy-detail-body {
     overflow: visible;
+  }
+
+  :deep(.render-info-block) {
+    margin: 0;
+  }
+
+  :deep(.render-info-item) {
+    display: flex;
+    gap: var(--audit-space-8);
+    align-items: flex-start;
+    min-height: 32px;
+    padding: 6px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+  }
+
+  :deep(.info-label) {
+    flex: 0 0 84px;
+    width: 84px;
+    min-width: 84px;
+    overflow: visible;
+    color: var(--audit-neutral-text-02);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  :deep(.info-value) {
+    padding-left: 0;
+    overflow: visible;
+    color: var(--audit-neutral-text-01);
+    text-overflow: unset;
+    word-break: break-all;
   }
 }
 </style>

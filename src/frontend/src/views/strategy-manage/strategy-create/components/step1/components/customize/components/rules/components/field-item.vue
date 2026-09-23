@@ -355,7 +355,10 @@
     return value !== '' && value !== undefined && value !== null;
   };
 
-  const pasteFn = (value: string) => ([{ id: value, name: value }]);
+  const pasteFn = (value: string) => splitAndMerge([value]).map(item => ({
+    id: item,
+    name: item,
+  }));
 
   const handleAdd = () => {
     localConditions.value.conditions.push({

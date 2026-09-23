@@ -727,19 +727,21 @@
   }
 
   .assign-rules-card {
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 1px 2px 0 #00000029;
+    background: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-container);
+    box-shadow: var(--audit-shadow-card);
   }
 
   .assign-rules-header {
-    padding: 16px 24px 0;
+    padding: 12px var(--audit-space-24) 0;
+    border-bottom: 1px solid var(--audit-neutral-border-02);
   }
 
   .assign-rules-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #313238;
+    font-size: var(--audit-font-size-base);
+    font-weight: var(--audit-font-weight-bold);
+    line-height: var(--audit-line-height-base);
+    color: var(--audit-neutral-text-01);
   }
 
   .assign-rules-tip {
@@ -812,7 +814,7 @@
 
       .collapse-icon {
         font-size: 14px;
-        color: #63656e;
+        color: var(--audit-neutral-text-02);
         cursor: pointer;
         transition: transform 0.2s ease;
 

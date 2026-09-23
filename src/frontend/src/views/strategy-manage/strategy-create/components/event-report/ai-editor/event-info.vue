@@ -19,7 +19,7 @@
     <div class="tips-banner">
       <audit-icon
         class="info-icon"
-        type="info-fill" />
+        type="tishi" />
       <span class="tips-text">
         {{ t('一个审计风险工单可能关联多条事件,可以使用聚合函数对数据进行处理;若不使用聚合函数,系统将默认提取最后一个事件的数据') }}
       </span>

@@ -15,15 +15,14 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="isLoading"
-    name="strategyList">
+  <!-- 定位参照与原先 skeleton-loading 一致，右侧表格 left 才能对齐菜单右缘 -->
+  <div class="strategy-manage-anchor">
     <div class="strategy-manage">
       <!-- 左侧标签-->
       <render-label
         ref="renderLabelRef"
         :labels="strategyLabelList"
+        :loading="showLabelSkeleton"
         :total="total"
         :upgrade-total="upgradeTotal"
         @change="handleLeftWidth"
@@ -64,6 +63,7 @@
           :data-source="dataSource"
           :row-class="() => 'hover-highlight'"
           :settings="settings"
+          :use-skeleton="!isPlatformList"
           @clear-search="handleClearSearch"
           @column-filter="handleColumnFilter"
           @mouseleave="handleRiskCountRowLeave"
@@ -74,7 +74,7 @@
           @row-mouse-leave="handleRiskCountRowLeave" />
       </div>
     </div>
-  </skeleton-loading>
+  </div>
 
   <!-- 策略详情 -->
   <audit-sideslider
@@ -412,13 +412,13 @@
     stopping: 'stopping',
   };
   let timeout: number | undefined = undefined;
-  const isLoading = ref(false);
   const { on: onEvent, off } = useEventBus();
 
   const router = useRouter();
   const route = useRoute();
   const strategyRoutes = getStrategyRouteNames(route);
   const isPlatformList = computed(() => isPlatformStrategyRoute(route.name));
+  const strategyTagsLoaded = ref(false);
   /** 全局策略：以 my_role_permissions.manage_platform 判定管理员权限 */
   const hasManagePlatform = ref(false);
   const resolveStrategyPermission = (permission?: boolean) => (
@@ -643,11 +643,16 @@
   const showDetail = ref(false);
   const showRecords = ref(false);
   const currentDetailTab = ref<
-    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther'
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'bksecTicket' | 'riskOther'
   >('riskDetection');
-  const styles = shallowRef({ left: '216px' });
+  const styles = shallowRef({ left: '240px' });
   // 标签列表类型（兼容 TagItem 接口和 StrategyTag 模型）
   const strategyLabelList = ref<any[]>([]);
+  const showLabelSkeleton = computed(() => (
+    !isPlatformList.value
+    && !strategyTagsLoaded.value
+    && strategyLabelList.value.length === 0
+  ));
   const searchKey = ref<Array<SearchKey>>([]);
   const strategyItem = ref({} as StrategyModel);
   const detailLoading = ref(false);
@@ -1795,6 +1800,7 @@
   const {
     run: fetchStrategyTags,
     data: labelList,
+    error: strategyTagError,
   } = useRequest(StrategyManageService.fetchStrategyTags, {
     defaultParams: {
       page: 1,
@@ -1808,7 +1814,13 @@
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
       strategyLabelList.value = data;
+      strategyTagsLoaded.value = true;
     },
+  });
+  watch(strategyTagError, (failed) => {
+    if (failed) {
+      strategyTagsLoaded.value = true;
+    }
   });
   // 获取版本信息
   useRequest(ControlManageService.fetchControlTypes, {
@@ -2048,13 +2060,14 @@
   };
 
   const tabToStepMap: Record<
-    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'riskOther',
+    'riskDetection' | 'riskDiscoveryRules' | 'riskDisplay' | 'eventReport' | 'bksecTicket' | 'riskOther',
     number
   > = {
     riskDetection: 1,
     riskDiscoveryRules: 2,
     riskDisplay: 3,
     eventReport: 4,
+    bksecTicket: 5,
     riskOther: 5,
   };
 
@@ -2100,7 +2113,7 @@
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
-    styles.value = showLabel ? { left: '216px' } : { left: '-24px' };
+    styles.value = showLabel ? { left: '240px' } : { left: '0' };
   };
 
 
@@ -2500,9 +2513,16 @@
   max-width: 1000px;
 }
 
+.strategy-manage-anchor {
+  /* 铺满导航内容区（含被抵消的内边距），不再用 100vh 硬算，避免高出滚动容器 */
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 .strategy-manage {
   display: flex;
-  margin: -20px -24px 0;
+  height: 100%;
 
   :deep(.audit-highlight-table .bk-table-body td .cell:has(.strategy-name-cell)) {
     overflow: hidden;
@@ -2521,19 +2541,31 @@
 
   .strategy-manage-list {
     position: absolute;
-    right: -24px;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
     padding: 24px;
+    overflow: hidden;
     background-color: white;
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
 
     .action-header {
       display: flex;
+      flex-shrink: 0;
       margin-bottom: 20px;
 
       .search-input {
         width: 720px;
         margin-left: auto;
       }
+    }
+
+    :deep(.audit-render-list) {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .bk-button.is-disabled {

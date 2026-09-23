@@ -173,6 +173,14 @@
                   {row.has_report ? t('编辑调查报告') : t('创建调查报告')}
                 </auth-button>
               </bk-dropdown-item>
+              <bk-dropdown-item>
+                <bk-button
+                  style="width: 100%;"
+                  text
+                  onClick={() => handleOpenPackageRecords(row)}>
+                  {t('套餐执行记录')}
+                </bk-button>
+              </bk-dropdown-item>
             </bk-dropdown-menu>
           ),
         }}
@@ -304,6 +312,19 @@
         openEditReport: data.has_report ? 'true' : 'false',
       },
     });
+  };
+
+  const handleOpenPackageRecords = (row: RiskManageModel) => {
+    const sceneId = getSceneSystemParams().scope_id;
+    const resolved = router.resolve({
+      name: 'applicationManageList',
+      query: {
+        openRecords: '1',
+        riskId: row.risk_id,
+        ...(sceneId ? { sceneId } : {}),
+      },
+    });
+    window.open(resolved.href, '_blank');
   };
 
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {

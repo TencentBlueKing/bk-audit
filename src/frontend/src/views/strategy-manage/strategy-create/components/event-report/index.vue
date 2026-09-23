@@ -24,7 +24,7 @@
       class="event-tips">
       <audit-icon
         class="info-fill-icon"
-        type="info-fill" />
+        type="tishi" />
       <span class="info-fill-text">{{ t('当前策略尚未产生风险单，暂时无法预览报告的实际内容，您可以选择等待策略产生风险单后再启用该功能，或立即启用无需使用预览功能') }}</span>
     </div>
     <div class="event-box">
@@ -38,7 +38,7 @@
         <div class="event-title-desc">
           <audit-icon
             class="title-fill-icon"
-            type="info-fill" />
+            type="tishi" />
           <span class="info-fill-dec">{{ t('启用后，审计策略产生的风险工单将新增事件调查报告内容，便于非技术人员理解风险详情') }}</span>
         </div>
       </div>
@@ -53,7 +53,7 @@
           <div class="auto-reports-desc">
             <audit-icon
               class="title-fill-icon"
-              type="info-fill" />
+              type="tishi" />
             <span
               class="info-fill-text"
               style="color: #979ba5;">{{ t('开启后，策略产生风险时将自动创建调查报告，如果模版中使用了AI智能体会消耗AI额度，策略调试阶段可能会产生大量风险，建议先关闭，等稳定后再开启，关闭时可在风险单中手动使用此模板生成报告')
@@ -114,7 +114,7 @@
           <div class="risks-select-desc">
             <audit-icon
               class="info-fill"
-              type="info-fill" />
+              type="tishi" />
             <span class="select-tip-text">{{ t('关联审计风险工单，用于预览报告渲染效果') }}</span>
           </div>
         </div>
@@ -175,7 +175,6 @@
   import { formatDate } from '@/utils/assist/timestamp-conversion';
   import {
     getStrategyRouteNames,
-    isPlatformStrategyRoute,
     isStrategyCloneRoute,
     isStrategyCreateRoute,
     isStrategyEditRoute,
@@ -231,14 +230,8 @@
   const isCloneMode = isStrategyCloneRoute(route.name);
   const isCreateeMode = isStrategyCreateRoute(route.name);
   const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
-  // 全局策略有第 5 步风险分派；审计策略在本步直接提交
-  const hasAssignStep = isPlatformStrategyRoute(route.name);
-  const primaryActionText = computed(() => {
-    if (hasAssignStep) {
-      return t(isEnvent.value ? '下一步' : '跳过');
-    }
-    return t('提交');
-  });
+  // 场景策略与全局策略都在下一步进入第 5 步：场景是 BKSEC，全局是风险分派
+  const primaryActionText = computed(() => (isEnvent.value ? t('下一步') : t('跳过')));
 
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -437,12 +430,7 @@
       report_auto_render: isAutoGetReports.value,
     };
 
-    if (hasAssignStep) {
-      emits('nextStep', 5, stepParams);
-      return;
-    }
-    // 审计策略：第 4 步为最后一步，直接提交
-    emits('saveCurrentStep', stepParams);
+    emits('nextStep', 5, stepParams);
   };
 
   const buildReportStepParams = () => {
@@ -563,21 +551,21 @@
 
   .event-box {
     height: auto;
-    margin-top: 16px;
-    background: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 #1919290d;
+    margin-top: var(--audit-space-16);
+    background: var(--audit-neutral-bg-04);
+    border-radius: var(--audit-radius-container);
+    box-shadow: var(--audit-shadow-card);
 
     .event-title {
       display: flex;
-      height: 50px;
-      padding: 0 16px;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 22px;
+      height: auto;
+      padding: 12px var(--audit-space-24) var(--audit-space-16);
+      font-size: var(--audit-font-size-base);
+      font-weight: var(--audit-font-weight-bold);
+      line-height: var(--audit-line-height-base);
       letter-spacing: 0;
-      color: #4d4f56;
-      border-bottom: 1px solid #e8e8e8;
+      color: var(--audit-neutral-text-01);
+      border-bottom: 1px solid var(--audit-neutral-border-02);
       align-items: center;
 
       .event-title-text {
@@ -605,7 +593,7 @@
     }
 
     .is-auto-reports {
-      padding: 20px 16px 0;
+      padding: var(--audit-space-16) var(--audit-space-24) 0;
 
       .auto-reports-content {
         display: flex;
@@ -625,7 +613,7 @@
     }
 
     .event-editor {
-      padding: 16px;
+      padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
 
       .event-editor-title {
         font-size: 12px;

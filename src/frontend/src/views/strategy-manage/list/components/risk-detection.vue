@@ -605,21 +605,20 @@
 <style scoped lang="postcss">
 .risk-detection {
   .detail-info-card {
-    padding-top: 24px;
-    background: #fff;
+    background: var(--audit-neutral-bg-04);
   }
 
   .detail-section-title {
-    margin-bottom: 16px;
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 22px;
-    color: #313238;
+    margin-bottom: var(--audit-space-12);
+    font-size: var(--audit-font-size-base);
+    font-weight: var(--audit-font-weight-bold);
+    line-height: var(--audit-line-height-base);
+    color: var(--audit-neutral-text-01);
   }
 
   .detail-section-divider {
-    margin: 24px 0;
-    border-top: 1px solid #f0f1f5;
+    margin: var(--audit-space-24) 0;
+    border-top: 1px solid var(--audit-neutral-border-01);
   }
 
   .strategy-type-display {
@@ -635,28 +634,42 @@
   }
 
   .strategy-type-text {
-    font-size: 12px;
-    line-height: 20px;
-    color: #313238;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-01);
+  }
+
+  :deep(.audit-edit-tag__label.bk-tag) {
+    height: 22px;
+    padding: 0 var(--audit-space-8);
+    font-size: var(--audit-font-size-sm);
+    line-height: 22px;
+    color: var(--audit-neutral-text-02);
+    background: var(--audit-neutral-bg-01);
+    border: 0;
+    border-radius: var(--audit-radius-control);
   }
 
   .panel-edit {
     position: relative;
-    min-height: 32px;
-    padding: 0 3px;
-    background: #f5f7fa;
-    border-radius: 2px;
+    display: flex;
     flex-wrap: wrap;
+    gap: var(--audit-space-8);
+    align-items: center;
+    min-height: 22px;
+    padding: 0;
+    background: transparent;
 
     .query-field {
       position: relative;
-      height: 26px;
-      margin: 3px 4px 3px 0;
-      line-height: 26px;
-      color: #fff;
+      height: 22px;
+      padding: 0 var(--audit-space-8);
+      margin: 0;
+      line-height: 22px;
+      color: var(--audit-neutral-bg-04);
       white-space: nowrap;
-      background: #1eab8b;
-      border-radius: 2px;
+      background: #30bc9e;
+      border-radius: var(--audit-radius-control);
 
       &:hover {
         .query-field-remove {
