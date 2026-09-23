@@ -163,7 +163,7 @@
               }"
               clearable
               :disabled="isDisabled"
-              :maxlength="255"
+              :maxlength="2000"
               :placeholder="t('请输入')"
               :rows="6"
               type="textarea" />

@@ -128,7 +128,7 @@
           v-else
           v-model="formData.description"
           autofocus
-          :maxlength="255"
+          :maxlength="2000"
           type="textarea"
           @blur="handleBlur('description')" />
       </div>
