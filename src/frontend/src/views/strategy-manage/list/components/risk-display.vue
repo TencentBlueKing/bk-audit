@@ -247,9 +247,7 @@
 <style scoped lang="postcss">
 .risk-display {
   .detail-info-card {
-    padding-top: 24px;
-    padding-bottom: 24px;
-    background: #fff;
+    background: var(--audit-neutral-bg-04);
   }
 
   .detail-section-title {

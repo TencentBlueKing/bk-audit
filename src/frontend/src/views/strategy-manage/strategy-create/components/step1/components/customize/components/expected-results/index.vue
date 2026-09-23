@@ -17,6 +17,7 @@
 <template>
   <vuedraggable
     class="panel-edit flex"
+    :class="{ 'is-empty': !expectedResultList.length }"
     item-key="name"
     :list="expectedResultList">
     <template #item="{ element, index }: { element: DatabaseTableFieldModel, index: number }">
@@ -236,10 +237,21 @@
   }
 
   .expected-result-placeholder {
-    margin-left: 8px;
-    font-size: 12px;
-    line-height: 26px;
-    color: #c4c6cc;
+    margin-left: var(--audit-space-8);
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-03);
+  }
+
+  &.is-empty {
+    min-height: 26px;
+    padding: 0;
+    background: transparent;
+    align-items: center;
+
+    :deep(.add-field-btn) {
+      margin: 0;
+    }
   }
 }
 </style>

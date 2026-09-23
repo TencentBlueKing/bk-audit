@@ -16,42 +16,54 @@
 -->
 <template>
   <div class="other-table-detail">
-    <div class="title">
-      <span>{{ t('数据预览') }}</span>
-      <bk-button
-        text
-        theme="primary"
-        @click="dataStructurePreview">
-        <audit-icon
-          style="margin-right: 6px;"
-          type="view" />
-        {{ t('数据结构预览') }}
-      </bk-button>
-    </div>
+    <bk-button
+      class="structure-preview"
+      text
+      theme="primary"
+      @click="dataStructurePreview">
+      <audit-icon
+        class="structure-preview-icon"
+        type="view" />
+      {{ t('数据结构预览') }}
+    </bk-button>
     <div class="detail-form">
-      <render-info-item :label="t('数据名称')">
-        {{ rtMeta.result_table_name || '--' }}
-      </render-info-item>
-      <render-info-item :label="t('数据ID')">
-        {{ rtMeta.result_table_id || '--' }}
-      </render-info-item>
-      <render-info-item :label="t('中文名称')">
-        {{ rtMeta.result_table_name_alias || '--' }}
-      </render-info-item>
-      <render-info-item :label="t('数据管理员')">
-        {{ rtMeta.managers?.join(',') || '--' }}
-      </render-info-item>
-      <render-info-item :label="t('业务运维人员')">
-        <edit-tag :data="rtMeta.sensitivity_info?.biz_role_memebers || []" />
-      </render-info-item>
-      <render-info-item :label="t('表类型')">
-        {{ rtMeta.processing_type || '--' }}
-      </render-info-item>
+      <div class="detail-row">
+        <span class="detail-label">{{ t('数据名称') }}：</span>
+        <span class="detail-value">{{ rtMeta.result_table_name || '-' }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">{{ t('数据ID') }}：</span>
+        <span class="detail-value">{{ rtMeta.result_table_id || '-' }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">{{ t('中文名称') }}：</span>
+        <span class="detail-value">{{ rtMeta.result_table_name_alias || '-' }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">{{ t('数据管理员') }}：</span>
+        <span class="detail-value">{{ rtMeta.managers?.join(',') || '-' }}</span>
+      </div>
+      <div class="detail-row detail-row-tags">
+        <span class="detail-label">{{ t('业务运维人员') }}：</span>
+        <span class="detail-value">
+          <edit-tag
+            v-if="bizRoleMembers.length"
+            :data="bizRoleMembers"
+            :show-copy="false" />
+          <template v-else>
+            -
+          </template>
+        </span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">{{ t('表类型') }}：</span>
+        <span class="detail-value">{{ rtMeta.processing_type || '-' }}</span>
+      </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import { watch } from 'vue';
+  import { computed, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -59,8 +71,6 @@
   import RtMetaModel from '@model/strategy/rt-meta';
 
   import EditTag from '@components/edit-box/tag.vue';
-
-  import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -83,6 +93,7 @@
   } = useRequest(StrategyManageService.fetchTableRtMeta, {
     defaultValue: new RtMetaModel(),
   });
+  const bizRoleMembers = computed(() => rtMeta.value.sensitivity_info?.biz_role_memebers || []);
 
   const dataStructurePreview = () => {
     emit('show-structure-preview', props.rtId, '');
@@ -98,43 +109,78 @@
 </script>
 <style scoped lang="postcss">
   .other-table-detail {
-    width: 100%;
-    padding: 8px 16px;
-    margin-top: 8px;
-    margin-bottom: 4px;
-    background-color: #f5f7fa;
+    position: relative;
+    width: 624px;
+    max-width: 100%;
+    padding: 12px 24px;
+    margin-top: var(--audit-space-8);
+    background-color: var(--audit-neutral-bg-03);
+    border-radius: var(--audit-radius-control);
+    box-sizing: border-box;
+  }
 
-    .title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+  .structure-preview {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+  }
 
-    .detail-form {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 8px;
+  .structure-preview-icon {
+    margin-right: var(--audit-space-4);
+    font-size: 16px;
+  }
 
-      :deep(.render-info-item) {
-        display: flex;
-        align-items: flex-start;
-        line-height: 20px;
-      }
+  .detail-form {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: var(--audit-space-8);
+    align-items: center;
+  }
 
-      :deep(.info-label) {
-        min-width: 96px;
-        color: #979ba5;
-        text-align: right;
-        flex: 0 0 96px;
-      }
+  .detail-row {
+    display: contents;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+  }
 
-      :deep(.info-value) {
-        padding-left: 14px;
-        color: #63656e;
-        word-break: break-all;
-        flex: 1;
-      }
-    }
+  .detail-label {
+    min-width: 84px;
+    padding: 3px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-02);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .detail-value {
+    min-width: 0;
+    padding: 3px 108px 3px 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-01);
+    word-break: break-all;
+  }
+
+  .detail-row-tags .detail-label,
+  .detail-row-tags .detail-value {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .other-table-detail :deep(.audit-edit-tag__label.bk-tag) {
+    height: 22px;
+    padding: 0 var(--audit-space-8);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-02);
+    background: var(--audit-neutral-border-02);
+    border-color: transparent;
+    border-radius: var(--audit-radius-control);
+  }
+
+  .other-table-detail :deep(.bk-tag ~ .bk-tag) {
+    margin-left: var(--audit-space-8);
   }
 </style>

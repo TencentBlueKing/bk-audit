@@ -15,16 +15,30 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <!-- 步进条 -->
-  <teleport
-    v-if="isHeaderSlotActive"
-    to="#teleport-nav-step">
-    <bk-steps
-      v-model:cur-step="currentStep"
-      class="strategy-upgrade-step"
-      :line-type="isEditMode ? 'solid' : 'dashed'"
-      :steps="steps" />
-  </teleport>
+  <div class="strategy-step-bar">
+    <template
+      v-for="(step, index) in steps"
+      :key="step.title">
+      <div class="strategy-step-item">
+        <span
+          class="strategy-step-index"
+          :class="{
+            'is-current': index + 1 === currentStep,
+            'is-done': index + 1 < currentStep,
+          }">
+          <audit-icon
+            v-if="index + 1 < currentStep"
+            type="check-line" />
+          <template v-else>{{ index + 1 }}</template>
+        </span>
+        <span class="strategy-step-title">{{ step.title }}</span>
+      </div>
+      <span
+        v-if="index < steps.length - 1"
+        class="strategy-step-line"
+        :class="{ 'is-done': index + 1 < currentStep }" />
+    </template>
+  </div>
 
   <keep-alive>
     <component
@@ -102,12 +116,12 @@
   import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
   import StepBasicInfo from './components/step-basic-info/index.vue';
+  import StepBksec from './components/step-bksec/index.vue';
   import StepRiskRules from './components/step-risk-rules/index.vue';
   import Step2 from './components/step2/index.vue';
   import Step3 from './components/step3/index.vue';
 
   import useMessage from '@/hooks/use-message';
-  import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
   import {
     buildStrategyCreatePayload,
@@ -159,6 +173,9 @@
     visibility?: Record<string, any>,
     scene_id?: string | number,
     hit_conditions_reset_seq?: number,
+    bksecEnabled: boolean,
+    bksecRiskTypeId: number | null,
+    bksecFieldValues: Record<string, string>,
   }
 
   const router = useRouter();
@@ -166,18 +183,17 @@
   const strategyRoutes = getStrategyRouteNames(route);
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
-  const { isActive: isHeaderSlotActive, refresh: refreshHeaderSlot } = usePageHeaderSlot();
 
   // 全局策略（平台）含第 5 步「风险分派规则」；审计策略（场景）仅 4 步
   const hasAssignStep = isPlatformStrategyRoute(route.name);
 
-  const comMap = {
+  const comMap = computed(() => ({
     1: StepBasicInfo,
     2: StepRiskRules,
     3: Step2,
     4: eventReport,
-    5: Step3,
-  };
+    5: hasAssignStep ? Step3 : StepBksec,
+  }));
   const steps = computed(() => {
     const list = [
       { title: t('基础信息') },
@@ -185,13 +201,10 @@
       { title: t('单据展示') },
       { title: t('事件调查报告') },
     ];
-    if (hasAssignStep) {
-      list.push({ title: t('风险分派规则') });
-    }
+    list.push({ title: hasAssignStep ? t('风险分派规则') : t('BKSEC安全工单') });
     return list;
   });
-  const maxStep = hasAssignStep ? 5 : 4;
-  const stepBarWidth = computed(() => (hasAssignStep ? '780px' : '620px'));
+  const maxStep = 5;
   const normalizeStep = (step: unknown): 1 | 2 | 3 | 4 | 5 => {
     const n = Number(step);
     if ([1, 2, 3, 4, 5].includes(n)) {
@@ -206,7 +219,7 @@
   const currentStep = ref<1 | 2 | 3 | 4 | 5>(1);
   const comRef = ref();
 
-  const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
+  const renderCom = computed(() => comMap.value[currentStep.value as keyof typeof comMap.value]);
 
   // 预期结果为空时等价 select *，字段关联/管理字段回退为数据源全部字段
   // 未配置预期结果时不使用字段别名，入库字段名保持 raw_name
@@ -272,6 +285,9 @@
     report_enabled: false,
     report_auto_render: false,
     report_config: {},
+    bksecEnabled: false,
+    bksecRiskTypeId: null,
+    bksecFieldValues: {},
     binding_type: createBindingScope.binding_type,
     visibility: createBindingScope.isPlatform ? undefined : {},
     scene_id: createBindingScope.scene_id ?? undefined,
@@ -370,6 +386,9 @@
         report_enabled: d.report_enabled ?? false,
         report_auto_render: d.report_auto_render ?? false,
         report_config: _.cloneDeep(d.report_config ?? {}),
+        bksecEnabled: protocolForm.bksecEnabled ?? false,
+        bksecRiskTypeId: protocolForm.bksecRiskTypeId ?? null,
+        bksecFieldValues: _.cloneDeep(protocolForm.bksecFieldValues ?? {}),
         rules: protocolForm.rules?.length
           ? _.cloneDeep(protocolForm.rules)
           : [{
@@ -953,27 +972,67 @@
     }
   });
 
-  watch(
-    () => route.fullPath,
-    () => {
-      refreshHeaderSlot();
-    },
-  );
-
 </script>
 <style scoped>
-.strategy-upgrade-step {
-  width: v-bind(stepBarWidth);
-  margin: 0 auto;
-  transform: translateX(-86px);
+.strategy-step-bar {
+  display: flex;
+  max-width: 1312px;
+  margin: 0 auto var(--audit-space-16);
+  align-items: center;
+  justify-content: center;
+  gap: var(--audit-space-16);
+}
 
-  :deep(.bk-step ) {
-    display: flex;
+.strategy-step-item {
+  display: flex;
+  align-items: center;
+  gap: var(--audit-space-8);
+  flex: none;
+}
 
-    .bk-step-content {
-      display: flex;
-    }
-  }
+.strategy-step-index {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-02);
+  background: var(--audit-neutral-border-02);
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.strategy-step-index.is-current {
+  color: var(--audit-neutral-bg-04);
+  background: var(--audit-brand-02);
+}
+
+.strategy-step-index.is-done {
+  color: var(--audit-brand-02);
+  background: var(--audit-brand-06);
+  font-size: var(--audit-font-size-lg);
+}
+
+.strategy-step-title {
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-02);
+  white-space: nowrap;
+}
+
+.strategy-step-line {
+  width: 130px;
+  height: 1px;
+  background: var(--audit-neutral-border-01);
+  flex: none;
+}
+
+.strategy-step-line.is-done {
+  background: var(--audit-brand-02);
 }
 
 .save-dialog-body {
