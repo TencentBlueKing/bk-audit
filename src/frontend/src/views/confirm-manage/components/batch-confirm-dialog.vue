@@ -49,7 +49,7 @@
           :key="editorKey"
           v-model:content="formData.description"
           :default="formData.description"
-          :max-len="1000" />
+          :max-len="2000" />
       </bk-form-item>
     </audit-form>
     <template #footer>

@@ -119,7 +119,7 @@
                   <bk-input
                     v-model.trim="formData.risk_hazard"
                     autosize
-                    :maxlength="1000"
+                    :maxlength="2000"
                     :placeholder="t('请输入描述')"
                     show-word-limit
                     style="width: 100%;"
@@ -133,7 +133,7 @@
                   <bk-input
                     v-model.trim="formData.risk_guidance"
                     autosize
-                    :maxlength="1000"
+                    :maxlength="2000"
                     :placeholder="t('请输入描述')"
                     show-word-limit
                     style="width: 100%;"
@@ -147,7 +147,7 @@
                 <bk-input
                   v-model.trim="formData.description"
                   autosize
-                  :maxlength="1000"
+                  :maxlength="2000"
                   :placeholder="t('请输入描述')"
                   show-word-limit
                   style="width: 100%;"
