@@ -218,7 +218,7 @@
                 required>
                 <bk-input
                   v-model="applyForm.reason"
-                  :maxlength="100"
+                  :maxlength="2000"
                   :placeholder="t('请输入')"
                   :rows="3"
                   show-word-limit

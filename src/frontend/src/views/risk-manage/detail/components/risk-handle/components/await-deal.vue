@@ -52,7 +52,7 @@
             class="await-deal-rich-editor"
             :default="formData.description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
@@ -79,7 +79,7 @@
             class="await-deal-rich-editor"
             :default="formData.description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
@@ -101,7 +101,7 @@
             class="await-deal-rich-editor"
             :default="formData.misreport_description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>

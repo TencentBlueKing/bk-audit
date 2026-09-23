@@ -36,7 +36,7 @@
           class="confirm-deal-rich-editor"
           :default="formData.description"
           fullscreen-scope="parent"
-          :max-len="1000"
+          :max-len="2000"
           @expand-change="handleEditorExpandChange" />
       </bk-form-item>
       <template v-else>
@@ -55,7 +55,7 @@
             class="await-deal-rich-editor"
             :default="formData.description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>

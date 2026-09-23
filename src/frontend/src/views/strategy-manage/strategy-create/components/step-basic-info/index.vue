@@ -72,7 +72,7 @@
                   <bk-input
                     v-model.trim="formData.description"
                     autosize
-                    :maxlength="100"
+                    :maxlength="2000"
                     :placeholder="t('请输入')"
                     show-word-limit
                     style="width: 100%;"
