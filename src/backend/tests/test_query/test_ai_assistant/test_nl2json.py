@@ -23,22 +23,50 @@ from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 from unittest import mock
 
-from requests.exceptions import Timeout
+from django.utils import timezone
 
 from core.utils.time import parse_datetime
 from services.web.query.ai_assistant.constants import DEFAULT_SEARCH_WINDOW_DAYS
 from services.web.query.ai_assistant.exceptions import (
     AIOutputParseFailedError,
-    AIServiceError,
-    AITimeoutError,
     InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import AIConditionPayload
-from services.web.query.ai_assistant.services.nl2json import NL2JSONService
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
-NL2JSON_MODULE = "services.web.query.ai_assistant.services.nl2json"
+
+def bind_agent_output(cls):
+    """把用例参数 mock_chat.return_value 当作 Agent 原文，不再发起模型调用。"""
+
+    def bind_method(method):
+        def wrapped(self, *args, **kwargs):
+            box = mock.Mock()
+            self.agent_output = box
+            try:
+                return method(self, box, *args, **kwargs)
+            finally:
+                self.agent_output = None
+
+        return wrapped
+
+    for name, attr in list(vars(cls).items()):
+        if name.startswith("test_") and callable(attr):
+            setattr(cls, name, bind_method(attr))
+    return cls
+
+
+def assemble_recorded_output(test, selection=None, reference_time=None):
+    """用当前用例记录的 Agent 原文走公共条件解析。"""
+
+    return ConditionAssemblyService.parse_condition_text(
+        content=test.agent_output.return_value,
+        selection=selection or test.make_selection(),
+        scope_id=test.target_system_id,
+        reference_time=reference_time or timezone.localtime(),
+    )
+
 
 VALID_AI_OUTPUT = {
     "conditions": [{"raw_name": "username", "keys": [], "field_type": None, "operator": "eq", "filters": ["admin"]}],
@@ -47,31 +75,17 @@ VALID_AI_OUTPUT = {
 }
 
 
-@mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+@bind_agent_output
 class TestNL2JSONService(AIAssistantTestCase):
     """F2 自然语言 → condition"""
 
     def _convert(self, selection=None):
-        return NL2JSONService.convert(
-            query_text="查一下 admin 的操作日志",
-            selection=selection or self.make_selection(),
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
+        return assemble_recorded_output(self, selection=selection)
 
     def test_convert_success(self, mock_chat):
         mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
 
         condition = self._convert()
-
-        # User Message 注入 AIConditionPayload.model_json_schema()（single source of truth：
-        # 结构约束来自校验模型本身，含字段 description，不再手写 JSON 示例）
-        _, kwargs = mock_chat.call_args
-        user_message = kwargs["input"]
-        self.assertIn('"conditions"', user_message)
-        self.assertIn('"start_time"', user_message)
-        self.assertIn("检索条件列表，无字段条件时为空数组", user_message)
-        self.assertIn("查询执行层支持的全局操作符", user_message)
 
         # scope 取入参（不信任 AI）
         self.assertEqual(condition.scope_id, self.target_system_id)
@@ -83,66 +97,6 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(cond.filters, ["admin"])
         # field_type 由服务端按元数据补全
         self.assertEqual(cond.field.field_type, "string")
-        # 非流式调用 + 显式 user
-        self.assertEqual(kwargs["user"], self.username)
-        self.assertFalse(kwargs["execute_kwargs"]["stream"])
-
-    def test_sample_value_display_excluded_from_prompt(self, mock_chat):
-        """sample_value_display（前端展示映射）不注入 AI prompt：防 AI 照抄展示值构造 filters"""
-
-        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
-        selection = self.make_selection(
-            standard_fields=[
-                self.make_standard_field(
-                    raw_name="username",
-                    sample_value="admin",
-                    sample_value_display="管理员(展示值)",
-                    options=[{"id": "admin", "name": "管理员"}],
-                )
-            ]
-        )
-
-        NL2JSONService.convert(
-            query_text="查一下 admin 的操作日志",
-            selection=selection,
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
-
-        _, kwargs = mock_chat.call_args
-        user_message = kwargs["input"]
-        # 原始查询值注入（AI 形态参照），展示映射排除（options 本身正常注入）
-        self.assertIn('"sample_value": "admin"', user_message)
-        self.assertIn('"name": "管理员"', user_message)
-        self.assertNotIn("sample_value_display", user_message)
-        self.assertNotIn("管理员(展示值)", user_message)
-
-    def test_multi_value_rules_injected_into_prompt(self, mock_chat):
-        """多值规则注入 User Message：海量值完整性/分隔形态/原样保持/泛指不猜（复杂语句解析约束）"""
-
-        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
-        self._convert()
-
-        _, kwargs = mock_chat.call_args
-        user_message = kwargs["input"]
-        # 完整提取：禁止截断/抽样/遗漏（N 个值 → filters 恰好 N 个）
-        self.assertIn("值数量再多也必须完整提取", user_message)
-        self.assertIn("禁止截断、抽样、遗漏任何一个", user_message)
-        # 高数量自检（A5 十二人漏一稳定性修复）
-        self.assertIn("逐项自检", user_message)
-        # 分隔形态不限：顿号/逗号/空格/连词混排
-        self.assertIn("分隔形态不限", user_message)
-        # 值保持原样：不转写不翻译不串字段
-        self.assertIn("不得串字段", user_message)
-        # 泛指集合禁止猜测展开
-        self.assertIn("泛指集合", user_message)
-        self.assertIn("禁止猜测展开", user_message)
-        # 英文时间词同义换算（S14 last week 稳定性修复）
-        self.assertIn("last week=上周", user_message)
-        self.assertIn("非当前时刻前推7天", user_message)
-        # 安全审计动作词优先（S1 关键词抖动修复）
-        self.assertIn("动作动词", user_message)
-        self.assertIn("不得只提取修饰性宾语", user_message)
 
     def test_multi_value_single_include_condition(self, mock_chat):
         """多值合规输出：单条件 include 放全部值（10 人梯度零丢失）"""
@@ -231,11 +185,6 @@ class TestNL2JSONService(AIAssistantTestCase):
             self._convert()
         self.assertEqual(ctx.exception.error_code, "AI_OUTPUT_PARSE_FAILED")
 
-    def test_non_string_response(self, mock_chat):
-        mock_chat.return_value = {"unexpected": "dict"}
-        with self.assertRaises(AIOutputParseFailedError):
-            self._convert()
-
     def test_empty_conditions_raises_not_recognized(self, mock_chat):
         mock_chat.return_value = json.dumps({"conditions": [], "start_time": None, "end_time": None})
         with self.assertRaises(QueryNotRecognizedError) as ctx:
@@ -246,7 +195,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         """消息规划已确认检索意图时，空条件由后端补最近一天。"""
 
         reference_time = datetime(2026, 9, 20, 10, 0, tzinfo=datetime_timezone(timedelta(hours=8)))
-        condition = NL2JSONService.validate_and_assemble(
+        condition = ConditionAssemblyService.validate_and_assemble(
             payload=AIConditionPayload(),
             selection=self.make_selection(),
             scope_id=self.target_system_id,
@@ -363,15 +312,6 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(condition.conditions[0].operator, "eq")
         self.assertEqual(condition.conditions[0].filters, ["accessed"])
 
-    def test_prompt_contains_multilayer_extension_rule(self, mock_chat):
-        """prompt 规则：下钻路径支持多层（逐层写入 keys），防单层限制回退。"""
-        from services.web.query.ai_assistant.services.nl2json import (
-            NL2JSON_USER_MESSAGE_TEMPLATE,
-        )
-
-        self.assertIn("支持多层路径", NL2JSON_USER_MESSAGE_TEMPLATE)
-        self.assertIn("多层路径逐层写入 keys", NL2JSON_USER_MESSAGE_TEMPLATE)
-
     def test_known_extension_accepts_agent_selected_numeric_type(self, mock_chat):
         selection = self.make_selection(extension_fields=[self.make_extension_field(allow_operators=["eq", "gt"])])
         output = dict(VALID_AI_OUTPUT)
@@ -431,7 +371,7 @@ class TestNL2JSONService(AIAssistantTestCase):
         self.assertEqual(end_dt - start_dt, timedelta(days=1))
 
     def test_default_window_reuses_prompt_reference_time(self, mock_chat):
-        """Prompt 当前时间与后端默认窗口共享一次冻结值，避免长调用造成时间漂移。"""
+        """缺省时间窗使用调用方传入的同一锚点，避免另取当前时间造成漂移。"""
 
         reference_time = datetime(2026, 9, 20, 10, 30, tzinfo=datetime_timezone(timedelta(hours=8)))
         output = dict(VALID_AI_OUTPUT)
@@ -439,11 +379,8 @@ class TestNL2JSONService(AIAssistantTestCase):
         output["end_time"] = None
         mock_chat.return_value = json.dumps(output)
 
-        with mock.patch(f"{NL2JSON_MODULE}.timezone.localtime", return_value=reference_time):
-            condition = self._convert()
+        condition = assemble_recorded_output(self, reference_time=reference_time)
 
-        _, kwargs = mock_chat.call_args
-        self.assertIn(reference_time.isoformat(), kwargs["input"])
         self.assertEqual(condition.end_time, reference_time.isoformat())
         self.assertEqual(
             condition.start_time,
@@ -473,20 +410,8 @@ class TestNL2JSONService(AIAssistantTestCase):
         end_dt = parse_datetime(condition.end_time)
         self.assertEqual(end_dt - start_dt, timedelta(days=1))
 
-    def test_agent_timeout(self, mock_chat):
-        mock_chat.side_effect = Timeout("read timeout")
-        with self.assertRaises(AITimeoutError) as ctx:
-            self._convert()
-        self.assertEqual(ctx.exception.error_code, "AI_TIMEOUT")
 
-    def test_agent_service_error(self, mock_chat):
-        mock_chat.side_effect = Exception("connection reset")
-        with self.assertRaises(AIServiceError) as ctx:
-            self._convert()
-        self.assertEqual(ctx.exception.error_code, "AI_SERVICE_ERROR")
-
-
-@mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+@bind_agent_output
 class TestNL2JSONScenarios(AIAssistantTestCase):
     """真实检索场景话术全覆盖：AI 对各类话术的合理输出 → 链路产出与普通日志检索页手动构造一致。
 
@@ -519,12 +444,7 @@ class TestNL2JSONScenarios(AIAssistantTestCase):
         self.mock_chat.return_value = json.dumps(
             {"conditions": ai_conditions, "start_time": start_time, "end_time": end_time}
         )
-        return NL2JSONService.convert(
-            query_text=query_text,
-            selection=self._selection(),
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
+        return assemble_recorded_output(self, selection=self._selection())
 
     def test_operator_single(self, mock_chat):
         """「查一下张三的操作日志」→ username eq（检索页单选操作人）"""
@@ -670,12 +590,7 @@ class TestNL2JSONScenarios(AIAssistantTestCase):
                 "end_time": None,
             }
         )
-        condition = NL2JSONService.convert(
-            query_text="查工单Story-3000相关的张三的操作",
-            selection=selection,
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
+        condition = assemble_recorded_output(self, selection=selection)
         self.assertEqual(len(condition.conditions), 2)
         self.assertEqual(condition.conditions[0].field.keys, ["ticket_id"])
         self.assertEqual(condition.conditions[1].field.raw_name, "username")
@@ -708,7 +623,7 @@ class TestNL2JSONScenarios(AIAssistantTestCase):
         self.assertLess(start_dt, end_dt)
 
 
-@mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+@bind_agent_output
 class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
     """纯时间窗口 / 模糊意图话术（如"帮我查下最近七天的日志"）——时间有效即合法检索意图。
 
@@ -717,12 +632,7 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
     """
 
     def _convert(self, query_text: str = "帮我查下最近七天的日志"):
-        return NL2JSONService.convert(
-            query_text=query_text,
-            selection=self.make_selection(),
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
+        return assemble_recorded_output(self)
 
     def test_rolling_window_query(self, mock_chat):
         """「帮我查下最近七天的日志」：AI 输出空 conditions + 滚动 7 天窗口 → 放行"""
@@ -800,17 +710,12 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
             self._convert(query_text="你好")
 
 
-@mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion")
+@bind_agent_output
 class TestNL2JSONAdversarial(AIAssistantTestCase):
     """AI 坏输出对抗样本（JSON 提取闸门）"""
 
     def _convert(self, selection=None):
-        return NL2JSONService.convert(
-            query_text="测试",
-            selection=selection or self.make_selection(),
-            scope_id=self.target_system_id,
-            username=self.username,
-        )
+        return assemble_recorded_output(self, selection=selection)
 
     def test_truncated_json(self, mock_chat):
         """截断的 JSON（模型输出中断）"""

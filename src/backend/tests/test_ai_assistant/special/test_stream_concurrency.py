@@ -41,6 +41,7 @@ from services.web.ai_assistant.views import (
     MessagesViewSet,
 )
 from tests.test_ai_assistant import special_handlers
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
@@ -362,7 +363,8 @@ class StreamIdleHttpSpecialTest(LiveServerTestCase):
             attachment_uids=Attachment.objects.filter(is_stream=True).values_list("uid", flat=True)
         )
         self.session.close()
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
         reset_concurrency_observations()
         if leftovers:

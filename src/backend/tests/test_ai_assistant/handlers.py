@@ -94,7 +94,7 @@ def execute_async_success(self, execution: MessageExecution[EchoInput, EchoConte
 class EchoAsyncHandler(MessageTypeHandler[EchoInput, EchoContext, EchoOutput]):
     """示例异步消息 Handler：在类体中直接绑定业务 Task。"""
 
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    message_type = MessageType.USER_INTENT
     execution_mode = ExecutionMode.ASYNC
     input_model = EchoInput
     context_model = EchoContext

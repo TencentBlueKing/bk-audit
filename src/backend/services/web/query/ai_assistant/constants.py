@@ -54,7 +54,7 @@ AI_ASSISTANT_FIELD_SAMPLE_ROWS = 50
 EXTENSION_NL_NAME_PREFIX = "extend."
 
 # 拓展字段默认允许的操作符（一期拓展字段恒 string；采样发现与用户显式指定的子键共用，
-# field_context 缺省值与 nl2json 校验同源引用，防止两处漂移）
+# field_context 缺省值与条件组装校验同源引用，防止两处漂移）
 EXTENSION_FIELD_DEFAULT_OPERATORS = ("eq", "neq", "include", "exclude", "like")
 
 # ---------------------------------------------------------------------------
@@ -90,13 +90,9 @@ SNAPSHOT_DEFAULT_COLUMNS = (
 AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES = dict(SNAPSHOT_DEFAULT_COLUMNS)
 
 # ---------------------------------------------------------------------------
-# F2 NL2JSON
+# 条件组装
 # ---------------------------------------------------------------------------
 
-# AIDev 调用超时（秒），对齐联调指南静默处理阈值
-AI_NL2JSON_AGENT_TIMEOUT = 10
-# thread_id 前缀（AIDev 会话标识）
-AI_NL2JSON_THREAD_ID_PREFIX = "ai-log-search"
 # AI 未输出开始时间时，后端补最近 N 天检索窗口。该业务默认值与 30 天字段采样窗口相互独立。
 DEFAULT_SEARCH_WINDOW_DAYS = 1
 # AI 输出中禁止出现的时间字段（出现后端剔除并告警，时间由后端统一管理）

@@ -43,12 +43,13 @@ from services.web.query.ai_assistant.schemas import (  # noqa: E402
     SelectionSystem,
     SystemSelectionOutput,
 )
+from services.web.query.ai_assistant.services.condition import (  # noqa: E402
+    ConditionAssemblyService,
+)
 from services.web.query.ai_assistant.services.intent import (  # noqa: E402
     MessagePlanningService,
 )
-from services.web.query.ai_assistant.services.nl2json import (  # noqa: E402
-    NL2JSONService,
-)
+from services.web.query.constants import COLLECT_SEARCH_CONFIG  # noqa: E402
 
 _CHAT_COMPLETION_PATH = "services.web.query.ai_assistant.services.intent.api.bk_plugins_ai_agent.chat_completion"
 EVAL_CONTEXT_USERNAME = "eval_actor"
@@ -137,55 +138,51 @@ def _get_username(config):
 
 
 def _build_fields(system_id: str):
-    """构造贴近真实检索的稳定字段上下文。"""
+    """基于生产检索配置构造带合成样例的稳定字段上下文。"""
 
-    standard_fields = [
-        SelectionFieldMeta(
-            raw_name="username",
-            field_type="string",
-            display_name="操作人",
-            nl_name="操作人",
-            allow_operators=["eq", "include"],
-            sample_value="eval_user_alpha",
-        ),
-        SelectionFieldMeta(
-            raw_name="action_id",
-            field_type="string",
-            display_name="操作事件名(ID)",
-            nl_name="操作事件名(ID)",
-            description="别名：操作ID",
-            allow_operators=["eq", "include"],
-            sample_value="create",
-        ),
-        SelectionFieldMeta(
-            raw_name="result_code",
-            field_type="int",
-            display_name="执行结果",
-            nl_name="执行结果",
-            allow_operators=["include"],
-            sample_value=-1,
-            options=[
+    field_overrides = {
+        "username": {
+            "display_name": "操作人",
+            "sample_value": "eval_user_alpha",
+        },
+        "action_id": {
+            "display_name": "操作事件名(ID)",
+            "description": "别名：操作ID",
+            "sample_value": "create",
+        },
+        "result_code": {
+            "display_name": "执行结果",
+            "sample_value": -1,
+            "options": [
                 SelectionFieldOption(id="0", name="成功(0)"),
                 SelectionFieldOption(id="-1", name="失败(-1)"),
             ],
-        ),
-        SelectionFieldMeta(
-            raw_name="log",
-            field_type="string",
-            display_name="日志内容",
-            nl_name="日志内容",
-            allow_operators=["match_any", "match_all"],
-            sample_value="权限变更",
-        ),
-        SelectionFieldMeta(
-            raw_name="extend_data",
-            field_type="object",
-            display_name="拓展数据",
-            nl_name="拓展数据",
-            description="JSON 容器；用户明确给出的多级路径逐层写入 keys",
-            allow_operators=["eq", "neq", "include", "exclude", "like"],
-        ),
-    ]
+        },
+        "log": {
+            "display_name": "日志内容",
+            "sample_value": "权限变更",
+        },
+        "extend_data": {
+            "display_name": "拓展数据",
+            "description": "JSON 容器；用户明确给出的多级路径逐层写入 keys",
+        },
+    }
+    standard_fields = []
+    for raw_name, override in field_overrides.items():
+        config = COLLECT_SEARCH_CONFIG.query_field_map[raw_name]
+        display_name = override["display_name"]
+        standard_fields.append(
+            SelectionFieldMeta(
+                raw_name=raw_name,
+                field_type=config.field.field_type,
+                display_name=display_name,
+                nl_name=display_name,
+                description=override.get("description") or str(config.field.description or ""),
+                allow_operators=[operator.value for operator in config.allow_operators],
+                sample_value=override.get("sample_value"),
+                options=override.get("options"),
+            )
+        )
     extension_fields = [
         SelectionFieldMeta(
             raw_name="extend_data",
@@ -251,7 +248,7 @@ def _materialize_output(
     if log_search is not None:
         candidate_map = {system.system_id: system for system in system_context.systems}
         target = candidate_map[target_system_id]
-        condition = NL2JSONService.validate_and_assemble(
+        condition = ConditionAssemblyService.validate_and_assemble(
             payload=log_search.message_input.condition,
             selection=SystemSelectionOutput(systems=[target]),
             scope_id=target_system_id,

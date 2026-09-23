@@ -22,8 +22,8 @@ from services.web.ai_assistant.handlers.registry import (
 # handlers 包的回环导入，此处必须保持在 registry 导入之后，否则循环导入。
 from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
-    NaturalLanguageSearchHandler,
     SystemSelectionHandler,
+    UserIntentHandler,
 )
 
 # isort: on
@@ -39,8 +39,8 @@ __all__ = [
     "MessageHandlerRegistry",
     "MessagePreparation",
     "MessageTypeHandler",
-    "NaturalLanguageSearchHandler",
     "SystemSelectionHandler",
+    "UserIntentHandler",
     "attachment_handler_registry",
     "message_handler_registry",
 ]

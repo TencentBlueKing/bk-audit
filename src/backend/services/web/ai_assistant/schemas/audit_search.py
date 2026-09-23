@@ -3,9 +3,9 @@
 稳定键与《开发设计方案（总）》§7.2 对齐；字段上下文、检索条件和检索快照
 的内部结构直接复用 query 模块的类型化模型（协议「零转换」原则）。
 
-嵌套 query 模型含 ``Any`` 字段，drf_pydantic 无法自动转换 DRF serializer，
-统一用 ``Annotated[类型, DRF字段]`` 显式声明宽松 DRF 表达：运行时校验仍由
-Pydantic 嵌套模型完整执行，Swagger 只展示宽松对象结构。
+嵌套 query 模型含 ``Any`` 字段，drf_pydantic 无法自动转换 DRF serializer。
+检索条件用显式嵌套 Serializer 展开 OpenAPI；其余嵌套对象仍用宽松 DictField。
+运行时校验一律走 Pydantic，不把 OpenAPI 枚举当成请求校验。
 """
 
 from typing import Annotated, Any, Literal
@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 from rest_framework import serializers
 
+from core.sql.constants import FieldType
 from services.web.ai_assistant.schemas.message import MessageSchema
 from services.web.query.ai_assistant.schemas import (
     LogSearchOutput,
@@ -22,8 +23,8 @@ from services.web.query.ai_assistant.schemas import (
     SearchCondition,
     SelectionFieldMeta,
     SelectionSystem,
-    SystemSelectionOutput,
 )
+from services.web.query.utils.search_config import QueryConditionOperator
 
 __all__ = [
     "CommonQuerySchema",
@@ -31,10 +32,6 @@ __all__ = [
     "LogSearchContextSchema",
     "LogSearchInputSchema",
     "LogSearchOutputSchema",
-    "NLSearchContextSchema",
-    "NLSearchErrorSchema",
-    "NLSearchInputSchema",
-    "NLSearchOutputSchema",
     "SystemSelectionContextSchema",
     "SystemSelectionInputSchema",
     "SystemSelectionOutputSchema",
@@ -49,6 +46,34 @@ __all__ = [
 _NestedListField = serializers.ListField(child=serializers.DictField())
 _NestedObjectField = serializers.DictField()
 _NestedObjectOrNullField = serializers.DictField(allow_null=True)
+
+_OPERATOR_HELP = "查询执行层全局操作符。各字段实际可用集合是动态 allow_operators，" "本枚举不是字段白名单。"
+_FILTERS_HELP = "isnull/notnull 的 filters 必须为空数组；between 必须恰好 2 个值；其余操作符至少一个值。"
+_TIME_HELP = "手工创建 LOG_SEARCH 时必填；ISO8601 带时区，或 YYYY-MM-DD HH:mm:ss。"
+
+
+class _ConditionFieldSerializer(serializers.Serializer):
+    raw_name = serializers.CharField()
+    field_type = serializers.ChoiceField(choices=FieldType.choices, required=False)
+    keys = serializers.ListField(child=serializers.CharField(), required=False)
+
+
+class _ConditionItemSerializer(serializers.Serializer):
+    field = _ConditionFieldSerializer()
+    operator = serializers.ChoiceField(choices=QueryConditionOperator.choices, help_text=_OPERATOR_HELP)
+    filters = serializers.ListField(child=serializers.JSONField(), required=False, help_text=_FILTERS_HELP)
+
+
+class _SearchConditionSerializer(serializers.Serializer):
+    scope_type = serializers.ChoiceField(choices=[("system", "系统")], default="system")
+    scope_id = serializers.CharField()
+    start_time = serializers.CharField(help_text=_TIME_HELP)
+    end_time = serializers.CharField(help_text=_TIME_HELP)
+    conditions = _ConditionItemSerializer(many=True, required=False)
+
+
+_SearchConditionField = _SearchConditionSerializer()
+_SearchConditionOrNullField = _SearchConditionSerializer(allow_null=True)
 _USER_INTENT_CANDIDATES_DESCRIPTION = (
     "当前范围内可选系统列表，元素为 {system_id, name}；SYSTEM_REQUIRED 和 SYSTEM_UNAVAILABLE 时可用于选择引导，" "其他错误通常为空数组。"
 )
@@ -102,47 +127,6 @@ class SystemSelectionOutputSchema(MessageSchema):
     systems: Annotated[list[SelectionSystem], _NestedListField] = Field(default_factory=list)
     common_operations: list[CommonQuerySchema] = Field(default_factory=list)
     historical_operations: list[CommonQuerySchema] = Field(default_factory=list)
-
-
-class NLSearchInputSchema(MessageSchema):
-    """自然语言检索输入。"""
-
-    query_text: str = Field(min_length=1, max_length=2048)
-    auto_execute: bool = True
-
-
-class NLSearchContextSchema(MessageSchema):
-    """自然语言检索上下文：从父系统选择消息复制的最小充分字段上下文。"""
-
-    username: str
-    namespace: str
-    scope_id: str
-    system_selection: Annotated[SystemSelectionOutput, _NestedObjectField]
-    # session scope（从父 SELECTION 继承）固化到上下文：LOG_SEARCH 续链按此过滤
-    session_scope_type: str = ""
-    session_scope_id: str = ""
-
-
-class NLSearchErrorSchema(MessageSchema):
-    """自然语言识别失败的结构化协议（消息任务成功、识别业务失败）。"""
-
-    error_code: str
-    error_message: str
-
-
-class NLSearchOutputSchema(MessageSchema):
-    """自然语言检索输出：成功携带受控检索条件；预期内识别失败携带结构化错误协议。"""
-
-    condition: Annotated[SearchCondition | None, _NestedObjectOrNullField] = None
-    error: NLSearchErrorSchema | None = None
-
-    @model_validator(mode="after")
-    def _validate_payload_exclusive(self) -> "NLSearchOutputSchema":
-        """condition 与 error 互斥：识别成功带条件，识别失败带错误协议。"""
-
-        if (self.condition is None) == (self.error is None):
-            raise ValueError("NL 检索输出必须且只能携带 condition 或 error 之一")
-        return self
 
 
 class UserIntentInputSchema(MessageSchema):
@@ -233,7 +217,7 @@ class UserIntentOutputSchema(MessageSchema):
     intent: str = ""
     system_id: str = ""
     message: str = ""
-    condition: Annotated[SearchCondition | None, _NestedObjectOrNullField] = None
+    condition: Annotated[SearchCondition | None, _SearchConditionOrNullField] = None
     error: UserIntentErrorSchema | None = None
     selection_message_uid: str = ""
     log_search_message_uid: str = ""
@@ -254,7 +238,7 @@ class UserIntentOutputSchema(MessageSchema):
 class LogSearchInputSchema(MessageSchema):
     """日志检索输入：结构化条件，字段条件检索与 NL 续链共用同一结构。"""
 
-    condition: Annotated[SearchCondition, _NestedObjectField]
+    condition: Annotated[SearchCondition, _SearchConditionField]
 
 
 class LogSearchContextSchema(MessageSchema):

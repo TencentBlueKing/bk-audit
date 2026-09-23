@@ -43,7 +43,7 @@ class ReconciliationTest(TestCase):
     def create_message(self, *, task_id: str, age: timedelta) -> Message:
         message = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id=task_id,
             input_data={},

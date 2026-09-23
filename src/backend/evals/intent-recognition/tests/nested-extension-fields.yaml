@@ -8,6 +8,15 @@
     scope_type: 'scene'
     scope_id: '1001'
     current_time: '2026-09-20T10:00:00+08:00'
+    expected_conditions: &nested_username_scope
+      - raw_name: username
+        keys: []
+        operator: eq
+        filters: ["eval_user_nested"]
+      - raw_name: extend_data
+        keys: ["_request_url", "scope_id"]
+        operator: eq
+        filters: ["49"]
     authorized_systems: &full_path_systems
       - system_id: 'eval_audit_primary'
         name: '示例审计系统'
@@ -33,7 +42,9 @@
             system_id: 'eval_audit_primary'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: '嵌套字段-完整路径上下文-父节点表达'
   vars:
@@ -42,10 +53,13 @@
     scope_type: 'scene'
     scope_id: '1001'
     current_time: '2026-09-20T10:00:00+08:00'
+    expected_conditions: *nested_username_scope
     authorized_systems: *full_path_systems
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: '嵌套字段-父节点样例上下文-完整路径表达'
   vars:
@@ -54,6 +68,7 @@
     scope_type: 'scene'
     scope_id: '1001'
     current_time: '2026-09-20T10:00:00+08:00'
+    expected_conditions: *nested_username_scope
     authorized_systems: &parent_sample_systems
       - system_id: 'eval_audit_primary'
         name: '示例审计系统'
@@ -79,7 +94,9 @@
             system_id: 'eval_audit_primary'
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: '嵌套字段-父节点样例上下文-父节点表达'
   vars:
@@ -88,7 +105,10 @@
     scope_type: 'scene'
     scope_id: '1001'
     current_time: '2026-09-20T10:00:00+08:00'
+    expected_conditions: *nested_username_scope
     authorized_systems: *parent_sample_systems
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "eq" && c.filters.includes("eval_user_nested")) && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && JSON.stringify(c.field.keys) === JSON.stringify(["_request_url","scope_id"]) && c.operator === "eq" && JSON.stringify(c.filters) === JSON.stringify(["49"])) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"]) && d.condition.start_time.startsWith("2026-09-19T10:00:00") && d.condition.end_time.startsWith("2026-09-20T10:00:00")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js

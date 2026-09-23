@@ -230,21 +230,8 @@ class MessagePlanningContext(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# NATURAL_LANGUAGE_SEARCH（协议 §4）
+# Agent 条件载荷（消息规划与条件组装共用，不单独落成消息类型）
 # ---------------------------------------------------------------------------
-
-
-class NLSearchInput(BaseModel):
-    """NL 输入（协议 §4.1）"""
-
-    query_text: str = Field(..., min_length=1)
-    auto_execute: bool = True
-
-
-class NLSearchOutput(BaseModel):
-    """NL 输出（协议 §4.2，官方稳定键为 condition 单键）"""
-
-    condition: SearchCondition
 
 
 class AIConditionItem(BaseModel):
@@ -364,48 +351,6 @@ class MessagePlan(BaseModel):
             ("SYSTEM_SELECTION", "LOG_SEARCH"),
         ):
             raise ValueError("unsupported message plan sequence")
-        return self
-
-
-class IntentPayload(BaseModel):
-    """用户意图识别 Agent 返回的 JSON 契约（一期两类行为 + 无法识别兜底）。
-
-    single source of truth：model_json_schema() 注入 Prompt 约束输出结构，
-    model_validate 校验输出（详见一期设计方案 v6 §三/§五）。
-    """
-
-    intent: Literal["select_system", "log_search", "unrecognized"] = Field(
-        description="意图分类：选系统（含同时要检索）/ 当前系统日志检索 / 无法识别"
-    )
-    system_id: str = Field(
-        default="",
-        description="select_system 时必填，必须来自候选系统列表；log_search/unrecognized 时留空",
-    )
-    need_search: bool = Field(
-        default=False,
-        description="检索诉求判定：select_system 且话语同时包含日志检索诉求（如「查审计中心近七天的操作记录」）"
-        "为 true（切换系统后继续执行检索）；仅表达切换/选择系统（如「切换到蓝盾」「用蓝盾系统」）为 false"
-        "（仅切换不检索）；log_search 恒为 true，unrecognized 恒为 false",
-    )
-    message: str = Field(
-        default="",
-        description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",
-    )
-
-    @model_validator(mode="after")
-    def validate_intent_fields(self) -> "IntentPayload":
-        """拒绝意图与路由字段互相矛盾的输出，避免下游猜测续链行为。"""
-
-        if self.intent == "select_system":
-            if not self.system_id:
-                raise ValueError("select_system requires system_id")
-            return self
-        if self.intent == "log_search":
-            if self.system_id or not self.need_search:
-                raise ValueError("log_search requires empty system_id and need_search=true")
-            return self
-        if self.system_id or self.need_search:
-            raise ValueError("unrecognized requires empty system_id and need_search=false")
         return self
 
 

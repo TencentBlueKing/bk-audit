@@ -26,16 +26,27 @@ error_message 只承载用户可读的脱敏摘要，prompt / 字段上下文 / 
 
 
 class AIAssistantError(Exception):
-    """AI 助手业务异常基类"""
+    """AI 助手业务异常基类。
+
+    ``retry_raw_output`` 只在当前任务内传递给下一次 Agent 调用，不进入
+    ``extra`` 日志字段，避免可观测性截断影响纠错输入。
+    """
 
     error_code = "AI_SERVICE_ERROR"
     error_message = "AI 服务异常，请稍后重试"
 
-    def __init__(self, message: str = None, error_code: str = None, extra: dict = None):
+    def __init__(
+        self,
+        message: str = None,
+        error_code: str = None,
+        extra: dict = None,
+        retry_raw_output: str = None,
+    ):
         self.message = message or self.error_message
         if error_code:
             self.error_code = error_code
         self.extra = extra or {}
+        self.retry_raw_output = retry_raw_output
         super().__init__(self.message)
 
     def __str__(self):

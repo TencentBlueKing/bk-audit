@@ -14,7 +14,7 @@
 8. 用户明确表达多级拓展路径时，Agent 能基于公共 `extend_data` 容器生成 `extend_data + keys` 条件，并在“完整路径已发现”和“仅父节点及样例已发现”两类目标系统快照上通过后端校验。
 9. 拓展字段类型或操作符不明确时，Agent 可结合用户表达和样例在查询 Schema 的全局枚举内选择；采样元数据不作为错误的强限制。
 
-Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的字段差异和拓展字段受控样例会进入 Agent 上下文，普通标准字段运行时样例不进入 Prompt。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、操作人、完整嵌套路径、值和默认近一天时间窗；`tests/invalid-conditions.yaml` 验证意图已识别但操作符不受支持时稳定返回 `INVALID_CONDITION`。
+Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的字段差异和拓展字段受控样例会进入 Agent 上下文，普通标准字段运行时样例不进入 Prompt。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、完整条件集合（操作人与嵌套路径不能多也不能少）和默认近一天时间窗；`tests/invalid-conditions.yaml` 验证意图已识别但操作符不受支持时稳定返回 `INVALID_CONDITION`。
 
 评测分为两个 profile：
 
@@ -71,4 +71,4 @@ PROMPTFOO_PYTHON=.venv/bin/python npx promptfoo eval --no-table \
 - 系统越权、Schema 非法和字段非法必须被后端校验拒绝，不能仅依赖模型自觉。
 - 除总体通过率外，记录失败用例、错误类型、尝试次数和延迟分布；重复运行时重点观察相似系统名、复合计划和生产同构上下文边界的一致性。
 
-历史 V1–V6 评测针对旧的 `IntentRecognitionService + NL2JSON` 两段链路，不能与本版本通过率直接比较。本版本结果应建立新的 MessagePlan 基线。
+历史 V1–V6 评测针对已退役的两段式意图识别链路，不能与本版本通过率直接比较。本版本结果应建立新的 MessagePlan 基线。

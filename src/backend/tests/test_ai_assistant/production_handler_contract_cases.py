@@ -15,37 +15,24 @@ from unittest import mock
 from celery.exceptions import Ignore, Retry
 
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
-from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
-    NaturalLanguageSearchHandler,
     SystemSelectionHandler,
     UserIntentHandler,
 )
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
     LogSearchInputSchema,
-    NLSearchInputSchema,
     UserIntentInputSchema,
 )
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
-    execute_natural_language_search,
     execute_system_selection,
     execute_user_intent,
 )
-from tests.test_ai_assistant.base import (
-    AIAssistantPlatformTestCase,
-    ensure_business_handlers_registered,
-    make_condition,
-)
-from tests.test_ai_assistant.handlers import (
-    EchoAsyncHandler,
-    register_test_message_handler,
-)
+from tests.test_ai_assistant.base import AIAssistantPlatformTestCase, make_condition
 from tests.test_ai_assistant.test_handlers import (
     TestLogSearchHandler,
-    TestNaturalLanguageSearchHandler,
     TestSystemSelectionHandler,
 )
 
@@ -211,75 +198,3 @@ class UserIntentHandlerContract(AsyncTaskContractMixin, AIAssistantPlatformTestC
             created_by=self.user,
             updated_by=self.user,
         )
-
-
-class NaturalLanguageSearchHandlerContract(AIAssistantPlatformTestCase):
-    """NATURAL_LANGUAGE_SEARCH（ASYNC）契约：prepare 成功/失败 + 平台任务重试/陈旧投递。"""
-
-    def setUp(self):
-        super().setUp()
-        self.handler = NaturalLanguageSearchHandler()
-        self.input = NLSearchInputSchema(query_text="查一下 admin 的日志")
-        # retry/stale 契约走平台任务投递；Echo Handler 临时占用该消息类型提供快照恢复
-        register_test_message_handler(EchoAsyncHandler())
-
-    def tearDown(self):
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
-        ensure_business_handlers_registered()
-        super().tearDown()
-
-    test_success_contract = TestNaturalLanguageSearchHandler.test_prepare_resolves_latest_selection_without_parent
-    test_failure_contract = TestNaturalLanguageSearchHandler.test_prepare_without_selection_raises
-
-    def test_retry_contract(self):
-        """业务 Retry 时消息保持 PROCESSING 并刷新平台活动时间。"""
-
-        message = self.create_processing_message()
-        with mock.patch.object(execute_natural_language_search, "run", side_effect=Retry("temporary retry")):
-            with self.assertRaises(Retry):
-                self.invoke(execute_natural_language_search, message=message)
-        message.refresh_from_db()
-        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
-        self.assertIsNotNone(message.last_activity_at)
-
-    def test_stale_task_contract(self):
-        """终态消息的陈旧投递被平台拦截为 Ignore。"""
-
-        message = self.create_processing_message()
-        Message.objects.filter(id=message.id).update(status=ExecutionStatus.SUCCESS)
-        message.refresh_from_db()
-        with self.assertRaises(Ignore):
-            self.invoke(execute_natural_language_search, message=message)
-        message.refresh_from_db()
-        self.assertEqual(message.status, ExecutionStatus.SUCCESS)
-
-    # ---------- 任务投递基础设施（与 MessageTaskTest.invoke 同一模式） ----------
-
-    def create_processing_message(self, *, task_id: str = "task-contract") -> Message:
-        return Message.objects.create(
-            conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
-            status=ExecutionStatus.PROCESSING,
-            task_id=task_id,
-            input_data={"text": "hello"},
-            context_data={"prefix": "async"},
-            output_data=None,
-            created_by=self.user,
-            updated_by=self.user,
-        )
-
-    @staticmethod
-    def invoke(task, *, message: Message):
-        task_kwargs = {"message_id": message.id, "task_id": message.task_id}
-        task.push_request(
-            id=message.task_id,
-            retries=0,
-            called_directly=False,
-            is_eager=True,
-            args=(),
-            kwargs=task_kwargs,
-        )
-        try:
-            return task(**task_kwargs)
-        finally:
-            task.pop_request()

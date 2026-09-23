@@ -241,7 +241,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 | `UNRECOGNIZED_INTENT` | 无法识别为系统选择或日志检索 | 展示提示，保留输入框让用户补充需求 |
 | `SYSTEM_REQUIRED` | 已识别为检索，但当前没有已选系统，用户也没有提供足够的系统信息 | 展示 candidates 供用户选择；为空时提示切换范围或申请权限 |
 | `SYSTEM_UNAVAILABLE` | AI 选择的目标不在本次候选范围；不推断是场景外、无权限还是不存在 | 展示后端文案和 candidates，引导切换场景或重新选择 |
-| `INVALID_CONDITION` | 已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达 | 保留原输入并提示用户修改条件，不创建派生消息 |
+| `INVALID_CONDITION` | 已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达 | 保留原输入并提示用户修改条件；不创建 LOG_SEARCH。复合计划中已通过校验的 SYSTEM_SELECTION 可能保留，按 `derived_messages` 展示 |
 | `AI_OUTPUT_INVALID` | AI 输出无法按 MessagePlan 协议解析 | 展示通用识别失败提示，允许用户重试或换一种描述 |
 | `PERMISSION_DENIED` | 执行条件识别时权限校验未通过 | 展示权限提示，不展示受限系统或数据详情 |
 
@@ -267,7 +267,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 
 只有具体消息顶层 `status=FAILED` 时才读取该消息的顶层 `error_code/error_message` 并考虑重试。当前 Swagger 的 `UserIntentErrorSchema` 同步列出了业务错误码、可展示文案和 candidates 语义。
 
-存量 NATURAL_LANGUAGE_SEARCH 消息仍按 condition/error 分支展示，重试与编辑后同样遵循 auto_execute 的续链规则；其父消息是成功的 SYSTEM_SELECTION。新页面的自然语言提交统一使用 USER_INTENT，不另行创建 NATURAL_LANGUAGE_SEARCH。
+自然语言提交统一使用 USER_INTENT。识别成功后按派生消息展示系统选择和检索条件；业务错误按 `output_data.error` 展示，重试与编辑遵循 auto_execute 的续链规则。
 
 ## 结构化检索、条件确认与编辑
 
@@ -275,8 +275,49 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 
 - 手工条件检索引用成功 SYSTEM_SELECTION。
 - USER_INTENT 预览条件后的手工执行先等待 `selection_message_uid` 对应的 SYSTEM_SELECTION 成功，再引用它创建 LOG_SEARCH。
-- 存量 NATURAL_LANGUAGE_SEARCH 预览仍引用该成功自然语言消息。
 - 不把上一条 LOG_SEARCH 当作父消息；不要给 parent_message_uid 传会话 UID。
+
+`input_data.condition` 与 Swagger 嵌套结构一致。`operator` 列出的是查询执行层全局操作符；每个字段真正允许的操作符是字段上下文里的动态 `allow_operators`，不能把全局枚举当成该字段的白名单。`filters` 的形态跟操作符走：`isnull` / `notnull` 必须是空数组，`between` 必须恰好两个值，其余操作符至少一个值。手工创建 LOG_SEARCH 时必须传 `start_time`、`end_time`，格式为 ISO8601 带时区或 `YYYY-MM-DD HH:mm:ss`。近 1 天的默认时间窗只由 USER_INTENT 的 Agent 条件组装链路补齐，手工请求不补齐。
+
+标准字段：
+
+```json
+{
+  "condition": {
+    "scope_type": "system",
+    "scope_id": "bk-audit",
+    "start_time": "2026-09-22T00:00:00+08:00",
+    "end_time": "2026-09-23T00:00:00+08:00",
+    "conditions": [
+      {
+        "field": {"raw_name": "username", "field_type": "string", "keys": []},
+        "operator": "eq",
+        "filters": ["admin"]
+      }
+    ]
+  }
+}
+```
+
+拓展字段下钻时 `raw_name` 仍是容器名，子键放进 `keys`，顺序就是路径顺序：
+
+```json
+{
+  "condition": {
+    "scope_type": "system",
+    "scope_id": "bk-audit",
+    "start_time": "2026-09-22T00:00:00+08:00",
+    "end_time": "2026-09-23T00:00:00+08:00",
+    "conditions": [
+      {
+        "field": {"raw_name": "extend_data", "field_type": "string", "keys": ["ticket_id"]},
+        "operator": "eq",
+        "filters": ["Story-1"]
+      }
+    ]
+  }
+}
+```
 
 手工切系统时创建新的 SYSTEM_SELECTION 消息，历史选择和检索保留。不要用修改旧选择的方式重写历史上下文。
 
@@ -288,7 +329,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 | 追加一次查询 | `POST /messages/`，生成新 UID，选取允许的父消息 |
 | 失败原消息重试 | `POST /messages/{message_uid}/retry/`，复用原 UID 和快照输入；不是修改条件 |
 
-仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。已有 `derived_messages` 的 USER_INTENT 禁止编辑，前端应隐藏其编辑入口；没有派生消息的业务错误 USER_INTENT 可以修改后重跑。派生的 SYSTEM_SELECTION/LOG_SEARCH 仍按各自消息规则编辑。存量 NATURAL_LANGUAGE_SEARCH 编辑若 auto_execute=true，可能新增一条检索子消息。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
+仅 SUCCESS/FAILED 消息可编辑，PROCESSING 不并发编辑。已有 `derived_messages` 的 USER_INTENT 禁止编辑，前端应隐藏其编辑入口；没有派生消息的业务错误 USER_INTENT 可以修改后重跑。派生的 SYSTEM_SELECTION/LOG_SEARCH 仍按各自消息规则编辑。前端应按 UID 区分新旧结果，不让旧查询结果冒充新条件的结果。
 
 ## 状态刷新、结果列与反馈
 

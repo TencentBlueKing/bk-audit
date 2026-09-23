@@ -31,6 +31,7 @@ from services.web.query.ai_assistant.exceptions import (
     AITimeoutError,
 )
 from tests.base import TestCase
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoContext,
@@ -55,12 +56,13 @@ class MessageTaskTest(TestCase):
         register_test_message_handler(self.handler)
 
     def tearDown(self):
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
 
     def create_message(self, *, task_id: str = "task-current") -> Message:
         return Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id=task_id,
             input_data={"text": "hello"},

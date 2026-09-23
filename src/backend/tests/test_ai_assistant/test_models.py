@@ -41,7 +41,7 @@ class AIAssistantConstantsTest(SimpleTestCase):
         self.assertEqual(set(ExecutionObjectType.values), {"MESSAGE", "ATTACHMENT"})
         self.assertEqual(
             set(MessageType.values),
-            {"SYSTEM_SELECTION", "USER_INTENT", "NATURAL_LANGUAGE_SEARCH", "LOG_SEARCH"},
+            {"SYSTEM_SELECTION", "USER_INTENT", "LOG_SEARCH"},
         )
         self.assertEqual(
             set(AttachmentType.values),
@@ -345,7 +345,7 @@ class MessageModelTest(TestCase):
     def test_deleting_parent_message_keeps_child(self):
         parent = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             created_by="alice",
         )
         child = Message.objects.create(

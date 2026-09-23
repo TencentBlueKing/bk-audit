@@ -31,6 +31,7 @@ from services.web.ai_assistant.services.reconciliation import (
 )
 from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
 from tests.test_ai_assistant import integration_handlers
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.celery_integration import (
     reset_task_postrun,
     running_celery_worker,
@@ -129,13 +130,14 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
     def tearDown(self):
         self._clear_stream_keys()
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
 
     def create_processing_message(self, *, task_id: str) -> Message:
         return Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id=task_id,
             input_data={"text": "stale"},
@@ -150,7 +152,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "query"},
         )
 
@@ -319,7 +321,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         handler = register_test_message_handler(RealMessageSelfRetryHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "retry"},
         )
         original_task_id = message.task_id
@@ -370,7 +372,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         register_test_message_handler(RealMessageAutoretryFailureHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "fail"},
         )
 
@@ -425,7 +427,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         """巡检失败后再到达的 RabbitMQ 任务不能覆盖 MySQL 终态。"""
 
         integration_handlers.reset_old_task_observations()
-        handler = message_handler_registry.register(RealMessageOldTaskHandler())
+        handler = register_test_message_handler(RealMessageOldTaskHandler())
         message = self.create_processing_message(task_id="timed-out-task-id")
         expired_at = timezone.now() - timedelta(hours=1)
         Message.objects.filter(id=message.id).update(
@@ -482,7 +484,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         handler = register_test_message_handler(RealMessageSuccessHandler())
         failed = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.FAILED,
             task_id="failed-old-task-id",
             input_data={"text": "retry"},

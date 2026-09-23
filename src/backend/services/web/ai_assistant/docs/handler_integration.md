@@ -64,10 +64,10 @@ class SearchOutput(MessageSchema):
     filters: dict
 
 
-class NaturalLanguageSearchHandler(
+class LogSearchExampleHandler(
     MessageTypeHandler[SearchInput, SearchContext, SearchOutput]
 ):
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    message_type = MessageType.LOG_SEARCH
     execution_mode = ExecutionMode.SYNC
     input_model = SearchInput
     context_model = SearchContext
@@ -90,7 +90,7 @@ class NaturalLanguageSearchHandler(
 
 ```python
 @message_execution_task(
-    name="audit.execute_natural_language_search",
+    name="audit.execute_log_search",
     queue="audit_ai",
     acks_late=True,
 )
@@ -100,7 +100,7 @@ def execute_search(self, execution):
     return SearchOutput(filters=result)
 
 
-class AsyncNaturalLanguageSearchHandler(NaturalLanguageSearchHandler):
+class AsyncLogSearchExampleHandler(LogSearchExampleHandler):
     execution_mode = ExecutionMode.ASYNC
     async_task = execute_search
 ```

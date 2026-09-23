@@ -12,7 +12,6 @@ from django.conf import settings
 
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
-    execute_natural_language_search,
     execute_system_selection,
     execute_user_intent,
 )
@@ -86,7 +85,6 @@ class TestAICeleryQueueIsolation(TestCase):
         for task in (
             execute_system_selection,
             execute_user_intent,
-            execute_natural_language_search,
             execute_log_search,
         ):
             with self.subTest(task=task.name):

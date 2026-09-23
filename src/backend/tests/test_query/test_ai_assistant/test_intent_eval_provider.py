@@ -18,6 +18,7 @@ from services.web.query.ai_assistant.schemas import (
     PlannedSystemSelectionMessage,
     SystemSelectionInput,
 )
+from services.web.query.constants import COLLECT_SEARCH_CONFIG
 
 
 def load_provider_module():
@@ -144,6 +145,17 @@ class IntentEvalProviderTest(SimpleTestCase):
         self.assertIn("extend_data", fields)
         self.assertEqual(fields["extend_data"].field_type, "object")
         self.assertIn("eq", fields["extend_data"].allow_operators)
+
+    def test_default_common_fields_match_production_search_config(self):
+        """评测默认字段的类型与操作符必须取自生产检索配置。"""
+
+        fields = {field.raw_name: field for field in self.provider._resolve_common_fields({})}
+
+        for raw_name, field in fields.items():
+            with self.subTest(raw_name=raw_name):
+                config = COLLECT_SEARCH_CONFIG.query_field_map[raw_name]
+                self.assertEqual(field.field_type, config.field.field_type)
+                self.assertEqual(field.allow_operators, [operator.value for operator in config.allow_operators])
 
     def test_full_authorized_system_context_keeps_per_system_fields(self):
         """评测可以注入生产同构的完整系统字段快照。"""
@@ -279,16 +291,23 @@ class IntentEvalProviderTest(SimpleTestCase):
                 self.assertEqual(assertion["type"], "javascript")
                 for fragment in (
                     '["SYSTEM_SELECTION","LOG_SEARCH"]',
-                    'c.field.raw_name === "username"',
-                    'c.filters.includes("eval_user_nested")',
-                    'c.field.raw_name === "extend_data"',
-                    '["_request_url","scope_id"]',
-                    'c.operator === "eq"',
-                    'JSON.stringify(c.filters) === JSON.stringify(["49"])',
                     'd.condition.start_time.startsWith("2026-09-19T10:00:00")',
                     'd.condition.end_time.startsWith("2026-09-20T10:00:00")',
                 ):
                     self.assertIn(fragment, assertion["value"])
+                exact = case["assert"][1]
+                self.assertEqual(exact["value"], "file://assertions/exact_conditions.js")
+                expected = {
+                    (item["raw_name"], tuple(item["keys"]), item["operator"], tuple(item["filters"]))
+                    for item in variables["expected_conditions"]
+                }
+                self.assertEqual(
+                    expected,
+                    {
+                        ("username", (), "eq", ("eval_user_nested",)),
+                        ("extend_data", ("_request_url", "scope_id"), "eq", ("49",)),
+                    },
+                )
 
     def test_promptfoo_covers_invalid_condition_contract(self):
         """正式评测必须覆盖意图已识别但操作符不受支持的稳定业务错误。"""
@@ -317,6 +336,22 @@ class IntentEvalProviderTest(SimpleTestCase):
         self.assertTrue(all("eval_" in str(case["vars"]["authorized_systems"]) for case in cases))
         self.assertTrue(any("未知路径" in case["description"] for case in cases))
         self.assertTrue(any("数值比较" in case["description"] for case in cases))
+
+    def test_numeric_expected_conditions_declare_field_type(self):
+        """数值筛选值必须显式声明类型，断言不能信任待验证的 Agent 输出类型。"""
+
+        tests_root = Path(__file__).parents[3] / "evals/intent-recognition/tests"
+        result_code_conditions = []
+        for fixture_path in tests_root.glob("*.yaml"):
+            for case in yaml.safe_load(fixture_path.read_text()) or []:
+                result_code_conditions.extend(
+                    condition
+                    for condition in case.get("vars", {}).get("expected_conditions", [])
+                    if condition["raw_name"] == "result_code"
+                )
+
+        self.assertGreater(len(result_code_conditions), 0)
+        self.assertTrue(all(condition.get("field_type") == "int" for condition in result_code_conditions))
 
     def test_nested_extension_context_shapes_pass_backend_validation(self):
         """四格用例的两种字段上下文都允许显式完整下钻路径通过确定性校验。"""

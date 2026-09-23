@@ -31,6 +31,7 @@ from services.web.ai_assistant.models import Attachment, Conversation, Feedback,
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.message_execution import finish_message_failure
 from tests.base import TestCase
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoContext,
@@ -110,7 +111,8 @@ class MessageServiceTest(TestCase):
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
 
     def create_parent(
         self,
@@ -176,7 +178,7 @@ class MessageServiceTest(TestCase):
         invalid_cases.append(
             (
                 Conversation(created_by=self.user, updated_by=self.user),
-                MessageType.NATURAL_LANGUAGE_SEARCH,
+                MessageType.USER_INTENT,
             )
         )
         invalid_cases.extend(
@@ -369,7 +371,7 @@ class MessageServiceTest(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 message = self.service.create(
                     conversation=self.conversation,
-                    message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+                    message_type=MessageType.USER_INTENT,
                     input_data={"text": "hello"},
                 )
 
@@ -395,7 +397,7 @@ class MessageServiceTest(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 message = self.service.create(
                     conversation=self.conversation,
-                    message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+                    message_type=MessageType.USER_INTENT,
                     input_data={"text": "hello"},
                 )
 
@@ -412,7 +414,7 @@ class MessageServiceTest(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 message = self.service.create(
                     conversation=self.conversation,
-                    message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+                    message_type=MessageType.USER_INTENT,
                     input_data={"text": "hello"},
                 )
 
@@ -431,7 +433,7 @@ class MessageServiceTest(TestCase):
                 with self.assertRaises(IntegrityError):
                     self.service.create(
                         conversation=self.conversation,
-                        message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+                        message_type=MessageType.USER_INTENT,
                         input_data={"text": "hello"},
                     )
 
@@ -440,7 +442,7 @@ class MessageServiceTest(TestCase):
     def create_failed_async_message(self, **overrides) -> Message:
         values = {
             "conversation": self.conversation,
-            "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+            "message_type": MessageType.USER_INTENT,
             "status": ExecutionStatus.FAILED,
             "task_id": "task-old",
             "input_data": {"text": "hello"},
@@ -826,7 +828,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
         register_test_message_handler(EchoAsyncHandler())
         self.message = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.FAILED,
             task_id="task-old",
             input_data={"text": "hello"},
@@ -839,7 +841,8 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
         )
 
     def tearDown(self):
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
 
     @staticmethod
     def run_threads(*targets):
@@ -895,7 +898,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
 
     def test_update_concurrent_sync_and_async_requests_only_one_wins(self):
         for message_type, task_id in (
-            (MessageType.NATURAL_LANGUAGE_SEARCH, "task-old"),
+            (MessageType.USER_INTENT, "task-old"),
             (MessageType.SYSTEM_SELECTION, None),
         ):
             with self.subTest(message_type=message_type):
@@ -933,7 +936,7 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
                 self.assertIsInstance(errors[0], InvalidMessageState)
                 self.message.refresh_from_db()
                 self.assertEqual(self.message.input_data, results[0].input_data)
-                self.assertEqual(dispatch.call_count, int(message_type == MessageType.NATURAL_LANGUAGE_SEARCH))
+                self.assertEqual(dispatch.call_count, int(message_type == MessageType.USER_INTENT))
 
     def test_retry_rechecks_conversation_after_delete(self):
         retry_paused = threading.Event()

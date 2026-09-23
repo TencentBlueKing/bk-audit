@@ -139,9 +139,7 @@ class MessageExportService:
             parent = message.parent_message
             if parent is None:
                 return []
-            if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-                systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
-            elif parent.message_type == MessageType.USER_INTENT:
+            if parent.message_type == MessageType.USER_INTENT:
                 selection = (
                     Message.objects.filter(
                         conversation=parent.conversation,

@@ -208,7 +208,7 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
         )
 
         with mock.patch(
-            "services.web.query.ai_assistant.services.intent.IntentRecognitionService.load_candidates",
+            "services.web.ai_assistant.tasks.audit_search.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "审计中心"}],
         ), mock.patch(
             "services.web.ai_assistant.tasks.audit_search.FieldContextService.build_common_fields",

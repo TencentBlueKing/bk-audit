@@ -1,46 +1,30 @@
 """审计日志检索的业务 Celery 任务。
 
-自然语言检索为异步消息（调 AIDev 耗时长）；
+用户意图、系统选择和日志检索都是异步消息；
 常见操作缓存刷新为声明式周期任务（对齐上游 periodic_task 惯例，beat 自动调度）。
 """
 
 import logging
 import time
-from uuid import uuid4
 
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from celery.schedules import crontab
-from django.db import transaction
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     NL_PARSE_MAX_RETRIES,
     NL_PARSE_RETRY_INTERVAL_SECONDS,
     NL_PARSE_RETRY_TIMEOUT_SECONDS,
-    ExecutionStatus,
-    MessageErrorCode,
     MessageType,
     UserIntentErrorCode,
 )
-from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas.audit_search import (
-    LogSearchContextSchema,
     LogSearchOutputSchema,
-    NLSearchErrorSchema,
-    NLSearchOutputSchema,
     SystemSelectionOutputSchema,
     UserIntentAgentTraceSchema,
     UserIntentOutputSchema,
 )
-
-# 导入契约：MessageService 必须保持模块级导入，禁止改成延迟导入——曾发生"仅给部分
-# 调用点补局部导入"的事故（漏改 _create_log_search 与 execute_user_intent 的
-# select_system 分支），产生 NameError / flake8 F821，且前者位于 _finish_success
-# 的静默兜底内极难察觉（续链子消息悄悄不创建）。若确需规避循环依赖，应在引入反向
-# 依赖的一侧（services/handlers 对本模块的引用）做函数内延迟导入，
-# 写法对齐 services/message.py 的标题派发延迟导入。
-from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.message_plan import (
     MessagePlanExecutionService,
@@ -63,123 +47,9 @@ from services.web.query.ai_assistant.schemas import (
     SystemSelectionOutput,
 )
 from services.web.query.ai_assistant.services.field_context import FieldContextService
-from services.web.query.ai_assistant.services.intent import (
-    IntentRecognitionService,
-    MessagePlanningService,
-)
-from services.web.query.ai_assistant.services.nl2json import NL2JSONService
+from services.web.query.ai_assistant.services.intent import MessagePlanningService
 
 logger = logging.getLogger(__name__)
-
-
-def _create_log_search_with_fallback(
-    *,
-    execution: MessageExecution,
-    condition,
-    log_prefix: str,
-) -> None:
-    """续链 LOG_SEARCH；创建前置失败时固化可见、可重试的失败消息。"""
-
-    message = execution.message
-    try:
-        MessageService(user=message.created_by).create(
-            conversation=message.conversation,
-            message_type=MessageType.LOG_SEARCH,
-            input_data={"condition": condition.model_dump(mode="json")},
-            parent_message_uid=str(message.uid),
-            timeline_started_at=message.created_at,
-        )
-    except Exception:
-        logger.exception(
-            "%s auto log search creation failed, parent_message_id=%s",
-            log_prefix,
-            message.id,
-        )
-        service = MessageService(user=message.created_by)
-        with transaction.atomic():
-            service.lock_active_conversation(conversation=message.conversation)
-            if Message.objects.filter(parent_message=message, message_type=MessageType.LOG_SEARCH).exists():
-                return
-            target_system = next(
-                (
-                    system
-                    for system in execution.context_data.system_selection.systems
-                    if system.system_id == condition.scope_id
-                ),
-                None,
-            )
-            context = LogSearchContextSchema(
-                username=execution.context_data.username,
-                namespace=execution.context_data.namespace,
-                system_id=condition.scope_id,
-                source="natural_language",
-                session_scope_type=execution.context_data.session_scope_type,
-                session_scope_id=execution.context_data.session_scope_id,
-                extension_fields=target_system.extension_fields if target_system is not None else [],
-            )
-            now = timezone.now()
-            fallback = Message.objects.create(
-                conversation=message.conversation,
-                parent_message=message,
-                message_type=MessageType.LOG_SEARCH,
-                status=ExecutionStatus.FAILED,
-                task_id=str(uuid4()),
-                input_data={"condition": condition.model_dump(mode="json")},
-                context_data=context.model_dump(mode="json"),
-                output_data=None,
-                error_code=str(MessageErrorCode.TASK_EXECUTION_FAILED),
-                error_message="日志检索消息创建失败，请重试",
-                last_activity_at=now,
-                finished_at=now,
-                created_by=message.created_by,
-                updated_by=message.created_by,
-            )
-            Message.objects.filter(id=fallback.id).update(created_at=message.created_at, updated_at=now)
-
-
-class NLSearchExecutionTask(MessageExecutionTask):
-    """自然语言检索任务：消息成功后按 auto_execute 创建 LOG_SEARCH。
-
-    预期内识别失败时消息同样收敛 SUCCESS（output_data 携带结构化 error 协议），
-    无 condition 不续链；续链消息先持久化为 PROCESSING，再由独立任务执行并收敛终态。
-    创建失败不回滚自然语言消息，业务执行失败保留可见、可重试的 FAILED 子消息。
-    """
-
-    abstract = True
-
-    def _finish_success(self, *, execution: MessageExecution, task_id: str, output_data: NLSearchOutputSchema) -> dict:
-        result = super()._finish_success(execution=execution, task_id=task_id, output_data=output_data)
-        try:
-            self._create_auto_log_search(execution=execution, output_data=output_data)
-        except Exception:
-            # 续链失败不回滚自然语言消息终态（识别成功保留 condition，子消息不创建）
-            logger.exception(
-                "[NLSearchExecutionTask] auto log search failed, message_id=%s, task_id=%s",
-                execution.message.id,
-                task_id,
-            )
-        _dispatch_title_generation(execution=execution, log_prefix="[NLSearchExecutionTask]")
-        return result
-
-    @staticmethod
-    def _create_auto_log_search(*, execution: MessageExecution, output_data: NLSearchOutputSchema) -> None:
-        """以自然语言消息为父消息创建独立执行的日志检索消息。"""
-
-        message = execution.message
-        if not execution.input_data.auto_execute:
-            return
-        if output_data.condition is None:
-            # 识别失败（结构化 error 协议）无检索条件，不续链
-            return
-        _create_log_search_with_fallback(
-            execution=execution,
-            condition=output_data.condition,
-            log_prefix="[NLSearchExecutionTask]",
-        )
-        logger.info(
-            "[NLSearchExecutionTask] auto log search created, parent_message_id=%s",
-            message.id,
-        )
 
 
 @celery_app.task(bind=True, base=MessageExecutionTask)
@@ -273,7 +143,7 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
     """用一次通用 Agent 调用解析一至两条完整业务消息，落库交给成功收尾事务。"""
 
     context_data = execution.context_data
-    candidates = IntentRecognitionService.load_candidates(
+    candidates = MessagePlanningService.load_candidates(
         context_data.namespace,
         context_data.username,
         scope_type=context_data.scope_type,
@@ -525,74 +395,6 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
         validated=validated,
         agent_trace=success_trace,
     )
-
-
-@celery_app.task(bind=True, base=NLSearchExecutionTask)
-def execute_natural_language_search(self, execution: MessageExecution) -> NLSearchOutputSchema:  # noqa: N805
-    """识别自然语言并产出受控检索条件（薄代理：调用 query 模块 NL2JSON 服务）。
-
-    解析失败（AI 返回内容不合格，具随机性）任务内自动重试：受次数上限与
-    总时长上限双约束，任一超限即结束并冒泡收敛 FAILED（手动重试重新获得预算）。
-    暂态故障（AIDev 超时 / 服务异常）直接冒泡：平台收敛为 FAILED，
-    用户可通过消息重试接口重跑（重试可恢复的故障必须保留 FAILED 语义）。
-    确定性识别失败（未识别 / 输出非法 / 权限拒绝）不抛出：消息收敛 SUCCESS
-    并携带结构化 error 协议供前端展示（重试同输入仍会失败，引导调整问法）；
-    其余非预期异常继续冒泡，由平台收敛为 FAILED。
-    """
-
-    context_data = execution.context_data
-    deadline = time.monotonic() + NL_PARSE_RETRY_TIMEOUT_SECONDS
-    try:
-        for attempt in range(NL_PARSE_MAX_RETRIES + 1):
-            try:
-                condition = NL2JSONService.convert(
-                    query_text=execution.input_data.query_text,
-                    selection=context_data.system_selection,
-                    scope_id=context_data.scope_id,
-                    username=context_data.username,
-                )
-            except AIOutputParseFailedError:
-                # 解析失败具随机性：预算内自动重试；超次数或超时长（含 sleep 后即超
-                # 预算的前置检查——防失败 + 等待后仍发起突破预算的下一轮）即结束并冒泡 FAILED
-                if (
-                    attempt >= NL_PARSE_MAX_RETRIES
-                    or time.monotonic() >= deadline
-                    or time.monotonic() + NL_PARSE_RETRY_INTERVAL_SECONDS >= deadline
-                ):
-                    logger.error(
-                        "[execute_natural_language_search] nl2json parse retry budget exhausted, "
-                        "message_id=%s, attempt=%s",
-                        execution.message.id,
-                        attempt + 1,
-                    )
-                    raise
-                logger.warning(
-                    "[execute_natural_language_search] nl2json parse failed, retrying, " "message_id=%s, attempt=%s",
-                    execution.message.id,
-                    attempt + 1,
-                )
-                time.sleep(NL_PARSE_RETRY_INTERVAL_SECONDS)
-            else:
-                break
-    except (AITimeoutError, AIServiceError, AIOutputParseFailedError):
-        # 暂态基础设施故障 + 超预算解析失败：冒泡收敛 FAILED 保留重试接口可用性，
-        # 不与确定性识别失败（SUCCESS + error 协议）混同恢复语义
-        logger.exception(
-            "[execute_natural_language_search] nl2json transient failure, message_id=%s",
-            execution.message.id,
-        )
-        raise
-    except AIAssistantError as error:
-        # 确定性业务失败：query 侧业务异常自带稳定 error_code 与脱敏 message
-        logger.warning(
-            "[execute_natural_language_search] nl2json recognized failure, message_id=%s, error_code=%s",
-            execution.message.id,
-            error.error_code,
-        )
-        return NLSearchOutputSchema(
-            error=NLSearchErrorSchema(error_code=error.error_code, error_message=error.message),
-        )
-    return NLSearchOutputSchema(condition=condition)
 
 
 @periodic_task(run_every=crontab(hour="*/1"))

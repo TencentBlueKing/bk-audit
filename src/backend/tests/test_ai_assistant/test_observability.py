@@ -70,7 +70,7 @@ class ObservabilityTest(SimpleTestCase):
         report_execution_finished(
             ExecutionMetricSnapshot(
                 object_type="MESSAGE",
-                business_type="NATURAL_LANGUAGE_SEARCH",
+                business_type="USER_INTENT",
                 execution_mode="ASYNC",
                 is_stream=False,
                 status="SUCCESS",
@@ -96,7 +96,7 @@ class ObservabilityTest(SimpleTestCase):
             metric_cls.call_args.kwargs["dimension"],
             {
                 "object_type": "MESSAGE",
-                "business_type": "NATURAL_LANGUAGE_SEARCH",
+                "business_type": "USER_INTENT",
                 "execution_mode": "ASYNC",
                 "is_stream": "false",
                 "stage": "terminal",
@@ -134,7 +134,7 @@ class ObservabilityTest(SimpleTestCase):
         report_execution_finished(
             ExecutionMetricSnapshot(
                 object_type="MESSAGE",
-                business_type="NATURAL_LANGUAGE_SEARCH",
+                business_type="USER_INTENT",
                 execution_mode="ASYNC",
                 is_stream=False,
                 status="FAILED",
@@ -155,7 +155,7 @@ class ObservabilityTest(SimpleTestCase):
         snapshots = [
             ExecutionMetricSnapshot(
                 object_type="MESSAGE",
-                business_type="NATURAL_LANGUAGE_SEARCH",
+                business_type="USER_INTENT",
                 execution_mode="ASYNC",
                 is_stream=False,
                 status="FAILED",
@@ -275,7 +275,7 @@ class ObservabilityTest(SimpleTestCase):
         report_execution_finished(
             ExecutionMetricSnapshot(
                 object_type="MESSAGE",
-                business_type="NATURAL_LANGUAGE_SEARCH",
+                business_type="USER_INTENT",
                 execution_mode="ASYNC",
                 is_stream=False,
                 status="SUCCESS",
@@ -290,7 +290,7 @@ class ObservabilityTest(SimpleTestCase):
             [
                 ProcessingMetricRecord(
                     object_type="MESSAGE",
-                    business_type="NATURAL_LANGUAGE_SEARCH",
+                    business_type="USER_INTENT",
                     age_bucket="HEALTHY",
                     processing_count=1,
                     warning_count=0,

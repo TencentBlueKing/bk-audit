@@ -21,14 +21,11 @@ from unittest import mock
 from api.constants import AIAgentCode
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.models import Conversation, Message
-from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.services.message import MessageService
-from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.services.title_agent import (
     TitleAgentService,
     build_condition_title_input,
 )
-from services.web.ai_assistant.tasks.audit_search import execute_natural_language_search
 from services.web.ai_assistant.tasks.conversation import generate_conversation_title
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
@@ -371,73 +368,6 @@ class GenerateConversationTitleTaskTest(AIAssistantPlatformTestCase):
         mock_generate.assert_not_called()
 
 
-class NLTitleDispatchTest(AIAssistantPlatformTestCase):
-    """NL 消息成功后触发标题任务派发（不阻塞消息终态）"""
-
-    def _create_processing_nl(self):
-        selection = self.create_selection_message()
-        nl_message = self.create_nl_message(
-            query_text="查一下张三和王五最近三天的登录失败记录",
-            auto_execute=False,
-            parent=selection,
-            status=ExecutionStatus.PROCESSING,
-        )
-        from services.web.ai_assistant.handlers import message_handler_registry
-
-        nl_handler = message_handler_registry.require(MessageType.NATURAL_LANGUAGE_SEARCH)
-        execution = MessageExecution(
-            message=nl_message,
-            input_data=parse_snapshot(nl_handler.input_model, nl_message.input_data, field_name="input_data"),
-            context_data=parse_snapshot(nl_handler.context_model, nl_message.context_data, field_name="context_data"),
-        )
-        return nl_message, execution
-
-    def test_nl_finish_success_dispatches_title(self):
-        """NL 成功收敛后派发标题任务（携带会话 ID 与 query_text）"""
-
-        nl_message, execution = self._create_processing_nl()
-
-        with mock.patch(
-            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
-            return_value=make_condition(),
-        ), mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
-            execute_natural_language_search._finish_success(
-                execution=execution,
-                task_id="task-1",
-                output_data=execute_natural_language_search.run(execution),
-            )
-
-        mock_delay.assert_called_once_with(
-            conversation_id=self.conversation.id,
-            query_text="查一下张三和王五最近三天的登录失败记录",
-            source_message_id=nl_message.id,
-            source_message_task_id=nl_message.task_id,
-        )
-
-    def test_dispatch_failure_does_not_break_finish(self):
-        """标题任务派发异常不影响消息终态（静默吞掉）"""
-
-        nl_message, execution = self._create_processing_nl()
-
-        with mock.patch(
-            "services.web.ai_assistant.tasks.audit_search.NL2JSONService.convert",
-            return_value=make_condition(),
-        ), mock.patch(
-            "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay",
-            side_effect=RuntimeError("broker down"),
-        ):
-            result = execute_natural_language_search._finish_success(
-                execution=execution,
-                task_id="task-1",
-                output_data=execute_natural_language_search.run(execution),
-            )
-
-        # 消息仍正常收敛
-        nl_message.refresh_from_db()
-        self.assertEqual(nl_message.status, ExecutionStatus.SUCCESS)
-        self.assertTrue(result)
-
-
 class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
     """条件检索消息创建成功后触发标题任务派发（与 NL 链路对齐；不阻塞消息创建）"""
 
@@ -471,20 +401,13 @@ class FieldConditionTitleDispatchTest(AIAssistantPlatformTestCase):
         self.assertIn("操作人 等于 admin", dispatched_text)
 
     def test_nl_chained_log_search_not_dispatched(self):
-        """NL 续链子消息（source=natural_language）：标题由父 NL 消息链路派发，此处不重复"""
+        """用户意图续链的检索消息不重复派发标题。"""
 
         selection = self.create_selection_message()
         nl_message = self.create_nl_message(query_text="查一下 admin 的日志", parent=selection)
-        with mock.patch(
-            "services.web.ai_assistant.handlers.audit_search.LogSearchService.search",
-            return_value=make_log_search_output(),
-        ), mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
-            MessageService(user=self.user).create(
-                conversation=self.conversation,
-                message_type=MessageType.LOG_SEARCH,
-                input_data={"condition": make_condition().model_dump(mode="json")},
-                parent_message_uid=str(nl_message.uid),
-            )
+        message = self.create_log_search_message(parent=nl_message, source="natural_language")
+        with mock.patch("services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay") as mock_delay:
+            MessageService(user=self.user)._maybe_dispatch_field_condition_title(message)
 
         mock_delay.assert_not_called()
 

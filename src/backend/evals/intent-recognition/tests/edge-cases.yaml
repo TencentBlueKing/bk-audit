@@ -35,6 +35,22 @@
   vars:
     query: '麻烦帮我在示例流水线系统上面查一下eval_user_alpha和eval_user_beta最近三天操作id为456和789并且结果是失败的日志'
     current_system_id: 'eval_config_system'
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: include
+        filters: ["eval_user_alpha", "eval_user_beta"]
+      - raw_name: action_id
+        keys: []
+        operator: include
+        filters: ["456", "789"]
+      - raw_name: result_code
+        keys: []
+        field_type: int
+        operator: include
+        filters: [-1]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.includes("eval_user_alpha") && c.filters.includes("eval_user_beta")) && d.condition.conditions.some(c => c.field.raw_name === "action_id" && c.operator === "include" && c.filters.map(String).includes("456") && c.filters.map(String).includes("789")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.map(String).includes("-1"))'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+    - type: javascript
+      value: file://assertions/exact_conditions.js

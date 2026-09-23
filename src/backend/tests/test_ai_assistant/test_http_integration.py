@@ -24,6 +24,7 @@ from services.web.ai_assistant.views import (
     ConversationsViewSet,
     MessagesViewSet,
 )
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.celery_integration import running_celery_worker
 from tests.test_ai_assistant.http_integration import (
     iter_http_sse_frames,
@@ -167,7 +168,8 @@ class HttpIntegrationTest(LiveServerTestCase):
             attachment_uids=Attachment.objects.filter(is_stream=True).values_list("uid", flat=True)
         )
         self.session.close()
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
         reset_http_stream_events()
         if leftovers:
@@ -196,7 +198,7 @@ class HttpIntegrationTest(LiveServerTestCase):
                 self.api_url("/messages/"),
                 json={
                     "conversation_uid": conversation_uid,
-                    "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+                    "message_type": MessageType.USER_INTENT,
                     "input_data": {"text": text},
                 },
             )
@@ -212,6 +214,7 @@ class HttpIntegrationTest(LiveServerTestCase):
         return payload["data"]
 
     def create_success_message(self, *, text: str = "query") -> dict:
+        message_handler_registry.unregister(MessageType.USER_INTENT)
         message_handler_registry.register(RealMessageSuccessHandler())
         conversation = self.create_conversation()
         created = self.create_message(conversation_uid=conversation["uid"], text=text)
@@ -258,12 +261,12 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_async_message_creates_and_reaches_success_over_http(self):
         completed = self.create_success_message(text="http-message")
-        self.assertEqual(completed["message_type"], MessageType.NATURAL_LANGUAGE_SEARCH)
+        self.assertEqual(completed["message_type"], MessageType.USER_INTENT)
         self.assertEqual(completed["input_data"], {"text": "http-message"})
 
     def test_async_attachment_creates_and_retries_after_failure_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
         attachment_handler_registry.register(RealAttachmentHttpFailOnceHandler())
 
         created = self.unwrap(
@@ -285,7 +288,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_stream_attachment_emits_business_events_and_terminal_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
         attachment_handler_registry.register(RealAttachmentHttpStreamHandler())
 
         created = self.unwrap(
@@ -319,7 +322,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_last_event_id_filters_consumed_event_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
         attachment_handler_registry.register(RealAttachmentHttpStreamHandler())
         created = self.unwrap(
             self.session.post(
@@ -346,7 +349,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_stream_retry_resets_old_execution_and_rebuilds_snapshot(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
         attachment_handler_registry.register(RealAttachmentHttpStreamRetryHandler())
         created = self.unwrap(
             self.session.post(

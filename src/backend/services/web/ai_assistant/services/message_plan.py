@@ -40,7 +40,7 @@ from services.web.query.ai_assistant.schemas import (
     SearchCondition,
     SystemSelectionOutput,
 )
-from services.web.query.ai_assistant.services.nl2json import NL2JSONService
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +99,7 @@ class MessagePlanExecutionService:
 
         condition = None
         if log_item is not None:
-            condition = NL2JSONService.validate_and_assemble(
+            condition = ConditionAssemblyService.validate_and_assemble(
                 payload=log_item.message_input.condition,
                 selection=SystemSelectionOutput(systems=[candidate_map[target_system_id]]),
                 scope_id=target_system_id,

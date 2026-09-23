@@ -32,9 +32,6 @@ from services.web.ai_assistant.schemas.audit_search import (
     LogSearchContextSchema,
     LogSearchInputSchema,
     LogSearchOutputSchema,
-    NLSearchContextSchema,
-    NLSearchInputSchema,
-    NLSearchOutputSchema,
     SystemSelectionContextSchema,
     SystemSelectionInputSchema,
     SystemSelectionOutputSchema,
@@ -49,7 +46,6 @@ from services.web.ai_assistant.services.operation import (
 )
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
-    execute_natural_language_search,
     execute_system_selection,
     execute_user_intent,
 )
@@ -63,20 +59,14 @@ from services.web.query.ai_assistant.services.log_search import LogSearchService
 
 
 def resolve_session_scope(parent: Message) -> tuple[str, str]:
-    """从父消息（SYSTEM_SELECTION / USER_INTENT / NL）继承 session scope。
+    """从父消息（SYSTEM_SELECTION / USER_INTENT）继承 session scope。
 
     session scope 随消息快照固化在 context_data（重试/编辑复用），
-    NL/LOG_SEARCH 续链必须按此收窄 system_id 过滤——与前端左上角场景过滤器
+    LOG_SEARCH 续链必须按此收窄 system_id 过滤——与前端左上角场景过滤器
     当前选择保持一致，AI 助手是场景内工具不能跨场景路由。
-
-    注意：NL 消息上下文的 scope_id 是目标系统（非 session scope），其 session scope
-    固化在 session_scope_type/session_scope_id 字段——按消息类型取字段，防把目标
-    系统误当 scope_id 读取（会丢失场景范围并回退 system 维度校验）。
     """
 
     context = parent.context_data if isinstance(parent.context_data, dict) else {}
-    if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-        return str(context.get("session_scope_type") or ""), str(context.get("session_scope_id") or "")
     return str(context.get("scope_type") or ""), str(context.get("scope_id") or "")
 
 
@@ -122,10 +112,7 @@ def load_selection_snapshot(message: Message) -> SystemSelectionOutput:
 def extract_selection_system_ids(message: Message) -> set[str]:
     """提取父消息绑定的系统集合（日志检索 scope 校验依据）。"""
 
-    if message.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-        context_data = message.context_data if isinstance(message.context_data, dict) else {}
-        systems = (context_data.get("system_selection") or {}).get("systems") or []
-    elif message.message_type == MessageType.USER_INTENT:
+    if message.message_type == MessageType.USER_INTENT:
         output_data = message.output_data if isinstance(message.output_data, dict) else {}
         system_id = str(output_data.get("system_id") or "")
         return {system_id} if system_id else set()
@@ -267,53 +254,10 @@ class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentCont
         )
 
 
-class NaturalLanguageSearchHandler(
-    MessageTypeHandler[NLSearchInputSchema, NLSearchContextSchema, NLSearchOutputSchema]
-):
-    """自然语言检索消息：异步识别条件；上下文从父系统选择消息复制。"""
-
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
-    execution_mode = ExecutionMode.ASYNC
-    input_model = NLSearchInputSchema
-    context_model = NLSearchContextSchema
-    output_model = NLSearchOutputSchema
-    # 仅成功的自然语言消息支持反馈
-    supports_feedback = True
-    async_task = execute_natural_language_search
-
-    def prepare(
-        self,
-        *,
-        user: str,
-        conversation: Conversation,
-        parent_message: Message | None,
-        input_data: NLSearchInputSchema,
-    ) -> MessagePreparation[NLSearchContextSchema]:
-        parent = resolve_selection_parent(user=user, conversation=conversation, parent_message=parent_message)
-        selection = load_selection_snapshot(parent)
-        system_ids = [system.system_id for system in selection.systems]
-        if not system_ids:
-            raise InvalidMessageSnapshot()
-        # 从父 SELECTION 继承 session scope：LOG_SEARCH 续链按此过滤 system_id，
-        # 防 AI 在 NL 链路绕过 session scope 越权
-        session_scope_type, session_scope_id = resolve_session_scope(parent)
-        return MessagePreparation(
-            parent_message=parent,
-            context_data=NLSearchContextSchema(
-                username=user,
-                namespace=settings.DEFAULT_NAMESPACE,
-                scope_id=system_ids[0],
-                system_selection=selection,
-                session_scope_type=session_scope_type,
-                session_scope_id=session_scope_id,
-            ),
-        )
-
-
 class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContextSchema, LogSearchOutputSchema]):
-    """日志检索消息：父消息为系统选择、自然语言或用户意图消息。
+    """日志检索消息：父消息为系统选择或用户意图消息。
 
-    创建后返回 PROCESSING，由独立任务执行检索；意图识别与自然语言链路不等待结果。
+    创建后返回 PROCESSING，由独立任务执行检索；意图识别不等待检索结果。
     """
 
     message_type = MessageType.LOG_SEARCH
@@ -333,17 +277,12 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
     ) -> MessagePreparation[LogSearchContextSchema]:
         parent = self._resolve_parent(user=user, conversation=conversation, parent_message=parent_message)
         self._validate_scope(parent=parent, condition=input_data.condition)
-        # 从父消息（SYSTEM_SELECTION / NL / USER_INTENT）继承 session scope：
+        # 从父消息（SYSTEM_SELECTION / USER_INTENT）继承 session scope：
         # LogSearchService 按此过滤 system_id（覆盖 condition 维度的 system 校验），
         # 防 AI 助手在检索链路绕过 session scope 越权
         session_scope_type, session_scope_id = resolve_session_scope(parent)
-        # 自然语言来源 = NL 或意图识别消息续链（条件由 AI 识别，非用户手选条件表单）；
-        # field_condition 仅用户直接发起的条件检索（其标题走条件摘要派发）
-        source = (
-            "natural_language"
-            if parent.message_type in (MessageType.NATURAL_LANGUAGE_SEARCH, MessageType.USER_INTENT)
-            else "field_condition"
-        )
+        # 用户意图续链的条件由 AI 识别；field_condition 仅用户直接发起的条件检索
+        source = "natural_language" if parent.message_type == MessageType.USER_INTENT else "field_condition"
         return MessagePreparation(
             parent_message=parent,
             context_data=LogSearchContextSchema(
@@ -380,15 +319,14 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
         return LogSearchOutputSchema.from_query_output(output)
 
     def _resolve_parent(self, *, user: str, conversation: Conversation, parent_message: Message | None) -> Message:
-        """显式父消息须为成功的系统选择、自然语言或用户意图消息；省略时兜底解析最新成功选择。"""
+        """显式父消息须为成功的系统选择或用户意图消息；省略时兜底解析最新成功选择。"""
 
         if parent_message is not None:
             if parent_message.message_type not in (
                 MessageType.SYSTEM_SELECTION,
-                MessageType.NATURAL_LANGUAGE_SEARCH,
                 MessageType.USER_INTENT,
             ):
-                raise InvalidParentMessage(message="日志检索的父消息必须是系统选择、自然语言或用户意图消息")
+                raise InvalidParentMessage(message="日志检索的父消息必须是系统选择或用户意图消息")
             if parent_message.status != ExecutionStatus.SUCCESS:
                 raise InvalidParentMessage(message="父消息必须执行成功")
             return parent_message
@@ -400,11 +338,6 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
 
         if parent.message_type == MessageType.SYSTEM_SELECTION:
             systems = load_selection_snapshot(parent).systems
-        elif parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-            try:
-                systems = NLSearchContextSchema.model_validate(parent.context_data).system_selection.systems
-            except ValidationError as error:
-                raise InvalidMessageSnapshot() from error
         else:
             try:
                 systems = FieldContextService.build_selection(
@@ -430,5 +363,4 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
 
 message_handler_registry.register(SystemSelectionHandler())
 message_handler_registry.register(UserIntentHandler())
-message_handler_registry.register(NaturalLanguageSearchHandler())
 message_handler_registry.register(LogSearchHandler())

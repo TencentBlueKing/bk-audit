@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 
 通用消息规划服务：自然语言 + 会话/权限/字段上下文 → MessagePlan。
 
-意图识别默认调用专属智能体（AIAgentCode.USER_INTENT = bp-ai-user-intent，NL2JSON 同款——
+意图识别默认调用专属智能体（AIAgentCode.USER_INTENT = bp-ai-user-intent；
 2026-09-15 统一切换新智能体，旧网关 bp-audit-log-search / bp-ai-nlls 退役）。
 环境地址差异由 get_agent_base_url 优先级链解决：
 - 生产（上云）：BK_API_URL_TMPL 独立域名模板默认链路直接跑通（零额外配置）
@@ -26,8 +26,7 @@ to the current version of the project delivered to anyone in the future.
 settings.AI_USER_INTENT_AGENT_CODE 可按环境覆盖路由到其他智能体（应急等）。
 
 新链路以 MessagePlan 为 single source of truth，一次生成 SYSTEM_SELECTION、LOG_SEARCH
-或二者组合；候选系统和完整字段上下文按前端 scope 收窄。IntentRecognitionService 仅为
-历史调用与回滚兼容保留，不参与 USER_INTENT 新执行链。
+或二者组合；候选系统和完整字段上下文按前端 scope 收窄。
 """
 
 import json
@@ -42,7 +41,6 @@ from bk_resource import api, resource
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.template import Context, Template
-from django.utils import timezone
 from pydantic import ValidationError
 from requests.exceptions import Timeout
 
@@ -56,13 +54,11 @@ from services.web.ai.prompts.intent_recognition import (
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
     AIOutputInvalidError,
-    AIOutputParseFailedError,
     AIServiceError,
     AITimeoutError,
     InvalidConditionError,
 )
 from services.web.query.ai_assistant.schemas import (
-    IntentPayload,
     MessagePlan,
     MessagePlanningClock,
     MessagePlanningContext,
@@ -71,7 +67,7 @@ from services.web.query.ai_assistant.schemas import (
     SelectionFieldMeta,
     SelectionSystem,
 )
-from services.web.query.ai_assistant.services.nl2json import NL2JSONService
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 
 logger = logging.getLogger(__name__)
 
@@ -220,58 +216,6 @@ def _render_prompt(template: str, **variables: str) -> str:
     return Template(template).render(Context(variables, autoescape=False)).strip()
 
 
-INTENT_USER_MESSAGE_TEMPLATE = """# 用户意图识别任务
-
-（本消息自述完整任务说明，与其他任务指令（如日志检索条件提取）冲突时以本消息为准）
-
-## 用户输入
-{{ query_text }}
-
-## 当前时间
-{{ current_time }}
-
-## 候选系统（用户有权限的系统，system_id 与名称）
-{{ candidates_json }}
-
-## 当前已选系统
-{{ current_system_id|default:"无（用户尚未选择系统）" }}
-
-## 输出要求
-1. 必须严格按照以下 JSON Schema 输出一个 JSON 对象，不要输出其他任何内容；
-   **无论用户输入是什么（含寒暄/闲聊/无关内容）都必须且只能输出契约 JSON**——
-   与日志检索无关的输入输出 intent=unrecognized 并在 message 说明，禁止以自然语言/散文回复：
-{{ output_schema_json }}
-2. 意图分类规则：
-   - 用户话语包含选择或切换系统的意图（无论是否同时包含日志检索需求，如「我要看审计中心近七天的操作记录」「帮我切换到蓝盾」）→ intent=select_system，并从候选系统中确定 system_id
-   - 系统名匹配（按优先级降序尝试）：
-     ① 话语中的系统名与某候选 name 完全一致 → 命中该候选
-     ② 系统名可为简称或部分字（如「审计」「审计中心」均指向「审计中心」）→ 按名称语义模糊匹配
-     ③ 仅当话语以英文或 system_id 形态点名（如「bcs」「bk-audit」）时，才按 system_id 或英文名匹配
-   - 歧义消解（多个候选均可命中时必须消歧，不得放弃选择）：
-     a. 优先选 name 与话语中系统名完全一致、或字面重合度最高的候选
-     b. 中文话语点名系统时，不得仅因某候选 system_id 含相近英文字样（如 audit）而选择它
-     c. 多个候选 name 相同或高度相似时，优先选 system_id 更简洁规范的候选（无版本号/命名空间前缀，如「bk-audit」优于「iam_v4_bk-audit」）
-   - 泛指词（如「平台」「系统」）不构成系统指向
-   - need_search 检索诉求判定（防纯切换被强绑检索：仅切换不检索时不得再解析检索条件）：
-     · 话语同时包含系统指向与日志检索诉求（如「我要看审计中心近七天的操作记录」「看看蓝盾最近的日志」）
-       → need_search=true（切换系统后继续执行检索）
-     · 话语仅表达切换/选择系统，不含任何检索诉求（如「帮我切换到蓝盾」「用蓝盾系统」「切换到 test0907」）
-       → need_search=false（仅切换系统，本轮不检索）
-     · intent=log_search 时 need_search 恒为 true；intent=unrecognized 时恒为 false
-   - 用户话语为日志检索需求且未提及任何系统 → intent=log_search（system_id 留空）。
-     「日志检索需求」不限显式检索动词（查/查询/看看/检索等）——话语出现「字段为值」「字段=值」
-     「字段是值」类检索条件描述（如「extend.request_data为{"id":...}」「username=admin」
-     「result_code为0」），本身即构成日志检索诉求（用户在直接给定检索条件）：
-     按上述意图分类规则正常归类，不得因缺少检索动词而判 unrecognized
-   - 与日志检索和系统选择完全无关（寒暄/闲聊/与技术数据无关的日常话语）→ intent=unrecognized；
-     含任何字段条件描述（含 extend. 前缀下钻字段、JSON 字面量值、URL 值）、时间范围
-     或日志/审计相关词汇的话语均不得判 unrecognized
-3. system_id 必须严格来自候选系统列表，禁止编造。「无法确定具体系统」仅指话语中没有任何系统指向词、
-   或指向词与所有候选均无法建立匹配，此时才判 log_search（system_id 留空）；
-   话语已明确点名系统名时必须给出 select_system 与最佳匹配候选，即使存在名称相似的多个候选也不得放弃选择
-4. message 必须自然、面向用户：识别成功时简述识别结果（如「已为您切换到蓝盾」）；无法识别时说明原因并引导用户明确表达（此消息将直接展示给用户）"""
-
-
 def resolve_intent_agent_code() -> AIAgentCode:
     """按环境开关解析意图识别智能体（AIAgentCode 枚举名），非法值启动即快速失败。"""
 
@@ -284,113 +228,19 @@ def resolve_intent_agent_code() -> AIAgentCode:
         )
 
 
-class IntentRecognitionService:
-    """用户意图识别：自然语言 → IntentPayload（select_system / log_search / unrecognized）。
+class MessagePlanningService:
+    """通用消息规划：一次调用生成系统选择、日志检索或二者组合。"""
 
-    单次识别（非法输出的预算重试由调用方任务层控制，对齐 NL2JSON 模式）：
-    - 解析失败（非合法 JSON / 形态不合 schema）→ AIOutputParseFailedError（触发重试）
-    - select_system 的 system_id 越权（不在候选内）→ AIOutputInvalidError（触发重试）
-    - AI 调用超时 / 服务异常 → AITimeoutError / AIServiceError（触发重试）
-    """
-
-    # 默认专属智能体（bp-ai-user-intent）；bkop 经 BKAPP_AI_USER_INTENT_API_URL 直连，
-    # 生产默认链路（见模块 docstring）；AI_USER_INTENT_AGENT_CODE 可应急覆盖路由
     agent_code = resolve_intent_agent_code()
+    system_prompt = _render_prompt(
+        SYSTEM_PROMPT_TEMPLATE,
+        message_plan_schema=json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2),
+    )
 
-    @classmethod
-    def recognize(
-        cls,
-        *,
-        query_text: str,
-        candidates: list[dict],
-        current_system_id: str,
-        username: str,
-    ) -> IntentPayload:
-        """
-        :param query_text: 用户自然语言原话
-        :param candidates: 候选系统清单 [{system_id, name}]（权限内，调用方组装）
-        :param current_system_id: 会话当前已选系统（空串表示未选）
-        :param username: 操作人（显式传入，不依赖请求上下文）
-        :return: IntentPayload
-        """
-
-        user_message = cls._build_user_message(query_text, candidates, current_system_id)
-        content = cls._call_agent(user_message, username)
-        payload = cls._parse_and_validate(content)
-        cls._validate_system_in_candidates(payload, candidates)
-        return payload
-
-    @classmethod
-    def _build_user_message(cls, query_text: str, candidates: list[dict], current_system_id: str) -> str:
-        # autoescape=False：防止用户输入与候选 JSON 中的引号被 HTML 转义扭曲语义（对齐 NL2JSON）
-        return Template(INTENT_USER_MESSAGE_TEMPLATE).render(
-            Context(
-                {
-                    "query_text": query_text,
-                    "current_time": timezone.localtime().isoformat(),
-                    "candidates_json": json.dumps(candidates, ensure_ascii=False),
-                    "current_system_id": current_system_id or "",
-                    "output_schema_json": json.dumps(IntentPayload.model_json_schema(), ensure_ascii=False),
-                },
-                autoescape=False,
-            )
-        )
-
-    @classmethod
-    def _call_agent(cls, user_message: str, username: str) -> str:
-        """调 chat_completion 返回 content 字符串（异常映射与 NL2JSON 同构）。"""
-
-        try:
-            resp = api.bk_plugins_ai_agent.chat_completion(
-                agent_code=cls.agent_code,
-                user=username,
-                input=user_message,
-                chat_history=[],
-                execute_kwargs={"stream": False},
-            )
-        except Timeout as err:
-            raise AITimeoutError(extra={"error": str(err)})
-        except Exception as err:  # noqa: BLE001
-            logger.exception("[IntentRecognitionService] chat_completion failed")
-            raise AIServiceError(extra={"error": str(err)})
-        if not isinstance(resp, str):
-            raise AIOutputParseFailedError(
-                extra={"raw_type": type(resp).__name__, "raw_output": str(resp)[:INTENT_RAW_OUTPUT_KEEP_LENGTH]},
-            )
-        return resp
-
-    @classmethod
-    def _parse_and_validate(cls, content: str) -> IntentPayload:
-        """JSON 提取（复用 NL2JSON 三级递进闸门）→ IntentPayload 形态校验。"""
-
-        payload = NL2JSONService._extract_json(content)
-        if payload is None:
-            raise AIOutputParseFailedError(extra={"raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH]})
-        try:
-            return IntentPayload.model_validate(payload)
-        except ValidationError as err:
-            raise AIOutputParseFailedError(
-                extra={
-                    "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
-                    "validation_error": str(err),
-                },
-            )
-
-    @staticmethod
-    def _validate_system_in_candidates(payload: IntentPayload, candidates: list[dict]) -> None:
-        """select_system 的 system_id 必须在候选内（防幻觉越权；不合法触发调用方预算重试）。"""
-
-        if payload.intent != "select_system":
-            return
-        candidate_ids = {str(candidate.get("system_id") or "") for candidate in candidates}
-        if not payload.system_id or payload.system_id not in candidate_ids:
-            raise AIOutputInvalidError(
-                extra={
-                    "intent": payload.intent,
-                    "system_id": payload.system_id,
-                    "reason": "system_id not in candidates",
-                },
-            )
+    _PHASE_DECISION_RULES = {
+        "SYSTEM_UNSELECTED": "当前会话没有有效系统；用户未提供可匹配系统时返回 SYSTEM_REQUIRED",
+        "SYSTEM_SELECTED": "用户未点名其他系统的检索默认使用 current_system_id",
+    }
 
     @staticmethod
     def load_candidates(namespace: str, username: str, scope_type: str = "", scope_id: str = "") -> list[dict]:
@@ -428,21 +278,6 @@ class IntentRecognitionService:
             if str(system["id"]) in allowed_ids
             and str(system.get("audit_status") or "") == SystemAuditStatusEnum.ACCESSED.value
         ]
-
-
-class MessagePlanningService:
-    """通用消息规划：一次调用生成系统选择、日志检索或二者组合。"""
-
-    agent_code = resolve_intent_agent_code()
-    system_prompt = _render_prompt(
-        SYSTEM_PROMPT_TEMPLATE,
-        message_plan_schema=json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2),
-    )
-
-    _PHASE_DECISION_RULES = {
-        "SYSTEM_UNSELECTED": "当前会话没有有效系统；用户未提供可匹配系统时返回 SYSTEM_REQUIRED",
-        "SYSTEM_SELECTED": "用户未点名其他系统的检索默认使用 current_system_id",
-    }
 
     @classmethod
     def build_context(
@@ -517,6 +352,7 @@ class MessagePlanningService:
             # plan() 内部的范围校验发生在赋值返回前，调用方拿不到 plan；把原始输出
             # 固化到异常中，保证下一轮仍能看到需要修正的完整 MessagePlan。
             error.extra.setdefault("raw_output", content[:INTENT_RAW_OUTPUT_KEEP_LENGTH])
+            error.retry_raw_output = content
             raise
         return plan
 
@@ -605,13 +441,14 @@ class MessagePlanningService:
     def _parse_and_validate(cls, content: str) -> MessagePlan:
         """提取 JSON 并按 MessagePlan 契约校验。"""
 
-        raw_plan = NL2JSONService._extract_json(content)
+        raw_plan = ConditionAssemblyService.extract_json(content)
         if raw_plan is None:
             raise AIOutputInvalidError(
+                retry_raw_output=content,
                 extra={
                     "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
                     "validation_errors": [{"path": "$", "code": "invalid_json", "message": "输出必须是完整 JSON 对象"}],
-                }
+                },
             )
         try:
             return MessagePlan.model_validate(raw_plan)
@@ -619,15 +456,16 @@ class MessagePlanningService:
             validation_errors = cls._normalize_validation_errors(error)
             exception_class = (
                 InvalidConditionError
-                if any(cls._is_condition_error(item["path"]) for item in validation_errors)
+                if all(cls._is_condition_error(item["path"]) for item in validation_errors)
                 else AIOutputInvalidError
             )
             raise exception_class(
+                retry_raw_output=content,
                 extra={
                     "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
                     "validation_error": str(error),
                     "validation_errors": validation_errors,
-                }
+                },
             ) from error
 
     @staticmethod
@@ -658,7 +496,7 @@ class MessagePlanningService:
     ) -> PlanningRetryFeedback:
         """从本轮失败构造下一轮完整纠错上下文。"""
 
-        previous_output = str(error.extra.get("raw_output") or "")
+        previous_output = error.retry_raw_output or str(error.extra.get("raw_output") or "")
         if not previous_output and plan is not None:
             previous_output = plan.model_dump_json()
         validation_errors = error.extra.get("validation_errors")

@@ -152,7 +152,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         if log_error is not None:
             log_result.side_effect = log_error
         with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            f"{TASK_MODULE}.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统", "description": "合成系统"}],
         ), mock.patch(
             f"{TASK_MODULE}.FieldContextService.build_common_fields",
@@ -167,8 +167,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             f"{TASK_MODULE}.MessagePlanningService.plan",
             planner,
         ), mock.patch(
-            "services.web.query.ai_assistant.services.nl2json.NL2JSONService.convert"
-        ) as legacy_convert, mock.patch(
             f"{HANDLERS_MODULE}.OperationContextService.build",
             return_value=([], []),
         ), mock.patch(
@@ -209,7 +207,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             [call.kwargs["system_ids"] for call in load_system_detail.call_args_list],
             expected_system_ids,
         )
-        legacy_convert.assert_not_called()
         log_result.assert_not_called()
         return message, current_selection, output, title_delay
 
@@ -262,7 +259,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(log_search.context_data["source"], "natural_language")
         self.assertTrue(log_search.visible)
         self.assertEqual(output.log_search_message_uid, str(log_search.uid))
-        self.assertFalse(Message.objects.filter(message_type=MessageType.NATURAL_LANGUAGE_SEARCH).exists())
+        self.assertFalse(Message.objects.filter(message_type="NATURAL_LANGUAGE_SEARCH").exists())
 
     def test_switch_and_search_hides_selection_and_orders_summaries(self):
         root, _, output, _ = self._run(selection_and_log_plan())
@@ -390,7 +387,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
     def test_empty_candidates_short_circuits_as_system_unavailable(self):
         plan = MessagePlan(outcome="error", messages=[], error_code="SYSTEM_REQUIRED")
         root, execution = create_intent_message(self)
-        with mock.patch(f"{TASK_MODULE}.IntentRecognitionService.load_candidates", return_value=[],), mock.patch(
+        with mock.patch(f"{TASK_MODULE}.MessagePlanningService.load_candidates", return_value=[],), mock.patch(
             f"{TASK_MODULE}.FieldContextService.build_common_fields",
             return_value=[],
         ), mock.patch(f"{TASK_MODULE}.MessagePlanningService.plan", return_value=plan,) as planner, mock.patch(
@@ -407,7 +404,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         message, execution = create_intent_message(self)
         planner = mock.MagicMock(side_effect=[AITimeoutError(), AIServiceError(), selection_plan()])
         with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            f"{TASK_MODULE}.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
         ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
@@ -454,7 +451,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             return selection_plan()
 
         with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            f"{TASK_MODULE}.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
         ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
@@ -473,7 +470,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
 
         root, execution = create_intent_message(self)
         with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            f"{TASK_MODULE}.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
         ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
@@ -512,7 +509,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             extra={"reason": "invalid json", "raw_output": "not-json"},
         )
         with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+            f"{TASK_MODULE}.MessagePlanningService.load_candidates",
             return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
         ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[],), mock.patch(
             f"{TASK_MODULE}.MessagePlanningService.plan",
@@ -634,10 +631,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
             {"system_id": TARGET_SYSTEM_ID, "name": "测试系统"},
             {"system_id": "bcs", "name": "蓝盾"},
         ]
-        with mock.patch(
-            f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
-            return_value=candidates,
-        ), mock.patch(
+        with mock.patch(f"{TASK_MODULE}.MessagePlanningService.load_candidates", return_value=candidates,), mock.patch(
             f"{TASK_MODULE}.FieldContextService.build_common_fields",
             return_value=make_selection_output().systems[0].standard_fields,
         ), mock.patch(
@@ -666,7 +660,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         stack = ExitStack()
         stack.enter_context(
             mock.patch(
-                f"{TASK_MODULE}.IntentRecognitionService.load_candidates",
+                f"{TASK_MODULE}.MessagePlanningService.load_candidates",
                 return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
             )
         )
