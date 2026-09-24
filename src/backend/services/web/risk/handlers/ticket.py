@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import datetime
 import json
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
@@ -67,6 +67,19 @@ def _is_condition_hide(constant: dict) -> bool:
     if isinstance(flag, bool):
         return flag
     return isinstance(flag, str) and flag.strip().lower() == "true"
+
+
+def _normalize_sops_constant_value(constant: dict, value: Any) -> Any:
+    """按 BK-SOPS 变量协议转换常量值。
+
+    人员选择器的原生值是逗号分隔字符串；其他结构化值保留历史 JSON 字符串行为。
+    """
+
+    if constant.get("custom_type") == "bk_user_selector" and isinstance(value, list):
+        return ",".join(map(str, value))
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
 
 class RiskFlowBaseHandler:
@@ -626,12 +639,10 @@ class AutoProcess(RiskFlowBaseHandler):
                     continue
                 missing_keys.append(c["key"])
                 continue
-            # 前端保证字段映射和直接输入互斥；字段映射存在时读取风险字段，否则原样传递用户输入。
+            # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
-            # 对值的类型进行转换
-            if isinstance(value, (dict, list)):
-                value = json.dumps(value, ensure_ascii=False)
+            value = _normalize_sops_constant_value(c, value)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
