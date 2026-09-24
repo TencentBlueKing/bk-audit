@@ -4,7 +4,10 @@ from unittest import mock
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError
+from django.test import override_settings
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from api.constants import AIAgentCode
 from core.exceptions import ValidationError as CoreValidationError
 from services.web.ai_assistant.constants import (
     ExecutionStatus,
@@ -91,6 +94,51 @@ class MessageTaskTest(TestCase):
         self.assertIsNotNone(message.started_at)
         self.assertIsNotNone(message.last_activity_at)
         self.assertGreaterEqual(message.last_activity_at, message.started_at)
+        self.assertIsNone(message.finished_at)
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=1)
+    def test_exhausted_agent_rate_limit_writes_message_failure(self):
+        message = self.create_message()
+
+        with mock.patch.object(
+            execute_async_success,
+            "run",
+            side_effect=AgentRateLimited(AIAgentCode.USER_INTENT),
+        ), self.assertRaises(AgentRateLimited):
+            self.invoke(execute_async_success, message=message, retries=1)
+
+        message.refresh_from_db()
+        self.assertEqual(message.status, ExecutionStatus.FAILED)
+        self.assertIsNotNone(message.finished_at)
+
+    @override_settings(
+        AI_AGENT_TASK_MAX_RETRIES=1,
+        AI_AGENT_TASK_RETRY_BASE_SECONDS=1,
+        AI_AGENT_TASK_RETRY_MAX_SECONDS=1,
+        AI_AGENT_TASK_RETRY_JITTER_SECONDS=0,
+        AI_AGENT_TASK_RETRY_DEADLINE_SECONDS=60,
+    )
+    def test_agent_rate_limit_retries_and_keeps_message_processing(self):
+        message = self.create_message()
+        original_touch_processing = Message.touch_processing
+
+        with mock.patch.object(
+            execute_async_success,
+            "run",
+            side_effect=AgentRateLimited(AIAgentCode.USER_INTENT),
+        ), mock.patch.object(
+            Message,
+            "touch_processing",
+            side_effect=original_touch_processing,
+        ) as touch_processing, self.assertRaises(
+            Retry
+        ):
+            self.invoke(execute_async_success, message=message)
+
+        message.refresh_from_db()
+        touch_processing.assert_called_once_with(instance_id=message.id, task_id=message.task_id)
+        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
+        self.assertIsNotNone(message.last_activity_at)
         self.assertIsNone(message.finished_at)
 
     @mock.patch("services.web.ai_assistant.services.message_execution.report_execution_finished")

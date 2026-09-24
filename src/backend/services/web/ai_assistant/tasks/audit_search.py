@@ -32,6 +32,7 @@ from services.web.ai_assistant.services.message_plan import (
 )
 from services.web.ai_assistant.services.operation import OperationContextService
 from services.web.ai_assistant.tasks.message import MessageExecutionTask
+from services.web.common.ai import AIWorkloadQueue
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError,
     AIOutputInvalidError,
@@ -138,7 +139,7 @@ def _planning_error_output(*, error: AIAssistantError, system_context) -> UserIn
     )
 
 
-@celery_app.task(bind=True, base=UserIntentExecutionTask)
+@celery_app.task(bind=True, base=UserIntentExecutionTask, queue=AIWorkloadQueue.DEFAULT)
 def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan:  # noqa: N805
     """用一次通用 Agent 调用解析一至两条完整业务消息，落库交给成功收尾事务。"""
 
