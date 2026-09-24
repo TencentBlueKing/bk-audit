@@ -1,11 +1,22 @@
 # -*- coding: utf-8 -*-
-"""风险侧 AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。"""
+"""AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。
+
+助手会话标题与风险报告标题共用 ai_title；意图识别等 Message Task 仍走 default。
+日志分析 / 统计专属队列不在本分支，合入后再补五类互异断言。
+"""
 
 from pathlib import Path
 
 import yaml
 from django.conf import settings
 
+from services.web.ai_assistant.tasks.audit_search import (
+    execute_log_search,
+    execute_natural_language_search,
+    execute_system_selection,
+    execute_user_intent,
+)
+from services.web.ai_assistant.tasks.conversation import generate_conversation_title
 from services.web.risk.constants import RiskAICeleryQueue
 from services.web.risk.report.renderer import render_template
 from services.web.risk.tasks import (
@@ -22,11 +33,17 @@ PAAS_PROC_TYPE_MAX_LENGTH = 12
 
 
 class TestAICeleryQueueIsolation(TestCase):
-    """校验主分支 AI 队列拆分与限流配置。"""
+    """校验 AI 队列拆分：标题共用，重能力独立，助手 Message Task 仍走 default。"""
 
     def test_title_uses_shared_queue_with_rate_limit(self):
         self.assertEqual(generate_analyse_report_title.queue, RiskAICeleryQueue.TITLE)
         self.assertEqual(generate_analyse_report_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_conversation_title.queue, RiskAICeleryQueue.TITLE)
+        self.assertEqual(generate_conversation_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+        self.assertEqual(generate_conversation_title.queue, generate_analyse_report_title.queue)
+        self.assertEqual(generate_conversation_title.time_limit, settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+        self.assertEqual(generate_conversation_title.time_limit, generate_analyse_report_title.time_limit)
+        self.assertTrue(generate_conversation_title.acks_late)
 
     def test_single_risk_analyse_has_dedicated_queue(self):
         self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)
@@ -46,6 +63,7 @@ class TestAICeleryQueueIsolation(TestCase):
         self.assertEqual(
             {
                 generate_analyse_report_title.queue,
+                generate_conversation_title.queue,
                 render_template.queue,
                 generate_analyse_report.queue,
                 render_risk_report.queue,
@@ -57,6 +75,24 @@ class TestAICeleryQueueIsolation(TestCase):
                 RiskAICeleryQueue.RISK_REPORT,
             },
         )
+
+    def test_message_tasks_stay_off_isolated_ai_queues(self):
+        isolated = {
+            RiskAICeleryQueue.TITLE,
+            RiskAICeleryQueue.SINGLE_ANALYSE,
+            RiskAICeleryQueue.MULTI_ANALYSE,
+            RiskAICeleryQueue.RISK_REPORT,
+        }
+        for task in (
+            execute_system_selection,
+            execute_user_intent,
+            execute_natural_language_search,
+            execute_log_search,
+        ):
+            with self.subTest(task=task.name):
+                queue = getattr(task, "queue", None)
+                self.assertNotIn(queue, isolated)
+                self.assertIn(queue, {None, "celery", "default"})
 
     def test_app_desc_declares_isolated_workers_and_drops_risk_render(self):
         content = APP_DESC.read_text()

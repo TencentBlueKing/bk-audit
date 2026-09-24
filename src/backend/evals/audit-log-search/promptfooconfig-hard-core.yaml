@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# 精准回归配置：只跑历史失败/优化目标 5 用例（A5/S14/S1/S5/S16，镜像于 hard_core.yaml），分钟级快速验证 prompt 调优。
+# 层级：hard-core（5 用例）→ hard（36 易错）→ 全量 promptfooconfig.yaml（81）。
+
+description: '审计 AI 日志检索-精准回归（历史失败与优化目标用例）'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'AIDev-audit-log-search'
+    config:
+      username: '{{env.BKAPP_EVAL_USERNAME}}'
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 30000
+
+evaluateOptions:
+  maxConcurrency: 2
+  repeat: 1
+
+tests:
+  - file://tests/hard_core.yaml

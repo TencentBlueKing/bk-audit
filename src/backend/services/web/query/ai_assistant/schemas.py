@@ -1,0 +1,455 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing
+permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+
+AI 助手日志检索消息协议模型
+
+与《W0 消息业务载荷协议》1:1：
+- condition 与现有 collector_query/search 请求完全同构
+  （field{raw_name, field_type, keys} + filters + 顶层 start_time/end_time），
+  无 namespace / 分页 / 排序（后端注入 / 固化）；
+- Pydantic 只做形态校验（类型/必填/格式），语义校验（字段白名单/操作符）在服务层。
+
+快照样例字典键规则（samples 内）：标准列为 raw_name；拓展列为
+full_key（raw_name 与 keys 以 LOG_FIELD_KEY_JOIN_CHAR 连接），与导出链路一致。
+"""
+
+import re
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from core.sql.constants import FieldType
+from core.utils.time import parse_datetime
+from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
+from services.web.query.utils.search_config import QueryConditionOperator
+
+NO_VALUE_OPERATORS = (
+    QueryConditionOperator.ISNULL.value,
+    QueryConditionOperator.NOTNULL.value,
+)
+
+# 协议 §2.1：时间仅两种格式——ISO8601 带时区（推荐）或 'YYYY-MM-DD HH:mm:ss'（无时区按本地时区）
+ISO8601_TZ_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$")
+NAIVE_DATETIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+
+# ---------------------------------------------------------------------------
+# 统一条件结构（协议 §2）
+# ---------------------------------------------------------------------------
+
+
+class ConditionField(BaseModel):
+    """条件字段（协议 §2.1 field；与 QuerySearchFieldSerializer 同构）"""
+
+    raw_name: str = Field(..., min_length=1)
+    field_type: Optional[str] = None
+    keys: List[str] = Field(default_factory=list)
+
+
+class Condition(BaseModel):
+    """单条检索条件（协议 §2.1；与 QuerySearchConditionSerializer 同构）"""
+
+    field: ConditionField
+    operator: str = Field(..., min_length=1)
+    filters: List[Any] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_filters_shape(self):
+        if self.operator in NO_VALUE_OPERATORS and self.filters:
+            raise ValueError("isnull/notnull operator requires empty filters")
+        if self.operator not in NO_VALUE_OPERATORS and not self.filters:
+            raise ValueError("filters is required")
+        if self.operator == QueryConditionOperator.BETWEEN.value and len(self.filters) != 2:
+            raise ValueError("between operator requires exactly 2 filters")
+        return self
+
+
+class SearchCondition(BaseModel):
+    """
+    统一条件结构（协议 §2）：NL 输出 = LOG_SEARCH 输入。
+
+    与 collector_query/search 请求同构平铺，缺 namespace/分页/排序（后端注入/固化）。
+    model_dump() 输出补 namespace/page/page_size/sort_list 后可直接喂
+    CollectorSearchAllReqSerializer 校验。
+    """
+
+    scope_type: Literal["system"] = "system"
+    scope_id: str = Field(..., min_length=1)
+    start_time: str = Field(..., min_length=1)
+    end_time: str = Field(..., min_length=1)
+    conditions: List[Condition] = Field(default_factory=list)
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        if not (ISO8601_TZ_PATTERN.match(v) or NAIVE_DATETIME_PATTERN.match(v)):
+            raise ValueError("time must be ISO8601 with timezone or 'YYYY-MM-DD HH:mm:ss'")
+        try:
+            parse_datetime(v)
+        except Exception as err:
+            raise ValueError("invalid datetime value") from err
+        return v
+
+
+# ---------------------------------------------------------------------------
+# SYSTEM_SELECTION（协议 §3）
+# ---------------------------------------------------------------------------
+
+
+class SystemSelectionInput(BaseModel):
+    """SYSTEM_SELECTION 输入（协议 §3.1，一期限 1 个系统，结构按集合设计）"""
+
+    system_ids: List[str] = Field(..., min_length=1, max_length=1)
+
+
+class SelectionFieldOption(BaseModel):
+    """枚举字段可选值（与日志检索页 es_query/field_map 返回同构 [{id, name}]）"""
+
+    id: str
+    name: str
+
+
+class SelectionFieldMeta(BaseModel):
+    """字段元数据（协议 §3.2，standard_fields / extension_fields 共用结构）"""
+
+    raw_name: str
+    keys: List[str] = Field(default_factory=list)
+    # 字段值类型（FieldType.value，如 string/integer/long；拓展字段一期恒 string）
+    field_type: Optional[str] = None
+    display_name: str = ""
+    nl_name: str = ""
+    description: str = ""
+    allow_operators: List[str] = Field(default_factory=list)
+    # 原始查询值（如 0/-1，非展示值"成功(0)"），无数据为 None
+    sample_value: Optional[Any] = None
+    # sample_value 的展示映射值（仅枚举字段产出：options 按 id 匹配 name，如 0 → "成功"、-1 → "Other"）；
+    # 供前端渲染（原始值 0/-1 对用户不友好），不注入 AI prompt（防 AI 照抄展示值构造 filters）；
+    # 非枚举字段为 None，历史快照无该字段时同为 None（前端自行回退展示 sample_value）
+    sample_value_display: Optional[str] = None
+    # 枚举字段可选值（如 result_code 的 成功0/其他-1），非枚举字段为 None；前端 options 非空时渲染下拉
+    options: Optional[List[SelectionFieldOption]] = None
+    # 仅拓展字段返回
+    system_id: Optional[str] = None
+
+
+class SelectionSystem(BaseModel):
+    """单系统的字段上下文（协议 §3.2 systems[] 元素）"""
+
+    system_id: str
+    name: str = ""
+    description: str = ""
+    standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
+    extension_fields: List[SelectionFieldMeta] = Field(default_factory=list)
+
+
+class SystemSelectionOutput(BaseModel):
+    """SYSTEM_SELECTION 输出（协议 §3.2）；常见/历史操作由平台层消息协议组装。"""
+
+    systems: List[SelectionSystem] = Field(default_factory=list)
+
+
+class MessagePlanningConversation(BaseModel):
+    """Agent 可见的当前会话状态，字段之间必须保持一致。"""
+
+    username: str = Field(description="当前请求用户身份，仅用于理解请求主体，不作为授权依据")
+    phase: Literal["SYSTEM_UNSELECTED", "SYSTEM_SELECTED"]
+    phase_decision_rule: str = Field(description="当前阶段直接影响下一条消息的决策规则")
+    has_selected_system: bool
+    current_system_id: str = ""
+
+    @model_validator(mode="after")
+    def validate_selection_state(self) -> "MessagePlanningConversation":
+        """拒绝阶段、选择标记和当前系统 ID 相互矛盾的上下文。"""
+
+        selected = bool(self.current_system_id)
+        if self.has_selected_system != selected:
+            raise ValueError("has_selected_system conflicts with current_system_id")
+        expected_phase = "SYSTEM_SELECTED" if selected else "SYSTEM_UNSELECTED"
+        if self.phase != expected_phase:
+            raise ValueError("phase conflicts with current_system_id")
+        return self
+
+
+class MessagePlanningSystemSummary(BaseModel):
+    """Agent 用于选择系统的最小授权候选摘要。"""
+
+    system_id: str = Field(..., min_length=1)
+    name: str = ""
+    description: str = ""
+
+
+class MessagePlanningClock(BaseModel):
+    """Agent 解释自然语言时间所需的确定性时间锚点。"""
+
+    current_time: str
+    timezone: str
+    default_start_time: str
+    current_week_start: str
+    previous_week_start: str
+    previous_week_end: str
+
+
+class MessagePlanningContext(BaseModel):
+    """单次 MessagePlan 决策所需的全部动态上下文。"""
+
+    user_query: str = Field(..., min_length=1)
+    conversation: MessagePlanningConversation
+    authorized_systems: List[MessagePlanningSystemSummary] = Field(default_factory=list)
+    common_standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
+    current_system_detail: Optional[SelectionSystem] = None
+    clock: MessagePlanningClock
+
+    @model_validator(mode="after")
+    def validate_current_system_detail(self) -> "MessagePlanningContext":
+        """当前系统详情必须与会话状态和本轮授权候选完全对应。"""
+
+        if self.current_system_detail is None:
+            if self.conversation.has_selected_system:
+                raise ValueError("selected conversation requires current_system_detail")
+            return self
+        if self.current_system_detail.system_id != self.conversation.current_system_id:
+            raise ValueError("current_system_detail conflicts with current_system_id")
+        authorized_system_ids = {system.system_id for system in self.authorized_systems}
+        if self.conversation.current_system_id not in authorized_system_ids:
+            raise ValueError("current_system_id not in authorized_systems")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# NATURAL_LANGUAGE_SEARCH（协议 §4）
+# ---------------------------------------------------------------------------
+
+
+class NLSearchInput(BaseModel):
+    """NL 输入（协议 §4.1）"""
+
+    query_text: str = Field(..., min_length=1)
+    auto_execute: bool = True
+
+
+class NLSearchOutput(BaseModel):
+    """NL 输出（协议 §4.2，官方稳定键为 condition 单键）"""
+
+    condition: SearchCondition
+
+
+class AIConditionItem(BaseModel):
+    """AI 生成的单条条件（AIDev 返回契约，不进 output_data）"""
+
+    raw_name: str = Field(
+        ...,
+        min_length=1,
+        description="字段名，必须来自字段上下文；拓展数据下钻时 raw_name 固定为 extend_data，不得填写子键名",
+        examples=["username", "extend_data"],
+    )
+    keys: List[str] = Field(
+        default_factory=list,
+        description="下钻子键路径，仅 JSON 容器字段使用；普通字段为空数组，extend_data 多级路径按层拆分",
+        examples=[[], ["_request_url", "scope_id"]],
+    )
+    field_type: FieldType = Field(
+        default=FieldType.STRING,
+        description=("下发给查询执行层的叶子字段类型；上下文中的 object 表示 JSON 容器，不是可输出的查询类型。" "拓展字段类型不明确时结合用户表达与样例判断，缺省使用 string"),
+    )
+    operator: QueryConditionOperator = Field(
+        ...,
+        description="查询执行层支持的全局操作符；标准字段还必须遵循字段上下文中的 allow_operators",
+    )
+    filters: List[Any] = Field(
+        default_factory=list,
+        description="原始查询值列表，形态匹配操作符；值保持原样：JSON 对象字面量整体作为一个字符串" "（内部双引号转义），URL 与特殊字符文本不截断不改写",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_legacy_null_field_type(cls, value):
+        """兼容旧 Agent 显式输出 null；新 Schema 只向模型暴露查询类型枚举。"""
+
+        if isinstance(value, dict) and value.get("field_type") is None:
+            value = dict(value)
+            value.pop("field_type", None)
+        return value
+
+
+class AIConditionPayload(BaseModel):
+    """AIDev 返回的 JSON 契约：条件 + 时间（scope 不生成，取自上下文）。
+
+    作为输出契约的 single source of truth：model_json_schema() 注入 Prompt 约束 AI 输出结构，
+    model_validate 校验输出，同一份模型两用（详见一期设计方案 §5.3）。
+    """
+
+    conditions: List[AIConditionItem] = Field(default_factory=list, description="检索条件列表，无字段条件时为空数组")
+    start_time: Optional[str] = Field(None, description="开始时间，ISO 8601 带时区")
+    end_time: Optional[str] = Field(None, description="结束时间，ISO 8601 带时区")
+
+
+class PlannedSystemSelectionMessage(BaseModel):
+    """Agent 规划的系统选择消息；scope 由服务端注入。"""
+
+    message_type: Literal["SYSTEM_SELECTION"] = Field(description="选择或切换系统")
+    message_input: SystemSelectionInput
+
+
+class PlannedLogSearchInput(BaseModel):
+    """Agent 可写的日志检索输入；检索系统由计划上下文确定。"""
+
+    condition: AIConditionPayload
+
+
+class PlannedLogSearchMessage(BaseModel):
+    """Agent 规划的日志检索消息。"""
+
+    message_type: Literal["LOG_SEARCH"] = Field(description="按结构化条件检索日志")
+    message_input: PlannedLogSearchInput
+
+
+PlannedMessage = Annotated[
+    Union[PlannedSystemSelectionMessage, PlannedLogSearchMessage],
+    Field(discriminator="message_type"),
+]
+
+
+class MessagePlan(BaseModel):
+    """通用消息规划 Agent 的输出契约，一期最多生成系统选择和日志检索两条消息。"""
+
+    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行 messages；error 表示业务意图已完成判断但无法形成可执行计划")
+    messages: List[PlannedMessage] = Field(
+        default_factory=list,
+        max_length=2,
+        description=(
+            "outcome=dispatch 时按执行顺序填写；只允许 [SYSTEM_SELECTION]、[LOG_SEARCH]、"
+            "[SYSTEM_SELECTION, LOG_SEARCH] 三种序列。outcome=error 时必须为空"
+        ),
+    )
+    error_code: Optional[
+        Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE", "INVALID_CONDITION"]
+    ] = Field(
+        default=None,
+        description=(
+            "outcome=error 时必填：UNRECOGNIZED_INTENT 表示输入与系统选择、日志检索无关；"
+            "SYSTEM_REQUIRED 表示检索需要系统，但用户没有提供足够信息且当前没有已选系统；"
+            "SYSTEM_UNAVAILABLE 表示用户明确指向的系统不在当前可选系统中；"
+            "INVALID_CONDITION 表示已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达"
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> "MessagePlan":
+        """校验结果分支和一期允许的消息序列，避免执行层猜测依赖关系。"""
+
+        if self.outcome == "error":
+            if self.messages or not self.error_code:
+                raise ValueError("error outcome requires empty messages and error_code")
+            return self
+        if not self.messages or self.error_code:
+            raise ValueError("dispatch outcome requires messages and no error_code")
+        sequence = tuple(message.message_type for message in self.messages)
+        if sequence not in (
+            ("SYSTEM_SELECTION",),
+            ("LOG_SEARCH",),
+            ("SYSTEM_SELECTION", "LOG_SEARCH"),
+        ):
+            raise ValueError("unsupported message plan sequence")
+        return self
+
+
+class IntentPayload(BaseModel):
+    """用户意图识别 Agent 返回的 JSON 契约（一期两类行为 + 无法识别兜底）。
+
+    single source of truth：model_json_schema() 注入 Prompt 约束输出结构，
+    model_validate 校验输出（详见一期设计方案 v6 §三/§五）。
+    """
+
+    intent: Literal["select_system", "log_search", "unrecognized"] = Field(
+        description="意图分类：选系统（含同时要检索）/ 当前系统日志检索 / 无法识别"
+    )
+    system_id: str = Field(
+        default="",
+        description="select_system 时必填，必须来自候选系统列表；log_search/unrecognized 时留空",
+    )
+    need_search: bool = Field(
+        default=False,
+        description="检索诉求判定：select_system 且话语同时包含日志检索诉求（如「查审计中心近七天的操作记录」）"
+        "为 true（切换系统后继续执行检索）；仅表达切换/选择系统（如「切换到蓝盾」「用蓝盾系统」）为 false"
+        "（仅切换不检索）；log_search 恒为 true，unrecognized 恒为 false",
+    )
+    message: str = Field(
+        default="",
+        description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",
+    )
+
+    @model_validator(mode="after")
+    def validate_intent_fields(self) -> "IntentPayload":
+        """拒绝意图与路由字段互相矛盾的输出，避免下游猜测续链行为。"""
+
+        if self.intent == "select_system":
+            if not self.system_id:
+                raise ValueError("select_system requires system_id")
+            return self
+        if self.intent == "log_search":
+            if self.system_id or not self.need_search:
+                raise ValueError("log_search requires empty system_id and need_search=true")
+            return self
+        if self.system_id or self.need_search:
+            raise ValueError("unrecognized requires empty system_id and need_search=false")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# LOG_SEARCH（协议 §5）
+# ---------------------------------------------------------------------------
+
+
+class LogSearchInput(BaseModel):
+    """LOG_SEARCH 输入（协议 §5.1）"""
+
+    condition: SearchCondition
+
+
+class ResultColumn(BaseModel):
+    """结果列定义（协议 §5.2 columns；首列固定 start_time）"""
+
+    raw_name: str
+    keys: List[str] = Field(default_factory=list)
+    display_name: str = ""
+    description: str = ""
+
+    @property
+    def full_key(self) -> str:
+        """列唯一键（samples 字典键）：标准列 = raw_name，拓展列 = raw_name/key/..."""
+        return LOG_FIELD_KEY_JOIN_CHAR.join([self.raw_name, *self.keys])
+
+
+class QuerySummary(BaseModel):
+    """检索摘要（协议 §5.2 query_summary）"""
+
+    scope_type: str
+    scope_id: str
+    time_range: Dict[str, str]
+    condition_count: int = 0
+    source: Literal["natural_language", "field_condition"] = "field_condition"
+    took_ms: int = 0
+    executed_at: str = ""
+
+
+class LogSearchOutput(BaseModel):
+    """LOG_SEARCH 输出（协议 §5.2，四键：total/columns/samples/query_summary，无 SQL）"""
+
+    total: int = 0
+    columns: List[ResultColumn] = Field(default_factory=list)
+    samples: List[Dict[str, Any]] = Field(default_factory=list)
+    query_summary: QuerySummary

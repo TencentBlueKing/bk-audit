@@ -38,9 +38,11 @@ class LogExportTaskAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
         'alert_sented',
+        "source_type",
+        "source_id",
     ]
-    search_fields = ["created_by", "status"]
-    list_filter = ["status", "is_deleted", "namespace"]
+    search_fields = ["created_by", "status", "source_type", "source_id"]
+    list_filter = ["status", "is_deleted", "namespace", "source_type", "source_id"]
 
     def get_status_display(self, obj):
         return dict(TaskEnum.choices).get(obj.status, obj.status)

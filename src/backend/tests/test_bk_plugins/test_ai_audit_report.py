@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import os
 import sys
 import unittest
 from collections import Counter
@@ -34,7 +35,7 @@ from api.bk_plugins_ai_audit_analyse.default import (
     ChatCompletion as AnalyseChatCompletion,
 )
 from api.bk_plugins_ai_audit_report.default import ChatCompletion
-from api.constants import AIAgentCode
+from api.constants import AIAgentCode, APIProvider
 from api.utils import get_agent_base_url
 from tests.base import TestCase
 
@@ -269,6 +270,93 @@ class TestAIAuditReportAuth(TestCase):
 
         self.assertEqual(headers["X-BKAIDEV-USER"], "xxx")
         self.assertNotIn("user", params)
+
+
+class TestAgentScopedCredentials(TestCase):
+    """per-agent 凭证（新增能力）：BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY 优先于全局链，仅对该 agent 生效"""
+
+    def setUp(self):
+        self.resource = BaseChatCompletion()
+
+    def tearDown(self):
+        # 资源为单例且 agent 状态按线程隔离，测试串行复用同一线程，必须清理
+        self.resource._current_agent_code = None
+
+    @staticmethod
+    def _env_without_bkapp_ai() -> dict:
+        return {k: v for k, v in os.environ.items() if not k.startswith("BKAPP_AI_")}
+
+    def test_per_agent_credential_overrides_global(self):
+        """配置 per-agent 凭证后优先于全局 AI_AGENT_APP_CODE（独立凭证路径，不再依赖全局变量）"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        env = self._env_without_bkapp_ai()
+        env.update(
+            {
+                "BKAPP_AI_RISK_SEARCH_APP_CODE": "risk_search_app",
+                "BKAPP_AI_RISK_SEARCH_SECRET_KEY": "risk_search_secret",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AGENT_SECRET_KEY="global_agent_secret",
+            ):
+                self.assertEqual(self.resource.app_code, "risk_search_app")
+                self.assertEqual(self.resource.secret_key, "risk_search_secret")
+
+    def test_user_intent_credential_uses_hyphenated_app_code(self):
+        """意图识别 per-agent 凭证锚点：bp-ai-user-intent 网关认连字符 bk-audit 应用。
+
+        部署事实（2026-09-15 线上定案）：该网关授权的应用是 PaaS 应用 bk-audit（连字符，
+        BKPAAS_APP_ID），而全局 APP_CODE 为 bk_audit（下划线）——直连网关带全局凭证报
+        400 app not found。部署环境配置 BKAPP_AI_USER_INTENT_APP_CODE=bk-audit 与
+        _SECRET_KEY（PaaS 应用密钥）即修复，仅影响该 agent，不影响其他智能体凭证链。
+        """
+
+        self.resource._current_agent_code = AIAgentCode.USER_INTENT
+        env = self._env_without_bkapp_ai()
+        env.update(
+            {
+                "BKAPP_AI_USER_INTENT_APP_CODE": "bk-audit",
+                "BKAPP_AI_USER_INTENT_SECRET_KEY": "your-secret",
+            }
+        )
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(self.resource.app_code, "bk-audit")
+            self.assertEqual(self.resource.secret_key, "your-secret")
+
+    def test_per_agent_credential_fallback_to_global_chain(self):
+        """未配置 per-agent 凭证时回退原有全局链 AI_AGENT_APP_CODE（历史行为不变）"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AUDIT_REPORT_APP_CODE="report_app",
+            ):
+                self.assertEqual(self.resource.app_code, "global_agent_app")
+
+    def test_agent_without_context_keeps_global_chain(self):
+        """无 agent 上下文的资源（如审计报告/分析）不受 per-agent 机制影响"""
+        self.assertIsNone(self.resource._current_agent_code)
+        with mock.patch.dict(os.environ, self._env_without_bkapp_ai(), clear=True):
+            with override_settings(
+                AI_AGENT_APP_CODE="global_agent_app",
+                AI_AUDIT_REPORT_APP_CODE="report_app",
+            ):
+                self.assertEqual(self.resource.app_code, "global_agent_app")
+
+    def test_build_url_remembers_agent_code(self):
+        """build_url 记录 agent_code 供 per-agent 凭证解析"""
+        url = self.resource.build_url({"agent_code": "bp-ai-aud-rsk-srch"})
+        self.assertEqual(self.resource._current_agent_code, AIAgentCode.RISK_SEARCH)
+        self.assertIn("chat_completion", url)
+
+    @mock.patch("bk_resource.contrib.api.APIResource.perform_request", mock.Mock(return_value="ok"))
+    def test_perform_request_clears_agent_context(self):
+        """请求结束后清理线程内 agent 状态，避免残留影响后续请求"""
+        self.resource._current_agent_code = AIAgentCode.RISK_SEARCH
+        self.assertEqual(self.resource.perform_request({"agent_code": AIAgentCode.RISK_SEARCH}), "ok")
+        self.assertIsNone(self.resource._current_agent_code)
 
 
 class TestAIAuditAnalyseAuth(TestCase):
@@ -1047,6 +1135,41 @@ class TestGetAgentBaseUrl(TestCase):
         ):
             result = get_agent_base_url(AIAgentCode.RISK_SEARCH)
             self.assertEqual(result, "http://direct")
+
+    @mock.patch.dict("os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "https://bp-ai-user-intent.apigw.example.com/prod"})
+    def test_user_intent_api_url_fixes_missing_apigw_route(self):
+        """USER_INTENT 网关路由部署配置锚点（2026-09-14 线上事故修复方式）。
+
+        bp-ai-user-intent 未接入 bkapi 统一域名，部署环境默认解析链生成
+        bkapi.*.com/api/bp-ai-user-intent/prod → 404 API not found，意图链路全量
+        FAILED。修复方式：部署环境配置 BKAPP_AI_USER_INTENT_API_URL 指向该网关的
+        独立域名完整 URL（内网域名不进代码库，经环境变量注入），重启 worker 生效。
+        """
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertEqual(result, "https://bp-ai-user-intent.apigw.example.com/prod")
+
+    @mock.patch.dict(
+        "os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": "my-custom-gw"}
+    )
+    def test_user_intent_env_apigw_name_overrides_gateway(self):
+        """应急口：BKAPP_AI_USER_INTENT_APIGW_NAME 覆盖网关名走统一域名解析"""
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertIn("my-custom-gw", result)
+
+    @mock.patch.dict("os.environ", {"BKAPP_AI_USER_INTENT_API_URL": "", "BKAPP_AI_USER_INTENT_APIGW_NAME": ""})
+    def test_user_intent_default_resolves_unified_apigw(self):
+        """无覆盖时 USER_INTENT 走 get_endpoint 统一解析链（与映射表机制无关的基线行为）。
+
+        部署环境该链路生成 bkapi 统一域名（该网关未接入则 404）——正是事故现场，
+        修复依赖 BKAPP_AI_USER_INTENT_API_URL（见 test_user_intent_api_url_fixes_missing_apigw_route）。
+        """
+
+        from api.utils import get_endpoint
+
+        result = get_agent_base_url(AIAgentCode.USER_INTENT)
+        self.assertEqual(result, get_endpoint(AIAgentCode.USER_INTENT.value, APIProvider.APIGW, stage="prod"))
 
 
 class TestAIAuditReportAPIGWConfig(TestCase):

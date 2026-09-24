@@ -852,7 +852,7 @@ class RiskReportStatus(TextChoices):
 class RiskAICeleryQueue(TextChoices):
     """风险侧 AI 相关 Celery 队列。
 
-    标题共用一条轻量队列；单风险 / 多风险分析各自独立，避免互相抢占。
+    标题共用一条轻量队列（含助手会话标题）；单风险 / 多风险分析各自独立，避免互相抢占。
     预览与报告编排仍走 RISK_REPORT。
     """
 
