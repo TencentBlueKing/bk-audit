@@ -315,6 +315,87 @@ class AutoProcessTest(TicketTest):
         )
 
     @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_auto_process_formats_structured_values_by_sops_custom_type(self):
+        """人员选择器按 SOPS 协议使用逗号字符串，其他结构化值保持历史 JSON 格式。"""
+        template_info = {
+            "pipeline_tree": {
+                "constants": {
+                    "${users}": {
+                        "key": "${users}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${empty_users}": {
+                        "key": "${empty_users}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${user_string}": {
+                        "key": "${user_string}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "bk_user_selector",
+                    },
+                    "${json_list}": {
+                        "key": "${json_list}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "input",
+                    },
+                    "${json_object}": {
+                        "key": "${json_object}",
+                        "source_type": "custom",
+                        "show_type": "show",
+                        "custom_type": "textarea",
+                    },
+                }
+            }
+        }
+        pa_params = {
+            "${users}": {"field": "", "value": ["user1", "user2"]},
+            "${empty_users}": {"field": "", "value": []},
+            "${user_string}": {"field": "", "value": "user1,user2"},
+            "${json_list}": {"field": "", "value": ["item1", "item2"]},
+            "${json_object}": {"field": "", "value": {"key": "value"}},
+        }
+        create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
+        with mock.patch(
+            "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=template_info)
+        ), mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", create_task), RuleContext(
+            pa_info={"need_approve": False}, rule_info={"pa_params": pa_params}
+        ) as (
+            _,
+            rule,
+        ), RiskContext() as risk:
+            risk.rule_id = rule.rule_id
+            risk.rule_version = rule.version
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.save()
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+
+        self.assertEqual(
+            create_task.call_args.kwargs["constants"],
+            {
+                "${users}": "user1,user2",
+                "${empty_users}": "",
+                "${user_string}": "user1,user2",
+                "${json_list}": '["item1", "item2"]',
+                "${json_object}": '{"key": "value"}',
+            },
+        )
+
+    @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
         mock.Mock(return_value={"state": SOPSTaskStatus.FAILED.value}),
     )
