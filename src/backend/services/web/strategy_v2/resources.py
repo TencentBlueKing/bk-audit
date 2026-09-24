@@ -912,15 +912,16 @@ class UpdateStrategy(StrategyV2Base):
         # 不同且在远程更新清单中的字段才触发远程flow更新
         elif origin_value != new_value and key in REMOTE_UPDATE_FIELDS:
             need_update_remote = True
-        logger.info(
-            "[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, "
-            "Need update remote: %s",
-            strategy.strategy_id,
-            key,
-            origin_value,
-            new_value,
-            need_update_remote,
-        )
+        if need_update_remote:
+            logger.info(
+                "[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, "
+                "Need update remote: %s",
+                strategy.strategy_id,
+                key,
+                origin_value,
+                new_value,
+                need_update_remote,
+            )
         return need_update_remote
 
     @transaction.atomic()
