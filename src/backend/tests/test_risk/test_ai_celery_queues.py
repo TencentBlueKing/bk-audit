@@ -92,19 +92,23 @@ class TestAICeleryQueueIsolation(TestCase):
                 self.assertNotIn(queue, isolated)
                 self.assertIn(queue, {None, "celery", "default"})
 
-    def test_app_desc_declares_isolated_workers_and_drops_risk_render(self):
+    def test_app_desc_declares_merged_ai_worker_and_drops_risk_render(self):
+        """合并后所有 AI 队列由单一 audit-ai 进程消费，不再有独立 Worker。"""
         content = APP_DESC.read_text()
-        self.assertIn("-Q ai_title", content)
-        self.assertIn("-Q risk_single_analyse", content)
-        self.assertIn("-Q risk_multi_analyse", content)
-        self.assertIn("-Q risk_report", content)
-        self.assertIn("BKAPP_AI_TITLE_CONCURRENCY", content)
-        self.assertIn("BKAPP_RISK_SINGLE_ANALYSE_CONCURRENCY", content)
-        self.assertIn("BKAPP_RISK_MULTI_ANALYSE_CONCURRENCY", content)
+        # audit-ai 进程存在且监听全部 4 个队列
+        self.assertIn("audit-ai:", content)
+        self.assertIn("ai_title", content)
+        self.assertIn("risk_single_analyse", content)
+        self.assertIn("risk_multi_analyse", content)
+        self.assertIn("risk_report", content)
+        self.assertIn("BKAPP_AUDIT_AI_CONCURRENCY", content)
+        # 旧的独立 Worker 进程已移除
+        self.assertNotIn("risk-single:", content)
+        self.assertNotIn("risk-multi:", content)
+        self.assertNotIn("ai-title:", content)
+        self.assertNotIn("risk-report:", content)
         self.assertNotIn("-Q risk_render", content)
         self.assertNotIn("risk-render:", content)
-        self.assertIn("risk-single:", content)
-        self.assertIn("risk-multi:", content)
 
     def test_app_desc_process_types_fit_paas_length_limit(self):
         desc = yaml.safe_load(APP_DESC.read_text())
