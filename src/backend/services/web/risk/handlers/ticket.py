@@ -46,6 +46,7 @@ from services.web.risk.constants import (
     RiskLabel,
     RiskStatus,
 )
+from services.web.risk.exceptions import AutoProcessParamsError
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
 from services.web.risk.models import (
@@ -58,6 +59,14 @@ from services.web.risk.models import (
 from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
+
+
+def _is_condition_hide(constant: dict) -> bool:
+    """模板用字符串 "true"/"false" 标记条件隐藏，布尔值同样认。"""
+    flag = constant.get("is_condition_hide")
+    if isinstance(flag, bool):
+        return flag
+    return isinstance(flag, str) and flag.strip().lower() == "true"
 
 
 class RiskFlowBaseHandler:
@@ -601,18 +610,33 @@ class AutoProcess(RiskFlowBaseHandler):
         template_info = api.bk_sops.get_template_info(
             template_id=self.process_application.sops_template_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID
         )
-        pa_params = pa_params if pa_params is not None else (self.rule.pa_params if self.rule else pa_params)
+        pa_params = pa_params if pa_params is not None else (self.rule.pa_params if self.rule else {})
+        if not isinstance(pa_params, dict):
+            pa_params = {}
         constants = {}
+        missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
+            # 只覆盖用户入参。节点输出（如 ${_loop}）和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
+            if c.get("source_type") != "custom" or c.get("show_type") != "show":
+                continue
             field = pa_params.get(c["key"])
-            # 如果配置了常量，优先使用，没有常量使用字段映射
-            value = field.get("value") or getattr(self.risk, field.get("field"), "")
+            if not isinstance(field, dict):
+                # 条件字段未渲染时前端不会提交 key，此时保留标准运维模板默认值。
+                if _is_condition_hide(c):
+                    continue
+                missing_keys.append(c["key"])
+                continue
+            # 前端保证字段映射和直接输入互斥；字段映射存在时读取风险字段，否则原样传递用户输入。
+            field_name = field.get("field")
+            value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
             # 对值的类型进行转换
             if isinstance(value, (dict, list)):
                 value = json.dumps(value, ensure_ascii=False)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
+        if missing_keys:
+            raise AutoProcessParamsError(keys=",".join(missing_keys))
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",
             "constants": constants,
