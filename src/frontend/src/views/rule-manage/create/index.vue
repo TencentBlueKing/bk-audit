@@ -215,8 +215,8 @@
           </bk-form-item>
           <bk-loading :loading="detailLoading">
             <bk-form-item
-              v-if=" Object.keys(paramsDetailData)?.length"
-              class="is-required mr16"
+              v-if="hasUserInputParams"
+              class="mr16"
               :label="t('套餐参数')"
               property="pa_params">
               <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
@@ -225,14 +225,10 @@
                   :key="`${val.key}-${index}`">
                   <!-- 只显示需要显示的字段 -->
                   <bk-form-item
-                    v-if="val.show_type === 'show' && !val.is_hide"
+                    v-if="isUserInput(val) && !val.is_hide"
                     :label="val.name"
                     :label-width="150"
                     :property="`pa_params.${val.key}`"
-                    required
-                    :rules="[
-                      { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
-                    ]"
                     style="margin-bottom: 16px;">
                     <application-parameter
                       ref="applicationParameterRef"
@@ -297,7 +293,7 @@
       <template #action>
         <bk-button
           class="w88"
-          :loading="createLoading || updateLoading"
+          :loading="createLoading || updateLoading || detailLoading"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('保存') : t('提交') }}
@@ -318,7 +314,6 @@
   import _ from 'lodash';
   import {
     computed,
-    nextTick,
     reactive,
     ref,
     watch,
@@ -353,7 +348,8 @@
   } from '@/utils/assist/pa-param-field-ref';
   import {
     buildSubmitPaParams,
-    isPaParamHidden,
+    isUserInput,
+    syncPaParamVisibility,
   } from '@/utils/assist/pa-param-submit';
 
   interface ParamItem {
@@ -401,14 +397,6 @@
         trigger: 'change',
       },
     ],
-    pa_params: [
-      {
-        validator: (value: Record<string, any>) => Object.keys(value).length > 0
-          && Object.values(value).every(item => !!item),
-        message: t('套餐参数不能为空'),
-        trigger: 'change',
-      },
-    ],
   };
 
   const router = useRouter();
@@ -433,8 +421,6 @@
         // eslint-disable-next-line no-param-reassign
         data[key].dropdownShow = false;
         // eslint-disable-next-line no-param-reassign
-        data[key].is_hide = false;
-        // eslint-disable-next-line no-param-reassign
         data[key].default_value = param?.value ?? [];
         if (param?.field) {
           formData.value.pa_params[key] = {
@@ -450,8 +436,6 @@
       data[key].type = hasFieldRef ? 'field' : 'self';
       // eslint-disable-next-line no-param-reassign
       data[key].dropdownShow = false;
-      // eslint-disable-next-line no-param-reassign
-      data[key].is_hide = false;
       // eslint-disable-next-line no-param-reassign
       data[key].default_value = hasFieldRef ? fieldRefId : (param?.value ?? '');
       if (hasFieldRef) {
@@ -598,6 +582,7 @@
     }, {} as Record<string, ParamItem>);
   };
   const paramsDetailData = ref<Record<string, ParamItem>>({});
+  const hasUserInputParams = computed(() => Object.values(paramsDetailData.value).some(isUserInput));
 
   const {
     run: fetchDetail,
@@ -605,6 +590,9 @@
   } = useRequest(SoapManageService.fetchDetail, {
     defaultValue: {},
     onSuccess(data) {
+      if (!formData.value.pa_id) {
+        return;
+      }
       // 给对象中的每一项添加 type: 'self',
       Object.keys(data).forEach((key) => {
         // eslint-disable-next-line no-param-reassign
@@ -622,12 +610,6 @@
         paramsDetailData.value = data;
 
         formData.value.pa_params = {};
-        Object.values(data).forEach((val) => {
-          formData.value.pa_params[val.key] = {
-            field: '',
-            value: '', // 添加填写字段
-          };
-        });
       }
       if (isEditMode || isCloneMode) {
         formData.value.scope.forEach(({ field }:{field: string}) => {
@@ -663,6 +645,7 @@
         //   }
         // });
       }
+      syncPaParamVisibility(formData.value.pa_params, Object.values(data));
     },
   });
   //  获取风险可用字段（本项目 useRequest：manual: true 表示挂载时自动请求）
@@ -733,6 +716,8 @@
   const handlePaIdChange = (id: string) => {
     if (id) {
       isPaIdChange.value = true;
+      paramsDetailData.value = {};
+      formData.value.pa_params = {};
       const sopsTemplateId = processApplicationList.value
         .find(item => item.id === id)?.sops_template_id;
       fetchDetail({
@@ -758,16 +743,10 @@
     formData.value.scope.push(item);
   };
   const handleValidate = (value: any) => value.length > 0;
-  const handlePaValidate = (value: {field: string, value: string}) => {
-    if (!value || typeof value !== 'object') return false;
-    const { field, value: val } = value;
-    // 检查field和value是否都为空（包括undefined、null、空字符串、）
-    const isFieldEmpty = field === undefined || field === null || field === '';
-    const isValueEmpty = val === undefined || val === null || val === '' ;
-    // 只有当field和value都为空时才返回false，否则返回true
-    return !(isFieldEmpty && isValueEmpty);
-  };
   const handleSubmit = () => {
+    if (detailLoading.value) {
+      return;
+    }
     formRef.value.validate().then(() => {
       const payload = {
         ...formData.value,
@@ -788,25 +767,8 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
   watch(
-    () => formData.value, (val) => {
-      nextTick(() => {
-        Object.keys(paramsDetailData.value).forEach((obj) => {
-          if (paramsDetailData.value[obj]?.hide_condition) {
-            const hideCondition = paramsDetailData.value[obj]?.hide_condition;
-            // 添加安全检查，确保hideCondition存在且是数组
-            if (hideCondition && Array.isArray(hideCondition)) {
-              const oldIsHide = paramsDetailData.value[obj].is_hide;
-              paramsDetailData.value[obj].is_hide = isPaParamHidden(hideCondition, val.pa_params);
-              // 当字段从显示变为隐藏时，重置对应的参数值
-              if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
-                formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
-                formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
-              }
-            }
-          }
-        });
-      });
-    },
+    () => formData.value.pa_params,
+    paParams => syncPaParamVisibility(paParams, Object.values(paramsDetailData.value)),
     { deep: true },
   );
 
