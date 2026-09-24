@@ -91,7 +91,11 @@ APPROVE_TICKET_STATUS = {
 
 CUSTOM_AUTO_PROCESS_PARAMS = {"pa_params": {"${operator}": {"field": "operator"}}, "auto_close_risk": False}
 
-SOPS_TEMPLATE_INFO = {"pipeline_tree": {"constants": {"${operator}": {"key": "${operator}"}}}}
+SOPS_TEMPLATE_INFO = {
+    "pipeline_tree": {
+        "constants": {"${operator}": {"key": "${operator}", "source_type": "custom", "show_type": "show"}}
+    }
+}
 
 SOPS_FLOW_STATUS = {
     "state": SOPSTaskStatus.RUNNING.value,
