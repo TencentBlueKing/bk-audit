@@ -351,6 +351,10 @@
   import {
     resolveParamFieldReference,
   } from '@/utils/assist/pa-param-field-ref';
+  import {
+    buildSubmitPaParams,
+    isPaParamHidden,
+  } from '@/utils/assist/pa-param-submit';
 
   interface ParamItem {
     custom_type: string;
@@ -765,10 +769,14 @@
   };
   const handleSubmit = () => {
     formRef.value.validate().then(() => {
+      const payload = {
+        ...formData.value,
+        pa_params: buildSubmitPaParams(formData.value.pa_params, Object.values(paramsDetailData.value)),
+      };
       if (!isEditMode) {
-        create(formData.value);
+        create(payload);
       } else {
-        update(formData.value);
+        update(payload);
       }
     });
   };
@@ -787,25 +795,13 @@
             const hideCondition = paramsDetailData.value[obj]?.hide_condition;
             // 添加安全检查，确保hideCondition存在且是数组
             if (hideCondition && Array.isArray(hideCondition)) {
-              hideCondition.forEach((item: any) => {
-                // 根据操作符进行条件判断
-                const oldIsHide = paramsDetailData.value[obj].is_hide;
-                switch (item.operator) {
-                case '=':
-                  paramsDetailData.value[obj].is_hide = (
-                    item.value.toString() === val.pa_params[item.constant_key].value.toString()
-                  );
-                  break;
-                default:
-                  paramsDetailData.value[obj].is_hide = false;
-                  break;
-                }
-                // 当字段从显示变为隐藏时，重置对应的参数值
-                if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
-                  formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
-                  formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
-                }
-              });
+              const oldIsHide = paramsDetailData.value[obj].is_hide;
+              paramsDetailData.value[obj].is_hide = isPaParamHidden(hideCondition, val.pa_params);
+              // 当字段从显示变为隐藏时，重置对应的参数值
+              if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
+                formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
+                formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
+              }
             }
           }
         });
