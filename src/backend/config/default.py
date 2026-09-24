@@ -27,6 +27,7 @@ from client_throttler.constants import TimeDurationUnit
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
+from api.ai_agent_codes import AIAgentCode
 from core.observability import BKResourceAPIInstrumentor
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
@@ -209,7 +210,12 @@ BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
-# AI 智能体
+# AI 智能体：AIAgentCode.value 为默认 APIGW 网关名，新增 Agent 只需在枚举中加一行。
+# 枚举 name 对应以下自动生效的环境变量：
+#   BKAPP_AI_{name}_API_URL       完整 URL（优先级最高）
+#   BKAPP_AI_{name}_APIGW_NAME    覆盖网关名
+#   BKAPP_AI_{name}_APP_CODE      per-agent 应用凭证，作用域与 URL 路由一致
+#   BKAPP_AI_{name}_SECRET_KEY    per-agent 应用密钥
 # URL 路由由 get_agent_base_url() 根据 AIAgentCode 枚举自动解析，优先级：
 #   1. BKAPP_AI_{AGENT_CODE}_API_URL     — 完整 URL 直接使用
 #   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
@@ -473,6 +479,51 @@ throttler_config = ThrottlerConfig(
     placeholder_offset=int(os.getenv("BKAPP_THROTTLER_PLACEHOLDER_OFFSET", TimeDurationUnit.MINUTE.value)),
 )
 setup(throttler_config)
+# AI Agent 出站请求的跨进程全局限流。Web 与 Celery Worker 共用该 Redis Client，
+# 并以 AIAgentCode 为隔离维度；它是历史 Celery task rate_limit 之外的补充保护。
+AI_AGENT_RATE_LIMIT_REDIS_CLIENT = throttler_config.redis_client
+# 所有 Agent 的默认请求速率，格式与 client_throttler 一致（如 30/m）；空值表示默认关闭。
+AI_AGENT_DEFAULT_RATE_LIMIT = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
+# Client 在单次 HTTP 请求前等待全局配额的最长秒数；启用 rate 时必须严格大于 0。
+AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS = float(
+    os.getenv("BKAPP_AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS", "2")
+)
+# 已迁移 Agent 继续读取原环境变量；未配置时按历史 5/m × 2 Worker 副本折算为全局 10/m，
+# 避免跨实例限流上线后默认吞吐减半。
+_AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS = {
+    AIAgentCode.AUDIT_REPORT: os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "10/m"),
+    AIAgentCode.ALS_TITLE_SUM: os.getenv("BKAPP_AI_TITLE_TASK_RATE_LIMIT", "10/m"),
+    AIAgentCode.AUDIT_ANALYSE: os.getenv("BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT", "10/m"),
+}
+# 每个 Agent 可通过 BKAPP_AI_<枚举名>_RATE_LIMIT 及对应 MAX_WAIT_SECONDS 独立覆盖；
+# 全局默认值非空时优先于上述历史默认值。
+# AUDIT_REPORT 固定 client 默认保留单风险渲染的历史任务级限流；普通 AI 任务按请求显式启用全局限流。
+AI_AGENT_RATE_LIMITS = {
+    code.value: {
+        "rate": os.getenv(
+            f"BKAPP_AI_{code.name}_RATE_LIMIT",
+            AI_AGENT_DEFAULT_RATE_LIMIT or _AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS.get(code, ""),
+        ).strip(),
+        "max_wait_seconds": float(
+            os.getenv(
+                f"BKAPP_AI_{code.name}_RATE_LIMIT_MAX_WAIT_SECONDS",
+                str(AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS),
+            )
+        ),
+    }
+    for code in AIAgentCode
+}
+# 异步任务遇到 AgentRateLimited 后由 Broker 延迟重投，避免 Worker 原地等待或忙循环。
+# 最大重试次数不含首次执行；默认 10 次，耗尽后由具体任务收敛业务终态。
+AI_AGENT_TASK_MAX_RETRIES = int(os.getenv("BKAPP_AI_AGENT_TASK_MAX_RETRIES", "10"))
+# 指数退避的起始秒数，第 N 次重试以 base * 2^N 计算。
+AI_AGENT_TASK_RETRY_BASE_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_BASE_SECONDS", "5"))
+# 单次重试延迟的秒数上限，防止指数退避无限增长。
+AI_AGENT_TASK_RETRY_MAX_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_MAX_SECONDS", "60"))
+# 在退避时间上追加的随机抖动上限（秒），用于降低并发任务同时重试的概率。
+AI_AGENT_TASK_RETRY_JITTER_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_JITTER_SECONDS", "1"))
+# 从首次限流开始计算的总重试时间预算（秒）；下一次投递超出预算时直接结束重试。
+AI_AGENT_TASK_RETRY_DEADLINE_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_DEADLINE_SECONDS", "600"))
 SOPS_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_API_RATE_LIMIT", "10/s")
 SOPS_OPERATE_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_OPERATE_API_RATE_LIMIT", "10/s")
 ITSM_API_RATE_LIMIT = os.getenv("BKAPP_ITSM_API_RATE_LIMIT", "10/s")

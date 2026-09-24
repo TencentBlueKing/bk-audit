@@ -1,56 +1,37 @@
 # app_desc.yaml 进程架构设计
 
-## Worker 分层策略
+## Worker 按 workload 分层
 
-所有 Celery Worker 按任务特征分为两层：
+Celery 队列只描述任务的执行特征、资源占用和 SLA，不与 `AIAgentCode` 或具体业务一一对应。新增 Agent 默认复用现有 workload，不增加 Worker、队列和 MQ 连接。
 
-### 第一层：default Worker（通用任务）
+| Workload | Queue / Worker | 适用任务 |
+|---|---|---|
+| 常规任务 | `celery,default` / `worker` | 字段统计、系统选择、条件检索、风险报告编排等不直接调用 Agent 的任务 |
+| 常规 AI | `ai_default` / `ai-default` | 意图识别、会话/报告标题、用户侧分析报告、AI 变量预览等 Agent 调用 |
+| 单风险报告（兼容） | `risk_single_analyse` / `risk-single` | 策略自动触发、量大的单风险报告模板渲染；保留历史队列和任务级限流 |
 
-- **进程名**：\`worker\`
-- **Queue**：\`celery,default\`
-- **并发模型**：gevent, 128 并发
-- **适用任务**：
-  - 纯 CPU/IO 的短平快任务（如字段统计 \`generate_field_statistics\`）
-  - 调用 AI 但耗时短（<30s）的任务（如意图识别、NL2JSON）
-  - 新接入的常规异步任务默认投递到此 Worker，无需单独建队列
+`ai-default` 只消费 `ai_default`，通过 `BKAPP_AI_DEFAULT_CONCURRENCY` 调整并发。`risk-single` 只消费兼容队列 `risk_single_analyse`，通过 `BKAPP_RISK_SINGLE_ANALYSE_CONCURRENCY` 调整并发，避免常规 AI 的积压影响高吞吐历史链路。
 
-### 第二层：audit-ai Worker（AI 专用）
+## Agent 配额与队列解耦
 
-- **进程名**：\`audit-ai\`
-- **Queue**：\`ai_title,risk_single_analyse,risk_multi_analyse,risk_report,ai_assistant_log_analysis,ai_assistant_statistics\`
-- **并发模型**：gevent, 128 并发（环境变量 \`BKAPP_AUDIT_AI_CONCURRENCY\` 可调）
-- **关键参数**：\`--prefetch-multiplier=1\`（避免长任务预取堆积）
-- **适用任务**：
-  - 调用 LLM 的长任务（流式输出、分钟级耗时）
-  - 风险分析（单条/批量）、风险报告生成、AI 标题生成
-  - 日志分析、统计分析等 AI 能力
+Agent 总配额由公共出站 client 的 Redis 全局限流器按 `AIAgentCode` 控制，跨 Web、Celery、进程和 Pod 共用。`AUDIT_REPORT` 固定 client 默认保留 `risk_single_analyse` 的 Celery `rate_limit`；普通 AI 任务会按请求显式接入全局限流器。
 
-## 设计决策
+标题生成、批量分析和 AI 变量预览在未配置新限流变量时继续读取原任务限流环境变量；完全未配置时，按历史 `5/m × 2` 个 Worker 副本折算为全局 `10/m`。`BKAPP_AI_<AGENT>_RATE_LIMIT` 和全局默认值可显式覆盖。
 
-### 为什么将多个 AI Queue 合并到一个 Worker？
+异步任务遇到限流时由 `AIAgentTask` 进行有 deadline 的延迟 retry；同步请求返回受控 429。限流发生在真实 Agent HTTP 请求之前，因此重试不会重复已发出的调用。
 
-1. **限流天然隔离**：Celery 的 \`rate_limit\` 是按 **task name x worker instance** 独立计算的，不是按 queue 计算。即使所有 AI 任务跑在同一个 Worker 里，各任务的限流互不干扰
-2. **资源利用率**：所有 AI 任务的核心都是"调用 LLM API 等待 IO 返回"，非常适合 gevent 协程复用。拆分多个 Worker 会导致大量协程槽位空闲
-3. **运维简化**：从 6 个 Worker 组（12 实例）缩减为 1 个 Worker 组（2 实例），资源节省 ~70%
+## 新任务接入规则
 
-### 为什么保留多个 Queue 名称？
+1. 新增 Agent 异步任务默认使用 `ai_default`；`risk_single_analyse` 仅保留给历史单风险报告链路。
+2. 调用 Agent 时传入 `agent_code`；固定 Agent client 在类上声明对应 code。
+3. 只有 workload 的隔离需求发生变化时才新增队列或 Worker。
 
-- 保留 queue 名称是为了**部署灵活性**：未来如果某个 AI 能力需要独立扩缩容，只需新增一个 Worker 监听对应 queue 即可，无需修改任何 task 代码
+## 其他 Worker
 
-### 新任务接入规则
-
-| 任务特征 | 投递目标 | 示例 |
-|---------|---------|------|
-| 纯 CPU/IO，不调 AI | \`default\` queue | 字段统计、ES 检索 |
-| 调 AI 但短平快（<30s） | \`default\` queue | 意图识别、NL2JSON |
-| 调 AI 且长任务（流式/分钟级） | 对应 AI queue | 风险分析、日志分析 |
-
-## 其他 Worker 说明
-
-| 进程名 | Queue | 用途 | 备注 |
-|--------|-------|------|------|
-| \`risk-worker\` | - | 风险处理（supervisord 管理） | 独立进程，非 Celery |
-| \`notice\` | \`notice\` | 通知发送 | 低频，1 副本 |
-| \`beat\` | - | 定时任务调度 | 单副本 |
-| \`gen-risk\` | - | 风险生成 | 独立命令 |
-| \`log-export\` | \`log_export\` | 日志导出 | 低频，1 副本 |
+| 进程名 | Queue | 用途 |
+|---|---|---|
+| `risk-worker` | supervisor 管理 | 风险处理 |
+| `notice` | `notice` | 通知发送 |
+| `beat` | 无 | 定时任务调度 |
+| `gen-risk` | 无 | 风险生成 |
+| `log-export` | `log_export` | 日志导出 |

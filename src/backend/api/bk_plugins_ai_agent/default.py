@@ -20,6 +20,7 @@ import abc
 import json
 import os
 import threading
+import time
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -33,6 +34,7 @@ from api.bk_plugins_ai_agent.constants import (
     AI_STREAM_PREVIEW_LIMIT,
     AI_THINKING_PLACEHOLDERS,
 )
+from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
 
@@ -126,6 +128,16 @@ class ChatCompletion(AIAgentBase):
     name = gettext_lazy("通用智能体对话")
     method = "POST"
     action = "/bk_plugin/openapi/agent/chat_completion/"
+    agent_code: AIAgentCode | None = None
+    enable_agent_rate_limit = True
+
+    def _resolve_agent_code(self, validated_request_data: dict) -> AIAgentCode:
+        """解析通用参数或固定 Client 声明的 Agent Code。"""
+
+        agent_code = self.agent_code or validated_request_data.get("agent_code")
+        if not agent_code:
+            raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
+        return AIAgentCode(agent_code)
 
     def build_url(self, validated_request_data):
         agent_code = validated_request_data.pop("agent_code", None)
@@ -139,9 +151,37 @@ class ChatCompletion(AIAgentBase):
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
     def perform_request(self, validated_request_data):
-        # 请求结束后清理线程内 agent 状态，避免残留影响同线程后续请求（如审计报告等无 agent 的资源）
+        """取得全局 Agent 配额后发起 HTTP 请求，并记录无正文的调用维度。"""
+
+        # 单次开关只允许历史固定 Client 接入限流，不能关闭通用 Client 的默认限流。
+        request_rate_limit_opt_in = validated_request_data.pop("_enable_agent_rate_limit", False)
+        enable_agent_rate_limit = self.enable_agent_rate_limit or request_rate_limit_opt_in
+        agent_code = self._resolve_agent_code(validated_request_data)
+        self._current_agent_code = agent_code
         try:
-            return super().perform_request(validated_request_data)
+            if enable_agent_rate_limit:
+                agent_rate_limiter.acquire(agent_code)
+            request_started_at = time.monotonic()
+            try:
+                result = super().perform_request(validated_request_data)
+            except Exception as error:
+                logger.warning(
+                    "AI agent downstream request failed",
+                    extra={
+                        "agent_code": agent_code.value,
+                        "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                        "error_type": error.__class__.__name__,
+                    },
+                )
+                raise
+            logger.info(
+                "AI agent downstream request completed",
+                extra={
+                    "agent_code": agent_code.value,
+                    "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                },
+            )
+            return result
         finally:
             self._current_agent_code = None
 

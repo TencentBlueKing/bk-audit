@@ -44,6 +44,7 @@ from django.template import Context, Template
 from pydantic import ValidationError
 from requests.exceptions import Timeout
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from apps.meta.constants import SystemAuditStatusEnum
 from services.web.ai.prompts.intent_recognition import (
@@ -418,6 +419,8 @@ class MessagePlanningService:
             )
         except Timeout as error:
             raise AITimeoutError(extra={"error": str(error)})
+        except AgentRateLimited:
+            raise
         except Exception as error:  # noqa: BLE001
             logger.exception("[MessagePlanningService] chat_completion failed")
             raise AIServiceError(extra={"error": str(error)})
