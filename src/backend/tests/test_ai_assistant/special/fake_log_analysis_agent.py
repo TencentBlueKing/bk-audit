@@ -75,13 +75,6 @@ class FakeLogAnalysisAgent:
 def _complete_events(markdown: str) -> list[dict[str, Any]]:
     return [
         {"type": "RUN_STARTED", "threadId": "thread-1", "runId": "run-1"},
-        {
-            "type": "TOOL_CALL_START",
-            "toolCallId": "tool-1",
-            "toolCallName": "search_logs",
-            "testPadding": "x" * 600,
-        },
-        {"type": "TOOL_CALL_END", "toolCallId": "tool-1"},
         {"type": "TEXT_MESSAGE_START", "messageId": "message-1", "role": "assistant"},
         {"type": "TEXT_MESSAGE_CONTENT", "messageId": "message-1", "delta": markdown},
         {"type": "TEXT_MESSAGE_END", "messageId": "message-1"},
@@ -119,7 +112,7 @@ def _scenario_events(instruction: str, attempt: int) -> list[dict[str, Any]]:
         return events
     if instruction == "pre-start-text":
         events = _complete_events("# 前导文本结论")
-        return [*events[3:6], events[0], events[-1]]
+        return [*events[1:4], events[0], events[-1]]
     if instruction == "retry-once" and attempt == 1:
         return [
             {"type": "RUN_STARTED", "threadId": "thread-retry", "runId": "run-retry-1"},

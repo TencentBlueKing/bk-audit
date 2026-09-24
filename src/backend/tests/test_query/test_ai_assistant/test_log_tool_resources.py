@@ -612,7 +612,40 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         response_schema = schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/field_metadata/"]["post"][
             "responses"
         ]["200"]["content"]["application/json"]["schema"]
-        validator = jsonschema.Draft7Validator(self._openapi_json_schema(response_schema))
+        validation_schema = self._openapi_json_schema(response_schema)
+        validation_schema["components"] = self._openapi_json_schema(schema["components"])
+        validator = jsonschema.Draft7Validator(validation_schema)
+        errors = list(validator.iter_errors(json.loads(response.content)))
+        self.assertEqual(errors, [], "\n".join(f"{list(error.path)}: {error.message}" for error in errors))
+
+    def test_web_rendered_http_json_validates_against_openapi_response_schema(self):
+        """普通 Web Resource 的 OpenAPI 也应描述平台成功响应信封。"""
+        request = APIRequestFactory().post(
+            "/api/v1/query/namespaces/path-ns/collector_query/field_metadata/",
+            {"condition": self.condition.model_dump(mode="json")},
+            format="json",
+        )
+        force_authenticate(request, user=type("User", (), {"username": "web-user", "is_authenticated": True})())
+        with (
+            mock.patch("query.resources.ai_assistant.get_request_username", return_value="web-user"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.field_metadata.LogFieldMetadataService.get_metadata",
+                return_value=GetLogFieldMetadataResponse(sample_summary=FieldSampleSummary()),
+            ),
+        ):
+            view = resolve("/api/v1/query/namespaces/path-ns/collector_query/field_metadata/").func
+            response = view(request, namespace="path-ns")
+
+        response.render()
+        schema_response = SpectacularAPIView.as_view()(APIRequestFactory().get("/api/schema/"))
+        schema_response.render()
+        schema = yaml.safe_load(schema_response.content)
+        response_schema = schema["paths"]["/api/v1/query/namespaces/{namespace}/collector_query/field_metadata/"][
+            "post"
+        ]["responses"]["200"]["content"]["application/json"]["schema"]
+        validation_schema = self._openapi_json_schema(response_schema)
+        validation_schema["components"] = self._openapi_json_schema(schema["components"])
+        validator = jsonschema.Draft7Validator(validation_schema)
         errors = list(validator.iter_errors(json.loads(response.content)))
         self.assertEqual(errors, [], "\n".join(f"{list(error.path)}: {error.message}" for error in errors))
 

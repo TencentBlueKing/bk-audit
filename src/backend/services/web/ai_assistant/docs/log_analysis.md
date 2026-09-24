@@ -172,11 +172,12 @@ MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
 队列还需监控 RabbitMQ ready/unacked、Worker 在线数和限流饱和。详细边界见
 [`observability.md`](observability.md)。
 
-日志、Metric、Event 和 Trace 禁止记录：分析指令、用户名维度、日志样例、工具响应正文、AG-UI
-事件正文、最终 Markdown、task ID、execution ID 或对象 UID 维度。日志查询工具为便于排查会在
+Metric、Event 和 Trace 禁止记录分析指令、用户名、日志样例、工具响应正文、AG-UI 事件正文或
+最终 Markdown，也不使用 task ID、execution ID 或对象 UID 作为 Metric 维度。应用日志可记录这些
+必要执行标识以串联排障；Agent 上游调用失败时可在受控异常日志中保留错误正文，对外响应仍只返回
+稳定错误码和脱敏文案。日志查询工具为便于排查会在
 `SafeQuerySyncResource` 记录实际提交的 SQL（包含检索条件），但关闭默认 Resource 正文采集且不
-记录查询结果或远端错误正文；部署侧必须按审计日志等级控制该日志的访问和保留。错误对外只返回
-稳定错误码和脱敏文案，原始 Agent 正文不能进入异常日志。
+记录查询结果；部署侧必须按审计日志等级控制诊断日志的访问和保留。
 
 ## 真实组件验证
 

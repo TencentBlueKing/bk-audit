@@ -141,11 +141,11 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
     deadline = time.monotonic() + settings.CELERY_TEST_TASK_TIMEOUT
     try:
         while time.monotonic() < deadline:
-            if any(frame.data.get("type") == "TOOL_CALL_START" for frame in frames if isinstance(frame.data, dict)):
+            if any(frame.data.get("type") == "TEXT_MESSAGE_START" for frame in frames if isinstance(frame.data, dict)):
                 break
             time.sleep(0.05)
         else:
-            raise AssertionError(f"SSE 未在任务完成前收到工具事件: frames={frames}, errors={errors}")
+            raise AssertionError(f"SSE 未在任务完成前收到正文事件: frames={frames}, errors={errors}")
     finally:
         log_analysis_stack.agent.release("success")
     assert done.wait(settings.CELERY_TEST_TASK_TIMEOUT)
@@ -165,7 +165,7 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
     assert agent_request["chat_history"][1]["role"] == "user"
     assert json.loads(agent_request["chat_history"][1]["content"])["instruction"] == "success"
     assert agent_request["execute_kwargs"] == {"stream": True, "thread_id": str(config.execution_id)}
-    assert any(frame.data.get("type") == "TOOL_CALL_START" for frame in frames if isinstance(frame.data, dict))
+    assert any(frame.data.get("type") == "TEXT_MESSAGE_START" for frame in frames if isinstance(frame.data, dict))
     assert frames[-1].event == PlatformStreamEvent.STREAM_END
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
 
@@ -237,14 +237,12 @@ def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instructio
     else:
         assert [event["data"].get("type") for event in completed.stream_archive[:-1]] == [
             "RUN_STARTED",
-            "TOOL_CALL_START",
-            "TOOL_CALL_END",
             "TEXT_MESSAGE_START",
             "TEXT_MESSAGE_CONTENT",
             "TEXT_MESSAGE_END",
         ]
-        assert completed.stream_archive[3]["data"]["role"] == "assistant"
-        assert completed.stream_archive[4]["data"]["delta"] == "# 截断前完整结论"
+        assert completed.stream_archive[1]["data"]["role"] == "assistant"
+        assert completed.stream_archive[2]["data"]["delta"] == "# 截断前完整结论"
         assert [(frame.event, frame.data) for frame in frames] == [
             (event["event"], event["data"]) for event in completed.stream_archive
         ]

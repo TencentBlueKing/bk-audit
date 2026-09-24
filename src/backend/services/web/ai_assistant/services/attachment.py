@@ -365,8 +365,8 @@ class AttachmentService:
         if not attachment.is_stream:
             stream_updates["stream_config"] = {}
         with transaction.atomic():
-            # 会话锁隔离删除竞态；附件本身仍依赖终态 + old task_id CAS 抢占重试。
-            self._lock_active_source(source_message=attachment.source_message)
+            # 重试复用创建时快照；这里只锁定会话，避免来源消息后续编辑使历史附件永久失效。
+            self._lock_active_conversation(source_message=attachment.source_message)
             updated = Attachment.restart_terminal(
                 instance_id=attachment.id,
                 expected_status=expected_status,
@@ -429,6 +429,19 @@ class AttachmentService:
     def _lock_active_source(self, *, source_message: Message) -> None:
         """锁定来源会话并复核消息，避免删除提交后继续创建隐藏附件。"""
 
+        self._lock_active_conversation(source_message=source_message)
+        message_exists = Message.objects.filter(
+            id=source_message.id,
+            conversation_id=source_message.conversation_id,
+            created_by=self.user,
+            status=ExecutionStatus.SUCCESS,
+        ).exists()
+        if not message_exists:
+            raise InvalidAttachmentSource()
+
+    def _lock_active_conversation(self, *, source_message: Message) -> None:
+        """锁定来源会话并复核归属，供快照型附件重试隔离删除竞态。"""
+
         conversation_exists = (
             Conversation.objects.select_for_update()
             .filter(
@@ -438,13 +451,7 @@ class AttachmentService:
             )
             .exists()
         )
-        message_exists = Message.objects.filter(
-            id=source_message.id,
-            conversation_id=source_message.conversation_id,
-            created_by=self.user,
-            status=ExecutionStatus.SUCCESS,
-        ).exists()
-        if not conversation_exists or not message_exists:
+        if not conversation_exists:
             raise InvalidAttachmentSource()
 
     @staticmethod

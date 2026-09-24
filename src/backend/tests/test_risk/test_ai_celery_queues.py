@@ -2,7 +2,7 @@
 """AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。
 
 助手会话标题与风险报告标题共用 ai_title；意图识别等 Message Task 仍走 default。
-日志分析 / 统计继续使用各自专属队列，与标题、单风险、多风险等队列互不抢占。
+日志分析 / AI 统计使用专属队列；程序字段统计属于固定查询，复用 default Worker。
 """
 
 from pathlib import Path
@@ -93,7 +93,7 @@ class TestAICeleryQueueIsolation(TestCase):
     def test_feature_heavy_tasks_keep_dedicated_queues(self):
         self.assertEqual(execute_log_analysis.queue, "ai_assistant_log_analysis")
         self.assertEqual(generate_ai_statistics.queue, "ai_assistant_statistics")
-        self.assertEqual(generate_field_statistics.queue, generate_ai_statistics.queue)
+        self.assertEqual(generate_field_statistics.queue, "default")
         self.assertEqual(
             len(
                 {

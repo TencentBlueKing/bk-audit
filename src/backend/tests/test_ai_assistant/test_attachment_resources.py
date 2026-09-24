@@ -340,8 +340,12 @@ class AttachmentRequestSerializerTest(TestCase):
             "content"
         ]["application/json"]["schema"]
 
-        self.assertEqual(list_response_schema.get("type"), "array")
-        self.assertEqual(list_response_schema.get("items"), {"$ref": "#/components/schemas/AttachmentListItem"})
+        self.assertEqual(
+            set(list_response_schema["required"]), {"result", "code", "data", "message", "request_id", "trace_id"}
+        )
+        list_data_schema = list_response_schema["properties"]["data"]
+        self.assertEqual(list_data_schema.get("type"), "array")
+        self.assertEqual(list_data_schema.get("items"), {"$ref": "#/components/schemas/AttachmentListItem"})
 
         parameters = {
             parameter["name"]: parameter
@@ -350,9 +354,8 @@ class AttachmentRequestSerializerTest(TestCase):
         self.assertEqual(parameters["sort"]["schema"]["type"], "array")
         self.assertEqual(parameters["limit"]["schema"]["type"], "integer")
         conversation_list = schema["paths"]["/api/v1/ai_assistant/conversations/"]["get"]
-        self.assertEqual(
-            conversation_list["responses"]["200"]["content"]["application/json"]["schema"]["type"], "array"
-        )
+        conversation_schema = conversation_list["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual(conversation_schema["properties"]["data"]["type"], "array")
         self.assertTrue(
             {"has_attachments", "attachment_type"}.issubset(
                 {parameter["name"] for parameter in conversation_list["parameters"]}

@@ -1,9 +1,9 @@
 # 审计 AI 日志工具接入
 
-本目录提供日志分析 Agent 使用的三个用户态 MCP 工具。协议事实位于
-`log_tools/schemas.py`，HTTP/OpenAPI 入口位于 `services.web.query.mcp_views`。一期仅由 Agent
-通过用户态 APIGW/MCP 调用；普通 Web 查询不经过这些 MCP Resource。领域 Service 与类型化协议
-保持独立，后续前端程序统计可按场景直接复用，不需要绕行 MCP HTTP 接口。
+本目录提供日志字段探索、详情查询、通用聚合和程序字段统计的领域实现。协议事实位于
+`log_tools/schemas.py`，MCP HTTP/OpenAPI 入口位于 `services.web.query.mcp_views`。日志分析 Agent
+使用三个工具；AI 统计 Agent 使用字段探索和聚合两个工具。普通 Web 的字段目录复用同一个
+Resource、Service 和 DTO，程序字段统计直接复用领域 Service，不绕行 MCP HTTP。
 
 ## 架构与边界
 
@@ -34,10 +34,13 @@ flowchart LR
 | 查询 Service | 构造受控 SQL、执行 Doris 查询、脱敏/聚合、限制响应成本 | 任意 SQL、跨系统查询 |
 | Pydantic Schema | 字段、分页、排序、聚合函数和交叉字段约束 | 代替运行期权限检查 |
 
-## 三个稳定工具
+## MCP 工具集
 
 基础路径为 `/api/v1/query/namespaces/{namespace}/mcp_user/logs/`，`namespace` 只能来自 URL
 path，不能放入请求体。
+
+APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics` 只暴露字段探索和聚合，
+避免统计 Agent 查询日志明细。两套工具共享实现与协议，能力增强不维护兼容分支。
 
 | operationId | 路径 | 用途 | 关键约束 |
 | --- | --- | --- | --- |
@@ -82,13 +85,13 @@ path，不能放入请求体。
 
 ## 统计能力复用边界
 
-日志分析、后续 AI 统计和程序字段统计可以调用相同的用户态聚合服务：业务侧分别生成统计请求，
-查询侧统一完成鉴权、范围注入、SQL 执行和类型化响应，图表及报告协议由上层负责。
+日志分析和 AI 统计通过同一个用户态聚合服务构造显式维度与指标；程序字段统计在其上编排固定语义包。
+查询领域统一完成实时鉴权、范围注入、SQL 执行、类型转换、预算和结果完整性，图表及报告协议由上层负责。
 
-现有 `DorisStatisticSQLBuilder` 返回固定统计套餐（非空、Top5、Top5 时序或数值指标），
-`LogAggregationSQLBuilder` 接收显式维度和指标；两者平级复用 `BaseDorisSQLBuilder`，
-不互相继承，也不在本期重写旧统计接口。公共基类承载字段表达式、过滤、排序和 COUNT；
-固定套餐仍由旧 Builder 编排，后续按具体场景适配聚合服务，并保持旧响应兼容。
+`DorisStatisticSQLBuilder` 为程序统计编排概览、默认 Top10 分布、TopN 时序和可选数值摘要；
+`LogAggregationSQLBuilder` 接收 Agent 的显式维度和指标。两者复用 `BaseDorisSQLBuilder` 的字段表达式、
+过滤、排序和计数能力。分布先全范围选出 TopN，再对同一组值计算趋势，并把剩余非空值合并为 OTHER；
+具体 SQL 阶段、类型处理和完整性约束见 [`log_tools/README.md`](log_tools/README.md)。
 
 ## 动态 JSON 字段路径
 
@@ -121,9 +124,10 @@ PyPika `wrap_constant()` 只保护 SQL 字符串边界，不理解 JSONPath 中�
 - 为便于定位查询问题，`SafeQuerySyncResource` 会记录实际提交的 SQL（包含条件值），部署侧必须
   限制日志访问与保留周期；不得记录原始查询结果、脱敏前字段值、完整工具响应或远端错误正文。
 
-## Web 兼容和错误语义
+## Web 入口和错误语义
 
-三个工具复用 `UserAPIGWViewSet` 的标准响应包：成功数据位于 `data`，参数、权限、字段、超时和
+三个工具复用 `UserAPIGWViewSet` 的标准响应包；普通 Web 字段目录也由公共 OpenAPI 层声明相同
+成功信封。成功数据位于 `data`，参数、权限、字段、超时和
 响应过大等错误使用平台稳定错误响应。调用方可以缩小时间范围、页大小、字段或聚合维度后重试，
 但不得绕过 schema 构造 SQL。OpenAPI 契约由 Pydantic 模型生成，变更时应同步运行：
 

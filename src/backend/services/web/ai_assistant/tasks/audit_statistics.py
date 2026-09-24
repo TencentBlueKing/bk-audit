@@ -36,6 +36,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentSource,
 )
 from services.web.ai_assistant.log_analysis_artifact import LogAnalysisArtifactExtractor
+from services.web.ai_assistant.models import Conversation
 from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_statistics import (
     AIStatisticsAttachmentContext,
@@ -57,6 +58,23 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_statistics_execution_identity(execution: AttachmentExecution, *, username: str) -> None:
+    """校验执行快照所属用户和会话仍有效，不依赖可变的来源消息正文或状态。"""
+
+    attachment = execution.attachment
+    source_message = execution.source_message
+    if (
+        username != attachment.created_by
+        or source_message.created_by != attachment.created_by
+        or not Conversation.objects.filter(
+            id=source_message.conversation_id,
+            created_by=attachment.created_by,
+            is_deleted=False,
+        ).exists()
+    ):
+        raise InvalidAttachmentSource()
 
 
 def is_temporary_statistics_error(error: Exception) -> bool:
@@ -81,31 +99,19 @@ def is_temporary_statistics_error(error: Exception) -> bool:
     bind=True,
     base=AttachmentExecutionTask,
     name="ai_assistant.generate_field_statistics",
-    queue="ai_assistant_statistics",
+    queue="default",
     ignore_result=True,
     acks_late=True,
     max_retries=settings.AI_ASSISTANT_FIELD_STATISTICS_MAX_RETRIES,
     default_retry_delay=settings.AI_ASSISTANT_FIELD_STATISTICS_RETRY_DELAY_SECONDS,
-    rate_limit=settings.AI_ASSISTANT_FIELD_STATISTICS_TASK_RATE_LIMIT,
     time_limit=settings.AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT,
 )
 def generate_field_statistics(self, execution: AttachmentExecution) -> FieldStatisticsAttachmentOutput:  # noqa: N805
-    """复验完整来源和权限后计算固定包；只对临时上游故障作有界自动重试。"""
-    # tasks 冷启动经 services 回到 handlers，来源 helper 必须延迟到注册完成后加载。
-    from services.web.ai_assistant.handlers.log_search_source import (
-        parse_log_search_source,
-    )
-
+    """使用创建时快照计算固定包；只对临时上游故障作有界自动重试。"""
     context = execution.context_data
-    log_input, log_context, _ = parse_log_search_source(
-        user=execution.attachment.created_by,
-        source_message=execution.source_message,
-    )
+    _validate_statistics_execution_identity(execution, username=context.username)
     if (
-        context.username != execution.attachment.created_by
-        or context.namespace != log_context.namespace
-        or context.search_condition.model_dump(mode="json") != log_input.condition.model_dump(mode="json")
-        or context.field.raw_name != execution.input_data.field.raw_name
+        context.field.raw_name != execution.input_data.field.raw_name
         or list(context.field.keys) != execution.input_data.field.keys
         or context.top_n != execution.input_data.top_n
         or context.interval != execution.input_data.interval
@@ -206,27 +212,12 @@ def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatistics
 
 
 def _execute_ai_statistics(execution: AttachmentExecution) -> AIStatisticsAttachmentOutput:
-    """复验来源后透传事件，仅持久化图表配置标签内原文。"""
-    # tasks 冷启动经 services 回到 handlers，来源 helper 在注册完成后加载。
-    from services.web.ai_assistant.handlers.log_search_source import (
-        parse_log_search_source,
-    )
-
+    """使用创建时快照透传事件，仅持久化图表配置标签内原文。"""
     context = execution.context_data
-    log_input, log_context, log_output = parse_log_search_source(
-        user=execution.attachment.created_by,
-        source_message=execution.source_message,
-    )
-    if (
-        context.username != execution.attachment.created_by
-        or context.namespace != log_context.namespace
-        or context.instruction != execution.input_data.instruction
-        or context.initial_search_condition.model_dump(mode="json") != log_input.condition.model_dump(mode="json")
-        or context.query_summary.total != log_output.total
-        or context.query_summary.executed_at != log_output.query_summary.executed_at
-    ):
+    _validate_statistics_execution_identity(execution, username=context.username)
+    if context.instruction != execution.input_data.instruction:
         raise InvalidAttachmentSource()
-    # 以上只验证创建快照未被拼接；Agent 后续工具调用不受初始范围锁定，工具按当前用户重新鉴权。
+    # Agent 后续工具调用不受初始范围锁定，工具按当前用户重新鉴权。
     extractor = LogAnalysisArtifactExtractor(
         max_content_bytes=settings.AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES,
         strict_final_message=True,

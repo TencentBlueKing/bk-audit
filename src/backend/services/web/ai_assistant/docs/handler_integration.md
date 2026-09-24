@@ -149,7 +149,7 @@ def ready(self):
 
 - 当前用户、会话和来源消息的可见性；
 - 显式父消息同用户、同会话；
-- Attachment 来源消息必须为 `SUCCESS`；
+- 创建 Attachment 时来源消息必须为 `SUCCESS`；
 - Pydantic 输入、上下文和输出解析；
 - 异步状态、task ID fencing、失败映射和手动重试 CAS。
 
@@ -164,7 +164,8 @@ def ready(self):
 
 所有 SUCCESS 或 FAILED 的异步附件均支持手动重试/重新生成，不需要 Handler 声明类型开关。手动重试不重新调用
 `prepare()`，而是复用持久化 input/context 快照，清空旧产物、错误、过程归档和反馈后投递新 task ID。
-Message 手动重试仍仅允许 `FAILED + ASYNC`。若权限或依赖必须实时检查，应在业务 Task 中执行。
+重试只复核当前用户仍拥有有效会话，不要求来源消息保持创建时的正文或状态。Message 手动重试仍仅允许
+`FAILED + ASYNC`。若权限或依赖必须实时检查，应在业务 Task 中执行。
 
 附件 Task 仍返回业务 output 模型或字典供平台校验持久化；`AttachmentExecutionTask`
 在成功持久化后统一向 Celery 返回 `{"status": "SUCCESS"}`，避免任务成功事件携带业务正文。

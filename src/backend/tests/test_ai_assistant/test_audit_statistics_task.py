@@ -323,21 +323,30 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         attachment.refresh_from_db()
         self.assertEqual(attachment.status, "FAILED")
 
-    def test_execution_rechecks_source_status_owner_and_clear(self):
-        for change in ("status", "owner", "clear"):
-            with self.subTest(change=change):
-                attachment = self.processing()
-                if change == "clear":
-                    Conversation.objects.filter(id=self.conversation.id).update(is_deleted=True)
-                else:
-                    Message.objects.filter(id=self.source.id).update(
-                        **({"status": "FAILED"} if change == "status" else {"created_by": "other"})
-                    )
-                with self.assertRaises(InvalidAttachmentSource):
-                    invoke_task(generate_field_statistics, attachment=attachment)
-                self.assertEqual(self.remote.call_count, 0)
-                Message.objects.filter(id=self.source.id).update(status="SUCCESS", created_by=self.user)
-                Conversation.objects.filter(id=self.conversation.id).update(is_deleted=False)
+    def test_execution_uses_frozen_snapshot_after_source_is_edited(self):
+        attachment = self.processing()
+        frozen_condition = deepcopy(attachment.context_data["search_condition"])
+        Message.objects.filter(id=self.source.id).update(
+            status=ExecutionStatus.PROCESSING,
+            input_data={"condition": {**self.source.input_data["condition"], "scope_id": "edited"}},
+            context_data={"username": self.user, "namespace": "edited"},
+            output_data=None,
+        )
+        self.context.side_effect = lambda username, namespace, condition: LogQueryContext(
+            username=username,
+            namespace=namespace,
+            condition=condition,
+            table="logs",
+            conditions=(),
+        )
+
+        invoke_task(generate_field_statistics, attachment=attachment)
+
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
+        called_condition = self.context.call_args.kwargs["condition"].model_dump(mode="json")
+        self.assertEqual(called_condition, frozen_condition)
+        self.assertEqual(self.context.call_args.kwargs["namespace"], "bkaudit")
 
     def test_history_is_independent_of_later_queries(self):
         first = self.processing()
@@ -355,9 +364,9 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         )
 
     def test_task_uses_field_budget(self):
-        self.assertEqual(generate_field_statistics.queue, "ai_assistant_statistics")
+        self.assertEqual(generate_field_statistics.queue, "default")
         self.assertEqual(generate_field_statistics.time_limit, settings.AI_ASSISTANT_FIELD_STATISTICS_TASK_TIMEOUT)
-        self.assertEqual(generate_field_statistics.rate_limit, settings.AI_ASSISTANT_FIELD_STATISTICS_TASK_RATE_LIMIT)
+        self.assertIsNone(generate_field_statistics.rate_limit)
 
     def test_revoked_system_permission_is_rechecked_before_query(self):
         attachment = self.processing()
@@ -728,13 +737,26 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
             invoke_task(self.handler.async_task, attachment=attachment)
         agent.assert_not_called()
 
-    def test_invalid_source_and_identity_fail_before_agent(self):
-        for mutation in ("source", "identity", "cleared"):
+    def test_source_edit_does_not_invalidate_frozen_agent_context(self):
+        attachment = self.processing()
+        frozen_condition = deepcopy(attachment.context_data["initial_search_condition"])
+        Message.objects.filter(pk=self.source.pk).update(
+            status=ExecutionStatus.PROCESSING,
+            input_data={"condition": {**self.source.input_data["condition"], "scope_id": "edited"}},
+            context_data={"username": self.user, "namespace": "edited"},
+            output_data=None,
+        )
+
+        _, request = self.run_events(attachment, self.events(self.tagged("历史快照统计")))
+
+        payload = json.loads(request["chat_history"][1]["content"])
+        self.assertEqual(payload["context"]["initial_search_condition"], frozen_condition)
+
+    def test_invalid_identity_and_deleted_conversation_fail_before_agent(self):
+        for mutation in ("identity", "cleared"):
             with self.subTest(mutation=mutation):
                 attachment = self.processing()
-                if mutation == "source":
-                    Message.objects.filter(pk=self.source.pk).update(status="FAILED")
-                elif mutation == "identity":
+                if mutation == "identity":
                     context = deepcopy(attachment.context_data)
                     context["username"] = "other"
                     Attachment.objects.filter(pk=attachment.pk).update(context_data=context)
@@ -744,7 +766,7 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
                     with self.assertRaises(InvalidAttachmentSource):
                         invoke_task(self.handler.async_task, attachment=attachment)
                 agent.assert_not_called()
-                Message.objects.filter(pk=self.source.pk).update(status="SUCCESS")
+                Conversation.objects.filter(pk=self.conversation.pk).update(is_deleted=False)
 
     def test_permission_errors_do_not_retry(self):
         attachment = self.processing()

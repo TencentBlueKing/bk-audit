@@ -874,6 +874,11 @@ class AttachmentServiceTest(TestCase):
         old_context_data = failed_attachment.context_data
         old_task_id = failed_attachment.task_id
         old_content_updated_at = failed_attachment.content_updated_at
+        Message.objects.filter(pk=failed_attachment.source_message_id).update(
+            status=ExecutionStatus.PROCESSING,
+            input_data={"text": "edited after attachment creation"},
+            output_data=None,
+        )
 
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with self.captureOnCommitCallbacks(execute=False) as callbacks:
@@ -1165,7 +1170,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         )
         retry_paused = threading.Event()
         release_retry = threading.Event()
-        original_lock = AttachmentService._lock_active_source
+        original_lock = AttachmentService._lock_active_conversation
 
         def pause_before_lock(service, *, source_message):
             retry_paused.set()
@@ -1183,7 +1188,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
             finally:
                 close_old_connections()
 
-        with mock.patch.object(AttachmentService, "_lock_active_source", pause_before_lock), mock.patch.object(
+        with mock.patch.object(AttachmentService, "_lock_active_conversation", pause_before_lock), mock.patch.object(
             AttachmentService, "_dispatch"
         ) as dispatch:
             thread = threading.Thread(target=retry_attachment)

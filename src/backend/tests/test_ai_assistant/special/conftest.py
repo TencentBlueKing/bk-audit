@@ -279,7 +279,8 @@ def statistics_stack(transactional_db):
             agent = stack.enter_context(running_fake_log_analysis_agent())
             for task in (generate_ai_statistics, generate_field_statistics):
                 # 测试队列加隔离前缀，实际投递和重试仍由生产 Handler/Task 完成。
-                assert task.queue == "ai_assistant_statistics"
+                expected_queue = "ai_assistant_statistics" if task is generate_ai_statistics else "default"
+                assert task.queue == expected_queue
                 stack.enter_context(using_task_queue(task, queue))
             stack.enter_context(using_test_broker(queue_name=queue))
             stack.enter_context(
@@ -295,7 +296,6 @@ def statistics_stack(transactional_db):
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_TASK_RATE_LIMIT": "1000/m",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS": "1",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS": "1",
-                        "BKAPP_AI_ASSISTANT_FIELD_STATISTICS_TASK_RATE_LIMIT": "1000/m",
                     },
                     enable_special_handlers=False,
                     pool="gevent",

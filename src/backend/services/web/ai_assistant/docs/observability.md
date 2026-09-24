@@ -106,11 +106,15 @@ Metric/Event 使用 `core.monitor` 的异步最佳努力投递；Span 使用 `co
 fail-open 边界。监控客户端、OTel SDK 或属性写入异常只能记录日志，不能覆盖业务返回值、
 Celery Retry 或已提交终态。
 
-### 3.4 控制基数与敏感数据
+### 3.4 控制基数与诊断信息
 
-Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID、execution ID、用户或异常
-正文。Event 和 Trace 只在定位需要时携带受控标识。任何观测载荷都不得记录输入、上下文、
-最终产物、日志样例或流事件正文。
+Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID、execution ID、用户或异常正文。
+应用日志可以使用对象 UID、task ID、execution ID 等必要标识串联一次执行；Event 和 Trace 只在
+定位需要时携带受控标识，这些标识均不得作为无界 Metric 维度。
+
+外部调用失败时，内部异常日志可以记录排障所需的上游错误正文，但必须限制日志访问和保留周期，
+且不得进入前端错误、Metric 或 Event。仍禁止记录完整输入/上下文、日志样例、查询结果、完整工具响应、
+AG-UI 事件正文和最终产物；确需定位的 SQL 按查询模块既有受控日志策略处理。
 
 ### 3.5 Event 必须可行动
 
@@ -161,7 +165,8 @@ Worker 在线数/重启数和 Worker 实例级 `5/m` rate limit 饱和。以下�
 - 流降级增长但业务成功率正常：检查 Redis、归档 checkpoint 和事件容量，MySQL Markdown 仍是事实源；
 - 长期 `PROCESSING` 增长：检查 RabbitMQ 投递、Worker 注册/队列配置和巡检收敛结果。
 
-该链路禁止把分析指令、检索条件值、用户名、日志样例、工具请求/响应、SQL、AG-UI 事件正文或
-最终 Markdown 写入日志、Metric、Event 或 Trace。对象 UID、task ID、execution ID 只允许在受控
-Event/Trace 定位字段中使用，不得作为 Metric 维度。接入与时序见
+该链路不把分析指令、检索条件值、用户名、日志样例、查询结果、完整工具响应、AG-UI 事件正文或
+最终 Markdown 写入常规观测载荷。应用日志允许记录附件、task、execution 等必要标识；Agent 上游
+调用失败时允许在受控异常日志中保留错误正文用于排障，但对外错误仍使用稳定码和脱敏文案。
+这些标识和正文不得作为 Metric 维度或 Event 载荷。接入与时序见
 [`log_analysis.md`](log_analysis.md)。

@@ -30,9 +30,10 @@ flowchart TD
     UI[前端统计卡片] -->|创建 / 重试 / 轮询详情| API[Resource / Serializer]
     API --> Service[AttachmentService / Handler Registry]
     Source[成功 LOG_SEARCH] -->|来源归属与条件快照| Service
-    Service -->|创建 PROCESSING / 提交后投递| Worker[统计 Worker<br/>ai_assistant_statistics]
-    Worker --> Program[FIELD_STATISTICS<br/>完整来源条件]
-    Worker --> AI[AI_STATISTICS<br/>bp-ai-log-stats]
+    Service -->|FIELD_STATISTICS| DefaultWorker[default Worker<br/>短时固定量任务]
+    Service -->|AI_STATISTICS| AIWorker[ai-stats Worker<br/>ai_assistant_statistics / 限流]
+    DefaultWorker --> Program[FIELD_STATISTICS<br/>完整来源条件]
+    AIWorker --> AI[AI_STATISTICS<br/>bp-ai-log-stats]
     Program --> Kernel[共享查询与统计内核<br/>实际用户鉴权 / SQL / 预算]
     AI -->|可按需求调整查询条件| MCP[audit-log-statistics<br/>字段元数据 / 聚合]
     MCP --> Kernel
@@ -64,7 +65,7 @@ flowchart TD
 
 1. 创建附件时，平台校验用户和来源消息；Handler 校验类型输入并生成可信上下文，用户、租户、时区和来源条件不能由附件请求覆盖。
 2. 事务内创建 PROCESSING 附件，提交后投递任务。输入与上下文固化，便于重试和追踪。
-3. Worker 按附件及当前 task_id 加载执行；业务执行重新校验来源或实际工具权限。
+3. Worker 按附件及当前 task_id 加载固化快照，复核附件归属和会话仍有效，不再比较可能被编辑的来源消息正文或状态；查询 Service 或 Agent 工具调用按当前用户实时鉴权。
 4. 输出通过类型模型校验后，以条件更新（CAS）提交 SUCCESS；最终异常提交脱敏 FAILED。自动重试期间保持 PROCESSING。
 5. 人工重试允许符合平台约束的 SUCCESS 或 FAILED 异步附件：保留 UID，清空旧产物、错误、过程归档和反馈，生成新 task_id 后进入 PROCESSING。SUCCESS 用于重新生成，FAILED 用于重试；两种统计都支持，不存在 `supports_retry` 开关。Message 重试仍仅允许 FAILED + ASYNC。
 
@@ -72,7 +73,11 @@ flowchart TD
 
 两种统计直接使用 `AttachmentExecutionTask`。基类持久化业务结果后只向 Celery 返回轻量状态，避免把大结果再次写入成功事件；无需为这一通用规则创建统计专属任务父类。业务数据从附件详情读取。
 
-自动重试处理暂时性故障，参数、权限等确定性错误不自动重试。人工重试仍重新经过当前状态与权限检查。巡检按附件类型采用与任务超时、重试退避相匹配的不活跃阈值，避免长任务被平台提前判失败；巡检、候选查询和指标使用一致口径。
+自动重试处理暂时性故障，参数、权限等确定性错误不自动重试。人工重试校验附件终态、当前会话归属与有效性并复用创建快照；来源消息后续编辑不使历史附件永久失效。巡检按附件类型采用与任务超时、重试退避相匹配的不活跃阈值，避免长任务被平台提前判失败；巡检、候选查询和指标使用一致口径。
+
+`AI_STATISTICS` 调用下游 AI 接口，使用独立 `ai_assistant_statistics` 队列和 Worker 限流；
+`FIELD_STATISTICS` 是固定查询任务，进入 `default` 队列。新增短时、固定工作量且无需独立限流的任务优先复用
+`default`，只有存在下游限流、长任务隔离或独立容量治理需求时才增加专属 Worker。
 
 ## 4. 查询领域与统计内核
 
