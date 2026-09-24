@@ -35,6 +35,10 @@ export const matchesPaParamHideCondition = (
   if (!currentParam) {
     return false;
   }
+  // 自动规则的字段引用只有运行时才有实际值，配置阶段统一展示受控参数。
+  if (currentParam.field !== undefined && currentParam.field !== null && currentParam.field !== '') {
+    return false;
+  }
   const isEqual = JSON.stringify(condition.value) === JSON.stringify(currentParam.value);
   return condition.operator === '=' ? isEqual : !isEqual;
 };

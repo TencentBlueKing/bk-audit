@@ -105,6 +105,54 @@ if (!nullControllerMatchesNotEqual) {
   throw new Error('控制参数 key 存在且值为 null 时应命中 != 隐藏条件');
 }
 
+const fieldReferenceMatchesEqual = matchesPaParamHideCondition(
+  { constant_key: '${field_reference}', operator: '=', value: '' },
+  { '${field_reference}': { field: 'risk_level', value: '' } },
+);
+if (fieldReferenceMatchesEqual) {
+  throw new Error('控制参数引用风险字段时，= 条件不应隐藏目标参数');
+}
+
+const fieldReferenceMatchesNotEqual = matchesPaParamHideCondition(
+  { constant_key: '${field_reference}', operator: '!=', value: 'expected' },
+  { '${field_reference}': { field: 'risk_level', value: '' } },
+);
+if (fieldReferenceMatchesNotEqual) {
+  throw new Error('控制参数引用风险字段时，!= 条件不应隐藏目标参数');
+}
+
+const fieldReferenceParams = {
+  '${field_reference}': { field: 'risk_level', value: '' },
+  '${field_target}': { field: '', value: 'configured-value' },
+};
+const fieldReferenceMetas = [
+  {
+    key: '${field_reference}',
+    source_type: 'custom',
+    show_type: 'show',
+  },
+  {
+    key: '${field_target}',
+    source_type: 'custom',
+    show_type: 'show',
+    hide_condition: [
+      { constant_key: '${field_reference}', operator: '=', value: '' },
+      { constant_key: '${field_reference}', operator: '!=', value: 'expected' },
+    ],
+    is_hide: true,
+  },
+];
+syncPaParamVisibility(fieldReferenceParams, fieldReferenceMetas);
+if (fieldReferenceMetas[1].is_hide) {
+  throw new Error('字段引用无法在配置阶段求值时，受控参数应保持展示');
+}
+if (!Object.prototype.hasOwnProperty.call(
+  buildSubmitPaParams(fieldReferenceParams, fieldReferenceMetas),
+  '${field_target}',
+)) {
+  throw new Error('字段引用无法在配置阶段求值时，受控参数应保留在提交 payload 中');
+}
+
 const anyConditionMatches = isPaParamHidden(
   [
     { constant_key: '${visible}', operator: '=', value: 'custom' },
