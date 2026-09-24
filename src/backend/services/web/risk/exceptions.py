@@ -51,3 +51,13 @@ class AnalyseReportTitleGenerationError(RiskException):
     MESSAGE = gettext_lazy("AI 分析报告标题生成失败")
     STATUS_CODE = 500
     ERROR_CODE = "004"
+
+
+class AutoProcessParamsError(RiskException):
+    MESSAGE = gettext_lazy("处理套餐参数不完整，缺少模板变量: {keys}")
+    STATUS_CODE = 400
+    ERROR_CODE = "005"
+
+    def __init__(self, keys: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(keys=keys)
+        super().__init__(*args, **kwargs)
