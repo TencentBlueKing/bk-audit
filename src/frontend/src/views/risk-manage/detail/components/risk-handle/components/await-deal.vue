@@ -229,7 +229,7 @@
 
   import {
     buildSubmitPaParams,
-    matchesPaParamHideCondition,
+    isPaParamHidden,
   } from '@/utils/assist/pa-param-submit';
 
   interface Props {
@@ -628,15 +628,13 @@
           const hideCondition = paramsDetailData.value[obj]?.hide_condition;
           // 添加安全检查，确保hideCondition存在且是数组
           if (hideCondition && Array.isArray(hideCondition)) {
-            hideCondition.forEach((item: any) => {
-              const oldIsHide = paramsDetailData.value[obj].is_hide;
-              paramsDetailData.value[obj].is_hide = matchesPaParamHideCondition(item, val.pa_params);
-              // 当字段从显示变为隐藏时，重置对应的参数值
-              if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
-                formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
-                formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
-              }
-            });
+            const oldIsHide = paramsDetailData.value[obj].is_hide;
+            paramsDetailData.value[obj].is_hide = isPaParamHidden(hideCondition, val.pa_params);
+            // 当字段从显示变为隐藏时，重置对应的参数值
+            if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
+              formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
+              formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
+            }
           }
         }
       });

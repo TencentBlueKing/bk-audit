@@ -23,16 +23,28 @@ export const matchesPaParamHideCondition = (
   condition: PaParamHideCondition,
   paParams: Record<string, PaParamValue> | undefined,
 ) => {
-  if (condition.operator !== '=' || !condition.constant_key) {
+  if (!condition.constant_key || !['=', '!='].includes(condition.operator || '')) {
     return false;
   }
-  const expectedValue = condition.value;
-  const currentValue = paParams?.[condition.constant_key]?.value;
-  if (expectedValue === undefined || expectedValue === null
-    || currentValue === undefined || currentValue === null) {
+  const currentParam = paParams?.[condition.constant_key];
+  if (!currentParam) {
     return false;
   }
-  return String(expectedValue) === String(currentValue);
+  const isEqual = String(condition.value) === String(currentParam.value);
+  return condition.operator === '=' ? isEqual : !isEqual;
+};
+
+/** 标准运维多条条件按 OR 组合，任意条件命中即隐藏参数。 */
+export const isPaParamHidden = (
+  conditions: Iterable<PaParamHideCondition>,
+  paParams: Record<string, PaParamValue> | undefined,
+) => {
+  for (const condition of conditions) {
+    if (matchesPaParamHideCondition(condition, paParams)) {
+      return true;
+    }
+  }
+  return false;
 };
 
 /** 只提交本次表单实际渲染的用户入参。 */
