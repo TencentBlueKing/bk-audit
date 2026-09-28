@@ -57,7 +57,7 @@ class BaseAuthHandler:
             )
             result = True
         except APIRequestError as err:
-            logger.exception(
+            logger.warning(
                 "[%sFailed] RT => %s; Result => %s",
                 self.__class__.__name__,
                 self.build_result_table_id(),
