@@ -39,7 +39,11 @@ export const matchesPaParamHideCondition = (
   if (currentParam.field !== undefined && currentParam.field !== null && currentParam.field !== '') {
     return false;
   }
-  const isEqual = JSON.stringify(condition.value) === JSON.stringify(currentParam.value);
+  const hasStructuredValue = [condition.value, currentParam.value]
+    .some(value => value !== null && typeof value === 'object');
+  const isEqual = hasStructuredValue
+    ? JSON.stringify(condition.value) === JSON.stringify(currentParam.value)
+    : String(condition.value) === String(currentParam.value);
   return condition.operator === '=' ? isEqual : !isEqual;
 };
 

@@ -89,6 +89,22 @@ if (equalValueMatchesNotEqual) {
   throw new Error('控制参数值相同时不应命中 != 隐藏条件');
 }
 
+const stringConditionMatchesNumberValue = matchesPaParamHideCondition(
+  { constant_key: '${number}', operator: '=', value: '1' },
+  { '${number}': { field: '', value: 1 } },
+);
+if (!stringConditionMatchesNumberValue) {
+  throw new Error('基础类型应忽略字符串与数字的类型差异');
+}
+
+const stringConditionMatchesNumberValueNotEqual = matchesPaParamHideCondition(
+  { constant_key: '${number}', operator: '!=', value: '1' },
+  { '${number}': { field: '', value: 1 } },
+);
+if (stringConditionMatchesNumberValueNotEqual) {
+  throw new Error('基础类型值相同时不应因类型差异命中 != 隐藏条件');
+}
+
 const missingControllerMatchesNotEqual = matchesPaParamHideCondition(
   { constant_key: '${missing}', operator: '!=', value: 'custom' },
   params,
