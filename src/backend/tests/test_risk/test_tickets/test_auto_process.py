@@ -16,11 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
 import uuid
 from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
@@ -216,3 +218,50 @@ class AutoProcessTest(TicketTest):
                 risk = Risk.objects.get(risk_id=risk.risk_id)
                 self.assertEquals(risk.last_history.action, AutoProcess.__name__)
                 self.assertEquals(risk.last_history.extra["pa_config"], pa_config)
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
+        mock.Mock(side_effect=Exception("add node name error: 'NoneType' object has no attribute 'data'")),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_auto_process_get_task_status_failed(self):
+        """
+        测试已有 task_id 时 SOPS get_task_status 业务异常（如流程树缺节点）的处理。
+        """
+
+        with RuleContext(pa_info={"need_approve": False}) as (_, rule):
+            with RiskContext() as risk:
+                risk.rule_id = rule.rule_id
+                risk.rule_version = rule.version
+                risk.status = RiskStatus.AUTO_PROCESS
+                risk.save()
+                # 预置一个 AutoProcess 历史节点，携带失效的 task_id（模拟历史死单）
+                from services.web.risk.models import TicketNode
+
+                TicketNode.objects.create(
+                    risk_id=risk.risk_id,
+                    operator="system",
+                    current_operator=[],
+                    action=AutoProcess.__name__,
+                    timestamp=datetime.datetime.now().timestamp(),
+                    time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                    process_result={"task": {"task_id": "84988130"}},
+                    extra={},
+                )
+                risk.refresh_from_db()
+                # 执行
+                operator = uuid.uuid1().hex
+                # 不应抛出任何异常
+                AutoProcess(risk_id=risk.risk_id, operator=operator).run()
+                risk.refresh_from_db()
+                # 检测风险状态：转人工，不再停在 AUTO_PROCESS
+                self.assertEquals(risk.status, RiskStatus.AWAIT_PROCESS)
+                # 套餐失败，使用默认映射：AWAIT_PROCESS → PROCESSING
+                self.assertEquals(risk.display_status, RiskDisplayStatus.PROCESSING)
+                # 处理人转安全接口人
+                self.assertEquals(risk.current_operator, AutoProcess.load_security_person())

@@ -586,7 +586,17 @@ class AutoProcess(RiskFlowBaseHandler):
         # 已有任务获取状态
         task_id = self.load_task_id()
         if task_id:
-            return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+            try:
+                status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+            except Exception as err:  # NOCC:broad-except(需要识别 SOPS 业务异常)
+                logger.warning(
+                    "[AutoProcess] get_task_status failed risk_id=%s task_id=%s err=%s",
+                    self.risk.risk_id,
+                    task_id,
+                    err,
+                )
+                return {"status": {"state": SOPSTaskStatus.FAILED.value, "error": str(err)}}
+            return {"status": status}
         # 优先使用参数
         pa_config = pa_config
         # 或者使用上个节点(审批节点)配置
