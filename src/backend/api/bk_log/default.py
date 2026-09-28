@@ -200,7 +200,6 @@ class BizsList(BizBaseResource):
     name = gettext_lazy("业务列表")
     action = "/meta/projects/mine/"
     method = "GET"
-    use_admin_username = False
 
 
 class BizTopos(BizBaseResource):
@@ -496,8 +495,6 @@ class CheckAllowed(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/check_allowed/"
     method = "POST"
-    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
-    use_admin_username = False
 
     def perform_request(self, validated_request_data):
         resources = super(CheckAllowed, self).perform_request(validated_request_data)
@@ -513,8 +510,6 @@ class GetApplyData(BKLogBaseResource):
     tags = ["IAM"]
     action = "/iam/meta/get_apply_data/"
     method = "POST"
-    # 用户态鉴权接口：保留当前用户身份，不使用平台 admin 身份
-    use_admin_username = False
 
     ResponseSerializer = GetApplyDataResponseSerializer
 
@@ -524,7 +519,6 @@ class GetSpacesMine(BKLogBaseResource):
     method = "GET"
     action = "/meta/spaces/mine/"
     cache_type = CacheTypeItem(key="GetSpacesMine", timeout=60 * 10, user_related=True)
-    use_admin_username = False
 
 
 class CreateCustomCollector(CollectorsBaseResource):
@@ -549,6 +543,7 @@ class GetReportToken(CollectorsBaseResource):
     url_keys = ["collector_config_id"]
     method = "GET"
     platform_authorization = True
+    use_admin_username = False
 
 
 class GetReportHost(CollectorsBaseResource):
@@ -556,3 +551,4 @@ class GetReportHost(CollectorsBaseResource):
     action = "/databus_collectors/report_host/"
     method = "GET"
     platform_authorization = True
+    use_admin_username = False

@@ -1132,7 +1132,7 @@
           }
         ],
         "related_actions": [
-          "list_risk"
+          "list_risk_v2"
         ],
         "description": "",
         "description_en": ""
@@ -1161,7 +1161,7 @@
           }
         ],
         "related_actions": [
-          "list_risk"
+          "list_risk_v2"
         ],
         "description": "处理风险单，包含状态流转等操作",
         "description_en": "Process risk ticket, including status transition"
