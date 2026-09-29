@@ -88,6 +88,14 @@ class _LogCaptureHandler(logging.Handler):
         self.records.append(record)
 
 
+class AgentTransportTestCase(SimpleTestCase):
+    """隔离 Redis 限流状态，只验证 Agent HTTP/SSE 传输契约。"""
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0))
+
+
 class TestAGUIBufferedHTTP(SimpleTestCase):
     """真实 socket 验证两种传输形态，不要求小事件在缓冲填满前交付。"""
 
@@ -163,10 +171,11 @@ class TestAGUIBufferedHTTP(SimpleTestCase):
                 self.assertEqual(seen, events)
 
 
-class TestChatCompletionRelay(SimpleTestCase):
+class TestChatCompletionRelay(AgentTransportTestCase):
     """验证 AG-UI 事件协议、资源隔离和旧接口兼容性。"""
 
     def setUp(self):
+        super().setUp()
         self.resource = ChatCompletion()
         self.public_agui_resource = api.bk_plugins_ai_agent.chat_completion
         self.public_legacy_resource = api.bk_plugins_ai_agent.chat_completion
@@ -431,7 +440,7 @@ class TestChatCompletionRelay(SimpleTestCase):
         self.assertEqual(result, "hello")
 
 
-class TestChatCompletionCallback(SimpleTestCase):
+class TestChatCompletionCallback(AgentTransportTestCase):
     """同一公开入口有回调时交付 JSON 对象，无回调时维持历史正文返回。"""
 
     def test_public_chat_completion_delivers_json_and_consumes_past_run_finished(self):
@@ -510,7 +519,7 @@ class TestChatCompletionCallback(SimpleTestCase):
         response.close.assert_called_once_with()
 
 
-class TestChatCompletionLineFraming(SimpleTestCase):
+class TestChatCompletionLineFraming(AgentTransportTestCase):
     """使用 Requests 自身的 iter_lines，覆盖网络分片和换行，不替身分行算法。"""
 
     def test_nonchunked_large_event_uses_buffered_reads(self):

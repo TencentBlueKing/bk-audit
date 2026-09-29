@@ -1,6 +1,8 @@
 import os
 from unittest import mock
 
+from bk_resource import api as bk_api
+from bk_resource.exceptions import APIRequestError
 from client_throttler.exceptions import RetryTimeout, TooManyRequests, TooManyRetries
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -16,6 +18,25 @@ from api.bk_plugins_ai_audit_report.default import (
     ChatCompletion as ReportChatCompletion,
 )
 from api.constants import AIAgentCode
+from config import default as default_settings
+
+
+class CapturingRequestLogHandler:
+    """捕获 Resource 公共调用入口产生的请求日志。"""
+
+    records = []
+
+    def __init__(self, resource_name, start_time, end_time, request_data, response_data):
+        self.record_data = {
+            "resource_name": resource_name,
+            "request_data": request_data,
+            "response_data": response_data,
+        }
+
+    def record(self):
+        """保存本次请求日志，供集成契约断言。"""
+
+        self.records.append(self.record_data)
 
 
 class AgentRateLimiterTest(SimpleTestCase):
@@ -24,41 +45,96 @@ class AgentRateLimiterTest(SimpleTestCase):
         self.assertEqual(AIAgentCode.AUDIT_LOG_STATISTICS.value, "bp-ai-log-stats")
         self.assertEqual(AIAgentCode.AUDIT_LOG_ANALYSIS.value, "bp-ai-log-analyse")
 
-    def test_migrated_agent_limits_keep_legacy_defaults(self):
+    def test_all_agent_codes_have_a_safe_default_rate_limit(self):
+        configured_default = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip() or "10/m"
+
+        self.assertEqual(settings.AI_AGENT_DEFAULT_RATE_LIMIT, configured_default)
+        self.assertEqual(set(settings.AI_AGENT_RATE_LIMITS), {agent_code.value for agent_code in AIAgentCode})
+
+    def test_rate_limit_configuration_precedence_keeps_legacy_compatibility(self):
+        resolver = getattr(default_settings, "_resolve_ai_agent_rate_limit", None)
+        self.assertIsNotNone(resolver)
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(resolver(AIAgentCode.AUDIT_REPORT), "10/m")
+
+        with mock.patch.dict(os.environ, {"BKAPP_RENDER_TASK_RATE_LIMIT": "4/m"}, clear=True):
+            self.assertEqual(resolver(AIAgentCode.AUDIT_REPORT), "4/m")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "BKAPP_RENDER_TASK_RATE_LIMIT": "4/m",
+                "BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT": "20/m",
+            },
+            clear=True,
+        ):
+            self.assertEqual(resolver(AIAgentCode.AUDIT_REPORT), "20/m")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT": "20/m",
+                "BKAPP_AI_AUDIT_REPORT_RATE_LIMIT": "30/m",
+            },
+            clear=True,
+        ):
+            self.assertEqual(resolver(AIAgentCode.AUDIT_REPORT), "30/m")
+
+        with mock.patch.dict(os.environ, {"BKAPP_AI_AUDIT_REPORT_RATE_LIMIT": ""}, clear=True):
+            self.assertEqual(resolver(AIAgentCode.AUDIT_REPORT), "")
+
+    def test_legacy_agent_specific_environment_variables_remain_compatible(self):
         cases = (
             (AIAgentCode.AUDIT_REPORT, "BKAPP_RENDER_TASK_RATE_LIMIT"),
             (AIAgentCode.ALS_TITLE_SUM, "BKAPP_AI_TITLE_TASK_RATE_LIMIT"),
             (AIAgentCode.AUDIT_ANALYSE, "BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT"),
         )
-        global_default = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
+        global_override = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
 
         for agent_code, legacy_env_name in cases:
             with self.subTest(agent_code=agent_code):
-                expected = os.getenv(
-                    f"BKAPP_AI_{agent_code.name}_RATE_LIMIT",
-                    global_default or os.getenv(legacy_env_name, "10/m"),
-                ).strip()
+                agent_env_name = f"BKAPP_AI_{agent_code.name}_RATE_LIMIT"
+                expected = (
+                    os.environ[agent_env_name].strip()
+                    if agent_env_name in os.environ
+                    else global_override or os.getenv(legacy_env_name, "").strip() or "10/m"
+                )
                 self.assertEqual(settings.AI_AGENT_RATE_LIMITS[agent_code.value]["rate"], expected)
 
     @override_settings(
         AI_AGENT_RATE_LIMITS={
-            AIAgentCode.USER_INTENT.value: {"rate": "2/s", "max_wait_seconds": 0.5},
-            AIAgentCode.RISK_SEARCH.value: {"rate": "3/s", "max_wait_seconds": 1.0},
+            AIAgentCode.AUDIT_REPORT.value: {"rate": "1/s", "max_wait_seconds": 0.1},
+            AIAgentCode.RISK_SEARCH.value: {"rate": "2/s", "max_wait_seconds": 0.2},
+            AIAgentCode.ALS_TITLE_SUM.value: {"rate": "3/s", "max_wait_seconds": 0.3},
+            AIAgentCode.AUDIT_ANALYSE.value: {"rate": "4/s", "max_wait_seconds": 0.4},
+            AIAgentCode.USER_INTENT.value: {"rate": "5/s", "max_wait_seconds": 0.5},
+            AIAgentCode.AUDIT_LOG_STATISTICS.value: {"rate": "6/s", "max_wait_seconds": 0.6},
+            AIAgentCode.AUDIT_LOG_ANALYSIS.value: {"rate": "7/s", "max_wait_seconds": 0.7},
         }
     )
     @mock.patch("api.bk_plugins_ai_agent.rate_limiter.Throttler")
-    def test_each_agent_uses_an_isolated_redis_key(self, throttler_cls):
+    def test_all_agent_codes_use_isolated_redis_keys(self, throttler_cls):
         limiter = AgentRateLimiter()
 
-        limiter.acquire(AIAgentCode.USER_INTENT)
-        limiter.acquire(AIAgentCode.RISK_SEARCH)
+        for agent_code in AIAgentCode:
+            limiter.acquire(agent_code)
 
         configs = [call.args[0] for call in throttler_cls.call_args_list]
         self.assertEqual(
-            [config.key for config in configs], [AIAgentCode.USER_INTENT.value, AIAgentCode.RISK_SEARCH.value]
+            [config.key for config in configs],
+            [
+                AIAgentCode.AUDIT_REPORT.value,
+                AIAgentCode.RISK_SEARCH.value,
+                AIAgentCode.ALS_TITLE_SUM.value,
+                AIAgentCode.AUDIT_ANALYSE.value,
+                AIAgentCode.USER_INTENT.value,
+                AIAgentCode.AUDIT_LOG_STATISTICS.value,
+                AIAgentCode.AUDIT_LOG_ANALYSIS.value,
+            ],
         )
-        self.assertEqual([config.rate for config in configs], ["2/s", "3/s"])
-        self.assertEqual([config.max_retry_duration for config in configs], [0.5, 1.0])
+        self.assertEqual([config.rate for config in configs], ["1/s", "2/s", "3/s", "4/s", "5/s", "6/s", "7/s"])
+        self.assertEqual([config.max_retry_duration for config in configs], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
         self.assertTrue(all(config.enable_sleep_wait for config in configs))
 
     @override_settings(AI_AGENT_RATE_LIMITS={AIAgentCode.USER_INTENT.value: {"rate": "1/s", "max_wait_seconds": 0.1}})
@@ -103,6 +179,22 @@ class AgentRateLimiterTest(SimpleTestCase):
 
 
 class AgentClientRateLimitTest(SimpleTestCase):
+    def setUp(self):
+        CapturingRequestLogHandler.records.clear()
+
+    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
+    @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
+    def test_generic_client_applies_limiter_to_all_agent_codes(self, acquire, perform_request):
+        client = GenericChatCompletion()
+
+        for agent_code in AIAgentCode:
+            with self.subTest(agent_code=agent_code):
+                self.assertEqual(client.perform_request({"agent_code": agent_code}), "ok")
+                self.assertIsNone(client._current_agent_code)
+
+        self.assertEqual([call.args[0] for call in acquire.call_args_list], list(AIAgentCode))
+        self.assertEqual(perform_request.call_count, len(AIAgentCode))
+
     @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="ok")
     @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
     def test_regular_clients_share_limiter_while_legacy_report_client_bypasses_it(self, acquire, perform_request):
@@ -173,3 +265,48 @@ class AgentClientRateLimitTest(SimpleTestCase):
         acquire.assert_called_once_with(AIAgentCode.USER_INTENT)
         perform_request.assert_called_once()
         self.assertIsNone(client._current_agent_code)
+
+    @mock.patch("api.bk_plugins_ai_agent.default.BkApiResource.perform_request", return_value="agent-success-body")
+    @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
+    def test_public_agent_interface_records_request_and_success_response(self, acquire, _perform_request):
+        payload = {
+            "agent_code": AIAgentCode.USER_INTENT,
+            "input": "diagnostic-request-body",
+            "chat_history": [],
+            "execute_kwargs": {"stream": False},
+        }
+
+        with mock.patch(
+            "bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER",
+            CapturingRequestLogHandler,
+        ):
+            result = bk_api.bk_plugins_ai_agent.chat_completion(**payload)
+
+        self.assertEqual(result, "agent-success-body")
+        acquire.assert_called_once_with(AIAgentCode.USER_INTENT)
+        self.assertEqual(len(CapturingRequestLogHandler.records), 1)
+        record = CapturingRequestLogHandler.records[0]
+        self.assertEqual(record["resource_name"], "api.bk_plugins_ai_agent.default.ChatCompletion")
+        self.assertEqual(record["request_data"]["kwargs"], payload)
+        self.assertEqual(record["response_data"], "agent-success-body")
+
+    @mock.patch(
+        "api.bk_plugins_ai_agent.default.BkApiResource.perform_request",
+        side_effect=APIRequestError(result={"message": "diagnostic-upstream-error"}),
+    )
+    @mock.patch("api.bk_plugins_ai_agent.default.agent_rate_limiter.acquire", return_value=0.0)
+    def test_public_agent_interface_records_failure_body(self, acquire, _perform_request):
+        with mock.patch(
+            "bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER",
+            CapturingRequestLogHandler,
+        ), self.assertRaises(APIRequestError):
+            bk_api.bk_plugins_ai_agent.chat_completion(
+                agent_code=AIAgentCode.AUDIT_LOG_ANALYSIS,
+                input="diagnostic-failure-request",
+                chat_history=[],
+                execute_kwargs={"stream": False},
+            )
+
+        acquire.assert_called_once_with(AIAgentCode.AUDIT_LOG_ANALYSIS)
+        self.assertEqual(len(CapturingRequestLogHandler.records), 1)
+        self.assertEqual(CapturingRequestLogHandler.records[0]["response_data"], "diagnostic-upstream-error")

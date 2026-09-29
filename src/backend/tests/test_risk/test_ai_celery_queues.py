@@ -60,6 +60,7 @@ class TestAICeleryWorkloadRouting(TestCase):
             with self.subTest(task=task.name):
                 self.assertEqual(task.queue, AIWorkloadQueue.DEFAULT)
                 self.assertIsNone(task.rate_limit)
+                self.assertIsInstance(task, AIAgentTask)
 
     def test_single_risk_report_keeps_legacy_queue_and_rate_limit(self):
         self.assertEqual(render_template.queue, AIWorkloadQueue.RISK_SINGLE)
