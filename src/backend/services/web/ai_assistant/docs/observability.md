@@ -112,9 +112,9 @@ Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID�
 应用日志可以使用对象 UID、task ID、execution ID 等必要标识串联一次执行；Event 和 Trace 只在
 定位需要时携带受控标识，这些标识均不得作为无界 Metric 维度。
 
-外部调用失败时，内部异常日志可以记录排障所需的上游错误正文，但必须限制日志访问和保留周期，
-且不得进入前端错误、Metric 或 Event。仍禁止记录完整输入/上下文、日志样例、查询结果、完整工具响应、
-AG-UI 事件正文和最终产物；确需定位的 SQL 按查询模块既有受控日志策略处理。
+外部调用失败时，内部异常日志记录排障所需的上游错误正文，但必须限制日志访问和保留周期，
+且不得进入前端错误、Metric 或 Event。Agent 及日志工具的 ResourceRequestLog 保留请求、响应和异常正文，
+并视为受限诊断日志；查询 SQL 、结果和 Agent 输入/输出可能含业务数据，不得复制到普通业务日志或监控载荷。
 
 ### 3.5 Event 必须可行动
 
@@ -159,13 +159,13 @@ hard limit 只作为最终保险。
 Worker 在线数/重启数，以及按 `AUDIT_LOG_ANALYSIS` 统计的全局限流等待和拒绝量。以下异常需要联合排查：
 
 - 队列积压增长但 Worker 在线：检查限流、Agent 延迟和 gevent 并发占用；
-- `LogAnalysisTimeout` 比例上升：检查 Agent 和三个日志工具耗时，不记录具体条件或返回正文；
+- `LogAnalysisTimeout` 比例上升：检查 Agent 和三个日志工具耗时，并在受限 ResourceRequestLog 中核对具体条件和返回正文；
 - hard kill/Worker 重启增长：检查 30 分钟硬时限、内存与外部连接，随后确认 late ack 重投；
 - 流降级增长但业务成功率正常：检查 Redis、归档 checkpoint 和事件容量，MySQL Markdown 仍是事实源；
 - 长期 `PROCESSING` 增长：检查 RabbitMQ 投递、Worker 注册/队列配置和巡检收敛结果。
 
 该链路不把分析指令、检索条件值、用户名、日志样例、查询结果、完整工具响应、AG-UI 事件正文或
-最终 Markdown 写入常规观测载荷。应用日志允许记录附件、task、execution 等必要标识；Agent 上游
-调用失败时允许在受控异常日志中保留错误正文用于排障，但对外错误仍使用稳定码和脱敏文案。
+最终 Markdown 写入 Metric、Event 或普通 Trace 属性。这些内容可由 Agent 及日志工具的 ResourceRequestLog 保留供排障，
+并必须作为受限诊断日志管理；对外错误仍使用稳定码和脱敏文案。
 这些标识和正文不得作为 Metric 维度或 Event 载荷。接入与时序见
 [`log_analysis.md`](log_analysis.md)。

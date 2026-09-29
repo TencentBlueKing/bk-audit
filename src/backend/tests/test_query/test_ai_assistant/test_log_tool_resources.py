@@ -48,7 +48,11 @@ from services.web.query.ai_assistant.serializers import (
     SearchLogsRequestSerializer,
 )
 from services.web.query.mcp_views import MCPUserLogViewSet
-from services.web.query.resources.ai_assistant import MCPAggregateLogs, MCPSearchLogs
+from services.web.query.resources.ai_assistant import (
+    MCPAggregateLogs,
+    MCPGetLogFieldMetadata,
+    MCPSearchLogs,
+)
 from services.web.query.views import CollectorQueryViewSet
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 from tests.test_query.test_ai_assistant.test_log_aggregation_service import frames
@@ -74,6 +78,11 @@ class TestMCPUserLogRouting(SimpleTestCase):
             [("POST", "field_metadata"), ("POST", "search"), ("POST", "aggregate")],
         )
         self.assertIsInstance(MCPUserLogViewSet().get_permissions()[0], UserAPIGWPermission)
+
+    def test_log_tool_resources_keep_request_and_response_collection_enabled(self):
+        for resource_class in (MCPGetLogFieldMetadata, MCPSearchLogs, MCPAggregateLogs):
+            with self.subTest(resource=resource_class.__name__):
+                self.assertTrue(resource_class.support_data_collect)
 
 
 @override_settings(ROOT_URLCONF="services.web.urls")

@@ -68,8 +68,8 @@ class LogAnalysisTitleTaskTest(AIAssistantPlatformTestCase):
         self.assertTrue(generate_log_analysis_title.ignore_result)
         self.assertTrue(execute_log_analysis.ignore_result)
 
-    def test_agent_resources_do_not_collect_prompt_or_response_body(self):
-        self.assertFalse(ChatCompletion.support_data_collect)
+    def test_agent_resources_keep_request_and_response_collection_enabled(self):
+        self.assertTrue(ChatCompletion.support_data_collect)
 
     def test_default_title_is_replaced_by_shared_title_agent(self):
         with mock.patch.object(TitleAgentService, "generate_analysis_title", return_value="高风险操作分析") as generate:

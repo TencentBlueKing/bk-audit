@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""日志工具 QuerySync 响应隔离测试。"""
+"""日志工具 QuerySync 诊断信息保留测试。"""
 
 from unittest import mock
 
@@ -14,7 +14,7 @@ from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
 
 
 class TestSafeQuerySyncResource(SimpleTestCase):
-    """远端错误正文不得进入日志、异常或 OTel 状态描述。"""
+    """远端错误正文需保留在日志、异常和 OTel 状态中供排障。"""
 
     sentinel = "SELECT secret_value FROM audit WHERE token='raw-condition'"
 
@@ -24,6 +24,8 @@ class TestSafeQuerySyncResource(SimpleTestCase):
         response.content = self.sentinel.encode()
         response.status_code = 502
         response.headers = {"x-bkapi-request-id": "request-123"}
+        if isinstance(http_error, HTTPError):
+            http_error.response = response
         response.raise_for_status.side_effect = http_error
         return response
 
@@ -33,20 +35,21 @@ class TestSafeQuerySyncResource(SimpleTestCase):
 
         self.assertEqual(resource.parse_response(response), {"list": [{"count": 1}]})
 
-    def test_client_logs_sql_without_resource_response_body(self):
+    def test_resource_collection_stays_enabled(self):
+        self.assertTrue(SafeQuerySyncResource.support_data_collect)
+
+    def test_client_logs_sql(self):
         resource = SafeQuerySyncResource()
         response = self._response(payload={"result": True, "code": 0, "data": {"list": []}})
         with (
             mock.patch.object(resource.session, "request", return_value=response),
             mock.patch("api.bk_base.default.logger.info") as info,
-            mock.patch("bk_resource.base.bk_resource_settings.REQUEST_LOG_HANDLER") as request_log_handler,
         ):
             self.assertEqual(resource.request(sql=self.sentinel, prefer_storage="doris"), {"list": []})
 
         info.assert_any_call("[SafeQuerySyncResource] SQL => %s", self.sentinel)
-        request_log_handler.assert_not_called()
 
-    def test_remote_failure_body_is_absent_from_exception_logs_and_span_status(self):
+    def test_remote_failure_body_is_kept_in_exception_logs_and_span_status(self):
         resource = SafeQuerySyncResource()
         response = self._response(
             payload={"result": False, "code": "1500200", "message": self.sentinel, "data": self.sentinel}
@@ -64,15 +67,14 @@ class TestSafeQuerySyncResource(SimpleTestCase):
             with self.assertRaises(APIRequestError) as raised:
                 _run_with_api_resource_span(resource, lambda: resource.parse_response(response))
 
-        self.assertNotIn(self.sentinel, str(raised.exception))
-        self.assertNotIn(self.sentinel, repr(raised.exception.data))
-        resource_logger.error.assert_not_called()
-        resource_logger.exception.assert_not_called()
+        self.assertIn(self.sentinel, str(raised.exception))
+        self.assertIn(self.sentinel, str(raised.exception.data))
+        self.assertIn(self.sentinel, str(resource_logger.error.call_args_list))
         statuses = [call.args[0] for call in span.set_status.call_args_list]
         self.assertTrue(statuses)
-        self.assertTrue(all(self.sentinel not in str(status) for status in statuses))
+        self.assertTrue(any(self.sentinel in (status.description or "") for status in statuses))
 
-    def test_http_and_nonstandard_responses_raise_generic_api_error(self):
+    def test_http_and_nonstandard_responses_keep_remote_error_body(self):
         resource = SafeQuerySyncResource()
         cases = (
             self._response(payload={"message": self.sentinel}, http_error=HTTPError("bad gateway")),
@@ -83,8 +85,7 @@ class TestSafeQuerySyncResource(SimpleTestCase):
             with self.subTest(response=response):
                 with self.assertRaises(APIRequestError) as raised:
                     resource.parse_response(response)
-                self.assertNotIn(self.sentinel, str(raised.exception))
-                self.assertNotIn(self.sentinel, repr(raised.exception.data))
+                self.assertIn(self.sentinel, str(raised.exception))
 
     def test_http_timeout_status_is_mapped_to_log_query_timeout(self):
         resource = SafeQuerySyncResource()

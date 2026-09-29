@@ -378,7 +378,7 @@ class TestChatCompletionRelay(SimpleTestCase):
         self.assertTrue(any("event_count=5" in message for message in messages))
         self.assertFalse(any(secret_content in message for message in messages))
 
-    def test_parse_response_logs_http_error_metadata_without_business_body(self):
+    def test_parse_response_logs_http_error_body_for_diagnostics(self):
         secret_body = "SECRET_HTTP_ERROR_BODY"
         response = build_sse_response([])
         response.status_code = 502
@@ -391,9 +391,9 @@ class TestChatCompletionRelay(SimpleTestCase):
 
         messages = [record.getMessage() for record in records]
         self.assertTrue(any("status_code=502" in message and "stream_response=True" in message for message in messages))
-        self.assertFalse(any(secret_body in message for message in messages))
+        self.assertTrue(any(secret_body in message for message in messages))
 
-    def test_parse_response_relays_run_error_without_logging_business_body(self):
+    def test_parse_response_logs_relayed_run_error_for_diagnostics(self):
         secret_error = "SECRET_RUN_ERROR_BODY"
         response = build_sse_response([{"type": "RUN_ERROR", "message": secret_error}])
 
@@ -403,7 +403,7 @@ class TestChatCompletionRelay(SimpleTestCase):
         messages = [record.getMessage() for record in records]
         self.assertIsNone(result)
         self.assertTrue(any("status_code=200" in message and "stream_response=True" in message for message in messages))
-        self.assertFalse(any(secret_error in message for message in messages))
+        self.assertTrue(any(secret_error in message for message in messages))
 
     def test_public_agui_request_restores_session_after_protocol_error(self):
         response = build_sse_response([])

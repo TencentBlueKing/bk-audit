@@ -1087,7 +1087,7 @@ class TestAIAgentStreamCompatibility(TestCase):
         self.assertEqual(resource._parse_stream_response(response), "最终正文")
 
     @mock.patch("api.bk_plugins_ai_agent.default.logger.error")
-    def test_base_chat_completion_raises_agui_run_error_without_logging_message(self, mock_logger_error):
+    def test_base_chat_completion_logs_agui_run_error_message(self, mock_logger_error):
         resource = BaseChatCompletion()
         private_error = "PRIVATE_UPSTREAM_ERROR"
         response = mock.MagicMock()
@@ -1101,10 +1101,10 @@ class TestAIAgentStreamCompatibility(TestCase):
             resource._parse_stream_response(response)
 
         self.assertIn(private_error, context.exception.data["message"])
-        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+        self.assertIn(private_error, str(mock_logger_error.call_args_list))
 
     @mock.patch("bk_resource.contrib.api.logger.error")
-    def test_base_chat_completion_raises_non_stream_error_without_parent_logging_message(self, mock_logger_error):
+    def test_base_chat_completion_logs_non_stream_error_with_parent_logger(self, mock_logger_error):
         resource = BaseChatCompletion()
         private_error = "PRIVATE_NON_STREAM_ERROR"
         response = mock.MagicMock()
@@ -1122,7 +1122,7 @@ class TestAIAgentStreamCompatibility(TestCase):
 
         self.assertIn(private_error, context.exception.data["message"])
         self.assertNotIn("request-id", context.exception.data["message"])
-        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+        self.assertIn(private_error, str(mock_logger_error.call_args_list))
 
     def test_base_chat_completion_preserves_parent_http_error_for_unknown_status(self):
         """测试替身缺少整数状态码时，不应抢在父类 HTTP 校验前解析业务错误。"""
@@ -1141,8 +1141,8 @@ class TestAIAgentStreamCompatibility(TestCase):
         response.raise_for_status.assert_called_once_with()
 
     @mock.patch("bk_resource.contrib.api.logger.error")
-    def test_base_chat_completion_sanitizes_business_error_for_non_http_error_status(self, mock_logger_error):
-        """Requests 不将 600 视为 HTTP 错误，标准业务错误仍应绕过父类正文日志。"""
+    def test_base_chat_completion_logs_business_error_for_non_http_error_status(self, mock_logger_error):
+        """Requests 不将 600 视为 HTTP 错误，标准业务错误仍保留正文日志。"""
 
         resource = BaseChatCompletion()
         private_error = "PRIVATE_UNUSUAL_STATUS_ERROR"
@@ -1153,7 +1153,7 @@ class TestAIAgentStreamCompatibility(TestCase):
         with self.assertRaises(APIRequestError):
             resource.parse_response(response)
 
-        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+        self.assertIn(private_error, str(mock_logger_error.call_args_list))
 
     @mock.patch("bk_resource.contrib.api.logger.error")
     def test_base_chat_completion_preserves_iam_permission_error_contract(self, mock_logger_error):
@@ -1180,7 +1180,7 @@ class TestAIAgentStreamCompatibility(TestCase):
         mock_logger_error.assert_not_called()
 
     @mock.patch("api.bk_plugins_ai_agent.default.logger.error")
-    def test_base_chat_completion_raises_legacy_error_without_logging_message(self, mock_logger_error):
+    def test_base_chat_completion_logs_legacy_error_message(self, mock_logger_error):
         resource = BaseChatCompletion()
         private_error = "PRIVATE_LEGACY_ERROR"
         response = mock.MagicMock()
@@ -1194,7 +1194,7 @@ class TestAIAgentStreamCompatibility(TestCase):
             resource._parse_stream_response(response)
 
         self.assertIn(private_error, context.exception.data["message"])
-        self.assertNotIn(private_error, str(mock_logger_error.call_args_list))
+        self.assertIn(private_error, str(mock_logger_error.call_args_list))
 
 
 class TestGetAgentBaseUrl(TestCase):
