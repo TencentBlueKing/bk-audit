@@ -32,6 +32,10 @@ from services.web.ai_assistant.models import (
 )
 from services.web.query.constants import LogExportSourceType, TaskEnum
 from services.web.query.models import LogExportTask
+from tests.test_ai_assistant.factories import (
+    create_conversation,
+    create_conversation_group,
+)
 
 
 class AIAssistantConstantsTest(SimpleTestCase):
@@ -78,8 +82,8 @@ class AbstractModelTest(TestCase):
         self.assertFalse(hasattr(ai_models, "SourceModel"))
 
     def test_external_uid_is_unique_uuid4(self):
-        first = ConversationGroup.objects.create(name="默认分组", created_by="alice")
-        second = ConversationGroup.objects.create(name="默认分组", created_by="alice")
+        first = create_conversation_group(name="默认分组", created_by="alice")
+        second = create_conversation_group(name="默认分组", created_by="alice")
 
         self.assertIsInstance(first.uid, uuid.UUID)
         self.assertEqual(first.uid.version, 4)
@@ -106,10 +110,11 @@ class AbstractModelTest(TestCase):
 
     def test_confirmed_composite_indexes_and_non_unique_position(self):
         expected_indexes = {
-            Conversation: [("created_by", "is_deleted", "updated_at", "id")],
+            Conversation: [("created_by", "scope_type", "scope_id", "is_deleted", "updated_at", "id")],
+            ConversationGroup: [("created_by", "scope_type", "scope_id")],
             ConversationSidebarNode: [
-                ("created_by", "parent_node", "position", "id"),
-                ("created_by", "pinned_at", "id"),
+                ("created_by", "scope_type", "scope_id", "parent_node", "position", "id"),
+                ("created_by", "scope_type", "scope_id", "pinned_at", "id"),
             ],
             Message: [
                 ("conversation", "id"),
@@ -134,10 +139,23 @@ class AbstractModelTest(TestCase):
                 self.assertEqual([tuple(index.fields) for index in model._meta.indexes], expected)
         self.assertFalse(ConversationSidebarNode._meta.get_field("position").unique)
 
+    def test_scope_fields_are_required_and_concrete(self):
+        for model in (Conversation, ConversationGroup, ConversationSidebarNode):
+            with self.subTest(model=model):
+                scope_type = model._meta.get_field("scope_type")
+                scope_id = model._meta.get_field("scope_id")
+                self.assertEqual(scope_type.max_length, 32)
+                self.assertEqual(scope_type.choices, (("scene", "单场景"), ("system", "单系统")))
+                self.assertEqual(scope_id.max_length, 64)
+                self.assertFalse(scope_type.null)
+                self.assertFalse(scope_id.null)
+                self.assertFalse(scope_type.has_default())
+                self.assertFalse(scope_id.has_default())
+
 
 class ConversationModelTest(TestCase):
     def test_conversation_keeps_database_default_empty_and_supports_soft_delete(self):
-        conversation = Conversation.objects.create(created_by="alice")
+        conversation = create_conversation(created_by="alice")
         self.assertEqual(conversation.title, "")
 
         conversation.delete()
@@ -146,8 +164,8 @@ class ConversationModelTest(TestCase):
         self.assertTrue(Conversation._objects.get(pk=conversation.pk).is_deleted)
 
     def test_group_allows_duplicate_name_and_is_physically_deleted(self):
-        first = ConversationGroup.objects.create(name="工作", created_by="alice")
-        second = ConversationGroup.objects.create(name="工作", created_by="alice")
+        first = create_conversation_group(name="工作", created_by="alice")
+        second = create_conversation_group(name="工作", created_by="alice")
         self.assertNotEqual(first.pk, second.pk)
 
         first.delete()
@@ -158,11 +176,13 @@ class ConversationModelTest(TestCase):
 
 class SidebarNodeModelTest(TestCase):
     def setUp(self):
-        self.group = ConversationGroup.objects.create(name="工作", created_by="alice")
-        self.conversation = Conversation.objects.create(created_by="alice")
+        self.group = create_conversation_group(name="工作", created_by="alice")
+        self.conversation = create_conversation(created_by="alice")
         self.group_node = ConversationSidebarNode.objects.create(
             node_type=SidebarNodeType.GROUP,
             group=self.group,
+            scope_type=self.group.scope_type,
+            scope_id=self.group.scope_id,
             created_by="alice",
         )
 
@@ -172,6 +192,8 @@ class SidebarNodeModelTest(TestCase):
             node_type=SidebarNodeType.CONVERSATION,
             conversation=self.conversation,
             parent_node=self.group_node,
+            scope_type=self.conversation.scope_type,
+            scope_id=self.conversation.scope_id,
             created_by="alice",
         )
 
@@ -187,7 +209,9 @@ class SidebarNodeModelTest(TestCase):
             with self.subTest(values=values):
                 node = ConversationSidebarNode(
                     node_type=SidebarNodeType.GROUP,
-                    group=ConversationGroup.objects.create(name="分组", created_by="alice"),
+                    group=create_conversation_group(name="分组", created_by="alice"),
+                    scope_type="scene",
+                    scope_id="1",
                     created_by="alice",
                     **values,
                 )
@@ -198,6 +222,8 @@ class SidebarNodeModelTest(TestCase):
         with self.assertRaises(ValidationError):
             ConversationSidebarNode(
                 node_type=SidebarNodeType.GROUP,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
@@ -205,6 +231,8 @@ class SidebarNodeModelTest(TestCase):
         with self.assertRaises(ValidationError):
             ConversationSidebarNode(
                 node_type=SidebarNodeType.CONVERSATION,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
@@ -213,13 +241,17 @@ class SidebarNodeModelTest(TestCase):
                 node_type=SidebarNodeType.CONVERSATION,
                 group=self.group,
                 conversation=self.conversation,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
-        parent_conversation = Conversation.objects.create(created_by="alice")
+        parent_conversation = create_conversation(created_by="alice")
         conversation_parent_node = ConversationSidebarNode.objects.create(
             node_type=SidebarNodeType.CONVERSATION,
             conversation=parent_conversation,
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
         )
         with self.assertRaises(ValidationError):
@@ -227,36 +259,86 @@ class SidebarNodeModelTest(TestCase):
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation=self.conversation,
                 parent_node=conversation_parent_node,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
     def test_node_rejects_cross_user_target_and_parent(self):
-        other_group = ConversationGroup.objects.create(name="其他", created_by="bob")
+        other_group = create_conversation_group(name="其他", created_by="bob")
         with self.assertRaises(ValidationError):
             ConversationSidebarNode(
                 node_type=SidebarNodeType.GROUP,
                 group=other_group,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
-        other_conversation = Conversation.objects.create(created_by="bob")
-        with self.assertRaises(ValidationError):
+    def test_node_scope_must_match_business_object_and_parent(self):
+        invalid_nodes = (
+            ConversationSidebarNode(
+                node_type=SidebarNodeType.GROUP,
+                group=self.group,
+                scope_type="scene",
+                scope_id="2",
+                created_by="alice",
+            ),
             ConversationSidebarNode(
                 node_type=SidebarNodeType.CONVERSATION,
-                conversation=other_conversation,
+                conversation=create_conversation(scope_type="system", scope_id="bk_audit", created_by="alice"),
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
-            ).full_clean()
+            ),
+        )
+        for node in invalid_nodes:
+            with self.subTest(node_type=node.node_type), self.assertRaises(ValidationError):
+                node.full_clean()
 
+        other_group = create_conversation_group(name="另一个场景", scope_type="scene", scope_id="2", created_by="alice")
         other_group_node = ConversationSidebarNode.objects.create(
             node_type=SidebarNodeType.GROUP,
             group=other_group,
-            created_by="bob",
+            scope_type="scene",
+            scope_id="2",
+            created_by="alice",
         )
         with self.assertRaises(ValidationError):
             ConversationSidebarNode(
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation=self.conversation,
                 parent_node=other_group_node,
+                scope_type="scene",
+                scope_id="1",
+                created_by="alice",
+            ).full_clean()
+
+        other_conversation = create_conversation(created_by="bob")
+        with self.assertRaises(ValidationError):
+            ConversationSidebarNode(
+                node_type=SidebarNodeType.CONVERSATION,
+                conversation=other_conversation,
+                scope_type="scene",
+                scope_id="1",
+                created_by="alice",
+            ).full_clean()
+
+        bob_group = create_conversation_group(name="Bob 的分组", created_by="bob")
+        bob_group_node = ConversationSidebarNode.objects.create(
+            node_type=SidebarNodeType.GROUP,
+            group=bob_group,
+            scope_type="scene",
+            scope_id="1",
+            created_by="bob",
+        )
+        with self.assertRaises(ValidationError):
+            ConversationSidebarNode(
+                node_type=SidebarNodeType.CONVERSATION,
+                conversation=self.conversation,
+                parent_node=bob_group_node,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ).full_clean()
 
@@ -265,17 +347,23 @@ class SidebarNodeModelTest(TestCase):
             ConversationSidebarNode(
                 node_type=SidebarNodeType.GROUP,
                 group_id=999999999,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ),
             ConversationSidebarNode(
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation_id=999999999,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ),
             ConversationSidebarNode(
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation=self.conversation,
                 parent_node_id=999999999,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             ),
         )
@@ -289,18 +377,24 @@ class SidebarNodeModelTest(TestCase):
             ConversationSidebarNode.objects.create(
                 node_type=SidebarNodeType.GROUP,
                 group=self.group,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             )
 
         ConversationSidebarNode.objects.create(
             node_type=SidebarNodeType.CONVERSATION,
             conversation=self.conversation,
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
         )
         with self.assertRaises(IntegrityError), transaction.atomic():
             ConversationSidebarNode.objects.create(
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation=self.conversation,
+                scope_type="scene",
+                scope_id="1",
                 created_by="alice",
             )
 
@@ -309,6 +403,8 @@ class SidebarNodeModelTest(TestCase):
             node_type=SidebarNodeType.CONVERSATION,
             conversation=self.conversation,
             parent_node=self.group_node,
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
         )
 
@@ -321,7 +417,7 @@ class SidebarNodeModelTest(TestCase):
 
 class MessageModelTest(TestCase):
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice")
+        self.conversation = create_conversation(created_by="alice")
 
     def test_json_defaults_are_isolated_and_ids_are_increasing(self):
         first = Message.objects.create(
@@ -363,7 +459,7 @@ class MessageModelTest(TestCase):
 
 class AttachmentModelTest(TestCase):
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice")
+        self.conversation = create_conversation(created_by="alice")
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -444,7 +540,7 @@ class LogExportTaskSourceTest(TestCase):
         self.assertIsNone(task.source_id)
 
     def test_ai_export_can_reference_message_internal_id(self):
-        conversation = Conversation.objects.create(created_by="alice")
+        conversation = create_conversation(created_by="alice")
         message = Message.objects.create(
             conversation=conversation,
             message_type=MessageType.LOG_SEARCH,

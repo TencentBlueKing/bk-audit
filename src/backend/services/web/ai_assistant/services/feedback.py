@@ -81,14 +81,20 @@ class FeedbackService:
         return self._to_dto(feedback=feedback, source_uid=source.uid)
 
     def delete(self, *, feedback_uid: str) -> None:
-        """删除当前用户自己的反馈，不暴露其他用户反馈是否存在。"""
+        """删除当前用户在仍可访问来源上的反馈，不暴露其他用户反馈是否存在。"""
 
         try:
-            deleted, _ = Feedback.objects.filter(uid=feedback_uid, created_by=self.user).delete()
+            feedback = Feedback.objects.filter(uid=feedback_uid, created_by=self.user).first()
         except DjangoValidationError as error:
             raise FeedbackSourceNotFound() from error
-        if not deleted:
+        if feedback is None:
             raise FeedbackSourceNotFound()
+        self._load_source(
+            source_type=feedback.source_type,
+            lookup_field="id",
+            lookup_value=feedback.source_id,
+        )
+        feedback.delete()
 
     def bind_current_feedback(self, *, sources: list[FeedbackSource], source_type: str) -> None:
         """批量给待序列化来源绑定当前用户反馈，避免 Serializer 触发 N+1 查询。"""
@@ -112,33 +118,65 @@ class FeedbackService:
     def _resolve_source(self, *, source_type: str, source_uid: str) -> FeedbackSource:
         """按动态来源类型解析对象，并在同一查询内完成用户和软删除边界校验。"""
 
+        source = self._load_source(source_type=source_type, lookup_field="uid", lookup_value=source_uid)
+        if source.status != ExecutionStatus.SUCCESS:
+            raise InvalidFeedbackSourceState()
+        if source_type == FeedbackSourceType.MESSAGE:
+            handler_registry = message_handler_registry
+            handler_type = source.message_type
+        else:
+            handler_registry = attachment_handler_registry
+            handler_type = source.attachment_type
+        if not handler_registry.require(handler_type).supports_feedback:
+            raise FeedbackNotSupported()
+        return source
+
+    def _load_source(self, *, source_type: str, lookup_field: str, lookup_value) -> FeedbackSource:
+        """按所有权和软删除边界加载来源，同时读取所属会话的 scope。"""
+
         try:
             if source_type == FeedbackSourceType.MESSAGE:
                 source = (
                     Message.objects.filter(
-                        uid=source_uid,
+                        **{lookup_field: lookup_value},
                         created_by=self.user,
                         conversation__created_by=self.user,
                         conversation__is_deleted=False,
                     )
-                    .only("id", "uid", "status", "message_type")
+                    .select_related("conversation")
+                    .only(
+                        "id",
+                        "uid",
+                        "status",
+                        "message_type",
+                        "conversation__id",
+                        "conversation__scope_type",
+                        "conversation__scope_id",
+                    )
                     .first()
                 )
-                handler_registry = message_handler_registry
-                handler_type = source.message_type if source else None
             elif source_type == FeedbackSourceType.ATTACHMENT:
                 source = (
                     Attachment.objects.filter(
-                        uid=source_uid,
+                        **{lookup_field: lookup_value},
                         created_by=self.user,
                         source_message__conversation__created_by=self.user,
                         source_message__conversation__is_deleted=False,
                     )
-                    .only("id", "uid", "status", "attachment_type")
+                    .select_related("source_message__conversation")
+                    .only(
+                        "id",
+                        "uid",
+                        "status",
+                        "attachment_type",
+                        "source_message__id",
+                        "source_message__conversation_id",
+                        "source_message__conversation__id",
+                        "source_message__conversation__scope_type",
+                        "source_message__conversation__scope_id",
+                    )
                     .first()
                 )
-                handler_registry = attachment_handler_registry
-                handler_type = source.attachment_type if source else None
             else:
                 raise FeedbackSourceNotFound()
         except DjangoValidationError as error:
@@ -146,10 +184,6 @@ class FeedbackService:
 
         if source is None:
             raise FeedbackSourceNotFound()
-        if source.status != ExecutionStatus.SUCCESS:
-            raise InvalidFeedbackSourceState()
-        if not handler_registry.require(handler_type).supports_feedback:
-            raise FeedbackNotSupported()
         return source
 
     @staticmethod

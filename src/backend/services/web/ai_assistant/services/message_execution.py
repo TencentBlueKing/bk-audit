@@ -56,11 +56,15 @@ def load_message_execution(
         raise StaleMessageTask()
     if not Message.mark_processing_started(instance_id=message_id, task_id=task_id):
         raise StaleMessageTask()
-    message = Message.objects.filter(
-        id=message_id,
-        task_id=task_id,
-        status=ExecutionStatus.PROCESSING,
-    ).first()
+    message = (
+        Message.objects.select_related("conversation")
+        .filter(
+            id=message_id,
+            task_id=task_id,
+            status=ExecutionStatus.PROCESSING,
+        )
+        .first()
+    )
     if message is None:
         raise StaleMessageTask()
     handler = message_handler_registry.require(message.message_type)

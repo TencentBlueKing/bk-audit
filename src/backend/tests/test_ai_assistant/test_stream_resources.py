@@ -23,7 +23,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidStreamCursor,
     StreamNotEnabled,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.resources.stream import (
     GetAttachmentStream,
     GetAttachmentStreamSnapshot,
@@ -40,7 +40,11 @@ from services.web.ai_assistant.streaming.sse import (
     encode_sse_heartbeat,
 )
 from services.web.ai_assistant.views import AttachmentsViewSet
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     AttachmentHandlerRegistryMixin,
     EchoAttachmentStreamHandler,
@@ -194,7 +198,10 @@ class AttachmentStreamServiceTestCase(AttachmentHandlerRegistryMixin, TestCase):
     def setUp(self):
         self.user = "alice"
         use_attachment_handler(self, EchoAttachmentStreamHandler())
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -590,6 +597,14 @@ class AttachmentStreamIterationTest(AttachmentStreamServiceTestCase):
 
 @mock.patch("services.web.ai_assistant.resources.stream.get_request_username", return_value="alice")
 class StreamResourceTest(AttachmentStreamServiceTestCase):
+    def setUp(self):
+        super().setUp()
+        permission_username = mock.patch(
+            "services.web.ai_assistant.permissions.get_request_username", return_value="alice"
+        )
+        permission_username.start()
+        self.addCleanup(permission_username.stop)
+
     def test_snapshot_resource_returns_json_serializable_payload(self, _username):
         config = self.make_config()
         self.set_config(config)

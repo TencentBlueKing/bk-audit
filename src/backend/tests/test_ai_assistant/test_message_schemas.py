@@ -14,7 +14,13 @@ from services.web.ai_assistant.schemas import (
     dump_snapshot,
     parse_snapshot,
 )
+from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchInputSchema,
+    SystemSelectionInputSchema,
+    UserIntentInputSchema,
+)
 from tests.base import TestCase
+from tests.test_ai_assistant.base import make_condition
 
 
 class ExampleInput(MessageSchema):
@@ -139,3 +145,26 @@ class MessageSchemaTest(TestCase):
 
         self.assertEqual(context.exception.data["field_name"], "output_data")
         self.assertNotIn("must-not-leak", str(context.exception.data))
+
+
+class SessionScopeInputProtocolTest(TestCase):
+    def test_system_selection_and_user_intent_input_do_not_accept_session_scope(self):
+        test_cases = (
+            (SystemSelectionInputSchema, {"system_ids": ["bk_audit"]}),
+            (UserIntentInputSchema, {"query_text": "查日志", "auto_execute": True}),
+        )
+
+        for schema, payload in test_cases:
+            with self.subTest(schema=schema.__name__):
+                parsed = schema.model_validate(payload)
+                self.assertEqual(parsed.model_dump(mode="json"), payload)
+                with self.assertRaises(ValidationError):
+                    schema.model_validate({**payload, "scope_type": "scene", "scope_id": "1"})
+
+    def test_log_search_preserves_business_condition_scope(self):
+        condition = make_condition("bk_audit")
+
+        parsed = LogSearchInputSchema(condition=condition)
+
+        self.assertEqual(parsed.condition.scope_type, "system")
+        self.assertEqual(parsed.condition.scope_id, "bk_audit")

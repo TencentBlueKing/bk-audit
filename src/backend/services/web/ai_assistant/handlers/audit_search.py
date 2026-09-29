@@ -18,7 +18,6 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
     InvalidParentMessage,
-    ScopeContextRequired,
     SystemSelectionPermissionDenied,
     SystemSelectionRequired,
 )
@@ -56,18 +55,6 @@ from services.web.query.ai_assistant.schemas import (
 )
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.ai_assistant.services.log_search import LogSearchService
-
-
-def resolve_session_scope(parent: Message) -> tuple[str, str]:
-    """从父消息（SYSTEM_SELECTION / USER_INTENT）继承 session scope。
-
-    session scope 随消息快照固化在 context_data（重试/编辑复用），
-    LOG_SEARCH 续链必须按此收窄 system_id 过滤——与前端左上角场景过滤器
-    当前选择保持一致，AI 助手是场景内工具不能跨场景路由。
-    """
-
-    context = parent.context_data if isinstance(parent.context_data, dict) else {}
-    return str(context.get("scope_type") or ""), str(context.get("scope_id") or "")
 
 
 def resolve_selection_parent(*, user: str, conversation: Conversation, parent_message: Message | None) -> Message:
@@ -151,18 +138,13 @@ class SystemSelectionHandler(
                 or parent_message.status != ExecutionStatus.SUCCESS
             ):
                 raise InvalidParentMessage(message="系统选择只能作为根消息或成功意图识别消息的子消息")
-        # 创建/编辑强约束（schema 层宽松仅为兼容历史消息快照的读取/重试）
-        if not input_data.scope_type:
-            raise ScopeContextRequired()
         return MessagePreparation(
             parent_message=parent_message,
             context_data=SystemSelectionContextSchema(
                 username=user,
                 namespace=settings.DEFAULT_NAMESPACE,
-                # session scope 随消息快照固化（前端左上角场景过滤器当前选择），
-                # 后续 NL/LOG_SEARCH 子链继承同一 scope，防 AI 跨场景越权
-                scope_type=input_data.scope_type or "",
-                scope_id=input_data.scope_id or "",
+                scope_type=conversation.scope_type,
+                scope_id=conversation.scope_id,
             ),
         )
 
@@ -188,21 +170,9 @@ class SystemSelectionHandler(
         except AIPermissionDeniedError as error:
             # 所选系统均无检索权限：转为平台稳定错误（403），不误报为 AI 识别失败
             raise SystemSelectionPermissionDenied() from error
-        # 操作榜单按 session scope 候选系统集过滤（与前端左上角场景过滤器一致）：
-        # 场景内所有授权系统的历史/常用操作均可复用，不仅限当前所选系统——
-        # 切换场景后榜单随场景变化；无 scope（历史消息兜底）沿用所选系统
-        ranking_system_ids = list(input_data.system_ids)
-        if context_data.scope_type:
-            scoped_ids = set(
-                SearchLogPermission.get_scope_auth_systems(
-                    context_data.scope_type, context_data.scope_id, context_data.username
-                )
-            )
-            scoped_ids.discard("")  # ES filter 兜底空串
-            if scoped_ids:
-                ranking_system_ids = sorted(scoped_ids)
         common_operations, historical_operations = OperationContextService.build(
-            system_ids=ranking_system_ids,
+            scope_type=context_data.scope_type,
+            scope_id=context_data.scope_id,
             username=context_data.username,
         )
         return SystemSelectionOutputSchema(
@@ -239,17 +209,13 @@ class UserIntentHandler(MessageTypeHandler[UserIntentInputSchema, UserIntentCont
         # 入口消息无父：系统选择由任务内按意图识别结果创建/复用，prepare 阶段不做系统绑定
         if parent_message is not None:
             raise InvalidParentMessage(message="用户意图识别是入口消息，不能引用父消息")
-        # 创建/编辑强约束（schema 层宽松仅为兼容历史消息快照的读取/重试）
-        if not input_data.scope_type:
-            raise ScopeContextRequired()
         return MessagePreparation(
             parent_message=None,
             context_data=UserIntentContextSchema(
                 username=user,
                 namespace=settings.DEFAULT_NAMESPACE,
-                # 前端左上角场景过滤随消息快照固化：重试/编辑复用同一 scope 语义
-                scope_type=input_data.scope_type or "",
-                scope_id=input_data.scope_id or "",
+                scope_type=conversation.scope_type,
+                scope_id=conversation.scope_id,
             ),
         )
 
@@ -277,10 +243,9 @@ class LogSearchHandler(MessageTypeHandler[LogSearchInputSchema, LogSearchContext
     ) -> MessagePreparation[LogSearchContextSchema]:
         parent = self._resolve_parent(user=user, conversation=conversation, parent_message=parent_message)
         self._validate_scope(parent=parent, condition=input_data.condition)
-        # 从父消息（SYSTEM_SELECTION / USER_INTENT）继承 session scope：
-        # LogSearchService 按此过滤 system_id（覆盖 condition 维度的 system 校验），
-        # 防 AI 助手在检索链路绕过 session scope 越权
-        session_scope_type, session_scope_id = resolve_session_scope(parent)
+        # 父消息仅提供已选择系统，不作为会话范围事实来源。
+        session_scope_type = conversation.scope_type
+        session_scope_id = conversation.scope_id
         # 用户意图续链的条件由 AI 识别；field_condition 仅用户直接发起的条件检索
         source = "natural_language" if parent.message_type == MessageType.USER_INTENT else "field_condition"
         return MessagePreparation(

@@ -35,7 +35,7 @@ from services.web.ai_assistant.handlers import (
     attachment_handler_registry,
     message_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
+from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
@@ -67,9 +67,13 @@ from services.web.ai_assistant.services.message_execution import (
     finish_message_success,
     load_message_execution,
 )
+from services.web.common.scope_permission import ScopePermission
 from services.web.query.utils.search_config import QueryConditionOperator
 from tests.base import TestCase
 from tests.test_ai_assistant.base import ensure_business_handlers_registered
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoAttachmentAsyncHandler,
@@ -186,7 +190,7 @@ class MessageRequestSerializerTest(TestCase):
             data={
                 "conversation_uid": self.conversation_uid,
                 "message_type": MessageType.USER_INTENT,
-                "input_data": {"query_text": "查一下最近一天的日志", "scope_type": "cross_system"},
+                "input_data": {"query_text": "查一下最近一天的日志"},
             }
         )
         self.assertTrue(available.is_valid(), available.errors)
@@ -526,7 +530,10 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="alice")
 class MessageResourceTest(TestCase):
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
+        self.conversation = create_test_conversation(created_by="alice", updated_by="alice")
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
         self.sync_handler = FeedbackEchoSyncHandler()
         self.async_handler = EchoAsyncHandler()
         self.attachment_handler = FeedbackAttachmentEchoHandler()
@@ -816,7 +823,7 @@ class MessageResourceTest(TestCase):
         self.assertEqual([item["uid"] for item in window["results"]], [second["uid"]])
 
     def test_cross_user_resources_are_hidden(self, _username):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = Message.objects.create(
             conversation=foreign_conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -903,7 +910,7 @@ class MessageResourceTest(TestCase):
             RetryMessage().request({"message_uid": str(message.uid)})
 
     def test_retry_message_hides_foreign_and_deleted_conversation(self, _username):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign = self.create_failed_async_message(
             conversation=foreign_conversation,
             created_by="bob",

@@ -21,7 +21,7 @@ from services.web.ai_assistant.exceptions import (
     StaleMessageTask,
 )
 from services.web.ai_assistant.handlers import message_handler_registry
-from services.web.ai_assistant.models import Conversation, Message
+from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.services.message_execution import (
     finish_message_failure,
     finish_message_success,
@@ -35,6 +35,9 @@ from services.web.query.ai_assistant.exceptions import (
 )
 from tests.base import TestCase
 from tests.test_ai_assistant.base import ensure_business_handlers_registered
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoContext,
@@ -54,7 +57,7 @@ from tests.test_ai_assistant.handlers import (
 class MessageTaskTest(TestCase):
     def setUp(self):
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.handler = EchoAsyncHandler()
         register_test_message_handler(self.handler)
 

@@ -3,6 +3,7 @@ from django.utils.translation import gettext_lazy
 
 from core.models import get_request_username
 from services.web.ai_assistant.serializers.conversation import (
+    ClearConversationsRequestSerializer,
     ConversationCreateRequestSerializer,
     ConversationCreateResponseSerializer,
     ConversationDetailRequestSerializer,
@@ -17,6 +18,7 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarNodeListRequestSerializer,
     SidebarNodeResponseSerializer,
     SidebarPinRequestSerializer,
+    SidebarScopeQuerySerializer,
     SidebarSearchRequestSerializer,
 )
 from services.web.ai_assistant.services import (
@@ -39,7 +41,7 @@ class CreateConversationGroup(AIAssistantResource):
     ResponseSerializer = ConversationGroupResponseSerializer
 
     def perform_request(self, validated_request_data):
-        return ConversationService(user=get_request_username()).create_group(name=validated_request_data["name"])
+        return ConversationService(user=get_request_username()).create_group(**validated_request_data)
 
 
 class UpdateConversationGroup(AIAssistantResource):
@@ -73,6 +75,8 @@ class CreateConversation(AIAssistantResource):
     def perform_request(self, validated_request_data):
         creation = ConversationService(user=get_request_username()).create_conversation(
             title=validated_request_data["title"],
+            scope_type=validated_request_data["scope_type"],
+            scope_id=validated_request_data["scope_id"],
             group_uid=validated_request_data.get("group_uid"),
             initial_message=validated_request_data.get("initial_message"),
         )
@@ -114,23 +118,25 @@ class DeleteConversation(AIAssistantResource):
 
 
 class ClearConversations(AIAssistantResource):
-    """清空当前用户的全部会话和会话节点，但保留已创建的空分组。"""
+    """清空当前用户指定 scope 的会话和会话节点，但保留已创建的空分组。"""
 
     name = gettext_lazy("清空会话")
+    RequestSerializer = ClearConversationsRequestSerializer
 
     def perform_request(self, validated_request_data):
-        ConversationService(user=get_request_username()).clear_conversations()
+        ConversationService(user=get_request_username()).clear_conversations(**validated_request_data)
 
 
 class ListPinnedConversations(AIAssistantResource):
     """一次性返回全部置顶会话；这些会话不会重复出现在普通侧栏节点列表。"""
 
     name = gettext_lazy("获取置顶会话")
+    RequestSerializer = SidebarScopeQuerySerializer
     ResponseSerializer = SidebarNodeResponseSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        return ConversationSidebarService(user=get_request_username()).list_pinned()
+        return ConversationSidebarService(user=get_request_username()).list_pinned(**validated_request_data)
 
 
 class ListConversationSidebarNodes(AIAssistantResource):
@@ -145,6 +151,8 @@ class ListConversationSidebarNodes(AIAssistantResource):
     def perform_request(self, validated_request_data):
         parent_group_uid = validated_request_data.get("parent_node_uid")
         return ConversationSidebarService(user=get_request_username()).list_nodes(
+            scope_type=validated_request_data["scope_type"],
+            scope_id=validated_request_data.get("scope_id"),
             parent_group_uid=str(parent_group_uid) if parent_group_uid else None,
         )
 
@@ -167,6 +175,7 @@ class MoveConversationSidebarNode(AIAssistantResource):
 
     前端按以下规则组装请求：
 
+    - `scope_type/scope_id` 必填，指定本次移动所在的具体场景或系统；来源、目标和锚点必须属于该 scope。
     - `source_node_type/source_node_uid` 必填，`source_node_type` 可为 `GROUP` 或 `CONVERSATION`；UID 使用业务 UUID，
       不是内部 Node ID。分组来源只能留在根容器，不能嵌套到其他分组。
     - `target_node_type/target_node_uid` 必须成对出现，只用于指定目标容器；省略表示根容器，传 `GROUP + group_uid`
@@ -183,6 +192,8 @@ class MoveConversationSidebarNode(AIAssistantResource):
 
     ```json
     {
+      "scope_type": "scene",
+      "scope_id": "1",
       "source_node_type": "CONVERSATION",
       "source_node_uid": "source-conversation-uuid",
       "target_node_type": "GROUP",

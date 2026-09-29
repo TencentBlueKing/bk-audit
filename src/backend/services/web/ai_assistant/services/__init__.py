@@ -13,6 +13,7 @@ from services.web.ai_assistant.services.message import (
     PreparedMessage,
 )
 from services.web.ai_assistant.services.message_execution import MessageExecution
+from services.web.ai_assistant.services.scope import ScopeVisibility
 from services.web.ai_assistant.services.sidebar import ConversationSidebarService
 from services.web.ai_assistant.services.title_agent import TitleAgentService
 
@@ -30,5 +31,6 @@ __all__ = [
     "MessageService",
     "MessageWindow",
     "PreparedMessage",
+    "ScopeVisibility",
     "TitleAgentService",
 ]
