@@ -127,8 +127,8 @@
         </bk-form-item>
         <bk-loading :loading="detailLoading">
           <bk-form-item
-            v-if="Object.keys(paramsDetailData)?.length"
-            class="is-required pa-params-form-item"
+            v-if="hasUserInputParams"
+            class="pa-params-form-item"
             :label="t('套餐参数')"
             property="pa_params">
             <div class="pa-params-grid">
@@ -136,15 +136,10 @@
                 v-for="(val, index) in Object.values(sortByIndex (paramsDetailData))"
                 :key="`${val.key}-${index}`">
                 <bk-form-item
-                  v-if="val.show_type === 'show' && !val.is_hide"
+                  v-if="isUserInput(val) && !val.is_hide"
                   class="pa-params-field"
                   :label="val.name"
-                  :property="`pa_params.${val.key}`"
-                  required
-                  :rules="[
-                    { message: t('不能为空'),
-                      validator: (value: any) => handlePaValidate(value) },
-                  ]">
+                  :property="`pa_params.${val.key}`">
                   <application-parameter
                     v-model="formData.pa_params[val.key]"
                     clearable
@@ -226,6 +221,12 @@
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
   import RichEditor from '@components/editor/index.vue';
+
+  import {
+    buildSubmitPaParams,
+    isUserInput,
+    syncPaParamVisibility,
+  } from '@/utils/assist/pa-param-submit';
 
   interface Props {
     riskId: string,
@@ -322,14 +323,6 @@
       trigger: 'change',
       message: t('处理套餐不能为空'),
     }],
-    pa_params: [
-      {
-        validator: (value: Record<string, any>) => Object.keys(value).length > 0
-          && Object.values(value).every(item => !!item),
-        message: t('套餐参数不能为空'),
-        trigger: 'change',
-      },
-    ],
   };
   const radioGroup = computed(() => {
     const options = [
@@ -349,12 +342,14 @@
   });
   const formRef = ref();
   const loading = computed(() => transLoading.value || autoProcessLoading.value
-    || closeLoading.value || misreportLoading.value);
+    || closeLoading.value || misreportLoading.value || detailLoading.value);
   const filterProcessApplicationList = computed(() => processApplicationList.value
     .filter(item => item.is_enabled));
 
   const handlePaIdChange = (id: string) => {
     if (id) {
+      paramsDetailData.value = {};
+      formData.value.pa_params = {};
       const sopsTemplateId = processApplicationList.value
         .find(item => item.id === id)?.sops_template_id;
       fetchDetail({
@@ -364,19 +359,6 @@
       paramsDetailData.value = {};
       formData.value.pa_params = {};
     }
-  };
-
-  const handlePaValidate = (value: { field: string; value: string }) => {
-    const isEmpty = (v: any) => v === undefined
-      || v === null
-      || v === ''
-      || (Array.isArray(v) && v.length === 0);
-    if (!value || typeof value !== 'object') return false;
-    const { field, value: val } = value;
-    const isFieldEmpty = isEmpty(field);
-    const isValueEmpty = isEmpty(val);
-    // field 和 value 同时为空，才算不通过
-    return !(isFieldEmpty && isValueEmpty);
   };
 
   const handleTransferOperatorsChange = () => {
@@ -415,12 +397,16 @@
     }, {} as Record<string, ParamItem>);
   };
   const paramsDetailData = ref<Record<string, ParamItem>>({});
+  const hasUserInputParams = computed(() => Object.values(paramsDetailData.value).some(isUserInput));
   const {
     run: fetchDetail,
     loading: detailLoading,
   } = useRequest(SoapManageService.fetchDetail, {
     defaultValue: {},
     onSuccess(data) {
+      if (!formData.value.pa_id) {
+        return;
+      }
       // 给对象中的每一项添加 type: 'self',
       Object.keys(data).forEach((key) => {
         // eslint-disable-next-line no-param-reassign
@@ -429,14 +415,8 @@
         data[key].is_hide = false;
       });
       paramsDetailData.value = data;
-      // 如果是新建 或者 pa_params为null
       formData.value.pa_params = {};
-      Object.values(data).forEach((val) => {
-        formData.value.pa_params[val.key] = {
-          field: '',
-          value: '', // 添加填写字段
-        };
-      });
+      syncPaParamVisibility(formData.value.pa_params, Object.values(data));
     },
   });
 
@@ -533,6 +513,9 @@
     };
   };
   const handleSubmit = () => {
+    if (detailLoading.value) {
+      return;
+    }
     formRef.value.validate().then(() => {
       switch (formData.value.method) {
       case 'closeOrder':
@@ -544,7 +527,10 @@
         });
         break;
       case 'ProcessPackage':
-        autoProcess(formData.value);
+        autoProcess({
+          ...formData.value,
+          pa_params: buildSubmitPaParams(formData.value.pa_params, Object.values(paramsDetailData.value)),
+        });
         break;
       case 'misreport':
         updateRiskLabel({
@@ -614,35 +600,8 @@
   );
 
   watch(
-    () => formData.value, (val) => {
-      Object.keys(paramsDetailData.value).forEach((obj) => {
-        if (paramsDetailData.value[obj]?.hide_condition) {
-          const hideCondition = paramsDetailData.value[obj]?.hide_condition;
-          // 添加安全检查，确保hideCondition存在且是数组
-          if (hideCondition && Array.isArray(hideCondition)) {
-            hideCondition.forEach((item: any) => {
-              // 根据操作符进行条件判断
-              const oldIsHide = paramsDetailData.value[obj].is_hide;
-              switch (item.operator) {
-              case '=':
-                paramsDetailData.value[obj].is_hide = (
-                  item.value.toString() === val.pa_params[item.constant_key].value.toString()
-                );
-                break;
-              default:
-                paramsDetailData.value[obj].is_hide = false;
-                break;
-              }
-              // 当字段从显示变为隐藏时，重置对应的参数值
-              if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
-                formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
-                formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
-              }
-            });
-          }
-        }
-      });
-    },
+    () => formData.value.pa_params,
+    paParams => syncPaParamVisibility(paParams, Object.values(paramsDetailData.value)),
     { deep: true },
   );
 </script>

@@ -33,8 +33,8 @@ def build_schema_fields(entries: List[dict]) -> List[dict]:
             "is_dimension": False,
             "is_key": False,
             "field_index": index,
-            "is_json": entry["type"] in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value],
-            "is_original_json": entry["type"] in [JsonSchemaFieldType.JSON.value],
+            "is_json": False,
+            "is_original_json": JsonSchemaFieldType.is_original_json(entry["type"]),
         }
         for index, entry in enumerate(entries)
     ]
@@ -49,6 +49,34 @@ def make_asset_handler(schema_entries: List[dict]) -> AssetEtlStorageHandler:
     )
     handler.__dict__["schema_fields"] = build_schema_fields(schema_entries)
     return handler
+
+
+def test_asset_json_containers_use_original_json_not_variant():
+    """object/array/json 下发给 Doris 时使用原生 JSON，不标记 is_json（VARIANT）。"""
+    schema = [
+        {"id": "meta", "type": JsonSchemaFieldType.OBJECT.value, "description": "对象"},
+        {"id": "tags", "type": JsonSchemaFieldType.ARRAY.value, "description": "数组"},
+        {"id": "payload", "type": JsonSchemaFieldType.JSON.value, "description": "JSON"},
+        {"id": "name", "type": JsonSchemaFieldType.STRING.value, "description": "名称"},
+    ]
+    handler = AssetEtlStorageHandler(
+        data_id=1,
+        system=SimpleNamespace(system_id="bk_system"),
+        resource_type=SimpleNamespace(resource_type_id="bk_resource_type"),
+        storage_type=SnapShotStorageChoices.DORIS.value,
+    )
+    with _mock.patch(
+        "services.web.databus.collector.snapshot.join.etl_storage.resource.meta.resource_type_schema",
+        return_value=schema,
+    ):
+        fields = {field["field_name"]: field for field in handler.storage_fields}
+
+    for name in ("meta", "tags", "payload"):
+        assert fields[name]["is_json"] is False
+        assert fields[name]["is_original_json"] is True
+        assert fields[name]["field_type"] == "text"
+    assert fields["name"]["is_json"] is False
+    assert fields["name"]["is_original_json"] is False
 
 
 def test_asset_fields_preserve_builtin_metadata():

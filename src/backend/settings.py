@@ -72,6 +72,10 @@ def load_settings(module_path: str, raise_exception: bool = True):
 load_settings(module_path=DJANGO_CONF_MODULE)
 load_settings(module_path=f"services.{DEPLOY_SERVICE}.settings", raise_exception=False)
 
+# 环境配置常整份替换 DATABASES 且不带 charset，PyMySQL 会退回 utf8（3 字节）。
+# emoji 写入 utf8 列时，非严格模式下会从该字符起把后续文本静默截掉。
+globals()["DATABASES"]["default"].setdefault("OPTIONS", {})["charset"] = "utf8mb4"
+
 
 def _ensure_project_templates() -> None:
     """
