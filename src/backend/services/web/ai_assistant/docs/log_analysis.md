@@ -176,10 +176,10 @@ workload 还需监控 RabbitMQ ready/unacked、Worker 在线数和 Agent 限流�
 
 Metric、Event 和 Trace 禁止记录分析指令、用户名、日志样例、工具响应正文、AG-UI 事件正文或
 最终 Markdown，也不使用 task ID、execution ID 或对象 UID 作为 Metric 维度。应用日志可记录这些
-必要执行标识以串联排障；Agent 上游调用失败时可在受控异常日志中保留错误正文，对外响应仍只返回
-稳定错误码和脱敏文案。日志查询工具为便于排查会在
-`SafeQuerySyncResource` 记录实际提交的 SQL（包含检索条件），但关闭默认 Resource 正文采集且不
-记录查询结果；部署侧必须按审计日志等级控制诊断日志的访问和保留。
+必要执行标识以串联排障；Agent 上游调用失败时在异常日志中保留错误正文，对外响应仍只返回
+稳定错误码和脱敏文案。Agent 及日志查询 Resource 保留默认请求/响应采集；
+`SafeQuerySyncResource` 额外记录实际提交的 SQL（包含检索条件）、查询响应和远端错误正文。
+该类诊断日志可能包含业务数据，部署侧必须按审计日志等级严格控制访问和保留。
 
 ## 真实组件验证
 

@@ -93,7 +93,6 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     name = gettext_lazy("获取日志字段元信息")
     RequestSerializer = GetLogFieldMetadataRequestSerializer
     ResponseSerializer = GetLogFieldMetadataResponseSerializer
-    support_data_collect = False
 
     def perform_request(self, validated_request_data):
         data = dict(validated_request_data)
@@ -116,7 +115,6 @@ class MCPSearchLogs(QueryBaseResource):
     name = gettext_lazy("MCP 查询日志明细")
     RequestSerializer = SearchLogsRequestSerializer
     ResponseSerializer = SearchLogsResponseSerializer
-    support_data_collect = False
 
     def perform_request(self, validated_request_data):
         data = dict(validated_request_data)
@@ -141,7 +139,6 @@ class MCPAggregateLogs(QueryBaseResource):
     name = gettext_lazy("MCP 聚合日志")
     RequestSerializer = AggregateLogsRequestSerializer
     ResponseSerializer = AggregateLogsResponseSerializer
-    support_data_collect = False
 
     def perform_request(self, validated_request_data):
         data = dict(validated_request_data)
