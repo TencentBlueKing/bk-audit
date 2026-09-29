@@ -8,18 +8,33 @@
     query: '查一下示例审计系统近七天eval_user_alpha的操作记录'
     current_system_id: ''
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: eq
+        filters: ["eval_user_alpha"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.filters.includes("eval_user_alpha")) && d.condition.start_time.startsWith("2026-08-28")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-08-28")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: 'chain-系统+检索一体（含执行结果语义：失败 → result_code=-1 原始值）'
   vars:
     query: '我要看示例审计系统最近三天的失败日志'
     current_system_id: ''
     chain: true
+    expected_conditions:
+      - raw_name: result_code
+        keys: []
+        field_type: int
+        operator: include
+        filters: [-1]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.map(String).includes("-1"))'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 # ---- 场景B：已有系统 + 纯日志检索（复用当前系统）----
 - description: 'chain-已有系统纯检索（复用示例审计系统，不重建选择）'
@@ -27,18 +42,32 @@
     query: '看下eval_user_alpha最近三天的操作日志'
     current_system_id: 'eval_audit_system'
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: eq
+        filters: ["eval_user_alpha"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: 'chain-已有系统关键词检索（log 全文兜底路径）'
   vars:
     query: '搜一下权限变更相关的日志'
     current_system_id: 'eval_audit_system'
     chain: true
+    expected_conditions:
+      - raw_name: log
+        keys: []
+        operator: match_any
+        filters: ["权限变更"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "log")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.system_id === "eval_audit_system" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 # ---- 场景C：切换系统 + 日志检索 ----
 - description: 'chain-切换系统+检索（已选示例审计系统，点名示例流水线系统）'
@@ -46,9 +75,16 @@
     query: '我要看示例流水线系统近七天eval_user_beta的操作日志'
     current_system_id: 'eval_audit_system'
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: eq
+        filters: ["eval_user_beta"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.filters.includes("eval_user_beta"))'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 # ---- 场景D：新会话纯检索（SYSTEM_REQUIRED 平台守门）----
 - description: 'chain-新会话纯检索（无系统 → SYSTEM_REQUIRED + 候选清单）'
@@ -76,9 +112,16 @@
     query: '查一下工单号 Story-3000 相关的操作'
     current_system_id: 'eval_audit_system'
     chain: true
+    expected_conditions:
+      - raw_name: extend_data
+        keys: ["ticket_id"]
+        operator: eq
+        filters: ["Story-3000"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "extend_data" && c.field.keys.includes("ticket_id") && c.filters.includes("Story-3000"))'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "log_search" && d.messages.length === 1 && d.messages[0].message_type === "LOG_SEARCH" && d.condition !== null'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 # ---- 场景G：时间推算串联（纯时间窗口 → 空 conditions）----
 - description: 'chain-纯时间窗口（仅时间的有效检索 → 空 conditions + 换算窗口）'
@@ -96,24 +139,60 @@
     query: '查一下示例审计系统近七天eval_user_alpha、eval_user_beta、eval_user_gamma、eval_user_delta和eval_user_epsilon的操作记录'
     current_system_id: ''
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: include
+        filters: ["eval_user_alpha", "eval_user_beta", "eval_user_gamma", "eval_user_delta", "eval_user_epsilon"]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 5 && ["eval_user_alpha","eval_user_beta","eval_user_gamma","eval_user_delta","eval_user_epsilon"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-08-28")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-08-28")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: 'chain-切换系统+多人+失败（示例流水线系统+2人+result_code=-1）'
   vars:
     query: '我要看示例流水线系统上周eval_user_alpha和eval_user_beta的失败操作'
     current_system_id: 'eval_audit_system'
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: include
+        filters: ["eval_user_alpha", "eval_user_beta"]
+      - raw_name: result_code
+        keys: []
+        field_type: int
+        operator: include
+        filters: [-1]
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 2 && c.filters.includes("eval_user_alpha") && c.filters.includes("eval_user_beta")) && d.condition.conditions.some(c => c.field.raw_name === "result_code" && c.filters.map(String).includes("-1")) && d.condition.start_time.startsWith("2026-08-24") && d.condition.end_time.startsWith("2026-08-31")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-08-24") && d.condition.end_time.startsWith("2026-08-31")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js
 
 - description: 'chain-选系统+海量多值（示例审计系统+10人梯度完整性）'
   vars:
     query: '帮我看下示例审计系统最近三天eval_user_alpha、eval_user_beta、eval_user_gamma、eval_user_delta、eval_user_epsilon、eval_user_zeta、eval_user_eta、eval_user_theta、eval_user_iota、eval_user_kappa这十个人的操作日志'
     current_system_id: ''
     chain: true
+    expected_conditions:
+      - raw_name: username
+        keys: []
+        operator: include
+        filters:
+          - eval_user_alpha
+          - eval_user_beta
+          - eval_user_gamma
+          - eval_user_delta
+          - eval_user_epsilon
+          - eval_user_zeta
+          - eval_user_eta
+          - eval_user_theta
+          - eval_user_iota
+          - eval_user_kappa
   assert:
     - type: javascript
-      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.operator === "include" && c.filters.length === 10 && ["eval_user_alpha","eval_user_beta","eval_user_gamma","eval_user_delta","eval_user_epsilon","eval_user_zeta","eval_user_eta","eval_user_theta","eval_user_iota","eval_user_kappa"].every(n => c.filters.includes(n))) && d.condition.start_time.startsWith("2026-09-01")'
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-09-01")'
+    - type: javascript
+      value: file://assertions/exact_conditions.js

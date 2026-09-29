@@ -20,6 +20,7 @@ import abc
 import json
 import os
 import threading
+import time
 from contextvars import ContextVar
 from typing import Any, Callable
 
@@ -33,6 +34,7 @@ from requests.exceptions import HTTPError
 from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
 from api.bk_plugins_ai_agent.constants import AI_THINKING_PLACEHOLDERS
 from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
+from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
 
@@ -137,6 +139,16 @@ class ChatCompletion(AIAgentBase):
     support_data_collect = False
     # Resource 是进程级单例；回调必须按当前请求隔离，不写到实例属性或上游请求中。
     _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("chat_on_event", default=None)
+    agent_code: AIAgentCode | None = None
+    enable_agent_rate_limit = True
+
+    def _resolve_agent_code(self, validated_request_data: dict) -> AIAgentCode:
+        """解析通用参数或固定 Client 声明的 Agent Code。"""
+
+        agent_code = self.agent_code or validated_request_data.get("agent_code")
+        if not agent_code:
+            raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
+        return AIAgentCode(agent_code)
 
     def build_url(self, validated_request_data):
         agent_code = validated_request_data.pop("agent_code", None)
@@ -150,12 +162,40 @@ class ChatCompletion(AIAgentBase):
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
     def perform_request(self, validated_request_data):
-        """绑定请求内的事件回调；调用方传入的字典仍可复用。"""
+        """绑定流式回调并在取得 Agent 全局配额后发起 HTTP 请求。"""
+
         request_data = dict(validated_request_data)
         on_event = request_data.pop("on_event", None)
+        # 单次开关只允许历史固定 Client 接入限流，不能关闭通用 Client 的默认限流。
+        request_rate_limit_opt_in = request_data.pop("_enable_agent_rate_limit", False)
+        enable_agent_rate_limit = self.enable_agent_rate_limit or request_rate_limit_opt_in
         callback_token = self._on_event_context.set(on_event)
         try:
-            return super().perform_request(request_data)
+            agent_code = self._resolve_agent_code(request_data)
+            self._current_agent_code = agent_code
+            if enable_agent_rate_limit:
+                agent_rate_limiter.acquire(agent_code)
+            request_started_at = time.monotonic()
+            try:
+                result = super().perform_request(request_data)
+            except Exception as error:
+                logger.warning(
+                    "AI agent downstream request failed",
+                    extra={
+                        "agent_code": agent_code.value,
+                        "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                        "error_type": error.__class__.__name__,
+                    },
+                )
+                raise
+            logger.info(
+                "AI agent downstream request completed",
+                extra={
+                    "agent_code": agent_code.value,
+                    "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                },
+            )
+            return result
         finally:
             self._on_event_context.reset(callback_token)
             self._current_agent_code = None

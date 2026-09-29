@@ -1,19 +1,20 @@
 import logging
 from typing import Any, Generic, TypeVar
 
-from celery import Task
 from celery.exceptions import Ignore, Retry
 from django.core.exceptions import ImproperlyConfigured
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from services.web.ai_assistant.constants import ExecutionObjectType
 from services.web.ai_assistant.observability import start_execution_span
 from services.web.ai_assistant.schemas import SnapshotInput
+from services.web.common.ai import AIAgentTask
 
 logger = logging.getLogger(__name__)
 ExecutionT = TypeVar("ExecutionT")
 
 
-class BaseExecutionTask(Task, Generic[ExecutionT]):
+class BaseExecutionTask(AIAgentTask, Generic[ExecutionT]):
     """为消息和附件 Task 注入类型化快照，并统一收敛执行终态。
 
     业务 Task 继续使用 Celery 原生重试配置。调用 ``self.retry()`` 时不要覆盖
@@ -127,6 +128,26 @@ class BaseExecutionTask(Task, Generic[ExecutionT]):
             # Retry 已由 Celery 完成重投；收尾观测失败不能覆盖该控制异常。
             self._handle_retry_best_effort(execution=execution)
             raise
+        except AgentRateLimited as error:
+            try:
+                self.retry_agent_rate_limit(error)
+            except Retry:
+                self._handle_retry_best_effort(execution=execution)
+                raise
+            except AgentRateLimited:
+                # 基础设施预算耗尽后必须进入领域失败收尾，避免消息永久停在 PROCESSING。
+                self._log_failure(
+                    "AI Agent 限流重试耗尽",
+                    instance_id=instance_id,
+                    task_id=task_id,
+                )
+                self._fail_or_retry(
+                    execution=execution,
+                    instance_id=instance_id,
+                    task_id=task_id,
+                    exception=error,
+                )
+                raise
         except self.stale_exception:
             raise
         except Exception as error:

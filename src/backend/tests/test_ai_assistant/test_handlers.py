@@ -4,19 +4,15 @@
 from unittest import mock
 
 from services.web.ai_assistant.exceptions import (
-    InvalidMessageSnapshot,
     InvalidParentMessage,
     SystemSelectionPermissionDenied,
-    SystemSelectionRequired,
 )
 from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
-    NaturalLanguageSearchHandler,
     SystemSelectionHandler,
 )
 from services.web.ai_assistant.schemas.audit_search import (
     LogSearchInputSchema,
-    NLSearchInputSchema,
     SystemSelectionInputSchema,
 )
 from tests.test_ai_assistant.base import (
@@ -187,94 +183,6 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 )
 
 
-class TestNaturalLanguageSearchHandler(AIAssistantPlatformTestCase):
-    def setUp(self):
-        super().setUp()
-        self.handler = NaturalLanguageSearchHandler()
-        self.input = NLSearchInputSchema(query_text="查一下 admin 的日志")
-
-    def test_prepare_resolves_latest_selection_without_parent(self):
-        """前端不传 parent 时，后端绑定最新成功系统选择消息。"""
-
-        old_selection = self.create_selection_message()
-        latest_selection = self.create_selection_message()
-        self.assertGreater(latest_selection.id, old_selection.id)
-        preparation = self.handler.prepare(
-            user=self.user,
-            conversation=self.conversation,
-            parent_message=None,
-            input_data=self.input,
-        )
-        self.assertEqual(preparation.parent_message.id, latest_selection.id)
-
-    def test_prepare_without_selection_raises(self):
-        """当前会话无成功选择时返回稳定错误。"""
-
-        with self.assertRaises(SystemSelectionRequired):
-            self.handler.prepare(
-                user=self.user,
-                conversation=self.conversation,
-                parent_message=None,
-                input_data=self.input,
-            )
-
-    def test_prepare_with_explicit_invalid_parent_rejected(self):
-        """显式传入的父消息类型错误时拒绝。"""
-
-        nl_parent = self.create_nl_message()
-        with self.assertRaises(InvalidParentMessage):
-            self.handler.prepare(
-                user=self.user,
-                conversation=self.conversation,
-                parent_message=nl_parent,
-                input_data=self.input,
-            )
-
-    def test_prepare_copies_context_snapshot(self):
-        """上下文从父消息复制最小充分字段上下文（协议 §7.2）。"""
-
-        selection = make_selection_output()
-        self.create_selection_message(output=selection)
-        preparation = self.handler.prepare(
-            user=self.user,
-            conversation=self.conversation,
-            parent_message=None,
-            input_data=self.input,
-        )
-        context = preparation.context_data
-        self.assertEqual(context.scope_id, TARGET_SYSTEM_ID)
-        self.assertEqual(context.system_selection.systems[0].system_id, TARGET_SYSTEM_ID)
-        self.assertEqual(len(context.system_selection.systems[0].extension_fields), 1)
-
-    def test_prepare_inherits_session_scope_from_selection(self):
-        """session scope 从父 SELECTION 继承：NL 续链按同一场景收窄（防跨场景越权）。"""
-
-        self.create_selection_message()
-        preparation = self.handler.prepare(
-            user=self.user,
-            conversation=self.conversation,
-            parent_message=None,
-            input_data=self.input,
-        )
-        context = preparation.context_data
-        self.assertEqual(context.session_scope_type, self.default_scope_type)
-        self.assertEqual(context.session_scope_id, self.default_scope_id)
-
-    def test_prepare_with_empty_output_snapshot_rejected(self):
-        """父选择消息输出缺失时拒绝（快照损坏防御）。"""
-
-        selection_message = self.create_selection_message()
-        selection_message.output_data = {}
-        selection_message.save(update_record=False, update_fields=["output_data"])
-        with self.assertRaises(InvalidMessageSnapshot):
-            self.handler.prepare(
-                user=self.user,
-                conversation=self.conversation,
-                parent_message=None,
-                input_data=self.input,
-            )
-
-
 class TestLogSearchHandler(AIAssistantPlatformTestCase):
     def setUp(self):
         super().setUp()
@@ -300,23 +208,28 @@ class TestLogSearchHandler(AIAssistantPlatformTestCase):
         self.assertEqual(preparation.context_data.session_scope_type, self.default_scope_type)
 
     def test_prepare_with_nl_parent(self):
-        """NL 续链：自然语言父消息，source=natural_language。"""
+        """用户意图续链：父消息为 USER_INTENT，source=natural_language。"""
 
         selection = self.create_selection_message()
         nl_message = self.create_nl_message(parent=selection, condition=make_condition())
-        preparation = self._prepare(parent=nl_message)
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.FieldContextService.build_selection",
+            return_value=make_selection_output(),
+        ):
+            preparation = self._prepare(parent=nl_message)
         self.assertEqual(preparation.parent_message.id, nl_message.id)
         self.assertEqual(preparation.context_data.source, "natural_language")
 
     def test_prepare_inherits_session_scope_from_nl_parent(self):
-        """[review P2] NL 父消息的 session scope 继承：NL 上下文的 scope_id 是目标系统
-        （非 session scope），session scope 固化在 session_scope_* 字段——统一读
-        scope_type/scope_id 会得到 ("", 目标系统)：丢失场景范围回退 system 维度校验，
-        且目标系统被误当 scope 实例。"""
+        """用户意图父消息的 session scope 取上下文 scope_type/scope_id。"""
 
         selection = self.create_selection_message()
         nl_message = self.create_nl_message(parent=selection, condition=make_condition())
-        preparation = self._prepare(parent=nl_message)
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.FieldContextService.build_selection",
+            return_value=make_selection_output(),
+        ):
+            preparation = self._prepare(parent=nl_message)
         self.assertEqual(preparation.context_data.session_scope_type, self.default_scope_type)
         self.assertEqual(preparation.context_data.session_scope_id, self.default_scope_id)
 

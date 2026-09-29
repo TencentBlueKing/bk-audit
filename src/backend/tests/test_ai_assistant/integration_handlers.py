@@ -51,7 +51,7 @@ def execute_real_message_success(
 
 
 class RealMessageSuccessHandler(MessageTypeHandler[IntegrationInput, IntegrationContext, IntegrationOutput]):
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    message_type = MessageType.USER_INTENT
     execution_mode = ExecutionMode.ASYNC
     input_model = IntegrationInput
     context_model = IntegrationContext

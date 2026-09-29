@@ -18,14 +18,14 @@ evals/
 │   ├── tests/                  # 测试用例（按场景分文件）
 │   └── output/                 # 评估结果（.gitignore）
 │
-├── audit-log-search/           # 审计 AI 日志检索评估项目
+├── audit-log-search/           # 已退役的旧 NL2JSON 评测，仅保留历史用例
 │   ├── promptfooconfig.yaml
 │   ├── providers/
 │   ├── assertions/
 │   ├── tests/
 │   └── output/
 │
-├── intent-recognition/         # AI 用户意图判断评估项目
+├── intent-recognition/         # 当前 AI 消息规划与检索条件评估项目
 │   ├── promptfooconfig.yaml
 │   ├── providers/
 │   ├── tests/
@@ -77,5 +77,6 @@ evals/
 | 项目 | 用例数 | 说明 |
 |------|--------|------|
 | `nl2riskfilter/` | 45 | 自然语言转风险筛选条件（NL2JSON） |
-| `audit-log-search/` | 45 | 审计日志自然语言转受控检索条件（NL2JSON，含复杂语言场景与稳定性验证） |
-| `intent-recognition/` | 44 | AI 用户意图判断（选系统/日志检索/无法识别三分类 + 系统路由 + 动态消息 + 线上事故回归） |
+| `intent-recognition/` | 60 | 当前 MessagePlan 意图识别与检索条件评测；覆盖系统选择、日志检索、复合消息和回归场景 |
+
+`audit-log-search/` 是旧 NL2JSON 链路的历史评测目录，provider 已退役；不要运行其配置。日志检索相关 Agent 效果统一在 `intent-recognition/` 评测。

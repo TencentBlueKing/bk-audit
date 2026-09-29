@@ -31,6 +31,9 @@ django.setup()
 from services.web.query.ai_assistant.exceptions import (  # noqa: E402
     AIOutputInvalidError,
     AIOutputParseFailedError,
+    AIServiceError,
+    AITimeoutError,
+    InvalidConditionError,
     QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (  # noqa: E402
@@ -40,12 +43,13 @@ from services.web.query.ai_assistant.schemas import (  # noqa: E402
     SelectionSystem,
     SystemSelectionOutput,
 )
+from services.web.query.ai_assistant.services.condition import (  # noqa: E402
+    ConditionAssemblyService,
+)
 from services.web.query.ai_assistant.services.intent import (  # noqa: E402
     MessagePlanningService,
 )
-from services.web.query.ai_assistant.services.nl2json import (  # noqa: E402
-    NL2JSONService,
-)
+from services.web.query.constants import COLLECT_SEARCH_CONFIG  # noqa: E402
 
 _CHAT_COMPLETION_PATH = "services.web.query.ai_assistant.services.intent.api.bk_plugins_ai_agent.chat_completion"
 EVAL_CONTEXT_USERNAME = "eval_actor"
@@ -134,47 +138,51 @@ def _get_username(config):
 
 
 def _build_fields(system_id: str):
-    """构造贴近真实检索的稳定字段上下文。"""
+    """基于生产检索配置构造带合成样例的稳定字段上下文。"""
 
-    standard_fields = [
-        SelectionFieldMeta(
-            raw_name="username",
-            field_type="string",
-            display_name="操作人",
-            nl_name="操作人",
-            allow_operators=["eq", "include"],
-            sample_value="eval_user_alpha",
-        ),
-        SelectionFieldMeta(
-            raw_name="action_id",
-            field_type="string",
-            display_name="操作事件名(ID)",
-            nl_name="操作事件名(ID)",
-            description="别名：操作ID",
-            allow_operators=["eq", "include"],
-            sample_value="create",
-        ),
-        SelectionFieldMeta(
-            raw_name="result_code",
-            field_type="string",
-            display_name="执行结果",
-            nl_name="执行结果",
-            allow_operators=["include"],
-            sample_value=-1,
-            options=[
+    field_overrides = {
+        "username": {
+            "display_name": "操作人",
+            "sample_value": "eval_user_alpha",
+        },
+        "action_id": {
+            "display_name": "操作事件名(ID)",
+            "description": "别名：操作ID",
+            "sample_value": "create",
+        },
+        "result_code": {
+            "display_name": "执行结果",
+            "sample_value": -1,
+            "options": [
                 SelectionFieldOption(id="0", name="成功(0)"),
                 SelectionFieldOption(id="-1", name="失败(-1)"),
             ],
-        ),
-        SelectionFieldMeta(
-            raw_name="log",
-            field_type="string",
-            display_name="日志内容",
-            nl_name="日志内容",
-            allow_operators=["match_any", "match_all"],
-            sample_value="权限变更",
-        ),
-    ]
+        },
+        "log": {
+            "display_name": "日志内容",
+            "sample_value": "权限变更",
+        },
+        "extend_data": {
+            "display_name": "拓展数据",
+            "description": "JSON 容器；用户明确给出的多级路径逐层写入 keys",
+        },
+    }
+    standard_fields = []
+    for raw_name, override in field_overrides.items():
+        config = COLLECT_SEARCH_CONFIG.query_field_map[raw_name]
+        display_name = override["display_name"]
+        standard_fields.append(
+            SelectionFieldMeta(
+                raw_name=raw_name,
+                field_type=config.field.field_type,
+                display_name=display_name,
+                nl_name=display_name,
+                description=override.get("description") or str(config.field.description or ""),
+                allow_operators=[operator.value for operator in config.allow_operators],
+                sample_value=override.get("sample_value"),
+                options=override.get("options"),
+            )
+        )
     extension_fields = [
         SelectionFieldMeta(
             raw_name="extend_data",
@@ -215,6 +223,15 @@ def _resolve_system_context(variables) -> SystemSelectionOutput:
     return _build_system_context(_resolve_candidates(variables.get("candidates")))
 
 
+def _resolve_common_fields(variables) -> list[SelectionFieldMeta]:
+    """解析生产公共字段目录；缺省使用无系统样例的稳定评测字段。"""
+
+    if "common_standard_fields" in variables:
+        return [SelectionFieldMeta.model_validate(field) for field in variables["common_standard_fields"]]
+    standard_fields, _ = _build_fields("")
+    return [field.model_copy(update={"sample_value": None}) for field in standard_fields]
+
+
 def _materialize_output(
     *,
     plan: MessagePlan,
@@ -231,7 +248,7 @@ def _materialize_output(
     if log_search is not None:
         candidate_map = {system.system_id: system for system in system_context.systems}
         target = candidate_map[target_system_id]
-        condition = NL2JSONService.validate_and_assemble(
+        condition = ConditionAssemblyService.validate_and_assemble(
             payload=log_search.message_input.condition,
             selection=SystemSelectionOutput(systems=[target]),
             scope_id=target_system_id,
@@ -274,8 +291,6 @@ def call_api(prompt, options, context):
 
     query = vars_.get("query", prompt)
     current_system_id = vars_.get("current_system_id", "")
-    scope_type = vars_.get("scope_type", "cross_system")
-    scope_id = vars_.get("scope_id", "")
     try:
         current_time = _parse_current_time(vars_.get("current_time", "2026-09-04T18:00:00+08:00"))
     except (TypeError, ValueError) as error:
@@ -288,28 +303,38 @@ def call_api(prompt, options, context):
     try:
         max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
         system_context = _resolve_system_context(vars_)
-        user_message = MessagePlanningService.build_user_message(
+        candidates = [
+            {
+                "system_id": system.system_id,
+                "name": system.name,
+                "description": system.description,
+            }
+            for system in system_context.systems
+        ]
+        current_system = next(
+            (system for system in system_context.systems if system.system_id == current_system_id),
+            None,
+        )
+        planning_context = MessagePlanningService.build_context(
             query_text=query,
-            system_context=system_context,
-            current_system_id=current_system_id,
+            candidates=candidates,
+            common_fields=_resolve_common_fields(vars_),
+            current_system=current_system,
             username=EVAL_CONTEXT_USERNAME,
-            scope_type=scope_type,
-            scope_id=scope_id,
             reference_time=current_time,
         )
+        user_message = MessagePlanningService.build_user_message(planning_context)
         original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
+        retry_feedback = None
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):
+                plan = None
                 try:
                     plan = MessagePlanningService.plan(
-                        query_text=query,
-                        system_context=system_context,
-                        current_system_id=current_system_id,
-                        username=username,
-                        scope_type=scope_type,
-                        scope_id=scope_id,
-                        reference_time=current_time,
+                        context=planning_context,
                         user_message=user_message,
+                        agent_user=username,
+                        retry_feedback=retry_feedback,
                     )
                     payload = _materialize_output(
                         plan=plan,
@@ -318,7 +343,16 @@ def call_api(prompt, options, context):
                         reference_time=current_time,
                     )
                     break
-                except (AIOutputParseFailedError, AIOutputInvalidError, QueryNotRecognizedError):
+                except (
+                    AIOutputParseFailedError,
+                    AIOutputInvalidError,
+                    InvalidConditionError,
+                    QueryNotRecognizedError,
+                ) as error:
+                    if attempt_count >= max_attempts:
+                        raise
+                    retry_feedback = MessagePlanningService.build_retry_feedback(error=error, plan=plan)
+                except (AITimeoutError, AIServiceError):
                     if attempt_count >= max_attempts:
                         raise
     except Exception as error:  # 业务异常进入评测输出，由断言判定是否符合预期

@@ -125,11 +125,10 @@ class MessageService:
         return message
 
     def _maybe_dispatch_field_condition_title(self, message: Message) -> None:
-        """条件检索消息创建成功后派发会话标题生成（与自然语言链路对齐；失败静默不阻塞消息创建）。
+        """条件检索消息创建成功后派发会话标题生成（失败静默不阻塞消息创建）。
 
-        仅 source=field_condition（用户直接发起条件检索）触发：自然语言续链的
-        LOG_SEARCH 子消息（source=natural_language）已由父 NL 消息成功链路派发过；
-        NL 链路的派发见 NLSearchExecutionTask._dispatch_title_generation。
+        仅 source=field_condition（用户直接发起条件检索）触发：用户意图续链的
+        LOG_SEARCH 子消息（source=natural_language）已由父消息成功链路派发过。
         """
 
         if message.message_type != MessageType.LOG_SEARCH:
@@ -175,10 +174,7 @@ class MessageService:
         parent = message.parent_message
         if parent is None:
             return []
-        if parent.message_type == MessageType.NATURAL_LANGUAGE_SEARCH:
-            systems = ((parent.context_data or {}).get("system_selection") or {}).get("systems") or []
-        else:
-            systems = (parent.output_data or {}).get("systems") or []
+        systems = (parent.output_data or {}).get("systems") or []
         fields: list[dict[str, Any]] = []
         for system in systems:
             for field in (system or {}).get("extension_fields") or []:

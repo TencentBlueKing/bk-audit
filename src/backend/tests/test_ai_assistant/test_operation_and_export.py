@@ -157,12 +157,7 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         self.create_nl_message(query_text="查 admin 的日志", parent=selection)  # 重复
         self.create_nl_message(query_text="查导出失败的记录", parent=selection)
         # 其他系统的消息不进入结果
-        other_message = self.create_nl_message(
-            query_text="other system query",
-            selection=make_selection_output(system_id="other_system"),
-        )
-        other_message.context_data["system_selection"]["systems"][0]["system_id"] = "other_system"
-        other_message.save(update_record=False, update_fields=["context_data"])
+        self.create_nl_message(query_text="other system query", system_id="other_system")
         # 失败消息不进入结果
         self.create_nl_message(query_text="失败的不算", parent=selection, status=ExecutionStatus.FAILED)
 
@@ -367,13 +362,12 @@ class TestMessageExport(AIAssistantPlatformTestCase):
                 self.service.create_full_export(message_uid=str(message.uid), export_config={})
 
     def _make_nl_parent_with_extension_fields(self, extension_fields):
-        from tests.test_ai_assistant.base import make_selection_output
+        from services.web.query.ai_assistant.schemas import SelectionFieldMeta
 
-        selection = self.create_selection_message(output=make_selection_output())
-        nl_message = self.create_nl_message(parent=selection)
-        nl_message.context_data["system_selection"]["systems"][0]["extension_fields"] = extension_fields
-        nl_message.save(update_record=False, update_fields=["context_data"])
-        return nl_message
+        selection_output = make_selection_output()
+        selection_output.systems[0].extension_fields = [SelectionFieldMeta(**field) for field in extension_fields]
+        selection = self.create_selection_message(output=selection_output)
+        return self.create_nl_message(parent=selection)
 
     def test_full_export_auto_injects_extension_keys(self):
         """flatten 开启且未传 extension_keys：从 NL 父消息的系统选择快照自动聚合（前端只传开关）"""

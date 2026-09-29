@@ -14,30 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-# 会话侧异步任务：根据检索输入生成会话标题（共用智能体 ALS_TITLE_SUM）。
-# 任务挂 ai_title，与风险报告标题共用轻量队列，避免落入 celery/default 被重任务堵住。
-
 import logging
 
 from blueapps.core.celery import celery_app
 from django.conf import settings
 from django.utils import timezone
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from services.web.ai_assistant.constants import AI_CONVERSATION_TITLE_MAX_LENGTH
 from services.web.ai_assistant.models import Conversation, Message
 from services.web.ai_assistant.serializers.conversation import (
     DEFAULT_CONVERSATION_TITLE,
 )
-from services.web.risk.constants import RiskAICeleryQueue
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 
 logger = logging.getLogger(__name__)
 
 
 @celery_app.task(
-    queue=RiskAICeleryQueue.TITLE,
+    base=AIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
     acks_late=True,
-    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
 )
 def generate_conversation_title(
     conversation_id: int,
@@ -80,6 +78,8 @@ def generate_conversation_title(
             max_length=getattr(settings, "AI_CONVERSATION_TITLE_MAX_LENGTH", AI_CONVERSATION_TITLE_MAX_LENGTH),
             source=source,
         )
+    except AgentRateLimited:
+        raise
     except Exception:
         logger.exception("[generate_conversation_title] ai agent failed, conversation_id=%s", conversation_id)
         return {"conversation_id": conversation_id, "skipped": True}

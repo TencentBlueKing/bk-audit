@@ -91,7 +91,7 @@ class SyncMessageHandler(MessageTypeHandler[DecoratorInput, DecoratorContext, De
 
 
 class AsyncMessageHandler(SyncMessageHandler):
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    message_type = MessageType.USER_INTENT
     execution_mode = ExecutionMode.ASYNC
     async_task = execute_decorated_message
 
@@ -189,7 +189,6 @@ class ProductionTaskRedeliveryConfigTest(SimpleTestCase):
     def test_production_tasks_enable_late_ack_and_worker_lost_redelivery(self):
         from services.web.ai_assistant.tasks.audit_search import (
             execute_log_search,
-            execute_natural_language_search,
             execute_system_selection,
             execute_user_intent,
         )
@@ -197,7 +196,6 @@ class ProductionTaskRedeliveryConfigTest(SimpleTestCase):
         tasks = (
             execute_system_selection,
             execute_user_intent,
-            execute_natural_language_search,
             execute_log_search,
         )
         for task in tasks:

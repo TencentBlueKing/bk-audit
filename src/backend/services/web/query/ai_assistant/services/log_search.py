@@ -46,19 +46,19 @@ from core.sql.constants import FieldType
 from core.utils.data import extract_nested_value
 from services.web.databus.models import CollectorPlugin
 from services.web.query.ai_assistant.constants import (
-    EXTENSION_FIELD_DEFAULT_OPERATORS,
     LOG_SEARCH_SNAPSHOT_PAGE_SIZE,
     LOG_SEARCH_SNAPSHOT_VALUE_MAX_LENGTH,
     SNAPSHOT_DEFAULT_COLUMNS,
     SYSTEM_INFO_SNAPSHOT_KEYS,
 )
-from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
+from services.web.query.ai_assistant.exceptions import InvalidConditionError
 from services.web.query.ai_assistant.schemas import (
     Condition,
     LogSearchOutput,
     QuerySummary,
     ResultColumn,
     SearchCondition,
+    SelectionFieldMeta,
 )
 from services.web.query.constants import (
     COLLECT_SEARCH_CONFIG,
@@ -84,6 +84,7 @@ class LogSearchService:
         column_fields: List[str] = None,
         session_scope_type: str = "",
         session_scope_id: str = "",
+        extension_fields: List[SelectionFieldMeta] = None,
     ) -> LogSearchOutput:
         """
         :param condition: 统一条件结构（NL 输出或前端字段条件构造，同构）
@@ -95,8 +96,9 @@ class LogSearchService:
             当前选择）；与 condition.scope_id 的"system 维度权限校验"不同——session_scope
             严格按"用户当前具体场景"过滤 system_id，防止 AI 助手在检索链路绕过场景过滤越权
         :param session_scope_id: session 级 scope 实例 ID
+        :param extension_fields: 兼容既有消息快照；采样字段只作为 Agent 提示，不参与确定性限制
         :return: LogSearchOutput（零命中也是成功态：total=0 + samples=[]）
-        :raises AIOutputInvalidError: 条件整体校验失败（字段白名单/操作符/形态）
+        :raises InvalidConditionError: 条件整体校验失败（字段白名单/操作符/形态）
         """
         span = trace.get_current_span()
         span.set_attribute("ai.log_search.scope_id", condition.scope_id)
@@ -130,7 +132,10 @@ class LogSearchService:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _normalize_condition(cls, condition: SearchCondition) -> SearchCondition:
+    def _normalize_condition(
+        cls,
+        condition: SearchCondition,
+    ) -> SearchCondition:
         """条件归一：同字段同操作符聚合 + eq/neq 多值转 include/exclude（IN/NOT IN）。
 
         字段筛选多选传入 eq + 多 filters 时，SQL 层单值操作符仅取首个值（静默丢弃其余）；
@@ -147,6 +152,18 @@ class LogSearchService:
         normalized: List[Condition] = []
         merged_map: Dict[Tuple[str, Tuple[str, ...], str], Condition] = {}
         for cond in condition.conditions:
+            if cond.field.keys and cond.operator not in cls._field_allowed_operators(
+                cond.field.raw_name,
+                tuple(cond.field.keys),
+            ):
+                raise InvalidConditionError(
+                    extra={
+                        "reason": "operator not allowed for extension field",
+                        "raw_name": cond.field.raw_name,
+                        "keys": cond.field.keys,
+                        "operator": cond.operator,
+                    }
+                )
             if cond.operator not in mergeable:
                 normalized.append(cond)
                 continue
@@ -169,17 +186,33 @@ class LogSearchService:
                 if cond.operator == QueryConditionOperator.EQ.value
                 else QueryConditionOperator.EXCLUDE.value
             )
-            if target in cls._field_allowed_operators(cond.field.raw_name, tuple(cond.field.keys)):
+            allowed_operators = cls._field_allowed_operators(
+                cond.field.raw_name,
+                tuple(cond.field.keys),
+            )
+            if target in allowed_operators:
                 cond.operator = target
+            elif cond.operator in allowed_operators:
+                raise InvalidConditionError(
+                    extra={
+                        "reason": "multi-value equality requires include operator",
+                        "raw_name": cond.field.raw_name,
+                        "keys": cond.field.keys,
+                        "operator": cond.operator,
+                    }
+                )
         condition.conditions = normalized
         return condition
 
     @staticmethod
-    def _field_allowed_operators(raw_name: str, keys: Tuple[str, ...]) -> List[str]:
-        """查询字段白名单操作符（标准字段取 COLLECT_SEARCH_CONFIG，拓展子键取默认集合）"""
+    def _field_allowed_operators(
+        raw_name: str,
+        keys: Tuple[str, ...],
+    ) -> List[str]:
+        """返回查询层确定支持的操作符；拓展字段不采用采样提示做强限制。"""
 
         if keys:
-            return list(EXTENSION_FIELD_DEFAULT_OPERATORS)
+            return [choice[0] for choice in QueryConditionOperator.choices]
         for cfg in COLLECT_SEARCH_CONFIG.field_configs:
             if cfg.field.field_name == raw_name:
                 return list(cfg.allow_operators)
@@ -205,7 +238,7 @@ class LogSearchService:
         try:
             serializer.is_valid(raise_exception=True)
         except (DrfValidationError, CoreValidationError) as err:
-            raise AIOutputInvalidError(extra={"errors": str(err)})
+            raise InvalidConditionError(extra={"errors": str(err), "reason": "invalid query condition"})
         return serializer.validated_data
 
     # ------------------------------------------------------------------

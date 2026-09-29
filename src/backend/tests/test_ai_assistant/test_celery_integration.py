@@ -129,7 +129,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
     def create_processing_message(self, *, task_id: str) -> Message:
         return Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id=task_id,
             input_data={"text": "stale"},
@@ -144,7 +144,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
 
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "query"},
         )
 
@@ -313,7 +313,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         handler = use_message_handler(self, RealMessageSelfRetryHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "retry"},
         )
         original_task_id = message.task_id
@@ -364,7 +364,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         use_message_handler(self, RealMessageAutoretryFailureHandler())
         message = MessageService(user=self.user).create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             input_data={"text": "fail"},
         )
 
@@ -476,7 +476,7 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         handler = use_message_handler(self, RealMessageSuccessHandler())
         failed = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.FAILED,
             task_id="failed-old-task-id",
             input_data={"text": "retry"},
