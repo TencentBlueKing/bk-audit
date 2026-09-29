@@ -22,6 +22,7 @@ import json
 from typing import List, Optional
 
 from bk_resource import api, resource
+from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
@@ -586,7 +587,19 @@ class AutoProcess(RiskFlowBaseHandler):
         # 已有任务获取状态
         task_id = self.load_task_id()
         if task_id:
-            return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+            try:
+                return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+            except APIRequestError as err:
+                # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
+                err_data = getattr(err, "data", {}) or {}
+                if "code" in err_data:
+                    logger.exception(
+                        f"[AutoProcess] get_task_status business error, "
+                        f"risk_id={self.risk.risk_id}, task_id={task_id}, err={err}"
+                    )
+                    return {"status": {"state": SOPSTaskStatus.FAILED}}
+                # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
+                raise
         # 优先使用参数
         pa_config = pa_config
         # 或者使用上个节点(审批节点)配置
