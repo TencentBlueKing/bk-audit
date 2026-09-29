@@ -7,7 +7,7 @@ Celery 队列只描述任务的执行特征、资源占用和 SLA，不与 `AIAg
 | Workload | Queue / Worker | 适用任务 |
 |---|---|---|
 | 常规任务 | `celery,default` / `worker` | 字段统计、系统选择、条件检索、风险报告编排等不直接调用 Agent 的任务 |
-| 常规 AI | `ai_default` / `ai-default` | 意图识别、会话/报告标题、用户侧分析报告、AI 变量预览等 Agent 调用 |
+| 常规 AI | `ai_default` / `ai-default` | 意图识别、会话/报告标题、用户侧分析报告、日志分析、AI 统计、AI 变量预览等 Agent 调用 |
 | 单风险报告（兼容） | `risk_single_analyse` / `risk-single` | 策略自动触发、量大的单风险报告模板渲染；保留历史队列和任务级限流 |
 
 `ai-default` 只消费 `ai_default`，通过 `BKAPP_AI_DEFAULT_CONCURRENCY` 调整并发。`risk-single` 只消费兼容队列 `risk_single_analyse`，通过 `BKAPP_RISK_SINGLE_ANALYSE_CONCURRENCY` 调整并发，避免常规 AI 的积压影响高吞吐历史链路。

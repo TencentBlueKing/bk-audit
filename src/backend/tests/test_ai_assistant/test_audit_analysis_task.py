@@ -19,7 +19,7 @@ from django.test import SimpleTestCase, override_settings
 from requests import Response
 from requests.exceptions import HTTPError
 
-from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited, AGUIStreamProtocolError
 from api.constants import AIAgentCode
 from apps.meta.models import GlobalMetaConfig
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
@@ -663,20 +663,36 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
         self.assertNotIn("input_value", attachment.error_message)
         self.assertEqual(attachment.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
 
-    def test_task_celery_configuration_matches_dedicated_worker(self):
+    def test_task_celery_configuration_matches_merged_ai_worker(self):
         self.assertEqual(AIAgentCode.AUDIT_LOG_ANALYSIS.value, "bp-ai-log-analyse")
-        self.assertEqual(execute_log_analysis.queue, "ai_assistant_log_analysis")
-        self.assertEqual(execute_log_analysis.rate_limit, settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT)
+        self.assertEqual(execute_log_analysis.queue, "ai_default")
+        self.assertIsNone(execute_log_analysis.rate_limit)
         self.assertEqual(execute_log_analysis.time_limit, settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT)
         self.assertTrue(execute_log_analysis.acks_late)
 
         with open("app_desc.yaml", encoding="utf-8") as stream:
-            process = yaml.safe_load(stream)["modules"]["api"]["processes"]["ai-log"]
-        self.assertIn("-Q ai_assistant_log_analysis", process["command"])
+            process = yaml.safe_load(stream)["modules"]["api"]["processes"]["ai-default"]
+        queue_argument = process["command"].split("-Q ", 1)[1].split(" ", 1)[0]
+        self.assertEqual(queue_argument, "ai_default")
         self.assertIn("-P gevent", process["command"])
-        self.assertIn("--prefetch-multiplier=1", process["command"])
-        self.assertIn("BKAPP_AI_ASSISTANT_LOG_ANALYSIS_CONCURRENCY", process["command"])
+        self.assertIn("BKAPP_AI_DEFAULT_CONCURRENCY", process["command"])
         self.assertEqual(process["replicas"], 2)
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    def test_global_agent_rate_limit_exhaustion_finishes_failed(self):
+        """公共限流重试耗尽后必须写入附件失败终态。"""
+
+        attachment = self.create_attachment()
+        error = AgentRateLimited(AIAgentCode.AUDIT_LOG_ANALYSIS)
+        with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=error):
+            with self.assertRaises(AgentRateLimited) as caught:
+                invoke_task(execute_log_analysis, attachment=attachment)
+
+        attachment.refresh_from_db()
+        self.assertIs(caught.exception, error)
+        self.assertEqual(attachment.status, ExecutionStatus.FAILED)
+        self.assertEqual(attachment.error_code, AttachmentErrorCode.TASK_EXECUTION_FAILED)
+        self.assertEqual(attachment.stream_archive[-1]["event"], PlatformStreamEvent.STREAM_END)
 
     def test_agent_timeout_retries_three_times_before_final_failure(self):
         """临时失败保持处理中，第四次执行失败才收敛终态。"""

@@ -44,6 +44,7 @@ from services.web.ai_assistant.schemas.audit_statistics import (
     FieldStatisticsAttachmentOutput,
 )
 from services.web.ai_assistant.tasks.attachment import AttachmentExecutionTask
+from services.web.common.ai import AIWorkloadQueue
 from services.web.query.ai_assistant.exceptions import (
     LogQueryFailed,
     LogQueryTimeout,
@@ -163,12 +164,11 @@ def build_statistics_agent_input(context: AIStatisticsAttachmentContext) -> str:
     bind=True,
     base=AttachmentExecutionTask,
     name="ai_assistant.generate_ai_statistics",
-    queue="ai_assistant_statistics",
+    queue=AIWorkloadQueue.DEFAULT,
     ignore_result=True,
     acks_late=True,
     max_retries=settings.AI_ASSISTANT_AI_STATISTICS_MAX_RETRIES,
     default_retry_delay=settings.AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS,
-    rate_limit=settings.AI_ASSISTANT_AI_STATISTICS_TASK_RATE_LIMIT,
     time_limit=settings.AI_ASSISTANT_AI_STATISTICS_TASK_TIMEOUT,
 )
 def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatisticsAttachmentOutput:  # noqa: N805

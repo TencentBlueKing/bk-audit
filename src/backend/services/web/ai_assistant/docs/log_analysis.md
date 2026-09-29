@@ -2,7 +2,7 @@
 
 日志分析报告是从一条成功 `LOG_SEARCH` 消息派生的流式 `AI_ANALYSIS` Attachment。MySQL 保存
 状态、执行快照、事件归档和最终 Markdown；Redis Stream 只承载实时增量；Celery 使用专属
-`ai_assistant_log_analysis` 队列调用日志分析 Agent。
+日志分析任务进入共享 `ai_default` workload，由公共 Agent Client 按 `AUDIT_LOG_ANALYSIS` 实施全局限流。
 
 ## 组件架构
 
@@ -13,7 +13,7 @@ flowchart LR
     SVC --> HANDLER[AIAnalysisHandler]
     SVC --> DB[(MySQL)]
     SVC -->|transaction.on_commit| MQ[(RabbitMQ)]
-    MQ --> WORKER[ai-log gevent Worker]
+    MQ --> WORKER[ai-default gevent Worker]
     WORKER --> TASK[execute_log_analysis]
     TASK --> AGENT[日志分析 Agent]
     AGENT -->|AG-UI JSON events| RELAY[ChatCompletion + on_event]
@@ -153,15 +153,17 @@ MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
 
 ## 超时与部署
 
-生产 Worker 在 `app_desc.yaml` 中以 `ai-log` 独立进程部署：监听
-`ai_assistant_log_analysis`，gevent pool，`--prefetch-multiplier=1`，默认并发 32、2 个副本。
+生产 Worker 在 `app_desc.yaml` 中由共享的 `ai-default` 进程部署：只监听 `ai_default` workload，
+gevent pool，`--prefetch-multiplier=1`，默认总并发 128、2 个副本。队列只表达执行特征，
+日志分析的下游配额由公共 Agent Client 按 `AUDIT_LOG_ANALYSIS` 在 Redis 中跨进程、跨 Pod 控制。
 
 | 配置 | 默认值 | 语义 |
 | --- | --- | --- |
-| `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT` | `5/m` | 每个 Worker 实例的 Celery rate limit，不是集群全局限流 |
+| `BKAPP_AI_AUDIT_LOG_ANALYSIS_RATE_LIMIT` | 空（关闭） | 日志分析 Agent 的 Redis 全局限流，例如 `5/m` |
+| `BKAPP_AI_AUDIT_LOG_ANALYSIS_RATE_LIMIT_MAX_WAIT_SECONDS` | `2` 秒 | 单次调用在 Worker 内的有界等待预算 |
 | `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT` | `1740` 秒 | 可捕获的 gevent 业务超时，按普通异常写 `FAILED + stream_end` |
 | `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT` | `1800` 秒 | Celery hard limit，仅作 Worker 最终保险 |
-| `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_CONCURRENCY` | `32` | 专属 Worker gevent 并发数 |
+| `BKAPP_AUDIT_AI_CONCURRENCY` | `128` | 共享 Worker 的 gevent 总并发数，非日志分析任务独占配额 |
 
 业务超时必须严格小于 hard limit，非法配置会在 Django 启动时失败。hard kill 可能来不及写业务
 终态，依赖 late ack 重投和长期 `PROCESSING` 巡检兜底。
@@ -169,7 +171,7 @@ MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
 ## 可观测与安全
 
 平台按 `business_type=AI_ANALYSIS` 自动记录执行状态、失败码、排队/执行耗时和流运行摘要；专属
-队列还需监控 RabbitMQ ready/unacked、Worker 在线数和限流饱和。详细边界见
+workload 还需监控 RabbitMQ ready/unacked、Worker 在线数和 Agent 限流饱和。详细边界见
 [`observability.md`](observability.md)。
 
 Metric、Event 和 Trace 禁止记录分析指令、用户名、日志样例、工具响应正文、AG-UI 事件正文或

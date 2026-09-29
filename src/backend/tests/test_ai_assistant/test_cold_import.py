@@ -4,11 +4,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+from blueapps.core.celery import celery_app
 from django.test import SimpleTestCase
 
 
 class AIAssistantColdImportTest(SimpleTestCase):
     """启动与注册不依赖数据库；每种导入顺序使用全新的模块缓存。"""
+
+    def test_retired_natural_language_search_task_is_not_registered(self):
+        """退役消息类型不再留有可被 Worker 消费的旧任务入口。"""
+
+        self.assertNotIn(
+            "services.web.ai_assistant.tasks.audit_search.execute_natural_language_search",
+            celery_app.tasks,
+        )
 
     def test_platform_entrypoints_register_business_handlers_and_tasks(self):
         """从任务、服务或 Handler 入口启动，都应完成业务注册。"""

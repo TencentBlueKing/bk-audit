@@ -281,9 +281,15 @@ class TestChatCompletionRelay(SimpleTestCase):
             "perform_request",
             side_effect=lambda request_data: ChatCompletion._on_event_context.get(),
         ):
-            result = self.resource.perform_request({"on_event": callback})
+            result = self.resource.perform_request({"agent_code": "bp-ai-aud-rsk-srch", "on_event": callback})
 
         self.assertIs(result, callback)
+        self.assertIsNone(ChatCompletion._on_event_context.get())
+
+    def test_missing_agent_code_does_not_leak_callback_context(self):
+        with self.assertRaisesRegex(ValueError, "agent_code is required"):
+            self.resource.perform_request({"on_event": mock.Mock()})
+
         self.assertIsNone(ChatCompletion._on_event_context.get())
 
     def test_public_request_returns_events_uses_header_and_preserves_callback_payload(self):
@@ -570,7 +576,13 @@ class TestChatCompletionLineFraming(SimpleTestCase):
 
         def request(index):
             try:
-                resource.perform_request({"on_event": callbacks[index], "event": {"index": index}})
+                resource.perform_request(
+                    {
+                        "agent_code": "bp-ai-aud-rsk-srch",
+                        "on_event": callbacks[index],
+                        "event": {"index": index},
+                    }
+                )
                 self.assertIsNone(resource._on_event_context.get())
             except Exception as error:
                 errors.append(error)
