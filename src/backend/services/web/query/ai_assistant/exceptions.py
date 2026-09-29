@@ -25,16 +25,27 @@ from apps.exceptions import CoreException
 
 
 class AIAssistantError(Exception):
-    """AI 助手业务异常基类"""
+    """AI 助手业务异常基类。
+
+    ``retry_raw_output`` 只在当前任务内传递给下一次 Agent 调用，不进入
+    ``extra`` 日志字段，避免可观测性截断影响纠错输入。
+    """
 
     error_code = "AI_SERVICE_ERROR"
     error_message = "AI 服务异常，请稍后重试"
 
-    def __init__(self, message: str = None, error_code: str = None, extra: dict = None):
+    def __init__(
+        self,
+        message: str = None,
+        error_code: str = None,
+        extra: dict = None,
+        retry_raw_output: str = None,
+    ):
         self.message = message or self.error_message
         if error_code:
             self.error_code = error_code
         self.extra = extra or {}
+        self.retry_raw_output = retry_raw_output
         super().__init__(self.message)
 
     def __str__(self):
@@ -56,10 +67,17 @@ class AIOutputParseFailedError(AIAssistantError):
 
 
 class AIOutputInvalidError(AIAssistantError):
-    """AI 返回 JSON 合法但字段/操作符/取值形态非法"""
+    """AI 输出通过基础解析但不符合当前业务协议。"""
 
     error_code = "AI_OUTPUT_INVALID"
-    error_message = "AI 生成的检索条件不合法"
+    error_message = "AI 生成的内容不合法"
+
+
+class InvalidConditionError(AIAssistantError):
+    """Agent 条件结构或确定性条件规则不合法。"""
+
+    error_code = "INVALID_CONDITION"
+    error_message = "检索条件暂不支持，请调整字段、操作符或条件值"
 
 
 class AIServiceError(AIAssistantError):

@@ -9,25 +9,20 @@ from zoneinfo import ZoneInfo
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 from pydantic import ValidationError
-from requests.exceptions import Timeout
 
 from api.constants import AIAgentCode
-from services.web.ai.prompts.intent_recognition import SYSTEM_PROMPT
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
-    AIOutputParseFailedError,
-    AIServiceError,
-    AITimeoutError,
+    InvalidConditionError,
 )
 from services.web.query.ai_assistant.schemas import (
     MessagePlan,
     SelectionFieldMeta,
     SelectionSystem,
-    SystemSelectionOutput,
 )
 from services.web.query.ai_assistant.services.intent import (
-    IntentRecognitionService,
     MessagePlanningService,
+    PlanningRetryFeedback,
     resolve_intent_agent_code,
 )
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -35,8 +30,8 @@ from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 INTENT_MODULE = "services.web.query.ai_assistant.services.intent"
 
 CANDIDATES = [
-    {"system_id": "bk-audit", "name": "审计中心"},
-    {"system_id": "bcs", "name": "蓝盾"},
+    {"system_id": "bk-audit", "name": "审计中心", "description": ""},
+    {"system_id": "bcs", "name": "蓝盾", "description": ""},
 ]
 
 
@@ -90,12 +85,161 @@ class MessagePlanSchemaTest(AIAssistantTestCase):
                 }
             )
 
+    def test_invalid_condition_is_a_supported_business_error(self):
+        """已识别检索意图但条件无法表达时，Schema 提供稳定业务分支。"""
+
+        plan = MessagePlan.model_validate({"outcome": "error", "messages": [], "error_code": "INVALID_CONDITION"})
+
+        self.assertEqual(plan.error_code, "INVALID_CONDITION")
+        schema = MessagePlan.model_json_schema()
+        error_description = schema["properties"]["error_code"]["description"]
+        self.assertIn("INVALID_CONDITION", error_description)
+        self.assertIn("字段、操作符或条件值", error_description)
+
+    def test_condition_schema_exposes_query_type_and_operator_enums(self):
+        """Agent 输出只使用查询执行层支持的稳定类型和操作符。"""
+
+        schema = MessagePlan.model_json_schema()
+
+        self.assertEqual(
+            schema["$defs"]["FieldType"]["enum"],
+            ["string", "double", "int", "long", "text", "timestamp", "float"],
+        )
+        self.assertIn("gt", schema["$defs"]["Operator"]["enum"])
+        field_type = schema["$defs"]["AIConditionItem"]["properties"]["field_type"]
+        self.assertEqual(field_type["default"], "string")
+
 
 @mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
 class MessagePlanningContextTest(AIAssistantTestCase):
-    """通用规划请求应携带生产同构的完整系统、会话、时钟和输出契约。"""
+    """通用规划请求只携带当前决策需要的动态上下文。"""
 
-    def test_plan_injects_all_candidate_fields_and_stable_context(self, mock_chat):
+    def _build_context(self):
+        """构造不依赖接口返回的最小规划上下文。"""
+
+        return MessagePlanningService.build_context(
+            query_text="查审计中心日志",
+            candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "合成系统"}],
+            common_fields=[SelectionFieldMeta(raw_name="username", field_type="string", allow_operators=["eq"])],
+            current_system=SelectionSystem(system_id="bk-audit", name="审计中心"),
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+
+    def test_retry_feedback_is_sent_after_original_exchange(self, mock_chat):
+        """纠错调用携带上一轮输出和归一化校验错误。"""
+
+        previous_output = '{"outcome":"dispatch","messages":[]}'
+        feedback = PlanningRetryFeedback(
+            previous_output=previous_output,
+            validation_errors=(
+                {
+                    "path": "messages",
+                    "code": "value_error",
+                    "message": "dispatch outcome requires messages",
+                },
+            ),
+        )
+        mock_chat.return_value = json.dumps({"outcome": "error", "messages": [], "error_code": "INVALID_CONDITION"})
+
+        MessagePlanningService.plan(context=self._build_context(), retry_feedback=feedback)
+
+        history = mock_chat.call_args.kwargs["chat_history"]
+        self.assertEqual([item["role"] for item in history], ["role", "user", "assistant", "user"])
+        self.assertEqual(history[2]["content"], previous_output)
+        self.assertIn("dispatch outcome requires messages", history[3]["content"])
+
+    def test_scope_validation_failure_keeps_full_agent_output_for_retry(self, mock_chat):
+        """plan 内部范围校验失败时也必须保留可纠正的上一轮完整输出。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "dispatch",
+                "messages": [
+                    {
+                        "message_type": "SYSTEM_SELECTION",
+                        "message_input": {"system_ids": ["outside-system"]},
+                    }
+                ],
+            }
+        )
+        mock_chat.return_value = raw_output
+
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            MessagePlanningService.plan(context=self._build_context())
+
+        feedback = MessagePlanningService.build_retry_feedback(error=ctx.exception, plan=None)
+        self.assertEqual(feedback.previous_output, raw_output)
+        self.assertEqual(feedback.validation_errors[0]["code"], "system_id not in candidates")
+
+    def test_schema_validation_retry_uses_full_output_without_expanding_log_extra(self, mock_chat):
+        """纠错使用完整响应，异常日志仍只保留受控长度的摘要。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "dispatch",
+                "messages": [
+                    {
+                        "message_type": "LOG_SEARCH",
+                        "message_input": {
+                            "condition": {
+                                "conditions": [
+                                    {
+                                        "raw_name": "username",
+                                        "field_type": "string",
+                                        "operator": "unsupported",
+                                        "filters": ["user_a"],
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ],
+                "ignored_padding": "x" * 3000,
+            }
+        )
+
+        with self.assertRaises(InvalidConditionError) as ctx:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=ctx.exception, plan=None)
+        self.assertEqual(len(ctx.exception.extra["raw_output"]), 2048)
+        self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_mixed_schema_errors_are_classified_as_output_invalid(self, mock_chat):
+        """顶层协议错误不能被同一响应中的条件错误掩盖。"""
+
+        raw_output = json.dumps(
+            {
+                "outcome": "unsupported",
+                "messages": [
+                    {
+                        "message_type": "LOG_SEARCH",
+                        "message_input": {
+                            "condition": {
+                                "conditions": [
+                                    {
+                                        "raw_name": "username",
+                                        "field_type": "string",
+                                        "operator": "unsupported",
+                                        "filters": ["user_a"],
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+
+        with self.assertRaises(AIOutputInvalidError) as ctx:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        error_paths = {item["path"] for item in ctx.exception.extra["validation_errors"]}
+        self.assertIn("outcome", error_paths)
+        self.assertTrue(any("conditions" in path for path in error_paths))
+
+    def test_plan_separates_stable_rules_from_runtime_context(self, mock_chat):
         mock_chat.return_value = json.dumps(
             {
                 "outcome": "dispatch",
@@ -117,306 +261,219 @@ class MessagePlanningContextTest(AIAssistantTestCase):
                 ],
             }
         )
-        system_context = SystemSelectionOutput(
-            systems=[
-                SelectionSystem(
-                    system_id="bk-audit",
-                    name="审计中心",
-                    description="审计日志检索",
-                    standard_fields=[
-                        SelectionFieldMeta(
-                            raw_name="action_id",
-                            display_name="操作事件名(ID)",
-                            sample_value="delete",
-                            sample_value_display="删除",
-                        )
-                    ],
-                ),
-                SelectionSystem(
-                    system_id="bcs",
-                    name="蓝盾",
-                    description="研发流水线",
-                    standard_fields=[SelectionFieldMeta(raw_name="username", display_name="操作人")],
-                ),
-            ]
-        )
-
-        plan = MessagePlanningService.plan(
+        context = MessagePlanningService.build_context(
             query_text="查审计中心昨天失败的操作",
-            system_context=system_context,
-            current_system_id="bk-audit",
+            candidates=[
+                {"system_id": "bk-audit", "name": "审计中心", "description": "审计日志检索"},
+                {"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"},
+            ],
+            common_fields=[SelectionFieldMeta(raw_name="username", display_name="操作人")],
+            current_system=SelectionSystem(
+                system_id="bk-audit",
+                name="审计中心",
+                description="审计日志检索",
+                standard_fields=[
+                    SelectionFieldMeta(
+                        raw_name="action_id",
+                        display_name="操作事件名(ID)",
+                        sample_value="delete",
+                        sample_value_display="删除",
+                    )
+                ],
+            ),
             username=self.username,
-            scope_type="scene",
-            scope_id="1",
             reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
         )
+
+        plan = MessagePlanningService.plan(context=context)
 
         self.assertEqual([message.message_type for message in plan.messages], ["LOG_SEARCH"])
         request = mock_chat.call_args.kwargs
         self.assertNotIn("input", request)
-        self.assertEqual(request["chat_history"][0], {"role": "role", "content": SYSTEM_PROMPT})
+        system_prompt = request["chat_history"][0]["content"]
+        self.assertEqual(system_prompt, MessagePlanningService.system_prompt)
         self.assertEqual(request["chat_history"][1]["role"], "user")
         self.assertTrue(request["execute_kwargs"]["thread_id"].startswith("intent-planning-"))
         user_message = request["chat_history"][1]["content"]
-        self.assertIn("# 当前会话", user_message)
-        self.assertIn("# 授权系统与字段", user_message)
+        self.assertIn("# 本轮用户输入", user_message)
+        self.assertIn("# 当前会话状态", user_message)
+        self.assertIn("# 当前场景可选的已接入审计系统（按选择优先级排序）", user_message)
+        self.assertIn("# 日志检索公共字段", user_message)
+        self.assertIn("# 当前已选系统字段上下文", user_message)
         self.assertIn('"system_id": "bk-audit"', user_message)
         self.assertIn('"system_id": "bcs"', user_message)
         self.assertIn('"raw_name": "action_id"', user_message)
         self.assertNotIn("sample_value_display", user_message)
         self.assertIn('"current_system_id": "bk-audit"', user_message)
+        self.assertIn('"has_selected_system": true', user_message)
+        self.assertIn('"phase": "SYSTEM_SELECTED"', user_message)
+        self.assertIn('"username":', user_message)
         self.assertIn('"timezone": "Asia/Shanghai"', user_message)
         self.assertIn('"previous_week_start": "2026-09-07T00:00:00+08:00"', user_message)
         self.assertIn('"previous_week_end": "2026-09-14T00:00:00+08:00"', user_message)
-        self.assertIn("当前系统 ID 必须存在于授权系统列表中才算有效", user_message)
-        self.assertIn("不得因授权系统只有一个或位于列表首位就自动选择", user_message)
-        self.assertIn("授权列表无匹配（包括授权列表为空）时优先返回 SYSTEM_UNAVAILABLE", user_message)
-        self.assertIn("明确点名的系统不在授权系统中时返回 SYSTEM_UNAVAILABLE", user_message)
-        self.assertIn("即使已有系统，也不得据此生成 LOG_SEARCH", user_message)
-        self.assertIn("# 输出 JSON Schema", user_message)
-        self.assertNotIn('"versions"', user_message)
-        self.assertNotIn('"message_schema"', user_message)
+        self.assertNotIn("scope_type", user_message)
+        self.assertNotIn("scope_id", user_message)
+        self.assertNotIn("# 输出 JSON Schema", user_message)
+        self.assertNotIn("# 业务规则", user_message)
+        self.assertIn("# MessagePlan 输出 Schema", system_prompt)
+        self.assertIn('"PlannedLogSearchMessage"', system_prompt)
+        self.assertIn("SYSTEM_UNSELECTED", system_prompt)
+        self.assertIn("SYSTEM_SELECTED", system_prompt)
+        self.assertIn("error_code=SYSTEM_REQUIRED、messages=[]", system_prompt)
+        self.assertIn("候选系统的数量不改变这条规则", system_prompt)
+        self.assertIn('"error_code":"SYSTEM_REQUIRED"', system_prompt)
+        self.assertIn("顺序最靠前", system_prompt)
+        self.assertIn("即使当前只有一个候选，也不得自动选择", system_prompt)
+        self.assertIn("未指定时间时默认最近一天", system_prompt)
+        self.assertIn("raw_name 固定为 extend_data", system_prompt)
+        self.assertIn("每个检索条件都必须完整保留", system_prompt)
+        self.assertIn("INVALID_CONDITION", system_prompt)
 
     def test_system_prompt_is_generic_message_planner(self, mock_chat):
-        self.assertIn("消息决策", SYSTEM_PROMPT)
-        self.assertIn("不要要求上下文必须包含其他任务的字段", SYSTEM_PROMPT)
-        self.assertNotIn("只能使用上下文 authorized_systems", SYSTEM_PROMPT)
-        self.assertNotIn("你的任务是把用户的自然语言检索需求转换成结构化的日志检索条件 JSON", SYSTEM_PROMPT)
-
-    def test_planning_context_deterministically_summarizes_large_samples(self, mock_chat):
-        """规划上下文限制描述和样例体积，并为每次裁剪保留可诊断元数据。"""
-
-        context = SystemSelectionOutput(
-            systems=[
-                SelectionSystem(
-                    system_id="bk-audit",
-                    name="审计中心",
-                    description="描" * 300,
-                    standard_fields=[
-                        SelectionFieldMeta(raw_name="long_text", sample_value="x" * 200),
-                        SelectionFieldMeta(
-                            raw_name="nested",
-                            sample_value={"level1": {"level2": {"secret": "value"}}},
-                        ),
-                    ],
-                )
-            ]
+        self.assertIn("消息决策", MessagePlanningService.system_prompt)
+        self.assertIn("username 仅表示当前请求用户身份", MessagePlanningService.system_prompt)
+        self.assertIn("当前可选系统", MessagePlanningService.system_prompt)
+        self.assertNotIn(
+            "你的任务是把用户的自然语言检索需求转换成结构化的日志检索条件 JSON",
+            MessagePlanningService.system_prompt,
         )
 
-        user_message = MessagePlanningService.build_user_message(
+    def test_current_system_must_be_an_authorized_candidate(self, mock_chat):
+        """当前系统详情不能绕过本轮授权候选集合进入 Agent 上下文。"""
+
+        with self.assertRaises(ValidationError):
+            MessagePlanningService.build_context(
+                query_text="查询当前系统日志",
+                candidates=[{"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"}],
+                common_fields=[],
+                current_system=SelectionSystem(system_id="bk-audit", name="审计中心"),
+                username=self.username,
+                reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            )
+
+    def test_planning_context_only_summarizes_extension_samples(self, mock_chat):
+        """普通字段不携带运行时样例，只有路径探索需要的拓展样例进入上下文。"""
+
+        context = MessagePlanningService.build_context(
             query_text="查日志",
-            system_context=context,
-            current_system_id="bk-audit",
+            candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "描" * 300}],
+            common_fields=[
+                SelectionFieldMeta(raw_name="long_text"),
+                SelectionFieldMeta(raw_name="nested"),
+            ],
+            current_system=SelectionSystem(
+                system_id="bk-audit",
+                name="审计中心",
+                description="描" * 300,
+                standard_fields=[
+                    SelectionFieldMeta(raw_name="long_text", sample_value="x" * 200),
+                ],
+                extension_fields=[
+                    SelectionFieldMeta(
+                        raw_name="extend_data",
+                        keys=["request_data"],
+                        sample_value={"level1": {"level2": {"secret": "value"}}},
+                    )
+                ],
+            ),
             username=self.username,
-            scope_type="cross_system",
-            scope_id="",
             reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
         )
-        authorized_json = user_message.split("<authorized_systems>\n", 1)[1].split("\n</authorized_systems>", 1)[0]
-        system = json.loads(authorized_json)[0]
-        long_text, nested = system["standard_fields"]
 
-        self.assertEqual(len(system["description"]), 256)
-        self.assertEqual(system["description_meta"], {"truncated": True, "original_length": 300})
-        self.assertEqual(len(long_text["sample_value"]), 128)
+        user_message = MessagePlanningService.build_user_message(context)
+        current_json = user_message.split("<current_system_detail>\n", 1)[1].split("\n</current_system_detail>", 1)[0]
+        current_system = json.loads(current_json)
+        extension = current_system["extension_fields"][0]
+
+        self.assertEqual(len(current_system["description"]), 256)
+        self.assertEqual(current_system["field_overrides"], [])
+        self.assertNotIn("field_samples", current_system)
+        self.assertNotIn("x" * 128, user_message)
         self.assertEqual(
-            long_text["sample_value_meta"],
-            {"truncated": True, "original_type": "string", "original_length": 200},
-        )
-        self.assertEqual(
-            nested["sample_value"]["level1"]["level2"],
+            extension["sample_value"]["level1"]["level2"],
             {"truncated": True, "original_type": "object", "item_count": 1},
         )
-        self.assertTrue(nested["sample_value_meta"]["truncated"])
+        self.assertTrue(extension["sample_value_meta"]["truncated"])
 
-
-@mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
-class IntentRecognitionServiceTest(AIAssistantTestCase):
-    """意图识别：schema 注入 + 三类意图 + 候选白名单 + 异常映射"""
-
-    def _recognize(self, current_system_id="", candidates=CANDIDATES):
-        return IntentRecognitionService.recognize(
-            query_text="我要看审计中心近七天 hermit 的操作记录",
-            candidates=candidates,
-            current_system_id=current_system_id,
-            username=self.username,
-        )
-
-    def test_recognize_select_system(self, mock_chat):
-        """选系统意图：AI 输出契约解析 + User Message 注入 schema 与候选"""
-
-        mock_chat.return_value = json.dumps(
-            {"intent": "select_system", "system_id": "bk-audit", "message": "已为您选择审计中心"}
-        )
-
-        payload = self._recognize()
-
-        self.assertEqual(payload.intent, "select_system")
-        self.assertEqual(payload.system_id, "bk-audit")
-        self.assertEqual(payload.message, "已为您选择审计中心")
-        _, kwargs = mock_chat.call_args
-        user_message = kwargs["input"]
-        self.assertIn('"intent"', user_message)
-        self.assertIn("意图分类：选系统（含同时要检索）", user_message)
-        self.assertIn("bk-audit", user_message)
-        self.assertIn("审计中心", user_message)
-        self.assertEqual(kwargs["agent_code"], IntentRecognitionService.agent_code)
-        # 意图识别路由专属生产 agent（bp-ai-user-intent，与 NL2JSON 的检索 agent 解耦）——
-        # 硬断言防误回退到共享检索 agent（提示词冲突的已知权衡曾因此存在）；
-        # bkop 地址差异由 BKAPP_AI_USER_INTENT_API_URL 直连解决（2026-09-14 线上 404 事故定案）
-        self.assertEqual(kwargs["agent_code"], AIAgentCode.USER_INTENT)
-        self.assertEqual(kwargs["user"], self.username)
-        self.assertFalse(kwargs["execute_kwargs"]["stream"])
-
-    def test_recognize_log_search(self, mock_chat):
-        """当前系统检索意图：system_id 留空"""
-
-        mock_chat.return_value = json.dumps(
-            {"intent": "log_search", "system_id": "", "need_search": True, "message": "好的，为您检索"}
-        )
-        payload = self._recognize(current_system_id="bk-audit")
-        self.assertEqual(payload.intent, "log_search")
-        self.assertEqual(payload.system_id, "")
-
-    def test_recognize_unrecognized(self, mock_chat):
-        """无法识别：intent=unrecognized，message 为 AI 动态引导话术"""
-
-        mock_chat.return_value = json.dumps(
-            {"intent": "unrecognized", "system_id": "", "message": "抱歉，没理解您的需求，可以说要查哪个系统的日志"}
-        )
-        payload = self._recognize()
-        self.assertEqual(payload.intent, "unrecognized")
-        self.assertIn("没理解", payload.message)
-
-    def test_recognize_condition_only_query_prompt_rule(self, mock_chat):
-        """回归：纯条件罗列（无检索动词）必须判为检索诉求——prompt 注入条件描述判定规则。
-
-        线上报障：用户输入「extend.request_data为{...}，extend._request_url为http://...」
-        通篇无检索动词与系统指向，意图被误判 unrecognized（"未能理解当前意图"）。
-        修复：意图规则明确「字段为/=/是 + 值」类条件描述本身即日志检索需求，
-        即使无检索动词也判 log_search；含条件描述的话语不得判 unrecognized。
-        """
-
-        mock_chat.return_value = json.dumps(
-            {"intent": "log_search", "system_id": "", "need_search": True, "message": "好的，为您检索"}
-        )
-        payload = IntentRecognitionService.recognize(
-            query_text=(
-                'extend.request_data为{"id":"20260910204720871773","pk":"20260910204720871773"},'
-                "extend._request_url为http://bkaudit-api.example.com/api/v1/risks/20260910204720871773/"
+    def test_current_system_detail_only_keeps_differences_from_common_fields(self, mock_chat):
+        context = MessagePlanningService.build_context(
+            query_text="查日志",
+            candidates=[{"system_id": "bk-audit", "name": "审计中心"}],
+            common_fields=[SelectionFieldMeta(raw_name="username", nl_name="操作人")],
+            current_system=SelectionSystem(
+                system_id="bk-audit",
+                name="审计中心",
+                standard_fields=[SelectionFieldMeta(raw_name="username", nl_name="执行人", sample_value="user_a")],
             ),
-            candidates=CANDIDATES,
-            current_system_id="bk-audit",
             username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
         )
-        self.assertEqual(payload.intent, "log_search")
-        self.assertEqual(payload.system_id, "")
-        # User Message 注入条件描述判定规则与用户原话（URL 用 example.com 占位避免敏感扫描）
-        _, kwargs = mock_chat.call_args
-        user_message = kwargs["input"]
-        self.assertIn("字段为值", user_message)
-        self.assertIn("检索条件描述", user_message)
-        self.assertIn("不得判 unrecognized", user_message)
-        self.assertIn("extend.request_data", user_message)
+        user_message = MessagePlanningService.build_user_message(context)
+        current_json = user_message.split("<current_system_detail>\n", 1)[1].split("\n</current_system_detail>", 1)[0]
+        current_system = json.loads(current_json)
 
-    def test_parse_fenced_json(self, mock_chat):
-        """代码块包裹输出：三级递进提取（复用 NL2JSON 闸门）"""
-
-        raw = {"intent": "log_search", "system_id": "", "need_search": True, "message": "ok"}
-        mock_chat.return_value = f"识别结果如下：\n```json\n{json.dumps(raw)}\n```"
-        payload = self._recognize()
-        self.assertEqual(payload.intent, "log_search")
-
-    def test_parse_failed(self, mock_chat):
-        """非合法 JSON：AIOutputParseFailedError（触发调用方预算重试）"""
-
-        mock_chat.return_value = "这不是 JSON"
-        with self.assertRaises(AIOutputParseFailedError):
-            self._recognize()
-
-    def test_schema_validation_failed(self, mock_chat):
-        """缺 intent 字段：形态不合契约"""
-
-        mock_chat.return_value = json.dumps({"system_id": "bk-audit"})
-        with self.assertRaises(AIOutputParseFailedError):
-            self._recognize()
-
-    def test_invalid_intent_value_rejected(self, mock_chat):
-        """intent 非法枚举值：契约校验拒绝"""
-
-        mock_chat.return_value = json.dumps({"intent": "hack_intent", "system_id": "", "message": "x"})
-        with self.assertRaises(AIOutputParseFailedError):
-            self._recognize()
-
-    def test_system_not_in_candidates_rejected(self, mock_chat):
-        """越权 system_id（不在候选内）：AIOutputInvalidError（防幻觉越权）"""
-
-        mock_chat.return_value = json.dumps({"intent": "select_system", "system_id": "no-perm-system", "message": "x"})
-        with self.assertRaises(AIOutputInvalidError):
-            self._recognize()
-
-    def test_select_system_empty_system_id_rejected(self, mock_chat):
-        """select_system 但 system_id 为空：组合契约在 schema 阶段拒绝。"""
-
-        mock_chat.return_value = json.dumps({"intent": "select_system", "system_id": "", "message": "x"})
-        with self.assertRaises(AIOutputParseFailedError):
-            self._recognize()
-
-    def test_log_search_requires_need_search_and_empty_system_id(self, mock_chat):
-        """log_search 必须明确检索且不得携带系统，防止下游按矛盾字段续链。"""
-
-        invalid_payloads = [
-            {"intent": "log_search", "system_id": "", "need_search": False, "message": "x"},
-            {"intent": "log_search", "system_id": "bk-audit", "need_search": True, "message": "x"},
-        ]
-        for payload in invalid_payloads:
-            with self.subTest(payload=payload):
-                mock_chat.return_value = json.dumps(payload)
-                with self.assertRaises(AIOutputParseFailedError):
-                    self._recognize(current_system_id="bk-audit")
-
-    def test_unrecognized_rejects_system_and_search_flags(self, mock_chat):
-        """unrecognized 不得夹带确定的系统或检索续链标记。"""
-
-        mock_chat.return_value = json.dumps(
-            {"intent": "unrecognized", "system_id": "bk-audit", "need_search": True, "message": "x"}
-        )
-        with self.assertRaises(AIOutputParseFailedError):
-            self._recognize()
-
-    def test_timeout_and_service_error(self, mock_chat):
-        """AIDev 超时 / 服务异常：稳定异常映射（触发调用方重试）"""
-
-        mock_chat.side_effect = Timeout("t")
-        with self.assertRaises(AITimeoutError):
-            self._recognize()
-        mock_chat.side_effect = RuntimeError("down")
-        with self.assertRaises(AIServiceError):
-            self._recognize()
+        self.assertEqual(current_system["field_overrides"][0]["raw_name"], "username")
+        self.assertEqual(current_system["field_overrides"][0]["nl_name"], "执行人")
+        self.assertNotIn("field_samples", current_system)
+        self.assertNotIn("user_a", user_message)
 
 
 class LoadCandidatesTest(AIAssistantTestCase):
-    """候选组装：全量系统 ∩ 用户检索权限"""
+    """候选组装：当前范围权限 ∩ 已接入审计系统。"""
 
     def test_load_candidates_filters_by_permission(self):
         all_systems = [
-            {"id": "bk-audit", "name": "审计中心"},
-            {"id": "bcs", "name": "蓝盾"},
-            {"id": "other", "name": "无权限系统"},
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
+            {"id": "other", "name": "无权限系统", "audit_status": "accessed"},
         ]
         with mock.patch(
             "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
             return_value=(all_systems, ["bk-audit", "bcs"]),
         ):
-            candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
         self.assertEqual(candidates, CANDIDATES)
+
+    def test_load_candidates_excludes_authorized_but_not_accessed_system(self):
+        """有场景权限但尚未接入审计的系统不能暴露给 Agent。"""
+
+        all_systems = [
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "pending-system", "name": "待接入系统", "audit_status": "pending"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["bk-audit", "pending-system"]),
+        ):
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+
+        self.assertEqual([candidate["system_id"] for candidate in candidates], ["bk-audit"])
+
+    def test_load_candidates_preserves_given_priority_order(self):
+        """候选顺序是同等匹配时的产品优先级，意图识别层不得重新排序。"""
+
+        all_systems = [
+            {"id": "iam_v4_bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
+        ]
+        with mock.patch(
+            "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
+            return_value=(all_systems, ["iam_v4_bk-audit", "bk-audit", "bcs"]),
+        ):
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
+
+        self.assertEqual(
+            [candidate["system_id"] for candidate in candidates],
+            ["iam_v4_bk-audit", "bk-audit", "bcs"],
+        )
 
     def test_load_candidates_with_scope(self):
         """传 scope：候选与检索页场景过滤同口径（get_scope_auth_systems），仅保留场景授权系统"""
 
         all_systems = [
-            {"id": "bk-audit", "name": "审计中心"},
-            {"id": "bcs", "name": "蓝盾"},
+            {"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"},
+            {"id": "bcs", "name": "蓝盾", "audit_status": "accessed"},
         ]
         with mock.patch(
             "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
@@ -425,12 +482,12 @@ class LoadCandidatesTest(AIAssistantTestCase):
             f"{INTENT_MODULE}.resource.meta.system_list_all",
             return_value=all_systems,
         ) as mock_list:
-            candidates = IntentRecognitionService.load_candidates(
+            candidates = MessagePlanningService.load_candidates(
                 "bkaudit", self.username, scope_type="scene", scope_id="1"
             )
-        self.assertEqual(candidates, [{"system_id": "bk-audit", "name": "审计中心"}])
+        self.assertEqual(candidates, [{"system_id": "bk-audit", "name": "审计中心", "description": ""}])
         mock_scope.assert_called_once_with("scene", "1", self.username)
-        mock_list.assert_called_once_with(namespace="bkaudit")
+        mock_list.assert_called_once_with(namespace="bkaudit", audit_status__in="accessed")
 
     def test_load_candidates_with_scope_no_permission(self):
         """scope 无权限：get_scope_auth_systems 的 [""] 兜底（ES filter 语义）被剔除，候选为空"""
@@ -440,9 +497,9 @@ class LoadCandidatesTest(AIAssistantTestCase):
             return_value=[""],
         ), mock.patch(
             f"{INTENT_MODULE}.resource.meta.system_list_all",
-            return_value=[{"id": "bk-audit", "name": "审计中心"}],
+            return_value=[{"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"}],
         ):
-            candidates = IntentRecognitionService.load_candidates(
+            candidates = MessagePlanningService.load_candidates(
                 "bkaudit", self.username, scope_type="scene", scope_id="1"
             )
         self.assertEqual(candidates, [])
@@ -450,14 +507,14 @@ class LoadCandidatesTest(AIAssistantTestCase):
     def test_load_candidates_without_scope_keeps_legacy(self):
         """不传 scope：保持既有并集口径（旧前端兼容），不走场景过滤分支"""
 
-        all_systems = [{"id": "bk-audit", "name": "审计中心"}]
+        all_systems = [{"id": "bk-audit", "name": "审计中心", "audit_status": "accessed"}]
         with mock.patch(
             "apps.meta.permissions.SearchLogPermission.get_auth_systems_by_username",
             return_value=(all_systems, ["bk-audit"]),
         ), mock.patch(
             "apps.meta.permissions.SearchLogPermission.get_scope_auth_systems",
         ) as mock_scope:
-            candidates = IntentRecognitionService.load_candidates("bkaudit", self.username)
+            candidates = MessagePlanningService.load_candidates("bkaudit", self.username)
         self.assertEqual(candidates, CANDIDATES[:1])
         mock_scope.assert_not_called()
 
@@ -474,7 +531,7 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
     def test_default_routes_to_dedicated_agent(self):
         """默认：路由到 USER_INTENT 专属智能体（生产默认链路零额外配置）"""
 
-        self.assertEqual(IntentRecognitionService.agent_code, AIAgentCode.USER_INTENT)
+        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.USER_INTENT)
         self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
 
     @override_settings(AI_USER_INTENT_AGENT_CODE="RISK_SEARCH")

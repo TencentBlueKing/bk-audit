@@ -33,6 +33,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from rest_framework import serializers
 
+from core.sql.constants import FieldType
 from core.utils.time import parse_datetime
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
 from services.web.query.utils.search_config import QueryConditionOperator
@@ -178,35 +179,114 @@ class SystemSelectionOutput(BaseModel):
     systems: List[SelectionSystem] = Field(default_factory=list)
 
 
+class MessagePlanningConversation(BaseModel):
+    """Agent 可见的当前会话状态，字段之间必须保持一致。"""
+
+    username: str = Field(description="当前请求用户身份，仅用于理解请求主体，不作为授权依据")
+    phase: Literal["SYSTEM_UNSELECTED", "SYSTEM_SELECTED"]
+    phase_decision_rule: str = Field(description="当前阶段直接影响下一条消息的决策规则")
+    has_selected_system: bool
+    current_system_id: str = ""
+
+    @model_validator(mode="after")
+    def validate_selection_state(self) -> "MessagePlanningConversation":
+        """拒绝阶段、选择标记和当前系统 ID 相互矛盾的上下文。"""
+
+        selected = bool(self.current_system_id)
+        if self.has_selected_system != selected:
+            raise ValueError("has_selected_system conflicts with current_system_id")
+        expected_phase = "SYSTEM_SELECTED" if selected else "SYSTEM_UNSELECTED"
+        if self.phase != expected_phase:
+            raise ValueError("phase conflicts with current_system_id")
+        return self
+
+
+class MessagePlanningSystemSummary(BaseModel):
+    """Agent 用于选择系统的最小授权候选摘要。"""
+
+    system_id: str = Field(..., min_length=1)
+    name: str = ""
+    description: str = ""
+
+
+class MessagePlanningClock(BaseModel):
+    """Agent 解释自然语言时间所需的确定性时间锚点。"""
+
+    current_time: str
+    timezone: str
+    default_start_time: str
+    current_week_start: str
+    previous_week_start: str
+    previous_week_end: str
+
+
+class MessagePlanningContext(BaseModel):
+    """单次 MessagePlan 决策所需的全部动态上下文。"""
+
+    user_query: str = Field(..., min_length=1)
+    conversation: MessagePlanningConversation
+    authorized_systems: List[MessagePlanningSystemSummary] = Field(default_factory=list)
+    common_standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
+    current_system_detail: Optional[SelectionSystem] = None
+    clock: MessagePlanningClock
+
+    @model_validator(mode="after")
+    def validate_current_system_detail(self) -> "MessagePlanningContext":
+        """当前系统详情必须与会话状态和本轮授权候选完全对应。"""
+
+        if self.current_system_detail is None:
+            if self.conversation.has_selected_system:
+                raise ValueError("selected conversation requires current_system_detail")
+            return self
+        if self.current_system_detail.system_id != self.conversation.current_system_id:
+            raise ValueError("current_system_detail conflicts with current_system_id")
+        authorized_system_ids = {system.system_id for system in self.authorized_systems}
+        if self.conversation.current_system_id not in authorized_system_ids:
+            raise ValueError("current_system_id not in authorized_systems")
+        return self
+
+
 # ---------------------------------------------------------------------------
-# NATURAL_LANGUAGE_SEARCH（协议 §4）
+# Agent 条件载荷（消息规划与条件组装共用，不单独落成消息类型）
 # ---------------------------------------------------------------------------
-
-
-class NLSearchInput(BaseModel):
-    """NL 输入（协议 §4.1）"""
-
-    query_text: str = Field(..., min_length=1)
-    auto_execute: bool = True
-
-
-class NLSearchOutput(BaseModel):
-    """NL 输出（协议 §4.2，官方稳定键为 condition 单键）"""
-
-    condition: SearchCondition
 
 
 class AIConditionItem(BaseModel):
     """AI 生成的单条条件（AIDev 返回契约，不进 output_data）"""
 
-    raw_name: str = Field(..., min_length=1, description="字段名，必须来自字段上下文 standard_fields/extension_fields")
-    keys: List[str] = Field(default_factory=list, description="下钻子键，仅 JSON 容器字段使用，通用字段为空数组")
-    field_type: Optional[str] = Field(None, description="字段类型，可缺省由服务端按字段元数据补全")
-    operator: str = Field(..., min_length=1, description="操作符，必须在该字段 allow_operators 内")
+    raw_name: str = Field(
+        ...,
+        min_length=1,
+        description="字段名，必须来自字段上下文；拓展数据下钻时 raw_name 固定为 extend_data，不得填写子键名",
+        examples=["username", "extend_data"],
+    )
+    keys: List[str] = Field(
+        default_factory=list,
+        description="下钻子键路径，仅 JSON 容器字段使用；普通字段为空数组，extend_data 多级路径按层拆分",
+        examples=[[], ["_request_url", "scope_id"]],
+    )
+    field_type: FieldType = Field(
+        default=FieldType.STRING,
+        description=("下发给查询执行层的叶子字段类型；上下文中的 object 表示 JSON 容器，不是可输出的查询类型。" "拓展字段类型不明确时结合用户表达与样例判断，缺省使用 string"),
+    )
+    operator: QueryConditionOperator = Field(
+        ...,
+        description="查询执行层支持的全局操作符；标准字段还必须遵循字段上下文中的 allow_operators",
+    )
     filters: List[Any] = Field(
         default_factory=list,
         description="原始查询值列表，形态匹配操作符；值保持原样：JSON 对象字面量整体作为一个字符串" "（内部双引号转义），URL 与特殊字符文本不截断不改写",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_legacy_null_field_type(cls, value):
+        """兼容旧 Agent 显式输出 null；新 Schema 只向模型暴露查询类型枚举。"""
+
+        if isinstance(value, dict) and value.get("field_type") is None:
+            value = dict(value)
+            value.pop("field_type", None)
+        return value
 
 
 class AIConditionPayload(BaseModel):
@@ -250,10 +330,25 @@ PlannedMessage = Annotated[
 class MessagePlan(BaseModel):
     """通用消息规划 Agent 的输出契约，一期最多生成系统选择和日志检索两条消息。"""
 
-    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行消息计划，error 表示业务上无法形成计划")
-    messages: List[PlannedMessage] = Field(default_factory=list, max_length=2, description="按执行顺序排列的业务消息")
-    error_code: Optional[Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE"]] = Field(
-        default=None, description="outcome=error 时必填的稳定业务错误码"
+    outcome: Literal["dispatch", "error"] = Field(description="dispatch 表示执行 messages；error 表示业务意图已完成判断但无法形成可执行计划")
+    messages: List[PlannedMessage] = Field(
+        default_factory=list,
+        max_length=2,
+        description=(
+            "outcome=dispatch 时按执行顺序填写；只允许 [SYSTEM_SELECTION]、[LOG_SEARCH]、"
+            "[SYSTEM_SELECTION, LOG_SEARCH] 三种序列。outcome=error 时必须为空"
+        ),
+    )
+    error_code: Optional[
+        Literal["UNRECOGNIZED_INTENT", "SYSTEM_REQUIRED", "SYSTEM_UNAVAILABLE", "INVALID_CONDITION"]
+    ] = Field(
+        default=None,
+        description=(
+            "outcome=error 时必填：UNRECOGNIZED_INTENT 表示输入与系统选择、日志检索无关；"
+            "SYSTEM_REQUIRED 表示检索需要系统，但用户没有提供足够信息且当前没有已选系统；"
+            "SYSTEM_UNAVAILABLE 表示用户明确指向的系统不在当前可选系统中；"
+            "INVALID_CONDITION 表示已识别检索意图，但用户要求的字段、操作符或条件值无法合法表达"
+        ),
     )
 
     @model_validator(mode="after")
@@ -273,48 +368,6 @@ class MessagePlan(BaseModel):
             ("SYSTEM_SELECTION", "LOG_SEARCH"),
         ):
             raise ValueError("unsupported message plan sequence")
-        return self
-
-
-class IntentPayload(BaseModel):
-    """用户意图识别 Agent 返回的 JSON 契约（一期两类行为 + 无法识别兜底）。
-
-    single source of truth：model_json_schema() 注入 Prompt 约束输出结构，
-    model_validate 校验输出（详见一期设计方案 v6 §三/§五）。
-    """
-
-    intent: Literal["select_system", "log_search", "unrecognized"] = Field(
-        description="意图分类：选系统（含同时要检索）/ 当前系统日志检索 / 无法识别"
-    )
-    system_id: str = Field(
-        default="",
-        description="select_system 时必填，必须来自候选系统列表；log_search/unrecognized 时留空",
-    )
-    need_search: bool = Field(
-        default=False,
-        description="检索诉求判定：select_system 且话语同时包含日志检索诉求（如「查审计中心近七天的操作记录」）"
-        "为 true（切换系统后继续执行检索）；仅表达切换/选择系统（如「切换到蓝盾」「用蓝盾系统」）为 false"
-        "（仅切换不检索）；log_search 恒为 true，unrecognized 恒为 false",
-    )
-    message: str = Field(
-        default="",
-        description="给用户的说明消息：识别结果简述或无法识别的原因（此消息将直接展示给用户）",
-    )
-
-    @model_validator(mode="after")
-    def validate_intent_fields(self) -> "IntentPayload":
-        """拒绝意图与路由字段互相矛盾的输出，避免下游猜测续链行为。"""
-
-        if self.intent == "select_system":
-            if not self.system_id:
-                raise ValueError("select_system requires system_id")
-            return self
-        if self.intent == "log_search":
-            if self.system_id or not self.need_search:
-                raise ValueError("log_search requires empty system_id and need_search=true")
-            return self
-        if self.system_id or self.need_search:
-            raise ValueError("unrecognized requires empty system_id and need_search=false")
         return self
 
 

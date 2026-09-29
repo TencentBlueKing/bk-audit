@@ -191,7 +191,7 @@ class HttpIntegrationTest(LiveServerTestCase):
                 self.api_url("/messages/"),
                 json={
                     "conversation_uid": conversation_uid,
-                    "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+                    "message_type": MessageType.USER_INTENT,
                     "input_data": {"text": text},
                 },
             )
@@ -253,7 +253,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_async_message_creates_and_reaches_success_over_http(self):
         completed = self.create_success_message(text="http-message")
-        self.assertEqual(completed["message_type"], MessageType.NATURAL_LANGUAGE_SEARCH)
+        self.assertEqual(completed["message_type"], MessageType.USER_INTENT)
         self.assertEqual(completed["input_data"], {"text": "http-message"})
 
     def test_async_attachment_creates_and_retries_after_failure_over_http(self):

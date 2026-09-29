@@ -22,14 +22,10 @@ from unittest import mock
 
 from django.test import override_settings
 
-from apps.meta.models import Field
+from apps.meta.models import Field, GlobalMetaConfig
 from core.sql.constants import Operator
 from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
-from services.web.query.ai_assistant.schemas import (
-    SelectionSystem,
-    SystemSelectionOutput,
-)
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.utils.field_map import FieldMapHandler
@@ -43,31 +39,27 @@ FIELD_CONTEXT_MODULE = "services.web.query.ai_assistant.services.field_context"
 
 
 class TestPlanningFieldContext(AIAssistantTestCase):
-    """规划上下文按授权候选顺序合并多个单系统字段快照。"""
+    """规划公共字段不读取任何系统详情或日志样例。"""
 
-    def test_build_planning_context_reuses_single_system_contract(self):
-        with mock.patch.object(
+    def test_build_common_fields_does_not_load_or_sample_systems(self):
+        with mock.patch.object(FieldContextService, "_load_system_map",) as load_system_map, mock.patch.object(
+            GlobalMetaConfig,
+            "get",
+        ) as load_meta_config, mock.patch.object(
             FieldContextService,
-            "build_selection",
-            side_effect=[
-                SystemSelectionOutput(systems=[SelectionSystem(system_id="bk-audit", name="审计中心")]),
-                SystemSelectionOutput(systems=[SelectionSystem(system_id="bcs", name="蓝盾")]),
-            ],
-        ) as build_selection:
-            output = FieldContextService.build_planning_context(
-                namespace=self.namespace,
-                system_ids=["bk-audit", "bcs"],
-                username=self.username,
-            )
+            "_load_enum_options",
+            return_value={},
+        ) as load_enum_options, mock.patch.object(
+            FieldContextService,
+            "_sample_system_logs",
+        ) as sample_system_logs:
+            fields = FieldContextService.build_common_fields(namespace=self.namespace)
 
-        self.assertEqual([system.system_id for system in output.systems], ["bk-audit", "bcs"])
-        self.assertEqual(
-            build_selection.call_args_list,
-            [
-                mock.call(namespace=self.namespace, system_ids=["bk-audit"], username=self.username),
-                mock.call(namespace=self.namespace, system_ids=["bcs"], username=self.username),
-            ],
-        )
+        self.assertEqual(len(fields), len(COLLECT_SEARCH_CONFIG.field_configs))
+        load_enum_options.assert_called_once_with(self.namespace)
+        load_system_map.assert_not_called()
+        load_meta_config.assert_not_called()
+        sample_system_logs.assert_not_called()
 
 
 @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=False)

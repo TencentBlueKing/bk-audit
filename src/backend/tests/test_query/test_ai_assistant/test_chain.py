@@ -27,18 +27,18 @@ import json
 from unittest import mock
 
 import openpyxl
+from django.utils import timezone
 
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 from services.web.query.ai_assistant.services.export import (
     FullExportService,
     PreviewExportService,
 )
 from services.web.query.ai_assistant.services.field_context import FieldContextService
 from services.web.query.ai_assistant.services.log_search import LogSearchService
-from services.web.query.ai_assistant.services.nl2json import NL2JSONService
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 FIELD_CONTEXT_MODULE = "services.web.query.ai_assistant.services.field_context"
-NL2JSON_MODULE = "services.web.query.ai_assistant.services.nl2json"
 LOG_SEARCH_MODULE = "services.web.query.ai_assistant.services.log_search"
 EXPORT_MODULE = "services.web.query.ai_assistant.services.export"
 
@@ -67,7 +67,7 @@ class TestComponentChain(AIAssistantTestCase):
         self.assertEqual(len(selection.systems), 1)
         self.assertEqual(len(selection.systems[0].extension_fields), 1)
 
-        # ---------- F2：NATURAL_LANGUAGE_SEARCH（AI 输出拓展字段条件） ----------
+        # ---------- 条件组装：Agent 输出拓展字段条件 ----------
         ai_output = {
             "conditions": [
                 {
@@ -81,14 +81,12 @@ class TestComponentChain(AIAssistantTestCase):
             "start_time": self.start_time,
             "end_time": self.end_time,
         }
-        with mock.patch(f"{NL2JSON_MODULE}.api.bk_plugins_ai_agent.chat_completion") as mock_chat:
-            mock_chat.return_value = json.dumps(ai_output)
-            condition = NL2JSONService.convert(
-                query_text="查一下工单内容为 Story-3000 的日志",
-                selection=selection,
-                scope_id=self.target_system_id,
-                username=self.username,
-            )
+        condition = ConditionAssemblyService.parse_condition_text(
+            content=json.dumps(ai_output),
+            selection=selection,
+            scope_id=self.target_system_id,
+            reference_time=timezone.localtime(),
+        )
         # 零转换断言：condition 形态即 LOG_SEARCH 输入
         self.assertEqual(condition.scope_id, self.target_system_id)
         self.assertEqual(condition.conditions[0].field.keys, ["ticket_id"])

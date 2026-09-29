@@ -4,7 +4,10 @@ from unittest import mock
 from celery.exceptions import Ignore, MaxRetriesExceededError, Retry
 from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError
+from django.test import override_settings
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from api.constants import AIAgentCode
 from core.exceptions import ValidationError as CoreValidationError
 from services.web.ai_assistant.constants import (
     ExecutionStatus,
@@ -25,8 +28,13 @@ from services.web.ai_assistant.services.message_execution import (
     load_message_execution,
 )
 from services.web.ai_assistant.tasks import BaseExecutionTask, MessageExecutionTask
-from services.web.query.ai_assistant.exceptions import AIServiceError, AITimeoutError
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputInvalidError,
+    AIServiceError,
+    AITimeoutError,
+)
 from tests.base import TestCase
+from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoContext,
@@ -51,12 +59,13 @@ class MessageTaskTest(TestCase):
         register_test_message_handler(self.handler)
 
     def tearDown(self):
-        message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+        message_handler_registry.unregister(MessageType.USER_INTENT)
+        ensure_business_handlers_registered()
 
     def create_message(self, *, task_id: str = "task-current") -> Message:
         return Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id=task_id,
             input_data={"text": "hello"},
@@ -85,6 +94,51 @@ class MessageTaskTest(TestCase):
         self.assertIsNotNone(message.started_at)
         self.assertIsNotNone(message.last_activity_at)
         self.assertGreaterEqual(message.last_activity_at, message.started_at)
+        self.assertIsNone(message.finished_at)
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=1)
+    def test_exhausted_agent_rate_limit_writes_message_failure(self):
+        message = self.create_message()
+
+        with mock.patch.object(
+            execute_async_success,
+            "run",
+            side_effect=AgentRateLimited(AIAgentCode.USER_INTENT),
+        ), self.assertRaises(AgentRateLimited):
+            self.invoke(execute_async_success, message=message, retries=1)
+
+        message.refresh_from_db()
+        self.assertEqual(message.status, ExecutionStatus.FAILED)
+        self.assertIsNotNone(message.finished_at)
+
+    @override_settings(
+        AI_AGENT_TASK_MAX_RETRIES=1,
+        AI_AGENT_TASK_RETRY_BASE_SECONDS=1,
+        AI_AGENT_TASK_RETRY_MAX_SECONDS=1,
+        AI_AGENT_TASK_RETRY_JITTER_SECONDS=0,
+        AI_AGENT_TASK_RETRY_DEADLINE_SECONDS=60,
+    )
+    def test_agent_rate_limit_retries_and_keeps_message_processing(self):
+        message = self.create_message()
+        original_touch_processing = Message.touch_processing
+
+        with mock.patch.object(
+            execute_async_success,
+            "run",
+            side_effect=AgentRateLimited(AIAgentCode.USER_INTENT),
+        ), mock.patch.object(
+            Message,
+            "touch_processing",
+            side_effect=original_touch_processing,
+        ) as touch_processing, self.assertRaises(
+            Retry
+        ):
+            self.invoke(execute_async_success, message=message)
+
+        message.refresh_from_db()
+        touch_processing.assert_called_once_with(instance_id=message.id, task_id=message.task_id)
+        self.assertEqual(message.status, ExecutionStatus.PROCESSING)
+        self.assertIsNotNone(message.last_activity_at)
         self.assertIsNone(message.finished_at)
 
     @mock.patch("services.web.ai_assistant.services.message_execution.report_execution_finished")
@@ -259,6 +313,23 @@ class MessageTaskTest(TestCase):
                 self.assertTrue(updated)
                 self.assertEqual(message.error_code, error.error_code)
                 self.assertEqual(message.error_message, error.message)
+
+    def test_query_business_error_keeps_domain_code_and_message(self):
+        """查询域确定性错误进入 FAILED 时保留稳定业务码，供前端引导用户修正。"""
+
+        error = AIOutputInvalidError()
+        message = self.create_message(task_id="task-ai-output-invalid")
+
+        updated = finish_message_failure(
+            message_id=message.id,
+            task_id=message.task_id,
+            exception=error,
+        )
+
+        message.refresh_from_db()
+        self.assertTrue(updated)
+        self.assertEqual(message.error_code, error.error_code)
+        self.assertEqual(message.error_message, error.message)
 
     def test_non_platform_blue_exception_is_sanitized(self):
         message = self.create_message()

@@ -220,7 +220,7 @@ class MessageRequestSerializerTest(TestCase):
     def test_swagger_snapshot_schema_mapping_uses_registered_handler_models(self):
         # 保存常驻业务 Handler，测试结束后恢复，避免污染全局单例影响后续测试。
         saved_sync = message_handler_registry.handlers.get(MessageType.SYSTEM_SELECTION)
-        saved_async = message_handler_registry.handlers.get(MessageType.NATURAL_LANGUAGE_SEARCH)
+        saved_async = message_handler_registry.handlers.get(MessageType.USER_INTENT)
         sync_handler = EchoSyncHandler()
         async_handler = EchoAsyncHandler()
         register_test_message_handler(sync_handler)
@@ -230,16 +230,16 @@ class MessageRequestSerializerTest(TestCase):
             output_schemas = _message_schema_mapping("output_model")
         finally:
             message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-            message_handler_registry.unregister(MessageType.NATURAL_LANGUAGE_SEARCH)
+            message_handler_registry.unregister(MessageType.USER_INTENT)
             if saved_sync is not None:
                 message_handler_registry.register(saved_sync)
             if saved_async is not None:
                 message_handler_registry.register(saved_async)
 
         self.assertIs(input_schemas[MessageType.SYSTEM_SELECTION], EchoInput)
-        self.assertIs(input_schemas[MessageType.NATURAL_LANGUAGE_SEARCH], EchoInput)
+        self.assertIs(input_schemas[MessageType.USER_INTENT], EchoInput)
         self.assertIs(output_schemas[MessageType.SYSTEM_SELECTION], EchoOutput)
-        self.assertIs(output_schemas[MessageType.NATURAL_LANGUAGE_SEARCH], EchoOutput)
+        self.assertIs(output_schemas[MessageType.USER_INTENT], EchoOutput)
 
 
 class StartupAlphaMessageInput(MessageSchema):
@@ -275,7 +275,7 @@ class StartupAlphaMessageHandler(EchoSyncHandler):
 
 
 class StartupBetaMessageHandler(EchoSyncHandler):
-    message_type = MessageType.NATURAL_LANGUAGE_SEARCH
+    message_type = MessageType.USER_INTENT
     input_model = StartupBetaMessageInput
     output_model = StartupBetaMessageOutput
 
@@ -312,7 +312,7 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
             message_type: message_handler_registry.unregister(message_type)
             for message_type in (
                 MessageType.SYSTEM_SELECTION,
-                MessageType.NATURAL_LANGUAGE_SEARCH,
+                MessageType.USER_INTENT,
                 MessageType.LOG_SEARCH,
             )
         }
@@ -362,6 +362,9 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
         self.assertNotIn("#/components/schemas/StartupGammaMessageInput", refreshed_input_refs)
 
     def test_openapi_deduplicates_unregistered_message_fallback_schema(self):
+        intent_handler = self._saved_handlers[MessageType.USER_INTENT]
+        self.assertIsNotNone(intent_handler)
+        message_handler_registry.register(intent_handler)
         proxy = PolymorphicProxySerializer(
             component_name="AIMessageInputDataFallbackGate",
             serializers=lambda: _message_schema_models("input_model"),
@@ -388,11 +391,7 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertEqual(
             [item["$ref"] for item in schema["oneOf"]],
-            [
-                "#/components/schemas/EchoInput",
-                "#/components/schemas/UserIntentInputSchema",
-                "#/components/schemas/MessageSchema",
-            ],
+            ["#/components/schemas/EchoInput", "#/components/schemas/MessageSchema"],
         )
 
 
@@ -464,7 +463,7 @@ class MessageResourceTest(TestCase):
     def test_update_async_resource_returns_processing_for_original_uid(self, _username):
         message = Message.objects.create(
             conversation=self.conversation,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.SUCCESS,
             input_data={"text": "old"},
             output_data={"content": "old"},
@@ -505,7 +504,7 @@ class MessageResourceTest(TestCase):
                 created = CreateMessage().request(
                     {
                         "conversation_uid": str(self.conversation.uid),
-                        "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+                        "message_type": MessageType.USER_INTENT,
                         "input_data": {"text": "search"},
                     }
                 )
@@ -731,7 +730,7 @@ class MessageResourceTest(TestCase):
     def create_failed_async_message(self, **overrides):
         values = {
             "conversation": self.conversation,
-            "message_type": MessageType.NATURAL_LANGUAGE_SEARCH,
+            "message_type": MessageType.USER_INTENT,
             "status": ExecutionStatus.FAILED,
             "task_id": "task-old",
             "input_data": {"text": "search"},

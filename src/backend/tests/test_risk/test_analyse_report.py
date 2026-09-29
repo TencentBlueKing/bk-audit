@@ -1970,6 +1970,25 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(self.report.title, "自定义分析_20260616213045")
         self.assertFalse(self.report.title_generating)
 
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
+    def test_generate_title_rate_limit_exhaustion_resets_generating_state(self, mock_chat):
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.tasks import generate_analyse_report_title
+
+        mock_chat.side_effect = AgentRateLimited(AIAgentCode.ALS_TITLE_SUM)
+        self.report.title_generating = True
+        self.report.title_task_id = "title-task-id"
+        self.report.save(update_fields=["title_generating", "title_task_id"])
+
+        with mock.patch.object(generate_analyse_report_title.request, "id", "title-task-id"):
+            with self.assertRaises(AgentRateLimited):
+                generate_analyse_report_title(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertFalse(self.report.title_generating)
+
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_agent.chat_completion")
     def test_generate_title_task_skips_stale_task(self, mock_chat):
         """测试旧标题任务不会覆盖当前报告标题"""
@@ -2170,6 +2189,22 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(metric_kwargs["error_type"], "Exception")
         self.assertEqual(metric_kwargs["dimensions"]["operation"], "generate_analyse_report")
         self.assertEqual(metric_kwargs["dimensions"]["business_status"], AnalyseReportStatus.FAILED)
+
+    @override_settings(AI_AGENT_TASK_MAX_RETRIES=0)
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_rate_limit_exhaustion_marks_report_failed(self, mock_chat):
+        from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+        from api.constants import AIAgentCode
+        from services.web.risk.tasks import generate_analyse_report
+
+        mock_chat.side_effect = AgentRateLimited(AIAgentCode.AUDIT_ANALYSE)
+
+        with self.assertRaises(AgentRateLimited):
+            generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.FAILED)
+        self.assertEqual(self.report.extra_info["error"]["error_type"], "AgentRateLimited")
 
     @mock.patch("services.web.risk.tasks.report_observation_metric")
     @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")

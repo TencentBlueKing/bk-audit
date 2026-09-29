@@ -4,11 +4,7 @@ from services.web.ai_assistant.tasks.audit_analysis import (
     execute_log_analysis,
     generate_log_analysis_title,
 )
-from services.web.ai_assistant.tasks.audit_search import (
-    NLSearchExecutionTask,
-    execute_natural_language_search,
-    refresh_common_queries,
-)
+from services.web.ai_assistant.tasks.audit_search import refresh_common_queries
 from services.web.ai_assistant.tasks.audit_statistics import (
     generate_ai_statistics,
     generate_field_statistics,
@@ -30,11 +26,9 @@ __all__ = [
     "BaseExecutionTask",
     "MessageAsyncTask",
     "MessageExecutionTask",
-    "NLSearchExecutionTask",
     "attachment_execution_task",
     "build_agent_input",
     "execute_log_analysis",
-    "execute_natural_language_search",
     "generate_conversation_title",
     "generate_log_analysis_title",
     "generate_field_statistics",

@@ -9,8 +9,8 @@
   （Redis 异常返回空列表，不阻断系统选择消息主流程）。
 历史操作 = 当前用户最近的自然语言检索，直接查询消息表（按系统过滤），语义不变。
 
-数据源覆盖 NATURAL_LANGUAGE_SEARCH 与 USER_INTENT（统一入口）两类消息：
-意图消息仅收录真正产出检索条件的（output 携带 condition + system_id），
+数据源是 USER_INTENT：仅收录真正产出检索条件的消息
+（存在成功的来源 LOG_SEARCH，或历史输出仍携带 condition 与 system_id）。
 SYSTEM_REQUIRED / unrecognized 等引导性结果不进榜单。
 """
 
@@ -160,9 +160,8 @@ class OperationContextService:
 
     @classmethod
     def _iter_recent_queries(cls, scan_limit: int, username: str | None = None, since: datetime | None = None):
-        """迭代最近成功检索样例（NL + USER_INTENT 统一入口），产出 (query_text, system_ids, created_by)。
+        """迭代最近成功的 USER_INTENT 检索样例，产出 (query_text, system_ids, created_by)。
 
-        - NL 消息：系统取 context_data.system_selection.systems
         - 新 USER_INTENT：系统取 output_data.system_id，且必须存在 SUCCESS 的来源 LOG_SEARCH；
           失败消息后续重试成功也能进入榜单，不依赖入口消息内的派生状态摘要
         - 历史 USER_INTENT：仍以 output_data.condition 非空识别成功检索
@@ -170,7 +169,7 @@ class OperationContextService:
         """
 
         filters = {
-            "message_type__in": [MessageType.NATURAL_LANGUAGE_SEARCH, MessageType.USER_INTENT],
+            "message_type": MessageType.USER_INTENT,
             "status": ExecutionStatus.SUCCESS,
         }
         if username:
@@ -180,45 +179,27 @@ class OperationContextService:
         messages = list(
             Message.objects.filter(**filters)
             .order_by("-id")
-            .values_list("id", "message_type", "input_data", "context_data", "output_data", "created_by")[:scan_limit]
+            .values_list("id", "input_data", "output_data", "created_by")[:scan_limit]
         )
-        intent_message_ids = [
-            message_id for message_id, message_type, *_ in messages if message_type == MessageType.USER_INTENT
-        ]
         successful_intent_ids = set(
             Message.objects.filter(
-                parent_message_id__in=intent_message_ids,
+                parent_message_id__in=[message_id for message_id, *_ in messages],
                 message_type=MessageType.LOG_SEARCH,
                 status=ExecutionStatus.SUCCESS,
             ).values_list("parent_message_id", flat=True)
         )
-        for message_id, message_type, input_data, context_data, output_data, created_by in messages:
+        for message_id, input_data, output_data, created_by in messages:
             query_text = (input_data or {}).get("query_text") or ""
             if not query_text:
                 continue
-            if message_type == MessageType.USER_INTENT:
-                output = output_data if isinstance(output_data, dict) else {}
-                system_id = str(output.get("system_id") or "")
-                is_new_protocol = "derived_messages" in output
-                has_successful_search = message_id in successful_intent_ids
-                has_legacy_condition = not is_new_protocol and output.get("condition") is not None
-                if (not has_successful_search and not has_legacy_condition) or not system_id:
-                    continue
-                system_ids = {system_id}
-            else:
-                system_ids = cls._extract_message_system_ids(context_data)
-                if not system_ids:
-                    continue
-            yield query_text, system_ids, created_by
-
-    @staticmethod
-    def _extract_message_system_ids(context_data: dict | None) -> set[str]:
-        """从自然语言消息上下文快照提取其绑定的系统集合。"""
-
-        if not isinstance(context_data, dict):
-            return set()
-        selection = context_data.get("system_selection") or {}
-        return extract_system_ids(selection.get("systems") or [])
+            output = output_data if isinstance(output_data, dict) else {}
+            system_id = str(output.get("system_id") or "")
+            is_new_protocol = "derived_messages" in output
+            has_successful_search = message_id in successful_intent_ids
+            has_legacy_condition = not is_new_protocol and output.get("condition") is not None
+            if (not has_successful_search and not has_legacy_condition) or not system_id:
+                continue
+            yield query_text, {system_id}, created_by
 
     @classmethod
     def refresh_common_queries(cls) -> dict[str, int]:

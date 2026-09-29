@@ -2,7 +2,7 @@
 """AI 助手平台测试基类与工厂。
 
 平台测试需要真实数据库（消息/会话落库），query 业务组件全部 mock：
-FieldContextService / NL2JSONService / LogSearchService / 导出服务。
+FieldContextService / ConditionAssemblyService / LogSearchService / 导出服务。
 """
 
 from unittest import mock
@@ -11,8 +11,8 @@ from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.handlers.audit_search import (
     LogSearchHandler,
-    NaturalLanguageSearchHandler,
     SystemSelectionHandler,
+    UserIntentHandler,
 )
 from services.web.ai_assistant.models import Conversation, Message
 from services.web.query.ai_assistant.schemas import (
@@ -25,7 +25,7 @@ from services.web.query.ai_assistant.schemas import (
 )
 from tests.base import TestCase
 
-BUSINESS_MESSAGE_HANDLERS = (SystemSelectionHandler, NaturalLanguageSearchHandler, LogSearchHandler)
+BUSINESS_MESSAGE_HANDLERS = (SystemSelectionHandler, UserIntentHandler, LogSearchHandler)
 
 
 def ensure_business_handlers_registered():
@@ -172,26 +172,36 @@ class AIAssistantPlatformTestCase(TestCase):
         status: str = ExecutionStatus.SUCCESS,
         selection: SystemSelectionOutput | None = None,
         condition: SearchCondition | None = None,
+        system_id: str | None = None,
     ) -> Message:
-        """创建自然语言消息（默认成功态，供历史操作与父消息场景使用）。"""
+        """创建成功的 USER_INTENT 检索样例，供历史操作与日志检索父消息使用。"""
 
-        snapshot_selection = selection or make_selection_output()
-        input_data = {"query_text": query_text, "auto_execute": auto_execute}
+        resolved_system_id = system_id or (
+            selection.systems[0].system_id if selection is not None else TARGET_SYSTEM_ID
+        )
+        snapshot_condition = condition or make_condition(resolved_system_id)
+        input_data = {
+            "query_text": query_text,
+            "auto_execute": auto_execute,
+            "scope_type": self.default_scope_type,
+            "scope_id": self.default_scope_id,
+        }
         context_data = {
             "username": self.user,
             "namespace": "bkaudit",
-            "scope_id": TARGET_SYSTEM_ID,
-            "system_selection": snapshot_selection.model_dump(mode="json"),
-            "session_scope_type": self.default_scope_type,
-            "session_scope_id": self.default_scope_id,
+            "scope_type": self.default_scope_type,
+            "scope_id": self.default_scope_id,
         }
-        output_data = None
-        if condition is not None:
-            output_data = {"condition": condition.model_dump(mode="json")}
+        output_data = {
+            "intent": "log_search",
+            "system_id": resolved_system_id,
+            "message": "",
+            "condition": snapshot_condition.model_dump(mode="json"),
+        }
         return Message.objects.create(
             conversation=self.conversation,
             parent_message=parent,
-            message_type=MessageType.NATURAL_LANGUAGE_SEARCH,
+            message_type=MessageType.USER_INTENT,
             status=status,
             task_id="" if status == ExecutionStatus.SUCCESS else "task-1",
             input_data=input_data,
