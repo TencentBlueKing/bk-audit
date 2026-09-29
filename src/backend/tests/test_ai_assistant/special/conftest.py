@@ -52,6 +52,8 @@ def log_analysis_worker_env(agent: FakeLogAnalysisAgent, *, max_retries: int = 0
 
     return {
         "BKAPP_AI_AUDIT_LOG_ANALYSIS_API_URL": agent.base_url,
+        # 专项仍走真实 Redis 限流器，但提高测试速率，避免全套故障/重试场景互相消耗生产默认配额。
+        "BKAPP_AI_AUDIT_LOG_ANALYSIS_RATE_LIMIT": "600/m",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT": "10",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT": "15",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES": str(max_retries),
@@ -292,6 +294,7 @@ def statistics_stack(transactional_db):
                     extra_env={
                         "BKAPP_STATISTICS_E2E_BOUNDARY": "1",
                         "BKAPP_AI_AUDIT_LOG_STATISTICS_API_URL": agent.base_url,
+                        "BKAPP_AI_AUDIT_LOG_STATISTICS_RATE_LIMIT": "600/m",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS": "1",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS": "1",
                     },

@@ -16,7 +16,9 @@ Celery 队列只描述任务的执行特征、资源占用和 SLA，不与 `AIAg
 
 Agent 总配额由公共出站 client 的 Redis 全局限流器按 `AIAgentCode` 控制，跨 Web、Celery、进程和 Pod 共用。`AUDIT_REPORT` 固定 client 默认保留 `risk_single_analyse` 的 Celery `rate_limit`；普通 AI 任务会按请求显式接入全局限流器。
 
-标题生成、批量分析和 AI 变量预览在未配置新限流变量时继续读取原任务限流环境变量；完全未配置时，按历史 `5/m × 2` 个 Worker 副本折算为全局 `10/m`。`BKAPP_AI_<AGENT>_RATE_LIMIT` 和全局默认值可显式覆盖。
+所有 Agent 未配置部署变量时默认使用全局 `10/m`，避免新增 `AIAgentCode` 后因漏配而绕过限流。`BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT` 可调整全局默认值，`BKAPP_AI_<AGENT>_RATE_LIMIT` 可按 Agent 独立覆盖；标题生成、批量分析和 AI 变量预览仍兼容原任务限流环境变量。默认 `10/m` 对齐改造前 `5/m × 2` 个 Worker 副本的总吞吐。
+
+本次为新 Worker 拓扑首次上线，不涉及旧队列存量消息迁移。后续若已上线环境再次调整队列，必须在发布方案中单独设计滚动升级期间的兼容消费和排空步骤。
 
 异步任务遇到限流时由 `AIAgentTask` 进行有 deadline 的延迟 retry；同步请求返回受控 429。限流发生在真实 Agent HTTP 请求之前，因此重试不会重复已发出的调用。
 
