@@ -4,6 +4,7 @@ from django.db import IntegrityError, connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
+from core.exceptions import PermissionException
 from core.models import SoftDeleteQuerySet
 from services.web.ai_assistant.constants import (
     ExecutionStatus,
@@ -13,6 +14,7 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
+    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import (
@@ -36,15 +38,34 @@ class ConversationServiceTest(TestCase):
         self.other_user = "bob"
         self.service = ConversationService(user=self.user)
         self.other_service = ConversationService(user=self.other_user)
+        self.scope_permission_patch = mock.patch(
+            "services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry"
+        )
+        self.scope_permission_patch.start()
+        self.addCleanup(self.scope_permission_patch.stop)
         register_test_message_handler(EchoSyncHandler())
 
     def tearDown(self):
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
 
+    def create_group(self, *, service=None, **kwargs):
+        """为不关注范围的服务用例绑定默认测试场景。"""
+
+        kwargs.setdefault("scope_type", "scene")
+        kwargs.setdefault("scope_id", "1")
+        return (service or self.service).create_group(**kwargs)
+
+    def create_conversation(self, *, service=None, **kwargs):
+        """为不关注范围的服务用例绑定默认测试场景。"""
+
+        kwargs.setdefault("scope_type", "scene")
+        kwargs.setdefault("scope_id", "1")
+        return (service or self.service).create_conversation(**kwargs)
+
     def test_create_group_and_conversation_with_root_nodes(self):
-        first_group = self.service.create_group(name="待分析")
-        second_group = self.service.create_group(name="待分析")
-        conversation = self.service.create_conversation(title="新对话").conversation
+        first_group = self.create_group(name="待分析")
+        second_group = self.create_group(name="待分析")
+        conversation = self.create_conversation(title="新对话").conversation
 
         self.assertNotEqual(first_group.uid, second_group.uid)
         self.assertEqual(conversation.title, "新对话")
@@ -54,30 +75,79 @@ class ConversationServiceTest(TestCase):
         self.assertEqual(first_group.created_by, self.user)
         self.assertEqual(conversation.created_by, self.user)
 
+    @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
+    def test_create_group_persists_normalized_scope_on_group_and_node(self, _check_scope_entry):
+        group = self.create_group(name="场景分组", scope_type="scene", scope_id="01")
+
+        self.assertEqual((group.scope_type, group.scope_id), ("scene", "1"))
+        self.assertEqual((group.sidebar_node.scope_type, group.sidebar_node.scope_id), ("scene", "1"))
+
+    @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
+    def test_create_conversation_rejects_group_from_another_scope_without_residue(self, _check_scope_entry):
+        group = self.create_group(name="另一个场景", scope_type="scene", scope_id="2")
+
+        with self.assertRaises(SidebarScopeMismatch):
+            self.create_conversation(
+                title="错误分组会话",
+                scope_type="scene",
+                scope_id="1",
+                group_uid=str(group.uid),
+            )
+
+        self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
+
+    @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
+    def test_conversation_service_keeps_business_access_independent_of_http_permission(self, check_scope_entry):
+        conversation = self.create_conversation(
+            title="目标会话",
+            scope_type="system",
+            scope_id="bk_audit",
+        ).conversation
+        check_scope_entry.side_effect = PermissionException(
+            action_name="查看系统",
+            apply_url="",
+            permission={},
+        )
+
+        self.assertEqual(self.service.get_conversation(conversation_uid=str(conversation.uid)).id, conversation.id)
+
+    @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
+    def test_clear_only_soft_deletes_requested_scope(self, _check_scope_entry):
+        selected = self.create_conversation(title="清理目标", scope_type="scene", scope_id="1").conversation
+        other_scope = self.create_conversation(title="保留会话", scope_type="scene", scope_id="2").conversation
+        selected_group = self.create_group(name="保留分组", scope_type="scene", scope_id="1")
+
+        self.service.clear_conversations(scope_type="scene", scope_id="1")
+
+        self.assertTrue(Conversation._objects.get(id=selected.id).is_deleted)
+        self.assertFalse(Conversation._objects.get(id=other_scope.id).is_deleted)
+        self.assertTrue(ConversationGroup.objects.filter(id=selected_group.id).exists())
+        self.assertTrue(ConversationSidebarNode.objects.filter(group_id=selected_group.id).exists())
+
     def test_service_binds_user_context(self):
         service = ConversationService(user=self.user)
 
-        conversation = service.create_conversation(title="新对话").conversation
+        conversation = service.create_conversation(title="新对话", scope_type="scene", scope_id="1").conversation
 
         self.assertEqual(conversation.created_by, self.user)
 
     def test_create_conversation_accepts_explicit_title(self):
-        conversation = self.service.create_conversation(title="自定义标题").conversation
+        conversation = self.create_conversation(title="自定义标题").conversation
 
         self.assertEqual(conversation.title, "自定义标题")
 
     def test_create_empty_conversation_returns_null_initial_message(self):
-        result = self.service.create_conversation(title="新对话")
+        result = self.create_conversation(title="新对话")
 
         self.assertIsNone(result.initial_message)
         self.assertTrue(Conversation.objects.filter(id=result.conversation.id).exists())
         self.assertTrue(ConversationSidebarNode.objects.filter(conversation=result.conversation).exists())
 
     def test_create_conversation_in_group(self):
-        group = self.service.create_group(name="目标分组")
+        group = self.create_group(name="目标分组")
 
-        first = self.service.create_conversation(title="first", group_uid=str(group.uid)).conversation
-        second = self.service.create_conversation(title="second", group_uid=str(group.uid)).conversation
+        first = self.create_conversation(title="first", group_uid=str(group.uid)).conversation
+        second = self.create_conversation(title="second", group_uid=str(group.uid)).conversation
 
         self.assertEqual(first.sidebar_node.parent_node_id, group.sidebar_node.id)
         self.assertEqual(second.sidebar_node.parent_node_id, group.sidebar_node.id)
@@ -88,12 +158,12 @@ class ConversationServiceTest(TestCase):
         )
 
     def test_create_conversation_rejects_missing_or_foreign_group_without_residue(self):
-        foreign_group = self.other_service.create_group(name="其他用户分组")
+        foreign_group = self.create_group(service=self.other_service, name="其他用户分组")
 
         for group_uid in (str(foreign_group.uid), "00000000-0000-0000-0000-000000000000"):
             with self.subTest(group_uid=group_uid):
                 with self.assertRaises(ConversationGroupNotFound):
-                    self.service.create_conversation(title="不应创建", group_uid=group_uid)
+                    self.create_conversation(title="不应创建", group_uid=group_uid)
 
         self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
         self.assertFalse(
@@ -103,14 +173,14 @@ class ConversationServiceTest(TestCase):
         )
 
     def test_grouped_initial_message_failure_rolls_back_conversation_and_child_node(self):
-        group = self.service.create_group(name="目标分组")
+        group = self.create_group(name="目标分组")
         with mock.patch.object(
             self.service.message_service,
             "create_prepared",
             side_effect=IntegrityError("message write failed"),
         ):
             with self.assertRaises(IntegrityError):
-                self.service.create_conversation(
+                self.create_conversation(
                     title="新对话",
                     group_uid=str(group.uid),
                     initial_message={
@@ -124,7 +194,7 @@ class ConversationServiceTest(TestCase):
         self.assertFalse(ConversationSidebarNode.objects.filter(parent_node=group.sidebar_node).exists())
 
     def test_create_conversation_with_initial_message_is_atomic(self):
-        result = self.service.create_conversation(
+        result = self.create_conversation(
             title="新对话",
             initial_message={
                 "message_type": MessageType.SYSTEM_SELECTION,
@@ -143,7 +213,7 @@ class ConversationServiceTest(TestCase):
 
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with self.captureOnCommitCallbacks(execute=True):
-                result = self.service.create_conversation(
+                result = self.create_conversation(
                     title="新对话",
                     initial_message={
                         "message_type": MessageType.SYSTEM_SELECTION,
@@ -166,7 +236,7 @@ class ConversationServiceTest(TestCase):
             side_effect=RuntimeError("metadata failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "metadata failed"):
-                self.service.create_conversation(
+                self.create_conversation(
                     title="新对话",
                     initial_message={
                         "message_type": MessageType.SYSTEM_SELECTION,
@@ -185,7 +255,7 @@ class ConversationServiceTest(TestCase):
             side_effect=IntegrityError("message write failed"),
         ):
             with self.assertRaises(IntegrityError):
-                self.service.create_conversation(
+                self.create_conversation(
                     title="新对话",
                     initial_message={
                         "message_type": MessageType.SYSTEM_SELECTION,
@@ -202,16 +272,16 @@ class ConversationServiceTest(TestCase):
             side_effect=RuntimeError("node failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "node failed"):
-                self.service.create_group(name="rollback-group")
+                self.create_group(name="rollback-group")
             with self.assertRaisesRegex(RuntimeError, "node failed"):
-                self.service.create_conversation(title="新对话")
+                self.create_conversation(title="新对话")
 
         self.assertFalse(ConversationGroup.objects.filter(created_by=self.user).exists())
         self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
 
     def test_get_and_rename_are_scoped_to_current_user(self):
-        group = self.service.create_group(name="old-group")
-        conversation = self.service.create_conversation(title="新对话").conversation
+        group = self.create_group(name="old-group")
+        conversation = self.create_conversation(title="新对话").conversation
 
         renamed_group = self.service.rename_group(
             group_uid=str(group.uid),
@@ -240,8 +310,8 @@ class ConversationServiceTest(TestCase):
 
     def test_rename_does_not_use_explicit_row_locks(self):
         service = ConversationService(user=self.user)
-        group = service.create_group(name="old-group")
-        conversation = service.create_conversation(title="新对话").conversation
+        group = service.create_group(name="old-group", scope_type="scene", scope_id="1")
+        conversation = service.create_conversation(title="新对话", scope_type="scene", scope_id="1").conversation
 
         with CaptureQueriesContext(connection) as captured:
             service.rename_group(group_uid=str(group.uid), name="new-group")
@@ -251,9 +321,9 @@ class ConversationServiceTest(TestCase):
         self.assertEqual(lock_queries, [])
 
     def test_delete_conversation_soft_deletes_object_without_rewriting_other_positions(self):
-        first = self.service.create_conversation(title="新对话").conversation
-        second = self.service.create_conversation(title="新对话").conversation
-        third = self.service.create_conversation(title="新对话").conversation
+        first = self.create_conversation(title="新对话").conversation
+        second = self.create_conversation(title="新对话").conversation
+        third = self.create_conversation(title="新对话").conversation
 
         with mock.patch("core.models.get_request_username", return_value=self.user):
             self.service.delete_conversation(conversation_uid=str(second.uid))
@@ -275,7 +345,7 @@ class ConversationServiceTest(TestCase):
 
     def test_delete_conversation_reuses_soft_delete_queryset(self):
         service = ConversationService(user=self.user)
-        conversation = service.create_conversation(title="新对话").conversation
+        conversation = service.create_conversation(title="新对话", scope_type="scene", scope_id="1").conversation
         delete_calls = []
         original_delete = SoftDeleteQuerySet.delete
 
@@ -293,11 +363,11 @@ class ConversationServiceTest(TestCase):
         self.assertEqual(len(delete_calls), 1)
 
     def test_delete_group_soft_deletes_children_and_keeps_ungrouped_conversation(self):
-        group = self.service.create_group(name="delete-me")
-        other_group = self.service.create_group(name="keep-group")
-        child_a = self.service.create_conversation(title="新对话").conversation
-        child_b = self.service.create_conversation(title="新对话").conversation
-        ungrouped = self.service.create_conversation(title="新对话").conversation
+        group = self.create_group(name="delete-me")
+        other_group = self.create_group(name="keep-group")
+        child_a = self.create_conversation(title="新对话").conversation
+        child_b = self.create_conversation(title="新对话").conversation
+        ungrouped = self.create_conversation(title="新对话").conversation
         ConversationSidebarNode.objects.filter(conversation_id__in=[child_a.id, child_b.id]).update(
             parent_node=group.sidebar_node,
             position=1,
@@ -323,13 +393,13 @@ class ConversationServiceTest(TestCase):
         self.assertTrue(ConversationSidebarNode.objects.filter(group=other_group).exists())
 
     def test_clear_soft_deletes_all_conversations_but_keeps_empty_groups(self):
-        group = self.service.create_group(name="keep")
-        first = self.service.create_conversation(title="新对话").conversation
-        second = self.service.create_conversation(title="新对话").conversation
-        other = self.other_service.create_conversation(title="新对话").conversation
+        group = self.create_group(name="keep")
+        first = self.create_conversation(title="新对话").conversation
+        second = self.create_conversation(title="新对话").conversation
+        other = self.create_conversation(service=self.other_service, title="新对话").conversation
 
         with mock.patch("core.models.get_request_username", return_value=self.user):
-            self.service.clear_conversations()
+            self.service.clear_conversations(scope_type="scene", scope_id="1")
 
         self.assertTrue(Conversation._objects.get(id=first.id).is_deleted)
         self.assertTrue(Conversation._objects.get(id=second.id).is_deleted)
@@ -344,7 +414,7 @@ class ConversationServiceTest(TestCase):
         self.assertEqual(group_node.position, 1)
 
     def test_node_hard_delete_is_split_into_bounded_batches(self):
-        conversations = [self.service.create_conversation(title="新对话").conversation for _ in range(3)]
+        conversations = [self.create_conversation(title="新对话").conversation for _ in range(3)]
         queryset = ConversationSidebarNode.objects.filter(
             conversation_id__in=[conversation.id for conversation in conversations]
         )

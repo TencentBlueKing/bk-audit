@@ -1,9 +1,10 @@
 import time
+from collections.abc import Sequence
 
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import OperationalError, transaction
-from django.db.models import Count, F, Q, QuerySet
+from django.db.models import Case, Count, DateTimeField, F, Q, QuerySet, When
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
@@ -12,16 +13,25 @@ from services.web.ai_assistant.constants import (
 )
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
+    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
     SidebarNodeNotMovable,
+    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.models import (
     Conversation,
     ConversationGroup,
     ConversationSidebarNode,
 )
+from services.web.ai_assistant.services.scope import (
+    ScopeVisibility,
+    normalize_concrete_scope,
+    resolve_scope_visibility,
+)
+from services.web.common.constants import ScopeType
+from services.web.common.scope_permission import ScopePermission
 
 
 class _SidebarMoveRetry(Exception):
@@ -35,11 +45,22 @@ class ConversationSidebarService:
         """绑定当前操作用户，侧栏内部查询默认继承该用户边界。"""
 
         self.user = user
+        self.scope_permission = ScopePermission(username=user)
 
-    def _container_queryset(self, *, parent_node_id: int | None) -> QuerySet[ConversationSidebarNode]:
-        """精确限定当前用户和一个父容器，避免跨容器更新。"""
+    def _container_queryset(
+        self,
+        *,
+        parent_node_id: int | None,
+        scope_type: str,
+        scope_ids: Sequence[str],
+    ) -> QuerySet[ConversationSidebarNode]:
+        """按用户、concrete scope 分区和父容器限定节点集合。"""
 
-        queryset = ConversationSidebarNode.objects.filter(created_by=self.user)
+        queryset = ConversationSidebarNode.objects.filter(
+            created_by=self.user,
+            scope_type=scope_type,
+            scope_id__in=scope_ids,
+        )
         if parent_node_id is None:
             return queryset.filter(parent_node_id__isnull=True)
         return queryset.filter(parent_node_id=parent_node_id)
@@ -56,9 +77,22 @@ class ConversationSidebarService:
 
         self._validate_create_target(group=group, conversation=conversation, parent_node=parent_node)
         parent_node_id = parent_node.id if parent_node is not None else None
-        top_node = self._container_queryset(parent_node_id=parent_node_id).order_by("-position", "-id").first()
+        scope_owner = group or conversation
+        scope_type = scope_owner.scope_type
+        scope_id = scope_owner.scope_id
+        top_node = (
+            self._container_queryset(
+                parent_node_id=parent_node_id,
+                scope_type=scope_type,
+                scope_ids=(scope_id,),
+            )
+            .order_by("-position", "-id")
+            .first()
+        )
         node = ConversationSidebarNode(
             node_type=SidebarNodeType.GROUP if group else SidebarNodeType.CONVERSATION,
+            scope_type=scope_type,
+            scope_id=scope_id,
             group=group,
             conversation=conversation,
             parent_node=parent_node,
@@ -81,6 +115,8 @@ class ConversationSidebarService:
                 group=group,
                 created_by=self.user,
                 node_type=SidebarNodeType.GROUP,
+                scope_type=group.scope_type,
+                scope_id=group.scope_id,
                 parent_node_id__isnull=True,
             )
             .first()
@@ -89,13 +125,20 @@ class ConversationSidebarService:
             raise InvalidSidebarContainer()
         return node
 
-    def list_pinned(self) -> QuerySet[ConversationSidebarNode]:
-        """返回当前用户全部置顶会话，置顶时间越新越靠前。"""
+    def list_pinned(self, *, scope_type: str, scope_id: str | None) -> QuerySet[ConversationSidebarNode]:
+        """按 concrete 或 cross 查询范围返回当前用户置顶会话。"""
 
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
         return (
             ConversationSidebarNode.objects.filter(
                 created_by=self.user,
                 node_type=SidebarNodeType.CONVERSATION,
+                scope_type=visibility.scope_type.value,
+                scope_id__in=visibility.scope_ids,
+                conversation__scope_type=visibility.scope_type.value,
+                conversation__scope_id__in=visibility.scope_ids,
                 conversation__is_deleted=False,
                 pinned_at__isnull=False,
             )
@@ -106,23 +149,39 @@ class ConversationSidebarService:
     def list_nodes(
         self,
         *,
+        scope_type: str,
+        scope_id: str | None,
         parent_group_uid: str | None = None,
     ) -> QuerySet[ConversationSidebarNode]:
-        """返回根列表或指定分组中的普通 Node，后端直接排除置顶会话。"""
+        """按 concrete 或 cross 范围返回根列表或指定分组的普通节点。"""
 
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
         parent_node_id = None
         if parent_group_uid is not None:
-            parent_node_id = self._resolve_node(
-                node_type=SidebarNodeType.GROUP,
-                node_uid=parent_group_uid,
-            ).id
-        return (
-            self._container_queryset(parent_node_id=parent_node_id)
+            group_node = self._resolve_node(node_type=SidebarNodeType.GROUP, node_uid=parent_group_uid)
+            self._require_visible_node(node=group_node, visibility=visibility)
+            parent_node_id = group_node.id
+        queryset = (
+            self._container_queryset(
+                parent_node_id=parent_node_id,
+                scope_type=visibility.scope_type.value,
+                scope_ids=visibility.scope_ids,
+            )
             .filter(pinned_at__isnull=True)
             .filter(
-                # 分组节点没有 conversation；会话节点必须仍处于未删除状态。
-                Q(node_type=SidebarNodeType.GROUP)
-                | Q(node_type=SidebarNodeType.CONVERSATION, conversation__is_deleted=False)
+                Q(
+                    node_type=SidebarNodeType.GROUP,
+                    group__scope_type=visibility.scope_type.value,
+                    group__scope_id__in=visibility.scope_ids,
+                )
+                | Q(
+                    node_type=SidebarNodeType.CONVERSATION,
+                    conversation__scope_type=visibility.scope_type.value,
+                    conversation__scope_id__in=visibility.scope_ids,
+                    conversation__is_deleted=False,
+                )
             )
             .annotate(
                 # 数量直接挂在 Group Node 上，DTO 序列化时不会逐组查询。
@@ -131,6 +190,10 @@ class ConversationSidebarService:
                     filter=Q(
                         children__node_type=SidebarNodeType.CONVERSATION,
                         children__created_by=self.user,
+                        children__scope_type=F("scope_type"),
+                        children__scope_id=F("scope_id"),
+                        children__conversation__scope_type=F("scope_type"),
+                        children__conversation__scope_id=F("scope_id"),
                         children__conversation__is_deleted=False,
                     ),
                 ),
@@ -139,20 +202,47 @@ class ConversationSidebarService:
                     filter=Q(
                         children__node_type=SidebarNodeType.CONVERSATION,
                         children__created_by=self.user,
+                        children__scope_type=F("scope_type"),
+                        children__scope_id=F("scope_id"),
+                        children__conversation__scope_type=F("scope_type"),
+                        children__conversation__scope_id=F("scope_id"),
                         children__conversation__is_deleted=False,
                         children__pinned_at__isnull=True,
                     ),
                 ),
             )
             .select_related("group", "conversation", "parent_node__group")
-            .order_by("-position", "-id")
         )
+        if parent_group_uid is not None or not visibility.is_cross:
+            return queryset.order_by("-position", "-id")
+        return queryset.annotate(
+            business_updated_at=Case(
+                When(node_type=SidebarNodeType.GROUP, then=F("group__updated_at")),
+                default=F("conversation__updated_at"),
+                output_field=DateTimeField(),
+            )
+        ).order_by("-business_updated_at", "-id")
 
-    def search_conversations(self, *, keyword: str) -> QuerySet[Conversation]:
-        """标题搜索包含置顶会话，但不使用侧栏 position 排序。"""
+    def search_conversations(
+        self,
+        *,
+        keyword: str,
+        scope_type: str,
+        scope_id: str | None,
+    ) -> QuerySet[Conversation]:
+        """按 concrete 或 cross 范围搜索会话标题，稳定按更新时间排序。"""
 
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
         return (
-            Conversation.objects.filter(created_by=self.user, title__icontains=keyword)
+            Conversation.objects.filter(
+                created_by=self.user,
+                scope_type=visibility.scope_type.value,
+                scope_id__in=visibility.scope_ids,
+                title__icontains=keyword,
+                is_deleted=False,
+            )
             .select_related("sidebar_node__parent_node__group")
             .order_by("-updated_at", "-id")
         )
@@ -169,6 +259,8 @@ class ConversationSidebarService:
             node_type=SidebarNodeType.CONVERSATION,
             node_uid=conversation_uid,
         )
+        if (node.scope_type, node.scope_id) != (node.conversation.scope_type, node.conversation.scope_id):
+            raise SidebarScopeMismatch()
         if (node.pinned_at is not None) == is_pinned:
             return node
         operation_time = timezone.now()
@@ -184,6 +276,8 @@ class ConversationSidebarService:
     def move(
         self,
         *,
+        scope_type: str,
+        scope_id: str | None,
         source_node_type: str,
         source_node_uid: str,
         target_node_type: str | None = None,
@@ -224,9 +318,14 @@ class ConversationSidebarService:
 
         max_retries = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES
         retry_interval = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS
+        if scope_type in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
+            raise CrossScopeMutationNotAllowed()
+        scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
         for retry_count in range(max_retries + 1):
             try:
                 return self._move(
+                    scope_type=scope.scope_type.value,
+                    scope_id=scope.scope_id,
                     source_node_type=source_node_type,
                     source_node_uid=source_node_uid,
                     target_node_type=target_node_type,
@@ -251,6 +350,8 @@ class ConversationSidebarService:
     def _move(
         self,
         *,
+        scope_type: str,
+        scope_id: str,
         source_node_type: str,
         source_node_uid: str,
         target_node_type: str | None = None,
@@ -275,6 +376,7 @@ class ConversationSidebarService:
             node_type=source_node_type,
             node_uid=source_node_uid,
         )
+        self._require_node_scope(node=source, scope_type=scope_type, scope_id=scope_id)
         if source.pinned_at is not None:
             raise SidebarNodeNotMovable()
 
@@ -283,6 +385,8 @@ class ConversationSidebarService:
             target_node_type=target_node_type,
             target_node_uid=target_node_uid,
         )
+        if target_parent is not None:
+            self._require_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
         target_parent_id = target_parent.id if target_parent else None
         anchor, insert_after = self._resolve_anchor(
             before_node_type=before_node_type,
@@ -291,6 +395,8 @@ class ConversationSidebarService:
             after_node_uid=after_node_uid,
             target_parent_id=target_parent_id,
         )
+        if anchor is not None:
+            self._require_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
         after_successor = None
         insert_at_end = False
         if insert_after and anchor is not None and anchor.id != source.id:
@@ -298,6 +404,8 @@ class ConversationSidebarService:
                 anchor=anchor,
                 source_id=source.id,
                 target_parent_id=target_parent_id,
+                scope_type=scope_type,
+                scope_id=scope_id,
             )
         # 按主键升序加行锁，保证全局锁顺序一致，避免 ABBA 死锁。
         source_parent_id = source.parent_node_id
@@ -312,6 +420,18 @@ class ConversationSidebarService:
         target_parent_id = target_parent.id if target_parent else None
         if source.pinned_at is not None:
             raise SidebarNodeNotMovable()
+        self._require_node_scope(node=source, scope_type=scope_type, scope_id=scope_id)
+        if target_parent is not None:
+            self._require_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
+        if anchor is not None:
+            self._require_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
+        if after_successor is not None:
+            self._require_node_scope(node=after_successor, scope_type=scope_type, scope_id=scope_id)
+        if source.parent_node_id and (source.parent_node.scope_type, source.parent_node.scope_id) != (
+            scope_type,
+            scope_id,
+        ):
+            raise SidebarScopeMismatch()
         if source.parent_node_id != source_parent_id:
             # 另一笔移动已先提交，当前请求基于过期容器快照，不继续计算位置。
             raise SidebarNodeNotMovable()
@@ -327,6 +447,8 @@ class ConversationSidebarService:
                 anchor=anchor,
                 source_id=source.id,
                 target_parent_id=target_parent_id,
+                scope_type=scope_type,
+                scope_id=scope_id,
                 for_update=True,
             )
             expected_successor_id = after_successor.id if after_successor is not None else None
@@ -341,7 +463,11 @@ class ConversationSidebarService:
                 anchor = None
                 insert_at_end = True
 
-        target_nodes = self._container_queryset(parent_node_id=target_parent_id).exclude(id=source.id)
+        target_nodes = self._container_queryset(
+            parent_node_id=target_parent_id,
+            scope_type=scope_type,
+            scope_ids=(scope_id,),
+        ).exclude(id=source.id)
         target_position = self._make_target_position(
             source=source,
             target_nodes=target_nodes,
@@ -499,11 +625,17 @@ class ConversationSidebarService:
         anchor: ConversationSidebarNode,
         source_id: int,
         target_parent_id: int | None,
+        scope_type: str,
+        scope_id: str,
         for_update: bool = False,
     ) -> ConversationSidebarNode | None:
         """按完整容器顺序解析 after 锚点的直接后继；锁后复核使用当前读获取最新邻居。"""
 
-        target_nodes = self._container_queryset(parent_node_id=target_parent_id).exclude(id=source_id)
+        target_nodes = self._container_queryset(
+            parent_node_id=target_parent_id,
+            scope_type=scope_type,
+            scope_ids=(scope_id,),
+        ).exclude(id=source_id)
         if for_update:
             target_nodes = target_nodes.select_for_update()
         return (
@@ -520,8 +652,32 @@ class ConversationSidebarService:
         """Group 移动后补齐聚合计数，会话 Node 直接复用已加载实例。"""
 
         if node.node_type == SidebarNodeType.GROUP:
-            return self.list_nodes().get(id=node.id)
+            return self.list_nodes(scope_type=node.scope_type, scope_id=node.scope_id).get(id=node.id)
         return node
+
+    def _require_visible_node(self, *, node: ConversationSidebarNode, visibility: ScopeVisibility) -> None:
+        """拒绝展开当前 concrete/cross 权限集合之外的分组。"""
+
+        self._require_business_scope(node=node)
+        if node.scope_type != visibility.scope_type.value or node.scope_id not in visibility.scope_ids:
+            raise SidebarNodeNotFound()
+
+    def _require_node_scope(self, *, node: ConversationSidebarNode, scope_type: str, scope_id: str) -> None:
+        """校验 move 操作范围与锁定后节点、业务对象和父分组一致。"""
+
+        self._require_business_scope(node=node)
+        if (node.scope_type, node.scope_id) != (scope_type, scope_id):
+            raise SidebarScopeMismatch()
+        if node.parent_node_id and (node.parent_node.scope_type, node.parent_node.scope_id) != (scope_type, scope_id):
+            raise SidebarScopeMismatch()
+
+    @staticmethod
+    def _require_business_scope(*, node: ConversationSidebarNode) -> None:
+        """确保 Node 冗余分区键与其唯一业务对象绑定一致。"""
+
+        business_object = node.group if node.node_type == SidebarNodeType.GROUP else node.conversation
+        if (node.scope_type, node.scope_id) != (business_object.scope_type, business_object.scope_id):
+            raise SidebarScopeMismatch()
 
     def _resolve_target_parent(
         self,
@@ -646,3 +802,8 @@ class ConversationSidebarService:
             or not Conversation.objects.filter(id=conversation.id, created_by=self.user).exists()
         ):
             raise InvalidSidebarContainer()
+        if parent_node is not None and (parent_node.scope_type, parent_node.scope_id) != (
+            conversation.scope_type,
+            conversation.scope_id,
+        ):
+            raise SidebarScopeMismatch()

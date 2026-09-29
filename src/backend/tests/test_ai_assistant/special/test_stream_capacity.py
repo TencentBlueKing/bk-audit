@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 from amqp.exceptions import ChannelError
 from blueapps.core.celery import celery_app
@@ -12,7 +14,7 @@ from services.web.ai_assistant.constants import (
     StreamArchiveStatus,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import (
     UIStreamEvent,
     parse_stream_config,
@@ -21,9 +23,13 @@ from services.web.ai_assistant.schemas import (
 from services.web.ai_assistant.services import AttachmentService
 from services.web.ai_assistant.streaming import RedisLiveStore
 from services.web.ai_assistant.streaming.archive import _encoded_archive_bytes
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 from tests.test_ai_assistant.special_handlers import (
     SPECIAL_CAPACITY_QUEUE,
@@ -81,8 +87,11 @@ class StreamCapacitySpecialTest(TransactionTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-capacity-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         attachment_handler_registry.register(SpecialCapacityHandler())
 
     def tearDown(self):

@@ -85,11 +85,41 @@ flowchart TD
 
 消息是历史时间线，父子关系表达因果。附件平台的存在不表示一期已开放 AI_ANALYSIS/AI_STATISTICS 等业务类型；二期分析指南仅随二期分支交付。
 
+## Scope 选择与数据隔离
+
+Scope 分为“资源绑定”和“本次列表查询”两层，不能混为一组消息参数：
+
+| 用途 | 参数 | 规则 |
+| --- | --- | --- |
+| 创建会话或分组时绑定资源 | `scope_type` + `scope_id` | 必须选一个具体 `scene` 或 `system`；创建后不提供改绑接口 |
+| 查询侧栏、置顶、搜索和附件列表 | `scope_type` + `scope_id` | 支持具体 `scene/system`，也支持只读聚合 `cross_scene/cross_system`；cross 查询不传 `scope_id` |
+| 创建、读取或刷新消息 | `conversation_uid` + 消息类型专属字段 | 不传会话 scope；后端从所属会话读取绑定并做权限校验 |
+
+用户在具体场景或系统下创建会话/分组时，创建请求显式传入该绑定。例如：
+
+```json
+{
+  "scope_type": "scene",
+  "scope_id": "1",
+  "group_uid": "<可选的同 scope 分组 UID>"
+}
+```
+
+如需创建空会话，省略 `group_uid` 和 `initial_message` 即可。若创建分组，也必须传相同形式的具体 `scope_type/scope_id`；会话加入分组时，二者的绑定必须一致。
+
+侧栏节点、置顶、搜索和 `GET /attachments/` 每次查询都要传用户当前选择的具体或 cross 查询 scope。`cross_scene` 汇总当前有权访问的所有场景资源，`cross_system` 汇总当前有权访问的所有系统资源；两个方向彼此隔离。cross 根侧栏按所属会话/分组更新时间降序合并，并以 Node ID 降序稳定排序；展开分组仍按组内 position 降序排列。附件列表按 `content_updated_at DESC, id DESC` 排序。cross 响应中的 `scope_type/scope_id` 是每条资源的**实际绑定值**，不会回显 `cross_*`。
+
+`cross_*` 仅用于列表聚合，不可创建会话或分组，也不可执行跨范围移动或清空。移动和清空请求必须指定一个具体 scope。置顶接口按会话 UID 定位，后端仍会按该会话的实际绑定 scope 校验权限。
+
+消息历史通过 `conversation_uid` 读取，不需要也不应额外传 scope。USER_INTENT、SYSTEM_SELECTION、LOG_SEARCH 等消息的会话 scope 都由后端从 Conversation 派生；业务输入中的系统选择、检索条件等仍按各自消息类型提交。常用查询和历史操作也按所属会话的具体 scope 隔离，切换场景或系统不会混用；cross 视图只是聚合读取，不产生 cross 绑定或独立操作记录。
+
+权限被撤销或场景停用后，该 scope 下的资源会从侧栏、搜索、置顶、附件列表及 cross 聚合中隐藏；直接读取或操作对象会返回 403。恢复权限或重新启用场景后，原资源重新可见，无需重建。
+
 ## 进入页面、创建与恢复会话
 
-页面初始化可并行请求 `GET /conversation_sidebar/pinned/` 和 `GET /conversation_sidebar/nodes/`。置顶单独展示，普通列表不重复展示；按响应顺序分页，展开分组时再请求对应容器。搜索使用 `GET /conversation_sidebar/search/`，结果只用于定位会话。
+页面初始化可并行请求 `GET /conversation_sidebar/pinned/` 和 `GET /conversation_sidebar/nodes/`，两者都传当前选择的 scope 查询参数。置顶单独展示，普通列表不重复展示；按响应顺序分页，展开分组时再请求对应容器。搜索使用 `GET /conversation_sidebar/search/`，同样传 scope 查询参数，结果只用于定位会话。
 
-用户确认系统后再调用 `POST /conversations/`，同时携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应 input_data。若从某个分组内新建会话，同一请求传该分组的 `group_uid`，无需创建后再调用移动接口。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
+用户确认系统后再调用 `POST /conversations/`，在请求顶层传当前选定的具体 `scope_type/scope_id`；若需要初始化系统选择消息，再携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应业务 input_data。若从某个分组内新建会话，同一请求传该分组的 `group_uid`，无需创建后再调用移动接口。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
 
 若产品使用直接自然语言入口，可先 `POST /conversations/` 创建空会话，再提交 USER_INTENT；缺少系统时由识别结果引导补全。不要同时创建手工系统选择和语义相同的意图消息。
 
@@ -164,9 +194,9 @@ flowchart TD
 
 ## 用户自然语言入口：USER_INTENT
 
-新入口使用 `POST /messages/`，携带会话 UID、`message_type=USER_INTENT`、用户输入和当前 UI 的 scope。USER_INTENT 是入口消息，**不要传父消息**；即使已有系统选择，也由后端在当前会话内解析上下文。
+新入口使用 `POST /messages/`，携带会话 UID、`message_type=USER_INTENT` 和类型专属业务输入。**不要传 scope，也不要传父消息**；会话 scope 由后端从 Conversation 读取，即使已有系统选择，也在当前会话内解析上下文。
 
-下面仅演示 UID 和 scope 的衔接；占位 UID 必须替换，完整约束查看 Swagger：
+下面只包含消息 UID 与类型专属输入；占位 UID 必须替换，完整约束查看 Swagger：
 
 ```json
 {
@@ -174,12 +204,12 @@ flowchart TD
   "message_type": "USER_INTENT",
   "input_data": {
     "query_text": "查询审计中心昨天的失败操作",
-    "scope_type": "system",
-    "scope_id": "bk-audit",
     "auto_execute": true
   }
 }
 ```
+
+这里没有 `scope_type/scope_id`。SYSTEM_SELECTION 的选中系统、LOG_SEARCH 的检索条件等属于消息类型的业务输入，按对应 Schema 传入；它们不改变会话的绑定 scope。
 
 ```mermaid
 sequenceDiagram
@@ -271,7 +301,7 @@ USER_INTENT 的业务错误使用稳定 `error_code`；`error_message` 已由后
 
 ## 结构化检索、条件确认与编辑
 
-手工选择系统后直接检索，或识别后用户确认条件，调用 `POST /messages/` 创建 LOG_SEARCH，传会话 UID、完整 `input_data.condition` 和正确的直接父消息：
+手工选择系统后直接检索，或识别后用户确认条件，调用 `POST /messages/` 创建 LOG_SEARCH，传会话 UID、完整 `input_data.condition` 和正确的直接父消息。下面 `condition.scope_type/scope_id` 表示**日志查询的业务范围**，仍须按 LOG_SEARCH Schema 传入；它不是会话绑定 scope，也不能放到 USER_INTENT 的顶层输入中：
 
 - 手工条件检索引用成功 SYSTEM_SELECTION。
 - USER_INTENT 预览条件后的手工执行先等待 `selection_message_uid` 对应的 SYSTEM_SELECTION 成功，再引用它创建 LOG_SEARCH。
@@ -374,7 +404,7 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 ### 从会话和报告列表打开同一附件
 
 - 会话入口：消息响应的 attachments 是摘要。点击摘要，使用附件 uid 请求 `GET /attachments/{attachment_uid}/`。
-- 报告入口：请求 `GET /attachments/`，按 attachment_type、status、keyword、conversation_uid 或 source_message_uid 等已公开条件筛选；当前不分页。
+- 报告入口：请求 `GET /attachments/` 并传当前具体/cross scope，再按 attachment_type、status、keyword、conversation_uid 或 source_message_uid 等已公开条件筛选；当前不分页。
 - 列表只返回摘要，没有完整 input_data/output_data，也不能仅靠列表决定是否订阅流。点击项仍需请求附件详情。
 - 列表项的 conversation 和 source_message 用于显示归属及返回原会话。打开产物本身只需附件 UID，无需先遍历消息历史。
 - 只看已完成报告时筛选 SUCCESS；若页面还展示生成中和失败项，不要全局固定该筛选。

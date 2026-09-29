@@ -24,7 +24,7 @@ from services.web.ai_assistant.handlers import (
     attachment_handler_registry,
     message_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.resources.attachment import GetAttachment
 from services.web.ai_assistant.resources.conversation import GetConversation
 from services.web.ai_assistant.resources.message import GetMessage
@@ -40,12 +40,16 @@ from services.web.ai_assistant.views import (
     ConversationsViewSet,
     MessagesViewSet,
 )
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant import special_handlers
 from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
     wait_for_task_postrun,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 from tests.test_ai_assistant.http_integration import start_http_sse_collector
 from tests.test_ai_assistant.special_handlers import (
@@ -64,6 +68,7 @@ from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
 pytestmark = pytest.mark.special
 
 USERNAME_TARGETS = (
+    "services.web.ai_assistant.permissions.get_request_username",
     "services.web.ai_assistant.resources.conversation.get_request_username",
     "services.web.ai_assistant.resources.message.get_request_username",
     "services.web.ai_assistant.resources.attachment.get_request_username",
@@ -102,8 +107,11 @@ class StreamConcurrencySpecialTest(TransactionTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-concurrency-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         reset_concurrency_observations()
 
     def tearDown(self):
@@ -341,8 +349,11 @@ class StreamIdleHttpSpecialTest(LiveServerTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-idle-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.dispatched_task_id: str | None = None
         self.attachment_id: int | None = None
         reset_concurrency_observations()

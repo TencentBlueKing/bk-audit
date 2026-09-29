@@ -1,25 +1,23 @@
 # -*- coding: utf-8 -*-
-"""协议升级历史快照兼容性测试：scope 协议（2026-09-08）升级前落库的消息不得因新必填校验而读取失败。
-
-双层校验语义：
-- schema 层 scope_type 可选（None）：历史消息快照的读取/重试宽松通过（v1 兜底行为）
-- Handler.prepare 层必填：外部创建/编辑不传 scope_type → 400（ScopeContextRequired）
-"""
+"""会话 scope 唯一来源为 Conversation，历史消息执行也不得回退到客户端或父消息快照。"""
 
 from unittest import mock
 
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
-from services.web.ai_assistant.exceptions import ScopeContextRequired
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_search import (
+    LogSearchInputSchema,
     SystemSelectionInputSchema,
     UserIntentInputSchema,
     UserIntentOutputSchema,
 )
 from services.web.ai_assistant.serializers.message import MessageResponseSerializer
-from services.web.ai_assistant.services.message_execution import MessageExecution
+from services.web.ai_assistant.services.message_execution import (
+    MessageExecution,
+    load_message_execution,
+)
 from services.web.ai_assistant.tasks.audit_search import execute_user_intent
 from services.web.query.ai_assistant.schemas import (
     AIConditionItem,
@@ -33,6 +31,7 @@ from services.web.query.ai_assistant.schemas import (
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
     AIAssistantPlatformTestCase,
+    make_condition,
     make_log_search_output,
     make_selection_output,
 )
@@ -51,8 +50,13 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
             message_type=MessageType.USER_INTENT,
             status=status,
             task_id="" if status == ExecutionStatus.SUCCESS else "task-1",
-            input_data={"query_text": "查日志", "auto_execute": True, "scope_type": "cross_system"},
-            context_data={"username": self.user, "namespace": "bkaudit", "scope_type": "cross_system"},
+            input_data={"query_text": "查日志", "auto_execute": True},
+            context_data={
+                "username": self.user,
+                "namespace": "bkaudit",
+                "scope_type": self.conversation.scope_type,
+                "scope_id": self.conversation.scope_id,
+            },
             output_data=(
                 {
                     "intent": "log_search",
@@ -116,16 +120,16 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
         legacy = {"query_text": "看下审计中心近七天的操作记录", "auto_execute": True}
         parsed = parse_snapshot(UserIntentInputSchema, legacy, field_name="input_data")
         self.assertEqual(parsed.query_text, legacy["query_text"])
-        self.assertIsNone(parsed.scope_type)
+        self.assertEqual(parsed.model_dump(mode="json"), legacy)
 
     def test_legacy_selection_input_parses(self):
         legacy = {"system_ids": [TARGET_SYSTEM_ID]}
         parsed = parse_snapshot(SystemSelectionInputSchema, legacy, field_name="input_data")
         self.assertEqual(parsed.system_ids, [TARGET_SYSTEM_ID])
-        self.assertIsNone(parsed.scope_type)
+        self.assertEqual(parsed.model_dump(mode="json"), legacy)
 
-    def test_prepare_rejects_missing_scope_for_external_creation(self):
-        """外部创建/编辑路径强约束：schema 宽松解析出的 None 在 prepare 拒绝（400）。"""
+    def test_prepare_derives_session_scope_from_conversation(self):
+        """SYSTEM_SELECTION 与 USER_INTENT 不要求客户端提交会话 scope。"""
 
         for handler_type in (MessageType.USER_INTENT, MessageType.SYSTEM_SELECTION):
             handler = message_handler_registry.require(handler_type)
@@ -133,13 +137,14 @@ class MessageDurationTest(AIAssistantPlatformTestCase):
                 input_data = handler.input_model(query_text="查日志")
             else:
                 input_data = handler.input_model(system_ids=[TARGET_SYSTEM_ID])
-            with self.assertRaises(ScopeContextRequired):
-                handler.prepare(
-                    user=self.user,
-                    conversation=self.conversation,
-                    parent_message=None,
-                    input_data=input_data,
-                )
+            preparation = handler.prepare(
+                user=self.user,
+                conversation=self.conversation,
+                parent_message=None,
+                input_data=input_data,
+            )
+            self.assertEqual(preparation.context_data.scope_type, self.conversation.scope_type)
+            self.assertEqual(preparation.context_data.scope_id, self.conversation.scope_id)
 
 
 class LegacyMessageResponseTest(AIAssistantPlatformTestCase):
@@ -184,19 +189,73 @@ class LegacyMessageResponseTest(AIAssistantPlatformTestCase):
         self.assertEqual(data["input_data"]["query_text"], "看下审计中心近七天的操作记录")
 
 
-class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
-    """历史 USER_INTENT 消息（context 无 scope）重试：建 SELECTION 补 cross_system 宽口径兜底（v1 行为）。"""
+class SessionScopePreparationTest(AIAssistantPlatformTestCase):
+    def test_log_search_ignores_parent_context_scope_and_uses_conversation(self):
+        parent = self.create_selection_message()
+        parent.context_data = {
+            "username": self.user,
+            "namespace": "bkaudit",
+            "scope_type": "system",
+            "scope_id": "stale-system",
+        }
+        handler = message_handler_registry.require(MessageType.LOG_SEARCH)
 
-    def test_retry_without_scope_rebuilds_selection_with_fallback(self):
+        preparation = handler.prepare(
+            user=self.user,
+            conversation=self.conversation,
+            parent_message=parent,
+            input_data=LogSearchInputSchema(condition=make_condition()),
+        )
+
+        self.assertEqual(
+            (preparation.context_data.session_scope_type, preparation.context_data.session_scope_id),
+            (self.conversation.scope_type, self.conversation.scope_id),
+        )
+
+    def test_user_intent_execution_loads_conversation_with_message(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            message_type=MessageType.USER_INTENT,
+            status=ExecutionStatus.PROCESSING,
+            task_id="task-scope",
+            input_data={"query_text": "查日志", "auto_execute": True},
+            context_data={
+                "username": self.user,
+                "namespace": "bkaudit",
+                "scope_type": self.conversation.scope_type,
+                "scope_id": self.conversation.scope_id,
+            },
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        execution = load_message_execution(
+            message_id=message.id,
+            task_id="task-scope",
+            celery_task_id="task-scope",
+        )
+
+        self.assertEqual(execution.message._state.fields_cache["conversation"].pk, self.conversation.pk)
+
+
+class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
+    """历史 USER_INTENT 重试派生的业务消息使用 Conversation scope。"""
+
+    def test_retry_binds_derived_messages_to_conversation_scope(self):
         message = Message.objects.create(
             conversation=self.conversation,
             parent_message=None,
             message_type=MessageType.USER_INTENT,
             status=ExecutionStatus.PROCESSING,
             task_id="task-1",
-            # 历史快照：input_data 无 scope，context_data 无 scope
+            # 上下文中的历史 scope 不是事实来源；派生消息必须使用 Conversation 的绑定。
             input_data={"query_text": "看下审计中心的操作记录", "auto_execute": True},
-            context_data={"username": self.user, "namespace": "bkaudit"},
+            context_data={
+                "username": self.user,
+                "namespace": "bkaudit",
+                "scope_type": "system",
+                "scope_id": "stale-system",
+            },
             created_by=self.user,
             updated_by=self.user,
         )
@@ -263,7 +322,6 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
                 )
             )
 
-        # v1 兜底：无 scope 时系统路由仍成功，SELECTION 以 cross_system 宽口径建链
         self.assertEqual(output.intent, "select_system")
         self.assertEqual(output.system_id, TARGET_SYSTEM_ID)
         self.assertIsNone(output.condition)
@@ -274,4 +332,12 @@ class LegacyIntentRetryTest(AIAssistantPlatformTestCase):
             .first()
         )
         self.assertIsNotNone(new_selection)
-        self.assertEqual((new_selection.context_data or {}).get("scope_type"), "cross_system")
+        self.assertEqual(
+            (
+                (new_selection.context_data or {}).get("scope_type"),
+                (new_selection.context_data or {}).get("scope_id"),
+            ),
+            (self.conversation.scope_type, self.conversation.scope_id),
+        )
+        self.assertNotIn("scope_type", new_selection.input_data)
+        self.assertNotIn("scope_id", new_selection.input_data)

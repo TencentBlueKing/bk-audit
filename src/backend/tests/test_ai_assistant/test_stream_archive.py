@@ -16,7 +16,7 @@ from services.web.ai_assistant.constants import (
     StreamArchiveStatus,
 )
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import (
     AttachmentStreamConfig,
     UIStreamEvent,
@@ -28,6 +28,9 @@ from services.web.ai_assistant.streaming import (
     build_stream_key,
     fit_archive_events,
     merge_archive_status,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 
 
@@ -184,7 +187,7 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
     def setUp(self):
         self.user = "alice"
         self.store = AttachmentArchiveStore()
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,

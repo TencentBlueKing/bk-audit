@@ -1,15 +1,32 @@
 from rest_framework import serializers
 
-from services.web.ai_assistant.constants import SidebarNodeType
+from services.web.ai_assistant.constants import CONCRETE_SCOPE_CHOICES, SidebarNodeType
+from services.web.ai_assistant.exceptions import CrossScopeMutationNotAllowed
 from services.web.ai_assistant.serializers.message import (
     InitialMessageRequestSerializer,
     MessageResponseSerializer,
 )
+from services.web.common.constants import ScopeType
+from services.web.common.serializers import ScopeQuerySerializer
 
 DEFAULT_CONVERSATION_TITLE = "新对话"
 
 
-class ConversationGroupCreateRequestSerializer(serializers.Serializer):
+class ConcreteScopeRequestSerializer(serializers.Serializer):
+    """需要显式具体资源归属的写请求字段。"""
+
+    scope_type = serializers.CharField(max_length=32, help_text="资源范围类型，仅支持 scene 或 system")
+    scope_id = serializers.CharField(max_length=64, help_text="具体场景 ID 或系统 ID")
+
+    def validate_scope_type(self, value):
+        if value in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
+            raise serializers.ValidationError("写操作必须选择具体场景或系统")
+        if value not in dict(CONCRETE_SCOPE_CHOICES):
+            raise serializers.ValidationError("范围类型仅支持 scene 或 system")
+        return value
+
+
+class ConversationGroupCreateRequestSerializer(ConcreteScopeRequestSerializer):
     """创建会话分组，名称入库前统一去除首尾空白。"""
 
     name = serializers.CharField(
@@ -35,7 +52,7 @@ class ConversationGroupUpdateRequestSerializer(ConversationGroupDetailRequestSer
     )
 
 
-class ConversationCreateRequestSerializer(serializers.Serializer):
+class ConversationCreateRequestSerializer(ConcreteScopeRequestSerializer):
     """创建空会话，或原子创建一条系统选择初始化消息。"""
 
     title = serializers.CharField(
@@ -55,6 +72,30 @@ class ConversationCreateRequestSerializer(serializers.Serializer):
     )
 
 
+class ClearConversationsRequestSerializer(ConcreteScopeRequestSerializer):
+    """清空当前用户在单一 concrete scope 下的会话。"""
+
+    def validate_scope_type(self, value):
+        if value in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
+            raise CrossScopeMutationNotAllowed()
+        return super().validate_scope_type(value)
+
+
+class SidebarScopeQuerySerializer(ScopeQuerySerializer):
+    """侧栏集合查询 scope 参数，沿用平台 concrete/cross 校验协议。"""
+
+    scope_type = serializers.ChoiceField(
+        choices=ScopeType.choices,
+        help_text="查询范围类型，支持具体 scene/system 及 cross_scene/cross_system",
+    )
+    scope_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="具体 scene/system 的 ID；cross 查询省略",
+    )
+
+
 class ConversationDetailRequestSerializer(serializers.Serializer):
     conversation_uid = serializers.UUIDField(help_text="会话对外 UUID")
 
@@ -68,7 +109,7 @@ class ConversationUpdateRequestSerializer(ConversationDetailRequestSerializer):
     )
 
 
-class SidebarNodeListRequestSerializer(serializers.Serializer):
+class SidebarNodeListRequestSerializer(SidebarScopeQuerySerializer):
     """不传父节点表示根列表，传入时只允许 Group 容器。"""
 
     parent_node_type = serializers.ChoiceField(
@@ -82,6 +123,7 @@ class SidebarNodeListRequestSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         node_type = attrs.get("parent_node_type")
         node_uid = attrs.get("parent_node_uid")
         if bool(node_type) != bool(node_uid):
@@ -91,7 +133,7 @@ class SidebarNodeListRequestSerializer(serializers.Serializer):
         return attrs
 
 
-class SidebarSearchRequestSerializer(serializers.Serializer):
+class SidebarSearchRequestSerializer(SidebarScopeQuerySerializer):
     keyword = serializers.CharField(
         max_length=255,
         trim_whitespace=True,
@@ -100,7 +142,7 @@ class SidebarSearchRequestSerializer(serializers.Serializer):
     )
 
 
-class SidebarMoveRequestSerializer(serializers.Serializer):
+class SidebarMoveRequestSerializer(ConcreteScopeRequestSerializer):
     """将业务节点移到根容器或指定分组的开头/锚点前后。"""
 
     source_node_type = serializers.ChoiceField(
@@ -135,6 +177,11 @@ class SidebarMoveRequestSerializer(serializers.Serializer):
         required=False,
         help_text="目标锚点业务对象的对外 UUID；与 after_node_type 同时传入",
     )
+
+    def validate_scope_type(self, value):
+        if value in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
+            raise CrossScopeMutationNotAllowed()
+        return super().validate_scope_type(value)
 
     def validate(self, attrs):
         self._validate_pair(attrs, "target_node_type", "target_node_uid", "目标节点")
@@ -184,6 +231,8 @@ class ConversationGroupResponseSerializer(serializers.Serializer):
 
     uid = serializers.UUIDField(help_text="会话分组对外 UUID")
     name = serializers.CharField(help_text="会话分组名称")
+    scope_type = serializers.CharField(help_text="分组实际绑定的范围类型")
+    scope_id = serializers.CharField(help_text="分组实际绑定的范围 ID")
     created_at = serializers.DateTimeField(help_text="分组创建时间")
     updated_at = serializers.DateTimeField(help_text="分组最后更新时间")
 
@@ -193,6 +242,8 @@ class ConversationResponseSerializer(serializers.Serializer):
 
     uid = serializers.UUIDField(help_text="会话对外 UUID")
     title = serializers.CharField(help_text="会话标题")
+    scope_type = serializers.CharField(help_text="会话实际绑定的范围类型")
+    scope_id = serializers.CharField(help_text="会话实际绑定的范围 ID")
     created_at = serializers.DateTimeField(help_text="会话创建时间")
     updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
 
@@ -202,6 +253,8 @@ class ConversationCreateResponseSerializer(serializers.Serializer):
 
     uid = serializers.UUIDField(help_text="会话对外 UUID")
     title = serializers.CharField(help_text="会话标题")
+    scope_type = serializers.CharField(help_text="会话实际绑定的范围类型")
+    scope_id = serializers.CharField(help_text="会话实际绑定的范围 ID")
     created_at = serializers.DateTimeField(help_text="会话创建时间")
     updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
     initial_message = MessageResponseSerializer(allow_null=True, help_text="初始化消息；空会话为 null")
@@ -217,6 +270,8 @@ class SidebarNodeResponseSerializer(serializers.Serializer):
 
     node_type = serializers.ChoiceField(choices=SidebarNodeType.choices, help_text="侧栏节点类型")
     node_uid = serializers.UUIDField(help_text="分组或会话业务对象的对外 UUID")
+    scope_type = serializers.CharField(help_text="节点绑定的范围类型")
+    scope_id = serializers.CharField(help_text="节点绑定的范围 ID")
     name = serializers.CharField(required=False, help_text="分组节点名称；会话节点不返回")
     title = serializers.CharField(required=False, help_text="会话节点标题；分组节点不返回")
     updated_at = serializers.DateTimeField(required=False, help_text="会话最后更新时间")
@@ -246,6 +301,8 @@ class SidebarNodeResponseSerializer(serializers.Serializer):
             return {
                 "node_type": SidebarNodeType.GROUP,
                 "node_uid": str(instance.group.uid),
+                "scope_type": instance.scope_type,
+                "scope_id": instance.scope_id,
                 "name": instance.group.name,
                 "conversation_count": getattr(instance, "conversation_count", 0),
                 "unpinned_conversation_count": getattr(instance, "unpinned_conversation_count", 0),
@@ -265,6 +322,8 @@ class SidebarNodeResponseSerializer(serializers.Serializer):
         return {
             "node_type": SidebarNodeType.CONVERSATION,
             "node_uid": str(conversation.uid),
+            "scope_type": conversation.scope_type,
+            "scope_id": conversation.scope_id,
             "title": conversation.title,
             "updated_at": conversation.updated_at,
             "pinned_at": node.pinned_at,
@@ -277,6 +336,8 @@ class ConversationSearchResponseSerializer(serializers.Serializer):
 
     node_type = serializers.ChoiceField(choices=SidebarNodeType.choices, help_text="固定为 CONVERSATION")
     node_uid = serializers.UUIDField(help_text="会话对外 UUID")
+    scope_type = serializers.CharField(help_text="会话绑定的范围类型")
+    scope_id = serializers.CharField(help_text="会话绑定的范围 ID")
     title = serializers.CharField(help_text="会话标题")
     updated_at = serializers.DateTimeField(help_text="会话最后更新时间")
     pinned_at = serializers.DateTimeField(allow_null=True, help_text="会话置顶时间；未置顶时为 null")

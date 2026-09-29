@@ -1,4 +1,6 @@
-﻿from django.db import connection
+﻿from unittest import mock
+
+from django.db import connection
 from django.db.models.signals import pre_save
 from django.test.utils import CaptureQueriesContext
 
@@ -18,9 +20,13 @@ from services.web.ai_assistant.handlers import (
     attachment_handler_registry,
     message_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
+from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.services.feedback import FeedbackService
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     EchoAttachmentSyncHandler,
     EchoSyncHandler,
@@ -36,7 +42,10 @@ class FeedbackServiceTest(TestCase):
     def setUp(self):
         self.user = "alice"
         self.service = FeedbackService(user=self.user)
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        self.scope_permission_patcher.start()
+        self.addCleanup(self.scope_permission_patcher.stop)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         register_test_message_handler(FeedbackEchoSyncHandler())
         attachment_handler_registry.register(FeedbackAttachmentEchoHandler())
         self.message = self.create_message()
@@ -125,9 +134,9 @@ class FeedbackServiceTest(TestCase):
         )
 
     def test_upsert_rejects_missing_foreign_and_soft_deleted_source(self):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = self.create_message(conversation=foreign_conversation, user="bob")
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user, is_deleted=True)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user, is_deleted=True)
         deleted_message = self.create_message(conversation=deleted_conversation)
 
         for source_uid in ("not-a-uuid", str(foreign_message.uid), str(deleted_message.uid)):
@@ -158,10 +167,10 @@ class FeedbackServiceTest(TestCase):
             )
 
     def test_attachment_upsert_rejects_foreign_deleted_invalid_state_and_unsupported_source(self):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = self.create_message(conversation=foreign_conversation, user="bob")
         foreign_attachment = self.create_attachment(message=foreign_message, user="bob")
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user, is_deleted=True)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user, is_deleted=True)
         deleted_message = self.create_message(conversation=deleted_conversation)
         deleted_attachment = self.create_attachment(message=deleted_message)
 

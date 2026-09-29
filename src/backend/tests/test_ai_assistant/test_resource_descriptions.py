@@ -7,6 +7,16 @@ from drf_spectacular.views import SpectacularAPIView
 from rest_framework.test import APIRequestFactory
 
 from services.web.ai_assistant.resources.stream import GetAttachmentStream
+from services.web.ai_assistant.serializers.attachment import (
+    AttachmentListItemSerializer,
+    AttachmentListRequestSerializer,
+)
+from services.web.ai_assistant.serializers.conversation import (
+    ConversationCreateRequestSerializer,
+    ConversationGroupCreateRequestSerializer,
+    SidebarScopeQuerySerializer,
+)
+from services.web.ai_assistant.serializers.message import MessageCreateRequestSerializer
 from services.web.ai_assistant.urls import router
 from services.web.ai_assistant.views import (
     AttachmentsViewSet,
@@ -17,6 +27,26 @@ from services.web.ai_assistant.views import (
 
 
 class ResourceDescriptionTest(SimpleTestCase):
+    def test_scope_contract_descriptions_distinguish_binding_from_message_input(self):
+        scoped_serializers = (
+            ConversationCreateRequestSerializer,
+            ConversationGroupCreateRequestSerializer,
+            SidebarScopeQuerySerializer,
+            AttachmentListRequestSerializer,
+            AttachmentListItemSerializer,
+        )
+        for serializer_class in scoped_serializers:
+            with self.subTest(serializer=serializer_class.__name__):
+                fields = serializer_class().fields
+                for field_name in ("scope_type", "scope_id"):
+                    self.assertIn(field_name, fields)
+                    self.assertTrue(fields[field_name].help_text)
+
+        message_fields = MessageCreateRequestSerializer().fields
+        self.assertNotIn("scope_type", message_fields)
+        self.assertNotIn("scope_id", message_fields)
+        self.assertIn("类型对应", str(message_fields["input_data"].help_text))
+
     def test_attachment_stream_description_explains_eventsource_reconnect(self):
         description = inspect.getdoc(GetAttachmentStream)
 
