@@ -53,7 +53,6 @@ def log_analysis_worker_env(agent: FakeLogAnalysisAgent, *, max_retries: int = 0
     return {
         "BKAPP_AI_AUDIT_LOG_ANALYSIS_API_URL": agent.base_url,
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT": "10",
-        "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT": "1000/m",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT": "15",
         "BKAPP_AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES": str(max_retries),
     }
@@ -279,7 +278,7 @@ def statistics_stack(transactional_db):
             agent = stack.enter_context(running_fake_log_analysis_agent())
             for task in (generate_ai_statistics, generate_field_statistics):
                 # 测试队列加隔离前缀，实际投递和重试仍由生产 Handler/Task 完成。
-                expected_queue = "ai_assistant_statistics" if task is generate_ai_statistics else "default"
+                expected_queue = "ai_default" if task is generate_ai_statistics else "default"
                 assert task.queue == expected_queue
                 stack.enter_context(using_task_queue(task, queue))
             stack.enter_context(using_test_broker(queue_name=queue))
@@ -293,7 +292,6 @@ def statistics_stack(transactional_db):
                     extra_env={
                         "BKAPP_STATISTICS_E2E_BOUNDARY": "1",
                         "BKAPP_AI_AUDIT_LOG_STATISTICS_API_URL": agent.base_url,
-                        "BKAPP_AI_ASSISTANT_AI_STATISTICS_TASK_RATE_LIMIT": "1000/m",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_DELAY_SECONDS": "1",
                         "BKAPP_AI_ASSISTANT_AI_STATISTICS_RETRY_BACKOFF_MAX_SECONDS": "1",
                     },

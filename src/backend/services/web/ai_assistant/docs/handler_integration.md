@@ -131,12 +131,11 @@ Attachment 的 `prepare()` 返回 `AttachmentPreparation(title, context_data)`�
 
 ## 6. 注册与 OpenAPI
 
-在业务 Django App 的 `AppConfig.ready()` 中注册 Handler：
+业务 Handler 在模块加载时注册；Django App 的 `AppConfig.ready()` 导入入口模块，确保 Web 和 Worker 在使用前完成注册：
 
 ```python
 def ready(self):
-    message_handler_registry.register(AsyncNaturalLanguageSearchHandler())
-    attachment_handler_registry.register(AIAnalysisAttachmentHandler())
+    from services.web.ai_assistant import handlers  # noqa: F401
 ```
 
 必须在首次 OpenAPI schema 生成前完成注册。动态字段会根据当时已注册 Handler 生成 `oneOf`；

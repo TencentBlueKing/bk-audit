@@ -19,6 +19,11 @@ from api.constants import AIAgentCode
 
 
 class AgentRateLimiterTest(SimpleTestCase):
+    def test_phase_two_agent_codes_extend_common_enum(self):
+        self.assertEqual(len(AIAgentCode), 7)
+        self.assertEqual(AIAgentCode.AUDIT_LOG_STATISTICS.value, "bp-ai-log-stats")
+        self.assertEqual(AIAgentCode.AUDIT_LOG_ANALYSIS.value, "bp-ai-log-analyse")
+
     def test_migrated_agent_limits_keep_legacy_defaults(self):
         cases = (
             (AIAgentCode.AUDIT_REPORT, "BKAPP_RENDER_TASK_RATE_LIMIT"),

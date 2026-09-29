@@ -9,6 +9,7 @@ from unittest import mock
 from django.db import transaction
 
 from api.bk_plugins_ai_agent.default import ChatCompletion
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from services.web.ai_assistant.constants import (
     AI_CONVERSATION_TITLE_MAX_LENGTH,
@@ -193,6 +194,14 @@ class LogAnalysisTitleTaskTest(AIAssistantPlatformTestCase):
         self.assertEqual(result, {"updated": False, "skipped": False})
         self.assertEqual(self.attachment.title, DEFAULT_AI_ANALYSIS_TITLE)
         self.assertNotIn(private_input, "\n".join(captured.output))
+
+    def test_agent_rate_limit_is_rethrown_for_task_level_retry(self):
+        error = AgentRateLimited(AIAgentCode.ALS_TITLE_SUM)
+        with mock.patch.object(TitleAgentService, "generate_analysis_title", side_effect=error):
+            with self.assertRaises(AgentRateLimited) as caught:
+                generate_log_analysis_title.run(self.attachment.id)
+
+        self.assertIs(caught.exception, error)
 
     def test_empty_agent_title_keeps_default_title(self):
         with mock.patch.object(TitleAgentService, "generate_analysis_title", return_value=""), self.assertLogs(

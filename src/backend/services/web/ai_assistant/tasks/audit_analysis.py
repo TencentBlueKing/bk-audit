@@ -22,7 +22,7 @@ from django.utils import timezone
 from gevent import Timeout
 from requests.exceptions import HTTPError, RequestException
 
-from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited, AGUIStreamProtocolError
 from api.constants import AIAgentCode
 from services.web.ai_assistant.constants import (
     DEFAULT_AI_ANALYSIS_TITLE,
@@ -43,7 +43,7 @@ from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisOutputSchema,
 )
 from services.web.ai_assistant.tasks.attachment import AttachmentExecutionTask
-from services.web.risk.constants import RiskAICeleryQueue
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 
 if TYPE_CHECKING:
     from services.web.ai_assistant.services.attachment_execution import (
@@ -55,9 +55,9 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(
     name="ai_assistant.generate_log_analysis_title",
-    queue=RiskAICeleryQueue.TITLE,
+    base=AIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     ignore_result=True,
-    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
 def generate_log_analysis_title(attachment_id: int) -> dict:
@@ -93,6 +93,8 @@ def generate_log_analysis_title(attachment_id: int) -> dict:
             input_text=context.effective_instruction,
             username=attachment.created_by,
         )
+    except AgentRateLimited:
+        raise
     except Exception as error:
         # 严禁记录上下文正文；用户分析要求可能包含敏感业务信息。
         logger.warning(
@@ -169,12 +171,11 @@ class LogAnalysisExecutionTask(AttachmentExecutionTask):
     bind=True,
     base=LogAnalysisExecutionTask,
     name="ai_assistant.execute_log_analysis",
-    queue="ai_assistant_log_analysis",
+    queue=AIWorkloadQueue.DEFAULT,
     ignore_result=True,
     acks_late=True,
     max_retries=settings.AI_ASSISTANT_LOG_ANALYSIS_MAX_RETRIES,
     default_retry_delay=LOG_ANALYSIS_RETRY_DELAY_SECONDS,
-    rate_limit=settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_RATE_LIMIT,
     time_limit=settings.AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT,
 )
 def execute_log_analysis(

@@ -31,7 +31,7 @@ flowchart TD
     API --> Service[AttachmentService / Handler Registry]
     Source[成功 LOG_SEARCH] -->|来源归属与条件快照| Service
     Service -->|FIELD_STATISTICS| DefaultWorker[default Worker<br/>短时固定量任务]
-    Service -->|AI_STATISTICS| AIWorker[ai-stats Worker<br/>ai_assistant_statistics / 限流]
+    Service -->|AI_STATISTICS| AIWorker[ai-default Worker<br/>ai_default workload]
     DefaultWorker --> Program[FIELD_STATISTICS<br/>完整来源条件]
     AIWorker --> AI[AI_STATISTICS<br/>bp-ai-log-stats]
     Program --> Kernel[共享查询与统计内核<br/>实际用户鉴权 / SQL / 预算]
@@ -75,9 +75,10 @@ flowchart TD
 
 自动重试处理暂时性故障，参数、权限等确定性错误不自动重试。人工重试校验附件终态、当前会话归属与有效性并复用创建快照；来源消息后续编辑不使历史附件永久失效。巡检按附件类型采用与任务超时、重试退避相匹配的不活跃阈值，避免长任务被平台提前判失败；巡检、候选查询和指标使用一致口径。
 
-`AI_STATISTICS` 调用下游 AI 接口，使用独立 `ai_assistant_statistics` 队列和 Worker 限流；
-`FIELD_STATISTICS` 是固定查询任务，进入 `default` 队列。新增短时、固定工作量且无需独立限流的任务优先复用
-`default`，只有存在下游限流、长任务隔离或独立容量治理需求时才增加专属 Worker。
+`AI_STATISTICS` 调用下游 AI 接口，进入共享 `ai_default` workload，由 `ai-default` Worker 消费；
+下游配额由公共 Agent Client 按 `AUDIT_LOG_STATISTICS` 在 Redis 中全局控制。`FIELD_STATISTICS`
+是固定查询任务，进入 `default` 队列。新增短时、固定工作量的任务优先复用 `default`；
+常规 Agent 异步任务复用 `ai_default`，只有出现独立容量治理需求时才增加专属 Worker。
 
 ## 4. 查询领域与统计内核
 
