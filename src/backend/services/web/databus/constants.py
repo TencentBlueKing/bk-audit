@@ -235,6 +235,11 @@ class JsonSchemaFieldType(TextChoices):
     JSON = "json", gettext_lazy("Json")
 
     @classmethod
+    def is_original_json(cls, field_type: str) -> bool:
+        """object/array/json 使用原生 JSON，避免 is_json 被计算平台建成 VARIANT。"""
+        return field_type in {cls.OBJECT, cls.ARRAY, cls.JSON}
+
+    @classmethod
     def get_bkbase_field_type(cls, field_type: str) -> str:
         bkbase_field_map = {
             cls.STRING.value: FIELD_TYPE_STRING,
