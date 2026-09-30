@@ -74,7 +74,7 @@ LOG_SEARCH_MAX_FIELDS = 20
 LOG_SEARCH_MAX_SORT_FIELDS = 3
 LOG_SEARCH_MAX_PAGE_SIZE = 100
 LOG_SEARCH_RESPONSE_MAX_BYTES = 1024 * 1024
-LOG_FIELD_METADATA_MAX_FIELDS = 100
+LOG_FIELD_METADATA_MAX_FIELDS = 50
 LOG_FIELD_METADATA_SAMPLE_ROWS = 50
 LOG_FIELD_METADATA_SAMPLE_VALUES = 3
 LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = 1024
@@ -370,12 +370,14 @@ class LogFieldMetadataItem(BaseModel):
     options: Optional[List[SelectionFieldOption]] = Field(default=None, description="枚举字段的可选值。")
     is_expandable: bool = Field(
         default=False,
-        description="可见 JSON 根字段及其对象子字段可为 true，表示可继续探索下一层。",
+        description="可见 JSON 根字段及样本观察到的对象子字段可为 true；false 不能证明全范围没有下层字段。",
     )
-    statistics_supported: bool = Field(default=False, description="当前声明或样本及权限是否支持直接统计，仅作为目录提示。")
-    statistics_kind: Optional[StatisticsKind] = Field(default=None, description="声明或样本推断的统计类型；未知或不支持时为空。")
+    statistics_supported: bool = Field(default=False, description="当前声明、样本及权限给出的可尝试统计提示；最终以全范围执行为准。")
+    statistics_kind: Optional[StatisticsKind] = Field(default=None, description="声明或样本推断的统计类型；未知或不支持时为空，未知仍可能允许统计。")
     unsupported_reason: Optional[StatisticsUnsupportedReason] = Field(default=None, description="不可直接统计的稳定原因，不含敏感规则细节。")
-    allowed_metrics: List[AggregationMetricType] = Field(default_factory=list, description="当前字段类型和权限允许的聚合函数。")
+    allowed_metrics: List[AggregationMetricType] = Field(
+        default_factory=list, description="基于声明或样本与权限给出的聚合函数提示；执行时重新校验。"
+    )
     sample_values: Annotated[
         List[Any],
         serializers.ListField(
@@ -390,18 +392,18 @@ class LogFieldMetadataItem(BaseModel):
         description="最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。",
     )
     sampled_non_null_count: int = Field(default=0, description="脱敏样本中该字段的非空值数量。")
-    coverage: float = Field(default=0.0, description="非空样本数占本次采样日志数的比例。")
+    coverage: float = Field(default=0.0, description="非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率。")
 
 
 class FieldSampleSummary(BaseModel):
     """字段探索的有界采样摘要。"""
 
     sampling_performed: bool = Field(default=False, description="是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。")
-    sampled_count: int = Field(default=0, description="本次实际采样日志数，不是范围总量；sampling_performed=false 表示未采样，总量应使用 COUNT 查询。")
+    sampled_count: int = Field(default=0, description="本次 SQL 返回并脱敏的日志数，最多 50 条，不是范围总量；sampling_performed=false 表示未采样。")
     returned_field_count: int = Field(default=0, description="本次返回字段数量。")
     truncated: bool = Field(
         default=False,
-        description=("是否因字段数量、扫描/解析预算或存在协议无法表达的字段而仅返回部分探索结果；" "业务 data 载荷超限返回 413。"),
+        description=("采样预算为零或达到上限，或字段数量、解析预算、协议无法表达的路径导致探索可能不完整；" "业务 data 载荷超限返回 413。"),
     )
 
 
@@ -411,7 +413,7 @@ class GetLogFieldMetadataResponse(BaseModel):
     fields: List[LogFieldMetadataItem] = Field(
         default_factory=list,
         max_length=LOG_FIELD_METADATA_MAX_FIELDS,
-        description="最多返回 100 个字段；业务 data 的 UTF-8 JSON 最大 1 MiB。",
+        description="最多返回 50 个字段；业务 data 的 UTF-8 JSON 最大 1 MiB。",
     )
     sample_summary: FieldSampleSummary
 

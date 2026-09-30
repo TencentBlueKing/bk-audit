@@ -82,6 +82,7 @@ class LogFieldMetadataService:
             condition=request.condition,
         )
         sampled_count = 0
+        sampling_performed = False
         scan_truncated = False
         try:
             if request.parent_field is None:
@@ -97,17 +98,23 @@ class LogFieldMetadataService:
                         condition.field for condition in context.condition.conditions
                     ),
                 )
-                rows = cls._query_samples(context, parent_field)
-                safe_rows = SearchDataParser().parse_data(
-                    rows,
-                    username=username,
-                    system_id=request.condition.scope_id,
+                sample_limit = cls._effective_limit(
+                    settings.AI_ASSISTANT_FIELD_SAMPLE_ROWS, LOG_FIELD_METADATA_SAMPLE_ROWS, 0
+                )
+                sampling_performed = sample_limit > 0
+                rows = cls._query_samples(context, parent_field, page_size=sample_limit) if sampling_performed else []
+                safe_rows = (
+                    SearchDataParser().parse_data(rows, username=username, system_id=context.condition.scope_id)
+                    if sampling_performed
+                    else []
                 )
                 sampled_count = len(safe_rows)
                 fields, scan_truncated = cls._build_extended_fields(
                     parent_field=parent_field,
                     rows=safe_rows,
                 )
+                # 满页不能证明检索范围已耗尽；预算为零时也不能声称完成发现。
+                scan_truncated = scan_truncated or not sampling_performed or len(rows) >= sample_limit
             max_fields = cls._effective_limit(
                 settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0
             )
@@ -140,7 +147,7 @@ class LogFieldMetadataService:
         response = GetLogFieldMetadataResponse(
             fields=fields,
             sample_summary=FieldSampleSummary(
-                sampling_performed=request.parent_field is not None,
+                sampling_performed=sampling_performed,
                 sampled_count=sampled_count,
                 returned_field_count=len(fields),
                 truncated=truncated,
@@ -150,7 +157,7 @@ class LogFieldMetadataService:
         return response
 
     @classmethod
-    def _query_samples(cls, context: LogQueryContext, parent_field: LogFieldRef) -> List[dict]:
+    def _query_samples(cls, context: LogQueryContext, parent_field: LogFieldRef, *, page_size: int) -> List[dict]:
         """只投影 JSON 根字段和脱敏身份列；裸表配合 prefer_storage 指定 Doris。"""
 
         query_fields = prepare_sensitive_query_fields((parent_field,))
@@ -159,14 +166,15 @@ class LogFieldMetadataService:
             conditions=list(context.conditions),
             sort_list=DEFAULT_COLLECTOR_SORT_LIST,
             page=1,
-            page_size=cls._effective_limit(
-                settings.AI_ASSISTANT_FIELD_SAMPLE_ROWS,
-                LOG_FIELD_METADATA_SAMPLE_ROWS,
-                0,
-            ),
+            page_size=page_size,
+        )
+        sql = (
+            builder.build_parent_object_sample_sql(query_fields, parent_field)
+            if parent_field.raw_name in builder.JSON_TYPE_FIELDS
+            else builder.build_data_sql(query_fields)
         )
         records = api.bk_base.safe_query_sync(
-            sql=builder.build_data_sql(query_fields),
+            sql=sql,
             prefer_storage=StorageType.DORIS.value,
         )
         return records.get("list") or []

@@ -316,15 +316,20 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
     def test_response_capacity_and_expandable_semantics_are_documented(self):
         field_operation = self.resources["paths"][MCP_LOG_RESOURCES["mcp_get_log_field_metadata"][0]]["post"]
         field_response = field_operation["responses"]["200"]["schema"]["properties"]["data"]
-        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 100)
+        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 50)
         field_item = field_response["properties"]["fields"]["items"]
         self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
         self.assertIn(
-            "可见 JSON 根字段及其对象子字段",
+            "false 不能证明全范围没有下层字段",
             field_item["properties"]["is_expandable"]["description"],
         )
         self.assertIn("1 MiB", field_operation["description"])
-        truncated_description = field_response["properties"]["sample_summary"]["properties"]["truncated"]["description"]
+        sample_summary = field_response["properties"]["sample_summary"]
+        self.assertEqual(
+            set(sample_summary["required"]),
+            {"sampling_performed", "sampled_count", "returned_field_count", "truncated"},
+        )
+        truncated_description = sample_summary["properties"]["truncated"]["description"]
         self.assertIn("协议无法表达", truncated_description)
         self.assertIn("业务 data 载荷超限返回 413", truncated_description)
 

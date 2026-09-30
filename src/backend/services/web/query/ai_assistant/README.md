@@ -44,7 +44,7 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
 
 | operationId | 路径 | 用途 | 关键约束 |
 | --- | --- | --- | --- |
-| `mcp_get_log_field_metadata` | `POST field_metadata/` | 探索标准字段、JSON 子路径和脱敏样例 | 至多采样 50 条，不递归展开对象 |
+| `mcp_get_log_field_metadata` | `POST field_metadata/` | 探索标准字段、JSON 子路径和脱敏样例 | JSON 父对象由 Doris 筛选，最多取 50 条脱敏样本、返回 50 个直接子键 |
 | `mcp_search_logs` | `POST search/` | 返回当前用户可见的脱敏日志明细 | 最多 20 个投影字段、3 个排序项、100 条/页，业务 data 有字节预算 |
 | `mcp_aggregate_logs` | `POST aggregate/` | 固定函数的分组、时间桶和数值聚合 | 最多 2 个维度、5 个指标、100 个分组；不接受 SQL 或任意函数名 |
 

@@ -43,8 +43,8 @@ REPORT_CONTENT_MIN_LENGTH = int(os.getenv("BKAPP_REPORT_CONTENT_MIN_LENGTH", 10)
 AI_EVENT_FIELDS_BRIEF_MAX = int(os.getenv("BKAPP_AI_EVENT_FIELDS_BRIEF_MAX", 100))
 
 # ============== 审计 AI 日志字段探索配置 ==============
-# 单次字段探索最多返回的字段数，限制 Agent 工具响应体积；采样行数复用 AI_ASSISTANT_FIELD_SAMPLE_ROWS。
-AI_LOG_FIELD_METADATA_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_MAX_FIELDS", 100))
+# 单次字段探索最多返回的字段数，限制 Agent 工具响应体积；单次采样行数复用 AI_ASSISTANT_FIELD_SAMPLE_ROWS。
+AI_LOG_FIELD_METADATA_MAX_FIELDS = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_MAX_FIELDS", 50))
 # 单字段保留的脱敏样例值数量，值在去重和稳定排序后截断。
 AI_LOG_FIELD_METADATA_SAMPLE_VALUES = int(os.getenv("BKAPP_AI_LOG_FIELD_METADATA_SAMPLE_VALUES", 3))
 # 单个标量样例的 UTF-8 JSON 编码字节上限；超限样例直接跳过，避免伪截断值参与后续查询推理。

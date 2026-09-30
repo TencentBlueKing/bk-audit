@@ -78,7 +78,7 @@ class TestStatisticsBKBaseCompatibility(SimpleTestCase):
                 self.assertEqual(request["prefer_storage"], "doris")
                 self.assertNotIn(".doris", request["sql"])
         with mock.patch.object(SafeQuerySyncResource, "request", return_value={"list": []}) as query:
-            LogFieldMetadataService._query_samples(self.context, LogFieldRef(raw_name="extend_data"))
+            LogFieldMetadataService._query_samples(self.context, LogFieldRef(raw_name="extend_data"), page_size=50)
             self.assertEqual(query.call_args.kwargs["prefer_storage"], "doris")
             self.assertNotIn(".doris", query.call_args.kwargs["sql"])
 

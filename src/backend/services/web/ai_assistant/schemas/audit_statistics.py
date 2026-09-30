@@ -129,7 +129,7 @@ class AIStatisticsQuerySummary(MessageSchema):
 class AIStatisticsAttachmentContext(MessageSchema):
     """创建时固化最小初始上下文；Agent 可以按需求调整实际工具查询范围。"""
 
-    system_prompt: str = Field(min_length=1, description='服务端固化的统计 Agent 系统提示词，约束工具使用与权限边界。')
+    system_prompt: str = Field(min_length=1, description='服务端固化的统计 Agent 角色、能力与工作原则。')
     instruction: str = Field(min_length=1, description='创建时固化的用户统计需求原文。')
     initial_search_condition: Annotated[AgentSearchCondition, serializers.DictField()] = Field(
         description='来源检索的初始上下文；Agent 可按需求调整范围，工具每次调用仍独立鉴权。'

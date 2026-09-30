@@ -40,6 +40,7 @@ def statistics_capability(field: LogFieldRef, observed_types: list[JSONValueType
     """
     kind = None
     reason = None
+    can_attempt = False
     if not field.keys:
         if field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES:
             reason = StatisticsUnsupportedReason.OBJECT
@@ -54,7 +55,8 @@ def statistics_capability(field: LogFieldRef, observed_types: list[JSONValueType
         elif JSONValueType.ARRAY in observed:
             reason = StatisticsUnsupportedReason.ARRAY
         elif not observed:
-            reason = StatisticsUnsupportedReason.UNKNOWN_TYPE
+            # 缺失/null 的字段可得到成功的空统计；范围外未采到的标量由最终查询定型。
+            can_attempt = True
         elif observed <= {JSONValueType.INTEGER, JSONValueType.NUMBER}:
             kind = StatisticsKind.NUMERIC
         else:
@@ -64,8 +66,10 @@ def statistics_capability(field: LogFieldRef, observed_types: list[JSONValueType
         metrics = list(AggregationMetricType)
     elif kind == StatisticsKind.CATEGORICAL:
         metrics = [AggregationMetricType.COUNT, AggregationMetricType.DISTINCT_COUNT]
+    elif can_attempt:
+        metrics = [AggregationMetricType.COUNT, AggregationMetricType.DISTINCT_COUNT]
     return {
-        "statistics_supported": kind is not None,
+        "statistics_supported": kind is not None or can_attempt,
         "statistics_kind": kind,
         "unsupported_reason": reason,
         "allowed_metrics": metrics,
