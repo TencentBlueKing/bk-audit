@@ -386,9 +386,7 @@ export type AiAssistantScopeFields = {
 };
 
 /**
- * AI 助手消息的 scope 字段（与检索页 scope 协议一致）。
- * 用于 USER_INTENT / SYSTEM_SELECTION 等需按场景选择器隔离的请求。
- * - 不传 = 不过滤
+ * AI 助手列表查询的 scope 字段（与检索页 scope 协议一致）。
  * - scene / system 必须带 scope_id，否则省略整组避免 400
  * - cross_* 只传 scope_type，不带空 scope_id
  */
@@ -409,6 +407,18 @@ export const buildAiAssistantScopeFields = (): AiAssistantScopeFields => {
 
 /** @deprecated 使用 buildAiAssistantScopeFields */
 export const buildAiUserIntentScopeFields = buildAiAssistantScopeFields;
+
+/**
+ * AI 助手会话/分组绑定的具体 scope（当前场景选择器）。
+ * 创建、移动、清空只接受 scene / system；cross_* 或 scope 未就绪时返回 null。
+ */
+export const getAiAssistantConcreteScope = (): { scope_type: 'scene' | 'system'; scope_id: string } | null => {
+  const { scope_type: scopeType, scope_id: scopeId } = buildAiAssistantScopeFields();
+  if ((scopeType === 'scene' || scopeType === 'system') && scopeId) {
+    return { scope_type: scopeType, scope_id: scopeId };
+  }
+  return null;
+};
 
 /** 场景/系统维度需等 scope_id 就绪后再请求工具详情，避免先发无参请求 */
 export const isToolDetailScopeReady = (scopeParams?: SceneSystemScopeParams): boolean => {

@@ -917,6 +917,8 @@
     'clear-all': [];
     'import': [ids: string[]];
     'update-conv-title': [id: string, title: string];
+    /** 场景选择器变更，页面按新 scope 重载侧栏 */
+    'scene-change': [];
   }>();
 
   const handleNewChatInGroup = (group: Group) => {
@@ -974,6 +976,8 @@
 
   const handleSceneChange = (value: SceneItem | null) => {
     selectedScene.value = value;
+    searchKeyword.value = '';
+    emit('scene-change');
   };
 
   const handleCollapsedToggle = () => {

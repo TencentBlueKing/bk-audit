@@ -19,6 +19,7 @@ import { computed, ref } from 'vue';
 import AiAssistantManageService from '@service/ai-assistant-manage';
 
 import type {
+  AiConcreteScope,
   AiDerivedMessageRef,
   AiMessage,
   AiSearchCondition,
@@ -29,6 +30,8 @@ import type {
   AiUserIntentInput,
   AiUserIntentOutput,
 } from '@model/ai-assistant/types';
+
+import useMessage from '@hooks/use-message';
 
 import type {
   Conversation,
@@ -48,7 +51,7 @@ import {
   resolveDerivedMessageRefs,
 } from '../utils/map-ai-message';
 
-import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
+import { getAiAssistantConcreteScope } from '@/utils/assist/scene-system-params';
 import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
 
 /** 把用户点选的时间快捷项挂到结果上（仅前端交互态；非相对则清除） */
@@ -65,23 +68,27 @@ const attachDatetimeOriginToMessage = (
   applyRememberedDatetimeOrigin(messageUid, target?.result);
 };
 
-/** 组装 USER_INTENT input_data（附带当前场景选择器 scope） */
-const buildUserIntentInputData = (queryText: string): AiUserIntentInput => {
-  const scope = buildAiAssistantScopeFields();
-  return {
-    query_text: queryText,
-    auto_execute: true,
-    ...(scope.scope_type ? scope : {}),
-  };
-};
+/** 组装 USER_INTENT input_data；会话 scope 由后端从 Conversation 派生，不可携带 */
+const buildUserIntentInputData = (queryText: string): AiUserIntentInput => ({
+  query_text: queryText,
+  auto_execute: true,
+});
 
-/** 组装 SYSTEM_SELECTION input_data（附带当前场景选择器 scope） */
-const buildSystemSelectionInputData = (systemIds: string[]): AiSystemSelectionInput => {
-  const scope = buildAiAssistantScopeFields();
-  return {
-    system_ids: systemIds,
-    ...(scope.scope_type ? scope : {}),
-  };
+/** 组装 SYSTEM_SELECTION input_data；会话 scope 由后端从 Conversation 派生，不可携带 */
+const buildSystemSelectionInputData = (systemIds: string[]): AiSystemSelectionInput => ({
+  system_ids: systemIds,
+});
+
+const SCOPE_REQUIRED_MESSAGE = '请先选择具体场景或系统';
+
+/** 本期不做跨场景：会话、分组的读写都绑定当前具体 scene / system */
+const requireConcreteScope = (): AiConcreteScope => {
+  const scope = getAiAssistantConcreteScope();
+  if (!scope) {
+    useMessage().messageWarn(SCOPE_REQUIRED_MESSAGE);
+    throw new Error(SCOPE_REQUIRED_MESSAGE);
+  }
+  return scope;
 };
 
 const MESSAGE_POLL_INTERVAL_MS = 2000;
@@ -91,6 +98,14 @@ const CHILD_LOG_RETRY_DELAY_MS = 2000;
 /** 超时仍无子消息时写入本地识别错误，结束无限「检索中」 */
 const LOG_SEARCH_CHAIN_TIMEOUT_CODE = 'LOG_SEARCH_CHAIN_TIMEOUT';
 const LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE = '日志检索任务创建超时，请稍后重试或换一种描述';
+const CONVERSATION_UNAVAILABLE_CODE = 'CONVERSATION_UNAVAILABLE';
+const CONVERSATION_UNAVAILABLE_MESSAGE = '无权访问该会话，可能权限已被回收或所属场景已停用';
+
+/** 权限被回收 / 场景停用（403）或资源已不存在（404），重试也不会成功 */
+const isUnavailableRequestError = (error: unknown) => {
+  const code = (error as { code?: number | string } | null)?.code;
+  return code === 403 || code === 404;
+};
 const DEFAULT_CONVERSATION_TITLE = '新对话';
 const TITLE_REFRESH_TIMES = 20;
 const TITLE_REFRESH_INTERVAL_MS = 2000;
@@ -146,6 +161,10 @@ const sidebarSearchLoading = ref(false);
 
 /** 草稿会话（确认系统前的本地态） */
 const draftConversation = ref<Conversation | null>(null);
+
+/** 侧栏当前加载的 scope（scope_type:scope_id）；切换场景后用于丢弃旧 scope 的迟到响应 */
+let sidebarScopeKey = '';
+const toScopeKey = (scope: AiConcreteScope | null) => (scope ? `${scope.scope_type}:${scope.scope_id}` : '');
 
 const pollTimers = new Map<string, ReturnType<typeof setInterval>>();
 /** 同一会话消息拉取进行中的 Promise，避免并发叠打 */
@@ -255,7 +274,7 @@ const mapConversationNode = (node: AiSidebarConversationNode, pinned = false): C
     id: node.node_uid,
     title: node.title || DEFAULT_CONVERSATION_TITLE,
     pinned: pinned || Boolean(node.pinned),
-    groupName: node.group_name || undefined,
+    groupName: node.group?.name || undefined,
     sceneType: 'log',
     createdAt: node.updated_at || node.created_at
       ? Date.parse(node.updated_at || node.created_at || '') || Date.now()
@@ -361,8 +380,12 @@ const upsertConversationMessage = (
   }
 };
 
-/** 续链超时：给意图消息打本地错误态，结束无限「正在检索日志…」 */
-const markChildLogSearchTimeout = (conversationId: string, nlUid: string) => {
+/** 续链超时 / 会话不可用：给意图消息打本地错误态，结束无限「正在检索日志…」 */
+const markChildLogSearchTimeout = (
+  conversationId: string,
+  nlUid: string,
+  error = { code: LOG_SEARCH_CHAIN_TIMEOUT_CODE, message: LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE },
+) => {
   const conv = findStoredConversation(conversationId);
   if (!conv) return;
   const idx = conv.messages.findIndex(item => item.id === nlUid);
@@ -375,10 +398,7 @@ const markChildLogSearchTimeout = (conversationId: string, nlUid: string) => {
   if (hasChild) return;
   conv.messages.splice(idx, 1, {
     ...prev,
-    recognitionError: {
-      code: LOG_SEARCH_CHAIN_TIMEOUT_CODE,
-      message: LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE,
-    },
+    recognitionError: error,
   });
 };
 
@@ -421,8 +441,15 @@ const fetchChildLogSearch = async (
           }
           return child;
         }
-      } catch {
-        // 短暂重试
+      } catch (error) {
+        // 403 / 404 重试无意义且每次都会弹权限框；其他失败短暂重试
+        if (isUnavailableRequestError(error)) {
+          markChildLogSearchTimeout(conversationId, nlUid, {
+            code: CONVERSATION_UNAVAILABLE_CODE,
+            message: CONVERSATION_UNAVAILABLE_MESSAGE,
+          });
+          return null;
+        }
       }
       if (attempt < maxAttempts - 1) {
         await sleep(CHILD_LOG_RETRY_DELAY_MS);
@@ -693,6 +720,20 @@ const handleMessageTerminalStatus = async (conversationId: string, detail: AiMes
   }
 };
 
+/** 轮询无法继续时把消息标记为失败，结束「处理中」 */
+const markMessageUnavailable = (conversationId: string, messageUid: string) => {
+  const conv = findStoredConversation(conversationId);
+  if (!conv) return;
+  const idx = conv.messages.findIndex(item => item.id === messageUid);
+  if (idx < 0) return;
+  conv.messages.splice(idx, 1, {
+    ...conv.messages[idx],
+    apiStatus: 'FAILED',
+    errorCode: CONVERSATION_UNAVAILABLE_CODE,
+    errorMessage: CONVERSATION_UNAVAILABLE_MESSAGE,
+  });
+};
+
 const startMessagePoll = (conversationId: string, messageUid: string) => {
   if (pollTimers.has(messageUid)) return;
 
@@ -704,8 +745,12 @@ const startMessagePoll = (conversationId: string, messageUid: string) => {
         stopMessagePoll(messageUid);
         await handleMessageTerminalStatus(conversationId, detail);
       }
-    } catch {
-      // 轮询失败不打断，下一次继续
+    } catch (error) {
+      // 403 / 404 继续轮询会每轮都弹权限框，直接终止；其他失败下一轮继续
+      if (isUnavailableRequestError(error)) {
+        stopMessagePoll(messageUid);
+        markMessageUnavailable(conversationId, messageUid);
+      }
     }
   };
 
@@ -900,9 +945,13 @@ export function useSecChatStore() {
       if (!target) return;
       if (target.childrenLoaded && !options?.force) return;
 
+      const scope = getAiAssistantConcreteScope();
+      if (!scope) return;
+
       target.childrenLoading = true;
       try {
         const childPage = await AiAssistantManageService.fetchSidebarNodes({
+          ...scope,
           parent_node_type: 'GROUP',
           parent_node_uid: groupId,
           page: 1,
@@ -916,8 +965,7 @@ export function useSecChatStore() {
           .filter(isConversationNode)
           .map(node => mapConversationNode({
             ...node,
-            group_name: latest.name,
-            group_uid: latest.id,
+            group: { uid: latest.id, name: latest.name },
           }));
 
         const messageCache = snapshotMessageCache();
@@ -953,9 +1001,18 @@ export function useSecChatStore() {
    * 置顶能力本期不开放，不请求 pinned/。
    */
   const initSidebar = async () => {
+    const scope = getAiAssistantConcreteScope();
+    const scopeKey = toScopeKey(scope);
+    sidebarScopeKey = scopeKey;
+    if (!scope) {
+      rootSidebarOrder.value = [];
+      groups.value = [];
+      return;
+    }
     sidebarLoading.value = true;
     try {
-      const rootPage = await AiAssistantManageService.fetchSidebarNodes({ page: 1, page_size: 100 });
+      const rootPage = await AiAssistantManageService.fetchSidebarNodes({ ...scope, page: 1, page_size: 100 });
+      if (sidebarScopeKey !== scopeKey) return;
       const rootNodes = rootPage.results || [];
       rootSidebarOrder.value = rootNodes.reduce<RootSidebarItem[]>((acc, node) => {
         if (isGroupNode(node)) {
@@ -1021,8 +1078,36 @@ export function useSecChatStore() {
       }
       groups.value = nextGroups;
     } finally {
-      sidebarLoading.value = false;
+      if (sidebarScopeKey === scopeKey) {
+        sidebarLoading.value = false;
+      }
     }
+  };
+
+  /**
+   * 场景选择器变更后按新 scope 重载侧栏；scope 未变化时不做处理。
+   * 首次加载（此前未绑定 scope）不清当前会话，避免深链进入的会话被清掉。
+   * @returns 是否清空了当前会话（调用方据此回到首页）
+   */
+  const syncSidebarScope = async () => {
+    const nextKey = toScopeKey(getAiAssistantConcreteScope());
+    if (nextKey === sidebarScopeKey) return false;
+    const hadScope = Boolean(sidebarScopeKey);
+    if (hadScope) {
+      stopAllMessagePolls();
+      pendingSelectionQueries.clear();
+      createLogConversationInflight = null;
+      pendingNewChatGroupUid.value = null;
+      draftConversation.value = null;
+      activeConversationId.value = null;
+      conversations.value = [];
+      groups.value = [];
+      rootSidebarOrder.value = [];
+      sidebarSearchResults.value = [];
+      sidebarSearchLoading.value = false;
+    }
+    await initSidebar();
+    return hadScope;
   };
 
   const resolveConversation = (conversationId: string): Conversation => {
@@ -1072,6 +1157,10 @@ export function useSecChatStore() {
         }
         if (activeConversationId.value === conversationId) {
           activeConversationId.value = null;
+        }
+        // 同 scope 的其他会话也可能已不可见，按最新权限重拉侧栏
+        if (isUnavailableRequestError(error)) {
+          void initSidebar();
         }
         throw error;
       } finally {
@@ -1159,6 +1248,7 @@ export function useSecChatStore() {
       : undefined;
 
     await AiAssistantManageService.moveSidebarNode({
+      ...requireConcreteScope(),
       source_node_type: 'CONVERSATION',
       source_node_uid: id,
       ...(targetGroup ? {
@@ -1223,6 +1313,7 @@ export function useSecChatStore() {
     const targetGroup = options.groupName
       ? groups.value.find(g => g.name === options.groupName)
       : undefined;
+    const scope = requireConcreteScope();
     const targetParams = targetGroup
       ? {
         target_node_type: 'GROUP' as const,
@@ -1240,6 +1331,7 @@ export function useSecChatStore() {
       },
     ) => {
       await AiAssistantManageService.moveSidebarNode({
+        ...scope,
         source_node_type: resolveNodeType(nodeKind),
         source_node_uid: nodeUid,
         ...targetParams,
@@ -1316,7 +1408,10 @@ export function useSecChatStore() {
   };
 
   const createGroup = async (name: string) => {
-    const group = await AiAssistantManageService.createConversationGroup({ name });
+    const group = await AiAssistantManageService.createConversationGroup({
+      ...requireConcreteScope(),
+      name,
+    });
     await initSidebar();
     return group;
   };
@@ -1338,9 +1433,17 @@ export function useSecChatStore() {
       return;
     }
 
+    const scope = getAiAssistantConcreteScope();
+    if (!scope) {
+      sidebarSearchResults.value = [];
+      sidebarSearchLoading.value = false;
+      return;
+    }
+
     sidebarSearchLoading.value = true;
     try {
-      const nodes = await AiAssistantManageService.searchSidebar({ keyword: trimmed });
+      const nodes = await AiAssistantManageService.searchSidebar({ ...scope, keyword: trimmed });
+      if (toScopeKey(scope) !== sidebarScopeKey) return;
       const mapped = nodes
         .filter(isConversationNode)
         .map(node => mapConversationNode(node));
@@ -1360,7 +1463,7 @@ export function useSecChatStore() {
       // 协议：搜索需覆盖未展开分组，按需拉取命中分组子节点
       const hitGroupIds = new Set(nodes
         .filter(isConversationNode)
-        .map(node => node.group_uid)
+        .map(node => node.group?.uid)
         .filter((uid): uid is string => Boolean(uid)));
       await Promise.all([...hitGroupIds].map(groupId => loadGroupConversations(groupId, { force: true })));
     } catch {
@@ -1401,7 +1504,7 @@ export function useSecChatStore() {
   };
 
   const clearAllConversations = async () => {
-    await AiAssistantManageService.clearConversations();
+    await AiAssistantManageService.clearConversations(requireConcreteScope());
     draftConversation.value = null;
     activeConversationId.value = null;
     stopAllMessagePolls();
@@ -1427,6 +1530,7 @@ export function useSecChatStore() {
     createLogConversationInflight = (async () => {
       const groupUid = options?.groupUid || pendingNewChatGroupUid.value || undefined;
       const created = await AiAssistantManageService.createConversation({
+        ...requireConcreteScope(),
         title: DEFAULT_CONVERSATION_TITLE,
         ...(groupUid ? { group_uid: groupUid } : {}),
       });
@@ -1490,6 +1594,7 @@ export function useSecChatStore() {
 
     if (conv.isDraft) {
       const created = await AiAssistantManageService.createConversation({
+        ...requireConcreteScope(),
         title: conv.title || DEFAULT_CONVERSATION_TITLE,
       });
       const realId = created.uid;
@@ -1704,6 +1809,7 @@ export function useSecChatStore() {
     activeConversation,
     toggleSidebar,
     initSidebar,
+    syncSidebarScope,
     loadGroupConversations,
     searchSidebarConversations,
     clearSidebarSearch,
