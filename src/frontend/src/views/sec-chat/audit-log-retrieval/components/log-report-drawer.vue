@@ -176,9 +176,11 @@
 
   import AiAssistantManageService from '@service/ai-assistant-manage';
 
+  import { attachmentMarkdown } from '@model/ai-assistant/attachment';
   import type {
     AiAttachment,
     AiAttachmentExportFormat,
+    AiAttachmentOutputData,
   } from '@model/ai-assistant/types';
 
   import useMessage from '@hooks/use-message';
@@ -203,6 +205,8 @@
     exportFormats?: string[];
     conversationUid?: string;
     analysisMode?: string;
+    outputData?: AiAttachmentOutputData;
+    attachmentType?: string;
   }
 
   const props = withDefaults(defineProps<{
@@ -333,7 +337,7 @@
         },
       }, { catchError: true });
       savedTitle.value = attachment.title || nextTitle;
-      savedContent.value = attachment.output_data?.markdown || nextContent;
+      savedContent.value = attachmentMarkdown(attachment.output_data) || nextContent;
       resetEditForm(savedTitle.value, savedContent.value);
       isEditing.value = false;
       emit('updated', attachment);

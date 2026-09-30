@@ -205,6 +205,7 @@
 
   import AiAssistantManageService from '@service/ai-assistant-manage';
 
+  import { attachmentMarkdown } from '@model/ai-assistant/attachment';
   import type {
     AiAttachment,
     AiAttachmentExportFormat,
@@ -509,7 +510,7 @@
       const detail = await AiAssistantManageService.fetchAttachment({
         attachment_uid: item.uid,
       }, { catchError: true });
-      markdown = detail.output_data?.markdown || '';
+      markdown = attachmentMarkdown(detail.output_data);
       exportFormats = detail.export_formats || exportFormats;
       title = detail.title || title;
       createdAt = formatReportTime(detail.created_at || detail.content_updated_at || '') || createdAt;
@@ -592,7 +593,7 @@
       activeReport.value = {
         ...activeReport.value,
         title: attachment.title || activeReport.value.title,
-        markdown: attachment.output_data?.markdown || activeReport.value.markdown,
+        markdown: attachmentMarkdown(attachment.output_data) || activeReport.value.markdown,
         exportFormats: attachment.export_formats || activeReport.value.exportFormats,
       };
     }
