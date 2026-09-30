@@ -15,8 +15,10 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type {
+  AiConcreteScope,
   AiConversation,
   AiConversationGroup,
+  AiCreateConversationGroupParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
   AiExportConfig,
@@ -24,11 +26,13 @@ import type {
   AiMessage,
   AiMessageHistoryParams,
   AiMessageWindow,
+  AiScopeQuery,
   AiSidebarMoveParams,
   AiSidebarNode,
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
+  AiSidebarSearchParams,
   AiUpdateMessageParams,
 } from '@model/ai-assistant/types';
 
@@ -51,7 +55,7 @@ class AiAssistantManage extends ModuleBase {
 
   // ---------- 会话分组 ----------
 
-  createConversationGroup(params: { name: string }, payload = {} as IRequestPayload) {
+  createConversationGroup(params: AiCreateConversationGroupParams, payload = {} as IRequestPayload) {
     return Request.post<AiConversationGroup>(`${this.module}/conversation_groups/`, {
       params,
       payload,
@@ -107,28 +111,30 @@ class AiAssistantManage extends ModuleBase {
     });
   }
 
-  clearConversations(payload = {} as IRequestPayload) {
+  clearConversations(params: AiConcreteScope, payload = {} as IRequestPayload) {
     return Request.post<string>(`${this.module}/conversations/clear/`, {
+      params,
       payload,
     });
   }
 
   // ---------- 侧栏 ----------
 
-  getPinnedNodes(payload = {} as IRequestPayload) {
+  getPinnedNodes(params: AiScopeQuery, payload = {} as IRequestPayload) {
     return Request.get<AiSidebarNode[] | AiSidebarNodePage>(`${this.module}/conversation_sidebar/pinned/`, {
+      params,
       payload,
     });
   }
 
-  getSidebarNodes(params: AiSidebarNodesParams = {}, payload = {} as IRequestPayload) {
+  getSidebarNodes(params: AiSidebarNodesParams, payload = {} as IRequestPayload) {
     return Request.get<AiSidebarNodePage | AiSidebarNode[]>(`${this.module}/conversation_sidebar/nodes/`, {
       params,
       payload,
     });
   }
 
-  searchSidebar(params: { keyword: string }, payload = {} as IRequestPayload) {
+  searchSidebar(params: AiSidebarSearchParams, payload = {} as IRequestPayload) {
     return Request.get<AiSidebarNode[] | AiSidebarNodePage>(`${this.module}/conversation_sidebar/search/`, {
       params,
       payload,
