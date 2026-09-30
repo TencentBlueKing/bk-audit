@@ -15,16 +15,20 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type {
+  AiConcreteScope,
   AiConversation,
+  AiCreateConversationGroupParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
   AiExportConfig,
   AiMessageHistoryParams,
+  AiScopeQuery,
   AiSidebarMoveParams,
   AiSidebarNode,
   AiSidebarNodePage,
   AiSidebarNodesParams,
   AiSidebarPinParams,
+  AiSidebarSearchParams,
   AiUpdateMessageParams,
 } from '@model/ai-assistant/types';
 
@@ -64,7 +68,7 @@ const normalizeNodePage = (data: AiSidebarNode[] | AiSidebarNodePage | undefined
 export default {
   // ---------- 会话分组 ----------
 
-  createConversationGroup(params: { name: string }) {
+  createConversationGroup(params: AiCreateConversationGroupParams) {
     return AiAssistantManageSource.createConversationGroup(params)
       .then(({ data }) => data);
   },
@@ -101,24 +105,24 @@ export default {
       .then(({ data }) => data);
   },
 
-  clearConversations() {
-    return AiAssistantManageSource.clearConversations()
+  clearConversations(params: AiConcreteScope) {
+    return AiAssistantManageSource.clearConversations(params)
       .then(({ data }) => data);
   },
 
   // ---------- 侧栏 ----------
 
-  fetchPinnedNodes() {
-    return AiAssistantManageSource.getPinnedNodes()
+  fetchPinnedNodes(params: AiScopeQuery) {
+    return AiAssistantManageSource.getPinnedNodes(params)
       .then(({ data }) => normalizeNodeList(data));
   },
 
-  fetchSidebarNodes(params: AiSidebarNodesParams = {}) {
+  fetchSidebarNodes(params: AiSidebarNodesParams) {
     return AiAssistantManageSource.getSidebarNodes(params)
       .then(({ data }) => normalizeNodePage(data));
   },
 
-  searchSidebar(params: { keyword: string }) {
+  searchSidebar(params: AiSidebarSearchParams) {
     return AiAssistantManageSource.searchSidebar(params)
       .then(({ data }) => normalizeNodeList(data));
   },
