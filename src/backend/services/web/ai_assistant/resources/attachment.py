@@ -111,12 +111,13 @@ class CreateAttachment(AIAssistantResource):
 
 
 class ListAttachments(AIAssistantResource):
-    """查询当前用户可见的附件摘要，用于卡片恢复或产物列表；不分页。
+    """按当前权限 scope 查询附件摘要，用于卡片恢复或产物列表；不分页。
 
     ### Case：恢复某次检索的统计附件
 
     `GET /api/v1/ai_assistant/attachments/`，查询参数：
-    `source_message_uid={searchMessageUid}&attachment_type=FIELD_STATISTICS,AI_STATISTICS`
+    `scope_type=system&scope_id={systemId}&source_message_uid={searchMessageUid}`
+    `&attachment_type=FIELD_STATISTICS,AI_STATISTICS`
 
     类型和状态支持单值、逗号分隔或重复参数；仅查看成功结果时追加 status=SUCCESS，
     需要恢复生成中任务时不要固定成功状态。默认返回全部匹配项，limit 可限制数量。

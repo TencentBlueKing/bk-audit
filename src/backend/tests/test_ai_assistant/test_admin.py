@@ -14,7 +14,8 @@ from services.web.ai_assistant.constants import (
     ExecutionStatus,
     MessageType,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
+from tests.test_ai_assistant.factories import create_conversation
 from tests.test_ai_assistant.handlers import (
     EchoAttachmentAsyncHandler,
     use_attachment_handler,
@@ -32,7 +33,7 @@ class AttachmentAdminTest(TransactionTestCase):
         self.request.user = get_user_model().objects.create(username="retry-admin", is_staff=True, is_superuser=True)
         self.request.session = {}
         self.request._messages = FallbackStorage(self.request)
-        conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
+        conversation = create_conversation(created_by="alice", updated_by="alice")
         self.source = Message.objects.create(
             conversation=conversation,
             message_type=MessageType.LOG_SEARCH,

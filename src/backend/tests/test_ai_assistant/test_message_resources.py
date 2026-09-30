@@ -1,6 +1,7 @@
-﻿from unittest import mock
+from unittest import mock
 from uuid import UUID, uuid4
 
+from bk_resource.exceptions import ValidateException
 from django.db import connection
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -29,7 +30,7 @@ from services.web.ai_assistant.exceptions import (
     MessageSnapshotValidationError,
 )
 from services.web.ai_assistant.handlers import message_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
+from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
     GetMessage,
@@ -60,7 +61,11 @@ from services.web.ai_assistant.services.message_execution import (
     finish_message_success,
     load_message_execution,
 )
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoAttachmentAsyncHandler,
@@ -162,6 +167,28 @@ class MessageRequestSerializerTest(TestCase):
             with self.subTest(data=data):
                 serializer = MessageListRequestSerializer(data=data)
                 self.assertFalse(serializer.is_valid())
+
+    def test_post_messages_rejects_retired_natural_language_search(self):
+        """POST /messages/ 不再接受旧自然语言检索类型，USER_INTENT 仍是自然语言入口。"""
+
+        with self.assertRaises(ValidateException):
+            CreateMessage().request(
+                {
+                    "conversation_uid": self.conversation_uid,
+                    "message_type": "NATURAL_LANGUAGE_SEARCH",
+                    "input_data": {"query_text": "查一下最近一天的日志"},
+                }
+            )
+
+        available = MessageCreateRequestSerializer(
+            data={
+                "conversation_uid": self.conversation_uid,
+                "message_type": MessageType.USER_INTENT,
+                "input_data": {"query_text": "查一下最近一天的日志"},
+            }
+        )
+        self.assertTrue(available.is_valid(), available.errors)
+        self.assertEqual(available.validated_data["message_type"], MessageType.USER_INTENT)
 
     def test_initial_message_only_accepts_system_selection(self):
         valid = InitialMessageRequestSerializer(
@@ -398,7 +425,10 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="alice")
 class MessageResourceTest(TestCase):
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
+        self.conversation = create_test_conversation(created_by="alice", updated_by="alice")
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
         self.sync_handler = FeedbackEchoSyncHandler()
         self.async_handler = EchoAsyncHandler()
         self.attachment_handler = FeedbackAttachmentEchoHandler()
@@ -681,7 +711,7 @@ class MessageResourceTest(TestCase):
         self.assertEqual([item["uid"] for item in window["results"]], [second["uid"]])
 
     def test_cross_user_resources_are_hidden(self, _username):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = Message.objects.create(
             conversation=foreign_conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -768,7 +798,7 @@ class MessageResourceTest(TestCase):
             RetryMessage().request({"message_uid": str(message.uid)})
 
     def test_retry_message_hides_foreign_and_deleted_conversation(self, _username):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign = self.create_failed_async_message(
             conversation=foreign_conversation,
             created_by="bob",

@@ -354,11 +354,13 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 | 用户动作 | 调用衔接与页面行为 |
 | --- | --- |
 | 刷新页面或从原卡片重新打开 | 从消息附件摘要或附件列表找到 UID → 读取附件详情 → 终态展示结果，PROCESSING 恢复轮询或可选过程订阅；不重新创建 |
-| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 按 source_message_uid 和统计类型筛选；列表是摘要，点击后读详情 |
+| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 带当前查询 scope，再按 source_message_uid 和统计类型筛选；列表是摘要，点击后读详情 |
 | 失败后原样重试 / 成功后重新生成 | `POST /api/v1/ai_assistant/attachments/{uid}/retry/` → 保留附件 UID，立即清空旧产物、错误、过程与反馈 → 按返回状态恢复等待 |
 | 更换字段、统计选项或 AI 需求 | 从来源消息创建新附件，保留原结果；不能修改原附件 input_data 来重跑 |
 | 更换程序统计范围 | 先完成新的检索，再从新消息创建附件 |
 | 修改标题 | PATCH 原附件，成功后更新卡片和列表标题 |
+
+附件列表必传 `scope_type`：具体 `scene/system` 同时传 `scope_id`，跨范围查询使用 `cross_scene/cross_system` 且不传 `scope_id`。例如 `GET /api/v1/ai_assistant/attachments/?scope_type=system&scope_id={systemId}&source_message_uid={messageUid}&attachment_type=FIELD_STATISTICS`。列表项的 `scope_type/scope_id` 是来源会话的绑定归属；统计产物的 `query_summary.scope_id` 是实际日志查询系统，两者用途不同。创建附件仍只传来源消息 UID、类型和业务输入，详情/重试/SSE 仍按附件 UID 访问，不重复传会话 scope。
 
 仅轮询的页面在重试/重新生成成功后继续读原附件详情，无需等待执行标识。使用 SSE 时先关闭旧连接，等待新的 execution_id 后恢复；排队期间读到旧快照不能当作本轮结果。切换卡片后，迟到的请求或旧流事件不能覆盖新面板。
 

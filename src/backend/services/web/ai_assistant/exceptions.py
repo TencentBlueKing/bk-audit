@@ -274,16 +274,19 @@ class SystemSelectionPermissionDenied(AIAssistantException):
     STATUS_CODE = 403
 
 
-class ScopeContextRequired(AIAssistantException):
-    """创建/编辑消息缺少场景过滤上下文（scope_type）。
+class SidebarScopeMismatch(AIAssistantException):
+    """侧栏业务对象与操作范围不一致。"""
 
-    schema 层 scope_type 可选（宽松解析历史消息快照，协议升级前落库的
-    input_data 无该字段），创建/编辑路径在 Handler.prepare 强制必填——
-    与前端进入 AI 页时左上角场景选择器默认有值对齐。
-    """
+    MESSAGE = gettext_lazy("侧栏对象必须属于同一范围")
+    ERROR_CODE = "043"
+    STATUS_CODE = 400
 
-    MESSAGE = gettext_lazy("缺少场景过滤参数 scope_type，请携带当前场景后重试")
-    ERROR_CODE = "042"
+
+class CrossScopeMutationNotAllowed(AIAssistantException):
+    """聚合查询范围不支持清空或移动等写操作。"""
+
+    MESSAGE = gettext_lazy("跨范围视图不支持此操作")
+    ERROR_CODE = "044"
     STATUS_CODE = 400
 
 

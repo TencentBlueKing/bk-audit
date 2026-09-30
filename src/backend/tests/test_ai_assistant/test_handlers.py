@@ -23,11 +23,6 @@ from tests.test_ai_assistant.base import (
     make_selection_output,
 )
 
-# 测试默认 scope：cross_system 是宽松语义，单元测试不关心具体场景，
-# 仅校验 SystemSelectionInputSchema 的协议形态（scope 必填校验）
-DEFAULT_SCOPE_TYPE = "cross_system"
-DEFAULT_SCOPE_ID = ""
-
 
 class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
     def setUp(self):
@@ -45,7 +40,6 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 parent_message=parent,
                 input_data=SystemSelectionInputSchema(
                     system_ids=[TARGET_SYSTEM_ID],
-                    scope_type=DEFAULT_SCOPE_TYPE,
                 ),
             )
 
@@ -56,14 +50,13 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
             parent_message=None,
             input_data=SystemSelectionInputSchema(
                 system_ids=[TARGET_SYSTEM_ID],
-                scope_type=DEFAULT_SCOPE_TYPE,
             ),
         )
         self.assertIsNone(preparation.parent_message)
         self.assertEqual(preparation.context_data.username, self.user)
         self.assertTrue(preparation.context_data.namespace)
-        # session scope 随消息快照固化
-        self.assertEqual(preparation.context_data.scope_type, DEFAULT_SCOPE_TYPE)
+        self.assertEqual(preparation.context_data.scope_type, self.conversation.scope_type)
+        self.assertEqual(preparation.context_data.scope_id, self.conversation.scope_id)
 
     def test_execute_assembles_fields_and_operations(self):
         """execute 组装字段上下文 + 常见/历史操作。"""
@@ -80,12 +73,12 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
             output = self.handler.execute(
                 input_data=SystemSelectionInputSchema(
                     system_ids=[TARGET_SYSTEM_ID],
-                    scope_type=DEFAULT_SCOPE_TYPE,
                 ),
                 context_data=SystemSelectionHandler.context_model(
                     username=self.user,
                     namespace="bkaudit",
-                    scope_type=DEFAULT_SCOPE_TYPE,
+                    scope_type=self.conversation.scope_type,
+                    scope_id=self.conversation.scope_id,
                 ),
             )
         mock_build.assert_called_once()
@@ -96,23 +89,24 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
     def test_execute_scope_rejects_out_of_scope_system(self):
         """session scope 校验：system_ids 不在 scope 候选内时拒绝（防 AI 跨场景越权）"""
 
-        with self.assertRaises(SystemSelectionPermissionDenied):
+        with mock.patch(
+            "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
+        ), self.assertRaises(SystemSelectionPermissionDenied):
             self.handler.execute(
                 input_data=SystemSelectionInputSchema(
                     system_ids=["other_system"],
-                    scope_type="scene",
-                    scope_id="1",
                 ),
                 context_data=SystemSelectionHandler.context_model(
                     username=self.user,
                     namespace="bkaudit",
-                    scope_type="scene",
-                    scope_id="1",
+                    scope_type=self.conversation.scope_type,
+                    scope_id=self.conversation.scope_id,
                 ),
             )
 
-    def test_execute_operation_ranking_filtered_by_scope(self):
-        """操作榜单按 session scope 候选系统集过滤（切换场景榜单随场景变化）"""
+    def test_execute_operation_context_uses_conversation_scope(self):
+        """操作上下文按 Conversation scope 查询，系统候选仅用于本次选择校验。"""
 
         with self.patch_field_context(), self.patch_operation_context() as mock_build, mock.patch(
             "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
@@ -122,38 +116,19 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
             self.handler.execute(
                 input_data=SystemSelectionInputSchema(
                     system_ids=[TARGET_SYSTEM_ID],
-                    scope_type="scene",
-                    scope_id="1",
                 ),
                 context_data=SystemSelectionHandler.context_model(
                     username=self.user,
                     namespace="bkaudit",
-                    scope_type="scene",
-                    scope_id="1",
+                    scope_type=self.conversation.scope_type,
+                    scope_id=self.conversation.scope_id,
                 ),
             )
-        # 榜单收到的是 scope 候选系统集（排序去空串），而非仅所选系统
-        _, build_kwargs = mock_build.call_args
-        self.assertEqual(build_kwargs["system_ids"], ["bk_log", "sys_a", "sys_b"])
-
-    def test_execute_operation_ranking_falls_back_without_scope(self):
-        """无 scope（历史消息兜底）：榜单沿用所选系统（原行为）"""
-
-        with self.patch_field_context(), self.patch_operation_context() as mock_build:
-            self.handler.execute(
-                input_data=SystemSelectionInputSchema(
-                    system_ids=[TARGET_SYSTEM_ID],
-                    scope_type="cross_system",
-                ),
-                context_data=SystemSelectionHandler.context_model(
-                    username=self.user,
-                    namespace="bkaudit",
-                    scope_type="",
-                    scope_id="",
-                ),
-            )
-        _, build_kwargs = mock_build.call_args
-        self.assertEqual(build_kwargs["system_ids"], [TARGET_SYSTEM_ID])
+        mock_build.assert_called_once_with(
+            scope_type=self.conversation.scope_type,
+            scope_id=self.conversation.scope_id,
+            username=self.user,
+        )
 
     def test_execute_permission_denied_converted(self):
         """所选系统均无检索权限时转为平台稳定错误（403），不误报为 AI 识别失败。"""
@@ -173,12 +148,12 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 self.handler.execute(
                     input_data=SystemSelectionInputSchema(
                         system_ids=["no_perm_system"],
-                        scope_type=DEFAULT_SCOPE_TYPE,
                     ),
                     context_data=SystemSelectionHandler.context_model(
                         username=self.user,
                         namespace="bkaudit",
-                        scope_type=DEFAULT_SCOPE_TYPE,
+                        scope_type=self.conversation.scope_type,
+                        scope_id=self.conversation.scope_id,
                     ),
                 )
 

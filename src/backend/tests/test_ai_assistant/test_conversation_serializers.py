@@ -5,6 +5,7 @@ from services.web.ai_assistant.exceptions import (
     AIAssistantException,
     ConversationGroupNotFound,
     ConversationNotFound,
+    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
@@ -21,6 +22,7 @@ from services.web.ai_assistant.serializers import (
     SidebarMoveRequestSerializer,
     SidebarNodeListRequestSerializer,
     SidebarPinRequestSerializer,
+    SidebarScopeQuerySerializer,
     SidebarSearchRequestSerializer,
 )
 from services.web.ai_assistant.serializers.conversation import (
@@ -52,6 +54,7 @@ class ConversationRequestSerializerTest(TestCase):
             SidebarNodeListRequestSerializer,
             SidebarNodeResponseSerializer,
             SidebarPinRequestSerializer,
+            SidebarScopeQuerySerializer,
             SidebarSearchRequestSerializer,
         )
 
@@ -62,30 +65,88 @@ class ConversationRequestSerializerTest(TestCase):
 
     def test_create_conversation_accepts_optional_group_uid(self):
         group_uid = uuid4()
-        serializer = ConversationCreateRequestSerializer(data={"group_uid": str(group_uid)})
+        serializer = ConversationCreateRequestSerializer(
+            data={"group_uid": str(group_uid), "scope_type": "scene", "scope_id": "2"}
+        )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["group_uid"], group_uid)
+        self.assertEqual(serializer.validated_data["scope_type"], "scene")
+        self.assertEqual(serializer.validated_data["scope_id"], "2")
 
-        invalid = ConversationCreateRequestSerializer(data={"group_uid": "not-a-uuid"})
+        invalid = ConversationCreateRequestSerializer(
+            data={"group_uid": "not-a-uuid", "scope_type": "scene", "scope_id": "2"}
+        )
         self.assertFalse(invalid.is_valid())
+
+    def test_conversation_create_requires_a_concrete_scope(self):
+        valid = ConversationCreateRequestSerializer(data={"scope_type": "system", "scope_id": "bk_audit"})
+        self.assertTrue(valid.is_valid(), valid.errors)
+
+        for data in (
+            {},
+            {"scope_type": "scene"},
+            {"scope_type": "cross_scene", "scope_id": ""},
+            {"scope_type": "cross_system", "scope_id": ""},
+        ):
+            with self.subTest(data=data):
+                serializer = ConversationCreateRequestSerializer(data=data)
+                self.assertFalse(serializer.is_valid())
 
     def test_search_response_only_declares_conversation_fields(self):
         self.assertEqual(
             set(ConversationSearchResponseSerializer().fields),
-            {"node_type", "node_uid", "title", "updated_at", "pinned_at", "group", "is_pinned"},
+            {
+                "node_type",
+                "node_uid",
+                "scope_type",
+                "scope_id",
+                "title",
+                "updated_at",
+                "pinned_at",
+                "group",
+                "is_pinned",
+            },
         )
 
+    def test_sidebar_node_response_exposes_bound_scope(self):
+        self.assertTrue({"scope_type", "scope_id"}.issubset(SidebarNodeResponseSerializer().fields))
+
     def test_group_name_is_trimmed_and_required(self):
-        serializer = ConversationGroupCreateRequestSerializer(data={"name": "  生产排查  "})
+        serializer = ConversationGroupCreateRequestSerializer(
+            data={"name": "  生产排查  ", "scope_type": "scene", "scope_id": "1"}
+        )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data, {"name": "生产排查"})
+        self.assertEqual(
+            serializer.validated_data,
+            {"name": "生产排查", "scope_type": "scene", "scope_id": "1"},
+        )
 
         for invalid_name in ("", "   ", "x" * 65):
             with self.subTest(name=invalid_name):
-                serializer = ConversationGroupCreateRequestSerializer(data={"name": invalid_name})
+                serializer = ConversationGroupCreateRequestSerializer(
+                    data={"name": invalid_name, "scope_type": "scene", "scope_id": "1"}
+                )
                 self.assertFalse(serializer.is_valid())
+
+    def test_group_create_requires_a_concrete_scope(self):
+        valid = ConversationGroupCreateRequestSerializer(data={"name": "工具分析", "scope_type": "scene", "scope_id": "1"})
+        self.assertTrue(valid.is_valid(), valid.errors)
+
+        for data in (
+            {"name": "工具分析"},
+            {"name": "工具分析", "scope_type": "scene"},
+            {"name": "工具分析", "scope_type": "cross_scene", "scope_id": ""},
+        ):
+            with self.subTest(data=data):
+                serializer = ConversationGroupCreateRequestSerializer(data=data)
+                self.assertFalse(serializer.is_valid())
+
+    def test_conversation_and_group_responses_expose_concrete_scope(self):
+        self.assertTrue({"scope_type", "scope_id"}.issubset(ConversationGroupResponseSerializer().fields))
+        self.assertTrue({"scope_type", "scope_id"}.issubset(ConversationResponseSerializer().fields))
+        self.assertTrue({"scope_type", "scope_id"}.issubset(ConversationCreateResponseSerializer().fields))
 
     def test_group_update_requires_uid_and_valid_name(self):
         group_uid = uuid4()
@@ -117,20 +178,26 @@ class SidebarRequestSerializerTest(TestCase):
         self.source_uid = str(uuid4())
         self.target_uid = str(uuid4())
         self.anchor_uid = str(uuid4())
+        self.scope = {"scope_type": "scene", "scope_id": "1"}
+
+    def with_scope(self, data):
+        return {**self.scope, **data}
 
     def test_node_list_parent_fields_must_be_paired_and_group(self):
         valid = SidebarNodeListRequestSerializer(
-            data={"parent_node_type": SidebarNodeType.GROUP, "parent_node_uid": self.target_uid}
+            data=self.with_scope({"parent_node_type": SidebarNodeType.GROUP, "parent_node_uid": self.target_uid})
         )
         self.assertTrue(valid.is_valid(), valid.errors)
 
         for data in (
-            {"parent_node_type": SidebarNodeType.GROUP},
-            {"parent_node_uid": self.target_uid},
-            {
-                "parent_node_type": SidebarNodeType.CONVERSATION,
-                "parent_node_uid": self.target_uid,
-            },
+            self.with_scope({"parent_node_type": SidebarNodeType.GROUP}),
+            self.with_scope({"parent_node_uid": self.target_uid}),
+            self.with_scope(
+                {
+                    "parent_node_type": SidebarNodeType.CONVERSATION,
+                    "parent_node_uid": self.target_uid,
+                }
+            ),
         ):
             with self.subTest(data=data):
                 serializer = SidebarNodeListRequestSerializer(data=data)
@@ -138,20 +205,24 @@ class SidebarRequestSerializerTest(TestCase):
 
     def test_move_accepts_root_or_group_container_and_optional_anchor(self):
         root_move = SidebarMoveRequestSerializer(
-            data={
-                "source_node_type": SidebarNodeType.CONVERSATION,
-                "source_node_uid": self.source_uid,
-            }
+            data=self.with_scope(
+                {
+                    "source_node_type": SidebarNodeType.CONVERSATION,
+                    "source_node_uid": self.source_uid,
+                }
+            )
         )
         group_move = SidebarMoveRequestSerializer(
-            data={
-                "source_node_type": SidebarNodeType.CONVERSATION,
-                "source_node_uid": self.source_uid,
-                "target_node_type": SidebarNodeType.GROUP,
-                "target_node_uid": self.target_uid,
-                "before_node_type": SidebarNodeType.CONVERSATION,
-                "before_node_uid": self.anchor_uid,
-            }
+            data=self.with_scope(
+                {
+                    "source_node_type": SidebarNodeType.CONVERSATION,
+                    "source_node_uid": self.source_uid,
+                    "target_node_type": SidebarNodeType.GROUP,
+                    "target_node_uid": self.target_uid,
+                    "before_node_type": SidebarNodeType.CONVERSATION,
+                    "before_node_uid": self.anchor_uid,
+                }
+            )
         )
 
         self.assertTrue(root_move.is_valid(), root_move.errors)
@@ -159,14 +230,16 @@ class SidebarRequestSerializerTest(TestCase):
 
     def test_move_accepts_after_anchor(self):
         serializer = SidebarMoveRequestSerializer(
-            data={
-                "source_node_type": SidebarNodeType.CONVERSATION,
-                "source_node_uid": self.source_uid,
-                "target_node_type": SidebarNodeType.GROUP,
-                "target_node_uid": self.target_uid,
-                "after_node_type": SidebarNodeType.CONVERSATION,
-                "after_node_uid": self.anchor_uid,
-            }
+            data=self.with_scope(
+                {
+                    "source_node_type": SidebarNodeType.CONVERSATION,
+                    "source_node_uid": self.source_uid,
+                    "target_node_type": SidebarNodeType.GROUP,
+                    "target_node_uid": self.target_uid,
+                    "after_node_type": SidebarNodeType.CONVERSATION,
+                    "after_node_uid": self.anchor_uid,
+                }
+            )
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -174,6 +247,7 @@ class SidebarRequestSerializerTest(TestCase):
 
     def test_move_requires_paired_target_and_anchor_fields(self):
         base = {
+            **self.scope,
             "source_node_type": SidebarNodeType.CONVERSATION,
             "source_node_uid": self.source_uid,
         }
@@ -192,6 +266,7 @@ class SidebarRequestSerializerTest(TestCase):
     def test_move_rejects_before_and_after_anchor_together(self):
         serializer = SidebarMoveRequestSerializer(
             data={
+                **self.scope,
                 "source_node_type": SidebarNodeType.CONVERSATION,
                 "source_node_uid": self.source_uid,
                 "before_node_type": SidebarNodeType.CONVERSATION,
@@ -207,6 +282,7 @@ class SidebarRequestSerializerTest(TestCase):
     def test_move_rejects_conversation_container_and_nested_group(self):
         conversation_target = SidebarMoveRequestSerializer(
             data={
+                **self.scope,
                 "source_node_type": SidebarNodeType.CONVERSATION,
                 "source_node_uid": self.source_uid,
                 "target_node_type": SidebarNodeType.CONVERSATION,
@@ -215,6 +291,7 @@ class SidebarRequestSerializerTest(TestCase):
         )
         nested_group = SidebarMoveRequestSerializer(
             data={
+                **self.scope,
                 "source_node_type": SidebarNodeType.GROUP,
                 "source_node_uid": self.source_uid,
                 "target_node_type": SidebarNodeType.GROUP,
@@ -230,6 +307,7 @@ class SidebarRequestSerializerTest(TestCase):
             with self.subTest(anchor_prefix=anchor_prefix):
                 serializer = SidebarMoveRequestSerializer(
                     data={
+                        **self.scope,
                         "source_node_type": SidebarNodeType.CONVERSATION,
                         "source_node_uid": self.source_uid,
                         "target_node_type": SidebarNodeType.GROUP,
@@ -260,14 +338,38 @@ class SidebarRequestSerializerTest(TestCase):
         self.assertTrue(valid.is_valid(), valid.errors)
         self.assertFalse(invalid.is_valid())
 
+    def test_sidebar_queries_require_scope_and_accept_cross_scope(self):
+        for serializer_class, data in (
+            (SidebarNodeListRequestSerializer, {}),
+            (SidebarSearchRequestSerializer, {"keyword": "登录"}),
+        ):
+            with self.subTest(serializer=serializer_class.__name__):
+                self.assertFalse(serializer_class(data=data).is_valid())
+
+        for serializer_class, data in (
+            (SidebarNodeListRequestSerializer, {"scope_type": "cross_scene", "scope_id": None}),
+            (SidebarSearchRequestSerializer, {"keyword": "登录", "scope_type": "cross_system"}),
+        ):
+            with self.subTest(serializer=serializer_class.__name__, scope=data["scope_type"]):
+                self.assertTrue(serializer_class(data=data).is_valid())
+
+    def test_move_requires_concrete_scope_and_rejects_cross_scope(self):
+        payload = {"source_node_type": SidebarNodeType.CONVERSATION, "source_node_uid": self.source_uid}
+        self.assertFalse(SidebarMoveRequestSerializer(data=payload).is_valid())
+
+        with self.assertRaises(CrossScopeMutationNotAllowed):
+            SidebarMoveRequestSerializer(data={**payload, "scope_type": "cross_scene", "scope_id": None}).is_valid(
+                raise_exception=True
+            )
+
     def test_search_keyword_is_trimmed_and_required(self):
-        serializer = SidebarSearchRequestSerializer(data={"keyword": "  登录  "})
+        serializer = SidebarSearchRequestSerializer(data={**self.scope, "keyword": "  登录  "})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["keyword"], "登录")
 
         for keyword in ("", "  ", "x" * 256):
             with self.subTest(keyword=keyword):
-                serializer = SidebarSearchRequestSerializer(data={"keyword": keyword})
+                serializer = SidebarSearchRequestSerializer(data={**self.scope, "keyword": keyword})
                 self.assertFalse(serializer.is_valid())
 
 

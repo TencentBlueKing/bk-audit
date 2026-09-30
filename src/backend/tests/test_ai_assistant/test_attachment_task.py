@@ -23,7 +23,7 @@ from services.web.ai_assistant.exceptions import (
     StreamNotEnabled,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
@@ -37,6 +37,9 @@ from services.web.ai_assistant.streaming import (
 )
 from services.web.ai_assistant.tasks import AttachmentExecutionTask, BaseExecutionTask
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoContext,
     AttachmentEchoInput,
@@ -83,7 +86,7 @@ def invoke_task(task, *, attachment: Attachment, celery_task_id: str | None = No
 class AttachmentTaskTest(TestCase):
     def setUp(self):
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -473,7 +476,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
 
     def setUp(self):
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,

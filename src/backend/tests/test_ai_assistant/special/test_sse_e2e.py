@@ -5,6 +5,7 @@ LiveServer/wsgiref 无法证明事件实时到达的边界。
 """
 
 from contextlib import ExitStack
+from unittest import mock
 
 import requests
 from django.conf import settings
@@ -17,12 +18,16 @@ from services.web.ai_assistant.constants import (
     PlatformStreamEvent,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.services import AttachmentService
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
     wait_for_task_postrun,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.http_integration import iter_http_sse_frames
@@ -77,8 +82,11 @@ class GunicornSSESpecialTest(TransactionTestCase):
             super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = SSE_TEST_USER
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.session = requests.Session()
         self.task_postrun_expectations: dict[str, bool] = {}
         reset_realtime_sse_observations()

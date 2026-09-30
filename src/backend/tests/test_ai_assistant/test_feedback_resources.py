@@ -17,14 +17,18 @@ from services.web.ai_assistant.constants import (
 )
 from services.web.ai_assistant.exceptions import FeedbackSourceNotFound
 from services.web.ai_assistant.handlers import message_handler_registry
-from services.web.ai_assistant.models import Conversation, Feedback, Message
+from services.web.ai_assistant.models import Feedback, Message
 from services.web.ai_assistant.resources.feedback import DeleteFeedback, UpsertFeedback
 from services.web.ai_assistant.serializers.feedback import (
     FeedbackDeleteRequestSerializer,
     FeedbackResponseSerializer,
     FeedbackUpsertRequestSerializer,
 )
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     FeedbackEchoSyncHandler,
     register_test_message_handler,
@@ -72,7 +76,10 @@ class FeedbackRequestSerializerTest(TestCase):
 @mock.patch("services.web.ai_assistant.resources.feedback.get_request_username", return_value="alice")
 class FeedbackResourceTest(TestCase):
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
+        self.scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        self.scope_permission_patcher.start()
+        self.addCleanup(self.scope_permission_patcher.stop)
+        self.conversation = create_test_conversation(created_by="alice", updated_by="alice")
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -106,7 +113,7 @@ class FeedbackResourceTest(TestCase):
         self.assertFalse(Feedback.objects.exists())
 
     def test_cross_user_and_soft_deleted_sources_are_hidden(self, _username):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = Message.objects.create(
             conversation=foreign_conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -117,7 +124,7 @@ class FeedbackResourceTest(TestCase):
             created_by="bob",
             updated_by="bob",
         )
-        deleted_conversation = Conversation.objects.create(created_by="alice", updated_by="alice", is_deleted=True)
+        deleted_conversation = create_test_conversation(created_by="alice", updated_by="alice", is_deleted=True)
         deleted_message = Message.objects.create(
             conversation=deleted_conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -152,6 +159,14 @@ class FeedbackResourceTest(TestCase):
 
 
 class FeedbackResourceRoutingTest(TestCase):
+    def setUp(self):
+        super().setUp()
+        permission_username = mock.patch(
+            "services.web.ai_assistant.permissions.get_request_username", return_value="alice"
+        )
+        permission_username.start()
+        self.addCleanup(permission_username.stop)
+
     class User:
         username = "alice"
         is_authenticated = True
@@ -166,7 +181,7 @@ class FeedbackResourceRoutingTest(TestCase):
 
     @mock.patch("services.web.ai_assistant.resources.feedback.get_request_username", return_value="alice")
     def test_feedback_collection_accepts_post(self, _username):
-        conversation = Conversation.objects.create(created_by="alice", updated_by="alice")
+        conversation = create_test_conversation(created_by="alice", updated_by="alice")
         message = Message.objects.create(
             conversation=conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -191,7 +206,8 @@ class FeedbackResourceRoutingTest(TestCase):
         )
         force_authenticate(request, user=self.User())
 
-        response = resolve(path).func(request)
+        with mock.patch.object(ScopePermission, "check_scope_entry"):
+            response = resolve(path).func(request)
         response.render()
 
         self.assertEqual(response.status_code, 200)
@@ -220,9 +236,20 @@ class FeedbackResourceRoutingTest(TestCase):
 
     @mock.patch("services.web.ai_assistant.resources.feedback.get_request_username", return_value="alice")
     def test_delete_endpoint_uses_default_success_response_envelope(self, _username):
+        conversation = create_test_conversation(created_by="alice", updated_by="alice")
+        message = Message.objects.create(
+            conversation=conversation,
+            message_type=MessageType.SYSTEM_SELECTION,
+            status=ExecutionStatus.SUCCESS,
+            input_data={"text": "feedback"},
+            context_data={"prefix": "feedback"},
+            output_data={"content": "feedback"},
+            created_by="alice",
+            updated_by="alice",
+        )
         feedback = Feedback.objects.create(
             source_type=FeedbackSourceType.MESSAGE,
-            source_id=1,
+            source_id=message.id,
             feedback_type=FeedbackType.LIKE,
             created_by="alice",
             updated_by="alice",
@@ -232,7 +259,8 @@ class FeedbackResourceRoutingTest(TestCase):
         request = APIRequestFactory().delete(path)
         force_authenticate(request, user=self.User())
 
-        response = view(request, feedback_uid=feedback.uid)
+        with mock.patch.object(ScopePermission, "check_scope_entry"):
+            response = view(request, feedback_uid=feedback.uid)
         response.render()
         payload = json.loads(response.content)
 

@@ -19,19 +19,23 @@ from services.web.ai_assistant.constants import (
     MessageType,
     PlatformStreamEvent,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.services import AttachmentService, MessageService
 from services.web.ai_assistant.services.reconciliation import (
     reconcile_processing_executions,
 )
 from services.web.ai_assistant.streaming import AttachmentArchiveStore, RedisLiveStore
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant import integration_handlers
 from tests.test_ai_assistant.celery_integration import (
     reset_task_postrun,
     running_celery_worker,
     wait_for_snapshot,
     wait_for_task_postrun,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 from tests.test_ai_assistant.handlers import use_attachment_handler, use_message_handler
 from tests.test_ai_assistant.integration_handlers import (
@@ -120,8 +124,11 @@ class CeleryExecutionIntegrationTest(TransactionTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "celery-integration-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
 
     def tearDown(self):
         self._clear_stream_keys()

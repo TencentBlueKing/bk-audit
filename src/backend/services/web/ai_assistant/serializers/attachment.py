@@ -5,6 +5,7 @@ from core.serializers import FlexibleListField, SortListField, SortSerializerMix
 from services.web.ai_assistant.constants import (
     ATTACHMENT_DEFAULT_ORDER_FIELDS,
     ATTACHMENT_LIST_MAX_LIMIT,
+    CONCRETE_SCOPE_CHOICES,
     AttachmentExportFormat,
     AttachmentSortField,
     AttachmentType,
@@ -15,6 +16,8 @@ from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationErr
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
+from services.web.common.constants import ScopeType
+from services.web.common.serializers import ScopeQuerySerializer
 
 
 def _attachment_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -101,8 +104,19 @@ class AttachmentExportRequestSerializer(serializers.Serializer):
     )
 
 
-class AttachmentListRequestSerializer(SortSerializerMixin, serializers.Serializer):
+class AttachmentListRequestSerializer(SortSerializerMixin, ScopeQuerySerializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
+
+    scope_type = serializers.ChoiceField(
+        choices=ScopeType.choices,
+        help_text="查询范围类型，支持具体 scene/system 及 cross_scene/cross_system",
+    )
+    scope_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="具体 scene/system 的 ID；cross 查询省略",
+    )
 
     attachment_type = FlexibleListField(
         child=serializers.ChoiceField(choices=AttachmentType.choices),
@@ -239,6 +253,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
     """附件列表项摘要，不读取输入和输出大 JSON。"""
 
     uid = serializers.UUIDField(help_text="附件对外 UUID")
+    scope_type = serializers.ChoiceField(choices=CONCRETE_SCOPE_CHOICES, help_text="会话绑定的具体范围类型")
+    scope_id = serializers.CharField(help_text="会话绑定的具体场景或系统 ID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="附件执行状态")
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
@@ -259,6 +275,8 @@ class AttachmentListItemSerializer(serializers.Serializer):
         handler = attachment_handler_registry.require(instance.attachment_type)
         return {
             "uid": str(instance.uid),
+            "scope_type": conversation.scope_type,
+            "scope_id": conversation.scope_id,
             "attachment_type": instance.attachment_type,
             "status": instance.status,
             "title": instance.title,

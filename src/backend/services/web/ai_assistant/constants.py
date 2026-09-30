@@ -1,7 +1,29 @@
 from django.db.models import TextChoices
 from django.utils.translation import gettext_lazy
 
+from services.web.common.constants import ScopeType
+
 MYSQL_DEADLOCK_ERROR_CODE = 1213
+
+CONCRETE_SCOPE_CHOICES = (
+    (ScopeType.SCENE.value, ScopeType.SCENE.label),
+    (ScopeType.SYSTEM.value, ScopeType.SYSTEM.label),
+)
+
+
+class ScopePermissionSource(TextChoices):
+    """HTTP action 的 Scope 来源，供 View 声明权限绑定。"""
+
+    REQUEST = "request", "请求具体范围"
+    QUERY = "query", "查询范围"
+    CONVERSATION = "conversation", "会话"
+    GROUP = "group", "分组"
+    MESSAGE = "message", "消息"
+    ATTACHMENT_SOURCE = "attachment_source", "附件来源消息"
+    ATTACHMENT = "attachment", "附件"
+    FEEDBACK = "feedback", "反馈"
+    FEEDBACK_SOURCE = "feedback_source", "反馈来源"
+    CONVERSATION_NODE = "conversation_node", "会话节点"
 
 
 class ExecutionMode(TextChoices):

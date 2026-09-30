@@ -60,3 +60,14 @@ class RiskMatrixIntegrityTest(SimpleTestCase):
             self.assertEqual(case.ci_suite, "special")
             self.assertIn("tests.test_ai_assistant.special.test_sse_e2e.GunicornSSESpecialTest", case.test_id)
             self.assertTrue(case.test_id.endswith(method_name), case.test_id)
+
+    def test_scope_http_regression_is_registered_as_regular(self):
+        cases = {case.risk_id: case for case in RISK_CASES}
+
+        self.assertIn("R37", cases)
+        self.assertEqual(cases["R37"].ci_suite, "regular")
+        self.assertEqual(
+            cases["R37"].test_id,
+            "tests.test_ai_assistant.test_http_integration.HttpIntegrationTest"
+            ".test_scope_bound_resources_are_isolated_and_rechecked_over_http",
+        )

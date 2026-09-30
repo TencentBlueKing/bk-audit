@@ -25,21 +25,43 @@ class ReadOnlyCreateDeleteAdminMixin:
 
 @admin.register(ConversationGroup)
 class ConversationGroupAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ["id", "uid", "name", "created_by", "created_at", "updated_at"]
-    list_filter = ["created_at", "updated_at"]
-    search_fields = ["=uid", "name", "created_by"]
-    readonly_fields = ["id", "uid", "name", "created_by", "created_at", "updated_by", "updated_at"]
+    list_display = ["id", "uid", "name", "scope_type", "scope_id", "created_by", "created_at", "updated_at"]
+    list_filter = ["scope_type", "created_at", "updated_at"]
+    search_fields = ["=uid", "name", "scope_id", "created_by"]
+    readonly_fields = [
+        "id",
+        "uid",
+        "name",
+        "scope_type",
+        "scope_id",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at",
+    ]
 
 
 @admin.register(Conversation)
 class ConversationAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAdmin):
-    list_display = ["id", "uid", "title", "is_deleted", "created_by", "created_at", "updated_at"]
-    list_filter = ["is_deleted", "created_at", "updated_at"]
-    search_fields = ["=uid", "title", "created_by"]
+    list_display = [
+        "id",
+        "uid",
+        "title",
+        "scope_type",
+        "scope_id",
+        "is_deleted",
+        "created_by",
+        "created_at",
+        "updated_at",
+    ]
+    list_filter = ["scope_type", "is_deleted", "created_at", "updated_at"]
+    search_fields = ["=uid", "title", "scope_id", "created_by"]
     readonly_fields = [
         "id",
         "uid",
         "title",
+        "scope_type",
+        "scope_id",
         "is_deleted",
         "created_by",
         "created_at",
@@ -58,10 +80,12 @@ class ConversationSidebarNodeAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAd
         "parent_node",
         "position",
         "pinned_at",
+        "scope_type",
+        "scope_id",
         "created_by",
     ]
-    list_filter = ["node_type", "pinned_at", "created_at"]
-    search_fields = ["=group__uid", "=conversation__uid", "created_by"]
+    list_filter = ["node_type", "scope_type", "pinned_at", "created_at"]
+    search_fields = ["=group__uid", "=conversation__uid", "scope_id", "created_by"]
     readonly_fields = [
         "id",
         "node_type",
@@ -70,6 +94,8 @@ class ConversationSidebarNodeAdmin(ReadOnlyCreateDeleteAdminMixin, admin.ModelAd
         "parent_node",
         "position",
         "pinned_at",
+        "scope_type",
+        "scope_id",
         "created_by",
         "created_at",
         "updated_by",

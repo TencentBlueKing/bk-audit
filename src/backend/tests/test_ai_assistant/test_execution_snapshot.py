@@ -10,14 +10,17 @@ from services.web.ai_assistant.constants import (
     MessageErrorCode,
     MessageType,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 
 
 class ExecutionSnapshotModelTest(TestCase):
     """验证消息和附件共享的执行状态 CAS 原语。"""
 
     def setUp(self):
-        self.conversation = Conversation.objects.create(created_by="alice")
+        self.conversation = create_test_conversation(created_by="alice")
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,

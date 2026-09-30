@@ -1,12 +1,18 @@
+from datetime import timedelta
+from unittest import mock
+
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from services.web.ai_assistant.constants import SidebarNodeType
 from services.web.ai_assistant.exceptions import (
+    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
     SidebarNodeNotMovable,
+    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.models import (
     Conversation,
@@ -18,7 +24,21 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarNodeResponseSerializer,
 )
 from services.web.ai_assistant.services import ConversationSidebarService
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation_group as create_test_conversation_group,
+)
+
+
+def _default_scene_scope(method):
+    def scoped(service, *args, scope_type="scene", scope_id="1", **kwargs):
+        return method(service, *args, scope_type=scope_type, scope_id=scope_id, **kwargs)
+
+    return scoped
 
 
 class ConversationSidebarContainerTest(TestCase):
@@ -27,14 +47,45 @@ class ConversationSidebarContainerTest(TestCase):
         self.other_user = "bob"
         self.service = ConversationSidebarService(user=self.user)
         self.other_service = ConversationSidebarService(user=self.other_user)
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
+        for method_name, visible_ids in (("get_scene_ids", ["1"]), ("get_system_ids", ["bk_audit"])):
+            method_patch = mock.patch.object(ScopePermission, method_name, return_value=visible_ids)
+            method_patch.start()
+            self.addCleanup(method_patch.stop)
+        for method_name in ("list_nodes", "list_pinned", "search_conversations", "move"):
+            method_patch = mock.patch.object(
+                ConversationSidebarService,
+                method_name,
+                _default_scene_scope(getattr(ConversationSidebarService, method_name)),
+            )
+            method_patch.start()
+            self.addCleanup(method_patch.stop)
 
     @staticmethod
-    def create_group(*, user: str, name: str = "group") -> ConversationGroup:
-        return ConversationGroup.objects.create(name=name, created_by=user, updated_by=user)
+    def create_group(
+        *, user: str, name: str = "group", scope_type: str = "scene", scope_id: str = "1"
+    ) -> ConversationGroup:
+        return create_test_conversation_group(
+            name=name,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            created_by=user,
+            updated_by=user,
+        )
 
     @staticmethod
-    def create_conversation(*, user: str, title: str = "conversation") -> Conversation:
-        return Conversation.objects.create(title=title, created_by=user, updated_by=user)
+    def create_conversation(
+        *, user: str, title: str = "conversation", scope_type: str = "scene", scope_id: str = "1"
+    ) -> Conversation:
+        return create_test_conversation(
+            title=title,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            created_by=user,
+            updated_by=user,
+        )
 
     @staticmethod
     def create_raw_node(
@@ -45,8 +96,11 @@ class ConversationSidebarContainerTest(TestCase):
         conversation: Conversation | None = None,
         parent_node: ConversationSidebarNode | None = None,
     ) -> ConversationSidebarNode:
+        scope_owner = group or conversation
         return ConversationSidebarNode.objects.create(
             node_type=SidebarNodeType.GROUP if group else SidebarNodeType.CONVERSATION,
+            scope_type=scope_owner.scope_type,
+            scope_id=scope_owner.scope_id,
             group=group,
             conversation=conversation,
             parent_node=parent_node,
@@ -140,6 +194,15 @@ class ConversationSidebarContainerTest(TestCase):
         self.assertEqual(self.positions(user=self.user), [11, 10, 10])
         self.assertEqual(self.positions(user=self.other_user), [99])
 
+    def test_root_positions_are_independent_per_scope(self):
+        scene_one = self.create_conversation(user=self.user, scope_id="1")
+        scene_two = self.create_conversation(user=self.user, scope_id="2")
+
+        first_node = self.service.create_node(conversation=scene_one)
+        second_node = self.service.create_node(conversation=scene_two)
+
+        self.assertEqual((first_node.position, second_node.position), (1, 1))
+
 
 class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
     """验证移动、置顶和读取都只作用于当前用户的精确容器。"""
@@ -160,8 +223,15 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
         *,
         title: str,
         parent_node: ConversationSidebarNode | None = None,
+        scope_type: str = "scene",
+        scope_id: str = "1",
     ) -> ConversationSidebarNode:
-        conversation = self.create_conversation(user=self.user, title=title)
+        conversation = self.create_conversation(
+            user=self.user,
+            title=title,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
         node = self.service.create_node(conversation=conversation)
         if parent_node is not None:
             node.parent_node = parent_node
@@ -395,24 +465,38 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
         source = self.create_conversation_node(title="source")
         ConversationSidebarNode.objects.filter(id=first.id).update(position=100)
         ConversationSidebarNode.objects.filter(id=anchor.id).update(position=80)
-        ConversationSidebarNode.objects.filter(id=middle.id).update(position=60)
+        ConversationSidebarNode.objects.filter(id=middle.id).update(position=81)
         ConversationSidebarNode.objects.filter(id=source.id).update(position=40)
 
-        self.service.move(
-            source_node_type=SidebarNodeType.CONVERSATION,
-            source_node_uid=str(source.conversation.uid),
-            before_node_type=SidebarNodeType.CONVERSATION,
-            before_node_uid=str(anchor.conversation.uid),
-        )
+        with CaptureQueriesContext(connection) as captured:
+            self.service.move(
+                scope_type="scene",
+                scope_id="1",
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(source.conversation.uid),
+                before_node_type=SidebarNodeType.CONVERSATION,
+                before_node_uid=str(anchor.conversation.uid),
+            )
 
         first.refresh_from_db()
         anchor.refresh_from_db()
         middle.refresh_from_db()
         source.refresh_from_db()
-        self.assertEqual(first.position, 100)
+        self.assertEqual(first.position, 101)
         self.assertEqual(source.position, 81)
         self.assertEqual(anchor.position, 80)
-        self.assertEqual(middle.position, 60)
+        self.assertEqual(middle.position, 82)
+        range_updates = [
+            query["sql"]
+            for query in captured.captured_queries
+            if query["sql"].lstrip().upper().startswith("UPDATE ") and "created_by" in query["sql"]
+        ]
+        self.assertEqual(len(range_updates), 1)
+        sql = range_updates[0].upper()
+        self.assertIn("SCOPE_TYPE", sql)
+        self.assertIn("SCOPE_ID", sql)
+        self.assertIn("PARENT_NODE_ID", sql)
+        self.assertNotIn(" JOIN ", sql)
 
     def test_move_to_later_anchor_does_not_update_nodes_after_anchor(self):
         source = self.create_conversation_node(title="source")
@@ -692,5 +776,155 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
         listed_group = self.service.list_nodes().get(id=group_node.id)
 
         self.assertEqual(listed_group.conversation_count, 1)
-        self.assertEqual(listed_group.unpinned_conversation_count, 1)
         self.assertEqual(owned.created_by, self.user)
+
+    def test_scope_queries_filter_concrete_and_cross_visibility_and_use_business_order(self):
+        current_time = timezone.now()
+        scene_one = self.create_conversation_node(title="scene-one", scope_id="1")
+        scene_two = self.create_conversation_node(title="scene-two", scope_id="2")
+        system = self.create_conversation_node(title="system", scope_type="system", scope_id="1")
+        Conversation.objects.filter(id=scene_one.conversation_id).update(updated_at=current_time)
+        Conversation.objects.filter(id=scene_two.conversation_id).update(updated_at=current_time + timedelta(seconds=1))
+        Conversation.objects.filter(id=system.conversation_id).update(updated_at=current_time + timedelta(seconds=2))
+
+        with (
+            mock.patch.object(
+                ScopePermission,
+                "get_scene_ids",
+                side_effect=lambda scope, _action: ["1", "2"] if scope.is_cross_scope else [scope.scope_id],
+            ),
+            mock.patch.object(
+                ScopePermission,
+                "get_system_ids",
+                side_effect=lambda scope, _action: ["1"] if scope.is_cross_scope else [scope.scope_id],
+            ),
+        ):
+            concrete_nodes = list(self.service.list_nodes(scope_type="scene", scope_id="1"))
+            cross_scene_nodes = list(self.service.list_nodes(scope_type="cross_scene", scope_id=None))
+            cross_system_nodes = list(self.service.list_nodes(scope_type="cross_system", scope_id=None))
+            cross_search = list(
+                self.service.search_conversations(keyword="scene", scope_type="cross_scene", scope_id=None)
+            )
+
+        self.assertEqual([node.conversation_id for node in concrete_nodes], [scene_one.conversation_id])
+        self.assertEqual(
+            [node.conversation_id for node in cross_scene_nodes],
+            [scene_two.conversation_id, scene_one.conversation_id],
+        )
+        self.assertNotIn(system.conversation_id, [node.conversation_id for node in cross_scene_nodes])
+        self.assertEqual([node.conversation_id for node in cross_system_nodes], [system.conversation_id])
+        self.assertEqual(
+            [conversation.id for conversation in cross_search], [scene_two.conversation_id, scene_one.conversation_id]
+        )
+
+    def test_cross_root_order_merges_group_and_conversation_business_timestamps(self):
+        current_time = timezone.now()
+        group = self.create_group(user=self.user, scope_id="1")
+        group_node = self.service.create_node(group=group)
+        conversation_node = self.create_conversation_node(title="newer", scope_id="2")
+        ConversationGroup.objects.filter(id=group.id).update(updated_at=current_time)
+        Conversation.objects.filter(id=conversation_node.conversation_id).update(
+            updated_at=current_time + timedelta(seconds=1)
+        )
+
+        with mock.patch.object(
+            ScopePermission,
+            "get_scene_ids",
+            side_effect=lambda scope, _action: ["1", "2"] if scope.is_cross_scope else [scope.scope_id],
+        ):
+            nodes = list(self.service.list_nodes(scope_type="cross_scene", scope_id=None))
+
+        self.assertEqual([node.id for node in nodes], [conversation_node.id, group_node.id])
+
+    def test_lost_scope_permission_removes_nodes_from_cross_list_pinned_and_search(self):
+        visible = self.create_conversation_node(title="shared-allowed", scope_id="1")
+        visible_pinned = self.create_conversation_node(title="shared-pinned-allowed", scope_id="1")
+        self.create_conversation_node(title="shared-hidden", scope_id="2")
+        inaccessible_pinned = self.create_conversation_node(title="shared-pinned-hidden", scope_id="2")
+        for node in (visible_pinned, inaccessible_pinned):
+            self.service.set_pinned(conversation_uid=str(node.conversation.uid), is_pinned=True)
+
+        with (mock.patch.object(ScopePermission, "get_scene_ids", return_value=["1"]),):
+            listed = list(self.service.list_nodes(scope_type="cross_scene", scope_id=None))
+            pinned = list(self.service.list_pinned(scope_type="cross_scene", scope_id=None))
+            searched = list(
+                self.service.search_conversations(keyword="shared", scope_type="cross_scene", scope_id=None)
+            )
+
+        self.assertEqual([node.id for node in listed], [visible.id])
+        self.assertEqual([node.conversation_id for node in pinned], [visible_pinned.conversation_id])
+        self.assertEqual(
+            {conversation.id for conversation in searched},
+            {visible.conversation_id, visible_pinned.conversation_id},
+        )
+
+    def test_cross_scope_group_expansion_checks_bound_group_and_keeps_scope_position(self):
+        group_one = self.create_group(user=self.user, scope_id="1")
+        group_two = self.create_group(user=self.user, scope_id="2")
+        group_one_node = self.service.create_node(group=group_one)
+        group_two_node = self.service.create_node(group=group_two)
+        one = self.create_conversation_node(title="one", parent_node=group_one_node, scope_id="1")
+        two = self.create_conversation_node(title="two", parent_node=group_two_node, scope_id="2")
+
+        with mock.patch.object(
+            ScopePermission,
+            "get_scene_ids",
+            side_effect=lambda scope, _action: ["1", "2"] if scope.is_cross_scope else [scope.scope_id],
+        ):
+            visible_children = list(
+                self.service.list_nodes(
+                    parent_group_uid=str(group_two.uid),
+                    scope_type="cross_scene",
+                    scope_id=None,
+                )
+            )
+            with self.assertRaises(SidebarNodeNotFound):
+                self.service.list_nodes(
+                    parent_group_uid=str(group_two.uid),
+                    scope_type="scene",
+                    scope_id="1",
+                )
+
+        self.assertEqual([node.conversation_id for node in visible_children], [two.conversation_id])
+        self.assertNotEqual(one.parent_node_id, two.parent_node_id)
+
+    @mock.patch.object(ScopePermission, "check_scope_entry")
+    def test_move_rejects_cross_scope_and_any_mismatched_bound_node(self, _check_scope_entry):
+        source = self.create_conversation_node(title="source", scope_id="1")
+        foreign_source = self.create_conversation_node(title="foreign-source", scope_id="2")
+        foreign_anchor = self.create_conversation_node(title="foreign-anchor", scope_id="2")
+        target_group = self.create_group(user=self.user, name="other-scope", scope_id="2")
+        self.service.create_node(group=target_group)
+
+        with self.assertRaises(CrossScopeMutationNotAllowed):
+            self.service.move(
+                scope_type="cross_scene",
+                scope_id=None,
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(source.conversation.uid),
+            )
+        with self.assertRaises(SidebarScopeMismatch):
+            self.service.move(
+                scope_type="scene",
+                scope_id="1",
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(foreign_source.conversation.uid),
+            )
+        with self.assertRaises(SidebarScopeMismatch):
+            self.service.move(
+                scope_type="scene",
+                scope_id="1",
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(source.conversation.uid),
+                target_node_type=SidebarNodeType.GROUP,
+                target_node_uid=str(target_group.uid),
+            )
+        with self.assertRaises(SidebarScopeMismatch):
+            self.service.move(
+                scope_type="scene",
+                scope_id="1",
+                source_node_type=SidebarNodeType.CONVERSATION,
+                source_node_uid=str(source.conversation.uid),
+                before_node_type=SidebarNodeType.CONVERSATION,
+                before_node_uid=str(foreign_anchor.conversation.uid),
+            )

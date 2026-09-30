@@ -12,15 +12,15 @@ from services.web.ai_assistant.constants import (
     MessageType,
     UserIntentErrorCode,
 )
-from services.web.ai_assistant.exceptions import (
-    InvalidParentMessage,
-    ScopeContextRequired,
-    StaleMessageTask,
-)
+from services.web.ai_assistant.exceptions import InvalidParentMessage, StaleMessageTask
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Message
 from services.web.ai_assistant.schemas import parse_snapshot
-from services.web.ai_assistant.schemas.audit_search import UserIntentOutputSchema
+from services.web.ai_assistant.schemas.audit_search import (
+    SystemSelectionContextSchema,
+    SystemSelectionInputSchema,
+    UserIntentOutputSchema,
+)
 from services.web.ai_assistant.services.message import MessageService
 from services.web.ai_assistant.services.message_execution import MessageExecution
 from services.web.ai_assistant.tasks.audit_search import execute_user_intent
@@ -60,12 +60,16 @@ TASK_MODULE = "services.web.ai_assistant.tasks.audit_search"
 TITLE_DELAY = "services.web.ai_assistant.tasks.conversation.generate_conversation_title.delay"
 
 
-def create_intent_message(testcase, query_text="看审计中心最近一天 admin 的操作记录", *, auto_execute=True, scope_extra=None):
+def create_intent_message(testcase, query_text="看审计中心最近一天 admin 的操作记录", *, auto_execute=True):
     """构造 PROCESSING 的 USER_INTENT 消息和类型化执行快照。"""
 
-    scope = scope_extra or {"scope_type": "cross_system"}
-    input_data = {"query_text": query_text, "auto_execute": auto_execute, **scope}
-    context_data = {"username": testcase.user, "namespace": "bkaudit", **scope}
+    input_data = {"query_text": query_text, "auto_execute": auto_execute}
+    context_data = {
+        "username": testcase.user,
+        "namespace": "bkaudit",
+        "scope_type": testcase.conversation.scope_type,
+        "scope_id": testcase.conversation.scope_id,
+    }
     message = Message.objects.create(
         conversation=testcase.conversation,
         message_type=MessageType.USER_INTENT,
@@ -227,6 +231,34 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(len(output.derived_messages), 1)
         title_delay.assert_called_once()
 
+    def test_system_selection_operation_context_uses_conversation_scope(self):
+        """榜单 scope 来自会话，不能由当前选择的 system_ids 推导。"""
+
+        handler = message_handler_registry.require(MessageType.SYSTEM_SELECTION)
+        context = SystemSelectionContextSchema(
+            username=self.user,
+            namespace="bkaudit",
+            scope_type="scene",
+            scope_id="2",
+        )
+
+        with mock.patch(
+            f"{HANDLERS_MODULE}.SearchLogPermission.get_scope_auth_systems",
+            return_value=[TARGET_SYSTEM_ID],
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.FieldContextService.build_selection",
+            return_value=make_selection_output(),
+        ), mock.patch(
+            f"{HANDLERS_MODULE}.OperationContextService.build",
+            return_value=([], []),
+        ) as build_operations:
+            handler.execute(
+                input_data=SystemSelectionInputSchema(system_ids=[TARGET_SYSTEM_ID]),
+                context_data=context,
+            )
+
+        build_operations.assert_called_once_with(scope_type="scene", scope_id="2", username=self.user)
+
     def test_planned_system_selection_can_be_edited_after_intent_finishes(self):
         """计划根成功后，用户仍可编辑可见的系统选择子消息。"""
 
@@ -246,8 +278,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
                     message_uid=str(selection.uid),
                     input_data={
                         "system_ids": [TARGET_SYSTEM_ID],
-                        "scope_type": self.default_scope_type,
-                        "scope_id": self.default_scope_id,
                     },
                 )
 
@@ -725,26 +755,19 @@ class UserIntentHandlerTest(AIAssistantPlatformTestCase):
                 user=self.user,
                 conversation=self.conversation,
                 parent_message=selection,
-                input_data=handler.input_model(query_text="查日志", scope_type="cross_system"),
-            )
-
-    def test_prepare_requires_scope_and_persists_valid_scope(self):
-        handler = message_handler_registry.require(MessageType.USER_INTENT)
-        with self.assertRaises(ScopeContextRequired):
-            handler.prepare(
-                user=self.user,
-                conversation=self.conversation,
-                parent_message=None,
                 input_data=handler.input_model(query_text="查日志"),
             )
+
+    def test_prepare_derives_scope_from_conversation(self):
+        handler = message_handler_registry.require(MessageType.USER_INTENT)
         preparation = handler.prepare(
             user=self.user,
             conversation=self.conversation,
             parent_message=None,
-            input_data=handler.input_model(query_text="查日志", scope_type="scene", scope_id="1"),
+            input_data=handler.input_model(query_text="查日志"),
         )
-        self.assertEqual(preparation.context_data.scope_type, "scene")
-        self.assertEqual(preparation.context_data.scope_id, "1")
+        self.assertEqual(preparation.context_data.scope_type, self.conversation.scope_type)
+        self.assertEqual(preparation.context_data.scope_id, self.conversation.scope_id)
 
 
 def datetime_from_iso(value):

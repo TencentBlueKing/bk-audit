@@ -30,8 +30,12 @@ from services.web.ai_assistant.handlers import (
 from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.message_execution import finish_message_failure
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
 from tests.test_ai_assistant.base import ensure_business_handlers_registered
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     EchoAsyncHandler,
     EchoContext,
@@ -105,7 +109,10 @@ class MessageServiceTest(TestCase):
     def setUp(self):
         self.user = "alice"
         self.service = MessageService(user=self.user)
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
         self.sync_handler = RecordingSyncHandler()
         register_test_message_handler(self.sync_handler)
 
@@ -137,7 +144,9 @@ class MessageServiceTest(TestCase):
         self.assertEqual(self.service.user, self.user)
 
     def test_prepare_initial_executes_handler_without_persisting_message(self):
-        unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
+        unsaved_conversation = Conversation(
+            scope_type="scene", scope_id="1", created_by=self.user, updated_by=self.user
+        )
 
         prepared = self.service.prepare_initial(
             conversation=unsaved_conversation,
@@ -152,7 +161,9 @@ class MessageServiceTest(TestCase):
     def test_create_prepared_honors_sync_execution_mode_without_reexecution(self):
         """同步 Handler 使用 prepare 阶段已经校验的输出创建成功消息。"""
 
-        unsaved_conversation = Conversation(created_by=self.user, updated_by=self.user)
+        unsaved_conversation = Conversation(
+            scope_type="scene", scope_id="1", created_by=self.user, updated_by=self.user
+        )
         prepared = self.service.prepare_initial(
             conversation=unsaved_conversation,
             message_type=MessageType.SYSTEM_SELECTION,
@@ -177,14 +188,17 @@ class MessageServiceTest(TestCase):
         self.register_async_handler()
         invalid_cases.append(
             (
-                Conversation(created_by=self.user, updated_by=self.user),
+                Conversation(scope_type="scene", scope_id="1", created_by=self.user, updated_by=self.user),
                 MessageType.USER_INTENT,
             )
         )
         invalid_cases.extend(
             [
                 (self.conversation, MessageType.SYSTEM_SELECTION),
-                (Conversation(created_by="bob", updated_by="bob"), MessageType.SYSTEM_SELECTION),
+                (
+                    Conversation(scope_type="scene", scope_id="1", created_by="bob", updated_by="bob"),
+                    MessageType.SYSTEM_SELECTION,
+                ),
             ]
         )
 
@@ -202,7 +216,7 @@ class MessageServiceTest(TestCase):
         register_test_message_handler(RecordingSyncHandler(fallback_parent=parent))
         with self.assertRaises(InvalidInitialMessage):
             self.service.prepare_initial(
-                conversation=Conversation(created_by=self.user, updated_by=self.user),
+                conversation=Conversation(scope_type="scene", scope_id="1", created_by=self.user, updated_by=self.user),
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={"text": "hello"},
             )
@@ -282,7 +296,7 @@ class MessageServiceTest(TestCase):
         self.assertEqual(message.parent_message, parent)
 
     def test_handler_owns_fallback_parent_validation(self):
-        other_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        other_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         foreign_parent = self.create_parent(conversation=other_conversation)
         message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
         register_test_message_handler(RecordingSyncHandler(fallback_parent=foreign_parent))
@@ -296,8 +310,8 @@ class MessageServiceTest(TestCase):
         self.assertEqual(message.parent_message, foreign_parent)
 
     def test_explicit_parent_must_exist_and_belong_to_user_and_conversation(self):
-        other_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        other_user_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        other_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
+        other_user_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         invalid_parent_uids = [
             str(uuid4()),
             str(self.create_parent(conversation=other_conversation).uid),
@@ -338,7 +352,7 @@ class MessageServiceTest(TestCase):
         self.assertEqual(context.exception.message, "父消息状态不允许")
 
     def test_deleted_or_foreign_conversation_is_rejected(self):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         self.conversation.delete()
 
         for conversation in (self.conversation, foreign_conversation):
@@ -529,7 +543,7 @@ class MessageServiceTest(TestCase):
 
     def test_retry_hides_foreign_or_deleted_conversation_message(self):
         self.register_async_handler()
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign = self.create_failed_async_message(
             conversation=foreign_conversation,
             created_by="bob",
@@ -824,7 +838,10 @@ class MessageServiceConcurrencyTest(TransactionTestCase):
 
     def setUp(self):
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
         register_test_message_handler(EchoAsyncHandler())
         self.message = Message.objects.create(
             conversation=self.conversation,

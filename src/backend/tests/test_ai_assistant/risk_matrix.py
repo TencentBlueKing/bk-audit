@@ -299,4 +299,12 @@ RISK_CASES: tuple[RiskCase, ...] = (
         "special",
         "Celery 重试使旧连接实时 reset，新 execution 独立完成",
     ),
+    RiskCase(
+        "R37",
+        "Scope隔离",
+        "tests.test_ai_assistant.test_http_integration.HttpIntegrationTest"
+        ".test_scope_bound_resources_are_isolated_and_rechecked_over_http",
+        "regular",
+        "会话绑定 scope 在真实 HTTP 链路中隔离、聚合并随权限变化生效",
+    ),
 )

@@ -90,33 +90,17 @@ class CommonQuerySchema(MessageSchema):
 
 
 class SystemSelectionInputSchema(MessageSchema):
-    """系统选择输入：协议按集合表达，一期限定单系统。
-
-    scope 双层校验：schema 层 scope_type 可选（宽松解析历史消息快照——协议
-    升级前落库的 input_data 无该字段，消息列表/详情/重试不能因协议升级报错）；
-    创建/编辑路径在 Handler.prepare 强制必填（AI 助手必须和前端左上角场景
-    过滤器保持一致，scope 随消息快照固化后 NL/LOG_SEARCH 链路继承同一 session scope）。
-    """
+    """系统选择输入：协议按集合表达，一期限定单系统；会话 scope 从 Conversation 获取。"""
 
     system_ids: list[str] = Field(min_length=1, max_length=1)
-    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
-    scope_id: str = Field(default="", max_length=64)
-
-    @model_validator(mode="after")
-    def _validate_scope(self) -> "SystemSelectionInputSchema":
-        """scope 协议约束：scene/system 必填 scope_id（与 ScopeContext 同源；None 跳过）。"""
-
-        if self.scope_type in ("scene", "system") and not self.scope_id:
-            raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
-        return self
 
 
 class SystemSelectionContextSchema(MessageSchema):
-    """系统选择服务端上下文。"""
+    """系统选择服务端上下文；scope 固化自所属 Conversation。"""
 
     username: str
     namespace: str
-    # session scope 随消息快照固化（重试/编辑复用）；后续 NL/LOG_SEARCH 继承
+    # 服务端快照供执行链路使用，创建/编辑时始终从所属 Conversation 重建。
     scope_type: str = ""
     scope_id: str = ""
 
@@ -130,26 +114,10 @@ class SystemSelectionOutputSchema(MessageSchema):
 
 
 class UserIntentInputSchema(MessageSchema):
-    """USER_INTENT 输入：与 NL 输入同构（前端提交参数零变化，仅 message_type 不同）。
-
-    scope 双层校验：schema 层 scope_type 可选（宽松解析历史消息快照——协议
-    升级前落库的 input_data 无该字段）；创建/编辑路径在 Handler.prepare 强制
-    必填（不传 400），与前端左上角场景过滤器当前选择保持一致——AI 助手是
-    场景内工具，必须明确场景才能工作。
-    """
+    """USER_INTENT 输入：只描述用户意图，会话 scope 从所属 Conversation 获取。"""
 
     query_text: str = Field(min_length=1, max_length=2048)
     auto_execute: bool = True
-    scope_type: Literal["cross_scene", "cross_system", "scene", "system"] | None = None
-    scope_id: str = Field(default="", max_length=64)
-
-    @model_validator(mode="after")
-    def _validate_scope(self) -> "UserIntentInputSchema":
-        """scope 协议约束：scene/system 必填 scope_id（None 跳过，历史快照兼容）。"""
-
-        if self.scope_type in ("scene", "system") and not self.scope_id:
-            raise ValueError("scope_type=scene/system 时 scope_id 为必传参数")
-        return self
 
 
 class UserIntentAgentTraceSchema(MessageSchema):
@@ -173,13 +141,11 @@ class UserIntentAgentTraceSchema(MessageSchema):
 
 
 class UserIntentContextSchema(MessageSchema):
-    """USER_INTENT 自身执行所需上下文，以及不参与续链决策的 Agent 诊断快照。"""
+    """USER_INTENT 服务端上下文与 Agent 诊断快照；scope 固化自所属 Conversation。"""
 
     username: str
     namespace: str
-    # session scope（前端左上角场景过滤器当前选择）随消息快照固化：
-    # 任务内 SYSTEM_REQUIRED 引导、select_system 路由校验、按需建 SYSTEM_SELECTION
-    # 都按此 scope 收窄，与前端 UI 可见系统保持一致
+    # 服务端执行上下文，创建/编辑时从 Conversation 读取并重新固化。
     scope_type: str = ""
     scope_id: str = ""
     agent_trace: Annotated[UserIntentAgentTraceSchema | None, _NestedObjectOrNullField] = None
@@ -248,7 +214,7 @@ class LogSearchContextSchema(MessageSchema):
     namespace: str
     system_id: str
     source: Literal["natural_language", "field_condition"] = "field_condition"
-    # session scope（从父消息继承）固化到上下文：LogSearchService 按此过滤 system_id
+    # session scope 从所属 Conversation 获取并固化，供 LogSearchService 过滤 system_id。
     session_scope_type: str = ""
     session_scope_id: str = ""
     extension_fields: Annotated[list[SelectionFieldMeta], _NestedListField] = Field(

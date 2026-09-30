@@ -14,12 +14,15 @@ from services.web.ai_assistant.constants import (
     PlatformStreamEvent,
     StreamArchiveStatus,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.services.reconciliation import (
     reconcile_processing_executions,
 )
 from services.web.ai_assistant.tasks.maintenance import monitor_ai_assistant_executions
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 
 
 class ReconciliationTest(TestCase):
@@ -28,7 +31,7 @@ class ReconciliationTest(TestCase):
     def setUp(self):
         self.now = timezone.now()
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,

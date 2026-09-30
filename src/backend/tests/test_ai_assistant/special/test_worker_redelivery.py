@@ -1,4 +1,5 @@
 import os
+from unittest import mock
 
 import pytest
 from django.conf import settings
@@ -10,11 +11,14 @@ from services.web.ai_assistant.constants import (
     MessageType,
     PlatformStreamEvent,
 )
-from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.services import AttachmentService
 from services.web.ai_assistant.streaming import RedisLiveStore
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.celery_integration import wait_for_snapshot
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.special.process_worker import (
     delete_worker_queue,
@@ -70,8 +74,11 @@ class WorkerRedeliveryTest(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-redelivery-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         use_attachment_handler(self, SpecialRedeliveryHandler())
         self.broker_context = using_test_broker(queue_name=SPECIAL_REDELIVERY_QUEUE)
         self.broker_context.__enter__()
@@ -82,7 +89,6 @@ class WorkerRedeliveryTest(TransactionTestCase):
         )
         for task_id in Attachment.objects.exclude(task_id="").values_list("task_id", flat=True):
             clear_redelivery_control(task_id)
-        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
         self.broker_context.__exit__(None, None, None)
         delete_worker_queue(SPECIAL_REDELIVERY_QUEUE)
         if leftovers:

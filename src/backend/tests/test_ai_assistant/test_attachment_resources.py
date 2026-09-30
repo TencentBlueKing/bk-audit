@@ -29,7 +29,7 @@ from services.web.ai_assistant.exceptions import (
     InvalidAttachmentState,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
+from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
     ExportAttachment,
@@ -57,7 +57,11 @@ from services.web.ai_assistant.services.attachment_execution import (
     load_attachment_execution,
 )
 from services.web.ai_assistant.views import AttachmentsViewSet
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoInput,
     AttachmentEchoOutput,
@@ -182,17 +186,24 @@ class AttachmentRequestSerializerTest(TestCase):
             {
                 "attachment_type": AttachmentType.FIELD_STATISTICS,
                 "status": ExecutionStatus.SUCCESS,
+                "scope_type": "scene",
+                "scope_id": "1",
             },
             {
                 "attachment_type": "FIELD_STATISTICS,AI_ANALYSIS",
                 "status": "SUCCESS,FAILED",
+                "scope_type": "scene",
+                "scope_id": "1",
             },
             {
                 "attachment_type": [AttachmentType.FIELD_STATISTICS, AttachmentType.AI_ANALYSIS],
                 "status": [ExecutionStatus.SUCCESS, ExecutionStatus.FAILED],
+                "scope_type": "scene",
+                "scope_id": "1",
             },
             QueryDict(
-                "attachment_type=FIELD_STATISTICS&attachment_type=AI_ANALYSIS"
+                "scope_type=scene&scope_id=1"
+                "&attachment_type=FIELD_STATISTICS&attachment_type=AI_ANALYSIS"
                 "&status=SUCCESS&status=FAILED"
                 f"&conversation_uid={uuid4()}&source_message_uid={uuid4()}&keyword=分析"
             ),
@@ -206,6 +217,8 @@ class AttachmentRequestSerializerTest(TestCase):
                 self.assertTrue(serializer.validated_data["status"])
 
         fields = AttachmentListRequestSerializer().fields
+        self.assertIn("scope_type", fields)
+        self.assertIn("scope_id", fields)
         self.assertIn("attachment_type", fields)
         self.assertIn("status", fields)
         self.assertIn("keyword", fields)
@@ -215,6 +228,9 @@ class AttachmentRequestSerializerTest(TestCase):
         self.assertNotIn("statuses", fields)
         self.assertNotIn("page", fields)
         self.assertNotIn("page_size", fields)
+        self.assertFalse(AttachmentListRequestSerializer(data={}).is_valid())
+        cross_scope = AttachmentListRequestSerializer(data={"scope_type": "cross_scene"})
+        self.assertTrue(cross_scope.is_valid(), cross_scope.errors)
 
     def test_detail_and_list_response_only_expose_public_fields(self):
         detail_fields = set(AttachmentResponseSerializer().fields)
@@ -245,6 +261,8 @@ class AttachmentRequestSerializerTest(TestCase):
             list_fields,
             {
                 "uid",
+                "scope_type",
+                "scope_id",
                 "attachment_type",
                 "status",
                 "title",
@@ -270,7 +288,7 @@ class AttachmentRequestSerializerTest(TestCase):
         detail = AttachmentResponseSerializer(
             Attachment.objects.create(
                 source_message=Message.objects.create(
-                    conversation=Conversation.objects.create(created_by="alice", updated_by="alice"),
+                    conversation=create_test_conversation(created_by="alice", updated_by="alice"),
                     message_type=MessageType.LOG_SEARCH,
                     status=ExecutionStatus.SUCCESS,
                     input_data={"text": "query"},
@@ -295,7 +313,7 @@ class AttachmentRequestSerializerTest(TestCase):
     def test_attachment_response_projects_stream_capability_without_internal_config(self):
         use_attachment_handler(self, ExportableAnalysisAttachmentHandler())
         source_message = Message.objects.create(
-            conversation=Conversation.objects.create(created_by="alice", updated_by="alice"),
+            conversation=create_test_conversation(created_by="alice", updated_by="alice"),
             message_type=MessageType.LOG_SEARCH,
             status=ExecutionStatus.SUCCESS,
             input_data={"text": "query"},
@@ -377,6 +395,12 @@ class AttachmentRequestSerializerTest(TestCase):
             "attachment_type": set(AttachmentType.values),
             "status": set(ExecutionStatus.values),
         }
+        scope_parameter = parameters["scope_type"]
+        self.assertEqual(scope_parameter["schema"]["type"], "string")
+        self.assertEqual(
+            set(scope_parameter["schema"]["enum"]),
+            {"scene", "system", "cross_scene", "cross_system"},
+        )
         for parameter_name, expected_enum in expected_enums.items():
             with self.subTest(parameter=parameter_name):
                 parameter = parameters[parameter_name]
@@ -584,8 +608,18 @@ class FeedbackAsyncAttachmentHandler(EchoAttachmentAsyncHandler):
 class AttachmentResourceTest(TestCase):
     def setUp(self):
         preserve_attachment_handler_registry(self)
-        self.conversation = Conversation.objects.create(
+        permission_username = mock.patch(
+            "services.web.ai_assistant.permissions.get_request_username", return_value="alice"
+        )
+        permission_username.start()
+        self.addCleanup(permission_username.stop)
+        for patcher in self._scope_permission_patchers():
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.conversation = create_test_conversation(
             title="查询用户登录日志",
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
             updated_by="alice",
         )
@@ -604,6 +638,24 @@ class AttachmentResourceTest(TestCase):
         self.async_handler = FeedbackAsyncAttachmentHandler()
         use_attachment_handler(self, self.sync_handler)
         use_attachment_handler(self, self.async_handler)
+
+    @staticmethod
+    def _scope_permission_patchers():
+        return (
+            mock.patch.object(ScopePermission, "check_scope_entry", return_value=True),
+            mock.patch.object(
+                ScopePermission,
+                "get_scene_ids",
+                side_effect=lambda scope, action: [int(scope.scope_id)] if not scope.is_cross_scope else [1, 2],
+            ),
+            mock.patch.object(
+                ScopePermission,
+                "get_system_ids",
+                side_effect=lambda scope, action: [scope.scope_id]
+                if not scope.is_cross_scope
+                else ["bk_audit", "other"],
+            ),
+        )
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -703,8 +755,10 @@ class AttachmentResourceTest(TestCase):
         self.assertNotIn("task_id", detail)
 
     def test_list_filters_by_type_status_keyword_conversation_and_source(self, _username):
-        other_conversation = Conversation.objects.create(
+        other_conversation = create_test_conversation(
             title="其他会话",
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
             updated_by="alice",
         )
@@ -741,6 +795,8 @@ class AttachmentResourceTest(TestCase):
 
         response = ListAttachments().request(
             {
+                "scope_type": "scene",
+                "scope_id": "1",
                 "attachment_type": "FIELD_STATISTICS,AI_ANALYSIS",
                 "status": [ExecutionStatus.SUCCESS, ExecutionStatus.FAILED],
                 "keyword": "Alpha",
@@ -754,6 +810,8 @@ class AttachmentResourceTest(TestCase):
             set(response[0]),
             {
                 "uid",
+                "scope_type",
+                "scope_id",
                 "attachment_type",
                 "status",
                 "title",
@@ -776,6 +834,7 @@ class AttachmentResourceTest(TestCase):
         self.assertNotIn("output_data", response[0])
         self.assertEqual(response[0]["source_message"]["uid"], str(self.source_message.uid))
         self.assertEqual(response[0]["conversation"]["uid"], str(self.conversation.uid))
+        self.assertEqual((response[0]["scope_type"], response[0]["scope_id"]), ("scene", "1"))
 
     def test_attachment_detail_exposes_current_feedback_but_list_only_exposes_capability(self, _username):
         attachment = self.create_attachment(output_data={"content": "feedback"})
@@ -789,7 +848,7 @@ class AttachmentResourceTest(TestCase):
         )
 
         detail = GetAttachment().request({"attachment_uid": str(attachment.uid)})
-        listed = ListAttachments().request({})
+        listed = ListAttachments().request({"scope_type": "scene", "scope_id": "1"})
 
         self.assertTrue(detail["supports_feedback"])
         self.assertEqual(detail["feedback"]["source_uid"], str(attachment.uid))
@@ -916,8 +975,10 @@ class AttachmentResourceTest(TestCase):
                     RetryAttachment().request({"attachment_uid": str(invalid_attachment.uid)})
 
     def test_cross_user_soft_deleted_and_corrupted_snapshots_are_rejected(self, _username):
-        foreign_conversation = Conversation.objects.create(
+        foreign_conversation = create_test_conversation(
             title="foreign",
+            scope_type="scene",
+            scope_id="1",
             created_by="bob",
             updated_by="bob",
         )
@@ -938,8 +999,10 @@ class AttachmentResourceTest(TestCase):
             created_by="bob",
             output_data={"content": "foreign"},
         )
-        deleted_conversation = Conversation.objects.create(
+        deleted_conversation = create_test_conversation(
             title="deleted",
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
             updated_by="alice",
         )
@@ -1045,8 +1108,13 @@ class AttachmentResourceTransactionTest(TransactionTestCase):
 
     def setUp(self):
         preserve_attachment_handler_registry(self)
-        self.conversation = Conversation.objects.create(
+        for patcher in AttachmentResourceTest._scope_permission_patchers():
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.conversation = create_test_conversation(
             title="查询用户登录日志",
+            scope_type="scene",
+            scope_id="1",
             created_by="alice",
             updated_by="alice",
         )

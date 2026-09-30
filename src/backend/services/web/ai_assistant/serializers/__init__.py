@@ -8,6 +8,7 @@ from services.web.ai_assistant.serializers.attachment import (
     AttachmentUpdateRequestSerializer,
 )
 from services.web.ai_assistant.serializers.conversation import (
+    ClearConversationsRequestSerializer,
     ConversationCreateRequestSerializer,
     ConversationCreateResponseSerializer,
     ConversationDetailRequestSerializer,
@@ -18,6 +19,7 @@ from services.web.ai_assistant.serializers.conversation import (
     SidebarMoveRequestSerializer,
     SidebarNodeListRequestSerializer,
     SidebarPinRequestSerializer,
+    SidebarScopeQuerySerializer,
     SidebarSearchRequestSerializer,
 )
 from services.web.ai_assistant.serializers.feedback import (
@@ -49,6 +51,7 @@ __all__ = [
     "AttachmentStreamRequestSerializer",
     "AttachmentStreamSnapshotResponseSerializer",
     "AttachmentUpdateRequestSerializer",
+    "ClearConversationsRequestSerializer",
     "ConversationCreateRequestSerializer",
     "ConversationCreateResponseSerializer",
     "ConversationDetailRequestSerializer",
@@ -56,6 +59,7 @@ __all__ = [
     "ConversationGroupDetailRequestSerializer",
     "ConversationGroupUpdateRequestSerializer",
     "ConversationUpdateRequestSerializer",
+    "SidebarScopeQuerySerializer",
     "FeedbackResponseSerializer",
     "FeedbackDeleteRequestSerializer",
     "FeedbackUpsertRequestSerializer",

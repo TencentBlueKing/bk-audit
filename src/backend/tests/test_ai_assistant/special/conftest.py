@@ -69,11 +69,12 @@ def create_log_analysis_attachment(*, user: str, instruction: str):
         ExecutionStatus,
         MessageType,
     )
-    from services.web.ai_assistant.models import Conversation, Message
+    from services.web.ai_assistant.models import Message
     from services.web.ai_assistant.services import AttachmentService
     from tests.test_ai_assistant.base import make_condition, make_log_search_output
+    from tests.test_ai_assistant.factories import create_conversation
 
-    conversation = Conversation.objects.create(created_by=user, updated_by=user)
+    conversation = create_conversation(created_by=user, updated_by=user)
     condition = make_condition()
     source = Message.objects.create(
         conversation=conversation,
@@ -85,6 +86,8 @@ def create_log_analysis_attachment(*, user: str, instruction: str):
             "namespace": "bkaudit",
             "system_id": condition.scope_id,
             "source": "field_condition",
+            "session_scope_type": conversation.scope_type,
+            "session_scope_id": conversation.scope_id,
         },
         output_data=make_log_search_output().model_dump(mode="json"),
         created_by=user,
@@ -218,13 +221,14 @@ def statistics_stack(transactional_db):
         FieldStatisticsAttachmentHandler,
     )
     from services.web.ai_assistant.handlers.registry import attachment_handler_registry
-    from services.web.ai_assistant.models import Attachment, Conversation, Message
+    from services.web.ai_assistant.models import Attachment, Message
     from services.web.ai_assistant.services import AttachmentService
     from services.web.ai_assistant.tasks.audit_statistics import (
         generate_ai_statistics,
         generate_field_statistics,
     )
     from tests.test_ai_assistant.base import make_condition, make_log_search_output
+    from tests.test_ai_assistant.factories import create_conversation
     from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
 
     username = "statistics-e2e-user"
@@ -236,7 +240,7 @@ def statistics_stack(transactional_db):
 
     def create(kind, instruction=""):
         """通过生产 Service 创建附件并由提交回调实际投递。"""
-        conversation = Conversation.objects.create(created_by=username, updated_by=username)
+        conversation = create_conversation(created_by=username, updated_by=username)
         condition = make_condition()
         condition.start_time = "2026-09-15T10:00:00+08:00"
         condition.end_time = "2026-09-15T11:59:59+08:00"
@@ -257,6 +261,8 @@ def statistics_stack(transactional_db):
                 "namespace": "bkaudit",
                 "system_id": condition.scope_id,
                 "source": "field_condition",
+                "session_scope_type": conversation.scope_type,
+                "session_scope_id": conversation.scope_id,
             },
             output_data=output,
         )

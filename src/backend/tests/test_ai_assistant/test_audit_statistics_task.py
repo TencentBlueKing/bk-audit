@@ -67,6 +67,7 @@ from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
 )
+from tests.test_ai_assistant.factories import create_conversation
 from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.stream_cleanup import delete_attachment_stream_keys
 from tests.test_ai_assistant.test_attachment_task import invoke_task
@@ -431,7 +432,7 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
     def test_worker_retry_keeps_task_id_and_persists_status_only_result(self):
         use_attachment_handler(self, FieldStatisticsAttachmentHandler())
         user = "statistics-worker"
-        conversation = Conversation.objects.create(created_by=user, updated_by=user)
+        conversation = create_conversation(created_by=user, updated_by=user)
         condition = make_condition()
         condition.start_time = "2026-09-15T10:00:00+08:00"
         condition.end_time = "2026-09-15T11:59:59+08:00"
@@ -449,6 +450,8 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
                 "namespace": "bkaudit",
                 "system_id": condition.scope_id,
                 "source": "field_condition",
+                "session_scope_type": conversation.scope_type,
+                "session_scope_id": conversation.scope_id,
             },
             output_data=output,
         )

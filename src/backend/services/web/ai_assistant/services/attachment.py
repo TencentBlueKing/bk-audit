@@ -39,6 +39,8 @@ from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
 )
 from services.web.ai_assistant.services.feedback import FeedbackService
+from services.web.ai_assistant.services.scope import resolve_scope_visibility
+from services.web.common.scope_permission import ScopePermission
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class AttachmentService:
 
     def __init__(self, *, user: str):
         self.user = user
+        self.scope_permission = ScopePermission(username=user)
 
     def create(
         self,
@@ -212,7 +215,15 @@ class AttachmentService:
             if only_fields is None:
                 queryset = queryset.select_related("source_message__conversation")
             else:
-                queryset = queryset.only(*only_fields)
+                queryset = queryset.select_related("source_message__conversation").only(
+                    *only_fields,
+                    "source_message_id",
+                    "source_message__id",
+                    "source_message__conversation_id",
+                    "source_message__conversation__id",
+                    "source_message__conversation__scope_type",
+                    "source_message__conversation__scope_id",
+                )
             attachment = queryset.filter(uid=attachment_uid).first()
         except DjangoValidationError as error:
             raise AttachmentNotFound() from error
@@ -227,6 +238,8 @@ class AttachmentService:
     def list(
         self,
         *,
+        scope_type: str,
+        scope_id: str | None,
         attachment_types: list[str] | None = None,
         statuses: list[str] | None = None,
         keyword: str = "",
@@ -235,9 +248,17 @@ class AttachmentService:
         limit: int | None = None,
         order_fields: list[str] | None = None,
     ):
-        """返回当前用户可见附件列表，并只加载列表视图必需字段。"""
+        """返回指定 concrete/cross scope 内的附件，并只加载列表视图必需字段。"""
+
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
+        if not visibility.scope_ids:
+            return Attachment.objects.none()
 
         filters: dict[str, Any] = {}
+        filters["source_message__conversation__scope_type"] = visibility.scope_type
+        filters["source_message__conversation__scope_id__in"] = visibility.scope_ids
         if attachment_types:
             filters["attachment_type__in"] = attachment_types
         if statuses:
@@ -263,6 +284,8 @@ class AttachmentService:
                 "source_message__created_at",
                 "source_message__conversation_id",
                 "source_message__conversation__id",
+                "source_message__conversation__scope_type",
+                "source_message__conversation__scope_id",
                 "source_message__conversation__uid",
                 "source_message__conversation__title",
                 "source_message__conversation__created_at",
@@ -413,13 +436,25 @@ class AttachmentService:
         """创建入口只接受当前用户未删除会话中的 SUCCESS 来源消息。"""
 
         try:
-            source_message = Message.objects.filter(
-                uid=source_message_uid,
-                created_by=self.user,
-                conversation__created_by=self.user,
-                conversation__is_deleted=False,
-                status=ExecutionStatus.SUCCESS,
-            ).first()
+            source_message = (
+                Message.objects.filter(
+                    uid=source_message_uid,
+                    created_by=self.user,
+                    conversation__created_by=self.user,
+                    conversation__is_deleted=False,
+                    status=ExecutionStatus.SUCCESS,
+                )
+                .select_related("conversation")
+                .only(
+                    "id",
+                    "uid",
+                    "status",
+                    "conversation__id",
+                    "conversation__scope_type",
+                    "conversation__scope_id",
+                )
+                .first()
+            )
         except DjangoValidationError as error:
             raise InvalidAttachmentSource() from error
         if source_message is None:
