@@ -90,8 +90,8 @@ export default {
       .then(({ data }) => data as AiConversation);
   },
 
-  fetchConversation(params: { conversation_uid: string }) {
-    return AiAssistantManageSource.getConversation(params)
+  fetchConversation(params: { conversation_uid: string }, options?: { silent?: boolean }) {
+    return AiAssistantManageSource.getConversation(params, { silent: options?.silent })
       .then(({ data }) => data);
   },
 
@@ -117,8 +117,8 @@ export default {
       .then(({ data }) => normalizeNodeList(data));
   },
 
-  fetchSidebarNodes(params: AiSidebarNodesParams) {
-    return AiAssistantManageSource.getSidebarNodes(params)
+  fetchSidebarNodes(params: AiSidebarNodesParams, options?: { silent?: boolean }) {
+    return AiAssistantManageSource.getSidebarNodes(params, { silent: options?.silent })
       .then(({ data }) => normalizeNodePage(data));
   },
 
@@ -150,8 +150,8 @@ export default {
       .then(({ data }) => data);
   },
 
-  fetchMessageHistory(params: AiMessageHistoryParams) {
-    return AiAssistantManageSource.getMessageHistory(params)
+  fetchMessageHistory(params: AiMessageHistoryParams, options?: { silent?: boolean }) {
+    return AiAssistantManageSource.getMessageHistory(params, { silent: options?.silent })
       .then(({ data }) => data);
   },
 
