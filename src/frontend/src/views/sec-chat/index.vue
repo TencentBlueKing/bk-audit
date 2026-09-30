@@ -35,6 +35,7 @@
       @reorder-conversation="handleReorderConversation"
       @reorder-group="handleReorderGroup"
       @reorder-root="handleReorderRoot"
+      @scene-change="handleSceneChange"
       @select="handleSelectConversation"
       @toggle="toggleSidebar"
       @update-conv-title="handleUpdateConvTitle"
@@ -62,6 +63,8 @@
   import { preserveSecChatQuery, saveSecChatLastRoute } from './utils/last-route';
   import ChatSidebar from './components/chat-sidebar.vue';
 
+  import { getSceneContextQuery } from '@/utils/assist/scene-system-params';
+
   const route = useRoute();
   const router = useRouter();
   const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
@@ -79,6 +82,7 @@
     sidebarSearchLoading,
     toggleSidebar,
     initSidebar,
+    syncSidebarScope,
     setActiveConversation,
     deleteConversation,
     updateConversationGroup,
@@ -115,8 +119,22 @@
     void initSidebar();
   });
 
+  /** 会话按场景隔离：切换后重载侧栏，原会话不属于新场景则回到首页 */
+  const handleSceneChange = async () => {
+    const cleared = await syncSidebarScope();
+    if (cleared && route.name !== 'secChatHome') {
+      router.push({
+        name: 'secChatHome',
+        // route.query 可能仍是旧场景，以当前选中场景覆盖
+        query: preserveSecChatQuery(route.query as Record<string, unknown>, getSceneContextQuery()),
+      });
+    }
+  };
+
   onActivated(() => {
     closeKeepAliveOverlays();
+    // keep-alive 失活期间可能在其他页面切换了场景
+    void handleSceneChange();
   });
 
   onDeactivated(() => {

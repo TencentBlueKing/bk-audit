@@ -82,15 +82,27 @@ export interface AiOperationHint {
   query_text: string;
 }
 
-/** 与检索页 scope 协议同名同义；不传 = 不过滤 */
+/** 与检索页 scope 协议同名同义 */
 export type AiScopeType = 'cross_scene' | 'cross_system' | 'scene' | 'system';
 
-export interface AiSystemSelectionInput {
-  system_ids: string[];
-  /** 与检索页 / USER_INTENT scope 协议一致；不传 = 不过滤 */
-  scope_type?: AiScopeType;
-  /** scope_type 为 scene / system 时必填 */
+/** 会话/分组绑定的具体 scope；创建、移动、清空只接受 scene / system */
+export type AiConcreteScopeType = 'scene' | 'system';
+
+export interface AiConcreteScope {
+  scope_type: AiConcreteScopeType;
+  scope_id: string;
+}
+
+/** 侧栏、搜索等列表查询 scope；cross_* 不传 scope_id */
+export interface AiScopeQuery {
+  scope_type: AiScopeType;
   scope_id?: string;
+}
+
+/** 会话 scope 由后端从 Conversation 派生，input_data 不允许携带 scope */
+export interface AiSystemSelectionInput {
+  /** 一期限定单系统 */
+  system_ids: string[];
 }
 
 export interface AiSystemSelectionOutput {
@@ -102,9 +114,6 @@ export interface AiSystemSelectionOutput {
 export interface AiNaturalLanguageSearchInput {
   query_text: string;
   auto_execute?: boolean;
-  scope_type?: AiScopeType;
-  /** scope_type 为 scene / system 时必填 */
-  scope_id?: string;
 }
 
 export type AiNlRecognitionErrorCode =
@@ -149,13 +158,10 @@ export type AiUserIntentType =
   | 'unrecognized'
   | string;
 
+/** 会话 scope 由后端从 Conversation 派生，input_data 不允许携带 scope */
 export interface AiUserIntentInput {
   query_text: string;
   auto_execute?: boolean;
-  /** 与检索页 scope 协议一致；不传 = 不过滤 */
-  scope_type?: AiScopeType;
-  /** scope_type 为 scene / system 时必填 */
-  scope_id?: string;
 }
 
 export interface AiUserIntentOutput {
@@ -270,6 +276,14 @@ export interface AiMessageWindow {
 export interface AiSidebarNodeBase {
   node_type: AiSidebarNodeType;
   node_uid: string;
+  /** 节点实际绑定的具体 scope */
+  scope_type?: AiConcreteScopeType;
+  scope_id?: string;
+}
+
+export interface AiConversationGroupSummary {
+  uid: string;
+  name: string;
 }
 
 /** 侧栏分组节点（字段以联调文档为准，未给到的字段保持可选） */
@@ -284,8 +298,8 @@ export interface AiSidebarConversationNode extends AiSidebarNodeBase {
   node_type: 'CONVERSATION';
   title: string;
   pinned?: boolean;
-  group_uid?: string | null;
-  group_name?: string | null;
+  /** 所属分组摘要；根会话为 null */
+  group?: AiConversationGroupSummary | null;
   updated_at?: string;
   created_at?: string;
 }
@@ -300,7 +314,7 @@ export interface AiSidebarNodePage {
   total?: number;
 }
 
-export interface AiCreateConversationParams {
+export interface AiCreateConversationParams extends AiConcreteScope {
   title?: string;
   /** 分组内新建时直接挂入，避免建完再 move */
   group_uid?: string;
@@ -334,14 +348,25 @@ export interface AiMessageHistoryParams {
   limit?: number;
 }
 
-export interface AiSidebarNodesParams {
+export interface AiCreateConversationGroupParams extends AiConcreteScope {
+  name: string;
+}
+
+export interface AiSidebarNodesParams extends AiScopeQuery {
   parent_node_type?: AiSidebarNodeType;
   parent_node_uid?: string;
   page?: number;
   page_size?: number;
 }
 
-export interface AiSidebarMoveParams {
+export interface AiSidebarSearchParams extends AiScopeQuery {
+  keyword: string;
+  page?: number;
+  page_size?: number;
+}
+
+/** 来源、目标和锚点必须属于同一具体 scope */
+export interface AiSidebarMoveParams extends AiConcreteScope {
   source_node_type: AiSidebarNodeType;
   source_node_uid: string;
   /** 省略表示移到根容器 */
