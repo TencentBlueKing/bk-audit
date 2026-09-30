@@ -1226,6 +1226,7 @@ export function useSecChatStore() {
     await initSidebar();
   };
 
+
   /**
    * 场景选择器变更后按新 scope 重载侧栏；scope 未变化时不做处理。
    * 首次加载（此前未绑定 scope）不清当前会话，避免深链进入的会话被清掉。
