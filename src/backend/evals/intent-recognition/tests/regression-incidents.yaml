@@ -1,0 +1,135 @@
+# 历史回归场景：candidates: line → provider 内置相似系统夹具（规模 11 + audit 字样干扰系统）
+# 场景1：「查询示例审计系统最近七天的数据」→ 意图误判 log_search → SYSTEM_REQUIRED 守门（点名系统被要求重选）
+#   期望：select_system + eval_audit_primary（话语已明确点名系统，不得因存在相近候选而放弃选择）
+# 场景2：「查询示例审计系统最近一个月eval_user_regression的数据」→ system_id 误选 eval_audit_shadow
+#   期望：select_system + eval_audit_primary（中文点名优先中文名称精确匹配，不得按英文 ID 字面相似选择）
+# 时间基准 current_time=2026-09-04T18:00:00+08:00（近七天 → 2026-08-28，一个月 → 2026-08-0x）
+
+# ---- 场景1：点名系统被误判为仅检索 ----
+- description: '回归-场景1：查询示例审计系统最近七天的数据（点名系统必须 select_system）'
+  vars:
+    query: '查询示例审计系统最近七天的数据'
+    current_system_id: ''
+    candidates: 'line'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+# ---- 场景2：误选 eval_audit_shadow ----
+- description: '回归-场景2：查询示例审计系统最近一个月eval_user_regression的数据（必须命中 eval_audit_primary 而非 eval_audit_shadow）'
+  vars:
+    query: '查询示例审计系统最近一个月eval_user_regression的数据'
+    current_system_id: ''
+    candidates: 'line'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+- description: '回归-场景2变体：示例审计系统最近一个月eval_user_regression的操作记录（操作记录话术同样不误选）'
+  vars:
+    query: '示例审计系统最近一个月eval_user_regression的操作记录'
+    current_system_id: ''
+    candidates: 'line'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+# ---- 干扰系统本身可被正确点名（正向能力不回退）----
+- description: '回归-干扰系统正向：明确点名 示例审计影子系统 原样系统时可选它'
+  vars:
+    query: '帮我看看 示例审计影子系统 最近的日志'
+    current_system_id: ''
+    candidates: 'line'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_shadow" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+- description: '回归-英文ID点名：用 eval_audit_primary 英文 ID 表达时仍按 ID 命中（英文匹配路径不回退）'
+  vars:
+    query: '查一下 eval_audit_primary 近三天的日志'
+    current_system_id: ''
+    candidates: 'line'
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+- description: '回归-守门不误伤：候选集合下真正无系统指向的话语仍 SYSTEM_REQUIRED（防新规则引入乱猜）'
+  vars:
+    query: '查一下最近七天的失败日志'
+    current_system_id: ''
+    candidates: 'line'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "error" && d.messages.length === 0 && d.error_code === "SYSTEM_REQUIRED" && d.intent === "log_search" && d.system_id === "" && d.condition === null && d.error !== null && d.error.error_code === "SYSTEM_REQUIRED"'
+
+# ---- 同名候选回归场景：按候选顺序稳定选择 ----
+# 候选同名且无描述差异时，授权系统列表顺序就是兜底选择优先级。
+- description: '回归-同名歧义：两候选 name 相同，最近七天查询选择第一个'
+  vars:
+    query: '查询示例审计系统最近七天的数据'
+    current_system_id: ''
+    candidates:
+      - {system_id: 'eval_audit_primary', name: '示例审计系统'}
+      - {system_id: 'eval_audit_shadow', name: '示例审计系统'}
+      - {system_id: 'eval_ci_system', name: '示例流水线系统'}
+      - {system_id: 'eval_asset_system', name: '示例配置系统'}
+      - {system_id: 'eval_monitor_system', name: '示例监控系统'}
+      - {system_id: 'eval_sandbox_system', name: 'eval_sandbox_system'}
+      - {system_id: 'eval_ops_base_system', name: '示例基础系统'}
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"])'
+
+- description: '回归-同名歧义：两候选 name 相同，按候选顺序选择第一个'
+  vars:
+    query: '查询示例审计系统最近一个月eval_user_regression的数据'
+    current_system_id: ''
+    candidates:
+      - {system_id: 'eval_audit_primary', name: '示例审计系统'}
+      - {system_id: 'eval_audit_shadow', name: '示例审计系统'}
+      - {system_id: 'eval_ci_system', name: '示例流水线系统'}
+      - {system_id: 'eval_asset_system', name: '示例配置系统'}
+      - {system_id: 'eval_monitor_system', name: '示例监控系统'}
+      - {system_id: 'eval_sandbox_system', name: 'eval_sandbox_system'}
+      - {system_id: 'eval_ops_base_system', name: '示例基础系统'}
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "dispatch" && d.system_id === "eval_audit_primary" && JSON.stringify(d.messages.map(m => m.message_type)) === JSON.stringify(["SYSTEM_SELECTION","LOG_SEARCH"])'
+
+- description: '回归-近名歧义：影子候选 name 为「示例审计系统（影子）」变体时仍选本体'
+  vars:
+    query: '查询示例审计系统最近七天的数据'
+    current_system_id: ''
+    candidates:
+      - {system_id: 'eval_audit_primary', name: '示例审计系统'}
+      - {system_id: 'eval_audit_shadow', name: '示例审计系统（影子）'}
+      - {system_id: 'eval_ci_system', name: '示例流水线系统'}
+      - {system_id: 'eval_asset_system', name: '示例配置系统'}
+      - {system_id: 'eval_monitor_system', name: '示例监控系统'}
+      - {system_id: 'eval_sandbox_system', name: 'eval_sandbox_system'}
+      - {system_id: 'eval_ops_base_system', name: '示例基础系统'}
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH"'
+
+# ---- 场景1/2 复合计划复现（单 Agent 同时输出系统选择与检索条件）----
+- description: '回归-chain场景1：查询示例审计系统最近七天的数据（选对系统 + 时间窗换算）'
+  vars:
+    query: '查询示例审计系统最近七天的数据'
+    current_system_id: ''
+    candidates: 'line'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-08-28")'
+
+- description: '回归-chain场景2：查询示例审计系统最近一个月操作人为eval_user_regression的数据（选对系统 + 操作人条件 + 月窗换算）'
+  vars:
+    query: '查询示例审计系统最近一个月操作人为eval_user_regression的数据'
+    current_system_id: ''
+    candidates: 'line'
+    chain: true
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_primary" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.conditions.some(c => c.field.raw_name === "username" && c.filters.includes("eval_user_regression")) && d.condition.start_time.startsWith("2026-08")'

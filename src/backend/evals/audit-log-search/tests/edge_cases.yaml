@@ -1,0 +1,155 @@
+# 边缘与鲁棒：未知字段忽略、拓展子键信任边界、枚举映射、复杂组合、已知限制观察。
+
+- description: 'E1-未知字段：部门不在上下文不阻断，核心条件继续组装（不可映射值允许全文兜底）'
+  vars:
+    query: '帮我查一下部门为运维部的张三的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    allow_extra_conditions: 'true'
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E2-拓展子键信任：上下文未列出的单层子键按用户指定放行'
+  vars:
+    query: '查一下 extend_data 里 app_name 是 portal 的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['app_name']
+        operator: 'eq'
+        filters: ['portal']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E3-枚举映射：API 调用映射 access_type 原始值'
+  vars:
+    query: '查一下通过 API 调用的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'access_type'
+        keys: []
+        operator: 'include'
+        filters: ['API']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E4-复杂组合：日期区间 + 多值操作人 + 全文关键词'
+  vars:
+    query: '帮我查一下2026年8月24日至8月30日之间，操作人是张三或者李四，并且日志内容里包含「权限变更」的记录'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'include'
+        filters: ['张三', '李四']
+      - raw_name: 'log'
+        keys: []
+        operator: 'match_any'
+        filters: ['权限变更']
+    expected_start_time: '2026-08-24T00:00:00+08:00'
+    expected_end_time: '2026-08-30T23:59:59+08:00'
+    expected_end_time_alts: '["2026-08-31T00:00:00+08:00"]'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E5-噪音容忍：多余空格不影响字段提取'
+  vars:
+    query: '查一下  张三  的操作日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'username'
+        keys: []
+        operator: 'eq'
+        filters: ['张三']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
+
+- description: 'E6-已知限制观察：数值范围比较（白名单不支持 gt，观察降级行为）'
+  vars:
+    query: '查一下响应时间大于1秒的日志'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: '字段白名单不支持数值范围操作符（F6 §5 已知边界），观察模型是否编造 gt 条件或安全降级'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+- description: 'E7-已知限制观察：否定语义（白名单不支持 neq，观察降级行为）'
+  vars:
+    query: '查一下不是通过 API 调用的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    limitation_reason: '标准字段白名单不支持 neq（F6 §5 已知边界），观察模型是否编造否定条件或安全降级'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:known_limitation_observer'
+
+- description: 'E8-拓展字段否定：neq/exclude 单值等价（白名单支持）'
+  vars:
+    query: '查一下工单号不是 Story-3000 的操作'
+    current_time: '2026-08-31T18:00:00+08:00'
+    expected_conditions:
+      - raw_name: 'extend_data'
+        keys: ['ticket_id']
+        operator: 'neq'
+        filters: ['Story-3000']
+    expected_start_time: '2026-08-01T18:00:00+08:00'
+    expected_end_time: '2026-08-31T18:00:00+08:00'
+  assert:
+    - type: python
+      value: 'file://assertions/check_conditions.py:valid_protocol_response'
+    - type: python
+      value: 'file://assertions/check_conditions.py:success_condition_is_valid'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_conditions_match'
+    - type: python
+      value: 'file://assertions/check_conditions.py:exact_time_window_match'
