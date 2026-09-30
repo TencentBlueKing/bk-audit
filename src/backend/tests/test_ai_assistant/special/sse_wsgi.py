@@ -5,6 +5,7 @@
 """
 
 import os
+from unittest import mock
 
 from django.conf import settings
 
@@ -26,14 +27,18 @@ from rest_framework.permissions import AllowAny  # noqa: E402
 
 _django_application = get_wsgi_application()
 
+from services.web.ai_assistant import permissions  # noqa: E402
 from services.web.ai_assistant.resources import attachment, stream  # noqa: E402
 from services.web.ai_assistant.views import AttachmentsViewSet  # noqa: E402
+from services.web.common.scope_permission import ScopePermission  # noqa: E402
 
 _username = os.environ[SSE_TEST_USERNAME_ENV]
 attachment.get_request_username = lambda: _username
 stream.get_request_username = lambda: _username
+permissions.get_request_username = lambda: _username
 AttachmentsViewSet.authentication_classes = []
 AttachmentsViewSet.permission_classes = [AllowAny]
+mock.patch.object(ScopePermission, "check_scope_entry").start()
 
 
 def application(environ, start_response):

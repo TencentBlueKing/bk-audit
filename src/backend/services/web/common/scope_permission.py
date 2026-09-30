@@ -199,7 +199,7 @@ class ScopePermission:
         路由逻辑：
         - cross_scene: 宽松策略 has_action_any_permission
         - cross_system: IAM + 本地 managers 双通道
-        - scene: IAM is_allowed 实例级
+        - scene: IAM is_allowed 实例级，且场景仍启用
         - system: IAM is_allowed + 本地 managers 实例级
         """
         self._validate_scope_action(scope.scope_type, action)
@@ -217,7 +217,10 @@ class ScopePermission:
 
         elif scope.scope_type == ScopeType.SCENE:
             resource = ResourceEnum.SCENE.create_instance(scope.scope_id)
-            result = self.permission.is_allowed(action, [resource], raise_exception=False)
+            result = (
+                self.permission.is_allowed(action, [resource], raise_exception=False)
+                and Scene.objects.filter(scene_id=scope.scope_id, status=SceneStatus.ENABLED).exists()
+            )
 
         elif scope.scope_type == ScopeType.SYSTEM:
             # 双通道：IAM 或 本地 managers

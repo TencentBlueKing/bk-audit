@@ -3,6 +3,8 @@ from blueapps.contrib.drf.utils.pagination import CustomPageNumberPagination
 from drf_spectacular.types import OpenApiTypes
 
 from core.utils.spectacular import BKResourceAutoSchema
+from services.web.ai_assistant.constants import ScopePermissionSource
+from services.web.ai_assistant.permissions import AIAssistantScopePermission
 from services.web.ai_assistant.renderers import EventStreamRenderer
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
@@ -59,7 +61,18 @@ class AIAssistantPageNumberPagination(CustomPageNumberPagination):
     max_page_size = 100
 
 
-class AIAssistantPaginatedViewSet(ResourceViewSet):
+class AIAssistantScopeViewSet(ResourceViewSet):
+    """为 AI 资源路由附加统一的 HTTP Scope 权限入口。"""
+
+    scope_permission_map = {}
+
+    def get_permissions(self):
+        """保留既有权限类并附加 AI 会话 Scope 权限。"""
+
+        return [*super().get_permissions(), AIAssistantScopePermission()]
+
+
+class AIAssistantPaginatedViewSet(AIAssistantScopeViewSet):
     """先对 QuerySet 做数据库分页，再使用当前 action 对应 DTO 序列化。"""
 
     page_response_serializers = {}
@@ -94,10 +107,15 @@ class AttachmentAutoSchema(BKResourceAutoSchema):
         return super().get_response_serializers()
 
 
-class ConversationGroupsViewSet(ResourceViewSet):
+class ConversationGroupsViewSet(AIAssistantScopeViewSet):
     """会话分组生命周期接口。"""
 
     lookup_field = "group_uid"
+    scope_permission_map = {
+        "create": ScopePermissionSource.REQUEST,
+        "partial_update": ScopePermissionSource.GROUP,
+        "destroy": ScopePermissionSource.GROUP,
+    }
     resource_routes = [
         ResourceRoute("POST", CreateConversationGroup),
         ResourceRoute("PATCH", UpdateConversationGroup, pk_field="group_uid"),
@@ -105,12 +123,20 @@ class ConversationGroupsViewSet(ResourceViewSet):
     ]
 
 
-class ConversationsViewSet(ResourceViewSet):
+class ConversationsViewSet(AIAssistantScopeViewSet):
     """会话生命周期及全量摘要查询接口。"""
 
     pagination_class = None
 
     lookup_field = "conversation_uid"
+    scope_permission_map = {
+        "create": ScopePermissionSource.REQUEST,
+        "list": ScopePermissionSource.QUERY,
+        "retrieve": ScopePermissionSource.CONVERSATION,
+        "partial_update": ScopePermissionSource.CONVERSATION,
+        "destroy": ScopePermissionSource.CONVERSATION,
+        "clear": ScopePermissionSource.REQUEST,
+    }
     resource_routes = [
         ResourceRoute("POST", CreateConversation),
         ResourceRoute("GET", ListConversations),
@@ -121,10 +147,19 @@ class ConversationsViewSet(ResourceViewSet):
     ]
 
 
-class MessagesViewSet(ResourceViewSet):
+class MessagesViewSet(AIAssistantScopeViewSet):
     """消息创建、历史窗口和异步状态轮询接口。"""
 
     lookup_field = "message_uid"
+    scope_permission_map = {
+        "create": ScopePermissionSource.CONVERSATION,
+        "list": ScopePermissionSource.CONVERSATION,
+        "attachments": ScopePermissionSource.ATTACHMENT_SOURCE,
+        **{
+            action: ScopePermissionSource.MESSAGE
+            for action in ("retrieve", "partial_update", "retry", "preview-export", "full-export")
+        },
+    }
     resource_routes = [
         ResourceRoute("POST", CreateMessage),
         ResourceRoute("GET", ListMessages),
@@ -137,12 +172,19 @@ class MessagesViewSet(ResourceViewSet):
     ]
 
 
-class AttachmentsViewSet(ResourceViewSet):
+class AttachmentsViewSet(AIAssistantScopeViewSet):
     """附件创建后的查询、编辑、重试和流式订阅接口。"""
 
     schema = AttachmentAutoSchema()
     pagination_class = None
     lookup_field = "attachment_uid"
+    scope_permission_map = {
+        "list": ScopePermissionSource.QUERY,
+        **{
+            action: ScopePermissionSource.ATTACHMENT
+            for action in ("retrieve", "partial_update", "retry", "export", "stream/snapshot", "stream")
+        },
+    }
     resource_routes = [
         ResourceRoute("GET", ListAttachments),
         ResourceRoute("GET", GetAttachment, pk_field="attachment_uid"),
@@ -161,10 +203,11 @@ class AttachmentsViewSet(ResourceViewSet):
         return super().get_renderers()
 
 
-class FeedbackViewSet(ResourceViewSet):
+class FeedbackViewSet(AIAssistantScopeViewSet):
     """当前用户对成功消息或附件的反馈写入与取消接口。"""
 
     lookup_field = "feedback_uid"
+    scope_permission_map = {"create": ScopePermissionSource.FEEDBACK_SOURCE, "destroy": ScopePermissionSource.FEEDBACK}
     resource_routes = [
         ResourceRoute("POST", UpsertFeedback),
         ResourceRoute("DELETE", DeleteFeedback, pk_field="feedback_uid"),
@@ -184,6 +227,7 @@ class ConversationSidebarViewSet(AIAssistantPaginatedViewSet):
     """侧栏置顶列表和跨会话标题搜索。"""
 
     pagination_class = AIAssistantPageNumberPagination
+    scope_permission_map = {"pinned": ScopePermissionSource.QUERY, "search": ScopePermissionSource.QUERY}
     page_response_serializers = {"search": ConversationSearchResponseSerializer}
     resource_routes = [
         ResourceRoute("GET", ListPinnedConversations, endpoint="pinned"),
@@ -195,6 +239,11 @@ class ConversationSidebarNodesViewSet(AIAssistantPaginatedViewSet):
     """根列表或组内 Node 的读取与顺序操作。"""
 
     pagination_class = AIAssistantPageNumberPagination
+    scope_permission_map = {
+        "list": ScopePermissionSource.QUERY,
+        "move": ScopePermissionSource.REQUEST,
+        "pin": ScopePermissionSource.CONVERSATION_NODE,
+    }
     page_response_serializers = {"list": SidebarNodeResponseSerializer}
     resource_routes = [
         ResourceRoute("GET", ListConversationSidebarNodes, enable_paginate=True),

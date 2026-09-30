@@ -1,4 +1,5 @@
 ﻿import threading
+from unittest import mock
 
 from django.db import close_old_connections
 from django.test import TransactionTestCase
@@ -10,8 +11,12 @@ from services.web.ai_assistant.constants import (
     MessageType,
 )
 from services.web.ai_assistant.handlers import message_handler_registry
-from services.web.ai_assistant.models import Conversation, Feedback, Message
+from services.web.ai_assistant.models import Feedback, Message
 from services.web.ai_assistant.services.feedback import FeedbackService
+from services.web.common.scope_permission import ScopePermission
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     FeedbackEchoSyncHandler,
     register_test_message_handler,
@@ -26,7 +31,10 @@ class FeedbackServiceConcurrencyTest(TransactionTestCase):
 
     def setUp(self):
         self.user = "concurrent-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.SYSTEM_SELECTION,

@@ -14,7 +14,8 @@ from services.web.ai_assistant.handlers.audit_search import (
     SystemSelectionHandler,
     UserIntentHandler,
 )
-from services.web.ai_assistant.models import Conversation, Message
+from services.web.ai_assistant.models import Message
+from services.web.common.scope_permission import ScopePermission
 from services.web.query.ai_assistant.schemas import (
     LogSearchOutput,
     QuerySummary,
@@ -24,6 +25,9 @@ from services.web.query.ai_assistant.schemas import (
     SystemSelectionOutput,
 )
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 
 BUSINESS_MESSAGE_HANDLERS = (SystemSelectionHandler, UserIntentHandler, LogSearchHandler)
 
@@ -122,19 +126,23 @@ class AIAssistantPlatformTestCase(TestCase):
     """平台消息链路测试基类。"""
 
     namespace = "bkaudit"
-    # 测试默认 session scope（cross_system 宽松语义；前端进 AI 页时左上角场景选择器默认有值，
-    # 真实请求必有 scope，测试用宽松值聚焦各用例自身逻辑）
-    default_scope_type = "cross_system"
-    default_scope_id = ""
+    # 普通业务测试固定一个 concrete scope；scope 行为测试显式创建其他范围。
+    default_scope_type = "scene"
+    default_scope_id = "1"
 
     def setUp(self):
         ensure_business_handlers_registered()
         self.user = "tester"
-        self.conversation = Conversation.objects.create(
+        self.conversation = create_test_conversation(
+            scope_type=self.default_scope_type,
+            scope_id=self.default_scope_id,
             title="新对话",
             created_by=self.user,
             updated_by=self.user,
         )
+        scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patch.start()
+        self.addCleanup(scope_permission_patch.stop)
 
     # ---------- 消息工厂 ----------
 
@@ -149,14 +157,12 @@ class AIAssistantPlatformTestCase(TestCase):
             status=ExecutionStatus.SUCCESS,
             input_data={
                 "system_ids": [TARGET_SYSTEM_ID],
-                "scope_type": self.default_scope_type,
-                "scope_id": self.default_scope_id,
             },
             context_data={
                 "username": self.user,
                 "namespace": "bkaudit",
-                "scope_type": self.default_scope_type,
-                "scope_id": self.default_scope_id,
+                "scope_type": self.conversation.scope_type,
+                "scope_id": self.conversation.scope_id,
             },
             output_data=selection.model_dump(mode="json"),
             created_by=self.user,
@@ -183,14 +189,12 @@ class AIAssistantPlatformTestCase(TestCase):
         input_data = {
             "query_text": query_text,
             "auto_execute": auto_execute,
-            "scope_type": self.default_scope_type,
-            "scope_id": self.default_scope_id,
         }
         context_data = {
             "username": self.user,
             "namespace": "bkaudit",
-            "scope_type": self.default_scope_type,
-            "scope_id": self.default_scope_id,
+            "scope_type": self.conversation.scope_type,
+            "scope_id": self.conversation.scope_id,
         }
         output_data = {
             "intent": "log_search",
@@ -234,8 +238,8 @@ class AIAssistantPlatformTestCase(TestCase):
                 "namespace": "bkaudit",
                 "system_id": snapshot_condition.scope_id,
                 "source": source,
-                "session_scope_type": self.default_scope_type,
-                "session_scope_id": self.default_scope_id,
+                "session_scope_type": self.conversation.scope_type,
+                "session_scope_id": self.conversation.scope_id,
             },
             output_data=snapshot_output.model_dump(mode="json"),
             created_by=self.user,

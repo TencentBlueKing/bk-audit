@@ -24,6 +24,10 @@ from services.web.ai_assistant.services import (
     ConversationSidebarService,
     MessageService,
 )
+from services.web.common.scope_permission import ScopePermission
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import EchoSyncHandler
 
 
@@ -37,10 +41,27 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
     def setUp(self):
         self.user = "concurrent-user"
         self.service = ConversationSidebarService(user=self.user)
+        original_move = ConversationSidebarService.move
+
+        def move_with_test_scope(service, *args, scope_type="scene", scope_id="1", **kwargs):
+            return original_move(service, *args, scope_type=scope_type, scope_id=scope_id, **kwargs)
+
+        move_patch = mock.patch.object(ConversationSidebarService, "move", move_with_test_scope)
+        move_patch.start()
+        self.addCleanup(move_patch.stop)
+        for method_name, visible_ids in (
+            ("check_scope_entry", None),
+            ("get_scene_ids", ["1"]),
+            ("get_system_ids", ["bk_audit"]),
+        ):
+            kwargs = {} if visible_ids is None else {"return_value": visible_ids}
+            permission_patch = mock.patch.object(ScopePermission, method_name, **kwargs)
+            permission_patch.start()
+            self.addCleanup(permission_patch.stop)
 
     def create_conversation(self, title: str, user: str | None = None) -> Conversation:
         user = user or self.user
-        return Conversation.objects.create(
+        return create_test_conversation(
             title=title,
             created_by=user,
             updated_by=user,
@@ -238,7 +259,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
 
     def test_group_delete_and_move_share_parent_node_lock(self):
         conversation_service = ConversationService(user=self.user)
-        group = conversation_service.create_group(name="deleted")
+        group = conversation_service.create_group(name="deleted", scope_type="scene", scope_id="1")
         inside = self.create_conversation("inside")
         outside = self.create_conversation("outside")
         self.service.create_node(conversation=inside)
@@ -311,7 +332,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
     def test_group_delete_and_direct_create_share_group_locks(self):
         """删除获胜时组内创建必须等待，并以领域异常回滚全部新对象。"""
 
-        group = ConversationService(user=self.user).create_group(name="deleted")
+        group = ConversationService(user=self.user).create_group(name="deleted", scope_type="scene", scope_id="1")
         delete_paused = threading.Event()
         release_delete = threading.Event()
         create_finished = threading.Event()
@@ -338,6 +359,8 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
             try:
                 result = ConversationService(user=self.user).create_conversation(
                     title="late",
+                    scope_type="scene",
+                    scope_id="1",
                     group_uid=str(group.uid),
                 )
                 outcomes["create"] = result.conversation.id
@@ -377,7 +400,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
         conversation_service = ConversationService(user=self.user)
         inside = self.create_conversation("inside")
         inside_node = self.service.create_node(conversation=inside)
-        group = conversation_service.create_group(name="deleted")
+        group = conversation_service.create_group(name="deleted", scope_type="scene", scope_id="1")
         group_node = ConversationSidebarNode.objects.get(group=group)
         self.assertLess(inside_node.id, group_node.id)
         self.service.move(
@@ -483,7 +506,7 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                ConversationService(user=self.user).clear_conversations()
+                ConversationService(user=self.user).clear_conversations(scope_type="scene", scope_id="1")
                 outcomes["clear"] = "success"
             except Exception as error:  # noqa: BLE001 - 并发测试保留原始数据库异常
                 outcomes["clear"] = error
@@ -496,7 +519,9 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                result = ConversationService(user=self.user).create_conversation(title="first")
+                result = ConversationService(user=self.user).create_conversation(
+                    title="first", scope_type="scene", scope_id="1"
+                )
                 outcomes["create"] = result.conversation.id
             except Exception as error:  # noqa: BLE001 - 并发测试保留原始数据库异常
                 outcomes["create"] = error

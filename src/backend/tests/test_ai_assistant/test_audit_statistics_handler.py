@@ -3,7 +3,14 @@
 from copy import deepcopy
 from unittest import mock
 
-from services.web.ai_assistant.constants import AttachmentType, ExecutionStatus
+from django.urls import resolve
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from services.web.ai_assistant.constants import (
+    AttachmentType,
+    ExecutionStatus,
+    MessageType,
+)
 from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
     AttachmentSnapshotValidationError,
@@ -13,7 +20,7 @@ from services.web.ai_assistant.handlers.audit_statistics import (
     AIStatisticsAttachmentHandler,
     FieldStatisticsAttachmentHandler,
 )
-from services.web.ai_assistant.models import Attachment, Conversation
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.resources.attachment import (
     CreateAttachment,
     GetAttachment,
@@ -24,7 +31,9 @@ from services.web.ai_assistant.schemas.audit_statistics import (
     FieldStatisticsAttachmentInput,
 )
 from services.web.ai_assistant.services.conversation import ConversationService
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.base import AIAssistantPlatformTestCase
+from tests.test_ai_assistant.factories import create_conversation
 from tests.test_ai_assistant.handlers import use_attachment_handler
 
 
@@ -69,8 +78,62 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
         )
         self.assertNotIn("samples", attachment.context_data)
         self.assertNotIn("execution_id", attachment.context_data)
-        self.assertEqual(ListAttachments().request(attachment_type="AI_ANALYSIS"), [])
+        self.assertEqual(
+            ListAttachments().request(
+                scope_type=self.conversation.scope_type,
+                scope_id=self.conversation.scope_id,
+                attachment_type="AI_ANALYSIS",
+            ),
+            [],
+        )
         self.assertEqual(GetAttachment().request(attachment_uid=created["uid"])["output_data"], None)
+
+    def test_statistics_http_creation_and_scope_filtered_lists(self):
+        """两种统计附件通过 HTTP 创建，列表归属由来源会话决定。"""
+        ai_handler = use_attachment_handler(self, AIStatisticsAttachmentHandler())
+        self.enterContext(mock.patch.object(ai_handler.async_task, "apply_async"))
+        self.enterContext(
+            mock.patch("services.web.ai_assistant.permissions.get_request_username", return_value=self.user)
+        )
+        self.enterContext(mock.patch.object(ScopePermission, "get_scene_ids", return_value=[1]))
+        path = "/api/v1/ai_assistant/attachments/"
+        create_path = f"/api/v1/ai_assistant/messages/{self.source.uid}/attachments/"
+        factory = APIRequestFactory()
+        user = mock.Mock(username=self.user, is_authenticated=True)
+        created_uids = []
+        for kind, data in (
+            (AttachmentType.FIELD_STATISTICS, {"field": {"raw_name": "extend_data", "keys": ["method"]}}),
+            (AttachmentType.AI_STATISTICS, {"instruction": "比较另一系统的操作趋势"}),
+        ):
+            with self.subTest(kind=kind), self.captureOnCommitCallbacks(execute=True):
+                request = factory.post(
+                    create_path,
+                    {"attachment_type": kind, "input_data": data},
+                    format="json",
+                )
+                force_authenticate(request, user=user)
+                route = resolve(create_path)
+                response = route.func(request, **route.kwargs)
+                self.assertEqual(response.status_code, 200, response.data)
+                created_uids.append(response.data["uid"])
+        hidden_conversation = create_conversation(scope_id="2", created_by=self.user)
+        hidden_source = Message.objects.create(
+            conversation=hidden_conversation,
+            message_type=MessageType.LOG_SEARCH,
+            status=ExecutionStatus.SUCCESS,
+            created_by=self.user,
+        )
+        Attachment.objects.create(
+            source_message=hidden_source, attachment_type=AttachmentType.FIELD_STATISTICS, created_by=self.user
+        )
+        for scope in ({"scope_type": "scene", "scope_id": "1"}, {"scope_type": "cross_scene"}):
+            with self.subTest(scope=scope):
+                request = factory.get(path, scope)
+                force_authenticate(request, user=user)
+                response = resolve(path).func(request)
+                self.assertEqual(response.status_code, 200, response.data)
+                self.assertEqual({row["uid"] for row in response.data}, set(created_uids))
+                self.assertEqual({(row["scope_type"], row["scope_id"]) for row in response.data}, {("scene", "1")})
 
     def test_creation_rejects_extra_range_and_identity(self):
         for extra in ({"condition": {}}, {"namespace": "other"}, {"username": "other"}, {"start_time": "bad"}):
@@ -121,12 +184,14 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
         for action in ("clear", "delete"):
             with self.subTest(action=action):
                 if action == "delete":
-                    self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+                    self.conversation = create_conversation(created_by=self.user, updated_by=self.user)
                     self.source = self.create_log_search_message()
                 created = self.create()
                 service = ConversationService(user=self.user)
                 if action == "clear":
-                    service.clear_conversations()
+                    service.clear_conversations(
+                        scope_type=self.conversation.scope_type, scope_id=self.conversation.scope_id
+                    )
                 else:
                     service.delete_conversation(conversation_uid=str(self.conversation.uid))
                 with self.assertRaises(AttachmentNotFound):
@@ -172,7 +237,14 @@ class AIStatisticsHandlerTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase
         self.assertEqual(attachment.context_data["username"], self.user)
         self.assertEqual(attachment.context_data["namespace"], "bkaudit")
         self.assertNotIn("samples", attachment.context_data)
-        self.assertEqual(ListAttachments().request(attachment_type="AI_ANALYSIS"), [])
+        self.assertEqual(
+            ListAttachments().request(
+                scope_type=self.conversation.scope_type,
+                scope_id=self.conversation.scope_id,
+                attachment_type="AI_ANALYSIS",
+            ),
+            [],
+        )
 
     def test_creation_rejects_overridden_identity_and_invalid_source(self):
         for extra in ({"username": "other"}, {"namespace": "other"}, {"condition": {}}):

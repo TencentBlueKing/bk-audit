@@ -8,7 +8,7 @@
 
 | 对象/能力 | 职责 | 边界 |
 | --- | --- | --- |
-| Conversation / SidebarNode | 用户会话、分组、排序、置顶 | 用户隔离，删除会话后不可继续写入产物 |
+| Conversation / SidebarNode | 用户会话、分组、排序、置顶 | 用户及 concrete scope 隔离，删除会话后不可继续写入产物 |
 | Message | 一次输入及直接输出，表达消息因果关系 | LOG_SEARCH 成功消息是分析和统计的来源 |
 | Attachment | 来源消息上的独立产物 | 同一消息可派生多个附件，各自执行、重试 |
 | Handler Registry | 类型注册、输入/上下文/输出模型及能力声明 | 新类型复用平台服务，不复制 HTTP 生命周期 |
@@ -23,11 +23,16 @@
 
 程序统计严格复用来源检索的完整条件，不统计预览行。AI 统计把来源条件作为初始上下文，Agent 可以按用户需求调整实际查询范围；每次工具调用独立鉴权。AI 输出标记、ECharts 格式及渲染协议由前端和 Agent skills 协同维护，后端只保存最终文本。
 
+会话、分组与侧栏节点创建时绑定具体 `scene/system`，不提供改绑入口；消息和附件沿来源会话继承资源归属。`views.py` 的 action 声明 scope 来源，`permissions.py` 定位本人对象的绑定后复用公共 `ScopePermission` 鉴权。会话、侧栏和附件列表则经 `services/scope.py` 计算可见 ID，具体查询和 `cross_scene/cross_system` 聚合查询使用同一过滤规则；cross 仅用于读取。
+
+会话归属与日志查询范围用途不同：附件列表按会话绑定隔离，统计查询条件仍按实际操作用户鉴权。程序统计复用成功 LOG_SEARCH 的条件，AI 统计可按需求调整条件，不通过会话 scope 额外锁定统计范围。
+
 ## 2. 分层与调用链
 
 ```mermaid
 flowchart TD
-    UI[前端统计卡片] -->|创建 / 重试 / 轮询详情| API[Resource / Serializer]
+    UI[前端统计卡片] -->|创建 / 重试 / 轮询详情| Permission[HTTP Scope 权限<br/>本人来源会话归属]
+    Permission --> API[Resource / Serializer]
     API --> Service[AttachmentService / Handler Registry]
     Source[成功 LOG_SEARCH] -->|来源归属与条件快照| Service
     Service -->|FIELD_STATISTICS| DefaultWorker[default Worker<br/>短时固定量任务]
@@ -50,6 +55,7 @@ flowchart TD
 | 代码入口（相对本模块） | 应在这里修改的内容 |
 | --- | --- |
 | `views.py`、`resources/`、`serializers/` | HTTP 路由、请求响应及 OpenAPI |
+| `permissions.py`、`services/scope.py` | HTTP 资源 scope 授权与集合可见范围，复用公共 ScopePermission |
 | `services/attachment.py`、`services/attachment_execution.py` | 创建、归属检查、事务、重试及终态提交 |
 | `handlers/audit_statistics.py` | 两种统计类型注册、来源解析、可信上下文准备 |
 | `handlers/log_search_source.py` | 成功 LOG_SEARCH 的归属与快照一致性校验 |

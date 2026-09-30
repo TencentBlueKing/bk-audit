@@ -19,7 +19,7 @@ from services.web.ai_assistant.exceptions import (
     StaleAttachmentTask,
     StreamRuntimeClosed,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import (
     UIStreamEvent,
     parse_stream_config,
@@ -29,6 +29,9 @@ from services.web.ai_assistant.streaming import (
     AttachmentArchiveStore,
     RedisLiveStore,
     UIStreamRuntime,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 
 
@@ -44,7 +47,7 @@ class StreamRuntimeTestCase(TransactionTestCase):
         self.archive_store = AttachmentArchiveStore()
         self.client = self.redis_store._client
         self.source_message = Message.objects.create(
-            conversation=Conversation.objects.create(created_by=self.user, updated_by=self.user),
+            conversation=create_test_conversation(created_by=self.user, updated_by=self.user),
             message_type=MessageType.LOG_SEARCH,
             status=ExecutionStatus.SUCCESS,
             task_id="source-task",

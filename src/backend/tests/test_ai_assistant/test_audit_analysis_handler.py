@@ -25,7 +25,7 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.handlers.audit_analysis import AIAnalysisHandler
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisContextSchema,
     AIAnalysisInputSchema,
@@ -37,6 +37,7 @@ from services.web.ai_assistant.services.attachment_execution import (
 )
 from services.web.ai_assistant.services.feedback import FeedbackService
 from tests.test_ai_assistant.base import AIAssistantPlatformTestCase
+from tests.test_ai_assistant.factories import create_conversation
 
 
 def ensure_analysis_handler_registered() -> AIAnalysisHandler:
@@ -117,7 +118,7 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
 
     def test_prepare_rejects_non_log_search_or_invisible_source(self):
         wrong_type = self.create_selection_message()
-        other_conversation = Conversation.objects.create(created_by="other", updated_by="other")
+        other_conversation = create_conversation(created_by="other", updated_by="other")
         other_message = Message.objects.create(
             conversation=other_conversation,
             message_type=MessageType.LOG_SEARCH,

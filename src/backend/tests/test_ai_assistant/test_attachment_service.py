@@ -8,6 +8,7 @@ from django.test import TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from core.exceptions import PermissionException
 from services.web.ai_assistant import services as ai_assistant_services
 from services.web.ai_assistant.constants import (
     AttachmentErrorCode,
@@ -47,9 +48,14 @@ from services.web.ai_assistant.serializers.attachment import (
 from services.web.ai_assistant.services.attachment import AttachmentService
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
+    load_attachment_execution,
 )
 from services.web.ai_assistant.streaming import build_stream_key
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 from tests.test_ai_assistant.handlers import (
     AttachmentEchoContext,
     AttachmentEchoInput,
@@ -196,10 +202,31 @@ class AttachmentServiceTest(TestCase):
         attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
         self.user = "alice"
         self.other_user = "bob"
+        for patcher in self._scope_permission_patchers():
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.service = AttachmentService(user=self.user)
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = self.create_source_message()
         self.atomic_depth = len(connection.atomic_blocks)
+
+    @staticmethod
+    def _scope_permission_patchers():
+        return (
+            mock.patch.object(ScopePermission, "check_scope_entry", return_value=True),
+            mock.patch.object(
+                ScopePermission,
+                "get_scene_ids",
+                side_effect=lambda scope, action: [int(scope.scope_id)] if not scope.is_cross_scope else [1, 2],
+            ),
+            mock.patch.object(
+                ScopePermission,
+                "get_system_ids",
+                side_effect=lambda scope, action: [scope.scope_id]
+                if not scope.is_cross_scope
+                else ["bk_audit", "other"],
+            ),
+        )
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -255,6 +282,7 @@ class AttachmentServiceTest(TestCase):
         output_data=UNSET,
         stream_config=UNSET,
         stream_archive=UNSET,
+        is_stream: bool = False,
         created_by: str | None = None,
     ) -> Attachment:
         return Attachment.objects.create(
@@ -270,6 +298,7 @@ class AttachmentServiceTest(TestCase):
             error_message="old error" if status == ExecutionStatus.FAILED else "",
             stream_config={"mode": "stream"} if stream_config is UNSET else stream_config,
             stream_archive=[{"delta": "old"}] if stream_archive is UNSET else stream_archive,
+            is_stream=is_stream,
             content_updated_at=content_updated_at or timezone.now(),
             created_by=created_by or self.user,
             updated_by=created_by or self.user,
@@ -277,12 +306,12 @@ class AttachmentServiceTest(TestCase):
 
     def test_create_requires_visible_success_source_message(self):
         self.register_sync_handler()
-        foreign_conversation = Conversation.objects.create(created_by=self.other_user, updated_by=self.other_user)
+        foreign_conversation = create_test_conversation(created_by=self.other_user, updated_by=self.other_user)
         invalid_source_uids = [
             str(uuid4()),
             str(self.create_source_message(conversation=foreign_conversation, user=self.other_user).uid),
         ]
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         deleted_source = self.create_source_message(conversation=deleted_conversation)
         deleted_conversation.delete()
         invalid_source_uids.append(str(deleted_source.uid))
@@ -468,10 +497,10 @@ class AttachmentServiceTest(TestCase):
     def test_get_only_returns_visible_attachment(self):
         self.register_sync_handler()
         visible = self.create_attachment()
-        foreign_conversation = Conversation.objects.create(created_by=self.other_user, updated_by=self.other_user)
+        foreign_conversation = create_test_conversation(created_by=self.other_user, updated_by=self.other_user)
         foreign_source = self.create_source_message(conversation=foreign_conversation, user=self.other_user)
         foreign_attachment = self.create_attachment(source_message=foreign_source, created_by=self.other_user)
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         deleted_source = self.create_source_message(conversation=deleted_conversation)
         deleted_attachment = self.create_attachment(source_message=deleted_source)
         deleted_conversation.delete()
@@ -502,34 +531,44 @@ class AttachmentServiceTest(TestCase):
             title="AI Beta",
             content_updated_at=now,
         )
-        foreign_conversation = Conversation.objects.create(created_by=self.other_user, updated_by=self.other_user)
+        foreign_conversation = create_test_conversation(created_by=self.other_user, updated_by=self.other_user)
         foreign_source = self.create_source_message(conversation=foreign_conversation, user=self.other_user)
         self.create_attachment(source_message=foreign_source, created_by=self.other_user)
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         deleted_source = self.create_source_message(conversation=deleted_conversation)
         self.create_attachment(source_message=deleted_source)
         deleted_conversation.delete()
 
         self.assertEqual(
-            [attachment.id for attachment in self.service.list()],
+            [attachment.id for attachment in self.service.list(scope_type="scene", scope_id="1")],
             [third.id, second.id, first.id],
         )
         self.assertEqual(
-            [attachment.id for attachment in self.service.list(keyword="alpha")],
+            [attachment.id for attachment in self.service.list(scope_type="scene", scope_id="1", keyword="alpha")],
             [second.id, first.id],
         )
         self.assertEqual(
-            [attachment.id for attachment in self.service.list(attachment_types=[AttachmentType.AI_ANALYSIS])],
+            [
+                attachment.id
+                for attachment in self.service.list(
+                    scope_type="scene", scope_id="1", attachment_types=[AttachmentType.AI_ANALYSIS]
+                )
+            ],
             [third.id, second.id],
         )
         self.assertEqual(
-            [attachment.id for attachment in self.service.list(statuses=[ExecutionStatus.FAILED])],
+            [
+                attachment.id
+                for attachment in self.service.list(scope_type="scene", scope_id="1", statuses=[ExecutionStatus.FAILED])
+            ],
             [second.id],
         )
         self.assertEqual(
             [
                 attachment.id
                 for attachment in self.service.list(
+                    scope_type="scene",
+                    scope_id="1",
                     attachment_types=[AttachmentType.AI_ANALYSIS, AttachmentType.FIELD_STATISTICS],
                     statuses=[ExecutionStatus.SUCCESS, ExecutionStatus.FAILED],
                     keyword="AI",
@@ -553,7 +592,7 @@ class AttachmentServiceTest(TestCase):
             )
 
         with self.assertNumQueries(1):
-            attachments = list(self.service.list())
+            attachments = list(self.service.list(scope_type="scene", scope_id="1"))
             serialized_attachments = AttachmentListItemSerializer(attachments, many=True).data
             conversation_ids = [attachment.source_message.conversation.id for attachment in attachments]
 
@@ -569,6 +608,78 @@ class AttachmentServiceTest(TestCase):
         }
         for attachment in attachments:
             self.assertTrue(required_deferred_fields.issubset(attachment.get_deferred_fields()))
+
+    def test_list_is_partitioned_by_concrete_and_visible_cross_scope(self):
+        scene_one_attachment = self.create_attachment()
+        scene_two = create_test_conversation(
+            scope_type="scene", scope_id="2", created_by=self.user, updated_by=self.user
+        )
+        scene_two_attachment = self.create_attachment(source_message=self.create_source_message(conversation=scene_two))
+        scene_three = create_test_conversation(
+            scope_type="scene", scope_id="3", created_by=self.user, updated_by=self.user
+        )
+        scene_three_attachment = self.create_attachment(
+            source_message=self.create_source_message(conversation=scene_three)
+        )
+        system = create_test_conversation(
+            scope_type="system", scope_id="bk_audit", created_by=self.user, updated_by=self.user
+        )
+        system_attachment = self.create_attachment(source_message=self.create_source_message(conversation=system))
+        hidden_system = create_test_conversation(
+            scope_type="system", scope_id="hidden", created_by=self.user, updated_by=self.user
+        )
+        hidden_system_attachment = self.create_attachment(
+            source_message=self.create_source_message(conversation=hidden_system)
+        )
+
+        self.assertEqual(
+            {item.id for item in self.service.list(scope_type="scene", scope_id="1")},
+            {scene_one_attachment.id},
+        )
+        self.assertEqual(
+            {item.id for item in self.service.list(scope_type="scene", scope_id="2")},
+            {scene_two_attachment.id},
+        )
+        self.assertEqual(
+            {item.id for item in self.service.list(scope_type="system", scope_id="bk_audit")},
+            {system_attachment.id},
+        )
+        self.assertEqual(
+            {item.id for item in self.service.list(scope_type="cross_scene", scope_id=None)},
+            {scene_one_attachment.id, scene_two_attachment.id},
+        )
+        self.assertEqual(
+            {item.id for item in self.service.list(scope_type="cross_system", scope_id=None)},
+            {system_attachment.id},
+        )
+        self.assertNotIn(
+            scene_three_attachment.id,
+            {item.id for item in self.service.list(scope_type="cross_scene", scope_id=None)},
+        )
+        self.assertNotIn(
+            hidden_system_attachment.id,
+            {item.id for item in self.service.list(scope_type="cross_system", scope_id=None)},
+        )
+
+    def test_running_worker_is_not_failed_when_user_scope_access_is_revoked(self):
+        self.register_async_handler()
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.PROCESSING,
+            task_id="task-running",
+        )
+        denied = PermissionException(action_name="访问场景", apply_url="", permission={})
+
+        with mock.patch.object(ScopePermission, "check_scope_entry", side_effect=denied):
+            execution = load_attachment_execution(
+                attachment_id=attachment.id,
+                task_id=attachment.task_id,
+                celery_task_id=attachment.task_id,
+            )
+
+        attachment.refresh_from_db()
+        self.assertEqual(execution.attachment.id, attachment.id)
+        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
 
     def test_update_title_only_allows_all_statuses_and_rejects_invalid_title(self):
         self.register_async_handler()
@@ -678,13 +789,13 @@ class AttachmentServiceTest(TestCase):
 
     def test_export_rejects_foreign_and_soft_deleted_conversation(self):
         self.register_exportable_handler()
-        foreign_conversation = Conversation.objects.create(created_by=self.other_user, updated_by=self.other_user)
+        foreign_conversation = create_test_conversation(created_by=self.other_user, updated_by=self.other_user)
         foreign = self.create_attachment(
             attachment_type=AttachmentType.AI_ANALYSIS,
             source_message=self.create_source_message(conversation=foreign_conversation, user=self.other_user),
             created_by=self.other_user,
         )
-        deleted_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        deleted_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         deleted = self.create_attachment(
             attachment_type=AttachmentType.AI_ANALYSIS,
             source_message=self.create_source_message(conversation=deleted_conversation),
@@ -1068,7 +1179,10 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         preserve_attachment_handler_registry(self)
         self.user = "alice"
         self.service = AttachmentService(user=self.user)
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        for patcher in AttachmentServiceTest._scope_permission_patchers():
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         self.source_message = Message.objects.create(
             conversation=self.conversation,
             message_type=MessageType.LOG_SEARCH,
@@ -1214,9 +1328,12 @@ class StreamAttachmentRetryTest(AttachmentHandlerRegistryMixin, TestCase):
 
     def setUp(self):
         self.user = "alice"
+        for patcher in AttachmentServiceTest._scope_permission_patchers():
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.service = AttachmentService(user=self.user)
         self.source_message = Message.objects.create(
-            conversation=Conversation.objects.create(created_by=self.user, updated_by=self.user),
+            conversation=create_test_conversation(created_by=self.user, updated_by=self.user),
             message_type=MessageType.LOG_SEARCH,
             status=ExecutionStatus.SUCCESS,
             task_id="source-task",

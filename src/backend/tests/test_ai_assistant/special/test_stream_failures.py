@@ -14,7 +14,7 @@ from services.web.ai_assistant.constants import (
     StreamArchiveStatus,
 )
 from services.web.ai_assistant.handlers import attachment_handler_registry
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Message
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.services import AttachmentService
 from services.web.ai_assistant.streaming import (
@@ -22,6 +22,7 @@ from services.web.ai_assistant.streaming import (
     RedisLiveStore,
     UIStreamRuntime,
 )
+from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant import special_handlers
 from tests.test_ai_assistant.celery_integration import (
     once_then_original,
@@ -29,6 +30,9 @@ from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
     wait_for_snapshot,
     wait_for_task_postrun,
+)
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
 )
 from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.special_handlers import (
@@ -64,8 +68,11 @@ class StreamFailureSpecialTest(TransactionTestCase):
         super().tearDownClass()
 
     def setUp(self):
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-failure-user"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         reset_checkpoint_observations()
         reset_competition_observations()
 

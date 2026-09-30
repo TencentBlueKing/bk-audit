@@ -110,7 +110,9 @@ AG-UI 事件由流中的业务 data 承载。快照里的 data 已是对象，SS
 
 从会话卡片打开：附件摘要 → `GET /attachments/{attachment_uid}/`。
 
-从报告列表打开：`GET /attachments/?attachment_type=AI_ANALYSIS` → 点击某项 uid → 请求详情。只列已完成报告时追加 status=SUCCESS；需要展示生成中任务时不固定此条件。
+从报告列表打开：`GET /attachments/?scope_type=system&scope_id={systemId}&attachment_type=AI_ANALYSIS` → 点击某项 uid → 请求详情。只列已完成报告时追加 status=SUCCESS；需要展示生成中任务时不固定此条件。
+
+附件列表传用户当前选择的会话查询范围；上例为具体系统，也可使用具体场景或 `cross_scene/cross_system`（cross 不传 `scope_id`）。列表项回显来源会话的实际绑定，完整规则见[公共指南](frontend_integration.md#scope-选择与数据隔离)。附件详情、重试和 SSE 按 UID 请求，不追加 scope 参数。
 
 得到详情后：
 

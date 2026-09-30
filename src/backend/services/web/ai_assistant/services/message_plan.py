@@ -145,19 +145,16 @@ class MessagePlanExecutionService:
         target_system = next(
             system for system in validated.system_context.systems if system.system_id == validated.target_system_id
         )
-        session_scope_type = execution.context_data.scope_type or "cross_system"
+        session_scope_type = execution.message.conversation.scope_type
+        session_scope_id = execution.message.conversation.scope_id
         messages: list[PreparedMessage] = []
         if selection_item is not None:
-            selection_input = SystemSelectionInputSchema(
-                system_ids=[validated.target_system_id],
-                scope_type=session_scope_type,
-                scope_id=execution.context_data.scope_id,
-            )
+            selection_input = SystemSelectionInputSchema(system_ids=[validated.target_system_id])
             selection_context = SystemSelectionContextSchema(
                 username=execution.context_data.username,
                 namespace=execution.context_data.namespace,
                 scope_type=session_scope_type,
-                scope_id=execution.context_data.scope_id,
+                scope_id=session_scope_id,
             )
             messages.append(
                 PreparedMessage(
@@ -182,7 +179,7 @@ class MessagePlanExecutionService:
                 system_id=validated.target_system_id,
                 source="natural_language",
                 session_scope_type=session_scope_type,
-                session_scope_id=execution.context_data.scope_id,
+                session_scope_id=session_scope_id,
                 extension_fields=target_system.extension_fields,
             )
             messages.append(

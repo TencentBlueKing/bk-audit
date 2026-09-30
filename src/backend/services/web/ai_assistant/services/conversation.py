@@ -12,6 +12,8 @@ from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
+    CrossScopeMutationNotAllowed,
+    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.models import (
     Attachment,
@@ -21,7 +23,13 @@ from services.web.ai_assistant.models import (
     Message,
 )
 from services.web.ai_assistant.services.message import MessageService
+from services.web.ai_assistant.services.scope import (
+    normalize_concrete_scope,
+    resolve_scope_visibility,
+)
 from services.web.ai_assistant.services.sidebar import ConversationSidebarService
+from services.web.common.constants import ScopeType
+from services.web.common.scope_permission import ScopePermission
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,22 +47,35 @@ class ConversationService:
         """绑定当前操作用户，同一次领域调用不再重复传递 user。"""
 
         self.user = user
+        self.scope_permission = ScopePermission(username=user)
         self.sidebar_service = ConversationSidebarService(user=user)
         self.message_service = MessageService(user=user)
 
     def list(
         self,
         *,
+        scope_type: str,
+        scope_id: str | None,
         has_attachments: bool | None = None,
         attachment_types: list[str] | None = None,
     ) -> QuerySet[Conversation]:
-        """平铺当前用户全部可见会话；附件存在性筛选与附件列表使用相同归属边界。
+        """平铺指定 scope 下可见会话；附件筛选与附件列表使用相同归属边界。
 
         附件类型单独传入时隐含存在该类型附件；has_attachments=False 时表示
         不存在指定类型附件。Exists 避免多附件连接重复会话和逐行查询。
         """
 
-        queryset = Conversation.objects.filter(created_by=self.user, is_deleted=False)
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
+        if not visibility.scope_ids:
+            return Conversation.objects.none()
+        queryset = Conversation.objects.filter(
+            created_by=self.user,
+            is_deleted=False,
+            scope_type=visibility.scope_type,
+            scope_id__in=visibility.scope_ids,
+        )
         if has_attachments is not None or attachment_types:
             attachments = Attachment.objects.filter(
                 source_message__conversation_id=OuterRef("pk"),
@@ -79,15 +100,22 @@ class ConversationService:
                 attachment_count=Count("messages__attachments", filter=owned_attachments),
                 **counts,
             )
-            .only("id", "uid", "title", "created_at", "updated_at")
+            .only("id", "uid", "title", "scope_type", "scope_id", "created_at", "updated_at")
             .order_by("-updated_at", "-id")
         )
 
     @transaction.atomic
-    def create_group(self, *, name: str) -> ConversationGroup:
+    def create_group(self, *, name: str, scope_type: str, scope_id: str) -> ConversationGroup:
         """创建空分组并将其 Node 插入根列表最前。"""
 
-        group = ConversationGroup.objects.create(name=name, created_by=self.user, updated_by=self.user)
+        scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
+        group = ConversationGroup.objects.create(
+            name=name,
+            scope_type=scope.scope_type,
+            scope_id=scope.scope_id,
+            created_by=self.user,
+            updated_by=self.user,
+        )
         self.sidebar_service.create_node(group=group)
         return group
 
@@ -113,10 +141,14 @@ class ConversationService:
             parent_node__group=group,
             created_by=self.user,
             conversation_id__isnull=False,
+            scope_type=group.scope_type,
+            scope_id=group.scope_id,
         )
         # 显式子查询避免 MySQL 对跨表 UPDATE 先将全部会话主键拉到 Python 内存。
         Conversation.objects.filter(
             created_by=self.user,
+            scope_type=group.scope_type,
+            scope_id=group.scope_id,
             id__in=Subquery(child_nodes.values("conversation_id")),
         ).delete()
         # 先分批删除会话 Node，避免 group.delete() 的 Collector 一次物化整个分组。
@@ -128,14 +160,19 @@ class ConversationService:
         self,
         *,
         title: str,
+        scope_type: str,
+        scope_id: str,
         group_uid: str | None = None,
         initial_message: Mapping[str, Any] | None = None,
     ) -> ConversationCreation:
         """创建会话、目标容器 Node 和可选初始化消息，数据库写入保持原子性。"""
 
+        scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
         operation_time = timezone.now()
         conversation = Conversation(
             title=title,
+            scope_type=scope.scope_type,
+            scope_id=scope.scope_id,
             created_by=self.user,
             updated_by=self.user,
             updated_at=operation_time,
@@ -153,6 +190,8 @@ class ConversationService:
             parent_node = None
             if group_uid is not None:
                 group = self._get_group(group_uid=group_uid, for_update=True)
+                if (group.scope_type, group.scope_id) != (scope.scope_type, scope.scope_id):
+                    raise SidebarScopeMismatch()
                 parent_node = self.sidebar_service.lock_group_node_for_update(group=group)
             conversation.save(update_record=False, force_insert=True)
             self.sidebar_service.create_node(conversation=conversation, parent_node=parent_node)
@@ -184,25 +223,50 @@ class ConversationService:
         """软删除会话并物理删除 Node，一期不提供恢复。"""
 
         conversation = self._get_conversation(conversation_uid=conversation_uid, for_update=True)
-        Conversation.objects.filter(id=conversation.id, created_by=self.user).delete()
-        ConversationSidebarNode.objects.filter(conversation=conversation, created_by=self.user).delete()
+        Conversation.objects.filter(
+            id=conversation.id,
+            created_by=self.user,
+            scope_type=conversation.scope_type,
+            scope_id=conversation.scope_id,
+        ).delete()
+        ConversationSidebarNode.objects.filter(
+            conversation=conversation,
+            created_by=self.user,
+            scope_type=conversation.scope_type,
+            scope_id=conversation.scope_id,
+        ).delete()
 
     @transaction.atomic
-    def clear_conversations(self) -> None:
-        """清空当前用户的会话和会话 Node，保留分组及空分组 Node。"""
+    def clear_conversations(self, *, scope_type: str, scope_id: str) -> None:
+        """清空当前用户在指定 concrete scope 的会话，保留分组及空分组 Node。"""
 
+        if scope_type in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
+            raise CrossScopeMutationNotAllowed()
+        scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
         # clear 与消息/附件最终写入共用 Conversation 行锁；后续删除严格绑定这批
         # 初始 ID，避免 READ COMMITTED 下误删事务期间并发创建的新会话 Node。
         conversation_ids = list(
             Conversation.objects.select_for_update()
-            .filter(created_by=self.user, is_deleted=False)
+            .filter(
+                created_by=self.user,
+                scope_type=scope.scope_type,
+                scope_id=scope.scope_id,
+                is_deleted=False,
+            )
             .order_by("id")
             .values_list("id", flat=True)
         )
-        Conversation.objects.filter(created_by=self.user, id__in=conversation_ids).delete()
+        Conversation.objects.filter(
+            created_by=self.user,
+            scope_type=scope.scope_type,
+            scope_id=scope.scope_id,
+            id__in=conversation_ids,
+        ).delete()
         self._delete_nodes_in_batches(
             ConversationSidebarNode.objects.filter(
                 created_by=self.user,
+                scope_type=scope.scope_type,
+                scope_id=scope.scope_id,
                 node_type=SidebarNodeType.CONVERSATION,
                 conversation_id__in=conversation_ids,
             )

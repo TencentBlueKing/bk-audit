@@ -32,15 +32,20 @@ class TestMessageCreation(AIAssistantPlatformTestCase):
                 message_type=MessageType.SYSTEM_SELECTION,
                 input_data={
                     "system_ids": [TARGET_SYSTEM_ID],
-                    "scope_type": self.default_scope_type,
-                    "scope_id": self.default_scope_id,
                 },
             )
         self.assertEqual(message.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(message.parent_message)
         self.assertTrue(message.task_id)
-        # session scope 固化到消息快照（后续链路继承）
-        self.assertEqual((message.context_data or {}).get("scope_type"), self.default_scope_type)
+        # session scope 由 Conversation 产生并固化到服务端消息快照。
+        self.assertEqual(
+            (message.context_data or {}).get("scope_type"),
+            self.conversation.scope_type,
+        )
+        self.assertEqual(
+            (message.context_data or {}).get("scope_id"),
+            self.conversation.scope_id,
+        )
 
     def test_create_log_search_failure_no_message(self):
         """异步化后创建即落库 PROCESSING；检索失败由任务收敛 FAILED（不再同步冒泡不落库）。"""

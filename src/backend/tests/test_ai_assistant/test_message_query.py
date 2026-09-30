@@ -1,3 +1,4 @@
+from unittest import mock
 from uuid import uuid4
 
 from services.web.ai_assistant.constants import (
@@ -13,13 +14,20 @@ from services.web.ai_assistant.exceptions import (
 )
 from services.web.ai_assistant.models import Attachment, Conversation, Message
 from services.web.ai_assistant.services import MessageService
+from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
+from tests.test_ai_assistant.factories import (
+    create_conversation as create_test_conversation,
+)
 
 
 class MessageQueryTest(TestCase):
     def setUp(self):
         self.user = "alice"
-        self.conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
+        scope_permission_patcher = mock.patch.object(ScopePermission, "check_scope_entry")
+        scope_permission_patcher.start()
+        self.addCleanup(scope_permission_patcher.stop)
         self.service = MessageService(user=self.user)
 
     def create_message(
@@ -88,7 +96,7 @@ class MessageQueryTest(TestCase):
         self.assertTrue(after.has_after)
 
     def test_empty_conversation_and_empty_anchor_windows_have_stable_boundaries(self):
-        empty_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
+        empty_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
         empty_window = self.service.list(conversation_uid=str(empty_conversation.uid))
         self.assertEqual(empty_window.results, [])
         self.assertIsNone(empty_window.first_uid)
@@ -127,8 +135,8 @@ class MessageQueryTest(TestCase):
                 self.service.list(conversation_uid=str(self.conversation.uid), **parameters)
 
     def test_anchor_must_belong_to_current_user_and_conversation(self):
-        other_conversation = Conversation.objects.create(created_by=self.user, updated_by=self.user)
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        other_conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         invalid_anchor_uids = (
             "not-a-uuid",
             str(uuid4()),
@@ -145,7 +153,7 @@ class MessageQueryTest(TestCase):
                 )
 
     def test_missing_or_foreign_conversation_is_not_an_empty_window(self):
-        foreign_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        foreign_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         invalid_conversation_uids = ("not-a-uuid", str(uuid4()), str(foreign_conversation.uid))
 
         for conversation_uid in invalid_conversation_uids:
@@ -154,7 +162,7 @@ class MessageQueryTest(TestCase):
 
     def test_get_is_scoped_to_current_user_and_active_conversation(self):
         message = self.create_message(0)
-        other_conversation = Conversation.objects.create(created_by="bob", updated_by="bob")
+        other_conversation = create_test_conversation(created_by="bob", updated_by="bob")
         foreign_message = self.create_message(1, conversation=other_conversation, user="bob")
 
         self.assertEqual(self.service.get(message_uid=str(message.uid)).id, message.id)
