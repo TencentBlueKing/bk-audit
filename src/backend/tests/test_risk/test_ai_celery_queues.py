@@ -5,10 +5,18 @@ from pathlib import Path
 import yaml
 from django.conf import settings
 
+from services.web.ai_assistant.tasks.audit_analysis import (
+    execute_log_analysis,
+    generate_log_analysis_title,
+)
 from services.web.ai_assistant.tasks.audit_search import (
     execute_log_search,
     execute_system_selection,
     execute_user_intent,
+)
+from services.web.ai_assistant.tasks.audit_statistics import (
+    generate_ai_statistics,
+    generate_field_statistics,
 )
 from services.web.ai_assistant.tasks.conversation import generate_conversation_title
 from services.web.common.ai import AIAgentTask, AIWorkloadQueue
@@ -32,6 +40,7 @@ class TestAICeleryWorkloadRouting(TestCase):
         for task in (
             execute_system_selection,
             execute_log_search,
+            generate_field_statistics,
             render_risk_report,
         ):
             with self.subTest(task=task.name):
@@ -43,11 +52,15 @@ class TestAICeleryWorkloadRouting(TestCase):
             generate_analyse_report,
             generate_analyse_report_title,
             generate_conversation_title,
+            generate_log_analysis_title,
             render_ai_variable,
+            execute_log_analysis,
+            generate_ai_statistics,
         ):
             with self.subTest(task=task.name):
                 self.assertEqual(task.queue, AIWorkloadQueue.DEFAULT)
                 self.assertIsNone(task.rate_limit)
+                self.assertIsInstance(task, AIAgentTask)
 
     def test_single_risk_report_keeps_legacy_queue_and_rate_limit(self):
         self.assertEqual(render_template.queue, AIWorkloadQueue.RISK_SINGLE)

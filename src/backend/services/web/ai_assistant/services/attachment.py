@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
+    ATTACHMENT_DEFAULT_ORDER_FIELDS,
     AttachmentErrorCode,
     AttachmentExportFormat,
     ExecutionMode,
@@ -32,7 +33,7 @@ from services.web.ai_assistant.handlers import (
     AttachmentExportResult,
     attachment_handler_registry,
 )
-from services.web.ai_assistant.models import Attachment, Conversation, Message
+from services.web.ai_assistant.models import Attachment, Conversation, Feedback, Message
 from services.web.ai_assistant.schemas import dump_snapshot, parse_snapshot
 from services.web.ai_assistant.services.attachment_execution import (
     finish_attachment_failure,
@@ -244,6 +245,8 @@ class AttachmentService:
         keyword: str = "",
         conversation_uid: str | None = None,
         source_message_uid: str | None = None,
+        limit: int | None = None,
+        order_fields: list[str] | None = None,
     ):
         """返回指定 concrete/cross scope 内的附件，并只加载列表视图必需字段。"""
 
@@ -267,7 +270,7 @@ class AttachmentService:
         if source_message_uid:
             filters["source_message__uid"] = source_message_uid
 
-        return (
+        queryset = (
             self._visible_attachments()
             .filter(**filters)
             .select_related("source_message__conversation")
@@ -292,9 +295,12 @@ class AttachmentService:
                 "title",
                 "content_updated_at",
                 "created_at",
+                "error_code",
+                "error_message",
             )
-            .order_by("-content_updated_at", "-id")
+            .order_by(*(order_fields or ATTACHMENT_DEFAULT_ORDER_FIELDS), "-id")
         )
+        return queryset[:limit] if limit is not None else queryset
 
     def update(
         self,
@@ -361,17 +367,19 @@ class AttachmentService:
         return attachment
 
     def retry(self, *, attachment_uid: str) -> Attachment:
-        """仅 FAILED + ASYNC 附件允许重试，并用旧 task_id 做 CAS 抢占。"""
+        """终态 SUCCESS/FAILED 的异步附件允许覆盖式重试，用旧 task_id 做 CAS 抢占。"""
 
         attachment = self.get(attachment_uid=attachment_uid)
         handler = attachment_handler_registry.require(attachment.attachment_type)
+        retryable_statuses = (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED)
         if (
-            attachment.status != ExecutionStatus.FAILED
+            attachment.status not in retryable_statuses
             or handler.execution_mode != ExecutionMode.ASYNC
             or not attachment.task_id
         ):
             raise InvalidAttachmentState()
 
+        expected_status = attachment.status
         old_task_id = attachment.task_id
         new_task_id = str(uuid4())
         now = timezone.now()
@@ -380,10 +388,11 @@ class AttachmentService:
         if not attachment.is_stream:
             stream_updates["stream_config"] = {}
         with transaction.atomic():
-            # 会话锁隔离删除竞态；附件本身仍依赖 FAILED + old task_id CAS 抢占重试。
-            self._lock_active_source(source_message=attachment.source_message)
-            updated = Attachment.restart_failed(
+            # 重试复用创建时快照；这里只锁定会话，避免来源消息后续编辑使历史附件永久失效。
+            self._lock_active_conversation(source_message=attachment.source_message)
+            updated = Attachment.restart_terminal(
                 instance_id=attachment.id,
+                expected_status=expected_status,
                 old_task_id=old_task_id,
                 new_task_id=new_task_id,
                 extra_updates={
@@ -396,6 +405,12 @@ class AttachmentService:
             )
             if not updated:
                 raise InvalidAttachmentState()
+            Feedback.objects.filter(
+                source_type=FeedbackSourceType.ATTACHMENT,
+                source_id=attachment.id,
+            ).delete()
+            # get() 可能已绑定旧反馈；删除后清掉临时属性，避免响应序列化读到脏缓存。
+            attachment._current_feedback = None
             # CAS 使用 QuerySet 原子抢占；刷新实例供 on_commit 投递和接口返回共同使用。
             attachment.refresh_from_db()
 
@@ -449,23 +464,29 @@ class AttachmentService:
     def _lock_active_source(self, *, source_message: Message) -> None:
         """锁定来源会话并复核消息，避免删除提交后继续创建隐藏附件。"""
 
-        conversation = (
-            Conversation.objects.select_for_update()
-            .filter(
-                id=source_message.conversation_id,
-                created_by=self.user,
-                is_deleted=False,
-            )
-            .only("id", "scope_type", "scope_id")
-            .first()
-        )
+        self._lock_active_conversation(source_message=source_message)
         message_exists = Message.objects.filter(
             id=source_message.id,
             conversation_id=source_message.conversation_id,
             created_by=self.user,
             status=ExecutionStatus.SUCCESS,
         ).exists()
-        if conversation is None or not message_exists:
+        if not message_exists:
+            raise InvalidAttachmentSource()
+
+    def _lock_active_conversation(self, *, source_message: Message) -> None:
+        """锁定来源会话并复核归属，供快照型附件重试隔离删除竞态。"""
+
+        conversation_exists = (
+            Conversation.objects.select_for_update()
+            .filter(
+                id=source_message.conversation_id,
+                created_by=self.user,
+                is_deleted=False,
+            )
+            .exists()
+        )
+        if not conversation_exists:
             raise InvalidAttachmentSource()
 
     @staticmethod

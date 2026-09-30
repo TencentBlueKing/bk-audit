@@ -89,6 +89,7 @@ class AIAssistantScopePermissionTest(TestCase):
             ("patch", f"conversation_groups/{self.group.uid}/", {}),
             ("delete", f"conversation_groups/{self.group.uid}/", {}),
             ("post", "conversations/", scope),
+            ("get", "conversations/", scope),
             ("get", f"conversations/{self.conversation.uid}/", {}),
             ("patch", f"conversations/{self.conversation.uid}/", {}),
             ("delete", f"conversations/{self.conversation.uid}/", {}),

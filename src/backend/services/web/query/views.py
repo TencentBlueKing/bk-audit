@@ -19,6 +19,8 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import api, resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from services.web.query.mcp_views import reject_body_namespace
+
 
 class EsQueryViewSet(ResourceViewSet):
     resource_routes = [
@@ -30,6 +32,12 @@ class EsQueryViewSet(ResourceViewSet):
 
 class CollectorQueryViewSet(ResourceViewSet):
     resource_routes = [
+        ResourceRoute(
+            "POST",
+            resource.query.mcp_get_log_field_metadata,
+            endpoint="field_metadata",
+            decorators=[reject_body_namespace],
+        ),
         ResourceRoute("POST", resource.query.collector_search, endpoint="search"),
         ResourceRoute("POST", resource.query.collector_search_statistic, endpoint="search_statistic"),
         ResourceRoute("GET", resource.query.collector_search_config, endpoint="search_config"),

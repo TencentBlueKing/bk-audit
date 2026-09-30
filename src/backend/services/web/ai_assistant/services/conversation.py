@@ -5,10 +5,10 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import QuerySet, Subquery
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import SidebarNodeType
+from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
@@ -16,15 +16,20 @@ from services.web.ai_assistant.exceptions import (
     SidebarScopeMismatch,
 )
 from services.web.ai_assistant.models import (
+    Attachment,
     Conversation,
     ConversationGroup,
     ConversationSidebarNode,
     Message,
 )
 from services.web.ai_assistant.services.message import MessageService
-from services.web.ai_assistant.services.scope import normalize_concrete_scope
+from services.web.ai_assistant.services.scope import (
+    normalize_concrete_scope,
+    resolve_scope_visibility,
+)
 from services.web.ai_assistant.services.sidebar import ConversationSidebarService
 from services.web.common.constants import ScopeType
+from services.web.common.scope_permission import ScopePermission
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,8 +47,62 @@ class ConversationService:
         """绑定当前操作用户，同一次领域调用不再重复传递 user。"""
 
         self.user = user
+        self.scope_permission = ScopePermission(username=user)
         self.sidebar_service = ConversationSidebarService(user=user)
         self.message_service = MessageService(user=user)
+
+    def list(
+        self,
+        *,
+        scope_type: str,
+        scope_id: str | None,
+        has_attachments: bool | None = None,
+        attachment_types: list[str] | None = None,
+    ) -> QuerySet[Conversation]:
+        """平铺指定 scope 下可见会话；附件筛选与附件列表使用相同归属边界。
+
+        附件类型单独传入时隐含存在该类型附件；has_attachments=False 时表示
+        不存在指定类型附件。Exists 避免多附件连接重复会话和逐行查询。
+        """
+
+        visibility = resolve_scope_visibility(
+            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+        )
+        if not visibility.scope_ids:
+            return Conversation.objects.none()
+        queryset = Conversation.objects.filter(
+            created_by=self.user,
+            is_deleted=False,
+            scope_type=visibility.scope_type,
+            scope_id__in=visibility.scope_ids,
+        )
+        if has_attachments is not None or attachment_types:
+            attachments = Attachment.objects.filter(
+                source_message__conversation_id=OuterRef("pk"),
+                created_by=self.user,
+            )
+            if attachment_types:
+                attachments = attachments.filter(attachment_type__in=attachment_types)
+            queryset = queryset.alias(has_matching_attachments=Exists(attachments)).filter(
+                has_matching_attachments=has_attachments if has_attachments is not None else True,
+            )
+        # 存在性过滤只筛会话；统计覆盖该会话下当前用户全部附件和执行状态。
+        owned_attachments = Q(messages__attachments__created_by=self.user)
+        counts = {
+            f"attachment_count_{attachment_type.lower()}": Count(
+                "messages__attachments",
+                filter=owned_attachments & Q(messages__attachments__attachment_type=attachment_type),
+            )
+            for attachment_type in AttachmentType.values
+        }
+        return (
+            queryset.annotate(
+                attachment_count=Count("messages__attachments", filter=owned_attachments),
+                **counts,
+            )
+            .only("id", "uid", "title", "scope_type", "scope_id", "created_at", "updated_at")
+            .order_by("-updated_at", "-id")
+        )
 
     @transaction.atomic
     def create_group(self, *, name: str, scope_type: str, scope_id: str) -> ConversationGroup:

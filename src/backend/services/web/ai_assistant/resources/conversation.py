@@ -11,6 +11,8 @@ from services.web.ai_assistant.serializers.conversation import (
     ConversationGroupDetailRequestSerializer,
     ConversationGroupResponseSerializer,
     ConversationGroupUpdateRequestSerializer,
+    ConversationListItemSerializer,
+    ConversationListRequestSerializer,
     ConversationResponseSerializer,
     ConversationSearchResponseSerializer,
     ConversationUpdateRequestSerializer,
@@ -125,6 +127,26 @@ class ClearConversations(AIAssistantResource):
 
     def perform_request(self, validated_request_data):
         ConversationService(user=get_request_username()).clear_conversations(**validated_request_data)
+
+
+class ListConversations(AIAssistantResource):
+    """返回指定权限 scope 内的会话摘要，不受侧栏分组或置顶位置限制。
+
+    concrete 查询传 scope_type=scene/system 与 scope_id；cross_scene/cross_system
+    查询仅聚合当前用户在该方向有权限的范围。附件存在性筛选不改变附件计数口径。
+    """
+
+    name = gettext_lazy("获取会话列表")
+    RequestSerializer = ConversationListRequestSerializer
+    ResponseSerializer = ConversationListItemSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        """转换公开附件类型参数后交由领域服务查询。"""
+
+        query = dict(validated_request_data)
+        query["attachment_types"] = query.pop("attachment_type", None)
+        return ConversationService(user=get_request_username()).list(**query)
 
 
 class ListPinnedConversations(AIAssistantResource):
