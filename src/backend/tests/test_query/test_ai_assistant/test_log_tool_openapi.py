@@ -222,14 +222,19 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
             "post"
         ]
         field_response = self._response_payload(field_operation)
-        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 100)
+        self.assertEqual(field_response["properties"]["fields"]["maxItems"], 50)
         field_item = self._component(field_response["properties"]["fields"]["items"])
         self.assertEqual(field_item["properties"]["sample_values"]["maxItems"], 3)
         self.assertIn(
-            "可见 JSON 根字段及其对象子字段",
+            "false 不能证明全范围没有下层字段",
             field_item["properties"]["is_expandable"]["description"],
         )
         self.assertIn("1 MiB", field_operation["description"])
+        sample_summary = field_response["properties"]["sample_summary"]
+        self.assertEqual(
+            set(sample_summary["properties"]),
+            {"sampling_performed", "sampled_count", "returned_field_count", "truncated"},
+        )
 
         aggregate_operation = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"][
             "post"

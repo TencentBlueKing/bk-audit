@@ -25,69 +25,16 @@ from services.web.query.resources.base import QueryBaseResource
 
 
 class MCPGetLogFieldMetadata(QueryBaseResource):
-    """探索当前用户可查询的日志根字段或下一层 JSON 字段，返回脱敏元信息。
+    """字段、路径或操作符不明确时，探索当前用户可查询的字段及脱敏元信息。
 
-    Web 字段选择器与 MCP 共用该 Resource。Web 使用
-    `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`；
-    namespace 从路径传入，身份来自当前请求，不在 body 提交 namespace 或 username。
+    省略 parent_field 返回声明的根目录，不采样；sampled_count=0 不代表没有日志。
+    指定 parent_field 时最多采样 50 条、返回 50 个直接子字段；继续展开应复用 field 的完整路径。
+    JSON 根列先筛有效父对象，VARIANT 根列使用兼容采样；已取得的目录可复用，总量用 COUNT。
 
-    ### Case 1：打开程序统计字段选择器
-
-    ```json
-    {
-      "condition": {
-        "scope_type": "system",
-        "scope_id": "your-system-id",
-        "start_time": "2026-09-17 00:00:00",
-        "end_time": "2026-09-17 23:59:59",
-        "conditions": []
-      }
-    }
-    ```
-
-    将 condition 替换为来源 LOG_SEARCH 消息 input_data.condition 的完整内容，保留过滤条件。
-    省略 parent_field 时返回声明的根字段，不查询 Doris 样本；sampling_performed=false，sampled_count=0 不代表无日志。
-    日志总量应调用 COUNT，已取得的字段目录可复用，不要为了确认总量重复探索或扩大时间范围。
-
-    ### Case 2：展开拓展字段
-
-    ```json
-    {
-      "condition": {
-        "scope_type": "system",
-        "scope_id": "your-system-id",
-        "start_time": "2026-09-17 00:00:00",
-        "end_time": "2026-09-17 23:59:59",
-        "conditions": []
-      },
-      "parent_field": {
-        "raw_name": "extend_data",
-        "keys": []
-      }
-    }
-    ```
-
-    下一次展开时用上一层返回的 field 替换 parent_field，保留完整 keys。
-    每次仅探索下一层，至多采样 50 条脱敏日志，不递归展开全部路径。
-
-    ### 如何使用返回值
-
-    fields[].field 可传给后续工具或程序统计附件；is_expandable 控制展开入口，
-    statistics_supported 控制统计选择提示，unsupported_reason 说明不可统计原因。
-    对象可展开不等于本身可统计。类型和覆盖率可能来自样本，不保证全范围一致；
-    执行统计时仍重新校验权限和真实类型。sample_summary.truncated 表示探索有截断，
-    不代表目录中不存在其他 key。业务 data 载荷不超过 1 MiB；配置可收紧采样与大小限制。
-    Web 使用登录用户身份，MCP 使用网关用户身份，均重验权限。
-
-    | HTTP / code | 含义 | 调用方动作 |
-    | --- | --- | --- |
-    | 400 / 2926001、2926002 | 条件、字段或操作符非法 | 修正输入，操作符以 allow_operators 为准 |
-    | 403 / 2926004 | 敏感字段权限不足 | 停止该字段查询，重新选择或申请权限 |
-    | 504 / 2926005、502 / 2926006 | 查询超时或失败 | 稍后重试；持续失败保留请求标识排查 |
-    | 413 / 2926007 | 探索响应过大 | 缩小探索范围 |
-
-    认证、系统查询权限等其他错误遵循平台公共协议，以上不是完整错误清单。
-
+    子字段仅代表样本发现：空目录、is_expandable=false 均不证明全范围没有子键。
+    目录类型、统计能力与 coverage 仅供参考，最终以全范围统计为准；对象可展开不等于可直接统计。
+    truncated=true 表示采样或字段/解析预算等导致发现不完整；业务 data 最大 1 MiB。
+    筛选使用返回的 allow_operators；权限拒绝时停止对应查询，查询失败不能当作零。
     """
 
     name = gettext_lazy("获取日志字段元信息")
@@ -126,7 +73,11 @@ class MCPSearchLogs(QueryBaseResource):
 
 
 class MCPAggregateLogs(QueryBaseResource):
-    """对当前用户可访问日志执行类型化、受控的分组聚合。
+    """对当前用户可访问日志执行类型化、受控的分组聚合，用于总量、分布和趋势。
+
+    TopN 按全范围排名；OTHER 汇总剩余非缺失类别，MISSING 独立，比例分母为全范围总量。
+    核对 query_summary 的范围、粒度及 complete，不从样例或 TopN 部分组推断总体。
+    查询失败不能当作零，应按错误提示调整请求；权限拒绝时停止对应查询。
 
     维度和指标 id 必须全局唯一，不能使用 group_id/group_kind/log_count/log_ratio/bucket_start；COUNT 示例为 {"id":"cnt","type":"COUNT"}。
     DISTINCT_COUNT 只需 id/type/field，不传 value_type/percentile；order_by 仅控制类别TopN，不能引用时间维度，时间桶自动升序。

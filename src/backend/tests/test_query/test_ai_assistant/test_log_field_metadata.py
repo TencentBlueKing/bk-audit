@@ -208,7 +208,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         )
 
     def test_statistics_capabilities_follow_declared_and_observed_types(self):
-        """数字混合保持数值，类别混合降级，容器和未知值不宣称直接支持。"""
+        """数字混合保持数值，类别混合降级，容器拒绝，未知值可尝试统计。"""
         rows = [
             {"extend_data": {"numeric": 1, "mixed": 1, "boolean": True, "object": {}, "array": [], "null": None}},
             {"extend_data": {"numeric": 1.5, "mixed": "1", "boolean": False, "object": 2, "array": "x"}},
@@ -224,7 +224,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             ("boolean", "CATEGORICAL", None, ["COUNT", "DISTINCT_COUNT"]),
             ("object", None, "OBJECT", []),
             ("array", None, "ARRAY", []),
-            ("null", None, "UNKNOWN_TYPE", []),
+            ("null", None, None, ["COUNT", "DISTINCT_COUNT"]),
         ):
             with self.subTest(name=name):
                 self.assertEqual(
@@ -233,7 +233,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
                         for key in ("statistics_supported", "statistics_kind", "unsupported_reason", "allowed_metrics")
                     },
                     {
-                        "statistics_supported": kind is not None,
+                        "statistics_supported": kind is not None or name == "null",
                         "statistics_kind": kind,
                         "unsupported_reason": reason,
                         "allowed_metrics": metrics,
@@ -243,6 +243,18 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertEqual(roots["start_time"].get("statistics_kind"), "NUMERIC")
         self.assertEqual(roots["username"].get("statistics_kind"), "CATEGORICAL")
         self.assertFalse(roots["extend_data"].get("statistics_supported", True))
+
+    def test_null_only_child_can_attempt_statistics_without_a_sample_type_claim(self):
+        """目录样本全为空时仍允许全范围统计决定最终类型。"""
+        fields = {
+            item.field.keys[-1]: item
+            for item in self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data")).fields
+        }
+
+        self.assertTrue(fields["nullable"].statistics_supported)
+        self.assertIsNone(fields["nullable"].statistics_kind)
+        self.assertIsNone(fields["nullable"].unsupported_reason)
+        self.assertEqual([metric.value for metric in fields["nullable"].allowed_metrics], ["COUNT", "DISTINCT_COUNT"])
 
     def test_unauthorized_catalog_field_has_no_samples_or_statistics(self):
         """即使脱敏留下遮罩值，也不能把无权字段当成可统计类别。"""
@@ -500,9 +512,89 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
 
         self.assertEqual(result.fields, [])
+        self.assertEqual(
+            result.sample_summary.model_dump(),
+            {"sampling_performed": True, "sampled_count": 0, "returned_field_count": 0, "truncated": False},
+        )
+
+    def test_sparse_parent_is_discovered_from_sql_qualified_rows(self):
+        """普通最新 50 行没有父对象时，由 SQL 挑出的有效对象仍能发现子键。"""
+        qualifying_row = {"extend_data": {"rare": {"nested": "visible"}}}
+        self.mock_query.side_effect = lambda **kwargs: {
+            "list": [qualifying_row]
+            if "JSON_KEYS(`extend_data`,'$')" in kwargs["sql"]
+            else [{"extend_data": None} for _ in range(50)]
+        }
+        self.mock_parser.return_value.parse_data.side_effect = lambda rows, **kwargs: rows
+
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
+
+        self.assertEqual([item.field.keys for item in result.fields], [["rare"]])
+        self.assertTrue(result.fields[0].is_expandable)
+        self.assertEqual(result.sample_summary.sampled_count, 1)
+        self.assertEqual(self.mock_query.call_count, 1)
+
+    def test_known_parent_is_filtered_in_sql_before_sampling(self):
+        """已知父路径用 Doris 选出非空对象行，再从脱敏样本只发现直接子键。"""
+        qualifying_row = {"extend_data": {"risk": {"score": 80, "level": "high"}}}
+
+        def query_by_sql(**kwargs):
+            if "JSON_TYPE" in kwargs["sql"] and "JSON_KEYS" in kwargs["sql"]:
+                return {"list": [qualifying_row]}
+            return {"list": [{"extend_data": None} for _ in range(50)]}
+
+        self.mock_query.side_effect = query_by_sql
+        self.mock_parser.return_value.parse_data.side_effect = lambda rows, **kwargs: rows
+
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data", keys=["risk"]))
+
+        self.assertEqual([field.field.keys for field in result.fields], [["risk", "level"], ["risk", "score"]])
+        self.assertEqual(result.sample_summary.sampled_count, 1)
+        self.assertEqual(self.mock_query.call_count, 1)
+        sql = self.mock_query.call_args.kwargs["sql"]
+        self.assertIn("JSON_TYPE(`extend_data`,'$.risk')", sql)
+        self.assertIn("ARRAY_SIZE(JSON_KEYS(`extend_data`,'$.risk'))", sql)
+        self.assertIn("LIMIT 50", sql)
+
+    def test_nested_parent_returns_only_its_direct_child_paths(self):
+        """展开 a.b 只返回 a.b.c、a.b.d、a.b.e，不返回兄弟或孙级字段。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"extend_data": {"a": {"b": {"c": 1, "d": None, "e": {"deep": True}}, "sibling": 2}}}
+        ]
+
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data", keys=["a", "b"]))
+
+        self.assertEqual(
+            [item.field.keys for item in result.fields], [["a", "b", "c"], ["a", "b", "d"], ["a", "b", "e"]]
+        )
+        self.assertTrue(result.fields[-1].is_expandable)
+        self.assertIn("JSON_TYPE(`extend_data`,'$.a.b')", self.mock_query.call_args.kwargs["sql"])
+
+    def test_full_sample_budget_marks_field_discovery_incomplete(self):
+        """50 条原始父对象全部脱敏为空时，不把空目录当作字段全集。"""
+        page = {"list": [{"extend_data": {"private": index}} for index in range(50)]}
+        self.mock_query.return_value = page
+        self.mock_parser.return_value.parse_data.side_effect = lambda rows, **kwargs: [
+            {"extend_data": {}} for _ in rows
+        ]
+
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
+
+        self.assertEqual(result.fields, [])
+        self.assertEqual(result.sample_summary.sampled_count, 50)
+        self.assertTrue(result.sample_summary.truncated)
+        self.assertEqual(self.mock_query.call_count, 1)
+
+    @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ROWS=0)
+    def test_disabled_sample_budget_does_not_claim_complete_discovery(self):
+        """采样预算为零时空目录仍应显式声明探索不完整。"""
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
+
+        self.assertEqual(result.fields, [])
         self.assertEqual(result.sample_summary.sampled_count, 0)
-        self.assertEqual(result.sample_summary.returned_field_count, 0)
-        self.assertFalse(result.sample_summary.truncated)
+        self.assertFalse(result.sample_summary.sampling_performed)
+        self.assertTrue(result.sample_summary.truncated)
+        self.mock_query.assert_not_called()
 
     @override_settings(AI_LOG_FIELD_METADATA_SAMPLE_VALUES=1)
     def test_sample_values_are_desensitized_deduplicated_and_bounded(self):
@@ -585,31 +677,31 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
 
     @override_settings(AI_LOG_FIELD_METADATA_MAX_FIELDS=999)
     def test_field_count_hard_limit_accepts_limit_minus_one_and_limit_then_truncates_plus_one(self):
-        for count in (99, 100, 101):
+        for count in (49, 50, 51):
             with self.subTest(count=count):
                 self.safe_rows = [{"extend_data": {f"field_{index:03d}": index for index in range(count)}}]
                 self.mock_parser.return_value.parse_data.return_value = self.safe_rows
 
                 result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
 
-                self.assertEqual(len(result.fields), min(count, 100))
-                self.assertEqual(result.sample_summary.truncated, count > 100)
+                self.assertEqual(len(result.fields), min(count, 50))
+                self.assertEqual(result.sample_summary.truncated, count > 50)
 
     @override_settings(AI_LOG_FIELD_METADATA_MAX_FIELDS=999)
     def test_extended_field_scan_stops_after_hard_limit_plus_one_inspected_keys(self):
         class GuardedFields(dict):
             def items(self):
                 for index, item in enumerate(super().items()):
-                    if index >= 101:
+                    if index >= 51:
                         raise AssertionError("must stop scanning after hard max plus one")
                     yield item
 
-        self.safe_rows = [{"extend_data": GuardedFields({f"field_{index:03d}": index for index in range(102)})}]
+        self.safe_rows = [{"extend_data": GuardedFields({f"field_{index:03d}": index for index in range(52)})}]
         self.mock_parser.return_value.parse_data.return_value = self.safe_rows
 
         result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
 
-        self.assertEqual(len(result.fields), 100)
+        self.assertEqual(len(result.fields), 50)
         self.assertTrue(result.sample_summary.truncated)
 
     @override_settings(AI_LOG_FIELD_METADATA_MAX_FIELDS=2)
@@ -821,7 +913,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             LogFieldMetadataItem(
                 field=LogFieldRef(raw_name="username"),
                 category=LogFieldCategory.BASIC,
-                description=f"{index}-" + "x" * 11000,
+                description=f"{index}-" + "x" * 25000,
                 type_source=LogFieldMetadataTypeSource.DECLARED,
             )
             for index in range(100)
@@ -854,6 +946,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertEqual(
             sql,
             "SELECT `extend_data`,`system_id`,`resource_type_id`,`action_id` FROM test_rt"
+            " WHERE JSON_TYPE(`extend_data`,'$')='object' AND ARRAY_SIZE(JSON_KEYS(`extend_data`,'$'))>0"
             " ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 50",
         )
 

@@ -502,6 +502,33 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         self.assertIn(r'quoted\\"key', sql)
         self.assertIn(r"path\\\\key", sql)
 
+    def test_parent_object_sample_preserves_scope_and_escapes_json_path(self):
+        """父对象筛选沿用权限和时间条件，特殊子键仍按 JSONPath 字面量查询。"""
+        builder = ProjectedLogSQLBuilder(
+            table="test_rt.doris",
+            conditions=[
+                {"field": {"raw_name": "system_id"}, "operator": "eq", "filters": ["scope"]},
+                {"field": {"raw_name": "thedate"}, "operator": "gte", "filters": ["20260901"]},
+            ],
+            sort_list=[],
+            page=2,
+            page_size=25,
+        )
+
+        sql = builder.build_parent_object_sample_sql(
+            [LogFieldRef(raw_name="extend_data"), LogFieldRef(raw_name="system_id")],
+            LogFieldRef(raw_name="extend_data", keys=['quoted"key', r"path\key"]),
+        )
+
+        self.assertIn("`system_id`='scope'", sql)
+        self.assertIn("`thedate`>='20260901'", sql)
+        self.assertEqual(sql.count("JSON_TYPE(`extend_data`"), 1)
+        self.assertEqual(sql.count("JSON_KEYS(`extend_data`"), 1)
+        self.assertIn(r'quoted\\"key', sql)
+        self.assertIn(r"path\\\\key", sql)
+        self.assertTrue(sql.endswith("LIMIT 25"), sql)
+        self.assertNotIn("OFFSET", sql)
+
     def test_rejects_non_field_reference(self):
         with self.assertRaises(TypeError):
             self._builder().build_data_sql(["username"])
