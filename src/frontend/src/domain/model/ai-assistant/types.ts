@@ -412,6 +412,132 @@ export interface AiAnalysisInputData {
   instruction?: string;
 }
 
+/** 日志字段引用；字段目录返回后原样回传，不自行拼路径 */
+export interface AiLogFieldRef {
+  raw_name: string;
+  /** JSON 子路径，普通字段为空数组 */
+  keys: string[];
+  /** 仅类型提示，不决定 statistics_kind */
+  field_type?: string;
+}
+
+export type AiStatisticsKind = 'NUMERIC' | 'CATEGORICAL' | string;
+
+/** VALUE 为真实类别，OTHER 汇总未入选 TopN 的非缺失类别，MISSING 汇总缺失值 */
+export type AiStatisticsGroupKind = 'VALUE' | 'OTHER' | 'MISSING' | string;
+
+export type AiStatisticsInterval = 'AUTO' | 'MINUTE' | 'HOUR' | 'DAY' | string;
+
+export interface AiStatisticsFieldInfo {
+  raw_name: string;
+  keys: string[];
+  display_name: string;
+}
+
+export interface AiStatisticsOverview {
+  total_count: number;
+  present_count: number;
+  missing_count: number;
+  /** 0～1，总数为 0 时为 null */
+  present_ratio: number | null;
+}
+
+export interface AiStatisticsDistributionGroup {
+  group_id: string;
+  kind: AiStatisticsGroupKind;
+  value_type?: 'number' | 'string' | 'boolean' | null;
+  /** 保留原始标量类型与空字符串；OTHER / MISSING 为 null */
+  value: string | number | boolean | null;
+  count: number;
+  /** 0～1，总数为 0 时为 null */
+  ratio: number | null;
+}
+
+export interface AiStatisticsDistribution {
+  top_n: number;
+  has_other: boolean;
+  groups: AiStatisticsDistributionGroup[];
+}
+
+export interface AiStatisticsCountSeries {
+  group_id: string;
+  /** 与 bucket_starts 等长同序，空桶为 0 */
+  counts: number[];
+}
+
+export interface AiStatisticsTimeSeries {
+  requested_interval: AiStatisticsInterval;
+  effective_interval: AiStatisticsInterval;
+  timezone: string;
+  bucket_starts: string[];
+  series: AiStatisticsCountSeries[];
+}
+
+export interface AiStatisticsNumericSummary {
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  /** 近似分位数算法 */
+  median: number | null;
+  median_is_approximate?: boolean;
+  valid_count: number;
+  conversion_failed_count: number;
+}
+
+/** 统计实际执行范围与预算决策，不代表分页 */
+export interface AiStatisticsQuerySummary {
+  total_count?: number;
+  top_n?: number | null;
+  has_other?: boolean;
+  scope_id?: string;
+  start_time?: string;
+  end_time?: string;
+  requested_interval?: AiStatisticsInterval | null;
+  effective_interval?: AiStatisticsInterval | null;
+  timezone?: string;
+  complete?: boolean;
+}
+
+/** FIELD_STATISTICS 成功产物 */
+export interface AiFieldStatisticsOutput {
+  field: AiStatisticsFieldInfo;
+  statistics_kind: AiStatisticsKind;
+  overview: AiStatisticsOverview;
+  distribution: AiStatisticsDistribution;
+  time_series: AiStatisticsTimeSeries;
+  /** 仅 NUMERIC 返回 */
+  numeric_summary: AiStatisticsNumericSummary | null;
+  query_summary?: AiStatisticsQuerySummary;
+}
+
+/** AI_STATISTICS 成功产物：图表配置标签内未解析原文 */
+export interface AiStatisticsContentOutput {
+  content: string;
+}
+
+export interface AiFieldStatisticsInputData {
+  field: AiLogFieldRef;
+  /** 不传用后端默认（10） */
+  top_n?: number;
+  interval?: AiStatisticsInterval;
+}
+
+export interface AiStatisticsInputData {
+  instruction: string;
+}
+
+/**
+ * 附件产物：AI_ANALYSIS 为 markdown 对象，FIELD_STATISTICS 为固定语义包，
+ * AI_STATISTICS 为 { content } 原文。取 markdown 用 attachmentMarkdown 收窄。
+ */
+export type AiAttachmentOutputData =
+  | { markdown?: string; [key: string]: any }
+  | AiFieldStatisticsOutput
+  | AiStatisticsContentOutput
+  | any[]
+  | string
+  | null;
+
 export interface AiAttachment {
   uid: string;
   source_message_uid: string;
@@ -420,10 +546,7 @@ export interface AiAttachment {
   title?: string;
   content_updated_at?: string | null;
   input_data?: Record<string, any> | null;
-  output_data?: {
-    markdown?: string;
-    [key: string]: any;
-  } | null;
+  output_data?: AiAttachmentOutputData | null;
   error_code?: string | null;
   error_message?: string | null;
   supports_feedback?: boolean;

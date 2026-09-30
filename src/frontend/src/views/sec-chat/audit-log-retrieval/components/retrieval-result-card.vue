@@ -328,7 +328,7 @@
                       class="view-icon"
                       :class="{ 'is-loading': item.retrying }"
                       type="refresh" />
-                    {{ t('重新分析') }}
+                    {{ item.type === 'statistics' ? t('重新统计') : t('重新分析') }}
                   </button>
                 </template>
                 <template v-else>
@@ -426,7 +426,9 @@
     <log-statistics-dialog
       v-if="statisticsDialogShow"
       v-model="statisticsDialogShow"
-      @confirm="handleStatisticsConfirm" />
+      :condition="displayResult.rawCondition || null"
+      :submitting="statisticsSubmitting"
+      @select="handleStatisticsSelect" />
 
     <log-report-drawer
       v-if="reportDrawerShow"
@@ -441,8 +443,13 @@
     <log-statistics-drawer
       v-if="statisticsDrawerShow"
       v-model:is-show="statisticsDrawerShow"
+      :attachment-type="statisticsAttachmentType"
       :created-at="statisticsCreatedAt"
-      :fields="statisticsFields" />
+      :error-message="statisticsErrorMessage"
+      :output-data="statisticsOutputData"
+      :regenerating="statisticsRegenerating"
+      :status="statisticsStatus"
+      @regenerate="handleStatisticsRegenerate" />
   </div>
 </template>
 
@@ -453,9 +460,13 @@
 
   import AiAssistantManageService from '@service/ai-assistant-manage';
 
+  import { attachmentMarkdown } from '@model/ai-assistant/attachment';
   import type {
     AiAttachment,
     AiAttachmentListItem,
+    AiAttachmentOutputData,
+    AiAttachmentStatus,
+    AiAttachmentType,
     AiCreateAttachmentParams,
   } from '@model/ai-assistant/types';
 
@@ -491,10 +502,11 @@
     exportLogSearchFull,
     exportLogSearchPreview,
   } from '../utils/export-log-search';
+  import { isStatisticsAttachmentType } from '../utils/map-statistics-output';
   import JsonFieldPreview from './json-field-preview.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
-  import LogStatisticsDialog from './log-statistics-dialog.vue';
+  import LogStatisticsDialog, { type StatisticsSelectPayload } from './log-statistics-dialog.vue';
   import LogStatisticsDrawer from './log-statistics-drawer.vue';
   import SelectedSystemsPanel from './selected-systems-panel.vue';
 
@@ -551,6 +563,8 @@
     exportFormats?: string[];
     isStream?: boolean;
     executionId?: string | null;
+    attachmentType?: AiAttachmentType;
+    outputData?: AiAttachmentOutputData;
   }
 
   /** 多列时保证列宽可读，超出横向滚动 */
@@ -835,12 +849,18 @@
   const analyzeDialogShow = ref(false);
   const analyzeSubmitting = ref(false);
   const statisticsDialogShow = ref(false);
+  const statisticsSubmitting = ref(false);
   const reportItems = ref<ReportStatusItem[]>([]);
   const reportDrawerShow = ref(false);
   const activeReport = ref<LogReportInfo | null>(null);
   const statisticsDrawerShow = ref(false);
   const statisticsCreatedAt = ref('');
-  const statisticsFields = ref<string[]>([]);
+  const statisticsOutputData = ref<AiAttachmentOutputData>(null);
+  const statisticsAttachmentType = ref('');
+  const statisticsStatus = ref('');
+  const statisticsErrorMessage = ref('');
+  const statisticsRegenerating = ref(false);
+  const activeStatisticsId = ref('');
   const followHandles = new Map<string, FollowAttachmentHandle>();
   /** 本次会话新建/重试成功后按稿自动打开抽屉 */
   const pendingAutoOpenIds = new Set<string>();
@@ -900,7 +920,12 @@
         reportDrawerShow.value = false;
         activeReport.value = null;
         statisticsDrawerShow.value = false;
-        statisticsFields.value = [];
+        statisticsOutputData.value = null;
+        statisticsAttachmentType.value = '';
+        statisticsStatus.value = '';
+        statisticsErrorMessage.value = '';
+        statisticsRegenerating.value = false;
+        activeStatisticsId.value = '';
         pendingAutoOpenIds.clear();
         hiddenUntilDrawerCloseIds.value = new Set();
         stopAllFollows();
@@ -964,6 +989,12 @@
     return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value;
   };
 
+  const REPORT_STATUS_TO_ATTACHMENT: Record<ReportStatusItem['status'], AiAttachmentStatus> = {
+    loading: 'PROCESSING',
+    failed: 'FAILED',
+    done: 'SUCCESS',
+  };
+
   const resolveReportStatus = (status: AiAttachment['status']): ReportStatusItem['status'] => {
     if (status === 'SUCCESS') return 'done';
     if (status === 'FAILED') return 'failed';
@@ -973,17 +1004,22 @@
   const mapAttachmentToReport = (attachment: AiAttachment | AiAttachmentListItem): ReportStatusItem => {
     const status = resolveReportStatus(attachment.status);
     const detail = attachment as AiAttachment;
+    const isStats = isStatisticsAttachmentType(attachment.attachment_type);
     return {
       id: attachment.uid,
-      type: 'analyze',
-      title: status === 'loading' ? t('智能分析中') : (attachment.title || t('智能分析报告')),
+      type: isStats ? 'statistics' : 'analyze',
+      title: status === 'loading'
+        ? (isStats ? t('数据统计中') : t('智能分析中'))
+        : (attachment.title || (isStats ? t('数据统计报告') : t('智能分析报告'))),
       createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
       status,
       errorMessage: detail.error_message || '',
-      markdown: detail.output_data?.markdown || '',
+      markdown: attachmentMarkdown(detail.output_data),
       exportFormats: detail.export_formats || attachment.export_formats || [],
       isStream: detail.is_stream,
       retrying: false,
+      attachmentType: attachment.attachment_type,
+      outputData: detail.output_data || null,
     };
   };
 
@@ -1036,10 +1072,25 @@
         ...activeReport.value,
         title: attachment.title || activeReport.value.title,
         createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
-        markdown: attachment.output_data?.markdown || activeReport.value.markdown,
+        markdown: attachmentMarkdown(attachment.output_data) || activeReport.value.markdown,
         exportFormats: attachment.export_formats || activeReport.value.exportFormats,
         analysisMode: String(attachment.input_data?.analysis_mode || activeReport.value.analysisMode || ''),
+        outputData: attachment.output_data || activeReport.value.outputData,
+        attachmentType: attachment.attachment_type || activeReport.value.attachmentType,
       };
+    }
+    // 抽屉开着时跟随详情刷新；非当前附件的迟到回包不改抽屉
+    if (activeStatisticsId.value === attachment.uid) {
+      statisticsCreatedAt.value = formatAttachmentTime(
+        attachment.created_at || attachment.content_updated_at || '',
+      ) || statisticsCreatedAt.value;
+      statisticsOutputData.value = attachment.output_data ?? null;
+      statisticsAttachmentType.value = attachment.attachment_type || statisticsAttachmentType.value;
+      statisticsStatus.value = attachment.status || statisticsStatus.value;
+      statisticsErrorMessage.value = attachment.error_message || '';
+      if (attachment.status !== 'PROCESSING') {
+        statisticsRegenerating.value = false;
+      }
     }
     maybeAutoOpenReport(attachment.uid);
   };
@@ -1061,11 +1112,28 @@
     }
   });
 
-  const startFollow = (attachmentUid: string, previousExecutionId?: string | null) => {
+  watch(statisticsDrawerShow, (show, wasShow) => {
+    if (wasShow && !show && activeStatisticsId.value) {
+      revealReportRow(activeStatisticsId.value);
+      activeStatisticsId.value = '';
+      statisticsRegenerating.value = false;
+    }
+  });
+
+  /**
+   * 统计附件虽然 is_stream 为 true，但过程流对结果面板没有意义，
+   * 强制走轮询，避免多开一条 SSE 连接。
+   */
+  const startFollow = (
+    attachmentUid: string,
+    previousExecutionId?: string | null,
+    pollOnly = false,
+  ) => {
     stopFollow(attachmentUid);
     const handle = followAttachment({
       attachmentUid,
       previousExecutionId,
+      pollOnly,
       onDetail: applyAttachmentDetail,
       onArchiveIncomplete: () => {
         messageWarn(t('部分生成过程不可恢复'));
@@ -1088,14 +1156,13 @@
       // 消息块按生成时间倒序：附件列表默认排 content_updated_at，编辑或重试会让报告前移
       const list = await AiAssistantManageService.fetchAttachments({
         source_message_uid: messageUid,
-        attachment_type: 'AI_ANALYSIS',
         sort: '-created_at',
       }, { catchError: true });
       const mapped = list.map(item => mapAttachmentToReport(item));
       reportItems.value = mapped;
       mapped
         .filter(item => item.status === 'loading')
-        .forEach(item => startFollow(item.id));
+        .forEach(item => startFollow(item.id, null, item.type === 'statistics'));
     } catch {
       // 历史附件加载失败不影响检索卡
     }
@@ -1105,8 +1172,8 @@
     void hydrateAttachments(displayMessageUid.value);
   }
 
-  const resolveCreateErrorMessage = (error: any) => (
-    error?.message || t('创建分析失败')
+  const resolveCreateErrorMessage = (error: any, fallback?: string) => (
+    error?.message || fallback || t('创建分析失败')
   );
 
   const handlePageChange = (page: number) => {
@@ -1218,10 +1285,80 @@
     statisticsDialogShow.value = true;
   };
 
-  const handleStatisticsConfirm = (payload: { fields: string[]; customPrompt?: string }) => {
+  const handleStatisticsSelect = async (payload: StatisticsSelectPayload) => {
+    const messageUid = displayMessageUid.value || props.messageUid;
+    if (!messageUid) {
+      messageWarn(t('缺少结果消息无法统计'));
+      return;
+    }
+    if (statisticsSubmitting.value) return;
+    const isCustom = payload.type === 'custom';
+    if (!isCustom && !payload.field) {
+      messageWarn(t('请选择需要统计的字段'));
+      return;
+    }
+
+    const params: AiCreateAttachmentParams = isCustom
+      ? {
+        message_uid: messageUid,
+        attachment_type: 'AI_STATISTICS',
+        input_data: {
+          instruction: payload.prompt || '',
+        },
+      }
+      : {
+        message_uid: messageUid,
+        attachment_type: 'FIELD_STATISTICS',
+        input_data: {
+          // 字段统计按 raw_name + keys 定位，JSON 子字段不能压成点号字符串
+          field: {
+            raw_name: payload.field?.raw_name || '',
+            keys: payload.field?.keys || [],
+          },
+        },
+      };
+
+    const placeholderId = `pending-statistics-${Date.now()}`;
+    const placeholder: ReportStatusItem = {
+      id: placeholderId,
+      type: 'statistics',
+      title: t('数据统计中'),
+      createdAt: '',
+      status: 'loading',
+      attachmentType: isCustom ? 'AI_STATISTICS' : 'FIELD_STATISTICS',
+    };
+
+    statisticsSubmitting.value = true;
     emit('statistics');
-    void payload;
-    messageWarn(t('数据统计尚未开放'));
+    upsertReport(placeholder, true);
+    statisticsDialogShow.value = false;
+    try {
+      const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
+      removeReport(placeholderId);
+      upsertReport(mapAttachmentToReport(attachment), true);
+      markPendingAutoOpen(attachment.uid);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, null, true);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      try {
+        await hydrateAttachments(messageUid);
+        if (reportItems.value.some(item => item.status === 'loading' && item.id !== placeholderId)) {
+          removeReport(placeholderId);
+          statisticsDialogShow.value = false;
+          messageWarn(t('统计请求未确认'));
+          return;
+        }
+      } catch {
+        // 刷新失败时仍提示创建失败
+      }
+      removeReport(placeholderId);
+      messageError(resolveCreateErrorMessage(error, t('创建统计失败')));
+    } finally {
+      statisticsSubmitting.value = false;
+    }
   };
 
   const resolvePreviousExecutionId = async (attachmentUid: string, fallback?: string | null) => {
@@ -1235,43 +1372,84 @@
     }
   };
 
+  /** 后端 SUCCESS 与 FAILED 都可重试，统计在抽屉里走同一条重新生成链路 */
   const handleRetryReport = async (item: ReportStatusItem) => {
-    if (item.retrying || item.status !== 'failed') return;
+    if (item.retrying || item.status === 'loading') return;
+    const isStats = item.type === 'statistics';
+    const previousStatus = item.status;
     upsertReport({
       ...item,
       retrying: true,
       status: 'loading',
-      title: t('智能分析中'),
+      title: isStats ? t('数据统计中') : t('智能分析中'),
       errorMessage: '',
     });
     stopFollow(item.id);
-    markPendingAutoOpen(item.id);
-    const previousExecutionId = await resolvePreviousExecutionId(item.id, item.executionId);
+    if (isStats && activeStatisticsId.value === item.id) {
+      // 抽屉里发起的重新生成，结果直接刷在当前抽屉上，不重复自动打开
+      statisticsRegenerating.value = true;
+      statisticsStatus.value = 'PROCESSING';
+      statisticsErrorMessage.value = '';
+    } else {
+      markPendingAutoOpen(item.id);
+    }
+    // 统计不消费过程流，不必回溯上一次执行
+    const previousExecutionId = isStats
+      ? null
+      : await resolvePreviousExecutionId(item.id, item.executionId);
     try {
       const attachment = await AiAssistantManageService.retryAttachment({
         attachment_uid: item.id,
       }, { catchError: true });
       applyAttachmentDetail(attachment);
       if (attachment.status === 'PROCESSING') {
-        startFollow(attachment.uid, previousExecutionId);
+        startFollow(attachment.uid, previousExecutionId, isStats);
       }
     } catch (error: any) {
       pendingAutoOpenIds.delete(item.id);
       upsertReport({
         ...item,
         retrying: false,
-        status: 'failed',
+        status: previousStatus,
         errorMessage: error?.message || item.errorMessage,
       });
-      messageError(error?.message || t('创建分析失败'));
+      if (activeStatisticsId.value === item.id) {
+        statisticsRegenerating.value = false;
+        statisticsStatus.value = REPORT_STATUS_TO_ATTACHMENT[previousStatus];
+      }
+      messageError(error?.message || (isStats ? t('创建统计失败') : t('创建分析失败')));
     }
+  };
+
+  const handleStatisticsRegenerate = () => {
+    const item = reportItems.value.find(current => current.id === activeStatisticsId.value);
+    if (!item) return;
+    void handleRetryReport(item);
   };
 
   const openReport = async (item: ReportStatusItem | LogReportInfo) => {
     if (item.type === 'statistics') {
-      statisticsFields.value = statisticsFields.value.length ? statisticsFields.value : [];
+      const current = 'status' in item ? item : undefined;
+      // 先认领 activeStatisticsId，后续详情与轮询回包才会同步到抽屉
+      activeStatisticsId.value = item.id;
       statisticsCreatedAt.value = item.createdAt || '';
+      statisticsOutputData.value = ('outputData' in item ? item.outputData : null) ?? null;
+      statisticsAttachmentType.value = ('attachmentType' in item ? item.attachmentType : '') || '';
+      statisticsErrorMessage.value = current?.errorMessage || '';
+      statisticsRegenerating.value = false;
+      if (current) {
+        statisticsStatus.value = REPORT_STATUS_TO_ATTACHMENT[current.status];
+      }
       statisticsDrawerShow.value = true;
+      try {
+        // 列表接口不带 output_data，打开时必须读详情
+        const detail = await AiAssistantManageService.fetchAttachment({
+          attachment_uid: item.id,
+        }, { catchError: true });
+        applyAttachmentDetail(detail);
+      } catch {
+        // 使用卡片上已有摘要打开
+      }
       return;
     }
     if ('status' in item && item.status === 'loading') return;
@@ -1287,7 +1465,7 @@
         attachment_uid: item.id,
       }, { catchError: true });
       applyAttachmentDetail(detail);
-      markdown = detail.output_data?.markdown || markdown;
+      markdown = attachmentMarkdown(detail.output_data) || markdown;
       exportFormats = detail.export_formats || exportFormats;
       title = detail.title || title;
       createdAt = formatAttachmentTime(detail.created_at || detail.content_updated_at || '') || createdAt;

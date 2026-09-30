@@ -18,110 +18,205 @@
   <teleport
     v-if="isShow"
     to="#sec-chat-overlay-root">
-    <div
-      class="log-statistics-overlay"
-      @click.self="handleClose">
-      <div class="log-statistics-modal">
-        <div class="modal-header">
-          <h4 class="modal-title">
-            数据统计
-          </h4>
+    <div class="log-statistics-overlay">
+      <div
+        class="log-statistics-dialog-sizer"
+        @click.self="handleOverlayClose">
+        <div
+          class="log-statistics-modal"
+          :class="{ 'is-expanded': customExpanded }">
           <div
             class="modal-close"
             @click="handleClose">
             <audit-icon type="close" />
           </div>
-        </div>
+          <div class="modal-header">
+            <h4 class="modal-title">
+              {{ t('数据统计') }}
+            </h4>
+          </div>
 
-        <div class="modal-body">
-          <p class="subtitle">
-            请选择需要统计的字段
-          </p>
-          <bk-input
-            v-model="keyword"
-            class="search-input"
-            clearable
-            placeholder="搜索字段名称">
-            <template #suffix>
-              <audit-icon
-                class="search-icon"
-                type="search1" />
-            </template>
-          </bk-input>
+          <div class="modal-body">
+            <div class="field-section">
+              <p class="subtitle">
+                {{ t('请选择需要统计的字段') }}
+              </p>
 
-          <div class="field-groups">
-            <div
-              v-for="group in filteredGroups"
-              :key="group.key"
-              class="field-group">
-              <div class="group-title">
-                {{ group.label }}（{{ group.fields.length }}）
-              </div>
-              <div class="field-grid-wrap">
-                <div class="field-grid">
+              <div
+                v-if="fieldPath.length"
+                class="field-breadcrumb">
+                <button
+                  class="crumb-item"
+                  type="button"
+                  @click="handleBackToLevel(-1)">
+                  {{ t('全部字段') }}
+                </button>
+                <template
+                  v-for="(crumb, index) in fieldPath"
+                  :key="crumb.key">
+                  <audit-icon
+                    class="crumb-split"
+                    type="right" />
                   <button
-                    v-for="field in group.fields"
-                    :key="field"
-                    class="field-pill"
-                    :class="{ 'is-selected': selectedFields.includes(field) }"
+                    class="crumb-item"
+                    :class="{ 'is-current': index === fieldPath.length - 1 }"
                     type="button"
-                    @click="toggleField(field)">
-                    {{ field }}
+                    @click="handleBackToLevel(index)">
+                    {{ crumb.label }}
                   </button>
+                </template>
+              </div>
+
+              <label class="search-wrap">
+                <input
+                  v-model="keyword"
+                  class="search-input"
+                  :placeholder="t('搜索字段名称')"
+                  type="text">
+                <audit-icon
+                  class="search-icon"
+                  type="search1" />
+              </label>
+
+              <div
+                class="field-groups"
+                data-testid="statistics-field-list">
+                <div
+                  v-if="fieldLoading"
+                  class="field-placeholder"
+                  data-testid="statistics-field-loading">
+                  <audit-icon
+                    class="placeholder-loading"
+                    type="loading" />
+                  {{ t('字段加载中') }}
+                </div>
+                <div
+                  v-else-if="fieldError"
+                  class="field-placeholder"
+                  data-testid="statistics-field-error">
+                  <span>{{ fieldError }}</span>
+                  <bk-button
+                    text
+                    theme="primary"
+                    @click="handleReloadFields">
+                    {{ t('重新加载') }}
+                  </bk-button>
+                </div>
+                <template v-else-if="filteredGroups.length">
+                  <div
+                    v-for="group in filteredGroups"
+                    :key="group.key"
+                    class="field-group">
+                    <div class="group-title">
+                      {{ group.label }}
+                      <template v-if="!group.loading">
+                        ({{ group.fields.length }})
+                      </template>
+                    </div>
+                    <div
+                      v-if="group.loading"
+                      class="group-tip">
+                      <audit-icon
+                        class="placeholder-loading"
+                        type="loading" />
+                      {{ t('字段加载中') }}
+                    </div>
+                    <div
+                      v-else-if="group.error"
+                      class="group-tip">
+                      {{ group.error }}
+                    </div>
+                    <div
+                      v-else
+                      class="field-grid">
+                      <div
+                        v-for="field in group.fields"
+                        :key="field.key"
+                        v-bk-tooltips="{
+                          content: field.tip,
+                          disabled: !field.tip,
+                        }"
+                        class="field-item">
+                        <button
+                          class="field-pill"
+                          :disabled="submitting || !field.statisticsSupported"
+                          type="button"
+                          @click="handleSelectField(field)">
+                          {{ field.label }}
+                        </button>
+                        <button
+                          v-if="field.isExpandable"
+                          class="field-expand"
+                          :disabled="submitting"
+                          type="button"
+                          @click="handleExpandField(field)">
+                          <audit-icon type="right" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p
+                    v-if="fieldTruncated"
+                    class="field-hint">
+                    {{ t('字段较多，仅返回部分结果，可用搜索缩小范围') }}
+                  </p>
+                </template>
+                <div
+                  v-else
+                  class="field-placeholder"
+                  data-testid="statistics-field-empty">
+                  {{ keyword.trim() ? t('暂无匹配字段') : t('当前层级没有可统计字段') }}
                 </div>
               </div>
             </div>
-            <div
-              v-if="!filteredGroups.length"
-              class="field-empty">
-              暂无匹配字段
-            </div>
-          </div>
 
-          <div class="divider-wrapper">
-            <div class="divider-line" />
-            <div class="divider-text">
-              以上报告不满足需求？
-            </div>
-            <div class="divider-line" />
-          </div>
+            <div class="custom-block">
+              <div class="divider-wrapper">
+                <div class="divider-line" />
+                <div class="divider-text">
+                  {{ t('以上字段统计不满足要求？') }}
+                </div>
+                <div class="divider-line" />
+              </div>
 
-          <div class="custom-section">
-            <div
-              class="custom-header"
-              @click="customExpanded = !customExpanded">
-              <audit-icon
-                class="collapse-icon"
-                :type="customExpanded ? 'angle-fill-down' : 'angle-fill-rignt'" />
-              <span class="custom-title">自定义统计</span>
-              <span class="custom-desc">（输入任意内容，AI为您定制报告）</span>
-            </div>
-            <div
-              v-show="customExpanded"
-              class="custom-content">
-              <div class="custom-input-wrapper">
-                <bk-input
-                  v-model="customPrompt"
-                  class="custom-input"
-                  placeholder="输入你想统计的内容，例如：分析张三在英雄联盟业务的资产转移报告"
-                  :rows="3"
-                  type="textarea" />
+              <div class="custom-section">
+                <div
+                  class="custom-header"
+                  @click="customExpanded = !customExpanded">
+                  <audit-icon
+                    class="collapse-icon"
+                    :type="customExpanded ? 'angle-fill-down' : 'angle-fill-rignt'" />
+                  <span class="custom-title">{{ t('自定义统计') }}</span>
+                  <span class="custom-desc">{{ t('（输入任意内容，AI为您定制报告）') }}</span>
+                </div>
+                <div
+                  v-show="customExpanded"
+                  class="custom-content">
+                  <div class="custom-input-wrapper">
+                    <bk-input
+                      v-model="customPrompt"
+                      class="custom-input"
+                      data-testid="statistics-instruction-input"
+                      :maxlength="INSTRUCTION_MAX_LENGTH"
+                      :placeholder="t('输入你想统计的内容，例如：分析张三在英雄联盟业务的资产转移报告')"
+                      :resize="false"
+                      :rows="3"
+                      type="textarea" />
+                    <bk-button
+                      class="custom-confirm-btn"
+                      data-testid="statistics-custom-confirm"
+                      :disabled="submitting"
+                      :loading="submitting"
+                      size="small"
+                      theme="primary"
+                      @click.stop="handleCustomConfirm">
+                      {{ t('确认统计') }}
+                    </bk-button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="modal-footer">
-          <bk-button
-            class="confirm-btn"
-            :disabled="!canConfirm"
-            theme="primary"
-            @click="handleConfirm">
-            确定
-          </bk-button>
-          <bk-button @click="handleClose">
-            取消
-          </bk-button>
         </div>
       </div>
     </div>
@@ -130,93 +225,334 @@
 
 <script lang="ts" setup>
   import { computed, onDeactivated, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import EsQueryService from '@service/es-query';
+
+  import type {
+    AiLogFieldRef,
+    AiSearchCondition,
+  } from '@model/ai-assistant/types';
+  import type { LogFieldMetadataItem } from '@model/es-query/log-field-metadata';
+
+  import useMessage from '@hooks/use-message';
+
+  export interface StatisticsSelectPayload {
+    type: 'field' | 'custom';
+    field?: AiLogFieldRef;
+    fieldLabel?: string;
+    prompt?: string;
+  }
+
+  interface FieldViewItem {
+    key: string;
+    label: string;
+    category: string;
+    field: AiLogFieldRef;
+    statisticsSupported: boolean;
+    isExpandable: boolean;
+    tip: string;
+    searchText: string;
+  }
+
+  interface FieldGroupView {
+    key: string;
+    label: string;
+    fields: FieldViewItem[];
+    loading: boolean;
+    error: string;
+  }
 
   const props = withDefaults(defineProps<{
     modelValue?: boolean;
+    /** 来源检索条件；缺失时无法获取字段目录，也不允许创建 */
+    condition?: AiSearchCondition | null;
+    submitting?: boolean;
   }>(), {
     modelValue: false,
+    condition: null,
+    submitting: false,
   });
 
   const emit = defineEmits<{
     'update:modelValue': [value: boolean];
-    confirm: [payload: { fields: string[]; customPrompt?: string }];
+    select: [payload: StatisticsSelectPayload];
   }>();
 
-  const COMMON_FIELDS = [
-    '操作起始时间', '操作人', '操作人账号类型', '来源系统', '操作结果',
-    '操作途径', '来源IP', '事件ID', '请求ID',
-  ];
+  const { t } = useI18n();
+  const { messageWarn } = useMessage();
 
-  const EXTEND_FIELDS = [
-    '请求路径', '空间ID', '资源实例', '动作标识', '客户端类型',
-    '浏览器', '操作系统', '业务ID', '项目ID', '环境类型',
-    '接口版本', '请求方法', '状态码', '耗时', '扩展字段1',
-    '扩展字段2', '扩展字段3', '扩展字段4', '扩展字段5', '扩展字段6',
-  ];
+  /** 与后端 BKAPP_AI_ASSISTANT_AI_STATISTICS_INSTRUCTION_MAX_LENGTH 默认值一致 */
+  const INSTRUCTION_MAX_LENGTH = 2048;
 
   const keyword = ref('');
-  const selectedFields = ref<string[]>([]);
   const customExpanded = ref(false);
   const customPrompt = ref('');
-  /** 父级用 v-if 挂载时 modelValue 已是 true，不能再等无 immediate 的 watch */
+  const fieldLoading = ref(false);
+  const fieldError = ref('');
+  const fieldTruncated = ref(false);
+  const fieldItems = ref<FieldViewItem[]>([]);
+  /** 根层自动展开出来的拓展字段分组，各自独立 loading */
+  const extendGroups = ref<FieldGroupView[]>([]);
+  const fieldPath = ref<Array<{ key: string; label: string; field: AiLogFieldRef }>>([]);
+  /** 切层或重载时丢弃上一层目录的迟到回包 */
+  let fieldRequestToken = 0;
+
+  /** 兜底上限，防止配置异常时把整屏刷成采样请求 */
+  const AUTO_EXPAND_LIMIT = 12;
+  /** 每个子层都要采样查询，限并发避免一次性打满后端 */
+  const AUTO_EXPAND_CONCURRENCY = 3;
+
   const isShow = computed({
     get: () => props.modelValue,
     set: (val: boolean) => emit('update:modelValue', val),
   });
 
-  watch(() => props.modelValue, (val) => {
-    if (val) {
-      keyword.value = '';
-      selectedFields.value = [];
-      customExpanded.value = false;
-      customPrompt.value = '';
-    }
-  });
-
-  const filterFields = (fields: string[]) => {
-    const key = keyword.value.trim().toLowerCase();
-    if (!key) return fields;
-    return fields.filter(item => item.toLowerCase().includes(key));
-  };
-
-  const filteredGroups = computed(() => {
-    const groups = [
-      { key: 'common', label: '通用字段', fields: filterFields(COMMON_FIELDS) },
-      { key: 'extend', label: '拓展字段', fields: filterFields(EXTEND_FIELDS) },
-    ];
-    return groups.filter(item => item.fields.length);
-  });
-
-  const canConfirm = computed(() => (
-    selectedFields.value.length > 0 || !!customPrompt.value.trim()
+  const currentParentField = computed(() => (
+    fieldPath.value.length ? fieldPath.value[fieldPath.value.length - 1].field : undefined
   ));
 
-  const toggleField = (field: string) => {
-    const idx = selectedFields.value.indexOf(field);
-    if (idx === -1) selectedFields.value.push(field);
-    else selectedFields.value.splice(idx, 1);
+  const matchKeyword = (item: FieldViewItem) => {
+    const key = keyword.value.trim().toLowerCase();
+    if (!key) return true;
+    return item.searchText.includes(key);
   };
 
-  const handleClose = () => {
-    isShow.value = false;
-  };
-
-  // keep-alive 场景下失活时，关闭 teleport 弹层避免遮罩/DOM 残留
-  onDeactivated(() => {
-    isShow.value = false;
-    keyword.value = '';
-    selectedFields.value = [];
-    customExpanded.value = false;
-    customPrompt.value = '';
+  /**
+   * 后端同一次请求里的 category 是同质的（根层全 BASIC，展开后全 EXTENDED），
+   * 所以分组不靠 category，而是靠「根层 + 自动展开出来的子层」拼出来。
+   */
+  const filteredGroups = computed<FieldGroupView[]>(() => {
+    if (fieldPath.value.length) {
+      const current = fieldPath.value[fieldPath.value.length - 1];
+      return [{
+        key: 'current',
+        label: current.label,
+        fields: fieldItems.value.filter(matchKeyword),
+        loading: false,
+        error: '',
+      }].filter(group => group.fields.length);
+    }
+    // 已经单独成组的 JSON 根字段本身不可统计，再放进通用字段只会多出一个点不动的项
+    const expandedKeys = new Set(extendGroups.value.map(group => group.key));
+    const groups: FieldGroupView[] = [{
+      key: 'basic',
+      label: t('通用字段'),
+      fields: fieldItems.value
+        .filter(item => item.statisticsSupported || !expandedKeys.has(item.key))
+        .filter(matchKeyword),
+      loading: false,
+      error: '',
+    }];
+    extendGroups.value.forEach((group) => {
+      groups.push({ ...group, fields: group.fields.filter(matchKeyword) });
+    });
+    return groups.filter(group => group.fields.length || group.loading || group.error);
   });
 
-  const handleConfirm = () => {
-    if (!canConfirm.value) return;
-    emit('confirm', {
-      fields: [...selectedFields.value],
-      customPrompt: customPrompt.value.trim() || undefined,
+  const resolveFieldKey = (field: AiLogFieldRef) => (
+    [field.raw_name, ...(field.keys || [])].join('\u0000')
+  );
+
+  /** 可展开不等于可统计：JSON 根字段要先展开到子路径 */
+  const resolveTip = (item: LogFieldMetadataItem, label: string) => {
+    if (!item.statistics_supported) {
+      if (item.is_expandable) return t('该字段需展开到子字段后统计');
+      return item.unsupported_reason
+        ? `${t('该字段暂不支持统计')}（${item.unsupported_reason}）`
+        : t('该字段暂不支持统计');
+    }
+    const path = [item.field?.raw_name, ...(item.field?.keys || [])].filter(Boolean).join('.');
+    return path === label ? item.description || '' : [path, item.description].filter(Boolean).join(' · ');
+  };
+
+  const toFieldViewItem = (item: LogFieldMetadataItem): FieldViewItem => {
+    const field: AiLogFieldRef = {
+      raw_name: item.field?.raw_name || '',
+      keys: item.field?.keys || [],
+      ...(item.field?.field_type ? { field_type: item.field.field_type } : {}),
+    };
+    const lastKey = field.keys.length ? field.keys[field.keys.length - 1] : '';
+    const label = item.display_name || lastKey || field.raw_name;
+    return {
+      key: resolveFieldKey(field),
+      label,
+      category: String(item.category || ''),
+      field,
+      statisticsSupported: Boolean(item.statistics_supported),
+      isExpandable: Boolean(item.is_expandable),
+      tip: resolveTip(item, label),
+      searchText: `${label} ${field.raw_name} ${field.keys.join('.')}`.toLowerCase(),
+    };
+  };
+
+  const patchExtendGroup = (key: string, patch: Partial<FieldGroupView>) => {
+    extendGroups.value = extendGroups.value.map(group => (
+      group.key === key ? { ...group, ...patch } : group
+    ));
+  };
+
+  const runWithConcurrency = async (tasks: Array<() => Promise<void>>, limit: number) => {
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+      while (cursor < tasks.length) {
+        const index = cursor;
+        cursor += 1;
+        await tasks[index]();
+      }
     });
+    await Promise.all(workers);
+  };
+
+  /**
+   * 拓展字段和通用字段一起呈现，不让用户先点一次展开。
+   * 每个可展开根字段各发一次请求（后端一层一请求），失败只影响该组。
+   * 只自动展开一层，更深的对象仍由 pill 上的展开入口按需进入。
+   */
+  const autoExpandRootFields = async (items: FieldViewItem[], token: number) => {
+    const expandable = items.filter(item => item.isExpandable).slice(0, AUTO_EXPAND_LIMIT);
+    if (!expandable.length) return;
+    extendGroups.value = expandable.map(item => ({
+      key: item.key,
+      label: expandable.length === 1 ? t('拓展字段') : item.label,
+      fields: [],
+      loading: true,
+      error: '',
+    }));
+    await runWithConcurrency(expandable.map(item => async () => {
+      if (token !== fieldRequestToken) return;
+      try {
+        const result = await EsQueryService.fetchLogFieldMetadata({
+          condition: props.condition as AiSearchCondition,
+          parent_field: { raw_name: item.field.raw_name, keys: item.field.keys },
+        }, { catchError: true });
+        if (token !== fieldRequestToken) return;
+        patchExtendGroup(item.key, {
+          fields: (result.fields || []).map(toFieldViewItem),
+          loading: false,
+        });
+      } catch (error: any) {
+        if (token !== fieldRequestToken) return;
+        patchExtendGroup(item.key, {
+          loading: false,
+          error: error?.message || t('字段加载失败'),
+        });
+      }
+    }), AUTO_EXPAND_CONCURRENCY);
+  };
+
+  const loadFields = async (parentField?: AiLogFieldRef) => {
+    if (!props.condition) {
+      fieldItems.value = [];
+      fieldTruncated.value = false;
+      fieldError.value = t('缺少检索条件，无法获取字段');
+      return;
+    }
+    fieldRequestToken += 1;
+    const token = fieldRequestToken;
+    fieldLoading.value = true;
+    fieldError.value = '';
+    extendGroups.value = [];
+    try {
+      const result = await EsQueryService.fetchLogFieldMetadata({
+        condition: props.condition,
+        ...(parentField
+          ? { parent_field: { raw_name: parentField.raw_name, keys: parentField.keys } }
+          : {}),
+      }, { catchError: true });
+      if (token !== fieldRequestToken) return;
+      const items = (result.fields || []).map(toFieldViewItem);
+      fieldItems.value = items;
+      fieldTruncated.value = Boolean(result.sample_summary?.truncated);
+      // 根层才自动展开；手动深入的层级继续按需展开，避免层层放大请求
+      if (!parentField) void autoExpandRootFields(items, token);
+    } catch (error: any) {
+      if (token !== fieldRequestToken) return;
+      fieldItems.value = [];
+      fieldTruncated.value = false;
+      fieldError.value = error?.message || t('字段加载失败');
+    } finally {
+      if (token === fieldRequestToken) fieldLoading.value = false;
+    }
+  };
+
+  const resetState = () => {
+    keyword.value = '';
+    customExpanded.value = false;
+    customPrompt.value = '';
+    fieldPath.value = [];
+    fieldItems.value = [];
+    extendGroups.value = [];
+    fieldTruncated.value = false;
+    fieldError.value = '';
+  };
+
+  // 外层用 v-if 挂载，创建时 modelValue 已是 true，必须 immediate，否则首次打开不拉字段
+  watch(() => props.modelValue, (val) => {
+    if (!val || props.submitting) return;
+    resetState();
+    void loadFields();
+  }, { immediate: true });
+
+  const handleClose = () => {
+    if (props.submitting) return;
+    isShow.value = false;
+  };
+
+  const handleOverlayClose = () => {
     handleClose();
+  };
+
+  onDeactivated(() => {
+    isShow.value = false;
+    resetState();
+  });
+
+  const handleSelectField = (item: FieldViewItem) => {
+    if (props.submitting || !item.statisticsSupported) return;
+    emit('select', {
+      type: 'field',
+      field: item.field,
+      fieldLabel: item.label,
+    });
+    isShow.value = false;
+  };
+
+  const handleExpandField = (item: FieldViewItem) => {
+    if (props.submitting) return;
+    keyword.value = '';
+    fieldPath.value = [...fieldPath.value, {
+      key: item.key,
+      label: item.label,
+      field: item.field,
+    }];
+    void loadFields(item.field);
+  };
+
+  /** index 为 -1 回到根层；点当前层不重复请求 */
+  const handleBackToLevel = (index: number) => {
+    if (index === fieldPath.value.length - 1) return;
+    keyword.value = '';
+    fieldPath.value = index < 0 ? [] : fieldPath.value.slice(0, index + 1);
+    void loadFields(currentParentField.value);
+  };
+
+  const handleReloadFields = () => {
+    void loadFields(currentParentField.value);
+  };
+
+  const handleCustomConfirm = () => {
+    if (props.submitting) return;
+    const prompt = customPrompt.value.trim();
+    if (!prompt) {
+      messageWarn(t('请输入统计要求'));
+      return;
+    }
+    emit('select', {
+      type: 'custom',
+      prompt,
+    });
+    isShow.value = false;
   };
 </script>
 
@@ -225,21 +561,31 @@
     position: absolute;
     inset: 0;
     z-index: 100;
-    display: flex;
-    padding: 24px;
     overflow: auto;
     pointer-events: auto;
     background: rgb(0 0 0 / 40%);
+    box-sizing: border-box;
+  }
+
+  .log-statistics-dialog-sizer {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    min-height: 100%;
+    padding: var(--audit-space-24);
     box-sizing: border-box;
     align-items: center;
     justify-content: center;
   }
 
   .log-statistics-modal {
+    position: relative;
     display: flex;
-    width: 680px;
-    min-width: 680px;
+    width: 640px;
+    height: 694px;
     max-height: calc(100% - 48px);
+    min-width: 640px;
+    padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
     margin: auto;
     overflow: hidden;
     background: var(--audit-neutral-bg-04);
@@ -247,224 +593,433 @@
     box-shadow: var(--audit-shadow-dialog);
     flex-direction: column;
     flex-shrink: 0;
+    gap: 20px;
     box-sizing: border-box;
+
+    &.is-expanded {
+      height: 778px;
+    }
   }
 
   .modal-header {
     display: flex;
-    height: 52px;
-    padding: 0 24px;
     flex-shrink: 0;
     align-items: center;
-    justify-content: space-between;
     box-sizing: border-box;
 
     .modal-title {
       margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 28px;
-      color: #313238;
+      font-size: var(--audit-font-size-xl);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-xl);
+      color: var(--audit-neutral-text-01);
     }
+  }
 
-    .modal-close {
-      display: flex;
-      width: 32px;
-      height: 32px;
-      margin-right: -8px;
-      font-size: 18px;
-      color: #979ba5;
-      cursor: pointer;
-      border-radius: 2px;
-      align-items: center;
-      justify-content: center;
+  .modal-close {
+    position: absolute;
+    top: var(--audit-space-8);
+    right: var(--audit-space-8);
+    z-index: 1;
+    display: flex;
+    width: 24px;
+    height: 24px;
+    font-size: var(--audit-font-size-base);
+    color: var(--audit-neutral-text-03);
+    cursor: pointer;
+    border-radius: var(--audit-radius-control);
+    align-items: center;
+    justify-content: center;
 
-      &:hover {
-        color: #63656e;
-        background: #eaebf0;
-      }
+    &:hover {
+      color: var(--audit-neutral-text-02);
+      background: var(--audit-neutral-border-02);
     }
   }
 
   .modal-body {
-    padding: 0 24px 8px;
-    overflow: auto;
+    display: flex;
+    min-height: 0;
+    overflow: hidden;
+    flex-direction: column;
     flex: 1;
+    gap: var(--audit-space-24);
+  }
+
+  .field-section {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    flex-shrink: 1;
+    gap: var(--audit-space-8);
   }
 
   .subtitle {
-    margin: 0 0 12px;
-    font-size: 12px;
-    line-height: 20px;
-    color: #63656e;
+    margin: 0;
+    font-size: var(--audit-font-size-sm);
+    font-weight: var(--audit-font-weight-regular);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-02);
+    flex-shrink: 0;
   }
 
-  .search-input {
-    margin-bottom: 16px;
+  .field-breadcrumb {
+    display: flex;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-03);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--audit-space-4);
+
+    .crumb-item {
+      padding: 0;
+      font-size: var(--audit-font-size-sm);
+      color: var(--audit-brand-02);
+      cursor: pointer;
+      background: transparent;
+      border: none;
+
+      &.is-current {
+        color: var(--audit-neutral-text-02);
+        cursor: default;
+      }
+    }
+
+    .crumb-split {
+      font-size: var(--audit-font-size-sm);
+      color: var(--audit-neutral-text-04);
+    }
+  }
+
+  .search-wrap {
+    display: flex;
+    width: 100%;
+    height: 32px;
+    padding: 6px 8px;
+    background: var(--audit-neutral-bg-04);
+    border: 1px solid var(--audit-neutral-text-04);
+    border-radius: var(--audit-radius-control);
+    box-sizing: border-box;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--audit-space-8);
+
+    &:hover {
+      border-color: var(--audit-neutral-text-03);
+    }
+
+    &:focus-within {
+      border-color: var(--audit-brand-02);
+    }
+
+    .search-input {
+      width: 100%;
+      height: 20px;
+      min-width: 0;
+      padding: 0;
+      font-size: var(--audit-font-size-sm);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-01);
+      background: transparent;
+      border: 0;
+      outline: none;
+      box-shadow: none;
+      flex: 1;
+
+      &::placeholder {
+        color: var(--audit-neutral-text-04);
+      }
+    }
 
     .search-icon {
-      margin-right: 8px;
+      display: flex;
+      width: 16px;
+      height: 16px;
       font-size: 16px;
-      color: #c4c6cc;
+      color: var(--audit-neutral-text-04);
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  .field-groups {
+    display: flex;
+    width: 100%;
+    height: 456px;
+    min-height: 0;
+    overflow: auto;
+    flex-direction: column;
+    flex-shrink: 1;
+    gap: var(--audit-space-16);
+    scrollbar-width: thin;
+    scrollbar-color: var(--audit-neutral-border-01) transparent;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--audit-neutral-border-01);
+      border-radius: 99px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
     }
   }
 
   .field-group {
-    margin-bottom: 16px;
-
     .group-title {
-      margin-bottom: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 20px;
-      color: #313238;
+      margin-bottom: var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-03);
     }
   }
 
-  .field-grid-wrap {
-    /* 每组最多展示 5 行（2 列），超出滚动：5*32 + 4*8 = 192 */
-    max-height: 192px;
-    overflow: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #dcdee5 transparent;
-
-    &::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: #dcdee5;
-      border-radius: 2px;
-    }
+  .group-tip {
+    display: flex;
+    padding: var(--audit-space-8) 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-04);
+    align-items: center;
+    gap: var(--audit-space-8);
   }
 
   .field-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--audit-space-8);
+  }
+
+  .field-item {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--audit-space-4);
   }
 
   .field-pill {
     height: 32px;
     padding: 0 12px;
     overflow: hidden;
-    font-size: 12px;
+    font-size: var(--audit-font-size-sm);
+    font-weight: var(--audit-font-weight-regular);
     line-height: 30px;
-    color: #63656e;
+    color: var(--audit-neutral-text-02);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
-    background: #f5f7fa;
-    border: 1px solid transparent;
-    border-radius: 2px;
+    background: var(--audit-neutral-bg-03);
+    border: 1px solid var(--audit-neutral-bg-01);
+    border-radius: var(--audit-radius-container);
     box-sizing: border-box;
+    flex: 1;
 
-    &:hover {
-      color: #3a84ff;
+    &:hover:not(:disabled) {
+      border-color: var(--audit-brand-02);
     }
 
-    &.is-selected {
-      color: #3a84ff;
-      background: #f0f5ff;
-      border-color: #3a84ff;
+    &:active:not(:disabled) {
+      color: var(--audit-brand-02);
+      background: var(--audit-brand-06);
+      border-color: var(--audit-brand-02);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 60%;
     }
   }
 
-  .field-empty {
-    padding: 24px 0;
-    font-size: 12px;
-    color: #c4c6cc;
-    text-align: center;
+  .field-expand {
+    display: flex;
+    width: 24px;
+    height: 32px;
+    font-size: var(--audit-font-size-sm);
+    color: var(--audit-neutral-text-03);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    &:hover:not(:disabled) {
+      color: var(--audit-brand-02);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  .field-placeholder {
+    display: flex;
+    padding: var(--audit-space-40) 0;
+    font-size: var(--audit-font-size-sm);
+    color: var(--audit-neutral-text-04);
+    align-items: center;
+    justify-content: center;
+    gap: var(--audit-space-8);
+
+    .placeholder-loading {
+      animation: statistics-field-rotate 1s linear infinite;
+    }
+  }
+
+  @keyframes statistics-field-rotate {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .field-hint {
+    margin: 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-04);
   }
 
   .divider-wrapper {
     display: flex;
-    margin: 16px 0;
+    height: 20px;
+    margin: 0;
+    flex-shrink: 0;
     align-items: center;
 
     .divider-line {
       height: 1px;
-      background: #dcdee5;
+      background: var(--audit-neutral-border-01);
       flex: 1;
     }
 
     .divider-text {
-      padding: 0 16px;
-      font-size: 12px;
-      color: #979ba5;
+      padding: 0 var(--audit-space-16);
+      font-size: var(--audit-font-size-sm);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
+      white-space: nowrap;
     }
   }
 
+  .custom-block {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--audit-space-16);
+  }
+
   .custom-section {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--audit-space-12);
+
     .custom-header {
       display: flex;
+      min-width: 0;
       cursor: pointer;
       user-select: none;
       align-items: center;
+      gap: var(--audit-space-8);
 
       .collapse-icon {
-        margin-right: 6px;
-        font-size: 16px;
-        color: #979ba5;
+        display: inline-flex;
+        width: 12px;
+        height: 12px;
+        font-size: 12px;
+        line-height: 12px;
+        color: var(--audit-neutral-text-03);
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
       }
 
       .custom-title {
-        font-size: 14px;
-        font-weight: 700;
-        color: #313238;
+        font-size: var(--audit-font-size-base);
+        font-weight: var(--audit-font-weight-bold);
+        line-height: var(--audit-line-height-base);
+        color: var(--audit-neutral-text-02);
+        white-space: nowrap;
+        flex-shrink: 0;
       }
 
       .custom-desc {
-        font-size: 12px;
-        color: #979ba5;
+        min-width: 0;
+        font-size: var(--audit-font-size-sm);
+        line-height: var(--audit-line-height-sm);
+        color: var(--audit-neutral-text-03);
+        white-space: nowrap;
       }
     }
 
     .custom-content {
-      margin-top: 12px;
+      width: 100%;
     }
 
     .custom-input-wrapper {
-      border: 1px solid #dcdee5;
-      border-radius: 2px;
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 72px;
+      background: linear-gradient(white, white) padding-box,
+        linear-gradient(90deg, #a469ff 0%, #1cc2fe 100%) border-box;
+      border: 1px solid transparent;
+      border-radius: var(--audit-radius-control);
+      box-sizing: border-box;
       transition: all .2s;
-
-      &:focus-within {
-        background: linear-gradient(white, white) padding-box,
-          linear-gradient(90deg, #a469ff 0%, #1cc2fe 100%) border-box;
-        border-color: transparent;
-      }
+      align-items: flex-end;
 
       .custom-input {
+        height: 100%;
         background: transparent;
         border: none;
         box-shadow: none;
+        flex: 1;
 
         :deep(.bk-textarea) {
-          min-height: 80px;
+          height: 100%;
+          min-height: 0;
+          padding: 4px 88px 32px 8px;
           background: transparent;
           border: none;
-          resize: none;
+          box-sizing: border-box;
+          resize: none !important;
+        }
+
+        :deep(textarea) {
+          resize: none !important;
+        }
+
+        /* textarea 设了 maxlength 就强制渲染字数统计，show-word-limit 关不掉，只能隐藏；
+           textarea 用的是 bk-textarea-- 前缀，和 input 的不是同一个类名 */
+        :deep(.bk-textarea--max-length),
+        :deep(.bk-input--max-length) {
+          display: none;
         }
       }
-    }
-  }
 
-  .modal-footer {
-    display: flex;
-    height: 56px;
-    padding: 0 24px;
-    background: #fafbfd;
-    border-top: 1px solid #dcdee5;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    box-sizing: border-box;
-
-    .confirm-btn {
-      min-width: 64px;
+      .custom-confirm-btn {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        height: 26px;
+        min-width: 64px;
+        padding: 3px 12px;
+      }
     }
   }
 </style>

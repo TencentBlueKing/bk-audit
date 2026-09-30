@@ -14,6 +14,11 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type {
+  AiLogFieldRef,
+  AiSearchCondition,
+} from '@model/ai-assistant/types';
+
 import EsQuerySource from '../source/es-query';
 
 
@@ -79,6 +84,22 @@ export default {
    */
   fetchSearchStatistic(params: Record<string, any>) {
     return EsQuerySource.getSearchStatistic(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc AI 助手字段目录（数据统计选字段）
+   * @param { Object } params condition 用来源检索条件；parent_field 展开 JSON 下一层
+   */
+  fetchLogFieldMetadata(
+    params: {
+      condition: AiSearchCondition,
+      parent_field?: AiLogFieldRef,
+    },
+    options?: { catchError?: boolean },
+  ) {
+    return EsQuerySource.getLogFieldMetadata(params, {
+      catchError: options?.catchError,
+    })
       .then(({ data }) => data);
   },
   /**

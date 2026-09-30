@@ -34,6 +34,8 @@ export interface FollowAttachmentOptions {
   attachmentUid: string;
   /** 重试前的 execution_id；读到相同值时继续等待新代际 */
   previousExecutionId?: string | null;
+  /** 只轮询详情，不订阅过程；统计附件 is_stream 为真但本期不接 SSE */
+  pollOnly?: boolean;
   onDetail: (attachment: AiAttachment) => void;
   onRebuildProcess?: () => void;
   onProcessEvent?: (data: Record<string, any>, streamId?: string) => void;
@@ -225,7 +227,7 @@ export const followAttachment = (options: FollowAttachmentOptions): FollowAttach
         clearTimers();
         return;
       }
-      if (!detail.is_stream) {
+      if (options.pollOnly || !detail.is_stream) {
         pollDetail();
         return;
       }

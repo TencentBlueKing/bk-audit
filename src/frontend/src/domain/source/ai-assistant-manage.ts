@@ -50,7 +50,7 @@ import ModuleBase from './module-base';
 /**
  * AI 助手 HTTP 资源层。
  * Base: /api/v1/ai_assistant/
- * 反馈仍未接；附件用于二期智能分析。
+ * 反馈仍未接；附件用于智能分析与数据统计。
  */
 class AiAssistantManage extends ModuleBase {
   constructor() {

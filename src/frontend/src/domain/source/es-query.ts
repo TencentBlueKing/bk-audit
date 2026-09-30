@@ -14,7 +14,12 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type {
+  AiLogFieldRef,
+  AiSearchCondition,
+} from '@model/ai-assistant/types';
 import type FieldMapModel from '@model/es-query/field-map';
+import type { LogFieldMetadataResult } from '@model/es-query/log-field-metadata';
 import type SearchModel from '@model/es-query/search';
 import type SearchStatisticModel from '@model/es-query/search_statistic';
 import type StandardFieldModel from '@model/meta/standard-field';
@@ -71,6 +76,22 @@ class EsQuery extends ModuleBase {
   getSearchStatistic(params: Record<string, any>) {
     return Request.post<SearchStatisticModel>(`${this.path}/collector_query/search_statistic/`, {
       params,
+    });
+  }
+  /**
+   * AI 助手字段目录：一层一请求。
+   * 不传 parent_field 返回可见根字段，传入 JSON 字段引用则展开下一层。
+   */
+  getLogFieldMetadata(
+    params: {
+      condition: AiSearchCondition,
+      parent_field?: AiLogFieldRef,
+    },
+    payload = {} as IRequestPayload,
+  ) {
+    return Request.post<LogFieldMetadataResult>(`${this.path}/collector_query/field_metadata/`, {
+      params,
+      payload,
     });
   }
   // 创建日志检索导出任务
