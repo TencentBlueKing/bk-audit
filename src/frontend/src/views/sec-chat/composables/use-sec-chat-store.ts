@@ -101,10 +101,17 @@ const LOG_SEARCH_CHAIN_TIMEOUT_MESSAGE = '日志检索任务创建超时，请�
 const CONVERSATION_UNAVAILABLE_CODE = 'CONVERSATION_UNAVAILABLE';
 const CONVERSATION_UNAVAILABLE_MESSAGE = '无权访问该会话，可能权限已被回收或所属场景已停用';
 
-/** 权限被回收 / 场景停用（403）或资源已不存在（404），重试也不会成功 */
+/** 权限被回收 / 场景停用（403 或业务码 9900403）或资源已不存在（404），重试也不会成功 */
 const isUnavailableRequestError = (error: unknown) => {
   const code = (error as { code?: number | string } | null)?.code;
-  return code === 403 || code === 404;
+  return code === 403 || code === 404 || code === '9900403';
+};
+
+/** 以下请求带 silent 跳过全局错误处理，非权限类错误需自行提示 */
+const notifyRequestError = (error: unknown) => {
+  if (isUnavailableRequestError(error)) return;
+  const message = (error as { message?: string } | null)?.message;
+  useMessage().messageError(message || '请求失败');
 };
 const DEFAULT_CONVERSATION_TITLE = '新对话';
 const TITLE_REFRESH_TIMES = 20;
@@ -164,6 +171,9 @@ const draftConversation = ref<Conversation | null>(null);
 
 /** 侧栏当前加载的 scope（scope_type:scope_id）；切换场景后用于丢弃旧 scope 的迟到响应 */
 let sidebarScopeKey = '';
+/** 侧栏根节点请求返回 403 的 scope（当前场景本身无权限 / 已停用） */
+let sidebarUnavailableScopeKey = '';
+let sidebarInitTask: Promise<void> | null = null;
 const toScopeKey = (scope: AiConcreteScope | null) => (scope ? `${scope.scope_type}:${scope.scope_id}` : '');
 
 const pollTimers = new Map<string, ReturnType<typeof setInterval>>();
@@ -430,7 +440,7 @@ const fetchChildLogSearch = async (
           anchor_uid: nlUid,
           direction: 'AFTER',
           include_content: true,
-        });
+        }, { silent: true });
         const child = (windowData.results || []).find(item => (
           item.message_type === 'LOG_SEARCH'
           && item.parent_message_uid === nlUid
@@ -957,7 +967,7 @@ export function useSecChatStore() {
           parent_node_uid: groupId,
           page: 1,
           page_size: 100,
-        });
+        }, { silent: true });
         // await 后分组列表可能已刷新，重新定位
         const latest = groups.value.find(g => g.id === groupId);
         if (!latest) return;
@@ -977,7 +987,8 @@ export function useSecChatStore() {
         ]);
         latest.childrenLoaded = true;
         latest.conversationCount = mapped.length;
-      } catch {
+      } catch (error) {
+        notifyRequestError(error);
         // 单组失败保留未加载态，便于下次展开重试
         const latest = groups.value.find(g => g.id === groupId);
         if (latest) latest.childrenLoaded = false;
@@ -1001,7 +1012,7 @@ export function useSecChatStore() {
    * 已加载过的分组子节点在刷新时保留，避免展开组「先空再补拉」闪屏。
    * 置顶能力本期不开放，不请求 pinned/。
    */
-  const initSidebar = async () => {
+  const loadSidebarRoot = async () => {
     const scope = getAiAssistantConcreteScope();
     const scopeKey = toScopeKey(scope);
     sidebarScopeKey = scopeKey;
@@ -1012,8 +1023,14 @@ export function useSecChatStore() {
     }
     sidebarLoading.value = true;
     try {
-      const rootPage = await AiAssistantManageService.fetchSidebarNodes({ ...scope, page: 1, page_size: 100 });
+      const rootPage = await AiAssistantManageService.fetchSidebarNodes(
+        { ...scope, page: 1, page_size: 100 },
+        { silent: true },
+      );
       if (sidebarScopeKey !== scopeKey) return;
+      if (sidebarUnavailableScopeKey === scopeKey) {
+        sidebarUnavailableScopeKey = '';
+      }
       const rootNodes = rootPage.results || [];
       rootSidebarOrder.value = rootNodes.reduce<RootSidebarItem[]>((acc, node) => {
         if (isGroupNode(node)) {
@@ -1078,11 +1095,42 @@ export function useSecChatStore() {
         conversations.value.push(mergeConversationCache([keep], messageCache)[0]);
       }
       groups.value = nextGroups;
+    } catch (error) {
+      if (sidebarScopeKey !== scopeKey) return;
+      if (isUnavailableRequestError(error)) {
+        // 场景无权限 / 已停用：清空侧栏，提示交给场景选择器跳转的权限页
+        sidebarUnavailableScopeKey = scopeKey;
+        rootSidebarOrder.value = [];
+        groups.value = [];
+        return;
+      }
+      notifyRequestError(error);
     } finally {
       if (sidebarScopeKey === scopeKey) {
         sidebarLoading.value = false;
       }
     }
+  };
+
+  const initSidebar = () => {
+    const task = loadSidebarRoot();
+    sidebarInitTask = task;
+    return task.finally(() => {
+      if (sidebarInitTask === task) sidebarInitTask = null;
+    });
+  };
+
+  /**
+   * 打开会话 403 后按最新权限重拉侧栏。
+   * 进行中的侧栏请求结果已是最新；当前 scope 已确认无权限时不再重复请求。
+   */
+  const refreshSidebarAfterUnavailable = async () => {
+    if (sidebarInitTask) {
+      await sidebarInitTask;
+      return;
+    }
+    if (sidebarUnavailableScopeKey && sidebarUnavailableScopeKey === sidebarScopeKey) return;
+    await initSidebar();
   };
 
   /**
@@ -1139,11 +1187,11 @@ export function useSecChatStore() {
       messageLoading.value = true;
       try {
         const [detail, windowData] = await Promise.all([
-          AiAssistantManageService.fetchConversation({ conversation_uid: conversationId }),
+          AiAssistantManageService.fetchConversation({ conversation_uid: conversationId }, { silent: true }),
           AiAssistantManageService.fetchMessageHistory({
             conversation_uid: conversationId,
             include_content: true,
-          }),
+          }, { silent: true }),
         ]);
         // await 后侧栏可能已整表替换，必须重新取引用再写回
         const conv = resolveConversation(conversationId);
@@ -1159,9 +1207,11 @@ export function useSecChatStore() {
         if (activeConversationId.value === conversationId) {
           activeConversationId.value = null;
         }
-        // 同 scope 的其他会话也可能已不可见，按最新权限重拉侧栏
         if (isUnavailableRequestError(error)) {
-          void initSidebar();
+          // 同 scope 的其他会话也可能已不可见，按最新权限重拉侧栏
+          void refreshSidebarAfterUnavailable();
+        } else {
+          notifyRequestError(error);
         }
         throw error;
       } finally {
