@@ -57,7 +57,10 @@ class CreateAttachment(AIAssistantResource):
     }
     ```
 
-    字段路径应使用字段探索返回的引用；duration 仅为示意，不保证业务系统存在该字段。
+    可使用字段探索返回的引用，也可直接输入自定义路径，不要求路径被采样目录发现。
+    例如 extend_data.a.b.c 使用 {"raw_name":"extend_data","keys":["a","b","c"]}；不传 field_type。
+    duration 仅为示意，不保证业务系统存在；合法但不存在的路径成功返回全缺失统计。
+    raw_name 必须为已知可见日志根字段，keys 为对象键路径；不支持任意 SQL 表达式或数组下标。
     无需提交统计类型，后端按全范围真实类型决定是否返回数值摘要；field_type 不能强制转换。
     top_n 默认 10，OTHER/MISSING 不占名额；显式时间粒度超预算报错，AUTO 可自动选择。
     查询范围固定为来源消息的完整条件，不能在 input_data 中覆盖 condition、用户或租户。
@@ -116,13 +119,17 @@ class ListAttachments(AIAssistantResource):
     ### Case：恢复某次检索的统计附件
 
     `GET /api/v1/ai_assistant/attachments/`，查询参数：
-    `scope_type=system&scope_id={systemId}&source_message_uid={searchMessageUid}`
+    `source_message_uid={searchMessageUid}&sort=-created_at`
     `&attachment_type=FIELD_STATISTICS,AI_STATISTICS`
 
     类型和状态支持单值、逗号分隔或重复参数；仅查看成功结果时追加 status=SUCCESS，
     需要恢复生成中任务时不要固定成功状态。默认返回全部匹配项，limit 可限制数量。
     列表包含来源消息与会话摘要，不包含 input_data/output_data；点击某项后用 uid 查询附件详情。
     同一来源可能有多份附件，按附件 UID 区分，不能只按来源消息覆盖结果。
+    指定 source_message_uid 或 conversation_uid 时无需传 scope，后端按本人资源实际归属鉴权。
+    兼容调用方重复提交 scope，但不能用它覆盖资源归属；两个 UID 同时传入时取交集。
+    未指定资源 UID 的完整附件列表必须传 scope_type，具体 scene/system 同时传 scope_id；
+    cross_scene/cross_system 仅汇总当前有权限的对应方向资源。
     """
 
     name = gettext_lazy("获取附件列表")

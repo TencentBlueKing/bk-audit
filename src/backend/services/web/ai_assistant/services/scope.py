@@ -2,7 +2,8 @@
 
 该模块复用平台 ScopeContext 和 ScopePermission，不查询 AI 助手业务对象。
 Conversation 与 ConversationGroup 保存的始终是单一 concrete scope。
-cross scope 仅解析为当前用户可见的具体 ID 集合，供集合查询使用。
+具体 Scope 的访问权限由 HTTP 入口检查；本层只构造过滤范围。
+cross scope 解析为当前用户可见的具体 ID 集合，供集合查询使用。
 """
 
 from dataclasses import dataclass
@@ -37,11 +38,12 @@ def normalize_concrete_scope(*, scope_type: str, scope_id: str | None) -> ScopeC
 
 
 def resolve_scope_visibility(*, permission: ScopePermission, scope_type: str, scope_id: str | None) -> ScopeVisibility:
-    """用公共 Scope 权限计算查询方向上的可见具体 ID。"""
+    """具体范围复用入口鉴权，cross 范围枚举授权 ID 后供 SQL 过滤。"""
 
     scope = ScopeContext(scope_type=scope_type, scope_id=scope_id)
     if not scope.is_cross_scope:
         scope = normalize_concrete_scope(scope_type=scope.scope_type, scope_id=scope.scope_id)
+        return ScopeVisibility(scope.scope_type, (scope.scope_id,), False)
 
     if scope.is_scene_scope:
         scope_ids = permission.get_scene_ids(scope, ActionEnum.VIEW_SCENE)

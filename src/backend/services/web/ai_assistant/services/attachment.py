@@ -238,8 +238,8 @@ class AttachmentService:
     def list(
         self,
         *,
-        scope_type: str,
-        scope_id: str | None,
+        scope_type: str | None = None,
+        scope_id: str | None = None,
         attachment_types: list[str] | None = None,
         statuses: list[str] | None = None,
         keyword: str = "",
@@ -248,17 +248,16 @@ class AttachmentService:
         limit: int | None = None,
         order_fields: list[str] | None = None,
     ):
-        """返回指定 concrete/cross scope 内的附件，并只加载列表视图必需字段。"""
-
-        visibility = resolve_scope_visibility(
-            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
-        )
-        if not visibility.scope_ids:
-            return Attachment.objects.none()
-
+        """按资源 UID 或显式 Scope 查询本人附件；UID 真实归属在 HTTP 入口鉴权。"""
         filters: dict[str, Any] = {}
-        filters["source_message__conversation__scope_type"] = visibility.scope_type
-        filters["source_message__conversation__scope_id__in"] = visibility.scope_ids
+        if not (source_message_uid or conversation_uid):
+            visibility = resolve_scope_visibility(
+                permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+            )
+            if not visibility.scope_ids:
+                return Attachment.objects.none()
+            filters["source_message__conversation__scope_type"] = visibility.scope_type
+            filters["source_message__conversation__scope_id__in"] = visibility.scope_ids
         if attachment_types:
             filters["attachment_type__in"] = attachment_types
         if statuses:

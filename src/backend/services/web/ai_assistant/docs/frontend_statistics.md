@@ -54,11 +54,24 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 打开字段选择器时，调用 `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`，namespace 沿用页面已有的租户上下文，并使用来源消息的完整检索条件。此处是 Web 接口，前端无需接 MCP 网关。
 
-初次请求获取根字段。用户展开可展开的 JSON 字段时，用返回的字段引用作为 parent_field 再请求下一层；保留返回引用中的完整路径，不自行拼接字段名称。继续展开不会创建统计附件。
+初次只传来源消息的完整 `condition`，获取全部基础字段。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，传原 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，返回父字段自身及这批样本发现的全部对象后代，不需要再逐层请求。
 
-`is_expandable=true` 表示样本观察到对象，可直接展示展开入口；字段可以可展开但本身不可统计。`is_expandable=false` 只表示本轮样本未观察到对象，不证明全范围没有子键；前端可对已发现的 JSON 子路径提供“尝试展开”，仍按原 `field` 引用请求下一层。`sample_summary.truncated=true` 表示采样或字段/解析预算导致发现不完整，仍可能存在未发现字段；界面应标注“样本发现”，空目录也不能展示为字段不存在。统计能力提示决定是否提供选择操作，选中后保留 `field` 引用供创建附件使用。目录加载失败留在选择器中提供重新加载，不创建附件。
+例如展开 extend_data 中的 a，请求增量参数为：
 
-目录根据声明和父对象候选样本提供提示，最多 50 条日志、50 个子字段；可能未覆盖所有 JSON key，也不保证全量执行一定成功。`coverage` 仅相对本次 SQL 选出的样本，不能展示为完整范围覆盖率。最终遇到类型或权限变化，按附件执行错误处理。
+```json
+{
+  "parent_field": {"raw_name": "extend_data", "keys": ["a"]},
+  "include_descendants": true
+}
+```
+
+请求还须包含来源消息的 `condition`。采样中有 a.b.c 和 a.b.d 时，响应 `fields` 包含 a、a.b、a.b.c、a.b.d，每项仍使用完整的 `field.raw_name` 与 `field.keys`。前端按路径前缀建立分组，可直接搜索整批目录；提交统计时保留原字段引用，不把点号拼接结果当作 raw_name。根目录与二次目录的父项可能重复，按字段引用合并即可。
+
+`is_expandable=true` 表示可作为对象分组展示；递归响应已包含其发现的后代，展开 UI 无需再次查询。字段可展开不等于本身可统计，选取操作参考 `statistics_supported`。数组作为叶子，不展开数组下标或元素键。`is_expandable=false` 仅表示本次样本未观察到对象或路径已达协议深度，不证明全范围没有子键。
+
+递归模式不限制字段数量；省略 `include_descendants` 仍只返回最多50个直接子字段。Web 与 MCP 共用发现/脱敏逻辑，但 MCP 不提供递归开关，仍逐层探索，采样默认同为100条。业务data超过1 MiB返回413。`sample_summary.truncated=true` 表示采样、路径或单层字段预算造成发现可能不全；界面应标注“样本发现”，空目录不能解释为全范围不存在字段。`coverage` 只针对本次SQL返回的样本，不是完整范围覆盖率。加载失败留在选择器中重试，不创建统计附件。
+
+支持用户直接填写自定义字段路径，**无需先在目录中找到它**。例如 extend_data.a.b.c 提交为 `{"raw_name":"extend_data","keys":["a","b","c"]}`。根字段须是接口支持的日志列，keys 逐段传对象键；不能传任意SQL表达式或数组下标。合法但不存在的路径可成功返回全缺失统计。创建/执行仍会校验实际权限和全范围类型；目录类型仅供提示。
 
 ### 确认并创建
 
@@ -354,13 +367,15 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 | 用户动作 | 调用衔接与页面行为 |
 | --- | --- |
 | 刷新页面或从原卡片重新打开 | 从消息附件摘要或附件列表找到 UID → 读取附件详情 → 终态展示结果，PROCESSING 恢复轮询或可选过程订阅；不重新创建 |
-| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 带当前查询 scope，再按 source_message_uid 和统计类型筛选；列表是摘要，点击后读详情 |
+| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 传 source_message_uid 和统计类型，无需重复 Scope；列表是摘要，点击后读详情 |
 | 失败后原样重试 / 成功后重新生成 | `POST /api/v1/ai_assistant/attachments/{uid}/retry/` → 保留附件 UID，立即清空旧产物、错误、过程与反馈 → 按返回状态恢复等待 |
 | 更换字段、统计选项或 AI 需求 | 从来源消息创建新附件，保留原结果；不能修改原附件 input_data 来重跑 |
 | 更换程序统计范围 | 先完成新的检索，再从新消息创建附件 |
 | 修改标题 | PATCH 原附件，成功后更新卡片和列表标题 |
 
-附件列表必传 `scope_type`：具体 `scene/system` 同时传 `scope_id`，跨范围查询使用 `cross_scene/cross_system` 且不传 `scope_id`。例如 `GET /api/v1/ai_assistant/attachments/?scope_type=system&scope_id={systemId}&source_message_uid={messageUid}&attachment_type=FIELD_STATISTICS`。列表项的 `scope_type/scope_id` 是来源会话的绑定归属；统计产物的 `query_summary.scope_id` 是实际日志查询系统，两者用途不同。创建附件仍只传来源消息 UID、类型和业务输入，详情/重试/SSE 仍按附件 UID 访问，不重复传会话 scope。
+按来源消息或会话恢复附件，只传 `source_message_uid` 或 `conversation_uid` 即可，例如 `GET /api/v1/ai_assistant/attachments/?source_message_uid={messageUid}&attachment_type=FIELD_STATISTICS&sort=-created_at`。后端根据本人资源的实际 Scope 校验权限；重复传入的 Scope 不会覆盖资源归属。两个 UID 同时传入时取交集。
+
+未指定资源 UID 的完整附件列表才必传 `scope_type`：具体 `scene/system` 同时传 `scope_id`，跨范围查询使用 `cross_scene/cross_system` 且不传 `scope_id`。列表项的 `scope_type/scope_id` 是来源会话的绑定归属；统计产物的 `query_summary.scope_id` 是实际日志查询系统，两者用途不同。创建附件仍只传来源消息 UID、类型和业务输入，详情/重试/SSE 按附件 UID 访问，不重复传会话 Scope。
 
 仅轮询的页面在重试/重新生成成功后继续读原附件详情，无需等待执行标识。使用 SSE 时先关闭旧连接，等待新的 execution_id 后恢复；排队期间读到旧快照不能当作本轮结果。切换卡片后，迟到的请求或旧流事件不能覆盖新面板。
 

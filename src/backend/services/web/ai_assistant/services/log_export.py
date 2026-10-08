@@ -8,6 +8,7 @@ import logging
 
 from pydantic import ValidationError
 
+from core.exceptions import ValidationError as RequestValidationError
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
@@ -26,6 +27,7 @@ from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
+from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
 from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError as QueryAIPermissionDeniedError,
 )
@@ -81,6 +83,8 @@ class MessageExportService:
             raise InvalidMessageSnapshot() from error
         namespace = str((message.context_data or {}).get("namespace") or "")
         export_config = dict(export_config or {})
+        # 公开接口配置可省略，默认列与 AI 助手预览保持一致。
+        export_config.setdefault("field_scope", LogExportFieldScope.AI_STANDARD.value)
         # AI 助手「标准字段」scope：翻译为 SPECIFIED + 快照默认展示列（与预览导出同构，
         # display_name 沿用产品文案），常规导出链路（白名单校验/ExportConfig）仅见 SPECIFIED，
         # 原检索页 standard（全量标准字段集）语义不变
@@ -111,6 +115,8 @@ class MessageExportService:
             )
         except QueryAIPermissionDeniedError as error:
             raise LogExportPermissionDenied() from error
+        except AIOutputInvalidError as error:
+            raise RequestValidationError("日志导出配置无效，请检查字段范围和列配置") from error
         except QueryAIAssistantError as error:
             logger.warning(
                 "[MessageExportService] full export failed, message_id=%s, error=%s",

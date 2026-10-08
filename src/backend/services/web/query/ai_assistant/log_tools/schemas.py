@@ -75,7 +75,7 @@ LOG_SEARCH_MAX_SORT_FIELDS = 3
 LOG_SEARCH_MAX_PAGE_SIZE = 100
 LOG_SEARCH_RESPONSE_MAX_BYTES = 1024 * 1024
 LOG_FIELD_METADATA_MAX_FIELDS = 50
-LOG_FIELD_METADATA_SAMPLE_ROWS = 50
+LOG_FIELD_METADATA_SAMPLE_ROWS = 100
 LOG_FIELD_METADATA_SAMPLE_VALUES = 3
 LOG_FIELD_METADATA_SAMPLE_VALUE_MAX_BYTES = 1024
 LOG_FIELD_METADATA_RESPONSE_MAX_BYTES = 1024 * 1024
@@ -353,6 +353,15 @@ class GetLogFieldMetadataRequest(AgentLogToolRequest):
         return parent_field
 
 
+class GetLogFieldMetadataWebRequest(GetLogFieldMetadataRequest):
+    """Web 字段选择器可一次探索采样对象树；MCP 不提供此开关。"""
+
+    include_descendants: bool = Field(
+        default=False,
+        description="指定 parent_field 时设为 true，一次采样返回父路径自身和所有发现的对象后代；默认仅返回直接子字段。省略parent_field始终返回基础目录。",
+    )
+
+
 class LogFieldMetadataItem(BaseModel):
     """单个可查询字段的声明元信息与当前样本观察。"""
 
@@ -399,11 +408,13 @@ class FieldSampleSummary(BaseModel):
     """字段探索的有界采样摘要。"""
 
     sampling_performed: bool = Field(default=False, description="是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。")
-    sampled_count: int = Field(default=0, description="本次 SQL 返回并脱敏的日志数，最多 50 条，不是范围总量；sampling_performed=false 表示未采样。")
+    sampled_count: int = Field(
+        default=0, description="本次 SQL 返回并脱敏的日志数，最多 100 条，不是范围总量；sampling_performed=false 表示未采样。"
+    )
     returned_field_count: int = Field(default=0, description="本次返回字段数量。")
     truncated: bool = Field(
         default=False,
-        description=("采样预算为零或达到上限，或字段数量、解析预算、协议无法表达的路径导致探索可能不完整；" "业务 data 载荷超限返回 413。"),
+        description=("采样预算为零或达到上限，或单层字段数量、解析预算、协议无法表达的路径/深度导致发现可能不完整；" "业务 data 载荷超限返回 413。"),
     )
 
 
@@ -416,6 +427,15 @@ class GetLogFieldMetadataResponse(BaseModel):
         description="最多返回 50 个字段；业务 data 的 UTF-8 JSON 最大 1 MiB。",
     )
     sample_summary: FieldSampleSummary
+
+
+class GetLogFieldMetadataTreeResponse(GetLogFieldMetadataResponse):
+    """Web 的扁平采样字段树，递归模式不截断字段数量。"""
+
+    fields: List[LogFieldMetadataItem] = Field(
+        default_factory=list,
+        description="递归模式返回父路径自身及全部发现的对象后代，不限制字段个数；单层模式仍最多50个，业务data最大1 MiB。",
+    )
 
 
 class LogSortItem(BaseModel):

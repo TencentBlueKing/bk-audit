@@ -8,12 +8,15 @@ from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import AttachmentType, SidebarNodeType
+from services.web.ai_assistant.constants import (
+    AttachmentType,
+    ExecutionStatus,
+    SidebarNodeType,
+)
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
     CrossScopeMutationNotAllowed,
-    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.models import (
     Attachment,
@@ -95,6 +98,25 @@ class ConversationService:
             )
             for attachment_type in AttachmentType.values
         }
+        counts.update(
+            {
+                f"attachment_count_{status.lower()}": Count(
+                    "messages__attachments", filter=owned_attachments & Q(messages__attachments__status=status)
+                )
+                for status in ExecutionStatus.values
+            }
+        )
+        counts.update(
+            {
+                f"attachment_count_{attachment_type.lower()}_{status.lower()}": Count(
+                    "messages__attachments",
+                    filter=owned_attachments
+                    & Q(messages__attachments__attachment_type=attachment_type, messages__attachments__status=status),
+                )
+                for attachment_type in AttachmentType.values
+                for status in ExecutionStatus.values
+            }
+        )
         return (
             queryset.annotate(
                 attachment_count=Count("messages__attachments", filter=owned_attachments),
@@ -160,13 +182,16 @@ class ConversationService:
         self,
         *,
         title: str,
-        scope_type: str,
-        scope_id: str,
+        scope_type: str | None = None,
+        scope_id: str | None = None,
         group_uid: str | None = None,
         initial_message: Mapping[str, Any] | None = None,
     ) -> ConversationCreation:
         """创建会话、目标容器 Node 和可选初始化消息，数据库写入保持原子性。"""
 
+        if group_uid is not None:
+            group = self._get_group(group_uid=group_uid)
+            scope_type, scope_id = group.scope_type, group.scope_id
         scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
         operation_time = timezone.now()
         conversation = Conversation(
@@ -190,8 +215,6 @@ class ConversationService:
             parent_node = None
             if group_uid is not None:
                 group = self._get_group(group_uid=group_uid, for_update=True)
-                if (group.scope_type, group.scope_id) != (scope.scope_type, scope.scope_id):
-                    raise SidebarScopeMismatch()
                 parent_node = self.sidebar_service.lock_group_node_for_update(group=group)
             conversation.save(update_record=False, force_insert=True)
             self.sidebar_service.create_node(conversation=conversation, parent_node=parent_node)

@@ -16,8 +16,7 @@ from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationErr
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
-from services.web.common.constants import ScopeType
-from services.web.common.serializers import ScopeQuerySerializer
+from services.web.ai_assistant.serializers.scope import ResourceScopeQuerySerializer
 
 
 def _attachment_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -104,19 +103,10 @@ class AttachmentExportRequestSerializer(serializers.Serializer):
     )
 
 
-class AttachmentListRequestSerializer(SortSerializerMixin, ScopeQuerySerializer):
+class AttachmentListRequestSerializer(SortSerializerMixin, ResourceScopeQuerySerializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
 
-    scope_type = serializers.ChoiceField(
-        choices=ScopeType.choices,
-        help_text="查询范围类型，支持具体 scene/system 及 cross_scene/cross_system",
-    )
-    scope_id = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        allow_null=True,
-        help_text="具体 scene/system 的 ID；cross 查询省略",
-    )
+    resource_uid_fields = ("source_message_uid", "conversation_uid")
 
     attachment_type = FlexibleListField(
         child=serializers.ChoiceField(choices=AttachmentType.choices),

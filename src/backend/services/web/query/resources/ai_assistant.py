@@ -18,6 +18,8 @@ from services.web.query.ai_assistant.serializers import (
     AggregateLogsResponseSerializer,
     GetLogFieldMetadataRequestSerializer,
     GetLogFieldMetadataResponseSerializer,
+    GetLogFieldMetadataTreeResponseSerializer,
+    GetLogFieldMetadataWebRequestSerializer,
     SearchLogsRequestSerializer,
     SearchLogsResponseSerializer,
 )
@@ -28,7 +30,7 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     """字段、路径或操作符不明确时，探索当前用户可查询的字段及脱敏元信息。
 
     省略 parent_field 返回声明的根目录，不采样；sampled_count=0 不代表没有日志。
-    指定 parent_field 时最多采样 50 条、返回 50 个直接子字段；继续展开应复用 field 的完整路径。
+    指定 parent_field 时默认最多采样 100 条、返回 50 个直接子字段；继续展开应复用 field 的完整路径。
     JSON 根列先筛有效父对象，VARIANT 根列使用兼容采样；已取得的目录可复用，总量用 COUNT。
 
     子字段仅代表样本发现：空目录、is_expandable=false 均不证明全范围没有子键。
@@ -44,10 +46,32 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     def perform_request(self, validated_request_data):
         data = dict(validated_request_data)
         namespace = data.pop("namespace")
+        include_descendants = data.pop("include_descendants", False)
         request = GetLogFieldMetadataRequest.model_validate(data)
         return LogFieldMetadataService.get_metadata(
-            username=get_request_username(), namespace=namespace, request=request
+            username=get_request_username(),
+            namespace=namespace,
+            request=request,
+            include_descendants=include_descendants,
         ).model_dump(mode="json")
+
+
+class GetLogFieldMetadata(MCPGetLogFieldMetadata):
+    """前端日志检索、统计与分析的字段选择目录，不要求先创建附件。
+
+    首次仅传 condition：返回基础字段，JSON 根字段 is_expandable=true，不采样。
+    再传 parent_field 和 include_descendants=true：在该检索条件内一次采样最多100条日志，
+    返回父路径自身及采样发现的全部对象后代，字段数量不截断；数组作为叶子。
+    例如 parent_field={"raw_name":"extend_data","keys":["a"]} 返回 a、a.b、a.b.c、a.b.d。
+    使用 field.raw_name+keys 分组、搜索及提交统计，is_expandable 仅用于层级展示，
+    statistics_supported 决定统计能力提示；本响应已包含发现的后代，无需逐层重查。
+    省略 include_descendants 时仅返回直接子字段（最多50个）。目录先脱敏再解析，
+    sample_summary.truncated 表示采样/路径预算导致发现可能不全；业务data超过1 MiB返回413。
+    namespace 来自 URL，body 不传；样本目录不是全范围字段全集，统计可直接提交合法自定义路径。
+    """
+
+    RequestSerializer = GetLogFieldMetadataWebRequestSerializer
+    ResponseSerializer = GetLogFieldMetadataTreeResponseSerializer
 
 
 class MCPSearchLogs(QueryBaseResource):
