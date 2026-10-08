@@ -68,7 +68,10 @@ class DeleteConversationGroup(AIAssistantResource):
 
 
 class CreateConversation(AIAssistantResource):
-    """创建会话；可携带系统选择初始化消息，并在同一事务中原子落库。"""
+    """创建会话；可携带系统选择初始化消息，并在同一事务中原子落库。
+
+    根列表创建须传具体 Scope；组内创建传 group_uid 即可，由该分组派生归属并鉴权。
+    """
 
     name = gettext_lazy("创建会话")
     RequestSerializer = ConversationCreateRequestSerializer
@@ -77,8 +80,8 @@ class CreateConversation(AIAssistantResource):
     def perform_request(self, validated_request_data):
         creation = ConversationService(user=get_request_username()).create_conversation(
             title=validated_request_data["title"],
-            scope_type=validated_request_data["scope_type"],
-            scope_id=validated_request_data["scope_id"],
+            scope_type=validated_request_data.get("scope_type"),
+            scope_id=validated_request_data.get("scope_id"),
             group_uid=validated_request_data.get("group_uid"),
             initial_message=validated_request_data.get("initial_message"),
         )
@@ -134,6 +137,10 @@ class ListConversations(AIAssistantResource):
 
     concrete 查询传 scope_type=scene/system 与 scope_id；cross_scene/cross_system
     查询仅聚合当前用户在该方向有权限的范围。附件存在性筛选不改变附件计数口径。
+    attachment_count 和 attachment_counts_by_type 仍包含全部状态；各状态数量读取
+    attachment_counts_by_status，例如 SUCCESS=2、FAILED=1、PROCESSING=1 时总数为4。
+    分类型状态读取 attachment_counts_by_type_and_status.FIELD_STATISTICS.FAILED 等。
+    全部类型与状态均补0，状态之和等于对应总数；只统计本人附件，筛选类型不缩小计数。
     """
 
     name = gettext_lazy("获取会话列表")
@@ -162,7 +169,11 @@ class ListPinnedConversations(AIAssistantResource):
 
 
 class ListConversationSidebarNodes(AIAssistantResource):
-    """分页获取根列表或指定分组内的混排侧栏节点，按当前相对顺序返回。"""
+    """分页获取根列表或指定分组内的混排侧栏节点，按当前相对顺序返回。
+
+    根列表必须传具体或 cross Scope；展开分组只传 parent_node_type=GROUP 与
+    parent_node_uid，后端按分组实际归属鉴权，无需重复 Scope。
+    """
 
     name = gettext_lazy("获取侧栏节点")
     RequestSerializer = SidebarNodeListRequestSerializer
@@ -173,7 +184,7 @@ class ListConversationSidebarNodes(AIAssistantResource):
     def perform_request(self, validated_request_data):
         parent_group_uid = validated_request_data.get("parent_node_uid")
         return ConversationSidebarService(user=get_request_username()).list_nodes(
-            scope_type=validated_request_data["scope_type"],
+            scope_type=validated_request_data.get("scope_type"),
             scope_id=validated_request_data.get("scope_id"),
             parent_group_uid=str(parent_group_uid) if parent_group_uid else None,
         )
@@ -197,7 +208,7 @@ class MoveConversationSidebarNode(AIAssistantResource):
 
     前端按以下规则组装请求：
 
-    - `scope_type/scope_id` 必填，指定本次移动所在的具体场景或系统；来源、目标和锚点必须属于该 scope。
+    - 无需传 `scope_type/scope_id`，后端从来源节点读取具体范围并鉴权；目标和锚点必须属于该范围。
     - `source_node_type/source_node_uid` 必填，`source_node_type` 可为 `GROUP` 或 `CONVERSATION`；UID 使用业务 UUID，
       不是内部 Node ID。分组来源只能留在根容器，不能嵌套到其他分组。
     - `target_node_type/target_node_uid` 必须成对出现，只用于指定目标容器；省略表示根容器，传 `GROUP + group_uid`
@@ -214,8 +225,6 @@ class MoveConversationSidebarNode(AIAssistantResource):
 
     ```json
     {
-      "scope_type": "scene",
-      "scope_id": "1",
       "source_node_type": "CONVERSATION",
       "source_node_uid": "source-conversation-uuid",
       "target_node_type": "GROUP",

@@ -38,10 +38,10 @@ class ScopePrimitivesTest(TestCase):
         permission.get_scene_ids.return_value = [1, 2]
         permission.get_system_ids.return_value = ["bk_audit"]
         scenes = resolve_scope_visibility(permission=permission, scope_type="cross_scene", scope_id=None)
-        system = resolve_scope_visibility(permission=permission, scope_type="system", scope_id="bk_audit")
+        system = resolve_scope_visibility(permission=permission, scope_type="cross_system", scope_id=None)
         self.assertEqual((scenes.scope_type, scenes.scope_ids, scenes.is_cross), (ScopeType.SCENE, ("1", "2"), True))
         self.assertEqual(
-            (system.scope_type, system.scope_ids, system.is_cross), (ScopeType.SYSTEM, ("bk_audit",), False)
+            (system.scope_type, system.scope_ids, system.is_cross), (ScopeType.SYSTEM, ("bk_audit",), True)
         )
         self.assertEqual(permission.get_scene_ids.call_args.args[1], ActionEnum.VIEW_SCENE)
         self.assertEqual(permission.get_system_ids.call_args.args[1], ActionEnum.VIEW_SYSTEM)
@@ -56,9 +56,11 @@ class ScopePrimitivesTest(TestCase):
         self.assertEqual((result.scope_type, result.scope_ids, result.is_cross), (ScopeType.SCENE, (), True))
         permission.check_scope_entry.assert_not_called()
 
-    def test_concrete_empty_visibility_does_not_authorize_entry(self):
+    def test_concrete_visibility_reuses_http_authorization(self):
         permission = Mock()
         permission.get_scene_ids.return_value = []
         result = resolve_scope_visibility(permission=permission, scope_type="scene", scope_id="01")
-        self.assertEqual((result.scope_type, result.scope_ids, result.is_cross), (ScopeType.SCENE, (), False))
+        self.assertEqual((result.scope_type, result.scope_ids, result.is_cross), (ScopeType.SCENE, ("1",), False))
         permission.check_scope_entry.assert_not_called()
+        permission.get_scene_ids.assert_not_called()
+        permission.get_system_ids.assert_not_called()

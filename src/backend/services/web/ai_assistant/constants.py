@@ -24,6 +24,7 @@ class ScopePermissionSource(TextChoices):
     FEEDBACK = "feedback", "反馈"
     FEEDBACK_SOURCE = "feedback_source", "反馈来源"
     CONVERSATION_NODE = "conversation_node", "会话节点"
+    SIDEBAR_NODE = "sidebar_node", "移动来源节点"
 
 
 class ExecutionMode(TextChoices):

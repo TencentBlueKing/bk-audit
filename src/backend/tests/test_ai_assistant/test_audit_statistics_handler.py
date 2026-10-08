@@ -62,6 +62,17 @@ class FieldStatisticsTestMixin:
 class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTestCase):
     """真实 Resource/Service/数据库，只有 Broker 投递被替换。"""
 
+    def test_custom_nested_path_not_present_in_source_catalog_can_create_statistics(self):
+        """用户直接提交三层对象路径，不要求来源字段目录中已发现该路径。"""
+        created = self.create(field={"raw_name": "extend_data", "keys": ["custom", "branch", "leaf"]})
+        attachment = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(created["status"], "PROCESSING")
+        self.assertEqual(
+            attachment.context_data["field"],
+            {"raw_name": "extend_data", "keys": ["custom", "branch", "leaf"], "display_name": "leaf"},
+        )
+        self.assertEqual(attachment.context_data["search_condition"], self.source.input_data["condition"])
+
     def test_creation_snapshots_full_source_and_disables_report_capabilities(self):
         created = self.create(field={"raw_name": "extend_data", "keys": ["method"], "field_type": "double"})
         attachment = Attachment.objects.get(uid=created["uid"])

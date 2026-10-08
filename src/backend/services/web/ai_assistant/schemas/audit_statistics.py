@@ -30,10 +30,15 @@ from services.web.query.ai_assistant.log_tools.schemas import (
 
 
 class FieldStatisticsAttachmentInput(MessageSchema):
-    """前端字段引用与有界统计参数；类型提示由查询内核忽略。"""
+    """目录字段或用户自定义路径与统计参数；无需先调用字段探索，类型由全范围判定。"""
 
     field: Annotated[LogFieldRef, serializers.DictField()] = Field(
-        description='待统计的通用字段或 JSON 子路径；field_type 仅为提示，实际类型由服务端确定。'
+        description=(
+            '待统计的通用字段或自定义JSON对象路径，不要求出现在采样目录中；'
+            '例如 {"raw_name":"extend_data","keys":["a","b","c"]}。'
+            'raw_name 为已知日志根字段；JSON 子键按层级传 keys，不能传 SQL 表达式或数组下标；'
+            'field_type 可省略，实际类型由服务端确定。'
+        )
     )
     top_n: int = Field(
         default=10,

@@ -48,7 +48,7 @@ AI_ASSISTANT_FIELD_SAMPLE_ENABLED = True
 FIELD_SAMPLE_LOOKBACK_DAYS = 30
 # L2 采样条数：单条日志的拓展子键覆盖不全，采样多条按时间倒序融合发现更多拓展字段
 # （同一 (容器, 子键) 保留最新一行的采样值）；standard_fields 的 sample_value 仍取最新一条
-AI_ASSISTANT_FIELD_SAMPLE_ROWS = 50
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = 100
 
 # 拓展字段 nl_name 前缀（D-G：拓展字段 nl_name 带 extend. 前缀，与注入 AI 的字段上下文同源）
 EXTENSION_NL_NAME_PREFIX = "extend."

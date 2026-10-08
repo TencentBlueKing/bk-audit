@@ -2,8 +2,8 @@
 
 本目录提供日志字段探索、详情查询、通用聚合和程序字段统计的领域实现。协议事实位于
 `log_tools/schemas.py`，MCP HTTP/OpenAPI 入口位于 `services.web.query.mcp_views`。日志分析 Agent
-使用三个工具；AI 统计 Agent 使用字段探索和聚合两个工具。普通 Web 的字段目录复用同一个
-Resource、Service 和 DTO，程序字段统计直接复用领域 Service，不绕行 MCP HTTP。
+使用三个工具；AI 统计 Agent 使用字段探索和聚合两个工具。普通 Web 的字段目录复用同一
+Service 与字段元信息结构，仅扩展递归请求及不截断字段数的响应集合；程序字段统计直接复用领域 Service，不绕行 MCP HTTP。
 
 ## 架构与边界
 
@@ -12,7 +12,9 @@ flowchart LR
     AGENT[日志分析 Agent] --> APIGW[用户态 API Gateway]
     APIGW --> VIEW
     VIEW --> RES[Resource + DRF/Pydantic]
-    RES --> META[LogFieldMetadataService]
+    RES -->|单层目录| META[LogFieldMetadataService]
+    WEB[前端字段选择器] --> WEBRES[Web 递归请求适配]
+    WEBRES -->|完整采样对象树| META
     RES --> SEARCH[LogDetailSearchService]
     RES --> AGG[LogAggregationService]
     META --> CTX[LogQueryContextService]
@@ -44,7 +46,7 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
 
 | operationId | 路径 | 用途 | 关键约束 |
 | --- | --- | --- | --- |
-| `mcp_get_log_field_metadata` | `POST field_metadata/` | 探索标准字段、JSON 子路径和脱敏样例 | JSON 父对象由 Doris 筛选，最多取 50 条脱敏样本、返回 50 个直接子键 |
+| `mcp_get_log_field_metadata` | `POST field_metadata/` | 探索标准字段、JSON 子路径和脱敏样例 | JSON 父对象由 Doris 筛选，默认最多取100条脱敏样本、返回50个直接子键 |
 | `mcp_search_logs` | `POST search/` | 返回当前用户可见的脱敏日志明细 | 最多 20 个投影字段、3 个排序项、100 条/页，业务 data 有字节预算 |
 | `mcp_aggregate_logs` | `POST aggregate/` | 固定函数的分组、时间桶和数值聚合 | 最多 2 个维度、5 个指标、100 个分组；不接受 SQL 或任意函数名 |
 

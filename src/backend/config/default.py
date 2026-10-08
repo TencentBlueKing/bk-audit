@@ -151,7 +151,7 @@ LANGUAGES = (
 LANGUAGE_COOKIE_NAME = os.getenv("BKAPP_LANGUAGE_COOKIE_NAME", "blueking_language")
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "blueapps.contrib.drf.exception.custom_exception_handler",
+    "EXCEPTION_HANDLER": "core.exception_handler.exception_handler",
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "blueapps.contrib.drf.utils.pagination.CustomPageNumberPagination",
     "PAGE_SIZE": 100,
@@ -259,7 +259,7 @@ AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
 #   若线上延迟或样例质量异常，可设 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED=false 关闭；
 #   操作上下文由平台层 services/web/ai_assistant/services/operation.py 统一管控）
 AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "True"))
-AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "50"))
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "100"))
 AI_ASSISTANT_OPERATION_RANKING_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_OPERATION_RANKING_ENABLED", "True"))
 # AI 助手会话标题生成（一期复刻 risk generate_analyse_report_title 调用方式，共用智能体 ALS_TITLE_SUM）
 AI_CONVERSATION_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH", "35"))
