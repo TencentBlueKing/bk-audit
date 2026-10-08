@@ -274,6 +274,45 @@ class ListQueriesTest(TestCase):
             },
         )
 
+    def test_conversation_counts_split_status_and_type_without_extra_queries(self):
+        """类型筛选不缩小状态计数，排除他人附件，空会话补齐全部零值。"""
+        for attachment_type, status, owner in (
+            (AttachmentType.FIELD_STATISTICS, ExecutionStatus.FAILED, "alice"),
+            (AttachmentType.AI_STATISTICS, ExecutionStatus.PROCESSING, "alice"),
+            (AttachmentType.FIELD_STATISTICS, ExecutionStatus.FAILED, "bob"),
+        ):
+            Attachment.objects.create(
+                source_message=self.source,
+                attachment_type=attachment_type,
+                status=status,
+                created_by=owner,
+                updated_by=owner,
+            )
+        with self.assertNumQueries(1):
+            response = conversation_resources.ListConversations().request(
+                **self.scope, attachment_type=AttachmentType.AI_ANALYSIS
+            )
+        self.assertEqual(response[0]["attachment_count"], 4)
+        self.assertEqual(response[0]["attachment_counts_by_status"], {"PROCESSING": 1, "SUCCESS": 2, "FAILED": 1})
+        self.assertEqual(
+            response[0]["attachment_counts_by_type_and_status"],
+            {
+                "FIELD_STATISTICS": {"PROCESSING": 0, "SUCCESS": 0, "FAILED": 1},
+                "AI_STATISTICS": {"PROCESSING": 1, "SUCCESS": 0, "FAILED": 0},
+                "AI_ANALYSIS": {"PROCESSING": 0, "SUCCESS": 2, "FAILED": 0},
+            },
+        )
+        response = conversation_resources.ListConversations().request(**self.scope, has_attachments=False)
+        self.assertEqual(response[0]["attachment_counts_by_status"], {"PROCESSING": 0, "SUCCESS": 0, "FAILED": 0})
+        self.assertEqual(
+            response[0]["attachment_counts_by_type_and_status"],
+            {
+                "FIELD_STATISTICS": {"PROCESSING": 0, "SUCCESS": 0, "FAILED": 0},
+                "AI_STATISTICS": {"PROCESSING": 0, "SUCCESS": 0, "FAILED": 0},
+                "AI_ANALYSIS": {"PROCESSING": 0, "SUCCESS": 0, "FAILED": 0},
+            },
+        )
+
     def test_conversation_counts_remain_one_query_across_multiple_messages(self):
         """同会话多消息正确汇总，多会话仍只执行一次数据库查询。"""
         source = Message.objects.create(

@@ -23,9 +23,26 @@
 
 程序统计严格复用来源检索的完整条件，不统计预览行。AI 统计把来源条件作为初始上下文，Agent 可以按用户需求调整实际查询范围；每次工具调用独立鉴权。AI 输出标记、ECharts 格式及渲染协议由前端和 Agent skills 协同维护，后端只保存最终文本。
 
-会话、分组与侧栏节点创建时绑定具体 `scene/system`，不提供改绑入口；消息和附件沿来源会话继承资源归属。`views.py` 的 action 声明 scope 来源，`permissions.py` 定位本人对象的绑定后复用公共 `ScopePermission` 鉴权。会话、侧栏和附件列表则经 `services/scope.py` 计算可见 ID，具体查询和 `cross_scene/cross_system` 聚合查询使用同一过滤规则；cross 仅用于读取。
+会话、分组与侧栏节点创建时绑定具体 `scene/system`，不提供改绑入口；消息和附件沿来源会话继承资源归属。`views.py` 的 action 声明 Scope 来源，`permissions.py` 定位本人对象后复用公共 `ScopePermission` 鉴权。按消息/会话查询附件、展开分组、组内创建会话及移动节点时，UID 已限定归属，直接使用资源真实 Scope，前端无需重复传入。无资源 UID 的会话、侧栏和附件集合查询经 `services/scope.py` 计算可见 ID；cross 仅聚合当前有权限的同方向资源。根创建和清空仍显式选具体 Scope；移动的目标与锚点必须与来源同属一个 Scope。
 
 会话归属与日志查询范围用途不同：附件列表按会话绑定隔离，统计查询条件仍按实际操作用户鉴权。程序统计复用成功 LOG_SEARCH 的条件，AI 统计可按需求调整条件，不通过会话 scope 额外锁定统计范围。
+
+SYSTEM_SELECTION 的常用及历史操作由 OperationContextService 按当前用户、会话 Scope 和所选系统共同过滤。常用操作使用 v4 Redis 天桶，增加系统维度，多选时合并所选系统的衰减频次；旧 v3 桶按 TTL 自然过期。历史操作先按会话 Scope 查询最近有效检索，再按所选系统过滤及去重。这一榜单范围不改变会话归属或日志查询鉴权。
+
+### 权限与范围判断分工
+
+| 层次 | 执行内容 | 是否调用权限服务 |
+| --- | --- | --- |
+| HTTP Permission | 从请求或本人资源 UID 解析具体 Scope，检查访问权限；撤权返回 403 | 具体 Scope 调用一次 `check_scope_entry` |
+| Resource / Serializer | 校验 UID、字段类型、成对参数及请求语义 | 不鉴权 |
+| Service 具体范围查询 | 使用已经通过入口鉴权的 Scope 构造 SQL 范围；继续限定本人、未删除资源 | 不重复调用 IAM |
+| Service cross 查询 | 枚举当前有权的场景/系统 ID，再过滤列表；无权限集合为空 | 调用 `get_scene_ids/get_system_ids`，不额外做 cross 入口检查 |
+| Service 移动与组内创建 | 保证 Node、业务对象、父容器、目标与锚点的 Scope 一致；移动在锁定后检查最新状态 | 数据一致性校验，不是权限判定 |
+| 日志查询内核 | 每次统计/检索按实际用户校验查询系统与敏感字段，把授权系统写入 SQL 条件 | 独立日志数据鉴权 |
+
+AI 平台 Service 不是独立的接口鉴权入口。对外 Resource 必须经 `AIAssistantScopeViewSet` 的 Permission 调用；新增内部调用时，由调用入口承担授权。已有可信内部流程可以复用 Service，但不能据此绕过 HTTP 或 MCP 的权限入口。
+
+移动请求只声明来源、目标与锚点 UID，不声明 `scope_type/scope_id`；Scope 在事务内从来源节点派生。重复的旧 Scope 字段按普通未知参数忽略，不参与鉴权或移动。组内创建会话以 `group_uid` 决定归属，合法的重复 Scope 值不改变归属。SQL 中的 Scope 条件和锁定后的同范围检查仍保留，它们分别保证结果范围与写入一致性。
 
 ## 2. 分层与调用链
 
@@ -65,7 +82,9 @@ flowchart TD
 | `services/reconciliation.py` | 长期 PROCESSING 的巡检与失败收敛 |
 | `../query/ai_assistant/log_tools/` | 元数据、权限、SQL 生成、预算、聚合结果解析 |
 
-字段探索 Web 路由复用 `MCPGetLogFieldMetadata` Resource、服务与 DTO，仅使用不同认证入口。聚合 MCP 统一增强请求协议，没有另建旧模式分支；现有分析 Agent 同样可以使用增强能力。
+字段探索 Web 与 MCP 共用 `LogFieldMetadataService`、字段引用及元信息结构。Web 的 `GetLogFieldMetadata` 仅扩展请求开关与响应集合：`include_descendants=true` 时一次采样最多100条，脱敏后迭代遍历父路径自身及全部对象后代，不限制字段数量；MCP 不暴露此开关，仍逐层探索并限制每次50个字段。两者采样默认均为100条，路径和业务data字节预算沿用查询内核。聚合 MCP 统一增强请求协议，没有另建旧模式分支；现有分析 Agent 同样可以使用增强能力。
+
+会话平铺列表在同一次 SQL 聚合中返回附件总数、类型数、状态数以及类型/状态交叉计数，均只统计本人附件，不因类型筛选而收窄。程序统计及 MCP 聚合可直接接受合法自定义 JSON 路径；字段目录用于发现和提示，不作为路径存在性的前置校验。实际统计仍按全范围类型与执行时权限校验。
 
 ## 3. 生命周期与一致性
 

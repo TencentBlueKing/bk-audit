@@ -39,6 +39,10 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     LogFieldRef,
 )
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.resources.ai_assistant import (
+    GetLogFieldMetadata,
+    MCPGetLogFieldMetadata,
+)
 from services.web.query.search_data import SearchDataParser
 from services.web.query.utils.formatter import HitsFormatter
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -554,7 +558,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         sql = self.mock_query.call_args.kwargs["sql"]
         self.assertIn("JSON_TYPE(`extend_data`,'$.risk')", sql)
         self.assertIn("ARRAY_SIZE(JSON_KEYS(`extend_data`,'$.risk'))", sql)
-        self.assertIn("LIMIT 50", sql)
+        self.assertIn("LIMIT 100", sql)
 
     def test_nested_parent_returns_only_its_direct_child_paths(self):
         """展开 a.b 只返回 a.b.c、a.b.d、a.b.e，不返回兄弟或孙级字段。"""
@@ -571,8 +575,8 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertIn("JSON_TYPE(`extend_data`,'$.a.b')", self.mock_query.call_args.kwargs["sql"])
 
     def test_full_sample_budget_marks_field_discovery_incomplete(self):
-        """50 条原始父对象全部脱敏为空时，不把空目录当作字段全集。"""
-        page = {"list": [{"extend_data": {"private": index}} for index in range(50)]}
+        """100 条原始父对象全部脱敏为空时，不把空目录当作字段全集。"""
+        page = {"list": [{"extend_data": {"private": index}} for index in range(100)]}
         self.mock_query.return_value = page
         self.mock_parser.return_value.parse_data.side_effect = lambda rows, **kwargs: [
             {"extend_data": {}} for _ in rows
@@ -581,7 +585,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
 
         self.assertEqual(result.fields, [])
-        self.assertEqual(result.sample_summary.sampled_count, 50)
+        self.assertEqual(result.sample_summary.sampled_count, 100)
         self.assertTrue(result.sample_summary.truncated)
         self.assertEqual(self.mock_query.call_count, 1)
 
@@ -843,8 +847,174 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertEqual(len(result.fields[0].field.keys), 2)
         self.assertFalse(result.fields[0].is_expandable)
 
+    def test_recursive_discovery_returns_parent_and_descendants_from_one_sample(self):
+        """跨日志合并完整对象路径，不遍历数组元素，不为每层再次查询。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"extend_data": {"a": {"b": {"c": 1}, "items": [{"hidden": 3}]}, "sibling": 5}},
+            {"extend_data": {"a": {"b": {"d": 2}}, "sibling": 6}},
+        ]
+        result = LogFieldMetadataService.get_metadata(
+            username=self.username,
+            namespace=self.namespace,
+            request=GetLogFieldMetadataRequest(
+                condition=self.condition, parent_field=LogFieldRef(raw_name="extend_data", keys=["a"])
+            ),
+            include_descendants=True,
+        )
+        self.assertEqual(
+            [item.field.keys for item in result.fields],
+            [["a"], ["a", "b"], ["a", "b", "c"], ["a", "b", "d"], ["a", "items"]],
+        )
+        self.assertEqual([item.is_expandable for item in result.fields], [True, True, False, False, False])
+        self.assertEqual([item.coverage for item in result.fields], [1, 1, 0.5, 0.5, 0.5])
+        self.assertEqual(result.fields[2].sample_values, [1])
+        self.assertEqual(result.fields[3].sample_values, [2])
+        self.assertEqual(self.mock_query.call_count, 1)
+        self.assertIn("LIMIT 100", self.mock_query.call_args.kwargs["sql"])
+
+    def test_web_tree_resource_returns_more_than_fifty_fields_while_mcp_stays_one_level(self):
+        """经过完整 Resource 校验的 Web 不截断目录，MCP 仍只返回直接子键。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"extend_data": {f"field_{index}": {"child": index} for index in range(60)}}
+        ]
+        params = {
+            "namespace": self.namespace,
+            "condition": self.condition.model_dump(mode="json"),
+            "parent_field": {"raw_name": "extend_data"},
+        }
+        with mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value=self.username):
+            tree = GetLogFieldMetadata().request(**params, include_descendants=True)
+            direct = MCPGetLogFieldMetadata().request(**params)
+        self.assertEqual(len(tree["fields"]), 121)
+        self.assertEqual(tree["sample_summary"]["returned_field_count"], 121)
+        self.assertFalse(tree["sample_summary"]["truncated"])
+        self.assertEqual(len(direct["fields"]), 50)
+        self.assertTrue(direct["sample_summary"]["truncated"])
+        self.assertTrue(all(len(item["field"]["keys"]) == 1 for item in direct["fields"]))
+        self.assertEqual(self.mock_query.call_count, 2)
+        self.assertTrue(all("LIMIT 100" in call.kwargs["sql"] for call in self.mock_query.call_args_list))
+
+    def test_recursive_discovery_applies_real_masking_before_enumerating_descendants(self):
+        """私密子树不进入字段目录，无权子字段值不能随递归路径泄露。"""
+        rules = [
+            SensitiveObject(
+                id=1,
+                fields=[{"field_name": "extend_data.a.secret"}],
+                system_id=self.target_system_id,
+                resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+                resource_id="host",
+            ),
+            SensitiveObject(
+                id=2,
+                is_private=True,
+                fields=[{"field_name": "extend_data.a.private"}],
+                system_id=self.target_system_id,
+                resource_type=SensitiveResourceTypeEnum.RESOURCE.value,
+                resource_id="host",
+            ),
+        ]
+        self.mock_query.return_value = {
+            "list": [
+                {
+                    "system_id": self.target_system_id,
+                    "resource_type_id": "host",
+                    "action_id": "view",
+                    "extend_data": {
+                        "a": {
+                            "public": {"child": 1},
+                            "secret": "protected-value",
+                            "private": {"child": "private-value"},
+                        }
+                    },
+                }
+            ]
+        }
+        self.mock_parser.return_value = SearchDataParser()
+        self.mock_catalog_access.side_effect = lambda **kwargs: {
+            path: not path.endswith(".secret") for path in kwargs["fields"]
+        }
+        with (
+            mock.patch.object(SensitiveObject._objects, "filter") as private_filter,
+            mock.patch.object(SensitiveObject.objects, "all") as sensitive_all,
+            mock.patch.object(SearchDataParser, "_permission_service") as permissions,
+        ):
+            private_filter.return_value.filter.return_value = [rules[1]]
+            sensitive_all.return_value.filter.return_value = [rules[0]]
+            permissions.return_value.get_sensitive_object_permissions.return_value = {"1": False}
+            result = LogFieldMetadataService.get_metadata(
+                username=self.username,
+                namespace=self.namespace,
+                request=GetLogFieldMetadataRequest(
+                    condition=self.condition, parent_field=LogFieldRef(raw_name="extend_data")
+                ),
+                include_descendants=True,
+            )
+        self.assertEqual(
+            [item.field.keys for item in result.fields],
+            [[], ["a"], ["a", "public"], ["a", "public", "child"], ["a", "secret"]],
+        )
+        self.assertEqual(result.fields[3].sample_values, [1])
+        self.assertEqual(result.fields[-1].sample_values, [])
+        self.assertFalse(result.fields[-1].statistics_supported)
+        self.assertNotIn("protected-value", result.model_dump_json())
+        self.assertNotIn("private-value", result.model_dump_json())
+
+    @override_settings(AI_LOG_FIELD_METADATA_MAX_FIELDS=1)
+    def test_recursive_discovery_does_not_apply_mcp_field_count_budget(self):
+        """递归模式保留全部采样路径，不受单层 MCP 的50字段协议限制。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"extend_data": {f"field_{index}": index for index in range(80)}}
+        ]
+        result = LogFieldMetadataService.get_metadata(
+            username=self.username,
+            namespace=self.namespace,
+            request=GetLogFieldMetadataRequest(
+                condition=self.condition, parent_field=LogFieldRef(raw_name="extend_data")
+            ),
+            include_descendants=True,
+        )
+        self.assertEqual(len(result.fields), 81)
+        self.assertEqual(result.fields[0].field.keys, [])
+        self.assertEqual({item.field.keys[0] for item in result.fields[1:]}, {f"field_{i}" for i in range(80)})
+        self.assertFalse(result.sample_summary.truncated)
+
+    @override_settings(AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH=2)
+    def test_recursive_discovery_marks_unrepresentable_deeper_paths(self):
+        """完整目录也遵守实际查询路径协议，深度超限明确提示未完成发现。"""
+        self.mock_parser.return_value.parse_data.return_value = [{"extend_data": {"a": {"b": {"c": 1}}}}]
+        result = LogFieldMetadataService.get_metadata(
+            username=self.username,
+            namespace=self.namespace,
+            request=GetLogFieldMetadataRequest(
+                condition=self.condition, parent_field=LogFieldRef(raw_name="extend_data")
+            ),
+            include_descendants=True,
+        )
+        self.assertEqual([item.field.keys for item in result.fields], [[], ["a"], ["a", "b"]])
+        self.assertTrue(result.sample_summary.truncated)
+
+    @override_settings(AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES=1024)
+    def test_recursive_oversized_native_tree_fails_before_building_all_field_items(self):
+        """原生对象的路径本身已超出响应字节预算时，不继续构造完整目录。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"extend_data": {f"{index}_" + "x" * 120: index for index in range(20)}}
+        ]
+        with mock.patch.object(
+            LogFieldMetadataService, "_build_item", wraps=LogFieldMetadataService._build_item
+        ) as build:
+            with self.assertRaises(LogQueryResponseTooLarge):
+                LogFieldMetadataService.get_metadata(
+                    username=self.username,
+                    namespace=self.namespace,
+                    request=GetLogFieldMetadataRequest(
+                        condition=self.condition, parent_field=LogFieldRef(raw_name="extend_data")
+                    ),
+                    include_descendants=True,
+                )
+        build.assert_not_called()
+
     def test_sample_row_limit_uses_hard_limit_and_environment_can_only_tighten(self):
-        for configured, expected in ((49, 49), (50, 50), (51, 50), (999, 50)):
+        for configured, expected in ((49, 49), (100, 100), (101, 100), (999, 100)):
             with self.subTest(configured=configured):
                 with override_settings(AI_ASSISTANT_FIELD_SAMPLE_ROWS=configured):
                     self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
@@ -947,7 +1117,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             sql,
             "SELECT `extend_data`,`system_id`,`resource_type_id`,`action_id` FROM test_rt"
             " WHERE JSON_TYPE(`extend_data`,'$')='object' AND ARRAY_SIZE(JSON_KEYS(`extend_data`,'$'))>0"
-            " ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 50",
+            " ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 100",
         )
 
     def test_api_request_timeout_cause_is_mapped_to_controlled_timeout(self):

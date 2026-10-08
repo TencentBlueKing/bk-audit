@@ -429,7 +429,7 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         self.assertEqual(ext_map[("extend_data", ("ticket_id",))].sample_value, "Story-1")
         # 采样 SQL 按配置条数取数
         sql = mock_query_sync.call_args.kwargs["sql"]
-        self.assertIn("LIMIT 50", sql)
+        self.assertIn("LIMIT 100", sql)
 
     @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
     def test_l2_sampling_failure_degrades_gracefully(

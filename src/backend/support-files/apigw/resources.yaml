@@ -3076,7 +3076,7 @@ paths:
       operationId: mcp_get_log_field_metadata
       description: >-
         字段、路径或操作符不明确时探索当前用户可查询的字段，默认空间无需传 namespace。根目录不采样，sampled_count=0 不表示无日志；目录可复用，总量用 COUNT。
-        指定 parent_field 最多采样 50 条、返回 50 个直接子字段，继续展开复用返回的完整 field；响应最大 1 MiB。
+        指定 parent_field 默认最多采样 100 条、返回 50 个直接子字段，继续展开复用返回的完整 field；响应最大 1 MiB。
         子字段仅代表样本发现，空目录或 is_expandable=false 不证明全范围没有子键；目录类型、统计能力及 coverage 仅供参考，最终以全范围统计为准。
         truncated=true 表示采样或字段/解析预算等导致发现不完整。筛选使用 allow_operators；权限拒绝时停止对应查询，查询失败不能当作零。
       tags: []
@@ -3147,11 +3147,11 @@ paths:
                     required: [sampling_performed, sampled_count, returned_field_count, truncated]
                     properties:
                       sampling_performed: {description: 是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。, type: boolean}
-                      sampled_count: {description: 本次 SQL 返回并脱敏的日志数，最多 50 条，不是范围总量；sampling_performed=false 表示未采样。, type: integer}
+                      sampled_count: {description: 本次 SQL 返回并脱敏的日志数，最多 100 条，不是范围总量；sampling_performed=false 表示未采样。, type: integer}
                       returned_field_count: {description: 本次返回字段数量。, type: integer}
                       truncated:
                         type: boolean
-                        description: "采样预算为零或达到上限，或字段数量、解析预算、协议无法表达的路径导致探索可能不完整；业务 data 载荷超限返回 413。"
+                        description: "采样预算为零或达到上限，或单层字段数量、解析预算、协议无法表达的路径/深度导致发现可能不完整；业务 data 载荷超限返回 413。"
         default:
           description: 平台标准错误响应
         "400": {description: 请求参数不合法, schema: {$ref: '#/definitions/log_tool_error_response'}}

@@ -479,10 +479,10 @@ class HttpIntegrationTest(LiveServerTestCase):
             move_response = self.session.post(
                 self.api_url("/conversation_sidebar/nodes/move/"),
                 json={
-                    "scope_type": ScopeType.CROSS_SCENE,
-                    "scope_id": "",
                     "source_node_type": SidebarNodeType.CONVERSATION,
                     "source_node_uid": scene_one["uid"],
+                    "before_node_type": SidebarNodeType.CONVERSATION,
+                    "before_node_uid": scene_two["uid"],
                 },
             )
             self.assertNotEqual(move_response.status_code, 200, move_response.text)

@@ -4,6 +4,7 @@ from core.serializers import FlexibleListField
 from services.web.ai_assistant.constants import (
     CONCRETE_SCOPE_CHOICES,
     AttachmentType,
+    ExecutionStatus,
     SidebarNodeType,
 )
 from services.web.ai_assistant.exceptions import CrossScopeMutationNotAllowed
@@ -11,6 +12,7 @@ from services.web.ai_assistant.serializers.message import (
     InitialMessageRequestSerializer,
     MessageResponseSerializer,
 )
+from services.web.ai_assistant.serializers.scope import ResourceScopeQuerySerializer
 from services.web.common.constants import ScopeType
 from services.web.common.serializers import ScopeQuerySerializer
 
@@ -60,6 +62,9 @@ class ConversationGroupUpdateRequestSerializer(ConversationGroupDetailRequestSer
 class ConversationCreateRequestSerializer(ConcreteScopeRequestSerializer):
     """创建空会话，或原子创建一条系统选择初始化消息。"""
 
+    scope_type = serializers.CharField(required=False, max_length=32, help_text="根创建必填 scene/system；组内创建由 group_uid 派生")
+    scope_id = serializers.CharField(required=False, max_length=64, help_text="根创建必填具体 ID；组内创建无需重复传入")
+
     title = serializers.CharField(
         default=DEFAULT_CONVERSATION_TITLE,
         max_length=255,
@@ -75,6 +80,16 @@ class ConversationCreateRequestSerializer(ConcreteScopeRequestSerializer):
         required=False,
         help_text="可选系统选择初始化消息",
     )
+
+    def validate(self, attrs):
+        """组内创建由分组决定归属，根创建必须明确具体范围。"""
+        attrs = super().validate(attrs)
+        if attrs.get("group_uid"):
+            attrs.pop("scope_type", None)
+            attrs.pop("scope_id", None)
+        elif not attrs.get("scope_type") or not attrs.get("scope_id"):
+            raise serializers.ValidationError("根列表创建会话必须传入 scope_type 和 scope_id")
+        return attrs
 
 
 class ClearConversationsRequestSerializer(ConcreteScopeRequestSerializer):
@@ -114,8 +129,10 @@ class ConversationUpdateRequestSerializer(ConversationDetailRequestSerializer):
     )
 
 
-class SidebarNodeListRequestSerializer(SidebarScopeQuerySerializer):
+class SidebarNodeListRequestSerializer(ResourceScopeQuerySerializer):
     """不传父节点表示根列表，传入时只允许 Group 容器。"""
+
+    resource_uid_fields = ("parent_node_uid",)
 
     parent_node_type = serializers.ChoiceField(
         choices=SidebarNodeType.choices,
@@ -147,7 +164,7 @@ class SidebarSearchRequestSerializer(SidebarScopeQuerySerializer):
     )
 
 
-class SidebarMoveRequestSerializer(ConcreteScopeRequestSerializer):
+class SidebarMoveRequestSerializer(serializers.Serializer):
     """将业务节点移到根容器或指定分组的开头/锚点前后。"""
 
     source_node_type = serializers.ChoiceField(
@@ -182,11 +199,6 @@ class SidebarMoveRequestSerializer(ConcreteScopeRequestSerializer):
         required=False,
         help_text="目标锚点业务对象的对外 UUID；与 after_node_type 同时传入",
     )
-
-    def validate_scope_type(self, value):
-        if value in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
-            raise CrossScopeMutationNotAllowed()
-        return super().validate_scope_type(value)
 
     def validate(self, attrs):
         self._validate_pair(attrs, "target_node_type", "target_node_uid", "目标节点")
@@ -283,11 +295,46 @@ class AttachmentCountsByTypeSerializer(serializers.Serializer):
         }
 
 
+class AttachmentCountsByStatusSerializer(serializers.Serializer):
+    """把同一次 SQL 聚合的状态属性映射为补零的状态计数。"""
+
+    def __init__(self, *args, count_prefix="attachment_count", **kwargs):
+        """通过聚合属性前缀复用全类型及指定类型的状态响应结构。"""
+        self.count_prefix = count_prefix
+        super().__init__(*args, **kwargs)
+
+    def get_fields(self):
+        """状态字段与执行状态枚举同源，不访问数据库。"""
+        return {
+            status: serializers.IntegerField(
+                source=f"{self.count_prefix}_{status.lower()}", min_value=0, help_text=f"{label}附件数量，无附件时为0"
+            )
+            for status, label in ExecutionStatus.choices
+        }
+
+
+class AttachmentCountsByTypeAndStatusSerializer(serializers.Serializer):
+    """各附件类型下的状态计数，与已有类型总数具有相同统计口径。"""
+
+    def get_fields(self):
+        """按类型生成状态结构，响应协议和 Swagger 使用同一 Serializer。"""
+        return {
+            attachment_type: AttachmentCountsByStatusSerializer(
+                source="*", count_prefix=f"attachment_count_{attachment_type.lower()}", help_text=f"{label}的各状态数量"
+            )
+            for attachment_type, label in AttachmentType.choices
+        }
+
+
 class ConversationListItemSerializer(ConversationResponseSerializer):
     """会话列表摘要及全类型附件计数，统计不随附件类型筛选收窄。"""
 
     attachment_count = serializers.IntegerField(min_value=0, help_text="当前会话下当前用户全部附件总数，包含所有状态")
     attachment_counts_by_type = AttachmentCountsByTypeSerializer(source="*", help_text="各附件类型数量，无附件的类型返回0")
+    attachment_counts_by_status = AttachmentCountsByStatusSerializer(source="*", help_text="全部附件的各执行状态数量，无附件时补0")
+    attachment_counts_by_type_and_status = AttachmentCountsByTypeAndStatusSerializer(
+        source="*", help_text="每种附件类型的各状态数量；计数不随附件类型筛选收窄，无附件时补0"
+    )
 
 
 class ConversationCreateResponseSerializer(serializers.Serializer):

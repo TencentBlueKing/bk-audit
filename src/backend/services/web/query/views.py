@@ -34,7 +34,7 @@ class CollectorQueryViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute(
             "POST",
-            resource.query.mcp_get_log_field_metadata,
+            resource.query.get_log_field_metadata,
             endpoint="field_metadata",
             decorators=[reject_body_namespace],
         ),

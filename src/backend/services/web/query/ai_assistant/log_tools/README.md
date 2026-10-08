@@ -8,7 +8,7 @@
 
 | 能力 | 入口文件（当前目录） | 结果与用途 |
 | --- | --- | --- |
-| 字段探索 | field_metadata.py | 根字段声明或下一层 JSON 样本元数据，帮助选择字段 |
+| 字段探索 | field_metadata.py | 根目录、MCP单层及Web完整采样对象树，帮助选择字段 |
 | 日志详情 | search.py | 脱敏、投影后的分页日志及总数，供分析取证 |
 | 通用聚合 | aggregation.py | columns/rows/groups 等统计数据，供 Agent 使用 |
 | 程序字段统计 | statistics.py | 单字段固定统计包，供附件保存和前端渲染 |
@@ -43,9 +43,11 @@ flowchart TD
 
 ## 3. 字段探索：目录不是全量类型证明
 
-不传 parent_field 时从日志检索字段配置生成根目录，不访问 Doris 采样。指定 JSON 父路径时，Doris 对 JSON 根列按 `JSON_TYPE(parent)='object'` 和 `ARRAY_SIZE(JSON_KEYS(parent))>0` 筛出含直接子键的对象行，最多返回 50 条。服务端保留根列和脱敏身份列，经过 `SearchDataParser` 逐行脱敏后，只推断该父路径下一层的字段、类型、覆盖率和样本值，最多返回 50 个子字段；不会递归扫出整个 JSON 树。VARIANT 根列暂沿用单页 50 条兼容查询，待目标 Doris 版本验证对应键筛选表达式。
+不传 parent_field 时从日志检索字段配置生成根目录，不访问 Doris 采样。指定 JSON 父路径时，Doris 按 `JSON_TYPE(parent)='object'` 和 `ARRAY_SIZE(JSON_KEYS(parent))>0` 筛出非空对象行，按当前条件与采集排序最多取100条；VARIANT 根列沿用兼容单页采样。投影只含根列和脱敏身份列，先经过 `SearchDataParser` 逐行脱敏，再发现路径。
 
-父对象中可能同时包含有权和无权子字段，因此探索不整体拒绝父对象，而是在取回根列后逐行脱敏；返回字段仍按路径校验权限并清除无权字段的样本与统计能力。`sampled_count` 是 SQL 返回并脱敏的日志数。达到采样上限（最多 50 条）、预算为零或字段/解析预算截断时 `truncated=true`，不能证明全部子键已发现。`coverage` 的分母是本次父对象候选样本，不是完整检索范围。子字段只有样本观察到对象才有 `is_expandable=true`；全 null 的已发现字段可尝试统计，最终类型和结果由全范围查询判定。
+MCP 仍只发现父路径下一层，每次最多50字段。Web 提供 `include_descendants=true`，共用同一服务，在这一批样本上使用栈遍历对象，合并父路径自身和所有后代路径，返回扁平 fields；不为节点再次查 Doris、不展开数组、不截断字段数量。完整路径用 raw_name+keys 表达，is_expandable 用于对象分组，statistics_supported 独立表示统计提示。对象/数组不进入 sample_values；路径深度仍与实际查询协议一致。
+
+父对象中可能同时包含有权和无权子字段，因此探索不整体拒绝父对象，而是在取回根列后逐行脱敏；返回字段仍按路径校验权限并清除无权字段的样本与统计能力。`sampled_count` 是 SQL 返回并脱敏的日志数。达到采样上限（最多100条）、预算为零或单层字段/路径/解析预算截断时 `truncated=true`，不能证明全部子键已发现。`coverage` 的分母是本次父对象候选样本，不是完整检索范围。子字段只有样本观察到对象才有 `is_expandable=true`；全 null 的已发现字段可尝试统计，最终类型和结果由全范围查询判定。
 
 ## 4. 详情查询：补列 → 脱敏 → 投影
 

@@ -241,7 +241,7 @@ class ConversationSidebarNodesViewSet(AIAssistantPaginatedViewSet):
     pagination_class = AIAssistantPageNumberPagination
     scope_permission_map = {
         "list": ScopePermissionSource.QUERY,
-        "move": ScopePermissionSource.REQUEST,
+        "move": ScopePermissionSource.SIDEBAR_NODE,
         "pin": ScopePermissionSource.CONVERSATION_NODE,
     }
     page_response_serializers = {"list": SidebarNodeResponseSerializer}

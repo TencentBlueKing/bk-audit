@@ -36,6 +36,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationQuerySummary,
     FieldSampleSummary,
     GetLogFieldMetadataResponse,
+    GetLogFieldMetadataTreeResponse,
     LogDetailColumn,
     LogFieldMetadataItem,
     LogQueryExecutionSummary,
@@ -500,14 +501,15 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         )
         query.assert_not_called()
 
-    def test_web_field_metadata_shares_resource_and_rejects_body_namespace(self):
-        """普通 Web 入口复用字段 Resource，且不能通过 body 覆盖 URL namespace。"""
+    def test_web_field_metadata_reuses_service_and_rejects_body_namespace(self):
+        """Web 与 MCP 共用领域服务，且不能通过 body 覆盖 URL namespace。"""
         web_route = next(
             (route for route in CollectorQueryViewSet.resource_routes if route.endpoint == "field_metadata"), None
         )
         self.assertIsNotNone(web_route)
         mcp_route = next(route for route in MCPUserLogViewSet.resource_routes if route.endpoint == "field_metadata")
-        self.assertIs(web_route.resource_class, mcp_route.resource_class)
+        self.assertNotIn("include_descendants", mcp_route.resource_class.RequestSerializer().fields)
+        self.assertIn("include_descendants", web_route.resource_class.RequestSerializer().fields)
         self.assertFalse(
             any(isinstance(permission, UserAPIGWPermission) for permission in CollectorQueryViewSet().get_permissions())
         )
@@ -531,6 +533,28 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                     self.assertEqual(service.call_args.kwargs["username"], "web-user")
                 else:
                     service.assert_not_called()
+
+    def test_mcp_field_metadata_rejects_web_recursive_option_before_sampling(self):
+        """MCP协议不接受Web递归开关，不能让Agent误请求完整字段树。"""
+        request = APIRequestFactory().post(
+            "/api/v1/query/namespaces/path-ns/mcp_user/logs/field_metadata/",
+            {
+                "condition": self.condition.model_dump(mode="json"),
+                "parent_field": {"raw_name": "extend_data"},
+                "include_descendants": True,
+            },
+            format="json",
+        )
+        force_authenticate(request, user=type("User", (), {"username": "gateway-user", "is_authenticated": True})())
+        with (
+            mock.patch("core.permissions.get_app_info"),
+            mock.patch(
+                "services.web.query.ai_assistant.log_tools.field_metadata.LogFieldMetadataService.get_metadata"
+            ) as service,
+        ):
+            response = self._view("field_metadata")(request, namespace="path-ns")
+        self.assertEqual(response.status_code, 400, response.data)
+        service.assert_not_called()
 
     def test_aggregate_http_accepts_model_dump_with_explicit_nulls(self):
         request_model = AggregateLogsRequest.model_validate(
@@ -594,7 +618,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertIn("data", body)
         self.assertEqual(body["data"]["sample_summary"]["sampled_count"], 0)
         self.assertEqual(
-            service.call_args.kwargs, {"username": "gateway-user", "namespace": "path-ns", "request": mock.ANY}
+            service.call_args.kwargs,
+            {"username": "gateway-user", "namespace": "path-ns", "request": mock.ANY, "include_descendants": False},
         )
 
     def test_rendered_http_json_validates_against_openapi_response_schema(self):
@@ -628,10 +653,14 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertEqual(errors, [], "\n".join(f"{list(error.path)}: {error.message}" for error in errors))
 
     def test_web_rendered_http_json_validates_against_openapi_response_schema(self):
-        """普通 Web Resource 的 OpenAPI 也应描述平台成功响应信封。"""
+        """递归Web响应及超过50字段目录都符合实际OpenAPI信封，不向MCP暴露递归开关。"""
         request = APIRequestFactory().post(
             "/api/v1/query/namespaces/path-ns/collector_query/field_metadata/",
-            {"condition": self.condition.model_dump(mode="json")},
+            {
+                "condition": self.condition.model_dump(mode="json"),
+                "parent_field": {"raw_name": "extend_data"},
+                "include_descendants": True,
+            },
             format="json",
         )
         force_authenticate(request, user=type("User", (), {"username": "web-user", "is_authenticated": True})())
@@ -639,13 +668,28 @@ class TestMCPUserLogResources(AIAssistantTestCase):
             mock.patch("query.resources.ai_assistant.get_request_username", return_value="web-user"),
             mock.patch(
                 "services.web.query.ai_assistant.log_tools.field_metadata.LogFieldMetadataService.get_metadata",
-                return_value=GetLogFieldMetadataResponse(sample_summary=FieldSampleSummary()),
-            ),
+                return_value=GetLogFieldMetadataTreeResponse(
+                    fields=[
+                        LogFieldMetadataItem(
+                            field={"raw_name": "extend_data", "keys": [f"field_{i}"]},
+                            category="EXTENDED",
+                            type_source="INFERRED",
+                        )
+                        for i in range(60)
+                    ],
+                    sample_summary=FieldSampleSummary(
+                        sampling_performed=True, sampled_count=1, returned_field_count=60
+                    ),
+                ),
+            ) as service,
         ):
             view = resolve("/api/v1/query/namespaces/path-ns/collector_query/field_metadata/").func
             response = view(request, namespace="path-ns")
 
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(service.call_args.kwargs["include_descendants"])
         response.render()
+        self.assertEqual(len(json.loads(response.content)["data"]["fields"]), 60)
         schema_response = SpectacularAPIView.as_view()(APIRequestFactory().get("/api/schema/"))
         schema_response.render()
         schema = yaml.safe_load(schema_response.content)

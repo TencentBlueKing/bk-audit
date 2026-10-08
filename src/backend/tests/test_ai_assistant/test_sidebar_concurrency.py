@@ -41,14 +41,6 @@ class ConversationSidebarConcurrencyTest(TransactionTestCase):
     def setUp(self):
         self.user = "concurrent-user"
         self.service = ConversationSidebarService(user=self.user)
-        original_move = ConversationSidebarService.move
-
-        def move_with_test_scope(service, *args, scope_type="scene", scope_id="1", **kwargs):
-            return original_move(service, *args, scope_type=scope_type, scope_id=scope_id, **kwargs)
-
-        move_patch = mock.patch.object(ConversationSidebarService, "move", move_with_test_scope)
-        move_patch.start()
-        self.addCleanup(move_patch.stop)
         for method_name, visible_ids in (
             ("check_scope_entry", None),
             ("get_scene_ids", ["1"]),

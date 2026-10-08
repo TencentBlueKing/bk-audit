@@ -1,7 +1,8 @@
 """日志字段元信息探索：声明根字段与按需 JSON 子字段采样。
 
 根字段直接复用现有日志检索配置，不访问 Doris。调用方指定可见 JSON 父字段后，
-服务才执行最小列采样，先预检条件字段权限，再逐行脱敏后推断下一层字段元信息。
+服务才执行一次最小列采样，先预检条件字段权限，再逐行脱敏后推断字段元信息。
+MCP 仅探索下一层；Web 可在同一批样本上返回父路径自身和全部对象后代。
 """
 
 import json
@@ -30,6 +31,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     FieldSampleSummary,
     GetLogFieldMetadataRequest,
     GetLogFieldMetadataResponse,
+    GetLogFieldMetadataTreeResponse,
     JSONValueType,
     LogFieldCategory,
     LogFieldMetadataItem,
@@ -57,7 +59,7 @@ from services.web.query.utils.field_map import FieldMapHandler
 
 
 class LogFieldMetadataService:
-    """返回用户可见根字段，或探索一个可见 JSON 字段的下一层。
+    """返回用户可见根字段，或从一次采样探索可见 JSON 父路径。
 
     根字段范围与 WEB 日志检索配置同源。JSON 子字段样本统一通过 SearchDataParser，
     条件字段单独预检权限，确保类型与样例不旁路现有权限和脱敏逻辑。
@@ -72,8 +74,9 @@ class LogFieldMetadataService:
         username: str,
         namespace: str,
         request: GetLogFieldMetadataRequest,
+        include_descendants: bool = False,
     ) -> GetLogFieldMetadataResponse:
-        """完成类型复验和鉴权后，按根字段或子字段路径组装元信息。"""
+        """鉴权后返回元信息；include_descendants 仅由 Web 入口开启整树发现。"""
 
         request = GetLogFieldMetadataRequest.model_validate(request.model_dump())
         context = LogQueryContextService.build(
@@ -112,14 +115,17 @@ class LogFieldMetadataService:
                 fields, scan_truncated = cls._build_extended_fields(
                     parent_field=parent_field,
                     rows=safe_rows,
+                    include_descendants=include_descendants,
                 )
                 # 满页不能证明检索范围已耗尽；预算为零时也不能声称完成发现。
                 scan_truncated = scan_truncated or not sampling_performed or len(rows) >= sample_limit
             max_fields = cls._effective_limit(
                 settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0
             )
-            truncated = scan_truncated or len(fields) > max_fields
-            fields = fields[:max_fields]
+            truncated = scan_truncated
+            if not include_descendants:
+                truncated = truncated or len(fields) > max_fields
+                fields = fields[:max_fields]
             access = SensitiveLogFieldPermissionService.get_access(
                 username=username,
                 system_id=request.condition.scope_id,
@@ -144,7 +150,8 @@ class LogFieldMetadataService:
                 raise
             raise mapped_error from err
 
-        response = GetLogFieldMetadataResponse(
+        response_class = GetLogFieldMetadataTreeResponse if include_descendants else GetLogFieldMetadataResponse
+        response = response_class(
             fields=fields,
             sample_summary=FieldSampleSummary(
                 sampling_performed=sampling_performed,
@@ -234,59 +241,89 @@ class LogFieldMetadataService:
         *,
         parent_field: LogFieldRef,
         rows: List[dict],
+        include_descendants: bool = False,
     ) -> Tuple[List[LogFieldMetadataItem], bool]:
-        """从脱敏样本中发现指定父路径的下一层字段。"""
+        """在同一批脱敏样本中合并直接子字段，或父路径自身及全部对象后代。
 
-        values_by_keys: Dict[Tuple[str, ...], List[Any]] = {}
+        递归模式使用栈遍历，不额外查询、不展开数组、不截断字段数量；路径深度
+        仍与实际查询协议一致。单层模式保留 MCP 字段预算与返回结构。
+        """
+        parent_keys = tuple(parent_field.keys)
+        values_by_keys: Dict[Tuple[str, ...], List[Any]] = {parent_keys: []} if include_descendants else {}
         scan_truncated = False
         max_fields = cls._effective_limit(settings.AI_LOG_FIELD_METADATA_MAX_FIELDS, LOG_FIELD_METADATA_MAX_FIELDS, 0)
+        max_path_depth = cls._effective_limit(
+            settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH, LOG_TOOL_MAX_FIELD_PATH_DEPTH, 0
+        )
+        response_limit = cls._effective_limit(
+            settings.AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES, LOG_FIELD_METADATA_RESPONSE_MAX_BYTES, 0
+        )
+        minimum_response_bytes = 0
         for row in rows:
             root_value = row.get(parent_field.raw_name, row.get(parent_field.raw_name.lower()))
             container, sample_truncated = cls._resolve_parent(root_value, parent_field.keys)
             scan_truncated = scan_truncated or sample_truncated
+            if include_descendants:
+                values_by_keys[parent_keys].append(container)
             if not isinstance(container, dict):
                 continue
-            for inspected_count, (key, value) in enumerate(container.items(), start=1):
-                if inspected_count > max_fields:
-                    scan_truncated = True
-                    break
-                try:
-                    field_ref = LogFieldRef(
-                        raw_name=parent_field.raw_name,
-                        keys=[*parent_field.keys, key],
-                    )
-                except PydanticValidationError:
-                    # 协议无法表达的业务 key 被跳过时，必须告知 Agent 探索结果并不完整。
-                    scan_truncated = True
-                    continue
-                field_keys = tuple(field_ref.keys)
-                if field_keys in values_by_keys:
-                    values_by_keys[field_keys].append(value)
-                elif len(values_by_keys) < max_fields:
-                    values_by_keys[field_keys] = [value]
-                else:
-                    scan_truncated = True
+            stack = [(parent_keys, container)]
+            while stack:
+                container_keys, current = stack.pop()
+                for inspected_count, (key, value) in enumerate(current.items(), start=1):
+                    if not include_descendants and inspected_count > max_fields:
+                        scan_truncated = True
+                        break
+                    try:
+                        field_ref = LogFieldRef(raw_name=parent_field.raw_name, keys=[*container_keys, key])
+                    except PydanticValidationError:
+                        # 不可表达路径不能参与后续 SQL；跳过整个子树并明确发现不完整。
+                        scan_truncated = True
+                        continue
+                    field_keys = tuple(field_ref.keys)
+                    if field_keys in values_by_keys:
+                        values_by_keys[field_keys].append(value)
+                    elif include_descendants or len(values_by_keys) < max_fields:
+                        if include_descendants:
+                            # 字段引用只是完整响应的一部分；其总字节已超限时必然无法返回。
+                            # 提前停止宽对象遍历，沿用既有413预算，不额外限制字段个数。
+                            minimum_response_bytes += len(field_ref.model_dump_json().encode("utf-8"))
+                            if minimum_response_bytes > response_limit:
+                                raise LogQueryResponseTooLarge()
+                        values_by_keys[field_keys] = [value]
+                    else:
+                        scan_truncated = True
+                    if include_descendants and isinstance(value, dict) and value:
+                        if len(field_keys) < max_path_depth:
+                            stack.append((field_keys, value))
+                        else:
+                            scan_truncated = True
 
-        max_path_depth = cls._effective_limit(
-            settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-            LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-            0,
-        )
+        config = COLLECT_SEARCH_CONFIG.query_field_map[parent_field.raw_name]
         fields = []
         for keys in sorted(values_by_keys):
             values = values_by_keys[keys]
+            is_root = not keys
             fields.append(
                 cls._build_item(
                     field_ref=LogFieldRef(
                         raw_name=parent_field.raw_name,
                         keys=list(keys),
-                        field_type=LogFieldType.STRING,
+                        field_type=config.field.field_type if is_root else LogFieldType.STRING,
                     ),
-                    category=LogFieldCategory.EXTENDED,
-                    display_name=keys[-1],
-                    description="",
-                    type_source=LogFieldMetadataTypeSource.INFERRED,
-                    allow_operators=list(EXTENSION_FIELD_DEFAULT_OPERATORS),
+                    category=LogFieldCategory.BASIC if is_root else LogFieldCategory.EXTENDED,
+                    display_name=(
+                        str(config.field.description or config.field.alias_name or parent_field.raw_name)
+                        if is_root
+                        else keys[-1]
+                    ),
+                    description=str(config.field.description or "") if is_root else "",
+                    type_source=LogFieldMetadataTypeSource.DECLARED if is_root else LogFieldMetadataTypeSource.INFERRED,
+                    allow_operators=(
+                        [operator.value for operator in config.allow_operators]
+                        if is_root
+                        else list(EXTENSION_FIELD_DEFAULT_OPERATORS)
+                    ),
                     options=None,
                     values=values,
                     sampled_count=len(rows),

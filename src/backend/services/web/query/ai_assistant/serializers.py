@@ -28,6 +28,8 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsResponse,
     GetLogFieldMetadataRequest,
     GetLogFieldMetadataResponse,
+    GetLogFieldMetadataTreeResponse,
+    GetLogFieldMetadataWebRequest,
     SearchLogsRequest,
     SearchLogsResponse,
 )
@@ -147,6 +149,23 @@ class GetLogFieldMetadataResponseSerializer(
     create_serializer_from_model(GetLogFieldMetadataResponse, _RESPONSE_DRF_CONFIG)
 ):
     """字段探索响应的生成 Serializer。"""
+
+
+class GetLogFieldMetadataWebRequestSerializer(
+    NamespacePathRequestSerializerMixin,
+    create_serializer_from_model(GetLogFieldMetadataWebRequest, _DRF_CONFIG),
+):
+    """Web 可选择返回完整采样字段树，MCP 请求不提供递归开关。"""
+
+    PydanticRequestModel = GetLogFieldMetadataWebRequest
+    field_error_roots = frozenset(("parent_field",))
+    model_error = UnsupportedLogField
+
+
+class GetLogFieldMetadataTreeResponseSerializer(
+    create_serializer_from_model(GetLogFieldMetadataTreeResponse, _RESPONSE_DRF_CONFIG)
+):
+    """Web 字段目录响应，递归模式不受 MCP 字段个数限制。"""
 
 
 class SearchLogsRequestSerializer(
