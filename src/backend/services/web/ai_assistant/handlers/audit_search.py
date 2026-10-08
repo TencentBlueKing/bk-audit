@@ -173,6 +173,9 @@ class SystemSelectionHandler(
         common_operations, historical_operations = OperationContextService.build(
             scope_type=context_data.scope_type,
             scope_id=context_data.scope_id,
+            # 操作榜单按所选系统隔离（验收修复）：场景内多系统时各自系统的常用/历史操作
+            # 互不串榜——用户在系统选择卡上看到的是该系统自己的高频与最近检索
+            system_ids=input_data.system_ids,
             username=context_data.username,
         )
         return SystemSelectionOutputSchema(
