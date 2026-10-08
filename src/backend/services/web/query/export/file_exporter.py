@@ -194,18 +194,31 @@ class XLSXExporter(FileExporter):
                 return category.label
         return EXTENSION_GROUP_LABEL
 
+    @classmethod
+    def _build_field_title(cls, field) -> str:
+        """单行标题拼接：中文显示名(英文字段路径)，如「操作起始时间(start_time)」。
+
+        扩展字段下钻列（full_key 形如 extend_data/{sub_key}，AI 平铺导出与检索页
+        指定字段共用该形态）的 display_name 是子键名本身，拼接会得到
+        「_request_url(extend_data/_request_url)」的重复语义，故只显示完整路径；
+        display_name 缺失或与 full_key 相同时同样只显示 full_key，避免括号重复。
+        """
+
+        full_key = field.full_key or field.display_name
+        display_name = field.display_name or full_key
+        if full_key.startswith(f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"):
+            return full_key
+        if display_name and display_name != full_key:
+            return f"{display_name}({full_key})"
+        return full_key
+
     def _write_title_header(self):
         """
-        写入标题头
+        写入标题头（单行：中文显示名(英文字段路径)，见 _build_field_title）
         """
 
-        # 第一行标题（显示名称）
-        titles = [f.display_name or f.full_key for f in self.config.export_fields]
+        titles = [self._build_field_title(f) for f in self.config.export_fields]
         self._write_row(titles, self.title_fmt)
-
-        # 第二行标题（字段路径）
-        keys = [f.full_key or f.display_name for f in self.config.export_fields]
-        self._write_row(keys, self.key_fmt)
 
         # 设置列宽
         self.worksheet.set_column(0, len(titles) - 1, 20)

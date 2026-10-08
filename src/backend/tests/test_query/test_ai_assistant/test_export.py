@@ -56,21 +56,18 @@ class TestPreviewExportService(AIAssistantTestCase):
         self.assertTrue(result.file_name.endswith(".xlsx"))
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        # 行结构：分类头 / 显示名 / 字段路径 / 数据行
-        display_names = [cell.value for cell in sheet[2]]
-        self.assertIn("开始时间", display_names)
-        self.assertIn("操作人", display_names)
-        full_keys = [cell.value for cell in sheet[3]]
-        self.assertIn("start_time", full_keys)
-        self.assertIn("username", full_keys)
+        # 行结构：分类头 / 单行标题（中文显示名(英文字段路径)） / 数据行
+        titles = [cell.value for cell in sheet[2]]
+        self.assertIn("开始时间(start_time)", titles)
+        self.assertIn("操作人(username)", titles)
         # 数据行
-        first_row = [cell.value for cell in sheet[4]]
+        first_row = [cell.value for cell in sheet[3]]
         self.assertIn("admin", first_row)
-        second_row = [cell.value for cell in sheet[5]]
+        second_row = [cell.value for cell in sheet[4]]
         self.assertIn("zhangsan", second_row)
 
     def test_export_extension_column(self):
-        """拓展列按 full_key 取值导出"""
+        """拓展列按 full_key 取值导出；标题只显示完整字段路径（扩展字段英文两者拼接）"""
         output = self.make_log_search_output(
             columns=[
                 ResultColumn(raw_name="username", display_name="操作人"),
@@ -84,11 +81,12 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        display_names = [cell.value for cell in sheet[2]]
-        self.assertIn("工单内容", display_names)
-        full_keys = [cell.value for cell in sheet[3]]
-        self.assertIn("extend_data/ticket_id", full_keys)
-        first_row = [cell.value for cell in sheet[4]]
+        titles = [cell.value for cell in sheet[2]]
+        self.assertIn("extend_data/ticket_id", titles)
+        # 子键名不与完整路径重复拼接
+        self.assertNotIn("工单内容", titles)
+        self.assertNotIn("工单内容(extend_data/ticket_id)", titles)
+        first_row = [cell.value for cell in sheet[3]]
         self.assertIn("Story-3000", first_row)
 
     def test_export_empty_samples_raises(self):
@@ -120,20 +118,21 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）
-        full_keys = [cell.value for cell in sheet[3]]
-        self.assertIn("extend_data/ticket_id", full_keys)
-        self.assertIn("extend_data/operator", full_keys)
-        self.assertIn("extend_data/instance_id", full_keys)
-        # ② extend_data 单列已移除
-        self.assertNotIn("extend_data", full_keys)
+        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）；平铺列标题只显示字段路径
+        titles = [cell.value for cell in sheet[2]]
+        self.assertIn("extend_data/ticket_id", titles)
+        self.assertIn("extend_data/operator", titles)
+        self.assertIn("extend_data/instance_id", titles)
+        # ② extend_data 单列已移除（单列标题形态「拓展数据(extend_data)」同样不应出现）
+        self.assertNotIn("extend_data", titles)
+        self.assertNotIn("拓展数据(extend_data)", titles)
         # ③ 行 1：缺 operator/instance_id 不影响 ticket_id 取值
-        first_data_row = [cell.value for cell in sheet[4]]
+        first_data_row = [cell.value for cell in sheet[3]]
         self.assertIn("admin", first_data_row)
         self.assertIn("Story-3000", first_data_row)
         self.assertIn("operator_a", first_data_row)
         # ④ 行 2：缺 operator 不报错，空值单元格（空字符串）
-        second_data_row = [cell.value for cell in sheet[5]]
+        second_data_row = [cell.value for cell in sheet[4]]
         self.assertIn("zhangsan", second_data_row)
         self.assertIn("Story-4000", second_data_row)
         self.assertIn("vm-001", second_data_row)
@@ -150,8 +149,8 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        full_keys = [cell.value for cell in sheet[3]]
-        self.assertEqual(full_keys.count("extend_data"), 0)
+        titles = [cell.value for cell in sheet[2]]
+        self.assertEqual(titles.count("extend_data"), 0)
 
     def test_flatten_extension_false_keeps_default(self):
         """flatten_extension 缺省/False：保持原 extend_data 单列输出（与现状兼容）"""
@@ -168,9 +167,10 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        full_keys = [cell.value for cell in sheet[3]]
-        self.assertIn("extend_data", full_keys)
-        self.assertNotIn("extend_data/ticket_id", full_keys)
+        titles = [cell.value for cell in sheet[2]]
+        # extend_data 整列（非下钻）保留，标题按「中文显示名(英文路径)」拼接
+        self.assertIn("拓展数据(extend_data)", titles)
+        self.assertNotIn("extend_data/ticket_id", titles)
 
 
 @mock.patch(f"{EXPORT_MODULE}.resource.query.create_collector_search_export_task")
