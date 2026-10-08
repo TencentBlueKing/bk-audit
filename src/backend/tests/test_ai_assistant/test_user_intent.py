@@ -232,7 +232,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         title_delay.assert_called_once()
 
     def test_system_selection_operation_context_uses_conversation_scope(self):
-        """榜单 scope 来自会话，不能由当前选择的 system_ids 推导。"""
+        """榜单 scope 来自会话，系统隔离按本次所选 system_ids（场景内多系统不串榜）。"""
 
         handler = message_handler_registry.require(MessageType.SYSTEM_SELECTION)
         context = SystemSelectionContextSchema(
@@ -257,7 +257,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
                 context_data=context,
             )
 
-        build_operations.assert_called_once_with(scope_type="scene", scope_id="2", username=self.user)
+        build_operations.assert_called_once_with(
+            scope_type="scene", scope_id="2", system_ids=[TARGET_SYSTEM_ID], username=self.user
+        )
 
     def test_planned_system_selection_can_be_edited_after_intent_finishes(self):
         """计划根成功后，用户仍可编辑可见的系统选择子消息。"""
