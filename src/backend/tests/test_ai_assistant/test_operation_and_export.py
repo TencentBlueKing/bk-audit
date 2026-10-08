@@ -53,6 +53,7 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
         store.replace_today(
             scope_type="scene",
             scope_id="1",
+            system_id=TARGET_SYSTEM_ID,
             username=self.user,
             counts={"q1": 3, "q2": 1},
             window_days=14,
@@ -63,7 +64,7 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
         self.assertEqual(mapping, {"q1": 3.0, "q2": 1.0})
         self.assertEqual(
             zadd_key,
-            f"bk_audit:ai_assistant:common_queries_v3:scene:1:{self.user}:d"
+            f"bk_audit:ai_assistant:common_queries_v4:scene:1:{TARGET_SYSTEM_ID}:{self.user}:d"
             f"{timezone.localdate().strftime('%Y%m%d')}",
         )
         pipeline.expire.assert_called_once_with(zadd_key, 16 * 86400)
@@ -77,6 +78,7 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
             store.replace_today(
                 scope_type="scene",
                 scope_id="1",
+                system_id=TARGET_SYSTEM_ID,
                 username=self.user,
                 counts={"a": 5, "b": 9, "c": 1},
                 window_days=14,
@@ -89,7 +91,14 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
         """当日无计数：仅清空当天桶（delete），不写 zadd/expire（空桶自然不占内存）"""
 
         store = self._make_store()
-        store.replace_today(scope_type="scene", scope_id="1", username=self.user, counts={}, window_days=14)
+        store.replace_today(
+            scope_type="scene",
+            scope_id="1",
+            system_id=TARGET_SYSTEM_ID,
+            username=self.user,
+            counts={},
+            window_days=14,
+        )
         pipeline = store.redis_client.pipeline.return_value
         pipeline.delete.assert_called_once()
         pipeline.zadd.assert_not_called()
@@ -113,22 +122,47 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
             + [[]] * 11
             + [[("old-q", 5.0)]]
         )
-        items = store.list_top(scope_type="scene", scope_id="1", username=self.user, window_days=14, limit=10)
+        items = store.list_top(
+            scope_type="scene",
+            scope_id="1",
+            system_ids=[TARGET_SYSTEM_ID],
+            username=self.user,
+            window_days=14,
+            limit=10,
+        )
         self.assertEqual([item.query_text for item in items], ["yesterday-q", "today-q", "old-q"])
 
-    def test_list_top_reads_only_requested_scope_bucket(self):
-        """每个 concrete scope 只读取自己的每日桶，不访问旧 system/v2 桶。"""
+    def test_list_top_reads_only_requested_scope_and_system_bucket(self):
+        """每个 scope × 系统 只读取自己的每日桶（v4 key 含系统维度），不访问 v3 场景桶。"""
 
         store = self._make_store()
         pipeline = store.redis_client.pipeline.return_value
         pipeline.execute.return_value = [[("q1", 3.0)]] + [[]] * 13
-        items = store.list_top(scope_type="scene", scope_id="1", username=self.user, window_days=14, limit=10)
+        items = store.list_top(
+            scope_type="scene",
+            scope_id="1",
+            system_ids=[TARGET_SYSTEM_ID],
+            username=self.user,
+            window_days=14,
+            limit=10,
+        )
         self.assertEqual([item.query_text for item in items], ["q1"])
         self.assertEqual(
             pipeline.zrange.call_args_list[0].args[0],
-            f"bk_audit:ai_assistant:common_queries_v3:scene:1:{self.user}:d{timezone.localdate().strftime('%Y%m%d')}",
+            f"bk_audit:ai_assistant:common_queries_v4:scene:1:{TARGET_SYSTEM_ID}:{self.user}:d"
+            f"{timezone.localdate().strftime('%Y%m%d')}",
         )
         self.assertEqual(pipeline.zrange.call_count, 14)
+
+    def test_list_top_without_system_ids_returns_empty(self):
+        """未指定系统：不读取任何桶（操作榜单必须系统归因，防场景内串榜）"""
+
+        store = self._make_store()
+        items = store.list_top(
+            scope_type="scene", scope_id="1", system_ids=[], username=self.user, window_days=14, limit=10
+        )
+        self.assertEqual(items, [])
+        store.redis_client.pipeline.assert_not_called()
 
     def test_list_top_redis_error_returns_empty(self):
         """Redis 异常降级：返回空列表，不抛出（次要功能不阻断主流程）"""
@@ -137,7 +171,15 @@ class TestCommonQueryStore(AIAssistantPlatformTestCase):
 
         store = self._make_store(**{"pipeline.return_value.execute.side_effect": redis.RedisError("down")})
         self.assertEqual(
-            store.list_top(scope_type="scene", scope_id="1", username=self.user, window_days=14, limit=10), []
+            store.list_top(
+                scope_type="scene",
+                scope_id="1",
+                system_ids=[TARGET_SYSTEM_ID],
+                username=self.user,
+                window_days=14,
+                limit=10,
+            ),
+            [],
         )
 
 
@@ -146,26 +188,53 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         """总闸关闭：操作上下文返回空（设计稿确认后默认开启，开关保留作一键总闸）。"""
 
         with mock.patch("django.conf.settings.AI_ASSISTANT_OPERATION_RANKING_ENABLED", False):
-            common, historical = OperationContextService.build(scope_type="scene", scope_id="1", username=self.user)
+            common, historical = OperationContextService.build(
+                scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+            )
         self.assertEqual(common, [])
         self.assertEqual(historical, [])
 
     def test_build_enabled_by_default(self):
         """默认开启：走真实实现（Redis 未预热/无历史消息时自然为空，不报错）。"""
 
-        common, historical = OperationContextService.build(scope_type="scene", scope_id="1", username=self.user)
+        common, historical = OperationContextService.build(
+            scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+        )
         self.assertEqual(common, [])
         self.assertEqual(historical, [])
 
-    def test_build_historical_filters_by_conversation_scope_and_deduplicates(self):
-        """历史操作以 Conversation scope 归属，同场景跨系统合并、跨场景和 system 隔离。"""
+    def test_build_historical_isolates_by_system_within_scene(self):
+        """[验收回归] 历史操作按所选系统隔离：同场景多系统的检索样例互不串榜。
+
+        验收问题：场景下有多个有权限系统时，系统选择卡的历史操作仅做场景隔离、
+        混入场景内其他系统的检索样例。修复后按消息 output_data.system_id 过滤。
+        """
 
         selection = self.create_selection_message()
         self.create_nl_message(query_text="查 admin 的日志", parent=selection)
         self.create_nl_message(query_text="查 admin 的日志", parent=selection)  # 重复
-        self.create_nl_message(query_text="查导出失败的记录", parent=selection)
-        # 同一 scene 中检索其他 system 的消息仍属于该 scene 历史。
+        # 同一 scene 中检索 other system 的消息：不属于当前所选系统的历史
         self.create_nl_message(query_text="other system query", system_id="other_system")
+        # 失败消息不进入结果
+        self.create_nl_message(query_text="失败的不算", parent=selection, status=ExecutionStatus.FAILED)
+
+        # 所选系统 = TARGET_SYSTEM_ID：只见本系统样例（去重后 1 条）
+        historical = OperationContextService.build_historical(
+            scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+        )
+        self.assertEqual([item.query_text for item in historical], ["查 admin 的日志"])
+
+        # 切到 other system：只见 other system 样例
+        other_historical = OperationContextService.build_historical(
+            scope_type="scene", scope_id="1", system_ids=["other_system"], username=self.user
+        )
+        self.assertEqual([item.query_text for item in other_historical], ["other system query"])
+
+    def test_build_historical_filters_by_conversation_scope_and_deduplicates(self):
+        """历史操作仍按 Conversation scope 隔离（场景/系统维度之外的第二道边界）。"""
+
+        selection = self.create_selection_message()
+        self.create_nl_message(query_text="查 admin 的日志", parent=selection)
         scene_two = create_test_conversation(
             scope_type="scene", scope_id="2", created_by=self.user, updated_by=self.user
         )
@@ -182,47 +251,44 @@ class TestOperationContext(AIAssistantPlatformTestCase):
             output={"intent": "log_search", "system_id": TARGET_SYSTEM_ID, "condition": {}},
             conversation=system_conversation,
         )
-        # 失败消息不进入结果
-        self.create_nl_message(query_text="失败的不算", parent=selection, status=ExecutionStatus.FAILED)
 
-        historical = OperationContextService.build_historical(scope_type="scene", scope_id="1", username=self.user)
+        historical = OperationContextService.build_historical(
+            scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+        )
         query_texts = [item.query_text for item in historical]
-        self.assertEqual(query_texts, ["other system query", "查导出失败的记录", "查 admin 的日志"])
+        self.assertEqual(query_texts, ["查 admin 的日志"])
         self.assertNotIn("other scene query", query_texts)
         self.assertNotIn("system query", query_texts)
-        self.assertNotIn("失败的不算", query_texts)
 
-        scene_two_history = OperationContextService.build_historical(
-            scope_type="scene", scope_id="2", username=self.user
-        )
-        self.assertEqual([item.query_text for item in scene_two_history], ["other scene query"])
-        system_history = OperationContextService.build_historical(
-            scope_type="system", scope_id=TARGET_SYSTEM_ID, username=self.user
-        )
-        self.assertEqual([item.query_text for item in system_history], ["system query"])
-
-    def test_build_common_reads_only_current_user(self):
-        """常见操作：仅读取当前用户 × 系统的高频缓存，不串看其他用户样例。"""
+    def test_build_common_reads_only_current_user_and_selected_system(self):
+        """常见操作：仅读取当前用户 × 所选系统的高频缓存，不串看其他用户/系统样例。"""
 
         with mock.patch.object(
             CommonQueryStore,
             "list_top",
             return_value=[CommonQuerySchema(query_text=f"{self.user}-q")],
         ) as mock_list_top:
-            common = OperationContextService.build_common(scope_type="scene", scope_id="1", username=self.user)
+            common = OperationContextService.build_common(
+                scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+            )
         self.assertEqual([item.query_text for item in common], [f"{self.user}-q"])
         mock_list_top.assert_called_once_with(
-            scope_type="scene", scope_id="1", username=self.user, window_days=mock.ANY, limit=mock.ANY
+            scope_type="scene",
+            scope_id="1",
+            system_ids=[TARGET_SYSTEM_ID],
+            username=self.user,
+            window_days=mock.ANY,
+            limit=mock.ANY,
         )
 
     def test_refresh_common_queries_aggregates_today_counts(self):
-        """定时刷新：只聚合当天成功检索，按用户 × 系统计数重建当天桶（重复语句累计频次）。"""
+        """定时刷新：只聚合当天成功检索，按用户 × scope × 系统重建当天桶（重复语句累计频次）。"""
 
         selection = self.create_selection_message()
         self.create_nl_message(query_text="q1", parent=selection)
         self.create_nl_message(query_text="q1", parent=selection)  # 重复 → 当日频次 2
         self.create_nl_message(query_text="q2", parent=selection)
-        # 同一 scene 的另一个 system 也计入当前 scene 榜单。
+        # 同一 scene 的另一个 system：写入独立系统桶（不与当前系统合并——验收修复）
         self.create_nl_message(query_text="other-system-q", system_id="other_system")
         # 其他用户的样例进入独立缓存，不与当前用户混合
         other_message = self.create_nl_message(query_text="other-q", parent=selection)
@@ -236,15 +302,21 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         with mock.patch.object(CommonQueryStore, "replace_today") as mock_replace:
             result = OperationContextService.refresh_common_queries()
         replace_calls = {
-            (call.kwargs["scope_type"], call.kwargs["scope_id"], call.kwargs["username"]): call.kwargs["counts"]
+            (
+                call.kwargs["scope_type"],
+                call.kwargs["scope_id"],
+                call.kwargs["system_id"],
+                call.kwargs["username"],
+            ): call.kwargs["counts"]
             for call in mock_replace.call_args_list
         }
         self.assertEqual(
-            replace_calls.get(("scene", "1", self.user)),
-            {"q1": 2, "q2": 1, "other-system-q": 1},
+            replace_calls.get(("scene", "1", TARGET_SYSTEM_ID, self.user)),
+            {"q1": 2, "q2": 1},
         )
-        self.assertEqual(replace_calls.get(("scene", "1", "other_user")), {"other-q": 1})
-        self.assertEqual(result, {"refreshed_scopes": 2, "scanned_messages": 5})
+        self.assertEqual(replace_calls.get(("scene", "1", "other_system", self.user)), {"other-system-q": 1})
+        self.assertEqual(replace_calls.get(("scene", "1", TARGET_SYSTEM_ID, "other_user")), {"other-q": 1})
+        self.assertEqual(result, {"refreshed_scope_systems": 3, "scanned_messages": 5})
 
     def _create_intent_message(
         self,
@@ -313,7 +385,9 @@ class TestOperationContext(AIAssistantPlatformTestCase):
             output={"intent": "unrecognized", "error": {"error_code": "UNRECOGNIZED_INTENT", "error_message": "x"}},
         )
 
-        historical = OperationContextService.build_historical(scope_type="scene", scope_id="1", username=self.user)
+        historical = OperationContextService.build_historical(
+            scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+        )
         query_texts = [item.query_text for item in historical]
         self.assertEqual(query_texts, ["查一下审计中心近七天的操作记录"])
         self.assertNotIn("查下最近七天的日志", query_texts)
@@ -342,12 +416,17 @@ class TestOperationContext(AIAssistantPlatformTestCase):
         with mock.patch.object(CommonQueryStore, "replace_today") as mock_replace:
             result = OperationContextService.refresh_common_queries()
         replace_calls = {
-            (call.kwargs["scope_type"], call.kwargs["scope_id"], call.kwargs["username"]): call.kwargs["counts"]
+            (
+                call.kwargs["scope_type"],
+                call.kwargs["scope_id"],
+                call.kwargs["system_id"],
+                call.kwargs["username"],
+            ): call.kwargs["counts"]
             for call in mock_replace.call_args_list
         }
         # 仅成功检索的意图消息进当天桶（引导性输出不计）
-        self.assertEqual(replace_calls.get(("scene", "1", self.user)), {"intent-q1": 1})
-        self.assertEqual(result["refreshed_scopes"], 1)
+        self.assertEqual(replace_calls.get(("scene", "1", TARGET_SYSTEM_ID, self.user)), {"intent-q1": 1})
+        self.assertEqual(result["refreshed_scope_systems"], 1)
         self.assertEqual(result["scanned_messages"], 1)
 
     def test_historical_scope_filter_is_applied_before_scan_limit(self):
@@ -368,7 +447,9 @@ class TestOperationContext(AIAssistantPlatformTestCase):
             )
 
         with mock.patch("django.conf.settings.AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT", 1):
-            historical = OperationContextService.build_historical(scope_type="scene", scope_id="1", username=self.user)
+            historical = OperationContextService.build_historical(
+                scope_type="scene", scope_id="1", system_ids=[TARGET_SYSTEM_ID], username=self.user
+            )
 
         self.assertEqual([item.query_text for item in historical], ["current-scope-query"])
 

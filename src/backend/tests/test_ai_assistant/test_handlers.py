@@ -105,8 +105,8 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
                 ),
             )
 
-    def test_execute_operation_context_uses_conversation_scope(self):
-        """操作上下文按 Conversation scope 查询，系统候选仅用于本次选择校验。"""
+    def test_execute_operation_context_uses_conversation_scope_and_selected_system(self):
+        """操作上下文按 Conversation scope × 所选系统查询，场景内其他系统不串榜。"""
 
         with self.patch_field_context(), self.patch_operation_context() as mock_build, mock.patch(
             "services.web.ai_assistant.handlers.audit_search.SearchLogPermission.get_scope_auth_systems",
@@ -127,6 +127,7 @@ class TestSystemSelectionHandler(AIAssistantPlatformTestCase):
         mock_build.assert_called_once_with(
             scope_type=self.conversation.scope_type,
             scope_id=self.conversation.scope_id,
+            system_ids=[TARGET_SYSTEM_ID],
             username=self.user,
         )
 
