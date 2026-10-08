@@ -112,7 +112,7 @@ Scope 分为“资源绑定”和“本次列表查询”两层，不能混为�
 
 `cross_*` 用于列表聚合，不能作为新资源的绑定范围，也不能作为清空范围。移动请求只传来源、目标和锚点参数，接口不再声明 Scope 字段；旧请求中的额外 Scope 字段不参与处理。后端按来源 UID 派生 Scope，目标与锚点必须属于来源的具体 Scope。清空仍必须指定具体 Scope。置顶接口按会话 UID 定位，后端按该会话的实际绑定 Scope 校验权限。
 
-消息历史通过 `conversation_uid` 读取，不需要也不应额外传 scope。USER_INTENT、SYSTEM_SELECTION、LOG_SEARCH 等消息的会话 scope 都由后端从 Conversation 派生；业务输入中的系统选择、检索条件等仍按各自消息类型提交。常用查询和历史操作也按所属会话的具体 scope 隔离，切换场景或系统不会混用；cross 视图只是聚合读取，不产生 cross 绑定或独立操作记录。
+消息历史通过 `conversation_uid` 读取，不需要也不应额外传 scope。USER_INTENT、SYSTEM_SELECTION、LOG_SEARCH 等消息的会话 scope 都由后端从 Conversation 派生；业务输入中的系统选择、检索条件等仍按各自消息类型提交。常用查询和历史操作按所属会话的具体 scope 及 SYSTEM_SELECTION 所选系统共同隔离，同一场景内切换系统也会更新榜单；多选系统时合并这些系统的操作。cross 视图只是聚合读取，不产生 cross 绑定或独立操作记录。
 
 `GET /conversations/` 返回当前查询范围内的平铺会话数组，可按附件类型/是否有附件筛选；每项的附件计数仍覆盖该会话下本人全部附件类型和状态。
 
@@ -386,6 +386,8 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 全量导出复用现有审计日志导出列表和下载流程。在 Swagger 定位“查询/下载日志导出任务”，使用 full-export 返回的整数任务 ID，按该模块公开状态判断就绪后调用 download；不要调用 Attachment 的详情或 export。导出格式/列选择等字段以对应 Swagger 为准，前端不额外塞入新检索条件改变来源范围。
 
 全量导出省略 `export_config` 或其中的 `field_scope` 时，默认使用 `ai_standard`，即 AI 助手标准展示列。显式非法列配置返回 400 参数错误，修正后再提交；查询或任务执行故障仍返回对应执行错误。
+
+Excel 导出保留分类行，字段标题使用单行“中文显示名(英文字段路径)”，随后是数据行。extend_data 下钻或平铺列只显示完整字段路径；没有显示名或显示名与路径相同时，也只显示路径。预览与全量导出共用此表头规则。
 
 ## 从消息卡片创建附件
 
