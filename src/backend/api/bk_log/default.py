@@ -76,7 +76,7 @@ from core.utils.data import distinct
 
 class BKLogBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bk-log"
-    use_admin_username = True
+    platform_authorization = True
 
     @property
     def base_url(self):
@@ -543,7 +543,6 @@ class GetReportToken(CollectorsBaseResource):
     url_keys = ["collector_config_id"]
     method = "GET"
     platform_authorization = True
-    use_admin_username = False
 
 
 class GetReportHost(CollectorsBaseResource):
@@ -551,4 +550,3 @@ class GetReportHost(CollectorsBaseResource):
     action = "/databus_collectors/report_host/"
     method = "GET"
     platform_authorization = True
-    use_admin_username = False
