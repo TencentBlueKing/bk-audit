@@ -130,7 +130,7 @@ class TestComponentChain(AIAssistantTestCase):
         preview = PreviewExportService.export(output)
         workbook = openpyxl.load_workbook(io.BytesIO(preview.content))
         sheet = workbook.active
-        first_data_row = [cell.value for cell in sheet[4]]
+        first_data_row = [cell.value for cell in sheet[3]]
         self.assertIn("admin", first_data_row)
 
         # ---------- F4b：全量导出（condition 原样重建 query_params） ----------
