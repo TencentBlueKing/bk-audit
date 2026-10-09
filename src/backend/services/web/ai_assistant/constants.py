@@ -24,6 +24,7 @@ class ScopePermissionSource(TextChoices):
     FEEDBACK = "feedback", "反馈"
     FEEDBACK_SOURCE = "feedback_source", "反馈来源"
     CONVERSATION_NODE = "conversation_node", "会话节点"
+    SIDEBAR_NODE = "sidebar_node", "移动来源节点"
 
 
 class ExecutionMode(TextChoices):
@@ -76,6 +77,15 @@ class AttachmentErrorCode(TextChoices):
     OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
 
 
+class AIStatisticsArtifactErrorReason(TextChoices):
+    """AI 统计最终产物的标签提取失败原因；日志只记录稳定原因值。"""
+
+    START_TAG_COUNT_INVALID = "START_TAG_COUNT_INVALID", gettext_lazy("起始标签缺失或重复")
+    END_TAG_COUNT_INVALID = "END_TAG_COUNT_INVALID", gettext_lazy("结束标签缺失或重复")
+    TAG_ORDER_INVALID = "TAG_ORDER_INVALID", gettext_lazy("起止标签顺序错误")
+    EMPTY_CONTENT = "EMPTY_CONTENT", gettext_lazy("标签内没有有效内容")
+
+
 class MessageType(TextChoices):
     """平台首期支持的消息类型。"""
 
@@ -99,6 +109,13 @@ class AttachmentType(TextChoices):
     FIELD_STATISTICS = "FIELD_STATISTICS", gettext_lazy("字段统计")
     AI_STATISTICS = "AI_STATISTICS", gettext_lazy("AI 统计")
     AI_ANALYSIS = "AI_ANALYSIS", gettext_lazy("AI 分析")
+
+
+class AnalysisMode(TextChoices):
+    """日志分析报告的指令来源。"""
+
+    DEFAULT = "DEFAULT", gettext_lazy("默认分析")
+    CUSTOM = "CUSTOM", gettext_lazy("自定义分析")
 
 
 class AttachmentExportFormat(TextChoices):
@@ -155,3 +172,24 @@ AI_CONVERSATION_TITLE_MAX_LENGTH = 35
 NL_PARSE_MAX_RETRIES = 2
 NL_PARSE_RETRY_INTERVAL_SECONDS = 2
 NL_PARSE_RETRY_TIMEOUT_SECONDS = 20
+
+# 日志分析默认标准由 GlobalMetaConfig 运营维护；Handler 在创建时将实际值固化到 context_data。
+AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY = "ai_assistant_log_analysis_default_prompt"
+DEFAULT_AI_ANALYSIS_TITLE = "智能分析报告"
+
+# 日志分析重试退避（秒）；上限短于平台失活阈值，避免排队期间被巡检收敛。
+LOG_ANALYSIS_RETRY_DELAY_SECONDS = 30
+LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS = 120
+
+
+class AttachmentSortField(TextChoices):
+    """附件列表公开排序字段；不开放内部任务和关联模型字段。"""
+
+    CONTENT_UPDATED_AT = "content_updated_at", gettext_lazy("内容更新时间")
+    CREATED_AT = "created_at", gettext_lazy("创建时间")
+    UPDATED_AT = "updated_at", gettext_lazy("记录更新时间")
+    TITLE = "title", gettext_lazy("附件标题")
+
+
+ATTACHMENT_DEFAULT_ORDER_FIELDS = ("-content_updated_at",)
+ATTACHMENT_LIST_MAX_LIMIT = 100

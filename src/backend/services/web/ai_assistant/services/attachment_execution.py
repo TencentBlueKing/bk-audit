@@ -31,6 +31,7 @@ from services.web.ai_assistant.schemas import (
     parse_snapshot,
 )
 from services.web.ai_assistant.streaming import UIStreamRuntime
+from services.web.query.ai_assistant.exceptions import LogToolException
 
 InputT = TypeVar("InputT", bound=MessageSchema)
 ContextT = TypeVar("ContextT", bound=MessageSchema)
@@ -200,6 +201,11 @@ def finish_attachment_failure(
     elif isinstance(exception, AttachmentOutputValidationError):
         public_message = exception.message
         resolved_error_code = AttachmentErrorCode.OUTPUT_VALIDATION_FAILED
+    elif isinstance(exception, LogToolException):
+        # 日志工具只公开固定领域消息；不序列化底层异常或附加查询数据。
+        public_message = str(exception.MESSAGE)
+        if resolved_error_code == AttachmentErrorCode.TASK_EXECUTION_FAILED:
+            resolved_error_code = exception.code
     elif isinstance(exception, AIAssistantException):
         public_message = exception.message
         if resolved_error_code == AttachmentErrorCode.TASK_EXECUTION_FAILED:

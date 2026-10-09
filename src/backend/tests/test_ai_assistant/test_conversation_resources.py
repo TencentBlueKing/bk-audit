@@ -359,19 +359,21 @@ class ConversationResourceTest(TestCase):
         pinned_schema = pinned["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(pinned["operationId"], "api_v1_ai_assistant_conversation_sidebar_pinned_list")
         self.assertEqual(
-            pinned_schema,
+            pinned_schema["properties"]["data"],
             {"type": "array", "items": {"$ref": "#/components/schemas/SidebarNodeResponse"}},
         )
 
         message_list = paths["/api/v1/ai_assistant/messages/"]["get"]
         message_list_schema = message_list["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(message_list["operationId"], "api_v1_ai_assistant_messages_list")
-        self.assertEqual(message_list_schema, {"$ref": "#/components/schemas/MessageWindowResponse"})
+        self.assertEqual(
+            message_list_schema["properties"]["data"], {"$ref": "#/components/schemas/MessageWindowResponse"}
+        )
 
         message_detail = paths["/api/v1/ai_assistant/messages/{message_uid}/"]["get"]
         message_detail_schema = message_detail["responses"]["200"]["content"]["application/json"]["schema"]
         self.assertEqual(message_detail["operationId"], "api_v1_ai_assistant_messages_retrieve")
-        self.assertEqual(message_detail_schema, {"$ref": "#/components/schemas/MessageResponse"})
+        self.assertEqual(message_detail_schema["properties"]["data"], {"$ref": "#/components/schemas/MessageResponse"})
 
         # 无响应序列化器的 GET 也不能因为 collection 路由语义被误包装成数组。
         ping_schema = paths["/ping/"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -382,7 +384,7 @@ class ConversationResourceTest(TestCase):
             "/api/v1/meta/namespaces/{namespace}/general_config/",
         ):
             list_schema = paths[list_path]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
-            self.assertEqual(list_schema.get("type"), "array")
+            self.assertEqual(list_schema["properties"]["data"].get("type"), "array")
 
 
 @override_settings(ROOT_URLCONF="services.web.urls")

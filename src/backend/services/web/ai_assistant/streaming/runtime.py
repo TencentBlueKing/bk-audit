@@ -24,6 +24,7 @@ import logging
 import threading
 import time
 from typing import Any
+from uuid import UUID
 
 from django.conf import settings
 from django.db import DatabaseError
@@ -61,7 +62,7 @@ logger = logging.getLogger(__name__)
 class UIStreamRuntime:
     """业务 Task 唯一的流式出口；封装实时推送、归档缓冲与终态收敛。
 
-    Handler 只调用 ``send()``，成功、失败和 Retry 收敛由平台 Task/Service 调用
+    业务通过 ``send()`` 推送，可读取 ``execution_id`` 关联外部会话；成功、失败和 Retry 由平台 Task/Service 调用
     ``finish_*`` 生命周期方法；两者都不感知 Redis 与归档细节。
     Redis 连接故障与 MySQL checkpoint 故障降级为 ``DEGRADED``/``TRUNCATED``；
     接入错误、实现错误、MySQL fencing 判定执行失效和终态事务失败向业务抛出。
@@ -101,6 +102,11 @@ class UIStreamRuntime:
         self._redis_stopped = False
         # 只在实际落库成功后推进，数据库故障时下一条事件会继续尝试。
         self._last_activity_checkpoint_at = time.monotonic()
+
+    @property
+    def execution_id(self) -> UUID:
+        """返回已持久化的本次执行标识，供业务关联外部服务会话。"""
+        return self._binding.config.execution_id
 
     @classmethod
     def start(

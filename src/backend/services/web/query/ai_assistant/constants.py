@@ -48,7 +48,7 @@ AI_ASSISTANT_FIELD_SAMPLE_ENABLED = True
 FIELD_SAMPLE_LOOKBACK_DAYS = 30
 # L2 采样条数：单条日志的拓展子键覆盖不全，采样多条按时间倒序融合发现更多拓展字段
 # （同一 (容器, 子键) 保留最新一行的采样值）；standard_fields 的 sample_value 仍取最新一条
-AI_ASSISTANT_FIELD_SAMPLE_ROWS = 50
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = 100
 
 # 拓展字段 nl_name 前缀（D-G：拓展字段 nl_name 带 extend. 前缀，与注入 AI 的字段上下文同源）
 EXTENSION_NL_NAME_PREFIX = "extend."
@@ -112,3 +112,15 @@ AI_FORBIDDEN_CONDITION_FIELDS = AI_FORBIDDEN_TIME_FIELDS + ("system_id",)
 
 # D4 默认实现：后端生成全量导出任务名，{prefix} 为 message_uid 前 8 位
 AI_EXPORT_TASK_NAME_TEMPLATE = gettext_lazy("AI助手检索导出-%s")
+
+# MCP 明细默认按证据字段取数，避免复用前端快照的大 JSON/完整日志列。
+MCP_LOG_DEFAULT_FIELDS = (
+    "event_id",
+    "start_time",
+    "username",
+    "system_id",
+    "action_id",
+    "resource_type_id",
+    "instance_id",
+    "result_code",
+)

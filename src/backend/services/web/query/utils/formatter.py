@@ -133,19 +133,14 @@ class HitsFormatter:
         return data
 
     def _format_sensitive_data(self):
-        # 默认拥有所有权限
-        _all_permission = True
-        for so in self.sensitive_objs:
-            # IAM 权限
-            has_permission = getattr(so, "_has_permission", False)
-            # 该条日志是否匹配
-            match_condition = self._check_sensitive_condition(so)
-            # 有权限或不匹配则跳过
-            if has_permission or not match_condition:
-                continue
-            # 没有权限 且 匹配 且 不是移除的内容
-            if not has_permission and match_condition and not so.is_private:
-                _all_permission = False
+        """先确定命中规则，再遮罩或删除字段，避免改写后续规则的匹配条件。"""
+        matched_sensitive_objs = [
+            so
+            for so in self.sensitive_objs
+            if not getattr(so, "_has_permission", False) and self._check_sensitive_condition(so)
+        ]
+        # 原始 log 是结构化字段的完整文本副本；命中任一无权规则时都必须整体遮罩。
+        for so in matched_sensitive_objs:
             # 逐个字段进行替换或移除
             for field in so.fields:
                 field_path = field["field_name"].split(".")
@@ -153,7 +148,7 @@ class HitsFormatter:
                 args = (self.hit, field_path, default_value)
                 self.hit = drop_dict_item_by_path(*args) if so.is_private else modify_dict_by_path(*args)
         # 没有所有权限时，需要隐藏原始日志
-        if not _all_permission:
+        if matched_sensitive_objs:
             self.hit["log"] = SENSITIVE_REPLACE_VALUE
 
     def _check_sensitive_condition(self, sensitive_obj: SensitiveObject) -> bool:

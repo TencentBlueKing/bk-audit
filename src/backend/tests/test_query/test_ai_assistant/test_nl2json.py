@@ -470,11 +470,11 @@ class TestNL2JSONScenarios(AIAssistantTestCase):
         self.assertEqual(condition.conditions[0].operator, "include")
         self.assertEqual(condition.conditions[0].filters, ["张三", "李四"])
 
-    def test_failed_result(self, mock_chat):
-        """「查下失败的日志」→ result_code include [-1]（原始查询值）"""
+    def test_literal_negative_result_code(self, mock_chat):
+        """明确指定结果码 -1 时按字面值查询，不将它当作所有失败。"""
         self.mock_chat = mock_chat
         condition = self._convert(
-            "查下失败的日志",
+            "查下结果码为 -1 的日志",
             [{"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]}],
         )
         self.assertEqual(condition.conditions[0].field.raw_name, "result_code")
@@ -560,10 +560,10 @@ class TestNL2JSONScenarios(AIAssistantTestCase):
         self.assertEqual(condition.conditions[0].filters, ["登录"])
 
     def test_combined_conditions(self, mock_chat):
-        """「张三昨天的失败操作」→ username + result_code 组合（检索页多条件 AND）"""
+        """操作人与明确结果码组合，筛选值保留字面含义。"""
         self.mock_chat = mock_chat
         condition = self._convert(
-            "查一下张三昨天的失败操作",
+            "查一下张三昨天结果码为 -1 的操作",
             [
                 {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]},
                 {"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]},

@@ -7,7 +7,6 @@ from django.utils import timezone
 
 from services.web.ai_assistant.constants import SidebarNodeType
 from services.web.ai_assistant.exceptions import (
-    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
@@ -54,7 +53,7 @@ class ConversationSidebarContainerTest(TestCase):
             method_patch = mock.patch.object(ScopePermission, method_name, return_value=visible_ids)
             method_patch.start()
             self.addCleanup(method_patch.stop)
-        for method_name in ("list_nodes", "list_pinned", "search_conversations", "move"):
+        for method_name in ("list_nodes", "list_pinned", "search_conversations"):
             method_patch = mock.patch.object(
                 ConversationSidebarService,
                 method_name,
@@ -470,8 +469,6 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
 
         with CaptureQueriesContext(connection) as captured:
             self.service.move(
-                scope_type="scene",
-                scope_id="1",
                 source_node_type=SidebarNodeType.CONVERSATION,
                 source_node_uid=str(source.conversation.uid),
                 before_node_type=SidebarNodeType.CONVERSATION,
@@ -878,42 +875,32 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
                     scope_id=None,
                 )
             )
-            with self.assertRaises(SidebarNodeNotFound):
+            children_with_redundant_scope = list(
                 self.service.list_nodes(
                     parent_group_uid=str(group_two.uid),
                     scope_type="scene",
                     scope_id="1",
                 )
+            )
 
         self.assertEqual([node.conversation_id for node in visible_children], [two.conversation_id])
+        self.assertEqual([node.conversation_id for node in children_with_redundant_scope], [two.conversation_id])
         self.assertNotEqual(one.parent_node_id, two.parent_node_id)
 
-    @mock.patch.object(ScopePermission, "check_scope_entry")
-    def test_move_rejects_cross_scope_and_any_mismatched_bound_node(self, _check_scope_entry):
+    def test_move_uses_source_scope_and_rejects_mismatched_target_or_anchor(self):
         source = self.create_conversation_node(title="source", scope_id="1")
         foreign_source = self.create_conversation_node(title="foreign-source", scope_id="2")
         foreign_anchor = self.create_conversation_node(title="foreign-anchor", scope_id="2")
         target_group = self.create_group(user=self.user, name="other-scope", scope_id="2")
         self.service.create_node(group=target_group)
 
-        with self.assertRaises(CrossScopeMutationNotAllowed):
-            self.service.move(
-                scope_type="cross_scene",
-                scope_id=None,
-                source_node_type=SidebarNodeType.CONVERSATION,
-                source_node_uid=str(source.conversation.uid),
-            )
+        moved = self.service.move(
+            source_node_type=SidebarNodeType.CONVERSATION,
+            source_node_uid=str(foreign_source.conversation.uid),
+        )
+        self.assertEqual((moved.scope_type, moved.scope_id), ("scene", "2"))
         with self.assertRaises(SidebarScopeMismatch):
             self.service.move(
-                scope_type="scene",
-                scope_id="1",
-                source_node_type=SidebarNodeType.CONVERSATION,
-                source_node_uid=str(foreign_source.conversation.uid),
-            )
-        with self.assertRaises(SidebarScopeMismatch):
-            self.service.move(
-                scope_type="scene",
-                scope_id="1",
                 source_node_type=SidebarNodeType.CONVERSATION,
                 source_node_uid=str(source.conversation.uid),
                 target_node_type=SidebarNodeType.GROUP,
@@ -921,8 +908,6 @@ class ConversationSidebarBehaviorTest(ConversationSidebarContainerTest):
             )
         with self.assertRaises(SidebarScopeMismatch):
             self.service.move(
-                scope_type="scene",
-                scope_id="1",
                 source_node_type=SidebarNodeType.CONVERSATION,
                 source_node_uid=str(source.conversation.uid),
                 before_node_type=SidebarNodeType.CONVERSATION,

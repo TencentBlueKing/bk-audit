@@ -2,7 +2,7 @@
 
 本文说明调用时机、接口衔接和页面状态处理。按页面操作串联会话、消息、附件和流式展示，并说明日志检索入口。附件与流式属于公共接入方式；具体附件类型是否可创建，以目标环境已开放的业务能力为准。二期 AI 分析单独交付，不因公共接口存在而默认开放。
 
-阅读顺序：首次接入从对象关系、接口导航开始；实现检索看消息章节；接报告面板看附件与流式章节。AI 分析专属交互见二期分支同目录的 `frontend_log_analysis.md`。
+阅读顺序：首次接入从对象关系、接口导航开始；实现检索看消息章节；接报告面板看附件与流式章节。AI 分析专属交互见[日志分析指南](frontend_log_analysis.md)，程序统计与 AI 统计的完整用户路径见[统计联调指南](frontend_statistics.md)。
 
 ## 协议入口与维护边界
 
@@ -40,8 +40,8 @@ flowchart TD
     F --> G[用户发起已开放的附件操作]
     G --> H{附件状态及 is_stream}
     H -->|终态| I[展示最终结果或错误]
-    H -->|处理中、非流式| J[轮询附件详情]
-    H -->|处理中、流式| K[快照恢复过程，再接 SSE]
+    H -->|处理中、只看结果或不支持流| J[轮询附件详情]
+    H -->|处理中、支持流且需要过程| K[快照恢复过程，再接 SSE]
     J --> I
     K --> L[流结束后刷新附件详情]
     L --> I
@@ -68,7 +68,7 @@ flowchart TD
 | 恢复生成过程 | `GET /attachments/{attachment_uid}/stream/snapshot/` | 展示历史事件，拿本次执行和游标 |
 | 接收生成增量 | `GET /attachments/{attachment_uid}/stream/` | 处理业务事件与两个具名控制事件 |
 | 编辑报告 | `PATCH /attachments/{attachment_uid}/` | 更新同一附件的标题/正文 |
-| 重试失败附件 | `POST /attachments/{attachment_uid}/retry/` | 原 UID，重新获取本次执行 |
+| 重试失败或重新生成成功附件 | `POST /attachments/{attachment_uid}/retry/` | 原 UID，清空旧产物后重新获取本次执行 |
 | 下载附件 | `GET /attachments/{attachment_uid}/export/` | 直接保存文件，无导出轮询 |
 | 赞踩/取消 | `POST /feedback/`、`DELETE /feedback/{feedback_uid}/` | 更新来源卡片反馈 |
 
@@ -91,8 +91,9 @@ Scope 分为“资源绑定”和“本次列表查询”两层，不能混为�
 
 | 用途 | 参数 | 规则 |
 | --- | --- | --- |
-| 创建会话或分组时绑定资源 | `scope_type` + `scope_id` | 必须选一个具体 `scene` 或 `system`；创建后不提供改绑接口 |
-| 查询侧栏、置顶、搜索和附件列表 | `scope_type` + `scope_id` | 支持具体 `scene/system`，也支持只读聚合 `cross_scene/cross_system`；cross 查询不传 `scope_id` |
+| 在根列表创建会话或分组 | `scope_type` + `scope_id` | 必须选一个具体 `scene` 或 `system`；创建后不提供改绑接口 |
+| 无资源 UID 的会话列表、根侧栏、置顶、搜索和附件列表 | `scope_type` + `scope_id` | 支持具体 `scene/system`，也支持只读聚合 `cross_scene/cross_system`；cross 查询不传 `scope_id` |
+| 按消息/会话查附件、展开分组、组内创建会话、移动已有节点 | 对应资源 UID | 无需重复 Scope；后端定位本人资源并按真实归属鉴权，重复 Scope 不能覆盖归属 |
 | 创建、读取或刷新消息 | `conversation_uid` + 消息类型专属字段 | 不传会话 scope；后端从所属会话读取绑定并做权限校验 |
 
 用户在具体场景或系统下创建会话/分组时，创建请求显式传入该绑定。例如：
@@ -105,21 +106,25 @@ Scope 分为“资源绑定”和“本次列表查询”两层，不能混为�
 }
 ```
 
-如需创建空会话，省略 `group_uid` 和 `initial_message` 即可。若创建分组，也必须传相同形式的具体 `scope_type/scope_id`；会话加入分组时，二者的绑定必须一致。
+如需创建根列表空会话，省略 `group_uid` 和 `initial_message` 即可。若创建分组，也必须传具体 `scope_type/scope_id`；组内创建会话传 `group_uid` 即可，后端从该分组派生绑定范围。
 
-侧栏节点、置顶、搜索和 `GET /attachments/` 每次查询都要传用户当前选择的具体或 cross 查询 scope。`cross_scene` 汇总当前有权访问的所有场景资源，`cross_system` 汇总当前有权访问的所有系统资源；两个方向彼此隔离。cross 根侧栏按所属会话/分组更新时间降序合并，并以 Node ID 降序稳定排序；展开分组仍按组内 position 降序排列。附件列表按 `content_updated_at DESC, id DESC` 排序。cross 响应中的 `scope_type/scope_id` 是每条资源的**实际绑定值**，不会回显 `cross_*`。
+`GET /conversations/`、根侧栏、置顶、搜索及未按资源限定的 `GET /attachments/` 要传当前选择的具体或 cross 查询 Scope。按消息或会话查附件时传 `source_message_uid` 或 `conversation_uid`；展开分组时传 `parent_node_type=GROUP` 和 `parent_node_uid`，均无需重复 Scope。`cross_scene` 汇总当前有权访问的所有场景资源，`cross_system` 汇总当前有权访问的所有系统资源；两个方向彼此隔离。cross 根侧栏按所属会话/分组更新时间降序合并，并以 Node ID 降序稳定排序；展开分组仍按组内 position 降序排列。附件列表按 `content_updated_at DESC, id DESC` 排序。cross 响应中的 `scope_type/scope_id` 是每条资源的**实际绑定值**，不会回显 `cross_*`。
 
-`cross_*` 仅用于列表聚合，不可创建会话或分组，也不可执行跨范围移动或清空。移动和清空请求必须指定一个具体 scope。置顶接口按会话 UID 定位，后端仍会按该会话的实际绑定 scope 校验权限。
+`cross_*` 用于列表聚合，不能作为新资源的绑定范围，也不能作为清空范围。移动请求只传来源、目标和锚点参数，接口不再声明 Scope 字段；旧请求中的额外 Scope 字段不参与处理。后端按来源 UID 派生 Scope，目标与锚点必须属于来源的具体 Scope。清空仍必须指定具体 Scope。置顶接口按会话 UID 定位，后端按该会话的实际绑定 Scope 校验权限。
 
-消息历史通过 `conversation_uid` 读取，不需要也不应额外传 scope。USER_INTENT、SYSTEM_SELECTION、LOG_SEARCH 等消息的会话 scope 都由后端从 Conversation 派生；业务输入中的系统选择、检索条件等仍按各自消息类型提交。常用查询和历史操作也按所属会话的具体 scope 隔离，切换场景或系统不会混用；cross 视图只是聚合读取，不产生 cross 绑定或独立操作记录。
+消息历史通过 `conversation_uid` 读取，不需要也不应额外传 scope。USER_INTENT、SYSTEM_SELECTION、LOG_SEARCH 等消息的会话 scope 都由后端从 Conversation 派生；业务输入中的系统选择、检索条件等仍按各自消息类型提交。常用查询和历史操作按所属会话的具体 scope 及 SYSTEM_SELECTION 所选系统共同隔离，同一场景内切换系统也会更新榜单；多选系统时合并这些系统的操作。cross 视图只是聚合读取，不产生 cross 绑定或独立操作记录。
 
-权限被撤销或场景停用后，该 scope 下的资源会从侧栏、搜索、置顶、附件列表及 cross 聚合中隐藏；直接读取或操作对象会返回 403。恢复权限或重新启用场景后，原资源重新可见，无需重建。
+`GET /conversations/` 返回当前查询范围内的平铺会话数组，可按附件类型/是否有附件筛选；每项的附件计数仍覆盖该会话下本人全部附件类型和状态。
+
+会话卡片使用 `attachment_count` 展示总数，`attachment_counts_by_type` 展示各类型总数；成功、失败和处理中数量分别读取 `attachment_counts_by_status.SUCCESS/FAILED/PROCESSING`。按类型展示状态时使用 `attachment_counts_by_type_and_status`，例如 `attachment_counts_by_type_and_status.FIELD_STATISTICS.FAILED`。所有类型和状态均补零；每个类型的状态数之和等于该类型总数，全部状态之和等于附件总数。列表类型筛选只筛会话，不改变上述计数口径。
+
+权限被撤销或场景停用后，该 scope 下的资源会从会话列表、侧栏、搜索、置顶、附件列表及 cross 聚合中隐藏；直接读取或操作对象会返回 403。恢复权限或重新启用场景后，原资源重新可见，无需重建。
 
 ## 进入页面、创建与恢复会话
 
 页面初始化可并行请求 `GET /conversation_sidebar/pinned/` 和 `GET /conversation_sidebar/nodes/`，两者都传当前选择的 scope 查询参数。置顶单独展示，普通列表不重复展示；按响应顺序分页，展开分组时再请求对应容器。搜索使用 `GET /conversation_sidebar/search/`，同样传 scope 查询参数，结果只用于定位会话。
 
-用户确认系统后再调用 `POST /conversations/`，在请求顶层传当前选定的具体 `scope_type/scope_id`；若需要初始化系统选择消息，再携带 `initial_message.message_type=SYSTEM_SELECTION` 与对应业务 input_data。若从某个分组内新建会话，同一请求传该分组的 `group_uid`，无需创建后再调用移动接口。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询它的详情，SUCCESS 后才能用于后续检索；FAILED 时保留错误卡片，不将其用作有效父消息。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
+用户确认系统后再调用 `POST /conversations/`，根列表创建时传当前具体 `scope_type/scope_id`；组内创建时传 `group_uid`，无需重复 Scope 或在创建后再移动。若需要初始化系统选择消息，携带 `initial_message.message_type=SYSTEM_SELECTION` 与业务 input_data。保存返回的会话 UID 和 `initial_message.uid`，进入会话并更新侧栏。初始化消息为 PROCESSING 时轮询详情，SUCCESS 后用于检索；FAILED 时保留错误卡片。创建请求失败则保留选择界面与输入。系统选择字段见 Swagger。
 
 若产品使用直接自然语言入口，可先 `POST /conversations/` 创建空会话，再提交 USER_INTENT；缺少系统时由识别结果引导补全。不要同时创建手工系统选择和语义相同的意图消息。
 
@@ -378,7 +383,13 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 | 导出当前预览 | `GET /messages/{message_uid}/preview-export/` | 来源为成功 LOG_SEARCH；直接返回 Excel 文件，导出快照样例，不重新查全量日志 |
 | 导出完整检索范围 | `POST /messages/{message_uid}/full-export/` → 保存 export_task_id → 既有导出任务详情 → 下载 | 后端从来源快照重建条件；请求成功只代表任务创建，不代表文件就绪 |
 
+零命中也可以正常预览或全量导出 XLSX：保留分类、字段标题，数据行数为 0；前端无需阻止下载。
+
 全量导出复用现有审计日志导出列表和下载流程。在 Swagger 定位“查询/下载日志导出任务”，使用 full-export 返回的整数任务 ID，按该模块公开状态判断就绪后调用 download；不要调用 Attachment 的详情或 export。导出格式/列选择等字段以对应 Swagger 为准，前端不额外塞入新检索条件改变来源范围。
+
+全量导出省略 `export_config` 或其中的 `field_scope` 时，默认使用 `ai_standard`，即 AI 助手标准展示列。显式非法列配置返回 400 参数错误，修正后再提交；查询或任务执行故障仍返回对应执行错误。
+
+Excel 导出保留分类行，字段标题使用单行“中文显示名(英文字段路径)”，随后是数据行。extend_data 下钻或平铺列只显示完整字段路径；没有显示名或显示名与路径相同时，也只显示路径。预览与全量导出共用此表头规则。
 
 ## 从消息卡片创建附件
 
@@ -390,27 +401,31 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 2. 调用 `POST /messages/{message_uid}/attachments/`，请求体只提交对应 attachment_type 与 input_data，具体业务字段见 Swagger。
 3. 保存返回附件 uid 与 source_message_uid，将它挂到来源卡片；创建完成后也可刷新消息详情确认 attachments 摘要。
 4. 按返回状态处理：SUCCESS 直接渲染 output_data；FAILED 显示错误；PROCESSING 显示生成中，再根据 is_stream 选择下表链路。
-5. 用户再次创建会得到另一个附件。双击防重在请求期间处理；需要重试原失败产物时调用 retry，不再调用创建接口。
+5. 用户再次创建会得到另一个附件。双击防重在请求期间处理；需要重试失败产物或重新生成成功产物时调用 retry，不再调用创建接口。
 
 | 返回状态 | is_stream | 接下来做什么 |
 | --- | --- | --- |
-| SUCCESS | 任意 | 展示最终正文/图表，按能力显示编辑、反馈、下载 |
-| FAILED | 任意 | 展示 error_message，允许适用类型重试；过程可按需查看 |
+| SUCCESS | 任意 | 展示最终正文/图表，按能力显示编辑、反馈、下载；渲染异常时可对原 UID 重新生成 |
+| FAILED | 任意 | 展示 error_message，允许异步类型重试；过程可按需查看 |
 | PROCESSING | false | 轮询附件详情，直到 SUCCESS/FAILED |
-| PROCESSING | true | 先读快照，恢复已有过程，再订阅 SSE；结束后查详情 |
+| PROCESSING | true | 可直接轮询详情获取产物；需要过程时先读快照，再订阅 SSE，结束后查详情 |
 
-非流式附件轮询时按附件 UID 更新；不要为了刷新一个附件而不断加载全部消息。切页停止轮询，重新打开后先查详情，仍 PROCESSING 才恢复。
+`is_stream` 表示是否支持流式过程，不决定能否轮询。所有异步附件均可只轮询详情到 SUCCESS/FAILED，读取 output_data 或错误；无需订阅 SSE，也无需获取 execution_id。建议合理设置轮询间隔，网络故障时退避。
+
+附件轮询时按附件 UID 更新；不要为了刷新一个附件而不断加载全部消息。切页停止轮询，重新打开后先查详情，仍 PROCESSING 才恢复。
 
 ### 从会话和报告列表打开同一附件
 
 - 会话入口：消息响应的 attachments 是摘要。点击摘要，使用附件 uid 请求 `GET /attachments/{attachment_uid}/`。
-- 报告入口：请求 `GET /attachments/` 并传当前具体/cross scope，再按 attachment_type、status、keyword、conversation_uid 或 source_message_uid 等已公开条件筛选；当前不分页。
+- 报告入口：完整列表传具体/cross Scope；按 `conversation_uid` 或 `source_message_uid` 恢复局部附件时无需重复 Scope。可追加 attachment_type、status、keyword 等公开筛选；当前不分页。
 - 列表只返回摘要，没有完整 input_data/output_data，也不能仅靠列表决定是否订阅流。点击项仍需请求附件详情。
 - 列表项的 conversation 和 source_message 用于显示归属及返回原会话。打开产物本身只需附件 UID，无需先遍历消息历史。
 - 只看已完成报告时筛选 SUCCESS；若页面还展示生成中和失败项，不要全局固定该筛选。
 - 附件详情是共用入口：终态渲染结果；处理中按 is_stream 恢复。两个入口不能各自启动一条针对同一面板的重复订阅。
 
 ## 流式附件：先快照，再增量，最后详情
+
+本节仅适用于选择展示流式过程的页面；只看最终产物时直接轮询详情即可。
 
 前端需要区分三份数据：
 
@@ -430,6 +445,8 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 4. execution_id 为空时显示“等待开始”，暂不建立 SSE；退避后再次查询详情与快照。详情已进入终态则直接展示最终结果。
 5. execution_id 非空时保存该值；携带同一快照的 latest_stream_id 建立连接。latest_stream_id 为空时省略该参数，不传字符串 `null`。
 6. 业务增量更新过程；平台结束事件关闭连接并刷新详情；平台重置事件重新走恢复流程。
+
+任务可能在快照读取后、SSE 建连前进入终态。此时新连接只返回无游标的 `platform.stream_end`，不会重放快照之后的历史事件。最终产物直接从详情展示；若页面还需要完整过程，重新读取终态快照并重建过程区域。不要仅凭收到结束事件就认定本地已收齐全部历史。
 
 ```text
 GET /api/v1/ai_assistant/attachments/{attachment_uid}/stream/
@@ -507,8 +524,8 @@ source.onerror = () => {
 | 刷新页面/重新打开 | 查详情 → 终态展示结果；处理中读快照 → 重建过程 → 连接增量 |
 | 网络断开/onerror | 关旧连接 → 有限退避 → 查详情 → 仍处理中才读快照并重连；登录或权限失败停止自动重试 |
 | platform.stream_reset | 关旧连接 → 使旧请求回调失效 → 查详情与新快照 → 替换过程 → 按新的执行标识订阅 |
-| platform.stream_end | 关连接 → 查详情 → SUCCESS 展示 output_data，FAILED 展示错误；详情请求失败可重试详情，不重跑业务 |
-| 用户重试 FAILED 附件 | 先关旧连接 → POST retry → 保留附件 UID、清空旧错误/过程 → 查详情和快照，等待新 execution_id |
+| platform.stream_end | 关连接 → 查详情 → SUCCESS 展示 output_data，FAILED 展示错误；需要完整过程时重读终态快照并重建；详情请求失败只重试读取，不重跑业务 |
+| 用户重试 FAILED 或重新生成 SUCCESS 附件 | 先关旧连接 → POST retry → 保留附件 UID，立即清空旧产物/错误/过程/反馈 → 查详情和快照，等待新 execution_id |
 | 离开页面/删除会话 | 关闭连接、取消请求和退避定时器；忽略迟到响应，防止覆盖新页面 |
 
 重试排队期间可能暂时仍读到旧 execution_id 和旧过程。记录重试前的 execution_id；再次读到相同值时保持“等待重新生成”，不要把旧结束事件或旧正文当成本轮结果。取得新的 execution_id 后再重建和订阅。
@@ -516,6 +533,8 @@ source.onerror = () => {
 如果使用 EventSource 自带重连，Last-Event-ID 请求头优先于 URL 游标。本指南示例在 onerror 中主动 close，再通过详情/快照恢复；不要同时保留浏览器自动重连和应用自己的重连循环。
 
 关闭浏览器连接只停止本地观看，不会取消附件生成。页面恢复不应重新 POST 创建或重试附件。
+
+`archive_status=COMPLETE` 表示已归档内容未降级/截断，不代表附件已完成。运行中的快照可能落后于 Redis 实时流，不能因增量事件尚未出现在当前快照中就判断数据异常；完成状态仍看附件详情。
 
 快照 archive_status 非 COMPLETE 表示过程记录可能不完整：可提示“部分生成过程不可恢复”，最终是否成功仍看附件详情。不要因过程缺失隐藏已成功的报告，也不要承诺刷新后能恢复每一个中间事件。
 
@@ -529,7 +548,9 @@ source.onerror = () => {
 4. 保存成功后使用最新响应更新同一附件；保存失败保留编辑草稿，不能显示“已保存”。
 5. 编辑不会重新生成，也不改变当时的流式过程。查看过程和查看当前正文允许不同。
 
-失败重试用 `POST /attachments/{attachment_uid}/retry/`，保留原附件位置和 UID。非流式附件回到详情轮询；流式附件按上面的新执行恢复流程处理。修改输入要求并重新生成应创建新附件，不用 PATCH output_data 代替执行。
+SUCCESS 或 FAILED 的异步附件可用 `POST /attachments/{attachment_uid}/retry/` 覆盖式重跑：保留原附件位置和 UID，立即清空旧产物、错误、过程归档和反馈；本期不保留产物版本，新执行失败不恢复旧成功产物。Message 重试仍仅允许 FAILED，不得把附件的成功态重生语义扩展到 Message。仅轮询的页面继续查询原附件详情；使用 SSE 的页面按上面的新执行恢复流程处理。修改输入要求并重新生成应创建新附件，不用 PATCH output_data 代替执行。
+
+编辑和反馈按实际落库顺序以后写为准，不与重新生成绑定同一执行轮次。重试时的清理只保证该次事务提交时的快照；若此前发出的编辑或反馈请求更晚落库，旧正文或旧反馈可能再次出现。前端发起重新生成时应避免同一附件的编辑、反馈请求并行提交，并在迟到响应后回读详情；异步任务的结果仍由服务端按当前 task_id 和执行标识校验，不接受旧任务回写。
 
 ### 下载已有产物
 

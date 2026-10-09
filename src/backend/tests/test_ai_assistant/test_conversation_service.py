@@ -14,7 +14,6 @@ from services.web.ai_assistant.constants import (
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
     ConversationNotFound,
-    SidebarScopeMismatch,
 )
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import (
@@ -83,18 +82,13 @@ class ConversationServiceTest(TestCase):
         self.assertEqual((group.sidebar_node.scope_type, group.sidebar_node.scope_id), ("scene", "1"))
 
     @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
-    def test_create_conversation_rejects_group_from_another_scope_without_residue(self, _check_scope_entry):
+    def test_group_uid_determines_conversation_scope(self, _check_scope_entry):
         group = self.create_group(name="另一个场景", scope_type="scene", scope_id="2")
-
-        with self.assertRaises(SidebarScopeMismatch):
-            self.create_conversation(
-                title="错误分组会话",
-                scope_type="scene",
-                scope_id="1",
-                group_uid=str(group.uid),
-            )
-
-        self.assertFalse(Conversation.objects.filter(created_by=self.user).exists())
+        conversation = self.create_conversation(
+            title="组内会话", scope_type="scene", scope_id="1", group_uid=str(group.uid)
+        ).conversation
+        self.assertEqual((conversation.scope_type, conversation.scope_id), (group.scope_type, group.scope_id))
+        self.assertEqual(conversation.sidebar_node.parent_node.group_id, group.id)
 
     @mock.patch("services.web.ai_assistant.services.scope.ScopePermission.check_scope_entry")
     def test_conversation_service_keeps_business_access_independent_of_http_permission(self, check_scope_entry):

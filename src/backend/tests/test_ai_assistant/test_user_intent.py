@@ -7,7 +7,11 @@ from unittest import mock
 
 from django.utils import timezone
 
-from services.web.ai_assistant.constants import ExecutionStatus, MessageType
+from services.web.ai_assistant.constants import (
+    ExecutionStatus,
+    MessageType,
+    UserIntentErrorCode,
+)
 from services.web.ai_assistant.exceptions import InvalidParentMessage, StaleMessageTask
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Message
@@ -26,6 +30,7 @@ from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError,
     AIServiceError,
     AITimeoutError,
+    QueryNotRecognizedError,
 )
 from services.web.query.ai_assistant.schemas import (
     AIConditionItem,
@@ -562,6 +567,34 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(retry_record.raw_output, "not-json")
         self.assertGreaterEqual(retry_record.duration_ms, 0)
         self.assertEqual(resolved.agent_trace.attempt_count, 2)
+
+    def test_exhausted_planning_errors_use_public_error_codes(self):
+        """重试耗尽后仅返回 USER_INTENT 协议定义的错误码，内部异常码保留在追踪中。"""
+
+        cases = (
+            (AIOutputParseFailedError(), UserIntentErrorCode.AI_OUTPUT_INVALID),
+            (QueryNotRecognizedError(), UserIntentErrorCode.UNRECOGNIZED_INTENT),
+        )
+        for planning_error, public_error_code in cases:
+            with self.subTest(error_code=planning_error.error_code):
+                root, execution = create_intent_message(self)
+                with mock.patch(
+                    f"{TASK_MODULE}.MessagePlanningService.load_candidates",
+                    return_value=[{"system_id": TARGET_SYSTEM_ID, "name": "测试系统"}],
+                ), mock.patch(f"{TASK_MODULE}.FieldContextService.build_common_fields", return_value=[]), mock.patch(
+                    f"{TASK_MODULE}.MessagePlanningService.plan", side_effect=planning_error
+                ) as planner, mock.patch(
+                    f"{TASK_MODULE}.NL_PARSE_RETRY_INTERVAL_SECONDS", 0
+                ):
+                    resolved = execute_user_intent.run(execution)
+
+                self.assertEqual(planner.call_count, 3)
+                self.assertEqual(resolved.output.error.error_code, public_error_code)
+                self.assertEqual(resolved.output.error.candidates, [])
+                self.assertEqual(resolved.messages, ())
+                self.assertEqual(resolved.agent_trace.status, "failed")
+                self.assertEqual(resolved.agent_trace.error_code, planning_error.error_code)
+                self.assertFalse(Message.objects.filter(parent_message=root).exists())
 
     def test_invalid_log_condition_keeps_valid_planned_selection(self):
         """复合计划的检索条件无效时，重试耗尽后仍创建已确定合法的系统选择。"""

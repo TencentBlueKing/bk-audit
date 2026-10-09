@@ -111,13 +111,13 @@ class TestFieldContextService(AIAssistantTestCase):
         self.assertEqual(result_code_field.field_type, "int")
         self.assertEqual(
             [item.model_dump() for item in result_code_field.options],
-            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "其他"}],
+            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "结果码 -1"}],
         )
         # 常见/历史操作由平台层组装，query 层输出不含操作榜单字段
         self.assertFalse(hasattr(output, "common_operations"))
 
     def test_enum_options_same_source_as_field_map(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
-        """枚举 options 与 FieldMapHandler（es_query/field_map 接口）同源同构"""
+        """常见值选项复用 Collector 字面值提示，不误用 ES 反选语义。"""
         mock_perm.return_value = True
         mock_meta_get.return_value = {}
         mock_system_list.return_value = []
@@ -132,7 +132,7 @@ class TestFieldContextService(AIAssistantTestCase):
             handler = FieldMapHandler(fields=[name], timedelta=1, namespace=self.namespace)
             self.assertEqual(
                 [item.model_dump() for item in by_name[name].options],
-                handler.field_map[name],
+                handler.collector_field_map[name],
             )
 
     def test_no_permission_raises(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
@@ -429,7 +429,7 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         self.assertEqual(ext_map[("extend_data", ("ticket_id",))].sample_value, "Story-1")
         # 采样 SQL 按配置条数取数
         sql = mock_query_sync.call_args.kwargs["sql"]
-        self.assertIn("LIMIT 50", sql)
+        self.assertIn("LIMIT 100", sql)
 
     @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
     def test_l2_sampling_failure_degrades_gracefully(
