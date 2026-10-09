@@ -37,7 +37,10 @@
           extCls: 'nl-tag-tooltip-wrap',
         }"
         class="tag-value-wrapper">
-        <span class="tag-value">{{ displayValue }}</span>
+        <span class="tag-value">{{ displayValue.text }}</span>
+        <span
+          v-if="displayValue.remaining > 0"
+          class="tag-value tag-value-more">，+{{ displayValue.remaining }}</span>
       </span>
       <audit-icon
         class="tag-remove-btn"
@@ -184,7 +187,7 @@
 
   const displayValue = computed(() => {
     const { value } = props.tag;
-    if (!Array.isArray(value) || value.length === 0) return '--';
+    if (!Array.isArray(value) || value.length === 0) return { text: '--', remaining: 0 };
     const labels = getLabels(value);
     let displayText = '';
     let visibleCount = 0;
@@ -194,8 +197,7 @@
       displayText = nextText;
       visibleCount += 1;
     }
-    const remaining = labels.length - visibleCount;
-    return remaining > 0 ? `${displayText}，+${remaining}` : displayText;
+    return { text: displayText, remaining: labels.length - visibleCount };
   });
 
   const isOverflow = computed(() => {

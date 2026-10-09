@@ -435,6 +435,12 @@
         white-space: nowrap;
       }
 
+      .tag-value-more {
+        max-width: none;
+        overflow: visible;
+        flex-shrink: 0;
+      }
+
       .tag-remove-btn {
         margin-left: 6px;
         font-size: 12px;
