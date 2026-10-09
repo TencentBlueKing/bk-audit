@@ -109,19 +109,26 @@
             <div class="column-label">
               历史操作
             </div>
-            <button
-              v-for="(item, index) in historySuggestions"
-              :key="`history-${index}`"
-              class="suggest-item"
-              type="button"
-              @click="$emit('select-suggestion', item)">
-              <show-tooltips-text
-                class="suggest-text"
-                :data="item"
-                :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
-                :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
-                :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
-            </button>
+            <template v-if="historySuggestions.length">
+              <button
+                v-for="(item, index) in historySuggestions"
+                :key="`history-${index}`"
+                class="suggest-item"
+                type="button"
+                @click="$emit('select-suggestion', item)">
+                <show-tooltips-text
+                  class="suggest-text"
+                  :data="item"
+                  :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
+                  :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                  :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+              </button>
+            </template>
+            <div
+              v-else
+              class="history-empty">
+              暂无数据
+            </div>
           </div>
         </div>
       </div>
@@ -695,6 +702,16 @@
       overflow: hidden;
       color: inherit;
     }
+  }
+
+  .history-empty {
+    display: flex;
+    height: 176px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    align-items: center;
+    justify-content: center;
   }
 
   .field-section {
