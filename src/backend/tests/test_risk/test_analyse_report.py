@@ -2176,6 +2176,29 @@ class TestGenerateAnalyseReportTask(AnalyseReportTestBase):
         self.assertEqual(self.report.status, AnalyseReportStatus.GENERATING)
         mock_report_metric.assert_not_called()
 
+    @mock.patch("services.web.risk.tasks.api.bk_plugins_ai_audit_analyse.chat_completion")
+    def test_task_strips_preamble_and_action_input_fence(self, mock_chat):
+        """Agent 输出 markdown 围栏和 action_input 包装时，只落库围栏内正文。"""
+        mock_chat.return_value = (
+            "现在我已经收集了足够的数据，可以开始撰写最终报告了。\n"
+            "```markdown\n"
+            "action_input\n"
+            "# 责任人行为调查报告\n\n"
+            "## 一、概述\n\n"
+            "正文\n"
+            "```\n"
+        )
+
+        from services.web.risk.tasks import generate_analyse_report
+
+        generate_analyse_report(report_id=self.report.report_id)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, AnalyseReportStatus.SUCCESS)
+        self.assertEqual(self.report.content, "# 责任人行为调查报告\n\n## 一、概述\n\n正文\n")
+        self.assertNotIn("action_input", self.report.content)
+        self.assertNotIn("现在我已经收集", self.report.content)
+
 
 class TestAnalyseReportModel(AnalyseReportTestBase):
     """测试 Agent Report 数据模型"""

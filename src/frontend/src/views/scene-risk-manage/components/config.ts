@@ -91,10 +91,19 @@ export default {
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskScenes,
-    defaultParams: {
-      risk_view_type: 'all',
-      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    get defaultParams() {
+      const params: Record<string, string> = {
+        risk_view_type: 'all',
+        start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      };
+      const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
+      // 顶部选中单个场景时，下拉只查该场景；所有场景不附加范围
+      if (scopeType === 'scene' && scopeId) {
+        params.scope_id = scopeId;
+        params.scope_type = scopeType;
+      }
+      return params;
     },
     formatLabel: (item: Record<string, any>) => `${item.name}(${item.scene_id || item.id})`,
   },

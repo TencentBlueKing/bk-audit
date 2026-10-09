@@ -92,6 +92,7 @@ from services.web.risk.models import (
 )
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
+from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
@@ -122,7 +123,19 @@ def _validate_analyse_report_content(content: str, report_id: int) -> str:
             _content_preview(content or ""),
         )
         raise ValueError(f"AI分析报告内容异常: {reason}")
-    return content or ""
+
+    extracted = extract_markdown_report_body(content)
+    if extracted is content or extracted == content:
+        return content
+    if not extracted.strip():
+        return content
+    logger_celery.info(
+        "[GenerateAnalyseReport] Extracted markdown report body: report_id=%s, before=%s, after=%s",
+        report_id,
+        len(content),
+        len(extracted),
+    )
+    return extracted
 
 
 @celery_app.task(
