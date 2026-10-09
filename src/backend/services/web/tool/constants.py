@@ -92,6 +92,71 @@ class TargetValueTypeEnum(TextChoices):
     FIELD = "field", gettext_lazy("字段")
 
 
+# 用户画像工具 - 账号类型常量
+PROFILE_ACCOUNT_TYPE_CTX = "ctx"
+PROFILE_ACCOUNT_TYPE_OPENID = "openid"
+PROFILE_ACCOUNT_TYPE_WECHAT = "form_wechat"
+PROFILE_ACCOUNT_TYPE_QQ = "form_qq"
+
+PROFILE_ACCOUNT_TYPES = [
+    PROFILE_ACCOUNT_TYPE_CTX,
+    PROFILE_ACCOUNT_TYPE_OPENID,
+    PROFILE_ACCOUNT_TYPE_WECHAT,
+    PROFILE_ACCOUNT_TYPE_QQ,
+]
+
+
+class UsageLimits(BaseModel):
+    """使用限制配置
+
+    结构示例：
+    {
+        "scenes": {
+            "场景ID1": {"account_type": ["openid", "form_wechat"]},
+            "场景ID2": {"account_type": ["ctx"]}
+        },
+        "systems": {
+            "系统ID1": {"account_type": ["openid"]}
+        }
+    }
+    """
+
+    scenes: Annotated[Dict[str, Dict[str, List[str]]], DictField()] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("场景级别使用限制"),
+        description=gettext_lazy("工具配置中场景下的使用限制"),
+    )
+    systems: Annotated[Dict[str, Dict[str, List[str]]], DictField()] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("系统级别使用限制"),
+        description=gettext_lazy("工具配置中系统下的使用限制"),
+    )
+
+    @field_validator("scenes", "systems")
+    @classmethod
+    def validate_account_type_values(cls, v):
+        """校验 account_type 的值是否属于合法集合
+
+        注意：account_type 不配置表示「全部可用」，配置为空列表 [] 表示「全部禁止」，
+        两者语义不同，故此处仅校验值的合法性，不禁止空列表。
+        """
+        valid_types = set(PROFILE_ACCOUNT_TYPES)
+        for scope_id, limits in v.items():
+            if not isinstance(limits, dict):
+                continue
+            account_type_values = limits.get("account_type")
+            if account_type_values is not None:
+                if not isinstance(account_type_values, list):
+                    raise ValueError(gettext("account_type 必须是列表"))
+                for value in account_type_values:
+                    if value not in valid_types:
+                        raise ValueError(
+                            gettext("无效的账号类型: %(value)s，合法值为: %(valid_types)s")
+                            % {"value": value, "valid_types": ", ".join(sorted(valid_types))}
+                        )
+        return v
+
+
 class DefaultValueOverrides(BaseModel):
     """参数默认值覆盖配置（位于 config 层级）
 
@@ -798,6 +863,11 @@ class SmartPageToolConfig(BaseModel):
     )
     default_value_overrides: DefaultValueOverrides = PydanticField(
         default_factory=DefaultValueOverrides, title=gettext_lazy("参数默认值覆盖")
+    )
+    usage_limits: UsageLimits = PydanticField(
+        default_factory=UsageLimits,
+        title=gettext_lazy("使用限制"),
+        description=gettext_lazy("使用限制配置"),
     )
     input_variable: Annotated[List[SmartPageInputVariable], ListField(child=DictField())] = PydanticField(
         default_factory=list,
