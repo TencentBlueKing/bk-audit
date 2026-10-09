@@ -829,10 +829,13 @@ class UpdateTool(ToolBase):
             raise ToolDoesNotExist()
 
         if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
-            # smart_page 工具：仅更新 default_value_overrides，不走全量 config 更新逻辑
-            # serializer 已将校验后的 overrides 存入 _smart_page_overrides，并清除了 config
+            # smart_page 工具：仅更新 default_value_overrides 和 usage_limits，不走全量 config 更新逻辑
+            # serializer 已将校验后的 overrides 和 usage_limits 存入对应字段，并清除了 config
             smart_page_overrides = validated_request_data.pop("_smart_page_overrides", None)
-            return self._update_smart_page_overrides(tool, smart_page_overrides, validated_request_data, updated_time)
+            smart_page_usage_limits = validated_request_data.pop("_smart_page_usage_limits", None)
+            return self._update_smart_page_overrides(
+                tool, smart_page_overrides, smart_page_usage_limits, validated_request_data, updated_time
+            )
 
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
@@ -856,23 +859,38 @@ class UpdateTool(ToolBase):
         )
         return tool
 
-    def _update_smart_page_overrides(self, tool, new_overrides, validated_request_data, updated_time=None):
-        """smart_page 工具仅更新 default_value_overrides。
+    def _update_smart_page_overrides(
+        self, tool, new_overrides, new_usage_limits, validated_request_data, updated_time=None
+    ):
+        """smart_page 工具仅更新 default_value_overrides 和 usage_limits。
 
-        - overrides 变更时创建新版本，保证历史可追溯
-        - overrides 未变更时（None 或与现有值相同）直接返回原工具
+        - 配置变更时创建新版本，保证历史可追溯
+        - 配置未变更时（None 或与现有值相同）直接返回原工具
         """
-        # new_overrides=None 表示本次请求未提交覆盖配置（仅修改了可见范围），无需更新
-        if new_overrides is None:
-            return tool
+        # 检查是否有实际变更
+        has_changes = False
 
-        # 对比新旧覆盖配置，仅在实际变更时才创建新版本
-        current_overrides = tool.config.get("default_value_overrides", {})
-        if new_overrides == current_overrides:
+        # 检查 default_value_overrides 变更
+        if new_overrides is not None:
+            current_overrides = tool.config.get("default_value_overrides", {})
+            if new_overrides != current_overrides:
+                has_changes = True
+
+        # 检查 usage_limits 变更
+        if new_usage_limits is not None:
+            current_usage_limits = tool.config.get("usage_limits", {})
+            if new_usage_limits != current_usage_limits:
+                has_changes = True
+
+        # 无变更则直接返回
+        if not has_changes:
             return tool
 
         config = tool.config if tool.config else {}
-        config['default_value_overrides'] = new_overrides
+        if new_overrides is not None:
+            config['default_value_overrides'] = new_overrides
+        if new_usage_limits is not None:
+            config['usage_limits'] = new_usage_limits
         validated_request_data["config"] = config
         # 防止客户端通过提交 tags 字段越权修改标签
         tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
@@ -1474,6 +1492,11 @@ class GetToolDetail(ToolBase):
 
         data = self.ResponseSerializer(instance=tool).data
 
+        # 根据场景/系统ID计算允许的账号类型
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            allowed_account_types = self._get_allowed_account_types(tool, scene_id, system_id)
+            data["allowed_account_types"] = allowed_account_types
+
         # 权限判定仅用于 API 配置脱敏：平台工具需平台管理员，场景工具需对应场景管理员
         is_tool_manager = self._is_tool_manager(current_user, tool.uid)
 
@@ -1546,6 +1569,57 @@ class GetToolDetail(ToolBase):
 
             if raw_name in overridden_defaults:
                 var_config["default_value"] = overridden_defaults[raw_name]
+
+    def _get_allowed_account_types(self, tool, scene_id=None, system_id=None):
+        """根据场景/系统ID计算允许的账号类型
+
+        Args:
+            tool: 工具对象
+            scene_id: 场景ID
+            system_id: 系统ID
+
+        Returns:
+            list: 允许的账号类型列表（保持 PROFILE_ACCOUNT_TYPES 顺序）
+
+        语义：
+            - 未配置任何限制 → 全部可用（返回完整列表）
+            - 配置 account_type 为非空列表 → 仅返回列表内类型
+            - 配置 account_type 为空列表 [] → 全部禁止（返回空列表）
+        """
+        from services.web.tool.constants import PROFILE_ACCOUNT_TYPES
+
+        config = tool.config or {}
+        usage_limits = config.get("usage_limits", {})
+
+        if not usage_limits:
+            return PROFILE_ACCOUNT_TYPES
+
+        scenes_limits = usage_limits.get("scenes", {})
+        systems_limits = usage_limits.get("systems", {})
+
+        if not scenes_limits and not systems_limits:
+            return PROFILE_ACCOUNT_TYPES
+
+        allowed_account_types = set()
+        has_limit = False
+
+        if scene_id:
+            scene_limit = scenes_limits.get(str(scene_id), {})
+            if "account_type" in scene_limit:
+                has_limit = True
+                allowed_account_types.update(scene_limit["account_type"])
+        elif system_id:
+            system_limit = systems_limits.get(system_id, {})
+            if "account_type" in system_limit:
+                has_limit = True
+                allowed_account_types.update(system_limit["account_type"])
+
+        # 未配置任何限制则返回全部可用
+        if not has_limit:
+            return PROFILE_ACCOUNT_TYPES
+
+        # 配置了限制，保持 PROFILE_ACCOUNT_TYPES 顺序
+        return [t for t in PROFILE_ACCOUNT_TYPES if t in allowed_account_types]
 
 
 class SqlAnalyseResource(ToolBase, Resource):
