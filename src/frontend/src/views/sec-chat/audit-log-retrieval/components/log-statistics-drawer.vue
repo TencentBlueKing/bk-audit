@@ -139,15 +139,21 @@
               :ref="el => setChartRef(card.key, el)"
               class="chart-box is-ratio"
               :style="{ height: `${card.height}px`, width: `${card.height}px` }" />
-            <div class="ratio-legend">
+            <div
+              class="ratio-legend"
+              @mouseleave="hideLegendTip">
               <div
                 v-for="item in card.ratio || []"
                 :key="item.groupId"
-                class="legend-item">
+                class="legend-item"
+                @mouseenter="showLegendTip(item, $event)">
                 <span
                   class="legend-dot"
                   :style="{ background: item.color }" />
-                <span>{{ item.name }}：{{ item.valueText }} ( {{ item.percent }} )</span>
+                <span class="legend-label">
+                  <span class="legend-name">{{ item.name }}</span>
+                  <span class="legend-meta">：{{ item.valueText }} ( {{ item.percent }} )</span>
+                </span>
               </div>
             </div>
           </div>
@@ -200,6 +206,23 @@
         </div>
       </template>
     </div>
+    <bk-popover
+      ref="legendPopoverRef"
+      ext-cls="statistics-legend-popover"
+      :is-show="legendTipShow"
+      :max-width="360"
+      placement="top"
+      :popover-delay="0"
+      :reference="legendTipAnchor"
+      theme="light"
+      trigger="manual">
+      <span class="legend-tip-anchor" />
+      <template #content>
+        <div class="statistics-legend-full">
+          {{ legendTipText }}
+        </div>
+      </template>
+    </bk-popover>
   </audit-sideslider>
 </template>
 
@@ -279,9 +302,39 @@
 
   const chartEls = new Map<string, HTMLElement>();
   const chartInstances = new Map<string, echarts.ECharts>();
+  /** 入场动画结束前不做 resize，避免把正在生长的图重置成终态 */
+  const entranceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  interface LegendPopoverExpose {
+    updatePopover?(el: HTMLElement | null): void;
+  }
+
+  const legendTipShow = ref(false);
+  const legendTipText = ref('');
+  const legendTipAnchor = ref<HTMLElement | null>(null);
+  const legendPopoverRef = ref<LegendPopoverExpose | null>(null);
+
+  /** 整列图例共用一个提示。每项各挂一个时，快速划过会留下还没关掉的提示 */
+  const showLegendTip = (item: StatisticsRatioItem, event: MouseEvent) => {
+    const anchor = event.currentTarget as HTMLElement | null;
+    if (!anchor) return;
+    legendTipAnchor.value = anchor;
+    legendTipText.value = `${item.name}：${item.valueText} ( ${item.percent} )`;
+    legendTipShow.value = true;
+    nextTick(() => {
+      legendPopoverRef.value?.updatePopover?.(anchor);
+    });
+  };
+
+  const hideLegendTip = () => {
+    legendTipShow.value = false;
+  };
   let resizeObserver: ResizeObserver | null = null;
   let renderTimer: ReturnType<typeof setTimeout> | null = null;
+  let renderFrame = 0;
   let renderToken = 0;
+
+  /** 折线从左长出、环图从中心展开，时长盖过「空白卡片直接出终态」的跳变 */
+  const CHART_ENTRANCE_MS = 880;
 
   const isFieldStatistics = computed(() => isFieldStatisticsType(props.attachmentType));
   const isLoading = computed(() => props.status === 'PROCESSING');
@@ -390,6 +443,81 @@
     mountFailedKeys.value = next;
   };
 
+  const LEGEND_LABEL_MAX = 20;
+  const TOOLTIP_WRAP_STYLE = [
+    'max-width:360px',
+    'max-height:240px',
+    'overflow:auto',
+    'white-space:normal',
+    'word-break:break-all',
+    'overflow-wrap:anywhere',
+    'line-height:20px',
+  ].join(';');
+
+  const truncateLegendLabel = (name: string) => (
+    name.length > LEGEND_LABEL_MAX ? `${name.slice(0, LEGEND_LABEL_MAX)}…` : name
+  );
+
+  /**
+   * 消毒会丢掉函数和 extraCssText，超长类别名要在消毒之后再挂上。
+   * 图例文案截断；悬停图例时 echarts 再弹一层 tooltip 展示全文，并限制宽度换行。
+   */
+  const decorateLongLabels = (option: Record<string, any>) => {
+    const { legend } = option;
+    if (legend && typeof legend === 'object' && !Array.isArray(legend)) {
+      legend.formatter = (name: string) => truncateLegendLabel(String(name ?? ''));
+      const legendTooltip = legend.tooltip && typeof legend.tooltip === 'object' ? legend.tooltip : {};
+      legend.tooltip = {
+        ...legendTooltip,
+        show: true,
+        appendToBody: true,
+        confine: true,
+        enterable: true,
+        extraCssText: TOOLTIP_WRAP_STYLE,
+      };
+    }
+    const { tooltip } = option;
+    if (tooltip && typeof tooltip === 'object' && !Array.isArray(tooltip)) {
+      // 挂到 body 避免被侧栏裁切；confine 把它限制在图表区域内，超高则在提示内滚动
+      tooltip.appendToBody = true;
+      tooltip.confine = true;
+      tooltip.enterable = true;
+      tooltip.extraCssText = [tooltip.extraCssText, TOOLTIP_WRAP_STYLE].filter(Boolean).join(';');
+    }
+    return option;
+  };
+
+  const toSeriesList = (series: unknown) => {
+    if (Array.isArray(series)) return series;
+    if (series) return [series];
+    return [];
+  };
+
+  /**
+   * 消毒之后再写。LLM 和字段统计都走这里，保证屏上是长出来的，导出路径仍关掉动画。
+   */
+  const applyEntranceMotion = (option: Record<string, any>) => ({
+    ...option,
+    animation: true,
+    animationDuration: CHART_ENTRANCE_MS,
+    animationEasing: 'cubicOut',
+    animationDurationUpdate: 280,
+    animationEasingUpdate: 'cubicOut',
+    series: toSeriesList(option.series).map((series: Record<string, any>, index: number) => {
+      if (!series || typeof series !== 'object') return series;
+      const pieMotion = series.type === 'pie' ? { animationType: 'scale' } : {};
+      return {
+        ...series,
+        ...pieMotion,
+        animation: true,
+        animationDuration: CHART_ENTRANCE_MS,
+        animationEasing: 'cubicOut',
+        animationDurationUpdate: 280,
+        animationDelay: Math.min(index, 6) * 40,
+      };
+    }),
+  });
+
   const resolveRawOption = (card: StatisticsChartCard) => {
     if (card.errorCode) return null;
     if (card.option) return card.option;
@@ -416,9 +544,10 @@
           rawOption,
           card.kind === 'echarts' ? {} : FIELD_STATISTICS_LIMITS,
         );
+        const displayOption = option ? applyEntranceMotion(decorateLongLabels(option)) : null;
         return {
           ...card,
-          option: option ? markRaw(option) : undefined,
+          option: displayOption ? markRaw(displayOption) : undefined,
           errorCode,
         };
       } catch {
@@ -447,6 +576,7 @@
   const createdAtText = computed(() => props.createdAt || '--');
 
   const handleUpdateShow = (val: boolean) => {
+    if (!val) hideLegendTip();
     emit('update:isShow', val);
   };
 
@@ -466,13 +596,35 @@
   };
 
   const resizeCharts = () => {
-    chartInstances.forEach((chart) => {
+    chartInstances.forEach((chart, key) => {
+      if (entranceTimers.has(key)) return;
       try {
-        chart.resize();
+        chart.resize({ animation: { duration: 0 } });
       } catch {
         // 抽屉收起时容器已销毁，resize 失败无需打断其它图表
       }
     });
+  };
+
+  const clearEntranceTimers = () => {
+    entranceTimers.forEach(timer => clearTimeout(timer));
+    entranceTimers.clear();
+  };
+
+  const holdResizeUntilEntranceEnds = (key: string) => {
+    const prev = entranceTimers.get(key);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+      entranceTimers.delete(key);
+      const chart = chartInstances.get(key);
+      if (!chart) return;
+      try {
+        chart.resize({ animation: { duration: 0 } });
+      } catch {
+        // 入场结束时抽屉可能已经关掉
+      }
+    }, CHART_ENTRANCE_MS + 6 * 40 + 40);
+    entranceTimers.set(key, timer);
   };
 
   const mountChart = (card: StatisticsChartCard) => {
@@ -485,6 +637,7 @@
       const chart = echarts.init(el);
       chartInstances.set(card.key, chart);
       chart.setOption(card.option, true);
+      holdResizeUntilEntranceEnds(card.key);
     } catch {
       chartInstances.get(card.key)?.dispose();
       chartInstances.delete(card.key);
@@ -523,12 +676,21 @@
     });
   };
 
-  const disposeCharts = () => {
-    renderToken += 1;
+  const cancelScheduledRender = () => {
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = null;
     }
+    if (renderFrame) {
+      cancelAnimationFrame(renderFrame);
+      renderFrame = 0;
+    }
+  };
+
+  const disposeCharts = () => {
+    renderToken += 1;
+    cancelScheduledRender();
+    clearEntranceTimers();
     resizeObserver?.disconnect();
     resizeObserver = null;
     chartInstances.forEach(chart => chart.dispose());
@@ -536,19 +698,43 @@
     if (mountFailedKeys.value.size) mountFailedKeys.value = new Set();
   };
 
+  const chartHostWidth = () => {
+    let width = 0;
+    chartEls.forEach((el) => {
+      width = Math.max(width, el.clientWidth);
+    });
+    return width;
+  };
+
+  /**
+   * 侧栏还在滑动时宽度每帧都变，这时 init 再 resize 会把入场动画打断成终态。
+   * 等宽度连续两帧不变再挂载，图从空画布长出来。
+   */
   const renderCharts = async () => {
     const token = renderToken;
     await nextTick();
     if (token !== renderToken) return;
-    if (renderTimer) clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => {
+    cancelScheduledRender();
+    let lastWidth = -1;
+    let stableFrames = 0;
+    let frames = 0;
+    const tick = () => {
       if (token !== renderToken) return;
-      const pending = mountPendingCharts();
-      resizeCharts();
-      bindResizeObserver();
-      if (pending) retryMount(token, 3);
-      renderTimer = null;
-    }, 320);
+      const width = chartHostWidth();
+      if (width >= 80 && width === lastWidth) stableFrames += 1;
+      else stableFrames = 0;
+      lastWidth = width;
+      frames += 1;
+      if (stableFrames >= 2 || frames >= 45) {
+        renderFrame = 0;
+        const pending = mountPendingCharts();
+        bindResizeObserver();
+        if (pending) retryMount(token, 6);
+        return;
+      }
+      renderFrame = requestAnimationFrame(tick);
+    };
+    renderFrame = requestAnimationFrame(tick);
   };
 
   watch(
@@ -826,11 +1012,30 @@
 
   .legend-item {
     display: flex;
+    max-width: 280px;
+    min-width: 0;
     font-size: var(--audit-font-size-sm);
     line-height: var(--audit-line-height-sm);
     color: var(--audit-neutral-text-02);
     align-items: center;
     gap: var(--audit-space-8);
+  }
+
+  .legend-label {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .legend-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .legend-meta {
+    flex-shrink: 0;
   }
 
   .legend-dot {
@@ -839,9 +1044,21 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
+
+  .legend-tip-anchor {
+    display: none;
+  }
 </style>
 
 <style lang="postcss">
+  .statistics-legend-popover .statistics-legend-full {
+    max-width: 360px;
+    line-height: 20px;
+    word-break: break-all;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .bk-sideslider .bk-modal-content:has(.stats-body),
   .bk-sideslider .bk-sideslider-content:has(.stats-body) {
     height: 100%;

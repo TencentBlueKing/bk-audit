@@ -58,10 +58,31 @@ export const isStatisticsAttachmentType = (type?: string) => (
 
 export const isFieldStatisticsType = (type?: string) => type === 'FIELD_STATISTICS';
 
-/** 比例协议为 0～1；展示乘 100 保留两位，null 显示「—」 */
-export const formatStatisticsRatio = (ratio?: number | null) => {
-  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return EMPTY_TEXT;
-  return `${(ratio * 100).toFixed(2)}%`;
+/**
+ * 比例协议为 0～1。页面保留两位；null 显示「—」，计数为 0 显示 0.00%。
+ * 舍入后变成 0 的正比例用 count/total 重算，仍小于 0.01% 时显示 <0.01%。
+ */
+export const formatStatisticsRatio = (
+  ratio?: number | null,
+  count?: number | null,
+  total?: number | null,
+) => {
+  let value = ratio;
+  const roundedAway = typeof value !== 'number' || !Number.isFinite(value) || value === 0;
+  if (
+    roundedAway
+    && typeof count === 'number'
+    && count > 0
+    && typeof total === 'number'
+    && total > 0
+  ) {
+    value = count / total;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) return EMPTY_TEXT;
+  if (value === 0) return '0.00%';
+  const percent = value * 100;
+  if (percent > 0 && percent < 0.01) return '<0.01%';
+  return `${percent.toFixed(2)}%`;
 };
 
 export const formatStatisticsCount = (count?: number | null) => {
@@ -69,11 +90,11 @@ export const formatStatisticsCount = (count?: number | null) => {
   return count.toLocaleString('en-US');
 };
 
-/** 均值、中位数可能是长浮点串，摘要格子放不下，收到 6 位有效数字，完整值挂 title */
+/** 数值摘要沿用后端已收到的四位小数，不再按有效数字重排 */
 export const formatNumericValue = (value?: number | null) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return EMPTY_TEXT;
   if (Number.isInteger(value)) return value.toLocaleString('en-US');
-  return String(Number(value.toPrecision(6)));
+  return String(value);
 };
 
 export const formatNumericValueFull = (value?: number | null) => {
@@ -106,6 +127,44 @@ const resolveGroupLabel = (group: AiStatisticsDistributionGroup, labels: Statist
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   const text = String(value);
   return text === '' ? labels.emptyString : text;
+};
+
+const VALUE_TYPE_SUFFIX: Record<string, string> = {
+  number: '数字',
+  string: '字符串',
+  boolean: '布尔',
+};
+
+/**
+ * 图例按名称区分类别。真实值撞上「其他 / 缺失」时标成原始值；
+ * 同一文案同时有数字和字符串时再标类型，避免饼图按名称合并。
+ */
+const disambiguateGroupLabels = (
+  groups: AiStatisticsDistributionGroup[],
+  labels: StatisticsLabelDict,
+) => {
+  const bases = groups.map((group) => {
+    const name = resolveGroupLabel(group, labels);
+    const collided = group.kind === 'VALUE' && (name === labels.other || name === labels.missing);
+    return {
+      group,
+      name: collided ? `${name}（原始值）` : name,
+      valueType: group.kind === 'VALUE' ? String(group.value_type || '') : '',
+    };
+  });
+  const typesByName = new Map<string, Set<string>>();
+  bases.forEach((item) => {
+    if (item.group.kind !== 'VALUE' || !item.valueType) return;
+    const types = typesByName.get(item.name) || new Set<string>();
+    types.add(item.valueType);
+    typesByName.set(item.name, types);
+  });
+  return bases.map((item) => {
+    const types = typesByName.get(item.name);
+    if (!types || types.size < 2) return item.name;
+    const suffix = VALUE_TYPE_SUFFIX[item.valueType];
+    return suffix ? `${item.name}（${suffix}）` : item.name;
+  });
 };
 
 const resolveGroupColor = (group: AiStatisticsDistributionGroup, valueIndex: number) => {
@@ -195,18 +254,20 @@ const mapRatioItems = (
   labels: StatisticsLabelDict,
 ): StatisticsRatioItem[] => {
   const groups = Array.isArray(output.distribution?.groups) ? output.distribution.groups : [];
+  const names = disambiguateGroupLabels(groups, labels);
+  const total = output.overview?.total_count;
   let valueIndex = 0;
-  return groups.map((group) => {
+  return groups.map((group, index) => {
     const color = resolveGroupColor(group, valueIndex);
     if (group.kind !== 'OTHER' && group.kind !== 'MISSING') valueIndex += 1;
     const count = Number(group.count ?? 0);
     return {
       groupId: String(group.group_id ?? ''),
       kind: String(group.kind ?? ''),
-      name: resolveGroupLabel(group, labels),
+      name: names[index],
       value: count,
       valueText: formatStatisticsCount(count),
-      percent: formatStatisticsRatio(group.ratio),
+      percent: formatStatisticsRatio(group.ratio, count, total),
       color,
     };
   });
@@ -310,7 +371,11 @@ export const mapFieldStatisticsOutput = (
       totalText: formatStatisticsCount(overview?.total_count),
       presentText: formatStatisticsCount(overview?.present_count),
       missingText: formatStatisticsCount(overview?.missing_count),
-      presentRatioText: formatStatisticsRatio(overview?.present_ratio),
+      presentRatioText: formatStatisticsRatio(
+        overview?.present_ratio,
+        overview?.present_count,
+        overview?.total_count,
+      ),
     },
     numericSummary: String(output.statistics_kind || '') === 'NUMERIC'
       ? output.numeric_summary || null
@@ -391,14 +456,16 @@ export const buildTrendOption = (trend: StatisticsTrendView): EChartsOption => (
     color: '#63656e',
     fontSize: 12,
   },
-  animationDuration: 300,
   tooltip: { trigger: 'axis' },
   legend: {
+    // 默认 left:center 会把整组图例居中；铺满宽度后从左侧往下排
+    left: 0,
+    right: 0,
     bottom: 0,
     icon: 'circle',
     itemWidth: 8,
     itemHeight: 8,
-    itemGap: 12,
+    itemGap: 24,
     textStyle: {
       color: '#4d4f56',
       fontSize: 12,
@@ -409,7 +476,7 @@ export const buildTrendOption = (trend: StatisticsTrendView): EChartsOption => (
     left: 48,
     right: 24,
     top: 24,
-    bottom: trend.series.length > 1 ? 72 : 48,
+    bottom: trend.series.length > 6 ? 96 : trend.series.length > 1 ? 72 : 48,
     containLabel: true,
   },
   xAxis: {
@@ -447,7 +514,6 @@ export const buildRatioOption = (ratio: StatisticsRatioItem[]): EChartsOption =>
     color: '#63656e',
     fontSize: 12,
   },
-  animationDuration: 300,
   tooltip: { trigger: 'item' },
   series: [
     {

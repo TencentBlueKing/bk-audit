@@ -233,13 +233,20 @@ export interface AiConversationSummary {
   updated_at?: string;
   /** 当前用户在该会话下所有状态的附件总数；筛选条件不缩小此计数 */
   attachment_count?: number;
-  /** 按类型计数，无附件的类型为 0。报告侧栏读 AI_ANALYSIS */
+  /** 按类型计数，无附件的类型为 0。类型筛选不缩小此口径 */
   attachment_counts_by_type?: Partial<Record<AiAttachmentType, number>>;
+  /** 全部附件的 PROCESSING / SUCCESS / FAILED，缺省状态补 0 */
+  attachment_counts_by_status?: Partial<Record<AiAttachmentStatus, number>>;
+  /** 各类型下的三种状态计数。报告列表读 AI_ANALYSIS.SUCCESS，与只展示成功报告对齐 */
+  attachment_counts_by_type_and_status?: Partial<Record<AiAttachmentType, Partial<Record<AiAttachmentStatus, number>>>>;
 }
 
 export interface AiConversationListParams {
   has_attachments?: boolean;
   attachment_type?: AiAttachmentType;
+  /** 当前列表查询范围。scene/system 同时带 scope_id；cross_* 不传 scope_id */
+  scope_type?: AiScopeType;
+  scope_id?: string;
 }
 
 export interface AiConversation {
@@ -634,6 +641,9 @@ export interface AiAttachmentListParams {
   keyword?: string;
   conversation_uid?: string;
   source_message_uid?: string;
+  /** 当前列表查询范围，与会话列表相同。不是 attachment_type */
+  scope_type?: AiScopeType;
+  scope_id?: string;
   /** 1–100；不传返回全部匹配附件 */
   limit?: number;
   /** content_updated_at | created_at | updated_at | title，前缀 - 倒序，可逗号分隔；默认 -content_updated_at */
