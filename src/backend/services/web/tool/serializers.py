@@ -197,11 +197,18 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
             elif tool_type == ToolTypeEnum.API:
                 validated_config = ApiToolConfig.model_validate(config).model_dump()
             elif tool_type == ToolTypeEnum.SMART_PAGE:
-                # smart_page 仅提取 default_value_overrides，忽略 data_sources 等敏感字段
+                # smart_page 仅提取 default_value_overrides 和 usage_limits，忽略 data_sources 等敏感字段
                 validated_config = SmartPageToolConfig.model_validate(config)
                 attrs["_smart_page_overrides"] = validated_config.default_value_overrides.model_dump()
+                attrs["_smart_page_usage_limits"] = validated_config.usage_limits.model_dump()
                 # 避免越权改写工具基础属性（name/description/namespace/status/tags/config 等）
-                allowed_keys = {"uid", "_smart_page_overrides", "visibility", "updated_time"}
+                allowed_keys = {
+                    "uid",
+                    "_smart_page_overrides",
+                    "_smart_page_usage_limits",
+                    "visibility",
+                    "updated_time",
+                }
                 for key in [k for k in list(attrs.keys()) if k not in allowed_keys]:
                     attrs.pop(key)
             else:
@@ -388,6 +395,12 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     data_search_config_type = serializers.SerializerMethodField()
     permission_owner = serializers.SerializerMethodField()
     favorite = serializers.BooleanField(required=False, default=False, label=gettext_lazy("是否收藏"))
+    allowed_account_types = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        label=gettext_lazy("允许的账号类型"),
+        help_text=gettext_lazy("根据场景/系统ID计算出的允许账号类型列表"),
+    )
 
     def get_data_search_config_type(self, obj):
         if hasattr(obj, "data_search_config") and obj.data_search_config:
@@ -418,6 +431,7 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "is_bkvision",
             "favorite",
             "status",
+            "allowed_account_types",
         ]
 
 
