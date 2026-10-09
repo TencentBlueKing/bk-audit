@@ -89,6 +89,12 @@ SNAPSHOT_DEFAULT_COLUMNS = (
 # 非默认结果列仍回退全局 Field.description；该覆盖只在助手链路生效，不影响普通日志检索页。
 AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES = dict(SNAPSHOT_DEFAULT_COLUMNS)
 
+# AI 助手导出来源标记（export_config.source）：AI 检索导出专属样式开关——单行表头
+# （无"标准/系统/自定义字段"分类合并行）、字段顺序与前端"日志检索结果"一致、
+# 列宽按表头自适应并预留 Excel 排序筛选按钮空间。常规日志检索导出永不携带该标记，
+# 保持分类两行表头与固定列宽不变（隔离模式与 flatten_extension 相同）
+AI_ASSISTANT_EXPORT_SOURCE = "ai_assistant"
+
 # ---------------------------------------------------------------------------
 # 条件组装
 # ---------------------------------------------------------------------------

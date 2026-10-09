@@ -139,3 +139,20 @@ class TestResolveCategoryLabel:
         """防止后续误改 gettext 漂移：锁定 label 文本为「扩展字段」与产品语义一致。"""
 
         assert str(EXTENSION_GROUP_LABEL) == "扩展字段"
+
+
+class TestCalcDisplayWidth:
+    """AI 导出列宽自适应的宽度计算（近似 Excel 列宽单位）：全角/CJK 记 2，半角记 1。"""
+
+    def test_ascii_counts_one_each(self):
+        assert XLSXExporter._calc_display_width("start_time") == 10
+
+    def test_chinese_counts_two_each(self):
+        assert XLSXExporter._calc_display_width("操作起始时间") == 12
+
+    def test_mixed_header_title(self):
+        # 「操作起始时间(start_time)」= 6 中文(12) + 括号(2) + start_time(10) = 24
+        assert XLSXExporter._calc_display_width("操作起始时间(start_time)") == 24
+
+    def test_empty_string_is_zero(self):
+        assert XLSXExporter._calc_display_width("") == 0

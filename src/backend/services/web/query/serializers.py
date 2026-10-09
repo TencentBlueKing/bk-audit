@@ -42,6 +42,7 @@ from core.utils.time import format_date_string, parse_datetime
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
+from services.web.query.ai_assistant.constants import AI_ASSISTANT_EXPORT_SOURCE
 from services.web.query.constants import (
     COLLECT_SEARCH_CONFIG,
     DATE_FORMAT,
@@ -534,8 +535,9 @@ class LogExportConfigSerializer(serializers.Serializer):
     """
     日志导出配置序列化器
 
-    flatten_extension / extension_keys 为 AI 助手导出的可选扩展键（required=False 且无 default：
-    原检索页不传时 validated_data 不含这两个键，落库形态与历史完全一致，行为零变化）。
+    flatten_extension / extension_keys / source 为 AI 助手导出的可选扩展键（required=False
+    且无 default：原检索页不传时 validated_data 不含这些键，落库形态与历史完全一致，
+    行为零变化）。
     """
 
     field_scope = serializers.ChoiceField(
@@ -552,6 +554,14 @@ class LogExportConfigSerializer(serializers.Serializer):
         child=serializers.CharField(),
         required=False,
         help_text=gettext_lazy("扩展字段平铺的子键清单，仅单层"),
+    )
+    # AI 导出来源标记（后端强制注入，前端无需传递）：运行时导出器据此启用 AI 专属
+    # 样式——单行表头 + 字段保序 + 列宽自适应；非 AI 值一律按非 AI 处理
+    source = serializers.ChoiceField(
+        label=gettext_lazy("导出来源"),
+        choices=[(AI_ASSISTANT_EXPORT_SOURCE, AI_ASSISTANT_EXPORT_SOURCE)],
+        required=False,
+        help_text=gettext_lazy("AI 助手导出来源标记，仅 ai_assistant"),
     )
 
     def validate(self, attrs):
