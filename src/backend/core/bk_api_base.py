@@ -16,8 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import os
 
 from bk_resource import BkApiResource
+from blueapps.utils.logger import logger
 from django.conf import settings
 
 from core.tenant import get_admin_username, use_multi_tenant_mode
@@ -78,5 +80,20 @@ class AuditBkApiResource(BkApiResource):
                 if admin_username:
                     auth["bk_username"] = admin_username
                 headers["x-bkapi-authorization"] = json.dumps(auth)
+
+        # 打印最终生效的鉴权身份，便于部署时确认使用的是哪个虚拟用户
+        _auth = headers.get("x-bkapi-authorization", "{}")
+        _auth = json.loads(_auth) if isinstance(_auth, str) else _auth
+        logger.info(
+            "[AuditBkApiResource] 出站请求鉴权身份: module=%s action=%s use_admin_username=%s "
+            "multi_tenant=%s bk_username=%s has_access_token=%s 环境变量是否生效:%s",
+            getattr(self, "module_name", ""),
+            getattr(self, "action", ""),
+            self.use_admin_username,
+            self.use_multi_tenant_mode(),
+            _auth.get("bk_username"),
+            "access_token" in _auth,
+            os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", "admin") == _auth.get("bk_username"),
+        )
 
         return self.set_headers(headers, validated_request_data)
