@@ -361,8 +361,9 @@
     padding: 8px;
 
     &.is-compact {
-      width: 180px;
+      width: max-content;
       min-width: 180px;
+      max-width: 360px;
     }
 
     .nl-tag-search-input {

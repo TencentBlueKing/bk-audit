@@ -23,6 +23,7 @@ import type {
   AiSearchCondition,
   AiSystemFieldItem,
   AiSystemInfo,
+  AiTimeShortcut,
   AiUserIntentOutput,
 } from '@model/ai-assistant/types';
 
@@ -39,6 +40,46 @@ const formatDisplayDateTime = (value?: string | null) => {
   const parsed = dayjs(value);
   if (!parsed.isValid()) return String(value);
   return parsed.format('YYYY-MM-DD HH:mm:ss');
+};
+
+const TIME_SHORTCUT_PATTERN = /^now-\d+[smhdwMy]$/;
+
+/** 后端 time_shortcut → 时间组件的 datetime_origin；非法或空值返回 undefined */
+export const timeShortcutToDatetimeOrigin = (shortcut?: AiTimeShortcut): string[] | undefined => {
+  if (typeof shortcut !== 'string' || !TIME_SHORTCUT_PATTERN.test(shortcut)) return undefined;
+  return [shortcut, 'now'];
+};
+
+/** 时间组件的 datetime_origin → 提交给后端的 time_shortcut；绝对时间段返回 null */
+export const datetimeOriginToTimeShortcut = (origin?: unknown): string | null => {
+  if (!Array.isArray(origin) || origin.length < 2) return null;
+  const [start, end] = origin;
+  if (end !== 'now' || typeof start !== 'string' || !TIME_SHORTCUT_PATTERN.test(start)) return null;
+  return start;
+};
+
+/**
+ * 读消息 input_data 上后端下发的 time_shortcut（识别类消息与 LOG_SEARCH 一致）。
+ * 返回 undefined 表示后端未下发该字段（历史消息），调用方可回退本地记忆。
+ */
+export const resolveMessageTimeShortcut = (message: AiMessage): AiTimeShortcut | undefined => {
+  const source = message.input_data;
+  if (!source || typeof source !== 'object' || !('time_shortcut' in source)) return undefined;
+  const value = (source as Record<string, any>).time_shortcut;
+  return typeof value === 'string' ? value : null;
+};
+
+const withTimeShortcut = (
+  result: RetrievalResultPayload | undefined,
+  shortcut?: AiTimeShortcut,
+) => {
+  if (!result) return result;
+  const origin = timeShortcutToDatetimeOrigin(shortcut);
+  if (origin) {
+    // eslint-disable-next-line no-param-reassign
+    result.datetimeOrigin = origin;
+  }
+  return result;
 };
 
 /** 空对象 / 空数组文案与空值一致，表格侧会展示为 -- */
@@ -573,7 +614,10 @@ export const mapAiMessageToChatMessage = (
       role: 'assistant',
       type: 'retrieval-result',
       content: queryText,
-      result: mapConditionPendingResult(nlCondition, fieldCatalog),
+      result: withTimeShortcut(
+        mapConditionPendingResult(nlCondition, fieldCatalog),
+        message.input_data?.time_shortcut,
+      ),
       ...baseMeta,
     };
   }
@@ -650,7 +694,10 @@ export const mapAiMessageToChatMessage = (
 
     // 意图成功且已识别条件：先出条件区，表格等派生 LOG_SEARCH
     const pendingResult = message.status === 'SUCCESS'
-      ? mapConditionPendingResult(output.condition, fieldCatalog)
+      ? withTimeShortcut(
+        mapConditionPendingResult(output.condition, fieldCatalog),
+        message.input_data?.time_shortcut,
+      )
       : undefined;
 
     return {
@@ -680,6 +727,7 @@ export const mapAiMessageToChatMessage = (
     } else if (message.status === 'FAILED') {
       result = mapLogSearchFailedToResult(message, fieldCatalog);
     }
+    withTimeShortcut(result, message.input_data?.time_shortcut);
     return {
       id: message.uid,
       role: 'assistant',
