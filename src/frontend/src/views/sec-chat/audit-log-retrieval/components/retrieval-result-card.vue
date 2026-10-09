@@ -153,7 +153,19 @@
                 </p>
               </div>
               <div class="summary-actions">
+                <bk-button
+                  v-if="isDirectExport"
+                  class="export-btn"
+                  :disabled="!canExport || resubmitLoading"
+                  :loading="exporting"
+                  @click="handleExport('preview')">
+                  <audit-icon
+                    class="export-icon"
+                    type="download" />
+                  {{ exporting ? '导出中…' : '导出' }}
+                </bk-button>
                 <bk-dropdown
+                  v-else
                   class="export-dropdown"
                   :disabled="!canExport || exporting || resubmitLoading"
                   placement="bottom-start"
@@ -448,6 +460,7 @@
   import {
     exportLogSearchFull,
     exportLogSearchPreview,
+    PREVIEW_EXPORT_LIMIT,
   } from '../utils/export-log-search';
   import JsonFieldPreview from './json-field-preview.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
@@ -770,6 +783,8 @@
     && !isFailed.value
     && displayResult.value.totalHit > 0
   ));
+  /** 命中数不超过预览导出上限时，预览导出即全量，点击直接导出不再弹下拉 */
+  const isDirectExport = computed(() => displayResult.value.totalHit <= PREVIEW_EXPORT_LIMIT);
 
   const thumbUpPath = 'M5.2 14.5H3.4c-.5 0-.9-.4-.9-.9V7.8c0-.5.4-.9.9-.9h1.8v7.6z'
     + 'M13.4 6.9H9.7l.5-2.4c.1-.6-.1-1.2-.5-1.6L9 2.2c-.2-.2-.5-.2-.7 0l-.2.2'
