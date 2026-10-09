@@ -35,6 +35,7 @@ from core.sql.constants import FieldType
 from services.web.query.ai_assistant.constants import (
     AI_FORBIDDEN_CONDITION_FIELDS,
     DEFAULT_SEARCH_WINDOW_DAYS,
+    DEFAULT_TIME_SHORTCUT,
 )
 from services.web.query.ai_assistant.exceptions import (
     AIOutputParseFailedError,
@@ -65,6 +66,7 @@ INVALID_REASON_MESSAGES = {
     "filters required": "筛选条件缺少比较值",
     "between needs 2 filters": "区间筛选需要恰好 2 个值",
     "field type does not match field context": "字段类型与当前系统字段定义不一致",
+    "invalid time shortcut": "相对时间表述超出支持范围，请换用「近N小时/近N天」或明确时间段",
 }
 
 
@@ -245,7 +247,9 @@ class ConditionAssemblyService:
     def _payload_has_valid_time(cls, payload: AIConditionPayload) -> bool:
         """AI 输出是否携带可解析的有效时间（检索意图成立的信号，与 _assemble 同解析口径）"""
 
-        return any(cls._safe_parse_time(value) is not None for value in (payload.start_time, payload.end_time))
+        return payload.time_shortcut is not None or any(
+            cls._safe_parse_time(value) is not None for value in (payload.start_time, payload.end_time)
+        )
 
     @classmethod
     def _validate_operator_shape(cls, cond: AIConditionItem, valid_operators: set) -> None:
@@ -290,20 +294,41 @@ class ConditionAssemblyService:
             elif cond.field_type != field_type:
                 raise _invalid_condition_error(cond, "field type does not match field context")
 
+    # 相对时间窗快捷标记形态与窗口上限（365 天，与前端快捷项最大 now-12M 一致）
+    TIME_SHORTCUT_PATTERN = re.compile(r"^now-([1-9]\d*)([hdM])$")
+    TIME_SHORTCUT_MAX_WINDOW = timedelta(days=365)
+    # 月粒度对齐前端 DATETIME_SHORTCUT_LABEL_MAP / shortcutConfigs 的固定换算
+    # （1M=30、3M=90、6M=182、12M=365，非 30×N 线性，必须查表）；非白名单月值拒绝
+    MONTH_SHORTCUT_DAYS = {"1": 30, "3": 90, "6": 182, "12": 365}
+
     @classmethod
     def _assemble(cls, payload: AIConditionPayload, scope_id: str, reference_time: datetime) -> SearchCondition:
-        """scope 取入参；AI 时间优先，缺省时间基于本次转换的同一锚点补齐。"""
+        """scope 取入参；相对时间窗（time_shortcut）优先，其余场景 AI 时间优先，
+        缺省时间基于本次转换的同一锚点补齐。
+        """
 
-        end_time = cls._safe_parse_time(payload.end_time) or reference_time
-        start_time = cls._safe_parse_time(payload.start_time) or (end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS))
-        if start_time > end_time:
-            # 防御：AI 时间换算倒置（LLM 常见笔误），Doris 链路无倒置校验、SQL 恒假零命中，交换保窗口有效
-            logger.warning(
-                "[ConditionAssemblyService] swapped reversed time window from AI output: %s ~ %s",
-                start_time,
-                end_time,
-            )
-            start_time, end_time = end_time, start_time
+        time_shortcut = cls._normalize_time_shortcut(payload.time_shortcut)
+        if time_shortcut is not None:
+            # 「近 N 小时/近 N 天」：服务端权威换算（消除 LLM 算数误差）；AI 画蛇添足
+            # 同时输出的绝对时间忽略——用户语义为相对窗口，shortcut 透传前端渲染动态标签
+            end_time = reference_time
+            start_time = end_time - cls._shortcut_delta(time_shortcut)
+        else:
+            parsed_start = cls._safe_parse_time(payload.start_time)
+            parsed_end = cls._safe_parse_time(payload.end_time)
+            end_time = parsed_end or reference_time
+            start_time = parsed_start or (end_time - timedelta(days=DEFAULT_SEARCH_WINDOW_DAYS))
+            if start_time > end_time:
+                # 防御：AI 时间换算倒置（LLM 常见笔误），Doris 链路无倒置校验、SQL 恒假零命中，交换保窗口有效
+                logger.warning(
+                    "[ConditionAssemblyService] swapped reversed time window from AI output: %s ~ %s",
+                    start_time,
+                    end_time,
+                )
+                start_time, end_time = end_time, start_time
+            if parsed_start is None and parsed_end is None:
+                # 用户未提及时间：走默认窗口，同样标注 shortcut 供前端回显「近1天」
+                time_shortcut = DEFAULT_TIME_SHORTCUT
         return SearchCondition(
             scope_type="system",
             scope_id=scope_id,
@@ -318,6 +343,52 @@ class ConditionAssemblyService:
                 for cond in payload.conditions
             ],
         )
+
+    @classmethod
+    def resolve_time_shortcut(cls, payload: AIConditionPayload) -> Optional[str]:
+        """用户时间语义的相对标记（消息层平级携带，不进 SearchCondition——其子类
+        AgentSearchCondition 是 MCP 工具契约）：
+        - 相对表述（time_shortcut 有值）→ 校验后原样返回
+        - 未提及时间（start/end 均不可解析）→ 默认窗口标记 now-1d
+        - 明确时间段 → None
+        """
+
+        shortcut = cls._normalize_time_shortcut(payload.time_shortcut)
+        if shortcut is not None:
+            return shortcut
+        if cls._safe_parse_time(payload.start_time) is None and cls._safe_parse_time(payload.end_time) is None:
+            return DEFAULT_TIME_SHORTCUT
+        return None
+
+    @classmethod
+    def _normalize_time_shortcut(cls, value: Optional[str]) -> Optional[str]:
+        """形态与窗口范围校验（pydantic pattern 已拦形态，此处纵深防御 + 上限校验）：
+        now-{N}h / now-{N}d / now-{N}M（月仅 1/3/6/12 白名单），换算窗口超 365 天拒绝——
+        静默钳制会造成语义漂移，显式报错更稳。
+        """
+
+        if value is None:
+            return None
+        count, unit = cls.TIME_SHORTCUT_PATTERN.match(value).groups()
+        if (unit == "M" and count not in cls.MONTH_SHORTCUT_DAYS) or cls._shortcut_delta(
+            value
+        ) > cls.TIME_SHORTCUT_MAX_WINDOW:
+            raise InvalidConditionError(
+                message=INVALID_REASON_MESSAGES["invalid time shortcut"],
+                extra={"reason": "invalid time shortcut", "time_shortcut": value},
+            )
+        return value
+
+    @classmethod
+    def _shortcut_delta(cls, value: str) -> timedelta:
+        """now-{N}h / now-{N}d / now-{N}M → 时间差（月按前端固定映射查表）"""
+
+        count, unit = cls.TIME_SHORTCUT_PATTERN.match(value).groups()
+        if unit == "h":
+            return timedelta(hours=int(count))
+        if unit == "d":
+            return timedelta(days=int(count))
+        return timedelta(days=cls.MONTH_SHORTCUT_DAYS[count])
 
     @staticmethod
     def _safe_parse_time(value: Optional[str]):
