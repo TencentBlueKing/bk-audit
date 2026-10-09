@@ -687,6 +687,8 @@
       field,
       fieldLabel: text,
     });
+    // 不把自定义文本留成已选项。删空时输入框会退回已选项，整段错误字段会被填回去
+    selectedFieldKey.value = '';
   };
 
   const handleSelectField = (item: FieldViewItem) => {
