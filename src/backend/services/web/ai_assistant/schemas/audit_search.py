@@ -184,6 +184,8 @@ class UserIntentOutputSchema(MessageSchema):
     system_id: str = ""
     message: str = ""
     condition: Annotated[SearchCondition | None, _SearchConditionOrNullField] = None
+    # 相对时间窗快捷标记（条件预览的动态标签）：与 condition 平级，语义见 LogSearchInputSchema
+    time_shortcut: str | None = None
     error: UserIntentErrorSchema | None = None
     selection_message_uid: str = ""
     log_search_message_uid: str = ""
@@ -205,6 +207,13 @@ class LogSearchInputSchema(MessageSchema):
     """日志检索输入：结构化条件，字段条件检索与 NL 续链共用同一结构。"""
 
     condition: Annotated[SearchCondition, _SearchConditionField]
+    # 相对时间窗快捷标记（如 "now-1d"，与前端 datetime_origin 快捷项语法同源）：
+    # 仅 NL 链路携带——用户时间语义为相对表述（近N小时/近N天）或未提及时间（默认窗口）
+    # 时由消息规划层写入，明确时间段为 None；字段条件检索不传。condition 里的
+    # start_time/end_time 恒为换算后的绝对时间（查询/导出/报告依赖），本标记仅供
+    # 前端渲染「近N天」标签并按执行时刻动态换算，不参与查询（故不放 SearchCondition——
+    # 其子类 AgentSearchCondition 是 MCP 工具契约，definition.yaml 静态快照不包含该字段）
+    time_shortcut: str | None = None
 
 
 class LogSearchContextSchema(MessageSchema):

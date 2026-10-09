@@ -101,11 +101,9 @@ class SearchCondition(BaseModel):
     start_time: str = Field(..., min_length=1)
     end_time: str = Field(..., min_length=1)
     conditions: List[Condition] = Field(default_factory=list)
-    # 相对时间窗快捷标记（如 "now-1d"，与前端 datetime_origin 快捷项语法同源）：
-    # 仅当用户时间语义为相对表述（近N小时/近N天）或未提及时间（后端补默认窗口）时由服务端生成；
-    # 用户给出明确时间段（如 10月1日到5日）时为 None。start_time/end_time 恒为换算后的
-    # 绝对时间（查询/导出/报告依赖），time_shortcut 仅供前端渲染「近N天」标签并动态换算
-    time_shortcut: Optional[str] = None
+    # 注：相对时间窗标记 time_shortcut 不放本模型——AgentSearchCondition（MCP 日志工具契约，
+    # definition.yaml 静态快照同源）继承本类，加字段会污染工具契约；标记由消息层
+    # LogSearchInputSchema / UserIntentOutputSchema 平级携带（见 ConditionAssemblyService.resolve_time_shortcut）
 
     @field_validator("start_time", "end_time")
     @classmethod
@@ -304,16 +302,19 @@ class AIConditionPayload(BaseModel):
     conditions: List[AIConditionItem] = Field(default_factory=list, description="检索条件列表，无字段条件时为空数组")
     start_time: Optional[str] = Field(None, description="开始时间，ISO 8601 带时区")
     end_time: Optional[str] = Field(None, description="结束时间，ISO 8601 带时区")
-    # 相对时间窗快捷标记（形态 now-{N}h / now-{N}d）：用户使用「近N小时/近N天/最近N小时/
-    # 最近N天」等相对表述时输出（近1小时→now-1h，近7天→now-7d，近1周→now-7d，近1月→now-30d），
-    # 由服务端统一换算绝对时间并回显动态时间标签；此时 start_time/end_time 留空。
-    # 用户给出明确时间段（如 10月1日到5日、昨天10点）或未提及时间时留空
+    # 相对时间窗快捷标记（格式 now-{N}{unit}，与前端约定 10-09：h=小时、d=天、M=月，
+    # 月粒度对齐前端 DATETIME_SHORTCUT_LABEL_MAP 的 1/3/6/12 白名单）：用户使用
+    # 「近N小时/近N天/近N月」等相对表述时输出（近1小时→now-1h、近7天/近一周→now-7d、
+    # 近1月→now-1M、近一年→now-12M），由服务端统一换算绝对时间并回显动态时间标签；
+    # 此时 start_time/end_time 留空。用户给出明确时间段（如 10月1日到5日、昨天10点）
+    # 或未提及时间时留空
     time_shortcut: Optional[str] = Field(
         None,
-        pattern=r"^now-([1-9]\d*)[hd]$",
+        pattern=r"^now-([1-9]\d*)[hdM]$",
         description=(
-            "相对时间窗标记；用户使用「近N小时/近N天/最近N小时/最近N天」等相对表述时输出，"
-            "格式 now-{N}h 或 now-{N}d（近1小时→now-1h、近7天→now-7d、近1周→now-7d、近1月→now-30d），"
+            "相对时间窗标记，格式 now-{数字}{单位}（h=小时、d=天、M=月）；"
+            "用户使用「近N小时/近N天/近N月」等相对表述时输出（近1小时→now-1h、近7天/近一周→now-7d、"
+            "近14天→now-14d、近1月→now-1M、近3月→now-3M、近6月→now-6M、近一年→now-12M），"
             "此时 start_time/end_time 留空由服务端统一换算；用户给出明确时间段或未提及时间时留空"
         ),
     )
