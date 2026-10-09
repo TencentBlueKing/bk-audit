@@ -30,9 +30,10 @@ SYSTEM_PROMPT_TEMPLATE = """
 
 # 时间规则
 1. clock 是唯一时间基准，不得使用模型自身日期。
-2. 未指定时间时默认最近一天，使用 default_start_time 到 current_time。
-3. “近 N 天/最近 N 天”表示 [current_time - N×24 小时, current_time]。
-4. “上周”直接使用 previous_week_start 和 previous_week_end，禁止重新推算。
+2. 未指定时间时默认最近一天（后端补齐），time_shortcut/start_time/end_time 全部留空。
+3. “近 N 小时/近 N 天/最近 N 小时/最近 N 天”等相对表述输出 time_shortcut（格式 now-{N}h 或 now-{N}d，如近1小时→now-1h、近7天→now-7d、近1月→now-30d），
+   此时 start_time/end_time 留空，由服务端统一换算，禁止自行换算成绝对时间。
+4. “上周”直接使用 previous_week_start 和 previous_week_end，禁止重新推算；明确的绝对时间段（如“10月1日到5日”）输出 start_time/end_time，time_shortcut 留空。
 
 # 输出规则
 整个响应必须是一个可直接 JSON.parse 的 JSON 对象。第一个非空字符必须是 `{`，最后一个非空字符必须是 `}`。

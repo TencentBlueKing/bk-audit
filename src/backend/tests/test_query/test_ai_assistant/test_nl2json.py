@@ -711,6 +711,130 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
 
 
 @bind_agent_output
+class TestRelativeTimeShortcut(AIAssistantTestCase):
+    """相对时间窗快捷标记（前端确认方案 10-09）：
+    用户语义为相对表述（近N小时/近N天）→ AI 输出 time_shortcut，服务端权威换算绝对时间；
+    用户未提及时间 → 后端默认窗口并标注 now-1d；用户给出明确时间段 → time_shortcut 为 None。
+    start_time/end_time 恒有效（查询/导出/报告依赖），shortcut 仅供前端动态标签。
+    """
+
+    REFERENCE_TIME = datetime(2026, 9, 20, 10, 30, tzinfo=datetime_timezone(timedelta(hours=8)))
+
+    def _convert(self):
+        return assemble_recorded_output(self, reference_time=self.REFERENCE_TIME)
+
+    def test_days_shortcut_converted_and_passed_through(self, mock_chat):
+        """「近7天」→ 服务端换算 [now-7d, now]，shortcut 透传（消除 LLM 算数误差）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-7d"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=7))
+        self.assertEqual(condition.time_shortcut, "now-7d")
+
+    def test_hours_shortcut_converted(self, mock_chat):
+        """「近1小时」→ 小时粒度换算"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1h"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(hours=1))
+        self.assertEqual(condition.time_shortcut, "now-1h")
+
+    def test_shortcut_overrides_redundant_absolute_time(self, mock_chat):
+        """AI 画蛇添足同时输出绝对时间 → shortcut 优先（用户语义为相对窗口），绝对时间忽略"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "time_shortcut": "now-7d",
+                "start_time": "2020-01-01T00:00:00+08:00",
+                "end_time": "2020-01-02T00:00:00+08:00",
+            }
+        )
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=7))
+
+    def test_pure_shortcut_without_conditions_passes(self, mock_chat):
+        """空 conditions + shortcut（纯时间窗口检索）→ 检索意图成立，放行"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-3d"})
+
+        condition = self._convert()
+
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.time_shortcut, "now-3d")
+
+    def test_default_window_annotates_shortcut(self, mock_chat):
+        """用户未提及时间（上游已确认检索意图 allow_empty=True，AI 按新规则全留空）
+        → 默认窗口 + 标注 now-1d（前端渲染「近1天」）"""
+        payload = AIConditionPayload.model_validate({"conditions": [], "start_time": None, "end_time": None})
+
+        condition = ConditionAssemblyService.validate_and_assemble(
+            payload=payload,
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            reference_time=self.REFERENCE_TIME,
+            allow_empty=True,
+        )
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=1))
+        self.assertEqual(condition.time_shortcut, "now-1d")
+
+    def test_explicit_time_range_shortcut_none(self, mock_chat):
+        """明确时间段（「10月1日到5日」）→ 绝对时间生效，shortcut 为 None"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-10-01T00:00:00+08:00",
+                "end_time": "2026-10-05T00:00:00+08:00",
+            }
+        )
+
+        condition = self._convert()
+
+        self.assertEqual(condition.start_time, "2026-10-01T00:00:00+08:00")
+        self.assertEqual(condition.end_time, "2026-10-05T00:00:00+08:00")
+        self.assertIsNone(condition.time_shortcut)
+
+    def test_out_of_range_shortcut_rejected(self, mock_chat):
+        """超 365 天（now-400d）→ 拒绝（静默钳制会语义漂移，显式报错）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-400d"})
+
+        with self.assertRaises(InvalidConditionError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.extra["reason"], "invalid time shortcut")
+
+    def test_invalid_shortcut_form_rejected(self, mock_chat):
+        """非法形态（now-1w）→ pydantic pattern 拒绝 → InvalidConditionError"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1w"})
+
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_zero_window_shortcut_rejected(self, mock_chat):
+        """零窗口（now-0d）→ pattern 排除 0 开头，拒绝"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-0d"})
+
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_legacy_output_without_shortcut_unchanged(self, mock_chat):
+        """回归：既有输出（绝对时间、无 shortcut 字段）→ 行为不变，shortcut None"""
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
+
+        condition = self._convert()
+
+        self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
+        self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
+        self.assertIsNone(condition.time_shortcut)
+
+
+@bind_agent_output
 class TestNL2JSONAdversarial(AIAssistantTestCase):
     """AI 坏输出对抗样本（JSON 提取闸门）"""
 

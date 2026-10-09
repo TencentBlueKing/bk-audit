@@ -95,6 +95,9 @@ AI_ASSISTANT_FIELD_DISPLAY_OVERRIDES = dict(SNAPSHOT_DEFAULT_COLUMNS)
 
 # AI 未输出开始时间时，后端补最近 N 天检索窗口。该业务默认值与 30 天字段采样窗口相互独立。
 DEFAULT_SEARCH_WINDOW_DAYS = 1
+# 默认窗口的相对时间快捷标记（用户未提及时间时随 SearchCondition 返回，前端渲染「近1天」
+# 动态标签并按执行时刻换算；与 DEFAULT_SEARCH_WINDOW_DAYS 同源，改窗口天数此处自动跟随）
+DEFAULT_TIME_SHORTCUT = f"now-{DEFAULT_SEARCH_WINDOW_DAYS}d"
 # AI 输出中禁止出现的时间字段（出现后端剔除并告警，时间由后端统一管理）
 AI_FORBIDDEN_TIME_FIELDS = ("thedate", "dtEventTimeStamp")
 # AI 输出中禁止出现的条件字段（后端剔除并告警）：
