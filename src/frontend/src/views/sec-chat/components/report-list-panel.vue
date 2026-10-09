@@ -97,7 +97,7 @@
               :type="collapsedSessions.has(block.session.uid) ? 'angle-fill-rignt' : 'angle-fill-down'" />
             <span class="group-name">{{ block.session.title || t('未命名会话') }}</span>
             <span
-              v-if="block.session.loaded"
+              v-if="groupCountText(block.session)"
               class="group-count">
               {{ groupCountText(block.session) }}
             </span>
@@ -214,9 +214,16 @@
 
   import useMessage from '@hooks/use-message';
 
+  import { buildAiAssistantScopeFields } from '@/utils/assist/scene-system-params';
+
   import reportListCloseIcon from '@images/report-list-close.svg';
 
   import LogReportDrawer, { type LogReportInfo } from '../audit-log-retrieval/components/log-report-drawer.vue';
+  import {
+    analysisSuccessTotal,
+    resolveSessionReportsAllLoaded,
+    sessionReportListParams,
+  } from '../utils/report-session-count';
 
   interface ReportSession {
     uid: string;
@@ -229,6 +236,8 @@
     /** 该会话报告是否已全部在列 */
     allLoaded: boolean;
     loadingAll: boolean;
+    /** 会话上 AI_ANALYSIS 的 SUCCESS 数；新字段缺失时为 null */
+    reportTotal: number | null;
   }
 
   interface RenderBlock {
@@ -294,10 +303,12 @@
       }));
   });
 
-  /** 首屏只取一页，没取全时用 n+ 表示还有更多 */
-  const groupCountText = (session: ReportSession) => (
-    session.allLoaded ? `${session.reports.length}` : `${session.reports.length}+`
-  );
+  /** 展示会话上 AI_ANALYSIS 成功数；没有计数时再用已加载条数 */
+  const groupCountText = (session: ReportSession) => {
+    if (typeof session.reportTotal === 'number' && session.reportTotal > 0) return `${session.reportTotal}`;
+    if (session.loaded) return `${session.reports.length}`;
+    return '';
+  };
 
   const formatReportTime = (value?: string | null) => {
     if (!value) return '';
@@ -311,19 +322,15 @@
   );
 
   const fetchSessionReports = (conversationUid: string, limit?: number) => (
-    AiAssistantManageService.fetchAttachments({
-      conversation_uid: conversationUid,
-      attachment_type: 'AI_ANALYSIS',
-      status: 'SUCCESS',
-      ...(limit ? { limit } : {}),
-    }, { catchError: true })
+    AiAssistantManageService.fetchAttachments(
+      sessionReportListParams(conversationUid, limit),
+      { catchError: true },
+    )
   );
 
-  /**
-   * 会话上的 attachment_counts_by_type 含所有状态，与只取 SUCCESS 的列表对不上，
-   * 只能按「是否取满一页」判断还有没有更多。
-   */
-  const resolveAllLoaded = (loadedCount: number) => loadedCount < SESSION_PAGE_SIZE;
+  const resolveAllLoaded = (loadedCount: number, reportTotal: number | null) => (
+    resolveSessionReportsAllLoaded(loadedCount, reportTotal, SESSION_PAGE_SIZE)
+  );
 
   const patchSession = (uid: string, patch: Partial<ReportSession>) => {
     sessions.value = sessions.value.map(item => (
@@ -341,7 +348,7 @@
         reports: list,
         loaded: true,
         loading: false,
-        allLoaded: resolveAllLoaded(list.length),
+        allLoaded: resolveAllLoaded(list.length, session.reportTotal),
       });
     } catch {
       // 单个会话拉取失败不影响其他会话，重新进入视口可再试
@@ -354,7 +361,6 @@
     patchSession(session.uid, { loadingAll: true });
     try {
       const reports = await fetchSessionReports(session.uid);
-      // 不带 limit 即全量，无需再按计数判断
       patchSession(session.uid, {
         reports,
         allLoaded: true,
@@ -372,19 +378,25 @@
     loading.value = true;
     try {
       const list = await AiAssistantManageService.fetchConversationList({
+        ...buildAiAssistantScopeFields(),
         has_attachments: true,
         attachment_type: 'AI_ANALYSIS',
       }, { catchError: true });
       if (token !== sessionsFetchToken) return;
-      sessions.value = list.map(item => ({
-        uid: item.uid,
-        title: item.title,
-        reports: [],
-        loaded: false,
-        loading: false,
-        allLoaded: false,
-        loadingAll: false,
-      }));
+      sessions.value = list.map((item) => {
+        const reportTotal = analysisSuccessTotal(item);
+        const noSuccessReports = reportTotal === 0;
+        return {
+          uid: item.uid,
+          title: item.title,
+          reports: [],
+          loaded: noSuccessReports,
+          loading: false,
+          allLoaded: noSuccessReports,
+          loadingAll: false,
+          reportTotal,
+        };
+      });
       collapsedSessions.value = new Set();
       /*
        * 会话整体换了新对象，reports 全被重置回空。
@@ -427,6 +439,7 @@
     searchCancelSource = source;
     try {
       const list = await AiAssistantManageService.fetchAttachments({
+        ...buildAiAssistantScopeFields(),
         attachment_type: 'AI_ANALYSIS',
         status: 'SUCCESS',
         keyword,

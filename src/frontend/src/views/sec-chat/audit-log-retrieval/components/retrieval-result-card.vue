@@ -328,7 +328,7 @@
                     class="status-failed-wrap">
                     <audit-icon
                       class="status-icon is-failed"
-                      type="failed" />
+                      type="delete-fill" />
                     <span class="status-text">{{ reportStatusText(item) }}</span>
                   </span>
                   <button
@@ -439,6 +439,7 @@
       v-if="statisticsDialogShow"
       v-model="statisticsDialogShow"
       :condition="displayResult.rawCondition || null"
+      :submit-error="statisticsSubmitError"
       :submitting="statisticsSubmitting"
       @select="handleStatisticsSelect" />
 
@@ -498,6 +499,7 @@
   import { useSecChatStore } from '../../composables/use-sec-chat-store';
   import type { AiUiMessageStatus, RetrievalResultPayload, SelectedSystem, SystemFieldRow } from '../../types';
   import { followAttachment, type FollowAttachmentHandle } from '../../utils/follow-attachment';
+  import { messageAttachmentListParams } from '../../utils/report-session-count';
   import {
     buildAiSearchCondition,
     appendSearchModelField,
@@ -516,6 +518,7 @@
     PREVIEW_EXPORT_LIMIT,
   } from '../utils/export-log-search';
   import { isStatisticsAttachmentType } from '../utils/map-statistics-output';
+  import { formatStatisticsInputError } from '../utils/statistics-input-error';
   import JsonFieldPreview from './json-field-preview.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
   import LogReportDrawer, { type LogReportInfo } from './log-report-drawer.vue';
@@ -844,7 +847,7 @@
   const canExport = computed(() => (
     Boolean(displayMessageUid.value)
     && !isFailed.value
-    && displayResult.value.totalHit > 0
+    && !displayResult.value.tablePending
   ));
   /** 命中数不超过预览导出上限时，预览导出即全量，点击直接导出不再弹下拉 */
   const isDirectExport = computed(() => displayResult.value.totalHit <= PREVIEW_EXPORT_LIMIT);
@@ -865,6 +868,7 @@
   const analyzeSubmitting = ref(false);
   const statisticsDialogShow = ref(false);
   const statisticsSubmitting = ref(false);
+  const statisticsSubmitError = ref('');
   const reportItems = ref<ReportStatusItem[]>([]);
   const reportDrawerShow = ref(false);
   const activeReport = ref<LogReportInfo | null>(null);
@@ -1004,6 +1008,12 @@
     return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : value;
   };
 
+  /** 会话内报告时间展示创建时间，没有该字段才退回内容更新时间 */
+  const attachmentDisplayTime = (attachment: {
+    content_updated_at?: string | null;
+    created_at?: string | null;
+  }) => formatAttachmentTime(attachment.created_at || attachment.content_updated_at || '');
+
   const REPORT_STATUS_TO_ATTACHMENT: Record<ReportStatusItem['status'], AiAttachmentStatus> = {
     loading: 'PROCESSING',
     failed: 'FAILED',
@@ -1026,7 +1036,7 @@
       title: status === 'loading'
         ? (isStats ? t('数据统计中') : t('智能分析中'))
         : (attachment.title || (isStats ? t('数据统计报告') : t('智能分析报告'))),
-      createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
+      createdAt: attachmentDisplayTime(attachment),
       status,
       errorMessage: detail.error_message || '',
       markdown: attachmentMarkdown(detail.output_data),
@@ -1086,7 +1096,7 @@
       activeReport.value = {
         ...activeReport.value,
         title: attachment.title || activeReport.value.title,
-        createdAt: formatAttachmentTime(attachment.created_at || attachment.content_updated_at || ''),
+        createdAt: attachmentDisplayTime(attachment),
         markdown: attachmentMarkdown(attachment.output_data) || activeReport.value.markdown,
         exportFormats: attachment.export_formats || activeReport.value.exportFormats,
         analysisMode: String(attachment.input_data?.analysis_mode || activeReport.value.analysisMode || ''),
@@ -1096,9 +1106,7 @@
     }
     // 抽屉开着时跟随详情刷新；非当前附件的迟到回包不改抽屉
     if (activeStatisticsId.value === attachment.uid) {
-      statisticsCreatedAt.value = formatAttachmentTime(
-        attachment.created_at || attachment.content_updated_at || '',
-      ) || statisticsCreatedAt.value;
+      statisticsCreatedAt.value = attachmentDisplayTime(attachment) || statisticsCreatedAt.value;
       statisticsOutputData.value = attachment.output_data ?? null;
       statisticsAttachmentType.value = attachment.attachment_type || statisticsAttachmentType.value;
       statisticsStatus.value = attachment.status || statisticsStatus.value;
@@ -1169,10 +1177,10 @@
   const hydrateAttachments = async (messageUid: string) => {
     try {
       // 消息块按生成时间倒序：附件列表默认排 content_updated_at，编辑或重试会让报告前移
-      const list = await AiAssistantManageService.fetchAttachments({
-        source_message_uid: messageUid,
-        sort: '-created_at',
-      }, { catchError: true });
+      const list = await AiAssistantManageService.fetchAttachments(
+        messageAttachmentListParams(messageUid),
+        { catchError: true },
+      );
       const mapped = list.map(item => mapAttachmentToReport(item));
       reportItems.value = mapped;
       mapped
@@ -1299,6 +1307,7 @@
 
   const handleStatistics = () => {
     if (statisticsActionDisabled.value) return;
+    statisticsSubmitError.value = '';
     statisticsDialogShow.value = true;
   };
 
@@ -1346,13 +1355,14 @@
     };
 
     statisticsSubmitting.value = true;
+    statisticsSubmitError.value = '';
     emit('statistics');
     upsertReport(placeholder, true);
-    statisticsDialogShow.value = false;
     try {
       const attachment = await AiAssistantManageService.createAttachment(params, { catchError: true });
       removeReport(placeholderId);
       upsertReport(mapAttachmentToReport(attachment), true);
+      statisticsDialogShow.value = false;
       markPendingAutoOpen(attachment.uid);
       if (attachment.status === 'PROCESSING') {
         startFollow(attachment.uid, null, true);
@@ -1360,6 +1370,13 @@
         maybeAutoOpenReport(attachment.uid);
       }
     } catch (error: any) {
+      const inputError = formatStatisticsInputError(error, '');
+      if (inputError) {
+        removeReport(placeholderId);
+        statisticsSubmitError.value = inputError;
+        statisticsDialogShow.value = true;
+        return;
+      }
       try {
         await hydrateAttachments(messageUid);
         if (reportItems.value.some(item => item.status === 'loading' && item.id !== placeholderId)) {
@@ -1372,7 +1389,8 @@
         // 刷新失败时仍提示创建失败
       }
       removeReport(placeholderId);
-      messageError(resolveCreateErrorMessage(error, t('创建统计失败')));
+      statisticsSubmitError.value = resolveCreateErrorMessage(error, t('创建统计失败'));
+      statisticsDialogShow.value = true;
     } finally {
       statisticsSubmitting.value = false;
     }
@@ -1419,6 +1437,16 @@
         attachment_uid: item.id,
       }, { catchError: true });
       applyAttachmentDetail(attachment);
+      const messageUid = displayMessageUid.value || props.messageUid;
+      if (messageUid) {
+        await hydrateAttachments(messageUid);
+      }
+      const refreshed = mapAttachmentToReport(attachment);
+      if (reportItems.value.some(current => current.id === attachment.uid)) {
+        upsertReport(refreshed);
+      } else {
+        upsertReport(refreshed, true);
+      }
       if (attachment.status === 'PROCESSING') {
         startFollow(attachment.uid, previousExecutionId, isStats);
       }
@@ -1485,7 +1513,7 @@
       markdown = attachmentMarkdown(detail.output_data) || markdown;
       exportFormats = detail.export_formats || exportFormats;
       title = detail.title || title;
-      createdAt = formatAttachmentTime(detail.created_at || detail.content_updated_at || '') || createdAt;
+      createdAt = attachmentDisplayTime(detail) || createdAt;
       analysisMode = String(detail.input_data?.analysis_mode || analysisMode);
     } catch {
       // 使用卡片上已有摘要打开
