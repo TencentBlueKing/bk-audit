@@ -55,6 +55,9 @@ export interface AiSearchCondition {
   conditions?: AiConditionItem[];
 }
 
+
+export type AiTimeShortcut = string | null;
+
 /** SYSTEM_SELECTION 字段项 */
 export interface AiSystemFieldItem {
   raw_name: string;
@@ -114,6 +117,8 @@ export interface AiSystemSelectionOutput {
 export interface AiNaturalLanguageSearchInput {
   query_text: string;
   auto_execute?: boolean;
+  /** 后端识别后回写，前端只读 */
+  time_shortcut?: AiTimeShortcut;
 }
 
 export type AiNlRecognitionErrorCode =
@@ -162,6 +167,8 @@ export type AiUserIntentType =
 export interface AiUserIntentInput {
   query_text: string;
   auto_execute?: boolean;
+  /** 后端识别后回写，前端只读 */
+  time_shortcut?: AiTimeShortcut;
 }
 
 export interface AiUserIntentOutput {
@@ -182,6 +189,7 @@ export interface AiUserIntentOutput {
 
 export interface AiLogSearchInput {
   condition: AiSearchCondition;
+  time_shortcut?: AiTimeShortcut;
 }
 
 export interface AiLogSearchColumn {
@@ -318,9 +326,7 @@ export interface AiCreateMessageParams {
 /** PATCH 编辑并重新执行消息（覆盖当前消息快照） */
 export interface AiUpdateMessageParams {
   message_uid: string;
-  input_data: {
-    condition: AiSearchCondition;
-  };
+  input_data: AiLogSearchInput;
 }
 
 export interface AiMessageHistoryParams {
