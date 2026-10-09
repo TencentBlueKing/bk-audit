@@ -19,6 +19,7 @@
     <!-- 查询输入 -->
     <profile-query-input
       ref="queryInputRef"
+      :allowed-account-types="allowedAccountTypes"
       :loading="isQuerying"
       @query="handleQuery"
       @reset="handleReset" />
@@ -194,6 +195,7 @@
   import ColumnEnumFilter from './column-enum-filter.vue';
   import ProfileQueryInput from './profile-query-input.vue';
   import ProfileUserInfo from './profile-user-info.vue';
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import {
     parseSmartPageGameDetailIntent,
@@ -202,6 +204,10 @@
   import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import type { DataRangeToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
+  import {
+    allowedAccountTypesForScope,
+    findPortraitUsageDenial,
+  } from '@/utils/tool/portrait-account-restriction';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -229,6 +235,7 @@
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const { messageError } = useMessage();
   const router = useRouter();
   const route = useRoute();
 
@@ -558,6 +565,28 @@
     getToolDetailScopeQuery(),
   );
 
+  const allowedAccountTypes = computed(() => allowedAccountTypesForScope(
+    props.toolConfig?.usage_restrictions,
+    getToolDetailScopeQuery(),
+  ));
+
+  const usageScopeParams = () => {
+    const scope = getToolDetailScopeQuery();
+    if (scope.scene_id !== undefined) {
+      return {
+        _usage_scope_type: 'scene',
+        _usage_scope_id: String(scope.scene_id),
+      };
+    }
+    if (scope.system_id) {
+      return {
+        _usage_scope_type: 'system',
+        _usage_scope_id: String(scope.system_id),
+      };
+    }
+    return {};
+  };
+
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
     loading: userInfoLoading,
@@ -847,6 +876,7 @@
         data_source_name: 'main_user_info',
         params: {
           ...getDataRangeParams(),
+          ...usageScopeParams(),
           username: ctx,
         },
       },
@@ -863,6 +893,7 @@
         params: {
           ...getDataRangeParams(),
           ...params,
+          ...usageScopeParams(),
         },
       },
     });
@@ -1138,6 +1169,17 @@
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
+    const denial = findPortraitUsageDenial(
+      props.toolConfig?.usage_restrictions,
+      getToolDetailScopeQuery(),
+      accountType,
+    );
+    if (denial) {
+      isQuerying.value = false;
+      hasQueried.value = false;
+      messageError(denial);
+      return;
+    }
     // openid 类型查询时，先不设置 hasQueried，等结果返回后再决定
     hasQueried.value = accountType !== 'openid';
     // 立即进入"查询中"状态，确保 loading 占位立刻显示（涵盖 openid 类型 hasQueried=false 的场景）

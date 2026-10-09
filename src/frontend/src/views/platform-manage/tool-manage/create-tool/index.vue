@@ -66,7 +66,7 @@
 
             <component
               :is="ToolTypeComMap[formData.tool_type]"
-              v-if="isShowComponent"
+              v-if="isShowComponent && ToolTypeComMap[formData.tool_type]"
               ref="comRef"
               :data-search-config-type="formData.data_search_config_type"
               :form-data-config="formData"
@@ -116,7 +116,9 @@
             :title="t('可见范围')">
             <template #content>
               <!-- 选择可见范围 -->
-              <div class="visible-range-select-row">
+              <div
+                class="visible-range-select-row"
+                :class="{ 'is-portrait-width': formData.tool_type === 'smart_page' }">
                 <label class="select-label">{{ t('选择可见范围') }}</label>
                 <div class="select-control">
                   <visible-range-field
@@ -134,7 +136,8 @@
                 :selected-scenes="selectedSceneItems"
                 :selected-systems="selectedSystemItems"
                 :tool-uid="formData.uid || ''"
-                @update:param-overrides="handleParamOverridesChange" />
+                @update:param-overrides="handleParamOverridesChange"
+                @update:usage-restrictions="handleUsageRestrictionsChange" />
             </template>
           </card-part-vue>
         </audit-form>
@@ -180,6 +183,7 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
+  import { InfoBox } from 'bkui-vue';
   import { computed, nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
@@ -224,6 +228,14 @@
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
   import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
+  import {
+    affectedRestrictionScopeNames,
+    pruneUsageRestrictions,
+    usageRestrictionsChanged,
+    validateUsageRestrictions,
+    type UsageRestrictions,
+    type UsageScopeCard,
+  } from '@/utils/tool/portrait-account-restriction';
 
   provideToolManageContext(createPlatformToolManageContext());
 
@@ -264,6 +276,7 @@
   const isSuccessful = ref(false);
   const allTagMap = ref<Record<string, string>>({});
   const isUpdate = ref(false);
+  const usageRestrictionBaseline = ref('{}');
   const isFirstEdit = ref(false);
   const reportListsPanels = ref([]);
   const bkVisionUpdateTime = ref('');
@@ -432,6 +445,7 @@
       if (!(data as any).visibility) {
         await loadEditVisibility(route.params.id as string);
       }
+      usageRestrictionBaseline.value = JSON.stringify(formData.value.config?.usage_restrictions || {});
       restoreToolComponentConfig();
       isEditDataReady.value = true;
     },
@@ -442,6 +456,18 @@
   };
 
   const validateStep1 = async (): Promise<boolean> => {
+    if (formData.value.tool_type === 'smart_page') {
+      if (!formData.value.name?.trim() || !formData.value.description?.trim()) {
+        messageWarn(t('请完善基础信息'));
+        return false;
+      }
+      try {
+        await formRef.value.validate();
+        return true;
+      } catch {
+        return false;
+      }
+    }
     try {
       const tastQueue = [formRef.value.validate()];
       if (comRef.value && formData.value.tool_type !== 'api') {
@@ -547,6 +573,57 @@
     formData.value.scene_param_overrides = value;
   };
 
+  const handleUsageRestrictionsChange = (value: UsageRestrictions) => {
+    formData.value.config.usage_restrictions = value;
+  };
+
+  const portraitScopeCards = (): UsageScopeCard[] => [
+    ...selectedSceneItems.value.map(item => ({ type: 'scene' as const, id: item.id, name: item.name })),
+    ...selectedSystemItems.value.map(item => ({ type: 'system' as const, id: item.id, name: item.name })),
+  ];
+
+  const nextPortraitRestrictions = () => pruneUsageRestrictions(
+    formData.value.config?.usage_restrictions,
+    formData.value.scene_ids || [],
+    formData.value.system_ids || [],
+    formData.value.visibility_type,
+  );
+
+  const submitWithPortraitConfirm = () => {
+    if (formData.value.tool_type !== 'smart_page') {
+      doSubmit();
+      return;
+    }
+    const next = nextPortraitRestrictions();
+    const result = validateUsageRestrictions(next, portraitScopeCards());
+    if (!result.ok) {
+      messageWarn(result.message);
+      return;
+    }
+    const baseline = JSON.parse(usageRestrictionBaseline.value || '{}') as UsageRestrictions;
+    if (!usageRestrictionsChanged(baseline, next)) {
+      doSubmit();
+      return;
+    }
+    if (result.equivalentToUnrestricted) {
+      messageWarn(t('当前配置等同于不限制'));
+    }
+    const names = affectedRestrictionScopeNames(baseline, next, portraitScopeCards());
+    const quoted = names.map(name => `「${name}」`).join('');
+    InfoBox({
+      type: 'warning',
+      title: t('提交确认'),
+      subTitle: t('本次变更将影响{names}下用户使用本工具的方式，是否提交？', {
+        names: quoted,
+      }),
+      confirmText: t('提交'),
+      cancelText: t('取消'),
+      onConfirm() {
+        doSubmit();
+      },
+    });
+  };
+
   const handleCancel = () => {
     router.push({
       name: backRouteName,
@@ -647,7 +724,7 @@
         && !sceneParamConfigRef.value.validate()) {
         return;
       }
-      doSubmit();
+      submitWithPortraitConfirm();
       return;
     }
 
@@ -656,7 +733,7 @@
       return;
     }
     syncStep1Config();
-    doSubmit();
+    submitWithPortraitConfirm();
   };
 
   const isApiDoneDeBug = ref(false);
@@ -881,6 +958,16 @@
     .select-control {
       width: 100%;
       max-width: 660px;
+    }
+
+    /* 去掉左侧 17px 偏移，宽度补回，右边仍与卡片内容对齐 */
+    &.is-portrait-width {
+      width: calc(100% - 17px);
+      max-width: 737px;
+    }
+
+    &.is-portrait-width .select-control {
+      max-width: 100%;
     }
   }
 

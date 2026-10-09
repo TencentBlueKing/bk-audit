@@ -30,10 +30,17 @@
       </div>
 
       <div class="block-body">
+        <usage-restriction-panel
+          v-if="formData.tool_type === 'smart_page'"
+          :rows="usageRowsOf(item)"
+          @update:rows="(rows) => updateUsageRows(item, rows)" />
         <!-- 覆盖参数默认值：弹窗内占满，编辑/新建页占 1/3 宽度 -->
         <div
           class="override-section"
-          :class="{ 'is-full-width': overrideSelectFullWidth }">
+          :class="{
+            'is-full-width': overrideSelectFullWidth,
+            'is-portrait-width': formData.tool_type === 'smart_page',
+          }">
           <label class="form-label">{{ t('覆盖参数默认值') }}</label>
           <div class="form-control">
             <bk-select
@@ -76,7 +83,10 @@
         <div
           v-if="getTableData(item).length > 0"
           class="render-field"
-          :class="{ 'is-two-col': !showDisplayName }">
+          :class="{
+            'is-two-col': !showDisplayName,
+            'is-portrait-width': formData.tool_type === 'smart_page',
+          }">
           <div class="field-header-row">
             <div class="field-value col-name">
               {{ t('参数名') }}
@@ -314,7 +324,11 @@
 
   import { DateRange } from '@blueking/date-picker';
 
+  import type { UsageRestrictionRow, UsageRestrictions } from '@utils/tool/portrait-account-restriction';
+
   import type { SceneParamOverride, FormData } from '../types';
+
+  import UsageRestrictionPanel from './usage-restriction-panel.vue';
 
   interface ConfigItem {
     key: string;             // scene-{id} 或 system-{id}
@@ -366,7 +380,27 @@
   // eslint-disable-next-line func-call-spacing
   const emit = defineEmits<{
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
+    (e: 'update:usageRestrictions', value: UsageRestrictions): void;
   }>();
+
+  const usageRowsOf = (item: ConfigItem): UsageRestrictionRow[] => {
+    const restrictions = props.formData.config?.usage_restrictions;
+    const bucket = item.type === 'scene' ? restrictions?.scenes : restrictions?.systems;
+    return bucket?.[String(item.id)] || [];
+  };
+
+  const updateUsageRows = (item: ConfigItem, rows: UsageRestrictionRow[]) => {
+    const current = props.formData.config?.usage_restrictions || {};
+    const scenes = { ...(current.scenes || {}) };
+    const systems = { ...(current.systems || {}) };
+    const bucket = item.type === 'scene' ? scenes : systems;
+    if (rows.length) {
+      bucket[String(item.id)] = rows;
+    } else {
+      delete bucket[String(item.id)];
+    }
+    emit('update:usageRestrictions', { scenes, systems });
+  };
 
   /** 侧滑 z-index=9999 时，时间类弹出层需抬升；用 id/cls 限定作用域 */
   const TIME_RANGE_PICKER_ID = 'scene-param-config';
@@ -1307,6 +1341,20 @@
       width: 100%;
       max-width: 100%;
     }
+
+    &.is-portrait-width {
+      margin-bottom: 8px;
+    }
+
+    &.is-portrait-width .form-label {
+      margin-bottom: 4px;
+    }
+
+    /* 与使用限制的添加框同宽；下方参数表仍铺满卡片 */
+    &.is-portrait-width .form-control {
+      width: 100%;
+      max-width: 720px;
+    }
   }
 
   :deep(.override-param-select) {
@@ -1479,6 +1527,14 @@
     border: 1px solid #dcdee5;
     border-radius: 2px;
     user-select: none;
+  }
+
+  .render-field.is-portrait-width {
+    max-width: 720px;
+  }
+
+  .render-field.is-portrait-width .field-row .col-default {
+    justify-content: stretch;
   }
 
   .field-header-row,
@@ -1727,6 +1783,19 @@
     }
   }
 
+  .render-field.is-portrait-width :deep(.field-value) {
+    .override-default-input,
+    .bk-input.override-default-input,
+    .override-time-picker,
+    .override-person-select,
+    .override-tag-input,
+    .override-default-multiselect,
+    .default-value-tip-wrap {
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+
   /*
    * 时间范围：占满默认值列，保证弹层锚点稳定；
    * 预留右侧清除按钮空间，避免叠在文案上；长文案省略。
@@ -1803,6 +1872,11 @@
     width: 320px !important;
     max-width: 100%;
     height: auto !important;
+  }
+
+  .scene-param-config .render-field.is-portrait-width .override-person-select.bk-user-selector,
+  .scene-param-config .render-field.is-portrait-width .override-person-select {
+    width: 100% !important;
   }
 
   .scene-param-config .override-person-select .tags-container {

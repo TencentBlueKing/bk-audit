@@ -69,10 +69,9 @@
           {{ t('请选择') }}
         </span>
       </div>
-      <audit-icon
+      <angle-down
         class="arrow-icon"
-        :class="{ 'is-open': popoverVisible }"
-        type="angle-line-down" />
+        :class="{ 'is-open': popoverVisible }" />
     </div>
 
     <!-- 下拉面板 -->
@@ -274,6 +273,8 @@
 <script setup lang="ts">
   import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import AngleDown from 'bkui-vue/lib/icon/angle-down';
 
   import MetaManageService from '@service/meta-manage';
   import SceneManageService from '@service/scene-manage';
@@ -927,14 +928,17 @@
   }
 
   .visible-range-selector {
+    position: relative;
     display: flex;
     align-items: center;
     width: 100%;
     min-height: 32px;
-    padding: 0 8px;
+    /* 与 bk-select 一致：左 10px，右侧留给箭头 */
+    padding: 0 28px 0 10px;
     cursor: pointer;
     border: 1px solid #c4c6cc;
     border-radius: 2px;
+    box-sizing: border-box;
     transition: border-color .2s;
 
     &:hover {
@@ -986,11 +990,17 @@
   }
 
   .arrow-icon {
-    flex-shrink: 0;
-    margin-left: 8px;
-    font-size: 14px;
+    position: absolute;
+    top: 0;
+    right: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 100%;
+    font-size: 20px;
     color: #979ba5;
-    transition: transform .2s;
+    transition: transform .3s cubic-bezier(.4, 0, .2, 1);
 
     &.is-open {
       transform: rotate(180deg);

@@ -670,29 +670,16 @@
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPublished = row.status === 'published';
-        const isSmartPage = row.tool_type === 'smart_page';
 
         return (
           <div class="action-cell">
-            <span
-              v-bk-tooltips={{
-                content: t('此工具暂不支持编辑，如需调整可见范围，请直接在“可见范围”列进行操作'),
-                disabled: !isSmartPage,
-                placement: 'top',
-                extCls: 'smart-page-edit-disabled-tips',
-              }}>
-              <bk-button
-                text
-                theme="primary"
-                class="mr8"
-                disabled={isSmartPage}
-                onClick={() => {
-                  // 用户画像类型禁用“编辑”，避免触发平台创建/编辑流程
-                  if (!isSmartPage) emit('edit', row);
-                }}>
-                {t('编辑')}
-              </bk-button>
-            </span>
+            <bk-button
+              text
+              theme="primary"
+              class="mr8"
+              onClick={() => emit('edit', row)}>
+              {t('编辑')}
+            </bk-button>
             <bk-button
               text
               theme="primary"

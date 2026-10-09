@@ -22,28 +22,36 @@
         label-width="160"
         property="tool_type"
         required>
+        <div class="tool-type-options">
         <bk-radio-group v-model="formData.tool_type">
           <template
             v-for="(item, index) in toolTypeList"
             :key="index">
-            <bk-radio
-              :disabled="isEditMode"
-              :label="item.id">
-              <div style="display: flex; align-items: center; line-height: 16px;">
-                <audit-icon
-                  style=" margin-right: 5px;font-size: 16px;"
-                  svg
-                  :type="iconMap[item.id as keyof typeof iconMap]" />
-                <span
-                  v-bk-tooltips="{
-                    disabled: !item.tips,
-                    content: item.tips || '',
-                  }"
-                  :style="item.tips ? { 'border-bottom': '1px dashed #979ba5' } : {}">{{ item.name }}</span>
-              </div>
-            </bk-radio>
+            <span
+              v-bk-tooltips="{
+                disabled: toolTypeTipDisabled(item),
+                content: toolTypeTip(item),
+              }"
+              class="tool-type-radio">
+              <bk-radio
+                :disabled="isToolTypeDisabled(item.id)"
+                :label="item.id">
+                <div style="display: flex; align-items: center; line-height: 16px;">
+                  <span
+                    v-if="item.id === 'smart_page'"
+                    class="tool-type-badge">画像</span>
+                  <audit-icon
+                    v-else
+                    style=" margin-right: 5px;font-size: 16px;"
+                    svg
+                    :type="iconMap[item.id as keyof typeof iconMap]" />
+                  <span :style="toolTypeTip(item) ? { 'border-bottom': '1px dashed #979ba5' } : {}">{{ item.name }}</span>
+                </div>
+              </bk-radio>
+            </span>
           </template>
         </bk-radio-group>
+        </div>
       </bk-form-item>
 
       <!-- 数据查询 -->
@@ -137,7 +145,7 @@
 
 <script setup lang="ts">
   import _ from 'lodash';
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RootManageService from '@service/root-manage';
@@ -181,27 +189,51 @@
     value: 'sql',
   }];
 
-  const toolTypeList = ref<Array<{
+  const isPortraitTool = computed(() => formData.value.tool_type === 'smart_page');
+
+  const toolTypeList = computed<Array<{
     id: string;
     name: string;
     tips?: string;
-  }>>([{
-    id: 'data_search',
-    name: t('数据查询'),
-    tips: t('根据输入条件，使用 SQL 查询数据库以获得结果；可定义输入与输出'),
-  }, {
-    id: 'api',
-    name: t('API接口'),
-    tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
-  }, {
-    id: 'bk_vision',
-    name: t('BKVision图表'),
-  }]);
+  }>>(() => {
+    const list: Array<{ id: string; name: string; tips?: string }> = [{
+      id: 'data_search',
+      name: t('数据查询'),
+      tips: t('根据输入条件，使用 SQL 查询数据库以获得结果；可定义输入与输出'),
+    }, {
+      id: 'api',
+      name: t('API接口'),
+      tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
+    }, {
+      id: 'bk_vision',
+      name: t('BKVision图表'),
+    }];
+    if (isPortraitTool.value) {
+      list.push({
+        id: 'smart_page',
+        name: t('智能用户画像'),
+      });
+    }
+    return list;
+  });
+
+  const isToolTypeDisabled = (toolType: string) => {
+    if (isPortraitTool.value) return toolType !== 'smart_page';
+    return props.isEditMode;
+  };
+
+  const toolTypeTip = (item: { id: string; tips?: string }) => {
+    if (isPortraitTool.value && item.id !== 'smart_page') return t('工具类型不可编辑');
+    return item.tips || '';
+  };
+
+  const toolTypeTipDisabled = (item: { id: string; tips?: string }) => !toolTypeTip(item);
 
   const iconMap = {
     data_search: 'sqlxiao',
     api: 'apixiao',
     bk_vision: 'bkvisonxiao',
+    smart_page: 'user',
   };
 
   const configUid = ref<string[]>([]);
@@ -434,7 +466,11 @@
   });
 
   // 监听工具类型变化，获取图表列表
-  watch(() => formData.value.tool_type, (val) => {
+  watch(() => formData.value.tool_type, (val, oldVal) => {
+    if (oldVal === 'smart_page' && val !== 'smart_page') {
+      formData.value.tool_type = 'smart_page';
+      return;
+    }
     if (val === 'bk_vision') {
       fetchChartLists();
     }
@@ -479,6 +515,39 @@
 </script>
 
 <style lang="postcss" scoped>
+  .tool-type-options :deep(.bk-radio-group) {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 24px;
+  }
+
+  .tool-type-radio {
+    display: inline-flex;
+  }
+
+  .tool-type-badge {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    margin-right: 5px;
+    padding: 0 3px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    color: #ea580c;
+    background: #ffedd5;
+    border-radius: 2px;
+  }
+
+  .tool-type-radio:deep(.is-disabled),
+  .tool-type-radio:deep(.bk-radio.is-disabled) {
+    pointer-events: none;
+  }
+
   .chart-cascade {
     display: flex;
   }

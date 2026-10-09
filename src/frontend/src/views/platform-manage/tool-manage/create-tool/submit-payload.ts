@@ -5,6 +5,8 @@ import _ from 'lodash';
 
 import type { PlatformToolSubmitPayload } from '@model/tool/tool-manage-types';
 
+import { pruneUsageRestrictions } from '@utils/tool/portrait-account-restriction';
+
 import type { DefaultValueOverrides, FormData, SceneParamOverride, VisibilityScopePayload } from './types';
 
 /** 将表单中的场景/系统参数覆盖配置转为后端 config.default_value_overrides 结构 */
@@ -399,6 +401,14 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
     ...data.config,
     default_value_overrides: defaultValueOverrides,
   };
+  if (data.tool_type === 'smart_page') {
+    data.config.usage_restrictions = pruneUsageRestrictions(
+      data.config.usage_restrictions,
+      data.scene_ids || [],
+      (data.system_ids || []).map((id: string | number) => String(id)),
+      data.visibility_type,
+    );
+  }
 
   if (hasVisibilitySelection) {
     data.visibility = buildVisibilityPayload(data as FormData);

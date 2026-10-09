@@ -67,6 +67,10 @@ export interface ToolConfigPayload {
   uid?: string;
   api_config?: Record<string, unknown>;
   default_value_overrides?: DefaultValueOverrides;
+  usage_restrictions?: {
+    scenes?: Record<string, Array<{ id: string; kind: string; param: string; allowed: string[] }>>;
+    systems?: Record<string, Array<{ id: string; kind: string; param: string; allowed: string[] }>>;
+  };
   updated_at?: string;
   updated_by?: string;
   updated_time?: string;
