@@ -16,6 +16,8 @@
 */
 import dayjs from 'dayjs';
 
+import MetaManageService from '@service/meta-manage';
+
 import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/types';
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
@@ -29,7 +31,7 @@ import {
 
 import { isRelativeDatetimeOrigin } from '@/utils/sync-datetime-from-url';
 
-/** 前端时间快捷项映射（展示用）；后端只存绝对起止，不回传快捷值 */
+/** 前端时间快捷项映射（展示用）；后端快捷值见消息 input_data.time_shortcut */
 export const DATETIME_SHORTCUT_LABEL_MAP: Record<string, string> = {
   'now-1d': '近1天',
   'now-3d': '近3天',
@@ -218,6 +220,14 @@ const isLogFieldValue = (value: any): value is LogFieldConditionValue => (
   && 'operator' in value
 );
 
+type SystemOptionService = (params: Record<'system_ids', string>) => Promise<Array<Record<'id' | 'name', string>>>;
+
+/** 选项按系统实时查询的字段，与日志检索 action-id / resource-type-id 同源 */
+const SYSTEM_REMOTE_OPTION_SERVICES: Record<string, SystemOptionService> = {
+  action_id: MetaManageService.fetchBatchSystemActionList,
+  resource_type_id: MetaManageService.fetchBatchSystemResourceTypeList,
+};
+
 const fieldConfigFromRow = (
   field: SystemFieldRow,
   fieldCatalog: SystemFieldRow[] = [],
@@ -239,6 +249,20 @@ const fieldConfigFromRow = (
       type: 'log-field',
       required: false,
       defaultOperator: pickDefaultOperator(operators),
+      ...metaExtras,
+    };
+  }
+
+  const remoteService = SYSTEM_REMOTE_OPTION_SERVICES[field.rawName];
+  if (remoteService && !field.keys?.length) {
+    return {
+      label,
+      type: 'select',
+      required: false,
+      service: () => remoteService({ system_ids: field.systemId || '' }),
+      labelName: 'name',
+      valName: 'id',
+      defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
       ...metaExtras,
     };
   }
