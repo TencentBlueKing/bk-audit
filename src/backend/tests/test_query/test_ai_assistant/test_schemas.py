@@ -74,14 +74,11 @@ class TestSearchCondition(AIAssistantTestCase):
             self.make_condition(start_time="2026/08/13")
 
     def test_model_dump_isomorphic_with_drf(self):
-        """model_dump 输出与 QuerySearchConditionSerializer 输入同构（time_shortcut 为前端展示标记，不参与 DRF 校验）"""
+        """model_dump 与 QuerySearchConditionSerializer 输入逐键一致。
+        time_shortcut 在消息层平级携带、不进本模型——子类 AgentSearchCondition 是 MCP 工具契约。"""
         condition = self.make_condition(conditions=[self.make_field_condition(keys=[])])
         dumped = condition.model_dump()
-        self.assertEqual(
-            set(dumped.keys()),
-            {"scope_type", "scope_id", "start_time", "end_time", "conditions", "time_shortcut"},
-        )
-        self.assertIsNone(dumped["time_shortcut"])
+        self.assertEqual(set(dumped.keys()), {"scope_type", "scope_id", "start_time", "end_time", "conditions"})
         self.assertEqual(set(dumped["conditions"][0].keys()), {"field", "operator", "filters"})
         self.assertEqual(set(dumped["conditions"][0]["field"].keys()), {"raw_name", "field_type", "keys"})
 
@@ -101,8 +98,12 @@ class TestSystemSelectionInput(AIAssistantTestCase):
 class TestAIConditionPayloadTimeShortcut(AIAssistantTestCase):
     """相对时间窗快捷标记形态校验（pattern 约束自动进 model_json_schema 注入 prompt）"""
 
-    def test_valid_hour_and_day_forms(self):
-        for value in ("now-1h", "now-24h", "now-1d", "now-7d", "now-30d", "now-365d"):
+    def test_valid_forms(self):
+        """合法快捷值：天/小时/月粒度（月对齐前端 DATETIME_SHORTCUT_LABEL_MAP 白名单）"""
+        for value in ("now-1h", "now-24h", "now-1d", "now-3d", "now-7d", "now-14d", "now-30d", "now-365d"):
+            payload = AIConditionPayload(conditions=[], time_shortcut=value)
+            self.assertEqual(payload.time_shortcut, value)
+        for value in ("now-1M", "now-3M", "now-6M", "now-12M"):
             payload = AIConditionPayload(conditions=[], time_shortcut=value)
             self.assertEqual(payload.time_shortcut, value)
 
@@ -111,7 +112,7 @@ class TestAIConditionPayloadTimeShortcut(AIAssistantTestCase):
         self.assertIsNone(AIConditionPayload(conditions=[], time_shortcut=None).time_shortcut)
 
     def test_invalid_form_rejected(self):
-        for value in ("now-1w", "now-1M", "now--1d", "now-0d", "now-7D", "now", "yesterday", "now-1.5d", "now-1h30m"):
+        for value in ("now-1w", "now-1Y", "now--1d", "now-0d", "now-7D", "now", "yesterday", "now-1.5d", "now-1h30m"):
             with self.assertRaises(PydanticValidationError):
                 AIConditionPayload(conditions=[], time_shortcut=value)
 
