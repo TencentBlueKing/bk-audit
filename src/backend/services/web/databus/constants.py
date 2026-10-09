@@ -89,7 +89,7 @@ JOIN_DATA_RT_FORMAT = "bkaudit_{system_id}_{resource_type_id}"
 JOIN_DATA_RUNNING_WAIT_TIME = 60
 ASSET_RT_FORMAT = "asset_{system_id}_{resource_type_id}"
 
-DEFAULT_REDIS_TAGS = ["Bk-Audit", "inland", "enable", "usr"]
+DEFAULT_REDIS_TAGS = [tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "").split(",") if tag]
 
 RESOURCE_TYPE_DATA_RT_KEY = "bkaudit_resource_type_data"
 RESOURCE_TYPE_DATA_CONFIG_KEY = "bkaudit_resource_type_config_data"
