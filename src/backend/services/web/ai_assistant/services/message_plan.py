@@ -52,6 +52,9 @@ class ValidatedMessagePlan:
     current_selection: Message | None
     condition: SearchCondition | None
     system_context: SystemSelectionOutput
+    # 用户时间语义的相对标记（近N小时/近N天→now-{N}h/d，未提及→默认 now-1d，明确时间段→None）；
+    # 消息层平级携带（LOG_SEARCH input_data / USER_INTENT output），前端渲染「近N天」动态标签用
+    time_shortcut: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +101,7 @@ class MessagePlanExecutionService:
             raise AIOutputInvalidError(extra={"reason": "system_id not in candidates", "system_id": target_system_id})
 
         condition = None
+        time_shortcut = None
         if log_item is not None:
             condition = ConditionAssemblyService.validate_and_assemble(
                 payload=log_item.message_input.condition,
@@ -106,12 +110,14 @@ class MessagePlanExecutionService:
                 reference_time=reference_time,
                 allow_empty=True,
             )
+            time_shortcut = ConditionAssemblyService.resolve_time_shortcut(log_item.message_input.condition)
         return ValidatedMessagePlan(
             plan=plan,
             target_system_id=target_system_id,
             current_selection=current_selection,
             condition=condition,
             system_context=system_context,
+            time_shortcut=time_shortcut,
         )
 
     @classmethod
@@ -172,7 +178,7 @@ class MessagePlanExecutionService:
         if log_item is not None and execution.input_data.auto_execute:
             if validated.condition is None:
                 raise AIOutputInvalidError(extra={"reason": "log search has no valid condition"})
-            log_input = LogSearchInputSchema(condition=validated.condition)
+            log_input = LogSearchInputSchema(condition=validated.condition, time_shortcut=validated.time_shortcut)
             log_context = LogSearchContextSchema(
                 username=execution.context_data.username,
                 namespace=execution.context_data.namespace,
@@ -198,6 +204,10 @@ class MessagePlanExecutionService:
             intent="select_system" if selection_item is not None else "log_search",
             system_id=validated.target_system_id,
             condition=validated.condition if log_item is not None and not execution.input_data.auto_execute else None,
+            # 条件预览（auto_execute=false）同步携带动态标签标记，与 condition 同生共死
+            time_shortcut=validated.time_shortcut
+            if log_item is not None and not execution.input_data.auto_execute
+            else None,
             selection_message_uid=(
                 str(validated.current_selection.uid)
                 if selection_item is None and validated.current_selection is not None
