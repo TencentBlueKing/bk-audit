@@ -79,13 +79,14 @@ class EsQuery extends ModuleBase {
     });
   }
   /**
-   * AI 助手字段目录：一层一请求。
-   * 不传 parent_field 返回可见根字段，传入 JSON 字段引用则展开下一层。
+   * AI 助手字段目录。
+   * 不传 parent_field 返回根字段；可展开根字段再带 parent_field 与 include_descendants 一次取回对象后代。
    */
   getLogFieldMetadata(
     params: {
       condition: AiSearchCondition,
       parent_field?: AiLogFieldRef,
+      include_descendants?: boolean,
     },
     payload = {} as IRequestPayload,
   ) {

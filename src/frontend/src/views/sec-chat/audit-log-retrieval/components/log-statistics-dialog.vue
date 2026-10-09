@@ -42,6 +42,104 @@
                 {{ t('请选择需要统计的字段') }}
               </p>
 
+              <template v-if="fieldLoading">
+                <div
+                  class="field-placeholder"
+                  data-testid="statistics-field-loading">
+                  <audit-icon
+                    class="placeholder-loading"
+                    type="loading" />
+                  {{ t('字段加载中') }}
+                </div>
+              </template>
+              <div
+                v-else-if="fieldError"
+                class="field-placeholder"
+                data-testid="statistics-field-error">
+                <span>{{ fieldError }}</span>
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleReloadFields">
+                  {{ t('重新加载') }}
+                </bk-button>
+              </div>
+              <template v-else>
+                <bk-select
+                  v-if="filteredGroups.length"
+                  v-model="selectedFieldKey"
+                  allow-create
+                  class="field-select"
+                  data-testid="statistics-field-select"
+                  :disabled="submitting"
+                  filterable
+                  :input-search="false"
+                  :no-match-text="t('未找到匹配字段')"
+                  :placeholder="t('请选择字段或输入自定义字段，自定义字段格式为 extend_data.a.b.c，Enter 后直接统计')"
+                  :scroll-height="320"
+                  :search-placeholder="t('搜索字段名称')"
+                  @change="handleFieldChange">
+                  <bk-option-group
+                    v-for="group in filteredGroups"
+                    :key="group.key"
+                    collapsible
+                    :label="group.label">
+                    <template v-if="group.loading">
+                      <bk-option
+                        :id="`${group.key}-loading`"
+                        disabled
+                        :name="t('字段加载中')" />
+                    </template>
+                    <template v-else-if="group.error">
+                      <bk-option
+                        :id="`${group.key}-error`"
+                        disabled
+                        :name="group.error" />
+                    </template>
+                    <template v-else-if="group.fields.length">
+                      <bk-option
+                        v-for="field in group.fields"
+                        :id="field.key"
+                        :key="field.key"
+                        :disabled="!field.statisticsSupported"
+                        :name="field.label">
+                        <show-tooltips-text
+                          class="field-option-label"
+                          :data="field.label"
+                          :max-width="360"
+                          :tip="field.tip"
+                          tooltip-content-class="show-tooltips-text-popup"
+                          tooltip-max-height="240px" />
+                      </bk-option>
+                    </template>
+                    <template v-else>
+                      <bk-option
+                        :id="`${group.key}-empty`"
+                        disabled
+                        :name="t('本次样本未发现子字段')" />
+                    </template>
+                  </bk-option-group>
+                </bk-select>
+                <div
+                  v-else
+                  class="field-placeholder"
+                  data-testid="statistics-field-empty">
+                  {{ t('当前层级没有可统计字段') }}
+                </div>
+                <p
+                  v-if="fieldTruncated"
+                  class="field-hint">
+                  {{ t('采样可能未覆盖全部子字段，可以通过自定义字段方式使用。') }}
+                </p>
+              </template>
+              <p
+                v-if="submitError"
+                class="field-hint is-error"
+                data-testid="statistics-submit-error">
+                {{ submitError }}
+              </p>
+
+              <!-- 平铺字段列表暂时停用，先保留
               <div
                 v-if="fieldPath.length"
                 class="field-breadcrumb">
@@ -168,6 +266,7 @@
                   {{ keyword.trim() ? t('暂无匹配字段') : t('当前层级没有可统计字段') }}
                 </div>
               </div>
+              -->
             </div>
 
             <div class="custom-block">
@@ -235,7 +334,17 @@
   } from '@model/ai-assistant/types';
   import type { LogFieldMetadataItem } from '@model/es-query/log-field-metadata';
 
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
   import useMessage from '@hooks/use-message';
+
+  import {
+    collectDescendantFields,
+    descendantFieldMetadataParams,
+    fieldOptionLabel,
+    rootFieldMetadataParams,
+    unsupportedFieldDataType,
+  } from '../utils/field-metadata-catalog';
 
   export interface StatisticsSelectPayload {
     type: 'field' | 'custom';
@@ -261,6 +370,8 @@
     fields: FieldViewItem[];
     loading: boolean;
     error: string;
+    /** 该组后代来自有限样本，目录可能不全 */
+    truncated?: boolean;
   }
 
   const props = withDefaults(defineProps<{
@@ -268,10 +379,13 @@
     /** 来源检索条件；缺失时无法获取字段目录，也不允许创建 */
     condition?: AiSearchCondition | null;
     submitting?: boolean;
+    /** 创建校验失败时留在面板上的原因 */
+    submitError?: string;
   }>(), {
     modelValue: false,
     condition: null,
     submitting: false,
+    submitError: '',
   });
 
   const emit = defineEmits<{
@@ -286,6 +400,7 @@
   const INSTRUCTION_MAX_LENGTH = 2048;
 
   const keyword = ref('');
+  const selectedFieldKey = ref('');
   const customExpanded = ref(false);
   const customPrompt = ref('');
   const fieldLoading = ref(false);
@@ -298,19 +413,13 @@
   /** 切层或重载时丢弃上一层目录的迟到回包 */
   let fieldRequestToken = 0;
 
-  /** 兜底上限，防止配置异常时把整屏刷成采样请求 */
-  const AUTO_EXPAND_LIMIT = 12;
-  /** 每个子层都要采样查询，限并发避免一次性打满后端 */
+  /** 每个可展开根字段各采样一次，限并发避免一次性打满后端 */
   const AUTO_EXPAND_CONCURRENCY = 3;
 
   const isShow = computed({
     get: () => props.modelValue,
     set: (val: boolean) => emit('update:modelValue', val),
   });
-
-  const currentParentField = computed(() => (
-    fieldPath.value.length ? fieldPath.value[fieldPath.value.length - 1].field : undefined
-  ));
 
   const matchKeyword = (item: FieldViewItem) => {
     const key = keyword.value.trim().toLowerCase();
@@ -347,7 +456,7 @@
     extendGroups.value.forEach((group) => {
       groups.push({ ...group, fields: group.fields.filter(matchKeyword) });
     });
-    return groups.filter(group => group.fields.length || group.loading || group.error);
+    return groups.filter(group => group.fields.length || group.loading || group.error || group.truncated);
   });
 
   const resolveFieldKey = (field: AiLogFieldRef) => (
@@ -358,9 +467,10 @@
   const resolveTip = (item: LogFieldMetadataItem, label: string) => {
     if (!item.statistics_supported) {
       if (item.is_expandable) return t('该字段需展开到子字段后统计');
-      return item.unsupported_reason
-        ? `${t('该字段暂不支持统计')}（${item.unsupported_reason}）`
-        : t('该字段暂不支持统计');
+      const dataType = unsupportedFieldDataType(item.field?.field_type, item.observed_types);
+      return dataType
+        ? t('该字段数据类型为 {type}，不支持统计', { type: dataType })
+        : t('该字段不支持统计');
     }
     const path = [item.field?.raw_name, ...(item.field?.keys || [])].filter(Boolean).join('.');
     return path === label ? item.description || '' : [path, item.description].filter(Boolean).join(' · ');
@@ -372,8 +482,7 @@
       keys: item.field?.keys || [],
       ...(item.field?.field_type ? { field_type: item.field.field_type } : {}),
     };
-    const lastKey = field.keys.length ? field.keys[field.keys.length - 1] : '';
-    const label = item.display_name || lastKey || field.raw_name;
+    const label = fieldOptionLabel(item.display_name || '', field.raw_name, field.keys);
     return {
       key: resolveFieldKey(field),
       label,
@@ -405,31 +514,39 @@
   };
 
   /**
-   * 拓展字段和通用字段一起呈现，不让用户先点一次展开。
-   * 每个可展开根字段各发一次请求（后端一层一请求），失败只影响该组。
-   * 只自动展开一层，更深的对象仍由 pill 上的展开入口按需进入。
+   * 每个可展开根字段单独采样一次，include_descendants 带回全部对象后代。
+   * 数组不是可展开对象，不会再请求。失败只影响该组。
    */
   const autoExpandRootFields = async (items: FieldViewItem[], token: number) => {
-    const expandable = items.filter(item => item.isExpandable).slice(0, AUTO_EXPAND_LIMIT);
+    const expandable = items.filter(item => item.isExpandable);
     if (!expandable.length) return;
     extendGroups.value = expandable.map(item => ({
       key: item.key,
-      label: expandable.length === 1 ? t('拓展字段') : item.label,
+      label: item.label,
       fields: [],
       loading: true,
       error: '',
+      truncated: false,
     }));
     await runWithConcurrency(expandable.map(item => async () => {
       if (token !== fieldRequestToken) return;
       try {
-        const result = await EsQueryService.fetchLogFieldMetadata({
-          condition: props.condition as AiSearchCondition,
-          parent_field: { raw_name: item.field.raw_name, keys: item.field.keys },
-        }, { catchError: true });
+        const result = await EsQueryService.fetchLogFieldMetadata(
+          descendantFieldMetadataParams(props.condition as AiSearchCondition, item.field),
+          { catchError: true },
+        );
         if (token !== fieldRequestToken) return;
+        const truncated = Boolean(result.sample_summary?.truncated);
+        if (truncated) fieldTruncated.value = true;
+        const fields = collectDescendantFields(
+          (result.fields || []).map(toFieldViewItem),
+          item.key,
+        );
         patchExtendGroup(item.key, {
-          fields: (result.fields || []).map(toFieldViewItem),
+          label: truncated ? `${item.label}${t('（样本发现）')}` : item.label,
+          fields,
           loading: false,
+          truncated,
         });
       } catch (error: any) {
         if (token !== fieldRequestToken) return;
@@ -441,7 +558,7 @@
     }), AUTO_EXPAND_CONCURRENCY);
   };
 
-  const loadFields = async (parentField?: AiLogFieldRef) => {
+  const loadFields = async () => {
     if (!props.condition) {
       fieldItems.value = [];
       fieldTruncated.value = false;
@@ -454,18 +571,15 @@
     fieldError.value = '';
     extendGroups.value = [];
     try {
-      const result = await EsQueryService.fetchLogFieldMetadata({
-        condition: props.condition,
-        ...(parentField
-          ? { parent_field: { raw_name: parentField.raw_name, keys: parentField.keys } }
-          : {}),
-      }, { catchError: true });
+      const result = await EsQueryService.fetchLogFieldMetadata(
+        rootFieldMetadataParams(props.condition),
+        { catchError: true },
+      );
       if (token !== fieldRequestToken) return;
       const items = (result.fields || []).map(toFieldViewItem);
       fieldItems.value = items;
       fieldTruncated.value = Boolean(result.sample_summary?.truncated);
-      // 根层才自动展开；手动深入的层级继续按需展开，避免层层放大请求
-      if (!parentField) void autoExpandRootFields(items, token);
+      void autoExpandRootFields(items, token);
     } catch (error: any) {
       if (token !== fieldRequestToken) return;
       fieldItems.value = [];
@@ -478,6 +592,7 @@
 
   const resetState = () => {
     keyword.value = '';
+    selectedFieldKey.value = '';
     customExpanded.value = false;
     customPrompt.value = '';
     fieldPath.value = [];
@@ -508,6 +623,72 @@
     resetState();
   });
 
+  const fieldPathText = (field: AiLogFieldRef) => (
+    [field.raw_name, ...(field.keys || [])].filter(Boolean).join('.')
+  );
+
+  const catalogFields = () => [
+    ...fieldItems.value,
+    ...extendGroups.value.flatMap(group => group.fields),
+  ];
+
+  const findCatalogField = (text: string) => {
+    const normalized = text.trim().toLowerCase();
+    return catalogFields().find((item) => {
+      const path = fieldPathText(item.field).toLowerCase();
+      return item.label.toLowerCase() === normalized || path === normalized;
+    });
+  };
+
+  const handleFieldChange = (key: string) => {
+    if (!key || props.submitting || key.endsWith('-loading') || key.endsWith('-error') || key.endsWith('-empty')) return;
+    const item = catalogFields().find(field => field.key === key);
+    if (item) {
+      if (!item.statisticsSupported) {
+        messageWarn(item.tip || t('该字段不支持统计'));
+        selectedFieldKey.value = '';
+        return;
+      }
+      handleSelectField(item);
+      return;
+    }
+    // allow-create 把外层输入框的回车值原样抛出来，目录里没有就按自定义字段统计
+    handleSearchEnter(key);
+  };
+
+  const parseCustomField = (text: string): AiLogFieldRef | null => {
+    const parts = text.split('.')
+      .map(part => part.trim())
+      .filter(Boolean);
+    if (!parts.length) return null;
+    const [rawName, ...keys] = parts;
+    return { raw_name: rawName, keys };
+  };
+
+  const handleSearchEnter = (value?: string) => {
+    const text = String(value ?? keyword.value).trim();
+    if (!text || props.submitting) return;
+    const matched = findCatalogField(text);
+    if (matched) {
+      if (!matched.statisticsSupported) {
+        messageWarn(matched.tip || t('该字段不支持统计'));
+        return;
+      }
+      handleSelectField(matched);
+      return;
+    }
+    const field = parseCustomField(text);
+    if (!field) {
+      messageWarn(t('请输入字段名'));
+      return;
+    }
+    emit('select', {
+      type: 'field',
+      field,
+      fieldLabel: text,
+    });
+  };
+
   const handleSelectField = (item: FieldViewItem) => {
     if (props.submitting || !item.statisticsSupported) return;
     emit('select', {
@@ -515,7 +696,6 @@
       field: item.field,
       fieldLabel: item.label,
     });
-    isShow.value = false;
   };
 
   const handleExpandField = (item: FieldViewItem) => {
@@ -526,7 +706,7 @@
       label: item.label,
       field: item.field,
     }];
-    void loadFields(item.field);
+    void loadFields();
   };
 
   /** index 为 -1 回到根层；点当前层不重复请求 */
@@ -534,11 +714,11 @@
     if (index === fieldPath.value.length - 1) return;
     keyword.value = '';
     fieldPath.value = index < 0 ? [] : fieldPath.value.slice(0, index + 1);
-    void loadFields(currentParentField.value);
+    void loadFields();
   };
 
   const handleReloadFields = () => {
-    void loadFields(currentParentField.value);
+    void loadFields();
   };
 
   const handleCustomConfirm = () => {
@@ -552,8 +732,11 @@
       type: 'custom',
       prompt,
     });
-    isShow.value = false;
   };
+
+  // 平铺列表已注释，展开和面包屑回退先留着，恢复界面时删掉这两行
+  void handleExpandField;
+  void handleBackToLevel;
 </script>
 
 <style lang="postcss" scoped>
@@ -582,7 +765,7 @@
     position: relative;
     display: flex;
     width: 640px;
-    height: 694px;
+    height: auto;
     max-height: calc(100% - 48px);
     min-width: 640px;
     padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
@@ -597,7 +780,7 @@
     box-sizing: border-box;
 
     &.is-expanded {
-      height: 778px;
+      height: auto;
     }
   }
 
@@ -650,8 +833,17 @@
     display: flex;
     min-height: 0;
     flex-direction: column;
-    flex-shrink: 1;
+    flex-shrink: 0;
     gap: var(--audit-space-8);
+  }
+
+  .field-select {
+    width: 100%;
+  }
+
+  .field-option-label {
+    width: 100%;
+    min-width: 0;
   }
 
   .subtitle {
@@ -891,6 +1083,10 @@
     font-size: var(--audit-font-size-sm);
     line-height: var(--audit-line-height-sm);
     color: var(--audit-neutral-text-04);
+
+    &.is-error {
+      color: var(--audit-danger-02);
+    }
   }
 
   .divider-wrapper {
