@@ -88,12 +88,13 @@ export default {
   },
   /**
    * @desc AI 助手字段目录（数据统计选字段）
-   * @param { Object } params condition 用来源检索条件；parent_field 展开 JSON 下一层
+   * @param { Object } params condition 用来源检索条件；parent_field + include_descendants 一次取回该根字段的对象后代
    */
   fetchLogFieldMetadata(
     params: {
       condition: AiSearchCondition,
       parent_field?: AiLogFieldRef,
+      include_descendants?: boolean,
     },
     options?: { catchError?: boolean },
   ) {
