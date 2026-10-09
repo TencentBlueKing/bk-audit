@@ -65,8 +65,11 @@ const resolveExportErrorMessage = async (error: any, fallback: string) => {
   return backendMessage || fallback;
 };
 
+/** 预览导出最多导出的条数 */
+export const PREVIEW_EXPORT_LIMIT = 100;
+
 /**
- * 预览导出：下载快照前 N 条（默认最多 100）。
+ * 预览导出：下载快照前 N 条（默认最多 PREVIEW_EXPORT_LIMIT）。
  */
 export const exportLogSearchPreview = async (messageUid: string) => {
   try {
