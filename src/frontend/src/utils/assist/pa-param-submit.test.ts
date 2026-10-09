@@ -202,8 +202,14 @@ if (arrayValueMatchesString) {
 if (!isUserInput({ source_type: 'custom', show_type: 'show' })) {
   throw new Error('custom + show 应被识别为用户入参');
 }
+if (!isUserInput({ source_type: 'component_inputs', show_type: 'show' })) {
+  throw new Error('component_inputs + show 应被识别为用户入参');
+}
+if (isUserInput({ source_type: 'component_inputs', show_type: 'hide' })) {
+  throw new Error('隐藏的节点输入变量不应被识别为用户入参');
+}
 if (isUserInput({ source_type: 'component_outputs', show_type: 'show' })) {
-  throw new Error('非 custom 参数不应被识别为用户入参');
+  throw new Error('节点输出不应被识别为用户入参');
 }
 
 const editableParams: Record<string, { field?: unknown; value?: unknown }> = {

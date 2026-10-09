@@ -140,11 +140,17 @@ class AutoProcessTest(TicketTest):
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
     )
     def test_auto_process_skips_non_input_constants(self):
-        """只把 show + custom 的入参传给 create_task，隐藏变量和节点输出不传。"""
+        """展示中的自定义变量和节点输入变量传给 create_task，隐藏变量和节点输出不传。"""
         template_info = {
             "pipeline_tree": {
                 "constants": {
                     "${webhook_urls}": {"key": "${webhook_urls}", "source_type": "custom", "show_type": "show"},
+                    "${risk_id}": {"key": "${risk_id}", "source_type": "component_inputs", "show_type": "show"},
+                    "${hidden_input}": {
+                        "key": "${hidden_input}",
+                        "source_type": "component_inputs",
+                        "show_type": "hide",
+                    },
                     "${_loop}": {"key": "${_loop}", "source_type": "component_outputs", "show_type": "hide"},
                     "${hidden_default}": {"key": "${hidden_default}", "source_type": "custom", "show_type": "hide"},
                 }
@@ -153,6 +159,8 @@ class AutoProcessTest(TicketTest):
         create_task = mock.Mock(return_value=SOPS_FLOW_INFO)
         pa_params = {
             "${webhook_urls}": {"field": "", "value": "mock-webhook-value"},
+            "${risk_id}": {"field": "risk_id", "value": ""},
+            "${hidden_input}": {"field": "", "value": "should-not-pass"},
             "${_loop}": {"field": "", "value": ""},
         }
         with mock.patch(
@@ -168,9 +176,14 @@ class AutoProcessTest(TicketTest):
             risk.status = RiskStatus.AUTO_PROCESS
             risk.save()
             AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+            risk_id = risk.risk_id
         constants = create_task.call_args.kwargs["constants"]
-        self.assertEqual(constants, {"${webhook_urls}": "mock-webhook-value"})
+        self.assertEqual(
+            constants,
+            {"${webhook_urls}": "mock-webhook-value", "${risk_id}": risk_id},
+        )
         self.assertNotIn("${_loop}", constants)
+        self.assertNotIn("${hidden_input}", constants)
         self.assertNotIn("${hidden_default}", constants)
 
     @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))

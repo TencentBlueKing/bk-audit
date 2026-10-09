@@ -18,9 +18,15 @@ type PaParamHideCondition = {
   value?: unknown;
 };
 
+/**
+ * 与 bk-sops classify_constants 对齐：展示中的自定义变量和节点输入变量都要采集。
+ * 节点输出由运行时产生，隐藏变量保留模板绑定。
+ */
+const USER_INPUT_SOURCE_TYPES = new Set(['custom', 'component_inputs']);
+
 /** 判断标准运维常量是否属于需要前端采集的用户入参。 */
 export const isUserInput = (meta?: PaParamMeta) => (
-  meta?.source_type === 'custom' && meta?.show_type === 'show'
+  meta?.show_type === 'show' && USER_INPUT_SOURCE_TYPES.has(meta.source_type || '')
 );
 
 /** 安全判断当前参数值是否命中标准运维的条件隐藏规则。 */
