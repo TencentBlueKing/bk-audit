@@ -27,6 +27,7 @@ import type {
   AiSidebarGroupNode,
   AiSidebarNode,
   AiSystemSelectionInput,
+  AiTimeShortcut,
   AiUserIntentInput,
   AiUserIntentOutput,
 } from '@model/ai-assistant/types';
@@ -43,12 +44,15 @@ import type {
 } from '../types';
 import {
   buildFieldCatalog,
+  datetimeOriginToTimeShortcut,
   extractFieldCatalogFromSystemMessage,
   findLatestSuccessSystemSelection,
   getNlRecognitionError,
   isPureSystemSwitchIntent,
   mapAiMessageToChatMessage,
   resolveDerivedMessageRefs,
+  resolveMessageTimeShortcut,
+  timeShortcutToDatetimeOrigin,
 } from '../utils/map-ai-message';
 
 import { getAiAssistantConcreteScope } from '@/utils/assist/scene-system-params';
@@ -193,7 +197,7 @@ const pendingSelectionQueries = new Map<string, { conversationId: string; queryT
 const hiddenCardMessageIds = new Set<string>();
 /**
  * 条件筛选点选的时间快捷项（按 LOG_SEARCH uid 记忆）。
- * 后端只回绝对起止，轮询 remap / 刷新会丢交互态，需本地持久化后在 upsert 时回挂。
+ * 仅作兜底：后端未下发 time_shortcut 的历史消息，靠本地记忆在 upsert 时回挂。
  */
 const DATETIME_ORIGIN_STORAGE_KEY = 'bk-audit-sec-chat-log-search-datetime-origin';
 const logSearchDatetimeOriginByUid = new Map<string, string[]>();
@@ -242,13 +246,28 @@ const rememberLogSearchDatetimeOrigin = (messageUid: string, datetimeOrigin?: st
   }
 };
 
-/** 把记忆中的快捷项挂到结果 payload */
+/**
+ * 把快捷项挂到结果 payload：后端下发了 time_shortcut 时以后端为准；
+ * 未下发（历史消息）才回退本地记忆。
+ */
 const applyRememberedDatetimeOrigin = (
   messageUid: string,
   result?: RetrievalResultPayload,
   fallback?: string[],
+  serverShortcut?: AiTimeShortcut,
 ) => {
   if (!result) return;
+  if (serverShortcut !== undefined) {
+    const serverOrigin = timeShortcutToDatetimeOrigin(serverShortcut);
+    if (serverOrigin) {
+      // eslint-disable-next-line no-param-reassign
+      result.datetimeOrigin = serverOrigin;
+    } else {
+      // eslint-disable-next-line no-param-reassign
+      delete result.datetimeOrigin;
+    }
+    return;
+  }
   const remembered = logSearchDatetimeOriginByUid.get(messageUid)
     || (fallback && isRelativeDatetimeOrigin(fallback) ? fallback : undefined);
   if (remembered) {
@@ -370,10 +389,16 @@ const upsertConversationMessage = (
       message.uid,
       chatMessage.result,
       prev.result?.datetimeOrigin,
+      resolveMessageTimeShortcut(message),
     );
     conv.messages.splice(idx, 1, chatMessage);
   } else {
-    applyRememberedDatetimeOrigin(message.uid, chatMessage.result);
+    applyRememberedDatetimeOrigin(
+      message.uid,
+      chatMessage.result,
+      undefined,
+      resolveMessageTimeShortcut(message),
+    );
     conv.messages.push(chatMessage);
   }
 
@@ -812,8 +837,13 @@ const applyMessageWindow = (conv: Conversation, windowData: {
       fieldCatalog,
       hiddenCardMessageIds,
     });
-    // 刷新/历史窗口不经 upsert，需单独回挂本地记忆的时间快捷项
-    applyRememberedDatetimeOrigin(message.uid, chatMessage.result);
+    // 刷新/历史窗口不经 upsert，需单独回挂时间快捷项
+    applyRememberedDatetimeOrigin(
+      message.uid,
+      chatMessage.result,
+      undefined,
+      resolveMessageTimeShortcut(message),
+    );
     mapped.push(chatMessage);
   });
   /* eslint-disable no-param-reassign -- 原地更新会话消息窗口与系统上下文 */
@@ -1753,7 +1783,7 @@ export function useSecChatStore() {
   /**
    * 条件筛选检索：POST LOG_SEARCH，写入消息列表，顺序跟随后端返回。
    * 引导卡「条件筛选」首次检索走此路径（不传已有 uid，生成新卡）。
-   * @param datetimeOrigin 用户点选的时间快捷项；仅前端保留用于标签展示
+   * @param datetimeOrigin 用户点选的时间快捷项；转为 input_data.time_shortcut 提交
    */
   const sendConditionSearch = async (
     condition: AiSearchCondition,
@@ -1766,7 +1796,10 @@ export function useSecChatStore() {
     const message = await AiAssistantManageService.createMessage({
       conversation_uid: conv.id,
       message_type: 'LOG_SEARCH',
-      input_data: { condition },
+      input_data: {
+        condition,
+        time_shortcut: datetimeOriginToTimeShortcut(options?.datetimeOrigin),
+      },
     });
     // 先于 upsert 记住快捷项，避免首帧 remap 丢交互态
     rememberLogSearchDatetimeOrigin(message.uid, options?.datetimeOrigin);
@@ -1792,7 +1825,7 @@ export function useSecChatStore() {
 
   /**
    * 结果卡二次修改条件：PATCH 已有 LOG_SEARCH uid，覆盖同条消息快照，不新建卡。
-   * @param datetimeOrigin 用户点选的时间快捷项；仅前端保留用于标签展示
+   * @param datetimeOrigin 用户点选的时间快捷项；转为 input_data.time_shortcut 提交
    */
   const rerunLogSearch = async (
     messageUid: string,
@@ -1808,7 +1841,10 @@ export function useSecChatStore() {
     }
     const message = await AiAssistantManageService.updateMessage({
       message_uid: messageUid,
-      input_data: { condition },
+      input_data: {
+        condition,
+        time_shortcut: datetimeOriginToTimeShortcut(options?.datetimeOrigin),
+      },
     });
     rememberLogSearchDatetimeOrigin(messageUid, options?.datetimeOrigin);
     upsertConversationMessage(conv.id, message);
