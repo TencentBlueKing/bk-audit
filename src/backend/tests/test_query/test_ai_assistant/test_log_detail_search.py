@@ -88,6 +88,13 @@ class TestLogDetailSearchService(AIAssistantTestCase):
             request=SearchLogsRequest(condition=self.condition, **kwargs),
         )
 
+    def test_snapshot_detail_column_uses_declared_alias(self):
+        """明细列与字段目录复用快照字段中文别名。"""
+        self.safe_rows[0]["snapshot_action_info"] = {"name": "view"}
+        result = self._search(fields=[LogFieldRef(raw_name="snapshot_action_info", keys=["name"])])
+        self.assertEqual(result.columns[0].display_name, "操作名称")
+        self.assertEqual(result.items, ({"snapshot_action_info.name": "view"},))
+
     def test_requested_extend_field_is_desensitized_before_final_projection(self):
         result = self._search(fields=[LogFieldRef(raw_name="extend_data", keys=["region"])])
 

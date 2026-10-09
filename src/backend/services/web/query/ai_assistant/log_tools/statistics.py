@@ -6,13 +6,15 @@
 from django.utils import timezone
 from pydantic import ValidationError
 
-from apps.meta.utils.fields import STANDARD_FIELDS, START_TIME
 from services.web.query.ai_assistant.exceptions import UnsupportedAggregation
 from services.web.query.ai_assistant.log_tools.aggregation import (
     LogAggregationService,
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
+from services.web.query.ai_assistant.log_tools.field_definitions import (
+    get_declared_field,
+)
 from services.web.query.ai_assistant.log_tools.field_statistics_schemas import (
     FieldCountSeries,
     FieldDistribution,
@@ -128,15 +130,10 @@ class FieldStatisticsService:
 
     @staticmethod
     def _field(field):
-        """根字段显示名复用服务端定义，JSON 子路径沿目录规则使用末段原文。"""
-        if field.keys:
-            display_name = field.keys[-1]
+        """统计标题与字段目录共用内置别名；未声明路径回退到末段 key。"""
+        definition = get_declared_field(field)
+        if definition:
+            display_name = str(definition.get("field_alias") or definition["field_name"])
         else:
-            definitions = {item.field_name: item for item in (*STANDARD_FIELDS, START_TIME)}
-            definition = definitions.get(field.raw_name)
-            display_name = (
-                str(definition.description or definition.alias_name or definition.field_name)
-                if definition
-                else field.raw_name
-            )
+            display_name = field.keys[-1] if field.keys else field.raw_name
         return StatisticsField(raw_name=field.raw_name, keys=tuple(field.keys), display_name=display_name)

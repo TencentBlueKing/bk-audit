@@ -193,14 +193,14 @@ class FieldContextService:
     @staticmethod
     def _load_enum_options(namespace: str) -> Dict[str, List[dict]]:
         """
-        枚举字段可选值（与日志检索页 es_query/field_map 接口同源；
+        常见真实值选项（复用 FieldMapHandler 的 Collector 字面值提示；
         白名单未来新增枚举字段自动透出，无需改本服务）
         """
         return FieldMapHandler(
             fields=[cfg.field.field_name for cfg in COLLECT_SEARCH_CONFIG.field_configs],
             timedelta=DEFAULT_TIMEDELTA,
             namespace=namespace,
-        ).field_map
+        ).collector_field_map
 
     @staticmethod
     def _to_standard_field(

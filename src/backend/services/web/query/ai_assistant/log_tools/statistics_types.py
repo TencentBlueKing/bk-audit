@@ -29,22 +29,32 @@ _NUMERIC_TYPES = frozenset(
 )
 
 
-def statistics_capability(field: LogFieldRef, observed_types: list[JSONValueType]) -> dict:
+def statistics_capability(
+    field: LogFieldRef,
+    observed_types: list[JSONValueType],
+    *,
+    declared_type: str | None = None,
+) -> dict:
     """根据可信根声明或 JSON 观察类型生成四个统计能力字段。
 
     Args:
         field: 通过 LogFieldRef 校验的业务字段；子路径的 field_type 不参与推断。
         observed_types: 已脱敏样本的 JSON 类型，NULL 不改变已观察标量的类别。
+        declared_type: 服务端内置字段定义的可信类型，不接受调用方类型提示。
     Returns:
         可直接传给 LogFieldMetadataItem 的能力字段；不含用户权限判断。
     """
     kind = None
     reason = None
     can_attempt = False
-    if not field.keys:
-        if field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES:
+    if declared_type is not None or not field.keys:
+        declared_type = declared_type or _DECLARED_TYPES.get(field.raw_name)
+        if (not field.keys and field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES) or declared_type in (
+            LogFieldType.OBJECT,
+            LogFieldType.NESTED,
+        ):
             reason = StatisticsUnsupportedReason.OBJECT
-        elif _DECLARED_TYPES.get(field.raw_name) in _NUMERIC_TYPES:
+        elif declared_type in _NUMERIC_TYPES:
             kind = StatisticsKind.NUMERIC
         else:
             kind = StatisticsKind.CATEGORICAL

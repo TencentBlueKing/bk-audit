@@ -61,6 +61,8 @@ class CreateAttachment(AIAssistantResource):
     例如 extend_data.a.b.c 使用 {"raw_name":"extend_data","keys":["a","b","c"]}；不传 field_type。
     duration 仅为示意，不保证业务系统存在；合法但不存在的路径成功返回全缺失统计。
     raw_name 必须为已知可见日志根字段，keys 为对象键路径；不支持任意 SQL 表达式或数组下标。
+    例如 event_data 不是支持的根字段：创建时返回 HTTP400、code=2908017，且不创建附件。
+    errors.field_name=input_data，errors.errors 的 loc=["field","raw_name"] 与 msg 给出字段位置和原因。
     无需提交统计类型，后端按全范围真实类型决定是否返回数值摘要；field_type 不能强制转换。
     top_n 默认 10，OTHER/MISSING 不占名额；显式时间粒度超预算报错，AUTO 可自动选择。
     查询范围固定为来源消息的完整条件，不能在 input_data 中覆盖 condition、用户或租户。

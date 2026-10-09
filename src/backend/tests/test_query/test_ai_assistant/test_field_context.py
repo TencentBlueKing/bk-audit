@@ -111,13 +111,13 @@ class TestFieldContextService(AIAssistantTestCase):
         self.assertEqual(result_code_field.field_type, "int")
         self.assertEqual(
             [item.model_dump() for item in result_code_field.options],
-            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "其他"}],
+            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "结果码 -1"}],
         )
         # 常见/历史操作由平台层组装，query 层输出不含操作榜单字段
         self.assertFalse(hasattr(output, "common_operations"))
 
     def test_enum_options_same_source_as_field_map(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
-        """枚举 options 与 FieldMapHandler（es_query/field_map 接口）同源同构"""
+        """常见值选项复用 Collector 字面值提示，不误用 ES 反选语义。"""
         mock_perm.return_value = True
         mock_meta_get.return_value = {}
         mock_system_list.return_value = []
@@ -132,7 +132,7 @@ class TestFieldContextService(AIAssistantTestCase):
             handler = FieldMapHandler(fields=[name], timedelta=1, namespace=self.namespace)
             self.assertEqual(
                 [item.model_dump() for item in by_name[name].options],
-                handler.field_map[name],
+                handler.collector_field_map[name],
             )
 
     def test_no_permission_raises(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
