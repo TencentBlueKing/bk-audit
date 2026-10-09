@@ -1579,7 +1579,12 @@ class GetToolDetail(ToolBase):
             system_id: 系统ID
 
         Returns:
-            list: 允许的账号类型列表（保持 PROFILE_ACCOUNT_TYPES 顺序），全部可用时返回完整列表
+            list: 允许的账号类型列表（保持 PROFILE_ACCOUNT_TYPES 顺序）
+
+        语义：
+            - 未配置任何限制 → 全部可用（返回完整列表）
+            - 配置 account_type 为非空列表 → 仅返回列表内类型
+            - 配置 account_type 为空列表 [] → 全部禁止（返回空列表）
         """
         from services.web.tool.constants import PROFILE_ACCOUNT_TYPES
 
@@ -1595,26 +1600,26 @@ class GetToolDetail(ToolBase):
         if not scenes_limits and not systems_limits:
             return PROFILE_ACCOUNT_TYPES
 
-        # 收集该场景/系统的账号类型限制
+        # 一次只带一个维度：场景优先，系统次之（互斥，不再取并集）
         allowed_account_types = set()
+        has_limit = False
 
         if scene_id:
             scene_limit = scenes_limits.get(str(scene_id), {})
-            account_type_limit = scene_limit.get("account_type")
-            if account_type_limit is not None:
-                allowed_account_types.update(account_type_limit)
-
-        if system_id:
+            if "account_type" in scene_limit:
+                has_limit = True
+                allowed_account_types.update(scene_limit["account_type"])
+        elif system_id:
             system_limit = systems_limits.get(system_id, {})
-            account_type_limit = system_limit.get("account_type")
-            if account_type_limit is not None:
-                allowed_account_types.update(account_type_limit)
+            if "account_type" in system_limit:
+                has_limit = True
+                allowed_account_types.update(system_limit["account_type"])
 
-        # 未配置限制则返回全部可用
-        if not allowed_account_types:
+        # 未配置任何限制则返回全部可用
+        if not has_limit:
             return PROFILE_ACCOUNT_TYPES
 
-        # 保持 PROFILE_ACCOUNT_TYPES 顺序
+        # 配置了限制（含空列表，即全部禁止），保持 PROFILE_ACCOUNT_TYPES 顺序
         return [t for t in PROFILE_ACCOUNT_TYPES if t in allowed_account_types]
 
 

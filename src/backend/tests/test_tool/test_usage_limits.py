@@ -51,11 +51,9 @@ class UsageLimitsModelTest(TestCase):
         self.assertIn("wechat", error_msg)
 
     def test_empty_account_type_list(self):
-        """空列表应抛出异常"""
-        with self.assertRaises(ValidationError) as cm:
-            UsageLimits(scenes={"1001": {"account_type": []}})
-        error_msg = str(cm.exception)
-        self.assertIn("不能为空列表", error_msg)
+        """空列表表示全部禁止，应通过校验"""
+        limits = UsageLimits(scenes={"1001": {"account_type": []}})
+        self.assertEqual(limits.scenes["1001"]["account_type"], [])
 
     def test_account_type_must_be_list(self):
         """account_type 必须是列表"""
@@ -171,7 +169,7 @@ class GetAllowedAccountTypesTest(TestCase):
         self.assertEqual(result, ["form_wechat", "form_qq"])
 
     def test_scene_and_system_both_configured(self):
-        """场景和系统都配置时取并集"""
+        """场景和系统同时配置时，场景优先（互斥，不再取并集）"""
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
@@ -184,7 +182,20 @@ class GetAllowedAccountTypesTest(TestCase):
         )
         resource = GetToolDetail()
         result = resource._get_allowed_account_types(tool, scene_id="1001", system_id="sys001")
-        self.assertEqual(result, ["ctx", "openid"])
+        self.assertEqual(result, ["ctx"])
+
+    def test_scene_empty_account_type_list(self):
+        """场景配置空列表时返回空列表（全部禁止）"""
+        tool = self._make_tool(
+            usage_limits={
+                "scenes": {
+                    "1001": {"account_type": []},
+                }
+            }
+        )
+        resource = GetToolDetail()
+        result = resource._get_allowed_account_types(tool, scene_id="1001")
+        self.assertEqual(result, [])
 
     def test_order_preserved(self):
         """返回顺序应与 PROFILE_ACCOUNT_TYPES 一致"""

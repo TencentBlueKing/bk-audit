@@ -135,7 +135,11 @@ class UsageLimits(BaseModel):
     @field_validator("scenes", "systems")
     @classmethod
     def validate_account_type_values(cls, v):
-        """校验 account_type 的值是否属于合法集合"""
+        """校验 account_type 的值是否属于合法集合
+
+        注意：account_type 不配置表示「全部可用」，配置为空列表 [] 表示「全部禁止」，
+        两者语义不同，故此处仅校验值的合法性，不禁止空列表。
+        """
         valid_types = set(PROFILE_ACCOUNT_TYPES)
         for scope_id, limits in v.items():
             if not isinstance(limits, dict):
@@ -144,8 +148,6 @@ class UsageLimits(BaseModel):
             if account_type_values is not None:
                 if not isinstance(account_type_values, list):
                     raise ValueError(gettext("account_type 必须是列表"))
-                if len(account_type_values) == 0:
-                    raise ValueError(gettext("account_type 不能为空列表"))
                 for value in account_type_values:
                     if value not in valid_types:
                         raise ValueError(
