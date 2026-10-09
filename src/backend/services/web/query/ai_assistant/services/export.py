@@ -37,7 +37,6 @@ from apps.meta.permissions import SearchLogPermission
 from core.sql.constants import FieldType
 from services.web.query.ai_assistant.constants import AI_EXPORT_TASK_NAME_TEMPLATE
 from services.web.query.ai_assistant.exceptions import (
-    AIAssistantError,
     AIOutputInvalidError,
     AIPermissionDeniedError,
 )
@@ -113,11 +112,8 @@ class PreviewExportService:
         :param output: LOG_SEARCH 消息 output_data 解析结果
         :param export_config: 导出配置（field_scope/fields/flatten_extension/extension_keys）；
             flatten_extension=True 时把 extend_data 内子键平铺为单独列（聚合自 samples）
-        :raises AIAssistantError: 快照无样例数据
+        零数据快照沿用正常流程，只输出分类和字段标题。
         """
-        if not output.samples:
-            raise AIAssistantError(message="快照无样例数据，无法导出", error_code="TASK_EXECUTION_FAILED")
-
         config = export_config or {}
         if config.get("flatten_extension"):
             return cls._export_with_flatten_extension(output)
@@ -162,6 +158,9 @@ class PreviewExportService:
                         keys.append(key)
 
         # ② 构造展平后的列：移除 extend_data 单列；为每个子键添加 ResultColumn
+        if not keys:
+            return cls.export(output)
+
         flat_columns: List[ResultColumn] = [
             column for column in output.columns if not (column.raw_name == "extend_data" and not column.keys)
         ]

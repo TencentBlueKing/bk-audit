@@ -54,7 +54,7 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 打开字段选择器时，调用 `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`，namespace 沿用页面已有的租户上下文，并使用来源消息的完整检索条件。此处是 Web 接口，前端无需接 MCP 网关。
 
-初次只传来源消息的完整 `condition`，获取全部基础字段。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，传原 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，返回父字段自身及这批样本发现的全部对象后代，不需要再逐层请求。
+初次只传来源消息的完整 `condition`，获取全部基础字段。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，传原 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，仅返回内置声明与这批样本合并后的叶子字段完整路径，不包含父项和中间对象，不需要再逐层请求。
 
 例如展开 extend_data 中的 a，请求增量参数为：
 
@@ -65,13 +65,17 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 }
 ```
 
-请求还须包含来源消息的 `condition`。采样中有 a.b.c 和 a.b.d 时，响应 `fields` 包含 a、a.b、a.b.c、a.b.d，每项仍使用完整的 `field.raw_name` 与 `field.keys`。前端按路径前缀建立分组，可直接搜索整批目录；提交统计时保留原字段引用，不把点号拼接结果当作 raw_name。根目录与二次目录的父项可能重复，按字段引用合并即可。
+请求还须包含来源消息的 `condition`。采样中有 a.b.c、a.b.d 和 a.e 时，响应 `fields` 只包含这三个叶子，不包含 a、a.b，每项仍使用完整的 `field.raw_name` 与 `field.keys`。前端可按路径前缀建立分组、直接搜索叶子目录；提交统计时保留原字段引用，不把点号拼接结果当作 raw_name。
 
-`is_expandable=true` 表示可作为对象分组展示；递归响应已包含其发现的后代，展开 UI 无需再次查询。字段可展开不等于本身可统计，选取操作参考 `statistics_supported`。数组作为叶子，不展开数组下标或元素键。`is_expandable=false` 仅表示本次样本未观察到对象或路径已达协议深度，不证明全范围没有子键。
+根目录及单层目录的 `is_expandable=true` 表示该字段可作为对象分组，前端可发起级联查询。级联响应仅包含叶子，`is_expandable=false`，直接用于选择器；选取操作仍参考 `statistics_supported`。数组作为叶子但不支持统计，不展开数组下标或元素键。空对象没有叶子，不返回；达到路径深度上限的对象不冒充叶子，`truncated=true` 提示发现不完整。
 
 递归模式不限制字段数量；省略 `include_descendants` 仍只返回最多50个直接子字段。Web 与 MCP 共用发现/脱敏逻辑，但 MCP 不提供递归开关，仍逐层探索，采样默认同为100条。业务data超过1 MiB返回413。`sample_summary.truncated=true` 表示采样、路径或单层字段预算造成发现可能不全；界面应标注“样本发现”，空目录不能解释为全范围不存在字段。`coverage` 只针对本次SQL返回的样本，不是完整范围覆盖率。加载失败留在选择器中重试，不创建统计附件。
 
 支持用户直接填写自定义字段路径，**无需先在目录中找到它**。例如 extend_data.a.b.c 提交为 `{"raw_name":"extend_data","keys":["a","b","c"]}`。根字段须是接口支持的日志列，keys 逐段传对象键；不能传任意SQL表达式或数组下标。合法但不存在的路径可成功返回全缺失统计。创建/执行仍会校验实际权限和全范围类型；目录类型仅供提示。
+
+不受支持的根字段或不合法路径会在创建时返回400，不创建附件。错误码 `2908017` 的 `errors.field_name` 标识输入部分（例如 `input_data`），`errors.errors` 包含 `loc`、`msg`、`type`，供前端定位和展示，例如 `loc=["field","raw_name"]`；响应不回显原始输入。`event_data` 不是当前支持的根字段，不能作为自定义日志列提交；如果业务字段 a 存在于扩展数据中，使用 `{"raw_name":"extend_data","keys":["a"]}`。
+
+目录中的 `options` 只是常见实际值的展示提示，不要把下拉选项当成只能输入的值。`result_code` 可以传 107、999 等实际数值；`-1` 只匹配真实 -1。过滤非零使用 `operator="neq", filters=[0]` 或 `operator="exclude", filters=[0]`，不要用“其他=-1”替代非零。操作符以 `allow_operators` 为准。
 
 ### 确认并创建
 
@@ -111,14 +115,15 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 | 场景 | 类型来源 | 作用 |
 | --- | --- | --- |
 | 普通根字段 | 服务端 `COLLECT_SEARCH_CONFIG` 的字段声明，目录返回 `type_source=DECLARED` | 声明为 `int/long/float/double/timestamp` 时，统计能力提示为 `NUMERIC` |
-| JSON 子字段 | 字段目录读取脱敏样本，返回 `type_source=INFERRED` 和 `observed_types` | 只用于字段探索和能力提示；全 null 样本的已发现字段允许尝试统计（`statistics_supported=true`、`statistics_kind=null`），对象或数组样本不可直接统计 |
+| 已声明 JSON 子字段 | 来自内置 `sub_keys`，使用中文别名和声明类型，`type_source=DECLARED`；即使样本缺少该 key 仍返回 | 声明提供能力提示；样本只补充值、观察类型和覆盖率，实际统计仍校验全范围类型 |
+| 动态 JSON 子字段 | 字段目录读取脱敏样本，返回 `type_source=INFERRED` 和 `observed_types` | 只用于字段探索和能力提示；全 null 样本的已发现字段允许尝试统计（`statistics_supported=true`、`statistics_kind=null`），对象或数组样本不可直接统计 |
 | `FIELD_STATISTICS` 最终结果 | 重新按完整查询范围统计，不信任客户端传入的 `field_type`，也不只看样本 | `statistics_kind` 才是本次结果的最终类型：声明数值字段，或全范围非空值全部为原生数字时为 `NUMERIC`；其余可统计标量为 `CATEGORICAL` |
 
 因此，字符串 `"120"` 仍是字符串，不能由前端把它改成数字；`null`/缺失不算字段值。字段目录中的类型是“可选字段提示”，`statistics_supported=true` 且 `statistics_kind=null` 时仍允许提交程序统计；最终统计结果以 `statistics_kind` 和 `numeric_summary` 为准。完整范围出现对象、数组等不支持类型时会执行失败，应按附件 FAILED 处理，不会自动降为类别统计。
 
 **百分比怎么展示：**程序统计与 MCP 的比例统一以 0～1 数值返回，保留小数点后四位。例如计算值 `0.472934282` 返回 `0.4729`，前端乘 100 后显示 `47.29%`。页面百分比保留两位即可。JSON 数字不补尾零，`0.6` 与 `0.6000` 含义相同，页面均显示 `60.00%`。
 
-`null` 显示“—”；计数为 0 时显示 `0.00%`。极小的正比例可能舍入为 0，因此不能用 `ratio === 0` 判断没有日志；需要精确显示时用 `count / total_count` 重算，非零且小于 `0.01%` 可显示 `<0.01%`。存在率对应使用 `present_count / total_count`。各组分别舍入后合计可能不是 100%，无需改写计数凑齐；图形使用原始 `count`，计数和其他数值指标不受比例精度规则影响。
+`null` 显示“—”；计数为 0 时显示 `0.00%`。极小的正比例可能舍入为 0，因此不能用 `ratio === 0` 判断没有日志；需要精确显示时用 `count / total_count` 重算，非零且小于 `0.01%` 可显示 `<0.01%`。存在率对应使用 `present_count / total_count`。各组分别舍入后合计可能不是 100%，无需改写计数凑齐；图形使用原始 `count`，整数计数和原始类别值不舍入；`numeric_summary` 的 min/max/avg/median 及 MCP 浮点数值指标统一输出四位小数，例如 `12.3456789` 返回 `12.3457`。JSON 数字不补尾零，小于舍入精度的数值可能返回 0。
 
 下面用同一份示例统计数据说明分布与时序的对应关系，示例数值用于说明协议。
 

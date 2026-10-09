@@ -118,10 +118,34 @@ class TestFieldStatistics(TestCase):
         self.assertEqual(result.statistics_kind, "NUMERIC")
         self.assertEqual(
             result.numeric_summary.model_dump(),
+            dict(min=0.0, max=9, avg=3, median=2, median_is_approximate=True, valid_count=9, conversion_failed_count=0),
+        )
+
+    def test_numeric_summary_rounds_output_without_changing_category_identity(self):
+        """四位小数应用到摘要；原始数字类别保真，避免类别合并或无法回查。"""
+        self.data[1].update(a="9", s_min="0.0000123", s_max="9.123456", s_avg="3.123456", s_median="2.123456")
+        self.data[2].update(d0_type="number", d0_json="2.123456")
+        result = self._analyze(LogFieldRef(raw_name="extend_data", keys=["n"]))
+        payload = result.model_dump(mode="json")
+        self.assertEqual(
+            payload["numeric_summary"],
             dict(
-                min=1e-20, max=9, avg=3, median=2, median_is_approximate=True, valid_count=9, conversion_failed_count=0
+                min=0.0,
+                max=9.1235,
+                avg=3.1235,
+                median=2.1235,
+                median_is_approximate=True,
+                valid_count=9,
+                conversion_failed_count=0,
             ),
         )
+        self.assertEqual(payload["distribution"]["groups"][0]["value"], 2.123456)
+        self.assertEqual(result.numeric_summary.avg, 3.123456)
+
+    def test_snapshot_statistics_title_uses_declared_alias(self):
+        """目录和统计附件展示同一声明字段名，采样不决定标题。"""
+        result = self._analyze(LogFieldRef(raw_name="snapshot_action_info", keys=["name"]))
+        self.assertEqual(result.field.display_name, "操作名称")
 
     def test_mixed_scalars_and_numeric_strings_remain_categorical(self):
         for numeric_count in ("0", "3"):

@@ -383,6 +383,8 @@ LOG_SEARCH 成功后按 `output_data.columns` 渲染 samples；total 是命中�
 | 导出当前预览 | `GET /messages/{message_uid}/preview-export/` | 来源为成功 LOG_SEARCH；直接返回 Excel 文件，导出快照样例，不重新查全量日志 |
 | 导出完整检索范围 | `POST /messages/{message_uid}/full-export/` → 保存 export_task_id → 既有导出任务详情 → 下载 | 后端从来源快照重建条件；请求成功只代表任务创建，不代表文件就绪 |
 
+零命中也可以正常预览或全量导出 XLSX：保留分类、字段标题，数据行数为 0；前端无需阻止下载。
+
 全量导出复用现有审计日志导出列表和下载流程。在 Swagger 定位“查询/下载日志导出任务”，使用 full-export 返回的整数任务 ID，按该模块公开状态判断就绪后调用 download；不要调用 Attachment 的详情或 export。导出格式/列选择等字段以对应 Swagger 为准，前端不额外塞入新检索条件改变来源范围。
 
 全量导出省略 `export_config` 或其中的 `field_scope` 时，默认使用 `ai_standard`，即 AI 助手标准展示列。显式非法列配置返回 400 参数错误，修正后再提交；查询或任务执行故障仍返回对应执行错误。

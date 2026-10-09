@@ -19,6 +19,9 @@ from services.web.query.ai_assistant.log_tools.context import (
     LogQueryContextService,
 )
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
+from services.web.query.ai_assistant.log_tools.field_definitions import (
+    get_declared_field,
+)
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_SEARCH_RESPONSE_MAX_BYTES,
     LogDetailColumn,
@@ -172,19 +175,25 @@ class LogDetailSearchService:
 
         options_map = FieldMapHandler(
             fields=[field.raw_name for field in fields], timedelta=DEFAULT_TIMEDELTA, namespace=namespace
-        ).field_map
+        ).collector_field_map
         return [
             LogDetailColumn(
                 field=field,
                 key=cls._field_key(field),
-                display_name=field.keys[-1]
-                if field.keys
-                else str(LOG_SEARCH_ALL_FIELDS_MAP[field.raw_name].description),
+                display_name=cls._field_display_name(field),
                 description="" if field.keys else str(LOG_SEARCH_ALL_FIELDS_MAP[field.raw_name].description),
                 options=[SelectionFieldOption(**option) for option in options_map.get(field.raw_name, [])] or None,
             )
             for field in fields
         ]
+
+    @staticmethod
+    def _field_display_name(field: LogFieldRef) -> str:
+        """明细列使用声明别名，与目录和统计标题保持一致。"""
+        definition = get_declared_field(field)
+        if definition:
+            return str(definition.get("field_alias") or definition["field_name"])
+        return field.keys[-1] if field.keys else str(LOG_SEARCH_ALL_FIELDS_MAP[field.raw_name].description)
 
     @classmethod
     def _project_item(cls, row: Dict[str, Any], fields: Iterable[LogFieldRef]) -> Dict[str, Any]:

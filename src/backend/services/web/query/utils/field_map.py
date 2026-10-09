@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from django.utils.translation import gettext_lazy
+
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, USER_IDENTIFY_TYPE
 from core.utils.data import choices_to_select_list
 from services.web.query.constants import (
@@ -34,6 +36,22 @@ class FieldMapHandler:
     @property
     def field_map(self):
         return self.get_db_fields()
+
+    @property
+    def collector_field_map(self) -> dict:
+        """Collector 选项均代表字面值，避免复用 ES 的“其他=反选”语义。
+
+        选项不是允许值白名单；未知结果码/访问方式仍可直接作为过滤值。
+        """
+        options = self.field_map
+        for field_name, other_value, label in (
+            (RESULT_CODE.field_name, ResultCodeChoices.FAILED.value, gettext_lazy("结果码 -1")),
+            (ACCESS_TYPE.field_name, AccessTypeChoices.OTHER.value, gettext_lazy("访问方式 -1")),
+        ):
+            for item in options.get(field_name, []):
+                if str(item["id"]) == other_value:
+                    item["name"] = str(label)
+        return options
 
     @property
     def query_fields(self) -> list:

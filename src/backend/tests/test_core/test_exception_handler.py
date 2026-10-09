@@ -1,6 +1,8 @@
 """公共 HTTP 异常分类：参数错误不应被当作服务执行失败。"""
 
-from unittest import TestCase
+import json
+from types import SimpleNamespace
+from unittest import TestCase, mock
 
 from bk_resource import Resource
 from bk_resource.exceptions import ValidateException
@@ -9,9 +11,44 @@ from django.utils.module_loading import import_string
 from rest_framework import serializers
 
 from core.exceptions import ValidationError
+from core.utils.renderers import APIRenderer
+from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationError
+from services.web.ai_assistant.schemas import parse_snapshot
+from services.web.ai_assistant.schemas.audit_statistics import (
+    FieldStatisticsAttachmentInput,
+)
 
 
 class RequestExceptionHandlerTest(TestCase):
+    def test_attachment_input_validation_details_survive_http_rendering(self):
+        """实际字段校验原因通过 HTTP 信封保留，原始用户输入不进入错误响应。"""
+        handler = import_string(settings.REST_FRAMEWORK["EXCEPTION_HANDLER"])
+        try:
+            parse_snapshot(
+                FieldStatisticsAttachmentInput,
+                {"field": {"raw_name": "event_data", "keys": ["a"]}},
+                field_name="input_data",
+                error_type=AttachmentSnapshotValidationError,
+            )
+        except AttachmentSnapshotValidationError as error:
+            response = handler(error, {})
+        else:
+            self.fail("未知日志根字段应被拒绝")
+        with mock.patch("blueapps.utils.request_provider.get_or_create_local_request_id", return_value="req-id"):
+            payload = json.loads(
+                APIRenderer().render(
+                    response.data,
+                    renderer_context={"response": response, "request": SimpleNamespace(otel_trace_id=None)},
+                )
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(payload["result"])
+        self.assertEqual(payload["code"], "2908017")
+        self.assertEqual(payload["errors"]["field_name"], "input_data")
+        self.assertEqual(payload["errors"]["errors"][0]["loc"], ["field", "raw_name"])
+        self.assertIn("日志根字段", payload["errors"]["errors"][0]["msg"])
+        self.assertNotIn("event_data", str(payload["errors"]))
+
     def test_resource_response_validation_remains_500(self):
         """SDK 响应校验复用相同异常类，不能误判为客户端参数错误。"""
 
