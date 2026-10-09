@@ -22,7 +22,12 @@ import type { AiConditionItem, AiSearchCondition } from '@model/ai-assistant/typ
 
 import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
 
-import type { LogFieldConditionValue, SelectedSystem, SystemFieldRow } from '../../types';
+import type {
+  LogFieldConditionValue,
+  SelectedSystem,
+  SystemFieldOption,
+  SystemFieldRow,
+} from '../../types';
 import {
   resolveNestedPathLabel,
   resolveParentFieldLabel,
@@ -141,6 +146,8 @@ export interface ILogFieldConfig extends IFieldConfig {
   fieldMeta?: SystemFieldRow;
   defaultOperator?: string;
   allowOperators?: string[];
+  /** 常见值提示，不限制可提交的取值 */
+  suggestOptions?: SystemFieldOption[];
 }
 
 export const createDefaultDatetime = () => ([
@@ -242,17 +249,6 @@ const fieldConfigFromRow = (
     allowOperators: operators,
   };
 
-  // 扩展字段且允许多操作符 → 展示操作符徽章
-  if (field.isExtension && operators.length > 1) {
-    return {
-      label,
-      type: 'log-field',
-      required: false,
-      defaultOperator: pickDefaultOperator(operators),
-      ...metaExtras,
-    };
-  }
-
   const remoteService = SYSTEM_REMOTE_OPTION_SERVICES[field.rawName];
   if (remoteService && !field.keys?.length) {
     return {
@@ -267,26 +263,24 @@ const fieldConfigFromRow = (
     };
   }
 
-  // 标准字段：options 有值 → 下拉
-  if (hasOptions) {
-    return {
-      label,
-      type: 'select',
-      required: false,
-      service: () => Promise.resolve(options),
-      labelName: 'name',
-      valName: 'id',
-      defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
-      ...metaExtras,
-    };
-  }
-
   if (isUser) {
     return {
       label,
       type: 'user-selector',
       required: false,
       defaultOperator: operators.includes('include') ? 'include' : pickDefaultOperator(operators),
+      ...metaExtras,
+    };
+  }
+
+  // 常见值只作提示。带 options 或多操作符时用自由输入，-1 只提交真实 -1
+  if (hasOptions || (field.isExtension && operators.length > 1)) {
+    return {
+      label,
+      type: 'log-field',
+      required: false,
+      defaultOperator: pickDefaultOperator(operators),
+      suggestOptions: options,
       ...metaExtras,
     };
   }
@@ -553,14 +547,25 @@ const extractFieldValue = (config: ILogFieldConfig, value: any) => {
   };
 };
 
+const NUMERIC_FIELD_TYPES = new Set(['int', 'long', 'float', 'double', 'number']);
+
+/** 数值列把纯数字文本交回数字，字符串列保持原文；-1 不会被改写成其他含义 */
+const coerceNumericFilter = (config: ILogFieldConfig, value: any) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return value;
+  const fieldType = String(config.fieldMeta?.fieldType || '').toLowerCase();
+  if (!NUMERIC_FIELD_TYPES.has(fieldType)) return value;
+  const text = value.trim();
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text)) return value;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : value;
+};
+
 const valueToFilters = (config: ILogFieldConfig, rawValue: any): any[] => {
-  if (Array.isArray(rawValue)) {
-    return rawValue.filter(item => item !== undefined && item !== null && item !== '');
-  }
-  if (rawValue === undefined || rawValue === null || rawValue === '') {
-    return [];
-  }
-  return [rawValue];
+  const values = Array.isArray(rawValue)
+    ? rawValue.filter(item => item !== undefined && item !== null && item !== '')
+    : [rawValue].filter(item => item !== undefined && item !== null && item !== '');
+  return values.map(item => coerceNumericFilter(config, item));
 };
 
 /**
