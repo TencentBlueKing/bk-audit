@@ -6,7 +6,7 @@ PRE_COMMIT ?= $(VENV)/bin/pre-commit
 
 # ── Backend Quality ─────────────────────────────────────
 
-# 为当前 clone 安装只检查暂存文件的 Git pre-commit hook
+# 为当前 clone 安装暂存文件检查及后端提交标题校验
 .PHONY: install-hooks
 install-hooks:
 	$(PRE_COMMIT) install --install-hooks --config .pre-commit-config.yaml
