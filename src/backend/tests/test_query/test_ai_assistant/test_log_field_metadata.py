@@ -5,7 +5,7 @@ import json
 from unittest import mock
 
 from bk_resource.exceptions import APIRequestError
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError as PydanticValidationError
 from requests.exceptions import Timeout as RequestsTimeout
 
@@ -210,6 +210,101 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             namespace=self.namespace,
             request=GetLogFieldMetadataRequest(condition=self.condition, **kwargs),
         )
+
+    def test_declared_snapshot_children_survive_empty_samples(self):
+        """固定结构目录不依赖样本覆盖，声明名称与数值类型优先。"""
+        self.mock_query.return_value = {"list": []}
+        self.mock_parser.return_value.parse_data.return_value = []
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="snapshot_action_info"))
+        fields = {tuple(item.field.keys): item for item in result.fields}
+        self.assertEqual(len(fields), 14)
+        identifier = fields[("id",)]
+        self.assertEqual(identifier.type_source, "DECLARED")
+        self.assertEqual(identifier.field.field_type, "int")
+        self.assertEqual(identifier.display_name, "ID")
+        self.assertEqual(identifier.statistics_kind, "NUMERIC")
+        self.assertEqual(identifier.sample_values, [])
+        self.assertEqual(fields[("name",)].display_name, "操作名称")
+        self.assertEqual(fields[("name",)].coverage, 0)
+
+    def test_declared_snapshot_and_sampled_dynamic_keys_share_one_directory(self):
+        """样本补值和未声明路径，不覆盖声明别名或类型。"""
+        self.mock_parser.return_value.parse_data.return_value = [
+            {"snapshot_action_info": {"id": 7, "name": "view", "custom": "dynamic"}},
+            {"snapshot_action_info": {"name": "edit"}},
+            {"snapshot_action_info": {}},
+        ]
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="snapshot_action_info"))
+        fields = {tuple(item.field.keys): item for item in result.fields}
+        self.assertEqual(fields[("id",)].type_source, "DECLARED")
+        self.assertEqual(fields[("id",)].sample_values, [7])
+        self.assertEqual(fields[("name",)].display_name, "操作名称")
+        self.assertEqual(fields[("custom",)].type_source, "INFERRED")
+        self.assertEqual(fields[("custom",)].sample_values, ["dynamic"])
+        self.assertEqual(fields[("id",)].model_dump(mode="json")["coverage"], 0.3333)
+        self.assertEqual(fields[("created_at",)].sample_values, [])
+
+    @override_settings(AI_LOG_FIELD_METADATA_MAX_FIELDS=20)
+    def test_declared_values_are_not_lost_after_dynamic_scan_budget(self):
+        """动态键占满扫描预算也不能抹掉已声明字段的样例。"""
+        snapshot = {f"dynamic_{index}": index for index in range(30)}
+        snapshot["id"] = 7
+        self.mock_parser.return_value.parse_data.return_value = [{"snapshot_action_info": snapshot}]
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="snapshot_action_info"))
+        identifier = next(item for item in result.fields if item.field.keys == ["id"])
+        self.assertEqual(identifier.sample_values, [7])
+        self.assertTrue(result.sample_summary.truncated)
+
+    def test_declared_fields_still_apply_path_permissions_without_samples(self):
+        """声明只补目录，不能在空样本时跳过字段权限。"""
+        self.mock_parser.return_value.parse_data.return_value = []
+        self.mock_catalog_access.side_effect = lambda **kwargs: {
+            path: path != "snapshot_action_info.id" for path in kwargs["fields"]
+        }
+        result = self._get_metadata(parent_field=LogFieldRef(raw_name="snapshot_action_info"))
+        identifier = next(item for item in result.fields if item.field.keys == ["id"])
+        self.assertFalse(identifier.statistics_supported)
+        self.assertEqual(identifier.unsupported_reason, "PERMISSION_DENIED")
+        self.assertEqual(identifier.allowed_metrics, [])
+        self.assertEqual(identifier.sample_values, [])
+        self.assertEqual(identifier.observed_types, [])
+
+    def test_declared_nested_structure_obeys_web_tree_and_mcp_next_level(self):
+        """声明树和采样树使用同一层级规则；零样本仍可展开声明对象。"""
+        definition = COLLECT_SEARCH_CONFIG.query_field_map["snapshot_action_info"].field
+        properties = {
+            "dynamic_content": False,
+            "sub_keys": [
+                {
+                    "field_name": "nested",
+                    "field_type": "object",
+                    "field_alias": "嵌套信息",
+                    "property": {
+                        "dynamic_content": False,
+                        "sub_keys": [
+                            {"field_name": "code", "field_type": "int", "field_alias": "嵌套代码", "property": None},
+                        ],
+                    },
+                },
+            ],
+        }
+        self.mock_parser.return_value.parse_data.return_value = []
+        parent = LogFieldRef(raw_name="snapshot_action_info")
+        with mock.patch.object(definition, "property", properties):
+            single = self._get_metadata(parent_field=parent)
+            self.assertEqual([item.field.keys for item in single.fields], [["nested"]])
+            self.assertTrue(single.fields[0].is_expandable)
+            self.assertFalse(single.fields[0].statistics_supported)
+            nested = self._get_metadata(parent_field=LogFieldRef(raw_name="snapshot_action_info", keys=["nested"]))
+            self.assertEqual(nested.fields[0].display_name, "嵌套代码")
+            tree = LogFieldMetadataService.get_metadata(
+                username=self.username,
+                namespace=self.namespace,
+                request=GetLogFieldMetadataRequest(condition=self.condition, parent_field=parent),
+                include_descendants=True,
+            )
+        self.assertEqual([item.field.keys for item in tree.fields], [["nested", "code"]])
+        self.assertTrue(all(item.type_source == "DECLARED" for item in tree.fields))
 
     def test_statistics_capabilities_follow_declared_and_observed_types(self):
         """数字混合保持数值，类别混合降级，容器拒绝，未知值可尝试统计。"""
@@ -847,7 +942,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertEqual(len(result.fields[0].field.keys), 2)
         self.assertFalse(result.fields[0].is_expandable)
 
-    def test_recursive_discovery_returns_parent_and_descendants_from_one_sample(self):
+    def test_recursive_discovery_returns_only_leaf_paths_from_one_sample(self):
         """跨日志合并完整对象路径，不遍历数组元素，不为每层再次查询。"""
         self.mock_parser.return_value.parse_data.return_value = [
             {"extend_data": {"a": {"b": {"c": 1}, "items": [{"hidden": 3}]}, "sibling": 5}},
@@ -863,12 +958,12 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         )
         self.assertEqual(
             [item.field.keys for item in result.fields],
-            [["a"], ["a", "b"], ["a", "b", "c"], ["a", "b", "d"], ["a", "items"]],
+            [["a", "b", "c"], ["a", "b", "d"], ["a", "items"]],
         )
-        self.assertEqual([item.is_expandable for item in result.fields], [True, True, False, False, False])
-        self.assertEqual([item.coverage for item in result.fields], [1, 1, 0.5, 0.5, 0.5])
-        self.assertEqual(result.fields[2].sample_values, [1])
-        self.assertEqual(result.fields[3].sample_values, [2])
+        self.assertEqual([item.is_expandable for item in result.fields], [False, False, False])
+        self.assertEqual([item.coverage for item in result.fields], [0.5, 0.5, 0.5])
+        self.assertEqual(result.fields[0].sample_values, [1])
+        self.assertEqual(result.fields[1].sample_values, [2])
         self.assertEqual(self.mock_query.call_count, 1)
         self.assertIn("LIMIT 100", self.mock_query.call_args.kwargs["sql"])
 
@@ -885,14 +980,29 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         with mock.patch("services.web.query.resources.ai_assistant.get_request_username", return_value=self.username):
             tree = GetLogFieldMetadata().request(**params, include_descendants=True)
             direct = MCPGetLogFieldMetadata().request(**params)
-        self.assertEqual(len(tree["fields"]), 121)
-        self.assertEqual(tree["sample_summary"]["returned_field_count"], 121)
+        self.assertEqual(len(tree["fields"]), 60)
+        self.assertEqual(tree["sample_summary"]["returned_field_count"], 60)
         self.assertFalse(tree["sample_summary"]["truncated"])
         self.assertEqual(len(direct["fields"]), 50)
         self.assertTrue(direct["sample_summary"]["truncated"])
         self.assertTrue(all(len(item["field"]["keys"]) == 1 for item in direct["fields"]))
         self.assertEqual(self.mock_query.call_count, 2)
         self.assertTrue(all("LIMIT 100" in call.kwargs["sql"] for call in self.mock_query.call_args_list))
+
+    def test_recursive_leaves_exclude_empty_and_mixed_objects_but_keep_arrays_and_nulls(self):
+        """叶子取合并后的对象结构，空对象不冒充字段，数组不向下枚举。"""
+        fields, truncated = LogFieldMetadataService._build_extended_fields(
+            parent_field=LogFieldRef(raw_name="extend_data", keys=["a"]),
+            rows=[
+                {"extend_data": {"a": {"empty": {}, "mixed": 1, "items": [{"hidden": 1}], "null": None}}},
+                {"extend_data": {"a": {"mixed": {"child": 2}}}},
+            ],
+            include_descendants=True,
+        )
+        self.assertEqual([item.field.keys for item in fields], [["a", "items"], ["a", "mixed", "child"], ["a", "null"]])
+        self.assertFalse(truncated)
+        self.assertTrue(all(not item.is_expandable for item in fields))
+        self.assertFalse(fields[0].statistics_supported)
 
     def test_recursive_discovery_applies_real_masking_before_enumerating_descendants(self):
         """私密子树不进入字段目录，无权子字段值不能随递归路径泄露。"""
@@ -951,9 +1061,9 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             )
         self.assertEqual(
             [item.field.keys for item in result.fields],
-            [[], ["a"], ["a", "public"], ["a", "public", "child"], ["a", "secret"]],
+            [["a", "public", "child"], ["a", "secret"]],
         )
-        self.assertEqual(result.fields[3].sample_values, [1])
+        self.assertEqual(result.fields[0].sample_values, [1])
         self.assertEqual(result.fields[-1].sample_values, [])
         self.assertFalse(result.fields[-1].statistics_supported)
         self.assertNotIn("protected-value", result.model_dump_json())
@@ -973,9 +1083,8 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             ),
             include_descendants=True,
         )
-        self.assertEqual(len(result.fields), 81)
-        self.assertEqual(result.fields[0].field.keys, [])
-        self.assertEqual({item.field.keys[0] for item in result.fields[1:]}, {f"field_{i}" for i in range(80)})
+        self.assertEqual(len(result.fields), 80)
+        self.assertEqual({item.field.keys[0] for item in result.fields}, {f"field_{i}" for i in range(80)})
         self.assertFalse(result.sample_summary.truncated)
 
     @override_settings(AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH=2)
@@ -990,7 +1099,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
             ),
             include_descendants=True,
         )
-        self.assertEqual([item.field.keys for item in result.fields], [[], ["a"], ["a", "b"]])
+        self.assertEqual(result.fields, [])
         self.assertTrue(result.sample_summary.truncated)
 
     @override_settings(AI_LOG_FIELD_METADATA_RESPONSE_MAX_BYTES=1024)
@@ -1175,3 +1284,21 @@ class TestGetLogFieldMetadataRequest(AIAssistantTestCase):
         self.assertEqual(request.parent_field.keys, ["风险", "detail-key"])
         with self.assertRaises(PydanticValidationError):
             GetLogFieldMetadataRequest(condition=self.make_condition(), parent_field={"raw_name": "username"})
+
+
+class TestDeclaredJSONStorageType(SimpleTestCase):
+    """JSON 可展开性取业务字段声明，不取 TEXT 存储形式。"""
+
+    def test_text_backed_json_root_is_expandable_but_not_a_tree_leaf(self):
+        roots = LogFieldMetadataService._build_basic_fields(namespace="default")
+        basic = next(item for item in roots if item.field.raw_name == "snapshot_instance_data")
+        tree, _ = LogFieldMetadataService._build_extended_fields(
+            parent_field=LogFieldRef(raw_name="snapshot_instance_data"),
+            rows=[],
+            include_descendants=True,
+        )
+        self.assertEqual(tree, [])
+        self.assertTrue(basic.is_expandable)
+        self.assertFalse(basic.statistics_supported)
+        self.assertEqual(basic.unsupported_reason, "OBJECT")
+        self.assertEqual(basic.field.field_type, "text")

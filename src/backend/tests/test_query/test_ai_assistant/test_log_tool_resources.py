@@ -1199,9 +1199,9 @@ class TestMCPUserLogResources(AIAssistantTestCase):
                 )
 
     def test_invalid_field_operator_directs_agent_to_allowed_operators(self):
-        """日志中的 result_code eq 不是该字段支持的操作符，应提供修正方向。"""
+        """日志中的 result_code like 不是该字段支持的操作符，应提供修正方向。"""
         condition = self.condition.model_dump(mode="json")
-        condition["conditions"] = [{"field": {"raw_name": "result_code"}, "operator": "eq", "filters": [107]}]
+        condition["conditions"] = [{"field": {"raw_name": "result_code"}, "operator": "like", "filters": [107]}]
         with self.assertRaises(UnsupportedLogField) as caught:
             MCPSearchLogs().request(namespace="default", condition=condition)
         self.assertIn("allow_operators", str(caught.exception))

@@ -62,6 +62,29 @@ class FieldStatisticsTestMixin:
 class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTestCase):
     """真实 Resource/Service/数据库，只有 Broker 投递被替换。"""
 
+    def test_unknown_custom_root_returns_http_field_error_without_creating_attachment(self):
+        """自定义路径不允许任意日志列，拒绝时公开具体位置且不创建附件。"""
+        self.enterContext(
+            mock.patch("services.web.ai_assistant.permissions.get_request_username", return_value=self.user)
+        )
+        self.enterContext(mock.patch.object(ScopePermission, "get_scene_ids", return_value=[1]))
+        path = f"/api/v1/ai_assistant/messages/{self.source.uid}/attachments/"
+        request = APIRequestFactory().post(
+            path,
+            {"attachment_type": "FIELD_STATISTICS", "input_data": {"field": {"raw_name": "event_data", "keys": ["a"]}}},
+            format="json",
+        )
+        force_authenticate(request, user=mock.Mock(username=self.user, is_authenticated=True))
+        route = resolve(path)
+        response = route.func(request, **route.kwargs)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "2908017")
+        self.assertEqual(response.data["data"]["field_name"], "input_data")
+        self.assertEqual(response.data["data"]["errors"][0]["loc"], ["field", "raw_name"])
+        self.assertIn("日志根字段", response.data["data"]["errors"][0]["msg"])
+        self.assertFalse(Attachment.objects.filter(source_message=self.source).exists())
+        self.handler.async_task.apply_async.assert_not_called()
+
     def test_custom_nested_path_not_present_in_source_catalog_can_create_statistics(self):
         """用户直接提交三层对象路径，不要求来源字段目录中已发现该路径。"""
         created = self.create(field={"raw_name": "extend_data", "keys": ["custom", "branch", "leaf"]})

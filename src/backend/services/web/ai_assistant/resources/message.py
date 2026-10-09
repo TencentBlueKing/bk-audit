@@ -109,7 +109,10 @@ class RetryMessage(AIAssistantResource):
 
 
 class PreviewExportMessage(AIAssistantResource):
-    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。"""
+    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。
+
+    零数据快照同样返回正常文件，只保留分类与字段标题、数据行数为 0。
+    """
 
     name = gettext_lazy("预览导出日志检索")
     RequestSerializer = MessagePreviewExportRequestSerializer

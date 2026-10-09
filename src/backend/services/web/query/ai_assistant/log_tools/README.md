@@ -8,7 +8,7 @@
 
 | 能力 | 入口文件（当前目录） | 结果与用途 |
 | --- | --- | --- |
-| 字段探索 | field_metadata.py | 根目录、MCP单层及Web完整采样对象树，帮助选择字段 |
+| 字段探索 | field_metadata.py、field_definitions.py | 根目录、MCP单层及Web完整采样对象树，帮助选择字段 |
 | 日志详情 | search.py | 脱敏、投影后的分页日志及总数，供分析取证 |
 | 通用聚合 | aggregation.py | columns/rows/groups 等统计数据，供 Agent 使用 |
 | 程序字段统计 | statistics.py | 单字段固定统计包，供附件保存和前端渲染 |
@@ -23,7 +23,10 @@ flowchart TD
     Context --> Detail[详情查询]
     Context --> Aggregate[聚合内核]
     Program[程序统计服务] --> Aggregate
+    Metadata --> Definition[内置字段与 sub_keys 声明]
     Metadata --> Sample[按需采样与脱敏]
+    Definition --> Catalog[声明优先合并字段目录]
+    Sample --> Catalog
     Detail --> Project[查询补列 / 脱敏 / 最终投影]
     Aggregate --> SQL[规范化 / 全局 TopN / 原记录重聚合]
     SQL --> BKBase[SafeQuerySyncResource<br/>prefer_storage=doris]
@@ -45,9 +48,13 @@ flowchart TD
 
 不传 parent_field 时从日志检索字段配置生成根目录，不访问 Doris 采样。指定 JSON 父路径时，Doris 按 `JSON_TYPE(parent)='object'` 和 `ARRAY_SIZE(JSON_KEYS(parent))>0` 筛出非空对象行，按当前条件与采集排序最多取100条；VARIANT 根列沿用兼容单页采样。投影只含根列和脱敏身份列，先经过 `SearchDataParser` 逐行脱敏，再发现路径。
 
-MCP 仍只发现父路径下一层，每次最多50字段。Web 提供 `include_descendants=true`，共用同一服务，在这一批样本上使用栈遍历对象，合并父路径自身和所有后代路径，返回扁平 fields；不为节点再次查 Doris、不展开数组、不截断字段数量。完整路径用 raw_name+keys 表达，is_expandable 用于对象分组，statistics_supported 独立表示统计提示。对象/数组不进入 sample_values；路径深度仍与实际查询协议一致。
+目录取内置声明与样本路径的并集。根字段和 `property.sub_keys` 来自同一查询字段配置；声明字段优先使用内置类型、中文别名并标记 `DECLARED`，没有样本仍保留。样本只补充 `observed_types`、样例与覆盖率。未声明的动态路径标记 `INFERRED`，类型能力由观察值提示。`field_definitions.py` 提供共用声明解析，明细列与程序统计标题也沿用声明别名。声明不替代实际统计时的类型和权限校验。
 
-父对象中可能同时包含有权和无权子字段，因此探索不整体拒绝父对象，而是在取回根列后逐行脱敏；返回字段仍按路径校验权限并清除无权字段的样本与统计能力。`sampled_count` 是 SQL 返回并脱敏的日志数。达到采样上限（最多100条）、预算为零或单层字段/路径/解析预算截断时 `truncated=true`，不能证明全部子键已发现。`coverage` 的分母是本次父对象候选样本，不是完整检索范围。子字段只有样本观察到对象才有 `is_expandable=true`；全 null 的已发现字段可尝试统计，最终类型和结果由全范围查询判定。
+MCP 仍只发现父路径下一层，每次最多50字段。Web 提供 `include_descendants=true`，共用同一服务，在这一批样本上使用栈遍历对象，合并声明与采样发现的子树，只返回后代叶子的完整路径，父项和中间对象不进入扁平 fields；不为节点再次查 Doris、不展开数组、不截断字段数量。完整路径用 raw_name+keys 表达，根目录/单层目录的 is_expandable 用于选择待展开对象，statistics_supported 独立表示统计提示。对象/数组不进入 sample_values；路径深度仍与实际查询协议一致。
+
+父对象中可能同时包含有权和无权子字段，因此探索不整体拒绝父对象，而是在取回根列后逐行脱敏；返回字段仍按路径校验权限并清除无权字段的样本与统计能力。`sampled_count` 是 SQL 返回并脱敏的日志数。达到采样上限（最多100条）、预算为零或单层字段/路径/解析预算截断时 `truncated=true`，不能证明全部子键已发现。`coverage` 的分母是本次父对象候选样本，不是完整检索范围。子字段声明为对象或样本观察到对象时可有 `is_expandable=true`；全 null 的已发现字段可尝试统计，最终类型和结果由全范围查询判定。
+
+Collector 的 `options` 是常见真实值的显示提示，不是枚举成员白名单。结果码 `include [-1]` 只匹配真实 -1；查非零使用 `neq [0]` 或 `exclude [0]`，数值比较同样适用于 access_type。user_identify_type 支持实际值的相等、包含与排除。旧 ES 检索保留其原有“其他=反选”业务语义，不在 Collector SQL 中偷偷转换真实值。
 
 ## 4. 详情查询：补列 → 脱敏 → 投影
 
@@ -149,6 +156,6 @@ MCP：`aggregation.py` 消费统一 DSL，支持最多 2 个维度、5 个指标
 
 多 DISTINCT_COUNT 指标使用单列类型前缀键去重，避免 Doris 拒绝同条 SQL 中多个多列 DISTINCT；前缀保留字符串/数值/布尔类型差异，缺失值排除，空字符串参与。
 
-根字段目录不读取日志，`sampling_performed=false` 时 `sampled_count=0` 不能解释为无日志；总量由 COUNT 获取。字段目录可在同一分析中复用。保留/重复列 ID 和非法操作符分别返回固定的修正提示，错误消息不回显用户条件。MCP 的 `ratio/log_ratio` 与程序统计的 `ratio/present_ratio` 统一输出四位小数，保留 null；计数及数值指标不降精度。很小的正比例可能舍入为 0，是否有日志以计数为准。
+根字段目录不读取日志，`sampling_performed=false` 时 `sampled_count=0` 不能解释为无日志；总量由 COUNT 获取。字段目录可在同一分析中复用。保留/重复列 ID 和非法操作符分别返回固定的修正提示，错误消息不回显用户条件。MCP 的 `ratio/log_ratio` 与程序统计的 `ratio/present_ratio` 统一输出四位小数，保留 null；整数计数和类别原值保持精度；数值摘要及聚合浮点指标统一输出四位小数。很小的正比例可能舍入为 0，是否有日志以计数为准。
 
 时间条件、SQL分区和桶轴共用 `time_range.parse_log_time`：无时区字符串按服务端默认时区解释，显式偏移按真实时刻转换。MCP入口覆盖旧范围校验，避免UTC与本地混合输入被误判；传入Collector前转换为默认时区ISO，避免UTC被重复解释为本地时间。

@@ -136,6 +136,21 @@ OBJECT_FIELD_OPERATOR = [
     QueryConditionOperator.NOTNULL,
 ]
 
+# 数值字段按实际值比较，枚举仅作展示提示，不限制日志中可能出现的值。
+NUMERIC_FIELD_OPERATORS = [
+    QueryConditionOperator.EQ,
+    QueryConditionOperator.NEQ,
+    QueryConditionOperator.GT,
+    QueryConditionOperator.LT,
+    QueryConditionOperator.GTE,
+    QueryConditionOperator.LTE,
+    QueryConditionOperator.INCLUDE,
+    QueryConditionOperator.EXCLUDE,
+    QueryConditionOperator.BETWEEN,
+    QueryConditionOperator.ISNULL,
+    QueryConditionOperator.NOTNULL,
+]
+
 # 日志查询条件配置
 COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
     field_configs=[
@@ -144,11 +159,17 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(
             field=RESOURCE_TYPE_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
         ),
+        FieldSearchConfig(field=ACCESS_TYPE, allow_operators=NUMERIC_FIELD_OPERATORS),
         FieldSearchConfig(
-            field=ACCESS_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
-            field=USER_IDENTIFY_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+            field=USER_IDENTIFY_TYPE,
+            allow_operators=[
+                QueryConditionOperator.INCLUDE,
+                QueryConditionOperator.EXCLUDE,
+                QueryConditionOperator.EQ,
+                QueryConditionOperator.NEQ,
+                QueryConditionOperator.ISNULL,
+                QueryConditionOperator.NOTNULL,
+            ],
         ),
         FieldSearchConfig(field=USERNAME, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
         FieldSearchConfig(field=EVENT_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
@@ -173,7 +194,7 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(field=SNAPSHOT_RESOURCE_TYPE_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
         FieldSearchConfig(field=SNAPSHOT_ACTION_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
         FieldSearchConfig(field=SNAPSHOT_INSTANCE_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
-        FieldSearchConfig(field=RESULT_CODE, allow_operators=[QueryConditionOperator.INCLUDE]),
+        FieldSearchConfig(field=RESULT_CODE, allow_operators=NUMERIC_FIELD_OPERATORS),
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.LIKE]),

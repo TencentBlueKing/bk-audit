@@ -33,10 +33,11 @@ class MCPGetLogFieldMetadata(QueryBaseResource):
     指定 parent_field 时默认最多采样 100 条、返回 50 个直接子字段；继续展开应复用 field 的完整路径。
     JSON 根列先筛有效父对象，VARIANT 根列使用兼容采样；已取得的目录可复用，总量用 COUNT。
 
-    子字段仅代表样本发现：空目录、is_expandable=false 均不证明全范围没有子键。
+    内置 sub_keys 优先返回声明类型和中文别名，样本补值及动态字段；空目录不证明全范围没有子键。
     目录类型、统计能力与 coverage 仅供参考，最终以全范围统计为准；对象可展开不等于可直接统计。
     truncated=true 表示采样或字段/解析预算等导致发现不完整；业务 data 最大 1 MiB。
-    筛选使用返回的 allow_operators；权限拒绝时停止对应查询，查询失败不能当作零。
+    筛选使用 allow_operators，options 仅提示常见真实值；非零结果码用 neq 0，-1 只匹配 -1。
+    权限拒绝时停止对应查询，查询失败不能当作零。
     """
 
     name = gettext_lazy("获取日志字段元信息")
@@ -61,10 +62,10 @@ class GetLogFieldMetadata(MCPGetLogFieldMetadata):
 
     首次仅传 condition：返回基础字段，JSON 根字段 is_expandable=true，不采样。
     再传 parent_field 和 include_descendants=true：在该检索条件内一次采样最多100条日志，
-    返回父路径自身及采样发现的全部对象后代，字段数量不截断；数组作为叶子。
-    例如 parent_field={"raw_name":"extend_data","keys":["a"]} 返回 a、a.b、a.b.c、a.b.d。
-    使用 field.raw_name+keys 分组、搜索及提交统计，is_expandable 仅用于层级展示，
-    statistics_supported 决定统计能力提示；本响应已包含发现的后代，无需逐层重查。
+    只返回声明/采样合并后的叶子完整路径，声明别名及类型优先；数组作为叶子，字段数量不截断。
+    例如 parent_field={"raw_name":"extend_data","keys":["a"]} 返回 a.b.c、a.b.d、a.e，不含 a 和 a.b。
+    使用 field.raw_name+keys 分组、搜索及提交统计，根目录的 is_expandable 用于选择待展开对象，
+    statistics_supported 决定统计能力提示；级联响应无需逐层重查。
     省略 include_descendants 时仅返回直接子字段（最多50个）。目录先脱敏再解析，
     sample_summary.truncated 表示采样/路径预算导致发现可能不全；业务data超过1 MiB返回413。
     namespace 来自 URL，body 不传；样本目录不是全范围字段全集，统计可直接提交合法自定义路径。

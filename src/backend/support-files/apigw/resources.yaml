@@ -17,8 +17,8 @@ definitions:
       message: {type: string, x-nullable: true}
       request_id: {type: string, x-nullable: true}
       trace_id: {type: string, x-nullable: true}
-      data: {x-nullable: true, description: 统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）及受控 adjustments 调整建议；不回显 SQL 或字段值。}
-      errors: {x-nullable: true, description: 可选诊断信息，不应作为 Agent 分支判断依据。}
+      data: {x-nullable: true, description: 普通错误为 null；IAM 权限错误沿用平台权限申请数据。}
+      errors: {x-nullable: true, description: 可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）及受控 adjustments 调整建议；不回显 SQL 或字段值，工具分支仍按 code 判断。}
   log_tool_field_ref:
     description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及\n路径成本；Doris JSON SQL 构建器负责统一转义。"
     type: object
@@ -3077,8 +3077,8 @@ paths:
       description: >-
         字段、路径或操作符不明确时探索当前用户可查询的字段，默认空间无需传 namespace。根目录不采样，sampled_count=0 不表示无日志；目录可复用，总量用 COUNT。
         指定 parent_field 默认最多采样 100 条、返回 50 个直接子字段，继续展开复用返回的完整 field；响应最大 1 MiB。
-        子字段仅代表样本发现，空目录或 is_expandable=false 不证明全范围没有子键；目录类型、统计能力及 coverage 仅供参考，最终以全范围统计为准。
-        truncated=true 表示采样或字段/解析预算等导致发现不完整。筛选使用 allow_operators；权限拒绝时停止对应查询，查询失败不能当作零。
+        内置 sub_keys 优先返回声明类型和中文别名，样本补充值与动态字段；空目录不证明全范围没有子键。目录类型、统计能力及 coverage 仅供参考，最终以全范围统计为准。
+        truncated=true 表示采样或字段/解析预算等导致发现不完整。筛选使用 allow_operators，options 只提示常见真实值；非零结果码用 neq 0，-1 只匹配 -1；权限拒绝时停止对应查询，查询失败不能当作零。
       tags: []
       parameters:
         - in: body
@@ -3132,15 +3132,15 @@ paths:
                         type_source: {description: 字段类型来自声明还是样本推断。, enum: [DECLARED, INFERRED], type: string}
                         observed_types: {description: 脱敏样本中观察到的 JSON 类型。, items: {enum: [boolean, integer, number, string, array, object, 'null'], type: string}, type: array}
                         allow_operators: {description: 现有日志检索支持的操作符。, items: {type: string}, type: array}
-                        options: {description: 枚举字段的可选值。, items: {$ref: '#/definitions/log_tool_option'}, type: array, x-nullable: true}
-                        is_expandable: {type: boolean, description: 可见 JSON 根字段及样本观察到的对象子字段可为 true；false 不能证明全范围没有下层字段。}
+                        options: {description: "常见值及显示名称提示，不是允许值白名单；过滤值按实际值匹配。结果码非零使用 neq 0 或 exclude [0]，-1 仅匹配真实 -1。", items: {$ref: '#/definitions/log_tool_option'}, type: array, x-nullable: true}
+                        is_expandable: {type: boolean, description: 声明为对象的字段或样本观察到的对象字段可为 true；false 不能证明全范围没有下层字段。}
                         statistics_supported: {type: boolean, description: 当前声明、样本及权限给出的可尝试统计提示；最终以全范围执行为准。}
                         statistics_kind: {type: string, x-nullable: true, enum: [CATEGORICAL, NUMERIC], description: 声明或样本推断的统计类型；未知或不支持时为空，未知仍可能允许统计。}
                         unsupported_reason: {type: string, x-nullable: true, enum: [OBJECT, ARRAY, UNKNOWN_TYPE, PERMISSION_DENIED], description: 不可直接统计的稳定原因，不含敏感规则细节。}
                         allowed_metrics: {type: array, items: {description: 聚合函数枚举，禁止接收调用方给出的函数名。, enum: [COUNT, DISTINCT_COUNT, MIN, MAX, AVG, SUM, PERCENTILE_APPROX], type: string}, description: 基于声明或样本与权限给出的聚合函数提示；执行时重新校验。}
                         sample_values: {type: array, maxItems: 3, items: {}, description: 最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。}
                         sampled_non_null_count: {description: 脱敏样本中该字段的非空值数量。, type: integer}
-                        coverage: {description: 非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率。, format: double, type: number}
+                        coverage: {description: 非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率；输出保留 4 位小数。, format: double, type: number}
                   sample_summary:
                     description: "字段探索的有界采样摘要。"
                     type: object
@@ -3647,7 +3647,7 @@ paths:
                       type: object
                     type: array
                   rows:
-                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数，保留 4 位小数；精确比例可由计数计算。时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
+                    description: "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；log_ratio 分母为全范围日志总数；比例及数值指标输出保留 4 位小数，整数计数和原始类别值不舍入。精确比例可由计数计算。时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
                     items:
                       type: object
                     type: array

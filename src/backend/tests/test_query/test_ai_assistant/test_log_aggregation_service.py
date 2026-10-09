@@ -557,6 +557,18 @@ class TestLogAggregationService(TestCase):
         self.assertEqual(result["rows"][0]["events"], 7)
         self.assertEqual(result["query_summary"]["total_count"], 11)
 
+    def test_numeric_metrics_use_four_decimals_at_output_boundary(self):
+        """AVG 等派生指标输出统一精度，内部计算和整数 COUNT 不变。"""
+        data = frames()
+        data[4]["m1"] = "1.23456789"
+        self.mock_query.return_value = ({"list": data},)
+        result = self._aggregate()
+        payload = result.model_dump(mode="json")
+        self.assertEqual(payload["rows"][0]["average"], 1.2346)
+        self.assertEqual(payload["rows"][0]["events"], 6)
+        self.assertIsNone(payload["rows"][2]["average"])
+        self.assertEqual(result.rows[0]["average"], 1.23456789)
+
     def _time_dimensions(self, interval="HOUR", category=True):
         """时间列放首位，验证内部类别索引不会误用请求维度下标。"""
         dimensions = [{"id": "hour", "type": "TIME_BUCKET", "field": {"raw_name": "start_time"}, "interval": interval}]

@@ -13,7 +13,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     AggregationQuerySummary,
     AggregationTimeInterval,
     StatisticsKind,
-    serialize_statistics_ratio,
+    serialize_statistics_number,
 )
 
 
@@ -22,7 +22,7 @@ class StatisticsField(BaseModel):
 
     raw_name: str = Field(description='服务端解析后的日志根字段名。')
     keys: tuple[str, ...] = Field(description='JSON 子路径，按层级排列；普通字段为空数组。')
-    display_name: str = Field(description='服务端字段定义的展示名；拓展字段使用最后一段 key。')
+    display_name: str = Field(description='服务端字段定义的展示名；声明子字段复用内置中文别名；动态路径使用最后一段 key。')
 
 
 class FieldStatisticsOverview(BaseModel):
@@ -38,7 +38,7 @@ class FieldStatisticsOverview(BaseModel):
     @field_serializer("present_ratio")
     def serialize_present_ratio(self, value):
         """概览存在率与 MCP 使用相同的四位小数输出精度。"""
-        return serialize_statistics_ratio(value)
+        return serialize_statistics_number(value)
 
 
 class FieldDistributionGroup(BaseModel):
@@ -57,7 +57,7 @@ class FieldDistributionGroup(BaseModel):
     @field_serializer("ratio")
     def serialize_ratio(self, value):
         """分布占比与 MCP 使用相同的四位小数输出精度。"""
-        return serialize_statistics_ratio(value)
+        return serialize_statistics_number(value)
 
 
 class FieldDistribution(BaseModel):
@@ -86,15 +86,20 @@ class FieldTimeSeries(BaseModel):
 
 
 class FieldNumericSummary(BaseModel):
-    """同一最终查询的原生数值摘要，无有效数字时所有摘要为 null。"""
+    """同一最终查询的原生数值摘要；浮点数输出四位小数，无有效数字时所有摘要为 null。"""
 
-    min: int | float | None = Field(description='完整范围内原生数值的最小值；无有效数字为 null。')
-    max: int | float | None = Field(description='完整范围内原生数值的最大值；无有效数字为 null。')
-    avg: int | float | None = Field(description='完整范围内原生数值的平均值；无有效数字为 null。')
-    median: int | float | None = Field(description='完整范围内原生数值的近似中位数；无有效数字为 null。')
+    min: int | float | None = Field(description='完整范围内原生数值的最小值，浮点数输出保留 4 位小数；无有效数字为 null。')
+    max: int | float | None = Field(description='完整范围内原生数值的最大值，浮点数输出保留 4 位小数；无有效数字为 null。')
+    avg: int | float | None = Field(description='完整范围内原生数值的平均值，浮点数输出保留 4 位小数；无有效数字为 null。')
+    median: int | float | None = Field(description='完整范围内原生数值的近似中位数，浮点数输出保留 4 位小数；无有效数字为 null。')
     median_is_approximate: Literal[True] = Field(default=True, description='恒为 true，明确中位数使用近似分位数算法。')
     valid_count: int = Field(description='完整范围内原生数值数量；不将字符串或布尔转换为数字。')
     conversion_failed_count: int = Field(description='存在但非原生数值的数量；当前仅对全范围数值字段生成摘要，因此成功返回时为 0。')
+
+    @field_serializer("min", "max", "avg", "median")
+    def serialize_summary_value(self, value):
+        """数值摘要和 MCP 指标共用输出精度，整数与空值保持原类型。"""
+        return serialize_statistics_number(value)
 
 
 class FieldStatisticsResult(BaseModel):

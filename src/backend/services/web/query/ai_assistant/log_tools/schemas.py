@@ -18,6 +18,7 @@ from pydantic import (
     StrictInt,
     StrictStr,
     ValidationInfo,
+    field_serializer,
     field_validator,
     model_serializer,
     model_validator,
@@ -104,12 +105,12 @@ AGGREGATION_MAX_TIME_BUCKETS = 1440
 AGGREGATION_MAX_CELLS = 100000
 AGGREGATION_RESPONSE_MAX_BYTES = 4 * 1024 * 1024
 AGGREGATION_RESERVED_COLUMN_IDS = frozenset(("group_id", "group_kind", "log_count", "log_ratio", "bucket_start"))
-STATISTICS_RATIO_DECIMAL_PLACES = 4
+STATISTICS_DECIMAL_PLACES = 4
 
 
-def serialize_statistics_ratio(value: float | None) -> float | None:
-    """对外比例统一保留四位小数；空值保持 null，计数和内部计算不变。"""
-    return round(value, STATISTICS_RATIO_DECIMAL_PLACES) if value is not None else None
+def serialize_statistics_number(value: int | float | None) -> int | float | None:
+    """派生统计浮点数在输出边界保留四位小数；整数和 null 原样返回。"""
+    return round(value, STATISTICS_DECIMAL_PLACES) if isinstance(value, float) else value
 
 
 def _bounded_limit(configured_limit: int, hard_limit: int, minimum: int) -> int:
@@ -327,10 +328,16 @@ class LogFieldRef(BaseModel):
         description="可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。",
     )
 
+    @field_validator("raw_name")
+    @classmethod
+    def validate_raw_name(cls, value: str) -> str:
+        """根字段来自日志查询目录，自定义对象子键由 keys 表达。"""
+        if value not in LOG_TOOL_ALLOWED_FIELD_NAMES:
+            raise ValueError("不支持的日志根字段，请使用字段目录中的 raw_name；自定义子字段通过 keys 指定")
+        return value
+
     @model_validator(mode="after")
     def validate_field_reference(self):
-        if self.raw_name not in LOG_TOOL_ALLOWED_FIELD_NAMES:
-            raise ValueError("unsupported log field")
         if self.keys and self.raw_name not in LOG_TOOL_NESTED_FIELD_NAMES:
             raise ValueError("nested keys are only supported for visible JSON fields")
         _validate_field_path(self.raw_name, self.keys)
@@ -358,7 +365,7 @@ class GetLogFieldMetadataWebRequest(GetLogFieldMetadataRequest):
 
     include_descendants: bool = Field(
         default=False,
-        description="指定 parent_field 时设为 true，一次采样返回父路径自身和所有发现的对象后代；默认仅返回直接子字段。省略parent_field始终返回基础目录。",
+        description="指定 parent_field 时设为 true，一次采样返回声明与样本合并的后代叶子字段完整路径，不返回父项和中间对象；默认仅返回直接子字段。省略parent_field始终返回基础目录。",
     )
 
 
@@ -376,10 +383,12 @@ class LogFieldMetadataItem(BaseModel):
     type_source: LogFieldMetadataTypeSource = Field(..., description="字段类型来自声明还是样本推断。")
     observed_types: List[JSONValueType] = Field(default_factory=list, description="脱敏样本中观察到的 JSON 类型。")
     allow_operators: List[str] = Field(default_factory=list, description="现有日志检索支持的操作符。")
-    options: Optional[List[SelectionFieldOption]] = Field(default=None, description="枚举字段的可选值。")
+    options: Optional[List[SelectionFieldOption]] = Field(
+        default=None, description="常见值及显示名称提示，不是允许值白名单；过滤值按实际值匹配。结果码非零使用 neq 0 或 exclude [0]，-1 仅匹配真实 -1。"
+    )
     is_expandable: bool = Field(
         default=False,
-        description="可见 JSON 根字段及样本观察到的对象子字段可为 true；false 不能证明全范围没有下层字段。",
+        description="声明为对象的字段或样本观察到的对象字段可为 true；false 不能证明全范围没有下层字段。",
     )
     statistics_supported: bool = Field(default=False, description="当前声明、样本及权限给出的可尝试统计提示；最终以全范围执行为准。")
     statistics_kind: Optional[StatisticsKind] = Field(default=None, description="声明或样本推断的统计类型；未知或不支持时为空，未知仍可能允许统计。")
@@ -401,7 +410,12 @@ class LogFieldMetadataItem(BaseModel):
         description="最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。",
     )
     sampled_non_null_count: int = Field(default=0, description="脱敏样本中该字段的非空值数量。")
-    coverage: float = Field(default=0.0, description="非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率。")
+    coverage: float = Field(default=0.0, description="非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率；输出保留 4 位小数。")
+
+    @field_serializer("coverage")
+    def serialize_coverage(self, value):
+        """采样覆盖率与统计比例采用相同输出精度。"""
+        return serialize_statistics_number(value)
 
 
 class FieldSampleSummary(BaseModel):
@@ -434,7 +448,7 @@ class GetLogFieldMetadataTreeResponse(GetLogFieldMetadataResponse):
 
     fields: List[LogFieldMetadataItem] = Field(
         default_factory=list,
-        description="递归模式返回父路径自身及全部发现的对象后代，不限制字段个数；单层模式仍最多50个，业务data最大1 MiB。",
+        description="递归模式仅返回声明与样本合并的后代叶子完整路径，不包含父项和中间对象，不限制字段个数；单层模式仍最多50个，业务data最大1 MiB。",
     )
 
 
@@ -924,7 +938,7 @@ class AggregateLogsResponse(BaseModel):
         ...,
         description=(
             "完整聚合行，以 columns.id 为键，并带 group_id/group_kind/log_count/log_ratio；"
-            "log_ratio 分母为全范围日志总数，保留 4 位小数；精确比例可由计数计算。"
+            "log_ratio 分母为全范围日志总数；比例及数值指标输出保留 4 位小数，整数计数和原始类别值不舍入。精确比例可由计数计算。"
             "时间维度仅返回有日志的桶；缺省桶 COUNT/DISTINCT_COUNT 为 0，数值指标无输入为 null。"
             "结果不截断；业务 data UTF-8 JSON 最大 4 MiB，最多 1440 时间桶和 100000 数值单元格。"
         ),
@@ -937,11 +951,15 @@ class AggregateLogsResponse(BaseModel):
     )
 
     @model_serializer(mode="wrap")
-    def serialize_compact_ratios(self, handler):
-        """MCP 比例与程序统计统一保留四位小数；计数和指标保持原精度。"""
+    def serialize_statistics_values(self, handler):
+        """统一派生指标与比例精度，避免改变维度原值、组身份或内部计算。"""
         data = handler(self)
         for rows, key in ((data.get("groups", ()), "ratio"), (data.get("rows", ()), "log_ratio")):
             for row in rows:
                 if row.get(key) is not None:
-                    row[key] = serialize_statistics_ratio(row[key])
+                    row[key] = serialize_statistics_number(row[key])
+        metric_ids = [column.id for column in self.columns if column.role == AggregationColumnRole.METRIC]
+        for row in data.get("rows", ()):
+            for metric_id in metric_ids:
+                row[metric_id] = serialize_statistics_number(row.get(metric_id))
         return data

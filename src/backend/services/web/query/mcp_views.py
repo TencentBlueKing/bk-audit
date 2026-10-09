@@ -171,11 +171,15 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                 "trace_id": {"type": "string", "nullable": True},
                 "data": {
                     "nullable": True,
+                    "description": "普通错误为 null；IAM 权限错误沿用平台权限申请数据。",
+                },
+                "errors": {
+                    "nullable": True,
                     "description": (
-                        "统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）" "及受控 adjustments 调整建议；不回显 SQL 或字段值。"
+                        "可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）"
+                        "及受控 adjustments 调整建议；不回显 SQL 或字段值，工具分支仍按 code 判断。"
                     ),
                 },
-                "errors": {"nullable": True},
             },
         }
 
