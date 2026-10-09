@@ -1,0 +1,49 @@
+services:
+  mysql:
+    image: "${TEST_MYSQL_IMAGE:-mysql:5.7.44}"
+    platform: "${TEST_MYSQL_PLATFORM:-linux/amd64}"
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: "${TEST_MYSQL_PASSWORD:-123456}"
+      MYSQL_DATABASE: "${TEST_MYSQL_DATABASE:-bk_audit}"
+    ports:
+      - "${TEST_MYSQL_PORT:-3357}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${TEST_MYSQL_PASSWORD:-123456}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - bk_audit_test_mysql:/var/lib/mysql
+
+  redis:
+    image: redis:6.2.23-alpine
+    restart: unless-stopped
+    ports:
+      - "${TEST_REDIS_PORT:-7963}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.7.18-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: "${TEST_RABBITMQ_USER:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${TEST_RABBITMQ_PASSWORD:-guest}"
+    ports:
+      - "${TEST_RABBITMQ_PORT:-5672}:5672"
+      - "${TEST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  bk_audit_test_mysql:

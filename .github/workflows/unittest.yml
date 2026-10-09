@@ -18,17 +18,45 @@ on:
 
 jobs:
   unittest:
+    name: tests (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [regular, special]
     services:
+      mysql:
+        image: mysql:5.7.44
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
       redis:
-        image: redis:latest
+        image: redis:6.2.23-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd="redis-cli ping"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=3
+          --health-retries=10
+      rabbitmq:
+        image: rabbitmq:3.7.18-management
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=30
     env:
       BKPAAS_APP_MODULE_NAME: "api"
       BKAPP_DEPLOY_SERVICE: "web"
@@ -54,7 +82,11 @@ jobs:
       REDIS_PORT: "6379"
       REDIS_DB: "0"
       REDIS_PASSWORD: ""
-      REDIS_KEY_PREFIX: "bk_audit"
+      REDIS_KEY_PREFIX: "bk_audit_${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.suite }}"
+      BKAPP_CELERY_TEST_BROKER_URL: "amqp://guest:guest@127.0.0.1:5672//"
+      BKAPP_CELERY_TEST_QUEUE_PREFIX: "bk_audit_test_${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.suite }}"
+      BKAPP_CELERY_TEST_TASK_TIMEOUT: "30"
+      BKAPP_AI_ASSISTANT_SPECIAL_LOG_DIR: "special-logs"
       BKAPP_PLATFORM_AUTH_ACCESS_USERNAME: "admin"
       BKAPP_PLATFORM_AUTH_ACCESS_TOKEN: "admin"
       BKAPP_BK_IAM_APIGATEWAY_URL: "https://bkapi.paas.example.com/api/bk-iam/prod"
@@ -69,19 +101,14 @@ jobs:
       BKAPP_SKIP_IAM_MIGRATION: "True"
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.target_branch || github.ref }}
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Set up MySQL 8
-        uses: shogo82148/actions-setup-mysql@v1
-        with:
-          mysql-version: '8.0'
-          root-password: root
       - name: Install MySQL client
         run: |
           sudo apt-get update
@@ -94,7 +121,7 @@ jobs:
           pip install -r requirements_dev.txt
       - name: Create DB
         run: |
-          mysql -h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASSWORD -P$MYSQL_PORT -e "CREATE DATABASE $MYSQL_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -P"$MYSQL_PORT" -e "CREATE DATABASE $MYSQL_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
       - name: Run migrations
         run: |
           cd src/backend
@@ -102,10 +129,28 @@ jobs:
       - name: Run tests
         run: |
           cd src/backend
-          pytest --cov=.
+          if [ "${{ matrix.suite }}" = "regular" ]; then
+            make test TEST_ARGS="--junitxml=test-results-regular.xml"
+          else
+            make test-special TEST_ARGS="--junitxml=test-results-special.xml"
+          fi
       - name: Upload coverage to Codecov
+        if: matrix.suite == 'regular'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: src/backend/coverage.xml
           fail_ci_if_error: true
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.suite }}
+          path: src/backend/test-results-${{ matrix.suite }}.xml
+      - name: Upload special worker logs
+        if: always() && matrix.suite == 'special'
+        uses: actions/upload-artifact@v4
+        with:
+          name: special-worker-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: src/backend/special-logs/
+          if-no-files-found: ignore

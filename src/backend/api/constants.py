@@ -19,8 +19,8 @@ to the current version of the project delivered to anyone in the future.
 from enum import Enum
 
 from django.conf import settings
-from django.db.models import TextChoices
-from django.utils.translation import gettext_lazy
+
+from api.ai_agent_codes import AIAgentCode as AIAgentCode  # noqa: F401 - 保持历史导入路径
 
 ESB_PREFIX = "/api/c/compapi/v2/"
 ESB_URL_FORMAT = "{}{}{{}}".format(settings.BK_COMPONENT_API_URL, ESB_PREFIX)
@@ -38,18 +38,6 @@ class APIProvider(Enum):
 AI_AGENT_API_URL_TMPL = "BKAPP_AI_{}_API_URL"
 # APIGW 网关名覆盖：BKAPP_AI_{AGENT_CODE}_APIGW_NAME
 AI_AGENT_APIGW_NAME_TMPL = "BKAPP_AI_{}_APIGW_NAME"
-
-
-class AIAgentCode(TextChoices):
-    """AI 智能体标识枚举
-
-    value 为默认 APIGW 网关名，新增 agent 只需加一行。
-    环境变量按模板自动生效：
-      - BKAPP_AI_{name}_API_URL      完整 URL（优先级最高）
-      - BKAPP_AI_{name}_APIGW_NAME   覆盖网关名
-    """
-
-    AUDIT_REPORT = "bp-ai-audit-report", gettext_lazy("风险报告智能体")
-    RISK_SEARCH = "bp-ai-aud-rsk-srch", gettext_lazy("风险检索助手")
-    ALS_TITLE_SUM = "bp-ai-als-title-sum", gettext_lazy("AI 风险分析报告标题生成")
-    AUDIT_ANALYSE = "bp-ai-audit-analyse", gettext_lazy("审计风险分析助手")
+# 应用凭证（per-agent，作用域与 URL 路由一致）：BKAPP_AI_{AGENT_CODE}_APP_CODE / _SECRET_KEY
+AI_AGENT_APP_CODE_TMPL = "BKAPP_AI_{}_APP_CODE"
+AI_AGENT_SECRET_KEY_TMPL = "BKAPP_AI_{}_SECRET_KEY"

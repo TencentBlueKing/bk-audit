@@ -1,12 +1,17 @@
-# -*- coding: utf-8 -*-
-"""风险侧 AI Celery 队列隔离：标题共用，单/多风险分析独立，预览与编排留在 risk_report。"""
+"""AI Celery workload 路由契约。"""
 
 from pathlib import Path
 
 import yaml
 from django.conf import settings
 
-from services.web.risk.constants import RiskAICeleryQueue
+from services.web.ai_assistant.tasks.audit_search import (
+    execute_log_search,
+    execute_system_selection,
+    execute_user_intent,
+)
+from services.web.ai_assistant.tasks.conversation import generate_conversation_title
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 from services.web.risk.report.renderer import render_template
 from services.web.risk.tasks import (
     generate_analyse_report,
@@ -17,60 +22,50 @@ from services.web.risk.tasks import (
 from tests.base import TestCase
 
 APP_DESC = Path(__file__).resolve().parents[2] / "app_desc.yaml"
-# 蓝鲸 PaaS / Heroku 对 process type 的硬限制
 PAAS_PROC_TYPE_MAX_LENGTH = 12
 
 
-class TestAICeleryQueueIsolation(TestCase):
-    """校验主分支 AI 队列拆分与限流配置。"""
+class TestAICeleryWorkloadRouting(TestCase):
+    """队列只表达执行特征，不与 Agent Code 或业务类型一一绑定。"""
 
-    def test_title_uses_shared_queue_with_rate_limit(self):
-        self.assertEqual(generate_analyse_report_title.queue, RiskAICeleryQueue.TITLE)
-        self.assertEqual(generate_analyse_report_title.rate_limit, settings.AI_TITLE_TASK_RATE_LIMIT)
+    def test_non_agent_tasks_use_general_default_workload(self):
+        for task in (
+            execute_system_selection,
+            execute_log_search,
+            render_risk_report,
+        ):
+            with self.subTest(task=task.name):
+                self.assertIn(getattr(task, "queue", None), {None, "celery", "default"})
 
-    def test_single_risk_analyse_has_dedicated_queue(self):
-        self.assertEqual(render_template.queue, RiskAICeleryQueue.SINGLE_ANALYSE)
+    def test_regular_agent_tasks_share_ai_default_workload(self):
+        for task in (
+            execute_user_intent,
+            generate_analyse_report,
+            generate_analyse_report_title,
+            generate_conversation_title,
+            render_ai_variable,
+        ):
+            with self.subTest(task=task.name):
+                self.assertEqual(task.queue, AIWorkloadQueue.DEFAULT)
+                self.assertIsNone(task.rate_limit)
+
+    def test_single_risk_report_keeps_legacy_queue_and_rate_limit(self):
+        self.assertEqual(render_template.queue, AIWorkloadQueue.RISK_SINGLE)
         self.assertEqual(render_template.rate_limit, settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT)
+        self.assertNotIsInstance(render_template, AIAgentTask)
+        self.assertNotEqual(generate_analyse_report.queue, render_template.queue)
 
-    def test_multi_risk_analyse_has_dedicated_queue(self):
-        self.assertEqual(generate_analyse_report.queue, RiskAICeleryQueue.MULTI_ANALYSE)
-        self.assertEqual(generate_analyse_report.rate_limit, settings.RISK_MULTI_ANALYSE_TASK_RATE_LIMIT)
-
-    def test_preview_and_orchestrator_stay_on_risk_report(self):
-        self.assertEqual(render_ai_variable.queue, RiskAICeleryQueue.RISK_REPORT)
-        self.assertEqual(render_risk_report.queue, RiskAICeleryQueue.RISK_REPORT)
-        self.assertEqual(render_ai_variable.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
-        self.assertEqual(render_risk_report.rate_limit, settings.RENDER_TASK_RATE_LIMIT)
-
-    def test_title_single_and_multi_queues_are_distinct(self):
-        self.assertEqual(
-            {
-                generate_analyse_report_title.queue,
-                render_template.queue,
-                generate_analyse_report.queue,
-                render_risk_report.queue,
-            },
-            {
-                RiskAICeleryQueue.TITLE,
-                RiskAICeleryQueue.SINGLE_ANALYSE,
-                RiskAICeleryQueue.MULTI_ANALYSE,
-                RiskAICeleryQueue.RISK_REPORT,
-            },
-        )
-
-    def test_app_desc_declares_isolated_workers_and_drops_risk_render(self):
-        content = APP_DESC.read_text()
-        self.assertIn("-Q ai_title", content)
-        self.assertIn("-Q risk_single_analyse", content)
-        self.assertIn("-Q risk_multi_analyse", content)
-        self.assertIn("-Q risk_report", content)
-        self.assertIn("BKAPP_AI_TITLE_CONCURRENCY", content)
-        self.assertIn("BKAPP_RISK_SINGLE_ANALYSE_CONCURRENCY", content)
-        self.assertIn("BKAPP_RISK_MULTI_ANALYSE_CONCURRENCY", content)
-        self.assertNotIn("-Q risk_render", content)
-        self.assertNotIn("risk-render:", content)
-        self.assertIn("risk-single:", content)
-        self.assertIn("risk-multi:", content)
+    def test_app_desc_workers_consume_workload_queues(self):
+        desc = yaml.safe_load(APP_DESC.read_text())
+        processes = desc["modules"]["api"]["processes"]
+        self.assertIn("ai-default", processes)
+        self.assertIn("risk-single", processes)
+        self.assertIn(f"-Q {AIWorkloadQueue.DEFAULT}", processes["ai-default"]["command"])
+        self.assertIn(f"-Q {AIWorkloadQueue.RISK_SINGLE}", processes["risk-single"]["command"])
+        self.assertNotIn(AIWorkloadQueue.RISK_SINGLE, processes["ai-default"]["command"])
+        self.assertNotIn(AIWorkloadQueue.DEFAULT, processes["risk-single"]["command"])
+        self.assertNotIn("audit-ai", processes)
+        self.assertNotIn("ai-batch", processes)
 
     def test_app_desc_process_types_fit_paas_length_limit(self):
         desc = yaml.safe_load(APP_DESC.read_text())
@@ -99,10 +94,8 @@ class TestAICeleryQueueIsolation(TestCase):
                     "worker",
                     "risk-worker",
                     "log-export",
-                    "risk-report",
-                    "ai-title",
+                    "ai-default",
                     "risk-single",
-                    "risk-multi",
                     "notice",
                     "beat",
                     "gen-risk",
@@ -113,10 +106,8 @@ class TestAICeleryQueueIsolation(TestCase):
                 "worker": 2,
                 "risk-worker": 2,
                 "log-export": 2,
-                "risk-report": 2,
-                "ai-title": 2,
+                "ai-default": 2,
                 "risk-single": 2,
-                "risk-multi": 2,
                 "notice": 1,
                 "beat": 1,
                 "gen-risk": 2,
