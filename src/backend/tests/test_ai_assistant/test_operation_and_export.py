@@ -515,7 +515,7 @@ class TestMessageExport(AIAssistantPlatformTestCase):
                 self.service.create_full_export(message_uid=str(message.uid), export_config={})
 
     def test_full_export_default_uses_ai_display_columns(self):
-        """缺省配置与 ai_standard 一致，不修改调用方配置。"""
+        """缺省配置与 ai_standard 一致，不修改调用方配置；AI 来源标记随配置注入。"""
         message = self.create_log_search_message()
         config = {}
         with mock.patch(
@@ -532,6 +532,8 @@ class TestMessageExport(AIAssistantPlatformTestCase):
                 "fields": [
                     {"raw_name": name, "display_name": label, "keys": []} for name, label in SNAPSHOT_DEFAULT_COLUMNS
                 ],
+                # AI 导出来源标记：后端强制注入（单行表头/保序/自适应列宽的运行时开关）
+                "source": "ai_assistant",
             },
         )
 
