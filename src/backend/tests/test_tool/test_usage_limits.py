@@ -20,12 +20,13 @@ from unittest import mock
 from django.test import TestCase
 from pydantic import ValidationError
 
+from core.exceptions import PermissionException
 from services.web.tool.constants import (
     PROFILE_ACCOUNT_TYPES,
     SmartPageToolConfig,
     UsageLimits,
 )
-from services.web.tool.resources import GetToolDetail
+from services.web.tool.resources import ExecuteTool, GetToolDetail
 
 
 class UsageLimitsModelTest(TestCase):
@@ -223,3 +224,78 @@ class GetAllowedAccountTypesTest(TestCase):
         resource = GetToolDetail()
         result = resource._get_allowed_account_types(tool)
         self.assertEqual(result, PROFILE_ACCOUNT_TYPES)
+
+
+class ValidateUsageLimitsTest(TestCase):
+    """测试 ExecuteTool._validate_usage_limits 方法（执行侧账号类型使用限制校验）"""
+
+    def _make_tool(self, usage_limits=None):
+        """创建模拟工具对象"""
+        tool = mock.MagicMock()
+        tool.config = {}
+        if usage_limits:
+            tool.config["usage_limits"] = usage_limits
+        return tool
+
+    def _make_resource(self):
+        """创建 ExecuteTool 实例，并 mock 掉用户场景权限推导，避免依赖 ScopePermission"""
+        resource = ExecuteTool()
+        resource._get_user_allowed_scopes = mock.MagicMock(return_value=([], []))
+        return resource
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_no_usage_limits(self, mock_validator_cls):
+        """工具未配置 usage_limits 时跳过校验（不抛异常）"""
+        tool = self._make_tool()
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"form_openid": "xxx"}}
+        # 不抛异常即视为通过
+        resource._validate_usage_limits(tool, params, "user1")
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_no_account_type_configured(self, mock_validator_cls):
+        """可访问范围内均未配置 account_type 时跳过校验"""
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"other_field": ["v"]}}})
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"form_openid": "xxx"}}
+        resource._validate_usage_limits(tool, params, "user1")
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_allowed_account_type(self, mock_validator_cls):
+        """使用的账号类型在允许集合内，通过校验"""
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["openid"]}}})
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"form_openid": "xxx"}}
+        resource._validate_usage_limits(tool, params, "user1")
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_disallowed_account_type_raises(self, mock_validator_cls):
+        """使用的账号类型不在允许集合内，抛权限异常"""
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["ctx"]}}})
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"form_openid": "xxx"}}
+        with self.assertRaises(PermissionException):
+            resource._validate_usage_limits(tool, params, "user1")
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_empty_account_type_list_rejects(self, mock_validator_cls):
+        """配置空列表时，使用任何账号类型都被拒绝（全部禁止）"""
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": []}}})
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"form_openid": "xxx"}}
+        with self.assertRaises(PermissionException):
+            resource._validate_usage_limits(tool, params, "user1")
+
+    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
+    def test_no_account_type_param_used(self, mock_validator_cls):
+        """params 中未携带账号类型参数时，即使配置了限制也不拦截"""
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["openid"]}}})
+        resource = self._make_resource()
+        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
+        params = {"params": {"game_ids": ["100"]}}
+        resource._validate_usage_limits(tool, params, "user1")

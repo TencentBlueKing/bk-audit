@@ -1117,6 +1117,71 @@ class ExecuteTool(ToolBase):
             user_allowed_system_ids=set(user_allowed_system_ids),
         )
 
+    def _validate_usage_limits(self, tool, params, username):
+        """校验执行时的账号类型使用限制（用户权限维度）
+
+        规则：
+        1. 工具未配置 usage_limits：跳过（全部可用）。
+        2. 用户可访问范围内均未配置 account_type：跳过（全部可用）。
+        3. 用户可访问范围内配置了 account_type（含空列表）：
+           - 非空列表：实际使用的账号类型必须 ⊆ 允许集合，越界则抛权限异常。
+           - 空列表 []：允许集合为空，使用任何账号类型都会被拒绝（全部禁止）。
+        """
+        from core.exceptions import PermissionException
+        from services.web.common.default_value_validator import DefaultValueValidator
+        from services.web.tool.constants import PROFILE_ACCOUNT_TYPE_PARAM_KEYS
+
+        config = tool.config or {}
+        usage_limits = config.get("usage_limits", {})
+        if not usage_limits:
+            return
+
+        # 1. 推导用户可访问的场景/系统集合（用户权限 ∩ 工具可见范围）
+        user_allowed_scene_ids, user_allowed_system_ids = self._get_user_allowed_scopes(username)
+        validator = DefaultValueValidator()
+        accessible_scenes, accessible_systems = validator.get_accessible_scopes(
+            resource_type=ResourceVisibilityType.TOOL,
+            resource_id=tool.uid,
+            user_allowed_scene_ids=set(user_allowed_scene_ids),
+            user_allowed_system_ids=set(user_allowed_system_ids),
+        )
+
+        # 2. 收集可访问范围内允许的账号类型（并集），并标记是否配置过限制
+        scenes_limits = usage_limits.get("scenes", {})
+        systems_limits = usage_limits.get("systems", {})
+        allowed_account_types = set()
+        has_limit = False
+        for scene_id in accessible_scenes:
+            limit = scenes_limits.get(str(scene_id), {})
+            if "account_type" in limit:
+                has_limit = True
+                allowed_account_types.update(limit["account_type"])
+        for system_id in accessible_systems:
+            limit = systems_limits.get(system_id, {})
+            if "account_type" in limit:
+                has_limit = True
+                allowed_account_types.update(limit["account_type"])
+
+        # 3. 可访问范围内均未配置限制：全部可用，跳过
+        if not has_limit:
+            return
+
+        # 4. 识别本次执行实际使用的账号类型（value 经映射对应 SQL 模板参数 key）
+        smart_params = params.get("params", {}) or {}
+        used_account_types = {
+            account_type
+            for account_type, param_key in PROFILE_ACCOUNT_TYPE_PARAM_KEYS.items()
+            if smart_params.get(param_key) not in (None, "", [])
+        }
+
+        # 5. 校验
+        illegal_account_types = used_account_types - allowed_account_types
+        if illegal_account_types:
+            raise PermissionException(
+                action_name=gettext_lazy("使用无权限的账号类型"),
+                permission=gettext("当前用户无权使用账号类型: %s") % ", ".join(sorted(illegal_account_types)),
+            )
+
     def perform_request(self, validated_request_data):
         """
         1. 获取工具
@@ -1155,6 +1220,10 @@ class ExecuteTool(ToolBase):
 
         # 校验默认值的权限
         self._validate_default_value_permissions(tool, params_for_validation, get_request_username())
+
+        # 校验账号类型使用限制（仅 smart_page 工具）
+        if tool.tool_type == ToolTypeEnum.SMART_PAGE.value:
+            self._validate_usage_limits(tool, params, get_request_username())
 
         current_user = get_request_username()
         try:
