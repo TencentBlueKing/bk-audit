@@ -105,6 +105,14 @@ PROFILE_ACCOUNT_TYPES = [
     PROFILE_ACCOUNT_TYPE_QQ,
 ]
 
+# 账号类型 value（usage_limits 配置/前端展示值）→ SQL 模板条件参数 key 的映射。
+PROFILE_ACCOUNT_TYPE_PARAM_KEYS = {
+    PROFILE_ACCOUNT_TYPE_CTX: "form_ctx",
+    PROFILE_ACCOUNT_TYPE_OPENID: "form_openid",
+    PROFILE_ACCOUNT_TYPE_WECHAT: "form_wechat",
+    PROFILE_ACCOUNT_TYPE_QQ: "form_qq",
+}
+
 
 class UsageLimits(BaseModel):
     """使用限制配置
