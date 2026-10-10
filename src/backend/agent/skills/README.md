@@ -31,7 +31,7 @@
 - **主要功能**：
   - 根据暂存区或指定文件归纳提交范围。
   - 渲染并校验 TAPD / GitHub tracker 格式。
-  - 约束正文 bullet 风格，避免把实现细节写进 commit message。
+  - 通过 sh 校验标题，正文推荐 bullet，避免把实现细节写进 commit message。
   - 配合项目 pre-commit 流程完成实际提交。
 
 ## 目录结构

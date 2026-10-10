@@ -18,6 +18,9 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
+import os
+import threading
+import time
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -31,7 +34,8 @@ from api.bk_plugins_ai_agent.constants import (
     AI_STREAM_PREVIEW_LIMIT,
     AI_THINKING_PLACEHOLDERS,
 )
-from api.constants import AIAgentCode
+from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
+from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
 
 
@@ -40,15 +44,35 @@ class AIAgentBase(BkApiResource, abc.ABC):
 
     与 AIAuditReport 共享相同的认证逻辑，但 URL 通过 get_agent_base_url 动态路由。
     不直接继承 AIAuditReport 以避免循环导入（bk_resource 按字母序扫描 api/ 目录）。
+
+    凭证解析（原有全局链保持不变，per-agent 为新增覆盖）：
+      - 带 agent_code 的资源（ChatCompletion）优先读 BKAPP_AI_{AGENT}_APP_CODE/_SECRET_KEY，
+        为需要独立凭证的智能体（如上云版的日志检索）提供与 URL 路由同作用域的专属凭证；
+      - 未配置 per-agent 凭证时走原有全局链，行为与历史版本完全一致：
+        AI_AGENT_APP_CODE/_SECRET_KEY → AI_AUDIT_REPORT_APP_CODE/_SECRET_KEY → APP_CODE/SECRET_KEY。
     """
 
     module_name = "bk_plugins_ai_agent"
     base_url = ""
     platform_authorization = True
     tags = ["AIAgent"]
-    TIMEOUT = 300
+    # 单次智能体调用超时（秒）：默认 300 保持历史行为；环境可经 BKAPP_AI_AGENT_API_TIMEOUT_SECONDS
+    # 收紧（如 60）——NL 链路重试预算的 deadline 只能在两次调用之间检查，正在进行的
+    # 调用不可中断，单次超时是链路总时长的实际上限闸门（部署反馈：AIDev 慢时单次
+    # 调用可拖数分钟且无拦截）
+    TIMEOUT = getattr(settings, "AI_AGENT_API_TIMEOUT_SECONDS", 300)
     app_code_setting_names = ("AI_AGENT_APP_CODE", "AI_AUDIT_REPORT_APP_CODE")
     secret_key_setting_names = ("AI_AGENT_SECRET_KEY", "AI_AUDIT_REPORT_SECRET_KEY")
+    # 资源为进程级单例，agent 状态按线程隔离（gevent 部署下为 greenlet 隔离）
+    _agent_ctx = threading.local()
+
+    @property
+    def _current_agent_code(self):
+        return getattr(self._agent_ctx, "agent_code", None)
+
+    @_current_agent_code.setter
+    def _current_agent_code(self, agent_code):
+        self._agent_ctx.agent_code = agent_code
 
     @staticmethod
     def _get_first_setting(setting_names: tuple[str, ...], default_setting_name: str) -> str:
@@ -58,12 +82,29 @@ class AIAgentBase(BkApiResource, abc.ABC):
                 return setting_value
         return getattr(settings, default_setting_name)
 
+    def _get_agent_scoped_credential(self, is_app_code: bool) -> str:
+        """per-agent 应用凭证：BKAPP_AI_{AGENT}_APP_CODE / BKAPP_AI_{AGENT}_SECRET_KEY
+
+        与 get_agent_base_url 的 URL 路由作用域一致，仅影响当前 agent，不影响其它智能体。
+        """
+        agent_code = self._current_agent_code
+        if agent_code is None:
+            return ""
+        tmpl = AI_AGENT_APP_CODE_TMPL if is_app_code else AI_AGENT_SECRET_KEY_TMPL
+        return os.getenv(tmpl.format(agent_code.name), "").strip()
+
     @property
     def app_code(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=True)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.app_code_setting_names, "APP_CODE")
 
     @property
     def secret_key(self) -> str:
+        agent_scoped_credential = self._get_agent_scoped_credential(is_app_code=False)
+        if agent_scoped_credential:
+            return agent_scoped_credential
         return self._get_first_setting(self.secret_key_setting_names, "SECRET_KEY")
 
     def add_esb_info_before_request(self, params: dict) -> dict:
@@ -87,6 +128,16 @@ class ChatCompletion(AIAgentBase):
     name = gettext_lazy("通用智能体对话")
     method = "POST"
     action = "/bk_plugin/openapi/agent/chat_completion/"
+    agent_code: AIAgentCode | None = None
+    enable_agent_rate_limit = True
+
+    def _resolve_agent_code(self, validated_request_data: dict) -> AIAgentCode:
+        """解析通用参数或固定 Client 声明的 Agent Code。"""
+
+        agent_code = self.agent_code or validated_request_data.get("agent_code")
+        if not agent_code:
+            raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
+        return AIAgentCode(agent_code)
 
     def build_url(self, validated_request_data):
         agent_code = validated_request_data.pop("agent_code", None)
@@ -94,8 +145,45 @@ class ChatCompletion(AIAgentBase):
             raise ValueError("agent_code is required for bk_plugins_ai_agent.ChatCompletion")
         if isinstance(agent_code, str):
             agent_code = AIAgentCode(agent_code)
+        # 记录本次请求的 agent，供 per-agent 凭证解析（build_url 先于 build_header 执行）
+        self._current_agent_code = agent_code
         base_url = get_agent_base_url(agent_code)
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
+
+    def perform_request(self, validated_request_data):
+        """取得全局 Agent 配额后发起 HTTP 请求，并记录无正文的调用维度。"""
+
+        # 单次开关只允许历史固定 Client 接入限流，不能关闭通用 Client 的默认限流。
+        request_rate_limit_opt_in = validated_request_data.pop("_enable_agent_rate_limit", False)
+        enable_agent_rate_limit = self.enable_agent_rate_limit or request_rate_limit_opt_in
+        agent_code = self._resolve_agent_code(validated_request_data)
+        self._current_agent_code = agent_code
+        try:
+            if enable_agent_rate_limit:
+                agent_rate_limiter.acquire(agent_code)
+            request_started_at = time.monotonic()
+            try:
+                result = super().perform_request(validated_request_data)
+            except Exception as error:
+                logger.warning(
+                    "AI agent downstream request failed",
+                    extra={
+                        "agent_code": agent_code.value,
+                        "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                        "error_type": error.__class__.__name__,
+                    },
+                )
+                raise
+            logger.info(
+                "AI agent downstream request completed",
+                extra={
+                    "agent_code": agent_code.value,
+                    "downstream_duration_ms": int((time.monotonic() - request_started_at) * 1000),
+                },
+            )
+            return result
+        finally:
+            self._current_agent_code = None
 
     def build_header(self, validated_request_data):
         headers = super().build_header(validated_request_data)

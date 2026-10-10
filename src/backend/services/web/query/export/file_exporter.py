@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 import gc
+import math
 import tempfile
 from datetime import datetime
 from functools import cached_property
@@ -25,10 +26,28 @@ from typing import List
 import xlsxwriter
 from blueapps.utils.logger import logger_celery
 from django.core.files import File
+from django.utils.translation import gettext_lazy
 
 from core.utils.data import unique_id
-from services.web.query.constants import FieldCategoryEnum
+from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR, FieldCategoryEnum
 from services.web.query.export.model import ExportConfig
+
+# AI 日志检索导出的"扩展字段"分组文案（仅 flatten_extension 平铺开启时生效）：
+# 拓展数据容器在所有白名单外，平铺后子键列落 CUSTOM 兜底分组（_write_category_header
+# 按分类渲染合并表头）。flatten_extension 是 AI 助手导出专属参数（检索页导出永不传），
+# 以此作渲染开关——检索页与非平铺 AI 导出的 CUSTOM 分组保持"自定义字段"label 不变，
+# 避免影响既有日志检索的字段导出文案；全属 extend_data 容器系列（产品语义"拓展字段"
+# 专指 extend_data 下钻，09-10 限定）的 CUSTOM 分组才渲染为"扩展字段"。
+EXTEND_DATA_RAW_NAME = "extend_data"
+EXTENSION_GROUP_LABEL = gettext_lazy("扩展字段")
+
+# AI 导出列宽自适应参数：列宽下限与既有固定列宽一致；AUTO_FILTER 预留 Excel
+# 排序/筛选下拉按钮（约 2~3 字符宽）+ 单元格左右内边距（约 1~2 字符）的渲染余量
+# （实测 2026-10-10：仅预留按钮宽度时 extend_data/request_uri 等纯 ASCII 长路径
+# 列的表头尾部仍被下拉按钮覆盖）；表头为加粗字体，另按粗体放大系数补偿
+AI_EXPORT_MIN_COLUMN_WIDTH = 20
+AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH = 6
+AI_EXPORT_BOLD_TITLE_SCALE = 1.1
 
 
 class FileExporter(abc.ABC):
@@ -127,6 +146,12 @@ class XLSXExporter(FileExporter):
         写入表头
         """
 
+        # AI 助手导出（export_config.source 标记）：单行表头「中文显示名(字段路径)」，
+        # 不写"标准/系统/自定义字段"分类合并行（验收 2026-10-09：分类行不需要，
+        # 表头与 AI 助手"日志检索结果"保持一致）；常规检索页导出保持两行结构不变
+        if self.config.is_ai_assistant:
+            self._write_title_header()
+            return
         self._write_category_header()
         self._write_title_header()
 
@@ -149,33 +174,86 @@ class XLSXExporter(FileExporter):
             if not fields:
                 continue
 
+            label = self._resolve_category_label(category, fields, flatten_extension=self.config.flatten_extension)
             span = len(fields)
             fmt = self.category_header_fmts.get(category)
 
             if span > 1:
-                self.worksheet.merge_range(
-                    self.row, current_col, self.row, current_col + span - 1, str(category.label), fmt
-                )
+                self.worksheet.merge_range(self.row, current_col, self.row, current_col + span - 1, str(label), fmt)
             else:
-                self.worksheet.write(self.row, current_col, str(category.label), fmt)
+                self.worksheet.write(self.row, current_col, str(label), fmt)
             current_col += span
         self.row += 1
 
+    @staticmethod
+    def _resolve_category_label(category, fields, *, flatten_extension: bool = False):
+        """解析分类合并表头文案：仅 AI 导出平铺（flatten_extension，检索页不传）且
+        CUSTOM 分组全属 extend_data 容器系列时渲染为"扩展字段"。
+
+        注：AI 助手导出已改为单行表头（_write_header 按 export_config.source
+        跳过分类行，验收 2026-10-09）——本方法的 flatten_extension 分支不再被
+        AI 导出触达，保留作历史兼容（非 AI 链路 flatten_extension 恒 False，
+        一律返回原 label）；检索页导出的分类行文案不受影响。
+        """
+
+        if not flatten_extension or category != FieldCategoryEnum.CUSTOM:
+            return category.label
+        prefix = f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"
+        for field in fields:
+            full_key = getattr(field, "full_key", "") or ""
+            if not full_key.startswith(prefix):
+                return category.label
+        return EXTENSION_GROUP_LABEL
+
+    @classmethod
+    def _build_field_title(cls, field) -> str:
+        """单行标题拼接：中文显示名(英文字段路径)，如「操作起始时间(start_time)」。
+
+        扩展字段下钻列（full_key 形如 extend_data/{sub_key}，AI 平铺导出与检索页
+        指定字段共用该形态）的 display_name 是子键名本身，拼接会得到
+        「_request_url(extend_data/_request_url)」的重复语义，故只显示完整路径；
+        display_name 缺失或与 full_key 相同时同样只显示 full_key，避免括号重复。
+        """
+
+        full_key = field.full_key or field.display_name
+        display_name = field.display_name or full_key
+        if full_key.startswith(f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"):
+            return full_key
+        if display_name and display_name != full_key:
+            return f"{display_name}({full_key})"
+        return full_key
+
+    @staticmethod
+    def _calc_display_width(text) -> int:
+        """近似 Excel 列宽单位：全角/CJK 等宽字符记 2，其余记 1。"""
+
+        return sum(2 if ord(char) > 127 else 1 for char in str(text))
+
     def _write_title_header(self):
         """
-        写入标题头
+        写入标题头（单行：中文显示名(英文字段路径)，见 _build_field_title）
         """
 
-        # 第一行标题（显示名称）
-        titles = [f.display_name or f.full_key for f in self.config.export_fields]
+        titles = [self._build_field_title(f) for f in self.config.export_fields]
         self._write_row(titles, self.title_fmt)
 
-        # 第二行标题（字段路径）
-        keys = [f.full_key or f.display_name for f in self.config.export_fields]
-        self._write_row(keys, self.key_fmt)
-
         # 设置列宽
-        self.worksheet.set_column(0, len(titles) - 1, 20)
+        if self.config.is_ai_assistant:
+            # AI 助手导出：列宽按表头文本自适应——至少完整展示表头列名，并预留
+            # Excel 排序/筛选下拉按钮空间（按钮渲染后表头仍完整显示），下限不窄于
+            # 既有固定列宽；常规检索页导出保持固定 20 不变
+            for col, title in enumerate(titles):
+                # 表头为加粗字体，常规字符宽度估算对粗体偏窄（粗体约宽 10%），
+                # 先按粗体放大系数补偿，再预留筛选按钮 + 内边距空间，避免长表头
+                # 尾部（如 extend_data/request_uri 纯 ASCII 长路径列）被下拉按钮覆盖
+                bolded_width = math.ceil(self._calc_display_width(title) * AI_EXPORT_BOLD_TITLE_SCALE)
+                width = max(
+                    AI_EXPORT_MIN_COLUMN_WIDTH,
+                    bolded_width + AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH,
+                )
+                self.worksheet.set_column(col, col, width)
+        else:
+            self.worksheet.set_column(0, len(titles) - 1, 20)
 
     def write(self, formatted_logs: List[dict]):
         for log in formatted_logs:

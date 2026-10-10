@@ -34,6 +34,7 @@ Celery、requests、Redis 等框架级 span 会自动生成。本文件只补自
    - Event 面向“少量、可读、需要人处理”的异常事实；Metric 面向聚合告警。
 """
 
+import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
@@ -48,6 +49,8 @@ from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
 API_SPAN_INSTRUMENTATION_NAME = "bk_audit.bk_resource"
 BUSINESS_SPAN_INSTRUMENTATION_NAME = "bk_audit.business"
+
+logger = logging.getLogger(__name__)
 
 API_SPAN_STATUS_SUCCESS = "success"
 API_SPAN_STATUS_ERROR = "error"
@@ -101,11 +104,16 @@ def set_span_attributes(span: Span, attributes: dict[str, Any] | None) -> None:
         ```
     """
 
-    if not attributes or not span.is_recording():
+    if not attributes:
         return
 
-    for key, value in attributes.items():
-        _set_span_attribute(span, key, value)
+    try:
+        if not span.is_recording():
+            return
+        for key, value in attributes.items():
+            _set_span_attribute(span, key, value)
+    except Exception:  # NOCC:broad-except(Trace 属性失败不能改变业务结果)
+        logger.exception("[ObservationSpan] set attributes failed")
 
 
 def _get_current_observation_context():
@@ -338,22 +346,53 @@ def start_observation_span(
         ```
     """
 
-    tracer = trace.get_tracer(BUSINESS_SPAN_INSTRUMENTATION_NAME)
-    with tracer.start_as_current_span(
-        name,
-        kind=kind,
-        record_exception=True,
-        set_status_on_exception=True,
-    ) as span:
+    span_context = None
+    span = trace.INVALID_SPAN
+    try:
+        tracer = trace.get_tracer(BUSINESS_SPAN_INSTRUMENTATION_NAME)
+        span_context = tracer.start_as_current_span(
+            name,
+            kind=kind,
+            record_exception=True,
+            set_status_on_exception=True,
+        )
+        span = span_context.__enter__()
         set_span_attributes(span, attributes)
-        try:
-            yield span
-        except Exception as err:
-            # OTel 会记录异常栈；这里补一个低基数 error_type，便于 APM 侧聚合过滤。
-            _set_span_attribute(span, "bk_audit.error_type", err.__class__.__name__)
-            span.set_status(Status(StatusCode.ERROR, str(err)[:1024]))
-            raise
-        span.set_status(Status(StatusCode.OK))
+    except Exception:  # NOCC:broad-except(Trace 基础设施异常不能阻断业务)
+        logger.exception("[ObservationSpan] start failed name=%s", name)
+        if span_context is not None:
+            try:
+                span_context.__exit__(None, None, None)
+            except Exception:  # NOCC:broad-except(尽力清理 Trace context)
+                logger.exception("[ObservationSpan] cleanup failed name=%s", name)
+        span_context = None
+        span = trace.INVALID_SPAN
+
+    try:
+        yield span
+    except BaseException as err:
+        if span_context is not None:
+            try:
+                # OTel 会记录异常栈；补充低基数 error_type 便于 APM 聚合过滤。
+                _set_span_attribute(span, "bk_audit.error_type", err.__class__.__name__)
+                span.set_status(Status(StatusCode.ERROR, str(err)[:1024]))
+            except Exception:  # NOCC:broad-except(Trace 属性失败不能覆盖业务异常)
+                logger.exception("[ObservationSpan] mark error failed name=%s", name)
+            try:
+                span_context.__exit__(type(err), err, err.__traceback__)
+            except Exception:  # NOCC:broad-except(Trace 结束失败不能覆盖业务异常)
+                logger.exception("[ObservationSpan] close failed name=%s", name)
+        raise
+    else:
+        if span_context is not None:
+            try:
+                span.set_status(Status(StatusCode.OK))
+            except Exception:  # NOCC:broad-except(Trace 状态失败不能改变业务结果)
+                logger.exception("[ObservationSpan] mark success failed name=%s", name)
+            try:
+                span_context.__exit__(None, None, None)
+            except Exception:  # NOCC:broad-except(Trace 结束失败不能改变业务结果)
+                logger.exception("[ObservationSpan] close failed name=%s", name)
 
 
 class BKResourceAPIInstrumentor(BaseInstrumentor):

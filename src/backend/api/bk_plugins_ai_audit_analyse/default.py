@@ -22,6 +22,7 @@ from django.utils.translation import gettext_lazy
 
 from api.bk_plugins_ai_agent.default import AIAgentBase
 from api.bk_plugins_ai_agent.default import ChatCompletion as BaseChatCompletion
+from api.constants import AIAgentCode
 from api.domains import AI_AUDIT_ANALYSE_API_URL
 
 
@@ -42,6 +43,7 @@ class ChatCompletion(BaseChatCompletion):
     tags = ["AIAuditAnalyse"]
     name = gettext_lazy("分析智能体对话")
     TIMEOUT = 600
+    agent_code = AIAgentCode.AUDIT_ANALYSE
 
     def build_url(self, validated_request_data):
         return AI_AUDIT_ANALYSE_API_URL.rstrip("/") + "/" + self.action.lstrip("/")

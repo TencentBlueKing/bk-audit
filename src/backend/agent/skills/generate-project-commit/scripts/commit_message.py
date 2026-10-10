@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Render and validate bk-audit commit messages."""
+"""保留 Python 渲染及旧命令入口，标题规则委托给同目录 sh 校验器。
+
+提交 hook 直接运行 shell，不需要项目 Python；正文 bullet 仅为生成建议。
+"""
 
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 TYPES = ("feat", "fix", "docs", "style", "refactor", "perf", "test", "chore")
-TYPE_PATTERN = "|".join(TYPES)
-GITHUB_PATTERN = re.compile(rf"^({TYPE_PATTERN}):\s.+\s#[0-9]+$")
-TAPD_PATTERN = re.compile(rf"^({TYPE_PATTERN}):\s.+\s--[^=\s]+=[0-9]+$")
-MERGE_PATTERN = re.compile(r"^Merge")
+VALIDATOR = Path(__file__).with_suffix(".sh")
 
 
 def normalize_body_item(item: str) -> str:
+    """将生成正文规范为 bullet，忽略空内容。"""
     item = item.strip()
     if not item:
         return ""
@@ -28,6 +28,7 @@ def normalize_body_item(item: str) -> str:
 
 
 def build_subject(commit_type: str, summary: str, tracker: str) -> str:
+    """生成单行标题并通过共享 shell 规则验证，非法输入抛出 ValueError。"""
     commit_type = commit_type.strip()
     summary = summary.strip()
     tracker = tracker.strip()
@@ -38,20 +39,16 @@ def build_subject(commit_type: str, summary: str, tracker: str) -> str:
         raise ValueError("summary must be a non-empty single line")
     if not tracker or "\n" in tracker:
         raise ValueError("tracker must be a non-empty single line")
+    if any(character.isspace() for character in tracker):
+        raise ValueError("tracker must be a single token")
 
-    if tracker.startswith("#"):
-        if not re.fullmatch(r"#[0-9]+", tracker):
-            raise ValueError("github tracker must look like #1234")
-    elif tracker.startswith("--"):
-        if not re.fullmatch(r"--[^=\s]+=[0-9]+", tracker):
-            raise ValueError("tapd tracker must look like --story=1234")
-    else:
-        raise ValueError("tracker must start with # or --")
-
-    return f"{commit_type}: {summary} {tracker}"
+    subject = f"{commit_type}: {summary} {tracker}"
+    validate_message(subject, allow_merge=False)
+    return subject
 
 
 def render_message(args: argparse.Namespace) -> str:
+    """渲染合法标题及可选 bullet 正文。"""
     subject = build_subject(args.type, args.summary, args.tracker)
     body_items = [normalize_body_item(item) for item in args.body]
     body_items = [item for item in body_items if item]
@@ -65,44 +62,27 @@ def render_message(args: argparse.Namespace) -> str:
 
 
 def classify_subject(subject: str, allow_merge: bool) -> str | None:
-    if GITHUB_PATTERN.match(subject):
-        return "Github Type"
-    if TAPD_PATTERN.match(subject):
-        return "TAPD Type"
-    if allow_merge and MERGE_PATTERN.match(subject):
-        return "Merge Type"
-    return None
+    """委托 shell 返回标题类型，非法标题返回 None。"""
+    arguments = ["sh", str(VALIDATOR), "classify"]
+    if allow_merge:
+        arguments.append("--allow-merge")
+    result = subprocess.run(arguments, input=subject, text=True, capture_output=True, check=False)
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def validate_message(message: str, allow_merge: bool) -> None:
+    """校验标题，不限制正文组织；空标题或非法标题抛出 ValueError。"""
     lines = message.splitlines()
     if not lines or not lines[0].strip():
         raise ValueError("commit message is empty")
 
     subject = lines[0].strip()
-    subject_kind = classify_subject(subject, allow_merge)
-    if not subject_kind:
+    if not classify_subject(subject, allow_merge):
         raise ValueError(f"invalid subject: {subject}")
-
-    if subject_kind == "Merge Type":
-        return
-    if len(lines) == 1:
-        raise ValueError("commit message body must contain at least one bullet")
-    if lines[1].strip():
-        raise ValueError("second line must be blank before body")
-
-    has_body_bullet = False
-    for line_no, line in enumerate(lines[2:], start=3):
-        if not line.strip():
-            continue
-        if not line.startswith("- "):
-            raise ValueError(f"body line {line_no} must start with '- '")
-        has_body_bullet = True
-    if not has_body_bullet:
-        raise ValueError("commit message body must contain at least one bullet")
 
 
 def read_message(args: argparse.Namespace) -> str:
+    """读取旧 CLI 支持的 message 文件、参数或 stdin。"""
     if args.message_file:
         return Path(args.message_file).read_text(encoding="utf-8")
     if args.message:
@@ -111,6 +91,7 @@ def read_message(args: argparse.Namespace) -> str:
 
 
 def validate_command(args: argparse.Namespace) -> int:
+    """执行兼容校验入口，成功返回 0。"""
     message = read_message(args)
     validate_message(message, allow_merge=args.allow_merge)
     print("Valid commit message")
@@ -118,6 +99,7 @@ def validate_command(args: argparse.Namespace) -> int:
 
 
 def check_log_command(args: argparse.Namespace) -> int:
+    """逐项检查最近的提交标题，首个非法标题返回 1。"""
     result = subprocess.run(
         ["git", "log", "-n", str(args.limit), "--pretty=format:%s"],
         check=True,
@@ -134,6 +116,7 @@ def check_log_command(args: argparse.Namespace) -> int:
 
 
 def parse_args() -> argparse.Namespace:
+    """解析兼容渲染、校验和历史检查参数。"""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -155,6 +138,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """执行兼容命令，预期校验失败返回非零状态。"""
     args = parse_args()
     try:
         if args.command == "render":

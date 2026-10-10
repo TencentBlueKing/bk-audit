@@ -38,6 +38,7 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 from rest_framework.settings import api_settings
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from apps.exceptions import MetaConfigNotExistException
 from apps.itsm.constants import TicketStatus
@@ -54,6 +55,7 @@ from core.observability import (
     start_observation_span,
 )
 from core.utils.data import data_chunks
+from services.web.common.ai import AIAgentTask, AIWorkloadQueue
 from services.web.common.monitor import (
     AnalyseReportGenerateFailedEvent,
     RiskExportFailedEvent,
@@ -64,7 +66,7 @@ from services.web.risk.constants import (
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
-    RiskAICeleryQueue,
+    AnalyseReportStatus,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -83,6 +85,7 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import (
+    AnalyseReport,
     AnalyseReportAgentRequestInfo,
     AnalyseReportErrorInfo,
     AnalyseReportExtraInfo,
@@ -140,7 +143,6 @@ def _validate_analyse_report_content(content: str, report_id: int) -> str:
 
 @celery_app.task(
     bind=True,
-    queue=RiskAICeleryQueue.RISK_REPORT,
     time_limit=settings.RENDER_TASK_TIMEOUT + 60,  # 宽限 60s
     max_retries=settings.RENDER_MAX_RETRY,
     acks_late=True,  # 任务级别的延迟确认
@@ -801,13 +803,44 @@ def _update_analyse_report_extra_info(report, extra_info: dict) -> None:
     report.__class__.objects.filter(report_id=report.report_id).update(extra_info=extra_info)
 
 
+class AnalyseReportAIAgentTask(AIAgentTask):
+    """批量分析限流预算耗尽时写入报告失败终态。"""
+
+    def on_agent_rate_limit_exhausted(self, *, error: AgentRateLimited, args: tuple, kwargs: dict) -> None:
+        report_id = kwargs.get("report_id") if "report_id" in kwargs else args[0]
+        report = AnalyseReport.objects.get(report_id=report_id)
+        now = timezone.now()
+        previous = AnalyseReportExtraInfo.model_validate(report.extra_info)
+        started_at = datetime.datetime.fromisoformat(previous.execution.started_at)
+        report.status = AnalyseReportStatus.FAILED
+        report.extra_info = _build_analyse_report_extra_info(
+            started_at=started_at,
+            ended_at=now,
+            agent_request=previous.agent_request,
+            error=_build_analyse_report_error_info(
+                error,
+                int(getattr(self.request, "retries", 0) or 0),
+                int(settings.AI_AGENT_TASK_MAX_RETRIES),
+            ),
+        )
+        report.save(update_fields=["status", "extra_info", "updated_at"])
+
+
+class AnalyseReportTitleAIAgentTask(AIAgentTask):
+    """标题限流预算耗尽时释放生成中标记。"""
+
+    def on_agent_rate_limit_exhausted(self, *, error: AgentRateLimited, args: tuple, kwargs: dict) -> None:
+        report_id = kwargs.get("report_id") if "report_id" in kwargs else args[0]
+        AnalyseReport.objects.filter(report_id=report_id).update(title_generating=False, updated_at=timezone.now())
+
+
 @celery_app.task(
     bind=True,
-    queue=RiskAICeleryQueue.MULTI_ANALYSE,
+    base=AnalyseReportAIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     time_limit=settings.ANALYSE_REPORT_TIME_LIMIT,
     max_retries=2,
     acks_late=True,
-    rate_limit=settings.RISK_MULTI_ANALYSE_TASK_RATE_LIMIT,
 )
 def generate_analyse_report(self, report_id: int):
     """
@@ -922,6 +955,8 @@ def generate_analyse_report(self, report_id: int):
             )
             return {"report_id": report.report_id}
 
+        except AgentRateLimited:
+            raise
         except Exception as exc:
             max_retries = self.max_retries
             current_retries = getattr(self.request, "retries", 0)
@@ -991,10 +1026,10 @@ def _normalize_analyse_report_ai_title(raw_title: Any, max_length: int) -> str:
 
 @celery_app.task(
     bind=True,
-    queue=RiskAICeleryQueue.TITLE,
+    base=AnalyseReportTitleAIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
     acks_late=True,
-    rate_limit=settings.AI_TITLE_TASK_RATE_LIMIT,
 )
 def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
     """异步生成 AI 分析报告标题"""
@@ -1032,6 +1067,8 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
             report.title = title
             report.title_generating = False
         return {"report_id": report_id, "title": report.title, "updated": updated}
+    except AgentRateLimited:
+        raise
     except Exception:
         AnalyseReport.objects.filter(
             report_id=report_id,
@@ -1042,9 +1079,9 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
 
 
 @celery_app.task(
-    queue=RiskAICeleryQueue.RISK_REPORT,
+    base=AIAgentTask,
+    queue=AIWorkloadQueue.DEFAULT,
     acks_late=True,
-    rate_limit=settings.RENDER_TASK_RATE_LIMIT,
 )
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量
@@ -1072,7 +1109,12 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
         _ = Risk.objects.get(risk_id=risk_id)
 
         # 构建 AI Provider
-        ai_provider = AIProvider(context={"risk_id": risk_id}, ai_variables_config=ai_variables, enable_cache=True)
+        ai_provider = AIProvider(
+            context={"risk_id": risk_id},
+            ai_variables_config=ai_variables,
+            enable_cache=True,
+            enable_agent_rate_limit=True,
+        )
 
         # 执行 AI 调用，收集结果
         ai_results = {}
@@ -1086,6 +1128,9 @@ def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]
                 if result:
                     result = render_ai_markdown(result)
                 ai_results[field_name] = result
+            except AgentRateLimited:
+                # 交给 AIAgentTask 统一延迟重试，避免把限流响应伪装成变量渲染成功。
+                raise
             except Exception as e:
                 logger_celery.exception("[RenderAIVariable] Failed to get AI variable %s: %s", var_name, e)
                 ai_results[field_name] = f"[Error: {e}]"
