@@ -1,5 +1,6 @@
 """BKBase/Doris 真实故障的兼容回归：路由参数、表达式子查询与 UNION 别名。"""
 
+import json
 import re
 import sqlite3
 from dataclasses import replace
@@ -19,6 +20,10 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     SearchLogsRequest,
 )
 from services.web.query.ai_assistant.log_tools.search import LogDetailSearchService
+from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
+from services.web.query.ai_assistant.log_tools.statistics_result import (
+    StatisticsResultParser,
+)
 from services.web.query.ai_assistant.log_tools.statistics_sql import (
     StatisticsSQLBuilder,
 )
@@ -49,6 +54,115 @@ class TestStatisticsBKBaseCompatibility(SimpleTestCase):
         )
         sql = StatisticsSQLBuilder.from_request(self.context, request).build_complete_sql()
         self.assertNotIn(" DIV ", sql)
+
+    def test_json_filters_distinguish_null_missing_and_literal_null(self):
+        """检索缺失口径与统计一致，字符串 null、空串和布尔仍保留为真实值。"""
+        documents = [{"v": None}, {}, {"v": "null"}, {"v": ""}, {"v": 7}, {"v": True}]
+
+        def kind(document, _path):
+            item = json.loads(document)
+            if "v" not in item:
+                return None
+            return {type(None): "null", str: "string", int: "int", bool: "bool"}[type(item["v"])]
+
+        def text(document, _path):
+            item = json.loads(document)
+            if "v" not in item:
+                return None
+            value = item["v"]
+            return value if isinstance(value, str) else json.dumps(value)
+
+        with sqlite3.connect(":memory:") as db:
+            db.create_function("JSON_TYPE", 2, kind)
+            db.create_function("JSON_EXTRACT_STRING", 2, text)
+            for root in ("extend_data", "snapshot_action_info"):
+                db.execute(f"CREATE TABLE logs({root} TEXT)")
+                db.executemany("INSERT INTO logs VALUES(?)", [(json.dumps(doc),) for doc in documents])
+                for operator, filters, count in (
+                    ("isnull", [], 2),
+                    ("notnull", [], 4),
+                    ("eq", ["null"], 1),
+                    ("eq", ["true"], 1),
+                ):
+                    with self.subTest(root=root, operator=operator, filters=filters):
+                        builder = ProjectedLogSQLBuilder(
+                            "logs",
+                            [{"field": {"raw_name": root, "keys": ["v"]}, "operator": operator, "filters": filters}],
+                            [],
+                            1,
+                            10,
+                        )
+                        sql = sqlglot.parse_one(builder.build_count_sql(), read="starrocks").sql(dialect="sqlite")
+                        self.assertEqual(db.execute(sql).fetchone()[0], count)
+                db.execute("DROP TABLE logs")
+
+    def test_snapshot_groups_preserve_scalar_types_without_variant_schema_function(self):
+        """snapshot 与动态 JSON 共用标量语义，布尔不可变为 0/1，数字与文本不可混组。"""
+        field = LogFieldRef(raw_name="snapshot_action_info", keys=["value"])
+        request = make_request(
+            dimensions=[dict(id="value", type="FIELD", field=field)],
+            metrics=[dict(id="events", type="COUNT")],
+            top_n=10,
+        )
+        builder = StatisticsSQLBuilder.from_request(replace(self.context, table="logs"), request)
+        sql = sqlglot.parse_one(builder.build_complete_sql(), read="starrocks").sql(dialect="sqlite")
+
+        def value(document, path):
+            """测试只含简单单层路径；JSON 语法兼容性另由真实 BKBase 验证。"""
+            return json.loads(document).get(path.removeprefix("$."))
+
+        def kind(document, path):
+            """按独立合成值提供 Doris JSON 类型，避免调用生产规范化逻辑求期望值。"""
+            item = value(document, path)
+            return {type(None): "null", bool: "bool", int: "int", float: "double", str: "string"}[type(item)]
+
+        with sqlite3.connect(":memory:") as db:
+            db.create_function("REGEXP", 2, lambda pattern, item: bool(re.search(pattern, item or "")))
+            db.create_function("REGEXP_LIKE", 2, lambda item, pattern: bool(re.search(pattern, item or "")))
+            db.create_function("JSON_TYPE", 2, kind)
+            db.create_function("JSON_EXTRACT_LARGEINT", 2, value)
+            db.create_function("JSON_EXTRACT_DOUBLE", 2, value)
+            db.create_function("JSON_EXTRACT_STRING", 2, lambda document, path: value(document, path))
+            db.create_function("JSON_EXTRACT", 2, lambda document, path: json.dumps(value(document, path)))
+            db.create_function("JSON_QUOTE", 1, json.dumps)
+            db.row_factory = sqlite3.Row
+            db.execute("CREATE TABLE logs(system_id TEXT, snapshot_action_info TEXT)")
+            db.executemany(
+                "INSERT INTO logs VALUES(?,?)",
+                [
+                    ("s1", json.dumps(item))
+                    for item in (
+                        {"value": 7},
+                        {"value": 7.0},
+                        {"value": "7"},
+                        {"value": True},
+                        {"value": False},
+                        {"value": ""},
+                        {"value": None},
+                        {},
+                    )
+                ],
+            )
+            frames = [dict(row) for row in db.execute(sql)]
+
+        result = StatisticsResultParser(request).parse({"list": frames})
+        actual = {
+            (group.values[0].value_type, str(group.values[0].value)): group.count
+            for group in result.groups
+            if group.kind == "VALUE"
+        }
+        self.assertEqual(
+            actual,
+            {
+                ("number", "7"): 2,
+                ("string", "7"): 1,
+                ("boolean", "True"): 1,
+                ("boolean", "False"): 1,
+                ("string", ""): 1,
+            },
+        )
+        self.assertEqual(result.total_count, 8)
+        self.assertEqual(next(group.count for group in result.groups if group.kind == "MISSING"), 2)
 
     def test_union_frame_identifiers_avoid_reserved_key(self):
         """BKBase 重写 UNION 时不能依赖反引号保留 key 别名。"""

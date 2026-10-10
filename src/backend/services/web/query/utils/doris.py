@@ -20,20 +20,16 @@ from typing import List, Union
 from pypika.enums import Order
 from pypika.functions import Avg, Count, Max, Min
 from pypika.queries import QueryBuilder
-from pypika.terms import BasicCriterion, Criterion, EmptyCriterion, Function
+from pypika.terms import BasicCriterion, Case, Criterion, EmptyCriterion, Function
 
 from apps.meta.utils.fields import STANDARD_FIELDS
 from core.constants import OrderTypeChoices
 from core.sql.builder.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.builder.functions import DateTrunc, FromUnixTime, PercentileApprox
-from core.sql.builder.terms import (
-    DorisField,
-    DorisJsonTypeExtractFunction,
-    DorisVariantField,
-    PypikaField,
-)
+from core.sql.builder.terms import DorisField, DorisJsonTypeExtractFunction, PypikaField
 from core.sql.builder.utils import operate
 from core.sql.constants import FieldType
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -76,14 +72,19 @@ class BaseDorisSQLBuilder:
         """
         return BkBaseTable(table)
 
-    def get_pypika_field(self, name: str, keys: List[str] = None) -> Union[DorisField, Function]:
+    def get_pypika_field(self, name: str, keys: List[str] = None) -> Union[DorisField, Function, Case]:
         """
         获取pypika字段
         """
-        if name in self.VARIANT_FIELDS and keys:
-            return DorisVariantField(name=name, table=self.table, keys=keys)
-        if name in self.JSON_TYPE_FIELDS and keys:
-            return DorisJsonTypeExtractFunction(DorisField(name=name, table=self.table), keys=keys)
+        if keys and name in self.VARIANT_FIELDS | self.JSON_TYPE_FIELDS:
+            validate_log_json_keys(keys)
+            root = DorisField(name=name, table=self.table)
+            value = DorisJsonTypeExtractFunction(root, keys=keys)
+            # JSON/VARIANT 共用字面路径，避免方括号误读业务 Key。
+            # JSON_EXTRACT_STRING 会把 JSON null 读成文本 "null"；按实际类型保留 SQL NULL，
+            # 字符串 "null" 仍是正常值，isnull/notnull 与统计缺失口径保持一致。
+            kind = Function("JSON_TYPE", root, value.args[1])
+            return Case().when(kind == "null", None).else_(value)
         return DorisField(name=name, table=self.table)
 
     def build_filters(self, pypika_field: DorisField, operator: str, filters: list) -> BasicCriterion:

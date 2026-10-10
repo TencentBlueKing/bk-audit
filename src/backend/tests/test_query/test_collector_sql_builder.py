@@ -137,7 +137,8 @@ class TestDorisSQLBuilder(TestCase):
             f"AND `dtEventTimeStamp`>={self.start_timestamp} "
             f"AND `dtEventTimeStamp`<={self.end_timestamp} AND `system_id` "
             f"IN ('bk-audit','bk-bscp') AND `action_id`='create_link_table' AND `instance_name` "
-            f"LIKE '%123131%' AND JSON_EXTRACT_STRING(`instance_data`,'$.key1')='value1' LIMIT 50"
+            f"LIKE '%123131%' AND CASE WHEN JSON_TYPE(`instance_data`,'$.key1')='null' THEN NULL "
+            f"ELSE JSON_EXTRACT_STRING(`instance_data`,'$.key1') END='value1' LIMIT 50"
         )
         print(data_sql)
         self.assertEqual(data_sql, expect)
@@ -147,7 +148,8 @@ class TestDorisSQLBuilder(TestCase):
             f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} "
             f"AND `system_id` IN ('bk-audit','bk-bscp') "
             f"AND `action_id`='create_link_table' AND `instance_name` LIKE '%123131%' "
-            f"AND JSON_EXTRACT_STRING(`instance_data`,'$.key1')='value1' LIMIT 1"
+            f"AND CASE WHEN JSON_TYPE(`instance_data`,'$.key1')='null' THEN NULL "
+            f"ELSE JSON_EXTRACT_STRING(`instance_data`,'$.key1') END='value1' LIMIT 1"
         )
         print(count_sql)
         self.assertEqual(count_sql, expect)

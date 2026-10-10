@@ -42,27 +42,17 @@ class StatisticsFieldSQL:
         root = builder.get_pypika_field(self.field.raw_name).get_sql(quote_char="`")
         if self.field.keys:
             path = ValueWrapper(DorisJsonTypeExtractFunction._format_json_path(self.field.keys)).get_sql()
-            if self.field.raw_name in builder.VARIANT_FIELDS:
-                value = builder.get_pypika_field(self.field.raw_name, self.field.keys).get_sql(quote_char="`")
-                # VARIANT 的类型表用完整子路径作键；未识别/DECIMAL/JSONB 不做猜测转换。
-                type_path = ValueWrapper(
-                    DorisJsonTypeExtractFunction._format_json_path([".".join(self.field.keys)])
-                ).get_sql()
-                kind = f"LOWER(JSON_EXTRACT_STRING(VARIANT_TYPE({root}),{type_path}))"
-                kind = f"CASE WHEN {value} IS NULL THEN NULL ELSE COALESCE({kind},'unsupported') END"
-                integer = f"CASE WHEN {kind} IN {INTEGER_KINDS} THEN CAST({value} AS LARGEINT) END"
-                double = f"CASE WHEN {kind} IN {FLOAT_KINDS} THEN CAST({value} AS DOUBLE) END"
-                text = f"CASE WHEN {kind} IN ('string','bool','boolean') THEN CAST({value} AS STRING) END"
-            else:
-                kind = f"LOWER(JSON_TYPE({root},{path}))"
-                integer = f"CASE WHEN {kind} IN {INTEGER_KINDS} THEN JSON_EXTRACT_LARGEINT({root},{path}) END"
-                double = f"CASE WHEN {kind} IN {FLOAT_KINDS} THEN JSON_EXTRACT_DOUBLE({root},{path}) END"
-                text = f"JSON_EXTRACT_STRING({root},{path})"
-                # JSON_EXTRACT_STRING 只负责 string；boolean 保留 JSON 原生序列化。
-                text = (
-                    f"CASE WHEN {kind} IN ('bool','boolean') THEN CAST(JSON_EXTRACT({root},{path}) AS STRING) "
-                    f"ELSE {text} END"
-                )
+            # BKBase 的 JSON 函数也支持 VARIANT；按路径读取实际类型，
+            # 不依赖高版本 VARIANT_TYPE，也避免 VARIANT 布尔 CAST 变成 0/1。
+            kind = f"LOWER(JSON_TYPE({root},{path}))"
+            integer = f"CASE WHEN {kind} IN {INTEGER_KINDS} THEN JSON_EXTRACT_LARGEINT({root},{path}) END"
+            double = f"CASE WHEN {kind} IN {FLOAT_KINDS} THEN JSON_EXTRACT_DOUBLE({root},{path}) END"
+            text = f"JSON_EXTRACT_STRING({root},{path})"
+            # boolean 使用 JSON 原生文本，避免 VARIANT 直接 CAST 的 0/1 表示。
+            text = (
+                f"CASE WHEN {kind} IN ('bool','boolean') THEN CAST(JSON_EXTRACT({root},{path}) AS STRING) "
+                f"ELSE {text} END"
+            )
         else:
             declared = AGGREGATION_STANDARD_FIELD_TYPES.get(self.field.raw_name)
             if declared in {"int", "long", "timestamp"}:

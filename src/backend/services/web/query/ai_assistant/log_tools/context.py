@@ -105,10 +105,6 @@ class LogQueryContextService:
             "bind_system_info": False,
         }
         serializer = CollectorSearchAllReqSerializer(data=payload)
-        # DRF 为每个实例复制字段；仅此工具入口保留 JSON key 原文，不改变 Web 的历史校验行为。
-        # 必须在校验前设置，使权限检查和 SQL 构造使用同一条路径，而不是事后恢复未经校验的输入。
-        key_field = serializer.fields["conditions"].child.fields["field"].fields["keys"].child
-        key_field.trim_whitespace = False
         try:
             serializer.is_valid(raise_exception=True)
         except (DrfValidationError, CoreValidationError) as err:

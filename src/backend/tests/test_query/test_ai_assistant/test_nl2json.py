@@ -286,6 +286,15 @@ class TestNL2JSONService(AIAssistantTestCase):
         with self.assertRaises(InvalidConditionError):
             self._convert()
 
+    def test_unqueryable_extension_key_returns_a_condition_error(self, mock_chat):
+        """模型生成不可解析路径时保留领域错误，不留到 SQL 执行失败。"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "extend_data", "keys": ["space key"], "operator": "eq", "filters": ["x"]}]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(InvalidConditionError) as error:
+            self._convert()
+        self.assertIn("字段子键不支持", str(error.exception))
+
     def test_extension_multilayer_keys_accepted(self, mock_chat):
         """多层下钻放行（产品确认不做层级限制）。
 

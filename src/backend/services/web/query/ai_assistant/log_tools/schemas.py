@@ -1,7 +1,8 @@
 """日志工具共享的 Pydantic 协议与成本边界。
 
 模型同时服务业务代码校验和 OpenAPI schema 生成。拓展字段路径允许业务定义的
-Unicode 与标点 key，但点号保留为现有跨模块路径分隔符；SQL 转义统一由查询构建层完成。
+Unicode 与常见标点 key；点号保留为跨模块路径分隔符，引擎不支持的子键提前拒绝。
+SQL 转义统一由查询构建层完成。
 """
 
 import json
@@ -53,6 +54,7 @@ from services.web.query.ai_assistant.schemas import (
     SelectionFieldOption,
 )
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
 
 LOG_TOOL_MAX_CONDITIONS = 100
@@ -139,6 +141,7 @@ def _json_size(value: Any) -> int:
 def _validate_field_path(raw_name: str, keys: List[str]) -> None:
     """校验动态字段路径成本，并保留点号作为无歧义路径分隔符。"""
 
+    validate_log_json_keys(keys)
     if any("." in key for key in keys):
         raise ValueError("field key must not contain the path separator '.'")
     if len(keys) > _bounded_limit(settings.AI_LOG_TOOL_MAX_FIELD_PATH_DEPTH, LOG_TOOL_MAX_FIELD_PATH_DEPTH, 0):
@@ -171,7 +174,7 @@ class AgentConditionField(ConditionField):
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-        description="最多 16 段业务子键，允许 Unicode 和除点号外的标点；完整字段路径 UTF-8 最大 1024 bytes。",
+        description="最多 16 段业务子键，允许 Unicode 和常见标点；不支持点号、空白、控制字符、双引号、反斜杠和星号；完整路径 UTF-8 最大 1024 bytes。",
     )
 
     @model_validator(mode="after")
@@ -298,8 +301,8 @@ class AgentLogToolRequest(BaseModel):
 class LogFieldRef(BaseModel):
     """受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。
 
-    JSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及
-    路径成本；Doris JSON SQL 构建器负责统一转义。
+    JSON 字段由业务系统定义，路径段允许中文和可查询的常见标点。本模型约束可见根字段、
+    可解析子键及路径成本；Doris JSON SQL 构建器负责统一转义。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -316,12 +319,12 @@ class LogFieldRef(BaseModel):
             allow_empty=True,
             default=list,
             max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-            help_text="可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组。",
+            help_text="可见 JSON 根字段的业务子路径；不支持点号、空白、控制字符、双引号、反斜杠和星号，非 JSON 字段必须为空数组。",
         ),
     ] = Field(
         default_factory=list,
         max_length=LOG_TOOL_MAX_FIELD_PATH_DEPTH,
-        description="可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。",
+        description="可见 JSON 根字段的业务子路径；允许 Unicode 和常见标点，不支持点号、空白、控制字符、双引号、反斜杠和星号；非 JSON 字段必须为空数组，完整路径最大 1024 bytes。",
     )
     field_type: Optional[LogFieldType] = Field(
         default=None,
@@ -645,8 +648,8 @@ class AggregationMetric(BaseModel):
     value_type: Optional[AggregationValueType] = Field(
         default=None,
         description=(
-            "COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 extend_data 数值"
-            "聚合必须传 LONG 或 DOUBLE，标准数值字段必须省略。"
+            "COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 JSON 子字段数值"
+            "聚合必须传 LONG 或 DOUBLE，标准数值字段必须省略。文本只转换普通十进制（不含科学记数），失败见 data_quality；最终数值超安全范围返回 2926008。"
         ),
     )
     percentile: Optional[float] = Field(

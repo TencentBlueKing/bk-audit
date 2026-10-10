@@ -175,7 +175,7 @@ class LogDetailSearchService:
 
         options_map = FieldMapHandler(
             fields=[field.raw_name for field in fields], timedelta=DEFAULT_TIMEDELTA, namespace=namespace
-        ).collector_field_map
+        ).field_map
         return [
             LogDetailColumn(
                 field=field,

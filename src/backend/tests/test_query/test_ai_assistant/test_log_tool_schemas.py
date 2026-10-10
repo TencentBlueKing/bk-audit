@@ -14,6 +14,7 @@ from django.db.models import TextChoices
 from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError as PydanticValidationError
 
+from core.exceptions import ValidationError
 from services.web.query.ai_assistant import exceptions as log_exceptions
 from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
@@ -36,6 +37,7 @@ from services.web.query.ai_assistant.log_tools.schemas import (
 )
 from services.web.query.ai_assistant.log_tools.sql import ProjectedLogSQLBuilder
 from services.web.query.ai_assistant.schemas import SearchCondition
+from services.web.query.serializers import QuerySearchConditionSerializer
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -216,10 +218,44 @@ class TestLogFieldRef(AIAssistantTestCase):
             LogFieldRef(raw_name="username", keys=["bypass"])
 
     def test_extend_data_accepts_business_defined_unicode_and_punctuation_keys(self):
-        for key in ("中文字段", "123field", "bad-key", "x`y", "带 空格", "x']; SELECT 1; --"):
+        for key in ("中文字段", "123field", "bad-key", "x`y", "a'b", "a:b", "a@b"):
             with self.subTest(key=key):
                 field = LogFieldRef(raw_name="extend_data", keys=[key])
                 self.assertEqual(field.keys, [key])
+
+    def test_unsupported_json_keys_fail_before_querying(self):
+        """不可查询键和控制字符在请求阶段拒绝，不伪装成字段缺失。"""
+        for key in ("带 空格", 'quoted"key', r"path\key", "*", "tab\tkey", "line\nkey", "\x7f", "\x80", "\x9f"):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(PydanticValidationError, "unsupported JSON field key"):
+                    LogFieldRef(raw_name="extend_data", keys=[key])
+                with self.assertRaisesRegex(PydanticValidationError, "unsupported JSON field key"):
+                    SearchLogsRequest(
+                        condition={
+                            **self.make_condition().model_dump(),
+                            "conditions": [
+                                {
+                                    "field": {"raw_name": "extend_data", "keys": [key]},
+                                    "operator": "eq",
+                                    "filters": ["x"],
+                                }
+                            ],
+                        }
+                    )
+
+    def test_web_conditions_reject_unqueryable_keys_but_ignore_scalar_subpaths(self):
+        """Web 条件复用查询键校验，普通字段误带 keys 仍按旧协议忽略。"""
+        payload = {"field": {"raw_name": "extend_data"}, "operator": "eq", "filters": ["x"]}
+        for key in ("space key", "\x7f", "\x80", "\x9f"):
+            with self.subTest(key=key):
+                payload["field"]["keys"] = [key]
+                with self.assertRaises(ValidationError) as error:
+                    QuerySearchConditionSerializer(data=payload).is_valid(raise_exception=True)
+                self.assertEqual(error.exception.STATUS_CODE, 400)
+        payload["field"]["raw_name"] = "username"
+        serializer = QuerySearchConditionSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        self.assertEqual(serializer.validated_data["field"]["keys"], [])
 
     def test_extend_data_rejects_literal_dot_in_path_segment(self):
         """点号是跨模块路径分隔符，不能同时作为无转义的字面 key。"""
@@ -489,18 +525,28 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         self.assertIn("OFFSET 25", sql)
         self.assertNotIn("SELECT *", sql)
 
-    def test_unicode_and_quote_keys_are_escaped_by_json_sql_builder(self):
-        sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=["中文字段", "x']; SELECT 1; --"])])
+    def test_unicode_and_single_quote_keys_are_escaped_by_json_sql_builder(self):
+        sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=["中文字段", "x'];SELECT1;--"])])
 
         self.assertIn("中文字段", sql)
-        self.assertIn("'$.中文字段.\"x'']; SELECT 1; --\"'", sql)
-        self.assertNotIn("'$.中文字段.\"x']; SELECT 1; --\"'", sql)
+        self.assertIn("'$.中文字段.\"x''];SELECT1;--\"'", sql)
+        self.assertNotIn("'$.中文字段.\"x'];SELECT1;--\"'", sql)
 
-    def test_quote_and_backslash_key_keeps_json_path_escaping_after_sql_parsing(self):
-        sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=['quoted"key', r"path\key"])])
-
-        self.assertIn(r'quoted\\"key', sql)
-        self.assertIn(r"path\\\\key", sql)
+    def test_snapshot_projection_and_filter_use_the_same_literal_json_path(self):
+        """旧 VARIANT 方括号会误读中括号键、拒绝单引号键，统一使用 JSON 路径。"""
+        field = LogFieldRef(raw_name="snapshot_action_info", keys=["bracket[key]", "a'b"])
+        builder = ProjectedLogSQLBuilder(
+            table="test_rt",
+            conditions=[{"field": field.model_dump(), "operator": "isnull", "filters": []}],
+            sort_list=[],
+            page=1,
+            page_size=1,
+        )
+        sql = builder.build_data_sql([field])
+        self.assertEqual(sql.count("JSON_EXTRACT_STRING(`snapshot_action_info`"), 2)
+        self.assertIn("JSON_TYPE(`snapshot_action_info`", sql)
+        self.assertIn("IS NULL", sql)
+        self.assertNotIn("`snapshot_action_info`[", sql)
 
     def test_parent_object_sample_preserves_scope_and_escapes_json_path(self):
         """父对象筛选沿用权限和时间条件，特殊子键仍按 JSONPath 字面量查询。"""
@@ -517,15 +563,14 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
 
         sql = builder.build_parent_object_sample_sql(
             [LogFieldRef(raw_name="extend_data"), LogFieldRef(raw_name="system_id")],
-            LogFieldRef(raw_name="extend_data", keys=['quoted"key', r"path\key"]),
+            LogFieldRef(raw_name="extend_data", keys=["风险-详情", "a'b"]),
         )
 
         self.assertIn("`system_id`='scope'", sql)
         self.assertIn("`thedate`>='20260901'", sql)
         self.assertEqual(sql.count("JSON_TYPE(`extend_data`"), 1)
         self.assertEqual(sql.count("JSON_KEYS(`extend_data`"), 1)
-        self.assertIn(r'quoted\\"key', sql)
-        self.assertIn(r"path\\\\key", sql)
+        self.assertIn('$."风险-详情"."a\'\'b"', sql)
         self.assertTrue(sql.endswith("LIMIT 25"), sql)
         self.assertNotIn("OFFSET", sql)
 

@@ -156,11 +156,11 @@ class SelectionFieldMeta(BaseModel):
     allow_operators: List[str] = Field(default_factory=list)
     # 原始查询值（如 0/-1，非展示值"成功(0)"），无数据为 None
     sample_value: Optional[Any] = None
-    # sample_value 的展示映射值（仅枚举字段产出：options 按 id 匹配 name，如 0 → "成功"、-1 → "结果码 -1"）；
+    # sample_value 的展示映射值（仅枚举字段产出：options 按 id 匹配原枚举 name，如 0 → "成功"、-1 → "其他"）；
     # 供前端渲染（原始值 0/-1 对用户不友好），不注入 AI prompt（防 AI 照抄展示值构造 filters）；
     # 非枚举字段为 None，历史快照无该字段时同为 None（前端自行回退展示 sample_value）
     sample_value_display: Optional[str] = None
-    # 常见值展示提示（如 result_code 的 成功0/结果码-1）；不限制用户传入其他实际值，非枚举字段为 None；前端 options 非空时渲染下拉
+    # 枚举展示与日志检索页一致；不限制用户传入其他实际值，非枚举字段为 None；前端 options 非空时渲染下拉
     options: Optional[List[SelectionFieldOption]] = None
     # 仅拓展字段返回
     system_id: Optional[str] = None

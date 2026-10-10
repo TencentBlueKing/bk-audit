@@ -43,6 +43,9 @@ from services.web.query.ai_assistant.log_tools.statistics_result import (
 from services.web.query.ai_assistant.log_tools.statistics_sql import (
     StatisticsSQLBuilder,
 )
+from services.web.query.ai_assistant.log_tools.statistics_types import (
+    StatisticsNumberOutOfRange,
+)
 
 
 class LogAggregationService:
@@ -142,6 +145,8 @@ class LogAggregationService:
                     fill_time_buckets=fill_time_buckets,
                 ).parse(raw)
                 return result, axis, took_ms
+            except StatisticsNumberOutOfRange as err:
+                raise UnsupportedStatisticsNumber() from err
             except StatisticsBudgetExceeded as err:
                 suggestion = err.data["suggested_interval"]
                 if not time_dimension or time_dimension.interval != "AUTO" or suggestion is None:

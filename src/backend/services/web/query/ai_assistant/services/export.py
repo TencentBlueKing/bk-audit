@@ -162,12 +162,11 @@ class PreviewExportService:
                         seen.add(key)
                         keys.append(key)
 
-        # ② 构造展平后的列：extend_data 单列在**原位**替换为子键列（保持与前端
-        # "日志检索结果"一致的列序——拓展数据列固定在"操作（完整日志）"之前，
-        # 验收 2026-10-09）；samples 无拓展子键时回退默认导出（列不变化）
+        # 无可平铺子键时沿用正常导出，零数据快照仍保留字段标题。
         if not keys:
             return cls.export(output)
 
+        # 在原位置替换拓展数据列，保持与前端展示一致的列顺序。
         flat_columns: List[ResultColumn] = []
         for column in output.columns:
             if column.raw_name == "extend_data" and not column.keys:
