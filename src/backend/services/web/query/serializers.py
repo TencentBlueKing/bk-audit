@@ -38,7 +38,7 @@ from core.exceptions import ValidationError
 from core.models import get_request_username
 from core.serializers import OrderBaseSerializer
 from core.sql.constants import FieldType
-from core.utils.time import format_date_string, parse_datetime
+from core.utils.time import format_date_string
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
@@ -67,6 +67,7 @@ from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
 from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
+from services.web.query.utils.time_range import parse_log_time
 from services.web.risk.constants import (
     ES_SEARCH_ORIGIN_FIELDS,
     IGNORE_SEARCH_ALL_FILTER_FIELDS,
@@ -361,8 +362,8 @@ class CollectorSearchAllReqSerializer(CollectorSearchReqBaseSerializer):
         时间分区条件
         """
 
-        start_time = parse_datetime(validated_request_data["start_time"])
-        end_time = parse_datetime(validated_request_data["end_time"])
+        start_time = parse_log_time(str(validated_request_data["start_time"]))
+        end_time = parse_log_time(str(validated_request_data["end_time"]))
         start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
         return [

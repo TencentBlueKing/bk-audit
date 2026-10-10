@@ -260,7 +260,7 @@ class AgentSearchCondition(SearchCondition):
     @model_validator(mode="after")
     def validate_time_range(self):
         """覆盖旧检索解析器的UTC歧义，与SQL和桶轴按同一真实时刻比较。"""
-        if parse_log_time(self.start_time) > parse_log_time(self.end_time):
+        if parse_log_time(self.start_time).timestamp() > parse_log_time(self.end_time).timestamp():
             raise ValueError("start_time must not exceed end_time")
         return self
 
