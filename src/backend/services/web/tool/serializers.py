@@ -201,9 +201,14 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
                 validated_config = SmartPageToolConfig.model_validate(config)
                 attrs["_smart_page_overrides"] = validated_config.default_value_overrides.model_dump()
                 attrs["_smart_page_usage_limits"] = validated_config.usage_limits.model_dump()
-                # 避免越权改写工具基础属性（name/description/namespace/status/tags/config 等）
+                # 允许编辑基础信息和覆盖配置，避免越权改写其他字段
                 allowed_keys = {
                     "uid",
+                    "name",
+                    "description",
+                    "namespace",
+                    "status",
+                    "tags",
                     "_smart_page_overrides",
                     "_smart_page_usage_limits",
                     "visibility",
