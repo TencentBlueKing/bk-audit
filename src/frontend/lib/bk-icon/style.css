@@ -473,3 +473,12 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .audit-icon-huihua:before {
 	content: "\e1c2";
 }
+.audit-icon-tishi:before {
+	content: "\e1c3";
+}
+.audit-icon-ai:before {
+	content: "\e1c6";
+}
+.audit-icon-xingzhuang:before {
+	content: "\e1c7";
+}
