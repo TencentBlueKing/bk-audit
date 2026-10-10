@@ -36,12 +36,12 @@ class UsageLimitsModelTest(TestCase):
         """合法账号类型值应通过校验"""
         limits = UsageLimits(
             scenes={
-                "1001": {"account_type": ["ctx", "openid"]},
+                "1001": {"account_type": ["form_ctx", "form_openid"]},
                 "1002": {"account_type": ["form_wechat"]},
             }
         )
         self.assertEqual(len(limits.scenes), 2)
-        self.assertEqual(limits.scenes["1001"]["account_type"], ["ctx", "openid"])
+        self.assertEqual(limits.scenes["1001"]["account_type"], ["form_ctx", "form_openid"])
 
     def test_invalid_account_type_value(self):
         """非法账号类型值应抛出异常"""
@@ -59,7 +59,7 @@ class UsageLimitsModelTest(TestCase):
     def test_account_type_must_be_list(self):
         """account_type 必须是列表"""
         with self.assertRaises(ValidationError):
-            UsageLimits(scenes={"1001": {"account_type": "ctx"}})  # 字符串而非列表
+            UsageLimits(scenes={"1001": {"account_type": "form_ctx"}})  # 字符串而非列表
 
     def test_no_account_type_limit(self):
         """不配置 account_type 时应通过"""
@@ -78,25 +78,25 @@ class SmartPageToolConfigWithUsageLimitsTest(TestCase):
     def test_create_with_usage_limits(self):
         """创建带 usage_limits 的配置"""
         config = SmartPageToolConfig(
-            usage_limits=UsageLimits(scenes={"1001": {"account_type": ["ctx"]}}),
+            usage_limits=UsageLimits(scenes={"1001": {"account_type": ["form_ctx"]}}),
         )
-        self.assertEqual(config.usage_limits.scenes["1001"]["account_type"], ["ctx"])
+        self.assertEqual(config.usage_limits.scenes["1001"]["account_type"], ["form_ctx"])
 
     def test_model_validate_with_usage_limits(self):
         """使用 model_validate 解析带 usage_limits 的配置"""
         config_dict = {
             "usage_limits": {
                 "scenes": {
-                    "1001": {"account_type": ["openid", "form_wechat"]},
+                    "1001": {"account_type": ["form_openid", "form_wechat"]},
                 },
                 "systems": {
-                    "sys001": {"account_type": ["ctx"]},
+                    "sys001": {"account_type": ["form_ctx"]},
                 },
             },
         }
         config = SmartPageToolConfig.model_validate(config_dict)
-        self.assertEqual(config.usage_limits.scenes["1001"]["account_type"], ["openid", "form_wechat"])
-        self.assertEqual(config.usage_limits.systems["sys001"]["account_type"], ["ctx"])
+        self.assertEqual(config.usage_limits.scenes["1001"]["account_type"], ["form_openid", "form_wechat"])
+        self.assertEqual(config.usage_limits.systems["sys001"]["account_type"], ["form_ctx"])
 
     def test_default_usage_limits(self):
         """默认 usage_limits 应为空"""
@@ -135,20 +135,20 @@ class GetAllowedAccountTypesTest(TestCase):
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
-                    "1001": {"account_type": ["ctx", "openid"]},
+                    "1001": {"account_type": ["form_ctx", "form_openid"]},
                 }
             }
         )
         resource = GetToolDetail()
         result = resource._get_allowed_account_types(tool, scene_id="1001")
-        self.assertEqual(result, ["ctx", "openid"])
+        self.assertEqual(result, ["form_ctx", "form_openid"])
 
     def test_scene_not_configured(self):
         """场景未配置限制时返回全部账号类型"""
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
-                    "1001": {"account_type": ["ctx"]},
+                    "1001": {"account_type": ["form_ctx"]},
                 }
             }
         )
@@ -174,16 +174,16 @@ class GetAllowedAccountTypesTest(TestCase):
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
-                    "1001": {"account_type": ["ctx"]},
+                    "1001": {"account_type": ["form_ctx"]},
                 },
                 "systems": {
-                    "sys001": {"account_type": ["openid"]},
+                    "sys001": {"account_type": ["form_openid"]},
                 },
             }
         )
         resource = GetToolDetail()
         result = resource._get_allowed_account_types(tool, scene_id="1001", system_id="sys001")
-        self.assertEqual(result, ["ctx"])
+        self.assertEqual(result, ["form_ctx"])
 
     def test_scene_empty_account_type_list(self):
         """场景配置空列表时返回空列表（全部禁止）"""
@@ -203,21 +203,21 @@ class GetAllowedAccountTypesTest(TestCase):
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
-                    "1001": {"account_type": ["form_qq", "ctx", "openid"]},
+                    "1001": {"account_type": ["form_qq", "form_ctx", "form_openid"]},
                 }
             }
         )
         resource = GetToolDetail()
         result = resource._get_allowed_account_types(tool, scene_id="1001")
-        # 应保持 PROFILE_ACCOUNT_TYPES 的顺序：ctx, openid, form_wechat, form_qq
-        self.assertEqual(result, ["ctx", "openid", "form_qq"])
+        # 应保持 PROFILE_ACCOUNT_TYPES 的顺序：form_ctx, form_openid, form_wechat, form_qq
+        self.assertEqual(result, ["form_ctx", "form_openid", "form_qq"])
 
     def test_no_scene_id_no_system_id(self):
         """不传 scene_id 和 system_id 时返回全部"""
         tool = self._make_tool(
             usage_limits={
                 "scenes": {
-                    "1001": {"account_type": ["ctx"]},
+                    "1001": {"account_type": ["form_ctx"]},
                 }
             }
         )
@@ -265,7 +265,7 @@ class ValidateUsageLimitsTest(TestCase):
     @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     def test_allowed_account_type(self, mock_validator_cls):
         """使用的账号类型在允许集合内，通过校验"""
-        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["openid"]}}})
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["form_openid"]}}})
         resource = self._make_resource()
         mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
         params = {"params": {"form_openid": "xxx"}}
@@ -274,7 +274,7 @@ class ValidateUsageLimitsTest(TestCase):
     @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     def test_disallowed_account_type_raises(self, mock_validator_cls):
         """使用的账号类型不在允许集合内，抛权限异常"""
-        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["ctx"]}}})
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["form_ctx"]}}})
         resource = self._make_resource()
         mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
         params = {"params": {"form_openid": "xxx"}}
@@ -294,7 +294,7 @@ class ValidateUsageLimitsTest(TestCase):
     @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
     def test_no_account_type_param_used(self, mock_validator_cls):
         """params 中未携带账号类型参数时，即使配置了限制也不拦截"""
-        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["openid"]}}})
+        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["form_openid"]}}})
         resource = self._make_resource()
         mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
         params = {"params": {"game_ids": ["100"]}}

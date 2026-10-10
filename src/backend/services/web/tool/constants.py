@@ -93,8 +93,8 @@ class TargetValueTypeEnum(TextChoices):
 
 
 # 用户画像工具 - 账号类型常量
-PROFILE_ACCOUNT_TYPE_CTX = "ctx"
-PROFILE_ACCOUNT_TYPE_OPENID = "openid"
+PROFILE_ACCOUNT_TYPE_CTX = "form_ctx"
+PROFILE_ACCOUNT_TYPE_OPENID = "form_openid"
 PROFILE_ACCOUNT_TYPE_WECHAT = "form_wechat"
 PROFILE_ACCOUNT_TYPE_QQ = "form_qq"
 
@@ -105,14 +105,6 @@ PROFILE_ACCOUNT_TYPES = [
     PROFILE_ACCOUNT_TYPE_QQ,
 ]
 
-# 账号类型 value（usage_limits 配置/前端展示值）→ SQL 模板条件参数 key 的映射。
-PROFILE_ACCOUNT_TYPE_PARAM_KEYS = {
-    PROFILE_ACCOUNT_TYPE_CTX: "form_ctx",
-    PROFILE_ACCOUNT_TYPE_OPENID: "form_openid",
-    PROFILE_ACCOUNT_TYPE_WECHAT: "form_wechat",
-    PROFILE_ACCOUNT_TYPE_QQ: "form_qq",
-}
-
 
 class UsageLimits(BaseModel):
     """使用限制配置
@@ -120,11 +112,11 @@ class UsageLimits(BaseModel):
     结构示例：
     {
         "scenes": {
-            "场景ID1": {"account_type": ["openid", "form_wechat"]},
-            "场景ID2": {"account_type": ["ctx"]}
+            "场景ID1": {"account_type": ["form_openid", "form_wechat"]},
+            "场景ID2": {"account_type": ["form_ctx"]}
         },
         "systems": {
-            "系统ID1": {"account_type": ["openid"]}
+            "系统ID1": {"account_type": ["form_openid"]}
         }
     }
     """

@@ -1129,7 +1129,7 @@ class ExecuteTool(ToolBase):
         """
         from core.exceptions import PermissionException
         from services.web.common.default_value_validator import DefaultValueValidator
-        from services.web.tool.constants import PROFILE_ACCOUNT_TYPE_PARAM_KEYS
+        from services.web.tool.constants import PROFILE_ACCOUNT_TYPES
 
         config = tool.config or {}
         usage_limits = config.get("usage_limits", {})
@@ -1166,12 +1166,12 @@ class ExecuteTool(ToolBase):
         if not has_limit:
             return
 
-        # 4. 识别本次执行实际使用的账号类型（value 经映射对应 SQL 模板参数 key）
+        # 4. 识别本次执行实际使用的账号类型（value 即 SQL 模板参数 key）
         smart_params = params.get("params", {}) or {}
         used_account_types = {
             account_type
-            for account_type, param_key in PROFILE_ACCOUNT_TYPE_PARAM_KEYS.items()
-            if smart_params.get(param_key) not in (None, "", [])
+            for account_type in PROFILE_ACCOUNT_TYPES
+            if smart_params.get(account_type) not in (None, "", [])
         }
 
         # 5. 校验
