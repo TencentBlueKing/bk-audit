@@ -128,6 +128,7 @@
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
           :key="`${tool.uid}:${props.scopeParams?.scope_type || ''}:${props.scopeParams?.scope_id || ''}`"
+          :allowed-account-types="toolDetailMap[tool.uid]?.allowed_account_types"
           :tool-config="toolDetailMap[tool.uid]?.config"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail"

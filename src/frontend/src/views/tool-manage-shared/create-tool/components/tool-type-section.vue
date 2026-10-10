@@ -23,34 +23,38 @@
         property="tool_type"
         required>
         <div class="tool-type-options">
-        <bk-radio-group v-model="formData.tool_type">
-          <template
-            v-for="(item, index) in toolTypeList"
-            :key="index">
-            <span
-              v-bk-tooltips="{
-                disabled: toolTypeTipDisabled(item),
-                content: toolTypeTip(item),
-              }"
-              class="tool-type-radio">
-              <bk-radio
-                :disabled="isToolTypeDisabled(item.id)"
-                :label="item.id">
-                <div style="display: flex; align-items: center; line-height: 16px;">
-                  <span
-                    v-if="item.id === 'smart_page'"
-                    class="tool-type-badge">画像</span>
-                  <audit-icon
-                    v-else
-                    style=" margin-right: 5px;font-size: 16px;"
-                    svg
-                    :type="iconMap[item.id as keyof typeof iconMap]" />
-                  <span :style="toolTypeTip(item) ? { 'border-bottom': '1px dashed #979ba5' } : {}">{{ item.name }}</span>
-                </div>
-              </bk-radio>
-            </span>
-          </template>
-        </bk-radio-group>
+          <bk-radio-group v-model="formData.tool_type">
+            <template
+              v-for="(item, index) in toolTypeList"
+              :key="index">
+              <span
+                v-bk-tooltips="{
+                  disabled: toolTypeTipDisabled(item),
+                  content: toolTypeTip(item),
+                }"
+                class="tool-type-radio">
+                <bk-radio
+                  :disabled="isToolTypeDisabled(item.id)"
+                  :label="item.id">
+                  <div style="display: flex; align-items: center; line-height: 16px;">
+                    <img
+                      v-if="item.id === 'smart_page'"
+                      alt="smart_page"
+                      class="tool-type-icon-img"
+                      :src="userProfileIcon">
+                    <audit-icon
+                      v-else
+                      style=" margin-right: 5px;font-size: 16px;"
+                      svg
+                      :type="iconMap[item.id as keyof typeof iconMap]" />
+                    <span :style="toolTypeTip(item) ? { 'border-bottom': '1px dashed #979ba5' } : {}">
+                      {{ item.name }}
+                    </span>
+                  </div>
+                </bk-radio>
+              </span>
+            </template>
+          </bk-radio-group>
         </div>
       </bk-form-item>
 
@@ -160,6 +164,8 @@
 
   import CardPartVue from './card-part.vue';
 
+  import userProfileIcon from '@/images/user.svg';
+
   const props = defineProps<{
     isEditMode: boolean;
     comRef: any;
@@ -233,7 +239,6 @@
     data_search: 'sqlxiao',
     api: 'apixiao',
     bk_vision: 'bkvisonxiao',
-    smart_page: 'user',
   };
 
   const configUid = ref<string[]>([]);
@@ -526,20 +531,11 @@
     display: inline-flex;
   }
 
-  .tool-type-badge {
-    display: inline-flex;
+  .tool-type-icon-img {
     flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    min-width: 16px;
+    width: 16px;
     height: 16px;
     margin-right: 5px;
-    padding: 0 3px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
-    color: #ea580c;
-    background: #ffedd5;
     border-radius: 2px;
   }
 

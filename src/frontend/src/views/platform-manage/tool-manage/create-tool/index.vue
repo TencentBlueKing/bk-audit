@@ -116,9 +116,7 @@
             :title="t('可见范围')">
             <template #content>
               <!-- 选择可见范围 -->
-              <div
-                class="visible-range-select-row"
-                :class="{ 'is-portrait-width': formData.tool_type === 'smart_page' }">
+              <div class="visible-range-select-row">
                 <label class="select-label">{{ t('选择可见范围') }}</label>
                 <div class="select-control">
                   <visible-range-field
@@ -231,6 +229,7 @@
   import {
     affectedRestrictionScopeNames,
     pruneUsageRestrictions,
+    usageLimitsToRestrictions,
     usageRestrictionsChanged,
     validateUsageRestrictions,
     type UsageRestrictions,
@@ -444,6 +443,9 @@
       );
       if (!(data as any).visibility) {
         await loadEditVisibility(route.params.id as string);
+      }
+      if (formData.value.config) {
+        formData.value.config.usage_restrictions = usageLimitsToRestrictions(data.config?.usage_limits);
       }
       usageRestrictionBaseline.value = JSON.stringify(formData.value.config?.usage_restrictions || {});
       restoreToolComponentConfig();
@@ -958,16 +960,6 @@
     .select-control {
       width: 100%;
       max-width: 660px;
-    }
-
-    /* 去掉左侧 17px 偏移，宽度补回，右边仍与卡片内容对齐 */
-    &.is-portrait-width {
-      width: calc(100% - 17px);
-      max-width: 737px;
-    }
-
-    &.is-portrait-width .select-control {
-      max-width: 100%;
     }
   }
 

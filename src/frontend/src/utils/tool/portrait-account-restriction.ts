@@ -1,6 +1,7 @@
 /**
  * 审计用户画像的账号类型使用限制。
- * 取值与画像查询表单一致：企业微信 ctx、openid、微信 form_wechat、QQ form_qq。
+ * 页面内取值与画像查询表单一致：企业微信 ctx、openid、微信 form_wechat、QQ form_qq；
+ * 接口 config.usage_limits / allowed_account_types 使用 form_ctx、form_openid、form_wechat、form_qq。
  */
 
 export const PORTRAIT_ACCOUNT_TYPES = [
@@ -24,10 +25,63 @@ export interface UsageRestrictions {
   systems?: Record<string, UsageRestrictionRow[]>;
 }
 
-export interface PortraitScopeQuery {
-  scene_id?: number;
-  system_id?: string;
+export interface UsageLimits {
+  scenes?: Record<string, { account_type?: string[] }>;
+  systems?: Record<string, { account_type?: string[] }>;
 }
+
+const ACCOUNT_TYPE_TO_API: Record<string, string> = {
+  ctx: 'form_ctx',
+  openid: 'form_openid',
+  form_wechat: 'form_wechat',
+  form_qq: 'form_qq',
+};
+
+const ACCOUNT_TYPE_FROM_API: Record<string, string> = Object.fromEntries(Object.entries(ACCOUNT_TYPE_TO_API)
+  .map(([local, api]) => [api, local]));
+
+const toApiAccountType = (value: string) => ACCOUNT_TYPE_TO_API[value] || value;
+
+const fromApiAccountType = (value: string) => ACCOUNT_TYPE_FROM_API[value] || value;
+
+/** 接口返回 null / undefined 表示不限制。 */
+export const allowedAccountTypesFromApi = (value?: string[] | null): string[] | null => (
+  Array.isArray(value) ? value.map(fromApiAccountType) : null
+);
+
+const limitsBucketToRows = (bucket?: Record<string, { account_type?: string[] }>) => {
+  const result: Record<string, UsageRestrictionRow[]> = {};
+  Object.entries(bucket || {}).forEach(([id, limit]) => {
+    if (!Array.isArray(limit?.account_type)) return;
+    result[id] = [{
+      id: `ur_${id}`,
+      kind: 'allowed_values',
+      param: 'type',
+      allowed: limit.account_type.map(fromApiAccountType),
+    }];
+  });
+  return result;
+};
+
+const rowsBucketToLimits = (bucket?: Record<string, UsageRestrictionRow[]>) => {
+  const result: Record<string, { account_type: string[] }> = {};
+  Object.entries(bucket || {}).forEach(([id, rows]) => {
+    const row = (rows || []).find(item => item.param === 'type');
+    if (!row) return;
+    result[id] = { account_type: (row.allowed || []).map(toApiAccountType) };
+  });
+  return result;
+};
+
+export const usageLimitsToRestrictions = (limits?: UsageLimits | null): UsageRestrictions => ({
+  scenes: limitsBucketToRows(limits?.scenes),
+  systems: limitsBucketToRows(limits?.systems),
+});
+
+export const usageRestrictionsToLimits = (restrictions?: UsageRestrictions | null) => ({
+  scenes: rowsBucketToLimits(restrictions?.scenes),
+  systems: rowsBucketToLimits(restrictions?.systems),
+});
 
 const ACCOUNT_LABEL = Object.fromEntries(PORTRAIT_ACCOUNT_TYPES.map(item => [item.value, item.label]));
 
@@ -35,46 +89,23 @@ export const portraitAccountLabel = (value: string) => ACCOUNT_LABEL[value] || v
 
 export const emptyUsageRestrictions = (): UsageRestrictions => ({ scenes: {}, systems: {} });
 
-const rowsOf = (restrictions: UsageRestrictions | undefined, scope: PortraitScopeQuery): UsageRestrictionRow[] => {
-  if (scope.scene_id !== undefined && scope.scene_id !== null) {
-    return restrictions?.scenes?.[String(scope.scene_id)] || [];
-  }
-  if (scope.system_id) {
-    return restrictions?.systems?.[String(scope.system_id)] || [];
-  }
-  return [];
-};
-
-/** 当前空间未配置时返回 null，表示四个账号类型都可用。 */
-export const allowedAccountTypesForScope = (
-  restrictions: UsageRestrictions | undefined,
-  scope: PortraitScopeQuery,
-): string[] | null => {
-  const row = rowsOf(restrictions, scope).find(item => item.param === 'type');
-  if (!row) return null;
-  return row.allowed || [];
-};
-
 export const portraitDenialMessage = (accountType: string) => (
   `当前空间不允许使用「${portraitAccountLabel(accountType)}」进行查询`
 );
 
-export const findPortraitUsageDenial = (
-  restrictions: UsageRestrictions | undefined,
-  scope: PortraitScopeQuery,
-  accountType: string,
-): string => {
-  const allowed = allowedAccountTypesForScope(restrictions, scope);
+/** allowed 为 null 表示当前空间未配置限制，四个账号类型都可用。 */
+export const findPortraitUsageDenial = (allowed: string[] | null, accountType: string): string => {
   if (!allowed || allowed.includes(accountType)) return '';
   return portraitDenialMessage(accountType);
 };
 
 const canonicalBucket = (bucket?: Record<string, UsageRestrictionRow[]>) => {
   const result: Record<string, string[]> = {};
-  Object.keys(bucket || {}).sort().forEach((id) => {
-    const allowed = (bucket?.[id] || []).find(item => item.param === 'type')?.allowed || [];
-    result[id] = [...allowed];
-  });
+  Object.keys(bucket || {}).sort()
+    .forEach((id) => {
+      const allowed = (bucket?.[id] || []).find(item => item.param === 'type')?.allowed || [];
+      result[id] = [...allowed];
+    });
   return result;
 };
 

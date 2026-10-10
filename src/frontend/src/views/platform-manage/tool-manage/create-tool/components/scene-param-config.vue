@@ -32,15 +32,63 @@
       <div class="block-body">
         <usage-restriction-panel
           v-if="formData.tool_type === 'smart_page'"
+          :class="{ 'is-full-width': overrideSelectFullWidth }"
+          :popover-z-index="popoverZIndex"
           :rows="usageRowsOf(item)"
           @update:rows="(rows) => updateUsageRows(item, rows)" />
+        <div
+          v-if="formData.tool_type === 'smart_page' && usageAccountRowOf(item)"
+          class="render-field usage-restriction-field is-two-col">
+          <div class="field-header-row">
+            <div class="field-value col-name">
+              {{ t('限制项') }}
+            </div>
+            <div class="field-value col-default">
+              <span class="col-default-label">{{ t('限制配置') }}</span>
+            </div>
+            <div class="field-value field-operation col-action" />
+          </div>
+          <div class="field-row">
+            <div class="field-value col-name">
+              <span class="param-name-text">{{ t('账号类型') }}</span>
+            </div>
+            <div
+              class="field-value col-default"
+              data-testid="portrait-usage-restriction-config">
+              <bk-select
+                :auto-height="false"
+                class="override-default-multiselect"
+                :clearable="false"
+                :model-value="usageAccountRowOf(item)?.allowed || []"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择账号类型')"
+                :popover-options="{
+                  boundary: 'body',
+                  zIndex: popoverZIndex,
+                }"
+                selected-style="checkbox"
+                show-selected-icon
+                @change="(val: string[]) => handleUsageAllowedChange(item, val)">
+                <bk-option
+                  v-for="option in usageAccountTypeOptions"
+                  :id="option.value"
+                  :key="option.value"
+                  :name="option.label" />
+              </bk-select>
+            </div>
+            <div class="field-value field-operation col-action">
+              <audit-icon
+                class="reduce-fill field-icon"
+                type="reduce-fill"
+                @click="handleRemoveUsageAccountRow(item)" />
+            </div>
+          </div>
+        </div>
         <!-- 覆盖参数默认值：弹窗内占满，编辑/新建页占 1/3 宽度 -->
         <div
           class="override-section"
-          :class="{
-            'is-full-width': overrideSelectFullWidth,
-            'is-portrait-width': formData.tool_type === 'smart_page',
-          }">
+          :class="{ 'is-full-width': overrideSelectFullWidth }">
           <label class="form-label">{{ t('覆盖参数默认值') }}</label>
           <div class="form-control">
             <bk-select
@@ -83,10 +131,7 @@
         <div
           v-if="getTableData(item).length > 0"
           class="render-field"
-          :class="{
-            'is-two-col': !showDisplayName,
-            'is-portrait-width': formData.tool_type === 'smart_page',
-          }">
+          :class="{ 'is-two-col': !showDisplayName }">
           <div class="field-header-row">
             <div class="field-value col-name">
               {{ t('参数名') }}
@@ -324,7 +369,12 @@
 
   import { DateRange } from '@blueking/date-picker';
 
-  import type { UsageRestrictionRow, UsageRestrictions } from '@utils/tool/portrait-account-restriction';
+  import {
+    PORTRAIT_ACCOUNT_TYPES,
+    portraitAccountLabel,
+    type UsageRestrictionRow,
+    type UsageRestrictions,
+  } from '@utils/tool/portrait-account-restriction';
 
   import type { SceneParamOverride, FormData } from '../types';
 
@@ -402,6 +452,17 @@
     emit('update:usageRestrictions', { scenes, systems });
   };
 
+  const usageAccountRowOf = (item: ConfigItem) => usageRowsOf(item).find(row => row.param === 'type');
+
+  const handleUsageAllowedChange = (item: ConfigItem, value: string | string[]) => {
+    const allowed = Array.isArray(value) ? value : [value];
+    updateUsageRows(item, usageRowsOf(item).map(row => (row.param === 'type' ? { ...row, allowed } : row)));
+  };
+
+  const handleRemoveUsageAccountRow = (item: ConfigItem) => {
+    updateUsageRows(item, usageRowsOf(item).filter(row => row.param !== 'type'));
+  };
+
   /** 侧滑 z-index=9999 时，时间类弹出层需抬升；用 id/cls 限定作用域 */
   const TIME_RANGE_PICKER_ID = 'scene-param-config';
   const DATE_PICKER_ZINDEX_STYLE_ID = 'scene-param-config-date-picker-zindex';
@@ -415,6 +476,11 @@
 
   const { t } = useI18n();
   const { messageSuccess, messageWarn } = useMessage();
+
+  const usageAccountTypeOptions = PORTRAIT_ACCOUNT_TYPES.map(item => ({
+    value: item.value,
+    label: item.value === 'openid' ? item.label : t(portraitAccountLabel(item.value)),
+  }));
 
   const inputVariableList = computed(() => props.inputVariables || []);
 
@@ -1341,20 +1407,6 @@
       width: 100%;
       max-width: 100%;
     }
-
-    &.is-portrait-width {
-      margin-bottom: 8px;
-    }
-
-    &.is-portrait-width .form-label {
-      margin-bottom: 4px;
-    }
-
-    /* 与使用限制的添加框同宽；下方参数表仍铺满卡片 */
-    &.is-portrait-width .form-control {
-      width: 100%;
-      max-width: 720px;
-    }
   }
 
   :deep(.override-param-select) {
@@ -1529,12 +1581,8 @@
     user-select: none;
   }
 
-  .render-field.is-portrait-width {
-    max-width: 720px;
-  }
-
-  .render-field.is-portrait-width .field-row .col-default {
-    justify-content: stretch;
+  .usage-restriction-field {
+    margin-bottom: 16px;
   }
 
   .field-header-row,
@@ -1783,19 +1831,6 @@
     }
   }
 
-  .render-field.is-portrait-width :deep(.field-value) {
-    .override-default-input,
-    .bk-input.override-default-input,
-    .override-time-picker,
-    .override-person-select,
-    .override-tag-input,
-    .override-default-multiselect,
-    .default-value-tip-wrap {
-      width: 100%;
-      max-width: 100%;
-    }
-  }
-
   /*
    * 时间范围：占满默认值列，保证弹层锚点稳定；
    * 预留右侧清除按钮空间，避免叠在文案上；长文案省略。
@@ -1872,11 +1907,6 @@
     width: 320px !important;
     max-width: 100%;
     height: auto !important;
-  }
-
-  .scene-param-config .render-field.is-portrait-width .override-person-select.bk-user-selector,
-  .scene-param-config .render-field.is-portrait-width .override-person-select {
-    width: 100% !important;
   }
 
   .scene-param-config .override-person-select .tags-container {

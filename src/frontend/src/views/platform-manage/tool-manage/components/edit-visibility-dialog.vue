@@ -52,7 +52,8 @@
             :selected-scenes="selectedSceneItems"
             :selected-systems="selectedSystemItems"
             :tool-uid="props.target?.uid || ''"
-            @update:param-overrides="handleParamOverridesChange" />
+            @update:param-overrides="handleParamOverridesChange"
+            @update:usage-restrictions="handleUsageRestrictionsChange" />
         </div>
       </div>
     </bk-loading>
@@ -86,6 +87,16 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import {
+    pruneUsageRestrictions,
+    usageLimitsToRestrictions,
+    usageRestrictionsChanged,
+    usageRestrictionsToLimits,
+    type UsageRestrictions,
+    type UsageScopeCard,
+    validateUsageRestrictions,
+  } from '@utils/tool/portrait-account-restriction';
 
   import type { FormData, SceneParamOverride } from '../create-tool/types';
   import {
@@ -148,7 +159,7 @@
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageWarn } = useMessage();
 
   const isShow = defineModel<boolean>('isShow', { default: false });
   // eslint-disable-next-line func-call-spacing
@@ -197,6 +208,7 @@
 
   const formData = reactive(createDefaultFormData());
   const toolConfigSnapshot = ref<Record<string, any> | null>(null);
+  const usageRestrictionBaseline = ref<UsageRestrictions>({});
   const isDetailReady = ref(false);
   const dialogContentKey = ref('');
   const pendingDetailUid = ref('');
@@ -217,6 +229,8 @@
     toolConfigSnapshot.value = _.cloneDeep(detail.config || {});
     formData.tool_type = detail.tool_type || '';
     formData.config.input_variable = detail.config?.input_variable || [];
+    formData.config.usage_restrictions = usageLimitsToRestrictions(detail.config?.usage_limits);
+    usageRestrictionBaseline.value = _.cloneDeep(formData.config.usage_restrictions);
     formData.scene_param_overrides = parseDefaultValueOverrides(
       detail.config?.default_value_overrides,
       allSceneList.value,
@@ -322,6 +336,15 @@
     formData.scene_param_overrides = value;
   };
 
+  const handleUsageRestrictionsChange = (value: UsageRestrictions) => {
+    formData.config.usage_restrictions = value;
+  };
+
+  const usageScopeCards = (): UsageScopeCard[] => [
+    ...selectedSceneItems.value.map(item => ({ type: 'scene' as const, id: item.id, name: item.name })),
+    ...selectedSystemItems.value.map(item => ({ type: 'system' as const, id: item.id, name: item.name })),
+  ];
+
   const {
     loading: submitLoading,
     run: updatePlatformTool,
@@ -359,6 +382,26 @@
     const originalOverrides = toolConfigSnapshot.value?.default_value_overrides || { scenes: {}, systems: {} };
     const overridesChanged = !_.isEqual(defaultValueOverrides, originalOverrides);
 
+    const isSmartPage = formData.tool_type === 'smart_page';
+    const nextRestrictions = pruneUsageRestrictions(
+      formData.config.usage_restrictions,
+      (formData.scene_ids || []).map(id => Number(id)),
+      (formData.system_ids || []).map(id => String(id)),
+      formData.visibility_type,
+    );
+    const restrictionsChanged = isSmartPage
+      && usageRestrictionsChanged(usageRestrictionBaseline.value, nextRestrictions);
+    if (restrictionsChanged) {
+      const result = validateUsageRestrictions(nextRestrictions, usageScopeCards());
+      if (!result.ok) {
+        messageWarn(result.message);
+        return;
+      }
+      if (result.equivalentToUnrestricted) {
+        messageWarn(t('当前配置等同于不限制'));
+      }
+    }
+
     const payload: Record<string, any> = {
       uid: props.target.uid,
       tags: resolveTagNames(),
@@ -366,7 +409,7 @@
     };
 
     // 后端校验要求完整 config，不能只传 default_value_overrides
-    if (overridesChanged) {
+    if (overridesChanged || restrictionsChanged) {
       if (!toolConfigSnapshot.value) {
         return;
       }
@@ -374,6 +417,9 @@
         ..._.cloneDeep(toolConfigSnapshot.value),
         default_value_overrides: defaultValueOverrides,
       };
+      if (isSmartPage) {
+        payload.config.usage_limits = usageRestrictionsToLimits(nextRestrictions);
+      }
     }
 
     updatePlatformTool(payload);

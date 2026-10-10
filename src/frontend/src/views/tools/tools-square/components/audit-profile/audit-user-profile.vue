@@ -19,7 +19,7 @@
     <!-- 查询输入 -->
     <profile-query-input
       ref="queryInputRef"
-      :allowed-account-types="allowedAccountTypes"
+      :allowed-account-types="scopeAllowedAccountTypes"
       :loading="isQuerying"
       @query="handleQuery"
       @reset="handleReset" />
@@ -205,7 +205,7 @@
   import type { DataRangeToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
   import {
-    allowedAccountTypesForScope,
+    allowedAccountTypesFromApi,
     findPortraitUsageDenial,
   } from '@/utils/tool/portrait-account-restriction';
 
@@ -216,6 +216,7 @@
 
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
+    allowedAccountTypes?: string[] | null;  // 工具详情按当前场景/系统返回的可用账号类型，null 表示不限制
     toolConfig?: DataRangeToolConfig & {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
       property?: {
         scene_id?: number | string;
@@ -231,6 +232,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     toolUid: '',
+    allowedAccountTypes: null,
     toolConfig: () => ({}),
   });
   const emit = defineEmits<Emits>();
@@ -565,27 +567,7 @@
     getToolDetailScopeQuery(),
   );
 
-  const allowedAccountTypes = computed(() => allowedAccountTypesForScope(
-    props.toolConfig?.usage_restrictions,
-    getToolDetailScopeQuery(),
-  ));
-
-  const usageScopeParams = () => {
-    const scope = getToolDetailScopeQuery();
-    if (scope.scene_id !== undefined) {
-      return {
-        _usage_scope_type: 'scene',
-        _usage_scope_id: String(scope.scene_id),
-      };
-    }
-    if (scope.system_id) {
-      return {
-        _usage_scope_type: 'system',
-        _usage_scope_id: String(scope.system_id),
-      };
-    }
-    return {};
-  };
+  const scopeAllowedAccountTypes = computed(() => allowedAccountTypesFromApi(props.allowedAccountTypes));
 
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
@@ -876,7 +858,6 @@
         data_source_name: 'main_user_info',
         params: {
           ...getDataRangeParams(),
-          ...usageScopeParams(),
           username: ctx,
         },
       },
@@ -893,7 +874,6 @@
         params: {
           ...getDataRangeParams(),
           ...params,
-          ...usageScopeParams(),
         },
       },
     });
@@ -1169,11 +1149,7 @@
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
-    const denial = findPortraitUsageDenial(
-      props.toolConfig?.usage_restrictions,
-      getToolDetailScopeQuery(),
-      accountType,
-    );
+    const denial = findPortraitUsageDenial(scopeAllowedAccountTypes.value, accountType);
     if (denial) {
       isQuerying.value = false;
       hasQueried.value = false;

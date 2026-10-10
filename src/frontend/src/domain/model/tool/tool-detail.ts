@@ -59,10 +59,16 @@ export default class ToolDetail {
   updated_time: string;
   data_search_config_type: string;
   is_bkvision: boolean;
+  // 按请求的 scene_id / system_id 计算出的可用账号类型；null 表示不限制，非 smart_page 工具恒为 null
+  allowed_account_types?: string[] | null;
   config: {
     // 智能页面工具（如审计用户画像）携带的属性，用于风险卡片跳转风险时携带场景 id
     property?: {
       scene_id?: number | string;
+    };
+    usage_limits?: {
+      scenes?: Record<string, { account_type?: string[] }>;
+      systems?: Record<string, { account_type?: string[] }>;
     };
     referenced_tables: Array<{
       table_name: string | null;

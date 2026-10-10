@@ -75,6 +75,8 @@ export default {
     '搜索或粘贴名称/ID': 'Search or paste name/ID',
     '已批量勾选 {n} 项': 'Batch selected {n} item(s)',
     '未匹配 {n} 项：{list}': 'Unmatched {n} item(s): {list}',
+    '本次变更将影响{names}下用户使用本工具的方式，是否提交？': 'This change will affect how users in {names} use this tool. Submit?',
+    当前配置等同于不限制: 'The current configuration is equivalent to no restriction',
     未匹配到可勾选的选项: 'No matching options found',
     预览: 'Preview',
     '请输入报表名称（选择报表后自动填充）': 'Please enter report name (auto-filled after selecting report)',

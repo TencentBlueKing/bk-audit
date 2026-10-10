@@ -5,7 +5,7 @@ import _ from 'lodash';
 
 import type { PlatformToolSubmitPayload } from '@model/tool/tool-manage-types';
 
-import { pruneUsageRestrictions } from '@utils/tool/portrait-account-restriction';
+import { pruneUsageRestrictions, usageRestrictionsToLimits } from '@utils/tool/portrait-account-restriction';
 
 import type { DefaultValueOverrides, FormData, SceneParamOverride, VisibilityScopePayload } from './types';
 
@@ -402,13 +402,14 @@ export function buildPlatformToolSubmitPayload(formData: FormData, isEditMode: b
     default_value_overrides: defaultValueOverrides,
   };
   if (data.tool_type === 'smart_page') {
-    data.config.usage_restrictions = pruneUsageRestrictions(
+    data.config.usage_limits = usageRestrictionsToLimits(pruneUsageRestrictions(
       data.config.usage_restrictions,
       data.scene_ids || [],
       (data.system_ids || []).map((id: string | number) => String(id)),
       data.visibility_type,
-    );
+    ));
   }
+  delete data.config.usage_restrictions;
 
   if (hasVisibilitySelection) {
     data.visibility = buildVisibilityPayload(data as FormData);
