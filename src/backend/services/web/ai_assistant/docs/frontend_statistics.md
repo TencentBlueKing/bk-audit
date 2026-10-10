@@ -36,7 +36,7 @@ flowchart TD
 
 Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此映射选择输入和解释输出。
 程序统计与 MCP 类别聚合默认 Top10，可显式调整；部署预算可收紧上限，以后端校验为准。已有附件保留创建时的参数。
-前端固定包补齐时间轴；MCP 返回稀疏时间桶并收敛展示比例精度，两者共享统计口径而不共用响应形状。
+程序统计固定包补齐时间轴；MCP 返回稀疏时间桶，两者共享统计口径和四位小数规则，按各自消费者组织响应。
 
 统计是来源消息上的附件，不会新增消息。同一检索卡片可以有多个统计附件，每个附件独立保存、展示和重试。
 
@@ -56,6 +56,17 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 初次只传来源消息的完整 `condition`，获取全部基础字段。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，传原 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，仅返回内置声明与这批样本合并后的叶子字段完整路径，不包含父项和中间对象，不需要再逐层请求。
 
+```mermaid
+flowchart TD
+    Source[来源卡片的完整 condition] --> Roots[获取基础字段目录]
+    Roots -->|普通字段| Select[选择可统计字段]
+    Roots -->|is_expandable=true| Expand[按根字段请求 include_descendants=true<br/>沿用原 condition，一次最多采样100条]
+    Expand --> Leaves[返回完整叶子路径<br/>按路径分组、搜索]
+    Leaves --> Select
+    Custom[直接输入自定义路径] --> Select
+    Select --> Submit[用 raw_name + keys 创建程序统计]
+```
+
 例如展开 extend_data 中的 a，请求增量参数为：
 
 ```json
@@ -69,13 +80,13 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 根目录及单层目录的 `is_expandable=true` 表示该字段可作为对象分组，前端可发起级联查询。级联响应仅包含叶子，`is_expandable=false`，直接用于选择器；选取操作仍参考 `statistics_supported`。数组作为叶子但不支持统计，不展开数组下标或元素键。空对象没有叶子，不返回；达到路径深度上限的对象不冒充叶子，`truncated=true` 提示发现不完整。
 
-递归模式不限制字段数量；省略 `include_descendants` 仍只返回最多50个直接子字段。Web 与 MCP 共用发现/脱敏逻辑，但 MCP 不提供递归开关，仍逐层探索，采样默认同为100条。业务data超过1 MiB返回413。`sample_summary.truncated=true` 表示采样、路径或单层字段预算造成发现可能不全；界面应标注“样本发现”，空目录不能解释为全范围不存在字段。`coverage` 只针对本次SQL返回的样本，不是完整范围覆盖率。加载失败留在选择器中重试，不创建统计附件。
+省略 `include_descendants` 时只返回直接子字段；Web 的递归模式不截断字段数量，MCP 仍逐层探索。`sample_summary.truncated=true` 表示发现可能不全；界面应标注“样本发现”，空目录不能解释为全范围不存在字段。`coverage` 只针对本次SQL返回的样本，不是完整范围覆盖率。加载失败留在选择器中重试，不创建统计附件；采样和响应预算以 Swagger 为准。
 
-支持用户直接填写自定义字段路径，**无需先在目录中找到它**。例如 extend_data.a.b.c 提交为 `{"raw_name":"extend_data","keys":["a","b","c"]}`。根字段须是接口支持的日志列，keys 逐段传对象键；不能传任意SQL表达式或数组下标。合法但不存在的路径可成功返回全缺失统计。创建/执行仍会校验实际权限和全范围类型；目录类型仅供提示。
+支持用户直接填写自定义字段路径，**无需先在目录中找到它**。例如 extend_data.a.b.c 提交为 `{"raw_name":"extend_data","keys":["a","b","c"]}`。根字段须是接口支持的日志列，keys 逐段传对象键；不能传任意SQL表达式或数组下标。单引号可直接传入，例如 `{"raw_name":"extend_data","keys":["parent'key","child''key"]}`；前端不做SQL转义或空白裁剪，其他路径限制见 Swagger。合法但不存在的路径可成功返回全缺失统计。创建/执行仍会校验实际权限和全范围类型；目录类型仅供提示。
 
-不受支持的根字段或不合法路径会在创建时返回400，不创建附件。错误码 `2908017` 的 `errors.field_name` 标识输入部分（例如 `input_data`），`errors.errors` 包含 `loc`、`msg`、`type`，供前端定位和展示，例如 `loc=["field","raw_name"]`；响应不回显原始输入。`event_data` 不是当前支持的根字段，不能作为自定义日志列提交；如果业务字段 a 存在于扩展数据中，使用 `{"raw_name":"extend_data","keys":["a"]}`。
+不受支持的根字段或不合法路径在创建时返回参数错误，不创建附件。展示接口提供的字段错误并保留输入，错误结构与样例见 Swagger。自定义对象键仍须归属已有日志列，例如 `extend_data` 下的 a；不能把业务名称 `event_data` 当作任意新增日志列。
 
-目录中的 `options` 只是常见实际值的展示提示，不要把下拉选项当成只能输入的值。`result_code` 可以传 107、999 等实际数值；`-1` 只匹配真实 -1。过滤非零使用 `operator="neq", filters=[0]` 或 `operator="exclude", filters=[0]`，不要用“其他=-1”替代非零。操作符以 `allow_operators` 为准。
+目录 `options` 沿用原枚举展示，只是提示，不限制实际输入值。例如结果码 -1 只匹配真实 -1，不能用“其他=-1”替代非零条件；具体过滤方式见检索接口 Swagger。
 
 ### 确认并创建
 
@@ -85,67 +96,11 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 ### 将成功产物映射到页面
 
-详情 SUCCESS 后使用 `output_data`，前端不再查询 Doris 或自己汇总日志：
+详情 SUCCESS 后使用 `output_data`；前端不再查询 Doris 或汇总预览日志。`FIELD_STATISTICS` 返回语义数据包，由前端适配图表和表格。字段目录类型用于提示，最终布局以 `statistics_kind` 和 `numeric_summary` 为准；具体协议和样例见 Swagger。
 
-| 页面区域 | 数据来源与衔接 |
-| --- | --- |
-| 字段标题与概览 | 服务端字段展示名及 overview |
-| 类别分布图 | distribution.groups，使用服务端给出的类别、数量与比例 |
-| 时间趋势图 | bucket_starts 为横轴；通过 group_id 将 series 与分布类别关联，counts 与横轴一一对应 |
-| 数值摘要 | numeric_summary 存在时展示；类别统计不展示该区域 |
-| 范围和粒度说明 | 使用响应的实际查询范围、effective_interval 和 timezone |
+`statistics_supported=true`、目录 `statistics_kind=null` 时仍可尝试统计。最终完整范围存在值均为原生数字，或字段是声明数值列时返回 NUMERIC；字符串数字不会自动转成数值。完整范围出现不支持的对象/数组时任务失败，不会静默改成类别统计。
 
-渲染时保留以下口径：
-
-- `group_id` 用于关联，不解析其内容；“其他”“缺失”按 kind 判断，不能靠文字匹配。真实值也可能叫“其他”，数字与字符串同名也不能合并。
-- 分布与时序共用全范围 TopN。OTHER/MISSING 是额外类别，保留它们，不在各时间桶重新排名或重新计算比例。空桶已经补齐。
-- 空字符串与缺失不同；比例为小数，展示时转换为百分比，null 显示无数据。空结果是成功空态，不是执行失败。
-- 数值摘要针对完整范围，中位数为近似值。实际时间粒度可能由 AUTO 决定，按返回值展示。
-
-这些约定影响图表含义；完整字段定义与取值约束仍以 Swagger 为准。
-
-### 3.1 FIELD_STATISTICS 结果如何映射为前端组件
-
-`FIELD_STATISTICS` 返回的是与组件无关的语义数据包，不直接返回 ECharts option、AntV 配置或某个 UI 组件的 props。前端可以根据同一份数据适配 ECharts、AntV、表格或自定义组件；不要把 `group_id` 当作展示文案，也不要根据接口字段名猜图表类型。
-
-#### 先回答两个协议问题
-
-**字段类型怎么来：**
-
-| 场景 | 类型来源 | 作用 |
-| --- | --- | --- |
-| 普通根字段 | 服务端 `COLLECT_SEARCH_CONFIG` 的字段声明，目录返回 `type_source=DECLARED` | 声明为 `int/long/float/double/timestamp` 时，统计能力提示为 `NUMERIC` |
-| 已声明 JSON 子字段 | 来自内置 `sub_keys`，使用中文别名和声明类型，`type_source=DECLARED`；即使样本缺少该 key 仍返回 | 声明提供能力提示；样本只补充值、观察类型和覆盖率，实际统计仍校验全范围类型 |
-| 动态 JSON 子字段 | 字段目录读取脱敏样本，返回 `type_source=INFERRED` 和 `observed_types` | 只用于字段探索和能力提示；全 null 样本的已发现字段允许尝试统计（`statistics_supported=true`、`statistics_kind=null`），对象或数组样本不可直接统计 |
-| `FIELD_STATISTICS` 最终结果 | 重新按完整查询范围统计，不信任客户端传入的 `field_type`，也不只看样本 | `statistics_kind` 才是本次结果的最终类型：声明数值字段，或全范围非空值全部为原生数字时为 `NUMERIC`；其余可统计标量为 `CATEGORICAL` |
-
-因此，字符串 `"120"` 仍是字符串，不能由前端把它改成数字；`null`/缺失不算字段值。字段目录中的类型是“可选字段提示”，`statistics_supported=true` 且 `statistics_kind=null` 时仍允许提交程序统计；最终统计结果以 `statistics_kind` 和 `numeric_summary` 为准。完整范围出现对象、数组等不支持类型时会执行失败，应按附件 FAILED 处理，不会自动降为类别统计。
-
-**百分比怎么展示：**程序统计与 MCP 的比例统一以 0～1 数值返回，保留小数点后四位。例如计算值 `0.472934282` 返回 `0.4729`，前端乘 100 后显示 `47.29%`。页面百分比保留两位即可。JSON 数字不补尾零，`0.6` 与 `0.6000` 含义相同，页面均显示 `60.00%`。
-
-`null` 显示“—”；计数为 0 时显示 `0.00%`。极小的正比例可能舍入为 0，因此不能用 `ratio === 0` 判断没有日志；需要精确显示时用 `count / total_count` 重算，非零且小于 `0.01%` 可显示 `<0.01%`。存在率对应使用 `present_count / total_count`。各组分别舍入后合计可能不是 100%，无需改写计数凑齐；图形使用原始 `count`，整数计数和原始类别值不舍入；`numeric_summary` 的 min/max/avg/median 及 MCP 浮点数值指标统一输出四位小数，例如 `12.3456789` 返回 `12.3457`。JSON 数字不补尾零，小于舍入精度的数值可能返回 0。
-
-下面用同一份示例统计数据说明分布与时序的对应关系，示例数值用于说明协议。
-
-推荐的结果面板结构如下：
-
-```text
-字段标题 / 查询范围 / 实际粒度
-        |
-概览 KPI：总日志数、字段存在数、缺失数、存在率
-        |
-类别分布：TopN 条形图或环形图
-        |
-时间趋势：折线图、堆叠柱状图或堆叠面积图
-        |
-数值摘要（NUMERIC）：最小值、最大值、平均值、中位数
-        |
-查询信息：系统、时间范围、时区、耗时、TopN
-```
-
-#### 最小映射
-
-一份成功响应可以直接拆成以下组件：`overview` → KPI 卡片，`distribution.groups` → 类别条形图/饼图，`time_series` → 折线图/堆叠柱状图，`numeric_summary` → 数值摘要卡片，`query_summary` → 查询信息条。图表配置仍由前端适配，不由后端返回 ECharts option。
+比例按0～1返回四位小数，前端乘100后保留两位百分比；null显示“—”，很小的正比例可能舍入为0，是否有日志以计数为准。各组比例舍入后不要求合计恰好100%。数值摘要及聚合浮点指标同样返回四位小数，整数计数与类别原值不舍入。
 
 | 响应字段 | 业务含义 | 推荐组件 | 前端处理规则 |
 | --- | --- | --- | --- |
@@ -154,7 +109,7 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 | `overview` | 完整检索范围的存在性统计 | KPI 卡片、进度条、完整性环图 | `total_count` 是总日志数；`present_ratio` 是 0–1 小数，展示百分比时再乘 100 |
 | `distribution.groups` | 全范围 TopN 类别及 `OTHER/MISSING` | 横向条形图、环形图、排行列表、分布表格 | 少量类别可用环图；类别较多优先横向条形图；使用 `kind` 判断合成组 |
 | `time_series.bucket_starts` + `series` | 各类别按时间桶的数量变化 | 折线图、堆叠柱状图、堆叠面积图、趋势表格 | 横轴使用 `bucket_starts`；每条序列通过 `group_id` 找到类别；`counts` 与横轴等长 |
-| `numeric_summary` | 完整范围的原生数值摘要 | 四个数值卡片、摘要表格 | 可展示 min/max/avg/median；`median` 必须标记为近似值；`valid_count` 可说明样本量；成功结果的 `conversion_failed_count` 当前固定为 0，不表示支持字符串数值转换 |
+| `numeric_summary` | 完整范围的原生数值摘要 | 四个数值卡片、摘要表格 | 可展示 min/max/avg/median；`median` 必须标记为近似值；`valid_count` 是全范围有效数值数量；成功结果的 `conversion_failed_count` 当前固定为 0，不表示支持字符串数值转换 |
 | `query_summary` | 实际执行范围、粒度和预算信息 | 查询信息条、筛选条件标签、折叠详情 | `returned_count` 是聚合 rows 数，不是日志总数；总数使用 `overview.total_count` |
 
 #### 按 `statistics_kind` 选择布局
@@ -183,8 +138,10 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 图例/标签：VALUE 用 value，OTHER/MISSING 用前端固定文案
 数据值：使用 count
 百分比：使用 ratio；total_count=0 时允许为 null
-稳定关联：使用 group_id，但不解析 group_id 的内部格式
+本份产物内的关联：使用 group_id，不解析其格式，不假设它跨重试或不同附件保持不变
 ```
+
+分布与时序共用完整范围 TopN，保留额外的 OTHER/MISSING，不在各时间桶重新排名或重新计算比例。空结果是成功空态，不是执行失败。
 
 #### `time_series` 的渲染方式
 
@@ -195,151 +152,81 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 - `requested_interval=AUTO` 时，展示粒度应使用 `effective_interval`，不能把 AUTO 当作实际时间单位。
 - 时间轴和桶划分使用 `timezone`，前端不要再次按本地时区转换后重新分桶。
 
-#### 典型结果与组件示例
+#### 一个结果怎样变成图表
 
-下面的 JSON 是绘图字段节选，不是完整接口响应；完整必填字段见 Swagger。Case 1 与 Case 2 来自同一份结果，类别、合计和比例一致。
-
-**Case 1：用户名分布 → 横向条形图或饼图**
+下面只节选分布与时序，演示同一份数据怎样驱动排行图和趋势图，不是完整接口响应。Top2之外的 PUT/DELETE 共2条已合入 OTHER，缺失1条另列：
 
 ```json
 {
-  "statistics_kind": "CATEGORICAL",
-  "overview": {"total_count": 1000, "present_count": 980, "missing_count": 20, "present_ratio": 0.98},
-  "distribution": {
-    "top_n": 2,
-    "has_other": true,
-    "groups": [
-      {"group_id": "g1", "kind": "VALUE", "value_type": "string", "value": "alice", "count": 600, "ratio": 0.6},
-      {"group_id": "g2", "kind": "VALUE", "value_type": "string", "value": "bob", "count": 280, "ratio": 0.28},
-      {"group_id": "g3", "kind": "OTHER", "value_type": null, "value": null, "count": 100, "ratio": 0.1},
-      {"group_id": "g4", "kind": "MISSING", "value_type": null, "value": null, "count": 20, "ratio": 0.02}
+  "distribution": {"groups": [
+    {"group_id":"g1","kind":"VALUE","value_type":"string","value":"GET","count":3},
+    {"group_id":"g2","kind":"VALUE","value_type":"string","value":"POST","count":2},
+    {"group_id":"g3","kind":"OTHER","value_type":null,"value":null,"count":2},
+    {"group_id":"g4","kind":"MISSING","value_type":null,"value":null,"count":1}
+  ]},
+  "time_series": {
+    "bucket_starts":["2026-01-01T10:00:00+08:00","2026-01-01T11:00:00+08:00"],
+    "series":[
+      {"group_id":"g1","counts":[2,1]},
+      {"group_id":"g2","counts":[1,1]},
+      {"group_id":"g3","counts":[1,1]},
+      {"group_id":"g4","counts":[1,0]}
     ]
   }
 }
 ```
 
-前端得到：`labels = [alice, bob, 其他, 缺失]`，`values = [600, 280, 100, 20]`；tooltip 百分比使用 `ratio * 100` 并保留 2 位。
+同一份示例数据可以显示为下面三种图。它们说明数据如何使用，实际页面样式由前端决定。
+
+**类别分布：** 横轴为类别，纵轴直接使用 `groups[].count`。本例 Top2 之外仍展示“其他”和“缺失”。类别名称较长时可改成横向条形图。
 
 ```mermaid
 xychart-beta
-    title "username 分布"
-    x-axis ["alice", "bob", "其他", "缺失"]
-    y-axis "日志数" 0 --> 650
-    bar [600, 280, 100, 20]
+    title "类别分布（8条日志，Top2）"
+    x-axis ["GET", "POST", "其他", "缺失"]
+    y-axis "日志数" 0 --> 3
+    bar [3, 2, 2, 1]
 ```
 
-同一组数据也可以渲染为：
+**占比：** 环图或饼图使用同一组 `count`，并显示前端格式化后的百分比。本例 GET 为37.50%，其他为25.00%；接口的 `ratio` 是0～1的小数。下图标注计数、按计数划分扇区；页面上的百分比标签由前端格式化。
 
 ```mermaid
 pie showData
-    title "username 占比"
-    "alice" : 600
-    "bob" : 280
-    "其他" : 100
-    "缺失" : 20
+    title 类别占比（与分布使用相同分组）
+    "GET" : 3
+    "POST" : 2
+    "其他" : 2
+    "缺失" : 1
 ```
 
-**Case 2：同一份用户名统计 → 按小时折线图**
+**时间趋势：** 横轴使用 `bucket_starts`，每个分组各取一条 `counts`。下图只画 GET，两个桶分别为2、1，合计为分布中的3条；其余分组按相同方式生成独立图例，缺失组第二个桶的0也保留。
 
-沿用 Case 1 的 `overview` 和 `distribution`，同一份产物的 `time_series` 如下，四个组均完整保留：
-
-```json
-{
-  "time_series": {
-    "requested_interval": "HOUR",
-    "effective_interval": "HOUR",
-    "timezone": "Asia/Shanghai",
-    "bucket_starts": [
-      "2026-09-18T10:00:00+08:00",
-      "2026-09-18T11:00:00+08:00",
-      "2026-09-18T12:00:00+08:00",
-      "2026-09-18T13:00:00+08:00"
-    ],
-    "series": [
-      {"group_id": "g1", "counts": [120, 150, 90, 240]},
-      {"group_id": "g2", "counts": [80, 70, 40, 90]},
-      {"group_id": "g3", "counts": [20, 30, 30, 20]},
-      {"group_id": "g4", "counts": [5, 0, 5, 10]}
-    ]
-  }
-}
+```mermaid
+xychart-beta
+    title "GET 时间趋势（示例时区 +08:00）"
+    x-axis ["10:00", "11:00"]
+    y-axis "日志数" 0 --> 3
+    line [2, 1]
 ```
 
-`g1` 关联 alice，四个桶合计 600；`g2` 关联 bob，合计 280；其他组 100、缺失组 20，全部序列合计 1000。`counts[i]` 与 `bucket_starts[i]` 一一对应，值为 0 的桶也保留。
-
-组件适配步骤如下，`displayLabel` 按上文规则处理合成组、空字符串和同名值：
+趋势图按 `group_id` 找到分布中的同一类别，不能用展示名称关联。前端按上文规则实现 `formatGroupLabel`，再进行最小映射：
 
 ```javascript
-const groupById = new Map(output.distribution.groups.map(group => [group.group_id, group]));
-const xAxis = output.time_series.bucket_starts;
-const lines = output.time_series.series.map(series => ({
-  id: series.group_id,
-  name: displayLabel(groupById.get(series.group_id)),
-  data: series.counts,
-}));
+const labels = new Map(output.distribution.groups.map(group => [group.group_id, formatGroupLabel(group)]));
+const rankingData = output.distribution.groups.map(group => ({ name: labels.get(group.group_id), value: group.count }));
+const trendOption = {
+  xAxis: { type: 'category', data: output.time_series.bucket_starts },
+  yAxis: { type: 'value' },
+  series: output.time_series.series.map(series => ({
+    id: series.group_id,
+    name: labels.get(series.group_id),
+    type: 'line',
+    data: series.counts,
+  })),
+};
 ```
 
-这是组件中间数据，实际 ECharts/AntV 配置由前端适配。图中四条线按顺序为 alice、bob、其他、缺失：
-
-```mermaid
-xychart-beta
-    title "username 每小时趋势"
-    x-axis ["10:00", "11:00", "12:00", "13:00"]
-    y-axis "日志数" 0 --> 250
-    line [120, 150, 90, 240]
-    line [80, 70, 40, 90]
-    line [20, 30, 30, 20]
-    line [5, 0, 5, 10]
-```
-
-**Case 3：数值分布 → 精确值 TopN 条形图**
-
-```json
-{
-  "statistics_kind": "NUMERIC",
-  "numeric_summary": {
-    "min": 1, "max": 980, "avg": 86.5, "median": 42,
-    "median_is_approximate": true, "valid_count": 1000, "conversion_failed_count": 0
-  },
-  "distribution": {
-    "top_n": 2,
-    "groups": [
-      {"group_id": "g1", "kind": "VALUE", "value_type": "number", "value": 10, "count": 120, "ratio": 0.12},
-      {"group_id": "g2", "kind": "VALUE", "value_type": "number", "value": 20, "count": 90, "ratio": 0.09},
-      {"group_id": "g3", "kind": "OTHER", "value_type": null, "value": null, "count": 790, "ratio": 0.79}
-    ]
-  }
-}
-```
-
-数值字段仍可展示摘要卡片和按时间的日志计数趋势；下面仅说明数值分布。它可以画成精确值排行，但它**不是直方图**：`10` 和 `20` 是两个真实值，`OTHER` 是 TopN 之外的合计。
-
-```mermaid
-xychart-beta
-    title "duration 精确值 TopN（不是直方图）"
-    x-axis ["10", "20", "其他"]
-    y-axis "日志数" 0 --> 800
-    bar [120, 90, 790]
-```
-
-**Case 4：空结果和全缺失不是同一种空态**
-
-| 情况 | API 特征 | 页面表现 |
-| --- | --- | --- |
-| 查询没有日志 | `total_count=0`、`present_ratio=null`、`groups=[]` | 成功空状态，显示“该查询范围没有日志” |
-| 有日志但字段全缺失 | `total_count>0`、`present_count=0`、`missing_count=total_count` | 显示“有日志但字段无值”，保留 `MISSING` 组；不要显示成无日志 |
-
-#### 当前接口明确不返回的内容
-
-当前 `FIELD_STATISTICS` 是固定语义数据包，不返回以下内容：
-
-- ECharts/AntV 的最终配置对象；
-- 后端指定的唯一图表类型；
-- 原始日志明细表；
-- 直方图分桶、四分位数 Q1/Q3、P95/P99 等未定义统计量；
-- 每个时间桶重新排名后的 TopN。
-
-因此前端负责“数据到组件”的适配，后端负责统计口径和结果完整性。若后续需要直方图、箱线图或后端统一图表配置，应新增明确的结果字段或独立接口，不能从当前字段推导出不存在的数据。
+这是数据到组件的映射示意；图表样式由前端决定。`numeric_summary` 单独渲染摘要卡片，不根据均值或中位数推导接口未提供的箱线图、直方图。
 
 ## 4. AI 统计：填需求 → 创建 → 解析产物
 
@@ -347,9 +234,19 @@ xychart-beta
 
 提交失败保留需求草稿。创建成功保存附件 UID，挂到来源卡片，并按第 5 节选择仅看结果或展示过程。
 
-SUCCESS 后读取 `output_data.content`。这是后端从 Agent 最后闭合消息中提取的指定标签内未解析原文，不保证是 JSON；后端只做标签切分，不执行 JSON/dict/list/ECharts 校验。图表解析与渲染由前端与 Agent skills 协同约定。联调前应确认该约定已在统计 Agent 配置中生效，否则仍可得到成功文本，但不一定能渲染为图表。
+SUCCESS 后读取 `output_data.content`。这是后端从 Agent 最后闭合消息中提取的指定标签内未解析原文，不保证是 JSON；后端只做标签切分，不执行 JSON/dict/list/ECharts 校验。图表解析与渲染由前端与 Agent skills 协同约定，解析失败时保留可查看的原文并提示重新生成。统计 Agent 只提供字段探索和聚合，不提供明细检索；需要查具体日志时使用 AI 分析入口。
 
-标签协议失败（缺失、重复、空内文等）会使附件 FAILED，展示错误并提供重试。标签提取成功后的内容解析/渲染失败不改附件状态；前端可对 SUCCESS 附件调用同一 retry 接口重新生成。重新生成会覆盖旧快照并删除旧反馈，本期不保留产物版本；新执行失败不恢复旧成功产物。中间文字和工具结果属于过程，不拼接成最终产物；单轮 AG-UI 事件仍原样归档，人工重试开始时清理上一轮归档并等待新 `execution_id`。AI 可以调整查询范围，因此不能直接把来源卡片范围标成图表实际范围；若页面需要展示实际范围，由前端与 Agent 输出约定提供。
+```mermaid
+flowchart TD
+    Agent[Agent 输出最后闭合消息] --> Tag{后端标签校验}
+    Tag -->|不合法| Failed[附件 FAILED<br/>显示错误，可原 UID 重试]
+    Tag -->|合法| Success[附件 SUCCESS<br/>保存标签内原文到 output_data.content]
+    Success --> Parse{前端按 skills 约定解析并渲染}
+    Parse -->|成功| Chart[展示图表]
+    Parse -->|失败| Fallback[显示原文与渲染错误<br/>附件仍为 SUCCESS，可原 UID 重新生成]
+```
+
+标签协议失败（缺失、重复、空内文等）会使附件 FAILED，展示错误并提供重试。标签提取成功后的内容解析/渲染失败不改附件状态；前端可对 SUCCESS 附件调用同一 retry 接口重新生成。重试保留创建时的输入与上下文快照，清空旧产物、过程及反馈，本期不保留产物版本；新执行失败不恢复旧成功产物。中间文字和工具结果属于过程，不拼接成最终产物；单轮 AG-UI 事件仍原样归档，人工重试开始时清理上一轮归档并等待新 `execution_id`。AI 可以调整查询范围，因此不能直接把来源卡片范围标成图表实际范围；若页面需要展示实际范围，由前端与 Agent 输出约定提供。
 
 ## 5. 等待结果：轮询是通用方式，SSE 按需接入
 
@@ -382,15 +279,13 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 
 未指定资源 UID 的完整附件列表才必传 `scope_type`：具体 `scene/system` 同时传 `scope_id`，跨范围查询使用 `cross_scene/cross_system` 且不传 `scope_id`。列表项的 `scope_type/scope_id` 是来源会话的绑定归属；统计产物的 `query_summary.scope_id` 是实际日志查询系统，两者用途不同。创建附件仍只传来源消息 UID、类型和业务输入，详情/重试/SSE 按附件 UID 访问，不重复传会话 Scope。
 
+会话列表中的 `attachment_count` 包含全部状态，不用它表示成功图表数量。按类型展示生成中、成功和失败数时读取 `attachment_counts_by_type_and_status.FIELD_STATISTICS/AI_STATISTICS`，具体计数口径见[公共指南](frontend_integration.md#scope-选择与数据隔离)。
+
 仅轮询的页面在重试/重新生成成功后继续读原附件详情，无需等待执行标识。使用 SSE 时先关闭旧连接，等待新的 execution_id 后恢复；排队期间读到旧快照不能当作本轮结果。切换卡片后，迟到的请求或旧流事件不能覆盖新面板。
 
 创建请求超时、无法确定是否成功时，先刷新该来源消息的附件列表核对，不立即重复提交。重试请求结果不确定时也先读原附件状态。
 
-创建时的校验错误直接在输入面板展示；已创建后的执行错误从详情展示。权限或字段错误需修正选择/条件，预算错误可减少类别数、调整粒度或缩小检索范围后新建，暂时性故障可原样重试。错误码与参数约束见 Swagger，不按内部错误文案推断业务分支。
-
 错误处理分两层：字段探索/创建/详情/重试请求失败时按 HTTP 与平台 code 处理；详情请求成功但 status=FAILED 时，按附件 error_code/error_message 展示执行失败。预算或字段问题需修改输入后新建，暂时性查询故障或标签格式异常可原对象重试；SUCCESS 但前端无法渲染时，可对同一 UID 重新生成。处理中的重复重试应恢复轮询，不重新创建。
-
-Swagger 提供人工可读的协议与样例；全量 OpenAPI 的代码生成兼容性需单独验证，不能以 /api/schema/ 返回成功作为严格校验通过的依据。
 
 两种统计均可改标题，不支持编辑产物或后端导出。反馈按 supports_feedback 展示，AI 统计复用公共附件反馈链路。不要复用 AI_ANALYSIS 的正文编辑、Markdown 取值或报告下载逻辑。
 

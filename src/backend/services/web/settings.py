@@ -99,7 +99,7 @@ if not 0 < AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT < AI_ASSISTANT_LOG_ANALYSI
         "AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT 必须大于 0 且小于 " "AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT"
     )
 # ============== 审计日志统计附件配置 ==============
-# 两种统计任务共用独立 Worker，各自配置限流、超时及受控自动重试；不影响分析队列。
+# 程序统计进入 default；AI 统计与分析共用 ai_default，按 Agent Code 限流并配置超时/重试。
 # 正文默认值沿用平台已有配置，不重新定义公共 Markdown 上限；运行时可独立收紧。
 AI_ASSISTANT_AI_STATISTICS_CONTENT_MAX_BYTES = int(
     os.getenv(

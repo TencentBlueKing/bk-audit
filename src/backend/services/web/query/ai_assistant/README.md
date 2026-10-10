@@ -10,8 +10,9 @@ Service 与字段元信息结构，仅扩展递归请求及不截断字段数的
 ```mermaid
 flowchart LR
     AGENT[日志分析 Agent] --> APIGW[用户态 API Gateway]
+    STATS[AI 统计 Agent<br/>仅字段探索与聚合] --> APIGW
     APIGW --> VIEW
-    VIEW --> RES[Resource + DRF/Pydantic]
+    VIEW[Web / MCP View] --> RES[Resource + DRF/Pydantic]
     RES -->|单层目录| META[LogFieldMetadataService]
     WEB[前端字段选择器] --> WEBRES[Web 递归请求适配]
     WEBRES -->|完整采样对象树| META
@@ -48,17 +49,17 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
 | --- | --- | --- | --- |
 | `mcp_get_log_field_metadata` | `POST field_metadata/` | 探索标准字段、JSON 子路径和脱敏样例 | JSON 父对象由 Doris 筛选，默认最多取100条脱敏样本、返回50个直接子键 |
 | `mcp_search_logs` | `POST search/` | 返回当前用户可见的脱敏日志明细 | 最多 20 个投影字段、3 个排序项、100 条/页，业务 data 有字节预算 |
-| `mcp_aggregate_logs` | `POST aggregate/` | 固定函数的分组、时间桶和数值聚合 | 最多 2 个维度、5 个指标、100 个分组；不接受 SQL 或任意函数名 |
+| `mcp_aggregate_logs` | `POST aggregate/` | 固定函数的分组、时间桶和数值聚合 | 类别默认 Top10，支持调整；不接受 SQL 或任意函数名，维度/指标/结果预算见 Swagger |
 
-三个请求都包含同一 `condition`：一期只允许 `scope_type=system` 和单个 `scope_id`，时间范围与
+三个请求都包含同一 `condition`：只允许 `scope_type=system` 和单个 `scope_id`，时间范围与
 条件结构和日志检索页一致；过滤值只接受字符串、整数或浮点数，复杂 JSON 值会在查询前拒绝。
-字段先通过 `field_metadata` 探索，再传给明细或聚合工具。例如：
+未知路径可先通过 `field_metadata` 探索；已知合法路径可直接传给明细或聚合工具。例如：
 
 ```json
 {
   "condition": {
     "scope_type": "system",
-    "scope_id": "bk_iam",
+    "scope_id": "example-system",
     "start_time": "2026-08-29T00:00:00+08:00",
     "end_time": "2026-08-29T12:00:00+08:00",
     "conditions": []
@@ -68,7 +69,7 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
   ],
   "metrics": [{"id": "count", "type": "COUNT"}],
   "order_by": [{"target_id": "count", "direction": "DESC"}],
-  "limit": 20
+  "top_n": 10
 }
 ```
 
@@ -80,19 +81,20 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
 排序最多 3 项，支持 `COLLECT_SEARCH_CONFIG` 中的非 JSON 根字段及 `start_time`，不支持 JSON
 子路径；`start_time` 映射为物理时间列 `dtEventTimeStamp`，并补齐采集器排序键。
 
-聚合未指定 `order_by` 时，按维度升序返回前 `limit` 组，不代表 TopN；显式按指标排序时才表示
-该指标下的 TopN/BottomN。一期不合并“其他”分组、不补空时间桶，并列指标值不额外按维度稳定
-排序。`data_quality` 是整个检索范围的数值转换质量，不是返回分组的逐组质量统计。
+聚合未指定 `order_by` 时，按完整范围日志数降序选出 TopN；可显式指定类别或指标排名，
+并列时用类别键稳定排序。TopN 外非缺失类别归 OTHER，缺失归 MISSING，两者不占 TopN 名额；
+时间桶复用全范围类别映射。MCP 不补空时间桶，程序统计补齐完整时间轴。
+`data_quality` 是整个检索范围的数值转换质量，不是返回分组的逐组质量统计。
 时间桶使用物理时间列 `dteventtimestamp`（与现有字段统计一致），而非业务上报的 `start_time` 列。
 
 ## 统计能力复用边界
 
-日志分析和 AI 统计通过同一个用户态聚合服务构造显式维度与指标；程序字段统计在其上编排固定语义包。
+日志分析和 AI 统计通过同一个用户态聚合服务构造显式维度与指标；程序字段统计复用内核编排固定语义包。
 查询领域统一完成实时鉴权、范围注入、SQL 执行、类型转换、预算和结果完整性，图表及报告协议由上层负责。
 
-`DorisStatisticSQLBuilder` 为程序统计编排概览、默认 Top10 分布、TopN 时序和可选数值摘要；
-`LogAggregationSQLBuilder` 接收 Agent 的显式维度和指标。两者复用 `BaseDorisSQLBuilder` 的字段表达式、
-过滤、排序和计数能力。分布先全范围选出 TopN，再对同一组值计算趋势，并把剩余非空值合并为 OTHER；
+`FieldStatisticsService` 将单字段输入编排为概览、默认 Top10 分布、时序和可选数值摘要；
+`LogAggregationService` 接收 Agent 的显式维度与指标。两者共用 `StatisticsSQLBuilder` 与结果解析，
+复用既有查询上下文和字段表达式。分布先全范围选出 TopN，再对同一组值计算趋势，把剩余非缺失类别合并为 OTHER；
 具体 SQL 阶段、类型处理和完整性约束见 [`log_tools/README.md`](log_tools/README.md)。
 
 ## 动态 JSON 字段路径
@@ -104,13 +106,14 @@ APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics`
 | --- | --- | --- |
 | `["ticket", "id"]` | `$.ticket.id` | 两层普通子键 |
 | `["中文字段"]` | `$.中文字段` | Unicode 普通子键 |
-| `["*"]` | `$."*"` | 字面 key `*`，不是通配符 |
 | `["items[0]"]` | `$."items[0]"` | 字面 key，不是数组下标 |
-| `["ticket id"]` | `$."ticket id"` | 包含空格的字面 key |
+| `["a.b"]` | `$."a.b"` | 一个包含点号的字面 key，不是两层路径 |
+| `["owner's"]` | `$."owner's"` | 含单引号的字面 key；SQL 通过 CONCAT 与 CHAR(39) 构造，不让前端转义 |
 
-PyPika `wrap_constant()` 只保护 SQL 字符串边界，不理解 JSONPath 中的通配符、数组下标和
-引用路径段，因此不能替代路径编码。引号、反斜杠和控制字符先按 JSON 字符串规则
-转义，再由 SQL 常量层处理；两层转义职责不同。
+PyPika `wrap_constant()` 只保护 SQL 字符串边界，不理解 JSONPath，因此不能替代逐段路径编码。
+日志查询模块统一拒绝空白、控制字符、通配符 `*`、双引号和反斜杠，不裁剪 key；单引号正常支持。
+该能力校验只用于日志检索及 AI 日志工具，通用 SQL 层负责合法路径的编码，不给其他业务新增限制。
+统计、明细、导出和字段采样共用编码；具体实现与引擎兼容原因见 [`log_tools/README.md`](log_tools/README.md)。
 
 ## 身份、权限与敏感数据
 

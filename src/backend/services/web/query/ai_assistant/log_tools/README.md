@@ -1,161 +1,110 @@
-# 日志详情、字段探索、聚合与统计实现架构
+# 日志查询与统计实现
 
-本文面向 query 领域维护者，解释 `ai_assistant/log_tools` 的实现和算法；它不是前端接口契约。附件生命周期见 [AI 助手架构](../../../ai_assistant/docs/architecture.md)，前端调用见 [统计联调指南](../../../ai_assistant/docs/frontend_statistics.md)。
+本目录提供字段探索、脱敏明细、通用聚合和程序字段统计。附件执行见[AI 助手架构](../../../ai_assistant/docs/architecture.md)，页面接入见[统计联调](../../../ai_assistant/docs/frontend_statistics.md)。
 
-## 1. 能力边界与代码导航
+## 1. 模块边界
 
-四项能力共用查询上下文与字段权限，但返回语义不同。
-
-| 能力 | 入口文件（当前目录） | 结果与用途 |
+| 能力 | 主要文件 | 职责 |
 | --- | --- | --- |
-| 字段探索 | field_metadata.py、field_definitions.py | 根目录、MCP单层及Web完整采样对象树，帮助选择字段 |
-| 日志详情 | search.py | 脱敏、投影后的分页日志及总数，供分析取证 |
-| 通用聚合 | aggregation.py | columns/rows/groups 等统计数据，供 Agent 使用 |
-| 程序字段统计 | statistics.py | 单字段固定统计包，供附件保存和前端渲染 |
-| 共用规则 | context.py、sensitive.py、schemas.py、constants.py | 可信条件、权限、参数边界及带说明的协议枚举 |
-| 查询构造 | sql.py、statistics_sql.py、statistics_fields.py | 明细投影、聚合 SQL、字段表达式 |
-| 结果与预算 | statistics_result.py、statistics_budget.py、statistics_summary.py、statistics_types.py | 完整性、时间轴、数值摘要、标量保真 |
+| 可信上下文与字段权限 | `context.py`、`sensitive.py` | 校验用户、系统、条件和字段权限，解析真实数据表 |
+| 字段探索 | `field_metadata.py`、`field_definitions.py` | 内置声明优先，样本补充动态路径与类型提示 |
+| 明细查询 | `search.py`、`sql.py` | 查询补列、逐行脱敏、最终投影 |
+| 字段表达式 | `statistics_fields.py` | 生成类型与原生值的 SQL 表达式 |
+| 统计 SQL | `statistics_sql.py` | 全范围规范化、TopN、原记录归组和聚合 |
+| 结果与预算 | `statistics_result.py`、`statistics_budget.py`、`statistics_summary.py`、`statistics_types.py` | 时间规划、类型恢复、摘要及完整性校验 |
+| 消费者 | `aggregation.py`、`statistics.py` | 分别组织 MCP 结果与程序统计固定包 |
+
+## 2. 查询与权限
+
+查询上下文来自当前用户、租户和检索条件，调用方不能传任意表或 SQL。系统授权写入查询条件；过滤、排序、维度和指标涉及的敏感路径在查询前检查。
+
+详情和采样先补齐脱敏所需身份列，再经 SearchDataParser 脱敏，最后投影；辅助列不对外输出。聚合直接拒绝无权字段，不能先计算后遮罩。
+
+过滤会泄露命中数，排序会泄露顺序，聚合会泄露分布，因此这些计算字段必须在查询前鉴权，不能靠返回后脱敏补救。父对象探索可能包含有权与无权子字段，采用逐行脱敏后发现路径，再清除无权字段的样例与统计能力；不会因为其中一个子字段无权就拒绝整个对象。
+
+查询经 SafeQuerySyncResource 使用裸表 ID 与 `prefer_storage="doris"`，SQL 同时兼容 BKBase 前置解析和 Doris。明细数据/count 使用同一条件批量查询，但不承诺两条SQL的事务快照一致性。
+
+## 3. 字段发现与类型
+
+根目录来自内置配置，无需采样。下钻将声明子字段与最多100条脱敏样本合并：声明优先保留类型和别名，动态字段由样本发现。Web 级联模式在同一批样本上返回后代叶子的完整路径；MCP 保持单层探索，每次最多50字段。
+
+内置子字段无样本时仍保留并标记 DECLARED，动态路径标记 INFERRED；样本补充观察类型、样例和覆盖率，不覆盖声明。Web 递归只遍历这一批数据，不按每个子节点再次查 Doris，不展开数组。声明解析集中在 `field_definitions.py`，目录、明细列和统计标题共用别名。
+
+字段目录与实际统计使用不同的类型依据：
+
+| 阶段 | 类型从哪里来 | 用途 |
+| --- | --- | --- |
+| 根字段及内置子字段目录 | 服务端字段配置 | 展示别名、类型与能力提示，不是动态读取 Doris 表结构 |
+| 动态子字段目录 | 脱敏样本中观察到的 JSON 值 | 帮助选择字段；不能证明全范围类型一致 |
+| 实际统计 | 普通列按服务端声明；JSON/VARIANT 子路径用 JSON_TYPE、JSON_EXTRACT_* 逐行读取 | 在完整范围检查类型并计算结果 |
+
+`source_columns()` 只生成最后一行所需的类型和值表达式，实际执行在 Doris 内，不是再次采样。已知合法 JSON 路径可直接统计；不能用样本目录是否包含该路径作为执行门槛。
+
+类别身份为“类型＋规范值”：数字1与1.0合并，与字符串"1"区分；布尔保留类型；null/缺失归MISSING，空字符串是实际值。去重使用单列类型前缀键，兼容Doris多个DISTINCT指标。对象/数组及不安全数值不能隐入OTHER。
+
+路径能力校验在日志查询模块统一复用，不影响其他业务；JSONPath编码放在通用查询构造层。含单引号的原始key通过 `CONCAT(...,CHAR(39),...)` 构造路径，避免BKBase重写字符串转义后读取错误；普通路径仍使用字面量。统计、明细、导出和父字段采样共用这套编码，不裁剪或改写key。不支持的key在请求边界拒绝，探索跳过并标记truncated。
+
+目录options沿用原枚举展示，但不限制实际合法输入值；Collector结果码-1仅匹配真实-1，非零应使用neq/exclude 0。
+
+## 4. 统计核心算法
 
 ```mermaid
 flowchart TD
-    Web[Web / MCP Resource] --> Context[请求校验与授权 Context]
-    Context --> Metadata[字段探索]
-    Context --> Detail[详情查询]
-    Context --> Aggregate[聚合内核]
-    Program[程序统计服务] --> Aggregate
-    Metadata --> Definition[内置字段与 sub_keys 声明]
-    Metadata --> Sample[按需采样与脱敏]
-    Definition --> Catalog[声明优先合并字段目录]
-    Sample --> Catalog
-    Detail --> Project[查询补列 / 脱敏 / 最终投影]
-    Aggregate --> SQL[规范化 / 全局 TopN / 原记录重聚合]
-    SQL --> BKBase[SafeQuerySyncResource<br/>prefer_storage=doris]
-    BKBase --> Doris[(Doris)]
-    Doris --> Result[帧解析 / 完整性与预算校验]
-    Result --> Fixed[程序统计固定包 / 密集时间轴]
-    Result --> Compact[MCP columns / rows / 稀疏时间桶]
+    Scope[完整授权查询范围] --> Values[逐行提取类型与值<br/>规范化类别身份]
+    Values --> Top[全范围排名，选择 TopN 类别]
+    Values -->|保留原始记录| Map[原始记录归组<br/>VALUE / OTHER / MISSING]
+    Top -->|统一类别映射| Map
+    Map --> Metrics[按组及时间桶重算指标<br/>COUNT / AVG / DISTINCT 等]
+    Metrics --> Result[校验类型、计数与预算<br/>组织程序统计或 MCP 响应]
 ```
 
-这是当前新增日志工具能力的实现范围，不表示所有历史 collector 查询/导出都迁移到这里。明细查询服务可被日志分析 Agent 使用；统计 Agent 的预期工具配置仅含字段探索和聚合。
+TopN在完整范围选定，所有时间桶复用同一组类别。OTHER的AVG、DISTINCT_COUNT和近似分位数必须在映射后的原始记录上重算，不能合并已有摘要。缺失不占TopN名额。
 
-## 2. 可信上下文与权限顺序
+例如完整范围有 GET 3 条、POST 2 条、PUT 1 条、DELETE 1 条、缺失 1 条，Top2 选中 GET 和 POST。两小时结果如下，时间桶沿用全范围图例：
 
-`LogQueryContextService` 根据当前用户、URL 租户和请求条件检查系统查询权限，校验系统归属，复用现有检索序列化器规范化条件，并解析实际数据表。调用方不能直接指定任意物理表或 SQL。服务入口再次校验 Pydantic 请求，防止内部构造绕过协议验证。
-
-不能仅靠结果脱敏保护查询：过滤敏感字段会泄露命中数，按敏感值排序会泄露顺序，聚合会泄露分布。因此，详情的过滤/排序字段、字段采样的过滤字段、聚合的过滤/维度/指标必须在查询前检查。详情输出和采样值还要逐行脱敏；聚合则对参与计算的无权字段直接拒绝，不能先算后遮罩。
-
-## 3. 字段探索：目录不是全量类型证明
-
-不传 parent_field 时从日志检索字段配置生成根目录，不访问 Doris 采样。指定 JSON 父路径时，Doris 按 `JSON_TYPE(parent)='object'` 和 `ARRAY_SIZE(JSON_KEYS(parent))>0` 筛出非空对象行，按当前条件与采集排序最多取100条；VARIANT 根列沿用兼容单页采样。投影只含根列和脱敏身份列，先经过 `SearchDataParser` 逐行脱敏，再发现路径。
-
-目录取内置声明与样本路径的并集。根字段和 `property.sub_keys` 来自同一查询字段配置；声明字段优先使用内置类型、中文别名并标记 `DECLARED`，没有样本仍保留。样本只补充 `observed_types`、样例与覆盖率。未声明的动态路径标记 `INFERRED`，类型能力由观察值提示。`field_definitions.py` 提供共用声明解析，明细列与程序统计标题也沿用声明别名。声明不替代实际统计时的类型和权限校验。
-
-MCP 仍只发现父路径下一层，每次最多50字段。Web 提供 `include_descendants=true`，共用同一服务，在这一批样本上使用栈遍历对象，合并声明与采样发现的子树，只返回后代叶子的完整路径，父项和中间对象不进入扁平 fields；不为节点再次查 Doris、不展开数组、不截断字段数量。完整路径用 raw_name+keys 表达，根目录/单层目录的 is_expandable 用于选择待展开对象，statistics_supported 独立表示统计提示。对象/数组不进入 sample_values；路径深度仍与实际查询协议一致。
-
-父对象中可能同时包含有权和无权子字段，因此探索不整体拒绝父对象，而是在取回根列后逐行脱敏；返回字段仍按路径校验权限并清除无权字段的样本与统计能力。`sampled_count` 是 SQL 返回并脱敏的日志数。达到采样上限（最多100条）、预算为零或单层字段/路径/解析预算截断时 `truncated=true`，不能证明全部子键已发现。`coverage` 的分母是本次父对象候选样本，不是完整检索范围。子字段声明为对象或样本观察到对象时可有 `is_expandable=true`；全 null 的已发现字段可尝试统计，最终类型和结果由全范围查询判定。
-
-Collector 的 `options` 是常见真实值的显示提示，不是枚举成员白名单。结果码 `include [-1]` 只匹配真实 -1；查非零使用 `neq [0]` 或 `exclude [0]`，数值比较同样适用于 access_type。user_identify_type 支持实际值的相等、包含与排除。旧 ES 检索保留其原有“其他=反选”业务语义，不在 Collector SQL 中偷偷转换真实值。
-
-## 4. 详情查询：补列 → 脱敏 → 投影
-
-假设只请求一个 JSON 子字段，直接只查该值会丢失敏感规则判断所需的上下文。`prepare_sensitive_query_fields` 补齐辅助列，`ProjectedLogSQLBuilder` 查询所需根列，完整行先经过 `SearchDataParser`，最后按请求字段投影。辅助列不进入最终 items；columns 给出 items 对应 key，消费者不必猜路径。
-
-数据 SQL 和 count SQL 使用相同授权条件，通过一次 bulk_request 批量发出。排序先采用用户指定顺序，再补采集器序列键，减少 OFFSET 分页并列值导致的不稳定。此批量调用包含两条 SQL，不承诺数据库事务快照一致性；数据持续写入时，分页结果和总数仍可能变化。
-
-响应包含 total、columns、items、pagination 和 query_summary。has_more 根据 total 与页码计算；最终业务响应超限明确失败，不通过截断行或改写字段值伪装完整成功。
-
-## 5. 聚合与程序统计内核
-
-### 5.1 字段与权限
-
-`context.py` 解析系统、租户、条件和数据表；`sensitive.py` 检查过滤字段、维度、指标和子路径权限。字段范围来自日志检索可见字段配置，并允许有效 JSON 子路径。私有敏感字段拒绝，其他敏感对象按 IAM 判断；统计不能绕过明细字段的权限限制。
-
-`field_metadata.py` 返回声明信息、样本推断和统计能力提示。样本只能帮助字段选择，不能证明全量值都可统计。最终查询仍检查实际类型和权限。`statistics_fields.py` 将普通列、JSON、VARIANT 字段转换为统一内部表示。
-
-类别身份由“类型 + 规范值”确定：数字 `1` 与字符串 `"1"` 不同，布尔值不转换成数字；数字 `1` 与 `1.0` 归一。缺失/null 进入 MISSING，空字符串仍是存在的真实类别。对象、数组或不安全数值等不支持的数据触发错误，不偷偷塞进 OTHER。
-
-### 5.2 全范围 TopN，再映射原始记录
-
-以 8 条日志为例：GET 3、POST 2、PUT 1、DELETE 1、缺失 1。`top_n=2` 时，结果是 GET 3、POST 2、OTHER 2、MISSING 1。
-
-算法先对**完整时间范围**的非缺失类别排序，默认按日志数降序并使用稳定的类型/值排序处理并列；选出 TopN 后，把每条原始记录映射为入选类别、OTHER 或 MISSING。时序始终复用这一组类别，不在每个时间桶重新选 TopN。
-
-这不是普通的 `GROUP BY ... LIMIT N`。直接截断只能得到前 N 组，无法同时保证 OTHER 精确、每个时间桶使用同一组图例，以及 AVG、去重数、近似分位数等非可加指标的正确性。实现采用以下顺序：
-
-```text
-字段值提取
-  → 按原始标量类型规范化类别身份
-  → 在完整范围内统计类别并选择 TopN
-  → 将每条原始日志映射到 VALUE / OTHER / MISSING
-  → 从映射后的原始记录计算分组指标和时间桶
-  → 校验总数、分组和时序闭合
-```
-
-以下两小时数据可以直观看出“先全局选组，再画时序”的含义：
-
-| 时间桶 | GET | POST | PUT | DELETE | 缺失 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 10:00 | 2 | 1 | 1 | 0 | 1 |
-| 11:00 | 1 | 1 | 0 | 1 | 0 |
-| 完整范围 | 3 | 2 | 1 | 1 | 1 |
-
-`top_n=2` 在完整范围选中 GET、POST，随后得到：
-
-| 组 | 总数 | 10:00 | 11:00 |
+| 结果组 | 完整范围 | 10:00 | 11:00 |
 | --- | ---: | ---: | ---: |
 | GET（VALUE） | 3 | 2 | 1 |
 | POST（VALUE） | 2 | 1 | 1 |
 | OTHER（PUT + DELETE） | 2 | 1 | 1 |
 | MISSING | 1 | 1 | 0 |
 
-因此前端固定图例不会随时间桶跳变，且每组时序求和等于该组完整范围总数。若分别在每个桶内选择 TopN，类别可能在相邻桶中进入或退出图例，OTHER 的含义也会发生变化。
+直接 GROUP BY 后 LIMIT 只能截断类别，不能得到上述 OTHER，也不能保证每个时间桶的类别一致。OTHER 的平均值同样不能取“各类别平均值的平均”：1 条值为100、9条值为0的记录合并后均值为10，而不是50。去重数也必须在合并后的原记录上计算。
 
-OTHER 的 AVG、DISTINCT_COUNT、近似分位数必须对映射后的原始记录重算。例如两组分别有 1 条数值 100 和 9 条数值 0，合并平均值是 10，不能对两个组的平均值求平均得到 50。
+最终SQL重新计算分组、时序、转换质量和可选数值摘要；预检只用于类别数及时间预算规划，不拼接为最终统计。纯时间ALL组数已知，跳过类别预检。CTE表示逻辑步骤，不保证Doris仅扫描一次。
 
-### 5.3 SQL 与完整性
+结果通过META/GROUP/ROW/QUALITY/SUMMARY帧传输，标量显式走STRING通道，再恢复数字、字符串和布尔，避免 UNION 和查询平台统一列类型时改变原始值。解析器检查帧、类别、总数、时序与摘要一致性，不返回截断的成功结果。
 
-`statistics_sql.py` 生成受控 SQL，维度和指标仅接受协议枚举，不接受任意 SQL 表达式。逻辑处理顺序：
+普通数值指标保留原生数值域；字符串/JSON数值运算按LONG/DOUBLE显式转换，失败值排除并计入data_quality。输入原生数值和最终数值均校验安全范围与类型；不以输出舍入修复精度损失。
 
-```text
-读取来源值 → 安全类型处理 → 规范化 → 类型校验
-    → 全范围类别汇总 → 排名选 TopN → 原记录映射分组
-    → 分组/时间聚合 + 数据质量 + 可选数值摘要
-    → META / GROUP / ROW / QUALITY / SUMMARY 结果帧
-```
+### 查询引擎兼容约束
 
-查询 SQL 还需同时兼容 BKBase 前置解析与 Doris。查询统一使用不带 `.doris` 后缀的表 ID，并传 `prefer_storage="doris"`；构造层移除历史上下文中的后缀，避免两种路由声明同时出现；元数据计数通过单行 CTE 关联，避免在 CAST 中嵌入标量子查询；UNION 内部键列使用 `frame_key`，避免保留字 `key`；时间桶使用毫秒差除法取整，避免 BKBase 拒绝的 DIV。上述边界已通过真实查询复现，单独使用本地 SQL 解析器无法覆盖。
+SQL 必须同时通过 BKBase 前置解析和 Doris 执行，维护时保留以下构造约束；本地 SQL 解析通过不代表平台能执行。
 
-这些 CTE 描述逻辑步骤，不保证 Doris 物理执行只扫描一次。有类别的时间查询先做规划查询；纯时间统计 ALL 组数固定为 1，直接规划并执行最终查询，但最终统计数据由同一最终 SQL 重算，避免把预检结果与最终数据拼接。
+| 构造方式 | 设计原因 |
+| --- | --- |
+| JSON/VARIANT 共用 JSON_TYPE、JSON_EXTRACT_* | 不依赖高版本 VARIANT_TYPE；按实际值保留布尔、数字等类型 |
+| DISTINCT_COUNT 使用类型前缀的单列键 | 避免多个多列 DISTINCT 同查被拒绝，同时区分数字与字符串；缺失排除、空字符串保留 |
+| 帧内部使用 frame_key；元信息用单行 CTE 关联 | 避开 key 保留字，以及 CAST 内标量子查询的解析限制 |
+| 时间桶用毫秒差除法后 FLOOR | 避免前置解析拒绝 DIV，保持实际时间定位 |
 
-`statistics_result.py` 校验帧结构、类型、计数闭合和时序闭合。程序统计补齐时间轴；MCP 仅返回有日志的时间桶，并通过 `query_summary.sparse_time_buckets=true` 标识缺省桶语义，空范围返回空 rows。计数类空桶为 0，无有效数值的数值指标为 null。缺帧、截断或预算超限返回错误，不把不完整数据标记为成功。
+表路由和单引号路径编码见前文；这些规则应由共享构造层维护，各消费者不要复制 SQL 修补分支。
 
-### 5.4 时间与预算
+## 5. 时间与结果组织
 
-`statistics_budget.py` 按可信时区规划 MINUTE/HOUR/DAY。分钟、小时沿 UTC 时间线推进，日桶按本地日历推进，覆盖夏令时边界。首尾桶只统计原查询范围内的数据。
+默认Top10，OTHER/MISSING额外返回。时间轴按可信时区规划，首尾桶只计原始查询范围；AUTO可按预算加粗并完整重查，显式粒度超限报错。预算限制类别/桶/单元与响应字节，部署配置可收紧。
 
-MCP 默认 TopN 10，程序统计默认 10，协议最大 500，部署配置可收紧；OTHER/MISSING 不占 TopN 名额。默认最多 1440 个时间桶、100000 个数值单元和 4 MiB 业务结果。单元预算结合组数、桶数和指标列计算；程序统计每组每桶只有计数列，MCP 还需考虑辅助计数/比例列。
+输入时间、SQL分区及桶轴共用 `time_range.parse_log_time`：无时区字符串按服务端默认时区解释，显式偏移保留真实时刻后再规范化给 Collector。分钟/小时沿 UTC 时间线推进，日桶按本地日历推进，避免偏移或夏令时造成重复解释。结果用返回的 timezone 展示。
 
-AUTO 选择预算允许的最细粒度；最终查询发现实际规模超预算时可加粗粒度并重跑完整查询。显式粒度不静默改变，超预算报错。即使日桶仍超预算，也不会无限扩展。以上是防护上限，不是容量压测承诺。
+数值单元预算按“组数 × 桶数 × 预算列数”估算：程序统计每桶只有计数列，按1列计算；MCP按指标数加2列计算，包含辅助计数与比例。字节预算仍单独检查，减少 TopN 或加粗时间粒度不能保证任意长文本结果不超限。AUTO 降级会重跑完整查询，显式粒度不会静默改变；具体容量配置见 `statistics_budget.py` 和 `services/web/settings.py`，不把保护上限当作压测承诺。
 
-### 5.5 两种消费者
+| 消费者 | 输出与语义 |
+| --- | --- |
+| FieldStatisticsService | 概览、分布、完整时序；声明数值列或全范围存在值均为原生数字时增加数值摘要，中位数近似 |
+| LogAggregationService / MCP | columns、rows、groups、query_summary、data_quality；支持自定义维度及指标，时序只返回有日志的稀疏桶 |
 
-程序统计：`statistics.py` 编排固定包，类别字段返回概览、分布和时序；声明为数值或全范围存在值均为原生数值的字段增加摘要。字符串数字不自动转数值，中位数为近似值。
+程序统计补齐空桶，计数为0；无有效数值的指标为null。比例、数值摘要及聚合浮点指标统一输出四位小数，整数计数与类别原值不舍入。小比例舍入为0时是否有日志以计数为准。
 
-MCP：`aggregation.py` 消费统一 DSL，支持最多 2 个维度、5 个指标；指标包括 COUNT、DISTINCT_COUNT、MIN、MAX、AVG、SUM、PERCENTILE_APPROX。输出 columns、rows、groups、query_summary、data_quality，供 Agent 继续解释。无类别维度可做全局 ALL 汇总。
+## 6. 变更与验证
 
-## 6. 变更与验证入口
-
-- 新字段或路径规则：同步检查 schemas、元数据提示、敏感对象路径覆盖、实际表达式及 typed 结果；不能只让目录可见而执行失败。
-- 新聚合指标：同步考虑参数约束、允许类型、OTHER 重算、空桶语义、数据质量和单元预算。
-- SQL 优化：保留全范围类别选择与最终查询口径一致，不能把预检统计直接拼成最终结果；以实际 Doris 执行计划验证性能。
-- 新消费者：复用服务与领域结果，图表协议留在消费者侧，查询内核不引入 ECharts。
-
-测试主要位于 `tests/test_query/test_ai_assistant/`，覆盖协议、Resource、字段权限、明细脱敏、SQL 构造、类型、预算和结果闭合；程序附件链路测试位于 `tests/test_ai_assistant/`。SQL 字符串单测只能校验构造约束，JSON/VARIANT、数值精度、近似分位数、查询超时和数据量边界仍需在实际查询引擎验证。
-
-### MCP 故障恢复与上下文成本
-
-多 DISTINCT_COUNT 指标使用单列类型前缀键去重，避免 Doris 拒绝同条 SQL 中多个多列 DISTINCT；前缀保留字符串/数值/布尔类型差异，缺失值排除，空字符串参与。
-
-根字段目录不读取日志，`sampling_performed=false` 时 `sampled_count=0` 不能解释为无日志；总量由 COUNT 获取。字段目录可在同一分析中复用。保留/重复列 ID 和非法操作符分别返回固定的修正提示，错误消息不回显用户条件。MCP 的 `ratio/log_ratio` 与程序统计的 `ratio/present_ratio` 统一输出四位小数，保留 null；整数计数和类别原值保持精度；数值摘要及聚合浮点指标统一输出四位小数。很小的正比例可能舍入为 0，是否有日志以计数为准。
-
-时间条件、SQL分区和桶轴共用 `time_range.parse_log_time`：无时区字符串按服务端默认时区解释，显式偏移按真实时刻转换。MCP入口覆盖旧范围校验，避免UTC与本地混合输入被误判；传入Collector前转换为默认时区ISO，避免UTC被重复解释为本地时间。
+新增字段/指标需同时核对协议、权限、类型、OTHER重算、预算和结果解析；新消费者复用内核，不引入ECharts协议。测试位于 `tests/test_query/test_ai_assistant/`；程序附件测试位于 `tests/test_ai_assistant/`。SQL构造单测不替代实际BKBase查询验证；字段统计、MCP聚合、明细和导出需在同一范围对照独立SQL，导出还需解析实际文件。受控只读CTE可补充不存在的特殊键样本，但不代表部署Worker已处理真实非空业务数据。
