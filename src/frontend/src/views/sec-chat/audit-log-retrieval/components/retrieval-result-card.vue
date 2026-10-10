@@ -847,7 +847,7 @@
   const canExport = computed(() => (
     Boolean(displayMessageUid.value)
     && !isFailed.value
-    && !displayResult.value.tablePending
+    && displayResult.value.totalHit > 0
   ));
   /** 命中数不超过预览导出上限时，预览导出即全量，点击直接导出不再弹下拉 */
   const isDirectExport = computed(() => displayResult.value.totalHit <= PREVIEW_EXPORT_LIMIT);
