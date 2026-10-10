@@ -500,6 +500,8 @@ class TestMessageExport(AIAssistantPlatformTestCase):
         self.assertEqual(kwargs["condition"].scope_id, TARGET_SYSTEM_ID)
         self.assertEqual(kwargs["username"], self.user)
         self.assertEqual(kwargs["export_config"]["field_scope"], "specified")
+        # AI 导出来源标记：后端强制注入（全量导出运行时据此启用单行表头/保序/自适应列宽）
+        self.assertEqual(kwargs["export_config"]["source"], "ai_assistant")
         self.assertTrue(kwargs["task_name"].startswith("AI助手检索导出-"))
         self.assertEqual(result, {"export_task_id": 123, "status": "PENDING"})
 
