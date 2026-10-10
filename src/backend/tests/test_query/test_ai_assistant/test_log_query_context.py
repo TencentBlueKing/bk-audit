@@ -4,6 +4,7 @@
 from unittest import mock
 
 from core.exceptions import PermissionException
+from core.exceptions import ValidationError as CoreValidationError
 from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
     LogQueryFailed,
@@ -177,29 +178,12 @@ class TestLogQueryContextService(AIAssistantTestCase):
 
         self.assertEqual(raised.exception.message, str(InvalidLogCondition.MESSAGE))
 
-    def test_json_keys_keep_whitespace_without_changing_web_validation(self):
-        """JSON key 是精确名称；工具校验不得裁剪它，也不能改变 Web 序列化器默认行为。"""
-
+    def test_json_keys_with_whitespace_are_rejected_without_trimming(self):
+        """不可解析的子键不能裁剪后查询另一条路径；Web 与工具入口统一拒绝。"""
         for key in (" token ", " ", " 中文 "):
-            with self.subTest(key=key):
-                condition = self.make_condition(
-                    conditions=[self.make_field_condition(raw_name="extend_data", keys=[key])]
-                )
-                with (
-                    mock.patch(f"{CONTEXT_MODULE}.SearchLogPermission.has_system_search_permission", return_value=True),
-                    mock.patch(f"{CONTEXT_MODULE}.CollectorPlugin.build_collector_rt", return_value="test_table"),
-                ):
-                    context = LogQueryContextService.build(
-                        username=self.username, namespace=self.namespace, condition=condition
-                    )
-                self.assertEqual(context.condition.conditions[0].field.keys, [key])
-                self.assertEqual(context.conditions[-1]["field"]["keys"], [key])
-                sql = ProjectedLogSQLBuilder(
-                    table=context.table, conditions=list(context.conditions), sort_list=[], page=1, page_size=1
-                ).build_data_sql([LogFieldRef(raw_name="extend_data", keys=[key])])
-                # 投影和过滤都使用同一个原始 JSON key，而不是只在上下文中保留。
-                self.assertEqual(sql.count(f'$."{key}"'), 2, sql)
-
+            condition = self.make_condition(conditions=[self.make_field_condition(raw_name="extend_data", keys=[key])])
+            with self.subTest(key=key), self.assertRaises(InvalidLogCondition):
+                LogQueryContextService._validate_condition(condition=condition, namespace=self.namespace)
         web_serializer = CollectorSearchAllReqSerializer(
             data={
                 "namespace": self.namespace,
@@ -210,8 +194,8 @@ class TestLogQueryContextService(AIAssistantTestCase):
                 "conditions": [self.make_field_condition(raw_name="extend_data", keys=[" token "]).model_dump()],
             }
         )
-        self.assertTrue(web_serializer.is_valid(), web_serializer.errors)
-        self.assertEqual(web_serializer.validated_data["conditions"][-1]["field"]["keys"], ["token"])
+        with self.assertRaises(CoreValidationError):
+            web_serializer.is_valid(raise_exception=True)
 
     def test_table_resolution_failure_is_mapped_without_leaking_namespace_details(self):
         internal_error = RuntimeError("collector_plugin_id for secret-namespace is missing")

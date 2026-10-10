@@ -199,7 +199,7 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.19")
+        self.assertEqual(definition["release"]["version"], "0.0.20")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
         self.assertIn("统计专用 MCP 工具集", definition["release"]["comment"])
 

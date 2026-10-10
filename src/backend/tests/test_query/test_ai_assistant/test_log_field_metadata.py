@@ -415,7 +415,7 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
 
     def test_unsupported_child_key_marks_field_scan_truncated(self):
         self.mock_parser.return_value.parse_data.return_value = [
-            {"extend_data": {"valid": "visible", "literal.dot": "unsupported"}}
+            {"extend_data": {"valid": "visible", "literal.dot": "unsupported", "space key": 8, "*": 9}}
         ]
 
         result = self._get_metadata(parent_field=LogFieldRef(raw_name="extend_data"))
@@ -429,6 +429,15 @@ class TestLogFieldMetadataService(AIAssistantTestCase):
         self.assertEqual([item.field.keys for item in result.fields], [["risk", "score"]])
         self.assertEqual(result.fields[0].sample_values, [80, 90])
         self.assertFalse(result.fields[0].is_expandable)
+
+    def test_root_enum_options_preserve_frontend_labels(self):
+        """Web/MCP 共用目录保留原结果码选项，不将查询值拼进展示名。"""
+        fields = {item.field.raw_name: item for item in self._get_metadata().fields}
+
+        self.assertEqual(
+            [option.model_dump() for option in fields["result_code"].options],
+            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "其他"}],
+        )
 
     def test_root_and_child_requests_have_expected_categories(self):
         basic = self._get_metadata()

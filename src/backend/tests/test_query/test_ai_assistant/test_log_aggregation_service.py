@@ -24,6 +24,9 @@ from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_TOOL_ALLOWED_FIELD_NAMES,
     LOG_TOOL_NESTED_FIELD_NAMES,
 )
+from services.web.query.ai_assistant.log_tools.statistics_result import (
+    UnsupportedStatisticsNumber,
+)
 from services.web.query.ai_assistant.schemas import Condition, ConditionField
 from tests.base import TestCase
 from tests.test_query.test_ai_assistant.test_log_aggregation_sql import make_request
@@ -156,6 +159,15 @@ class TestLogAggregationService(TestCase):
             self.mock_query.return_value = ({"list": data[:1]},)
             with self.assertRaises(UnsupportedFieldType):
                 self._aggregate()
+
+    def test_numeric_metric_overflow_returns_a_field_error_not_a_retryable_query_error(self):
+        """合法数值聚合的输出超安全范围，与原生值超界使用同一领域错误。"""
+        data = frames()
+        data[4]["m1"] = "9007199254740992"
+        self.mock_query.return_value = ({"list": data},)
+        with self.assertRaises(UnsupportedStatisticsNumber) as error:
+            self._aggregate()
+        self.assertEqual(error.exception.STATUS_CODE, 400)
 
     def test_empty_categories_and_empty_global_all(self):
         self.mock_query.return_value = (

@@ -200,9 +200,9 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         )
 
         # 不 mock Context/序列化器/权限判定本身，只替换基础设施；验证公开入口到 SQL 前的路径。
-        sensitive_rule = mock.Mock(id=1, fields=[{"field_name": "extend_data. secret "}], is_private=True)
+        sensitive_rule = mock.Mock(id=1, fields=[{"field_name": "extend_data.私有-键"}], is_private=True)
         cases = (
-            ("extend_data", [" secret "], "eq"),
+            ("extend_data", ["私有-键"], "eq"),
             ("log", ["bypass"], "match_any"),
         )
         resources = (
@@ -751,6 +751,17 @@ class TestMCPUserLogResources(AIAssistantTestCase):
 
     def test_public_http_maps_schema_errors_to_stable_domain_codes(self):
         cases = (
+            (
+                "aggregate",
+                {
+                    "condition": self.condition.model_dump(mode="json"),
+                    "dimensions": [
+                        {"id": "value", "type": "FIELD", "field": {"raw_name": "extend_data", "keys": ["*"]}}
+                    ],
+                    "metrics": [{"id": "count", "type": "COUNT"}],
+                },
+                UnsupportedLogField,
+            ),
             (
                 "field_metadata",
                 {

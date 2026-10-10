@@ -20,7 +20,7 @@ definitions:
       data: {x-nullable: true, description: 普通错误为 null；IAM 权限错误沿用平台权限申请数据。}
       errors: {x-nullable: true, description: 可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）及受控 adjustments 调整建议；不回显 SQL 或字段值，工具分支仍按 code 判断。}
   log_tool_field_ref:
-    description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及\n路径成本；Doris JSON SQL 构建器负责统一转义。"
+    description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和可查询的常见标点。本模型约束可见根字段、\n可解析子键及路径成本；Doris JSON SQL 构建器负责统一转义。"
     type: object
     additionalProperties: false
     required: [raw_name]
@@ -38,14 +38,14 @@ definitions:
           minLength: 1
           maxLength: 128
           pattern: '^[^.]+$'
-        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
+        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和常见标点，不支持点号、空白、控制字符、双引号、反斜杠和星号；非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
         type: string
         x-nullable: true
         enum: [string, double, int, long, text, timestamp, float, object, nested, keyword]
         description: 可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。
   log_tool_field_ref_response:
-    description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和除点号外的标点。本模型只约束可见根字段及\n路径成本；Doris JSON SQL 构建器负责统一转义。"
+    description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和可查询的常见标点。本模型约束可见根字段、\n可解析子键及路径成本；Doris JSON SQL 构建器负责统一转义。"
     type: object
     required: [raw_name, keys, field_type]
     properties:
@@ -58,7 +58,7 @@ definitions:
           minLength: 1
           maxLength: 128
           pattern: '^[^.]+$'
-        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
+        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和常见标点，不支持点号、空白、控制字符、双引号、反斜杠和星号；非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
       field_type:
         description: "可选存储字段类型提示，取值与审计日志公共 FieldType 一致；不决定 FIELD_STATISTICS 的 statistics_kind，服务端仍按字段声明和全范围原生值校验。"
         type: string
@@ -77,7 +77,7 @@ definitions:
         default: []
         maxItems: 16
         items: {type: string, minLength: 1, maxLength: 128, pattern: '^[^.]+$'}
-        description: 最多 16 段业务子键，允许 Unicode 和除点号外的标点；完整字段路径 UTF-8 最大 1024 bytes。
+        description: 最多 16 段业务子键，允许 Unicode 和常见标点；不支持点号、空白、控制字符、双引号、反斜杠和星号；完整路径 UTF-8 最大 1024 bytes。
   log_tool_condition:
     type: object
     description: 单系统日志检索条件；服务端会按当前用户重新鉴权。最多 100 个条件，完整 condition 的 UTF-8 JSON 最大 256 KiB。
@@ -3357,7 +3357,7 @@ paths:
                             type: string
                             x-nullable: true
                           keys:
-                            description: 最多 16 段业务子键，允许 Unicode 和除点号外的标点；完整字段路径 UTF-8 最大 1024 bytes。
+                            description: 最多 16 段业务子键，允许 Unicode 和常见标点；不支持点号、空白、控制字符、双引号、反斜杠和星号；完整路径 UTF-8 最大 1024 bytes。
                             items:
                               maxLength: 128
                               minLength: 1
@@ -3414,7 +3414,7 @@ paths:
                         minLength: 1
                         type: string
                       keys:
-                        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
+                        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和常见标点，不支持点号、空白、控制字符、双引号、反斜杠和星号；非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
                         items:
                           maxLength: 128
                           minLength: 1
@@ -3487,7 +3487,7 @@ paths:
                         minLength: 1
                         type: string
                       keys:
-                        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和除点号外的标点，非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
+                        description: 可见 JSON 根字段的业务子路径；允许 Unicode 和常见标点，不支持点号、空白、控制字符、双引号、反斜杠和星号；非 JSON 字段必须为空数组，完整路径最大 1024 bytes。
                         items:
                           maxLength: 128
                           minLength: 1
@@ -3515,8 +3515,8 @@ paths:
                     type: object
                     x-nullable: true
                   value_type:
-                    description: COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 extend_data 数值聚合必须传
-                      LONG 或 DOUBLE，标准数值字段必须省略。
+                    description: COUNT/DISTINCT_COUNT 必须省略；MIN/MAX/AVG/SUM/PERCENTILE_APPROX 对字符串或 JSON 子字段数值聚合必须传
+                      LONG 或 DOUBLE，标准数值字段必须省略。文本只转换普通十进制（不含科学记数），失败见 data_quality；最终数值超安全范围返回 2926008。
                     enum:
                     - LONG
                     - DOUBLE

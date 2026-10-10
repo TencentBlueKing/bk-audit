@@ -202,7 +202,7 @@ class LogFieldMetadataService:
             fields=[config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs],
             timedelta=DEFAULT_TIMEDELTA,
             namespace=namespace,
-        ).collector_field_map
+        ).field_map
         fields = []
         for config in COLLECT_SEARCH_CONFIG.field_configs:
             field = config.field

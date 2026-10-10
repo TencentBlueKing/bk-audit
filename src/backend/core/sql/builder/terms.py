@@ -178,10 +178,8 @@ class DorisVariantField(DorisField):
 class DorisJsonTypeExtractFunction(Function):
     """Doris JSON 字段提取函数。
 
-    普通路径段保留 ``$.key`` 形式；包含空格、点号或其他标点的业务 key 使用
-    Doris 支持的 ``$."key"`` 形式。JSON 路径先按 JSON 字符串规则转义，随后仍由
-    PyPika 作为 SQL 常量转义，两个层次不可相互替代。例如业务 key ``*``
-    必须生成 ``$."*"``，否则 ``$.*`` 会被 JSONPath 解释为通配符。
+    普通路径段保留 ``$.key`` 形式；其他子键使用 ``$."key"`` 并完成两层转义。
+    这里只负责 JSONPath 与 SQL 字符串编码，不施加业务模块的字段限制。
     """
 
     _SIMPLE_JSON_PATH_KEY = re.compile(r"^\w+$", flags=re.UNICODE)
@@ -212,6 +210,5 @@ class DorisJsonTypeExtractFunction(Function):
             key if cls._SIMPLE_JSON_PATH_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False) for key in keys
         )
         path = f"$.{'.'.join(path_segments)}"
-        # JSONPath 自身用反斜杠转义引号、控制字符和字面反斜杠；该路径随后还会
-        # 进入 Doris SQL 字符串，因此需要再转义一层，避免 SQL 解析提前消费。
+        # JSONPath 自身的转义还会进入 SQL 字符串，须再保护一次反斜杠。
         return path.replace("\\", "\\\\")

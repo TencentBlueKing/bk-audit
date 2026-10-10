@@ -113,11 +113,15 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
             self.context,
             make_request(
                 dimensions=[
-                    {"id": "value", "type": "FIELD", "field": {"raw_name": "extend_data", "keys": [" a'b ", "*", "中"]}}
+                    {
+                        "id": "value",
+                        "type": "FIELD",
+                        "field": {"raw_name": "extend_data", "keys": ["a'b", "风险-详情", "中"]},
+                    }
                 ]
             ),
         ).build_complete_sql()
-        self.assertIn('$." a\'\'b "."*".中', sql)
+        self.assertIn('$."a\'\'b"."风险-详情".中', sql)
         self.assertIn("JSON_TYPE", sql)
         self.assertIn("JSON_QUOTE", sql)
         self.assertIn("'null'", sql)
@@ -276,14 +280,14 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
             )
             self.assertEqual(db.execute(tree.sql(dialect="sqlite")).fetchone(), (5, 3))
 
-    def test_variant_subpath_guards_actual_storage_type_before_cast(self):
+    def test_variant_subpath_uses_query_engine_compatible_scalar_reading(self):
         request = make_request(
             dimensions=[{"id": "value", "type": "FIELD", "field": {"raw_name": "snapshot_action_info", "keys": ["id"]}}]
         )
         sql = LogAggregationSQLBuilder.from_request(self.context, request).build_complete_sql()
-        self.assertIn("VARIANT_TYPE(`snapshot_action_info`)", sql)
-        self.assertNotIn("JSON_TYPE(`snapshot_action_info`", sql)
-        self.assertIn("COALESCE(", sql)
+        self.assertIn("JSON_TYPE(`snapshot_action_info`,'$.id')", sql)
+        self.assertIn("JSON_EXTRACT_LARGEINT(`snapshot_action_info`,'$.id')", sql)
+        self.assertNotIn("VARIANT_TYPE", sql)
 
     def test_time_bucket_builds_complete_sql_without_legacy_rejection(self):
         request = make_request(

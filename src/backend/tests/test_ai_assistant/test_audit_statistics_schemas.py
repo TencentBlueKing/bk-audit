@@ -39,8 +39,8 @@ class FieldStatisticsSchemaTest(SimpleTestCase):
             self.assertEqual(overview.present_ratio, ratio)
 
     def test_defaults_and_literal_path(self):
-        value = FieldStatisticsAttachmentInput(field={"raw_name": "extend_data", "keys": [" 方法 "]})
-        self.assertEqual(value.field.keys, [" 方法 "])
+        value = FieldStatisticsAttachmentInput(field={"raw_name": "extend_data", "keys": ["请求-方法"]})
+        self.assertEqual(value.field.keys, ["请求-方法"])
         self.assertEqual(value.top_n, 10)
         self.assertEqual(value.interval, "AUTO")
 

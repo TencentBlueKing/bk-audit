@@ -167,6 +167,15 @@ class TestLogDetailSearchService(AIAssistantTestCase):
             {"took_ms": 125, "executed_at": result.query_summary.executed_at},
         )
 
+    def test_enum_column_options_preserve_frontend_labels(self):
+        """明细列沿用原枚举名称，展示提示不修改实际过滤值。"""
+        result = self._search(fields=[LogFieldRef(raw_name="result_code")])
+
+        self.assertEqual(
+            [option.model_dump() for option in result.columns[0].options],
+            [{"id": "0", "name": "成功"}, {"id": "-1", "name": "其他"}],
+        )
+
     def test_zero_hits_are_a_successful_empty_page(self):
         self.mock_query.return_value = ({"list": []}, {"list": [{"count": 0}]})
         self.mock_parser.return_value.parse_data.side_effect = RuntimeError("sensitive permission unavailable")

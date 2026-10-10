@@ -89,6 +89,10 @@ def statistics_capability(
 SAFE_STATISTICS_INTEGER = 9007199254740991
 
 
+class StatisticsNumberOutOfRange(ValueError):
+    """SQL 数值有效，但无法在公开 JSON 数字中安全表达。"""
+
+
 def _reject_json_constant(value: str):
     """拒绝 JSON 标准以外的非有限数字，不回显字段值。"""
     raise ValueError("non-finite statistics scalar")
@@ -116,8 +120,10 @@ def parse_statistics_scalar(value_type: str, value_json_text: str):
     if value_type not in {"integer", "number"} or type(value) not in {int, Decimal}:
         raise ValueError("statistics scalar type mismatch")
     number = Decimal(value)
-    if not number.is_finite() or number.copy_abs() > SAFE_STATISTICS_INTEGER:
-        raise ValueError("statistics number exceeds safe integer range")
+    if not number.is_finite():
+        raise ValueError("non-finite statistics scalar")
+    if number.copy_abs() > SAFE_STATISTICS_INTEGER:
+        raise StatisticsNumberOutOfRange("statistics number exceeds safe integer range")
     if number == number.to_integral_value():
         return int(number)
     if value_type == "integer":
@@ -126,7 +132,7 @@ def parse_statistics_scalar(value_type: str, value_json_text: str):
     if not math.isfinite(result) or (number != 0 and result == 0):
         raise ValueError("statistics number does not roundtrip")
     if result.is_integer() and abs(result) > SAFE_STATISTICS_INTEGER:
-        raise ValueError("statistics number exceeds safe integer range")
+        raise StatisticsNumberOutOfRange("statistics number exceeds safe integer range")
     if json.loads(json.dumps(result)) != result:
         raise ValueError("statistics number does not roundtrip")
     return result
