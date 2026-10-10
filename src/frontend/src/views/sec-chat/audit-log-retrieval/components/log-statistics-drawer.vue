@@ -496,7 +496,7 @@
   /**
    * 消毒之后再写。LLM 和字段统计都走这里，保证屏上是长出来的，导出路径仍关掉动画。
    */
-  const applyEntranceMotion = (option: Record<string, any>) => ({
+  const applyEntranceMotion = (option: Record<string, any>): echarts.EChartsOption => ({
     ...option,
     animation: true,
     animationDuration: CHART_ENTRANCE_MS,
@@ -505,7 +505,7 @@
     animationEasingUpdate: 'cubicOut',
     series: toSeriesList(option.series).map((series: Record<string, any>, index: number) => {
       if (!series || typeof series !== 'object') return series;
-      const pieMotion = series.type === 'pie' ? { animationType: 'scale' } : {};
+      const pieMotion = series.type === 'pie' ? { animationType: 'scale' as const } : {};
       return {
         ...series,
         ...pieMotion,
