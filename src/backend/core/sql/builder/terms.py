@@ -22,7 +22,7 @@ from typing import Any, Iterator, List, Optional, Union
 from pymysql.converters import escape_string
 from pypika.terms import Criterion
 from pypika.terms import Field as _PypikaField
-from pypika.terms import Function, NodeT
+from pypika.terms import Function, NodeT, Term, ValueWrapper
 from pypika.utils import builder, format_alias_sql, format_quotes
 
 from core.sql.constants import DORIS_FIELD_KEY_QUOTE, FieldType
@@ -200,7 +200,23 @@ class DorisJsonTypeExtractFunction(Function):
         self.name = self.json_extract_functions.get(
             self.target_field_type, self.json_extract_functions[FieldType.STRING]
         )
-        self.args = [self.wrap_constant(param) for param in (field, self._format_json_path(keys))]
+        self.args = [self.wrap_constant(field), self.json_path_term(keys)]
+
+    @classmethod
+    def json_path_term(cls, keys: List[str]) -> Term:
+        """构造保持原始键语义的路径表达式，不施加业务字段限制。
+
+        BKBase 重写 SQL 时会丢失字符串内单引号的转义，因此用 CHAR 构造该字符。
+        其他路径继续使用字面量，JSONPath 与 SQL 反斜杠编码保持原样。
+        """
+        path = cls._format_json_path(keys) if keys else "$"
+        if "'" not in path:
+            return ValueWrapper(path)
+        parts = path.split("'")
+        args = [ValueWrapper(parts[0])]
+        for part in parts[1:]:
+            args.extend([Function("CHAR", ord("'")), ValueWrapper(part)])
+        return Function("CONCAT", *args)
 
     @classmethod
     def _format_json_path(cls, keys: List[str]) -> str:

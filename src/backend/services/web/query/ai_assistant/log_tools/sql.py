@@ -50,7 +50,7 @@ class ProjectedLogSQLBuilder(BaseDorisSQLBuilder):
         if parent_field.raw_name not in self.JSON_TYPE_FIELDS:
             raise ValueError("parent sample requires a JSON column")
         root = self.get_pypika_field(parent_field.raw_name)
-        path = DorisJsonTypeExtractFunction._format_json_path(parent_field.keys) if parent_field.keys else "$"
+        path = DorisJsonTypeExtractFunction.json_path_term(parent_field.keys)
         parent_type = Function("JSON_TYPE", root, path)
         child_count = Function("ARRAY_SIZE", Function("JSON_KEYS", root, path))
         query = self._build_projected_query(fields).where(parent_type == "object").where(child_count > 0)

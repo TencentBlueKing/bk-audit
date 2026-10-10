@@ -529,7 +529,7 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         sql = self._builder().build_data_sql([LogFieldRef(raw_name="extend_data", keys=["中文字段", "x'];SELECT1;--"])])
 
         self.assertIn("中文字段", sql)
-        self.assertIn("'$.中文字段.\"x''];SELECT1;--\"'", sql)
+        self.assertIn("CONCAT('$.中文字段.\"x',CHAR(39),'];SELECT1;--\"')", sql)
         self.assertNotIn("'$.中文字段.\"x'];SELECT1;--\"'", sql)
 
     def test_snapshot_projection_and_filter_use_the_same_literal_json_path(self):
@@ -549,7 +549,7 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         self.assertNotIn("`snapshot_action_info`[", sql)
 
     def test_parent_object_sample_preserves_scope_and_escapes_json_path(self):
-        """父对象筛选沿用权限和时间条件，特殊子键仍按 JSONPath 字面量查询。"""
+        """父对象筛选沿用权限和时间条件，特殊子键复用兼容路径表达式。"""
         builder = ProjectedLogSQLBuilder(
             table="test_rt.doris",
             conditions=[
@@ -570,7 +570,7 @@ class TestProjectedLogSQLBuilder(AIAssistantTestCase):
         self.assertIn("`thedate`>='20260901'", sql)
         self.assertEqual(sql.count("JSON_TYPE(`extend_data`"), 1)
         self.assertEqual(sql.count("JSON_KEYS(`extend_data`"), 1)
-        self.assertIn('$."风险-详情"."a\'\'b"', sql)
+        self.assertIn("CONCAT('$.\"风险-详情\".\"a',CHAR(39),'b\"')", sql)
         self.assertTrue(sql.endswith("LIMIT 25"), sql)
         self.assertNotIn("OFFSET", sql)
 

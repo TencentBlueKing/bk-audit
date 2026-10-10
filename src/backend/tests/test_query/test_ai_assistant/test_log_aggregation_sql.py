@@ -121,7 +121,7 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
                 ]
             ),
         ).build_complete_sql()
-        self.assertIn('$."a\'\'b"."风险-详情".中', sql)
+        self.assertIn("CONCAT('$.\"a',CHAR(39),'b\".\"风险-详情\".中')", sql)
         self.assertIn("JSON_TYPE", sql)
         self.assertIn("JSON_QUOTE", sql)
         self.assertIn("'null'", sql)
