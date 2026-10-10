@@ -81,7 +81,7 @@
                 :systems="msg.systems || []"
                 @append-nl-field="handleAppendNlField"
                 @confirm-system="(ids, systems) => $emit('confirm-system', msg.id, ids, systems)"
-                @open-condition-filter="handleOpenConditionFilter"
+                @open-condition-filter="handleOpenConditionFilter($event, msg)"
                 @select-suggestion="handleSelectSuggestion" />
 
               <!-- 意图理解中且尚无条件：整条骨架；有条件后走结果卡局部 loading -->
@@ -159,12 +159,12 @@
                 v-else-if="shouldShowRetrievalResultCard(msg)"
                 :api-status="msg.apiStatus"
                 :error-message="msg.errorMessage || msg.aiMessage || ''"
-                :extension-fields="extensionFields"
+                :extension-fields="resolveResultContext(msg).extensionFields"
                 :message-uid="resolveResultMessageUid(msg)"
                 :result="getRetrievalResultPayload(msg)"
                 :show-regenerate="canShowIntentRegenerate(msg)"
-                :standard-fields="standardFields"
-                :systems="systems"
+                :standard-fields="resolveResultContext(msg).standardFields"
+                :systems="resolveResultContext(msg).systems"
                 @regenerate="handleRegenerate(msg.content || '')"
                 @reselect-system="handleReselectSystem" />
 
@@ -202,11 +202,12 @@
             class="message-row is-assistant condition-filter-row">
             <condition-filter-card
               :ref="(el: unknown) => setConditionFilterCardRef(card.id, el)"
-              :extension-fields="extensionFields"
+              :extension-fields="card.extensionFields"
               :initial-field-name="card.fieldName"
               :initial-sample="card.sample"
-              :standard-fields="standardFields"
-              :systems="systems"
+              :selection-message-uid="card.selectionMessageUid"
+              :standard-fields="card.standardFields"
+              :systems="card.systems"
               @reselect-system="handleReselectSystem"
               @searched="(success) => handleConditionSearched(card.id, success)" />
           </div>
@@ -245,6 +246,8 @@
   import errorSearchIcon from '@images/error-search.svg';
 
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
+  import { type SelectionContext, useSecChatStore } from '../../composables/use-sec-chat-store';
 
   import RetrievalGuideCard from './retrieval-guide-card.vue';
   import RetrievalCardSkeleton from './retrieval-card-skeleton.vue';
@@ -298,10 +301,15 @@
   } | null>(null);
   const panelBodyRef = ref<HTMLElement | null>(null);
 
+  /** 草稿卡绑定来源引导卡的 SYSTEM_SELECTION，检索时作为父消息，切系统后不跟随当前系统 */
   const conditionFilterCards = ref<Array<{
     id: string
     fieldName: string
     sample?: string
+    selectionMessageUid: string
+    systems: SelectedSystem[]
+    standardFields: SystemFieldRow[]
+    extensionFields: SystemFieldRow[]
   }>>([]);
   type ConditionFilterCardExpose = {
     addOrFocusField:(fieldName: string, sample?: string) => Promise<void>
@@ -494,6 +502,48 @@
     msg.result as RetrievalResultPayload
   );
 
+  const { getMessageSelectionContext, ensureMessageSelectionContext } = useSecChatStore();
+
+  /**
+   * 结果卡的系统上下文：按协议父链取所属 SYSTEM_SELECTION。
+   * 未就绪时，scope_id 与会话当前系统一致才借用当前上下文，否则仅展示 id、字段表留空（仅可改时间）。
+   */
+  const resolveResultContext = (msg: ChatMessage): SelectionContext => {
+    const scopeId = String(msg.result?.rawCondition?.scope_id || '').trim();
+    const context = getMessageSelectionContext(msg);
+    if (context && (!scopeId || context.systems.some(item => item.id === scopeId))) {
+      return {
+        ...context,
+        systems: context.systems.map(item => ({ id: item.id, name: item.name || item.id })),
+      };
+    }
+    if (!scopeId || props.systems.some(item => item.id === scopeId)) {
+      return {
+        systems: props.systems,
+        standardFields: props.standardFields,
+        extensionFields: props.extensionFields,
+      };
+    }
+    return {
+      systems: [{ id: scopeId, name: scopeId }],
+      standardFields: [],
+      extensionFields: [],
+    };
+  };
+
+  watch(
+    () => props.messages
+      .filter(msg => msg.type === 'retrieval-result' && msg.result)
+      .map(msg => `${msg.id}:${msg.parentMessageUid || ''}:${msg.selectionMessageUid || ''}`)
+      .join('|'),
+    () => {
+      props.messages.forEach((msg) => {
+        if (msg.type === 'retrieval-result' && msg.result) ensureMessageSelectionContext(msg);
+      });
+    },
+    { immediate: true },
+  );
+
   /** 结果卡导出/二次检索需 LOG_SEARCH uid；意图条件壳阶段先空着 */
   const resolveResultMessageUid = (msg: ChatMessage) => (
     msg.messageType === 'LOG_SEARCH' ? msg.id : ''
@@ -614,10 +664,13 @@
       .slice(2, 8)}`
   );
 
-  const handleOpenConditionFilter = async (payload: { fieldName: string; sample?: string }) => {
-    // 已有未检索草稿：向现有条件卡追加字段（与自然语言「追加」一致，不再整卡替换）
+  const handleOpenConditionFilter = async (
+    payload: { fieldName: string; sample?: string },
+    source: ChatMessage,
+  ) => {
+    // 已有同一引导卡的未检索草稿：追加字段（与自然语言「追加」一致）；来自其他系统的引导卡则新建
     const existing = conditionFilterCards.value[0];
-    if (existing) {
+    if (existing && existing.selectionMessageUid === source.id) {
       await conditionFilterCardRefs.value[existing.id]?.addOrFocusField(
         payload.fieldName,
         payload.sample,
@@ -626,10 +679,15 @@
       return;
     }
     const cardId = createConditionFilterCardId();
+    const hasSourceFields = Boolean(source.standardFields?.length || source.extensionFields?.length);
     conditionFilterCards.value = [{
       id: cardId,
       fieldName: payload.fieldName,
       sample: payload.sample,
+      selectionMessageUid: source.id,
+      systems: source.systems?.length ? [...source.systems] : [...props.systems],
+      standardFields: hasSourceFields ? (source.standardFields || []) : props.standardFields,
+      extensionFields: hasSourceFields ? (source.extensionFields || []) : props.extensionFields,
     }];
     await scrollConditionFilterIntoView(cardId, true);
   };
