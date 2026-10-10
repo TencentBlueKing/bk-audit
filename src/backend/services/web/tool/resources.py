@@ -888,6 +888,13 @@ class UpdateTool(ToolBase):
                 has_changes = True
                 break
 
+        # 检查 tags 变更（tag_name 列表）
+        if "tags" in validated_request_data:
+            current_tag_ids = list(ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True))
+            current_tag_names = list(Tag.objects.filter(tag_id__in=current_tag_ids).values_list("tag_name", flat=True))
+            if sorted(validated_request_data["tags"]) != sorted(current_tag_names):
+                has_changes = True
+
         # 无变更则直接返回
         if not has_changes:
             return tool
@@ -899,7 +906,7 @@ class UpdateTool(ToolBase):
             config['usage_limits'] = new_usage_limits
         validated_request_data["config"] = config
 
-        # tags 使用请求中的值，如果没有传则保持现有标签
+        # tags 使用请求中的值（tag_name 列表），如果没有传则保持现有标签
         if "tags" not in validated_request_data:
             tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
             validated_request_data["tags"] = list(
