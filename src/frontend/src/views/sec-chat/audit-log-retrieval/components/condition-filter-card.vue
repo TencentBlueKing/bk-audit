@@ -133,12 +133,15 @@
     /** 引导卡点条件筛选时预填的字段 */
     initialFieldName?: string;
     initialSample?: string;
+    /** 来源引导卡的 SYSTEM_SELECTION uid，作为 LOG_SEARCH 直接父消息 */
+    selectionMessageUid?: string;
   }>(), {
     systems: () => [],
     standardFields: () => [],
     extensionFields: () => [],
     initialFieldName: '',
     initialSample: undefined,
+    selectionMessageUid: '',
   });
 
   const emit = defineEmits<{
@@ -279,6 +282,7 @@
     try {
       const chatMessage = await sendConditionSearch(condition, {
         datetimeOrigin: searchModel.value.datetime_origin,
+        parentMessageUid: props.selectionMessageUid || undefined,
       });
 
       if (chatMessage.apiStatus === 'FAILED') {

@@ -119,6 +119,11 @@ export interface ChatMessage {
   visible?: boolean;
   parentMessageUid?: string | null;
   /**
+   * 所属 SYSTEM_SELECTION 的 uid：选系统消息为自身，意图消息取 selection_message_uid。
+   * LOG_SEARCH 不直接携带，经 parentMessageUid 链路解析。
+   */
+  selectionMessageUid?: string;
+  /**
    * USER_INTENT 是否已产生派生消息（derived_messages / 兼容 uid）。
    * 有派生时不可编辑意图原文；仅业务错误且无派生时可「编辑后重发」。
    */

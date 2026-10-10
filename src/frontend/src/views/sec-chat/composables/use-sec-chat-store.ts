@@ -35,12 +35,14 @@ import type {
 import useMessage from '@hooks/use-message';
 
 import type {
+  ChatMessage,
   Conversation,
   Group,
   RetrievalResultPayload,
   RootReorderPayload,
   RootSidebarItem,
   SelectedSystem,
+  SystemFieldRow,
 } from '../types';
 import {
   buildFieldCatalog,
@@ -50,6 +52,7 @@ import {
   getNlRecognitionError,
   isPureSystemSwitchIntent,
   mapAiMessageToChatMessage,
+  pickOwnSelectionMessageUid,
   resolveDerivedMessageRefs,
   resolveMessageTimeShortcut,
   timeShortcutToDatetimeOrigin,
@@ -195,6 +198,64 @@ const childLogFetchInflight = new Map<string, Promise<AiMessage | null>>();
 const pendingSelectionQueries = new Map<string, { conversationId: string; queryText: string }>();
 /** 后端未下发 visible 时的会话内兜底（如选系统后待补发检索） */
 const hiddenCardMessageIds = new Set<string>();
+
+export interface SelectionContext {
+  systems: SelectedSystem[];
+  standardFields: SystemFieldRow[];
+  extensionFields: SystemFieldRow[];
+}
+/**
+ * 成功 SYSTEM_SELECTION 的系统上下文（按 uid）。
+ * 结果卡按协议父链（LOG_SEARCH → SYSTEM_SELECTION / USER_INTENT → selection_message_uid）取所属系统，
+ * 不读会话当前系统，切系统后历史卡片保持不变。
+ */
+const selectionContexts = ref<Record<string, SelectionContext>>({});
+/** USER_INTENT / NATURAL_LANGUAGE_SEARCH uid → 其 selection_message_uid */
+const intentSelectionUids = ref<Record<string, string>>({});
+/** 已按需拉取过的父消息 uid，避免 PROCESSING / 失败时反复请求 */
+const selectionContextFetched = new Set<string>();
+
+const rememberSelectionContext = (message: AiMessage, chatMessage?: ChatMessage) => {
+  if (message.message_type === 'SYSTEM_SELECTION') {
+    if (message.status !== 'SUCCESS') return;
+    const mapped = chatMessage || mapAiMessageToChatMessage(message);
+    selectionContexts.value[message.uid] = {
+      systems: mapped.systems || [],
+      standardFields: mapped.standardFields || [],
+      extensionFields: mapped.extensionFields || [],
+    };
+    return;
+  }
+  const selectionUid = pickOwnSelectionMessageUid(message);
+  if (selectionUid) intentSelectionUids.value[message.uid] = selectionUid;
+};
+
+const resolveSelectionUid = (msg: ChatMessage): string => {
+  if (msg.selectionMessageUid) return msg.selectionMessageUid;
+  const parentUid = msg.parentMessageUid || '';
+  if (!parentUid) return '';
+  return intentSelectionUids.value[parentUid] || parentUid;
+};
+
+/** 父链上的消息未在当前窗口时按需拉取（父可能是 SYSTEM_SELECTION 或 USER_INTENT，最多跟一跳） */
+const loadSelectionContext = async (uid: string, depth = 0): Promise<void> => {
+  if (!uid || depth > 1 || selectionContexts.value[uid]) return;
+  const intentTarget = intentSelectionUids.value[uid];
+  if (intentTarget) {
+    await loadSelectionContext(intentTarget, depth + 1);
+    return;
+  }
+  if (selectionContextFetched.has(uid)) return;
+  selectionContextFetched.add(uid);
+  try {
+    const detail = await AiAssistantManageService.fetchMessage({ message_uid: uid });
+    rememberSelectionContext(detail);
+    const nextUid = intentSelectionUids.value[uid];
+    if (nextUid) await loadSelectionContext(nextUid, depth + 1);
+  } catch {
+    // 拉不到时结果卡退回按 scope_id 展示
+  }
+};
 /**
  * 条件筛选点选的时间快捷项（按 LOG_SEARCH uid 记忆）。
  * 仅作兜底：后端未下发 time_shortcut 的历史消息，靠本地记忆在 upsert 时回挂。
@@ -359,6 +420,7 @@ const upsertConversationMessage = (
     fieldCatalog,
     hiddenCardMessageIds,
   });
+  rememberSelectionContext(message, chatMessage);
 
   // PROCESSING 引导卡：用会话已选系统补全名称（input 往往只有 system_ids）
   if (
@@ -837,6 +899,7 @@ const applyMessageWindow = (conv: Conversation, windowData: {
       fieldCatalog,
       hiddenCardMessageIds,
     });
+    rememberSelectionContext(message, chatMessage);
     // 刷新/历史窗口不经 upsert，需单独回挂时间快捷项
     applyRememberedDatetimeOrigin(
       message.uid,
@@ -1787,7 +1850,7 @@ export function useSecChatStore() {
    */
   const sendConditionSearch = async (
     condition: AiSearchCondition,
-    options?: { datetimeOrigin?: string[] },
+    options?: { datetimeOrigin?: string[]; parentMessageUid?: string },
   ) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) {
@@ -1796,6 +1859,8 @@ export function useSecChatStore() {
     const message = await AiAssistantManageService.createMessage({
       conversation_uid: conv.id,
       message_type: 'LOG_SEARCH',
+      // 协议：手工条件检索引用来源 SYSTEM_SELECTION 作为直接父消息
+      ...(options?.parentMessageUid ? { parent_message_uid: options.parentMessageUid } : {}),
       input_data: {
         condition,
         time_shortcut: datetimeOriginToTimeShortcut(options?.datetimeOrigin),
@@ -1869,6 +1934,17 @@ export function useSecChatStore() {
     return mapped;
   };
 
+  /** 结果卡所属的系统上下文（按父链解析）；未就绪时返回 null */
+  const getMessageSelectionContext = (msg: ChatMessage): SelectionContext | null => {
+    const uid = resolveSelectionUid(msg);
+    return uid ? selectionContexts.value[uid] || null : null;
+  };
+
+  const ensureMessageSelectionContext = (msg: ChatMessage) => {
+    const uid = resolveSelectionUid(msg);
+    if (uid && !selectionContexts.value[uid]) void loadSelectionContext(uid);
+  };
+
   const retryMessage = async (messageUid: string) => {
     const conv = activeConversation.value;
     if (!conv || conv.isDraft) return;
@@ -1923,5 +1999,7 @@ export function useSecChatStore() {
     rerunLogSearch,
     retryMessage,
     stopAllMessagePolls,
+    getMessageSelectionContext,
+    ensureMessageSelectionContext,
   };
 }

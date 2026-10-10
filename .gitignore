@@ -64,7 +64,5 @@ AGENTS.md
 .agents/
 **/.agents/
 skills-lock.json
-
-
 pre-*-bkcodeai
 .husky/

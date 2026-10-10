@@ -502,6 +502,18 @@ export const isPureSystemSwitchIntent = (message: AiMessage): boolean => {
 };
 
 /**
+ * 消息自身声明的所属 SYSTEM_SELECTION uid。
+ * LOG_SEARCH 无此字段，需按 parent_message_uid 解析（父为 SYSTEM_SELECTION 或 USER_INTENT）。
+ */
+export const pickOwnSelectionMessageUid = (message: AiMessage): string => {
+  if (message.message_type === 'SYSTEM_SELECTION') return message.uid;
+  if (message.message_type !== 'USER_INTENT' && message.message_type !== 'NATURAL_LANGUAGE_SEARCH') return '';
+  const output = (message.output_data || {}) as AiUserIntentOutput;
+  const derived = resolveDerivedMessageRefs(output).find(ref => ref.message_type === 'SYSTEM_SELECTION');
+  return derived?.message_uid || '';
+};
+
+/**
  * 将后端消息映射为当前 UI 卡片模型。
  */
 export const mapAiMessageToChatMessage = (
@@ -520,6 +532,7 @@ export const mapAiMessageToChatMessage = (
     errorCode: message.error_code || undefined,
     errorMessage: message.error_message || undefined,
     parentMessageUid: message.parent_message_uid,
+    selectionMessageUid: pickOwnSelectionMessageUid(message) || undefined,
     visible,
   };
 
