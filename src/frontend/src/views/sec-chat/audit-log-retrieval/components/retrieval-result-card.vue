@@ -1220,7 +1220,9 @@
     try {
       if (mode === 'preview') {
         await exportLogSearchPreview(displayMessageUid.value);
-        messageSuccess(`已导出前 ${displayResult.value.previewCount} 条数据`);
+        messageSuccess(isDirectExport.value
+          ? `已导出全部 ${displayResult.value.totalHit} 条数据`
+          : `已导出前 ${displayResult.value.previewCount} 条数据`);
       } else {
         await exportLogSearchFull(displayMessageUid.value);
         messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
