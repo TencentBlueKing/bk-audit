@@ -41,7 +41,7 @@ class StatisticsFieldSQL:
         p = self.prefix
         root = builder.get_pypika_field(self.field.raw_name).get_sql(quote_char="`")
         if self.field.keys:
-            path = ValueWrapper(DorisJsonTypeExtractFunction._format_json_path(self.field.keys)).get_sql()
+            path = DorisJsonTypeExtractFunction.json_path_term(self.field.keys).get_sql()
             # BKBase 的 JSON 函数也支持 VARIANT；按路径读取实际类型，
             # 不依赖高版本 VARIANT_TYPE，也避免 VARIANT 布尔 CAST 变成 0/1。
             kind = f"LOWER(JSON_TYPE({root},{path}))"
