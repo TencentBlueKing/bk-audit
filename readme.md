@@ -47,6 +47,17 @@
 后端开发请先阅读 [pre-commit 开发规范](./src/backend/docs/pre-commit.md)，安装本地提交
 hook，并在提交前完成暂存区检查和单元测试。
 
+### Celery Worker 与 RabbitMQ 连接规划
+
+增加或拆分 Worker 进程前，先按 **进程数 × 4** 估算 RabbitMQ 连接占用；连接数不随 gevent
+协程数或单次处理的风险/日志数量线性增长。Web 进程空闲时不建立 Celery 投递连接，首次投递后
+连接会保持，容量评估不能按空闲时的瞬时连接数计算。
+
+部署通常包含 2 个副本，Worker 命令中的 `-c` 只调整单进程并发，不减少进程对应的连接基数。
+新增进程前应把现有和计划连接数合并计算，并以 RabbitMQ 连接上限的 70% 作为规划水位；超过
+该水位时优先复用 `default` 等现有队列，或先扩容 Broker。只有下游限流、长任务隔离或独立容量
+治理确有需要时再新增专属 Worker。
+
 ## License
 
 基于 MIT 协议， 详细请参考 [LICENSE](./LICENSE.txt)

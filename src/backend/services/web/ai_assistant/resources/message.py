@@ -109,7 +109,10 @@ class RetryMessage(AIAssistantResource):
 
 
 class PreviewExportMessage(AIAssistantResource):
-    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。"""
+    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。
+
+    零数据快照同样返回正常文件，只保留分类与字段标题、数据行数为 0。
+    """
 
     name = gettext_lazy("预览导出日志检索")
     RequestSerializer = MessagePreviewExportRequestSerializer
@@ -128,7 +131,14 @@ class PreviewExportMessage(AIAssistantResource):
 
 
 class CreateMessageFullExport(AIAssistantResource):
-    """从成功日志检索消息快照重建条件，创建既有 LogExportTask 全量导出。"""
+    """从成功日志检索消息快照重建条件，创建既有 LogExportTask 全量导出。
+
+    POST /messages/{message_uid}/full-export/ 无需 Scope，后端按来源会话归属鉴权。
+    请求 body 为 {} 或 {"export_config": {}} 时，默认导出 AI 助手标准展示列。
+    若指定列，传 {"export_config": {"field_scope": "specified", "fields": [{"raw_name": "username"}]}}。
+    导出配置只控制列；数据范围来自消息快照，调用方不能覆盖。非法配置返回 400。
+    成功响应含 export_task_id 与任务状态，须沿既有导出任务查询/下载链路等待文件就绪。
+    """
 
     name = gettext_lazy("创建全量日志导出")
     RequestSerializer = MessageFullExportRequestSerializer

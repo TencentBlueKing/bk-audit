@@ -2,7 +2,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from services.web.ai_assistant.constants import MessageType
+from services.web.ai_assistant.constants import AttachmentType, MessageType
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from tests.test_ai_assistant.handler_contracts import (
     HandlerContractSpec,
@@ -115,6 +115,7 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
 
     def test_live_registry_pollution_does_not_change_captured_contracts(self):
         handler = EchoAttachmentSyncHandler()
+        original = attachment_handler_registry.unregister(handler.attachment_type)
         attachment_handler_registry.register(handler)
         try:
             validate_handler_contracts(
@@ -124,3 +125,20 @@ class ProductionAttachmentHandlerContractTest(SimpleTestCase):
             )
         finally:
             attachment_handler_registry.unregister(handler.attachment_type)
+            if original is not None:
+                attachment_handler_registry.register(original)
+
+
+class AttachmentStatisticsCapabilityTest(SimpleTestCase):
+    """统计附件保留流和反馈的业务差异，重试由平台统一处理。"""
+
+    def test_production_statistics_capabilities_remain_independent(self):
+        """生产注册区分两类统计的流与反馈能力。"""
+        handlers = captured_attachment_handlers()
+        field = handlers[AttachmentType.FIELD_STATISTICS]
+        ai = handlers[AttachmentType.AI_STATISTICS]
+        self.assertEqual((field.is_stream, field.supports_feedback), (False, False))
+        self.assertEqual((ai.is_stream, ai.supports_feedback), (True, True))
+        for handler in (field, ai):
+            self.assertFalse(handler.supports_output_edit())
+            self.assertEqual(handler.export_formats, ())

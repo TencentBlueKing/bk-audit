@@ -24,7 +24,6 @@ from unittest import mock
 import openpyxl
 
 from services.web.query.ai_assistant.exceptions import (
-    AIAssistantError,
     AIOutputInvalidError,
     AIPermissionDeniedError,
 )
@@ -89,10 +88,17 @@ class TestPreviewExportService(AIAssistantTestCase):
         first_row = [cell.value for cell in sheet[2]]
         self.assertIn("Story-3000", first_row)
 
-    def test_export_empty_samples_raises(self):
+    def test_export_empty_samples_keeps_headers_and_zero_data_rows(self):
+        """零命中也可下载正常 XLSX，普通和扩展展平模式均保留标题。"""
         output = self.make_log_search_output(samples=[], total=0)
-        with self.assertRaises(AIAssistantError):
-            PreviewExportService.export(output)
+        for config in ({}, {"flatten_extension": True}):
+            with self.subTest(config=config):
+                result = PreviewExportService.export(output, export_config=config)
+                workbook = openpyxl.load_workbook(io.BytesIO(result.content))
+                sheet = workbook.active
+                self.assertEqual(sheet.max_row, 1)
+                self.assertIn("操作人(username)", [cell.value for cell in sheet[1]])
+                self.assertTrue(result.file_name.endswith(".xlsx"))
 
     def test_export_with_flatten_extension(self):
         """flatten_extension=True：extend_data 子键平铺为单独列，samples 字典同步展平"""

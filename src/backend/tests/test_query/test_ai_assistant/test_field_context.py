@@ -117,7 +117,7 @@ class TestFieldContextService(AIAssistantTestCase):
         self.assertFalse(hasattr(output, "common_operations"))
 
     def test_enum_options_same_source_as_field_map(self, mock_perm, mock_meta_get, mock_system_list, mock_query_sync):
-        """枚举 options 与 FieldMapHandler（es_query/field_map 接口）同源同构"""
+        """前端候选保持原枚举展示，不因实际值查询规则而改名。"""
         mock_perm.return_value = True
         mock_meta_get.return_value = {}
         mock_system_list.return_value = []
@@ -429,7 +429,7 @@ class TestFieldContextL2Sampling(AIAssistantTestCase):
         self.assertEqual(ext_map[("extend_data", ("ticket_id",))].sample_value, "Story-1")
         # 采样 SQL 按配置条数取数
         sql = mock_query_sync.call_args.kwargs["sql"]
-        self.assertIn("LIMIT 50", sql)
+        self.assertIn("LIMIT 100", sql)
 
     @override_settings(AI_ASSISTANT_FIELD_SAMPLE_ENABLED=True)
     def test_l2_sampling_failure_degrades_gracefully(

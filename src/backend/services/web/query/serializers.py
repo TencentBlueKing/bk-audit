@@ -65,6 +65,7 @@ from services.web.query.constants import (
 )
 from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import (
     ES_SEARCH_ORIGIN_FIELDS,
@@ -260,7 +261,11 @@ class QuerySearchFieldSerializer(serializers.Serializer):
         label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None, allow_null=True
     )
     keys = serializers.ListField(
-        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+        label=gettext_lazy("嵌套字段 key"),
+        child=serializers.CharField(trim_whitespace=False),
+        default=list,
+        allow_empty=True,
+        help_text=gettext_lazy("对象子键按原文逐段传入；不支持空白、控制字符、双引号、反斜杠和星号。"),
     )
 
 
@@ -289,6 +294,11 @@ class QuerySearchConditionSerializer(serializers.Serializer):
         # 判断字段是否支持嵌套 keys
         if not field_config.field.is_json:
             attrs["field"]["keys"] = []
+        else:
+            try:
+                validate_log_json_keys(attrs["field"]["keys"])
+            except ValueError as err:
+                raise ValidationError(message=gettext("字段子键不支持空白、控制字符、双引号、反斜杠或星号")) from err
         # 判断操作是否允许
         allow = COLLECT_SEARCH_CONFIG.judge_operator(field_name, attrs["field"]["keys"], attrs["operator"])
         if not allow:

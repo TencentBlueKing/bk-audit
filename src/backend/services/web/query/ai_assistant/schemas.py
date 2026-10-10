@@ -30,7 +30,8 @@ full_key（raw_name 与 keys 以 LOG_FIELD_KEY_JOIN_CHAR 连接），与导出�
 import re
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from rest_framework import serializers
 
 from core.sql.constants import FieldType
 from core.utils.time import parse_datetime
@@ -55,6 +56,8 @@ NAIVE_DATETIME_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 class ConditionField(BaseModel):
     """条件字段（协议 §2.1 field；与 QuerySearchFieldSerializer 同构）"""
 
+    model_config = ConfigDict(extra="forbid")
+
     raw_name: str = Field(..., min_length=1)
     field_type: Optional[str] = None
     keys: List[str] = Field(default_factory=list)
@@ -63,9 +66,13 @@ class ConditionField(BaseModel):
 class Condition(BaseModel):
     """单条检索条件（协议 §2.1；与 QuerySearchConditionSerializer 同构）"""
 
+    model_config = ConfigDict(extra="forbid")
+
     field: ConditionField
     operator: str = Field(..., min_length=1)
-    filters: List[Any] = Field(default_factory=list)
+    filters: Annotated[
+        List[Any], serializers.ListField(child=serializers.JSONField(), allow_empty=True, help_text="条件比较值列表")
+    ] = Field(default_factory=list, description="条件比较值列表，可包含字段支持的 JSON 标量值。")
 
     @model_validator(mode="after")
     def validate_filters_shape(self):
@@ -87,6 +94,8 @@ class SearchCondition(BaseModel):
     CollectorSearchAllReqSerializer 校验。
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     scope_type: Literal["system"] = "system"
     scope_id: str = Field(..., min_length=1)
     start_time: str = Field(..., min_length=1)
@@ -107,6 +116,14 @@ class SearchCondition(BaseModel):
             raise ValueError("invalid datetime value") from err
         return v
 
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        """统一校验检索时间顺序，调用方无需在服务层重复比较。"""
+
+        if parse_datetime(self.start_time) > parse_datetime(self.end_time):
+            raise ValueError("start_time must not exceed end_time")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # SYSTEM_SELECTION（协议 §3）
@@ -120,7 +137,7 @@ class SystemSelectionInput(BaseModel):
 
 
 class SelectionFieldOption(BaseModel):
-    """枚举字段可选值（与日志检索页 es_query/field_map 返回同构 [{id, name}]）"""
+    """常见实际值的显示提示 [{id, name}]，不限制日志中的其他合法值。"""
 
     id: str
     name: str
@@ -139,11 +156,11 @@ class SelectionFieldMeta(BaseModel):
     allow_operators: List[str] = Field(default_factory=list)
     # 原始查询值（如 0/-1，非展示值"成功(0)"），无数据为 None
     sample_value: Optional[Any] = None
-    # sample_value 的展示映射值（仅枚举字段产出：options 按 id 匹配 name，如 0 → "成功"、-1 → "Other"）；
+    # sample_value 的展示映射值（仅枚举字段产出：options 按 id 匹配原枚举 name，如 0 → "成功"、-1 → "其他"）；
     # 供前端渲染（原始值 0/-1 对用户不友好），不注入 AI prompt（防 AI 照抄展示值构造 filters）；
     # 非枚举字段为 None，历史快照无该字段时同为 None（前端自行回退展示 sample_value）
     sample_value_display: Optional[str] = None
-    # 枚举字段可选值（如 result_code 的 成功0/其他-1），非枚举字段为 None；前端 options 非空时渲染下拉
+    # 枚举展示与日志检索页一致；不限制用户传入其他实际值，非枚举字段为 None；前端 options 非空时渲染下拉
     options: Optional[List[SelectionFieldOption]] = None
     # 仅拓展字段返回
     system_id: Optional[str] = None

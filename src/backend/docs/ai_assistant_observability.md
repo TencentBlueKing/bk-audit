@@ -101,9 +101,10 @@ Event 用于少量、可定位且需要人工处理的异常。普通 Handler �
 
 允许的结构化字段包括 `object_type`、`object_uid`、`business_type`、`task_id`、
 `execution_id`、`stage`、`status`、`error_code`、`retry_kind`、`duration_ms`。
-应用结构化日志禁止记录 `input_data`、`context_data`、`output_data`、`stream_archive`、
-日志样例和流事件正文。项目 OTel 当前会按通用策略记录异常信息；Handler 不应在异常
-正文中拼接敏感输入或日志数据，涉及敏感依赖时应先在业务边界转换为受控异常。
+普通应用结构化日志禁止额外复制 `input_data`、`context_data`、`output_data`、`stream_archive`、
+日志样例和流事件正文。Agent 及日志工具的 ResourceRequestLog 作为例外保留请求、响应和异常正文，
+用于生产根因分析；`SafeQuerySyncResource` 还会在应用日志中记录最终 SQL，以便还原实际查询。
+这两类日志均按受限诊断日志控制访问并缩短保留周期，正文不得进入 Metric 维度、Event 载荷或普通 Trace 属性。
 
 ## 6. 环境配置
 

@@ -24,10 +24,13 @@ def test_ensure_default_scene_create_reserved_scene():
 @pytest.mark.django_db
 def test_ensure_default_scene_reuse_reserved_scene():
     """存在迁移保留场景时允许复用，并校正状态。"""
-    scene = Scene.objects.get(name=migration_0006.DEFAULT_SCENE_NAME)
-    scene.description = migration_0006.DEFAULT_SCENE_DESCRIPTION
-    scene.status = SceneStatus.DISABLED
-    scene.save(update_fields=["description", "status"])
+    # 事务测试清库后不会重跑数据迁移，复用场景由本例自行准备。
+    Scene.objects.filter(name=migration_0006.DEFAULT_SCENE_NAME).delete()
+    scene = Scene.objects.create(
+        name=migration_0006.DEFAULT_SCENE_NAME,
+        description=migration_0006.DEFAULT_SCENE_DESCRIPTION,
+        status=SceneStatus.DISABLED,
+    )
 
     reused = migration_0006._ensure_default_scene(Scene)
     scene.refresh_from_db()
@@ -39,9 +42,8 @@ def test_ensure_default_scene_reuse_reserved_scene():
 @pytest.mark.django_db
 def test_ensure_default_scene_reject_user_managed_conflict():
     """存在同名用户场景时拒绝复用，避免权限扩大。"""
-    scene = Scene.objects.get(name=migration_0006.DEFAULT_SCENE_NAME)
-    scene.description = "用户自定义场景"
-    scene.save(update_fields=["description"])
+    Scene.objects.filter(name=migration_0006.DEFAULT_SCENE_NAME).delete()
+    Scene.objects.create(name=migration_0006.DEFAULT_SCENE_NAME, description="用户自定义场景")
 
     with pytest.raises(RuntimeError, match="Reserved scene name conflict"):
         migration_0006._ensure_default_scene(Scene)
