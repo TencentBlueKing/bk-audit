@@ -55,14 +55,14 @@ class TestPreviewExportService(AIAssistantTestCase):
         self.assertTrue(result.file_name.endswith(".xlsx"))
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        # 行结构：分类头 / 单行标题（中文显示名(英文字段路径)） / 数据行
-        titles = [cell.value for cell in sheet[2]]
+        # 行结构（AI 导出单行表头）：单行标题（中文显示名(英文字段路径)） / 数据行
+        titles = [cell.value for cell in sheet[1]]
         self.assertIn("开始时间(start_time)", titles)
         self.assertIn("操作人(username)", titles)
         # 数据行
-        first_row = [cell.value for cell in sheet[3]]
+        first_row = [cell.value for cell in sheet[2]]
         self.assertIn("admin", first_row)
-        second_row = [cell.value for cell in sheet[4]]
+        second_row = [cell.value for cell in sheet[3]]
         self.assertIn("zhangsan", second_row)
 
     def test_export_extension_column(self):
@@ -80,12 +80,12 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        titles = [cell.value for cell in sheet[2]]
+        titles = [cell.value for cell in sheet[1]]
         self.assertIn("extend_data/ticket_id", titles)
         # 子键名不与完整路径重复拼接
         self.assertNotIn("工单内容", titles)
         self.assertNotIn("工单内容(extend_data/ticket_id)", titles)
-        first_row = [cell.value for cell in sheet[3]]
+        first_row = [cell.value for cell in sheet[2]]
         self.assertIn("Story-3000", first_row)
 
     def test_export_empty_samples_keeps_headers_and_zero_data_rows(self):
@@ -96,8 +96,8 @@ class TestPreviewExportService(AIAssistantTestCase):
                 result = PreviewExportService.export(output, export_config=config)
                 workbook = openpyxl.load_workbook(io.BytesIO(result.content))
                 sheet = workbook.active
-                self.assertEqual(sheet.max_row, 2)
-                self.assertIn("操作人(username)", [cell.value for cell in sheet[2]])
+                self.assertEqual(sheet.max_row, 1)
+                self.assertIn("操作人(username)", [cell.value for cell in sheet[1]])
                 self.assertTrue(result.file_name.endswith(".xlsx"))
 
     def test_export_with_flatten_extension(self):
@@ -125,7 +125,7 @@ class TestPreviewExportService(AIAssistantTestCase):
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
         # ① 子键并集列：ticket_id、operator、instance_id（保序去重）；平铺列标题只显示字段路径
-        titles = [cell.value for cell in sheet[2]]
+        titles = [cell.value for cell in sheet[1]]
         self.assertIn("extend_data/ticket_id", titles)
         self.assertIn("extend_data/operator", titles)
         self.assertIn("extend_data/instance_id", titles)
@@ -133,12 +133,12 @@ class TestPreviewExportService(AIAssistantTestCase):
         self.assertNotIn("extend_data", titles)
         self.assertNotIn("拓展数据(extend_data)", titles)
         # ③ 行 1：缺 operator/instance_id 不影响 ticket_id 取值
-        first_data_row = [cell.value for cell in sheet[3]]
+        first_data_row = [cell.value for cell in sheet[2]]
         self.assertIn("admin", first_data_row)
         self.assertIn("Story-3000", first_data_row)
         self.assertIn("operator_a", first_data_row)
         # ④ 行 2：缺 operator 不报错，空值单元格（空字符串）
-        second_data_row = [cell.value for cell in sheet[4]]
+        second_data_row = [cell.value for cell in sheet[3]]
         self.assertIn("zhangsan", second_data_row)
         self.assertIn("Story-4000", second_data_row)
         self.assertIn("vm-001", second_data_row)
@@ -155,7 +155,7 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        titles = [cell.value for cell in sheet[2]]
+        titles = [cell.value for cell in sheet[1]]
         self.assertEqual(titles.count("extend_data"), 0)
 
     def test_flatten_extension_false_keeps_default(self):
@@ -173,7 +173,7 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        titles = [cell.value for cell in sheet[2]]
+        titles = [cell.value for cell in sheet[1]]
         # extend_data 整列（非下钻）保留，标题按「中文显示名(英文路径)」拼接
         self.assertIn("拓展数据(extend_data)", titles)
         self.assertNotIn("extend_data/ticket_id", titles)
@@ -366,6 +366,14 @@ class TestLogExportConfigSerializerProtocol(AIAssistantTestCase):
         self.assertTrue(validated["flatten_extension"])
         self.assertEqual(validated["extension_keys"], ["ticket_id", "operator"])
 
+    def test_source_survives_serialization(self):
+        """AI 导出来源标记 source 经序列化器校验后保留（全量导出落库 → 运行时读取）"""
+        from services.web.query.serializers import LogExportConfigSerializer
+
+        serializer = LogExportConfigSerializer(data={"field_scope": "all", "fields": [], "source": "ai_assistant"})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["source"], "ai_assistant")
+
     def test_legacy_export_config_unchanged(self):
         """原检索页 export_config（仅 field_scope/fields）：validated_data 不含新键，落库形态与历史一致"""
         from services.web.query.serializers import LogExportConfigSerializer
@@ -375,6 +383,7 @@ class TestLogExportConfigSerializerProtocol(AIAssistantTestCase):
         validated = serializer.validated_data
         self.assertNotIn("flatten_extension", validated)
         self.assertNotIn("extension_keys", validated)
+        self.assertNotIn("source", validated)
         self.assertEqual(validated, {"field_scope": "all", "fields": []})
 
     # 注：非法形态（flatten_extension="yes" / extension_keys 含非字符串）的严格拦截在
@@ -402,17 +411,29 @@ class TestExportConfigFlattenIsolation(AIAssistantTestCase):
         self.assertEqual([key for key in full_keys if key.startswith("extend_data/")], [])
 
     def test_flatten_task_replaces_extend_data_column(self):
-        """开启平铺 + 子键清单：extend_data 单列被替换为子键列（仅 AI 导出路径构造此形态）"""
+        """开启平铺 + 子键清单：extend_data 单列被**原位**替换为子键列（保持前端结果列序，
+        全量导出 ai_standard 形态下子键列仍在 log 之前）"""
         from services.web.query.export.model import ExportConfig
 
         config = ExportConfig(
             task=self._make_task(
-                {"field_scope": "all", "fields": [], "flatten_extension": True, "extension_keys": ["ticket_id"]}
+                {
+                    "field_scope": "specified",
+                    "fields": [
+                        {"raw_name": "start_time", "display_name": "操作起始时间", "keys": []},
+                        {"raw_name": "extend_data", "display_name": "拓展数据", "keys": []},
+                        {"raw_name": "log", "display_name": "操作（完整日志）", "keys": []},
+                    ],
+                    "flatten_extension": True,
+                    "extension_keys": ["ticket_id", "operator"],
+                    "source": "ai_assistant",
+                }
             )
         )
         full_keys = [field.full_key for field in config.export_fields]
         self.assertNotIn("extend_data", full_keys)
-        self.assertIn("extend_data/ticket_id", full_keys)
+        # 子键列在 extend_data 原位展开（log 之前），不追加尾部
+        self.assertEqual(full_keys, ["start_time", "extend_data/ticket_id", "extend_data/operator", "log"])
 
     def test_flatten_without_keys_keeps_single_column(self):
         """开启平铺但未传子键清单：不替换（无列定义来源，保持单列）"""
@@ -450,3 +471,177 @@ class TestAIStandardFieldScope(AIAssistantTestCase):
         from services.web.query.constants import LogExportFieldScope
 
         self.assertIn(LogExportFieldScope.AI_STANDARD.value, LogExportFieldScope.values)
+
+
+class TestAIExportHeaderLayout(AIAssistantTestCase):
+    """AI 导出表头布局（验收 2026-10-09）：单行表头 + 字段保序 + 列宽自适应 + 常规导出隔离。"""
+
+    @staticmethod
+    def _nine_default_columns():
+        """构造与前端结果列同序的九列（SNAPSHOT_DEFAULT_COLUMNS 顺序）。"""
+        return [
+            ResultColumn(raw_name="start_time", display_name="操作起始时间"),
+            ResultColumn(raw_name="username", display_name="操作人"),
+            ResultColumn(raw_name="system_id", display_name="来源系统(ID)"),
+            ResultColumn(raw_name="action_id", display_name="操作事件名(ID)"),
+            ResultColumn(raw_name="resource_type_id", display_name="资源类型(ID)"),
+            ResultColumn(raw_name="instance_id", display_name="资源实例(ID)"),
+            ResultColumn(raw_name="result_code", display_name="操作结果(Code)"),
+            ResultColumn(raw_name="extend_data", display_name="拓展数据"),
+            ResultColumn(raw_name="log", display_name="操作（完整日志）"),
+        ]
+
+    def test_preview_export_default_nine_column_order(self):
+        """[验收回归] 预览导出列序与 AI 助手"日志检索结果"一致：
+        操作起始时间→操作人→来源系统→操作事件名→资源类型→资源实例→操作结果→拓展数据→操作（完整日志）
+        """
+        output = self.make_log_search_output(
+            columns=self._nine_default_columns(),
+            samples=[
+                {
+                    "start_time": "2026-10-09 12:00:00",
+                    "username": "admin",
+                    "extend_data": {"ticket_id": "T-1"},
+                }
+            ],
+            total=1,
+        )
+
+        result = PreviewExportService.export(output)
+
+        sheet = openpyxl.load_workbook(io.BytesIO(result.content)).active
+        titles = [cell.value for cell in sheet[1]]
+        self.assertEqual(
+            titles,
+            [
+                "操作起始时间(start_time)",
+                "操作人(username)",
+                "来源系统(ID)(system_id)",
+                "操作事件名(ID)(action_id)",
+                "资源类型(ID)(resource_type_id)",
+                "资源实例(ID)(instance_id)",
+                "操作结果(Code)(result_code)",
+                "拓展数据(extend_data)",
+                "操作（完整日志）(log)",
+            ],
+        )
+
+    def test_flatten_extension_keeps_position_before_log(self):
+        """[验收回归] 平铺导出：拓展子键列在 extend_data 原位展开（"操作（完整日志）"之前），不追加尾部"""
+        columns = self._nine_default_columns()
+        output = self.make_log_search_output(
+            columns=columns,
+            samples=[
+                {
+                    "start_time": "t",
+                    "username": "admin",
+                    "extend_data": {"ticket_id": "T-1", "operator": "op_a"},
+                }
+            ],
+            total=1,
+        )
+
+        result = PreviewExportService.export(output, export_config={"flatten_extension": True})
+
+        sheet = openpyxl.load_workbook(io.BytesIO(result.content)).active
+        titles = [cell.value for cell in sheet[1]]
+        # 前七列原序 + 子键两列（原 extend_data 位）+ log 殿后
+        self.assertEqual(
+            titles,
+            [
+                "操作起始时间(start_time)",
+                "操作人(username)",
+                "来源系统(ID)(system_id)",
+                "操作事件名(ID)(action_id)",
+                "资源类型(ID)(resource_type_id)",
+                "资源实例(ID)(instance_id)",
+                "操作结果(Code)(result_code)",
+                "extend_data/ticket_id",
+                "extend_data/operator",
+                "操作（完整日志）(log)",
+            ],
+        )
+
+    def test_preview_export_has_single_header_row(self):
+        """AI 预览导出：首行即字段标题（无"标准/系统/自定义字段"分类合并行），数据从第 2 行起"""
+        output = self.make_log_search_output(
+            samples=[{"start_time": "2026-10-09 12:00:00", "username": "admin"}], total=1
+        )
+
+        result = PreviewExportService.export(output)
+
+        sheet = openpyxl.load_workbook(io.BytesIO(result.content)).active
+        first_row = [cell.value for cell in sheet[1]]
+        self.assertIn("开始时间(start_time)", first_row)
+        # 分类合并行不存在（验收：标准/系统/自定义字段这一栏不需要）
+        for label in ("标准字段", "系统字段", "自定义字段", "扩展字段"):
+            self.assertNotIn(label, first_row)
+        data_row = [cell.value for cell in sheet[2]]
+        self.assertIn("admin", data_row)
+
+    def test_preview_export_column_width_adaptive(self):
+        """AI 预览导出列宽：≥ 表头文本显示宽 + 排序按钮预留（按钮渲染后表头仍完整），且 ≥ 既有 20"""
+        output = self.make_log_search_output(samples=[{"start_time": "t", "username": "admin"}], total=1)
+
+        result = PreviewExportService.export(output)
+
+        sheet = openpyxl.load_workbook(io.BytesIO(result.content)).active
+        for column_letter, cell in zip("AB", sheet[1]):
+            width = sheet.column_dimensions[column_letter].width
+            title = cell.value or ""
+            # 与 XLSXExporter._calc_display_width 同口径：全角字符记 2
+            expect_min = max(20, sum(2 if ord(ch) > 127 else 1 for ch in title) + 4)
+            self.assertGreaterEqual(
+                width,
+                expect_min,
+                f"列 {column_letter}({title}) 宽度 {width} 不足以完整展示表头并预留排序按钮空间",
+            )
+
+    def _make_config(self, export_config: dict):
+        from services.web.query.export.model import ExportConfig
+        from services.web.query.models import LogExportTask
+
+        return ExportConfig(task=LogExportTask(export_config=export_config))
+
+    def test_ai_export_fields_keep_given_order(self):
+        """AI 导出字段保序：与前端"日志检索结果"列序一致，不按分类重排（乱序给跨分类字段）"""
+
+        fields = [
+            {"raw_name": "start_time", "display_name": "操作起始时间", "keys": []},
+            {"raw_name": "extend_data", "display_name": "工单", "keys": ["k1"]},
+        ]
+        config = self._make_config({"field_scope": "specified", "fields": fields, "source": "ai_assistant"})
+        self.assertEqual([field.full_key for field in config.export_fields], ["start_time", "extend_data/k1"])
+
+    def test_legacy_export_fields_keep_category_order(self):
+        """常规导出（无 source）：字段仍按分类顺序重排（CUSTOM → STANDARD，既有行为零变化）"""
+
+        fields = [
+            {"raw_name": "start_time", "display_name": "操作起始时间", "keys": []},
+            {"raw_name": "extend_data", "display_name": "工单", "keys": ["k1"]},
+        ]
+        config = self._make_config({"field_scope": "specified", "fields": fields})
+        # 分类重排：CUSTOM(extend_data/k1) 先于 STANDARD(start_time)
+        self.assertEqual([field.full_key for field in config.export_fields], ["extend_data/k1", "start_time"])
+
+    def test_legacy_export_keeps_two_header_rows(self):
+        """常规导出隔离回归：无 source 标记时仍为两行表头（分类行 + 标题行）"""
+
+        from services.web.query.ai_assistant.services.export import PreviewXLSXExporter
+
+        fields = [
+            {"raw_name": "start_time", "display_name": "开始时间", "keys": []},
+            {"raw_name": "username", "display_name": "操作人", "keys": []},
+        ]
+        config = self._make_config({"field_scope": "specified", "fields": fields})
+        exporter = PreviewXLSXExporter(config)
+        try:
+            exporter.write([{"start_time": "t", "username": "admin"}])
+            file = exporter.save()
+            sheet = openpyxl.load_workbook(io.BytesIO(file.read())).active
+        finally:
+            exporter.close()
+        first_row = [cell.value for cell in sheet[1]]
+        self.assertIn("标准字段", first_row)
+        second_row = [cell.value for cell in sheet[2]]
+        self.assertIn("开始时间(start_time)", second_row)

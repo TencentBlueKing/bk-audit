@@ -35,7 +35,10 @@ from django.core.files import File
 
 from apps.meta.permissions import SearchLogPermission
 from core.sql.constants import FieldType
-from services.web.query.ai_assistant.constants import AI_EXPORT_TASK_NAME_TEMPLATE
+from services.web.query.ai_assistant.constants import (
+    AI_ASSISTANT_EXPORT_SOURCE,
+    AI_EXPORT_TASK_NAME_TEMPLATE,
+)
 from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     AIPermissionDeniedError,
@@ -127,6 +130,8 @@ class PreviewExportService:
             export_config={
                 "field_scope": LogExportFieldScope.SPECIFIED.value,
                 "fields": export_fields,
+                # AI 导出来源标记：单行表头 + 字段保序 + 列宽自适应（检索页导出不带）
+                "source": AI_ASSISTANT_EXPORT_SOURCE,
             }
         )
         config = ExportConfig(task=task_stub)
@@ -157,15 +162,17 @@ class PreviewExportService:
                         seen.add(key)
                         keys.append(key)
 
-        # ② 构造展平后的列：移除 extend_data 单列；为每个子键添加 ResultColumn
+        # 无可平铺子键时沿用正常导出，零数据快照仍保留字段标题。
         if not keys:
             return cls.export(output)
 
-        flat_columns: List[ResultColumn] = [
-            column for column in output.columns if not (column.raw_name == "extend_data" and not column.keys)
-        ]
-        for key in keys:
-            flat_columns.append(ResultColumn(raw_name="extend_data", keys=[key], display_name=key))
+        # 在原位置替换拓展数据列，保持与前端展示一致的列顺序。
+        flat_columns: List[ResultColumn] = []
+        for column in output.columns:
+            if column.raw_name == "extend_data" and not column.keys:
+                flat_columns.extend(ResultColumn(raw_name="extend_data", keys=[key], display_name=key) for key in keys)
+            else:
+                flat_columns.append(column)
 
         # ③ 内存态 LogExportTask 走 SPECIFIED 形态；携带 flatten_extension 标记——
         #    既是平铺语义自洽，也是 Excel 分组表头渲染"扩展字段"的开关（检索页导出不传）
@@ -177,6 +184,8 @@ class PreviewExportService:
                 "field_scope": LogExportFieldScope.SPECIFIED.value,
                 "fields": export_fields,
                 "flatten_extension": True,
+                # AI 导出来源标记：单行表头 + 字段保序 + 列宽自适应（检索页导出不带）
+                "source": AI_ASSISTANT_EXPORT_SOURCE,
             }
         )
         config = ExportConfig(task=task_stub)
