@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 import gc
+import math
 import tempfile
 from datetime import datetime
 from functools import cached_property
@@ -41,9 +42,12 @@ EXTEND_DATA_RAW_NAME = "extend_data"
 EXTENSION_GROUP_LABEL = gettext_lazy("扩展字段")
 
 # AI 导出列宽自适应参数：列宽下限与既有固定列宽一致；AUTO_FILTER 预留 Excel
-# 排序/筛选下拉按钮（约 2~3 字符宽）渲染后表头列名仍完整显示的余量
+# 排序/筛选下拉按钮（约 2~3 字符宽）+ 单元格左右内边距（约 1~2 字符）的渲染余量
+# （实测 2026-10-10：仅预留按钮宽度时 extend_data/request_uri 等纯 ASCII 长路径
+# 列的表头尾部仍被下拉按钮覆盖）；表头为加粗字体，另按粗体放大系数补偿
 AI_EXPORT_MIN_COLUMN_WIDTH = 20
-AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH = 4
+AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH = 6
+AI_EXPORT_BOLD_TITLE_SCALE = 1.1
 
 
 class FileExporter(abc.ABC):
@@ -239,9 +243,13 @@ class XLSXExporter(FileExporter):
             # Excel 排序/筛选下拉按钮空间（按钮渲染后表头仍完整显示），下限不窄于
             # 既有固定列宽；常规检索页导出保持固定 20 不变
             for col, title in enumerate(titles):
+                # 表头为加粗字体，常规字符宽度估算对粗体偏窄（粗体约宽 10%），
+                # 先按粗体放大系数补偿，再预留筛选按钮 + 内边距空间，避免长表头
+                # 尾部（如 extend_data/request_uri 纯 ASCII 长路径列）被下拉按钮覆盖
+                bolded_width = math.ceil(self._calc_display_width(title) * AI_EXPORT_BOLD_TITLE_SCALE)
                 width = max(
                     AI_EXPORT_MIN_COLUMN_WIDTH,
-                    self._calc_display_width(title) + AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH,
+                    bolded_width + AI_EXPORT_AUTO_FILTER_RESERVED_WIDTH,
                 )
                 self.worksheet.set_column(col, col, width)
         else:
