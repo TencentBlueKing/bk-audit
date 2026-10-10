@@ -862,7 +862,7 @@ class UpdateTool(ToolBase):
     def _update_smart_page_overrides(
         self, tool, new_overrides, new_usage_limits, validated_request_data, updated_time=None
     ):
-        """smart_page 工具仅更新 default_value_overrides 和 usage_limits。
+        """smart_page 工具更新配置和基础信息。
 
         - 配置变更时创建新版本，保证历史可追溯
         - 配置未变更时（None 或与现有值相同）直接返回原工具
@@ -882,6 +882,12 @@ class UpdateTool(ToolBase):
             if new_usage_limits != current_usage_limits:
                 has_changes = True
 
+        # 检查基础信息变更（name、description、status 等）
+        for field in ["name", "description", "namespace", "status"]:
+            if field in validated_request_data and getattr(tool, field, None) != validated_request_data[field]:
+                has_changes = True
+                break
+
         # 无变更则直接返回
         if not has_changes:
             return tool
@@ -892,9 +898,14 @@ class UpdateTool(ToolBase):
         if new_usage_limits is not None:
             config['usage_limits'] = new_usage_limits
         validated_request_data["config"] = config
-        # 防止客户端通过提交 tags 字段越权修改标签
-        tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
-        validated_request_data["tags"] = list(Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True))
+
+        # tags 使用请求中的值，如果没有传则保持现有标签
+        if "tags" not in validated_request_data:
+            tag_ids = ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True)
+            validated_request_data["tags"] = list(
+                Tag.objects.filter(tag_id__in=tag_ids).values_list("tag_name", flat=True)
+            )
+
         return self.create_tool_new_version(
             old_tool=tool,
             validated_request_data=validated_request_data,
