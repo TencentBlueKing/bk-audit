@@ -80,18 +80,6 @@
           class="nl-tag-log-measure-span">
           {{ localValue || t('请输入') }}
         </span>
-        <div
-          v-if="suggestOptions.length"
-          class="nl-tag-log-suggest">
-          <button
-            v-for="opt in suggestOptions"
-            :key="opt.id"
-            class="nl-tag-log-suggest-item"
-            type="button"
-            @mousedown.prevent="applySuggest(opt.id)">
-            {{ opt.name || opt.id }}（{{ opt.id }}）
-          </button>
-        </div>
       </div>
     </template>
     <audit-icon
@@ -190,24 +178,6 @@
     }
     return { operator: '', value: '' };
   });
-
-  const suggestOptions = computed(() => {
-    const config = props.tag.config as { suggestOptions?: Array<{ id?: string; name?: string }> };
-    return (config.suggestOptions || [])
-      .filter(item => item && item.id !== undefined && String(item.id) !== '')
-      .map(item => ({
-        id: String(item.id),
-        name: String(item.name || item.id),
-      }));
-  });
-
-  const applySuggest = (id: string) => {
-    localValue.value = id;
-    nextTick(() => {
-      inputRef.value?.focus();
-      handleAutoResize();
-    });
-  };
 
   const allowOperators = computed(() => {
     const config = props.tag.config as { allowOperators?: string[]; defaultOperator?: string };
@@ -358,26 +328,6 @@
     position: relative;
     display: inline-flex;
     min-width: 56px;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .nl-tag-log-suggest {
-    display: flex;
-    flex-basis: 100%;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .nl-tag-log-suggest-item {
-    padding: 0 4px;
-    font-size: 12px;
-    line-height: 18px;
-    color: #3a84ff;
-    cursor: pointer;
-    background: #f0f5ff;
-    border: none;
-    border-radius: 2px;
   }
 
   .nl-tag-log-inline-textarea {
