@@ -597,12 +597,12 @@
     extCls: 'scene-param-overflow-tips',
   });
 
-  // 构建配置列表：每个选中的场景/系统对应一个配置区块
+  // 构建配置列表：每个选中的场景/系统对应一个配置区块，后选的排在前面
   const configList = computed<ConfigItem[]>(() => {
     const list: ConfigItem[] = [];
     const overrides = props.formData.scene_param_overrides || {};
 
-    for (const s of props.selectedScenes) {
+    for (const s of [...props.selectedScenes].reverse()) {
       const key = `scene-${s.id}`;
       const existing = overrides[key];
       list.push({
@@ -615,7 +615,7 @@
       });
     }
 
-    for (const s of props.selectedSystems) {
+    for (const s of [...props.selectedSystems].reverse()) {
       const key = `system-${s.id}`;
       const existing = overrides[key];
       list.push({
