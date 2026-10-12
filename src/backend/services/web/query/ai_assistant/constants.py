@@ -71,6 +71,9 @@ SYSTEM_INFO_SNAPSHOT_KEYS = ("system_id", "name")
 # 快照显式剔除的内部存储字段（columns 裁剪之外的第二道保险）
 SNAPSHOT_EXCLUDED_FIELDS = ("__shard_key__", "__ext", "bk_data_id", "collector_config_id")
 
+# 拓展数据容器（extend_data）的产品文案：结果列/条件摘要与导出表头共用，集中定义防两处漂移
+EXTEND_DATA_DISPLAY_NAME = "拓展数据"
+
 # 快照默认列（产品需求 2026-08-14：9 个固定展示字段，display_name 用产品文案）
 # 注意：extend_data 为 dict 值，快照原样保留（前端格式化展示），单值截断只作用于 str 值
 SNAPSHOT_DEFAULT_COLUMNS = (
@@ -81,7 +84,7 @@ SNAPSHOT_DEFAULT_COLUMNS = (
     ("resource_type_id", "资源类型(ID)"),
     ("instance_id", "资源实例(ID)"),
     ("result_code", "操作结果(Code)"),
-    ("extend_data", "拓展数据"),
+    ("extend_data", EXTEND_DATA_DISPLAY_NAME),
     ("log", "操作（完整日志）"),
 )
 
