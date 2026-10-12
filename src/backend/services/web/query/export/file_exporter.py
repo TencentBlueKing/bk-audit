@@ -29,6 +29,7 @@ from django.core.files import File
 from django.utils.translation import gettext_lazy
 
 from core.utils.data import unique_id
+from services.web.query.ai_assistant.constants import EXTEND_DATA_DISPLAY_NAME
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR, FieldCategoryEnum
 from services.web.query.export.model import ExportConfig
 
@@ -211,14 +212,18 @@ class XLSXExporter(FileExporter):
 
         扩展字段下钻列（full_key 形如 extend_data/{sub_key}，AI 平铺导出与检索页
         指定字段共用该形态）的 display_name 是子键名本身，拼接会得到
-        「_request_url(extend_data/_request_url)」的重复语义，故只显示完整路径；
-        display_name 缺失或与 full_key 相同时同样只显示 full_key，避免括号重复。
+        「_request_url(extend_data/_request_url)」的重复语义；产品预期（2026-10-12）
+        容器部分渲染为产品文案——「拓展数据(extend_data)/_request_url」，与普通列
+        「中文显示名(英文字段路径)」格式同构；display_name 缺失或与 full_key 相同
+        时同样只显示 full_key，避免括号重复。
         """
 
         full_key = field.full_key or field.display_name
         display_name = field.display_name or full_key
-        if full_key.startswith(f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"):
-            return full_key
+        extend_prefix = f"{EXTEND_DATA_RAW_NAME}{LOG_FIELD_KEY_JOIN_CHAR}"
+        if full_key.startswith(extend_prefix):
+            sub_path = full_key[len(extend_prefix) :]
+            return f"{EXTEND_DATA_DISPLAY_NAME}({EXTEND_DATA_RAW_NAME}){LOG_FIELD_KEY_JOIN_CHAR}{sub_path}"
         if display_name and display_name != full_key:
             return f"{display_name}({full_key})"
         return full_key
