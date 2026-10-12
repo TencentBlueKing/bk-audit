@@ -139,21 +139,29 @@ class UsageLimits(BaseModel):
     @field_validator("scenes", "systems")
     @classmethod
     def validate_account_type_values(cls, v):
-        """校验 account_type 的值是否属于合法集合"""
+        """校验 account_type 的值是否属于合法集合
+
+        注意：account_type 不配置表示「全部可用」，配置为空列表 [] 不允许（至少选择 1 个）。
+        account_type 为 null 时跳过校验（视为未配置）。
+        """
         valid_types = set(PROFILE_ACCOUNT_TYPES)
         for scope_id, limits in v.items():
             if not isinstance(limits, dict):
                 continue
             account_type_values = limits.get("account_type")
-            if account_type_values is not None:
-                if not isinstance(account_type_values, list):
-                    raise ValueError(gettext("account_type 必须是列表"))
-                for value in account_type_values:
-                    if value not in valid_types:
-                        raise ValueError(
-                            gettext("无效的账号类型: %(value)s，合法值为: %(valid_types)s")
-                            % {"value": value, "valid_types": ", ".join(sorted(valid_types))}
-                        )
+            # null 或未配置都视为未配置，跳过校验
+            if account_type_values is None:
+                continue
+            if not isinstance(account_type_values, list):
+                raise ValueError(gettext("account_type 必须是列表"))
+            if len(account_type_values) == 0:
+                raise ValueError(gettext("account_type 不能为空列表，至少选择 1 个允许的账号类型"))
+            for value in account_type_values:
+                if value not in valid_types:
+                    raise ValueError(
+                        gettext("无效的账号类型: %(value)s，合法值为: %(valid_types)s")
+                        % {"value": value, "valid_types": ", ".join(sorted(valid_types))}
+                    )
         return v
 
 

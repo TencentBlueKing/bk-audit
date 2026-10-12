@@ -52,9 +52,11 @@ class UsageLimitsModelTest(TestCase):
         self.assertIn("wechat", error_msg)
 
     def test_empty_account_type_list(self):
-        """空列表表示全部禁止，应通过校验"""
-        limits = UsageLimits(scenes={"1001": {"account_type": []}})
-        self.assertEqual(limits.scenes["1001"]["account_type"], [])
+        """空列表应抛出异常（至少选择 1 个）"""
+        with self.assertRaises(ValidationError) as cm:
+            UsageLimits(scenes={"1001": {"account_type": []}})
+        error_msg = str(cm.exception)
+        self.assertIn("不能为空列表", error_msg)
 
     def test_account_type_must_be_list(self):
         """account_type 必须是列表"""
@@ -275,16 +277,6 @@ class ValidateUsageLimitsTest(TestCase):
     def test_disallowed_account_type_raises(self, mock_validator_cls):
         """使用的账号类型不在允许集合内，抛权限异常"""
         tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": ["form_ctx"]}}})
-        resource = self._make_resource()
-        mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
-        params = {"params": {"form_openid": "xxx"}}
-        with self.assertRaises(PermissionException):
-            resource._validate_usage_limits(tool, params, "user1")
-
-    @mock.patch("services.web.common.default_value_validator.DefaultValueValidator")
-    def test_empty_account_type_list_rejects(self, mock_validator_cls):
-        """配置空列表时，使用任何账号类型都被拒绝（全部禁止）"""
-        tool = self._make_tool(usage_limits={"scenes": {"1001": {"account_type": []}}})
         resource = self._make_resource()
         mock_validator_cls.return_value.get_accessible_scopes.return_value = ({"1001"}, set())
         params = {"params": {"form_openid": "xxx"}}
