@@ -188,6 +188,7 @@
                 multiple
                 multiple-mode="tag"
                 :placeholder="t('请选择默认值')"
+                :popover-options="{ maxWidth: SELECT_POPOVER_MAX_WIDTH }"
                 :search-placeholder="t('搜索或粘贴名称/ID')"
                 selected-style="checkbox"
                 show-select-all
@@ -196,27 +197,52 @@
                 @clear="() => handleDefaultValueChange(item, row.raw_name, [])"
                 @search-change="(val: string) => handleDefaultSearchChange(item, row.raw_name, val)"
                 @toggle="(open: boolean) => handleDefaultSelectToggle(open, item, row.raw_name)">
-                <!-- 自行渲染首项 + +n，避免 collapse-tags 初次回显/候选加载后不折叠 -->
+                <!-- 自行渲染可见项 + +n，避免 collapse-tags 初次回显/候选加载后不折叠；可见数量按单元格宽度计算 -->
                 <template #tag="{ selected }">
-                  <template v-if="selected.length">
+                  <div
+                    v-if="selected.length"
+                    :ref="(el) => bindTagFit(getFieldErrorKey(item.key, row.raw_name), el as HTMLElement | null)"
+                    class="override-tags-fit"
+                    :data-total="selected.length">
                     <bk-tag
+                      v-for="tag in selected.slice(0, getVisibleTagCount(item.key, row.raw_name, selected.length))"
+                      :key="tag.value"
                       class="override-selected-tag"
                       closable
-                      @close="handleRemoveSelectedValue(item, row.raw_name, selected[0].value)">
-                      {{ getSelectedChoiceLabel(row.raw_name, selected[0].value) }}
+                      @close="handleRemoveSelectedValue(item, row.raw_name, tag.value)">
+                      {{ getSelectedChoiceLabel(row.raw_name, tag.value) }}
                     </bk-tag>
                     <bk-tag
-                      v-if="selected.length > 1"
+                      v-if="selected.length > getVisibleTagCount(item.key, row.raw_name, selected.length)"
                       v-bk-tooltips="{
-                        content: getOverflowSelectedTipsContent(row.raw_name, selected),
+                        content: getOverflowSelectedTipsContent(
+                          row.raw_name,
+                          selected,
+                          getVisibleTagCount(item.key, row.raw_name, selected.length),
+                        ),
                         theme: 'dark',
                         placement: 'top',
                         extCls: 'override-selected-tips-wrap',
                       }"
                       class="override-selected-overflow-tag">
-                      +{{ selected.length - 1 }}
+                      +{{ selected.length - getVisibleTagCount(item.key, row.raw_name, selected.length) }}
                     </bk-tag>
-                  </template>
+                    <!-- 不可见的测量层：按真实标签宽度计算可见数量，与可见层互不影响，避免循环重排 -->
+                    <div
+                      aria-hidden="true"
+                      class="override-tags-measure">
+                      <bk-tag
+                        v-for="tag in selected.slice(0, MAX_MEASURE_TAGS)"
+                        :key="tag.value"
+                        class="override-selected-tag measure-tag"
+                        closable>
+                        {{ getSelectedChoiceLabel(row.raw_name, tag.value) }}
+                      </bk-tag>
+                      <bk-tag class="override-selected-overflow-tag measure-overflow-tag">
+                        +{{ selected.length }}
+                      </bk-tag>
+                    </div>
+                  </div>
                 </template>
                 <bk-option
                   v-for="choice in getMultiSelectChoices(row.raw_name)"
@@ -366,6 +392,7 @@
 
   import { DateRange } from '@blueking/date-picker';
 
+  import { calcFitTagCount } from '@utils/assist/calc-fit-tag-count';
   import {
     PORTRAIT_ACCOUNT_TYPES,
     portraitAccountLabel,
@@ -449,11 +476,13 @@
     emit('update:usageRestrictions', { scenes, systems });
   };
 
-  // 编辑页弹层与默认值下拉同宽；弹窗内（overrideSelectFullWidth）跟随下拉框铺满
+  /** 下拉弹层随触发器同宽，宽单元格内封顶，避免选项右侧大片留白 */
+  const SELECT_POPOVER_MAX_WIDTH = 400;
+
   const usageValuesPopoverOptions = computed(() => ({
     boundary: 'body',
     zIndex: props.popoverZIndex,
-    ...(props.overrideSelectFullWidth ? {} : { width: 320 }),
+    maxWidth: SELECT_POPOVER_MAX_WIDTH,
   }));
 
   const usageAccountRowOf = (item: ConfigItem) => usageRowsOf(item).find(row => row.param === 'type');
@@ -867,9 +896,10 @@
   const getOverflowSelectedTipsContent = (
     rawName: string,
     selected: Array<{ value: string | number; label?: string | number }>,
+    visibleCount: number,
   ) => {
     const text = selected
-      .slice(1)
+      .slice(visibleCount)
       .map(item => getSelectedChoiceLabel(rawName, item.value))
       .join(', ');
 
@@ -893,6 +923,65 @@
       current.filter(id => id !== String(value)),
     );
   };
+
+  /** 单行最多能放下的标签数有限，测量层只渲染前 N 个 */
+  const MAX_MEASURE_TAGS = 30;
+  const TAG_GAP = 4;
+  const tagFitCountMap = reactive<Record<string, number>>({});
+  const tagFitBindings = new Map<string, { el: HTMLElement; observer: ResizeObserver }>();
+
+  const getVisibleTagCount = (itemKey: string, rawName: string, total: number) => {
+    const count = tagFitCountMap[getFieldErrorKey(itemKey, rawName)] || 1;
+    return Math.min(Math.max(count, 1), total);
+  };
+
+  const computeTagFit = (cellKey: string, el: HTMLElement) => {
+    const measure = el.querySelector<HTMLElement>('.override-tags-measure');
+    if (!measure) return;
+    const tagWidths = Array.from(measure.querySelectorAll<HTMLElement>('.measure-tag')).map(tag => tag.offsetWidth);
+    const fit = calcFitTagCount(tagWidths, el.clientWidth, {
+      total: Number(el.dataset.total) || tagWidths.length,
+      gap: TAG_GAP,
+      overflowWidth: measure.querySelector<HTMLElement>('.measure-overflow-tag')?.offsetWidth || 0,
+    });
+    if (tagFitCountMap[cellKey] !== fit) {
+      tagFitCountMap[cellKey] = fit;
+    }
+  };
+
+  const unbindTagFit = (cellKey: string) => {
+    tagFitBindings.get(cellKey)?.observer.disconnect();
+    tagFitBindings.delete(cellKey);
+    delete tagFitCountMap[cellKey];
+  };
+
+  /**
+   * 单元格宽度变化或测量层内容变化（候选名称加载、增删选项）时重新计算。
+   */
+  const bindTagFit = (cellKey: string, el: HTMLElement | null) => {
+    const current = tagFitBindings.get(cellKey);
+    if (!el) {
+      if (current) {
+        Promise.resolve().then(() => {
+          const binding = tagFitBindings.get(cellKey);
+          if (binding && !binding.el.isConnected) unbindTagFit(cellKey);
+        });
+      }
+      return;
+    }
+    if (current?.el === el) return;
+    if (current) current.observer.disconnect();
+    const observer = new ResizeObserver(() => computeTagFit(cellKey, el));
+    observer.observe(el);
+    const measure = el.querySelector<HTMLElement>('.override-tags-measure');
+    if (measure) observer.observe(measure);
+    tagFitBindings.set(cellKey, { el, observer });
+  };
+
+  onBeforeUnmount(() => {
+    tagFitBindings.forEach(({ observer }) => observer.disconnect());
+    tagFitBindings.clear();
+  });
 
 
   const getParamOriginalDefault = (rawName: string) => {
@@ -1469,7 +1558,7 @@
   }
 
   :deep(.override-default-multiselect) {
-    width: 320px;
+    width: 100%;
     max-width: 100%;
     height: 100%;
     line-height: normal;
@@ -1541,6 +1630,38 @@
       box-sizing: border-box;
     }
 
+    /* 宽度只由单元格决定、与标签数量无关，可见数量变化不会反过来触发重新测量 */
+    .override-tags-fit {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      overflow: hidden;
+      flex: 1 1 0;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .bk-select-trigger .override-tags-fit .override-selected-overflow-tag {
+      flex-shrink: 0;
+    }
+
+    .override-tags-measure {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      width: max-content;
+      pointer-events: none;
+      visibility: hidden;
+      gap: 4px;
+    }
+
+    .bk-select-trigger .override-tags-measure .bk-tag {
+      flex-shrink: 0;
+    }
+
     /* 关闭组件内置 +n，改用自定义 overflow tag */
     .bk-select-overflow-tag {
       display: none !important;
@@ -1587,10 +1708,6 @@
 
   .usage-restriction-field {
     margin-bottom: 16px;
-  }
-
-  .usage-restriction-field .field-value :deep(.override-default-multiselect) {
-    width: 100%;
   }
 
   .field-header-row,
@@ -1762,7 +1879,7 @@
     }
 
     /*
-     * 默认值控件：高度对齐行高；宽度不占满列（约 320px），
+     * 默认值控件：高度对齐行高；各类型统一铺满默认值列，
      * 人员 / 时间范围保持组件默认高度，由 .col-default 的 align-items:center 垂直居中
      */
     .override-default-input,
@@ -1772,7 +1889,7 @@
     .override-tag-input,
     .override-default-multiselect,
     .default-value-tip-wrap {
-      width: 320px;
+      width: 100%;
       max-width: 100%;
       flex-shrink: 1;
       min-width: 0;
@@ -1909,10 +2026,10 @@
   }
 </style>
 <style lang="postcss">
-  /* 人员选择器：取消组件默认 width:100%，保持内容高度由单元格垂直居中 */
+  /* 人员选择器：铺满默认值列，保持内容高度由单元格垂直居中 */
   .scene-param-config .override-person-select.bk-user-selector,
   .scene-param-config .override-person-select {
-    width: 320px !important;
+    width: 100% !important;
     max-width: 100%;
     height: auto !important;
   }
