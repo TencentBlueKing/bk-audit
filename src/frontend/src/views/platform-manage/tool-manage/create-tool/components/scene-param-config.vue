@@ -63,10 +63,7 @@
                 multiple
                 multiple-mode="tag"
                 :placeholder="t('请选择账号类型')"
-                :popover-options="{
-                  boundary: 'body',
-                  zIndex: popoverZIndex,
-                }"
+                :popover-options="usageValuesPopoverOptions"
                 selected-style="checkbox"
                 show-selected-icon
                 @change="(val: string[]) => handleUsageAllowedChange(item, val)">
@@ -451,6 +448,13 @@
     }
     emit('update:usageRestrictions', { scenes, systems });
   };
+
+  // 编辑页弹层与默认值下拉同宽；弹窗内（overrideSelectFullWidth）跟随下拉框铺满
+  const usageValuesPopoverOptions = computed(() => ({
+    boundary: 'body',
+    zIndex: props.popoverZIndex,
+    ...(props.overrideSelectFullWidth ? {} : { width: 320 }),
+  }));
 
   const usageAccountRowOf = (item: ConfigItem) => usageRowsOf(item).find(row => row.param === 'type');
 
@@ -1583,6 +1587,10 @@
 
   .usage-restriction-field {
     margin-bottom: 16px;
+  }
+
+  .usage-restriction-field .field-value :deep(.override-default-multiselect) {
+    width: 100%;
   }
 
   .field-header-row,

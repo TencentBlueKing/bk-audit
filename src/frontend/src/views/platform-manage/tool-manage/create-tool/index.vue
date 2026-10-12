@@ -181,7 +181,6 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { InfoBox } from 'bkui-vue';
   import { computed, nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
@@ -227,7 +226,6 @@
   import useRequest from '@/hooks/use-request';
   import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
   import {
-    affectedRestrictionScopeNames,
     pruneUsageRestrictions,
     usageLimitsToRestrictions,
     usageRestrictionsChanged,
@@ -591,39 +589,22 @@
     formData.value.visibility_type,
   );
 
-  const submitWithPortraitConfirm = () => {
-    if (formData.value.tool_type !== 'smart_page') {
-      doSubmit();
-      return;
+  const submitWithUsageValidation = () => {
+    if (formData.value.tool_type === 'smart_page') {
+      const next = nextPortraitRestrictions();
+      const baseline = JSON.parse(usageRestrictionBaseline.value || '{}') as UsageRestrictions;
+      if (usageRestrictionsChanged(baseline, next)) {
+        const result = validateUsageRestrictions(next, portraitScopeCards());
+        if (!result.ok) {
+          messageWarn(result.message);
+          return;
+        }
+        if (result.equivalentToUnrestricted) {
+          messageWarn(t('当前配置等同于不限制'));
+        }
+      }
     }
-    const next = nextPortraitRestrictions();
-    const result = validateUsageRestrictions(next, portraitScopeCards());
-    if (!result.ok) {
-      messageWarn(result.message);
-      return;
-    }
-    const baseline = JSON.parse(usageRestrictionBaseline.value || '{}') as UsageRestrictions;
-    if (!usageRestrictionsChanged(baseline, next)) {
-      doSubmit();
-      return;
-    }
-    if (result.equivalentToUnrestricted) {
-      messageWarn(t('当前配置等同于不限制'));
-    }
-    const names = affectedRestrictionScopeNames(baseline, next, portraitScopeCards());
-    const quoted = names.map(name => `「${name}」`).join('');
-    InfoBox({
-      type: 'warning',
-      title: t('提交确认'),
-      subTitle: t('本次变更将影响{names}下用户使用本工具的方式，是否提交？', {
-        names: quoted,
-      }),
-      confirmText: t('提交'),
-      cancelText: t('取消'),
-      onConfirm() {
-        doSubmit();
-      },
-    });
+    doSubmit();
   };
 
   const handleCancel = () => {
@@ -726,7 +707,7 @@
         && !sceneParamConfigRef.value.validate()) {
         return;
       }
-      submitWithPortraitConfirm();
+      submitWithUsageValidation();
       return;
     }
 
@@ -735,7 +716,7 @@
       return;
     }
     syncStep1Config();
-    submitWithPortraitConfirm();
+    submitWithUsageValidation();
   };
 
   const isApiDoneDeBug = ref(false);

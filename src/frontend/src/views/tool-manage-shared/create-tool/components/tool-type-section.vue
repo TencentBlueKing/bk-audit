@@ -22,40 +22,34 @@
         label-width="160"
         property="tool_type"
         required>
-        <div class="tool-type-options">
-          <bk-radio-group v-model="formData.tool_type">
-            <template
-              v-for="(item, index) in toolTypeList"
-              :key="index">
-              <span
-                v-bk-tooltips="{
-                  disabled: toolTypeTipDisabled(item),
-                  content: toolTypeTip(item),
-                }"
-                class="tool-type-radio">
-                <bk-radio
-                  :disabled="isToolTypeDisabled(item.id)"
-                  :label="item.id">
-                  <div style="display: flex; align-items: center; line-height: 16px;">
-                    <img
-                      v-if="item.id === 'smart_page'"
-                      alt="smart_page"
-                      class="tool-type-icon-img"
-                      :src="userProfileIcon">
-                    <audit-icon
-                      v-else
-                      style=" margin-right: 5px;font-size: 16px;"
-                      svg
-                      :type="iconMap[item.id as keyof typeof iconMap]" />
-                    <span :style="toolTypeTip(item) ? { 'border-bottom': '1px dashed #979ba5' } : {}">
-                      {{ item.name }}
-                    </span>
-                  </div>
-                </bk-radio>
-              </span>
-            </template>
-          </bk-radio-group>
-        </div>
+        <bk-radio-group v-model="formData.tool_type">
+          <template
+            v-for="(item, index) in toolTypeList"
+            :key="index">
+            <bk-radio
+              :disabled="isEditMode"
+              :label="item.id">
+              <div style="display: flex; align-items: center; line-height: 16px;">
+                <img
+                  v-if="item.id === 'smart_page'"
+                  alt="smart_page"
+                  class="tool-type-icon-img"
+                  :src="userProfileIcon">
+                <audit-icon
+                  v-else
+                  style=" margin-right: 5px;font-size: 16px;"
+                  svg
+                  :type="iconMap[item.id as keyof typeof iconMap]" />
+                <span
+                  v-bk-tooltips="{
+                    disabled: !item.tips,
+                    content: item.tips || '',
+                  }"
+                  :style="item.tips ? { 'border-bottom': '1px dashed #979ba5' } : {}">{{ item.name }}</span>
+              </div>
+            </bk-radio>
+          </template>
+        </bk-radio-group>
       </bk-form-item>
 
       <!-- 数据查询 -->
@@ -222,18 +216,6 @@
     }
     return list;
   });
-
-  const isToolTypeDisabled = (toolType: string) => {
-    if (isPortraitTool.value) return toolType !== 'smart_page';
-    return props.isEditMode;
-  };
-
-  const toolTypeTip = (item: { id: string; tips?: string }) => {
-    if (isPortraitTool.value && item.id !== 'smart_page') return t('工具类型不可编辑');
-    return item.tips || '';
-  };
-
-  const toolTypeTipDisabled = (item: { id: string; tips?: string }) => !toolTypeTip(item);
 
   const iconMap = {
     data_search: 'sqlxiao',
@@ -520,28 +502,12 @@
 </script>
 
 <style lang="postcss" scoped>
-  .tool-type-options :deep(.bk-radio-group) {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: 24px;
-  }
-
-  .tool-type-radio {
-    display: inline-flex;
-  }
-
   .tool-type-icon-img {
     flex-shrink: 0;
     width: 16px;
     height: 16px;
     margin-right: 5px;
     border-radius: 2px;
-  }
-
-  .tool-type-radio:deep(.is-disabled),
-  .tool-type-radio:deep(.bk-radio.is-disabled) {
-    pointer-events: none;
   }
 
   .chart-cascade {

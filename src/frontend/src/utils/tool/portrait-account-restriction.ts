@@ -149,38 +149,6 @@ export const validateUsageRestrictions = (
   return { ok: true, message: '', equivalentToUnrestricted };
 };
 
-export const affectedRestrictionScopeNames = (
-  before: UsageRestrictions | undefined,
-  after: UsageRestrictions | undefined,
-  cards: UsageScopeCard[],
-) => {
-  const previous = canonicalUsageRestrictions(before);
-  const next = canonicalUsageRestrictions(after);
-  const names: string[] = [];
-  cards.forEach((card) => {
-    const bucketName = card.type === 'scene' ? 'scenes' : 'systems';
-    const id = String(card.id);
-    const left = previous[bucketName][id] || [];
-    const right = next[bucketName][id] || [];
-    if (JSON.stringify(left) !== JSON.stringify(right)) {
-      names.push(card.name);
-    }
-  });
-  // 可见范围里已经拿掉的空间，变更也要出现在确认文案里
-  const known = new Set(cards.map(card => `${card.type}:${card.id}`));
-  (['scenes', 'systems'] as const).forEach((bucketName) => {
-    const ids = new Set([...Object.keys(previous[bucketName]), ...Object.keys(next[bucketName])]);
-    ids.forEach((id) => {
-      const type = bucketName === 'scenes' ? 'scene' : 'system';
-      if (known.has(`${type}:${id}`)) return;
-      if (JSON.stringify(previous[bucketName][id] || []) !== JSON.stringify(next[bucketName][id] || [])) {
-        names.push(id);
-      }
-    });
-  });
-  return [...new Set(names)];
-};
-
 export const pruneUsageRestrictions = (
   restrictions: UsageRestrictions | undefined,
   sceneIds: number[],
