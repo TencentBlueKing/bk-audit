@@ -1143,7 +1143,6 @@ class ExecuteTool(ToolBase):
         2. 用户可访问范围内存在未配置限制的场景/系统：跳过（全部可用）。
         3. 用户可访问范围内所有场景/系统都配置了限制：
            - 非空列表：实际使用的账号类型必须 ⊆ 允许集合，越界则抛权限异常。
-           - 空列表 []：允许集合为空，使用任何账号类型都会被拒绝（全部禁止）。
         """
         from core.exceptions import PermissionException
         from services.web.common.default_value_validator import DefaultValueValidator
@@ -1173,18 +1172,20 @@ class ExecuteTool(ToolBase):
 
         for scene_id in accessible_scenes:
             limit = scenes_limits.get(str(scene_id), {})
-            if "account_type" in limit:
+            account_type = limit.get("account_type")
+            if account_type is not None:
                 # 配置了限制，用限制值
-                allowed_account_types.update(limit["account_type"])
+                allowed_account_types.update(account_type)
             else:
                 # 未配置限制，该场景全部可用
                 has_unlimited_scope = True
 
         for system_id in accessible_systems:
             limit = systems_limits.get(system_id, {})
-            if "account_type" in limit:
+            account_type = limit.get("account_type")
+            if account_type is not None:
                 # 配置了限制，用限制值
-                allowed_account_types.update(limit["account_type"])
+                allowed_account_types.update(account_type)
             else:
                 # 未配置限制，该系统全部可用
                 has_unlimited_scope = True
@@ -1680,7 +1681,6 @@ class GetToolDetail(ToolBase):
         语义：
             - 未配置任何限制 → 全部可用（返回完整列表）
             - 配置 account_type 为非空列表 → 仅返回列表内类型
-            - 配置 account_type 为空列表 [] → 全部禁止（返回空列表）
         """
         from services.web.tool.constants import PROFILE_ACCOUNT_TYPES
 
@@ -1701,14 +1701,16 @@ class GetToolDetail(ToolBase):
 
         if scene_id:
             scene_limit = scenes_limits.get(str(scene_id), {})
-            if "account_type" in scene_limit:
+            account_type = scene_limit.get("account_type")
+            if account_type is not None:
                 has_limit = True
-                allowed_account_types.update(scene_limit["account_type"])
+                allowed_account_types.update(account_type)
         elif system_id:
             system_limit = systems_limits.get(system_id, {})
-            if "account_type" in system_limit:
+            account_type = system_limit.get("account_type")
+            if account_type is not None:
                 has_limit = True
-                allowed_account_types.update(system_limit["account_type"])
+                allowed_account_types.update(account_type)
 
         # 未配置任何限制则返回全部可用
         if not has_limit:
