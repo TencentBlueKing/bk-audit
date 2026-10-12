@@ -34,9 +34,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from rest_framework import serializers
 
 from core.sql.constants import FieldType
-from core.utils.time import parse_datetime
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
 from services.web.query.utils.search_config import QueryConditionOperator
+from services.web.query.utils.time_range import parse_log_time
 
 NO_VALUE_OPERATORS = (
     QueryConditionOperator.ISNULL.value,
@@ -111,7 +111,7 @@ class SearchCondition(BaseModel):
         if not (ISO8601_TZ_PATTERN.match(v) or NAIVE_DATETIME_PATTERN.match(v)):
             raise ValueError("time must be ISO8601 with timezone or 'YYYY-MM-DD HH:mm:ss'")
         try:
-            parse_datetime(v)
+            parse_log_time(v)
         except Exception as err:
             raise ValueError("invalid datetime value") from err
         return v
@@ -120,7 +120,7 @@ class SearchCondition(BaseModel):
     def validate_time_range(self):
         """统一校验检索时间顺序，调用方无需在服务层重复比较。"""
 
-        if parse_datetime(self.start_time) > parse_datetime(self.end_time):
+        if parse_log_time(self.start_time).timestamp() > parse_log_time(self.end_time).timestamp():
             raise ValueError("start_time must not exceed end_time")
         return self
 

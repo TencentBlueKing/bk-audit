@@ -1,190 +1,50 @@
 # 日志分析报告接入
 
-日志分析报告是从一条成功 `LOG_SEARCH` 消息派生的流式 `AI_ANALYSIS` Attachment。MySQL 保存
-状态、执行快照、事件归档和最终 Markdown；Redis Stream 只承载实时增量；Celery 使用专属
-日志分析任务进入共享 `ai_default` workload，由公共 Agent Client 按 `AUDIT_LOG_ANALYSIS` 实施全局限流。
+AI_ANALYSIS是从成功LOG_SEARCH派生的流式附件。平台负责来源归属、快照、任务和状态；专属Handler/Task负责日志分析业务。公共设计见[模块架构](architecture.md)，前端接入见[报告联调](frontend_log_analysis.md)。
 
-## 组件架构
+## 1. 业务调用链
 
 ```mermaid
 flowchart LR
-    FE[前端] --> API[Attachment API]
-    API --> SVC[AttachmentService]
-    SVC --> HANDLER[AIAnalysisHandler]
-    SVC --> DB[(MySQL)]
-    SVC -->|transaction.on_commit| MQ[(RabbitMQ)]
-    MQ --> WORKER[ai-default gevent Worker]
-    WORKER --> TASK[execute_log_analysis]
-    TASK --> AGENT[日志分析 Agent]
-    AGENT -->|AG-UI JSON events| RELAY[ChatCompletion + on_event]
-    RELAY --> RUNTIME[UIStreamRuntime]
-    RELAY --> EXTRACTOR[LogAnalysisArtifactExtractor]
-    RUNTIME --> REDIS[(Redis Stream)]
-    RUNTIME --> DB
-    REDIS --> SSE[Attachment SSE]
-    SSE --> FE
-    EXTRACTOR -->|完整 assistant Markdown| TASK
-    TASK --> DB
-    AGENT --> TOOLS[三个用户态日志工具]
-    TOOLS --> DORIS[(Doris)]
+    Source[成功 LOG_SEARCH] --> Handler[AIAnalysisHandler<br/>指令与来源快照]
+    Handler --> Platform[附件平台<br/>保存与提交后投递]
+    Platform --> Task[execute_log_analysis<br/>ai_default]
+    Task --> Agent[bp-ai-log-analyse]
+    Agent --> MCP[字段探索 / 明细 / 聚合]
+    MCP --> Query[受控查询服务 → BKBase / Doris]
+    Agent --> Task
+    Task --> Result[平台归档过程并保存 Markdown]
 ```
 
-Handler 负责来源和快照协议，平台负责创建、投递、task fencing、重试和终态收敛，业务 Task 只
-构造 Agent 请求、透传事件并返回最终 Markdown。Agent 查询日志时使用
-[`query/ai_assistant/README.md`](../../query/ai_assistant/README.md) 中的三个受控工具。
+任务复用公共Agent Client，以实际用户执行；查询工具每次独立鉴权。分析Agent工具集为audit-log-analysis，统计Agent另用仅含字段探索和聚合的audit-log-statistics；工具路径、配置及能力说明见[查询工具接入](../../query/ai_assistant/README.md)。
 
-## 创建与快照
+## 2. 指令与快照
 
-创建入口：
+DEFAULT模式在创建时读取默认指令，CUSTOM模式使用用户指令。有效指令、来源检索条件、轻量查询摘要和用户语言/时区固化到Context；不把日志预览、SQL或结果列作为Agent输入。
 
-```http
-POST /api/v1/ai_assistant/messages/{message_uid}/attachments/
-Content-Type: application/json
+来源必须是当前用户可见的成功LOG_SEARCH，并通过输入、上下文和摘要一致性检查。分析使用AgentSearchCondition子集，超出工具条件预算的来源应调整后再创建。默认配置变化不影响已有附件或原样重试；已有附件依赖创建时快照，不因后续编辑来源消息而改写分析范围。
 
-{
-  "attachment_type": "AI_ANALYSIS",
-  "input_data": {
-    "analysis_mode": "CUSTOM",
-    "instruction": "按操作人汇总异常行为"
-  }
-}
-```
+## 3. 过程与产物
 
-`DEFAULT` 模式不接收 `instruction`，而是在创建时读取全局默认 Prompt；`CUSTOM` 模式必须提供
-非空指令。两种模式都会把最终有效指令固化到内部 Context，之后修改全局 Prompt 不影响历史
-Attachment 或手动重试。
+Task将Agent事件交给UIStreamRuntime归档与透传，LogAnalysisArtifactExtractor提取闭合assistant消息的完整正文。流关闭后检查正文非空及容量，再返回 `output_data.markdown`；公共Task基类提交终态和尾部过程。
 
-Handler 只接受当前用户可见、状态为 `SUCCESS` 的 `LOG_SEARCH` 来源，并校验输入条件、来源
-Context 和查询摘要属于同一次检索。Context 只保存：
+正文按 messageId 收集并在 TEXT_MESSAGE_END 后成为完整候选，不把工具响应或多段中间文字拼成报告。分析提取器保留最后已闭合候选，后续未闭合候选不会被当作完整正文；AI统计采用更严格的末条候选规则，且必须有合法图表标签。两者共用事件提取组件，但不能互换产物判定规则。
 
-现有 `LOG_SEARCH` 协议继续支持完整日志检索能力；日志分析为控制 Agent 重放成本，只接受其中
-满足 `AgentSearchCondition` 的条件子集。来源检索虽然成功但超出条件数量、字节预算或值类型约束
-时，创建接口会返回“当前日志检索条件暂不支持智能分析”，提示用户调整条件，不会把它归类为
-来源消息损坏。
+RUN_ERROR 会清空此前候选，避免把错误前的说明当作成功报告；后续形成新的完整报告仍可通过校验。网络异常、正文为空或超限按失败链路收敛。SSE收到文字结束或RUN_FINISHED仅表示过程事件，最终状态与产物仍以附件详情为准。
 
-- 有效指令、`search_condition` 和 `total/took_ms/executed_at` 查询摘要；
-- 当前用户名、时区、语言和内部使用的 namespace；
-- 不保存日志样例、结果列、SQL、消息/附件数据库 ID。
+MySQL保存状态、报告与历史过程，Redis只提供实时增量。前端可只轮询详情，也可读取快照后订阅SSE；流结束后读取详情确认终态。流恢复规则见[streaming](../streaming/README.md)。
 
-Worker 发给 Agent 的 `input` 进一步去掉 namespace，只包含指令、检索条件、轻量摘要以及用户的
-用户名/时区/语言。调用固定使用 `agent_code=bp-ai-log-analyse`、空 `chat_history` 和
-`execute_kwargs={"stream": true}`；Agent 的每次工具调用仍按该用户名实时鉴权。
+AI分析保存报告正文，不使用AI统计的图表标签提取。成功报告可完整替换Markdown，也可实时导出Markdown/PDF；编辑不修改来源快照，导出文件不在平台另存。
 
-## 流式时序与终态
+## 4. 稳定性
 
-```mermaid
-sequenceDiagram
-    participant FE as 前端
-    participant API as Attachment API
-    participant DB as MySQL
-    participant MQ as RabbitMQ
-    participant W as Celery Worker
-    participant A as 日志分析 Agent
-    participant R as Redis Stream
+- 任务进入共享ai_default队列；公共Agent Client按Agent Code实施Redis全局限流。队列并发不等于下游配额。
+- 业务超时需小于Celery hard limit。HTTP中断、事件解析或产物校验失败走公共失败链路，长期PROCESSING由巡检收敛。
+- late ack允许重投，旧任务终态由task_id fencing拒绝；不保证Agent调用只执行一次。
+- 人工重试沿用原快照和UID，清空旧产物与过程后建立新执行；SUCCESS和FAILED均可重新生成，处理中的附件不能重复重试。
 
-    FE->>API: 创建 AI_ANALYSIS
-    API->>DB: PROCESSING + input/context + task_id
-    API-->>FE: Attachment 详情
-    API->>MQ: on_commit 投递 execute_log_analysis
-    W->>DB: task_id fencing，建立 execution_id
-    W->>A: chat_completion(stream=true, on_event)
-    FE->>API: GET stream?execution_id=...
-    API->>R: XREAD 实时增量
-    loop AG-UI 过程事件
-        A-->>W: TOOL_CALL / TEXT / RUN_* event
-        W->>R: 追加事件
-        W->>DB: 归档 checkpoint
-        R-->>FE: SSE data frame
-    end
-    A-->>W: 关闭 HTTP 流
-    W->>W: 从完整 assistant 消息提取 Markdown
-    W->>DB: 同一终态事务刷尾部归档和 SUCCESS
-    W->>R: stream_end
-    R-->>FE: stream_end
-    FE->>API: 查询详情/快照
-    API-->>FE: Markdown + 持久化事件归档
-```
+错误、排队与执行耗时由平台观测。必要执行标识和上游错误正文可记应用日志；对外错误脱敏，指标禁止以用户、任务UID或正文作为高基数标签。详见[可观测性](observability.md)。
 
-`ChatCompletion` 带 `on_event` 时消费到上游关闭 HTTP 流，将每个 SSE `data` 反序列化为 JSON 对象并按顺序回调；
-该模式返回 `None`，不校验 Run 生命周期、不解释 `RUN_ERROR`、不累计完整事件，也不返回业务 `final_content`。
-无回调调用保留历史最终正文解析。回调按请求通过 ContextVar 隔离，不进入上游请求体。
-分行复用 Requests `iter_lines()`，约定每条 data 行为一个 JSON 对象；不支持任意多行 SSE data 拼接。
-两种传输形态均使用 Requests 默认读取块（当前 512 字节）；允许非 chunked 小事件等待后续数据
-填满缓冲或 EOF，不承诺逐事件立即交付。没有原始行长度硬上限；平台事件/归档容量与最终报告
-容量限制仍然保留，接入方应使用常规增量事件。
-日志分析任务在事件归档之后将同一事件交给专属提取器，只把最后一条收到
-`TEXT_MESSAGE_END` 的 assistant 正文作为最终 Markdown。正文非空且满足大小限制后才写入
-`output_data.markdown`。平台另行增加 `stream_reset` 和 `stream_end`，成功时实时事件顺序与
-MySQL 归档一致，Redis 过期不会丢失报告或历史快照。
+## 5. 验证入口
 
-前端接入顺序：
-
-1. 创建后轮询 `GET /api/v1/ai_assistant/attachments/{uid}/stream/snapshot/`。排队期间
-   `execution_id` 允许为空；待其非空后，使用持久化事件和最新游标建立
-   `GET .../stream/?execution_id=...` SSE。若轮询期间 Attachment 已进入终态，则直接读取详情，
-   不再建立实时流。
-2. 使用 `Last-Event-ID` 续传；连接关闭或收到 reset 后重新读取流快照和附件详情。
-3. 收到 `stream_end` 后关闭连接，以 MySQL 详情中的 `status/output_data/error_code` 为最终结果。
-4. SSE 300 秒无业务事件会主动关闭；heartbeat 和平台事件不刷新空闲窗口。
-
-## 失败、重试与重投
-
-- Agent `RUN_ERROR` 仅作为业务事件归档和透传；若后续没有形成完整报告，流关闭后由产物校验
-  将任务收敛为 `FAILED` 并追加 `stream_end`。HTTP 中断、非法 JSON 或非法最终内容同样由平台
-  失败链路收口。
-- 异步 Attachment 的手动重试允许 `SUCCESS` 或 `FAILED`：复用原对象和创建时快照，立即清空旧产物、
-  错误、过程归档和反馈，把状态改回 `PROCESSING`、生成新的 `task_id` 并投递任务；本期不保留产物版本，
-  新执行失败不恢复旧成功产物。响应不保证已经出现新 `execution_id`。Message 手动重试仍仅允许
-  `FAILED + ASYNC`，不得把附件的成功态重生语义扩展到 Message。
-- 新 Worker 开始执行后才建立新的 `execution_id` 和 Redis key，并向旧流写入 `stream_reset`；
-  旧 Worker 的终态回写由 task fencing 拒绝。前端重试后继续轮询 stream snapshot，拿到新
-  `execution_id` 后再订阅新流。
-- `acks_late=True`。Worker 硬退出时 RabbitMQ 可重投同一 task ID；平台允许重复执行，最终通过
-  MySQL `status + task_id` CAS 决定唯一终态。业务调用不是 exactly-once，Agent/工具应按此设计。
-- 用户 A 不能读取、重试、编辑、导出或订阅用户 B 的 Attachment；Worker Context 也不使用
-  全局可变用户状态。
-
-## 编辑、导出与生命周期
-
-成功报告允许完整替换 `output_data.markdown`，并更新 `content_updated_at`；编辑不修改来源检索
-快照。导出入口为 `GET /api/v1/ai_assistant/attachments/{uid}/export/?export_format=MARKDOWN|PDF`，
-文件按当前 Markdown 实时生成且不在平台留存。失败 Attachment 不能导出，重试成功后才恢复
-编辑与导出能力。
-
-## 超时与部署
-
-生产 Worker 在 `app_desc.yaml` 中由共享的 `ai-default` 进程部署：只监听 `ai_default` workload，
-gevent pool，`--prefetch-multiplier=1`，默认总并发 128、2 个副本。队列只表达执行特征，
-日志分析的下游配额由公共 Agent Client 按 `AUDIT_LOG_ANALYSIS` 在 Redis 中跨进程、跨 Pod 控制。
-
-| 配置 | 默认值 | 语义 |
-| --- | --- | --- |
-| `BKAPP_AI_AUDIT_LOG_ANALYSIS_RATE_LIMIT` | 空（关闭） | 日志分析 Agent 的 Redis 全局限流，例如 `5/m` |
-| `BKAPP_AI_AUDIT_LOG_ANALYSIS_RATE_LIMIT_MAX_WAIT_SECONDS` | `2` 秒 | 单次调用在 Worker 内的有界等待预算 |
-| `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_BUSINESS_TIMEOUT` | `1740` 秒 | 可捕获的 gevent 业务超时，按普通异常写 `FAILED + stream_end` |
-| `BKAPP_AI_ASSISTANT_LOG_ANALYSIS_TASK_TIMEOUT` | `1800` 秒 | Celery hard limit，仅作 Worker 最终保险 |
-| `BKAPP_AUDIT_AI_CONCURRENCY` | `128` | 共享 Worker 的 gevent 总并发数，非日志分析任务独占配额 |
-
-业务超时必须严格小于 hard limit，非法配置会在 Django 启动时失败。hard kill 可能来不及写业务
-终态，依赖 late ack 重投和长期 `PROCESSING` 巡检兜底。
-
-## 可观测与安全
-
-平台按 `business_type=AI_ANALYSIS` 自动记录执行状态、失败码、排队/执行耗时和流运行摘要；专属
-workload 还需监控 RabbitMQ ready/unacked、Worker 在线数和 Agent 限流饱和。详细边界见
-[`observability.md`](observability.md)。
-
-Metric、Event 和 Trace 禁止记录分析指令、用户名、日志样例、工具响应正文、AG-UI 事件正文或
-最终 Markdown，也不使用 task ID、execution ID 或对象 UID 作为 Metric 维度。应用日志可记录这些
-必要执行标识以串联排障；Agent 上游调用失败时在异常日志中保留错误正文，对外响应仍只返回
-稳定错误码和脱敏文案。Agent 及日志查询 Resource 保留默认请求/响应采集；
-`SafeQuerySyncResource` 额外记录实际提交的 SQL（包含检索条件）、查询响应和远端错误正文。
-该类诊断日志可能包含业务数据，部署侧必须按审计日志等级严格控制访问和保留。
-
-## 真实组件验证
-
-`tests/test_ai_assistant/special/test_log_analysis_e2e.py` 使用本地 fake HTTP AG-UI 服务，但不 mock
-Agent SDK；生产 Task 通过真实 RabbitMQ/gevent Worker 执行，事件进入真实 Redis Stream 和 MySQL
-测试库，并通过真实 Gunicorn HTTP/SSE 读取。生产分析 Task 的 Worker SIGKILL 重投、旧执行
-fencing、失败终止帧和跨用户 HTTP 流隔离也由同目录日志分析专项测试验证；其余平台专项测试
-继续覆盖通用 Redis/MySQL 故障与竞争边界。
+常规测试位于 `tests/test_ai_assistant/test_log_analysis*`。`special/test_log_analysis_e2e.py`通过真实RabbitMQ/gevent Worker、Redis、MySQL及HTTP/SSE验证执行和恢复，Agent上游使用本地模拟服务。部署验证需确认真实工具调用和独立SQL数据对照、最终正文与保存产物一致，以及前端恢复、编辑和下载。Agent效果与程序链路分别评估，不能只根据附件SUCCESS判定报告质量；具体E2E记录留在本地专题。

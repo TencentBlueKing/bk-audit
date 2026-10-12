@@ -77,6 +77,9 @@ DEFAULT_TIMEDELTA = 7
 DEFAULT_PAGE = 1
 DEFAULT_PAGE_SIZE = 10
 
+# XlsxWriter 已写入截断后的字符串，并以此返回码提示超出 Excel 单格长度。
+XLSX_STRING_TRUNCATED = -2
+
 # 单次检索最大条数
 SEARCH_MAX_LIMIT = 10000
 
