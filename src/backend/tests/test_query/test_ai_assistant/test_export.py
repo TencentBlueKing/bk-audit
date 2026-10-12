@@ -66,7 +66,7 @@ class TestPreviewExportService(AIAssistantTestCase):
         self.assertIn("zhangsan", second_row)
 
     def test_export_extension_column(self):
-        """拓展列按 full_key 取值导出；标题只显示完整字段路径（扩展字段英文两者拼接）"""
+        """拓展列按 full_key 取值导出；标题渲染为产品文案「拓展数据(extend_data)/子键」"""
         output = self.make_log_search_output(
             columns=[
                 ResultColumn(raw_name="username", display_name="操作人"),
@@ -81,7 +81,7 @@ class TestPreviewExportService(AIAssistantTestCase):
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
         titles = [cell.value for cell in sheet[1]]
-        self.assertIn("extend_data/ticket_id", titles)
+        self.assertIn("拓展数据(extend_data)/ticket_id", titles)
         # 子键名不与完整路径重复拼接
         self.assertNotIn("工单内容", titles)
         self.assertNotIn("工单内容(extend_data/ticket_id)", titles)
@@ -124,11 +124,11 @@ class TestPreviewExportService(AIAssistantTestCase):
 
         workbook = openpyxl.load_workbook(io.BytesIO(result.content))
         sheet = workbook.active
-        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）；平铺列标题只显示字段路径
+        # ① 子键并集列：ticket_id、operator、instance_id（保序去重）；平铺列标题渲染为容器产品文案
         titles = [cell.value for cell in sheet[1]]
-        self.assertIn("extend_data/ticket_id", titles)
-        self.assertIn("extend_data/operator", titles)
-        self.assertIn("extend_data/instance_id", titles)
+        self.assertIn("拓展数据(extend_data)/ticket_id", titles)
+        self.assertIn("拓展数据(extend_data)/operator", titles)
+        self.assertIn("拓展数据(extend_data)/instance_id", titles)
         # ② extend_data 单列已移除（单列标题形态「拓展数据(extend_data)」同样不应出现）
         self.assertNotIn("extend_data", titles)
         self.assertNotIn("拓展数据(extend_data)", titles)
@@ -556,8 +556,8 @@ class TestAIExportHeaderLayout(AIAssistantTestCase):
                 "资源类型(ID)(resource_type_id)",
                 "资源实例(ID)(instance_id)",
                 "操作结果(Code)(result_code)",
-                "extend_data/ticket_id",
-                "extend_data/operator",
+                "拓展数据(extend_data)/ticket_id",
+                "拓展数据(extend_data)/operator",
                 "操作（完整日志）(log)",
             ],
         )
