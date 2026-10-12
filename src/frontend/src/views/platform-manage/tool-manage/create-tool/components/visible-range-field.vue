@@ -951,6 +951,11 @@
     }
   }
 
+  .bk-form-item.is-error .visible-range-selector {
+    border-color: #ea3636;
+    transition: all .15s;
+  }
+
   .selected-tags-wrapper {
     display: flex;
     flex: 1;

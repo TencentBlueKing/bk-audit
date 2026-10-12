@@ -109,21 +109,26 @@
       <smart-action
         class="create-tools-page"
         :offset-target="getSmartActionOffsetTarget">
-        <audit-form :model="formData">
+        <audit-form
+          ref="visibleRangeFormRef"
+          form-type="vertical"
+          :model="formData"
+          :rules="visibleRangeRules">
           <card-part-vue
             :is-open="false"
             :show-icon="false"
             :title="t('可见范围')">
             <template #content>
               <!-- 选择可见范围 -->
-              <div class="visible-range-select-row">
-                <label class="select-label">{{ t('选择可见范围') }}</label>
-                <div class="select-control">
-                  <visible-range-field
-                    :form-data="formData"
-                    @update:form-data="handleVisibleRangeChange" />
-                </div>
-              </div>
+              <bk-form-item
+                class="visible-range-form-item"
+                :label="t('选择可见范围')"
+                property="visibility_type"
+                required>
+                <visible-range-field
+                  :form-data="formData"
+                  @update:form-data="handleVisibleRangeChange" />
+              </bk-form-item>
 
               <!-- 各场景/系统参数配置：未选可见范围、全部可见、全部场景、全部系统时不展示 -->
               <scene-param-config
@@ -219,6 +224,7 @@
     buildPlatformToolSubmitPayload,
     parseDefaultValueOverrides,
     reconcileSceneParamOverrides,
+    shouldSubmitVisibilityPayload,
   } from './submit-payload';
 
   import useMessage from '@/hooks/use-message';
@@ -261,6 +267,7 @@
   const isSkippingStepValidation = ref(false);
 
   const formRef = ref();
+  const visibleRangeFormRef = ref();
   const comRef = ref();
   const toolTypeSectionRef = ref();
   // eslint-disable-next-line func-call-spacing
@@ -379,6 +386,16 @@
           return value.every(item => reg.test(allTagMap.value[item] ? allTagMap.value[item] : item));
         },
         message: t('标签不能为纯数字'),
+        trigger: 'change',
+      },
+    ],
+  };
+
+  const visibleRangeRules = {
+    visibility_type: [
+      {
+        validator: () => shouldSubmitVisibilityPayload(formData.value),
+        message: t('可见范围不能为空'),
         trigger: 'change',
       },
     ],
@@ -566,6 +583,9 @@
     formData.value.scene_ids = val.scene_ids;
     formData.value.system_ids = val.system_ids;
     reconcileStep2ParamOverrides();
+    if (shouldSubmitVisibilityPayload(formData.value)) {
+      visibleRangeFormRef.value?.clearValidate('visibility_type');
+    }
   };
 
   // 参数覆盖配置变更
@@ -703,6 +723,11 @@
   const handleSubmit = async () => {
     // 步骤2：formRef/comRef 已卸载，校验覆盖参数后提交 formData
     if (currentStep.value === 2) {
+      try {
+        await visibleRangeFormRef.value?.validate('visibility_type');
+      } catch {
+        return;
+      }
       if (showParamOverrideConfig.value && sceneParamConfigRef.value
         && !sceneParamConfigRef.value.validate()) {
         return;
@@ -925,23 +950,8 @@
     }
   }
 
-  .visible-range-select-row {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 16px;
-
-    .select-label {
-      margin-bottom: 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
-      flex-shrink: 0;
-    }
-
-    .select-control {
-      width: 100%;
-      max-width: 660px;
-    }
+  .visible-range-form-item {
+    max-width: 660px;
   }
 
   /* 步骤2 操作按钮间距 */

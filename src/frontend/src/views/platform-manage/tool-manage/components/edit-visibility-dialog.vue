@@ -31,17 +31,22 @@
         v-if="isDetailReady"
         :key="dialogContentKey"
         class="edit-visibility-scroll">
-        <div class="edit-visibility-form">
-          <div class="form-item">
-            <label class="form-label">{{ t('可见范围') }}</label>
-            <div class="form-content">
-              <visible-range-field
-                :form-data="formData"
-                match-selector-width
-                popover-class="is-compact"
-                @update:form-data="handleVisibleRangeChange" />
-            </div>
-          </div>
+        <bk-form
+          ref="visibleRangeFormRef"
+          class="edit-visibility-form"
+          form-type="vertical"
+          :model="formData"
+          :rules="visibleRangeRules">
+          <bk-form-item
+            :label="t('可见范围')"
+            property="visibility_type"
+            required>
+            <visible-range-field
+              :form-data="formData"
+              match-selector-width
+              popover-class="is-compact"
+              @update:form-data="handleVisibleRangeChange" />
+          </bk-form-item>
 
           <scene-param-config
             v-if="showParamOverrideConfig"
@@ -54,7 +59,7 @@
             :tool-uid="props.target?.uid || ''"
             @update:param-overrides="handleParamOverridesChange"
             @update:usage-restrictions="handleUsageRestrictionsChange" />
-        </div>
+        </bk-form>
       </div>
     </bk-loading>
     <template #footer>
@@ -164,6 +169,7 @@
   const isShow = defineModel<boolean>('isShow', { default: false });
   // eslint-disable-next-line func-call-spacing
   const sceneParamConfigRef = ref<{ validate: () => boolean } | null>(null);
+  const visibleRangeFormRef = ref();
 
   const tagNameMap = computed(() => {
     const map: Record<string, string> = {};
@@ -207,6 +213,15 @@
   });
 
   const formData = reactive(createDefaultFormData());
+  const visibleRangeRules = {
+    visibility_type: [
+      {
+        validator: () => shouldSubmitVisibilityPayload(formData),
+        message: t('可见范围不能为空'),
+        trigger: 'change',
+      },
+    ],
+  };
   const toolConfigSnapshot = ref<Record<string, any> | null>(null);
   const usageRestrictionBaseline = ref<UsageRestrictions>({});
   const isDetailReady = ref(false);
@@ -330,6 +345,9 @@
     formData.scene_ids = val.scene_ids;
     formData.system_ids = val.system_ids;
     reconcileParamOverrides();
+    if (shouldSubmitVisibilityPayload(formData)) {
+      visibleRangeFormRef.value?.clearValidate('visibility_type');
+    }
   };
 
   const handleParamOverridesChange = (value: Record<string, SceneParamOverride>) => {
@@ -360,25 +378,22 @@
   /** 列表返回 tag_id，更新接口要求传 tag_name */
   const resolveTagNames = () => (props.target?.tags || []).map(tag => tagNameMap.value[tag] || tag);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!props.target?.uid || !isDetailReady.value) return;
+
+    try {
+      await visibleRangeFormRef.value?.validate('visibility_type');
+    } catch {
+      return;
+    }
 
     if (showParamOverrideConfig.value && sceneParamConfigRef.value
       && !sceneParamConfigRef.value.validate()) {
       return;
     }
 
-    const hasVisibilitySelection = shouldSubmitVisibilityPayload(formData);
-    const visibility = hasVisibilitySelection
-      ? buildVisibilityPayload(formData)
-      : {
-        visibility_type: 'all_visible' as const,
-        scene_ids: [],
-        system_ids: [],
-      };
-    const defaultValueOverrides = hasVisibilitySelection
-      ? buildDefaultValueOverrides(formData.scene_param_overrides)
-      : { scenes: {}, systems: {} };
+    const visibility = buildVisibilityPayload(formData);
+    const defaultValueOverrides = buildDefaultValueOverrides(formData.scene_param_overrides);
     const originalOverrides = toolConfigSnapshot.value?.default_value_overrides || { scenes: {}, systems: {} };
     const overridesChanged = !_.isEqual(defaultValueOverrides, originalOverrides);
 
@@ -546,25 +561,10 @@
 
 <style lang="postcss" scoped>
   .edit-visibility-form {
-    padding: 16px 24px 24px;
+    padding: 16px 24px;
 
-    .form-item {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .form-label {
-      margin-bottom: 8px;
-      font-size: 14px;
-      line-height: 22px;
-      color: #63656e;
-      text-align: left;
-    }
-
-    .form-content {
-      width: 100%;
-      min-width: 0;
+    :deep(.bk-form-item) {
+      margin-bottom: 0;
     }
   }
 

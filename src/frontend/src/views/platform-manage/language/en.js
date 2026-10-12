@@ -58,6 +58,7 @@ export default {
     分组名称: 'Group Name',
     请输入: 'Please enter',
     分组名称不能为空: 'Group name cannot be empty',
+    可见范围不能为空: 'Visible range cannot be empty',
     // Toggle Status Confirm Dialog
     '确认启用该报表？': 'Confirm to enable this report?',
     '确认停用该报表？': 'Confirm to disable this report?',
