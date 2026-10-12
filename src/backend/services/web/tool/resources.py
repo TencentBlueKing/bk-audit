@@ -1140,8 +1140,8 @@ class ExecuteTool(ToolBase):
 
         规则：
         1. 工具未配置 usage_limits：跳过（全部可用）。
-        2. 用户可访问范围内均未配置 account_type：跳过（全部可用）。
-        3. 用户可访问范围内配置了 account_type（含空列表）：
+        2. 用户可访问范围内存在未配置限制的场景/系统：跳过（全部可用）。
+        3. 用户可访问范围内所有场景/系统都配置了限制：
            - 非空列表：实际使用的账号类型必须 ⊆ 允许集合，越界则抛权限异常。
            - 空列表 []：允许集合为空，使用任何账号类型都会被拒绝（全部禁止）。
         """
@@ -1164,24 +1164,33 @@ class ExecuteTool(ToolBase):
             user_allowed_system_ids=set(user_allowed_system_ids),
         )
 
-        # 2. 收集可访问范围内允许的账号类型（并集），并标记是否配置过限制
+        # 2. 收集可访问范围内允许的账号类型（并集）
+        # 配置了限制的场景用限制值，未配置限制的场景用全集，最后取并集
         scenes_limits = usage_limits.get("scenes", {})
         systems_limits = usage_limits.get("systems", {})
         allowed_account_types = set()
-        has_limit = False
+        has_unlimited_scope = False  # 是否存在未配置限制的场景/系统
+
         for scene_id in accessible_scenes:
             limit = scenes_limits.get(str(scene_id), {})
             if "account_type" in limit:
-                has_limit = True
+                # 配置了限制，用限制值
                 allowed_account_types.update(limit["account_type"])
+            else:
+                # 未配置限制，该场景全部可用
+                has_unlimited_scope = True
+
         for system_id in accessible_systems:
             limit = systems_limits.get(system_id, {})
             if "account_type" in limit:
-                has_limit = True
+                # 配置了限制，用限制值
                 allowed_account_types.update(limit["account_type"])
+            else:
+                # 未配置限制，该系统全部可用
+                has_unlimited_scope = True
 
-        # 3. 可访问范围内均未配置限制：全部可用，跳过
-        if not has_limit:
+        # 3. 存在未配置限制的场景/系统，全部可用，跳过校验
+        if has_unlimited_scope:
             return
 
         # 4. 识别本次执行实际使用的账号类型（value 即 SQL 模板参数 key）
