@@ -14,7 +14,6 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-import dayjs from 'dayjs';
 import DOMPurify from 'dompurify';
 
 export type ChartSanitizeErrorCode = 'INVALID_STRUCTURE' | 'TOO_LARGE';
@@ -159,25 +158,25 @@ const toFiniteNumber = (raw: unknown): number => {
   return Number.NaN;
 };
 
-/** 只认 13 位毫秒与 10 位秒时间戳；年份、序号这类数字不是时间，返回 null 交回原样输出 */
-const parseEpoch = (num: number): dayjs.Dayjs | null => {
-  const digits = String(Math.trunc(Math.abs(num))).length;
-  if (digits === 13) return dayjs(num);
-  if (digits === 10) return dayjs(num * 1000);
-  return null;
+/**
+ * 只改带 T 的 ISO 展示。年月日时分秒按原文字保留，去掉 T 和时区。
+ * `2026-09-26`、`09-26`、时间戳都不改。
+ */
+const ISO_T_DISPLAY = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:Z|[+-]\d{2}:?\d{2})?$/;
+
+const unwrapIsoTDisplay = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') return null;
+  const matched = ISO_T_DISPLAY.exec(raw.trim());
+  if (!matched) return null;
+  return `${matched[1]} ${matched[2]}`;
 };
 
-const parseDatetimeValue = (raw: unknown): dayjs.Dayjs | null => {
-  if (typeof raw === 'number') {
-    return Number.isFinite(raw) ? parseEpoch(raw) : null;
-  }
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (/^-?\d+$/.test(trimmed)) {
-    const num = Number(trimmed);
-    return Number.isFinite(num) ? parseEpoch(num) : null;
-  }
-  return dayjs(trimmed);
+const displayCategoryValue = (raw: unknown) => unwrapIsoTDisplay(raw) ?? formatDisplayValue(raw);
+
+const axisTooltipRaw = (param: Record<string, any>) => {
+  if (param.axisValue != null && param.axisValue !== '') return param.axisValue;
+  if (param.axisValueLabel != null && param.axisValueLabel !== '') return param.axisValueLabel;
+  return '';
 };
 
 const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> }) => {
@@ -185,14 +184,7 @@ const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> })
   const options = isRecord(spec.options) ? spec.options : {};
 
   if (spec.__fn === 'datetime') {
-    const format = typeof options.format === 'string' && options.format.trim()
-      ? options.format
-      : 'MM-DD HH:mm';
-    return (params: unknown) => {
-      const raw = pickFormatterRaw(params);
-      const parsed = parseDatetimeValue(raw);
-      return parsed && parsed.isValid() ? parsed.format(format) : formatDisplayValue(raw);
-    };
+    return (params: unknown) => displayCategoryValue(pickFormatterRaw(params));
   }
 
   if (spec.__fn === 'percent') {
@@ -311,6 +303,73 @@ const asAxisList = (axis: unknown): Record<string, any>[] => {
   return isRecord(axis) ? [axis] : [];
 };
 
+/** 类目原文含 T 时，轴刻度只换展示，不改 data */
+const ensureIsoCategoryDisplay = (axis: unknown) => {
+  asAxisList(axis).forEach((host) => {
+    const categories = Array.isArray(host.data) ? host.data : [];
+    if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
+    if (!isRecord(host.axisLabel)) host.axisLabel = {};
+    if (host.axisLabel.formatter == null) {
+      host.axisLabel.formatter = (params: unknown) => displayCategoryValue(pickFormatterRaw(params));
+    }
+  });
+};
+
+const asZoomList = (dataZoom: unknown): Record<string, any>[] => {
+  if (Array.isArray(dataZoom)) return dataZoom.filter(isRecord);
+  return isRecord(dataZoom) ? [dataZoom] : [];
+};
+
+const zoomAxisIndex = (zoom: Record<string, any>, horizontal: boolean) => {
+  const raw = horizontal ? zoom.xAxisIndex : zoom.yAxisIndex;
+  if (Array.isArray(raw)) return typeof raw[0] === 'number' ? raw[0] : 0;
+  return typeof raw === 'number' && raw >= 0 ? raw : 0;
+};
+
+/** 左端标签在滑块外侧右对齐，右端标签向右延伸。边距要盖住字宽和手柄空隙 */
+const dataZoomLabelInset = (text: string) => Math.max(48, Math.ceil(text.length * 7 + 24));
+
+const bumpEdge = (current: unknown, inset: number) => (
+  typeof current === 'number' && Number.isFinite(current) ? Math.max(current, inset) : inset
+);
+
+/**
+ * dataZoom 手柄标签不走 axisLabel.formatter，类目原文会原样画出画布。
+ * 默认 width 是占位值，会把滑块拉成坐标区全宽，left/right 因此不生效，所以时间轴要清掉 width。
+ */
+const attachDataZoomLabels = (option: Record<string, any>) => {
+  asZoomList(option.dataZoom).forEach((zoom) => {
+    if (zoom.type === 'inside') return;
+    const horizontal = zoom.orient !== 'vertical';
+    const axis = horizontal ? option.xAxis : option.yAxis;
+    const index = zoomAxisIndex(zoom, horizontal);
+    const host = asAxisList(axis)[index];
+    const categories = Array.isArray(host?.data) ? host.data : [];
+    if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
+
+    zoom.labelFormatter = (_value: unknown, valueStr: unknown) => {
+      const raw = valueStr != null && valueStr !== '' ? valueStr : _value;
+      return displayCategoryValue(raw);
+    };
+
+    const longest = categories.reduce((max: string, item: unknown) => {
+      const text = displayCategoryValue(item);
+      return text.length > max.length ? text : max;
+    }, '');
+    const inset = dataZoomLabelInset(longest);
+
+    if (horizontal) {
+      zoom.left = bumpEdge(zoom.left, inset);
+      zoom.right = bumpEdge(zoom.right, inset);
+      if (zoom.width == null || zoom.width === 'ph') zoom.width = null;
+      return;
+    }
+    zoom.top = bumpEdge(zoom.top, inset);
+    zoom.bottom = bumpEdge(zoom.bottom, inset);
+    if (zoom.height == null || zoom.height === 'ph') zoom.height = null;
+  });
+};
+
 const resolveAllowedFormatters = (option: Record<string, any>) => {
   const resolveHost = (candidate: unknown) => {
     if (!isRecord(candidate)) return;
@@ -380,7 +439,7 @@ export const createTooltipFormatter = (trigger: unknown, templateRaw: unknown) =
     const list = Array.isArray(params) ? params.filter(isRecord) : isRecord(params) ? [params] : [];
     if (!list.length) return '';
     if (resolvedTrigger === 'axis') {
-      const title = escapeHtml(String(list[0].axisValueLabel ?? list[0].axisValue ?? ''));
+      const title = escapeHtml(displayCategoryValue(axisTooltipRaw(list[0])));
       const lines = list.map(item => renderTooltipTemplate(template, item));
       return [title, ...lines].join('<br/>');
     }
@@ -476,6 +535,9 @@ export const sanitizeChartOption = (
 
   resolveAllowedFormatters(option);
   stripRemainingFnSpecs(option);
+  ensureIsoCategoryDisplay(option.xAxis);
+  ensureIsoCategoryDisplay(option.yAxis);
   attachTooltipFormatters(option);
+  attachDataZoomLabels(option);
   return { option, errorCode: null };
 };
