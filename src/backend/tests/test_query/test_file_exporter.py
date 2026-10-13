@@ -1,14 +1,77 @@
 # -*- coding: utf-8 -*-
-"""FileExporter 表头渲染单测：分类合并行文案 + 单行标题拼接。"""
+"""共享 XLSX 写入器：表头渲染与超长字段的列完整性。"""
 
+import io
+
+import openpyxl
+import pytest
+
+from services.web.query.ai_assistant.services.export import PreviewXLSXExporter
 from services.web.query.constants import FieldCategoryEnum, LogExportField
 from services.web.query.export.file_exporter import EXTENSION_GROUP_LABEL, XLSXExporter
+from services.web.query.export.model import ExportConfig
+from services.web.query.models import LogExportTask
 
 
 def _field(raw_name: str, *keys: str, display_name: str = "") -> LogExportField:
     """构造导出字段；full_key 由 cached_property 拼接，测试不直接赋。"""
 
     return LogExportField(raw_name=raw_name, keys=list(keys), display_name=display_name)
+
+
+@pytest.mark.parametrize("exporter_class", [XLSXExporter, PreviewXLSXExporter])
+@pytest.mark.parametrize("source", [None, "ai_assistant"])
+@pytest.mark.parametrize("long_columns", [(0,), (1,), (2,), (3,), (0, 1, 2)])
+def test_long_cells_preserve_all_columns_and_following_rows(exporter_class, source, long_columns):
+    """预览及全量导出截断超长单格后，仍保留本行其余列和后续行。"""
+
+    field_names = ["custom_a", "custom_b", "custom_c", "custom_d"]
+    config_data = {
+        "field_scope": "specified",
+        "fields": [{"raw_name": name, "display_name": name, "keys": []} for name in field_names],
+    }
+    if source:
+        config_data["source"] = source
+    exporter = exporter_class(ExportConfig(task=LogExportTask(export_config=config_data)))
+    first_row = ["前列", "中列", "后列", "末列"]
+    for column in long_columns:
+        first_row[column] = "长" * 32768
+    boundary_row = ["界" * 32767, "边界后列", "后续列", "正常末列"]
+    try:
+        exporter.write([dict(zip(field_names, row)) for row in (first_row, boundary_row)])
+        workbook = openpyxl.load_workbook(io.BytesIO(exporter.save().read()), read_only=True)
+        try:
+            data_start = 2 if source else 3
+            rows = list(workbook.active.iter_rows(min_row=data_start, values_only=True))
+            assert rows == [tuple(value[:32767] for value in first_row), tuple(boundary_row)]
+        finally:
+            workbook.close()
+    finally:
+        exporter.close()
+
+
+@pytest.mark.parametrize("exporter_class", [XLSXExporter, PreviewXLSXExporter])
+def test_invalid_cell_position_fails_instead_of_saving_incomplete_row(exporter_class):
+    """真实 Excel 行越界错误不得当作已截断单格而继续生成成功文件。"""
+
+    config = ExportConfig(
+        task=LogExportTask(
+            export_config={
+                "source": "ai_assistant",
+                "field_scope": "specified",
+                "fields": [{"raw_name": "custom_a", "display_name": "custom_a", "keys": []}],
+            }
+        )
+    )
+    exporter = exporter_class(config)
+    exporter.row = 1048576
+    try:
+        with pytest.raises(ValueError, match=r"row=1048576, column=0, code=-1"):
+            exporter.write([{"custom_a": "越界值"}])
+        assert exporter.row == 1048576
+    finally:
+        exporter.workbook.close()
+        exporter.close()
 
 
 class TestBuildFieldTitle:
