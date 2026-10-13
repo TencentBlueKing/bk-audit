@@ -4,6 +4,8 @@
 直接调用迁移函数而遗漏字段状态、索引变更或 MySQL 兼容性问题。
 """
 
+from importlib import import_module
+
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
@@ -277,3 +279,66 @@ class ConversationScopeEmptyMigrationTest(TransactionTestCase):
 
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+class DefaultLogAnalysisPromptMigrationTest(TransactionTestCase):
+    """验证 0006 使用历史 Meta 模型初始化非空分析标准。"""
+
+    migrate_from = ("ai_assistant", "0005_user_column_preference")
+    migrate_to = ("ai_assistant", "0006_init_log_analysis_prompt")
+    meta_target = ("meta", "0025_alter_enummappingcollectionrelation_related_type")
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(self._migrate_to_leaf)
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from, self.meta_target]).apps
+        global_meta_config = old_apps.get_model("meta", "GlobalMetaConfig")
+        global_meta_config.objects.filter(config_key="ai_assistant_log_analysis_default_prompt").delete()
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.apps = executor.loader.project_state([self.migrate_to, self.meta_target]).apps
+
+    @staticmethod
+    def _migrate_to_leaf():
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_default_prompt_is_initialized_with_audit_analysis_boundaries(self):
+        global_meta_config = self.apps.get_model("meta", "GlobalMetaConfig")
+        prompt = global_meta_config.objects.get(
+            config_level="global",
+            instance_key="global",
+            config_key="ai_assistant_log_analysis_default_prompt",
+        ).config_value
+
+        self.assertIn("风险与异常发现", prompt)
+        self.assertIn("区分事实、推断和建议", prompt)
+        self.assertIn("不得伪造", prompt)
+
+    def test_forward_function_does_not_override_existing_prompt(self):
+        """重复执行初始化逻辑时保留运营已调整的默认分析标准。"""
+
+        migration = import_module("services.web.ai_assistant.migrations.0006_init_log_analysis_prompt")
+        global_meta_config = self.apps.get_model("meta", "GlobalMetaConfig")
+        config = global_meta_config.objects.get(
+            config_level="global",
+            instance_key="global",
+            config_key="ai_assistant_log_analysis_default_prompt",
+        )
+        config.config_value = "运营自定义分析标准"
+        config.save(update_fields=["config_value"])
+
+        migration.init_log_analysis_prompt(self.apps, None)
+
+        config.refresh_from_db()
+        self.assertEqual(config.config_value, "运营自定义分析标准")
+
+    def test_reverse_migration_is_noop_to_preserve_preexisting_prompt(self):
+        """无法区分迁移创建与运营预置记录时，回滚不得删除同 key 配置。"""
+
+        migration = import_module("services.web.ai_assistant.migrations.0006_init_log_analysis_prompt")
+
+        self.assertIs(migration.Migration.operations[0].reverse_code, migration.migrations.RunPython.noop)
