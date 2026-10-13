@@ -17,9 +17,9 @@ to the current version of the project delivered to anyone in the future.
 
 SQL 生成安全回归（共享 builder 行为固化）
 
-背景（2026-08-14 实证）：AI 输出的 filters 直接进 DorisQuerySQLBuilder（共享链路，
-与现有检索接口同路径）。pypika 的 format_quotes 对字符串值做单引号转义（' → ''），
-SQL 注入不可行；like 操作符自动包裹 %（NL prompt「like 只传子串不带 %」的依据）。
+AI 输出的 filters 直接进入 DorisQuerySQLBuilder（共享链路，与现有检索接口同路径）。
+PyPika 负责把单引号写成两个单引号，builder 额外处理 Doris 默认启用的反斜杠转义；
+like 操作符自动包裹 %（NL prompt「like 只传子串不带 %」的依据）。
 
 本文件把上述验证结论固化为回归测试，防止 pypika 升级或 builder 改动引入回归。
 """
@@ -61,14 +61,25 @@ class TestSQLInjectionSafety(AIAssistantTestCase):
         self.assertIn("IN ('a'' OR 1=1 --','b')", sql)
 
     def test_like_auto_wrap_percent_and_escaped(self):
-        """like 自动包裹 % + 单引号转义（NL prompt「like 只传子串」的依据）"""
+        """like 自动包裹 %，输入中的通配符和单引号仍保持字面量。"""
         sql = self._build_sql(["%' OR '1'='1"], operator="like")
-        self.assertIn("LIKE '%%'' OR ''1''=''1%'", sql)
+        self.assertIn(r"LIKE '%\\%'' OR ''1''=''1%'", sql)
 
-    def test_backslash_not_breaking_string(self):
-        """反斜杠不会破坏字符串字面量结构"""
-        sql = self._build_sql(["C:\\windows\\x", "path"], operator="include")
-        self.assertIn("IN (", sql)
+    def test_like_treats_backslash_and_wildcards_as_literal_substring(self):
+        """用户输入是字面子串，LIKE 模式字符不能改变匹配语义。"""
+
+        sql = self._build_sql([r"C:\temp_100%"], operator="like")
+
+        self.assertIn(r"LIKE '%C:\\\\temp\\_100\\%%'", sql)
+
+    def test_backslash_and_quote_cannot_reopen_string_literal(self):
+        """反斜杠必须先转义，避免其吞掉 PyPika 生成的首个单引号。"""
+
+        payload = "\\' OR 1=1 -- "
+        sql = self._build_sql([payload])
+
+        self.assertIn(r"`username`='\\'' OR 1=1 -- '", sql)
+        self.assertNotIn(r"`username`='\'' OR 1=1 -- '", sql)
 
     def test_empty_string_value_quoted(self):
         """空字符串值生成合法 SQL"""
