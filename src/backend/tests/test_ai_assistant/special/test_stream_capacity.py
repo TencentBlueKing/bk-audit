@@ -31,6 +31,7 @@ from tests.test_ai_assistant.celery_integration import (
 from tests.test_ai_assistant.factories import (
     create_conversation as create_test_conversation,
 )
+from tests.test_ai_assistant.handlers import use_attachment_handler
 from tests.test_ai_assistant.special_handlers import (
     SPECIAL_CAPACITY_QUEUE,
     SpecialCapacityHandler,
@@ -92,7 +93,7 @@ class StreamCapacitySpecialTest(TransactionTestCase):
         self.addCleanup(scope_permission_patcher.stop)
         self.user = "special-capacity-user"
         self.conversation = create_test_conversation(created_by=self.user, updated_by=self.user)
-        attachment_handler_registry.register(SpecialCapacityHandler())
+        use_attachment_handler(self, SpecialCapacityHandler())
 
     def tearDown(self):
         leftovers = delete_attachment_stream_keys(
