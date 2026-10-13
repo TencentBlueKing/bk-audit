@@ -239,6 +239,10 @@ SWAGGER_SETTINGS = {
     "DEFAULT_GENERATOR_CLASS": "bk_resource.utils.generators.BKResourceOpenAPISchemaGenerator",
 }
 
+DEFAULT_REDIS_TAGS = [
+    tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",") if tag
+]
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Audit',
     'DESCRIPTION': '审计中心 API',
