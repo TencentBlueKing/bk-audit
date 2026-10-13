@@ -105,6 +105,35 @@ class BKResourceAutoSchema(AutoSchema):
             return OpenApiTypes.BINARY
         return super().get_response_serializers()
 
+    def _get_response_for_code(self, serializer, status_code, media_types=None, direction="response"):
+        """把 ResourceViewSet 的成功 JSON schema 放入 APIRenderer 标准信封。"""
+
+        response = super()._get_response_for_code(serializer, status_code, media_types, direction)
+        if not self._get_matched_route() or not str(status_code).startswith("2") or serializer is OpenApiTypes.BINARY:
+            return response
+
+        for media_type, media in response.get("content", {}).items():
+            if media_type == "application/json" or media_type.endswith("+json"):
+                media["schema"] = self._success_envelope_schema(media["schema"])
+        return response
+
+    @staticmethod
+    def _success_envelope_schema(data_schema):
+        """声明 APIRenderer 的标准成功响应，data 保留原始列表和分页结构。"""
+
+        return {
+            "type": "object",
+            "required": ["result", "code", "data", "message", "request_id", "trace_id"],
+            "properties": {
+                "result": {"type": "boolean"},
+                "code": {"type": "integer"},
+                "data": data_schema,
+                "message": {"type": "string", "nullable": True},
+                "request_id": {"type": "string"},
+                "trace_id": {"type": "string", "nullable": True},
+            },
+        }
+
     def get_override_parameters(self):
         params = super().get_override_parameters()
         route = self._get_matched_route()
