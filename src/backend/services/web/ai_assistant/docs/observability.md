@@ -106,11 +106,17 @@ Metric/Event 使用 `core.monitor` 的异步最佳努力投递；Span 使用 `co
 fail-open 边界。监控客户端、OTel SDK 或属性写入异常只能记录日志，不能覆盖业务返回值、
 Celery Retry 或已提交终态。
 
-### 3.4 控制基数与敏感数据
+### 3.4 控制基数与诊断信息
 
-Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID、execution ID、用户或异常
-正文。Event 和 Trace 只在定位需要时携带受控标识。任何观测载荷都不得记录输入、上下文、
-最终产物、日志样例或流事件正文。
+Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID、execution ID、用户或异常正文。
+应用日志可以使用对象 UID、task ID、execution ID 等必要标识串联一次执行；Event 和 Trace 只在
+定位需要时携带受控标识，这些标识均不得作为无界 Metric 维度。
+
+外部调用失败时，内部异常日志记录排障所需的上游错误正文，但必须限制日志访问和保留周期，
+且不得进入前端错误、Metric 或 Event。Agent 及日志工具的 ResourceRequestLog 保留请求、响应和异常正文，
+并视为受限诊断日志。日志查询链路为便于还原实际请求，允许 `SafeQuerySyncResource` 额外把最终 SQL
+写入应用日志；SQL、查询结果和 Agent 输入/输出均可能含业务数据，相关日志 sink 必须按受限诊断日志
+控制访问和保留周期，且不得进入前端错误、Metric、Event 或普通 Trace 属性。
 
 ### 3.5 Event 必须可行动
 
@@ -143,3 +149,25 @@ Event。Event 只表达需要维护者处理的平台异常，例如长期失活
 - 新的活动刷新点必须代表 Worker 的真实进展，浏览器连接、详情读取等用户行为不能续活任务。
 - 修改具体字段或埋点时同步更新代码声明、契约测试和运维文档；本文只在架构或生命周期原则
   变化时更新。
+
+## 6. 日志分析报告观测
+
+日志分析生产 Task 使用 `business_type=AI_ANALYSIS` 和共享 `ai_default` workload。平台通用执行指标覆盖 `PROCESSING` 到 `SUCCESS/FAILED` 的排队耗时、
+执行耗时、状态和稳定错误码；流指标覆盖 execution 数、Redis 降级、归档降级、事件丢弃/截断与
+尾部收敛。业务超时应表现为 `LogAnalysisTimeout` 失败并在 29 分钟附近收敛，30 分钟 Celery
+hard limit 只作为最终保险。
+
+部署监控还应覆盖 `ai_default` RabbitMQ 队列的 ready/unacked 数、最老消息等待时间、`ai-default`
+Worker 在线数/重启数，以及按 `AUDIT_LOG_ANALYSIS` 统计的全局限流等待和拒绝量。以下异常需要联合排查：
+
+- 队列积压增长但 Worker 在线：检查限流、Agent 延迟和 gevent 并发占用；
+- `LogAnalysisTimeout` 比例上升：检查 Agent 和三个日志工具耗时，并在受限 ResourceRequestLog 中核对具体条件和返回正文；
+- hard kill/Worker 重启增长：检查 30 分钟硬时限、内存与外部连接，随后确认 late ack 重投；
+- 流降级增长但业务成功率正常：检查 Redis、归档 checkpoint 和事件容量，MySQL Markdown 仍是事实源；
+- 长期 `PROCESSING` 增长：检查 RabbitMQ 投递、Worker 注册/队列配置和巡检收敛结果。
+
+该链路不把分析指令、检索条件值、用户名、日志样例、查询结果、完整工具响应、AG-UI 事件正文或
+最终 Markdown 写入 Metric、Event 或普通 Trace 属性。这些内容可由 Agent 及日志工具的 ResourceRequestLog 保留供排障，
+并必须作为受限诊断日志管理；对外错误仍使用稳定码和脱敏文案。
+这些标识和正文不得作为 Metric 维度或 Event 载荷。接入与时序见
+[`log_analysis.md`](log_analysis.md)。
