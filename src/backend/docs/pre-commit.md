@@ -11,14 +11,42 @@
 make install-hooks
 ```
 
-该命令使用项目 `.venv/bin/pre-commit` 安装 Git 的 `pre-commit` hook。每个 clone 需要安装
-一次；标准 Git worktree 与主 checkout 共用 hook。更新 `.pre-commit-config.yaml` 后可再次执行。
+该命令使用项目 `.venv/bin/pre-commit` 安装 Git 的 `pre-commit` 和 `commit-msg` hook。
+每个 clone 需要安装一次；标准 Git worktree 与主 checkout 共用 hook。
+更新 `.pre-commit-config.yaml` 后可再次执行，不需要重复维护本机 `.git/hooks` 内容。
 
 不建议使用 `--allow-missing-config`。它会允许配置文件不存在时跳过检查，适合通用模板，
 不适合已经强制维护配置的本项目。
 
-`pre-commit install --hook-type commit-msg` 只负责安装 `commit-msg` 阶段入口。当前配置没有
-`commit-msg` 阶段的检查项，因此它不会校验提交信息，也无需安装。
+提交标题检查通过后端配置中的 local hook 运行
+`agent/skills/generate-project-commit/scripts/commit_message.sh`，只依赖 `sh`、`awk` 和 Git。
+校验器不使用 `.venv` 路径，也不要求启动 Django。pre-commit 本身仍需要安装环境，
+它生成的 Git 入口会记录当前安装器的 Python 路径；迁移虚拟环境后重新运行安装命令即可。
+
+本次只接入后端：暂存区含 `src/backend` 改动时校验标题，混合前后端提交也会校验；
+纯前端及其他非后端改动跳过。无暂存差异的 amend/reword 等仍校验，避免通过改标题漏检。
+worktree 共用入口，但会读取当前 worktree 的配置和暂存区；尚未接入的旧分支不会自动获得规则。
+
+如果本机设置了 `core.hooksPath`（例如前端 Husky 安装设置），pre-commit 会拒绝安装。
+先检查配置来源和现有 hook，再明确选择使用哪套入口；不要静默覆盖、自动 unset 或修改前端配置。
+
+## 提交标题规则
+
+普通标题使用 `<type>: <summary> #<issue>` 或 `<type>: <summary> --<TAPD key>=<数字>`，
+tracker 位于标题末尾。允许 `feat fix docs style refactor perf test chore`，摘要不能为空。
+常用 TAPD key 是 `story` 和 `bug`；格式合法不代表需求存在或归属正确。
+合并标题 `Merge ...` 允许不带 tracker。
+
+正文可选，推荐空行后写概括性的 `- ` bullet。hook 不额外强制正文格式。
+单独验证已有 message 或检查指定历史范围，可在后端目录执行：
+
+```bash
+sh agent/skills/generate-project-commit/scripts/commit_message.sh validate --message-file /tmp/commit-message.txt
+sh agent/skills/generate-project-commit/scripts/commit_message.sh check-range <base>..HEAD
+```
+
+手动验证合并标题时加 `--allow-merge`。历史检查不会补写需求号或改写提交。
+本地 hook 不扫描既有历史；修改历史提交后应使用明确的范围检查，而非只检查最新提交。
 
 ## 日常开发
 
@@ -46,5 +74,8 @@ make check        # 检查暂存文件并运行全量单元测试
 
 GitHub Actions 的 `Backend pre-commit` job 会在后端相关 PR 和 main 推送时执行
 `pre-commit run --all-files --show-diff-on-failure`。仓库管理员应在 main 分支保护规则中将
-`Backend pre-commit` 和现有单测 job 设为 required checks；本地 hook 可以被人为绕过，
+`Backend pre-commit` 和现有单测 job 设为 required checks。该 job 检查文件质量，
+不会因新增本地 `commit-msg` hook 自动扫描提交历史；历史标题仍需使用明确范围检查或
+对应的上游提交门禁，本次不修改 CI 流程。
+本地 hook 可以被人为绕过，
 分支保护才是最终强制门禁。

@@ -1,0 +1,976 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing
+permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+
+F2 NL2JSON 服务测试
+"""
+
+import json
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
+from unittest import mock
+
+from django.utils import timezone
+
+from core.utils.time import parse_datetime
+from services.web.query.ai_assistant.constants import DEFAULT_SEARCH_WINDOW_DAYS
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputParseFailedError,
+    InvalidConditionError,
+    QueryNotRecognizedError,
+)
+from services.web.query.ai_assistant.schemas import AIConditionPayload
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
+from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
+
+
+def bind_agent_output(cls):
+    """把用例参数 mock_chat.return_value 当作 Agent 原文，不再发起模型调用。"""
+
+    def bind_method(method):
+        def wrapped(self, *args, **kwargs):
+            box = mock.Mock()
+            self.agent_output = box
+            try:
+                return method(self, box, *args, **kwargs)
+            finally:
+                self.agent_output = None
+
+        return wrapped
+
+    for name, attr in list(vars(cls).items()):
+        if name.startswith("test_") and callable(attr):
+            setattr(cls, name, bind_method(attr))
+    return cls
+
+
+def assemble_recorded_output(test, selection=None, reference_time=None):
+    """用当前用例记录的 Agent 原文走公共条件解析。"""
+
+    return ConditionAssemblyService.parse_condition_text(
+        content=test.agent_output.return_value,
+        selection=selection or test.make_selection(),
+        scope_id=test.target_system_id,
+        reference_time=reference_time or timezone.localtime(),
+    )
+
+
+VALID_AI_OUTPUT = {
+    "conditions": [{"raw_name": "username", "keys": [], "field_type": None, "operator": "eq", "filters": ["admin"]}],
+    "start_time": "2026-08-13T00:00:00+08:00",
+    "end_time": "2026-08-14T00:00:00+08:00",
+}
+
+
+@bind_agent_output
+class TestNL2JSONService(AIAssistantTestCase):
+    """F2 自然语言 → condition"""
+
+    def _convert(self, selection=None):
+        return assemble_recorded_output(self, selection=selection)
+
+    def test_convert_success(self, mock_chat):
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
+
+        condition = self._convert()
+
+        # scope 取入参（不信任 AI）
+        self.assertEqual(condition.scope_id, self.target_system_id)
+        self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
+        self.assertEqual(len(condition.conditions), 1)
+        cond = condition.conditions[0]
+        self.assertEqual(cond.field.raw_name, "username")
+        self.assertEqual(cond.operator, "eq")
+        self.assertEqual(cond.filters, ["admin"])
+        # field_type 由服务端按元数据补全
+        self.assertEqual(cond.field.field_type, "string")
+
+    def test_multi_value_single_include_condition(self, mock_chat):
+        """多值合规输出：单条件 include 放全部值（10 人梯度零丢失）"""
+
+        usernames = [f"用户{index}" for index in range(1, 11)]
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "include", "filters": usernames}]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        self.assertEqual(len(condition.conditions), 1)
+        cond = condition.conditions[0]
+        self.assertEqual(cond.operator, "include")
+        self.assertEqual(cond.filters, usernames)
+
+    def test_multi_value_split_eq_conditions_pass_through(self, mock_chat):
+        """AI 违规拆多条同字段 eq（prompt 明令禁止）→ NL2JSON 层原样透传校验放行；
+
+        归一合并（多条同字段 eq → 单条 include）是检索执行层 LogSearchService
+        _normalize_condition 的职责（纵深兜底，test_log_search 已覆盖），
+        条件识别层不重复做——两层职责分离。
+        """
+
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]},
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["李四"]},
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["王五"]},
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        # 条件识别层透传 3 条（检索执行层归一）
+        self.assertEqual(len(condition.conditions), 3)
+        self.assertEqual(
+            [(cond.field.raw_name, cond.operator, cond.filters) for cond in condition.conditions],
+            [("username", "eq", ["张三"]), ("username", "eq", ["李四"]), ("username", "eq", ["王五"])],
+        )
+
+    def test_multi_value_and_single_value_fields_not_crossed(self, mock_chat):
+        """多字段混合：多值字段 include 与单值字段 eq 并存互不干扰（不串字段）"""
+
+        selection = self.make_selection(
+            standard_fields=[
+                self.make_standard_field(raw_name="username"),
+                self.make_standard_field(raw_name="result_code"),
+                self.make_standard_field(raw_name="access_source_ip"),
+            ]
+        )
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "username", "keys": [], "operator": "include", "filters": ["张三", "李四", "王五"]},
+            {
+                "raw_name": "result_code",
+                "keys": [],
+                "field_type": "int",
+                "operator": "include",
+                "filters": [-1],
+            },
+            {"raw_name": "access_source_ip", "keys": [], "operator": "eq", "filters": ["192.0.2.10"]},
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+
+        by_name = {cond.field.raw_name: cond for cond in condition.conditions}
+        self.assertEqual(by_name["username"].filters, ["张三", "李四", "王五"])
+        self.assertEqual(by_name["result_code"].filters, [-1])
+        self.assertEqual(by_name["access_source_ip"].filters, ["192.0.2.10"])
+
+    def test_parse_fenced_json(self, mock_chat):
+        mock_chat.return_value = f"```json\n{json.dumps(VALID_AI_OUTPUT)}\n```"
+        condition = self._convert()
+        self.assertEqual(len(condition.conditions), 1)
+
+    def test_parse_prose_wrapped_json(self, mock_chat):
+        mock_chat.return_value = f"好的，检索条件如下：{json.dumps(VALID_AI_OUTPUT)} 请查收。"
+        condition = self._convert()
+        self.assertEqual(len(condition.conditions), 1)
+
+    def test_parse_failed(self, mock_chat):
+        mock_chat.return_value = "抱歉，我无法理解这个问题。"
+        with self.assertRaises(AIOutputParseFailedError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.error_code, "AI_OUTPUT_PARSE_FAILED")
+
+    def test_empty_conditions_raises_not_recognized(self, mock_chat):
+        mock_chat.return_value = json.dumps({"conditions": [], "start_time": None, "end_time": None})
+        with self.assertRaises(QueryNotRecognizedError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.error_code, "QUERY_NOT_RECOGNIZED")
+
+    def test_message_plan_can_confirm_empty_search_and_apply_default_window(self, mock_chat):
+        """消息规划已确认检索意图时，空条件由后端补最近一天。"""
+
+        reference_time = datetime(2026, 9, 20, 10, 0, tzinfo=datetime_timezone(timedelta(hours=8)))
+        condition = ConditionAssemblyService.validate_and_assemble(
+            payload=AIConditionPayload(),
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            reference_time=reference_time,
+            allow_empty=True,
+        )
+
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(parse_datetime(condition.end_time), reference_time)
+        self.assertEqual(parse_datetime(condition.end_time) - parse_datetime(condition.start_time), timedelta(days=1))
+
+    def test_unknown_field_rejected(self, mock_chat):
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "not_a_field", "keys": [], "operator": "eq", "filters": ["x"]}]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(InvalidConditionError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.error_code, "INVALID_CONDITION")
+
+    def test_operator_not_allowed_rejected(self, mock_chat):
+        # username allow_operators 为 ["eq", "include"]，like 越权
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "like", "filters": ["adm"]}]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_unknown_operator_rejected(self, mock_chat):
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "regex", "filters": ["adm.*"]}]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_extension_condition_success(self, mock_chat):
+        selection = self.make_selection(extension_fields=[self.make_extension_field()])
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["ticket_id"],
+                "operator": "eq",
+                "filters": ["Story-3000"],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+        self.assertEqual(condition.conditions[0].field.keys, ["ticket_id"])
+
+    def test_extension_user_specified_key_allowed(self, mock_chat):
+        """用户显式指定的下钻子键：字段上下文未列出也放行（采样覆盖有限，子键信任用户）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "extend_data", "keys": ["not_exist"], "operator": "eq", "filters": ["x"]}]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].field.raw_name, "extend_data")
+        self.assertEqual(condition.conditions[0].field.keys, ["not_exist"])
+        self.assertEqual(condition.conditions[0].filters, ["x"])
+
+    def test_unknown_extension_path_accepts_agent_selected_numeric_type(self, mock_chat):
+        """未知拓展字段允许 Agent 根据用户需求选择查询类型和全局合法操作符。"""
+
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["_request_url", "scope_id"],
+                "field_type": "int",
+                "operator": "gt",
+                "filters": [49],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
+        self.assertEqual(condition.conditions[0].operator, "gt")
+        self.assertEqual(condition.conditions[0].filters, [49])
+
+    def test_extension_keys_on_non_json_field_rejected(self, mock_chat):
+        """容器白名单保留：非 JSON 容器字段带下钻 keys 仍拒绝（防编造容器）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": ["hijack"], "operator": "eq", "filters": ["x"]}]
+        mock_chat.return_value = json.dumps(output)
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_extension_multilayer_keys_accepted(self, mock_chat):
+        """多层下钻放行（产品确认不做层级限制）。
+
+        线上报障演进：extend.request_data.audit_status__in 二层下钻曾被单层协议拒绝
+        （AI_OUTPUT_INVALID"AI 生成的检索条件不合法"）——产品拍板不限制层级：
+        Doris SQL 层 variant 逐级拼接 / JSON Path 天然支持任意深度（见
+        core/sql/builder/terms.py::DorisVariantField.format_keys_quote），放开
+        校验层人为的单层约束即可。
+        """
+        selection = self.make_selection(extension_fields=[self.make_extension_field()])
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["request_data", "audit_status__in"],
+                "operator": "eq",
+                "filters": ["accessed"],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+        condition = self._convert(selection=selection)
+        # 多层 keys 原样组装（SQL 层逐级提取），不被单层校验拒绝
+        self.assertEqual(condition.conditions[0].field.keys, ["request_data", "audit_status__in"])
+        self.assertEqual(condition.conditions[0].operator, "eq")
+        self.assertEqual(condition.conditions[0].filters, ["accessed"])
+
+    def test_known_extension_accepts_agent_selected_numeric_type(self, mock_chat):
+        selection = self.make_selection(extension_fields=[self.make_extension_field(allow_operators=["eq", "gt"])])
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["ticket_id"],
+                "field_type": "long",
+                "operator": "gt",
+                "filters": [100],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+
+        self.assertEqual(condition.conditions[0].field.field_type, "long")
+        self.assertEqual(condition.conditions[0].operator, "gt")
+
+    def test_time_field_condition_stripped(self, mock_chat):
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "thedate", "keys": [], "operator": "gte", "filters": ["20260813"]},
+            {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["admin"]},
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        raw_names = [cond.field.raw_name for cond in condition.conditions]
+        self.assertNotIn("thedate", raw_names)
+        self.assertIn("username", raw_names)
+
+    def test_all_time_field_conditions_stripped_to_time_window(self, mock_chat):
+        """时间字段条件全被剔除，但 AI 输出了有效时间 → 降级为纯时间窗口检索而非未识别"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {"raw_name": "dtEventTimeStamp", "keys": [], "operator": "gte", "filters": [1755129600000]}
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
+        self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
+
+    def test_default_time_window(self, mock_chat):
+        """AI 未输出时间时，后端以同一时间锚点补最近 1 天。"""
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = None
+        output["end_time"] = None
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual(DEFAULT_SEARCH_WINDOW_DAYS, 1)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
+
+    def test_default_window_reuses_prompt_reference_time(self, mock_chat):
+        """缺省时间窗使用调用方传入的同一锚点，避免另取当前时间造成漂移。"""
+
+        reference_time = datetime(2026, 9, 20, 10, 30, tzinfo=datetime_timezone(timedelta(hours=8)))
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = None
+        output["end_time"] = None
+        mock_chat.return_value = json.dumps(output)
+
+        condition = assemble_recorded_output(self, reference_time=reference_time)
+
+        self.assertEqual(condition.end_time, reference_time.isoformat())
+        self.assertEqual(
+            condition.start_time,
+            (reference_time - timedelta(days=1)).isoformat(),
+        )
+
+    def test_utc_z_time_preserves_absolute_instant(self, mock_chat):
+        """ISO 8601 的 Z 表示 UTC，解析时不得只替换为本地时区标签。"""
+
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = "2026-08-31T10:00:00Z"
+        output["end_time"] = "2026-08-31T11:00:00Z"
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+
+        self.assertEqual(datetime.fromisoformat(condition.start_time), datetime.fromisoformat("2026-08-31T10:00:00Z"))
+        self.assertEqual(datetime.fromisoformat(condition.end_time), datetime.fromisoformat("2026-08-31T11:00:00Z"))
+
+    def test_invalid_time_falls_back_to_default(self, mock_chat):
+        output = dict(VALID_AI_OUTPUT)
+        output["start_time"] = "不是时间"
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert()
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
+
+
+@bind_agent_output
+class TestNL2JSONScenarios(AIAssistantTestCase):
+    """真实检索场景话术全覆盖：AI 对各类话术的合理输出 → 链路产出与普通日志检索页手动构造一致。
+
+    基准 = COLLECT_SEARCH_CONFIG 真实白名单（字段 × 操作符 × 值形态），
+    逐场景 mock「AI 对该话术的合理输出」，断言 SearchCondition 与检索页等价。
+    """
+
+    # 与普通日志检索页白名单一致的字段操作符（field_context 注入 AI 的同源数据）
+    FIELD_OPERATORS = {
+        "username": ["include", "eq"],
+        "action_id": ["include", "eq"],
+        "resource_type_id": ["include", "eq"],
+        "instance_id": ["include", "eq"],
+        "access_source_ip": ["include", "eq"],
+        "request_id": ["include", "eq"],
+        "result_code": ["include"],
+        "instance_name": ["like"],
+        "log": ["match_any", "match_all"],
+    }
+
+    def _selection(self):
+        return self.make_selection(
+            standard_fields=[
+                self.make_standard_field(raw_name=name, allow_operators=ops)
+                for name, ops in self.FIELD_OPERATORS.items()
+            ]
+        )
+
+    def _convert(self, query_text: str, ai_conditions: list, start_time=None, end_time=None):
+        self.mock_chat.return_value = json.dumps(
+            {"conditions": ai_conditions, "start_time": start_time, "end_time": end_time}
+        )
+        return assemble_recorded_output(self, selection=self._selection())
+
+    def test_operator_single(self, mock_chat):
+        """「查一下张三的操作日志」→ username eq（检索页单选操作人）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下张三的操作日志",
+            [{"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]}],
+            start_time="2026-08-21T00:00:00+08:00",
+            end_time="2026-08-28T00:00:00+08:00",
+        )
+        self.assertEqual(len(condition.conditions), 1)
+        self.assertEqual(condition.conditions[0].field.raw_name, "username")
+        self.assertEqual(condition.conditions[0].operator, "eq")
+        self.assertEqual(condition.conditions[0].filters, ["张三"])
+
+    def test_operators_multiple(self, mock_chat):
+        """「张三和李四的操作」→ username include 多值（检索页多选 = IN）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "张三和李四的操作",
+            [{"raw_name": "username", "keys": [], "operator": "include", "filters": ["张三", "李四"]}],
+        )
+        self.assertEqual(condition.conditions[0].operator, "include")
+        self.assertEqual(condition.conditions[0].filters, ["张三", "李四"])
+
+    def test_failed_result(self, mock_chat):
+        """「查下失败的日志」→ result_code include [-1]（原始查询值）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查下失败的日志",
+            [{"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "result_code")
+        self.assertEqual(condition.conditions[0].filters, [-1])
+
+    def test_result_with_string_value(self, mock_chat):
+        """「成功的操作」→ result_code include ["0"]（options id 字符串形态，与检索页表单值一致）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下成功的操作",
+            [{"raw_name": "result_code", "keys": [], "operator": "include", "filters": ["0"]}],
+        )
+        self.assertEqual(condition.conditions[0].filters, ["0"])
+
+    def test_instance_id_exact(self, mock_chat):
+        """「实例ID 12345 的操作」→ instance_id eq（排障精确查实例）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下实例ID是12345的操作",
+            [{"raw_name": "instance_id", "keys": [], "operator": "eq", "filters": ["12345"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "instance_id")
+        self.assertEqual(condition.conditions[0].filters, ["12345"])
+
+    def test_instance_name_fuzzy(self, mock_chat):
+        """「资源名叫 test-vm 的操作」→ instance_name like（模糊匹配，白名单支持）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查下资源名叫 test-vm 的操作",
+            [{"raw_name": "instance_name", "keys": [], "operator": "like", "filters": ["test-vm"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "instance_name")
+        self.assertEqual(condition.conditions[0].operator, "like")
+
+    def test_source_ip(self, mock_chat):
+        """「来源IP 1.2.3.4 的日志」→ access_source_ip eq（安全审计场景）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下来源IP是1.2.3.4的日志",
+            [{"raw_name": "access_source_ip", "keys": [], "operator": "eq", "filters": ["1.2.3.4"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "access_source_ip")
+        self.assertEqual(condition.conditions[0].filters, ["1.2.3.4"])
+
+    def test_request_id_troubleshooting(self, mock_chat):
+        """「request_id abc-123 的日志」→ request_id eq（调用链排障高频场景）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "帮我查request_id是abc-123的日志",
+            [{"raw_name": "request_id", "keys": [], "operator": "eq", "filters": ["abc-123"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "request_id")
+        self.assertEqual(condition.conditions[0].filters, ["abc-123"])
+
+    def test_keyword_fulltext(self, mock_chat):
+        """「日志里包含 Story-3000 的」→ log match_any（关键词全文检索）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下日志里包含Story-3000的记录",
+            [{"raw_name": "log", "keys": [], "operator": "match_any", "filters": ["Story-3000"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "log")
+        self.assertEqual(condition.conditions[0].operator, "match_any")
+
+    def test_multi_keyword_and(self, mock_chat):
+        """「同时包含权限变更和失败的日志」→ log match_all（多关键词 AND）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查同时包含权限变更和失败的日志",
+            [{"raw_name": "log", "keys": [], "operator": "match_all", "filters": ["权限变更", "失败"]}],
+        )
+        self.assertEqual(condition.conditions[0].operator, "match_all")
+        self.assertEqual(condition.conditions[0].filters, ["权限变更", "失败"])
+
+    def test_action_oral_fallback_fulltext(self, mock_chat):
+        """「查下登录操作」→ action_id 无枚举映射，AI 按提示词兜底 log match_any（禁止猜字段值）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查下登录相关的操作",
+            [{"raw_name": "log", "keys": [], "operator": "match_any", "filters": ["登录"]}],
+        )
+        self.assertEqual(condition.conditions[0].field.raw_name, "log")
+        self.assertEqual(condition.conditions[0].filters, ["登录"])
+
+    def test_combined_conditions(self, mock_chat):
+        """「张三昨天的失败操作」→ username + result_code 组合（检索页多条件 AND）"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下张三昨天的失败操作",
+            [
+                {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]},
+                {"raw_name": "result_code", "keys": [], "operator": "include", "filters": [-1]},
+            ],
+            start_time="2026-08-27T00:00:00+08:00",
+            end_time="2026-08-27T23:59:59+08:00",
+        )
+        self.assertEqual(len(condition.conditions), 2)
+        raw_names = [cond.field.raw_name for cond in condition.conditions]
+        self.assertEqual(raw_names, ["username", "result_code"])
+
+    def test_extension_plus_standard(self, mock_chat):
+        """「工单 Story-3000 相关张三的操作」→ 拓展下钻 + 标准字段混合"""
+        self.mock_chat = mock_chat
+        selection = self._selection()
+        selection.systems[0].extension_fields.append(self.make_extension_field())
+        self.mock_chat.return_value = json.dumps(
+            {
+                "conditions": [
+                    {"raw_name": "extend_data", "keys": ["ticket_id"], "operator": "eq", "filters": ["Story-3000"]},
+                    {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["张三"]},
+                ],
+                "start_time": None,
+                "end_time": None,
+            }
+        )
+        condition = assemble_recorded_output(self, selection=selection)
+        self.assertEqual(len(condition.conditions), 2)
+        self.assertEqual(condition.conditions[0].field.keys, ["ticket_id"])
+        self.assertEqual(condition.conditions[1].field.raw_name, "username")
+
+    def test_system_id_condition_stripped(self, mock_chat):
+        """「查xx系统的日志」（已选系统会话内提系统名）→ AI 偷带 system_id 条件被剔除，其余保留"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查下bk_log系统的日志",
+            [
+                {"raw_name": "system_id", "keys": [], "operator": "eq", "filters": ["other_system"]},
+                {"raw_name": "username", "keys": [], "operator": "eq", "filters": ["admin"]},
+            ],
+        )
+        raw_names = [cond.field.raw_name for cond in condition.conditions]
+        self.assertNotIn("system_id", raw_names)
+        self.assertIn("username", raw_names)
+
+    def test_reversed_time_swapped(self, mock_chat):
+        """AI 时间换算倒置（start > end）→ 组装层交换保窗口有效，避免 SQL 恒假零命中"""
+        self.mock_chat = mock_chat
+        condition = self._convert(
+            "查一下最近的日志",
+            [{"raw_name": "username", "keys": [], "operator": "eq", "filters": ["admin"]}],
+            start_time="2026-08-28T00:00:00+08:00",
+            end_time="2026-08-21T00:00:00+08:00",
+        )
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertLess(start_dt, end_dt)
+
+
+@bind_agent_output
+class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
+    """纯时间窗口 / 模糊意图话术（如"帮我查下最近七天的日志"）——时间有效即合法检索意图。
+
+    协议：conditions 空 + start/end 任一可解析 → 放行为纯时间窗口检索；
+    conditions 空 + 时间全空/非法 → QUERY_NOT_RECOGNIZED（寒暄/无关输入）。
+    """
+
+    def _convert(self, query_text: str = "帮我查下最近七天的日志"):
+        return assemble_recorded_output(self)
+
+    def test_rolling_window_query(self, mock_chat):
+        """「帮我查下最近七天的日志」：AI 输出空 conditions + 滚动 7 天窗口 → 放行"""
+        now = "2026-08-28T18:00:00+08:00"
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-21T18:00:00+08:00",
+                "end_time": now,
+            }
+        )
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, "2026-08-21T18:00:00+08:00")
+        self.assertEqual(condition.end_time, now)
+
+    def test_natural_day_query(self, mock_chat):
+        """「看下昨天有什么操作」：AI 按自然日边界换算 → 放行"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-27T00:00:00+08:00",
+                "end_time": "2026-08-27T23:59:59+08:00",
+            }
+        )
+
+        condition = self._convert(query_text="看下昨天有什么操作")
+        self.assertEqual(condition.conditions, [])
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual((end_dt - start_dt).days, 0)
+
+    def test_vague_intent_default_window(self, mock_chat):
+        """「帮我看看最近的情况」：模糊意图，AI 按提示词输出默认 1 天窗口 → 放行"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-08-27T18:00:00+08:00",
+                "end_time": "2026-08-28T18:00:00+08:00",
+            }
+        )
+
+        condition = self._convert(query_text="帮我看看最近的情况")
+        self.assertEqual(condition.conditions, [])
+        start_dt = parse_datetime(condition.start_time)
+        end_dt = parse_datetime(condition.end_time)
+        self.assertEqual(end_dt - start_dt, timedelta(days=1))
+
+    def test_start_time_only_fills_end_with_now(self, mock_chat):
+        """AI 仅输出 start_time（end 缺失）→ 时间意图成立，end 由后端兜底当前时间"""
+        mock_chat.return_value = json.dumps(
+            {"conditions": [], "start_time": "2026-08-20T00:00:00+08:00", "end_time": None}
+        )
+
+        condition = self._convert()
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(condition.start_time, "2026-08-20T00:00:00+08:00")
+        end_dt = parse_datetime(condition.end_time)
+        self.assertIsNotNone(end_dt)
+
+    def test_empty_conditions_with_invalid_time_rejected(self, mock_chat):
+        """空 conditions + 时间非法（不可解析）→ 无法确认检索意图，判未识别"""
+        mock_chat.return_value = json.dumps({"conditions": [], "start_time": "不是时间", "end_time": "也不是时间"})
+
+        with self.assertRaises(QueryNotRecognizedError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.error_code, "QUERY_NOT_RECOGNIZED")
+
+    def test_greeting_unrecognized(self, mock_chat):
+        """寒暄（「你好」）：AI 全空输出 → 未识别（保持既有鲁棒行为）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "start_time": None, "end_time": None})
+
+        with self.assertRaises(QueryNotRecognizedError):
+            self._convert(query_text="你好")
+
+
+@bind_agent_output
+class TestRelativeTimeShortcut(AIAssistantTestCase):
+    """相对时间窗快捷标记（前端确认方案 10-09，格式 now-{数字}{单位}，h/d/M）：
+    用户语义为相对表述（近N小时/近N天/近N月）→ AI 输出 time_shortcut，服务端权威换算绝对时间；
+    用户未提及时间 → 后端默认窗口并标注 now-1d；用户给出明确时间段 → 标记为 None。
+    start_time/end_time 恒有效（查询/导出/报告依赖）。
+    标记不进 SearchCondition（其子类 AgentSearchCondition 是 MCP 工具契约），
+    由 ConditionAssemblyService.resolve_time_shortcut 独立解析，消息层平级携带。
+    """
+
+    REFERENCE_TIME = datetime(2026, 9, 20, 10, 30, tzinfo=datetime_timezone(timedelta(hours=8)))
+
+    def _convert(self):
+        return assemble_recorded_output(self, reference_time=self.REFERENCE_TIME)
+
+    def _resolve_shortcut(self):
+        return ConditionAssemblyService.resolve_time_shortcut(
+            AIConditionPayload.model_validate(json.loads(self.agent_output.return_value))
+        )
+
+    def test_days_shortcut_converted_and_resolved(self, mock_chat):
+        """「近7天」→ 服务端换算 [now-7d, now]（消除 LLM 算数误差），标记独立可解析"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-7d"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=7))
+        self.assertEqual(self._resolve_shortcut(), "now-7d")
+
+    def test_hours_shortcut_converted(self, mock_chat):
+        """「近1小时」→ 小时粒度换算"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1h"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(hours=1))
+        self.assertEqual(self._resolve_shortcut(), "now-1h")
+
+    def test_month_shortcut_converted(self, mock_chat):
+        """「近1月」→ 月粒度按前端固定映射查表换算（1M=30 天，非 30×N 线性须查表）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1M"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=30))
+        self.assertEqual(self._resolve_shortcut(), "now-1M")
+
+    def test_year_mapped_to_month_shortcut(self, mock_chat):
+        """「近一年」→ now-12M（对齐前端 DATETIME_SHORTCUT_LABEL_MAP，前端渲染「近12月」）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-12M"})
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=365))
+        self.assertEqual(self._resolve_shortcut(), "now-12M")
+
+    def test_shortcut_overrides_redundant_absolute_time(self, mock_chat):
+        """AI 画蛇添足同时输出绝对时间 → shortcut 优先（用户语义为相对窗口），绝对时间忽略"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "time_shortcut": "now-7d",
+                "start_time": "2020-01-01T00:00:00+08:00",
+                "end_time": "2020-01-02T00:00:00+08:00",
+            }
+        )
+
+        condition = self._convert()
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=7))
+
+    def test_pure_shortcut_without_conditions_passes(self, mock_chat):
+        """空 conditions + shortcut（纯时间窗口检索）→ 检索意图成立，放行"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-3d"})
+
+        condition = self._convert()
+
+        self.assertEqual(condition.conditions, [])
+        self.assertEqual(self._resolve_shortcut(), "now-3d")
+
+    def test_default_window_annotates_shortcut(self, mock_chat):
+        """用户未提及时间（上游已确认检索意图 allow_empty=True，AI 按新规则全留空）
+        → 默认窗口 + 标记 now-1d（前端渲染「近1天」）"""
+        payload = AIConditionPayload.model_validate({"conditions": [], "start_time": None, "end_time": None})
+
+        condition = ConditionAssemblyService.validate_and_assemble(
+            payload=payload,
+            selection=self.make_selection(),
+            scope_id=self.target_system_id,
+            reference_time=self.REFERENCE_TIME,
+            allow_empty=True,
+        )
+
+        self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=1))
+        self.assertEqual(ConditionAssemblyService.resolve_time_shortcut(payload), "now-1d")
+
+    def test_explicit_time_range_shortcut_none(self, mock_chat):
+        """明确时间段（「10月1日到5日」）→ 绝对时间生效，标记为 None"""
+        mock_chat.return_value = json.dumps(
+            {
+                "conditions": [],
+                "start_time": "2026-10-01T00:00:00+08:00",
+                "end_time": "2026-10-05T00:00:00+08:00",
+            }
+        )
+
+        condition = self._convert()
+
+        self.assertEqual(condition.start_time, "2026-10-01T00:00:00+08:00")
+        self.assertEqual(condition.end_time, "2026-10-05T00:00:00+08:00")
+        self.assertIsNone(self._resolve_shortcut())
+
+    def test_out_of_range_shortcut_rejected(self, mock_chat):
+        """超 365 天（now-400d）→ 拒绝（静默钳制会语义漂移，显式报错）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-400d"})
+
+        with self.assertRaises(InvalidConditionError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.extra["reason"], "invalid time shortcut")
+
+    def test_non_whitelist_month_shortcut_rejected(self, mock_chat):
+        """非白名单月值（now-2M）→ 拒绝（月换算是查表非线性的，前端 map 亦无此 key）"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-2M"})
+
+        with self.assertRaises(InvalidConditionError) as ctx:
+            self._convert()
+        self.assertEqual(ctx.exception.extra["reason"], "invalid time shortcut")
+
+    def test_invalid_shortcut_form_rejected(self, mock_chat):
+        """非法形态（now-1w）→ pydantic pattern 拒绝 → InvalidConditionError"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1w"})
+
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_zero_window_shortcut_rejected(self, mock_chat):
+        """零窗口（now-0d）→ pattern 排除 0 开头，拒绝"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-0d"})
+
+        with self.assertRaises(InvalidConditionError):
+            self._convert()
+
+    def test_legacy_output_without_shortcut_unchanged(self, mock_chat):
+        """回归：既有输出（绝对时间、无 shortcut 字段）→ 行为不变，标记 None"""
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT)
+
+        condition = self._convert()
+
+        self.assertEqual(condition.start_time, VALID_AI_OUTPUT["start_time"])
+        self.assertEqual(condition.end_time, VALID_AI_OUTPUT["end_time"])
+        self.assertIsNone(self._resolve_shortcut())
+
+
+@bind_agent_output
+class TestNL2JSONAdversarial(AIAssistantTestCase):
+    """AI 坏输出对抗样本（JSON 提取闸门）"""
+
+    def _convert(self, selection=None):
+        return assemble_recorded_output(self, selection=selection)
+
+    def test_truncated_json(self, mock_chat):
+        """截断的 JSON（模型输出中断）"""
+        mock_chat.return_value = '{"conditions": [{"raw_name": "usern'
+        with self.assertRaises(AIOutputParseFailedError):
+            self._convert()
+
+    def test_empty_response(self, mock_chat):
+        mock_chat.return_value = ""
+        with self.assertRaises(AIOutputParseFailedError):
+            self._convert()
+
+    def test_multiple_json_blocks(self, mock_chat):
+        """多个 JSON 对象拼接"""
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT) + json.dumps(VALID_AI_OUTPUT)
+        with self.assertRaises(AIOutputParseFailedError):
+            self._convert()
+
+    def test_fullwidth_quotes_rejected(self, mock_chat):
+        """全角引号（中文标点）——当前不支持，文档化行为：拒绝而非错判"""
+        mock_chat.return_value = '{"conditions": [{"raw_name": "username", "operator": "eq", "filters": ["admin"]}]}'
+        condition = self._convert()
+        self.assertEqual(len(condition.conditions), 1)
+
+    def test_unicode_escaped_json(self, mock_chat):
+        """\\uXXXX 转义（ensure_ascii 输出）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "username", "keys": [], "operator": "eq", "filters": ["管理员"]}]
+        mock_chat.return_value = json.dumps(output, ensure_ascii=True)
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].filters, ["管理员"])
+
+    def test_numeric_filters_for_eq(self, mock_chat):
+        """eq 操作符的数值型 filters（原始查询值形态）"""
+        selection = self.make_selection(
+            standard_fields=[self.make_standard_field(raw_name="result_code", allow_operators=["eq", "gt"])]
+        )
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [{"raw_name": "result_code", "keys": [], "operator": "eq", "filters": [0]}]
+        mock_chat.return_value = json.dumps(output)
+        condition = self._convert(selection=selection)
+        self.assertEqual(condition.conditions[0].filters, [0])
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
+
+    def test_legacy_null_field_type_uses_standard_field_metadata(self, mock_chat):
+        """旧 Agent 显式输出 null 时，标准字段仍由权威元数据补全。"""
+
+        selection = self.make_selection(
+            standard_fields=[self.make_standard_field(raw_name="result_code", allow_operators=["eq"])]
+        )
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "result_code",
+                "keys": [],
+                "field_type": None,
+                "operator": "eq",
+                "filters": [0],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+
+        condition = self._convert(selection=selection)
+
+        self.assertEqual(condition.conditions[0].field.field_type, "int")
+
+    def test_deeply_nested_malformed_keys(self, mock_chat):
+        """深层嵌套 keys 放行（产品取消层级限制：SQL 层逐级提取天然支持任意深度）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"] = [
+            {
+                "raw_name": "extend_data",
+                "keys": ["a", "b", "c"],
+                "operator": "eq",
+                "filters": ["x"],
+            }
+        ]
+        mock_chat.return_value = json.dumps(output)
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].field.keys, ["a", "b", "c"])
+
+    def test_condition_with_extra_noise_fields(self, mock_chat):
+        """AI 输出附加多余字段（容错：Pydantic 忽略多余键）"""
+        output = dict(VALID_AI_OUTPUT)
+        output["conditions"][0]["explanation"] = "这是操作人字段"
+        mock_chat.return_value = json.dumps(output)
+        condition = self._convert()
+        self.assertEqual(condition.conditions[0].field.raw_name, "username")
+
+    def test_long_noise_after_valid_json(self, mock_chat):
+        """合法 JSON 前缀 + 超长噪音后缀 → 容错提取成功（花括号正则贪婪回溯）"""
+        mock_chat.return_value = json.dumps(VALID_AI_OUTPUT) + "长文本噪音" * 5000
+        condition = self._convert()
+        self.assertEqual(len(condition.conditions), 1)
+
+    def test_very_long_pure_garbage(self, mock_chat):
+        """纯超长垃圾文本（无 JSON）不崩，抛业务异常"""
+        mock_chat.return_value = "这只是一段毫无意义的长文本" * 10000
+        with self.assertRaises(AIOutputParseFailedError):
+            self._convert()

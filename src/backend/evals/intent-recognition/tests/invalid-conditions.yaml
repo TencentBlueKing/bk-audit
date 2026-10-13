@@ -1,0 +1,23 @@
+- description: '非法条件-明确系统但操作符不受字段支持'
+  vars:
+    query: '查询示例审计系统（系统ID：eval_audit_primary）操作人 username 大于 eval_user_alpha 的日志，请使用 gt 操作符'
+    current_system_id: ''
+    scope_type: 'cross_system'
+    scope_id: ''
+    current_time: '2026-09-20T10:00:00+08:00'
+    authorized_systems:
+      - system_id: 'eval_audit_primary'
+        name: '示例审计系统'
+        description: '审计日志与操作记录'
+        standard_fields:
+          - raw_name: 'username'
+            keys: []
+            field_type: 'string'
+            display_name: '操作人'
+            nl_name: '操作人'
+            description: '执行操作的用户'
+            allow_operators: ['eq', 'include']
+        extension_fields: []
+  assert:
+    - type: javascript
+      value: 'const d = JSON.parse(output); d.status === "success" && d.outcome === "error" && d.error_code === "INVALID_CONDITION" && d.messages.length === 0'

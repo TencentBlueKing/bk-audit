@@ -144,6 +144,7 @@ class TestSubmitRenderTask(TestCase):
         ai_provider = next(p for p in call_kwargs["providers"] if isinstance(p, AIProvider))
         self.assertIsInstance(ai_provider, AIProvider)
         self.assertEqual(ai_provider.context, {"risk_id": self.risk.risk_id})
+        self.assertFalse(ai_provider.enable_agent_rate_limit)
         # AIProvider 内部将 list 转为 dict 格式
         # 根据 PREDEFINED_PROMPT_TEMPLATE 是否为空来动态计算期望的 prompt_template
         prefix = AIVariableConfig.PREDEFINED_PROMPT_TEMPLATE

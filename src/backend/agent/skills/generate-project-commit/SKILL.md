@@ -1,13 +1,15 @@
 ---
 name: generate-project-commit
-description: Use when generating, validating, or committing bk-audit project commit messages from intended changes.
+description: Generate, validate, or commit bk-audit backend changes using its shell title validator and local hooks.
 ---
 
 # 生成项目 Commit
 
 ## Core Rule
 
-只处理用户期望提交的内容。不要 `git add .`，不要把未确认的工作区改动带进 commit。范围不清时先问清楚文件或变更主题。
+只处理用户期望提交的后端内容。不要 `git add .`，不要把未确认的工作区改动带进 commit。
+规则与脚本保持在 `src/backend`，不为前端安装 hook、不修改全局 Git 配置。
+安装和范围隔离详见后端 [pre-commit 说明](../../../docs/pre-commit.md)。
 
 ## Workflow
 
@@ -27,14 +29,19 @@ git log -n 20 --pretty=format:"%s"
 
 3. 生成 commit 内容：
    - AI 先归纳 `type`、标题、tracker、正文 bullet。
-   - 用 `scripts/commit_message.py render` 渲染并校验格式。
-   - 正文使用总览性 bullet，不写代码实现细节。
+   - 用 `scripts/commit_message.sh validate` 校验标题；该脚本是唯一标题规则来源。
+   - 可继续用 `scripts/commit_message.py render` 生成 message；Python 入口会委托 shell 校验。
+   - 正文可选，推荐总览性 bullet，不写代码实现细节。
 
 4. 用户明确要求实际提交时：
    - 只 `git add` 本次涉及文件。
    - 按项目要求运行 `.venv/bin/pre-commit run`。
    - pre-commit 改了文件后，重新检查 diff，必要时再次 `git add` 本次涉及文件。
-   - 使用脚本生成且校验通过的完整 commit message 执行 `git commit`。
+   - 使用校验通过的完整 commit message 执行 `git commit`。
+   - 初次接入时执行 `make install-hooks`，安装 `pre-commit` 和 `commit-msg` 两个入口。
+     安装仍使用项目 `.venv/bin/pre-commit`；标题校验通过 sh 执行，不硬编码 Python 路径。
+   - hook 在含后端改动、混合提交或无暂存差异的 message 改写时校验；纯前端提交跳过。
+     遇到 `core.hooksPath` 冲突时先检查来源，不自动 unset 或覆盖其他工具。
 
 ## Commit Message Format
 
@@ -79,7 +86,7 @@ fix: 修复报表删除残留收藏关系 #1234
 
 ## Validation
 
-不要把正则规则复制进对话。使用脚本生成和校验：
+不要复制正则规则。以下命令从 `src/backend` 执行。可选的 Python 渲染入口：
 
 ```bash
 .venv/bin/python agent/skills/generate-project-commit/scripts/commit_message.py render \
@@ -93,16 +100,23 @@ fix: 修复报表删除残留收藏关系 #1234
 校验已有 message：
 
 ```bash
-.venv/bin/python agent/skills/generate-project-commit/scripts/commit_message.py validate --message-file /tmp/commit-message.txt
+sh agent/skills/generate-project-commit/scripts/commit_message.sh validate --message-file /tmp/commit-message.txt
 ```
 
 检查最近 20 条历史提交格式：
 
 ```bash
-.venv/bin/python agent/skills/generate-project-commit/scripts/commit_message.py check-log -n 20
+sh agent/skills/generate-project-commit/scripts/commit_message.sh check-log -n 20
 ```
 
-普通提交不要生成 `Merge` 类型；`Merge` 只允许在 `check-log` 或显式校验合并提交时出现。
+修正历史后优先检查明确范围：
+
+```bash
+sh agent/skills/generate-project-commit/scripts/commit_message.sh check-range <base>..HEAD
+```
+
+普通提交不要生成 `Merge` 类型；合并标题只在历史检查或显式 `--allow-merge` 时允许。
+hook 检查当前 message，不扫描既有历史；格式校验不验证 TAPD/GitHub 中实际关联是否存在。
 
 ## Body Style
 
