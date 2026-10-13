@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import List
+from typing import List, Set
 
 from django.utils.translation import gettext_lazy
 
@@ -62,3 +62,21 @@ class SOPSTaskOperation(TextChoices):
 
     REVOKE = "revoke", gettext_lazy("终止任务")
     RETRY = "retry", gettext_lazy("重试")
+
+
+class SOPSConstantSourceType(TextChoices):
+    """标准运维全局变量来源。
+
+    与 bk-sops ``pipeline_web.parser.format.classify_constants`` 对齐：
+    custom、component_inputs 的值在创建任务时写入；component_outputs 绑定节点输出。
+    """
+
+    CUSTOM = "custom", gettext_lazy("自定义变量")
+    COMPONENT_INPUTS = "component_inputs", gettext_lazy("节点输入变量")
+    COMPONENT_OUTPUTS = "component_outputs", gettext_lazy("节点输出变量")
+
+    @classmethod
+    def user_input_types(cls) -> Set[str]:
+        """创建任务时允许覆盖的变量来源。节点输出不在此列。"""
+
+        return {cls.CUSTOM.value, cls.COMPONENT_INPUTS.value}

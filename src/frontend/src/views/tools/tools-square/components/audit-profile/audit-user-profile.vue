@@ -19,6 +19,7 @@
     <!-- 查询输入 -->
     <profile-query-input
       ref="queryInputRef"
+      :allowed-account-types="scopeAllowedAccountTypes"
       :loading="isQuerying"
       @query="handleQuery"
       @reset="handleReset" />
@@ -194,6 +195,7 @@
   import ColumnEnumFilter from './column-enum-filter.vue';
   import ProfileQueryInput from './profile-query-input.vue';
   import ProfileUserInfo from './profile-user-info.vue';
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import {
     parseSmartPageGameDetailIntent,
@@ -202,6 +204,10 @@
   import { getDataRangeParamsFromToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import type { DataRangeToolConfig } from '@/views/tools/tools-square/utils/data-range-params';
   import { getToolDetailScopeQuery } from '@/utils/assist/scene-system-params';
+  import {
+    allowedAccountTypesFromApi,
+    findPortraitUsageDenial,
+  } from '@/utils/tool/portrait-account-restriction';
 
   import '@blueking/tdesign-ui/vue3/index.css';
 
@@ -210,6 +216,8 @@
 
   interface Props {
     toolUid?: string;       // 工具 uid，用于调用执行接口
+    queryCacheKey?: string; // 查询状态缓存 key（含场景/系统），不同场景互不复用
+    allowedAccountTypes?: string[] | null;  // 工具详情按当前场景/系统返回的可用账号类型，null 表示不限制
     toolConfig?: DataRangeToolConfig & {          // 工具配置，包含 property.scene_id 用于跳转风险时携带场景
       property?: {
         scene_id?: number | string;
@@ -225,10 +233,13 @@
 
   const props = withDefaults(defineProps<Props>(), {
     toolUid: '',
+    queryCacheKey: '',
+    allowedAccountTypes: null,
     toolConfig: () => ({}),
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const { messageError } = useMessage();
   const router = useRouter();
   const route = useRoute();
 
@@ -314,12 +325,13 @@
   const gameSearchKey = ref<GameSearchKey[]>([]);
 
   // ========== 状态持久化（sessionStorage）==========
-  // key 按 toolUid 区分：
+  // key 按 toolUid + 场景/系统区分：
   // 1. 多个画像工具实例间互不干扰
-  // 2. 关闭工具 tab 时，外层可按 toolUid 精准清除该工具的查询状态
-  // 3. 刷新页面 / 同 tab 内路由切换返回时，该 key 仍然存在，可恢复查询
+  // 2. 不同场景的账号类型限制不同，切换场景后不能复用其它场景的查询
+  // 3. 关闭工具 tab 时，外层可按 toolUid 前缀精准清除该工具的查询状态
+  // 4. 刷新页面 / 同 tab 内路由切换返回时，该 key 仍然存在，可恢复查询
   const STORAGE_KEY_PROFILE_QUERY_PREFIX = 'tool_audit_profile_query_';
-  const getStorageKey = () => `${STORAGE_KEY_PROFILE_QUERY_PREFIX}${props.toolUid || ''}`;
+  const getStorageKey = () => `${STORAGE_KEY_PROFILE_QUERY_PREFIX}${props.queryCacheKey || props.toolUid || ''}`;
 
   // 保存查询状态到 sessionStorage
   const saveQueryState = (accountType: string, accountId: string) => {
@@ -557,6 +569,8 @@
     props.toolConfig,
     getToolDetailScopeQuery(),
   );
+
+  const scopeAllowedAccountTypes = computed(() => allowedAccountTypesFromApi(props.allowedAccountTypes));
 
   // ========== 接口调用：用户信息 (main_user_info) ==========
   const {
@@ -1138,6 +1152,13 @@
 
   // ========== 查询入口：根据账号类型分发不同的查询链路 ==========
   const handleQuery = (accountType: string, accountId: string) => {
+    const denial = findPortraitUsageDenial(scopeAllowedAccountTypes.value, accountType);
+    if (denial) {
+      isQuerying.value = false;
+      hasQueried.value = false;
+      messageError(denial);
+      return;
+    }
     // openid 类型查询时，先不设置 hasQueried，等结果返回后再决定
     hasQueried.value = accountType !== 'openid';
     // 立即进入"查询中"状态，确保 loading 占位立刻显示（涵盖 openid 类型 hasQueried=false 的场景）
@@ -1364,6 +1385,11 @@
   };
 
   // ========== 组件挂载时恢复查询状态 ==========
+  // 自动恢复（URL / sessionStorage）不弹限制提示，账号类型不被当前空间允许时直接放弃恢复
+  const isAccountTypeAllowed = (accountType: string) => (
+    !findPortraitUsageDenial(scopeAllowedAccountTypes.value, accountType)
+  );
+
   const applyUrlQueryIfPresent = () => {
     if (!props.toolUid || hasAppliedUrlQuery.value) return false;
     // 游戏详情 URL 也会带 openid/wecom 等字段；仅在当前路由为本智能页时才解析执行，避免误触发其它账号类型查询
@@ -1378,6 +1404,12 @@
     markSmartPageIntentApplied();
     if (!parsed) {
       tryOpenGameDetailFromUrlIntent();
+      return true;
+    }
+    if (!isAccountTypeAllowed(parsed.accountType)) {
+      pendingGameDetailIntent.value = null;
+      clearQueryState();
+      emit('urlParamsSync', { accountType: '', accountId: '' });
       return true;
     }
     // 已查询过相同账号时不再重复 execute，仅补齐游戏详情跳转意图
@@ -1399,6 +1431,10 @@
     }
     const savedState = loadQueryState();
     if (savedState && savedState.toolUid === props.toolUid && savedState.accountId) {
+      if (!isAccountTypeAllowed(savedState.accountType)) {
+        clearQueryState();
+        return;
+      }
       nextTick(() => {
         queryInputRef.value?.setForm(savedState.accountType, savedState.accountId);
         handleQuery(savedState.accountType, savedState.accountId);
