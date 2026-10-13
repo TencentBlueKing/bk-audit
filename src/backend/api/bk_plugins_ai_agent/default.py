@@ -21,6 +21,8 @@ import json
 import os
 import threading
 import time
+from contextvars import ContextVar
+from typing import Any, Callable
 
 from bk_resource import BkApiResource
 from bk_resource.exceptions import APIRequestError
@@ -30,10 +32,8 @@ from django.utils.translation import gettext_lazy
 from requests.exceptions import HTTPError
 
 from api.bk_plugins_ai_agent.agui import AGUIFinalMessageParser
-from api.bk_plugins_ai_agent.constants import (
-    AI_STREAM_PREVIEW_LIMIT,
-    AI_THINKING_PLACEHOLDERS,
-)
+from api.bk_plugins_ai_agent.constants import AI_THINKING_PLACEHOLDERS
+from api.bk_plugins_ai_agent.exceptions import AGUIStreamProtocolError
 from api.bk_plugins_ai_agent.rate_limiter import agent_rate_limiter
 from api.constants import AI_AGENT_APP_CODE_TMPL, AI_AGENT_SECRET_KEY_TMPL, AIAgentCode
 from api.utils import get_agent_base_url
@@ -123,11 +123,20 @@ class AIAgentBase(BkApiResource, abc.ABC):
 
 
 class ChatCompletion(AIAgentBase):
-    """通用 AI Agent 对话接口，通过 agent_code 参数路由到不同智能体"""
+    """通用 AI Agent 对话接口，通过 agent_code 参数路由到不同智能体。
+
+    传入 on_event 时逐条交付 JSON 对象，消费到 EOF 后返回 None；不解释 AG-UI 业务语义。
+    不传回调时沿用最终正文解析，兼容已有 Agent 调用方。
+
+    保留 Resource 默认的请求/响应采集，并额外记录路由、耗时和流式事件摘要；
+    异常正文不做隐藏，便于通过生产日志分析 Agent 失败根因。
+    """
 
     name = gettext_lazy("通用智能体对话")
     method = "POST"
     action = "/bk_plugin/openapi/agent/chat_completion/"
+    # Resource 是进程级单例；回调必须按当前请求隔离，不写到实例属性或上游请求中。
+    _on_event_context: ContextVar[Callable[[dict[str, Any]], None] | None] = ContextVar("chat_on_event", default=None)
     agent_code: AIAgentCode | None = None
     enable_agent_rate_limit = True
 
@@ -151,19 +160,22 @@ class ChatCompletion(AIAgentBase):
         return base_url.rstrip("/") + "/" + self.action.lstrip("/")
 
     def perform_request(self, validated_request_data):
-        """取得全局 Agent 配额后发起 HTTP 请求，并记录无正文的调用维度。"""
+        """绑定流式回调并在取得 Agent 全局配额后发起 HTTP 请求。"""
 
+        request_data = dict(validated_request_data)
+        on_event = request_data.pop("on_event", None)
         # 单次开关只允许历史固定 Client 接入限流，不能关闭通用 Client 的默认限流。
-        request_rate_limit_opt_in = validated_request_data.pop("_enable_agent_rate_limit", False)
+        request_rate_limit_opt_in = request_data.pop("_enable_agent_rate_limit", False)
         enable_agent_rate_limit = self.enable_agent_rate_limit or request_rate_limit_opt_in
-        agent_code = self._resolve_agent_code(validated_request_data)
-        self._current_agent_code = agent_code
+        callback_token = self._on_event_context.set(on_event)
         try:
+            agent_code = self._resolve_agent_code(request_data)
+            self._current_agent_code = agent_code
             if enable_agent_rate_limit:
                 agent_rate_limiter.acquire(agent_code)
             request_started_at = time.monotonic()
             try:
-                result = super().perform_request(validated_request_data)
+                result = super().perform_request(request_data)
             except Exception as error:
                 logger.warning(
                     "AI agent downstream request failed",
@@ -183,6 +195,7 @@ class ChatCompletion(AIAgentBase):
             )
             return result
         finally:
+            self._on_event_context.reset(callback_token)
             self._current_agent_code = None
 
     def build_header(self, validated_request_data):
@@ -197,11 +210,13 @@ class ChatCompletion(AIAgentBase):
         if isinstance(request_data, dict):
             execute_kwargs = request_data.get("execute_kwargs") or {}
             logger.info(
-                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, chat_history_count=%s",
-                request_data.get("agent_code"),
+                "AI agent request prepared: agent_code=%s, stream=%s, input_size=%s, "
+                "chat_history_count=%s, thread_id=%s",
+                self._current_agent_code,
                 bool(execute_kwargs.get("stream")),
                 len(request_data.get("input") or ""),
                 len(request_data.get("chat_history") or []),
+                execute_kwargs.get("thread_id"),
             )
             if execute_kwargs.get("stream"):
                 kwargs["stream"] = True
@@ -229,10 +244,6 @@ class ChatCompletion(AIAgentBase):
             return bool(execute_kwargs.get("stream"))
         except Exception:
             return False
-
-    @staticmethod
-    def _content_preview(content: str, limit: int = AI_STREAM_PREVIEW_LIMIT) -> str:
-        return (content or "").replace("\n", "\\n").replace("\r", "\\r")[:limit]
 
     @staticmethod
     def _clean_final_content(content: str) -> str:
@@ -341,7 +352,7 @@ class ChatCompletion(AIAgentBase):
         logger.info(
             "AI stream parsed: status_code=%s, line_count=%s, data_line_count=%s, invalid_json_count=%s, "
             "event_counts=%s, terminal_seen=%s, stream_done=%s, event_done=%s, ag_ui_finished=%s, "
-            "text_size=%s, done_size=%s, final_size=%s, final_source=%s, preview_limit=%s",
+            "text_size=%s, done_size=%s, final_size=%s, final_source=%s",
             getattr(response, "status_code", None),
             line_count,
             data_line_count,
@@ -355,15 +366,7 @@ class ChatCompletion(AIAgentBase):
             len(done_content or ""),
             len(final_content),
             final_source,
-            AI_STREAM_PREVIEW_LIMIT,
         )
-        for part, content in (("text", text_content), ("done", done_content or ""), ("final", final_content)):
-            logger.info(
-                "AI stream content preview: part=%s, size=%s, preview=%s",
-                part,
-                len(content),
-                self._content_preview(content),
-            )
         if not terminal_seen:
             error_message = (
                 "智能体流式响应未完整结束，请稍后重试；"
@@ -415,15 +418,14 @@ class ChatCompletion(AIAgentBase):
         return final_content
 
     def parse_response(self, response):
+        on_event = self._on_event_context.get()
+        if on_event is not None:
+            content_type = (response.headers.get("Content-Type") or response.headers.get("content-type") or "").lower()
+            if content_type and "text/event-stream" not in content_type:
+                return self._reject_non_stream_callback_response(response)
+            return self._relay_stream_response(response, on_event)
         is_stream_response = self._is_stream_response(response)
-        logger.info(
-            "AI agent response received: status_code=%s, content_type=%s, stream_response=%s",
-            getattr(response, "status_code", None),
-            (response.headers.get("Content-Type") or response.headers.get("content-type") or "")
-            if getattr(response, "headers", None)
-            else "",
-            is_stream_response,
-        )
+        self._log_response_received(response, is_stream_response=is_stream_response)
         if is_stream_response:
             try:
                 response.raise_for_status()
@@ -438,6 +440,11 @@ class ChatCompletion(AIAgentBase):
                         code=result_json.get("code"),
                         message=result_json.get("message"),
                     )
+                logger.error(
+                    "AI agent stream HTTP error: status_code=%s, body=%s",
+                    response.status_code,
+                    content,
+                )
                 raise APIRequestError(
                     module_name=self.module_name,
                     url=self.action,
@@ -459,3 +466,72 @@ class ChatCompletion(AIAgentBase):
                     if isinstance(delta, dict) and "content" in delta:
                         return delta["content"]
         return data
+
+    def _reject_non_stream_callback_response(self, response) -> None:
+        """保留 Agent 的标准错误；成功的非 SSE 响应按传输协议错误处理。"""
+
+        try:
+            self._log_response_received(response, is_stream_response=False)
+            super().parse_response(response)
+            raise AGUIStreamProtocolError("Agent 未按约定返回 SSE 事件流")
+        finally:
+            response.close()
+
+    @staticmethod
+    def _log_response_received(response, *, is_stream_response: bool) -> None:
+        """记录响应传输元数据。"""
+
+        logger.info(
+            "AI agent response received: status_code=%s, content_type=%s, stream_response=%s",
+            getattr(response, "status_code", None),
+            (response.headers.get("Content-Type") or response.headers.get("content-type") or "")
+            if getattr(response, "headers", None)
+            else "",
+            is_stream_response,
+        )
+
+    def _relay_stream_response(self, response, on_event: Callable[[dict[str, Any]], None]) -> None:
+        """拆除 SSE 外壳后交付 JSON 对象；业务方自行归档并提取最终结果。
+
+        Agent 约定每条 data 行为一个完整 JSON 对象，不在此校验事件类型或生命周期。
+        不另存事件副本，也不在 RUN_FINISHED 提前退出，以免丢弃上游尾部事件。
+        """
+        event_count = 0
+        try:
+            self._log_response_received(response, is_stream_response=True)
+            try:
+                response.raise_for_status()
+            except HTTPError:
+                logger.error(
+                    "AI agent relayed stream HTTP error: status_code=%s, body=%s",
+                    getattr(response, "status_code", None),
+                    getattr(response, "content", b""),
+                )
+                raise
+            # 两种传输形态均复用库默认块大小。接受非 chunked 小事件等待缓冲或 EOF，
+            # 避免逐字节读取造成长行反复拼接、扫描；EOF 前必须消费完整响应。
+            for raw_line in response.iter_lines(decode_unicode=False):
+                line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                if not line or not line.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(line[len("data:") :])
+                except (TypeError, json.JSONDecodeError) as error:
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象") from error
+                if not isinstance(event, dict):
+                    raise AGUIStreamProtocolError("AG-UI 事件不是 JSON 对象")
+                event_type = event.get("type") or event.get("event")
+                if event_type in {"RUN_ERROR", "error"}:
+                    error_message = event.get("message") or event.get("error") or event.get("content") or ""
+                    logger.error(
+                        "AI agent relayed stream error event: type=%s, code=%s, message=%s",
+                        event_type,
+                        event.get("code"),
+                        error_message,
+                    )
+                on_event(event)
+                event_count += 1
+            logger.info("AI agent stream relayed: event_count=%s", event_count)
+        finally:
+            # HTTP、协议或业务回调失败均需释放连接；请求上下文由 perform_request 清理。
+            response.close()
