@@ -58,6 +58,7 @@ export default {
     分组名称: 'Group Name',
     请输入: 'Please enter',
     分组名称不能为空: 'Group name cannot be empty',
+    可见范围不能为空: 'Visible range cannot be empty',
     // Toggle Status Confirm Dialog
     '确认启用该报表？': 'Confirm to enable this report?',
     '确认停用该报表？': 'Confirm to disable this report?',
@@ -75,6 +76,7 @@ export default {
     '搜索或粘贴名称/ID': 'Search or paste name/ID',
     '已批量勾选 {n} 项': 'Batch selected {n} item(s)',
     '未匹配 {n} 项：{list}': 'Unmatched {n} item(s): {list}',
+    当前配置等同于不限制: 'The current configuration is equivalent to no restriction',
     未匹配到可勾选的选项: 'No matching options found',
     预览: 'Preview',
     '请输入报表名称（选择报表后自动填充）': 'Please enter report name (auto-filled after selecting report)',

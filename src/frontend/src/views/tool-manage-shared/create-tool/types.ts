@@ -115,6 +115,20 @@ export interface FormData {
     sql: string;
     uid: string;
     default_value_overrides?: DefaultValueOverrides;
+    usage_restrictions?: {
+      scenes?: Record<string, Array<{
+        id: string;
+        kind: 'allowed_values';
+        param: 'type';
+        allowed: string[];
+      }>>;
+      systems?: Record<string, Array<{
+        id: string;
+        kind: 'allowed_values';
+        param: 'type';
+        allowed: string[];
+      }>>;
+    };
     output_config: {
       enable_grouping: boolean;
       groups: Array<{

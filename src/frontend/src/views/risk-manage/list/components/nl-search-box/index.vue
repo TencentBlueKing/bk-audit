@@ -20,7 +20,7 @@
     <div class="nl-search-header">
       <img
         class="nl-search-header-icon"
-        src="@/images/aixiaojing.svg">
+        :src="aiXiaojingIcon">
       <span class="nl-search-header-title">{{ t('智能搜索') }}</span>
     </div>
 
@@ -39,7 +39,7 @@
       <div class="nl-search-warning-content">
         <img
           class="nl-search-warning-icon"
-          src="@/images/info.svg">
+          :src="infoIcon">
         <span>{{ t('未识别到有效搜索条件，请输入责任人、风险等级、处理状态等关键词') }}</span>
       </div>
       <audit-icon
@@ -110,6 +110,8 @@
   } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+  import aiXiaojingIcon from '@/images/aixiaojing.svg?inline';
+  import infoIcon from '@/images/info.svg';
   import AddCondition from './components/add-condition.vue';
   import ConditionTags from './components/condition-tags.vue';
   import NlInput from './components/nl-input.vue';
@@ -780,11 +782,8 @@
     editSnapshot = takeSearchSnapshot();
   };
 
-  // 更新单个条件值（条件标签编辑态提交）
-  // 注意：使用直接属性赋值而非展开运算符，避免 searchModel 引用变化导致 popover 重渲染关闭
   const handleUpdateCondition = (fieldName: string, value: any) => {
     if (fieldName === 'datetime') {
-      // 日期字段：bk-date-picker 返回格式化的日期时间字符串数组
       if (Array.isArray(value) && value.length >= 2) {
         const formatted = value.map((item: any) => (
           typeof item === 'number' || item instanceof Date
@@ -792,8 +791,6 @@
             : item
         ));
         searchModel.value.datetime = formatted;
-        // 手动选择具体日期时，datetime_origin 设为具体日期（非快捷选项）
-        searchModel.value.datetime_origin = formatted;
       }
     } else if (fieldName === 'datetime_origin') {
       // 快捷选项变更时同步 datetime_origin（如 ['now-6M', 'now']）

@@ -128,6 +128,8 @@
           v-if="tool.tool_type === 'smart_page'"
           v-show="activeUid === tool.uid"
           :key="`${tool.uid}:${props.scopeParams?.scope_type || ''}:${props.scopeParams?.scope_id || ''}`"
+          :allowed-account-types="toolDetailMap[tool.uid]?.allowed_account_types"
+          :query-cache-key="getSearchValuesCacheKey(tool.uid)"
           :tool-config="toolDetailMap[tool.uid]?.config"
           :tool-uid="tool.uid"
           @open-game-detail="handleOpenGameDetail"
@@ -720,7 +722,7 @@
     const detail = toolDetailMap.value[uid];
     if (!detail) return;
 
-    const smartPageParams = smartPageUrlParamsMap.value[uid];
+    const smartPageParams = smartPageUrlParamsMap.value[getSearchValuesCacheKey(uid)];
     const query = mergeToolRouteQuery(route.query as Record<string, unknown>, detail.tool_type, {
       searchList: searchListMap.value[uid],
       accountType: smartPageParams?.accountType,
@@ -746,10 +748,11 @@
     uid: string,
     params: { accountType: string; accountId: string },
   ) => {
+    const cacheKey = getSearchValuesCacheKey(uid);
     if (params.accountId) {
-      smartPageUrlParamsMap.value[uid] = params;
+      smartPageUrlParamsMap.value[cacheKey] = params;
     } else {
-      delete smartPageUrlParamsMap.value[uid];
+      delete smartPageUrlParamsMap.value[cacheKey];
     }
     if (props.activeUid === uid) {
       syncToolParamsToRoute(uid);
@@ -888,7 +891,7 @@
     if (!detail) return;
 
     if (detail.tool_type === 'smart_page') {
-      if (smartPageUrlParamsMap.value[uid]?.accountId) {
+      if (smartPageUrlParamsMap.value[getSearchValuesCacheKey(uid)]?.accountId) {
         syncToolParamsToRoute(uid);
       }
       // 尚无账号参数时保留 URL 中的 openid 等深链参数
@@ -1340,12 +1343,15 @@
         }
       });
       // 清理已关闭的 smart_page 工具在 sessionStorage 中保存的查询输入
+      // key 格式为 前缀 + uid[:scene:xx | :system:xx]
       try {
         Object.keys(sessionStorage)
           .filter(key => key.startsWith(STORAGE_KEY_PROFILE_QUERY_PREFIX))
           .forEach((key) => {
-            const uid = key.slice(STORAGE_KEY_PROFILE_QUERY_PREFIX.length);
-            if (uid && !activeUids.has(uid)) {
+            const cacheKey = key.slice(STORAGE_KEY_PROFILE_QUERY_PREFIX.length);
+            if (!cacheKey) return;
+            const stillOpen = [...activeUids].some(uid => cacheKey === uid || cacheKey.startsWith(`${uid}:`));
+            if (!stillOpen) {
               sessionStorage.removeItem(key);
             }
           });

@@ -27,7 +27,7 @@
         </div>
         <div class="account-type-group">
           <div
-            v-for="item in accountTypes"
+            v-for="item in visibleAccountTypes"
             :key="item.value"
             class="account-type-item"
             :class="{ active: selectedAccountType === item.value }"
@@ -67,13 +67,15 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
 
   interface Props {
     loading?: boolean;
+    /** 为 null 时展示全部账号类型；有值时只展示这些取值 */
+    allowedAccountTypes?: string[] | null;
   }
 
   interface Emits {
@@ -89,6 +91,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     loading: false,
+    allowedAccountTypes: null,
   });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -108,6 +111,21 @@
   const selectedAccountType = ref('ctx');
   const accountId = ref('');
 
+  const visibleAccountTypes = computed(() => {
+    if (!props.allowedAccountTypes) return accountTypes;
+    return accountTypes.filter(item => props.allowedAccountTypes?.includes(item.value));
+  });
+
+  const defaultAccountType = () => visibleAccountTypes.value[0]?.value || 'ctx';
+
+  watch(visibleAccountTypes, (list) => {
+    if (!list.length) return;
+    if (!list.some(item => item.value === selectedAccountType.value)) {
+      selectedAccountType.value = list[0].value;
+      accountId.value = '';
+    }
+  }, { immediate: true });
+
   // 根据选择的账号类型动态生成 placeholder
   const placeholderMap: Record<string, string> = {
     ctx: '请输入企业微信账号',
@@ -119,6 +137,9 @@
   const accountPlaceholder = computed(() => t(placeholderMap[selectedAccountType.value] || '请输入'));
 
   const handleAccountTypeChange = (value: string) => {
+    if (!visibleAccountTypes.value.some(item => item.value === value)) {
+      return;
+    }
     if (selectedAccountType.value === value) {
       return;
     }
@@ -165,18 +186,23 @@
   // 重置
   const handleReset = () => {
     accountId.value = '';
-    selectedAccountType.value = 'ctx';
+    selectedAccountType.value = defaultAccountType();
     emit('reset');
   };
 
   // 重置表单（供父组件调用）
   const resetForm = () => {
     accountId.value = '';
-    selectedAccountType.value = 'ctx';
+    selectedAccountType.value = defaultAccountType();
   };
 
   // 设置表单值（供父组件恢复状态时调用）
   const setForm = (accountType: string, account: string) => {
+    if (!visibleAccountTypes.value.some(item => item.value === accountType)) {
+      selectedAccountType.value = defaultAccountType();
+      accountId.value = '';
+      return;
+    }
     selectedAccountType.value = accountType;
     accountId.value = account;
   };

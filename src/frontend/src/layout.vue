@@ -65,6 +65,14 @@
           {{ t('工具广场') }}
         </router-link>
         <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'secChat'
+          }"
+          :to="{ name: 'secChat' }">
+          {{ t('AI助手') }}
+        </router-link>
+        <router-link
           v-if="userRolePermission.show_log_search"
           class="main-navigation-nav "
           :class="{

@@ -526,13 +526,20 @@
     fetchToolsTagsList({ ...scopeParams.value, status: 'published' });
   };
 
+  /** 当前是否在工具广场相关路由（keep-alive 失活时 route 已是其他页） */
+  const isToolsRouteActive = () => route.name === 'toolsSquare' || route.name === 'toolDetail';
+
   const syncToolRouteToUrl = (uid: string) => {
+    // 失活实例仍可能因全局 scene query 变更触发场景同步，禁止抢导航
+    if (!isToolsRouteActive()) return;
     nextTick(() => {
       toolInfoPanelRef.value?.syncRouteForTool(uid);
     });
   };
 
   function syncRouteToUrl(uid?: string, options?: { scopeOnly?: boolean }) {
+    // 仅在工具广场/详情页同步路由；否则会把 AI 助手等页面强行 replace 回工具广场
+    if (!isToolsRouteActive()) return;
     const scopeQuery = getRouteScopeQuery(route.query as Record<string, unknown>);
     if (uid) {
       if (uid.startsWith('game_detail_')) {
@@ -546,7 +553,7 @@
       syncToolRouteToUrl(uid);
       return;
     }
-    if (!uid && route.name !== 'toolsSquare') {
+    if (route.name !== 'toolsSquare') {
       router.replace({ name: 'toolsSquare', query: scopeQuery });
     }
   }
