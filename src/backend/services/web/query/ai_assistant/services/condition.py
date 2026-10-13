@@ -52,6 +52,7 @@ from services.web.query.ai_assistant.schemas import (
     SystemSelectionOutput,
 )
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
 
 # 语义校验拒绝原因 → 用户可读文案（extra.reason 保留机器码供日志排障；message 直达用户）
@@ -60,6 +61,7 @@ INVALID_REASON_MESSAGES = {
     "operator not allowed for field": "该字段不支持此筛选方式",
     "operator not allowed for extension field": "拓展字段不支持此筛选方式",
     "keys on non-json field": "该字段不支持下钻筛选",
+    "unsupported json key": "字段子键不支持空白、控制字符、双引号、反斜杠或星号",
     "numeric operator on string extension field": "拓展字段为文本类型，不支持数值比较",
     "numeric operator on non-numeric field": "该字段为非数值类型，不支持数值比较",
     "unknown operator": "不支持的操作符",
@@ -275,6 +277,10 @@ class ConditionAssemblyService:
         """
         if cond.raw_name not in json_containers:
             raise _invalid_condition_error(cond, "keys on non-json field")
+        try:
+            validate_log_json_keys(cond.keys)
+        except ValueError as err:
+            raise _invalid_condition_error(cond, "unsupported json key") from err
 
     @classmethod
     def _validate_standard_condition(cls, cond: AIConditionItem, standard_map: dict) -> None:

@@ -15,12 +15,14 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
+import re
 from typing import Any, Iterator, List, Optional, Union
 
 from pymysql.converters import escape_string
 from pypika.terms import Criterion
 from pypika.terms import Field as _PypikaField
-from pypika.terms import Function, NodeT
+from pypika.terms import Function, NodeT, Term, ValueWrapper
 from pypika.utils import builder, format_alias_sql, format_quotes
 
 from core.sql.constants import DORIS_FIELD_KEY_QUOTE, FieldType
@@ -174,9 +176,13 @@ class DorisVariantField(DorisField):
 
 
 class DorisJsonTypeExtractFunction(Function):
+    """Doris JSON 字段提取函数。
+
+    普通路径段保留 ``$.key`` 形式；其他子键使用 ``$."key"`` 并完成两层转义。
+    这里只负责 JSONPath 与 SQL 字符串编码，不施加业务模块的字段限制。
     """
-    Doris json类型字段检索支持
-    """
+
+    _SIMPLE_JSON_PATH_KEY = re.compile(r"^\w+$", flags=re.UNICODE)
 
     json_extract_functions = {
         FieldType.STRING: 'JSON_EXTRACT_STRING',
@@ -194,4 +200,31 @@ class DorisJsonTypeExtractFunction(Function):
         self.name = self.json_extract_functions.get(
             self.target_field_type, self.json_extract_functions[FieldType.STRING]
         )
-        self.args = [self.wrap_constant(param) for param in (field, f"$.{'.'.join(keys)}")]
+        self.args = [self.wrap_constant(field), self.json_path_term(keys)]
+
+    @classmethod
+    def json_path_term(cls, keys: List[str]) -> Term:
+        """构造保持原始键语义的路径表达式，不施加业务字段限制。
+
+        BKBase 重写 SQL 时会丢失字符串内单引号的转义，因此用 CHAR 构造该字符。
+        其他路径继续使用字面量，JSONPath 与 SQL 反斜杠编码保持原样。
+        """
+        path = cls._format_json_path(keys) if keys else "$"
+        if "'" not in path:
+            return ValueWrapper(path)
+        parts = path.split("'")
+        args = [ValueWrapper(parts[0])]
+        for part in parts[1:]:
+            args.extend([Function("CHAR", ord("'")), ValueWrapper(part)])
+        return Function("CONCAT", *args)
+
+    @classmethod
+    def _format_json_path(cls, keys: List[str]) -> str:
+        """将业务子键编码为 JSONPath 字面路径，避免标点被解释为路径语法。"""
+
+        path_segments = (
+            key if cls._SIMPLE_JSON_PATH_KEY.fullmatch(key) else json.dumps(key, ensure_ascii=False) for key in keys
+        )
+        path = f"$.{'.'.join(path_segments)}"
+        # JSONPath 自身的转义还会进入 SQL 字符串，须再保护一次反斜杠。
+        return path.replace("\\", "\\\\")
