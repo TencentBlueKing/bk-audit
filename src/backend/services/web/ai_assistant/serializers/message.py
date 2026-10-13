@@ -15,6 +15,8 @@ from services.web.ai_assistant.handlers import (
 )
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
+from services.web.query.constants import LogExportFieldScope
+from services.web.query.serializers import LogExportConfigSerializer
 
 
 def _message_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -102,16 +104,27 @@ class MessagePreviewExportRequestSerializer(serializers.Serializer):
     )
 
 
+class MessageFullExportConfigSerializer(LogExportConfigSerializer):
+    """复用日志导出列协议，AI 助手缺省使用标准展示列。"""
+
+    field_scope = serializers.ChoiceField(
+        choices=LogExportFieldScope.choices,
+        default=LogExportFieldScope.AI_STANDARD.value,
+        help_text="导出列范围，默认 ai_standard；specified 时 fields 不能为空",
+    )
+
+
 class MessageFullExportRequestSerializer(serializers.Serializer):
     """全量导出只接收输出列配置，数据范围由消息快照重建，前端不可覆盖。"""
 
     message_uid = serializers.UUIDField(help_text="成功日志检索消息对外 UUID")
-    export_config = serializers.JSONField(
+    export_config = MessageFullExportConfigSerializer(
         required=False,
         default=dict,
         help_text=(
             "导出列配置（field_scope/fields/flatten_extension/extension_keys）；"
-            "field_scope 支持 ai_standard（AI助手标准展示列，与预览导出一致），不影响检索数据范围"
+            "省略配置或 field_scope 时默认 ai_standard（AI助手标准展示列，与预览导出一致），"
+            "不影响检索数据范围；非法配置返回 400"
         ),
     )
 

@@ -5,7 +5,6 @@ from services.web.ai_assistant.exceptions import (
     AIAssistantException,
     ConversationGroupNotFound,
     ConversationNotFound,
-    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
@@ -71,8 +70,8 @@ class ConversationRequestSerializerTest(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["group_uid"], group_uid)
-        self.assertEqual(serializer.validated_data["scope_type"], "scene")
-        self.assertEqual(serializer.validated_data["scope_id"], "2")
+        self.assertNotIn("scope_type", serializer.validated_data)
+        self.assertNotIn("scope_id", serializer.validated_data)
 
         invalid = ConversationCreateRequestSerializer(
             data={"group_uid": "not-a-uuid", "scope_type": "scene", "scope_id": "2"}
@@ -353,14 +352,15 @@ class SidebarRequestSerializerTest(TestCase):
             with self.subTest(serializer=serializer_class.__name__, scope=data["scope_type"]):
                 self.assertTrue(serializer_class(data=data).is_valid())
 
-    def test_move_requires_concrete_scope_and_rejects_cross_scope(self):
+    def test_move_protocol_only_uses_node_uids(self):
         payload = {"source_node_type": SidebarNodeType.CONVERSATION, "source_node_uid": self.source_uid}
-        self.assertFalse(SidebarMoveRequestSerializer(data=payload).is_valid())
-
-        with self.assertRaises(CrossScopeMutationNotAllowed):
-            SidebarMoveRequestSerializer(data={**payload, "scope_type": "cross_scene", "scope_id": None}).is_valid(
-                raise_exception=True
-            )
+        self.assertTrue(SidebarMoveRequestSerializer(data=payload).is_valid())
+        self.assertNotIn("scope_type", SidebarMoveRequestSerializer().fields)
+        self.assertNotIn("scope_id", SidebarMoveRequestSerializer().fields)
+        serializer = SidebarMoveRequestSerializer(data={**payload, "scope_type": "cross_scene", "scope_id": None})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertNotIn("scope_type", serializer.validated_data)
+        self.assertNotIn("scope_id", serializer.validated_data)
 
     def test_search_keyword_is_trimmed_and_required(self):
         serializer = SidebarSearchRequestSerializer(data={**self.scope, "keyword": "  登录  "})

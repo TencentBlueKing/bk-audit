@@ -17,16 +17,14 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-from typing import List
 
 from apps.audit.resources import AuditMixinResource
-from apps.meta.models import SensitiveObject
 from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.service import PermissionService
 from core.models import get_request_username
 from services.web.query.exceptions import LogExportTaskNoPermission
 from services.web.query.models import LogExportTask
-from services.web.query.utils.formatter import HitsFormatter
+from services.web.query.search_data import SearchDataParser as BaseSearchDataParser
 
 
 class QueryBaseResource(AuditMixinResource, abc.ABC):
@@ -36,35 +34,16 @@ class QueryBaseResource(AuditMixinResource, abc.ABC):
         return get_request_username()
 
 
-class SearchDataParser:
+class SearchDataParser(BaseSearchDataParser):
+    """兼容旧 Resource 导入和 mock 路径的脱敏解析器。"""
+
     @staticmethod
-    def mark_sensitive_permissions(sensitive_objs: List[SensitiveObject], username: str) -> None:
-        """Mark sensitive objects; PermissionService hides V3 resource vs V4 no-resource details."""
-        if not username:
-            for sensitive_obj in sensitive_objs:
-                setattr(sensitive_obj, "_has_permission", False)
-            return
+    def _permission_service(username: str) -> PermissionService:
+        return PermissionService(username=username)
 
-        permissions = PermissionService(username=username).get_sensitive_object_permissions(
-            [sensitive_obj.id for sensitive_obj in sensitive_objs]
-        )
-        for sensitive_obj in sensitive_objs:
-            setattr(sensitive_obj, "_has_permission", permissions.get(str(sensitive_obj.id), False))
-
-    def parse_data(self, data: List[dict], username: str = None) -> list:
-        """
-        :param data: 检索结果
-        :param username: 显式指定脱敏判定身份（Celery 等无请求上下文场景）；
-                         缺省回退 get_request_username()，保持原有行为
-        """
-        # 获取敏感字段列表
-        private_sensitive_objs = list(SensitiveObject._objects.filter(is_private=True))
-        sensitive_objs = list(SensitiveObject.objects.all())
-        # 获取用户信息，用于判断敏感权限
-        if sensitive_objs:
-            self.mark_sensitive_permissions(sensitive_objs, username or get_request_username())
-        # parse
-        return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
+    @staticmethod
+    def _request_username() -> str:
+        return get_request_username()
 
 
 class SearchExportTaskBaseResource(QueryBaseResource, abc.ABC):

@@ -15,6 +15,8 @@ from services.web.ai_assistant.constants import (
     AttachmentExportFormat,
     AttachmentType,
     ExecutionStatus,
+    FeedbackSourceType,
+    FeedbackType,
     MessageType,
 )
 from services.web.ai_assistant.exceptions import (
@@ -64,6 +66,7 @@ from tests.test_ai_assistant.handlers import (
     EchoAttachmentSyncHandler,
     EditableAttachmentEchoHandler,
     ExportableAnalysisAttachmentHandler,
+    preserve_attachment_handler_registry,
     use_attachment_handler,
 )
 
@@ -194,6 +197,9 @@ class EmptyObjectEditableAttachmentHandler(EditableAttachmentEchoHandler):
 
 class AttachmentServiceTest(TestCase):
     def setUp(self):
+        preserve_attachment_handler_registry(self)
+        # 程序统计已注册生产 Handler；机制用例在保存注册表后独占该类型。
+        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
         self.user = "alice"
         self.other_user = "bob"
         for patcher in self._scope_permission_patchers():
@@ -233,6 +239,8 @@ class AttachmentServiceTest(TestCase):
 
     def register_async_handler(self, handler=None):
         handler = handler or RecordingAttachmentAsyncHandler()
+        # AI_ANALYSIS 已有生产 Handler；平台机制用例需要独占该类型注册测试替身。
+        attachment_handler_registry.unregister(handler.attachment_type)
         attachment_handler_registry.register(handler)
         return handler
 
@@ -935,7 +943,7 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(updated.title, "第三次")
         self.assertEqual(updated.output_data, {"content": "latest"})
 
-    def test_retry_only_allows_failed_async_and_preserves_snapshots_without_prepare(self):
+    def test_retry_allows_terminal_async_and_preserves_snapshots_without_prepare(self):
         handler = self.register_async_handler()
         self.register_sync_handler()
         for attachment in (
@@ -977,6 +985,11 @@ class AttachmentServiceTest(TestCase):
         old_context_data = failed_attachment.context_data
         old_task_id = failed_attachment.task_id
         old_content_updated_at = failed_attachment.content_updated_at
+        Message.objects.filter(pk=failed_attachment.source_message_id).update(
+            status=ExecutionStatus.PROCESSING,
+            input_data={"text": "edited after attachment creation"},
+            output_data=None,
+        )
 
         with mock.patch.object(handler.async_task, "apply_async") as apply_async:
             with self.captureOnCommitCallbacks(execute=False) as callbacks:
@@ -1004,6 +1017,72 @@ class AttachmentServiceTest(TestCase):
             kwargs={"attachment_id": retried.id, "task_id": retried.task_id},
             task_id=retried.task_id,
         )
+
+        success_attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            task_id="task-success",
+            output_data={"content": "old success"},
+            stream_config={"execution_id": "old-execution"},
+            stream_archive=[{"delta": "old"}],
+        )
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.ATTACHMENT,
+            source_id=success_attachment.id,
+            feedback_type=FeedbackType.DISLIKE,
+            comment="old feedback",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        with mock.patch.object(handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = self.service.retry(attachment_uid=str(success_attachment.uid))
+        self.assertEqual(retried.status, ExecutionStatus.PROCESSING)
+        self.assertIsNone(retried.output_data)
+        self.assertEqual(retried.error_code, "")
+        self.assertEqual(retried.stream_archive, [])
+        self.assertFalse(
+            Feedback.objects.filter(
+                source_type=FeedbackSourceType.ATTACHMENT,
+                source_id=success_attachment.id,
+            ).exists()
+        )
+
+    def test_retry_cas_failure_preserves_feedback_and_skips_dispatch(self):
+        handler = self.register_async_handler()
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            status=ExecutionStatus.SUCCESS,
+            task_id="task-success",
+            output_data={"content": "old success"},
+        )
+        Feedback.objects.create(
+            source_type=FeedbackSourceType.ATTACHMENT,
+            source_id=attachment.id,
+            feedback_type=FeedbackType.DISLIKE,
+            comment="keep on cas miss",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        with mock.patch.object(Attachment, "restart_terminal", return_value=False), mock.patch.object(
+            handler.async_task, "apply_async"
+        ) as apply_async:
+            with self.captureOnCommitCallbacks(execute=False) as callbacks:
+                with self.assertRaises(InvalidAttachmentState):
+                    self.service.retry(attachment_uid=str(attachment.uid))
+
+        self.assertEqual(list(callbacks), [])
+        self.assertTrue(
+            Feedback.objects.filter(
+                source_type=FeedbackSourceType.ATTACHMENT,
+                source_id=attachment.id,
+            ).exists()
+        )
+        apply_async.assert_not_called()
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(attachment.task_id, "task-success")
 
     def test_retry_locks_only_active_conversation(self):
         self.register_async_handler()
@@ -1097,6 +1176,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        preserve_attachment_handler_registry(self)
         self.user = "alice"
         self.service = AttachmentService(user=self.user)
         for patcher in AttachmentServiceTest._scope_permission_patchers():
@@ -1114,7 +1194,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
             created_by=self.user,
             updated_by=self.user,
         )
-        attachment_handler_registry.register(RecordingAttachmentAsyncHandler())
+        use_attachment_handler(self, RecordingAttachmentAsyncHandler())
 
     def tearDown(self):
         for attachment_type in AttachmentType.values:
@@ -1142,47 +1222,49 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         return threads, results, errors
 
     def test_retry_concurrent_requests_only_one_cas_wins_after_shared_old_snapshot(self):
-        attachment = Attachment.objects.create(
-            source_message=self.source_message,
-            attachment_type=AttachmentType.AI_ANALYSIS,
-            title="原始标题",
-            status=ExecutionStatus.FAILED,
-            task_id="task-old",
-            input_data={"text": "hello"},
-            context_data={"prefix": "ctx"},
-            output_data={"content": "failed"},
-            error_code="OLD_CODE",
-            error_message="old error",
-            content_updated_at=timezone.now(),
-            created_by=self.user,
-            updated_by=self.user,
-        )
-        barrier = threading.Barrier(2)
-        original_get = AttachmentService.get
+        for status in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            with self.subTest(status=status):
+                attachment = Attachment.objects.create(
+                    source_message=self.source_message,
+                    attachment_type=AttachmentType.AI_ANALYSIS,
+                    title="原始标题",
+                    status=status,
+                    task_id="task-old",
+                    input_data={"text": "hello"},
+                    context_data={"prefix": "ctx"},
+                    output_data={"content": "old"},
+                    error_code="OLD_CODE" if status == ExecutionStatus.FAILED else "",
+                    error_message="old error" if status == ExecutionStatus.FAILED else "",
+                    content_updated_at=timezone.now(),
+                    created_by=self.user,
+                    updated_by=self.user,
+                )
+                barrier = threading.Barrier(2)
+                original_get = AttachmentService.get
 
-        def synchronized_get(service, *, attachment_uid):
-            loaded_attachment = original_get(service, attachment_uid=attachment_uid)
-            barrier.wait(timeout=5)
-            return loaded_attachment
+                def synchronized_get(service, *, attachment_uid):
+                    loaded_attachment = original_get(service, attachment_uid=attachment_uid)
+                    barrier.wait(timeout=5)
+                    return loaded_attachment
 
-        def retry_once():
-            return AttachmentService(user=self.user).retry(attachment_uid=str(attachment.uid))
+                def retry_once():
+                    return AttachmentService(user=self.user).retry(attachment_uid=str(attachment.uid))
 
-        with mock.patch.object(
-            AttachmentService, "get", autospec=True, side_effect=synchronized_get
-        ), mock.patch.object(AttachmentService, "_dispatch") as dispatch:
-            threads, results, errors = self.run_threads(retry_once, retry_once)
+                with mock.patch.object(
+                    AttachmentService, "get", autospec=True, side_effect=synchronized_get
+                ), mock.patch.object(AttachmentService, "_dispatch") as dispatch:
+                    threads, results, errors = self.run_threads(retry_once, retry_once)
 
-        self.assertFalse(any(thread.is_alive() for thread in threads))
-        self.assertEqual(len(results), 1)
-        self.assertEqual(len(errors), 1)
-        self.assertIsInstance(errors[0], InvalidAttachmentState)
-        self.assertEqual(dispatch.call_count, 1)
+                self.assertFalse(any(thread.is_alive() for thread in threads))
+                self.assertEqual(len(results), 1)
+                self.assertEqual(len(errors), 1)
+                self.assertIsInstance(errors[0], InvalidAttachmentState)
+                self.assertEqual(dispatch.call_count, 1)
 
-        attachment.refresh_from_db()
-        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
-        self.assertEqual(attachment.task_id, results[0].task_id)
-        self.assertNotEqual(attachment.task_id, "task-old")
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+                self.assertEqual(attachment.task_id, results[0].task_id)
+                self.assertNotEqual(attachment.task_id, "task-old")
 
     def test_retry_rechecks_conversation_after_delete(self):
         attachment = Attachment.objects.create(
@@ -1202,7 +1284,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
         )
         retry_paused = threading.Event()
         release_retry = threading.Event()
-        original_lock = AttachmentService._lock_active_source
+        original_lock = AttachmentService._lock_active_conversation
 
         def pause_before_lock(service, *, source_message):
             retry_paused.set()
@@ -1220,7 +1302,7 @@ class AttachmentServiceConcurrencyTest(TransactionTestCase):
             finally:
                 close_old_connections()
 
-        with mock.patch.object(AttachmentService, "_lock_active_source", pause_before_lock), mock.patch.object(
+        with mock.patch.object(AttachmentService, "_lock_active_conversation", pause_before_lock), mock.patch.object(
             AttachmentService, "_dispatch"
         ) as dispatch:
             thread = threading.Thread(target=retry_attachment)
