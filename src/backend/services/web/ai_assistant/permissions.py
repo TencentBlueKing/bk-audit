@@ -66,6 +66,8 @@ class AIAssistantScopePermission(BasePermission):
         params.update(view.kwargs)
         # 复用接口字段标准化，避免 UUID 整数、字符串空白等造成鉴权与业务对象不一致。
         fields = route.resource_class.RequestSerializer().fields
+        # 仅协议声明的字段可参与 Scope 解析，未知附加参数不能改变鉴权对象。
+        params = {name: value for name, value in params.items() if name in fields}
         for name in (
             "scope_type",
             "scope_id",
@@ -77,8 +79,13 @@ class AIAssistantScopePermission(BasePermission):
             "feedback_uid",
             "source_uid",
             "node_uid",
+            "source_message_uid",
+            "parent_node_uid",
+            "parent_node_type",
+            "source_node_uid",
+            "source_node_type",
         ):
-            if name in params and name in fields:
+            if name in params:
                 try:
                     params[name] = fields[name].run_validation(params[name])
                 except SerializerValidationError:
@@ -93,6 +100,36 @@ class AIAssistantScopePermission(BasePermission):
 
     def _resolve_scope(self, *, source: ScopePermissionSource, params: dict, username: str) -> ScopeContext | None:
         """从请求或本人对象解析 Scope；缺失、非法字段留给 Resource 序列化器。"""
+
+        if source == ScopePermissionSource.REQUEST and params.get("group_uid"):
+            return self._resolve_scope(
+                source=ScopePermissionSource.GROUP, params={"group_uid": params["group_uid"]}, username=username
+            )
+
+        if source == ScopePermissionSource.QUERY:
+            # 集合被业务 UID 限定时，调用方重复提交的 Scope 不能覆盖资源归属。
+            for uid_field, resource_source, target_field in (
+                ("source_message_uid", ScopePermissionSource.MESSAGE, "message_uid"),
+                ("conversation_uid", ScopePermissionSource.CONVERSATION, "conversation_uid"),
+                ("parent_node_uid", ScopePermissionSource.GROUP, "group_uid"),
+            ):
+                if params.get(uid_field):
+                    return self._resolve_scope(
+                        source=resource_source,
+                        params={target_field: params[uid_field]},
+                        username=username,
+                    )
+        if source == ScopePermissionSource.SIDEBAR_NODE:
+            resource_source = {
+                SidebarNodeType.GROUP: ScopePermissionSource.GROUP,
+                SidebarNodeType.CONVERSATION: ScopePermissionSource.CONVERSATION,
+            }.get(params.get("source_node_type"))
+            if resource_source is None or not params.get("source_node_uid"):
+                return None
+            field = "group_uid" if resource_source == ScopePermissionSource.GROUP else "conversation_uid"
+            return self._resolve_scope(
+                source=resource_source, params={field: params["source_node_uid"]}, username=username
+            )
 
         if source in {ScopePermissionSource.REQUEST, ScopePermissionSource.QUERY}:
             scope_type, scope_id = params.get("scope_type"), params.get("scope_id")

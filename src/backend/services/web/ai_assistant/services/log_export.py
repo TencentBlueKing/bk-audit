@@ -8,6 +8,7 @@ import logging
 
 from pydantic import ValidationError
 
+from core.exceptions import ValidationError as RequestValidationError
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
@@ -29,6 +30,7 @@ from services.web.query.ai_assistant.constants import (
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
+from services.web.query.ai_assistant.exceptions import AIOutputInvalidError
 from services.web.query.ai_assistant.exceptions import (
     AIPermissionDeniedError as QueryAIPermissionDeniedError,
 )
@@ -84,9 +86,9 @@ class MessageExportService:
             raise InvalidMessageSnapshot() from error
         namespace = str((message.context_data or {}).get("namespace") or "")
         export_config = dict(export_config or {})
-        # AI 导出来源标记（后端强制，前端不可覆盖）：全量导出运行时（LogExportTask →
-        # ExportConfig → XLSXExporter）据此启用 AI 专属样式——单行表头 + 字段保序 +
-        # 列宽自适应；与检索页共用的常规导出链路不受影响
+        # 公开接口配置可省略，默认列与 AI 助手预览保持一致。
+        export_config.setdefault("field_scope", LogExportFieldScope.AI_STANDARD.value)
+        # AI 导出启用专属样式；后端标记来源，调用方不可覆盖。
         export_config["source"] = AI_ASSISTANT_EXPORT_SOURCE
         # AI 助手「标准字段」scope：翻译为 SPECIFIED + 快照默认展示列（与预览导出同构，
         # display_name 沿用产品文案），常规导出链路（白名单校验/ExportConfig）仅见 SPECIFIED，
@@ -118,6 +120,8 @@ class MessageExportService:
             )
         except QueryAIPermissionDeniedError as error:
             raise LogExportPermissionDenied() from error
+        except AIOutputInvalidError as error:
+            raise RequestValidationError("日志导出配置无效，请检查字段范围和列配置") from error
         except QueryAIAssistantError as error:
             logger.warning(
                 "[MessageExportService] full export failed, message_id=%s, error=%s",
