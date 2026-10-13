@@ -132,21 +132,25 @@ class ExecutionSnapshotModel(models.Model):
         )
 
     @classmethod
-    def restart_failed(
+    def restart_terminal(
         cls,
         *,
         instance_id: int,
+        expected_status: str | ExecutionStatus,
         old_task_id: str,
         new_task_id: str,
         extra_updates: Mapping[str, Any] | None = None,
         now: datetime | None = None,
     ) -> bool:
-        """通过失败状态和旧任务 ID，原子抢占一次原对象重试。
+        """通过精确终态和旧任务 ID，原子抢占一次覆盖式重试。
 
         ``QuerySet.update()`` 不触发 ``save()`` 和 ``auto_now``；调用方需要通过
         ``extra_updates`` 显式传入审计时间及消息、附件各自的领域字段。
         """
 
+        terminal_status = str(expected_status)
+        if terminal_status not in (ExecutionStatus.SUCCESS, ExecutionStatus.FAILED):
+            raise ValueError("只能从 SUCCESS 或 FAILED 重启执行")
         now = now or (extra_updates or {}).get("updated_at") or timezone.now()
         updates = dict(extra_updates or {})
         updates.update(
@@ -163,10 +167,31 @@ class ExecutionSnapshotModel(models.Model):
         return (
             cls.objects.filter(
                 id=instance_id,
-                status=ExecutionStatus.FAILED,
+                status=terminal_status,
                 task_id=old_task_id,
             ).update(**updates)
             == 1
+        )
+
+    @classmethod
+    def restart_failed(
+        cls,
+        *,
+        instance_id: int,
+        old_task_id: str,
+        new_task_id: str,
+        extra_updates: Mapping[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """保持 Message 及存量调用方的 failed-only 语义，委托给 ``restart_terminal``。"""
+
+        return cls.restart_terminal(
+            instance_id=instance_id,
+            expected_status=ExecutionStatus.FAILED,
+            old_task_id=old_task_id,
+            new_task_id=new_task_id,
+            extra_updates=extra_updates,
+            now=now,
         )
 
     @classmethod

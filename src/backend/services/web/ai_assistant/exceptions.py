@@ -288,3 +288,32 @@ class CrossScopeMutationNotAllowed(AIAssistantException):
     MESSAGE = gettext_lazy("跨范围视图不支持此操作")
     ERROR_CODE = "044"
     STATUS_CODE = 400
+
+
+class LogAnalysisTimeout(AIAssistantException):
+    """日志分析超过可收敛业务时限，允许平台写入失败终态。"""
+
+    MESSAGE = gettext_lazy("日志分析超时，请重试")
+    ERROR_CODE = "043"
+
+
+class UnsupportedLogAnalysisCondition(AIAssistantException):
+    """来源检索成功，但其条件超出当前日志分析 Agent 的安全重放协议。"""
+
+    MESSAGE = gettext_lazy("当前日志检索条件暂不支持智能分析，请调整检索条件后重试")
+    ERROR_CODE = "044"
+    STATUS_CODE = 400
+
+
+class AIStatisticsTimeout(AIAssistantException):
+    """AI 统计达到业务时限，先于 Worker 硬终止收敛附件和流。"""
+
+    MESSAGE = gettext_lazy("AI 统计超时，请重试")
+    ERROR_CODE = "045"
+
+
+class AIStatisticsOutputParseError(AIAssistantException):
+    """AI 统计最终消息不满足标签产物协议。"""
+
+    MESSAGE = gettext_lazy("AI 统计结果格式异常，请重试")
+    ERROR_CODE = "046"
