@@ -349,7 +349,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     });
   };
 
-  const fetchSelectAllRowKeys = async (maxCount?: number) => {
+  const fetchSelectAllRows = async (maxCount?: number) => {
     const total = pagination.count;
     if (!total) {
       return [];
@@ -365,10 +365,12 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       page: 1,
       page_size: targetCount,
     });
-    const results = data?.results || [];
-    return results
-      .map((row: Record<string, any>) => getRowKeyValue(row))
-      .slice(0, targetCount);
+    return (data?.results || []).slice(0, targetCount);
+  };
+
+  const fetchSelectAllRowKeys = async (maxCount?: number) => {
+    const rows = await fetchSelectAllRows(maxCount);
+    return rows.map((row: Record<string, any>) => getRowKeyValue(row));
   };
 
   const resolveSelectedRowKeys = async (options?: { maxCount?: number }) => {
@@ -376,6 +378,13 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
       return [...selectedRowKeys.value];
     }
     return fetchSelectAllRowKeys(options?.maxCount);
+  };
+
+  const resolveSelectAllRows = async (options?: { maxCount?: number }) => {
+    if (!enabled.value || selectCheckMode.value !== 'all') {
+      return [];
+    }
+    return fetchSelectAllRows(options?.maxCount);
   };
 
   const resolveExportSelection = async () => {
@@ -431,6 +440,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     getSelectionMeta,
   };

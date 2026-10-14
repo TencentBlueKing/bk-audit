@@ -235,10 +235,48 @@ class RiskManage extends ModuleBase {
   // 批量转单
   batchTransRisk(params: {
     risk_ids: string[],
-    new_operators: string[],
+    new_operators: Array<string | { type: 'user' | 'field', value: string }>,
     description: string
   }) {
     return Request.post(`${this.module}/bulk_trans/`, {
+      params,
+    });
+  }
+  // 批量处理能力检查
+  previewBatchActions(params: {
+    risk_ids: string[],
+  }) {
+    return Request.post(`${this.module}/batch_actions/preview/`, {
+      params,
+    });
+  }
+  // 批量人工关单
+  bulkCloseRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return Request.post(`${this.module}/bulk_close/`, {
+      params,
+    });
+  }
+  // 批量处理套餐
+  bulkAutoProcessRisk(params: {
+    risk_ids: string[],
+    pa_id: string,
+    pa_params: Record<string, any>,
+    auto_close_risk: boolean,
+    description: string,
+  }) {
+    return Request.post(`${this.module}/bulk_auto_process/`, {
+      params,
+    });
+  }
+  // 批量标记误报
+  bulkMisreportRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return Request.post(`${this.module}/bulk_misreport/`, {
       params,
     });
   }
