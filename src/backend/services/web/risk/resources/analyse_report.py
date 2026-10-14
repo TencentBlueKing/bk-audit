@@ -17,13 +17,9 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import io
 import logging
-import os
-import re
 import uuid
 from typing import Any
-from urllib.parse import unquote, urlparse
 
 from blueapps.utils.request_provider import get_request_username
 from celery.result import AsyncResult
@@ -38,8 +34,14 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers as drf_serializers
 
 from apps.audit.resources import AuditMixinResource
+from core.exporter.report import (
+    ReportDocumentExporter,
+    ReportExportError,
+    resolve_content_format,
+)
 from core.utils.page import paginate_data
 from services.web.risk.constants import AnalyseReportStatus, AnalyseReportType
+from services.web.risk.exceptions import AnalyseReportExportFailed
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportErrorInfo,
@@ -49,7 +51,6 @@ from services.web.risk.models import (
     Risk,
 )
 from services.web.risk.report.analyse_report import bind_risks_to_analyse_report
-from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.serializers import (
     DeleteAnalyseReportRequestSerializer,
     ExportAnalyseReportRequestSerializer,
@@ -331,7 +332,12 @@ class RetrieveAnalyseReport(AnalyseReportMeta):
 
 
 class UpdateAnalyseReport(AnalyseReportMeta):
-    """编辑AI报告"""
+    """编辑报告标题或完整正文，保留 Markdown/HTML 原文。
+
+    富文本保存示例：{"content":"<h1>报告</h1><p>编辑正文</p>","content_format":"HTML"}。
+    省略格式时识别本次正文；详情返回 content_format，旧内容无需重新保存。
+    单独修改标题不改变正文或格式；格式标识只能与正文一同提交。
+    """
 
     name = gettext_lazy("编辑AI报告")
     RequestSerializer = UpdateAnalyseReportRequestSerializer
@@ -347,12 +353,17 @@ class UpdateAnalyseReport(AnalyseReportMeta):
             report.title = validated_request_data["title"]
         if "content" in validated_request_data:
             report.content = validated_request_data["content"]
+            report.extra_info = {
+                **report.extra_info,
+                "content_format": resolve_content_format(report.content, validated_request_data.get("content_format")),
+            }
 
         update_fields = []
         if "title" in validated_request_data:
             update_fields.append("title")
         if "content" in validated_request_data:
             update_fields.append("content")
+            update_fields.append("extra_info")
 
         if update_fields:
             report.save(update_fields=update_fields)
@@ -375,245 +386,31 @@ class DeleteAnalyseReport(AnalyseReportMeta):
 
 
 class ExportAnalyseReport(AnalyseReportMeta):
-    """导出AI报告
+    """复用公共 Markdown/HTML 报告导出；格式由正文标识或历史识别决定。
 
-    支持 Markdown 和 PDF 两种格式。
-    - Markdown: 直接输出 content 文本
-    - PDF: 使用 xhtml2pdf 将 Markdown → HTML → PDF，支持表格、样式等复杂格式
+    Markdown 下载对 HTML 仅作即时转换；PDF 失败稳定报错，不改正文或回退 HTML。
+    export_format 仍为 markdown/pdf，读取当前保存正文；两种正文均可导出，
+    HTML 下载为 Markdown 时仅文件格式降级，原 HTML 和 PDF 不作转换。
     """
 
     name = gettext_lazy("导出AI报告")
     RequestSerializer = ExportAnalyseReportRequestSerializer
 
     def perform_request(self, validated_request_data):
-        report_id = validated_request_data["report_id"]
-        export_format = validated_request_data["export_format"]
-        report = self.get_user_report(report_id)
-
-        if export_format == "markdown":
-            return self._export_markdown(report)
-        elif export_format == "pdf":
-            return self._export_pdf(report)
-
-    def _export_markdown(self, report):
-        """导出为 Markdown 文件"""
-        response = HttpResponse(report.content, content_type="text/markdown; charset=utf-8")
-        filename = self._build_export_filename(report.title, ".md")
-        response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
-        return response
-
-    @staticmethod
-    def _build_export_filename(title: str, extension: str) -> str:
-        timestamp = timezone.localtime().strftime("%Y%m%d%H%M%S")
-        return f"{title}_{timestamp}{extension}"
-
-    # 公共 Noto Sans SC 字体路径（SIL Open Font License），保留原风险报告资源策略。
-    _CJK_FONT_PATH = settings.PDF_CJK_FONT_PATH
-    _BLOCKED_PDF_RESOURCE_URI = "data:image/gif;base64,R0lGODlhAQABAAAAACw="
-
-    # PDF 报告的 HTML 模板，使用 @font-face 注册项目内置中文字体
-    _PDF_HTML_TEMPLATE = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-    @font-face {{
-        font-family: 'NotoSansSC';
-        src: url('{font_path}');
-    }}
-    body {{
-        font-family: 'NotoSansSC';
-        font-size: 12px;
-        line-height: 1.8;
-        color: #333;
-        margin: 0;
-        padding: 0;
-    }}
-    h1 {{
-        font-size: 20px;
-        text-align: center;
-        border-bottom: 2px solid #333;
-        padding-bottom: 10px;
-        margin-bottom: 6px;
-    }}
-    .meta {{
-        font-size: 10px;
-        color: #666;
-        text-align: center;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #ddd;
-    }}
-    h2 {{
-        font-size: 16px;
-        margin-top: 18px;
-        margin-bottom: 8px;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 4px;
-    }}
-    h3 {{
-        font-size: 14px;
-        margin-top: 14px;
-        margin-bottom: 6px;
-    }}
-    p {{
-        margin: 6px 0;
-        text-align: justify;
-    }}
-    p, li {{
-        -pdf-word-wrap: CJK;
-        word-break: break-word;
-        word-wrap: break-word;
-        overflow-wrap: anywhere;
-    }}
-    h1, h2, h3, blockquote, code, pre {{
-        -pdf-word-wrap: CJK;
-        word-break: break-word;
-        word-wrap: break-word;
-        overflow-wrap: anywhere;
-    }}
-    table {{
-        width: 100%;
-        max-width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-        margin: 10px 0;
-        font-size: 11px;
-    }}
-    th, td {{
-        border: 1px solid #ccc;
-        padding: 6px 8px;
-        text-align: left;
-        vertical-align: top;
-        -pdf-word-wrap: CJK;
-        word-break: break-word;
-        word-wrap: break-word;
-        overflow-wrap: anywhere;
-    }}
-    th {{
-        background-color: #f0f0f0;
-        font-weight: bold;
-    }}
-    tr:nth-child(even) td {{
-        background-color: #fafafa;
-    }}
-    ul, ol {{
-        margin: 6px 0;
-        padding-left: 24px;
-    }}
-    li {{
-        margin: 3px 0;
-    }}
-    code {{
-        background-color: #f5f5f5;
-        padding: 1px 4px;
-        font-size: 11px;
-    }}
-    pre {{
-        background-color: #f5f5f5;
-        padding: 10px;
-        font-size: 10px;
-        overflow-x: auto;
-        white-space: pre-wrap;
-    }}
-    blockquote {{
-        border-left: 3px solid #ccc;
-        margin: 10px 0;
-        padding: 6px 12px;
-        color: #666;
-    }}
-</style>
-</head>
-<body>
-    {content}
-</body>
-</html>"""
-
-    def _export_pdf(self, report):
-        """导出为 PDF 文件
-
-        使用 xhtml2pdf 将 Markdown 内容渲染为 PDF：
-        1. 先用 mistune 将 Markdown 转为 HTML
-        2. 再用 xhtml2pdf 将 HTML 渲染为 PDF
-        xhtml2pdf 基于 reportlab，支持表格、CSS 样式等复杂格式。
-        使用项目内置的 Noto Sans SC 字体以支持中文渲染；
-        如果 xhtml2pdf 不可用，回退为纯 HTML 导出。
-        """
-        # 将 Markdown 转为 HTML
-        html_content = render_ai_markdown(report.content)
-
-        # 渲染完整 HTML
-        full_html = self._PDF_HTML_TEMPLATE.format(
-            font_path=self._CJK_FONT_PATH,
-            content=html_content,
-        )
-
-        logger = logging.getLogger(__name__)
-
+        report = self.get_user_report(validated_request_data["report_id"])
         try:
-            # 检查字体文件是否存在
-            if not os.path.exists(self._CJK_FONT_PATH):
-                logger.error("[ExportPDF] 中文字体文件不存在: %s", self._CJK_FONT_PATH)
-
-            pdf_bytes = self._create_pdf(html=full_html)
-            response = HttpResponse(pdf_bytes, content_type="application/pdf")
-            ext = ".pdf"
-        except ImportError:
-            logger.exception("[ExportPDF] xhtml2pdf 或 reportlab 未安装，回退为 HTML 导出")
-            response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
-            ext = ".html"
-        except Exception:
-            logger.exception("[ExportPDF] PDF 生成失败，回退为 HTML 导出")
-            response = HttpResponse(full_html, content_type="text/html; charset=utf-8")
-            ext = ".html"
-
-        filename = self._build_export_filename(report.title, ext)
-        response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=filename)
+            result = ReportDocumentExporter(
+                title=report.title,
+                content=report.content,
+                content_format=report.extra_info.get("content_format"),
+                allow_remote_images=True,
+            ).export(validated_request_data["export_format"])
+        except ReportExportError as error:
+            logging.getLogger(__name__).exception("风险报告导出失败: report_id=%s", report.report_id)
+            raise AnalyseReportExportFailed() from error
+        response = HttpResponse(result.content, content_type=result.content_type)
+        response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=result.filename)
         return response
-
-    @classmethod
-    def _create_pdf(cls, html: str) -> bytes:
-        """使用 xhtml2pdf 将 HTML 渲染为 PDF 字节。"""
-        from xhtml2pdf import pisa
-
-        pdf_buffer = io.BytesIO()
-        pisa_status = pisa.CreatePDF(
-            html,
-            dest=pdf_buffer,
-            encoding="utf-8",
-            link_callback=cls._resolve_pdf_resource,
-        )
-        if pisa_status.err:
-            raise RuntimeError(f"xhtml2pdf 渲染失败，错误数: {pisa_status.err}")
-        return pdf_buffer.getvalue()
-
-    @classmethod
-    def _resolve_pdf_resource(cls, uri: str, rel: str | None) -> str | None:
-        """限制 PDF 渲染读取服务器本地文件，仅允许远程资源和内置字体。"""
-        if not uri:
-            return cls._BLOCKED_PDF_RESOURCE_URI
-
-        # Windows 盘符路径 (如 C:\xxx.ttf): 跳过 urlparse, 避免 scheme="c" 误判
-        # 用正则模式统一处理, Linux 上永远不会命中 (没有盘符路径)
-        if re.match(r"^[a-zA-Z]:[\\/]", uri):
-            candidate_path = uri
-        else:
-            parsed_uri = urlparse(uri)
-            if parsed_uri.scheme in {"http", "https", "data"}:
-                return uri
-            if parsed_uri.scheme == "file":
-                candidate_path = unquote(parsed_uri.path)
-            elif parsed_uri.scheme:
-                return cls._BLOCKED_PDF_RESOURCE_URI
-            elif os.path.isabs(uri):
-                candidate_path = uri
-            else:
-                candidate_path = os.path.join(os.path.dirname(rel), uri) if rel else os.path.abspath(uri)
-
-        builtin_font_path = os.path.realpath(cls._CJK_FONT_PATH)
-        if os.path.realpath(candidate_path) == builtin_font_path:
-            return cls._CJK_FONT_PATH
-        return cls._BLOCKED_PDF_RESOURCE_URI
 
 
 class AnalyseReportRiskListBase(AnalyseReportMeta):

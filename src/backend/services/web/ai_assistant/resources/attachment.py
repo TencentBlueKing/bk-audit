@@ -170,7 +170,8 @@ class GetAttachment(AIAssistantResource):
       比例是 0–1 小数，无数据时可为 null；空结果是成功空态。数值摘要的 median 为近似值。
     - AI_STATISTICS：output_data 为 {"content":"最终消息原文"}，图表协议由前端与 Agent 约定。
       解析失败可展示原文，不代表附件执行失败。
-    - AI_ANALYSIS：读取 output_data.markdown；不可将此字段用于 AI_STATISTICS。
+    - AI_ANALYSIS：读取 output_data.markdown，按 content_format（MARKDOWN/HTML）渲染正文。
+      旧记录读取时补齐格式标识；不可将正文用于 AI_STATISTICS。
 
     ### 错误处理
 
@@ -228,6 +229,16 @@ class UpdateAttachment(AIAssistantResource):
     仅支持修改标题，不支持提交 output_data，也不能修改 input_data。
     改字段、统计选项或 AI 需求时，从来源消息创建新附件。
     对于支持正文编辑的其他类型，output_data 是完整替换，且只允许 SUCCESS 状态编辑。
+
+    ### Case：保存富文本分析报告
+
+    ```json
+    {"output_data": {"markdown": "<h1>分析报告</h1><p>编辑正文</p>", "content_format": "HTML"}}
+    ```
+
+    AI_ANALYSIS 保留 markdown 字段名兼容已有客户端；content_format 指定正文格式。
+    省略标识时识别本次正文，返回结果总带格式；PDF 使用已保存的 HTML/Markdown，
+    HTML 请求 MARKDOWN 下载时才转换，正文及 PDF 不会因此丢失富文本样式。
     """
 
     name = gettext_lazy("编辑附件")

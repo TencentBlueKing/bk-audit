@@ -48,7 +48,7 @@ def test_log_analysis_http_truncation_automatically_retries(log_analysis_stack):
         assert sorted(states) == ["RETRY", "SUCCESS"]
         assert completed.status == ExecutionStatus.SUCCESS
         assert completed.task_id == attachment.task_id
-        assert completed.output_data == {"markdown": "# 自动重试结论"}
+        assert completed.output_data == {"markdown": "# 自动重试结论", "content_format": "MARKDOWN"}
         new_config = parse_stream_config(completed.stream_config)
         assert new_config.execution_id != old_config.execution_id
         assert new_config.redis_key != old_config.redis_key
@@ -158,7 +158,7 @@ def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
         predicate=lambda value: value.status == ExecutionStatus.SUCCESS,
     )
 
-    assert completed.output_data == {"markdown": "# 审计结论"}
+    assert completed.output_data == {"markdown": "# 审计结论", "content_format": "MARKDOWN"}
     agent_request = log_analysis_stack.agent.requests[-1]
     assert len(agent_request["chat_history"]) == 2
     assert agent_request["chat_history"][0] == {"role": "role", "content": SYSTEM_PROMPT}
@@ -259,7 +259,7 @@ def test_log_analysis_accepts_cross_layer_run_id(log_analysis_stack):
     completed = wait_for_terminal(attachment)
 
     assert completed.status == ExecutionStatus.SUCCESS
-    assert completed.output_data == {"markdown": "# 跨层级 Run 结论"}
+    assert completed.output_data == {"markdown": "# 跨层级 Run 结论", "content_format": "MARKDOWN"}
     assert any(event["data"].get("type") == "RUN_FINISHED" for event in completed.stream_archive[:-1])
 
 
@@ -273,7 +273,7 @@ def test_log_analysis_accepts_complete_text_before_run_started(log_analysis_stac
     snapshot = get_stream_snapshot(log_analysis_stack, completed)
 
     assert completed.status == ExecutionStatus.SUCCESS
-    assert completed.output_data == {"markdown": "# 前导文本结论"}
+    assert completed.output_data == {"markdown": "# 前导文本结论", "content_format": "MARKDOWN"}
     assert [event["data"].get("type") for event in completed.stream_archive[:-1]] == [
         "TEXT_MESSAGE_START",
         "TEXT_MESSAGE_CONTENT",
@@ -315,7 +315,7 @@ def test_log_analysis_manual_retry_rotates_execution_and_resets_old_stream(log_a
     assert retried.task_id != old_task_id
     assert new_config.execution_id != old_config.execution_id
     assert any(event.event == PlatformStreamEvent.STREAM_RESET for event in old_live_events)
-    assert completed.output_data == {"markdown": "# 重试结论"}
+    assert completed.output_data == {"markdown": "# 重试结论", "content_format": "MARKDOWN"}
     assert not any(event["data"].get("type") == "RUN_ERROR" for event in completed.stream_archive[:-1])
     assert log_analysis_stack.agent.attempts["retry-once"] == 2
 
@@ -358,7 +358,7 @@ def test_log_analysis_manual_retry_fences_old_production_execution(log_analysis_
     assert retried.task_id != old_task_id
     assert completed.task_id == retried.task_id
     assert completed.status == ExecutionStatus.SUCCESS
-    assert completed.output_data == {"markdown": "# 新任务结论"}
+    assert completed.output_data == {"markdown": "# 新任务结论", "content_format": "MARKDOWN"}
     assert completed.stream_config == expected_config
     assert completed.stream_archive == expected_archive
     assert not any(event["data"].get("delta") == "# 旧执行不应覆盖" for event in completed.stream_archive)
