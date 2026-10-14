@@ -78,3 +78,7 @@ nl2riskfilter 的 prompt 包含字段表格和枚举值，这些信息直接来�
 字段采样、OTHER/MISSING 等返回值语义与错误处理由 MCP 描述说明，参数限制由 schema 定义；系统提示词保留跨工具的工作原则，不重复协议细节。
 图表格式由统计 Agent 的 Skill 与前端约定，后端仅保存原文。网关工具集部署后仍需在 Agent 平台绑定。
 提示词会固化到附件上下文；更新用于新附件，历史附件重试沿用原快照。
+
+DEFAULT 分析指令来自 `GlobalMetaConfig` 的 `ai_assistant_log_analysis_default_prompt`，CUSTOM 使用用户输入。
+`0010_update_log_analysis_prompt` 直接覆盖目标全局 DEFAULT，不比对旧内容；配置缺失时创建，其他作用域不受影响；
+反向迁移不回写提示词。更新已有 DEFAULT 需要执行迁移，仅改系统提示词不会更新这份任务指令。
