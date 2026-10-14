@@ -32,7 +32,8 @@
         <bk-form-item
           v-if="formData.confirm_result === 'confirm'"
           :label="t('确认说明')"
-          property="description">
+          property="description"
+          required>
           <rich-editor
             :key="`${editorKey}-confirm`"
             v-model:content="formData.description"
@@ -49,7 +50,6 @@
             theme="warning"
             :title="t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
           <bk-form-item
-            class="is-required"
             :label="t('误报说明')"
             property="description"
             required>
@@ -151,7 +151,7 @@
       trigger: 'change',
     }],
     description: [{
-      validator: (value: string) => formData.value.confirm_result !== 'misreport' || isRichTextNotEmpty(value),
+      validator: (value: string) => isRichTextNotEmpty(value),
       message: t('说明不能为空'),
       trigger: 'change',
     }],
