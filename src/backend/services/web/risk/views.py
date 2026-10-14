@@ -128,6 +128,10 @@ class RisksViewSet(ResourceViewSet):
             ]
         if self.action in ["bulk_trans"]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
+        if self.action in ["confirm", "confirm_as_misreport"]:
+            return [RiskTicketPermission()]
+        if self.action in ["batch_confirm", "batch_confirm_as_misreport"]:
+            return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
         # 风险编辑相关权限
         if self.action in ["update"]:
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
