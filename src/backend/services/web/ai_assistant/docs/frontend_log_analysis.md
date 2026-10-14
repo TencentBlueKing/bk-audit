@@ -102,7 +102,7 @@ sequenceDiagram
 
 AG-UI 事件由流中的业务 data 承载。快照里的 data 已是对象，SSE 的 event.data 要先解析；不要对工具结果中的每个 content 再强行 JSON.parse，它可能是普通文本。兼容未知事件，不因不认识某个事件类型中断整份报告展示。
 
-模型可能输出多段文字：执行说明、工具调用前后说明和最终报告。**最终正文固定读取 output_data.markdown**，不能将所有中间文本连接后保存或导出。Markdown 按项目现有安全渲染策略展示。
+模型可能输出多段文字：执行说明、工具调用前后说明和最终报告。**最终正文固定读取 output_data.markdown**，不能将所有中间文本连接后保存或导出。详情的 `content_format` 为 MARKDOWN/HTML；Agent 正文为 Markdown，编辑后可保存 HTML，展示时按格式安全渲染。历史记录读取时补齐标识，不改写保存内容。
 
 标题可能晚于正文更新。正文完成后即可展示报告，临时标题不影响成功状态；下次刷新详情或列表时更新标题。
 
@@ -130,12 +130,14 @@ AG-UI 事件由流中的业务 data 承载。快照里的 data 已是对象，SS
 | 换一段分析要求 | 从原检索消息重新 POST attachments，选择 CUSTOM | 创建新附件，保留原报告 |
 | 换检索范围分析 | 先完成新的 LOG_SEARCH，再从该结果创建附件 | 来源消息及附件都按新结果关联 |
 | 改报告标题 | `PATCH /attachments/{uid}/` 提交 title，成功后更新卡片/列表 | 原附件不变 |
-| 编辑已完成正文 | PATCH 提交完整 `output_data: {"markdown": "编辑后的完整正文"}` | 不重新分析；保存成功后更新当前正文 |
+| 编辑已完成正文 | PATCH 提交完整 `output_data: {"markdown": "编辑后的完整正文", "content_format": "HTML"}`；Markdown 编辑用 MARKDOWN | 不重新分析；保存成功后更新当前正文及格式 |
 | 下载报告 | SUCCESS 时从 export_formats 选格式 → `GET /attachments/{uid}/export/?export_format=PDF`（或 MARKDOWN） | 直接文件响应，无需查询导出任务 |
 
 重试排队时可能暂时看到旧 execution_id。不要恢复旧过程或把旧的结束事件当作重试完成，按公共指南等待新的执行标识。
 
 正文编辑失败保留用户草稿。编辑不会改变历史生成过程；下载使用当前已保存正文，尚未保存的编辑不会进入下载文件。
+
+PDF 对 HTML 清洗后直接渲染，保留编辑器支持的颜色、对齐、列表及表格。HTML 正文请求 MARKDOWN 下载时，仅转换下载结果，高级样式可能降级，不修改保存的 HTML 或 PDF。
 
 ```mermaid
 flowchart LR

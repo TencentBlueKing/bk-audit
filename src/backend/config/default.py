@@ -271,10 +271,14 @@ AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT
 AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS", 14))
 AI_ASSISTANT_HISTORICAL_QUERY_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_LIMIT", 10))
 AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT", 50))
-# 公共 CJK 字体只供受限 PDF 资源回调放行，风险报告和 AI 附件共享同一资产路径。
+# 风险报告和 AI 附件默认共用腾讯体 W3 正文、W7 粗体；资源回调仅放行配置字体。
 PDF_CJK_FONT_PATH = os.getenv(
     "BKAPP_PDF_CJK_FONT_PATH",
-    os.path.join(BASE_DIR, "support-files", "fonts", "NotoSansSC-Regular.ttf"),
+    os.path.join(BASE_DIR, "support-files", "fonts", "TencentSans-W3.ttf"),
+)
+PDF_CJK_BOLD_FONT_PATH = os.getenv(
+    "BKAPP_PDF_CJK_BOLD_FONT_PATH",
+    os.path.join(BASE_DIR, "support-files", "fonts", "TencentSans-W7.ttf"),
 )
 # AI 助手消息或附件反馈说明的最大字符数，环境变量未配置时默认允许 2000 字符。
 AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH", 2000))
