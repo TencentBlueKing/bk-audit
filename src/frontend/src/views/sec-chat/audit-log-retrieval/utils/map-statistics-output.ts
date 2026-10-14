@@ -450,6 +450,12 @@ const AXIS_STYLE = {
   fontSize: 12,
 };
 
+const trendGridBottom = (seriesCount: number) => {
+  if (seriesCount > 6) return 96;
+  if (seriesCount > 1) return 72;
+  return 48;
+};
+
 export const buildTrendOption = (trend: StatisticsTrendView): EChartsOption => ({
   color: trend.series.map(item => item.color),
   textStyle: {
@@ -476,7 +482,7 @@ export const buildTrendOption = (trend: StatisticsTrendView): EChartsOption => (
     left: 48,
     right: 24,
     top: 24,
-    bottom: trend.series.length > 6 ? 96 : trend.series.length > 1 ? 72 : 48,
+    bottom: trendGridBottom(trend.series.length),
     containLabel: true,
   },
   xAxis: {

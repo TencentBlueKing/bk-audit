@@ -37,9 +37,7 @@ export const attachmentStatisticsContent = (output?: AiAttachmentOutputData | nu
 };
 
 /** FIELD_STATISTICS 固定语义包；缺三大块之一视为产物不可用 */
-export const asFieldStatisticsOutput = (
-  output?: AiAttachmentOutputData | null,
-): AiFieldStatisticsOutput | null => {
+export const asFieldStatisticsOutput = (output?: AiAttachmentOutputData | null): AiFieldStatisticsOutput | null => {
   const record = asRecord(output);
   if (!record) return null;
   const hasPackage = Boolean(record.overview) && Boolean(record.distribution) && Boolean(record.time_series);
