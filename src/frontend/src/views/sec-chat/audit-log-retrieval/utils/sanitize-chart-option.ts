@@ -14,6 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+/* eslint-disable no-underscore-dangle -- __fn / __template 是图表配置协议字段 */
 import DOMPurify from 'dompurify';
 
 export type ChartSanitizeErrorCode = 'INVALID_STRUCTURE' | 'TOO_LARGE';
@@ -124,8 +125,10 @@ const isFnSpec = (value: unknown): value is { __fn: string, options?: Record<str
 
 const emptyObject = (): Record<string, any> => ({});
 
+const isNil = (value: unknown): value is null | undefined => value === null || value === undefined;
+
 const formatDisplayValue = (value: unknown): string => {
-  if (value == null) return '';
+  if (isNil(value)) return '';
   if (Array.isArray(value)) return value.map(item => formatDisplayValue(item)).join(', ');
   if (typeof value === 'object') {
     if ('value' in (value as Record<string, unknown>)) {
@@ -141,12 +144,12 @@ const formatDisplayValue = (value: unknown): string => {
 };
 
 const pickFormatterRaw = (params: unknown): unknown => {
-  if (params == null) return '';
+  if (isNil(params)) return '';
   if (typeof params !== 'object') return params;
   const rec = params as Record<string, unknown>;
-  if (rec.value != null) return rec.value;
-  if (rec.name != null) return rec.name;
-  if (rec.data != null) return rec.data;
+  if (!isNil(rec.value)) return rec.value;
+  if (!isNil(rec.name)) return rec.name;
+  if (!isNil(rec.data)) return rec.data;
   return '';
 };
 
@@ -174,8 +177,8 @@ const unwrapIsoTDisplay = (raw: unknown): string | null => {
 const displayCategoryValue = (raw: unknown) => unwrapIsoTDisplay(raw) ?? formatDisplayValue(raw);
 
 const axisTooltipRaw = (param: Record<string, any>) => {
-  if (param.axisValue != null && param.axisValue !== '') return param.axisValue;
-  if (param.axisValueLabel != null && param.axisValueLabel !== '') return param.axisValueLabel;
+  if (!isNil(param.axisValue) && param.axisValue !== '') return param.axisValue;
+  if (!isNil(param.axisValueLabel) && param.axisValueLabel !== '') return param.axisValueLabel;
   return '';
 };
 
@@ -234,7 +237,7 @@ const buildNamedFn = (spec: { __fn: string, options?: Record<string, unknown> })
 
 const sanitizeValue = (value: unknown, ctx: WalkCtx): unknown => {
   if (ctx.depth > MAX_DEPTH) return undefined;
-  if (value == null) return value;
+  if (isNil(value)) return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -298,26 +301,22 @@ const sanitizeValue = (value: unknown, ctx: WalkCtx): unknown => {
   return next;
 };
 
-const asAxisList = (axis: unknown): Record<string, any>[] => {
-  if (Array.isArray(axis)) return axis.filter(isRecord);
-  return isRecord(axis) ? [axis] : [];
+const asRecordList = (value: unknown): Record<string, any>[] => {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  return isRecord(value) ? [value] : [];
 };
 
 /** 类目原文含 T 时，轴刻度只换展示，不改 data */
 const ensureIsoCategoryDisplay = (axis: unknown) => {
-  asAxisList(axis).forEach((host) => {
+  asRecordList(axis).forEach((item) => {
+    const host: Record<string, any> = item;
     const categories = Array.isArray(host.data) ? host.data : [];
     if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
     if (!isRecord(host.axisLabel)) host.axisLabel = {};
-    if (host.axisLabel.formatter == null) {
+    if (isNil(host.axisLabel.formatter)) {
       host.axisLabel.formatter = (params: unknown) => displayCategoryValue(pickFormatterRaw(params));
     }
   });
-};
-
-const asZoomList = (dataZoom: unknown): Record<string, any>[] => {
-  if (Array.isArray(dataZoom)) return dataZoom.filter(isRecord);
-  return isRecord(dataZoom) ? [dataZoom] : [];
 };
 
 const zoomAxisIndex = (zoom: Record<string, any>, horizontal: boolean) => {
@@ -338,17 +337,18 @@ const bumpEdge = (current: unknown, inset: number) => (
  * 默认 width 是占位值，会把滑块拉成坐标区全宽，left/right 因此不生效，所以时间轴要清掉 width。
  */
 const attachDataZoomLabels = (option: Record<string, any>) => {
-  asZoomList(option.dataZoom).forEach((zoom) => {
+  asRecordList(option.dataZoom).forEach((item) => {
+    const zoom: Record<string, any> = item;
     if (zoom.type === 'inside') return;
     const horizontal = zoom.orient !== 'vertical';
     const axis = horizontal ? option.xAxis : option.yAxis;
     const index = zoomAxisIndex(zoom, horizontal);
-    const host = asAxisList(axis)[index];
+    const host = asRecordList(axis)[index];
     const categories = Array.isArray(host?.data) ? host.data : [];
     if (!categories.some((item: unknown) => unwrapIsoTDisplay(item))) return;
 
     zoom.labelFormatter = (_value: unknown, valueStr: unknown) => {
-      const raw = valueStr != null && valueStr !== '' ? valueStr : _value;
+      const raw = !isNil(valueStr) && valueStr !== '' ? valueStr : _value;
       return displayCategoryValue(raw);
     };
 
@@ -361,12 +361,12 @@ const attachDataZoomLabels = (option: Record<string, any>) => {
     if (horizontal) {
       zoom.left = bumpEdge(zoom.left, inset);
       zoom.right = bumpEdge(zoom.right, inset);
-      if (zoom.width == null || zoom.width === 'ph') zoom.width = null;
+      if (isNil(zoom.width) || zoom.width === 'ph') zoom.width = null;
       return;
     }
     zoom.top = bumpEdge(zoom.top, inset);
     zoom.bottom = bumpEdge(zoom.bottom, inset);
-    if (zoom.height == null || zoom.height === 'ph') zoom.height = null;
+    if (isNil(zoom.height) || zoom.height === 'ph') zoom.height = null;
   });
 };
 
@@ -381,8 +381,8 @@ const resolveAllowedFormatters = (option: Record<string, any>) => {
   };
 
   resolveHost(option.legend);
-  asAxisList(option.xAxis).forEach(axis => resolveHost(axis.axisLabel));
-  asAxisList(option.yAxis).forEach(axis => resolveHost(axis.axisLabel));
+  asRecordList(option.xAxis).forEach(axis => resolveHost(axis.axisLabel));
+  asRecordList(option.yAxis).forEach(axis => resolveHost(axis.axisLabel));
   (Array.isArray(option.series) ? option.series : []).forEach((series) => {
     if (isRecord(series)) resolveHost(series.label);
   });
@@ -436,7 +436,7 @@ export const createTooltipFormatter = (trigger: unknown, templateRaw: unknown) =
   const resolvedTrigger = trigger === 'axis' ? 'axis' : 'item';
   const template = resolveTooltipTemplate(templateRaw, resolvedTrigger);
   return (params: unknown) => {
-    const list = Array.isArray(params) ? params.filter(isRecord) : isRecord(params) ? [params] : [];
+    const list = asRecordList(params);
     if (!list.length) return '';
     if (resolvedTrigger === 'axis') {
       const title = escapeHtml(displayCategoryValue(axisTooltipRaw(list[0])));
@@ -450,7 +450,7 @@ export const createTooltipFormatter = (trigger: unknown, templateRaw: unknown) =
 const attachTooltipFormatters = (option: Record<string, any>) => {
   const apply = (host: unknown) => {
     if (!isRecord(host) || !isRecord(host.tooltip)) return;
-    const tooltip = host.tooltip;
+    const { tooltip } = host;
     const template = tooltip.__template;
     delete tooltip.formatter;
     delete tooltip.__template;
@@ -519,12 +519,7 @@ export const sanitizeChartOption = (
     if (sanitized !== undefined) option[key] = sanitized;
   });
 
-  const seriesSource = Array.isArray(option.series)
-    ? option.series
-    : isRecord(option.series) ? [option.series] : [];
-  const series = seriesSource.filter(item => (
-    isRecord(item) && SERIES_TYPES.has(String(item.type || ''))
-  ));
+  const series = asRecordList(option.series).filter(item => SERIES_TYPES.has(String(item.type || '')));
   if (!series.length) {
     return { option: null, errorCode: 'INVALID_STRUCTURE' };
   }
