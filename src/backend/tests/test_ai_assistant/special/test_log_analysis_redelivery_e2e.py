@@ -67,4 +67,4 @@ def test_log_analysis_sigkill_redelivers_production_task(log_analysis_redelivery
     assert new_config.execution_id != old_config.execution_id
     assert new_config.redis_key != old_config.redis_key
     assert any(event.event == PlatformStreamEvent.STREAM_RESET for event in old_events)
-    assert completed.output_data == {"markdown": "# 重投结论"}
+    assert completed.output_data == {"markdown": "# 重投结论", "content_format": "MARKDOWN"}

@@ -31,6 +31,9 @@ from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisInputSchema,
     AIAnalysisOutputSchema,
 )
+from services.web.ai_assistant.serializers.attachment import (
+    AttachmentResponseSerializer,
+)
 from services.web.ai_assistant.services.attachment import AttachmentService
 from services.web.ai_assistant.services.attachment_execution import (
     load_attachment_execution,
@@ -47,6 +50,47 @@ def ensure_analysis_handler_registered() -> AIAnalysisHandler:
 
 
 class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
+    def test_legacy_html_response_exposes_format_without_rewriting_storage(self):
+        output = {"markdown": "<h1>旧报告</h1><p>完整正文</p>"}
+        attachment = Attachment.objects.create(
+            source_message=self.log_search,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="旧报告",
+            status=ExecutionStatus.SUCCESS,
+            input_data={"analysis_mode": AnalysisMode.DEFAULT},
+            context_data={},
+            output_data=output,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        response = AttachmentResponseSerializer(attachment).data
+        self.assertEqual(response["output_data"], {**output, "content_format": "HTML"})
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.output_data, output)
+
+    def test_html_edit_can_be_exported_and_replaced_with_markdown(self):
+        attachment = Attachment.objects.create(
+            source_message=self.log_search,
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            title="报告",
+            status=ExecutionStatus.SUCCESS,
+            input_data={"analysis_mode": AnalysisMode.DEFAULT},
+            context_data={},
+            output_data={"markdown": "# 原文"},
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        service = AttachmentService(user=self.user)
+        updated = service.update(
+            attachment_uid=str(attachment.uid), output_data={"markdown": "<p>编辑正文</p>", "content_format": "HTML"}
+        )
+        self.assertEqual(updated.output_data, {"markdown": "<p>编辑正文</p>", "content_format": "HTML"})
+        downloaded = service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+        self.assertIn("编辑正文", downloaded.content.decode())
+        self.assertNotIn("<p>", downloaded.content.decode())
+        updated = service.update(attachment_uid=str(attachment.uid), output_data={"markdown": "# Markdown改稿"})
+        self.assertEqual(updated.output_data["content_format"], "MARKDOWN")
+
     def setUp(self):
         super().setUp()
         self.handler = ensure_analysis_handler_registered()
@@ -276,7 +320,7 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
                 export_format=AttachmentExportFormat.PDF,
             )
 
-        self.assertEqual(updated.output_data, {"markdown": "# 修订结论"})
+        self.assertEqual(updated.output_data, {"markdown": "# 修订结论", "content_format": "MARKDOWN"})
         self.assertEqual(feedback.feedback_type, FeedbackType.LIKE)
         self.assertEqual(markdown_file.content, "# 修订结论".encode("utf-8"))
         self.assertTrue(pdf_file.content.startswith(b"%PDF"))

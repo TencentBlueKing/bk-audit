@@ -481,6 +481,8 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
                 deliveries.append((task_id, state))
                 if state == "SUCCESS":
                     results.append(retval)
+                # 零延迟重试可能在原投递的 postrun 前完成，等待两次通知而非依赖完成顺序。
+                if results and len(deliveries) >= 2:
                     finished.set()
 
         signals.task_postrun.connect(on_task_done, weak=False)
@@ -508,7 +510,7 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
                 )
                 self.assertTrue(finished.wait(timeout=settings.CELERY_TEST_TASK_TIMEOUT))
                 self.assertEqual(results, [{"status": "SUCCESS"}])
-                self.assertEqual(deliveries, [(attachment.task_id, "RETRY"), (attachment.task_id, "SUCCESS")])
+                self.assertCountEqual(deliveries, [(attachment.task_id, "RETRY"), (attachment.task_id, "SUCCESS")])
                 self.assertEqual(completed.output_data["overview"]["total_count"], 10)
         finally:
             signals.task_postrun.disconnect(on_task_done)

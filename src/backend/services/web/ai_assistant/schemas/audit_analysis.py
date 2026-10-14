@@ -16,6 +16,7 @@ from pydantic import (
 )
 from rest_framework import serializers
 
+from core.exporter.report import ReportContentFormat, resolve_content_format
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import AnalysisMode
 from services.web.ai_assistant.schemas.message import MessageSchema
@@ -94,9 +95,19 @@ class AIAnalysisContextSchema(MessageSchema):
 
 
 class AIAnalysisOutputSchema(MessageSchema):
-    """可编辑、可导出的最终 Markdown 报告。"""
+    """可编辑、可导出的报告，保留 markdown 字段名兼容现有前端。"""
 
-    markdown: str = Field(min_length=1, description="Agent 返回的完整 Markdown 正文。")
+    markdown: str = Field(min_length=1, description="完整报告正文；可以是 Markdown 或编辑器 HTML，不改写原文。")
+    content_format: ReportContentFormat | None = Field(
+        default=None, description="正文格式 MARKDOWN/HTML；旧记录及省略此项的编辑请求自动识别。"
+    )
+
+    @model_serializer(mode="wrap")
+    def serialize_output(self, handler: SerializerFunctionWrapHandler):
+        """序列化时补齐旧正文格式；详情读取不写回历史数据库快照。"""
+        data = handler(self)
+        data["content_format"] = resolve_content_format(self.markdown, self.content_format)
+        return data
 
     @field_validator("markdown")
     @classmethod

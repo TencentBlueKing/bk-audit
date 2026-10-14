@@ -34,7 +34,7 @@ RUN_ERROR 会清空此前候选，避免把错误前的说明当作成功报告�
 
 MySQL保存状态、报告与历史过程，Redis只提供实时增量。前端可只轮询详情，也可读取快照后订阅SSE；流结束后读取详情确认终态。流恢复规则见[streaming](../streaming/README.md)。
 
-AI分析保存报告正文，不使用AI统计的图表标签提取。成功报告可完整替换Markdown，也可实时导出Markdown/PDF；编辑不修改来源快照，导出文件不在平台另存。
+AI分析保存报告正文，不使用AI统计的图表标签提取。成功报告可完整替换Markdown/HTML，`content_format`标明格式；无标识的旧正文在读取时识别，数据库不迁移。导出复用`core/exporter/report.py`公共渲染器，与风险报告共用模板、字体和PDF分页。HTML清洗后直接渲染，仅在请求Markdown下载时转换；编辑不修改来源快照，导出文件不在平台另存。
 
 ## 4. 稳定性
 
