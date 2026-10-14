@@ -445,7 +445,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
                 invoke_task(execute_log_analysis, attachment=attachment)
             final = GetAttachment().request(attachment_uid=created["uid"])
             self.assertEqual(final["status"], ExecutionStatus.SUCCESS)
-            self.assertEqual(final["output_data"], {"markdown": "# 默认报告"})
+            self.assertEqual(final["output_data"], {"markdown": "# 默认报告", "content_format": "MARKDOWN"})
             attachment.refresh_from_db()
             self.assertTrue(attachment.stream_archive)
 
@@ -744,7 +744,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
         self.assertEqual(second_request["chat_history"][1], first_request["chat_history"][1])
         self.assertNotEqual(second_request["execute_kwargs"]["thread_id"], first_request["execute_kwargs"]["thread_id"])
         self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
-        self.assertEqual(attachment.output_data, {"markdown": "# 重试成功"})
+        self.assertEqual(attachment.output_data, {"markdown": "# 重试成功", "content_format": "MARKDOWN"})
 
     def test_legacy_context_uses_default_prompt_without_writing_snapshot(self):
         """旧附件缺系统提示词时使用兼容默认值，执行不修改 context。"""

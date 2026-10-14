@@ -7,6 +7,7 @@ Handler 只负责校验 LOG_SEARCH 来源、构建最小快照与声明编辑/�
 from django.conf import settings
 
 from apps.meta.models import GlobalMetaConfig
+from core.exporter.report import resolve_content_format
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import (
     AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY,
@@ -102,9 +103,13 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
         current_output: AIAnalysisOutputSchema,
         submitted_output: AIAnalysisOutputSchema,
     ) -> AIAnalysisOutputSchema:
-        """完整替换已由 output_model 校验的 Markdown，不改变来源与执行快照。"""
+        """替换正文并记录格式；旧客户端省略格式时按本次正文重新识别。"""
 
-        return submitted_output
+        return submitted_output.model_copy(
+            update={
+                "content_format": resolve_content_format(submitted_output.markdown, submitted_output.content_format)
+            }
+        )
 
     def export(
         self,
@@ -115,7 +120,9 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
     ) -> AttachmentExportResult:
         """复用平台受限 Markdown/PDF 实时导出器。"""
 
-        return MarkdownDocumentExporter(title=attachment.title, markdown=output_data.markdown).export(export_format)
+        return MarkdownDocumentExporter(
+            title=attachment.title, markdown=output_data.markdown, content_format=output_data.content_format
+        ).export(export_format)
 
     _validate_source = staticmethod(validate_log_search_source)
 
