@@ -41,7 +41,8 @@
         <template v-if="formData.method === 'closeOrder'">
           <bk-form-item
             :label="t('处理说明')"
-            property="description">
+            property="description"
+            required>
             <rich-editor
               :key="editorKey"
               v-model:content="formData.description"
@@ -69,7 +70,8 @@
           </bk-form-item>
           <bk-form-item
             :label="t('处理说明')"
-            property="description">
+            property="description"
+            required>
             <rich-editor
               :key="`${editorKey}-transfer`"
               v-model:content="formData.description"
@@ -90,7 +92,7 @@
             <bk-select
               v-model="formData.pa_id"
               filterable
-              :loading="applicationLoading || packageMerging"
+              :loading="applicationLoading"
               :placeholder="t('请选择')"
               @change="handlePaIdChange">
               <bk-option
@@ -159,7 +161,8 @@
             :title="t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
           <bk-form-item
             :label="t('误报说明')"
-            property="misreport_description">
+            property="misreport_description"
+            required>
             <rich-editor
               :key="`${editorKey}-misreport`"
               v-model:content="formData.misreport_description"
@@ -274,7 +277,6 @@
   const { messageSuccess, messageError } = useMessage();
   const isShow = ref(false);
   const isSubmitting = ref(false);
-  const packageMerging = ref(false);
   const editorKey = ref(0);
   const formRef = ref();
   const failures = ref<Array<{ risk_id: string; reason: string }>>([]);
@@ -336,10 +338,25 @@
     return !(fieldEmpty && valueEmpty);
   };
 
+  const richTextLength = (html: string) => DOMPurify.sanitize(html || '', { ALLOWED_TAGS: [] }).trim().length;
+
+  const isRichTextNotEmpty = (html: string) => richTextLength(html) > 0;
+
   const rules = {
     method: [{
       required: true,
       message: t('请选择处理方法'),
+      trigger: 'change',
+    }],
+    description: [{
+      validator: (value: string) => !['closeOrder', 'transfer'].includes(formData.value.method)
+        || isRichTextNotEmpty(value),
+      message: t('说明不能为空'),
+      trigger: 'change',
+    }],
+    misreport_description: [{
+      validator: (value: string) => formData.value.method !== 'misreport' || isRichTextNotEmpty(value),
+      message: t('误报说明不能为空'),
       trigger: 'change',
     }],
     new_operators: [{
@@ -392,6 +409,10 @@
     },
   });
 
+  watch(() => formData.value.method, () => {
+    formRef.value?.clearValidate?.();
+  });
+
   watch(() => formData.value.pa_params, () => {
     const nextDetail = { ...paramsDetailData.value };
     let detailChanged = false;
@@ -423,8 +444,6 @@
     }
   }, { deep: true });
 
-  const richTextLength = (html: string) => DOMPurify.sanitize(html || '', { ALLOWED_TAGS: [] }).trim().length;
-
   const resetForm = () => {
     formData.value = createForm();
     paramsDetailData.value = {};
@@ -433,39 +452,17 @@
     formRef.value?.clearValidate?.();
   };
 
-  const loadPackages = async () => {
+  const loadPackages = () => {
+    processApplicationList.value = [];
     const packageEnabled = props.availability.actions.some(action => action.id === 'package' && action.enabled);
     if (!packageEnabled) {
       return;
     }
-    if (props.scope === 'scene') {
-      const sceneId = getSceneSystemParams().scope_id || props.availability.sceneIds[0];
-      if (sceneId) {
-        fetchApplications({ scene_id: sceneId });
-      }
-      return;
-    }
-    const { sceneIds } = props.availability;
-    if (sceneIds.length <= 1) {
-      if (sceneIds[0]) {
-        fetchApplications({ scene_id: sceneIds[0] });
-      }
-      return;
-    }
-    packageMerging.value = true;
-    try {
-      const lists = await Promise.all(sceneIds.map(sceneId => (
-        ProcessApplicationManageService.fetchApplicationsAll({ scene_id: sceneId })
-      )));
-      const merged = new Map<string, typeof lists[number][number]>();
-      lists.flat().forEach((item) => {
-        if (item?.id) {
-          merged.set(String(item.id), item);
-        }
-      });
-      processApplicationList.value = [...merged.values()];
-    } finally {
-      packageMerging.value = false;
+    const sceneId = props.scope === 'scene'
+      ? getSceneSystemParams().scope_id || props.availability.sceneId
+      : props.availability.sceneId;
+    if (sceneId) {
+      fetchApplications({ scene_id: sceneId });
     }
   };
 
@@ -514,9 +511,12 @@
     if (!props.riskIds.length || isSubmitting.value || !action) {
       return;
     }
-    const description = formData.value.method === 'misreport'
-      ? formData.value.misreport_description
-      : formData.value.description;
+    const descriptionByMethod: Record<string, string> = {
+      closeOrder: formData.value.description,
+      transfer: formData.value.description,
+      misreport: formData.value.misreport_description,
+    };
+    const description = descriptionByMethod[formData.value.method] || '';
     if (richTextLength(description) > 1000) {
       messageError(t('最多 1000 字'));
       return;
@@ -536,10 +536,7 @@
         action,
         riskIds: props.riskIds,
         description,
-        transfer: {
-          type: 'user',
-          value: formData.value.new_operators,
-        },
+        operators: formData.value.new_operators,
         paId: formData.value.pa_id,
         paParams: formData.value.pa_params,
         autoCloseRisk: formData.value.auto_close_risk,
