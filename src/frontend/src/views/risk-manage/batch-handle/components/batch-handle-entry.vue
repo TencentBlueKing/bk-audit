@@ -4,7 +4,7 @@
     data-testid="batch-handle-button">
     <auth-button
       action-id="process_risk"
-      :disabled="!availability.enabled"
+      :disabled="evaluating || !availability.enabled"
       outline
       :permission="permission"
       theme="primary"
@@ -30,17 +30,25 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
 
   import useRequest from '@hooks/use-request';
 
+  import { fetchBatchPreview } from '../adapter';
   import {
-    evaluateBatchSelection,
-    hasBatchProcessPermission,
+    BATCH_SYNC_LIMIT,
+    type BatchAvailability,
     type BatchRiskRow,
+    createDisabledAvailability,
+    hasBatchProcessPermission,
+    REASON_LIMIT,
+    REASON_NONE,
+    REASON_UNLOADED,
+    REASON_UNSUPPORTED,
+    toBatchAvailability,
   } from '../evaluate';
 
   import BatchConfirmDialog from './batch-confirm-dialog.vue';
@@ -54,6 +62,7 @@
   interface ListExpose {
     getSelection?: () => Array<Record<string, any>>;
     getSelectedKeys?: () => Array<string | number>;
+    resolveSelectAllRows?: (options?: { maxCount?: number }) => Promise<Array<Record<string, any>>>;
     clearSelection?: () => void;
     refreshList?: () => void;
   }
@@ -82,14 +91,14 @@
   const selectedKeys = ref<string[]>([]);
   const eventFields = ref<FieldItem[]>([]);
 
+  const availability = ref<BatchAvailability>(createDisabledAvailability(REASON_NONE));
+  const evaluating = ref(false);
+  let refreshSeq = 0;
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
   const rows = computed(() => selectedKeys.value
     .map(id => rowCache.get(id))
     .filter((row): row is BatchRiskRow => Boolean(row)));
-
-  const availability = computed(() => evaluateBatchSelection(rows.value, {
-    count: props.selectionMeta.count,
-    incomplete: rows.value.length !== props.selectionMeta.count,
-  }));
 
   const riskIds = computed(() => rows.value.map(row => String(row.risk_id)));
 
@@ -141,27 +150,24 @@
     },
   });
 
-  const sync = () => {
-    const list = props.listRef;
-    if (!list?.getSelectedKeys || !list.getSelection) {
-      selectedKeys.value = [];
-      return;
-    }
-    const keys = list.getSelectedKeys().map(key => String(key));
+  const cacheRow = (row: Record<string, any>) => {
+    rowCache.set(String(row.risk_id), {
+      risk_id: row.risk_id,
+      status: row.status,
+      strategy_id: row.strategy_id,
+      scene_id: row.scene_id,
+      permission: row.permission,
+      current_operator: row.current_operator,
+    });
+  };
+
+  const syncFromList = (list: ListExpose) => {
+    const keys = (list.getSelectedKeys?.() || []).map(key => String(key));
     const keySet = new Set(keys);
-    list.getSelection().forEach((row) => {
-      const id = String(row.risk_id);
-      if (!keySet.has(id)) {
-        return;
+    (list.getSelection?.() || []).forEach((row) => {
+      if (keySet.has(String(row.risk_id))) {
+        cacheRow(row);
       }
-      rowCache.set(id, {
-        risk_id: row.risk_id,
-        status: row.status,
-        strategy_id: row.strategy_id,
-        scene_id: row.scene_id,
-        permission: row.permission,
-        current_operator: row.current_operator,
-      });
     });
     Array.from(rowCache.keys()).forEach((id) => {
       if (!keySet.has(id)) {
@@ -171,12 +177,90 @@
     selectedKeys.value = keys;
   };
 
+  const loadSelectAllRows = async (list: ListExpose, seq: number) => {
+    const allRows = await list.resolveSelectAllRows?.({ maxCount: BATCH_SYNC_LIMIT }) || [];
+    if (seq !== refreshSeq) {
+      return;
+    }
+    rowCache.clear();
+    allRows.forEach(cacheRow);
+    selectedKeys.value = allRows.map(row => String(row.risk_id));
+  };
+
+  const evaluate = async (seq: number) => {
+    const { count } = props.selectionMeta;
+    if (count <= 0) {
+      availability.value = createDisabledAvailability(REASON_NONE);
+      return;
+    }
+    if (count > BATCH_SYNC_LIMIT) {
+      availability.value = createDisabledAvailability(REASON_LIMIT);
+      return;
+    }
+    const selectedRows = rows.value;
+    if (selectedRows.length !== count) {
+      availability.value = createDisabledAvailability(REASON_UNLOADED);
+      return;
+    }
+    const preview = await fetchBatchPreview(selectedRows);
+    if (seq === refreshSeq) {
+      availability.value = toBatchAvailability(preview, selectedRows);
+    }
+  };
+
+  const sync = async () => {
+    refreshSeq += 1;
+    const seq = refreshSeq;
+    const list = props.listRef;
+    const { count, isSelectAll } = props.selectionMeta;
+    evaluating.value = true;
+    try {
+      if (!list) {
+        selectedKeys.value = [];
+      } else if (isSelectAll && count > 0 && count <= BATCH_SYNC_LIMIT) {
+        if (rows.value.length !== count) {
+          await loadSelectAllRows(list, seq);
+        }
+      } else {
+        syncFromList(list);
+      }
+      if (seq === refreshSeq) {
+        await evaluate(seq);
+      }
+    } catch {
+      if (seq === refreshSeq) {
+        availability.value = createDisabledAvailability(REASON_UNSUPPORTED);
+      }
+    } finally {
+      if (seq === refreshSeq) {
+        evaluating.value = false;
+      }
+    }
+  };
+
+  const scheduleSync = () => {
+    evaluating.value = true;
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+    }
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      sync();
+    }, 300);
+  };
+
   watch(
     () => [props.selectionMeta.count, props.selectionMeta.mode, props.selectionMeta.isSelectAll],
     () => {
-      nextTick(sync);
+      nextTick(scheduleSync);
     },
   );
+
+  onBeforeUnmount(() => {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+    }
+  });
 
   watch(
     () => [availability.value.strategyUnique, availability.value.strategyId] as const,
@@ -190,7 +274,7 @@
   );
 
   const handleOpen = () => {
-    if (!availability.value.enabled) {
+    if (evaluating.value || !availability.value.enabled) {
       return;
     }
     if (availability.value.dialog === 'confirm') {
@@ -211,5 +295,5 @@
     fetchRiskFields();
   });
 
-  defineExpose({ sync });
+  defineExpose({ sync: scheduleSync });
 </script>
