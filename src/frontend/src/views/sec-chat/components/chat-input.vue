@@ -60,16 +60,9 @@
           </div>
         </div>
       </div>
-      <div class="input-box">
-        <div
-          v-if="enableAttach"
-          class="attach-btn"
-          @click="handleAttach">
-          <img
-            alt=""
-            class="attach-icon-img"
-            :src="linkIcon">
-        </div>
+      <div
+        class="input-box"
+        :class="{ 'is-expanded': isComposerExpanded }">
         <div class="input-content">
           <!-- 斜杠命令菜单 -->
           <div
@@ -116,25 +109,52 @@
             @keydown="handleKeydown"
             @keyup="updateSlashMenuState" />
         </div>
-        <button
-          v-if="generating"
-          class="send-btn is-generating"
-          @click="handleStop">
-          <audit-icon
-            class="send-icon"
-            type="stop" />
-        </button>
-        <button
-          v-else
-          class="send-btn"
-          :class="{ 'is-active': inputValue.trim() && !disabled }"
-          :disabled="!inputValue.trim() || disabled"
-          @click="handleSend">
-          <img
-            alt=""
-            class="send-icon-img"
-            :src="fasongIcon">
-        </button>
+        <div class="input-toolbar">
+          <div
+            v-if="enableAttach"
+            class="toolbar-left">
+            <div
+              class="attach-btn"
+              @click="handleAttach">
+              <img
+                alt=""
+                class="attach-icon-img"
+                :src="linkIcon">
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <span
+              v-if="showWordCount"
+              class="input-word-count"
+              :class="{ 'is-over-limit': isOverLimit }">
+              {{ inputLength }} / {{ AI_INPUT_MAX_LENGTH }}
+            </span>
+            <button
+              v-if="generating"
+              class="send-btn is-generating"
+              @click="handleStop">
+              <audit-icon
+                class="send-icon"
+                type="stop" />
+            </button>
+            <button
+              v-else
+              class="send-btn"
+              :class="{ 'is-active': inputValue.trim() && !disabled && !isOverLimit }"
+              :disabled="!inputValue.trim() || disabled || isOverLimit"
+              @click="handleSend">
+              <img
+                alt=""
+                class="send-icon-img"
+                :src="fasongIcon">
+            </button>
+          </div>
+        </div>
+      </div>
+      <div
+        v-if="isOverLimit"
+        class="input-over-limit">
+        {{ overLimitTip }}
       </div>
       <div class="input-hint">
         AI助手 基于 AI 大模型生成回答，请注意验证关键信息的准确性
@@ -144,7 +164,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, nextTick, ref } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
 
   import biaobiaoIcon from '@images/biaobiao-icon.svg';
   import fasongIcon from '@images/fasong-icon.svg';
@@ -152,6 +172,10 @@
   import aiSettingIcon from '@images/ai-setting.svg';
   import linkIcon from '@images/link.svg';
   import shiyongIcon from '@images/shiyong-icon.svg';
+
+  import useMessage from '@hooks/use-message';
+
+  import { AI_INPUT_COUNT_VISIBLE_RATIO, AI_INPUT_MAX_LENGTH } from '../utils/constants';
 
   const props = defineProps<{
     disabled?: boolean;
@@ -175,6 +199,24 @@
   const activeSlashIndex = ref(0);
   const slashQuery = ref('');
   const slashStartIndex = ref(-1);
+
+  const { messageWarn } = useMessage();
+
+  /** 与发送内容口径一致，按 trim 后长度计算 */
+  const inputLength = computed(() => inputValue.value.trim().length);
+  const isOverLimit = computed(() => inputLength.value > AI_INPUT_MAX_LENGTH);
+  const showWordCount = computed(() => (
+    inputLength.value >= AI_INPUT_MAX_LENGTH * AI_INPUT_COUNT_VISIBLE_RATIO
+  ));
+  const overLimitTip = computed(() => (
+    `已超出 ${inputLength.value - AI_INPUT_MAX_LENGTH} 字，请精简后发送（上限 ${AI_INPUT_MAX_LENGTH} 字）`
+  ));
+
+  const TEXTAREA_LINE_HEIGHT = 22;
+  const TEXTAREA_MAX_HEIGHT = 200;
+  /** 单行时左右布局，内容换行或展示字数后切换为上下两层 */
+  const isExpanded = ref(false);
+  const isComposerExpanded = computed(() => isExpanded.value || showWordCount.value);
 
   const commandIconPath1 = 'M846.9 177.1l-59.4-59.4c-15.6-15.6-40.9-15.6-56.6 0L216.4 632.2'
     + 'c-15.6 15.6-15.6 40.9 0 56.6l59.4 59.4c15.6 15.6 40.9 15.6 56.6 0l514.5-514.5'
@@ -311,11 +353,16 @@
 
   const handleSend = () => {
     if (!inputValue.value.trim() || props.disabled || props.generating) return;
+    if (isOverLimit.value) {
+      messageWarn(`内容过长，请精简至 ${AI_INPUT_MAX_LENGTH} 字以内后重试`);
+      return;
+    }
     emit('send', inputValue.value.trim());
     inputValue.value = '';
     showSlashMenu.value = false;
     slashQuery.value = '';
     slashStartIndex.value = -1;
+    isExpanded.value = false;
     if (textareaRef.value) {
       textareaRef.value.style.height = 'auto';
     }
@@ -341,10 +388,21 @@
   };
 
   const autoResize = () => {
-    if (!textareaRef.value) return;
-    textareaRef.value.style.height = 'auto';
-    textareaRef.value.style.height = `${Math.min(textareaRef.value.scrollHeight, 160)}px`;
+    const el = textareaRef.value;
+    if (!el) return;
+    el.style.height = 'auto';
+    // 只在清空时收起：展开后 textarea 变宽，内容可能又回到一行，按行数收起会来回抖动
+    if (!inputValue.value) {
+      isExpanded.value = false;
+    } else if (el.scrollHeight > TEXTAREA_LINE_HEIGHT) {
+      isExpanded.value = true;
+    }
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
   };
+
+  watch(isComposerExpanded, () => {
+    nextTick(autoResize);
+  });
 
   const setInputValue = (text: string) => {
     inputValue.value = text;
@@ -559,7 +617,7 @@
         width: 100%;
         min-width: 0;
         min-height: 64px;
-        padding: 12px 16px;
+        padding: 12px 12px 12px 16px;
         overflow: visible;
         background: #fff;
         border: 1px solid #dcdee5;
@@ -574,11 +632,50 @@
           box-shadow: 0 2px 12px rgb(58 132 255 / 12%);
         }
 
+        &.is-expanded {
+          padding-bottom: 8px;
+          flex-direction: column;
+          align-items: stretch;
+
+          /* 使滚动条（6px）水平居中于发送按钮（32px）正上方 */
+          .input-content {
+            margin-right: calc((32px - 6px) / 2);
+            flex: none;
+          }
+
+          .input-toolbar {
+            margin-top: 4px;
+            margin-left: 0;
+          }
+        }
+
+        .input-toolbar {
+          display: flex;
+          min-height: 32px;
+          margin-left: 8px;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .toolbar-left,
+        .toolbar-right {
+          display: flex;
+          min-width: 0;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .toolbar-right {
+          margin-left: auto;
+          flex-shrink: 0;
+        }
+
         .attach-btn {
           display: flex;
           width: 32px;
           height: 32px;
-          margin-right: 4px;
           color: #979ba5;
           cursor: pointer;
           border-radius: 4px;
@@ -597,15 +694,23 @@
           }
         }
 
+        .input-word-count {
+          font-size: 12px;
+          line-height: 18px;
+          color: #979ba5;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+
+          &.is-over-limit {
+            color: #ea3636;
+          }
+        }
+
         .input-content {
-          flex: 1;
           position: relative;
-          display: flex;
-          align-items: center;
           min-width: 0;
-          min-height: 32px;
-          margin: 0 8px;
           overflow: visible;
+          flex: 1;
 
           .slash-menu {
             position: absolute;
@@ -668,10 +773,11 @@
           }
 
           .input-textarea {
+            display: block;
             width: 100%;
-            max-height: 160px;
-            min-height: 32px;
-            padding: 5px 0;
+            max-height: 200px;
+            min-height: 22px;
+            padding: 0;
             margin: 0;
             overflow-y: auto;
             font-size: 14px;
@@ -681,6 +787,11 @@
             border: none;
             outline: none;
             resize: none;
+
+            /* 全局 scrollbars.css 设置了 scrollbar-width / scrollbar-color，会让 webkit 自定义样式失效 */
+            scrollbar-width: auto;
+            scrollbar-color: auto;
+            scrollbar-gutter: stable;
 
             &::placeholder {
               color: #c4c6cc;
@@ -692,20 +803,36 @@
             }
 
             &::-webkit-scrollbar {
-              width: 4px;
+              width: 6px;
+            }
+
+            &::-webkit-scrollbar-button {
+              display: none;
+            }
+
+            &::-webkit-scrollbar-track {
+              background: transparent;
             }
 
             &::-webkit-scrollbar-thumb {
+              background: transparent;
+              border-radius: 3px;
+            }
+
+            &:hover::-webkit-scrollbar-thumb {
               background: #dcdee5;
-              border-radius: 2px;
+            }
+
+            &::-webkit-scrollbar-thumb:hover {
+              background: #c4c6cc;
             }
           }
         }
 
         .send-btn {
           display: flex;
-          width: 32px;
-          height: 32px;
+          width: 40px;
+          height: 40px;
           padding: 0;
           overflow: hidden;
           cursor: pointer;
@@ -749,6 +876,13 @@
             cursor: not-allowed;
           }
         }
+      }
+
+      .input-over-limit {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 18px;
+        color: #ea3636;
       }
 
       .input-hint {
