@@ -43,6 +43,7 @@ from services.web.risk.constants import (
     RISK_OPERATE_NOTICE_CONFIG_KEY,
     SECURITY_PERSON_KEY,
     ApproveTicketFields,
+    ItsmVersion,
     RiskDisplayStatus,
     RiskLabel,
     RiskStatus,
@@ -492,6 +493,43 @@ class ForApprove(RiskFlowBaseHandler):
     name = gettext_lazy("自动处理审批")
     allowed_status = [RiskStatus.FOR_APPROVE, RiskStatus.NEW, RiskStatus.AWAIT_PROCESS]
 
+    def _build_approve_form_data(self, ticket_info: dict) -> tuple:
+        """构造发起审批单据所需的 form_data。"""
+
+        # 预计算特殊字段值（按 bare_key 索引）
+        special_values = {
+            ApproveTicketFields.TITLE.key: gettext("【审计中心】执行%s审批") % self.process_application.name,
+            ApproveTicketFields.PROCESS_APPLICATION_NAME_FIELD.key: self.process_application.name,
+            ApproveTicketFields.TAGS.key: ";".join(self.risk.get_tag_names()),
+            ApproveTicketFields.OPERATOR.key: ";".join(self.risk.operator),
+            ApproveTicketFields.RISK_URL.key: "{}/risk-manage/detail/{}".format(
+                get_saas_url(settings.APP_CODE), self.risk.risk_id
+            ),
+        }
+
+        form_data = {}
+        fields = []
+        for field in ticket_info["fields"]:
+            key = field["key"]
+            # V4 表单字段 key 带 ticket__ 命名空间前缀，统一去前缀后比对
+            bare_key = key.split("__", 1)[-1]
+            if bare_key in special_values:
+                value = special_values[bare_key]
+            else:
+                value = (
+                    self.process_application.approve_config.get(key, {}).get("value")
+                    or self.process_application.approve_config.get(bare_key, {}).get("value")
+                    or getattr(self.risk, bare_key, "")
+                )
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value, ensure_ascii=False)
+            # V4 ticket_create 需要带前缀 key 的 form_data（dict）；
+            # V3 create_ticket 需要 [{"key": 裸key, "value": value}] 列表。
+            # 每个字段追加独立字典，避免共享引用导致重复对象，且保证普通配置字段不遗漏。
+            form_data[key] = value
+            fields.append({"key": bare_key, "value": value})
+        return form_data, fields
+
     def process(self, pa_config: dict = None, **kwargs) -> dict:
         """
         三种发起方式
@@ -500,59 +538,67 @@ class ForApprove(RiskFlowBaseHandler):
         3. 自动更新审批状态
         """
 
-        # 获取单据ID
-        sn = self.load_approve_sn()
-        # 已发起则获取单据状态
-        if sn:
-            return {"status": api.bk_itsm.ticket_approve_result(sn=[sn])[0]}
+        itsm_version = self.risk.last_history.itsm_version
+
+        # 已发起则获取单据状态（V4 按工单 ID 查询，V3 按 sn 查询；ticket_detail 各版本通用）
+        if itsm_version == ItsmVersion.V4:
+            ticket_id = self.load_approve_ticket_id()
+            if ticket_id:
+                return {"status": get_itsm_ticket_status(ticket_id)}
+        elif itsm_version == ItsmVersion.V3:
+            sn = self.load_approve_sn()
+            if sn:
+                return {"status": api.bk_itsm.ticket_approve_result(sn=[sn])[0]}
+
         # 手动传入处理套餐需要重新初始化处理套餐
         if pa_config:
             self.init_process_application(pa_config["pa_id"])
+
         # 未发起则发起单据
-        ticket_info = api.bk_itsm.get_service_detail(service_id=self.process_application.approve_service_id)
-        fields = []
-        for field in ticket_info["fields"]:
-            # 标题字段直接赋值
-            if field["key"] == ApproveTicketFields.TITLE.key:
-                field["value"] = gettext("【审计中心】执行%s审批") % self.process_application.name
-                fields.append(field)
-                continue
-            # 处理方案名称
-            if field["key"] == ApproveTicketFields.PROCESS_APPLICATION_NAME_FIELD.key:
-                field["value"] = self.process_application.name
-                fields.append(field)
-                continue
-            # 标签
-            if field["key"] == ApproveTicketFields.TAGS.key:
-                tags = self.risk.get_tag_names()
-                field["value"] = ";".join(tags)
-                fields.append(field)
-                continue
-            # 责任人
-            if field["key"] == ApproveTicketFields.OPERATOR.key:
-                field["value"] = ";".join(self.risk.operator)
-                fields.append(field)
-                continue
-            # 风险链接
-            if field["key"] == ApproveTicketFields.RISK_URL.key:
-                field["value"] = "{}/risk-manage/detail/{}".format(get_saas_url(settings.APP_CODE), self.risk.risk_id)
-                fields.append(field)
-                continue
-            # 获取风险字段，以配置优先
-            value = self.process_application.approve_config.get(field["key"], {}).get("value") or getattr(
-                self.risk, field["key"], ""
-            )
-            if isinstance(value, (dict, list)):
-                value = json.dumps(value, ensure_ascii=False)
-            field["value"] = value
-            fields.append(field)
-        ticket = api.bk_itsm.create_ticket(
-            service_id=self.process_application.approve_service_id,
-            creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
-            fields=fields,
+        ticket_info = resource.itsm.get_service_detail(
+            id=self.process_application.approve_service_id, version=itsm_version
         )
-        status = api.bk_itsm.ticket_approve_result(sn=[ticket["sn"]])[0]
+        form_data, fields = self._build_approve_form_data(ticket_info)
+
+        if itsm_version == ItsmVersion.V3:
+            ticket = api.bk_itsm.create_ticket(
+                service_id=self.process_application.approve_service_id,
+                creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+                fields=fields,
+            )
+            status = api.bk_itsm.ticket_approve_result(sn=[ticket["sn"]])[0]
+        else:
+            ticket = api.bk_itsm_v4.ticket_create(
+                operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+                workflow_key=self.process_application.approve_service_id,
+                form_data=form_data,
+                is_submit=True,
+            )
+            status = get_itsm_ticket_status(ticket["id"])
         return {"ticket": ticket, "status": status}
+
+    @staticmethod
+    def _parse_workflow_fields(workflow_detail: dict) -> dict:
+        """
+        将 V4 Workflows 接口返回的单个流程（workflow dict）解析为字段列表。
+
+        workflow dict 来自 workflows().items[0]，其表单字段定义位于
+        form_canvas_data.jsonschema.properties（key 形如 ticket__title）。
+        """
+
+        form_canvas_data = workflow_detail.get("form_canvas_data") or {}
+        jsonschema = form_canvas_data.get("jsonschema") or {}
+        properties = jsonschema.get("properties") or {}
+        fields = []
+        for key, prop in properties.items():
+            fields.append(
+                {
+                    "key": key,
+                    "name": prop.get("title", ""),
+                    "type": prop.get("type", "STRING").upper(),
+                }
+            )
+        return {"fields": fields}
 
     def update_operator(self, process_result: dict, **kwargs) -> None:
         status = process_result.get("status", {})
@@ -568,8 +614,19 @@ class ForApprove(RiskFlowBaseHandler):
             self.risk.current_operator = []
         self.risk.save(update_fields=["current_operator"])
 
+    def load_approve_ticket_id(self) -> str:
+        """
+        取单据 id 作为「是否已发起」的判断依据。
+        """
+
+        return str(self.risk.last_history.process_result.get("ticket", {}).get("id") or "")
+
     def load_approve_sn(self) -> str:
-        return self.risk.last_history.process_result.get("ticket", {}).get("sn", "")
+        """
+        工单编号。V4 不再按 sn 查询，仅用于识别 V3 遗留的历史在途单据（无 V4 工单 ID）。
+        """
+
+        return self.risk.last_history.process_result.get("ticket", {}).get("sn", "") or ""
 
     def update_status(self, process_result: dict, **kwargs) -> None:
         status = process_result.get("status", {})
@@ -602,6 +659,61 @@ class ForApprove(RiskFlowBaseHandler):
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return kwargs
+
+
+# V4 ITSM 工单状态标识（小写）与旧 ITSM TicketStatus（大写）的映射
+ITSM_V4_STATUS_MAPPING = {
+    "running": TicketStatus.RUNNING.value,
+    "finished": TicketStatus.FINISHED.value,
+    "termination": TicketStatus.TERMINATED.value,
+    "failed": TicketStatus.FAILED.value,
+    "revoked": TicketStatus.REVOKED.value,
+    "suspend": TicketStatus.SUSPEND.value,
+    "receiving": TicketStatus.RECEIVING.value,
+    "distributing": TicketStatus.DISTRIBUTING.value,
+    "wait": TicketStatus.WAIT.value,
+}
+
+
+def extract_current_processor(detail: dict) -> str:
+    """
+    从 V4 工单详情里取当前处理人
+    """
+
+    for item in detail.get("current_processors") or []:
+        if not isinstance(item, dict) or item.get("processor_type") != "user":
+            continue
+        processor = item.get("processor")
+        if isinstance(processor, (list, tuple)):
+            return ";".join(str(p) for p in processor)
+        return str(processor or "")
+    return ""
+
+
+def get_itsm_ticket_status(ticket_id: str) -> dict:
+    """
+    通过 ITSM V4 的 ticket_detail 接口获取工单审批状态。
+
+    返回结构与 V3 的 ticket_approve_result 对齐（id/title/update_at/ticket_url/
+    updated_by/approve_result/current_status），避免下游 sync_auto_result 与前端
+    节点展示因字段缺失取不到值。
+    """
+
+    detail = api.bk_itsm_v4.ticket_detail(id=ticket_id)
+    current_status = ITSM_V4_STATUS_MAPPING.get((detail.get("status") or "").lower())
+    if not current_status:
+        logger.warning("unmapped V4 itsm status: %s", detail.get("status"))
+        current_status = detail.get("status")
+    return {
+        "id": detail.get("id"),
+        "sn": detail.get("sn"),
+        "title": detail.get("title") or "",
+        "update_at": detail.get("updated_at") or "",
+        "ticket_url": detail.get("frontend_url") or "",
+        "updated_by": extract_current_processor(detail),
+        "approve_result": detail.get("approve_result"),
+        "current_status": current_status,
+    }
 
 
 class AutoProcess(RiskFlowBaseHandler):
