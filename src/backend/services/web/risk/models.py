@@ -389,7 +389,7 @@ class Risk(StrategyTagMixin, SoftDeleteModel):
     def last_history(self) -> Union["TicketNode", None]:
         from services.web.risk.handlers.ticket import MisReport, ReOpenMisReport
 
-        nodes = TicketNode.objects.filter(risk_id=self.risk_id).order_by("-timestamp")
+        nodes = TicketNode.objects.filter(risk_id=self.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
             if node.action not in [MisReport.__name__, ReOpenMisReport.__name__]:
                 return node
@@ -551,6 +551,9 @@ class ProcessApplication(SoftDeleteModel):
     approve_config = models.JSONField(gettext_lazy("Approve Config"), null=True, blank=True)
     description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    is_builtin = models.BooleanField(
+        gettext_lazy("Is Builtin"), default=False, help_text=gettext_lazy("系统内置套餐（如 BKSEC 发单），请勿删除或停用")
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Process Application")
@@ -574,6 +577,13 @@ class RiskRule(SoftDeleteModel):
     auto_close_risk = models.BooleanField(gettext_lazy("Auto Close Risk"), default=True)
     priority_index = models.IntegerField(gettext_lazy("Priority Index"), default=0)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
+    auto_strategy_id = models.BigIntegerField(
+        gettext_lazy("Auto Created By Strategy"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("策略 BKSEC 发单自动创建时记录来源策略 ID，非空表示系统自动规则"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Risk Rule")
@@ -664,6 +674,14 @@ class TicketNode(models.Model):
         choices=TicketNodeStatus.choices,
         default=TicketNodeStatus.RUNNING,
         db_index=True,
+    )
+    is_test = models.BooleanField(gettext_lazy("Is Test"), default=False, db_index=True)
+    duration = models.IntegerField(
+        gettext_lazy("Duration"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=gettext_lazy("处理耗时（秒），用于执行记录排序；未结束/缺失为 null"),
     )
 
     class Meta:
@@ -1150,3 +1168,28 @@ class NL2RiskFilterLog(OperateRecordModel):
         indexes = [
             models.Index(fields=["created_by", "status", "query_hash", "id"], name="risk_nl2log_user_st_qh_id"),
         ]
+
+
+def parse_sops_time(value) -> Optional[datetime.datetime]:
+    """解析 SOPS 状态里的时间字段（源格式或 ISO 格式，均可能出现在 JSONField 回读值中）"""
+    if not value or not isinstance(value, str):
+        return None
+    value = value.strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def calc_task_duration(status_info: dict) -> Optional[int]:
+    """耗时（秒）：SOPS 任务实际 start_time/finish_time 之差；未结束/缺失返回 None"""
+    start = parse_sops_time((status_info or {}).get("start_time"))
+    finish = parse_sops_time((status_info or {}).get("finish_time"))
+    if start and finish:
+        return int((finish - start).total_seconds())
+    return None

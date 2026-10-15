@@ -213,7 +213,7 @@ class RetrieveRisk(RiskMeta):
         )
         risk = data[0]
         nodes = (
-            TicketNode.objects.filter(risk_id=risk["risk_id"])
+            TicketNode.objects.filter(risk_id=risk["risk_id"], is_test=False)
             .exclude(action=RiskExperienceRecord.__name__)
             .order_by("timestamp")
         )
@@ -918,6 +918,7 @@ class ListProcessedRisk(ListRisk):
         # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
+            is_test=False,
         ).values("risk_id")
         return Risk.objects.filter(
             q,
