@@ -780,6 +780,11 @@ class CreateStrategy(StrategyV2Base):
             if is_draft:
                 strategy.status = StrategyStatusChoices.DRAFT
                 strategy.save(update_fields=["status"])
+            # BKSEC 发单规则同步（草稿不建规则，提交后自动创建/更新）
+            if not is_draft:
+                from services.web.risk.bksec.rules import sync_bksec_rule
+
+                sync_bksec_rule(strategy)
         # create
         # TODO: 当前外部 controller / IAM 调用保留在事务内；若本地事务回滚，
         # 外部侧可能残留已创建的控制器或授权。后续可迁移到事务提交后执行或增加补偿机制。
@@ -844,6 +849,11 @@ class UpdateStrategy(StrategyV2Base):
         need_update_remote = self.update_db(
             strategy=strategy, validated_request_data=validated_request_data, draft_save=draft_save
         )
+        # BKSEC 发单规则同步（草稿保存不部署、不建规则）
+        if not draft_save:
+            from services.web.risk.bksec.rules import sync_bksec_rule
+
+            sync_bksec_rule(strategy)
         if is_draft_strategy:
             # 草稿策略：仅落库不部署；提交（is_draft=False）时走创建链路部署（草稿从未部署，无 flow_id）
             if is_draft is False:
@@ -1070,6 +1080,10 @@ class DeleteStrategy(StrategyV2Base):
                 raise err
         # delete strategy
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
+        # 停用策略的 BKSEC 自动发单规则（保留历史版本供在途风险单走完）
+        from services.web.risk.bksec.rules import disable_bksec_rule
+
+        disable_bksec_rule(validated_request_data["strategy_id"])
         strategy.delete()
         BindingMetadataHelper.delete_resource_binding(
             resource_id=str(strategy.strategy_id),
@@ -1388,10 +1402,16 @@ class ToggleStrategy(StrategyV2Base):
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
+        # 启停经 celery 异步落库，此刻 strategy.status 仍是旧值，须显式向 sync_bksec_rule 传入方向
+        # （评审定论：停用策略须禁用自动规则）。对称写法确保后续追加逻辑不会漏调同步。
+        from services.web.risk.bksec.rules import sync_bksec_rule
+
         if validated_request_data["toggle"]:
             call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
-            return
-        call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
+            sync_bksec_rule(strategy, strategy_alive=True)
+        else:
+            call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
+            sync_bksec_rule(strategy, strategy_alive=False)
 
 
 class RetryStrategy(StrategyV2Base):

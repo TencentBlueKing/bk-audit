@@ -56,6 +56,7 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
     UserType,
+    calc_task_duration,
 )
 from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.constants import StrategyType
@@ -221,7 +222,7 @@ class RiskFlowBaseHandler:
         需要处理审批失败和执行失败两种情况
         """
 
-        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id).order_by("-timestamp")
+        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
             if node.action == CustomProcess.__name__ and node.extra.get("custom_action") == AutoProcess.__name__:
                 return [node.operator]
@@ -311,6 +312,7 @@ class RiskFlowBaseHandler:
             timestamp=datetime.datetime.now().timestamp(),
             time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             process_result=process_result,
+            duration=process_result.get("duration"),
             extra=self.build_history(process_result=process_result, *args, **kwargs),
         )
         self.risk.save(update_fields=["last_operate_time"])
@@ -622,7 +624,10 @@ class AutoProcess(RiskFlowBaseHandler):
         task_id = self.load_task_id()
         if task_id:
             try:
-                return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+                process_result = {
+                    "status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                }
+                return self._attach_failure_hint(process_result)
             except APIRequestError as err:
                 # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
                 err_data = getattr(err, "data", {}) or {}
@@ -631,9 +636,15 @@ class AutoProcess(RiskFlowBaseHandler):
                         f"[AutoProcess] get_task_status business error, "
                         f"risk_id={self.risk.risk_id}, task_id={task_id}, err={err}"
                     )
-                    return {"status": {"state": SOPSTaskStatus.FAILED}}
+                    return self._attach_failure_hint({"status": {"state": SOPSTaskStatus.FAILED}})
                 # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
                 raise
+
+        # 触发方式快照：人工选择(显式传参) / 审批通过(上个节点为审批) / 规则自动匹配
+        last_node = self.risk.last_history
+        trigger = (
+            "manual" if pa_config else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
+        )
         # 优先使用参数
         pa_config = pa_config
         # 或者使用上个节点(审批节点)配置
@@ -667,6 +678,17 @@ class AutoProcess(RiskFlowBaseHandler):
             # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
+            # 仅 BKSEC 自动规则（auto_strategy_id 非空）走模板渲染：值中含 {{ }} 时按上下文求值
+            # 通用套餐保持原有平铺取值机制，不因 BKSEC 特定功能改变行为边界
+            if isinstance(value, str) and "{{" in value and getattr(self.rule, "auto_strategy_id", None):
+                from services.web.risk.bksec.contract import render_event_constant
+
+                value = render_event_constant(value, risk=self.risk)
+            # operator 入参兜底：BKSEC 自动规则渲染后保证数组串契约（插件 json.loads 不崩）
+            if c["key"] == "${operator}" and getattr(self.rule, "auto_strategy_id", None):
+                from services.web.risk.bksec.contract import coerce_operator_constant
+
+                value = coerce_operator_constant(value, risk=self.risk)
             value = _normalize_sops_constant_value(c, value)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
@@ -682,10 +704,39 @@ class AutoProcess(RiskFlowBaseHandler):
         # 没有任务创建任务
         result = api.bk_sops.create_task(**params)
         api.bk_sops.start_task(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        return {
+        process_result = {
             "task": result,
             "status": api.bk_sops.get_task_status(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID),
+            # 套餐/任务快照：执行记录据此展示（历史节点无快照时由记录接口走规则链路兜底）
+            "pa_id": self.process_application.id,
+            "pa_name": self.process_application.name,
+            "task_name": params["name"],
+            "trigger": trigger,
         }
+        return self._attach_failure_hint(process_result)
+
+    @staticmethod
+    def _extract_failure_detail(status: dict) -> str:
+        """从 SOPS 状态中提取首个失败节点的错误信息"""
+        children = (status or {}).get("children") or {}
+        for child in children.values():
+            if child.get("state") in SOPSTaskStatus.get_failed_status():
+                return child.get("error_message") or ""
+        return ""
+
+    def _attach_failure_hint(self, process_result: dict) -> dict:
+        """写入点翻译失败提示并落库（非失败状态原样返回）"""
+        status = process_result.get("status") or {}
+        if status.get("state") in SOPSTaskStatus.get_failed_status():
+            from apps.feature.constants import FeatureTypeChoices
+            from services.web.risk.bksec.service import translate_failure_hint
+
+            channel = FeatureTypeChoices.BKSEC if getattr(self.rule, "auto_strategy_id", None) else "default"
+            detail = self._extract_failure_detail(status)
+            process_result["failure_hint"] = translate_failure_hint(channel, detail)
+        # 冗余存储 duration（秒），用于排序
+        process_result["duration"] = calc_task_duration(status)
+        return process_result
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         auto_close_risk = self.get_auto_close_risk(pa_config=kwargs.get("pa_config"))
@@ -725,7 +776,10 @@ class AutoProcess(RiskFlowBaseHandler):
             history_status = self.risk.last_history.process_result.get("status") or {}
             if current_status.get("state") != history_status.get("state"):
                 self.risk.last_history.process_result.update(process_result)
-                self.risk.last_history.save(update_fields=["process_result"])
+                # duration 冗余到独立整数字段，保证排序为数值排序（JSON 数值排序会按字符串比较出错）
+                if "duration" in process_result:
+                    self.risk.last_history.duration = process_result["duration"]
+                self.risk.last_history.save(update_fields=["process_result", "duration"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         history = {**kwargs}

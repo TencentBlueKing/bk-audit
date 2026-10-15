@@ -747,6 +747,29 @@ class ListRiskScenesRespSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class PAExecutionRecordInfoSerializer(serializers.Serializer):
+    """
+    处理套餐执行记录条目（执行记录侧滑列表）
+    """
+
+    id = serializers.IntegerField(label=gettext_lazy("节点ID"))
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    operator = serializers.CharField(label=gettext_lazy("操作人"), allow_blank=True)
+    time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    trigger = serializers.ChoiceField(
+        label=gettext_lazy("触发方式"), choices=["", "auto", "manual", "approve"], allow_blank=True
+    )
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
+
+
 class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
     List Risk

@@ -652,11 +652,11 @@ def process_one_risk(*, risk_id: str):
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
-    # 筛选所有需要更新的节点
+    # 筛选所有需要更新的节点（测试单不参与轮询，由 get_task_status 查询时同步）
     if node_id:
-        nodes = TicketNode.objects.filter(id=node_id)
+        nodes = TicketNode.objects.filter(id=node_id, is_test=False)
     else:
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING, is_test=False)
 
     # 逐个更新
     for node in nodes:
@@ -704,7 +704,9 @@ def sync_auto_result(node_id: str = None):
                 # 其他节点只需要判断不为最后一个，则关闭
                 # 或 该风险单已关闭，则关闭
                 else:
-                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    last_node = (
+                        TicketNode.objects.filter(risk_id=node.risk_id, is_test=False).order_by("-timestamp").first()
+                    )
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
                         risk and risk.status == RiskStatus.CLOSED
