@@ -8,22 +8,30 @@ Licensed under the MIT License (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at http://opensource.org/licenses/MIT
 Unless required by applicable law or agreed to in writing,
-software distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing permissions and
 limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
+import os
 
 from bk_resource import BkApiResource
 from client_throttler import Throttler, ThrottlerConfig
 from django.conf import settings
-from django.utils.translation import gettext_lazy
 
 from api.domains import BKSEC_API_URL
+
+
+def _load_mock_data():
+    """加载 Mock 数据（risk_type_list.json）"""
+    mock_file = os.path.join(settings.BASE_DIR, "mocks", "wesec", "risk_type_list.json")
+    with open(mock_file, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 class BKSec(BkApiResource, abc.ABC):
@@ -34,6 +42,9 @@ class BKSec(BkApiResource, abc.ABC):
     rate_limit = settings.BKSEC_API_RATE_LIMIT
 
     def perform_request(self, validated_request_data):
+        # Mock 模式：直接返回本地数据
+        if getattr(settings, "BKSEC_MOCK_ENABLED", False):
+            return self._mock_request(validated_request_data)
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
@@ -41,6 +52,10 @@ class BKSec(BkApiResource, abc.ABC):
                 rate=self.rate_limit,
             )
         )(validated_request_data)
+
+    def _mock_request(self, validated_request_data):
+        """Mock 请求处理（子类可覆盖）"""
+        return _load_mock_data()
 
 
 class RiskAccessList(BKSec):
@@ -50,23 +65,6 @@ class RiskAccessList(BKSec):
     method = "GET"
     action = "/api/v1/risk/risk_access/"
 
-
-class RiskAccessRetrieve(BKSec):
-    """
-    查询风险类型详情（取 token / 字段 schema）
-
-    BKSEC 对外只提供 risk_access 列表接口：传 id 时返回该风险类型的单条记录。
-    故详情复用列表接口按 id 过滤，并将首条记录以"详情对象"形态返回
-    （与列表一致，均已由 IS_STANDARD_FORMAT 解包 data 信封）。
-    """
-
-    name = gettext_lazy("查询风险类型详情")
-    method = "GET"
-    action = "/api/v1/risk/risk_access/"
-
-    def perform_request(self, validated_request_data):
-        # project_id 为接口必填的项目维度，未显式传入时按全局配置兜底
-        validated_request_data.setdefault("project_id", settings.BKSEC_PROJECT_ID or "")
-        result = super().perform_request(validated_request_data) or {}
-        results = result.get("results", []) or []
-        return results[0] if results else {}
+    def _mock_request(self, validated_request_data):
+        data = _load_mock_data()
+        return data.get("data", {})
