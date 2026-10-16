@@ -205,7 +205,17 @@ export default {
     return AiAssistantManageSource.fullExport(params, {
       catchError: options?.catchError,
     })
-      .then(({ data }) => data);
+      .then(({ data }) => {
+        // 同步直出为 xlsx Blob（响应拦截器已自动触发浏览器下载）；
+        // 降级/异步为 JSON Blob，解析回业务结构（拦截器对 json blob 不触发下载）
+        if (typeof Blob !== 'undefined' && data instanceof Blob && data.type && !data.type.includes('json')) {
+          return data;
+        }
+        if (typeof Blob !== 'undefined' && data instanceof Blob) {
+          return data.text().then((text) => JSON.parse(text));
+        }
+        return data;
+      });
   },
 
   // ---------- 附件 ----------

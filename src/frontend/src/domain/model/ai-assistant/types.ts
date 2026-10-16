@@ -428,6 +428,8 @@ export interface AiFullExportResult {
   id?: number;
   /** 异步导出提示文案（如邮件通知说明） */
   message?: string;
+  /** 导出分支标记：sync_fallback = 同步直出超限自动降级异步；缺省为直接异步 */
+  export_type?: string;
 }
 
 /** 附件业务类型；二期分析只注册 AI_ANALYSIS */
