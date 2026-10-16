@@ -24,7 +24,7 @@ class Plugin(BkApiResource):
     """插件 API 基类"""
 
     module_name = "plugin"
-    bkapi_header_authorization = True
+    platform_authorization = True
 
     @property
     def base_url(self) -> str:
