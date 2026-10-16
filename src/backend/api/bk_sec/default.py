@@ -30,7 +30,7 @@ class BKSec(BkApiResource, abc.ABC):
 
     module_name = "bk_sec"
     base_url = BKSEC_API_URL
-    platform_authorization = True
+    bkapi_header_authorization = True
     rate_limit = settings.BKSEC_API_RATE_LIMIT
 
     def perform_request(self, validated_request_data):
