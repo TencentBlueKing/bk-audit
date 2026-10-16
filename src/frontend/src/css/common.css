@@ -140,3 +140,35 @@
     transition: all .15s;
   }
 }
+
+/* 产品内 Tag 统一最大宽度，超长省略，hover 由 overflow tooltip 展示全文 */
+:root {
+  --audit-tag-max-width: 180px;
+}
+
+.bk-tag {
+  max-width: var(--audit-tag-max-width);
+  min-width: 0;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.bk-tag .bk-tag-text,
+.bk-tag .bk-tag-content {
+  min-width: 0;
+}
+
+.bk-user-selector .user-tag {
+  max-width: var(--audit-tag-max-width) !important;
+}
+
+.pa-param-user-tag,
+.audit-ellipsis-tag {
+  display: inline-block;
+  max-width: var(--audit-tag-max-width);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}

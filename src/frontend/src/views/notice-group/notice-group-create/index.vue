@@ -103,7 +103,7 @@
             <bk-input
               v-model="formData.description"
               class="form-item-common"
-              :maxlength="100"
+              :maxlength="2000"
               :placeholder="t('请输入说明')"
               :rows="2"
               type="textarea" />

@@ -890,6 +890,8 @@
             }).then(() => {
               messageSuccess(t('删除成功'));
               deleteInfoInstance?.hide();
+              highlightReportId.value = null;
+              pinnedNewReport.value = null;
               refreshList();
               fetchStatusCounts();
             });
@@ -908,7 +910,7 @@
 
   const refreshList = () => {
     nextTick(() => {
-      tableRef.value?.fetchData({});
+      tableRef.value?.fetchData({ page: 1 });
     });
   };
 

@@ -15,12 +15,14 @@
     :disabled="!isDockActive"
     to="body">
     <div
+      ref="dockRootRef"
       class="risk-handle-dock"
       :class="{
         'is-expanded': isExpanded,
         'is-resizing': isResizing,
         'is-resize-hover': showResizeBar,
         'is-editor-boosted': isEditorBoosted,
+        'is-inactive': !isDockActive,
       }"
       :style="dockStyle">
       <div
@@ -52,7 +54,7 @@
 
         class="risk-handle-dock__header"
 
-        @click="toggleExpanded">
+        @click.stop="toggleExpanded">
         <audit-icon
 
           class="risk-handle-dock__toggle"
@@ -94,6 +96,7 @@
 
   import {
     computed,
+    nextTick,
     onActivated,
     onBeforeUnmount,
     onDeactivated,
@@ -139,6 +142,10 @@
 
   const CONTENT_HORIZONTAL_PADDING = 24;
 
+  const TOGGLE_LOCK_MS = 250;
+
+  const RESIZE_CLICK_THRESHOLD = 4;
+
 
   const getDefaultExpandedHeight = () => {
     const maxHeight = Math.floor(window.innerHeight * MAX_HEIGHT_RATIO);
@@ -158,6 +165,33 @@
   const panelHeightBeforeBoost = ref<number | null>(null);
   const dockLeft = ref(0);
   const dockWidth = ref(0);
+  const dockRootRef = ref<HTMLElement>();
+  const isToggleLocked = ref(false);
+  let toggleLockTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const lockToggle = () => {
+    isToggleLocked.value = true;
+    if (toggleLockTimer) {
+      clearTimeout(toggleLockTimer);
+    }
+    toggleLockTimer = setTimeout(() => {
+      isToggleLocked.value = false;
+      toggleLockTimer = null;
+    }, TOGGLE_LOCK_MS);
+  };
+
+  const hideInactiveDocks = () => {
+    document.querySelectorAll('.risk-handle-dock').forEach((el) => {
+      const dockEl = el as HTMLElement;
+      if (el !== dockRootRef.value) {
+        dockEl.style.display = 'none';
+        dockEl.style.pointerEvents = 'none';
+        return;
+      }
+      dockEl.style.display = '';
+      dockEl.style.pointerEvents = '';
+    });
+  };
 
   watch(() => props.defaultExpanded, (expanded) => {
     if (expanded) {
@@ -281,6 +315,10 @@
 
 
   const toggleExpanded = () => {
+    if (isToggleLocked.value || isResizing.value || !isDockActive.value) {
+      return;
+    }
+    lockToggle();
     const wasExpanded = isExpanded.value;
     isExpanded.value = !isExpanded.value;
 
@@ -312,8 +350,10 @@
     const startHeight = panelHeight.value;
 
     const maxHeight = getMaxPanelHeight();
+    let lastY = startY;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      lastY = moveEvent.clientY;
       const nextHeight = startHeight + (startY - moveEvent.clientY);
       panelHeight.value = Math.min(Math.max(nextHeight, HEADER_HEIGHT), maxHeight);
     };
@@ -326,15 +366,20 @@
 
       document.body.style.cursor = prevBodyCursor;
 
+      document.removeEventListener('mousemove', handleMouseMove);
+
+      document.removeEventListener('mouseup', handleMouseUp);
+
+      if (Math.abs(lastY - startY) <= RESIZE_CLICK_THRESHOLD) {
+        toggleExpanded();
+        return;
+      }
+
       if (panelHeight.value < MIN_EXPANDED_HEIGHT) {
         isExpanded.value = false;
 
         panelHeight.value = getDefaultExpandedHeight();
       }
-
-      document.removeEventListener('mousemove', handleMouseMove);
-
-      document.removeEventListener('mouseup', handleMouseUp);
     };
 
 
@@ -376,6 +421,7 @@
   onMounted(() => {
     isDockActive.value = true;
     updateDockPosition();
+    nextTick(hideInactiveDocks);
 
     window.addEventListener('resize', handleResize);
 
@@ -398,6 +444,7 @@
     isDockActive.value = true;
     updateDockPosition();
     updateContentPadding(isExpanded.value ? panelHeight.value : COLLAPSED_HEIGHT);
+    nextTick(hideInactiveDocks);
   });
 
   onDeactivated(() => {
@@ -409,6 +456,12 @@
   });
 
   onBeforeUnmount(() => {
+    isDockActive.value = false;
+    if (toggleLockTimer) {
+      clearTimeout(toggleLockTimer);
+      toggleLockTimer = null;
+    }
+
     window.removeEventListener('resize', handleResize);
 
     layoutObserver?.disconnect();
@@ -453,6 +506,12 @@
   transition: height .2s ease, left .2s ease, width .2s ease;
 
 
+  &.is-inactive {
+    display: none;
+    pointer-events: none;
+  }
+
+
   &.is-resizing {
     transition: none;
     user-select: none;
@@ -470,11 +529,11 @@
 
 .risk-handle-dock__resize-zone {
   position: absolute;
-  top: 0;
+  top: -8px;
   right: 0;
   left: 0;
   z-index: 3;
-  height: 14px;
+  height: 8px;
   cursor: var(--dock-resize-cursor, ns-resize);
 
 }

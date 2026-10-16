@@ -48,8 +48,9 @@ import SmartAction from '@components/smart-action/index.vue';
 import SelectVerify from '@components/select-verify/index.vue';
 import SearchBox from '@components/search-box/index.vue';
 
-import WaterMark from '@utils/assist/water-mark';
 import { warmAgents } from '@utils/assist/ping-agent';
+import { installTagOverflowTips } from '@utils/assist/tag-overflow-tips';
+import WaterMark from '@utils/assist/water-mark';
 
 import cursor from '@directives/cursor';
 
@@ -68,6 +69,7 @@ import('bkui-vue/dist/style.variable.css');
 import('@lib/bk-icon/style.css');
 import('@lib/bk-icon/iconcool.js');
 import('@/css/reset.css');
+import('@/css/tokens.css');
 import('@/css/common.css');
 import('@blueking/notice-component/dist/style.css');
 import('@blueking/date-picker/vue3/vue3.css');
@@ -109,6 +111,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark(), RootMan
 
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);
+    installTagOverflowTips();
 
     // TAM前端监控
     setTimeout(() => {

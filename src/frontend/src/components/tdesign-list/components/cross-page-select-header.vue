@@ -16,6 +16,7 @@
 -->
 <template>
   <div
+    ref="rootRef"
     class="cross-page-select-header"
     :class="{ disabled: disabled || isHeaderLoading }">
     <span class="tdesign-list-select-slot">
@@ -40,7 +41,7 @@
         @mousedown.stop />
       <template #content>
         <div
-          class="pop-menu"
+          class="pop-menu cross-page-select-pop-menu"
           @click.stop
           @mousedown.stop>
           <div
@@ -63,6 +64,8 @@
 <script setup lang="ts">
   import {
     computed,
+    onMounted,
+    onUnmounted,
     ref,
     watch,
   } from 'vue';
@@ -88,6 +91,7 @@
   const emits = defineEmits<Emits>();
   const select = ref('');
   const popoverRef = ref<{ hide?:() => void }>();
+  const rootRef = ref<HTMLElement>();
   const popoverVisible = ref(false);
   const localLoading = ref(false);
   const { t } = useI18n();
@@ -116,6 +120,32 @@
     }
     popoverVisible.value = !popoverVisible.value;
   };
+
+  const handleClickOutside = (e: Event) => {
+    if (!popoverVisible.value) {
+      return;
+    }
+    const target = e.target as Node | null;
+    if (!target) {
+      return;
+    }
+    if (rootRef.value?.contains(target)) {
+      return;
+    }
+    const targetEl = target instanceof Element ? target : target.parentElement;
+    if (targetEl?.closest('.cross-page-select-pop-menu')) {
+      return;
+    }
+    closePopover();
+  };
+
+  onMounted(() => {
+    document.addEventListener('mousedown', handleClickOutside, true);
+  });
+
+  onUnmounted(() => {
+    document.removeEventListener('mousedown', handleClickOutside, true);
+  });
 
   watch(() => props.loading, (loading) => {
     if (!loading) {
