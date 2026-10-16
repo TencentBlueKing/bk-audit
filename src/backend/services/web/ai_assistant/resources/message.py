@@ -17,6 +17,8 @@ from services.web.ai_assistant.serializers.message import (
 )
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.log_export import MessageExportService
+from services.web.query.ai_assistant.constants import SYNC_EXPORT_FALLBACK
+from services.web.query.ai_assistant.services.export import PreviewExportFile
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -138,6 +140,10 @@ class CreateMessageFullExport(AIAssistantResource):
     若指定列，传 {"export_config": {"field_scope": "specified", "fields": [{"raw_name": "username"}]}}。
     导出配置只控制列；数据范围来自消息快照，调用方不能覆盖。非法配置返回 400。
     成功响应含 export_task_id 与任务状态，须沿既有导出任务查询/下载链路等待文件就绪。
+
+    同步直出（F4.5）：数据量守卫内时本接口直接返回 XLSX 文件流
+    （Content-Disposition 附件，前端按响应 Content-Type 分支处理）；
+    超限/超时自动降级为既有异步链路，JSON 响应含 export_type=sync_fallback 标记。
     """
 
     name = gettext_lazy("创建全量日志导出")
@@ -145,7 +151,17 @@ class CreateMessageFullExport(AIAssistantResource):
     ResponseSerializer = MessageFullExportResponseSerializer
 
     def perform_request(self, validated_request_data):
-        return MessageExportService(user=get_request_username()).create_full_export(
+        result = MessageExportService(user=get_request_username()).export_or_fallback(
             message_uid=str(validated_request_data["message_uid"]),
             export_config=validated_request_data.get("export_config") or {},
         )
+        # 同步直出：内存文件直接写响应（与预览导出同模式，绕过 ResponseSerializer）
+        if isinstance(result, PreviewExportFile):
+            response = HttpResponse(result.content, content_type=XLSX_CONTENT_TYPE)
+            response["Content-Disposition"] = content_disposition_header(
+                as_attachment=True,
+                filename=result.file_name,
+            )
+            return response
+        # 异步/降级：既有 JSON 协议（降级时含 export_type 标记，由 service 层注入）
+        return result
