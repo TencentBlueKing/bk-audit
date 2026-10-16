@@ -207,6 +207,8 @@ BKSEC_PROJECT_ID = os.getenv("BKAPP_BKSEC_PROJECT_ID")
 BKSEC_SOPS_TEMPLATE_ID = os.getenv("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
 # BKSEC 发单插件 Config 同步 API 地址
 BKSEC_PLUGIN_CONFIG_API_URL = os.getenv("BKAPP_BKSEC_PLUGIN_CONFIG_API_URL")
+# BKSEC Mock 模式开关（bkop 测试环境用，开启后 WeSec API 请求走本地 Mock）
+BKSEC_MOCK_ENABLED = strtobool(os.getenv("BKAPP_BKSEC_MOCK_ENABLED", "False"))
 BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。

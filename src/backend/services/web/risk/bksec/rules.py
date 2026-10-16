@@ -260,15 +260,20 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         ).report()
         return (False, message)
 
-    # 获取 token（调用 risk_access API）
+    # 获取 token（调用 risk_access 列表接口，从结果中按 risk_type_id 匹配）
     try:
         from bk_resource import api
 
-        # 注：BkApiResource 已按 IS_STANDARD_FORMAT 解包 data 信封，此处 result 即风险类型详情对象
-        result = api.bk_sec.risk_access_retrieve(id=config.risk_type_id)
-        token = (result or {}).get("token", "")
+        # 注：BkApiResource 已按 IS_STANDARD_FORMAT 解包 data 信封，此处 result 即分页结果对象
+        result = api.bk_sec.risk_access_list(project_id=settings.BKSEC_PROJECT_ID or "", is_formal="true")
+        results = (result or {}).get("results", []) or []
+        token = ""
+        for item in results:
+            if str(item.get("id")) == str(config.risk_type_id):
+                token = item.get("token", "")
+                break
         if not token:
-            message = "risk_access API 未返回 token"
+            message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id
             logger.warning(
                 "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
                 message,
