@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import os
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -151,7 +152,7 @@ LANGUAGES = (
 LANGUAGE_COOKIE_NAME = os.getenv("BKAPP_LANGUAGE_COOKIE_NAME", "blueking_language")
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "blueapps.contrib.drf.exception.custom_exception_handler",
+    "EXCEPTION_HANDLER": "core.exception_handler.exception_handler",
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "blueapps.contrib.drf.utils.pagination.CustomPageNumberPagination",
     "PAGE_SIZE": 100,
@@ -186,6 +187,9 @@ USE_APIGW = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 # ESB配置
 BK_COMPONENT_API_URL = os.getenv("BKAPP_BK_COMPONENT_API_URL", os.getenv("BK_COMPONENT_API_URL"))
 
+BK_CW_AITSM_APIGW_NAME = os.getenv("BKAPP_BK_CW_AITSM_APIGW_NAME", "cw-aitsm")
+BK_USER_APIGW_NAME = os.getenv("BKAPP_BK_USER_APIGW_NAME", "bk-user")
+BK_CMSI_APIGW_NAME = os.getenv("BKAPP_BK_CMSI_APIGW_NAME", "bk-cmsi")
 BK_IAM_APIGW_NAME = os.getenv("BKAPP_BK_IAM_APIGW_NAME", "bk-iam")
 LOG_APIGW_NAME = os.getenv("BKAPP_LOG_APIGW_NAME", "log-search")
 BK_PAAS_APIGW_NAME = os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3")
@@ -198,15 +202,27 @@ BK_BASE_DEBUG_API_URL = os.getenv("BKAPP_BASE_DEBUG_API_URL", BK_BASE_API_URL or
 BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL")
 BK_SOPS_API_URL = os.getenv("BKAPP_BK_SOPS_API_URL")
 BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
+# BKSEC 安全工单（风险类型接入 / 事件上报）
+BKSEC_API_URL = os.getenv("BKAPP_BKSEC_API_URL")
+BKSEC_APIGW_NAME = os.getenv("BKAPP_BKSEC_APIGW_NAME", "bksec")
+BKSEC_API_RATE_LIMIT = os.getenv("BKAPP_BKSEC_API_RATE_LIMIT", "10/s")
+# BKSEC 项目 ID（risk_access 接口必填的项目维度，策略页风险类型下拉按此过滤）
+BKSEC_PROJECT_ID = os.getenv("BKAPP_BKSEC_PROJECT_ID")
+# 预置 BKSEC 发单套餐指向的标准运维流程模板
+BKSEC_SOPS_TEMPLATE_ID = os.getenv("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
+# BKSEC 发单插件 Config 同步 API 地址
+BKSEC_PLUGIN_CONFIG_API_URL = os.getenv("BKAPP_BKSEC_PLUGIN_CONFIG_API_URL")
+# BKSEC Mock 模式开关（bkop 测试环境用，开启后 WeSec API 请求走本地 Mock）
+BKSEC_MOCK_ENABLED = strtobool(os.getenv("BKAPP_BKSEC_MOCK_ENABLED", "False"))
 BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
-# IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
-BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
+# ITSM V4 接入系统标识与系统 token（仅 system_workflow_list 服务列表接口需要）。
+# 二者均为接入系统级凭据，由后端配置读取，前端不感知。
+BK_ITSM_V4_SYSTEM_ID = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_ID", "")
+BK_ITSM_V4_SYSTEM_TOKEN = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_TOKEN", os.getenv("SYSTEM_TOKEN", ""))
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
@@ -259,7 +275,7 @@ AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
 #   若线上延迟或样例质量异常，可设 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED=false 关闭；
 #   操作上下文由平台层 services/web/ai_assistant/services/operation.py 统一管控）
 AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "True"))
-AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "50"))
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "100"))
 AI_ASSISTANT_OPERATION_RANKING_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_OPERATION_RANKING_ENABLED", "True"))
 # AI 助手会话标题生成（一期复刻 risk generate_analyse_report_title 调用方式，共用智能体 ALS_TITLE_SUM）
 AI_CONVERSATION_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH", "35"))
@@ -271,10 +287,14 @@ AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT
 AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS", 14))
 AI_ASSISTANT_HISTORICAL_QUERY_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_LIMIT", 10))
 AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT", 50))
-# 公共 CJK 字体只供受限 PDF 资源回调放行，风险报告和 AI 附件共享同一资产路径。
+# 风险报告和 AI 附件默认共用腾讯体 W3 正文、W7 粗体；资源回调仅放行配置字体。
 PDF_CJK_FONT_PATH = os.getenv(
     "BKAPP_PDF_CJK_FONT_PATH",
-    os.path.join(BASE_DIR, "support-files", "fonts", "NotoSansSC-Regular.ttf"),
+    os.path.join(BASE_DIR, "support-files", "fonts", "TencentSans-W3.ttf"),
+)
+PDF_CJK_BOLD_FONT_PATH = os.getenv(
+    "BKAPP_PDF_CJK_BOLD_FONT_PATH",
+    os.path.join(BASE_DIR, "support-files", "fonts", "TencentSans-W7.ttf"),
 )
 # AI 助手消息或附件反馈说明的最大字符数，环境变量未配置时默认允许 2000 字符。
 AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH", 2000))
@@ -408,6 +428,8 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    # BKSEC 安全工单：由 BksecPlugin 自动探测（必配环境变量 + 内置发单套餐），无需额外总闸。
+    "bksec": "auto",
 }
 
 # BkLog
@@ -482,28 +504,41 @@ setup(throttler_config)
 # AI Agent 出站请求的跨进程全局限流。Web 与 Celery Worker 共用该 Redis Client，
 # 并以 AIAgentCode 为隔离维度；它是历史 Celery task rate_limit 之外的补充保护。
 AI_AGENT_RATE_LIMIT_REDIS_CLIENT = throttler_config.redis_client
-# 所有 Agent 的默认请求速率，格式与 client_throttler 一致（如 30/m）；空值表示默认关闭。
-AI_AGENT_DEFAULT_RATE_LIMIT = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
+# 所有 Agent 的默认请求速率，格式与 client_throttler 一致（如 30/m）。默认 10/m，
+# 确保新增 Agent 即使遗漏部署变量也不会绕过全局限流；单个 Agent 仍可显式配置空值关闭。
+AI_AGENT_DEFAULT_RATE_LIMIT = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip() or "10/m"
 # Client 在单次 HTTP 请求前等待全局配额的最长秒数；启用 rate 时必须严格大于 0。
 AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS = float(
     os.getenv("BKAPP_AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS", "2")
 )
 # 已迁移 Agent 继续读取原环境变量；未配置时按历史 5/m × 2 Worker 副本折算为全局 10/m，
 # 避免跨实例限流上线后默认吞吐减半。
-_AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS = {
-    AIAgentCode.AUDIT_REPORT: os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "10/m"),
-    AIAgentCode.ALS_TITLE_SUM: os.getenv("BKAPP_AI_TITLE_TASK_RATE_LIMIT", "10/m"),
-    AIAgentCode.AUDIT_ANALYSE: os.getenv("BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT", "10/m"),
+_AI_AGENT_LEGACY_RATE_LIMIT_ENV_NAMES = {
+    AIAgentCode.AUDIT_REPORT: "BKAPP_RENDER_TASK_RATE_LIMIT",
+    AIAgentCode.ALS_TITLE_SUM: "BKAPP_AI_TITLE_TASK_RATE_LIMIT",
+    AIAgentCode.AUDIT_ANALYSE: "BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT",
 }
+
+
+def _resolve_ai_agent_rate_limit(agent_code: AIAgentCode) -> str:
+    """按单 Agent、全局、历史变量和安全默认值的顺序解析速率。"""
+
+    agent_env_name = f"BKAPP_AI_{agent_code.name}_RATE_LIMIT"
+    if agent_env_name in os.environ:
+        return os.environ[agent_env_name].strip()
+    global_override = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
+    if global_override:
+        return global_override
+    legacy_override = os.getenv(_AI_AGENT_LEGACY_RATE_LIMIT_ENV_NAMES.get(agent_code, ""), "").strip()
+    return legacy_override or AI_AGENT_DEFAULT_RATE_LIMIT
+
+
 # 每个 Agent 可通过 BKAPP_AI_<枚举名>_RATE_LIMIT 及对应 MAX_WAIT_SECONDS 独立覆盖；
-# 全局默认值非空时优先于上述历史默认值。
+# 显式全局值优先于历史变量，均未配置时使用安全默认值。
 # AUDIT_REPORT 固定 client 默认保留单风险渲染的历史任务级限流；普通 AI 任务按请求显式启用全局限流。
 AI_AGENT_RATE_LIMITS = {
     code.value: {
-        "rate": os.getenv(
-            f"BKAPP_AI_{code.name}_RATE_LIMIT",
-            AI_AGENT_DEFAULT_RATE_LIMIT or _AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS.get(code, ""),
-        ).strip(),
+        "rate": _resolve_ai_agent_rate_limit(code),
         "max_wait_seconds": float(
             os.getenv(
                 f"BKAPP_AI_{code.name}_RATE_LIMIT_MAX_WAIT_SECONDS",

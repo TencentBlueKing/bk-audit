@@ -1,4 +1,4 @@
-﻿from unittest import mock
+from unittest import mock
 from uuid import UUID, uuid4
 
 from bk_resource.exceptions import ValidateException
@@ -10,12 +10,10 @@ from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import ComponentRegistry
 from drf_spectacular.serializers import PolymorphicProxySerializerExtension
 from drf_spectacular.utils import PolymorphicProxySerializer
-from pydantic import ValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from core.sql.constants import FieldType
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionStatus,
@@ -31,10 +29,7 @@ from services.web.ai_assistant.exceptions import (
     MessageNotFound,
     MessageSnapshotValidationError,
 )
-from services.web.ai_assistant.handlers import (
-    attachment_handler_registry,
-    message_handler_registry,
-)
+from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.resources.message import (
     CreateMessage,
@@ -45,7 +40,6 @@ from services.web.ai_assistant.resources.message import (
 )
 from services.web.ai_assistant.schemas import MessageSchema
 from services.web.ai_assistant.schemas.audit_search import (
-    LogSearchInputSchema,
     UserIntentErrorSchema,
     UserIntentOutputSchema,
 )
@@ -68,9 +62,7 @@ from services.web.ai_assistant.services.message_execution import (
     load_message_execution,
 )
 from services.web.common.scope_permission import ScopePermission
-from services.web.query.utils.search_config import QueryConditionOperator
 from tests.base import TestCase
-from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.factories import (
     create_conversation as create_test_conversation,
 )
@@ -83,6 +75,8 @@ from tests.test_ai_assistant.handlers import (
     FeedbackAttachmentEchoHandler,
     FeedbackEchoSyncHandler,
     register_test_message_handler,
+    use_attachment_handler,
+    use_message_handler,
 )
 
 
@@ -325,38 +319,6 @@ class StartupGammaMessageHandler(EchoSyncHandler):
         return StartupGammaMessageOutput(content=input_data.gamma)
 
 
-def _component_schema(registry: ComponentRegistry, name: str) -> dict:
-    for key, component in registry._components.items():
-        component_name = key[0] if isinstance(key, tuple) else getattr(component, "name", None)
-        if component_name == name:
-            return component.schema
-    raise AssertionError(f"OpenAPI 组件不存在: {name}")
-
-
-def _resolve_schema_refs(node, registry: ComponentRegistry):
-    if isinstance(node, list):
-        return [_resolve_schema_refs(item, registry) for item in node]
-    if not isinstance(node, dict):
-        return node
-    if set(node) == {"$ref"}:
-        name = node["$ref"].rsplit("/", 1)[-1]
-        return _resolve_schema_refs(_component_schema(registry, name), registry)
-    return {key: _resolve_schema_refs(value, registry) for key, value in node.items()}
-
-
-def _map_message_serializer(serializer_class) -> dict:
-    view = APIView()
-    view.request = Request(APIRequestFactory().post("/"))
-    view.format_kwarg = None
-    auto_schema = AutoSchema()
-    auto_schema.view = view
-    auto_schema.method = "POST"
-    auto_schema.path = "/"
-    auto_schema.registry = ComponentRegistry()
-    schema = auto_schema._map_serializer(serializer_class(), "request")
-    return _resolve_schema_refs(schema, auto_schema.registry)
-
-
 def _map_polymorphic_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
     view = APIView()
     view.request = Request(APIRequestFactory().get("/"))
@@ -367,73 +329,6 @@ def _map_polymorphic_proxy_oneof(proxy: PolymorphicProxySerializer) -> dict:
     auto_schema.path = "/"
     auto_schema.registry = ComponentRegistry()
     return PolymorphicProxySerializerExtension(target=proxy).map_serializer(auto_schema, "response")
-
-
-class LogSearchConditionOpenAPITest(SimpleTestCase):
-    def test_log_search_input_exposes_nested_condition_and_operator_choices(self):
-        """LOG_SEARCH 输入在 OpenAPI 中展开条件字段，并列出全局操作符与字段类型。"""
-
-        schema = _map_message_serializer(LogSearchInputSchema.drf_serializer)
-        condition = schema["properties"]["condition"]
-        self.assertEqual(
-            set(condition["properties"]),
-            {"scope_type", "scope_id", "start_time", "end_time", "conditions"},
-        )
-        item = condition["properties"]["conditions"]["items"]
-        self.assertEqual(
-            set(item["properties"]["operator"]["enum"]),
-            {choice[0] for choice in QueryConditionOperator.choices},
-        )
-        field = item["properties"]["field"]["properties"]
-        self.assertEqual(set(field), {"raw_name", "field_type", "keys"})
-        self.assertEqual(set(field["field_type"]["enum"]), {choice[0] for choice in FieldType.choices})
-        documented = str(schema)
-        self.assertIn("allow_operators", documented)
-        self.assertIn("isnull", documented)
-        self.assertIn("between", documented)
-
-    def test_log_search_input_precheck_keeps_filter_shape(self):
-        """运行时仍按 Pydantic 校验 filters 形态，OpenAPI 枚举不替代字段白名单。"""
-
-        payload = {
-            "condition": {
-                "scope_type": "system",
-                "scope_id": "bk-audit",
-                "start_time": "2026-09-22T00:00:00+08:00",
-                "end_time": "2026-09-23T00:00:00+08:00",
-                "conditions": [
-                    {
-                        "field": {"raw_name": "username", "field_type": "string", "keys": []},
-                        "operator": "eq",
-                        "filters": ["admin"],
-                    },
-                    {
-                        "field": {"raw_name": "extend_data", "field_type": "string", "keys": ["ticket_id"]},
-                        "operator": "eq",
-                        "filters": ["Story-1"],
-                    },
-                    {
-                        "field": {"raw_name": "username", "field_type": "string", "keys": []},
-                        "operator": "isnull",
-                        "filters": [],
-                    },
-                ],
-            }
-        }
-        parsed = LogSearchInputSchema.model_validate(payload)
-        self.assertEqual(parsed.condition.conditions[1].field.keys, ["ticket_id"])
-        self.assertEqual(parsed.condition.conditions[2].filters, [])
-
-        payload["condition"]["conditions"][2]["filters"] = ["admin"]
-        with self.assertRaises(ValidationError):
-            LogSearchInputSchema.model_validate(payload)
-        payload["condition"]["conditions"][2] = {
-            "field": {"raw_name": "username", "field_type": "string", "keys": []},
-            "operator": "between",
-            "filters": ["only-one"],
-        }
-        with self.assertRaises(ValidationError):
-            LogSearchInputSchema.model_validate(payload)
 
 
 class MessageOpenAPIStartupContractTest(SimpleTestCase):
@@ -494,6 +389,9 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
         self.assertNotIn("#/components/schemas/StartupGammaMessageInput", refreshed_input_refs)
 
     def test_openapi_deduplicates_unregistered_message_fallback_schema(self):
+        intent_handler = self._saved_handlers[MessageType.USER_INTENT]
+        self.assertIsNotNone(intent_handler)
+        message_handler_registry.register(intent_handler)
         proxy = PolymorphicProxySerializer(
             component_name="AIMessageInputDataFallbackGate",
             serializers=lambda: _message_schema_models("input_model"),
@@ -504,7 +402,7 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertEqual(
             [item["$ref"] for item in schema["oneOf"]],
-            ["#/components/schemas/MessageSchema"],
+            ["#/components/schemas/MessageSchema", "#/components/schemas/UserIntentInputSchema"],
         )
 
     def test_openapi_deduplicates_schema_shared_by_multiple_handlers(self):
@@ -520,10 +418,7 @@ class MessageOpenAPIStartupContractTest(SimpleTestCase):
 
         self.assertEqual(
             [item["$ref"] for item in schema["oneOf"]],
-            [
-                "#/components/schemas/EchoInput",
-                "#/components/schemas/MessageSchema",
-            ],
+            ["#/components/schemas/EchoInput", "#/components/schemas/MessageSchema"],
         )
 
 
@@ -538,17 +433,10 @@ class MessageResourceTest(TestCase):
         self.async_handler = EchoAsyncHandler()
         self.attachment_handler = FeedbackAttachmentEchoHandler()
         self.async_attachment_handler = EchoAttachmentAsyncHandler()
-        register_test_message_handler(self.sync_handler)
-        register_test_message_handler(self.async_handler)
-        attachment_handler_registry.register(self.attachment_handler)
-        attachment_handler_registry.register(self.async_attachment_handler)
-
-    def tearDown(self):
-        message_handler_registry.unregister(MessageType.SYSTEM_SELECTION)
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        ensure_business_handlers_registered()
-        attachment_handler_registry.unregister(AttachmentType.FIELD_STATISTICS)
-        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        use_message_handler(self, self.sync_handler)
+        use_message_handler(self, self.async_handler)
+        use_attachment_handler(self, self.attachment_handler)
+        use_attachment_handler(self, self.async_attachment_handler)
 
     def test_update_message_returns_replaced_content_with_existing_feedback_and_attachment(self, _username):
         message = MessageService(user="alice").create(

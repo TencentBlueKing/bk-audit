@@ -53,6 +53,14 @@ class AnalyseReportTitleGenerationError(RiskException):
     ERROR_CODE = "004"
 
 
+class AnalyseReportExportFailed(RiskException):
+    """报告渲染失败，不能将 HTML 当作成功的 PDF 下载。"""
+
+    MESSAGE = gettext_lazy("分析报告导出失败，请稍后重试")
+    STATUS_CODE = 500
+    ERROR_CODE = "006"
+
+
 class AutoProcessParamsError(RiskException):
     MESSAGE = gettext_lazy("处理套餐参数不完整，缺少模板变量: {keys}")
     STATUS_CODE = 400
