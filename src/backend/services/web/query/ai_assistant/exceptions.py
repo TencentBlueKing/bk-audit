@@ -100,6 +100,22 @@ class AIPermissionDeniedError(AIAssistantError):
     error_message = "无目标系统的日志检索权限"
 
 
+class SyncExportFallback(AIAssistantError):
+    """全量导出同步直出的中止信号（非用户可见错误）。
+
+    触发即表示本次同步尝试中止，编排层捕获后自动降级为既有异步导出链路
+    （创建 LogExportTask → Celery → 邮件通知），调用方无需感知差异。
+    ``reason`` 取值见 constants.SyncExportFallbackReason，仅用于日志与指标。
+    """
+
+    error_code = "SYNC_EXPORT_FALLBACK"
+    error_message = "同步导出已转后台任务"
+
+    def __init__(self, reason: str, message: str = None):
+        self.reason = reason
+        super().__init__(message=message)
+
+
 class LogToolException(CoreException):
     """Agent/MCP 日志工具异常基类，公开消息不能由底层异常覆盖。"""
 

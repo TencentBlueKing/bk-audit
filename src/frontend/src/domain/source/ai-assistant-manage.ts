@@ -15,9 +15,16 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type {
+  AiAttachment,
+  AiAttachmentExportFormat,
+  AiAttachmentListItem,
+  AiAttachmentListParams,
   AiConcreteScope,
   AiConversation,
   AiConversationGroup,
+  AiConversationListParams,
+  AiConversationSummary,
+  AiCreateAttachmentParams,
   AiCreateConversationGroupParams,
   AiCreateConversationParams,
   AiCreateMessageParams,
@@ -33,6 +40,8 @@ import type {
   AiSidebarNodesParams,
   AiSidebarPinParams,
   AiSidebarSearchParams,
+  AiStreamSnapshot,
+  AiUpdateAttachmentParams,
   AiUpdateMessageParams,
 } from '@model/ai-assistant/types';
 
@@ -45,7 +54,7 @@ import ModuleBase from './module-base';
 /**
  * AI 助手 HTTP 资源层。
  * Base: /api/v1/ai_assistant/
- * 本期不接 attachments / feedback。
+ * 反馈仍未接；附件用于智能分析与数据统计。
  */
 class AiAssistantManage extends ModuleBase {
   constructor() {
@@ -83,6 +92,17 @@ class AiAssistantManage extends ModuleBase {
 
   createConversation(params: AiCreateConversationParams, payload = {} as IRequestPayload) {
     return Request.post<AiConversation>(`${this.module}/conversations/`, {
+      params,
+      payload,
+    });
+  }
+
+  /**
+   * 会话摘要列表：不受侧栏节点位置限制，按 updated_at 倒序。
+   * 报告侧栏用 has_attachments=true + attachment_type 过滤出有报告的会话。
+   */
+  getConversationList(params: AiConversationListParams = {}, payload = {} as IRequestPayload) {
+    return Request.get<AiConversationSummary[]>(`${this.module}/conversations/`, {
       params,
       payload,
     });
@@ -155,7 +175,7 @@ class AiAssistantManage extends ModuleBase {
     });
   }
 
-  // ---------- 消息（不含附件/反馈） ----------
+  // ---------- 消息 ----------
 
   createMessage(params: AiCreateMessageParams, payload = {} as IRequestPayload) {
     return Request.post<AiMessage>(`${this.module}/messages/`, {
@@ -218,20 +238,79 @@ class AiAssistantManage extends ModuleBase {
   }
 
   /**
-   * 全量导出：异步创建导出任务。
+   * 全量导出：数据量在守卫内时同步直出 XLSX 文件流，超限降级返回异步任务 JSON。
+   * responseType=blob 兼容两种响应形态（文件由响应拦截器统一触发下载，JSON 由调用层解析）。
    */
   fullExport(
     params: { message_uid: string; export_config?: AiExportConfig },
     payload = {} as IRequestPayload,
   ) {
     const { message_uid: messageUid, export_config: exportConfig } = params;
-    return Request.post<AiFullExportResult>(`${this.module}/messages/${messageUid}/full-export/`, {
+    return Request.post<AiFullExportResult | Blob>(`${this.module}/messages/${messageUid}/full-export/`, {
+      responseType: 'blob',
       params: {
         export_config: exportConfig || {
           field_scope: 'ai_standard',
           flatten_extension: true,
           fields: [],
         },
+      },
+      payload,
+    });
+  }
+
+  // ---------- 附件（智能分析） ----------
+
+  createAttachment(params: AiCreateAttachmentParams, payload = {} as IRequestPayload) {
+    const { message_uid: messageUid, ...body } = params;
+    return Request.post<AiAttachment>(`${this.module}/messages/${messageUid}/attachments/`, {
+      params: body,
+      payload,
+    });
+  }
+
+  getAttachments(params: AiAttachmentListParams = {}, payload = {} as IRequestPayload) {
+    return Request.get<AiAttachmentListItem[]>(`${this.module}/attachments/`, {
+      params,
+      payload,
+    });
+  }
+
+  getAttachment(params: { attachment_uid: string }, payload = {} as IRequestPayload) {
+    return Request.get<AiAttachment>(`${this.module}/attachments/${params.attachment_uid}/`, {
+      payload,
+    });
+  }
+
+  updateAttachment(params: AiUpdateAttachmentParams, payload = {} as IRequestPayload) {
+    const { attachment_uid: attachmentUid, ...body } = params;
+    return Request.patch<AiAttachment>(`${this.module}/attachments/${attachmentUid}/`, {
+      params: body,
+      payload,
+    });
+  }
+
+  retryAttachment(params: { attachment_uid: string }, payload = {} as IRequestPayload) {
+    return Request.post<AiAttachment>(`${this.module}/attachments/${params.attachment_uid}/retry/`, {
+      payload,
+    });
+  }
+
+  getAttachmentStreamSnapshot(params: { attachment_uid: string }, payload = {} as IRequestPayload) {
+    return Request.get<AiStreamSnapshot>(`${this.module}/attachments/${params.attachment_uid}/stream/snapshot/`, {
+      payload,
+    });
+  }
+
+  exportAttachment(
+    params: { attachment_uid: string; export_format: AiAttachmentExportFormat },
+    payload = {} as IRequestPayload,
+  ) {
+    const { attachment_uid: attachmentUid, export_format: exportFormat } = params;
+    return Request.get(`${this.module}/attachments/${attachmentUid}/export/`, {
+      responseType: 'blob',
+      params: {
+        export_format: exportFormat,
       },
       payload,
     });

@@ -659,6 +659,24 @@ LOG_EXPORT_TASK_MAX_PERIODIC_TIME = int(os.getenv("BKAPP_LOG_EXPORT_TASK_MAX_PER
 # 日志导出任务分页大小
 LOG_EXPORT_TASK_PAGE_SIZE = int(os.getenv("BKAPP_LOG_EXPORT_TASK_PAGE_SIZE", 100))
 
+# AI 助手全量导出同步直出开关：关闭时全量导出 100% 走既有异步链路（行为与历史一致）
+AI_EXPORT_SYNC_ENABLED = strtobool(os.getenv("BKAPP_AI_EXPORT_SYNC_ENABLED", "False"))
+# AI 助手全量导出同步直出条数上限：count 复检超过则直接创建异步导出任务（不发起同步尝试）
+AI_EXPORT_SYNC_MAX_COUNT = int(os.getenv("BKAPP_AI_EXPORT_SYNC_MAX_COUNT", 20000))
+# AI 助手全量导出同步直出软超时预算（秒）：每批拉取前守卫检查，超预算中止并降级异步；
+# 预算预留 ~5s 给 XLSX 收尾、文件传输与网关缓冲，对齐产品端到端 30s 承诺
+AI_EXPORT_SYNC_DEADLINE_SECONDS = int(os.getenv("BKAPP_AI_EXPORT_SYNC_DEADLINE_SECONDS", 25))
+# AI 助手全量导出同步直出硬超时（秒）：数据拉完后允许收尾超额完成的绝对上界，超过果断降级
+AI_EXPORT_SYNC_HARD_LIMIT_SECONDS = int(os.getenv("BKAPP_AI_EXPORT_SYNC_HARD_LIMIT_SECONDS", 35))
+# AI 助手全量导出同步直出分页大小：异步链路 LOG_EXPORT_TASK_PAGE_SIZE(100) 过小不适用同步路径
+AI_EXPORT_SYNC_PAGE_SIZE = int(os.getenv("BKAPP_AI_EXPORT_SYNC_PAGE_SIZE", 1000))
+# AI 助手全量导出同步直出全局并发槽上限（Redis 租约）：满槽直接降级异步，不排队
+AI_EXPORT_SYNC_CONCURRENCY = int(os.getenv("BKAPP_AI_EXPORT_SYNC_CONCURRENCY", 2))
+# AI 助手全量导出同步直出首批行均成本预估（毫秒/行）：首批拉取前按 total 外推预算，基准标定后修正
+AI_EXPORT_SYNC_ROW_COST_BUDGET_MS = float(os.getenv("BKAPP_AI_EXPORT_SYNC_ROW_COST_BUDGET_MS", 1.5))
+# AI 助手全量导出同步直出 count 复检最长时间（秒）：超过视为集群慢，直接降级异步
+AI_EXPORT_SYNC_COUNT_MAX_SECONDS = int(os.getenv("BKAPP_AI_EXPORT_SYNC_COUNT_MAX_SECONDS", 3))
+
 # 风险导出同步阈值
 RISK_EXPORT_SYNC_MAX_COUNT = int(os.getenv("BKAPP_RISK_EXPORT_SYNC_MAX_COUNT", 300))
 

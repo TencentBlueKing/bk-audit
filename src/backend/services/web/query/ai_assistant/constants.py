@@ -122,6 +122,28 @@ AI_FORBIDDEN_CONDITION_FIELDS = AI_FORBIDDEN_TIME_FIELDS + ("system_id",)
 # D4 默认实现：后端生成全量导出任务名，{prefix} 为 message_uid 前 8 位
 AI_EXPORT_TASK_NAME_TEMPLATE = gettext_lazy("AI助手检索导出-%s")
 
+# F4.5 全量导出同步直出：并发槽缓存键前缀（槽位数 = settings.AI_EXPORT_SYNC_CONCURRENCY）
+SYNC_EXPORT_SLOT_KEY_PREFIX = "ai_export_sync:slot"
+
+# F4.5 同步直出降级原因（低基数枚举，日志与指标维度共用）：触发即自动转既有异步链路
+class SyncExportFallbackReason:
+    """同步直出降级原因（低基数，禁止携带动态值进入指标维度）"""
+
+    # count 复检超过同步条数上限（快照 total 漂移以导出时点为准）
+    TOTAL_EXCEED = "total_exceed"
+    # count 复检耗时超过集群慢阈值
+    COUNT_SLOW = "count_slow"
+    # 批间守卫：绝对预算或上批耗时外推超软超时预算
+    DEADLINE = "deadline"
+    # 数据拉完后的收尾阶段超硬超时上界（绝对天花板）
+    HARD_LIMIT = "hard_limit"
+    # 全局并发槽满（满槽即降级，不排队）
+    CONCURRENCY = "concurrency"
+
+
+# 同步直出降级响应标记（导出响应 export_type 字段值，前端据此分支提示）
+SYNC_EXPORT_FALLBACK = "sync_fallback"
+
 # MCP 明细默认按证据字段取数，避免复用前端快照的大 JSON/完整日志列。
 MCP_LOG_DEFAULT_FIELDS = (
     "event_id",

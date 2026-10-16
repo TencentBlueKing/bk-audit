@@ -242,7 +242,7 @@
                             #suffix>
                             <span
                               v-bk-tooltips="{
-                                content: t('只允许中英文、空格、括号（中英文）、下划线')
+                                content: t('不能为空，且不超过50个字符')
                               }"
                               class="invalid-icon">
                               {{ t('输入不合法') }}
@@ -296,8 +296,6 @@
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
   import { encodeRegexp } from '@utils/assist';
-
-  import { formatFieldDisplayLabel } from '../../../../../../utils/strategy-protocol';
 
   import nodeSelect from './tree.vue';
 
@@ -386,18 +384,6 @@
 
     // 检查长度限制（例如：最大50个字符）
     if (value.length > 50) {
-      return false;
-    }
-
-    // 只允许中英文、空格、括号（中英文）
-    // 正则表达式说明：
-    // \u4e00-\u9fff: 中文字符
-    // a-zA-Z: 英文字母
-    // \s: 空格
-    // （）：中英文括号
-    // _：下划线
-    const validChars = /^[\u4e00-\u9fffa-zA-Z\s()（）_]*$/;
-    if (!validChars.test(value)) {
       return false;
     }
 
@@ -502,7 +488,7 @@
         ?? NO_AGGREGATE_VALUE;
     }
 
-    // 字段别名：编辑保留已有值；新增默认「中文名(raw_name)」
+    // 字段别名：编辑保留已有值；新增默认使用字段名
     let displayName: string;
     if (isEdit.value) {
       if ('textValue' in field) {
@@ -510,11 +496,7 @@
       }
       displayName = processedField.display_name;
     } else {
-      const formattedName = formatFieldDisplayLabel(
-        processedField.display_name,
-        processedField.raw_name,
-      );
-      displayName = `${formattedName}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+      displayName = `${processedField.raw_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
     }
 
     // 统计重复别名(包含已存在的和当前已选的)

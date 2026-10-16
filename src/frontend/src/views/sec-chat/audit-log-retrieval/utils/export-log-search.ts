@@ -87,24 +87,46 @@ export const exportLogSearchPreview = async (messageUid: string) => {
 };
 
 /**
- * 全量导出：创建异步任务，完成后邮件通知（无需轮询）。
+ * 全量导出结果：同步直出时文件已由浏览器自动下载，异步时返回任务信息。
+ */
+export interface AiFullExportOutcome {
+  /** true = 数据量守卫内同步直出，文件已自动保存 */
+  isSyncFile: boolean;
+  /** true = 同步尝试超限自动降级异步（分流提示，非失败） */
+  isFallback: boolean;
+  /** 异步任务信息（isSyncFile=false 时存在） */
+  result?: AiFullExportResult;
+}
+
+/**
+ * 全量导出：数据量守卫内同步直出（浏览器自动下载）；超限自动降级为异步任务（邮件通知）。
  */
 export const exportLogSearchFull = async (
   messageUid: string,
   exportConfig: AiExportConfig = { field_scope: 'ai_standard', flatten_extension: true, fields: [] },
-): Promise<AiFullExportResult> => {
+): Promise<AiFullExportOutcome> => {
   try {
     const created = await AiAssistantManageService.fullExport({
       message_uid: messageUid,
       export_config: exportConfig,
     }, { catchError: true });
 
-    const exportTaskId = resolveExportTaskId(created);
+    // 同步直出：service 层透传 xlsx Blob（拦截器已触发下载），无任务信息
+    if (typeof Blob !== 'undefined' && created instanceof Blob) {
+      return { isSyncFile: true, isFallback: false };
+    }
+
+    const task = created as AiFullExportResult;
+    const exportTaskId = resolveExportTaskId(task);
     if (!exportTaskId) {
       throw new Error('未获取到导出任务 ID，请稍后重试');
     }
 
-    return created;
+    return {
+      isSyncFile: false,
+      isFallback: task.export_type === 'sync_fallback',
+      result: task,
+    };
   } catch (error: any) {
     throw new Error(await resolveExportErrorMessage(error, '创建全量导出任务失败，请稍后重试'));
   }
