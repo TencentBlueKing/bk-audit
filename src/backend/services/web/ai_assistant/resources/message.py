@@ -8,7 +8,6 @@ from services.web.ai_assistant.serializers.message import (
     MessageCreateRequestSerializer,
     MessageDetailRequestSerializer,
     MessageFullExportRequestSerializer,
-    MessageFullExportResponseSerializer,
     MessageListRequestSerializer,
     MessagePreviewExportRequestSerializer,
     MessageResponseSerializer,
@@ -148,7 +147,10 @@ class CreateMessageFullExport(AIAssistantResource):
 
     name = gettext_lazy("创建全量日志导出")
     RequestSerializer = MessageFullExportRequestSerializer
-    ResponseSerializer = MessageFullExportResponseSerializer
+    # 不声明 ResponseSerializer：同步直出分支返回 HttpResponse 文件流，bk_resource 会按
+    # 已声明的 ResponseSerializer 做 dict 校验，HttpResponse 触发 params_error 500
+    # （2026-10-16 联调实测踩坑）；对齐预览导出 PreviewExportMessage 的文件流 resource
+    # 模式，异步分支返回裸 dict 由框架默认 JSON 包装，响应结构不变
 
     def perform_request(self, validated_request_data):
         result = MessageExportService(user=get_request_username()).export_or_fallback(

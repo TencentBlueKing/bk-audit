@@ -129,15 +129,6 @@ class MessageFullExportRequestSerializer(serializers.Serializer):
     )
 
 
-class MessageFullExportResponseSerializer(serializers.Serializer):
-    export_task_id = serializers.IntegerField(help_text="既有 LogExportTask 整数 ID")
-    status = serializers.CharField(help_text="导出任务公开状态")
-    export_type = serializers.CharField(
-        required=False,
-        help_text="导出分支标记：sync_fallback = 同步直出超限降级异步；缺省为直接异步",
-    )
-
-
 class MessageListRequestSerializer(serializers.Serializer):
     """通过可选 UID 锚点向前或向后读取消息窗口。"""
 
