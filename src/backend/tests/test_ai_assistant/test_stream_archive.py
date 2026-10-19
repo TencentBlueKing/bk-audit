@@ -475,16 +475,17 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         )
         last_delta = business_event("done", stream_id="2-0")
 
-        self.store.finalize(
-            binding=rotation.binding,
-            events=[last_delta],
-            terminal_event=terminal_event(ExecutionStatus.SUCCESS),
-            status=ExecutionStatus.SUCCESS,
-            output_data={"content": "done"},
-            error_code="",
-            error_message="",
-            updated_by=self.user,
-        )
+        with self.assertLogs("services.web.ai_assistant.streaming.archive", level="INFO") as logs:
+            self.store.finalize(
+                binding=rotation.binding,
+                events=[last_delta],
+                terminal_event=terminal_event(ExecutionStatus.SUCCESS),
+                status=ExecutionStatus.SUCCESS,
+                output_data={"content": "done"},
+                error_code="",
+                error_message="",
+                updated_by=self.user,
+            )
 
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
@@ -499,6 +500,10 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         self.assertEqual(self.attachment.updated_by, self.user)
         self.assertIsNotNone(self.attachment.finished_at)
         self.assertEqual(self.attachment.last_activity_at, self.attachment.finished_at)
+
+        self.assertEqual(len(logs.records), 1)
+        self.assertEqual(getattr(logs.records[0], "final_batch_event_count", None), 2)
+        self.assertNotIn("event_count", logs.records[0].__dict__)
 
     @mock.patch("services.web.ai_assistant.streaming.archive.report_execution_finished")
     def test_finalize_reports_terminal_execution_after_commit(self, report_execution_finished):

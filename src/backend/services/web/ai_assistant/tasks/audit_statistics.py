@@ -28,6 +28,7 @@ from services.web.ai_assistant.ai_statistics_artifact import (
     AIStatisticsArtifactExtractionError,
     extract_ai_statistics_chart_config,
 )
+from services.web.ai_assistant.constants import AttachmentErrorCode
 from services.web.ai_assistant.exceptions import (
     AIStatisticsOutputParseError,
     AIStatisticsTimeout,
@@ -130,6 +131,21 @@ def generate_field_statistics(self, execution: AttachmentExecution) -> FieldStat
     except (LogToolException, APIRequestError, RequestsTimeout, RequestsConnectionError) as error:
         # 分类依赖原始cause；之后必须离开except再重试，避免Celery重新关联敏感异常链。
         retryable = is_temporary_statistics_error(error)
+        # 公开异常会切断cause；转换前只在此边界保留一次内部诊断。
+        logger.warning(
+            "程序字段统计执行失败: attachment_id=%s, retry_count=%s, retryable=%s",
+            execution.attachment.id,
+            self.request.retries,
+            retryable,
+            exc_info=True,
+            extra={
+                "attachment_id": execution.attachment.id,
+                "attachment_uid": str(execution.attachment.uid),
+                "task_id": execution.attachment.task_id,
+                "retry_count": self.request.retries,
+                "retryable": retryable,
+            },
+        )
         public_error = type(error)() if isinstance(error, LogToolException) else LogQueryFailed()
     if not retryable:
         raise public_error from None
@@ -176,7 +192,7 @@ def build_statistics_agent_input(context: AIStatisticsAttachmentContext) -> str:
 def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatisticsAttachmentOutput:  # noqa: N805
     """调用独立统计 Agent，受控重试传输和最终文本错误；权限及参数错误直接失败。"""
     try:
-        return _execute_ai_statistics(execution)
+        return _execute_ai_statistics(execution, retry_count=self.request.retries)
     except (
         APIRequestError,
         RequestException,
@@ -213,7 +229,7 @@ def generate_ai_statistics(self, execution: AttachmentExecution) -> AIStatistics
     raise self.retry(exc=public_error, countdown=countdown) from None
 
 
-def _execute_ai_statistics(execution: AttachmentExecution) -> AIStatisticsAttachmentOutput:
+def _execute_ai_statistics(execution: AttachmentExecution, *, retry_count: int = 0) -> AIStatisticsAttachmentOutput:
     """使用创建时快照透传事件，仅持久化图表配置标签内原文。"""
     context = execution.context_data
     _validate_statistics_execution_identity(execution, username=context.username)
@@ -247,23 +263,41 @@ def _execute_ai_statistics(execution: AttachmentExecution) -> AIStatisticsAttach
             start_tag=settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG,
             end_tag=settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG,
         )
-    except AIStatisticsArtifactExtractionError as error:
-        logger.warning(
-            "AI 统计产物标签提取失败",
-            extra={
-                "attachment_id": execution.attachment.id,
-                "task_id": execution.attachment.task_id,
-                "reason": error.reason.value,
-            },
-        )
-        raise AIStatisticsOutputParseError() from error
-
-    try:
         return parse_snapshot(
             AIStatisticsAttachmentOutput,
             {"content": chart_config},
             field_name="output_data",
             error_type=AttachmentSnapshotValidationError,
         )
-    except AttachmentSnapshotValidationError as error:
+    except (AIStatisticsArtifactExtractionError, AttachmentSnapshotValidationError) as error:
+        tag_error = isinstance(error, AIStatisticsArtifactExtractionError)
+        diagnostics = {
+            **extractor.diagnostics,
+            "attachment_id": execution.attachment.id,
+            "attachment_uid": str(execution.attachment.uid),
+            "task_id": execution.attachment.task_id,
+            "execution_id": str(execution.stream.execution_id),
+            "retry_count": retry_count,
+            "stage": "tag_extraction" if tag_error else "output_validation",
+            "reason": error.reason.value if tag_error else AttachmentErrorCode.OUTPUT_VALIDATION_FAILED.value,
+            "start_tag_count": extractor.final_content.count(
+                settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG
+            ),
+            "end_tag_count": extractor.final_content.count(settings.AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_END_TAG),
+        }
+        # 核心原因写入消息，兼容未展开extra的日志导出；完整正文沿execution查既有归档。
+        logger.warning(
+            "AI 统计产物校验失败: attachment_id=%s, execution_id=%s, reason=%s, candidate_state=%s, "
+            "final_content_bytes=%s, start_tag_count=%s, end_tag_count=%s",
+            diagnostics["attachment_id"],
+            diagnostics["execution_id"],
+            diagnostics["reason"],
+            diagnostics["candidate_state"],
+            diagnostics["final_content_bytes"],
+            diagnostics["start_tag_count"],
+            diagnostics["end_tag_count"],
+            extra=diagnostics,
+        )
+        if tag_error:
+            raise AIStatisticsOutputParseError() from error
         raise AttachmentOutputValidationError() from error
