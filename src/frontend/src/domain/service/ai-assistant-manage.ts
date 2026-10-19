@@ -212,7 +212,15 @@ export default {
           return data;
         }
         if (typeof Blob !== 'undefined' && data instanceof Blob) {
-          return data.text().then((text) => JSON.parse(text));
+          return data.text().then((text) => {
+            const parsed = JSON.parse(text);
+            // bk_resource 响应统一包装 {result, code, data, message}，业务数据在 data 字段；
+            // 对齐拦截器对常规 json 响应的既有解包语义（case 0 后业务方拿到的即 data 字段）
+            if (parsed && typeof parsed === 'object' && 'result' in parsed && 'data' in parsed) {
+              return parsed.data;
+            }
+            return parsed;
+          });
         }
         return data;
       });
