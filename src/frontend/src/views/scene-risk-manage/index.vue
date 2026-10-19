@@ -299,7 +299,6 @@
 
   const handleSelectionChange = (meta: typeof selectionMeta.value) => {
     selectionMeta.value = meta;
-    nextTick(() => batchHandleRef.value?.sync());
   };
 
   const {
