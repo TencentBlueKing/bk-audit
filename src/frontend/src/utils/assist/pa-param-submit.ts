@@ -97,17 +97,17 @@ export const syncPaParamVisibility = (
 };
 
 /** 只提交本次表单实际渲染的用户入参。 */
-export const buildSubmitPaParams = (
-  paParams: Record<string, PaParamValue> | undefined,
+export const buildSubmitPaParams = <T extends PaParamValue>(
+  paParams: Record<string, T> | undefined,
   metas: Iterable<PaParamMeta>,
-) => {
+): Record<string, T> => {
   const metaByKey = new Map<string, PaParamMeta>();
   for (const meta of metas) {
     if (meta?.key) {
       metaByKey.set(meta.key, meta);
     }
   }
-  const result: Record<string, PaParamValue> = {};
+  const result: Record<string, T> = {};
   Object.entries(paParams || {}).forEach(([key, item]) => {
     const meta = metaByKey.get(key);
     if (!isUserInput(meta)) {

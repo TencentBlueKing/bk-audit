@@ -4,7 +4,8 @@
     data-testid="batch-handle-button">
     <auth-button
       action-id="process_risk"
-      :disabled="evaluating || !availability.enabled"
+      :disabled="!availability.enabled"
+      :loading="opening"
       outline
       :permission="permission"
       theme="primary"
@@ -93,6 +94,7 @@
 
   const availability = ref<BatchAvailability>(createDisabledAvailability(REASON_NONE));
   const evaluating = ref(false);
+  const opening = ref(false);
   let refreshSeq = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -123,12 +125,17 @@
       return [];
     }
     return data.map((item) => {
-      const rawId = String(item?.id ?? item?.field_name ?? item?.key ?? '');
-      const id = eventField && rawId && !rawId.startsWith('event_data.')
-        ? `event_data.${rawId}`
-        : rawId;
-      const name = String(item?.name ?? item?.display_name ?? item?.description ?? id);
-      return { id, name };
+      if (!eventField) {
+        const id = String(item?.id ?? item?.field_name ?? item?.key ?? '');
+        return { id, name: String(item?.name ?? item?.display_name ?? item?.description ?? id) };
+      }
+      // event_fields 的 id 为「显示名:字段名」，仅用于搜索框，变量需取 field_name
+      const fieldName = String(item?.field_name ?? '');
+      const isBasicField = item?.type === 'basic_event_field';
+      const id = fieldName && !isBasicField && !fieldName.startsWith('event_data.')
+        ? `event_data.${fieldName}`
+        : fieldName;
+      return { id, name: String(item?.display_name ?? item?.name ?? fieldName) };
     }).filter(item => item.id);
   };
 
@@ -202,9 +209,9 @@
       availability.value = createDisabledAvailability(REASON_UNLOADED);
       return;
     }
-    const preview = await fetchBatchPreview(selectedRows);
+    const preview = await fetchBatchPreview(selectedRows.map(row => String(row.risk_id)));
     if (seq === refreshSeq) {
-      availability.value = toBatchAvailability(preview, selectedRows);
+      availability.value = toBatchAvailability(preview);
     }
   };
 
@@ -239,9 +246,14 @@
   };
 
   const scheduleSync = () => {
-    evaluating.value = true;
     if (refreshTimer) {
       clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    const { count } = props.selectionMeta;
+    if (count <= 0 || count > BATCH_SYNC_LIMIT) {
+      sync();
+      return;
     }
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
@@ -273,8 +285,23 @@
     },
   );
 
-  const handleOpen = () => {
-    if (evaluating.value || !availability.value.enabled) {
+  const handleOpen = async () => {
+    if (opening.value) {
+      return;
+    }
+    if (refreshTimer || evaluating.value) {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      opening.value = true;
+      try {
+        await sync();
+      } finally {
+        opening.value = false;
+      }
+    }
+    if (!availability.value.enabled) {
       return;
     }
     if (availability.value.dialog === 'confirm') {

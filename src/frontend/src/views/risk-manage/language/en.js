@@ -370,7 +370,7 @@ export default {
     风险危害: 'Risk Hazard',
     处理指引: 'Handling Guidance',
     批量处理: 'Batch process',
-    至少选择一条风险单: 'Select at least one risk',
+    请至少选择1条风险单: 'Please select at least 1 risk',
     '所选风险包含未加载数据，暂无法批量处理': 'Selected risks include unloaded rows and cannot be batch processed yet',
     所选风险无法批量处理: 'Selected risks cannot be batch processed',
     '所选风险包含自动审批中/套餐处理中，不支持批量处理': 'Selected risks include ones under auto approval or tool processing and cannot be batch processed',

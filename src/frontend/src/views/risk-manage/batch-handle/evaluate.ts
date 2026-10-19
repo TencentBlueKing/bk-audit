@@ -1,5 +1,4 @@
 export const BATCH_SYNC_LIMIT = 500;
-export const PACKAGE_SYNC_LIMIT = 100;
 
 export const BATCH_ACTION_ORDER = ['close', 'transfer', 'package', 'misreport'] as const;
 
@@ -20,6 +19,9 @@ export interface BatchPreview {
   batch_enabled: boolean;
   batch_disabled_reason: string;
   actions: Record<PreviewActionKey, { enabled: boolean; disabled_reason: string }>;
+  unique_strategy_id?: number | null;
+  scene_id?: number | null;
+  selected_count?: number;
 }
 
 export interface BatchActionState {
@@ -38,8 +40,6 @@ export interface BatchAvailability {
   sceneId: string;
 }
 
-const PREVIEW_ACTION_KEYS: PreviewActionKey[] = ['confirm', 'close', 'trans', 'auto_process', 'misreport'];
-
 const PREVIEW_KEY_BY_ACTION: Record<BatchActionId, PreviewActionKey> = {
   close: 'close',
   transfer: 'trans',
@@ -47,51 +47,14 @@ const PREVIEW_KEY_BY_ACTION: Record<BatchActionId, PreviewActionKey> = {
   misreport: 'misreport',
 };
 
-const STATUS_CAPABILITIES: Record<string, PreviewActionKey[]> = {
-  pending_confirm: ['confirm', 'misreport'],
-  await_deal: ['close', 'trans', 'auto_process', 'misreport'],
-  processing: ['close', 'trans', 'auto_process', 'misreport'],
-  closed: ['close'],
-};
-
-const DEAL_STATUSES = new Set(['await_deal', 'processing']);
-const CLOSED_STATUS = 'closed';
-const AUTO_STATUSES = new Set(['for_approve', 'auto_process']);
-
-export const REASON_NONE = '至少选择一条风险单';
+export const REASON_NONE = '请至少选择1条风险单';
 export const REASON_UNLOADED = '所选风险包含未加载数据，暂无法批量处理';
 export const REASON_LIMIT = '所选风险数量超过上限，请缩小范围';
 export const REASON_UNSUPPORTED = '所选风险无法批量处理';
-const REASON_AUTO = '所选风险包含自动审批中/套餐处理中，不支持批量处理';
-const REASON_EMPTY = '所选风险状态不同，无可用批量操作';
-const REASON_MIXED_MISREPORT = '所选风险状态不同，仅支持标记误报。';
-const REASON_MIXED_CLOSE = '所选风险状态不同，仅支持人工关单。';
-const REASON_CLOSED_ONLY_CLOSE = '已关单风险仅支持人工关单';
-const REASON_STRATEGY = '所选风险策略不同，不支持批量处理套餐';
-const REASON_PACKAGE_LIMIT = '处理套餐一次最多 100 条';
 
-const normalizeStatus = (status: string) => (
-  status === 'await_confirm' ? 'pending_confirm' : status
+const normalizeIdentity = (value: number | null | undefined) => (
+  value === null || value === undefined ? '' : String(value)
 );
-
-const normalizeIdentity = (value: string | number | null | undefined) => {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  return String(value).trim();
-};
-
-const resolveUniqueIdentity = (values: Array<string | number | null | undefined>) => {
-  const normalized = values.map(normalizeIdentity);
-  if (normalized.length <= 1) {
-    return { unique: true, value: normalized[0] || '' };
-  }
-  const first = normalized[0];
-  if (!first || normalized.some(item => item !== first)) {
-    return { unique: false, value: '' };
-  }
-  return { unique: true, value: first };
-};
 
 export const createDisabledAvailability = (reason: string): BatchAvailability => ({
   enabled: false,
@@ -103,73 +66,8 @@ export const createDisabledAvailability = (reason: string): BatchAvailability =>
   sceneId: '',
 });
 
-/**
- * 后端 batch_actions/preview 未上线前的本地实现，规则与协议保持一致。
- */
-export const mockBatchPreview = (rows: BatchRiskRow[]): BatchPreview => {
-  const actions = Object.fromEntries(PREVIEW_ACTION_KEYS.map(key => (
-    [key, { enabled: false, disabled_reason: '' }]
-  ))) as BatchPreview['actions'];
-  const disabled = (reason: string): BatchPreview => ({
-    batch_enabled: false,
-    batch_disabled_reason: reason,
-    actions,
-  });
-
-  const statuses = rows.map(row => normalizeStatus(row.status || ''));
-  if (statuses.some(status => AUTO_STATUSES.has(status))) {
-    return disabled(REASON_AUTO);
-  }
-  if (rows.length > BATCH_SYNC_LIMIT) {
-    return disabled(REASON_LIMIT);
-  }
-  if (statuses.some(status => !STATUS_CAPABILITIES[status])) {
-    return disabled(REASON_UNSUPPORTED);
-  }
-
-  const uniqueStatuses = [...new Set(statuses)];
-  const intersection = PREVIEW_ACTION_KEYS.filter(key => (
-    uniqueStatuses.every(status => STATUS_CAPABILITIES[status].includes(key))
-  ));
-  if (!intersection.length) {
-    return disabled(REASON_EMPTY);
-  }
-
-  const mixed = uniqueStatuses.length > 1 && !uniqueStatuses.every(status => DEAL_STATUSES.has(status));
-  let stateReason = REASON_UNSUPPORTED;
-  if (mixed && intersection.includes('misreport')) {
-    stateReason = REASON_MIXED_MISREPORT;
-  } else if (mixed && intersection.includes('close')) {
-    stateReason = REASON_MIXED_CLOSE;
-  } else if (uniqueStatuses.every(status => status === CLOSED_STATUS)) {
-    stateReason = REASON_CLOSED_ONLY_CLOSE;
-  }
-
-  PREVIEW_ACTION_KEYS.forEach((key) => {
-    const enabled = intersection.includes(key);
-    actions[key] = { enabled, disabled_reason: enabled ? '' : stateReason };
-  });
-
-  if (actions.auto_process.enabled) {
-    const strategy = resolveUniqueIdentity(rows.map(row => row.strategy_id));
-    const scene = resolveUniqueIdentity(rows.map(row => row.scene_id));
-    if (!strategy.unique || !scene.unique) {
-      actions.auto_process = { enabled: false, disabled_reason: REASON_STRATEGY };
-    } else if (rows.length > PACKAGE_SYNC_LIMIT) {
-      actions.auto_process = { enabled: false, disabled_reason: REASON_PACKAGE_LIMIT };
-    }
-  }
-
-  return {
-    batch_enabled: true,
-    batch_disabled_reason: '',
-    actions,
-  };
-};
-
-export const toBatchAvailability = (preview: BatchPreview, rows: BatchRiskRow[]): BatchAvailability => {
-  const strategy = resolveUniqueIdentity(rows.map(row => row.strategy_id));
-  const scene = resolveUniqueIdentity(rows.map(row => row.scene_id));
+export const toBatchAvailability = (preview: BatchPreview): BatchAvailability => {
+  const strategyId = normalizeIdentity(preview.unique_strategy_id);
   const actions = BATCH_ACTION_ORDER.map((id) => {
     const item = preview.actions?.[PREVIEW_KEY_BY_ACTION[id]];
     const enabled = Boolean(item?.enabled);
@@ -189,9 +87,9 @@ export const toBatchAvailability = (preview: BatchPreview, rows: BatchRiskRow[])
     reason: enabled ? '' : (preview.batch_disabled_reason || REASON_UNSUPPORTED),
     dialog,
     actions,
-    strategyUnique: strategy.unique,
-    strategyId: strategy.value,
-    sceneId: scene.unique ? scene.value : '',
+    strategyUnique: Boolean(strategyId),
+    strategyId,
+    sceneId: normalizeIdentity(preview.scene_id),
   };
 };
 

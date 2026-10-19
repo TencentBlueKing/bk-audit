@@ -262,10 +262,9 @@ class RiskManage extends ModuleBase {
   // 批量处理套餐
   bulkAutoProcessRisk(params: {
     risk_ids: string[],
-    pa_id: string,
+    pa_id: number,
     pa_params: Record<string, any>,
     auto_close_risk: boolean,
-    description: string,
   }) {
     return Request.post(`${this.module}/bulk_auto_process/`, {
       params,
