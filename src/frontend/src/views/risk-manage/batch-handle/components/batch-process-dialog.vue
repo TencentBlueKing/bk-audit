@@ -5,7 +5,7 @@
     :quick-close="false"
     :title="t('批量处理')"
     :width="dialogWidth"
-    @closed="resetForm">
+    @closed="handleClosed">
     <div
       class="risk-await-deal-wrap"
       data-testid="batch-process-dialog">
@@ -104,7 +104,7 @@
           </bk-form-item>
           <bk-loading :loading="detailLoading">
             <bk-form-item
-              v-if="Object.keys(paramsDetailData).length"
+              v-if="hasUserInputParams"
               class="is-required pa-params-form-item"
               :label="t('套餐参数')"
               property="pa_params">
@@ -113,7 +113,7 @@
                   v-for="(val, index) in sortedParams"
                   :key="`${val.key}-${index}`">
                   <bk-form-item
-                    v-if="val.show_type === 'show' && !val.is_hide"
+                    v-if="isUserInput(val) && !val.is_hide"
                     class="pa-params-field"
                     :label="val.name"
                     :property="`pa_params.${val.key}`"
@@ -198,7 +198,7 @@
       <bk-button
         class="ml8"
         :disabled="isSubmitting"
-        @click="isShow = false">
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -223,6 +223,11 @@
   import { submitBatchProcess, type PackageParamValue } from '../adapter';
   import { defaultBatchAction, type BatchActionId, type BatchAvailability } from '../evaluate';
 
+  import {
+    buildSubmitPaParams,
+    isUserInput,
+    syncPaParamVisibility,
+  } from '@/utils/assist/pa-param-submit';
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   interface FieldItem {
@@ -237,6 +242,7 @@
     key: string;
     name: string;
     show_type: string;
+    source_type?: string;
     type?: string;
     is_hide?: boolean;
     hide_condition?: Array<{ operator: string; value: string | number; constant_key: string }>;
@@ -280,6 +286,7 @@
   const editorKey = ref(0);
   const formRef = ref();
   const failures = ref<Array<{ risk_id: string; reason: string }>>([]);
+  const hasProcessed = ref(false);
   const paramsDetailData = ref<Record<string, PackageParam>>({});
 
   const createForm = () => {
@@ -377,7 +384,6 @@
     run: fetchApplications,
   } = useRequest(ProcessApplicationManageService.fetchApplicationsAll, {
     defaultValue: [],
-    manual: true,
   });
 
   const enabledApplications = computed(() => (
@@ -389,10 +395,8 @@
     run: fetchDetail,
   } = useRequest(SoapManageService.fetchDetail, {
     defaultValue: {},
-    manual: true,
     onSuccess(data: Record<string, PackageParam>) {
       const detail: Record<string, PackageParam> = {};
-      const nextParams: Record<string, PackageParamValue> = {};
       Object.keys(data || {}).forEach((key) => {
         const item = data[key];
         const normalized = {
@@ -402,54 +406,45 @@
           is_hide: false,
         };
         detail[normalized.key] = normalized;
-        nextParams[normalized.key] = { field: '', value: '' };
       });
       paramsDetailData.value = detail;
-      formData.value.pa_params = nextParams;
+      formData.value.pa_params = {};
+      syncPaParamVisibility(formData.value.pa_params, Object.values(paramsDetailData.value));
     },
   });
+
+  const hasUserInputParams = computed(() => Object.values(paramsDetailData.value).some(isUserInput));
 
   watch(() => formData.value.method, () => {
     formRef.value?.clearValidate?.();
   });
 
-  watch(() => formData.value.pa_params, () => {
-    const nextDetail = { ...paramsDetailData.value };
-    let detailChanged = false;
-    Object.keys(nextDetail).forEach((key) => {
-      const param = nextDetail[key];
-      if (!Array.isArray(param.hide_condition)) {
-        return;
-      }
-      let isHide = Boolean(param.is_hide);
-      param.hide_condition.forEach((item) => {
-        if (item.operator !== '=') {
-          isHide = false;
-          return;
-        }
-        const current = formData.value.pa_params[item.constant_key]?.value;
-        isHide = String(item.value) === String(current ?? '');
-      });
-      if (isHide === param.is_hide) {
-        return;
-      }
-      nextDetail[key] = { ...param, is_hide: isHide };
-      detailChanged = true;
-      if (isHide) {
-        formData.value.pa_params[param.key] = { field: '', value: '' };
-      }
-    });
-    if (detailChanged) {
-      paramsDetailData.value = nextDetail;
-    }
-  }, { deep: true });
+  watch(
+    () => formData.value.pa_params,
+    paParams => syncPaParamVisibility(paParams, Object.values(paramsDetailData.value)),
+    { deep: true },
+  );
 
   const resetForm = () => {
     formData.value = createForm();
     paramsDetailData.value = {};
     failures.value = [];
+    hasProcessed.value = false;
     editorKey.value += 1;
     formRef.value?.clearValidate?.();
+  };
+
+  const handleClosed = () => {
+    const shouldRefresh = hasProcessed.value;
+    resetForm();
+    if (shouldRefresh) {
+      emit('success');
+    }
+  };
+
+  const handleCancel = () => {
+    isShow.value = false;
+    handleClosed();
   };
 
   const loadPackages = () => {
@@ -522,7 +517,7 @@
       return;
     }
     if (formData.value.method === 'ProcessPackage') {
-      const visible = sortedParams.value.filter(item => item.show_type === 'show' && !item.is_hide);
+      const visible = sortedParams.value.filter(item => isUserInput(item) && !item.is_hide);
       const filled = visible.every(item => isPackageParamFilled(formData.value.pa_params[item.key]));
       if (!filled) {
         messageError(t('套餐参数不能为空'));
@@ -538,11 +533,12 @@
         description,
         operators: formData.value.new_operators,
         paId: formData.value.pa_id,
-        paParams: formData.value.pa_params,
+        paParams: buildSubmitPaParams(formData.value.pa_params, Object.values(paramsDetailData.value)),
         autoCloseRisk: formData.value.auto_close_risk,
       });
       if (receipt.failed.length) {
         failures.value = receipt.failed;
+        hasProcessed.value = hasProcessed.value || receipt.success_count > 0;
         return;
       }
       messageSuccess(t('操作成功'));
