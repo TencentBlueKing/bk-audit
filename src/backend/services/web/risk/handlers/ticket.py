@@ -801,7 +801,8 @@ class MisReport(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
-        super().pre_check(*args, **kwargs)
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行此操作")
         # 检查风险标签
         if self.risk.risk_label != RiskLabel.NORMAL:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.risk_label)
