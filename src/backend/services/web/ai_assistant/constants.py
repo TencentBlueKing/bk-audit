@@ -77,6 +77,17 @@ class AttachmentErrorCode(TextChoices):
     OUTPUT_VALIDATION_FAILED = "OUTPUT_VALIDATION_FAILED", gettext_lazy("附件产物格式错误")
 
 
+class ArtifactCandidateState(TextChoices):
+    """最终文本候选的诊断状态，不参与产物成功判定。"""
+
+    NOT_STARTED = "NOT_STARTED", gettext_lazy("尚未收到候选")
+    STREAMING = "STREAMING", gettext_lazy("候选尚未闭合")
+    COMPLETE = "COMPLETE", gettext_lazy("候选已闭合")
+    CONTENT_LIMIT_EXCEEDED = "CONTENT_LIMIT_EXCEEDED", gettext_lazy("候选超限丢弃")
+    RUN_ERROR = "RUN_ERROR", gettext_lazy("上游错误清空候选")
+    ROLE_CHANGED = "ROLE_CHANGED", gettext_lazy("消息角色变更丢弃候选")
+
+
 class AIStatisticsArtifactErrorReason(TextChoices):
     """AI 统计最终产物的标签提取失败原因；日志只记录稳定原因值。"""
 

@@ -118,6 +118,12 @@ Metric 维度只允许稳定枚举和布尔值，不包含对象 UID、task ID�
 写入应用日志；SQL、查询结果和 Agent 输入/输出均可能含业务数据，相关日志 sink 必须按受限诊断日志
 控制访问和保留周期，且不得进入前端错误、Metric、Event 或普通 Trace 属性。
 
+流式 Agent 采用 `on_event` 回调时，Resource 响应值为 None，`ResponseData=null` 不代表上游正文为空。
+AI 统计/分析产物失败日志记录候选状态、正文大小、执行标识和重试次数，统计另记录实际标签数量；
+完整事件与正文按 execution 定位既有 Admin 流归档，不重复写入应用日志。程序统计在转换公开异常前
+记录一次内部原始异常链，对外错误码及文案保持不变。流结束日志的 `final_batch_event_count` 只计最后
+提交批次（含终态），不表示归档保留条数或整次执行事件总量。
+
 ### 3.5 Event 必须可行动
 
 普通业务失败、正常 Retry、旧任务 fencing 和单次流降级通过 Metric/Trace 观察，不升级为
