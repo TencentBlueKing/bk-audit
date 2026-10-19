@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
+
 from bk_resource import BkApiResource
 from django.conf import settings
 
@@ -28,6 +30,15 @@ class Plugin(BkApiResource):
     @property
     def base_url(self) -> str:
         return settings.BKSEC_PLUGIN_CONFIG_API_URL
+
+    def add_esb_info_before_request(self, params: dict) -> dict:
+        plugin_app_code = os.getenv("BKAPP_BKSEC_PLUGIN_APP_CODE")
+        plugin_app_secret = os.getenv("BKAPP_BKSEC_PLUGIN_APP_SECRET")
+        if plugin_app_code:
+            params["bk_app_code"] = plugin_app_code
+            params["bk_app_secret"] = plugin_app_secret or settings.SECRET_KEY
+            return params
+        return super().add_esb_info_before_request(params)
 
 
 class ConfigUpsert(Plugin):
