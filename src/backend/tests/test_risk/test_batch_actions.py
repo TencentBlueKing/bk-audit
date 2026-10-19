@@ -115,13 +115,16 @@ class TestBatchActionsPreview(BaseTestCase):
         self.assertIn("自动处理审批中", resp["batch_disabled_reason"])
         self.assertFalse(any(item["enabled"] for item in resp["actions"].values()))
 
-    def test_closed_only_enables_close(self):
+    def test_closed_only_enables_misreport(self):
         r1 = self._mk(1, RiskStatus.CLOSED)
         resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id])
         self.assertTrue(resp["batch_enabled"])
-        self.assertTrue(resp["actions"]["close"]["enabled"])
-        self.assertFalse(resp["actions"]["misreport"]["enabled"])
+        self.assertEqual(resp["batch_disabled_reason"], "")
+        self.assertTrue(resp["actions"]["misreport"]["enabled"])
+        self.assertFalse(resp["actions"]["close"]["enabled"])
+        self.assertIn("已关单", resp["actions"]["close"]["disabled_reason"])
         self.assertFalse(resp["actions"]["trans"]["enabled"])
+        self.assertFalse(resp["actions"]["confirm"]["enabled"])
 
     def test_over_limit_returns_reason(self):
         with self.assertRaises(BulkSelectionOverLimit) as caught:

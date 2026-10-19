@@ -2015,7 +2015,7 @@ _ACTION_LABELS = {
 _BATCH_ACTIONS = tuple(_ACTION_LABELS)
 _PROCESS_ACTIONS = frozenset({"close", "trans", "auto_process", "misreport"})
 _CONFIRM_ACTIONS = frozenset({"confirm", "misreport"})
-_CLOSED_ACTIONS = frozenset({"close"})
+_CLOSED_ACTIONS = frozenset({"misreport"})
 _BLOCKING_STATUS = frozenset({RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS})
 _BLOCKING_DISPLAY = frozenset({RiskDisplayStatus.FOR_APPROVE, RiskDisplayStatus.AUTO_PROCESS})
 
