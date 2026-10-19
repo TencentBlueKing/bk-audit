@@ -13,7 +13,7 @@ definitions:
     properties:
       result: {type: boolean}
       code:
-        description: 日志工具稳定领域错误码：2926001 日志查询条件不合法、2926002 不支持的日志字段、2926003 不支持的日志聚合方式、2926004 无敏感字段查询权限、2926005 日志查询超时，请稍后重试、2926006 日志查询失败，请稍后重试、2926007 日志查询结果过大，请缩小字段或 page_size 后重试、2926008 字段类型不支持当前统计操作、2926009 统计结果超出预算，请调整查询范围、类别数量或指标、2926010 统计结果过大，请缩短查询范围或降低 top_n；也可能返回 IAM 或平台通用错误码。
+        description: 日志工具稳定领域错误码：2926001 日志查询条件不合法、2926002 不支持的日志字段、2926003 不支持的日志聚合方式、2926004 无敏感字段查询权限、2926005 日志查询超时，请稍后重试、2926006 日志查询失败，请稍后重试、2926007 日志查询结果过大，请缩小字段或 page_size 后重试、2926008 字段类型不支持当前统计操作、2926009 统计结果超出预算，请调整查询范围、类别数量或指标、2926010 统计结果过大，请缩短查询范围或减少返回规模；也可能返回 IAM 或平台通用错误码。
       message: {type: string, x-nullable: true}
       request_id: {type: string, x-nullable: true}
       trace_id: {type: string, x-nullable: true}
@@ -3303,6 +3303,7 @@ paths:
       operationId: mcp_aggregate_logs
       description: >-
         对当前用户可查询的日志执行聚合，默认空间无需传 namespace。有类别时默认 Top10，无类别省略 top_n/order_by。
+        groups.values[].value_label为内置枚举名称，未知/动态路径为null，原始typed value不变；按group_id和dimension_id关联。
         TopN 按全范围排名，OTHER 汇总剩余非缺失类别，MISSING 独立；比例分母为全范围总量。
         时间桶自动升序，仅返回有日志的桶；缺省桶计数为0、数值指标为null。核对 query_summary 的范围、粒度及 complete，不从样例或 TopN 部分组推断总体。
         响应最大 4 MiB，超预算返回错误而不截断；查询失败不能当作零，按错误提示调整请求，敏感字段无权限时停止查询。参数限制见字段说明。
@@ -3441,12 +3442,13 @@ paths:
                     - raw_name
                     type: object
                   interval:
-                    description: FIELD 必须省略；TIME_BUCKET 默认 AUTO，可选 AUTO、MINUTE、HOUR、DAY；AUTO 按时间范围和预算选择实际粒度。
+                    description: FIELD 必须省略；TIME_BUCKET 默认 AUTO，可选 AUTO、MINUTE、HOUR、DAY、MONTH；AUTO 按完整范围从月到分钟选首个达到桶数阈值的粒度（默认12，后端可配置），容量独立检查。
                     enum:
                     - AUTO
                     - MINUTE
                     - HOUR
                     - DAY
+                    - MONTH
                     type: string
                 required:
                 - id
@@ -3636,6 +3638,7 @@ paths:
                           - MINUTE
                           - HOUR
                           - DAY
+                          - MONTH
                           type: string
                           x-nullable: true
                       required:
@@ -3691,10 +3694,15 @@ paths:
                                 type: string
                               value:
                                 description: 必须与 value_type 匹配；boolean 为 JSON 布尔值，integer 为 JSON 整数，number 为 JSON 数字（整数或浮点数），string 为 JSON 字符串；不得为 null、数组或对象。由于 API Gateway 使用 Swagger 2.0 不支持 anyOf/oneOf，网关 schema 不表达上述关联，服务端仍按 value_type 严格校验；保留空字符串。
+                              value_label:
+                                description: 内置枚举名称；未知值及动态路径为 null。按 group_id、dimension_id 关联展示，原始 value 不变。
+                                type: string
+                                x-nullable: true
                             required:
                             - dimension_id
                             - value_type
                             - value
+                            - value_label
                             type: object
                           type: array
                         count:
@@ -3758,6 +3766,7 @@ paths:
                         - MINUTE
                         - HOUR
                         - DAY
+                        - MONTH
                         type: string
                         x-nullable: true
                       effective_interval:
@@ -3766,6 +3775,7 @@ paths:
                         - MINUTE
                         - HOUR
                         - DAY
+                        - MONTH
                         type: string
                         x-nullable: true
                       timezone:

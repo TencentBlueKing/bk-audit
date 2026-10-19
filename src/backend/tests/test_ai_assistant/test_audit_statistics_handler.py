@@ -1,11 +1,13 @@
 """程序统计公开创建、范围固化和用户可见生命周期。"""
 
+import json
 from copy import deepcopy
 from unittest import mock
 
 from django.urls import resolve
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from core.exceptions import PermissionException
 from services.web.ai_assistant.constants import (
     AttachmentType,
     ExecutionStatus,
@@ -15,6 +17,7 @@ from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
     AttachmentSnapshotValidationError,
     InvalidAttachmentSource,
+    InvalidAttachmentState,
 )
 from services.web.ai_assistant.handlers.audit_statistics import (
     AIStatisticsAttachmentHandler,
@@ -28,9 +31,13 @@ from services.web.ai_assistant.resources.attachment import (
     RetryAttachment,
 )
 from services.web.ai_assistant.schemas.audit_statistics import (
+    AIStatisticsAttachmentContext,
     FieldStatisticsAttachmentInput,
 )
 from services.web.ai_assistant.services.conversation import ConversationService
+from services.web.ai_assistant.tasks.audit_statistics import (
+    build_statistics_agent_input,
+)
 from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.base import AIAssistantPlatformTestCase
 from tests.test_ai_assistant.factories import create_conversation
@@ -214,6 +221,95 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
         second = self.create()
         self.assertNotEqual(first["uid"], second["uid"])
 
+    def test_edit_retry_materializes_complete_input_without_changing_source_or_siblings(self):
+        first, sibling = self.create(), self.create()
+        original = deepcopy(self.source.input_data)
+        override = {**original["condition"], "conditions": [], "scope_id": "another-authorized-system"}
+        Attachment.objects.filter(uid=first["uid"]).update(status="SUCCESS", output_data=None)
+        with self.captureOnCommitCallbacks(execute=False):
+            changed = RetryAttachment().request(
+                attachment_uid=first["uid"],
+                input_data={
+                    "field": {"raw_name": "result_code"},
+                    "interval": "MONTH",
+                    "condition": override,
+                },
+            )
+        attachment = Attachment.objects.get(uid=first["uid"])
+        self.assertEqual(changed["input_data"]["condition"], override)
+        self.assertEqual(attachment.context_data["search_condition"], override)
+        self.assertEqual(attachment.context_data["field"]["raw_name"], "result_code")
+        self.assertEqual(attachment.context_data["interval"], "MONTH")
+        self.assertEqual(attachment.title, "操作结果统计")
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.input_data, original)
+        self.assertEqual(Attachment.objects.get(uid=sibling["uid"]).input_data, sibling["input_data"])
+        Attachment.objects.filter(uid=first["uid"]).update(status="FAILED", title="自定义标题")
+        with self.captureOnCommitCallbacks(execute=False):
+            changed = RetryAttachment().request(
+                attachment_uid=first["uid"], input_data={"field": {"raw_name": "username"}}
+            )
+        self.assertEqual(changed["title"], "自定义标题")
+        self.assertEqual(changed["input_data"]["interval"], "AUTO")
+        self.assertEqual(changed["input_data"]["condition"], original["condition"])
+        with self.assertRaises(InvalidAttachmentState):
+            RetryAttachment().request(attachment_uid=first["uid"], input_data={"field": {"raw_name": "username"}})
+
+    def test_edit_retry_preserves_custom_title_saved_while_preparing_input(self):
+        for custom_title in ("并发保存的自定义标题", "METHOD统计"):
+            with self.subTest(title=custom_title):
+                created = self.create()
+                Attachment.objects.filter(uid=created["uid"]).update(status="FAILED")
+                original_prepare = self.handler.prepare
+
+                def prepare_and_rename(**kwargs):
+                    """模拟输入准备期间另一个标题编辑请求成功落库。"""
+                    preparation = original_prepare(**kwargs)
+                    Attachment.objects.filter(uid=created["uid"]).update(title=custom_title)
+                    return preparation
+
+                with mock.patch.object(self.handler, "prepare", side_effect=prepare_and_rename):
+                    with self.captureOnCommitCallbacks(execute=False):
+                        changed = RetryAttachment().request(
+                            attachment_uid=created["uid"], input_data={"field": {"raw_name": "result_code"}}
+                        )
+                self.assertEqual(changed["title"], custom_title)
+                self.assertEqual(changed["input_data"]["field"]["raw_name"], "result_code")
+                self.assertEqual(Attachment.objects.get(uid=created["uid"]).title, custom_title)
+
+    def test_partial_retry_condition_is_rejected_without_replacing_saved_filters(self):
+        created = self.create()
+        Attachment.objects.filter(uid=created["uid"]).update(status="SUCCESS")
+        before = Attachment.objects.get(uid=created["uid"])
+        partial = {key: value for key, value in before.input_data["condition"].items() if key != "conditions"}
+        with self.assertRaises(AttachmentSnapshotValidationError):
+            RetryAttachment().request(
+                attachment_uid=created["uid"], input_data={"field": {"raw_name": "username"}, "condition": partial}
+            )
+        after = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(
+            (after.input_data, after.context_data, after.output_data, after.status, after.task_id),
+            (before.input_data, before.context_data, before.output_data, before.status, before.task_id),
+        )
+
+    def test_new_input_permission_failure_preserves_old_input_and_result(self):
+        created = self.create()
+        Attachment.objects.filter(uid=created["uid"]).update(status="FAILED")
+        before = Attachment.objects.get(uid=created["uid"])
+        with mock.patch(
+            "services.web.ai_assistant.handlers.log_search_source.LogQueryContextService.build",
+            side_effect=PermissionException(action_name="view_system", permission={}, apply_url=""),
+        ):
+            with self.assertRaises(PermissionException):
+                RetryAttachment().request(
+                    attachment_uid=created["uid"], input_data={"field": {"raw_name": "result_code"}}
+                )
+        after = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(
+            (after.input_data, after.context_data, after.status, after.task_id),
+            (before.input_data, before.context_data, before.status, before.task_id),
+        )
+
     def test_clear_and_delete_remove_visibility_and_reject_source(self):
         for action in ("clear", "delete"):
             with self.subTest(action=action):
@@ -279,6 +375,23 @@ class AIStatisticsHandlerTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase
             ),
             [],
         )
+
+    def test_edit_retry_uses_new_instruction_and_range_without_source_total(self):
+        created = self.create()
+        Attachment.objects.filter(uid=created["uid"]).update(status="FAILED")
+        condition = {**self.source.input_data["condition"], "conditions": []}
+        with self.captureOnCommitCallbacks(execute=False):
+            changed = RetryAttachment().request(
+                attachment_uid=created["uid"], input_data={"instruction": "新的统计要求", "condition": condition}
+            )
+        attachment = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(changed["input_data"]["instruction"], "新的统计要求")
+        self.assertEqual(attachment.context_data["instruction"], "新的统计要求")
+        payload = json.loads(
+            build_statistics_agent_input(AIStatisticsAttachmentContext.model_validate(attachment.context_data))
+        )
+        self.assertNotIn("query_summary", payload["context"])
+        self.assertEqual(payload["context"]["initial_search_condition"], condition)
 
     def test_creation_rejects_overridden_identity_and_invalid_source(self):
         for extra in ({"username": "other"}, {"namespace": "other"}, {"condition": {}}):

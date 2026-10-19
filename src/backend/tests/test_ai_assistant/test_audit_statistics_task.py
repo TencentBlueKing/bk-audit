@@ -118,7 +118,8 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
 
     def processing(self):
         """通过公开创建入口获得待执行对象。"""
-        return Attachment.objects.get(uid=self.create(top_n=1, interval="HOUR")["uid"])
+        with mock.patch.object(LogQueryContextService, "build", side_effect=self.build_context):
+            return Attachment.objects.get(uid=self.create(interval="HOUR")["uid"])
 
     def test_success_contract(self):
         attachment = self.processing()
@@ -138,6 +139,30 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         self.assertIsNotNone(attachment.finished_at)
         self.assertFalse(attachment.is_stream)
 
+    def test_edited_retry_worker_uses_replacement_field_interval_and_range(self):
+        attachment = self.processing()
+        invoke_task(generate_field_statistics, attachment=attachment)
+        condition = {**self.source.input_data["condition"], "conditions": [], "scope_id": "another-system"}
+        self.context.side_effect = lambda **kwargs: LogQueryContext(**kwargs, table="logs", conditions=())
+        with self.captureOnCommitCallbacks(execute=False):
+            RetryAttachment().request(
+                attachment_uid=str(attachment.uid),
+                input_data={
+                    "field": {"raw_name": "extend_data", "keys": ["another_method"]},
+                    "interval": "MINUTE",
+                    "condition": condition,
+                },
+            )
+        attachment.refresh_from_db()
+        self.assertEqual(invoke_task(generate_field_statistics, attachment=attachment), {"status": "SUCCESS"})
+        attachment.refresh_from_db()
+        output = attachment.output_data
+        self.assertEqual(output["field"]["keys"], ["another_method"])
+        self.assertEqual(output["query_summary"]["scope_id"], "another-system")
+        self.assertEqual(output["time_series"]["effective_interval"], "MINUTE")
+        self.assertEqual(len(output["time_series"]["bucket_starts"]), 120)
+        self.assertEqual(output["time_series"]["series"][0]["counts"][:3], [2, 4, 0])
+
     def test_success_cannot_be_edited_exported_or_feedbacked(self):
         attachment = self.processing()
         invoke_task(generate_field_statistics, attachment=attachment)
@@ -155,7 +180,6 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         attachment = Attachment.objects.get(
             uid=self.create(
                 field={"raw_name": "extend_data", "keys": ["method"], "field_type": "double"},
-                top_n=1,
                 interval="HOUR",
             )["uid"]
         )
@@ -353,7 +377,7 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         first = self.processing()
         invoke_task(generate_field_statistics, attachment=first)
         first_snapshot = GetAttachment().request(attachment_uid=str(first.uid))["output_data"]
-        self.frames[2]["d0_json"] = '"POST"'
+        self.frames[2]["d0_json"] = '"PATCH"'
         second = self.processing()
         invoke_task(generate_field_statistics, attachment=second)
         self.assertEqual(GetAttachment().request(attachment_uid=str(first.uid))["output_data"], first_snapshot)
@@ -361,7 +385,7 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
             GetAttachment().request(attachment_uid=str(second.uid))["output_data"]["distribution"]["groups"][0][
                 "value"
             ],
-            "POST",
+            "PATCH",
         )
 
     def test_task_uses_field_budget(self):
@@ -501,7 +525,6 @@ class FieldStatisticsWorkerIntegrationTest(TransactionTestCase):
                     attachment_type=AttachmentType.FIELD_STATISTICS,
                     input_data={
                         "field": {"raw_name": "extend_data", "keys": ["method"]},
-                        "top_n": 1,
                         "interval": "HOUR",
                     },
                 )
@@ -560,6 +583,24 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         with mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=respond) as agent:
             result = invoke_task(self.handler.async_task, attachment=attachment, **kwargs)
         return result, agent.call_args.kwargs
+
+    def test_edited_retry_agent_receives_new_instruction_and_independent_range(self):
+        attachment = self.processing()
+        self.run_events(attachment, self.events(self.tagged("old chart")))
+        condition = {**self.source.input_data["condition"], "conditions": []}
+        with self.captureOnCommitCallbacks(execute=False):
+            RetryAttachment().request(
+                attachment_uid=str(attachment.uid), input_data={"instruction": "新的需求", "condition": condition}
+            )
+        attachment.refresh_from_db()
+        result, request = self.run_events(attachment, self.events(self.tagged("new chart")))
+        self.assertEqual(result, {"status": "SUCCESS"})
+        payload = json.loads(request["chat_history"][-1]["content"])
+        self.assertEqual(payload["instruction"], "新的需求")
+        self.assertEqual(payload["context"]["initial_search_condition"], condition)
+        self.assertNotIn("query_summary", payload["context"])
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.output_data, {"content": "new chart"})
 
     def test_non_sse_upstream_error_does_not_leak_body_to_task_logs(self):
         """实际callback解析收到业务错误时，任务日志与异常不得包含上游正文。"""

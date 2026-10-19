@@ -14,6 +14,7 @@ from services.web.query.ai_assistant.exceptions import (
     InvalidLogCondition,
     LogQueryFailed,
     SensitiveFieldPermissionDenied,
+    StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
     UnsupportedFieldType,
 )
@@ -34,12 +35,12 @@ REAL_CONTEXT_BUILD = LogQueryContextService.build
 
 
 def field_frames():
-    """手算完整范围 GET6、OTHER3、缺失1；两桶分别4/6。"""
+    """手算完整范围 GET6、POST3、缺失1；两桶分别4/6。"""
     data = [
         dict(frame="META", n="10", a="3", b="5", c="0", d="0", e="0"),
         dict(frame="SUMMARY", n="9", a="0", s_min=None, s_max=None, s_avg=None, s_median=None),
         dict(frame="GROUP", frame_key="1", kind="VALUE", n="6", d0_type="string", d0_json='"GET"'),
-        dict(frame="GROUP", frame_key="2", kind="OTHER", n="3", d0_type=None, d0_json=None),
+        dict(frame="GROUP", frame_key="2", kind="VALUE", n="3", d0_type="string", d0_json='"POST"'),
         dict(frame="GROUP", frame_key="3", kind="MISSING", n="1", d0_type=None, d0_json=None),
     ]
     for key, bucket, count in [(1, 0, 2), (1, 1, 4), (2, 0, 1), (2, 1, 2), (3, 0, 1)]:
@@ -87,9 +88,8 @@ class TestFieldStatistics(TestCase):
             namespace="default",
             condition=self.condition,
             field=field or LogFieldRef(raw_name="extend_data", keys=["method"]),
-            top_n=1,
             interval="HOUR",
-            **kwargs
+            **kwargs,
         )
 
     def test_fixed_package_typed_groups_complete_axis_and_same_snapshot(self):
@@ -104,7 +104,7 @@ class TestFieldStatistics(TestCase):
         self.assertEqual(result.time_series.bucket_starts, ("2026-09-15T10:00:00+08:00", "2026-09-15T11:00:00+08:00"))
         self.assertEqual([s.counts for s in result.time_series.series], [(2, 4), (1, 2), (1, 0)])
         self.assertEqual(result.distribution.groups[0].value, "GET")
-        self.assertIsNone(result.distribution.groups[1].value_type)
+        self.assertEqual(result.distribution.groups[1].value, "POST")
         self.assertIsNone(result.distribution.groups[2].value)
         self.assertEqual(result.field.display_name, "method")
         self.assertEqual(result.statistics_kind, "CATEGORICAL")
@@ -114,6 +114,7 @@ class TestFieldStatistics(TestCase):
     def test_native_numeric_summary_and_client_hint_is_not_authority(self):
         self.data[1].update(a="9", s_min="1e-20", s_max="9", s_avg="3", s_median="2")
         self.data[2].update(d0_type="number", d0_json="2")
+        self.data[3].update(d0_type="number", d0_json="9")
         result = self._analyze(LogFieldRef(raw_name="extend_data", keys=["n"], field_type="string"))
         self.assertEqual(result.statistics_kind, "NUMERIC")
         self.assertEqual(
@@ -125,6 +126,7 @@ class TestFieldStatistics(TestCase):
         """四位小数应用到摘要；原始数字类别保真，避免类别合并或无法回查。"""
         self.data[1].update(a="9", s_min="0.0000123", s_max="9.123456", s_avg="3.123456", s_median="2.123456")
         self.data[2].update(d0_type="number", d0_json="2.123456")
+        self.data[3].update(d0_type="number", d0_json="9.123456")
         result = self._analyze(LogFieldRef(raw_name="extend_data", keys=["n"]))
         payload = result.model_dump(mode="json")
         self.assertEqual(
@@ -150,6 +152,10 @@ class TestFieldStatistics(TestCase):
     def test_mixed_scalars_and_numeric_strings_remain_categorical(self):
         for numeric_count in ("0", "3"):
             self.data[1]["a"] = numeric_count
+            self.data[3].update(
+                d0_type="number" if numeric_count == "3" else "string",
+                d0_json="3" if numeric_count == "3" else '"POST"',
+            )
             self.data[2]["d0_json"] = '"12"'
             result = self._analyze(LogFieldRef(raw_name="extend_data", keys=["n"], field_type="double"))
             self.assertEqual(result.statistics_kind, "CATEGORICAL")
@@ -177,8 +183,8 @@ class TestFieldStatistics(TestCase):
                 if total:
                     self.data.extend(
                         [
-                            dict(frame="GROUP", frame_key="3", kind="MISSING", n="2", d0_type=None, d0_json=None),
-                            dict(frame="ROW", frame_key="3", n="2", m0="2", bucket="0"),
+                            dict(frame="GROUP", frame_key="1", kind="MISSING", n="2", d0_type=None, d0_json=None),
+                            dict(frame="ROW", frame_key="1", n="2", m0="2", bucket="0"),
                         ]
                     )
                 result = self._analyze(field)
@@ -360,3 +366,45 @@ class TestFieldStatistics(TestCase):
             ).fetchone()
         self.assertEqual(row[:2], (7, 7))
         self.assertEqual(tuple(float(value) for value in row[2:]), (1, 22, 4))
+
+    @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=6)
+    def test_final_category_growth_returns_capacity_error_without_program_auto_coarsening(self):
+        self.data = [dict(frame="META", n="4", a="4", b="4", c="0", d="0", e="0")]
+        with self.assertRaises(StatisticsBudgetExceeded):
+            self._analyze()
+        self.assertEqual(self.query.call_count, 2)
+
+    def test_all_501_categories_are_returned_without_topn_metadata_or_other(self):
+        self.data = [
+            dict(frame="META", n="501", a="501", b="501", c="0", d="0", e="0"),
+            dict(frame="SUMMARY", n="501", a="0", s_min=None, s_max=None, s_avg=None, s_median=None),
+        ]
+        for key in range(1, 502):
+            self.data.extend(
+                [
+                    dict(frame="GROUP", frame_key=str(key), kind="VALUE", n="1", d0_type="string", d0_json=f'"v{key}"'),
+                    dict(frame="ROW", frame_key=str(key), bucket="0", n="1", m0="1"),
+                ]
+            )
+        result = self._analyze().model_dump(mode="json")
+        self.assertEqual(len(result["distribution"]["groups"]), 501)
+        self.assertEqual(set(result["distribution"]), {"groups"})
+        self.assertNotIn("top_n", result["query_summary"])
+        self.assertNotIn("has_other", result["query_summary"])
+        self.assertTrue(all(s["counts"] == [1, 0] for s in result["time_series"]["series"]))
+
+    def test_enum_labels_preserve_known_unknown_and_real_other_values(self):
+        self.data[1].update(a="9", s_min="-1", s_max="500", s_avg="166", s_median="0")
+        self.data[2].update(d0_type="number", d0_json="0")
+        self.data[3].update(d0_type="number", d0_json="500")
+        result = self._analyze(LogFieldRef(raw_name="result_code"))
+        self.assertEqual(
+            [(g.value, g.value_label) for g in result.distribution.groups], [(0, "成功"), (500, None), (None, None)]
+        )
+        self.data[3]["d0_json"] = "-1"
+        result = self._analyze(LogFieldRef(raw_name="result_code"))
+        self.assertEqual(
+            (result.distribution.groups[1].kind, result.distribution.groups[1].value_label), ("VALUE", "其他")
+        )
+        result = self._analyze(LogFieldRef(raw_name="extend_data", keys=["result_code"]))
+        self.assertTrue(all(g.value_label is None for g in result.distribution.groups))

@@ -33,7 +33,7 @@ class AIAnalysisSchemaTest(SimpleTestCase):
         for mode in ("validation", "serialization"):
             with self.subTest(mode=mode):
                 schema = AIAnalysisInputSchema.model_json_schema(mode=mode)
-                self.assertEqual(set(schema["properties"]), {"analysis_mode", "instruction"})
+                self.assertEqual(set(schema["properties"]), {"analysis_mode", "instruction", "condition"})
                 self.assertEqual(schema["required"], ["analysis_mode"])
                 instruction_types = schema["properties"]["instruction"]["anyOf"]
                 string_schema = next(item for item in instruction_types if item["type"] == "string")
@@ -116,7 +116,7 @@ class AIAnalysisSchemaTest(SimpleTestCase):
             for name, model in {
                 "field": "StatisticsField", "overview": "FieldStatisticsOverview",
                 "distribution": "FieldDistribution", "time_series": "FieldTimeSeries",
-                "query_summary": "AggregationQuerySummary",
+                "query_summary": "FieldStatisticsQuerySummary",
             }.items():
                 assert statistics[name]["$ref"] == "#/components/schemas/" + model
                 assert statistics[name]["description"]
@@ -127,8 +127,8 @@ class AIAnalysisSchemaTest(SimpleTestCase):
             assert components["FieldCountSeries"]["properties"]["counts"]["items"]["type"] == "integer"
             field_input = components["FieldStatisticsAttachmentInputRequest"]["properties"]
             assert field_input["field"]["$ref"] == "#/components/schemas/LogFieldRef"
-            assert field_input["top_n"]["description"]
-            assert set(components["AIStatisticsAttachmentInputRequest"]["properties"]) == {"instruction"}
+            assert field_input["condition"]["description"]
+            assert set(components["AIStatisticsAttachmentInputRequest"]["properties"]) == {"instruction", "condition"}
             assert components["EditableAIAttachmentOutputDataRequest"]["oneOf"] == [
                 {"$ref": "#/components/schemas/AIAnalysisOutputSchemaRequest"}
             ]

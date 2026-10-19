@@ -87,6 +87,44 @@ class TestLogToolEnumChoices(SimpleTestCase):
 class TestLogToolSettings(SimpleTestCase):
     """校验各类部署配置约定的启动行为。"""
 
+    def test_auto_readability_threshold_default_and_environment_override(self):
+        """默认12，环境值可覆盖；MCP公开协议不新增策略参数。"""
+        for value, expected in ((None, 12), ("48", 48)):
+            environment = os.environ.copy()
+            environment.pop("BKAPP_AI_LOG_STATISTICS_AUTO_MIN_BUCKETS", None)
+            if value is not None:
+                environment["BKAPP_AI_LOG_STATISTICS_AUTO_MIN_BUCKETS"] = value
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import services.web.settings as config; "
+                    f"assert config.AI_LOG_STATISTICS_AUTO_MIN_BUCKETS == {expected}",
+                ],
+                cwd=BACKEND_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_auto_readability_threshold_must_be_positive(self):
+        """无效阈值应在启动时指出配置错误，不在查询时变成业务失败。"""
+        for value in ("0", "-1"):
+            environment = os.environ.copy()
+            environment["BKAPP_AI_LOG_STATISTICS_AUTO_MIN_BUCKETS"] = value
+            completed = subprocess.run(
+                [sys.executable, "-c", "import services.web.settings"],
+                cwd=BACKEND_ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("AI_LOG_STATISTICS_AUTO_MIN_BUCKETS 必须为正整数", completed.stderr)
+
     def test_page_size_limit_below_public_default_fails_at_startup(self):
         environment = os.environ.copy()
         environment["BKAPP_AI_LOG_SEARCH_MAX_PAGE_SIZE"] = "19"
@@ -659,7 +697,7 @@ class TestStatisticsErrors(SimpleTestCase):
         )
         self.assertEqual(
             error.response_data()["data"],
-            {"suggested_interval": "DAY", "adjustments": ["缩短查询时间范围", "降低 top_n", "减少指标数量"]},
+            {"suggested_interval": "DAY", "adjustments": ["缩短查询时间范围", "使用更粗的时间粒度", "减少类别或指标数量"]},
         )
         self.assertIsNone(
             log_exceptions.StatisticsBudgetExceeded(suggested_interval="SELECT secret").response_data()["data"][

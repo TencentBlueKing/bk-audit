@@ -137,7 +137,11 @@ def build_agent_input(context: AIAnalysisContextSchema) -> str:
         "instruction": context.effective_instruction,
         "context": {
             "search_condition": context.search_condition.model_dump(mode="json"),
-            "query_summary": context.query_summary.model_dump(mode="json"),
+            **(
+                {"query_summary": context.query_summary.model_dump(mode="json")}
+                if context.query_summary is not None
+                else {}
+            ),
             "user": {
                 "username": context.username,
                 "timezone": context.timezone,

@@ -407,7 +407,10 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
                     input_data={"analysis_mode": AnalysisMode.DEFAULT},
                 )
             self.assertEqual(created["status"], ExecutionStatus.PROCESSING)
-            self.assertEqual(created["input_data"], {"analysis_mode": AnalysisMode.DEFAULT})
+            self.assertEqual(
+                created["input_data"],
+                {"analysis_mode": AnalysisMode.DEFAULT, "condition": self.source_message.input_data["condition"]},
+            )
             attachment = Attachment.objects.get(uid=created["uid"])
             old_task_id = attachment.task_id
             with (

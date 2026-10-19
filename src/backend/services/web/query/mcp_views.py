@@ -162,7 +162,7 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                         "2926007 日志查询结果过大，请缩小字段或 page_size 后重试、"
                         "2926008 字段类型不支持当前统计操作、"
                         "2926009 统计结果超出预算，请调整查询范围、类别数量或指标、"
-                        "2926010 统计结果过大，请缩短查询范围或降低 top_n；"
+                        "2926010 统计结果过大，请缩短查询范围或减少返回规模；"
                         "也可能返回 IAM 或平台通用错误码。"
                     ),
                 },
@@ -176,7 +176,7 @@ class MCPLogAutoSchema(BKResourceAutoSchema):
                 "errors": {
                     "nullable": True,
                     "description": (
-                        "可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）"
+                        "可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY/MONTH 或 null）"
                         "及受控 adjustments 调整建议；不回显 SQL 或字段值，工具分支仍按 code 判断。"
                     ),
                 },
