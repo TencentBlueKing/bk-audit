@@ -662,7 +662,7 @@ LOG_EXPORT_TASK_PAGE_SIZE = int(os.getenv("BKAPP_LOG_EXPORT_TASK_PAGE_SIZE", 100
 # AI 助手全量导出同步直出开关：关闭时全量导出 100% 走既有异步链路（行为与历史一致）
 AI_EXPORT_SYNC_ENABLED = strtobool(os.getenv("BKAPP_AI_EXPORT_SYNC_ENABLED", "True"))
 # AI 助手全量导出同步直出条数上限：count 复检超过则直接创建异步导出任务（不发起同步尝试）
-AI_EXPORT_SYNC_MAX_COUNT = int(os.getenv("BKAPP_AI_EXPORT_SYNC_MAX_COUNT", 20000))
+AI_EXPORT_SYNC_MAX_COUNT = int(os.getenv("BKAPP_AI_EXPORT_SYNC_MAX_COUNT", 10000))
 # AI 助手全量导出同步直出软超时预算（秒）：每批拉取前守卫检查，超预算中止并降级异步；
 # 预算预留 ~5s 给 XLSX 收尾、文件传输与网关缓冲，对齐产品端到端 30s 承诺
 AI_EXPORT_SYNC_DEADLINE_SECONDS = int(os.getenv("BKAPP_AI_EXPORT_SYNC_DEADLINE_SECONDS", 25))
