@@ -105,6 +105,7 @@ class ListQueriesTest(TestCase):
         self.first = Attachment.objects.create(
             source_message=self.source,
             attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"text": "query"},
             title="报告 Alpha",
             status=ExecutionStatus.SUCCESS,
             content_updated_at=now,
@@ -114,6 +115,7 @@ class ListQueriesTest(TestCase):
         self.second = Attachment.objects.create(
             source_message=self.source,
             attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"text": "query"},
             title="报告 Beta",
             status=ExecutionStatus.SUCCESS,
             content_updated_at=now - timedelta(days=1),
@@ -325,6 +327,7 @@ class ListQueriesTest(TestCase):
         Attachment.objects.create(
             source_message=source,
             attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"text": "query"},
             status=ExecutionStatus.PROCESSING,
             created_by="alice",
             updated_by="alice",

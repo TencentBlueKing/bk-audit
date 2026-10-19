@@ -8,10 +8,7 @@ from dataclasses import dataclass
 
 from django.utils.translation import gettext_lazy
 
-from services.web.query.ai_assistant.exceptions import (
-    StatisticsBudgetExceeded,
-    UnsupportedFieldType,
-)
+from services.web.query.ai_assistant.exceptions import UnsupportedFieldType
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
     AggregationDataQuality,
@@ -90,7 +87,16 @@ class StatisticsResultParser:
         if not isinstance(response, dict) or not isinstance(response.get("list"), list):
             raise ValueError("missing statistics frames")
         frames = response["list"]
-        max_groups = self.request.top_n + 2 if self.dimensions else 1
+        max_groups = (
+            (
+                self.request.top_n + 2
+                if self.request.top_n is not None
+                else budget_limits()[1]
+                // ((len(self.time_axis.bucket_starts) if self.time_axis else 1) * self.numeric_columns)
+            )
+            if self.dimensions
+            else 1
+        )
         if len(frames) > 1 + int(self.summary_field is not None) + max_groups * (
             1 + (len(self.time_axis.bucket_starts) if self.time_axis else 1)
         ) + len(self.quality_indices):
@@ -112,21 +118,17 @@ class StatisticsResultParser:
             raise UnsupportedFieldType()
         if invalid_number:
             raise UnsupportedStatisticsNumber()
-        if group_count > max_groups:
+        if self.request.top_n is not None and group_count > max_groups:
             raise ValueError("unbounded statistics groups")
         buckets = len(self.time_axis.bucket_starts) if self.time_axis else 1
         if group_count * buckets * self.numeric_columns > budget_limits()[1]:
-            try:
-                build_time_axis(
-                    start_time=self.request.condition.start_time,
-                    end_time=self.request.condition.end_time,
-                    interval=self.time_axis.effective_interval if self.time_axis else None,
-                    group_count=group_count,
-                    numeric_columns=self.numeric_columns,
-                )
-            except StatisticsBudgetExceeded as err:
-                err.actual_group_count = group_count
-                raise
+            build_time_axis(
+                start_time=self.request.condition.start_time,
+                end_time=self.request.condition.end_time,
+                interval=self.time_axis.effective_interval if self.time_axis else None,
+                group_count=group_count,
+                numeric_columns=self.numeric_columns,
+            )
         if (len(by_type["GROUP"]), len(by_type["ROW"]), len(by_type["QUALITY"])) != (
             group_count,
             row_count,
@@ -159,6 +161,10 @@ class StatisticsResultParser:
             values = []
             if not self.dimensions:
                 valid_kind = key == 1 and kind == "ALL"
+            elif self.request.top_n is None:
+                valid_kind = (
+                    (kind == "VALUE" and 1 <= key <= len(frames)) or (kind == "MISSING" and key == len(frames))
+                ) and count > 0
             else:
                 valid_kind = (
                     (kind == "VALUE" and 1 <= key <= self.request.top_n)

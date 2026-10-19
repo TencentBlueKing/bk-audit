@@ -28,13 +28,12 @@ from services.web.ai_assistant.handlers.attachment import (
     AttachmentTypeHandler,
 )
 from services.web.ai_assistant.handlers.log_search_source import (
-    parse_log_search_source,
+    prepare_log_attachment,
     validate_log_search_consistency,
     validate_log_search_source,
 )
 from services.web.ai_assistant.handlers.registry import attachment_handler_registry
 from services.web.ai_assistant.models import Attachment, Message
-from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisContextSchema,
     AIAnalysisInputSchema,
@@ -42,7 +41,6 @@ from services.web.ai_assistant.schemas.audit_analysis import (
     AIAnalysisQuerySummary,
 )
 from services.web.ai_assistant.tasks.audit_analysis import execute_log_analysis
-from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
 
 
 class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisContextSchema, AIAnalysisOutputSchema]):
@@ -67,18 +65,18 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
     ) -> AttachmentPreparation[AIAnalysisContextSchema]:
         """解析 LOG_SEARCH 类型化快照，并固化本次实际分析指令。"""
 
-        log_input, log_context, log_output = parse_log_search_source(user=user, source_message=source_message)
-        # LOG_SEARCH 可承载比 Agent 工具更宽的历史条件；分析创建前必须确认该快照可被工具重放。
-        search_condition = parse_snapshot(
-            AgentSearchCondition,
-            log_input.condition.model_dump(mode="json"),
-            field_name="source_message.input_data.condition",
+        input_data, log_context, log_output, summary_matches = prepare_log_attachment(
+            user=user,
+            source_message=source_message,
+            input_data=input_data,
             error_type=UnsupportedLogAnalysisCondition,
         )
+        search_condition = input_data.condition
 
         effective_instruction = self._resolve_instruction(input_data)
         return AttachmentPreparation(
             title=DEFAULT_AI_ANALYSIS_TITLE,
+            input_data=input_data,
             context_data=AIAnalysisContextSchema(
                 system_prompt=SYSTEM_PROMPT,
                 effective_instruction=effective_instruction,
@@ -87,7 +85,9 @@ class AIAnalysisHandler(AttachmentTypeHandler[AIAnalysisInputSchema, AIAnalysisC
                     total=log_output.total,
                     took_ms=log_output.query_summary.took_ms,
                     executed_at=log_output.query_summary.executed_at,
-                ),
+                )
+                if summary_matches
+                else None,
                 username=user,
                 namespace=log_context.namespace,
                 # 当前请求链路尚无可信用户偏好，先固化部署默认值；后续接入用户配置时只改此处。

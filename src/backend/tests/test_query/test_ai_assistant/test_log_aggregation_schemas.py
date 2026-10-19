@@ -304,7 +304,8 @@ class TestAggregationModels(AIAssistantTestCase):
         for value_type, value in (("boolean", True), ("integer", 1), ("number", 1.5), ("string", "")):
             result = schemas.AggregationGroupValue(dimension_id="category", value_type=value_type, value=value)
             self.assertEqual(
-                result.model_dump(mode="json"), {"dimension_id": "category", "value_type": value_type, "value": value}
+                result.model_dump(mode="json"),
+                {"dimension_id": "category", "value_type": value_type, "value": value, "value_label": None},
             )
         for value_type, value in (
             ("integer", True),

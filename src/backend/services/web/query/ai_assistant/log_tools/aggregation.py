@@ -12,7 +12,6 @@ from pydantic import ValidationError as PydanticValidationError
 
 from api.bk_base.constants import StorageType
 from services.web.query.ai_assistant.exceptions import (
-    StatisticsBudgetExceeded,
     StatisticsResponseTooLarge,
     UnsupportedAggregation,
     UnsupportedFieldType,
@@ -35,6 +34,9 @@ from services.web.query.ai_assistant.log_tools.sensitive import (
     SensitiveLogFieldPermissionService,
 )
 from services.web.query.ai_assistant.log_tools.statistics_budget import build_time_axis
+from services.web.query.ai_assistant.log_tools.statistics_labels import (
+    label_statistics_groups,
+)
 from services.web.query.ai_assistant.log_tools.statistics_result import (
     StatisticsResultParser,
     UnsupportedStatisticsNumber,
@@ -67,7 +69,7 @@ class LogAggregationService:
             response = AggregateLogsResponse(
                 columns=cls._columns(request, axis),
                 rows=result.rows,
-                groups=result.groups,
+                groups=label_statistics_groups(result.groups, builder.dimensions, namespace),
                 data_quality=result.quality,
                 query_summary=AggregationQuerySummary(
                     returned_count=len(result.rows),
@@ -96,7 +98,7 @@ class LogAggregationService:
 
     @classmethod
     def _execute(cls, builder, *, numeric_columns, fill_time_buckets=True):
-        """可信后端指定预算列数；预检只规划，AUTO 超限丢弃快照并完整重查。"""
+        """可信后端指定预算列数；预检只规划，最终超限明确拒绝，不改粒度重查。"""
         request = builder.request
         # 时间维度不进入 SQL 类别字段集，但其可见值同样必须授权。
         fields = [item.field for item in (*request.dimensions, *request.metrics)]
@@ -123,7 +125,7 @@ class LogAggregationService:
             if statistics_count(preflight.get("invalid_number_count")):
                 raise UnsupportedStatisticsNumber()
             group_count = statistics_count(preflight.get("group_count"))
-            if group_count > (request.top_n + 2 if builder.dimensions else 1):
+            if request.top_n is not None and group_count > (request.top_n + 2 if builder.dimensions else 1):
                 raise ValueError("unbounded statistics preflight")
         axis = build_time_axis(
             start_time=builder.context.condition.start_time,
@@ -132,38 +134,20 @@ class LogAggregationService:
             group_count=group_count,
             numeric_columns=numeric_columns,
         )
-        while True:
-            builder.time_axis = axis if time_dimension else None
-            raw, elapsed = cls._query(builder)
-            took_ms += elapsed
-            try:
-                result = StatisticsResultParser(
-                    request,
-                    builder.time_axis,
-                    numeric_columns,
-                    builder.summary_field,
-                    fill_time_buckets=fill_time_buckets,
-                ).parse(raw)
-                return result, axis, took_ms
-            except StatisticsNumberOutOfRange as err:
-                raise UnsupportedStatisticsNumber() from err
-            except StatisticsBudgetExceeded as err:
-                suggestion = err.data["suggested_interval"]
-                if not time_dimension or time_dimension.interval != "AUTO" or suggestion is None:
-                    raise
-                retry_axis = build_time_axis(
-                    start_time=builder.context.condition.start_time,
-                    end_time=builder.context.condition.end_time,
-                    interval=suggestion,
-                    group_count=err.actual_group_count,
-                    numeric_columns=numeric_columns,
-                )
-                axis = type(axis)(
-                    axis.requested_interval,
-                    retry_axis.effective_interval,
-                    retry_axis.timezone,
-                    retry_axis.bucket_starts,
-                )
+        builder.time_axis = axis if time_dimension else None
+        raw, elapsed = cls._query(builder)
+        took_ms += elapsed
+        try:
+            result = StatisticsResultParser(
+                request,
+                builder.time_axis,
+                numeric_columns,
+                builder.summary_field,
+                fill_time_buckets=fill_time_buckets,
+            ).parse(raw)
+            return result, axis, took_ms
+        except StatisticsNumberOutOfRange as err:
+            raise UnsupportedStatisticsNumber() from err
 
     @staticmethod
     def _query(builder, preflight=False):

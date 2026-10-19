@@ -126,12 +126,14 @@ AG-UI 事件由流中的业务 data 承载。快照里的 data 已是对象，SS
 | 用户意图 | 操作顺序 | 对象是否变化 |
 | --- | --- | --- |
 | 原失败报告再试一次 | 关闭旧流 → `POST /attachments/{uid}/retry/` → 获取详情/新快照 → 恢复本轮生成 | 附件 UID 不变，execution_id 更新 |
-| 成功报告重新生成 | 使用同一 retry 接口，清空旧正文、过程与反馈后等待新结果 | UID 不变，沿用创建时输入与上下文；新执行失败不恢复旧正文 |
-| 换一段分析要求 | 从原检索消息重新 POST attachments，选择 CUSTOM | 创建新附件，保留原报告 |
-| 换检索范围分析 | 先完成新的 LOG_SEARCH，再从该结果创建附件 | 来源消息及附件都按新结果关联 |
+| 成功报告重新生成 | 使用同一 retry 接口，清空旧正文、过程与反馈后等待新结果 | UID 不变，未传新输入时沿用当前保存的输入与上下文；新执行失败不恢复旧正文 |
+| 换一段分析要求 | retry 传完整 input_data，选择 CUSTOM 和 instruction | 原 UID 重跑；另建附件可保留原报告 |
+| 换检索范围分析 | 创建或 retry 在 input_data 中传完整 condition | 仅影响当前附件，来源和其他附件不变 |
 | 改报告标题 | `PATCH /attachments/{uid}/` 提交 title，成功后更新卡片/列表 | 原附件不变 |
 | 编辑已完成正文 | PATCH 提交完整 `output_data: {"markdown": "编辑后的完整正文", "content_format": "HTML"}`；Markdown 编辑用 MARKDOWN | 不重新分析；保存成功后更新当前正文及格式 |
 | 下载报告 | SUCCESS 时从 export_formats 选格式 → `GET /attachments/{uid}/export/?export_format=PDF`（或 MARKDOWN） | 直接文件响应，无需查询导出任务 |
+
+列表返回有效 input_data，可用于回填；retry 省略 input_data 原样重试，传入则按创建完整校验并整体替换。省略 condition 使用当前成功来源条件；保留独立范围须完整提交 condition。DEFAULT 删除 instruction；新输入校验失败保留旧报告。详见[统计联调：修改输入后重试](frontend_statistics.md#修改输入后重试)。
 
 重试排队时可能暂时看到旧 execution_id。不要恢复旧过程或把旧的结束事件当作重试完成，按公共指南等待新的执行标识。
 

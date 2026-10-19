@@ -11,6 +11,7 @@ from services.web.ai_assistant.serializers.attachment import (
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
     AttachmentResponseSerializer,
+    AttachmentRetryRequestSerializer,
     AttachmentUpdateRequestSerializer,
 )
 from services.web.ai_assistant.services.attachment import AttachmentService
@@ -33,7 +34,6 @@ class CreateAttachment(AIAssistantResource):
           "raw_name": "username",
           "keys": []
         },
-        "top_n": 10,
         "interval": "AUTO"
       }
     }
@@ -51,7 +51,6 @@ class CreateAttachment(AIAssistantResource):
             "duration"
           ]
         },
-        "top_n": 20,
         "interval": "HOUR"
       }
     }
@@ -64,8 +63,9 @@ class CreateAttachment(AIAssistantResource):
     例如 event_data 不是支持的根字段：创建时返回 HTTP400、code=2908017，且不创建附件。
     errors.field_name=input_data，errors.errors 的 loc=["field","raw_name"] 与 msg 给出字段位置和原因。
     无需提交统计类型，后端按全范围真实类型决定是否返回数值摘要；field_type 不能强制转换。
-    top_n 默认 10，OTHER/MISSING 不占名额；显式时间粒度超预算报错，AUTO 可自动选择。
-    查询范围固定为来源消息的完整条件，不能在 input_data 中覆盖 condition、用户或租户。
+    返回全部类别与实际MISSING，不合并OTHER；支持MINUTE/HOUR/DAY/MONTH，AUTO按完整范围从月到分钟选首个至少12桶的粒度。
+    时间轴完整、无日志桶补0；超技术预算明确失败，不静默截断或加粗。
+    可选传完整condition覆盖当前附件范围；省略使用当前成功来源，保存有效condition供回填。不能覆盖执行用户或租户。
 
     ### Case 3：AI 自定义统计
 
@@ -93,7 +93,7 @@ class CreateAttachment(AIAssistantResource):
 
     | HTTP / code | 含义 | 前端动作 |
     | --- | --- | --- |
-    | 400 / 2908017 | input_data 无效，包括 top_n 越界或配置收紧 | 修正参数后重新创建 |
+    | 400 / 2908017 | input_data 无效，如字段/完整condition/粒度非法 | 修正参数后创建或带完整输入重试 |
     | 400 / 2908018 | 来源无效或不是成功 LOG_SEARCH | 重新检索并选择成功卡片 |
     | 400 / 2926008 | 不支持统计该字段类型 | 换字段或展开 JSON 子字段 |
 
@@ -126,7 +126,7 @@ class ListAttachments(AIAssistantResource):
 
     类型和状态支持单值、逗号分隔或重复参数；仅查看成功结果时追加 status=SUCCESS，
     需要恢复生成中任务时不要固定成功状态。默认返回全部匹配项，limit 可限制数量。
-    列表包含来源消息与会话摘要，不包含 input_data/output_data；点击某项后用 uid 查询附件详情。
+    列表包含来源消息、会话摘要及类型化input_data，不包含output_data；可用input_data回填，产物按uid查询详情。
     同一来源可能有多份附件，按附件 UID 区分，不能只按来源消息覆盖结果。
     指定 source_message_uid 或 conversation_uid 时无需传 scope，后端按本人资源实际归属鉴权。
     兼容调用方重复提交 scope，但不能用它覆盖资源归属；两个 UID 同时传入时取交集。
@@ -166,7 +166,8 @@ class GetAttachment(AIAssistantResource):
     ### Case 2：按附件类型读取成功产物
 
     - FIELD_STATISTICS：output_data 含 overview、distribution、time_series、numeric_summary 等。
-      用 group_id 关联分布与时序，counts 与 bucket_starts 一一对应；OTHER/MISSING 按 kind 判断。
+      用 group_id 关联全部分布与时序，counts 与完整 bucket_starts 一一对应；缺失按 kind=MISSING 判断。
+      VALUE 可用 value_label 与原始 value 组合名称，未知名称为 null；不存在 TopN/OTHER 合并。
       比例是 0–1 小数，无数据时可为 null；空结果是成功空态。数值摘要的 median 为近似值。
     - AI_STATISTICS：output_data 为 {"content":"最终消息原文"}，图表协议由前端与 Agent 约定。
       解析失败可展示原文，不代表附件执行失败。
@@ -260,23 +261,27 @@ class RetryAttachment(AIAssistantResource):
 
     `POST /api/v1/ai_assistant/attachments/{attachment_uid}/retry/`，无需业务请求体。
     FIELD_STATISTICS 和 AI_STATISTICS 都支持人工重试或重新生成，没有 supports_retry 开关；
-    PROCESSING、同步类型或缺少有效 task_id 不能重试，执行仍需通过权限和来源有效性校验。
+    PROCESSING、同步类型或缺少有效 task_id 不能重试，执行仍按实际查询重新鉴权；带新输入的重试还须满足创建时来源要求。
 
     返回附件对象后按 status 处理。仅轮询时继续查询同一 UID，无需读取执行标识。
     使用 SSE 时先关闭旧流，等待新的 execution_id 后恢复；排队期间旧快照不代表新执行。
-    修改输入要求属于创建新附件，不通过本接口完成。
+    可选传input_data完整对象：与创建共用校验和prepare，整体替换输入及context。省略condition使用当前成功来源条件，保留原独立范围须完整提交condition。
+    不传input_data直接复用已有快照，不重新验证来源业务状态或刷新指令。修改条件仅影响此附件。
+    示例：{"input_data":{"field":{"raw_name":"result_code"},"interval":"MONTH"}}；未列出的输入字段不会从旧输入合并。
+    input_data=null/数组/字符串、condition局部或null、必填缺失返回4xx，旧输入/结果保持不变。
     HTTP 400 / 2908023 表示当前状态不允许重试（如已经 PROCESSING）；重新读取详情，不重复提交。
     HTTP 404 / 2908019 表示当前用户无法取得该附件；停止重试并刷新列表。
 
     """
 
     name = gettext_lazy("重试附件")
-    RequestSerializer = AttachmentDetailRequestSerializer
+    RequestSerializer = AttachmentRetryRequestSerializer
     ResponseSerializer = AttachmentResponseSerializer
 
     def perform_request(self, validated_request_data):
         attachment = AttachmentService(user=get_request_username()).retry(
             attachment_uid=str(validated_request_data["attachment_uid"]),
+            **({"input_data": validated_request_data["input_data"]} if "input_data" in validated_request_data else {}),
         )
         attachment.refresh_from_db()
         return attachment

@@ -3,14 +3,17 @@
 预检只供规划使用，最终语句重新计算排名、质量及完整性计数。
 所有 UNION 值显式走 STRING 通道，防止传输层提前解析数值类别。
 """
+from dataclasses import dataclass
 from datetime import datetime
 
 from services.web.query.ai_assistant.exceptions import UnsupportedAggregation
 from services.web.query.ai_assistant.log_tools.schemas import (
     AGGREGATION_STANDARD_FIELD_TYPES,
+    AgentSearchCondition,
     AggregateLogsRequest,
     AggregationDimension,
     AggregationDimensionType,
+    AggregationMetric,
     AggregationMetricType,
     AggregationValueType,
     LogFieldRef,
@@ -31,13 +34,31 @@ LONG_LITERAL_REGEXP = r"^-?[0-9]{1,18}$"
 DOUBLE_LITERAL_REGEXP = r"^-?(?:[0-9]{1,15}(?:[.][0-9]{1,15})?|[.][0-9]{1,15})$"
 
 
+@dataclass(frozen=True)
+class StatisticsQuery:
+    """程序统计的内部查询；None 表示全类别，不开放给 MCP 请求。"""
+
+    condition: AgentSearchCondition
+    dimensions: tuple[AggregationDimension, ...]
+    metrics: tuple[AggregationMetric, ...]
+    top_n: None = None
+    order_by: tuple = ()
+
+
 class StatisticsSQLBuilder(BaseDorisSQLBuilder):
     """只使用已鉴权条件和复验 DTO；内部字段/指标序号不使用调用方标识符。"""
 
     def __init__(self, *, context, request, summary_field=None):
         """复验请求与内部摘要字段，统一去重后交执行层授权。"""
         self.context = context
-        self.request = AggregateLogsRequest.model_validate(request.model_dump())
+        if isinstance(request, StatisticsQuery):
+            self.request = StatisticsQuery(
+                condition=AgentSearchCondition.model_validate(request.condition.model_dump()),
+                dimensions=tuple(AggregationDimension.model_validate(d.model_dump()) for d in request.dimensions),
+                metrics=tuple(AggregationMetric.model_validate(m.model_dump()) for m in request.metrics),
+            )
+        else:
+            self.request = AggregateLogsRequest.model_validate(request.model_dump())
         self.summary_field = None if summary_field is None else LogFieldRef.model_validate(summary_field.model_dump())
         if self.summary_field is not None:
             AggregationDimension(id="summary", type="FIELD", field=self.summary_field)
@@ -213,11 +234,24 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         join = " AND ".join(
             f"n.d{i}_{part} = s.d{i}_{part}" for i in range(len(self.dimensions)) for part in ("type", "key")
         )
+        if top_n is None:
+            return [
+                f"ranked AS (SELECT *, ROW_NUMBER() OVER (ORDER BY {self._ordering()}) "
+                "AS group_key FROM category_counts)",
+                "selected AS (SELECT * FROM ranked)",
+                "category_totals AS (SELECT COUNT(*) + 1 AS missing_key FROM ranked)",
+                f"mapped AS (SELECT n.*, CASE WHEN {missing} THEN t.missing_key ELSE s.group_key END AS group_key, "
+                f"CASE WHEN {missing} THEN 'MISSING' ELSE 'VALUE' END AS group_kind "
+                f"FROM normalized n CROSS JOIN category_totals t LEFT JOIN selected s ON {join})",
+                f"aggregated AS (SELECT group_key, group_kind, COUNT(*) AS log_count, {metrics} "
+                "FROM mapped GROUP BY group_key, group_kind)",
+            ]
         group_key = (
             f"CASE WHEN {missing} THEN {top_n + 2} WHEN s.group_key IS NULL THEN {top_n + 1} ELSE s.group_key END"
         )
         return [
-            f"ranked AS (SELECT *, ROW_NUMBER() OVER (ORDER BY {self._ordering()}) AS group_key FROM category_counts)",
+            f"ranked AS (SELECT *, ROW_NUMBER() OVER (ORDER BY {self._ordering()}) "
+            "AS group_key FROM category_counts)",
             f"selected AS (SELECT * FROM ranked WHERE group_key <= {top_n})",
             f"mapped AS (SELECT n.*, {group_key} AS group_key FROM normalized n LEFT JOIN selected s ON {join})",
             f"aggregated AS (SELECT group_key, CASE WHEN group_key = {top_n + 2} THEN 'MISSING' "
@@ -243,7 +277,7 @@ class StatisticsSQLBuilder(BaseDorisSQLBuilder):
         )
 
     def build_complete_sql(self, effective_interval=None):
-        """生成最终同快照帧；预算超限时只留 META 供受控失败或 AUTO 重查。"""
+        """生成最终同快照帧；预算超限时只留 META 供受控失败。"""
         time_dimensions = [d for d in self.request.dimensions if d.type == AggregationDimensionType.TIME_BUCKET]
         if time_dimensions and self.time_axis is None:
             effective_interval = effective_interval or time_dimensions[0].interval

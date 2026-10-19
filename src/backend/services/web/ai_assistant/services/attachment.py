@@ -5,12 +5,15 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import BinaryField, Case, F, Func, Value, When
+from django.db.models.lookups import Exact
 from django.utils import timezone
 
 from services.web.ai_assistant.constants import (
     ATTACHMENT_DEFAULT_ORDER_FIELDS,
     AttachmentErrorCode,
     AttachmentExportFormat,
+    AttachmentType,
     ExecutionMode,
     ExecutionStatus,
     FeedbackSourceType,
@@ -59,29 +62,12 @@ class AttachmentService:
         attachment_type: str,
         input_data: Mapping[str, Any],
     ) -> Attachment:
-        """按固定顺序准备附件；prepare 只在首次创建时执行。"""
+        """按固定顺序准备附件；prepare 与修改输入后重试共用。"""
 
         source_message = self._get_visible_success_source_message(source_message_uid=source_message_uid)
         handler = attachment_handler_registry.require(attachment_type)
-        parsed_input = parse_snapshot(
-            handler.input_model,
-            input_data,
-            field_name="input_data",
-            error_type=AttachmentSnapshotValidationError,
-        )
-
-        # prepare 可能访问外部上下文，必须放在事务外，避免把长耗时逻辑带进写事务。
-        preparation = handler.prepare(
-            user=self.user,
-            source_message=source_message,
-            input_data=parsed_input,
-        )
-        title = self._normalize_title(preparation.title)
-        parsed_context = parse_snapshot(
-            handler.context_model,
-            preparation.context_data,
-            field_name="context_data",
-            error_type=AttachmentSnapshotValidationError,
+        parsed_input, parsed_context, title = self._prepare(
+            handler=handler, source_message=source_message, input_data=input_data
         )
 
         if handler.execution_mode == ExecutionMode.ASYNC:
@@ -128,6 +114,27 @@ class AttachmentService:
                 created_by=self.user,
                 updated_by=self.user,
             )
+
+    def _prepare(self, *, handler, source_message, input_data):
+        """创建和修改输入共用完整准备；外部上下文工作全部发生在写事务外。"""
+        parsed_input = parse_snapshot(
+            handler.input_model, input_data, field_name="input_data", error_type=AttachmentSnapshotValidationError
+        )
+        preparation = handler.prepare(user=self.user, source_message=source_message, input_data=parsed_input)
+        if preparation.input_data is not None:
+            parsed_input = parse_snapshot(
+                handler.input_model,
+                preparation.input_data,
+                field_name="input_data",
+                error_type=AttachmentSnapshotValidationError,
+            )
+        parsed_context = parse_snapshot(
+            handler.context_model,
+            preparation.context_data,
+            field_name="context_data",
+            error_type=AttachmentSnapshotValidationError,
+        )
+        return parsed_input, parsed_context, self._normalize_title(preparation.title)
 
     def get(self, *, attachment_uid: str) -> Attachment:
         """返回当前用户可见会话中的一个附件详情。"""
@@ -296,6 +303,7 @@ class AttachmentService:
                 "created_at",
                 "error_code",
                 "error_message",
+                "input_data",
             )
             .order_by(*(order_fields or ATTACHMENT_DEFAULT_ORDER_FIELDS), "-id")
         )
@@ -365,7 +373,7 @@ class AttachmentService:
         attachment.save(update_record=False, update_fields=list(updates))
         return attachment
 
-    def retry(self, *, attachment_uid: str) -> Attachment:
+    def retry(self, *, attachment_uid: str, input_data: Mapping[str, Any] | None = None) -> Attachment:
         """终态 SUCCESS/FAILED 的异步附件允许覆盖式重试，用旧 task_id 做 CAS 抢占。"""
 
         attachment = self.get(attachment_uid=attachment_uid)
@@ -378,6 +386,31 @@ class AttachmentService:
         ):
             raise InvalidAttachmentState()
 
+        input_updates = {}
+        if input_data is not None:
+            source_message = self._get_visible_success_source_message(
+                source_message_uid=str(attachment.source_message.uid)
+            )
+            parsed_input, parsed_context, default_title = self._prepare(
+                handler=handler, source_message=source_message, input_data=input_data
+            )
+            input_updates.update(
+                input_data=parsed_input.model_dump(mode="json"), context_data=parsed_context.model_dump(mode="json")
+            )
+            # CAS 按字节比较当前标题，避开 MySQL 默认不区分大小写的排序规则，保留并发自定义标题。
+            if attachment.attachment_type == AttachmentType.FIELD_STATISTICS:
+                old_field = attachment.context_data.get("field", {})
+                input_updates["title"] = Case(
+                    When(
+                        Exact(
+                            Func("title", template="CAST(%(expressions)s AS BINARY)", output_field=BinaryField()),
+                            Value(f"{old_field.get('display_name')}统计"),
+                        ),
+                        then=Value(default_title),
+                    ),
+                    default=F("title"),
+                )
+
         expected_status = attachment.status
         old_task_id = attachment.task_id
         new_task_id = str(uuid4())
@@ -387,7 +420,7 @@ class AttachmentService:
         if not attachment.is_stream:
             stream_updates["stream_config"] = {}
         with transaction.atomic():
-            # 重试复用创建时快照；这里只锁定会话，避免来源消息后续编辑使历史附件永久失效。
+            # 已完成所需输入准备；这里只锁定会话，不让普通重试依赖可变的来源业务状态。
             self._lock_active_conversation(source_message=attachment.source_message)
             updated = Attachment.restart_terminal(
                 instance_id=attachment.id,
@@ -396,6 +429,7 @@ class AttachmentService:
                 new_task_id=new_task_id,
                 extra_updates={
                     **stream_updates,
+                    **input_updates,
                     "content_updated_at": now,
                     "updated_by": self.user,
                     "updated_at": now,
