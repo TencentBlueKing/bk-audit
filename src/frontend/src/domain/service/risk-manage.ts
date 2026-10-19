@@ -285,10 +285,9 @@ export default {
    */
   bulkAutoProcessRisk(params: {
     risk_ids: string[],
-    pa_id: string,
+    pa_id: number,
     pa_params: Record<string, any>,
     auto_close_risk: boolean,
-    description: string,
   }) {
     return RiskManageSource.bulkAutoProcessRisk(params)
       .then(({ data }) => data);

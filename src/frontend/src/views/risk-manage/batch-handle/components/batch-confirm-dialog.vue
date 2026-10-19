@@ -5,7 +5,7 @@
     :quick-close="false"
     :title="t('批量确认风险单')"
     width="720"
-    @closed="resetForm">
+    @closed="handleClosed">
     <div
       class="batch-confirm-wrap"
       data-testid="batch-confirm-dialog">
@@ -90,7 +90,7 @@
       <bk-button
         class="ml8"
         :disabled="isSubmitting"
-        @click="isShow = false">
+        @click="handleCancel">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -132,6 +132,7 @@
   const editorKey = ref(0);
   const formRef = ref();
   const failures = ref<Array<{ risk_id: string; reason: string }>>([]);
+  const hasProcessed = ref(false);
   const formData = ref({
     confirm_result: 'confirm',
     description: '',
@@ -167,8 +168,22 @@
       description: '',
     };
     failures.value = [];
+    hasProcessed.value = false;
     editorKey.value += 1;
     formRef.value?.clearValidate?.();
+  };
+
+  const handleClosed = () => {
+    const shouldRefresh = hasProcessed.value;
+    resetForm();
+    if (shouldRefresh) {
+      emit('success');
+    }
+  };
+
+  const handleCancel = () => {
+    isShow.value = false;
+    handleClosed();
   };
 
   const open = () => {
@@ -195,6 +210,7 @@
       });
       if (receipt.failed.length) {
         failures.value = receipt.failed;
+        hasProcessed.value = hasProcessed.value || receipt.success_count > 0;
         return;
       }
       messageSuccess(t('操作成功'));
