@@ -218,7 +218,7 @@ class TestBatchActionRules(BaseTestCase):
         self.assertTrue(resp["batch_enabled"])
         self.assertTrue(resp["actions"]["close"]["enabled"])
         self.assertFalse(resp["actions"]["auto_process"]["enabled"])
-        self.assertEqual(resp["actions"]["auto_process"]["disabled_reason"], "所选风险策略不同，不支持批量处理套餐")
+        self.assertEqual(resp["actions"]["auto_process"]["disabled_reason"], "所选风险策略不同/场景不同，不支持批量处理套餐")
         self.assertEqual(resp["actions"]["confirm"]["disabled_reason"], "所选风险包含待处理，不支持风险确认")
         self.assertEqual(resp["batch_disabled_reason"], "")
         self.assertIsNone(resp["unique_strategy_id"])
@@ -244,7 +244,7 @@ class TestBatchActionRules(BaseTestCase):
         self.assertEqual(resp["batch_disabled_reason"], "")
         self.assertEqual(
             resp["actions"]["auto_process"]["disabled_reason"],
-            "所选风险策略不同，不支持批量处理套餐；所选风险场景不同，不支持批量处理套餐",
+            "所选风险策略不同/场景不同，不支持批量处理套餐",
         )
 
     def test_blocking_statuses_are_joined(self):
@@ -404,6 +404,6 @@ class TestBulkAutoProcessGuard(BaseTestCase):
         )
         self.assertEqual(
             resp["failed"][0]["reason"],
-            "所选风险策略不同，不支持批量处理套餐；所选风险场景不同，不支持批量处理套餐",
+            "所选风险策略不同/场景不同，不支持批量处理套餐",
         )
         mock_perform.assert_not_called()

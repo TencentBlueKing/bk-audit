@@ -2000,8 +2000,7 @@ class ConfirmAsMisReportResource(RiskMeta):
 # 批量处理：选单 / 执行管道 / 可执行动作与预览
 # ---------------------------------------------------------------------------
 
-BATCH_REASON_STRATEGY = "所选风险策略不同，不支持批量处理套餐"
-BATCH_REASON_SCENE = "所选风险场景不同，不支持批量处理套餐"
+BATCH_REASON_STRATEGY_SCENE = "所选风险策略不同/场景不同，不支持批量处理套餐"
 BATCH_REASON_MISSING = "部分风险不存在或已被删除"
 BATCH_REASON_UNAVAILABLE = "所选风险无法批量处理"
 
@@ -2271,10 +2270,8 @@ def _auto_process_extra_reasons(risks: Sequence[Risk], strategy_unique: bool, sc
     reasons: List[str] = []
     if len(risks) > BULK_AUTO_PROCESS_MAX_RISK_IDS:
         reasons.append(str(BulkSelectionOverLimit.MESSAGE))
-    if not strategy_unique:
-        reasons.append(gettext(BATCH_REASON_STRATEGY))
-    if not scene_unique:
-        reasons.append(gettext(BATCH_REASON_SCENE))
+    if not strategy_unique or not scene_unique:
+        reasons.append(gettext(BATCH_REASON_STRATEGY_SCENE))
     return reasons
 
 
