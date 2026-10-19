@@ -25,7 +25,7 @@ export default class Application {
   sops_template_id: number;
   rule_count: number;
   need_approve: boolean | string;
-  approve_service_id: number;// 审批服务id
+  approve_service_id: string;// 审批服务id（V4 为流程标识 workflow_key 字符串）
 
   approve_config: Record<string, any>;
   description: string;
