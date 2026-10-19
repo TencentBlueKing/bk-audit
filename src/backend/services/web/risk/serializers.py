@@ -1141,7 +1141,7 @@ class BulkRiskSelectionSerializer(serializers.Serializer):
 
     risk_id_limit = None
 
-    risk_ids = serializers.ListField(
+    risk_ids = FlexibleListField(
         label=gettext_lazy("Risk IDs"),
         child=serializers.CharField(),
         required=False,
