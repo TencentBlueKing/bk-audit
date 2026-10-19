@@ -58,7 +58,7 @@ flowchart TD
     Metrics --> Result[校验类型、计数与预算<br/>组织程序统计或 MCP 响应]
 ```
 
-TopN在完整范围选定，所有时间桶复用同一组类别。OTHER的AVG、DISTINCT_COUNT和近似分位数必须在映射后的原始记录上重算，不能合并已有摘要。缺失不占TopN名额。
+MCP TopN在完整范围选定，所有时间桶复用同一组类别；程序全量模式复用相同排名和原记录归组，保留所有真实类别，不构造OTHER。OTHER的AVG、DISTINCT_COUNT和近似分位数必须在映射后的原始记录上重算，不能合并已有摘要。缺失不占TopN名额。
 
 例如完整范围有 GET 3 条、POST 2 条、PUT 1 条、DELETE 1 条、缺失 1 条，Top2 选中 GET 和 POST。两小时结果如下，时间桶沿用全范围图例：
 
@@ -92,11 +92,11 @@ SQL 必须同时通过 BKBase 前置解析和 Doris 执行，维护时保留以�
 
 ## 5. 时间与结果组织
 
-默认Top10，OTHER/MISSING额外返回。时间轴按可信时区规划，首尾桶只计原始查询范围；AUTO可按预算加粗并完整重查，显式粒度超限报错。预算限制类别/桶/单元与响应字节，部署配置可收紧。
+MCP默认Top10，OTHER/MISSING额外返回；程序统计返回全部类别，只保留实际MISSING。时间轴支持分钟/小时/天/自然月，按可信时区划分，首尾桶只计原始闭区间范围。二者的AUTO统一从月到分钟选择首个实际桶数达到阈值的粒度，默认12桶，可通过 `BKAPP_AI_LOG_STATISTICS_AUTO_MIN_BUCKETS` 配置；均不足时用分钟，再独立检查容量。预算限制类别/桶/单元与响应字节，部署配置可收紧。
 
 输入时间、SQL分区及桶轴共用 `time_range.parse_log_time`：无时区字符串按服务端默认时区解释，显式偏移保留真实时刻后再规范化给 Collector。分钟/小时沿 UTC 时间线推进，日桶按本地日历推进，避免偏移或夏令时造成重复解释。结果用返回的 timezone 展示。
 
-数值单元预算按“组数 × 桶数 × 预算列数”估算：程序统计每桶只有计数列，按1列计算；MCP按指标数加2列计算，包含辅助计数与比例。字节预算仍单独检查，减少 TopN 或加粗时间粒度不能保证任意长文本结果不超限。AUTO 降级会重跑完整查询，显式粒度不会静默改变；具体容量配置见 `statistics_budget.py` 和 `services/web/settings.py`，不把保护上限当作压测承诺。
+数值单元预算按“组数 × 桶数 × 预算列数”估算：程序统计每桶只有计数列，按1列计算；MCP按指标数加2列计算，包含辅助计数与比例。字节预算仍单独检查，减少 TopN 或加粗时间粒度不能保证任意长文本结果不超限。AUTO 与显式粒度超限均明确报错，不静默改粒度重查；具体容量配置见 `statistics_budget.py` 和 `services/web/settings.py`，不把保护上限当作压测承诺。
 
 | 消费者 | 输出与语义 |
 | --- | --- |
@@ -106,5 +106,7 @@ SQL 必须同时通过 BKBase 前置解析和 Doris 执行，维护时保留以�
 程序统计补齐空桶，计数为0；无有效数值的指标为null。比例、数值摘要及聚合浮点指标统一输出四位小数，整数计数与类别原值不舍入。小比例舍入为0时是否有日志以计数为准。
 
 ## 6. 变更与验证
+
+类别名称由statistics_labels.py复用FieldMapHandler，程序groups和MCP groups.values附value_label，动态子路径不套根枚举，名称不参与身份或SQL。程序全量与MCP TopN使用同一最终META/GROUP/ROW/SUMMARY快照。
 
 新增字段/指标需同时核对协议、权限、类型、OTHER重算、预算和结果解析；新消费者复用内核，不引入ECharts协议。测试位于 `tests/test_query/test_ai_assistant/`；程序附件测试位于 `tests/test_ai_assistant/`。SQL构造单测不替代实际BKBase查询验证；字段统计、MCP聚合、明细和导出需在同一范围对照独立SQL，导出还需解析实际文件。受控只读CTE可补充不存在的特殊键样本，但不代表部署Worker已处理真实非空业务数据。

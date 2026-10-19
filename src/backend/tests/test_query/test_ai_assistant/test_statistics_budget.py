@@ -37,9 +37,10 @@ class TestStatisticsBudget(SimpleTestCase):
                     ("2026-09-15T10:00:00+08:00", "2026-09-15T11:00:00+08:00"),
                 )
 
-    def test_auto_uses_actual_groups_and_all_numeric_columns(self):
+    def test_auto_checks_actual_groups_and_numeric_columns_without_coarsening(self):
         self.assertEqual(self.axis(interval="AUTO", group_count=500, numeric_columns=3).effective_interval, "MINUTE")
-        self.assertEqual(self.axis(interval="AUTO", group_count=500, numeric_columns=4).effective_interval, "HOUR")
+        with self.assertRaises(StatisticsBudgetExceeded):
+            self.axis(interval="AUTO", group_count=500, numeric_columns=4)
         self.assertEqual(self.axis(interval="AUTO", group_count=500, numeric_columns=1).effective_interval, "MINUTE")
 
     @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=12)
@@ -91,3 +92,46 @@ class TestStatisticsBudget(SimpleTestCase):
         self.assertEqual(
             axis.bucket_starts, ("2026-10-31T00:00:00-04:00", "2026-11-01T00:00:00-04:00", "2026-11-02T00:00:00-05:00")
         )
+
+    def test_program_auto_chooses_readable_granularity_from_full_range(self):
+        cases = (
+            ("2025-01-01", "2026-01-01", "MONTH", 13),
+            ("2026-01-01", "2026-02-01", "DAY", 32),
+            ("2026-01-01", "2026-01-02", "HOUR", 25),
+            ("2026-01-01T00:00:00", "2026-01-01T01:00:00", "MINUTE", 61),
+            ("2026-01-01T00:00:00", "2026-01-01T00:05:00", "MINUTE", 6),
+        )
+        for start, end, interval, count in cases:
+            with self.subTest(start=start, end=end):
+                axis = self.axis(start_time=start, end_time=end, interval="AUTO", minimum_buckets=12)
+                self.assertEqual((axis.effective_interval, len(axis.bucket_starts)), (interval, count))
+
+    def test_program_auto_threshold_uses_actual_closed_calendar_buckets(self):
+        for end, expected in (("2026-11-30", "DAY"), ("2026-12-01", "MONTH"), ("2027-01-01", "MONTH")):
+            with self.subTest(end=end):
+                self.assertEqual(
+                    self.axis(
+                        start_time="2026-01-01", end_time=end, interval="AUTO", minimum_buckets=12
+                    ).effective_interval,
+                    expected,
+                )
+
+    def test_month_uses_calendar_boundaries_across_leap_february(self):
+        axis = self.axis(start_time="2024-01-31T12:30:00+08:00", end_time="2024-03-01T00:00:00+08:00", interval="MONTH")
+        self.assertEqual(
+            axis.bucket_starts,
+            (
+                "2024-01-01T00:00:00+08:00",
+                "2024-02-01T00:00:00+08:00",
+                "2024-03-01T00:00:00+08:00",
+            ),
+        )
+
+    @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=24)
+    def test_program_auto_does_not_hide_capacity_error_by_coarsening(self):
+        with self.assertRaises(StatisticsBudgetExceeded):
+            self.axis(start_time="2026-01-01", end_time="2026-01-02", interval="AUTO", minimum_buckets=12)
+
+    def test_empty_groups_still_cannot_build_unbounded_axis(self):
+        with self.assertRaises(StatisticsBudgetExceeded):
+            self.axis(start_time="2024-01-01", end_time="2026-01-01", interval="HOUR", group_count=0)

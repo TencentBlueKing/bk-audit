@@ -1,6 +1,6 @@
 """统计附件的持久化协议。
 
-程序统计只接收字段与预算；查询范围和显示信息由成功检索来源重建。
+程序统计接收字段、粒度与可选完整范围；默认范围来自成功检索来源。
 程序输出复用查询领域固定包，AI 输出保存原文，不在附件层引入图表结构。
 """
 
@@ -8,28 +8,28 @@ import json
 from typing import Annotated
 
 from django.conf import settings
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 from rest_framework import serializers
 
+from services.web.ai_assistant.schemas.log_attachment import LogAttachmentInput
 from services.web.ai_assistant.schemas.message import MessageSchema
 from services.web.query.ai_assistant.log_tools.field_statistics_schemas import (
     FieldDistribution,
     FieldNumericSummary,
     FieldStatisticsOverview,
+    FieldStatisticsQuerySummary,
     FieldStatisticsResult,
     FieldTimeSeries,
     StatisticsField,
 )
 from services.web.query.ai_assistant.log_tools.schemas import (
-    AGGREGATION_MAX_TOP_N,
     AgentSearchCondition,
-    AggregationQuerySummary,
     AggregationTimeInterval,
     LogFieldRef,
 )
 
 
-class FieldStatisticsAttachmentInput(MessageSchema):
+class FieldStatisticsAttachmentInput(LogAttachmentInput):
     """目录字段或用户自定义路径与统计参数；无需先调用字段探索，类型由全范围判定。"""
 
     field: Annotated[LogFieldRef, serializers.DictField()] = Field(
@@ -40,41 +40,19 @@ class FieldStatisticsAttachmentInput(MessageSchema):
             'field_type 可省略，实际类型由服务端确定。'
         )
     )
-    top_n: int = Field(
-        default=10,
-        strict=True,
-        ge=1,
-        le=AGGREGATION_MAX_TOP_N,
-        description='非缺失类别上限，默认 10、协议最大 500，部署配置可收紧；OTHER/MISSING 不占名额。',
-    )
     interval: AggregationTimeInterval = Field(
-        default=AggregationTimeInterval.AUTO, description='时间桶粒度，默认 AUTO，由服务端按检索范围及预算选择。'
+        default=AggregationTimeInterval.AUTO,
+        description='时间桶粒度 MINUTE/HOUR/DAY/MONTH，默认 AUTO 按完整范围从月到分钟选首个达到桶数阈值的粒度（默认12，后端可配置）；容量独立检查。',
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def apply_default_top_n(cls, data):
-        """仅新输入缺省时读取共享配置；显式值及持久化快照保持不变。"""
-        if isinstance(data, dict) and "top_n" not in data:
-            return {**data, "top_n": settings.AI_LOG_AGGREGATION_DEFAULT_TOP_N}
-        return data
-
-    @model_validator(mode="after")
-    def validate_budget(self):
-        """创建时即拒绝超出部署预算的请求，不产生无效附件。"""
-        if not 1 <= self.top_n <= min(settings.AI_LOG_AGGREGATION_MAX_TOP_N, AGGREGATION_MAX_TOP_N):
-            raise ValueError("statistics top_n exceeds maximum")
-        return self
 
 
 class FieldStatisticsAttachmentContext(MessageSchema):
     """服务端固化的可重放查询上下文，不存预览样例和客户端类型声明。"""
 
     search_condition: Annotated[AgentSearchCondition, serializers.DictField()] = Field(
-        description='来源成功检索的条件快照；程序统计严格复用该范围。'
+        description='当前附件有效的独立条件快照；执行时重新鉴权。'
     )
     field: Annotated[StatisticsField, serializers.DictField()] = Field(description='服务端解析并固化的字段标识和展示名。')
-    top_n: int = Field(ge=1, le=AGGREGATION_MAX_TOP_N, description='创建时确认的非缺失类别上限；执行时仍校验运行预算。')
     interval: AggregationTimeInterval = Field(description='创建时固化的请求时间粒度，允许 AUTO。')
     username: str = Field(min_length=1, description='服务端固化的执行用户；执行时仍按该用户重新鉴权，不接受客户端覆盖。')
     namespace: str = Field(min_length=1, description='服务端固化的租户命名空间。')
@@ -87,13 +65,13 @@ class FieldStatisticsAttachmentOutput(MessageSchema, FieldStatisticsResult):
     field: Annotated[StatisticsField, serializers.DictField()] = Field(description='服务端解析的字段标识与展示名。')
     overview: Annotated[FieldStatisticsOverview, serializers.DictField()] = Field(description='完整检索范围的存在性概览。')
     distribution: Annotated[FieldDistribution, serializers.DictField()] = Field(
-        description='全范围 TopN 类别及实际存在的 OTHER/MISSING。'
+        description='完整真实类别及实际 MISSING，不合并 OTHER。'
     )
     time_series: Annotated[FieldTimeSeries, serializers.DictField()] = Field(description='与分布共享类别的完整时间序列，空桶计数为 0。')
     numeric_summary: Annotated[FieldNumericSummary | None, serializers.DictField(allow_null=True)] = Field(
         description='NUMERIC 包的全范围原生数值摘要；CATEGORICAL 为 null。'
     )
-    query_summary: Annotated[AggregationQuerySummary, serializers.DictField()] = Field(
+    query_summary: Annotated[FieldStatisticsQuerySummary, serializers.DictField()] = Field(
         description='实际执行范围、时间和预算信息，不代表分页。'
     )
 
@@ -106,7 +84,7 @@ class FieldStatisticsAttachmentOutput(MessageSchema, FieldStatisticsResult):
         return value
 
 
-class AIStatisticsAttachmentInput(MessageSchema):
+class AIStatisticsAttachmentInput(LogAttachmentInput):
     """用户统计指令；来源和身份只能由后端填充。"""
 
     instruction: str = Field(
@@ -137,9 +115,11 @@ class AIStatisticsAttachmentContext(MessageSchema):
     system_prompt: str = Field(min_length=1, description='服务端固化的统计 Agent 角色、能力与工作原则。')
     instruction: str = Field(min_length=1, description='创建时固化的用户统计需求原文。')
     initial_search_condition: Annotated[AgentSearchCondition, serializers.DictField()] = Field(
-        description='来源检索的初始上下文；Agent 可按需求调整范围，工具每次调用仍独立鉴权。'
+        description='当前附件有效的初始查询条件；Agent 可按需求调整范围，工具每次调用仍独立鉴权。'
     )
-    query_summary: AIStatisticsQuerySummary = Field(description='来源检索的轻量概览，不含日志样本。')
+    query_summary: AIStatisticsQuerySummary | None = Field(
+        default=None, description="条件与来源一致时的历史概览；覆盖条件不一致时为 null，不冒用来源计数。"
+    )
     username: str = Field(min_length=1, description='服务端固化的执行用户；执行时仍按该用户重新鉴权，不接受客户端覆盖。')
     namespace: str = Field(min_length=1, description='服务端固化的租户命名空间。')
     timezone: str = Field(min_length=1, description='服务端固化的用户时区，用于解释时间条件与划分时间桶。')

@@ -323,7 +323,9 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         aggregate = self.schema["paths"]["/api/v1/query/namespaces/{namespace}/mcp_user/logs/aggregate/"]["post"]
         aggregate_payload = self._response_payload(aggregate)
         column = self._component(aggregate_payload["properties"]["columns"]["items"])
-        self.assertEqual(self._resolve_enum(column["properties"]["effective_time_interval"]), {"MINUTE", "HOUR", "DAY"})
+        self.assertEqual(
+            self._resolve_enum(column["properties"]["effective_time_interval"]), {"MINUTE", "HOUR", "DAY", "MONTH"}
+        )
         self.assertTrue({"boolean", "number", "scalar"}.issubset(self._resolve_enum(column["properties"]["data_type"])))
         self.assertEqual(
             set(aggregate_payload["required"]), {"columns", "rows", "groups", "query_summary", "data_quality"}
@@ -342,7 +344,12 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
         validator = jsonschema.Draft7Validator(self._openapi_json_schema(typed_value))
         for value_type, value in (("boolean", True), ("integer", 1), ("number", 1.5), ("string", "")):
             self.assertEqual(
-                list(validator.iter_errors({"dimension_id": "category", "value_type": value_type, "value": value})), []
+                list(
+                    validator.iter_errors(
+                        {"dimension_id": "category", "value_type": value_type, "value": value, "value_label": None}
+                    )
+                ),
+                [],
             )
         for value in (None, [], {}):
             self.assertTrue(
@@ -432,12 +439,12 @@ class TestMCPUserLogOpenAPI(SimpleTestCase):
             ("string", {}),
         )
         for value_type, value in valid_pairs:
-            payload = {"dimension_id": "category", "value_type": value_type, "value": value}
+            payload = {"dimension_id": "category", "value_type": value_type, "value": value, "value_label": None}
             with self.subTest(payload=payload):
                 self.assertEqual(AggregationGroupValue.model_validate(payload).model_dump(mode="json"), payload)
                 self.assertEqual(list(validator.iter_errors(payload)), [])
         for value_type, value in invalid_pairs:
-            payload = {"dimension_id": "category", "value_type": value_type, "value": value}
+            payload = {"dimension_id": "category", "value_type": value_type, "value": value, "value_label": None}
             with self.subTest(payload=payload):
                 with self.assertRaises(PydanticValidationError):
                     AggregationGroupValue.model_validate(payload)

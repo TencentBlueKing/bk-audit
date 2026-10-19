@@ -114,7 +114,6 @@ def generate_field_statistics(self, execution: AttachmentExecution) -> FieldStat
     if (
         context.field.raw_name != execution.input_data.field.raw_name
         or list(context.field.keys) != execution.input_data.field.keys
-        or context.top_n != execution.input_data.top_n
         or context.interval != execution.input_data.interval
     ):
         raise InvalidAttachmentSource()
@@ -125,7 +124,6 @@ def generate_field_statistics(self, execution: AttachmentExecution) -> FieldStat
                 namespace=context.namespace,
                 condition=context.search_condition,
                 field=LogFieldRef(raw_name=context.field.raw_name, keys=list(context.field.keys)),
-                top_n=context.top_n,
                 interval=context.interval,
             )
         return FieldStatisticsAttachmentOutput.model_validate(result.model_dump(mode="python"))
@@ -151,7 +149,11 @@ def build_statistics_agent_input(context: AIStatisticsAttachmentContext) -> str:
             "instruction": context.instruction,
             "context": {
                 "initial_search_condition": context.initial_search_condition.model_dump(mode="json"),
-                "query_summary": context.query_summary.model_dump(mode="json"),
+                **(
+                    {"query_summary": context.query_summary.model_dump(mode="json")}
+                    if context.query_summary is not None
+                    else {}
+                ),
                 "user": {"username": context.username, "timezone": context.timezone, "language": context.language},
             },
         },

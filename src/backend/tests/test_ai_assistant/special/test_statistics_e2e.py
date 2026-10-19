@@ -137,12 +137,34 @@ def test_field_statistics_process_route_persists_complete_snapshot(statistics_st
     assert result.output_data["statistics_kind"] == "CATEGORICAL"
     assert result.output_data["numeric_summary"] is None
     assert result.output_data["distribution"] == {
-        "top_n": 1,
-        "has_other": True,
         "groups": [
-            {"group_id": "g1", "kind": "VALUE", "value_type": "string", "value": "GET", "count": 6, "ratio": 0.6},
-            {"group_id": "g2", "kind": "OTHER", "value_type": None, "value": None, "count": 3, "ratio": 0.3},
-            {"group_id": "g3", "kind": "MISSING", "value_type": None, "value": None, "count": 1, "ratio": 0.1},
+            {
+                "group_id": "g1",
+                "kind": "VALUE",
+                "value_type": "string",
+                "value": "GET",
+                "value_label": None,
+                "count": 6,
+                "ratio": 0.6,
+            },
+            {
+                "group_id": "g2",
+                "kind": "VALUE",
+                "value_type": "string",
+                "value": "POST",
+                "value_label": None,
+                "count": 3,
+                "ratio": 0.3,
+            },
+            {
+                "group_id": "g3",
+                "kind": "MISSING",
+                "value_type": None,
+                "value": None,
+                "value_label": None,
+                "count": 1,
+                "ratio": 0.1,
+            },
         ],
     }
     assert result.output_data["time_series"] == {

@@ -55,6 +55,7 @@ class AIAssistantScopePermissionTest(TestCase):
         self.attachment = Attachment.objects.create(
             source_message=self.message,
             attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"analysis_mode": "DEFAULT"},
             status=ExecutionStatus.SUCCESS,
             created_by="alice",
         )
@@ -373,6 +374,7 @@ class AIAssistantScopePermissionTest(TestCase):
         Attachment.objects.create(
             source_message=other_message,
             attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"analysis_mode": "DEFAULT"},
             status=ExecutionStatus.SUCCESS,
             created_by="alice",
         )

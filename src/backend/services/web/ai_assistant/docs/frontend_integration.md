@@ -418,7 +418,7 @@ Excel 导出保留分类行，字段标题使用单行“中文显示名(英文�
 
 - 会话入口：消息响应的 attachments 是摘要。点击摘要，使用附件 uid 请求 `GET /attachments/{attachment_uid}/`。
 - 报告入口：完整列表传具体/cross Scope；按 `conversation_uid` 或 `source_message_uid` 恢复局部附件时无需重复 Scope。可追加 attachment_type、status、keyword 等公开筛选；当前不分页。
-- 列表只返回摘要，没有完整 input_data/output_data，也不能仅靠列表决定是否订阅流。点击项仍需请求附件详情。
+- 列表返回摘要和类型化 input_data，不含 output_data，也不能仅靠列表决定是否订阅流。点击项仍需请求附件详情。
 - 列表项的 conversation 和 source_message 用于显示归属及返回原会话。打开产物本身只需附件 UID，无需先遍历消息历史。
 - 只看已完成报告时筛选 SUCCESS；若页面还展示生成中和失败项，不要全局固定该筛选。
 - 附件详情是共用入口：终态渲染结果；处理中按 is_stream 恢复。两个入口不能各自启动一条针对同一面板的重复订阅。
@@ -548,7 +548,7 @@ source.onerror = () => {
 4. 保存成功后使用最新响应更新同一附件；保存失败保留编辑草稿，不能显示“已保存”。
 5. 编辑不会重新生成，也不改变当时的流式过程。查看过程和查看当前正文允许不同。
 
-SUCCESS 或 FAILED 的异步附件可用 `POST /attachments/{attachment_uid}/retry/` 覆盖式重跑：保留原附件位置和 UID，立即清空旧产物、错误、过程归档和反馈；本期不保留产物版本，新执行失败不恢复旧成功产物。Message 重试仍仅允许 FAILED，不得把附件的成功态重生语义扩展到 Message。仅轮询的页面继续查询原附件详情；使用 SSE 的页面按上面的新执行恢复流程处理。修改输入要求并重新生成应创建新附件，不用 PATCH output_data 代替执行。
+SUCCESS 或 FAILED 的异步附件可用 `POST /attachments/{attachment_uid}/retry/` 覆盖式重跑：保留原附件位置和 UID，立即清空旧产物、错误、过程归档和反馈；本期不保留产物版本，新执行失败不恢复旧成功产物。Message 重试仍仅允许 FAILED，不得把附件的成功态重生语义扩展到 Message。仅轮询的页面继续查询原附件详情；使用 SSE 的页面按上面的新执行恢复流程处理。修改输入可在 retry 提交完整 input_data，按创建完整校验并整体替换；省略 input_data 直接复用原快照。需要保留旧结果时另建附件；不用 PATCH output_data 代替执行。
 
 编辑和反馈按实际落库顺序以后写为准，不与重新生成绑定同一执行轮次。重试时的清理只保证该次事务提交时的快照；若此前发出的编辑或反馈请求更晚落库，旧正文或旧反馈可能再次出现。前端发起重新生成时应避免同一附件的编辑、反馈请求并行提交，并在迟到响应后回读详情；异步任务的结果仍由服务端按当前 task_id 和执行标识校验，不接受旧任务回写。
 

@@ -8,15 +8,13 @@ from django.conf import settings
 
 from services.web.ai.prompts.log_statistics import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import AttachmentType, ExecutionMode
-from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationError
 from services.web.ai_assistant.handlers.attachment import (
     AttachmentPreparation,
     AttachmentTypeHandler,
 )
-from services.web.ai_assistant.handlers.log_search_source import parse_log_search_source
+from services.web.ai_assistant.handlers.log_search_source import prepare_log_attachment
 from services.web.ai_assistant.handlers.registry import attachment_handler_registry
 from services.web.ai_assistant.models import Message
-from services.web.ai_assistant.schemas import parse_snapshot
 from services.web.ai_assistant.schemas.audit_statistics import (
     AIStatisticsAttachmentContext,
     AIStatisticsAttachmentInput,
@@ -33,7 +31,6 @@ from services.web.ai_assistant.tasks.audit_statistics import (
 from services.web.query.ai_assistant.exceptions import UnsupportedFieldType
 from services.web.query.ai_assistant.log_tools.schemas import (
     LOG_TOOL_NESTED_FIELD_NAMES,
-    AgentSearchCondition,
     LogFieldRef,
 )
 from services.web.query.ai_assistant.log_tools.statistics import FieldStatisticsService
@@ -55,23 +52,23 @@ class FieldStatisticsAttachmentHandler(
 
     def prepare(self, *, user: str, source_message: Message, input_data: FieldStatisticsAttachmentInput):
         """构造可信执行快照；不采样字段类型，JSON 路径的实际类型由最终查询判断。"""
-        log_input, log_context, _ = parse_log_search_source(user=user, source_message=source_message)
-        condition = parse_snapshot(
-            AgentSearchCondition,
-            log_input.condition.model_dump(mode="json"),
-            field_name="source_message.input_data.condition",
-            error_type=AttachmentSnapshotValidationError,
+        input_data, log_context, _, _ = prepare_log_attachment(
+            user=user,
+            source_message=source_message,
+            input_data=input_data,
+            fields=[input_data.field, LogFieldRef(raw_name="start_time")],
         )
+        condition = input_data.condition
         field = LogFieldRef(raw_name=input_data.field.raw_name, keys=input_data.field.keys)
         if not field.keys and field.raw_name in LOG_TOOL_NESTED_FIELD_NAMES:
             raise UnsupportedFieldType()
         resolved_field = FieldStatisticsService._field(field)
         return AttachmentPreparation(
             title=f"{resolved_field.display_name}统计",
+            input_data=input_data,
             context_data=FieldStatisticsAttachmentContext(
                 search_condition=condition,
                 field=resolved_field,
-                top_n=input_data.top_n,
                 interval=input_data.interval,
                 username=user,
                 namespace=log_context.namespace,
@@ -99,15 +96,15 @@ class AIStatisticsAttachmentHandler(
 
     def prepare(self, *, user: str, source_message: Message, input_data: AIStatisticsAttachmentInput):
         """校验来源并固化初始范围；不把来源范围设置为 Agent 实际查询的限制。"""
-        log_input, log_context, log_output = parse_log_search_source(user=user, source_message=source_message)
-        condition = parse_snapshot(
-            AgentSearchCondition,
-            log_input.condition.model_dump(mode="json"),
-            field_name="source_message.input_data.condition",
-            error_type=AttachmentSnapshotValidationError,
+        input_data, log_context, log_output, summary_matches = prepare_log_attachment(
+            user=user,
+            source_message=source_message,
+            input_data=input_data,
         )
+        condition = input_data.condition
         return AttachmentPreparation(
             title="AI 统计",
+            input_data=input_data,
             context_data=AIStatisticsAttachmentContext(
                 system_prompt=SYSTEM_PROMPT,
                 instruction=input_data.instruction,
@@ -115,7 +112,9 @@ class AIStatisticsAttachmentHandler(
                 query_summary=AIStatisticsQuerySummary(
                     total=log_output.total,
                     executed_at=log_output.query_summary.executed_at,
-                ),
+                )
+                if summary_matches
+                else None,
                 username=user,
                 namespace=log_context.namespace,
                 timezone=settings.TIME_ZONE,

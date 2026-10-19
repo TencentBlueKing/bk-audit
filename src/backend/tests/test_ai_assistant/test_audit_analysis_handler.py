@@ -1,5 +1,6 @@
 """日志分析报告 Handler 的来源、快照、编辑、反馈和导出测试。"""
 
+import json
 from copy import deepcopy
 from unittest import mock
 
@@ -39,6 +40,7 @@ from services.web.ai_assistant.services.attachment_execution import (
     load_attachment_execution,
 )
 from services.web.ai_assistant.services.feedback import FeedbackService
+from services.web.ai_assistant.tasks.audit_analysis import build_agent_input
 from tests.test_ai_assistant.base import AIAssistantPlatformTestCase
 from tests.test_ai_assistant.factories import create_conversation
 
@@ -99,6 +101,28 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
             config_key=AI_ASSISTANT_LOG_ANALYSIS_PROMPT_KEY,
             config_value="默认审计分析标准 v1",
         )
+
+    def test_new_input_retry_refreshes_mode_and_range_and_omits_stale_summary(self):
+        service = AttachmentService(user=self.user)
+        with mock.patch.object(self.handler.async_task, "apply_async"):
+            with self.captureOnCommitCallbacks(execute=False):
+                attachment = service.create(
+                    source_message_uid=str(self.log_search.uid),
+                    attachment_type="AI_ANALYSIS",
+                    input_data={"analysis_mode": "CUSTOM", "instruction": "旧指令"},
+                )
+        Attachment.objects.filter(id=attachment.id).update(status="FAILED")
+        condition = {**self.log_search.input_data["condition"], "conditions": []}
+        with self.captureOnCommitCallbacks(execute=False):
+            updated = service.retry(
+                attachment_uid=str(attachment.uid), input_data={"analysis_mode": "DEFAULT", "condition": condition}
+            )
+        self.assertNotIn("instruction", updated.input_data)
+        context = AIAnalysisContextSchema.model_validate(updated.context_data)
+        self.assertEqual(context.effective_instruction, "默认审计分析标准 v1")
+        payload = json.loads(build_agent_input(context))
+        self.assertEqual(payload["context"]["search_condition"], condition)
+        self.assertNotIn("query_summary", payload["context"])
 
     def test_production_handler_declares_platform_capabilities(self):
         self.assertEqual(self.handler.attachment_type, AttachmentType.AI_ANALYSIS)

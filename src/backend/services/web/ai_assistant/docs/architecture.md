@@ -21,7 +21,7 @@
 | FIELD_STATISTICS | `default`，调用 FieldStatisticsService | 直接复用统计领域服务，不经 MCP HTTP | 概览、分布、时序、可选数值摘要 |
 | AI_STATISTICS | `ai_default`，调用 `bp-ai-log-stats` | 字段探索与聚合 MCP | `output_data.content`，标签内未解析原文 |
 
-程序统计严格使用完整来源范围，不能以预览行代替。AI 统计将来源范围作为初始上下文，Agent 可按需求调整有权限的实际查询范围。Agent 输出协议与前端渲染由前端及 skills 协同维护。
+程序统计默认使用完整来源范围，也可提交当前附件独立的完整 condition，不能以预览行代替。AI 统计将来源范围作为初始上下文，Agent 可按需求调整有权限的实际查询范围。Agent 输出协议与前端渲染由前端及 skills 协同维护。
 
 ## 2. 权限分层
 
@@ -63,11 +63,11 @@ flowchart TD
 
 归属检查、终态条件更新和查询鉴权分别防止写入已删除会话、旧任务覆盖新任务、实时权限变化后继续访问日志。它们与 HTTP 入口鉴权目的不同。巡检阈值需覆盖业务执行及重试等待时间，否则正常长任务会被提前判失败；维护入口为 `services/reconciliation.py`。
 
-异步附件 SUCCESS/FAILED 均可人工重试：保留 UID 和创建时快照，清空旧产物、错误、反馈及过程，生成新 task_id；新 Worker 建立新 execution_id。修改业务输入时创建新附件。Message 重试仍只允许 FAILED + ASYNC。
+异步附件 SUCCESS/FAILED 均可人工重试：保留 UID；未传 input_data 复用原快照，传入完整输入则复用创建校验/prepare并原子替换输入和上下文，清空旧产物、错误、反馈及过程，生成新 task_id；新 Worker 建立新 execution_id。修改条件只影响当前附件；需要保留旧结果时另建附件。Message 重试仍只允许 FAILED + ASYNC。
 
 ## 4. 查询与产物边界
 
-程序统计和聚合 MCP 共用[日志查询与统计内核](../../query/ai_assistant/log_tools/README.md)，统计口径一致，响应按消费者组织。字段目录用于发现和提示，不作为自定义路径必须存在的前置条件。
+程序统计和聚合 MCP 共用[日志查询与统计内核](../../query/ai_assistant/log_tools/README.md)，AUTO 统一按完整范围从月到分钟选择首个达到桶数阈值的粒度（默认12，后端可配置），容量独立检查。响应按消费者组织：程序返回全类别和完整轴，MCP默认Top10和稀疏桶。二者支持自然月和value_label，原始typed值不变。字段目录用于发现和提示，不作为自定义路径必须存在的前置条件。
 
 AI 分析保存完整闭合 assistant 报告；AI 统计从最后闭合 assistant 消息中提取唯一、顺序正确、非空的标签块。后端不解析 JSON/ECharts。标签协议失败走任务失败/重试；标签有效但图表不可渲染不改变附件成功状态，前端需单独处理渲染错误。统计 Agent 不提供明细检索，需要明细证据的需求使用分析 Agent。报告链路见[日志分析接入](log_analysis.md)。
 

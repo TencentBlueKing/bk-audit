@@ -19,6 +19,7 @@ from rest_framework import serializers
 from core.exporter.report import ReportContentFormat, resolve_content_format
 from services.web.ai.prompts.log_analysis import SYSTEM_PROMPT
 from services.web.ai_assistant.constants import AnalysisMode
+from services.web.ai_assistant.schemas.log_attachment import LogAttachmentInput
 from services.web.ai_assistant.schemas.message import MessageSchema
 from services.web.query.ai_assistant.log_tools.schemas import AgentSearchCondition
 from services.web.query.ai_assistant.schemas import SearchCondition
@@ -26,7 +27,7 @@ from services.web.query.ai_assistant.schemas import SearchCondition
 _NestedObjectField = serializers.DictField()
 
 
-class AIAnalysisInputSchema(MessageSchema):
+class AIAnalysisInputSchema(LogAttachmentInput):
     """前端提交的分析模式与可选自定义指令。"""
 
     analysis_mode: AnalysisMode
@@ -58,6 +59,8 @@ class AIAnalysisInputSchema(MessageSchema):
         """
 
         data = handler(self)
+        if self.condition is None:
+            data.pop("condition", None)
         if self.analysis_mode == AnalysisMode.DEFAULT:
             data.pop("instruction", None)
         return data
@@ -78,7 +81,7 @@ class AIAnalysisContextSchema(MessageSchema):
     system_prompt: str = Field(default=SYSTEM_PROMPT, min_length=1, description="创建时固化的 Agent 系统提示词。")
     effective_instruction: str = Field(min_length=1, description="创建时已固化的有效分析指令。")
     search_condition: Annotated[AgentSearchCondition, _NestedObjectField]
-    query_summary: AIAnalysisQuerySummary
+    query_summary: AIAnalysisQuerySummary | None = Field(default=None, description="条件与来源一致时的历史摘要；独立范围不一致则为 null。")
     username: str = Field(min_length=1, description="Agent 及工具调用使用的用户身份。")
     namespace: str = Field(min_length=1, description="检索消息固化的 namespace，不由前端提交。")
     timezone: str = Field(min_length=1, description="创建报告时固化的部署默认时区。")
