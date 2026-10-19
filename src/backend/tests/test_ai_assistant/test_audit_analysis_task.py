@@ -64,6 +64,46 @@ from tests.test_ai_assistant.test_attachment_task import invoke_task
 class LogAnalysisArtifactExtractorTest(SimpleTestCase):
     """业务提取器只提交完整 assistant 消息，并在 RUN_ERROR 后丢弃旧候选。"""
 
+    def test_diagnostics_distinguish_empty_unclosed_and_complete_candidate(self):
+        """摘要描述候选生命周期和UTF-8大小，不保留第二份正文。"""
+        extractor = LogAnalysisArtifactExtractor(max_content_bytes=12, strict_final_message=True)
+        self.assertEqual(
+            extractor.diagnostics,
+            {
+                "candidate_state": "NOT_STARTED",
+                "final_content_chars": 0,
+                "final_content_bytes": 0,
+                "buffered_content_bytes": 0,
+                "content_max_bytes": 12,
+                "strict_final_message": True,
+            },
+        )
+        extractor.consume({"type": "TEXT_MESSAGE_START", "messageId": "a", "role": "assistant"})
+        extractor.consume({"type": "TEXT_MESSAGE_CONTENT", "messageId": "a", "delta": "中文"})
+        self.assertEqual(
+            extractor.diagnostics,
+            {
+                "candidate_state": "STREAMING",
+                "final_content_chars": 0,
+                "final_content_bytes": 0,
+                "buffered_content_bytes": 6,
+                "content_max_bytes": 12,
+                "strict_final_message": True,
+            },
+        )
+        extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": "a"})
+        self.assertEqual(
+            extractor.diagnostics,
+            {
+                "candidate_state": "COMPLETE",
+                "final_content_chars": 2,
+                "final_content_bytes": 6,
+                "buffered_content_bytes": 0,
+                "content_max_bytes": 12,
+                "strict_final_message": True,
+            },
+        )
+
     def test_strict_final_message_does_not_fall_back_after_unclosed_or_retyped_start(self):
         """新 assistant 未闭合或被同 ID 非 assistant 作废后，严格模式不能回退旧正文。"""
         for strict, retyped, expected in ((False, False, "A"), (True, False, ""), (True, True, "")):
@@ -86,6 +126,7 @@ class LogAnalysisArtifactExtractorTest(SimpleTestCase):
                 for event in events:
                     extractor.consume(event)
                 self.assertEqual(extractor.final_content, expected)
+                self.assertEqual(extractor.diagnostics["candidate_state"], "ROLE_CHANGED" if retyped else "STREAMING")
 
     def test_strict_and_default_preserve_last_complete_raw_text(self):
         """正文含空白和任意围栏仍逐字返回，不由提取器解释格式或空白有效性。"""
@@ -118,10 +159,15 @@ class LogAnalysisArtifactExtractorTest(SimpleTestCase):
                 extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": "b"})
                 self.assertEqual(extractor.final_content, "")
                 self.assertEqual(extractor.buffered_content_bytes, 0)
+                self.assertEqual(
+                    extractor.diagnostics["candidate_state"],
+                    "CONTENT_LIMIT_EXCEEDED" if failure == "overflow" else "RUN_ERROR",
+                )
                 extractor.consume({"type": "TEXT_MESSAGE_START", "messageId": "c", "role": "assistant"})
                 extractor.consume({"type": "TEXT_MESSAGE_CONTENT", "messageId": "c", "delta": "中文"})
                 extractor.consume({"type": "TEXT_MESSAGE_END", "messageId": "c"})
                 self.assertEqual(extractor.final_content, "中文")
+                self.assertEqual(extractor.diagnostics["candidate_state"], "COMPLETE")
 
     def test_extracts_last_complete_fragmented_message_and_ignores_unknown_events(self):
         extractor = LogAnalysisArtifactExtractor()
@@ -632,6 +678,40 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
                 self.assertIsInstance(caught.exception.__cause__, AttachmentSnapshotValidationError)
                 self.assertIsNone(caught.exception.__cause__.__cause__)
 
+    def test_unclosed_report_logs_candidate_state_and_archive_reference(self):
+        """分析报告未闭合时留下执行定位，错误和日志均不复制正文。"""
+        attachment = self.create_attachment()
+        content = "PRIVATE_UNCLOSED_REPORT"
+
+        def agent_call(**kwargs):
+            """仅替换上游传输，保留真实提取器与附件生命周期。"""
+            for event in (
+                {"type": "TEXT_MESSAGE_START", "messageId": "report", "role": "assistant"},
+                {"type": "TEXT_MESSAGE_CONTENT", "messageId": "report", "delta": content},
+            ):
+                kwargs["on_event"](event)
+
+        with (
+            mock.patch.object(api.bk_plugins_ai_agent, "chat_completion", side_effect=agent_call),
+            self.assertLogs("services.web.ai_assistant.tasks.audit_analysis", level="WARNING") as logs,
+            self.assertRaises(AttachmentOutputValidationError),
+        ):
+            invoke_task(execute_log_analysis, attachment=attachment, retries=execute_log_analysis.max_retries)
+        self.assertEqual(len(logs.records), 1)
+        record = logs.records[0]
+        self.assertEqual(getattr(record, "candidate_state", None), "STREAMING")
+        self.assertEqual(record.reason, "OUTPUT_VALIDATION_FAILED")
+        self.assertEqual(record.stage, "output_validation")
+        self.assertEqual(record.final_content_bytes, 0)
+        self.assertEqual(record.buffered_content_bytes, len(content))
+        self.assertEqual(record.attachment_uid, str(attachment.uid))
+        self.assertEqual(record.task_id, attachment.task_id)
+        self.assertEqual(record.retry_count, execute_log_analysis.max_retries)
+        attachment.refresh_from_db()
+        self.assertEqual(record.execution_id, attachment.stream_config["execution_id"])
+        self.assertEqual(attachment.error_code, AttachmentErrorCode.OUTPUT_VALIDATION_FAILED)
+        self.assertNotIn(content, "\n".join(logs.output))
+
     @override_settings(AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES=16)
     def test_oversized_agent_output_is_sanitized_before_platform_logging(self):
         sentinel = "PRIVATE_REPORT_SENTINEL"
@@ -648,12 +728,17 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
                 side_effect=agent_call,
             ),
             self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as captured,
+            self.assertLogs("services.web.ai_assistant.tasks.audit_analysis", level="WARNING") as diagnostics,
             self.assertRaises(AttachmentOutputValidationError) as caught,
         ):
             invoke_task(execute_log_analysis, attachment=attachment, retries=execute_log_analysis.max_retries)
 
         attachment.refresh_from_db()
         log_output = "\n".join(captured.output)
+        self.assertEqual(len(diagnostics.records), 1)
+        self.assertEqual(getattr(diagnostics.records[0], "candidate_state", None), "CONTENT_LIMIT_EXCEEDED")
+        self.assertEqual(diagnostics.records[0].content_max_bytes, 16)
+        self.assertNotIn(sentinel, "\n".join(diagnostics.output))
         self.assertNotIn(sentinel, log_output)
         self.assertNotIn("input_value", log_output)
         self.assertNotIn(sentinel, str(caught.exception))

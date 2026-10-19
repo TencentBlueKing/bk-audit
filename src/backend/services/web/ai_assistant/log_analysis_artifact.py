@@ -8,6 +8,7 @@ assistant 文本消息。只有收到 TEXT_MESSAGE_END 的消息才可成为最�
 from django.conf import settings
 
 from api.bk_plugins_ai_agent.agui import AGUIEventType
+from services.web.ai_assistant.constants import ArtifactCandidateState
 
 
 class LogAnalysisArtifactExtractor:
@@ -22,6 +23,7 @@ class LogAnalysisArtifactExtractor:
         """设置 UTF-8 缓冲上限；严格模式禁止回退到新 assistant 消息之前的正文。"""
 
         self._strict_final_message = strict_final_message
+        self._candidate_state = ArtifactCandidateState.NOT_STARTED
         self._active_message_id: str | None = None
         self._active_content = bytearray()
         self._max_content_bytes = (
@@ -45,6 +47,7 @@ class LogAnalysisArtifactExtractor:
             # 同一 HTTP 流可能继续承载上游重试事件，错误前的候选正文不能误判为成功产物。
             self._discard_active_message()
             self._final_content = ""
+            self._candidate_state = ArtifactCandidateState.RUN_ERROR
             return
 
         message_id = event.get("messageId")
@@ -58,8 +61,10 @@ class LogAnalysisArtifactExtractor:
                     self._final_content = ""
                 self._active_message_id = message_id
                 self._active_content.clear()
+                self._candidate_state = ArtifactCandidateState.STREAMING
             elif message_id == self._active_message_id:
                 self._discard_active_message()
+                self._candidate_state = ArtifactCandidateState.ROLE_CHANGED
             return
         if event_type == AGUIEventType.TEXT_MESSAGE_CONTENT:
             if message_id != self._active_message_id:
@@ -71,12 +76,27 @@ class LogAnalysisArtifactExtractor:
                     # 超限消息不再保留；后续合法新消息仍可成为最终产物。
                     self._discard_active_message()
                     self._final_content = ""
+                    self._candidate_state = ArtifactCandidateState.CONTENT_LIMIT_EXCEEDED
                     return
                 self._active_content.extend(delta_bytes)
             return
         if event_type == AGUIEventType.TEXT_MESSAGE_END and message_id == self._active_message_id:
             self._final_content = self._active_content.decode("utf-8")
             self._discard_active_message()
+            self._candidate_state = ArtifactCandidateState.COMPLETE
+
+    @property
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        """按需生成失败诊断元信息，不复制正文或保留另一份事件历史。"""
+
+        return {
+            "candidate_state": self._candidate_state.value,
+            "final_content_chars": len(self._final_content),
+            "final_content_bytes": len(self._final_content.encode("utf-8")),
+            "buffered_content_bytes": len(self._active_content),
+            "content_max_bytes": self._max_content_bytes,
+            "strict_final_message": self._strict_final_message,
+        }
 
     @property
     def buffered_content_bytes(self) -> int:

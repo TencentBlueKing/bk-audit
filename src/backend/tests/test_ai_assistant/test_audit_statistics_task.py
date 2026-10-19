@@ -240,7 +240,7 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         self.assertEqual(result["error_code"], "")
 
     def test_doris_failure_and_retry_do_not_expose_upstream_body(self):
-        """真实统计错误包装保留重试分类，日志与Celery异常只含安全摘要。"""
+        """统计错误保留重试分类，共享Task日志和Celery异常不带上游正文。"""
         marker = "PRIVATE_DORIS_STATISTICS_10"
         for retries in (0, generate_field_statistics.max_retries):
             with self.subTest(retries=retries):
@@ -258,6 +258,45 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
                             invoke_task(generate_field_statistics, attachment=attachment, retries=retries)
                     self.assertNotIn(marker, "\n".join(captured.output))
                     self.assertNotIn(marker, str(raised.exception))
+
+    def test_successful_query_parse_failure_keeps_internal_cause(self):
+        """成功响应帧截断时，内部保留解析原因，公开错误仍使用稳定文案。"""
+        attachment = self.processing()
+        self.frames.pop()
+        with self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as logs:
+            with self.assertRaises(LogQueryFailed) as raised:
+                invoke_task(generate_field_statistics, attachment=attachment)
+        self.assertEqual(len(logs.records), 1)
+        record = logs.records[0]
+        self.assertIn("truncated statistics frames", "\n".join(logs.output))
+        self.assertEqual(record.attachment_id, attachment.id)
+        self.assertEqual(record.attachment_uid, str(attachment.uid))
+        self.assertEqual(record.task_id, attachment.task_id)
+        self.assertEqual(record.retry_count, 0)
+        self.assertFalse(record.retryable)
+        self.assertNotIn("truncated statistics frames", str(raised.exception))
+        self.assertIsNone(raised.exception.__cause__)
+        detail = GetAttachment().request(attachment_uid=str(attachment.uid))
+        self.assertEqual(detail["error_code"], LogQueryFailed().code)
+        self.assertNotIn("truncated statistics frames", detail["error_message"])
+
+    def test_temporary_query_failure_keeps_cause_before_retry(self):
+        """临时故障在重试前记录原始原因，Retry异常不带上游正文。"""
+        attachment = self.processing()
+        marker = "UPSTREAM_DIAGNOSTIC_SENTINEL"
+        self.remote.side_effect = APIRequestError(status_code=503, result={"message": marker})
+        with self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as logs:
+            with self.assertRaises(Retry) as raised:
+                invoke_task(generate_field_statistics, attachment=attachment, retries=1)
+        self.assertEqual(len(logs.records), 1)
+        record = logs.records[0]
+        self.assertIn(marker, "\n".join(logs.output))
+        self.assertTrue(record.retryable)
+        self.assertEqual(record.retry_count, 1)
+        self.assertEqual(record.task_id, attachment.task_id)
+        self.assertNotIn(marker, "".join(traceback.format_exception(raised.exception)))
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
 
     def test_retry_contract(self):
         for error in (ConnectionError("unavailable"), Timeout("late"), APIRequestError(status_code=503)):
@@ -675,17 +714,22 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         self.assertEqual(archived, events)
 
     def test_tag_extraction_failures_become_sanitized_retryable_attachment_failure(self):
+        """失败摘要区分标签缺失、重复、顺序与空内容，不记录原文。"""
         cases = (
-            "无标签",
-            "<!--DASH_AI_CHART_CONFIG-->missing-end",
-            "<!--DASH_AI_CHART_CONFIG--> \n <!--/DASH_AI_CHART_CONFIG-->",
+            ("无标签", "START_TAG_COUNT_INVALID", 0, 0),
+            ("<!--DASH_AI_CHART_CONFIG-->missing-end", "END_TAG_COUNT_INVALID", 1, 0),
+            ("<!--DASH_AI_CHART_CONFIG--> \n <!--/DASH_AI_CHART_CONFIG-->", "EMPTY_CONTENT", 1, 1),
             (
                 "<!--DASH_AI_CHART_CONFIG-->a<!--/DASH_AI_CHART_CONFIG-->"
-                "<!--DASH_AI_CHART_CONFIG-->b<!--/DASH_AI_CHART_CONFIG-->"
+                "<!--DASH_AI_CHART_CONFIG-->b<!--/DASH_AI_CHART_CONFIG-->",
+                "START_TAG_COUNT_INVALID",
+                2,
+                2,
             ),
+            ("<!--/DASH_AI_CHART_CONFIG-->x<!--DASH_AI_CHART_CONFIG-->", "TAG_ORDER_INVALID", 1, 1),
         )
-        for content in cases:
-            with self.subTest(content=content):
+        for content, reason, start_count, end_count in cases:
+            with self.subTest(reason=reason, start_count=start_count, end_count=end_count):
                 attachment = self.processing()
                 with self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as logs:
                     with self.assertRaises(AIStatisticsOutputParseError):
@@ -696,6 +740,42 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
                 self.assertEqual(attachment.error_code, AIStatisticsOutputParseError().code)
                 self.assertEqual(attachment.error_message, "AI 统计结果格式异常，请重试")
                 self.assertNotIn(content, "\n".join(logs.output))
+                self.assertEqual(len(logs.records), 1)
+                record = logs.records[0]
+                self.assertEqual(getattr(record, "candidate_state", None), "COMPLETE")
+                self.assertEqual(record.reason, reason)
+                self.assertEqual(record.stage, "tag_extraction")
+                self.assertEqual(record.start_tag_count, start_count)
+                self.assertEqual(record.end_tag_count, end_count)
+                self.assertEqual(record.final_content_chars, len(content))
+                self.assertEqual(record.final_content_bytes, len(content.encode("utf-8")))
+                self.assertEqual(record.buffered_content_bytes, 0)
+                self.assertEqual(record.attachment_id, attachment.id)
+                self.assertEqual(record.attachment_uid, str(attachment.uid))
+                self.assertEqual(record.task_id, attachment.task_id)
+                self.assertEqual(record.execution_id, attachment.stream_config["execution_id"])
+                self.assertEqual(record.retry_count, self.handler.async_task.max_retries)
+                self.assertIn(f"start_tag_count={start_count}", record.getMessage())
+                self.assertIn(f"end_tag_count={end_count}", record.getMessage())
+                self.assertIn(reason, record.getMessage())
+
+    def test_unclosed_final_candidate_logs_state_and_archive_reference_before_retry(self):
+        """未闭合候选与空正文可区分，日志仅记录执行定位和大小。"""
+        attachment = self.processing()
+        content = "PRIVATE_UNCLOSED_CANDIDATE"
+        with self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as logs:
+            with self.assertRaises(Retry):
+                self.run_events(attachment, self.events(content, closed=False), retries=1)
+        self.assertEqual(len(logs.records), 1)
+        record = logs.records[0]
+        self.assertEqual(getattr(record, "candidate_state", None), "STREAMING")
+        self.assertEqual(record.final_content_bytes, 0)
+        self.assertEqual(record.buffered_content_bytes, len(content))
+        self.assertEqual(record.retry_count, 1)
+        attachment.refresh_from_db()
+        self.assertEqual(record.execution_id, attachment.stream_config["execution_id"])
+        self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
+        self.assertNotIn(content, "\n".join(logs.output))
 
     @override_settings(
         AI_ASSISTANT_AI_STATISTICS_CHART_CONFIG_START_TAG="<chart>",
@@ -847,9 +927,16 @@ class AIStatisticsTaskTest(AIStatisticsTestMixin, AIAssistantPlatformTestCase):
         sentinel = "PRIVATE_STATISTICS_SENTINEL" + ("x" * 80)
         recovery = self.tagged("中文")
         attachment = self.processing()
-        with self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as logs:
+        with (
+            self.assertLogs("services.web.ai_assistant.tasks.base", level="ERROR") as logs,
+            self.assertLogs("services.web.ai_assistant.tasks.audit_statistics", level="WARNING") as diagnostics,
+        ):
             with self.assertRaises(AIStatisticsOutputParseError) as raised:
                 self.run_events(attachment, self.events(sentinel), retries=self.handler.async_task.max_retries)
+        self.assertEqual(len(diagnostics.records), 1)
+        self.assertEqual(getattr(diagnostics.records[0], "candidate_state", None), "CONTENT_LIMIT_EXCEEDED")
+        self.assertEqual(diagnostics.records[0].content_max_bytes, 80)
+        self.assertNotIn(sentinel, "\n".join(diagnostics.output))
         self.assertNotIn(sentinel, "\n".join(logs.output))
         self.assertNotIn("input_value", "\n".join(logs.output))
         self.assertNotIn(sentinel, str(raised.exception))
