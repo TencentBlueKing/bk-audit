@@ -491,7 +491,7 @@ class ForApprove(RiskFlowBaseHandler):
     name = gettext_lazy("自动处理审批")
     allowed_status = [RiskStatus.FOR_APPROVE, RiskStatus.NEW, RiskStatus.AWAIT_PROCESS]
 
-    def _build_approve_form_data(self, ticket_info: dict) -> tuple:
+    def _build_approve_form_data(self, ticket_info: dict) -> dict:
         """构造发起审批单据所需的 form_data。"""
 
         # 预计算特殊字段值（按 bare_key 索引）
@@ -506,7 +506,6 @@ class ForApprove(RiskFlowBaseHandler):
         }
 
         form_data = {}
-        fields = []
         for field in ticket_info["fields"]:
             key = field["key"]
             # V4 表单字段 key 带 ticket__ 命名空间前缀，统一去前缀后比对
@@ -521,12 +520,8 @@ class ForApprove(RiskFlowBaseHandler):
                 )
                 if isinstance(value, (dict, list)):
                     value = json.dumps(value, ensure_ascii=False)
-            # V4 ticket_create 需要带前缀 key 的 form_data（dict）；
-            # V3 create_ticket 需要 [{"key": 裸key, "value": value}] 列表。
-            # 每个字段追加独立字典，避免共享引用导致重复对象，且保证普通配置字段不遗漏。
             form_data[key] = value
-            fields.append({"key": bare_key, "value": value})
-        return form_data, fields
+        return form_data
 
     def process(self, pa_config: dict = None, **kwargs) -> dict:
         """
@@ -553,26 +548,19 @@ class ForApprove(RiskFlowBaseHandler):
             self.init_process_application(pa_config["pa_id"])
 
         # 未发起则发起单据
+        # 风险单中，状态是 for_approve 但是还没创建单据的风险单在 itsm_v4 迁移后统一使用v4创建单据
         ticket_info = resource.itsm.get_service_detail(
-            id=self.process_application.approve_service_id, version=itsm_version
+            id=self.process_application.approve_service_id, version=ItsmVersion.V4
         )
-        form_data, fields = self._build_approve_form_data(ticket_info)
+        form_data = self._build_approve_form_data(ticket_info)
 
-        if itsm_version == ItsmVersion.V3:
-            ticket = api.bk_itsm.create_ticket(
-                service_id=self.process_application.approve_service_id,
-                creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
-                fields=fields,
-            )
-            status = api.bk_itsm.ticket_approve_result(sn=[ticket["sn"]])[0]
-        else:
-            ticket = api.bk_itsm_v4.ticket_create(
-                operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
-                workflow_key=self.process_application.approve_service_id,
-                form_data=form_data,
-                is_submit=True,
-            )
-            status = get_itsm_ticket_status(ticket["id"])
+        ticket = api.bk_itsm_v4.ticket_create(
+            operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+            workflow_key=self.process_application.approve_service_id,
+            form_data=form_data,
+            is_submit=True,
+        )
+        status = get_itsm_ticket_status(ticket["id"])
         return {"ticket": ticket, "status": status}
 
     @staticmethod
