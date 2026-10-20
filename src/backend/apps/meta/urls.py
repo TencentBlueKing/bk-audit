@@ -27,6 +27,7 @@ from apps.meta.views import (
     field_views,
     general_config_views,
     global_views,
+    mcp_views,
     meta_views,
     namespace_views,
     paas_views,
@@ -52,6 +53,10 @@ router.register_module(user_manage_views)
 router.register_module(tag_views)
 router.register_module(system_diagnosis_views)
 router.register_module(general_config_views)
+# MCP 工具集前缀含子路径（mcp_user/meta），register_module 只能按类名生成
+# 无斜杠前缀（MCPUserMetaViewSet → mcp_user_meta），与 query/risk 模块的
+# MCP ViewSet 注册一致，须显式 register 指定前缀。
+router.register("mcp_user/meta", mcp_views.MCPUserMetaViewSet)
 
 urlpatterns = [
     path("", include(base_router.urls)),

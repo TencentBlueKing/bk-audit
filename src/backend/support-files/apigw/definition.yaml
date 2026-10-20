@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.20"
+  version: "0.0.21"
   # 版本标题
-  title: "0.0.20"
+  title: "0.0.21"
   # 版本描述
-  comment: "统计专用 MCP 工具集、声明字段目录及统计数值输出四位小数；同步 JSON 子键查询约束"
+  comment: "新增 audit-meta 系统接入元数据 MCP 工具集（系统列表、系统详情、操作、资源类型、字段目录探索）"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
@@ -94,6 +94,22 @@ stages:
         protocol_type: "streamable_http"
         target_app_codes:
           - "{{ settings.APP_CODE }}"
+      - name: "audit-meta"
+        description: "审计中心系统接入元数据 MCP 工具集，提供系统、操作、资源类型与字段目录探索能力"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+          - mcp_explore_system_fields
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
   - name: "prod"
     description: "生产环境"
     # 环境的英文名，蓝鲸官方网关需提供，以支持国际化
@@ -157,6 +173,22 @@ stages:
           - mcp_get_log_field_metadata
           - mcp_search_logs
           - mcp_aggregate_logs
+        is_public: true
+        status: 1
+        protocol_type: "streamable_http"
+        target_app_codes:
+          - "{{ settings.APP_CODE }}"
+      - name: "audit-meta"
+        description: "审计中心系统接入元数据 MCP 工具集，提供系统、操作、资源类型与字段目录探索能力"
+        labels:
+          - "audit"
+          - "meta"
+        resource_names:
+          - mcp_list_audit_systems
+          - mcp_get_audit_system_detail
+          - mcp_list_system_actions
+          - mcp_list_system_resource_types
+          - mcp_explore_system_fields
         is_public: true
         status: 1
         protocol_type: "streamable_http"
