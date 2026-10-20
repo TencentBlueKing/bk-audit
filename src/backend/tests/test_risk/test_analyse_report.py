@@ -1133,15 +1133,19 @@ class TestExportAnalyseReport(AnalyseReportTestBase):
         self.assertNotIn("<h1>", text)
 
     def test_html_markdown_export_converts_without_updating_report(self):
-        self.report.content = '<h1>历史报告</h1><p><strong>完整正文</strong></p>'
-        self.report.save(update_fields=["content"])
-        response = self.resource.risk.export_analyse_report.request(
-            {"report_id": self.report.report_id, "export_format": "markdown"}
-        )
-        self.assertIn("# 历史报告", response.content.decode())
-        self.assertIn("**完整正文**", response.content.decode())
-        self.report.refresh_from_db()
-        self.assertIn("<h1>", self.report.content)
+        for body in (
+            '<h1>历史报告</h1><p><strong>完整正文</strong></p>',
+            '<!DOCTYPE html><html><body><h1>历史报告</h1><p><strong>完整正文</strong></p></body></html>',
+        ):
+            with self.subTest(body=body):
+                self.report.content = body
+                self.report.save(update_fields=["content"])
+                response = self.resource.risk.export_analyse_report.request(
+                    {"report_id": self.report.report_id, "export_format": "markdown"}
+                )
+                self.assertEqual(response.content.decode().strip(), '# 历史报告\n\n**完整正文**')
+                self.report.refresh_from_db()
+                self.assertEqual(self.report.content, body)
 
     """测试导出AI报告"""
 
