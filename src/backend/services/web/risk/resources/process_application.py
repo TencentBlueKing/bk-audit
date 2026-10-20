@@ -38,6 +38,7 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
     calc_task_duration,
+    calc_task_finish_time,
 )
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
@@ -398,7 +399,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "operator": node.operator,
                     # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
                     "start_time": node.time,
-                    "finish_time": (process_result.get("status") or {}).get("finish_time") or "",
+                    "finish_time": calc_task_finish_time(process_result.get("status") or {}),
                     "sops_task_id": sops_task_id,
                     "sops_state": state,
                     "result": result,
@@ -492,7 +493,7 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "operator": node.operator,
             # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
             "start_time": node.time,
-            "finish_time": status_info.get("finish_time") or "",
+            "finish_time": calc_task_finish_time(status_info),
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
             "sops_state": state,
             "result": result,

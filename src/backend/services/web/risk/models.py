@@ -1231,3 +1231,21 @@ def calc_task_duration(status_info: dict) -> Optional[int]:
     if start and finish:
         return int((finish - start).total_seconds())
     return None
+
+
+def calc_task_finish_time(status_info: dict) -> str:
+    """任务结束时间：优先任务级 finish_time，缺失时退化为子节点最晚结束时间
+
+    与 calc_task_duration 同源：部分任务 SOPS 不回填任务级 finish_time，
+    仅用任务级字段会让终态记录的结束时间展示为空。
+    """
+    status_info = status_info or {}
+    if status_info.get("finish_time"):
+        return status_info["finish_time"]
+    children = status_info.get("children") or {}
+    candidates = [
+        child.get("finish_time") for child in children.values() if isinstance(child, dict) and child.get("finish_time")
+    ]
+    if not candidates:
+        return ""
+    return max(candidates, key=lambda value: parse_sops_time(value) or datetime.datetime.min)
