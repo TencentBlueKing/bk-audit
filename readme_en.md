@@ -42,6 +42,12 @@ The BK Audit Center aims to create benchmark audit products based on the BK ecos
 If you have good ideas or suggestions, please let us know by Issues or Pull Requests and contribute to the Blue Whale Open Source Community.
 [Tencent Open Source Incentive Program](https://opensource.tencent.com/contribution) welcome developers from all over the globe to contribute to Tencent Open Source projects.
 
+### Agent collaboration
+
+Developers and agents can start with the [Agent collaboration guide](agent/README.md) to find engineering conventions, tools, and task skills. Collaboration materials live under `agent/`: shared covers project entry, commits, and release preparation; backend holds domain skills and tools; frontend points to frontend engineering sources. Build, test, and check configurations stay with their respective projects.
+
+Agents can use [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) to locate the current checkout and select a capability. See the [architecture and maintenance guide](agent/architecture.md) when adding or maintaining collaboration capabilities; follow the selected skill for task-specific operations.
+
 ## License
 
 Based on the MIT protocol. Please refer to [LICENSE](./LICENSE.txt)

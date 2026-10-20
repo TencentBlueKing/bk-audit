@@ -7,7 +7,9 @@ description: Use when adding a new IAM resource type to bk-audit, registering re
 
 ## Overview
 
-在蓝鲸审计中心新增 IAM 资源类型的完整步骤清单。涉及 7 个文件/目录的联动修改，任何一步遗漏都会导致运行时错误。
+在蓝鲸审计中心新增 IAM 资源类型的实现清单，覆盖类型定义、注册、provider 与 IAM 同步；资产同步、实例选择和操作定义按资源需求决定。
+
+以下文件路径相对于产品 checkout 的 src/backend，不是技能安装目录。
 
 ## When to Use
 
@@ -64,31 +66,53 @@ class ResourceEnum:
 
 ### 3. 实现 Resource Provider
 
-在对应模块的 `provider.py` 中实现 provider 类。两种基类可选：
+在对应模块的 `provider.py` 中实现 provider 类。先阅读 `apps/permission/provider/base.py` 和相邻资源的实现；这里的两种基类均由项目定义，继承 IAM SDK 的 `ResourceProvider`：
 
-- `BaseResourceProvider`（iam-python-sdk 原生）— 适用于有实例选择需求的资源
-- `IAMResourceProvider`（项目封装）— 适用于仅需资产同步的资源
+- `BaseResourceProvider`：轻量封装，默认返回空的属性列表与属性值；实例相关接口由子类按 SDK 协议实现。
+- `IAMResourceProvider`：提供实例列表、详情、搜索及资源 schema 等通用处理，子类补充过滤逻辑和序列化定义；也可按需支持静态快照/资产同步。现有 `TicketNodeResourceProvider` 使用这个基类。
 
-**必须实现的方法（IAMResourceProvider）：**
+当前锁定依赖 `bk-iam==1.3.2` 的 `ResourceProvider` 还将 `list_instance_by_policy` 声明为抽象方法，项目 `IAMResourceProvider` 未替它实现。具体 provider 必须同时补齐本类及 SDK 继承的抽象成员，否则无法实例化；升级依赖时重新核对该契约。
 
-| 方法 | 用途 |
+**IAMResourceProvider 的实现与扩展点：**
+
+| 成员 | 用途与要求 |
 |------|------|
-| `filter_list_instance_results` | 列表过滤 |
-| `filter_fetch_instance_results` | 实例详情过滤 |
-| `filter_search_instance_results` | 搜索过滤 |
-| `fetch_instance_list` | 资产同步拉取（**性能关键**） |
-| `list_instance_by_policy` | 按策略列举实例 |
+| `resource_provider_serializer` | 必需的序列化器定义，可按资源能力返回 `None` |
+| `list_attr_value_choices` | 必须实现的属性值查询 |
+| `filter_list_instance_results` | 必须实现的实例列表过滤 |
+| `filter_fetch_instance_results` | 必须实现的实例详情过滤 |
+| `filter_search_instance_results` | 必须实现的搜索过滤 |
+| `fetch_instance_list` | 按需实现静态快照/资产同步拉取，关注分页性能 |
+| `list_instance_by_policy` | 必须实现的策略实例列举；继承的 SDK 抽象方法 |
 
-**`fetch_instance_list` 性能优化 — 延迟关联：**
+策略实例列举可参考 `services/web/risk/provider.py` 的 `TicketNodeResourceProvider`。下面摘录其关键方法，其余抽象成员仍需按上表实现：
 
-数据量大时（>10w），使用 keyset pagination 避免深分页性能问题：
+```python
+def list_instance_by_policy(self, filters, page, **options):
+    expression = filters.expression
+    if not expression:
+        return ListResult(results=[], count=0)
+
+    key_mapping = {f"{self.resource_type}.id": "id"}
+    converter = PathEqDjangoQuerySetConverter(key_mapping)
+    django_filters = converter.convert(expression)
+    queryset = TicketNode.objects.filter(django_filters)
+    results = [
+        {"id": str(item.pk), "display_name": str(item.pk)} for item in queryset[page.slice_from : page.slice_to]
+    ]
+    return ListResult(results=results, count=queryset.count())
+```
+
+**`fetch_instance_list` 分页 — 偏移切片与延迟关联：**
+
+下面示例先按时间排序并用偏移切片取得 PK，再按 PK 回表读取数据。延迟关联减少第一阶段读取的字段；深偏移成本和索引使用仍需结合实际数据与执行计划验证：
 
 ```python
 def fetch_instance_list(self, filter, page, **options):
     start_ts = float(filter.start_time) / 1000.0
     end_ts = float(filter.end_time) / 1000.0
     base_qs = Model.objects.filter(timestamp__gt=start_ts, timestamp__lte=end_ts)
-    # 先取 PK 列表（index-only scan）
+    # 第一阶段只查询 PK
     pk_list = list(
         base_qs.order_by("timestamp")
         .values_list("id", flat=True)[page.slice_from : page.slice_to]
@@ -140,7 +164,9 @@ if TicketNodeResourceProvider is not None:
 
 ### 6. 创建 Django Migration
 
-在 `apps/permission/migrations/` 下创建新迁移文件：
+新建迁移前，检查当前分支 `apps/permission/migrations/` 的依赖图并确认叶节点；存在分叉时先按项目约定处理合并依赖，不只按文件编号判断。
+
+下面的 `<permission-leaf-migration>` 是占位名称，必须替换为当前依赖图中选定的上游迁移名；不能直接复制历史示例的依赖。随后在该目录创建新迁移文件：
 
 ```python
 import os
@@ -157,7 +183,7 @@ def forward_func(apps, schema_editor):
 class Migration(migrations.Migration):
     migration_json = "initial.json"
     dependencies = [
-        ("permission", "0016_add_process_risk_action"),  # 改为实际的上一个 migration
+        ("permission", "<permission-leaf-migration>"),  # 替换为当前图选定的实际依赖
     ]
     operations = [migrations.RunPython(forward_func)]
 ```
@@ -181,7 +207,7 @@ class Migration(migrations.Migration):
 | 漏了 Django migration | `initial.json` 改了但不会被执行 | 创建 `RunPython(forward_func)` 迁移 |
 | 漏了 `urls.py` 注册 | IAM 回调 404 | 在 `resources_dispatcher.register` 中注册 |
 | Provider 类名与 Resource 类名冲突 | `bk_resource` 自动发现报 `ResourceNotRegistered` | Handler/Provider 类名避免与 `bk_resource` 注册的 Resource 类名相同 |
-| `fetch_instance_list` 无分页优化 | 数据量大时资产同步超时 | 使用延迟关联（先取 PK 再回表） |
+| `fetch_instance_list` 查询成本过高 | 大批量或深偏移同步超时 | 检查过滤/排序索引与执行计划，衡量偏移成本；按需采用先取 PK 再回表等优化，并验证实际效果 |
 | 资产同步缺少表映射 | BkBase 查询时 SQL 中保留原始 MySQL 表名，查询失败 | `_get_bkbase_table_map` 中补充映射 |
 
 ## Checklist

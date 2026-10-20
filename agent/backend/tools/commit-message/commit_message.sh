@@ -57,7 +57,7 @@ backend_hook_needed() {
     # 返回 0 需校验、1 仅有非后端改动、2 Git 检查失败。
     # 空暂存差异不能直接跳过，否则 amend/reword 会再次漏检。
     git_root=$(git rev-parse --show-toplevel) || return 2
-    if git -C "$git_root" diff --cached --quiet -- src/backend; then
+    if git -C "$git_root" diff --cached --quiet -- src/backend agent/backend; then
         if git -C "$git_root" diff --cached --quiet; then
             return 0
         else

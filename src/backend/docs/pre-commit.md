@@ -19,11 +19,11 @@ make install-hooks
 不适合已经强制维护配置的本项目。
 
 提交标题检查通过后端配置中的 local hook 运行
-`agent/skills/generate-project-commit/scripts/commit_message.sh`，只依赖 `sh`、`awk` 和 Git。
+`../../agent/backend/tools/commit-message/commit_message.sh`，只依赖 `sh`、`awk` 和 Git。
 校验器不使用 `.venv` 路径，也不要求启动 Django。pre-commit 本身仍需要安装环境，
 它生成的 Git 入口会记录当前安装器的 Python 路径；迁移虚拟环境后重新运行安装命令即可。
 
-本次只接入后端：暂存区含 `src/backend` 改动时校验标题，混合前后端提交也会校验；
+后端 hook 在暂存区含 `src/backend` 或 `agent/backend` 改动时校验标题，混合前后端提交也会校验；
 纯前端及其他非后端改动跳过。无暂存差异的 amend/reword 等仍校验，避免通过改标题漏检。
 worktree 共用入口，但会读取当前 worktree 的配置和暂存区；尚未接入的旧分支不会自动获得规则。
 
@@ -41,8 +41,8 @@ tracker 位于标题末尾。允许 `feat fix docs style refactor perf test chor
 单独验证已有 message 或检查指定历史范围，可在后端目录执行：
 
 ```bash
-sh agent/skills/generate-project-commit/scripts/commit_message.sh validate --message-file /tmp/commit-message.txt
-sh agent/skills/generate-project-commit/scripts/commit_message.sh check-range <base>..HEAD
+sh ../../agent/backend/tools/commit-message/commit_message.sh validate --message-file /tmp/commit-message.txt
+sh ../../agent/backend/tools/commit-message/commit_message.sh check-range <base>..HEAD
 ```
 
 手动验证合并标题时加 `--allow-merge`。历史检查不会补写需求号或改写提交。
@@ -66,8 +66,9 @@ review 修改、重新暂存，再次提交。禁止使用 `git commit --no-veri
 ```bash
 make quality      # 只检查暂存文件，等价于提交 hook
 make quality-all  # 检查全部文件，本地复现 CI
-make test         # 运行后端全量单元测试
-make check        # 检查暂存文件并运行全量单元测试
+make test         # 运行后端常规测试，不含 special
+make check        # 检查暂存文件并运行常规测试
+make test-all     # 顺序运行常规与 special 测试
 ```
 
 ## CI 与合并约束
@@ -76,6 +77,6 @@ GitHub Actions 的 `Backend pre-commit` job 会在后端相关 PR 和 main 推�
 `pre-commit run --all-files --show-diff-on-failure`。仓库管理员应在 main 分支保护规则中将
 `Backend pre-commit` 和现有单测 job 设为 required checks。该 job 检查文件质量，
 不会因新增本地 `commit-msg` hook 自动扫描提交历史；历史标题仍需使用明确范围检查或
-对应的上游提交门禁，本次不修改 CI 流程。
+对应的上游提交门禁。
 本地 hook 可以被人为绕过，
 分支保护才是最终强制门禁。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""保留 Python 渲染及旧命令入口，标题规则委托给同目录 sh 校验器。
+"""渲染提交信息并校验标题，标题规则调用同目录 sh 校验器。
 
 提交 hook 直接运行 shell，不需要项目 Python；正文 bullet 仅为生成建议。
 """
@@ -82,7 +82,7 @@ def validate_message(message: str, allow_merge: bool) -> None:
 
 
 def read_message(args: argparse.Namespace) -> str:
-    """读取旧 CLI 支持的 message 文件、参数或 stdin。"""
+    """读取 message 文件、参数或 stdin。"""
     if args.message_file:
         return Path(args.message_file).read_text(encoding="utf-8")
     if args.message:
@@ -91,7 +91,7 @@ def read_message(args: argparse.Namespace) -> str:
 
 
 def validate_command(args: argparse.Namespace) -> int:
-    """执行兼容校验入口，成功返回 0。"""
+    """执行校验入口，成功返回 0。"""
     message = read_message(args)
     validate_message(message, allow_merge=args.allow_merge)
     print("Valid commit message")
@@ -116,7 +116,7 @@ def check_log_command(args: argparse.Namespace) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    """解析兼容渲染、校验和历史检查参数。"""
+    """解析渲染、校验和历史检查参数。"""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -138,7 +138,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    """执行兼容命令，预期校验失败返回非零状态。"""
+    """执行命令，预期校验失败返回非零状态。"""
     args = parse_args()
     try:
         if args.command == "render":
