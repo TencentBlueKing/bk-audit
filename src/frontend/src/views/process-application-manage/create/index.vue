@@ -256,6 +256,17 @@
   };
 
   const formData = ref<Record<string, any>>(new ProcessApplicationCreateModel());
+  // V4 表单字段 key 带 ticket__ 命名空间前缀（如 ticket__title），
+  // 内置字段接口返回裸 key（title），过滤时需去前缀再比对；
+  // 但保存与提单仍使用原始带前缀 key。
+  const stripTicketPrefix = (key: string): string => {
+    const prefix = 'ticket__';
+    if (key.startsWith(prefix)) {
+      return key.slice(prefix.length);
+    }
+    return key.split('__').pop() as string;
+  };
+
   const fieldMap = ref<Record<string, string>>({});
   const formRef = ref();
   const defaultLabelWidht = 68;
@@ -277,7 +288,7 @@
   const filterDetailDataFields = computed(() => {
     if (!detailData.value) return [] as ServiceField[];
     const { fields } = detailData.value;
-    const res = fields.filter(item => !fieldMap.value[item.key]);
+    const res = fields.filter(item => !fieldMap.value[stripTicketPrefix(item.key)]);
     return res;
   });
 
