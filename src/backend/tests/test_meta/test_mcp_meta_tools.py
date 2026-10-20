@@ -152,6 +152,8 @@ class TestMetaListSystems(TestCase):
         # 不应出现的系统：未接入 / 其他命名空间 / 未授权
         make_system("bk_pending", name="待接入系统", audit_status=SystemAuditStatusEnum.PENDING.value)
         make_system("bk_other_ns", name="其他命名空间", namespace="other")
+        # 线上实证回归：description 为空的系统（2026-10-20 bkop 500 复现），必须能正常返回
+        make_system("bk_blank", name="无描述系统")
 
     def _list(self, authorized, **params):
         with mock.patch(
@@ -165,12 +167,26 @@ class TestMetaListSystems(TestCase):
             )
 
     def test_only_authorized_accessed_systems_in_namespace_are_listed(self):
-        output = self._list(["bk_job", "bk_cmdb", "bk_pending", "bk_other_ns", "bk_unknown"])
+        output = self._list(["bk_job", "bk_cmdb", "bk_blank", "bk_pending", "bk_other_ns", "bk_unknown"])
 
         listed = {item.system_id for item in output.systems}
-        self.assertEqual(listed, {"bk_job", "bk_cmdb"})
-        self.assertEqual(output.total, 2)
+        self.assertEqual(listed, {"bk_job", "bk_cmdb", "bk_blank"})
+        self.assertEqual(output.total, 3)
         self.assertTrue(all(item.audit_status == "accessed" for item in output.systems))
+        # 空 description 兜底为空串（2026-10-20 bkop 线上 500 回归）
+        blank = next(item for item in output.systems if item.system_id == "bk_blank")
+        self.assertEqual(blank.description, "")
+
+    def test_blank_description_system_passes_response_serializer(self):
+        """线上实证：description 为空的系统过 bk_resource 响应校验（曾报 500 该字段不能为空）。"""
+        from apps.meta.mcp_tools.serializers import ListAuditSystemsResponseSerializer
+
+        output = self._list(["bk_blank"])
+        serializer = ListAuditSystemsResponseSerializer(data=output.model_dump(mode="json"))
+        self.assertTrue(
+            serializer.is_valid(),
+            f"空 description 系统未通过响应序列化: {serializer.errors}",
+        )
 
     def test_keyword_matches_id_name_and_description(self):
         for keyword, expected in (("job", {"bk_job"}), ("配置", {"bk_cmdb"}), ("作业任务", {"bk_job"})):
