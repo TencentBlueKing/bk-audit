@@ -19,11 +19,14 @@ to the current version of the project delivered to anyone in the future.
 import logging
 from typing import List, Optional
 
+from bk_resource import api
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
+from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import BKSEC_FIELD_INITIAL_OWNER
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
@@ -125,14 +128,50 @@ def render_bksec_test_constants(config: BkSecConfig, risk: Risk, test_receivers:
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 
 
+def is_auto_process_succeeded(node: TicketNode) -> bool:
+    """
+    判断该正式派单是否已成功发出工单
+
+    - 终态 FINISHED：视为已成功发出
+    - 终态 FAILED/REVOKED/EXPIRED：未真正发出工单，允许在其上测试
+    - 非终态（CREATED/RUNNING/...）：保守按已发出处理，避免与进行中的正式单互相干扰
+    - 状态不可判定（无 task_id / 查询异常）：保守按已发出处理
+    """
+    process_result = node.process_result or {}
+    state = (process_result.get("status") or {}).get("state") or ""
+    if state not in SOPSTaskStatus.get_finished_status():
+        task_id = (process_result.get("task") or {}).get("task_id")
+        if not task_id:
+            return True
+        try:
+            status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+        except Exception as err:  # NOCC:broad-except(状态不可判定时保守拦截)
+            logger.warning(
+                "[BkSec] get sops task status failed, risk_id=%s task_id=%s err=%s", node.risk_id, task_id, err
+            )
+            return True
+        state = (status or {}).get("state") or ""
+    return state in SOPSTaskStatus.get_success_status()
+
+
 def validate_bksec_test_target(risk: Risk) -> None:
     """
-    校验该风险单是否已发送过正式工单，如果已发送过，则拒绝测试发送，避免测试工单干扰正式回调
+    校验该风险单是否已成功发送过正式工单
+
+    仅当正式派单已成功（SOPS 任务 FINISHED）时拒绝测试发送：插件的回调按风险单复用，
+    在其上发送测试工单会干扰正式回调或被静默拦截。
+    派单失败/被终止/已过期的单据未真正发出工单，允许测试，避免自动派单策略下无样例单可用。
     """
-    if TicketNode.objects.filter(risk_id=risk.risk_id, action="AutoProcess", is_test=False).exists():
-        raise serializers.ValidationError(
-            gettext_lazy("该风险单已有正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未发送过正式工单的风险单进行测试")
-        )
+    node = (
+        TicketNode.objects.filter(risk_id=risk.risk_id, action="AutoProcess", is_test=False)
+        .order_by("-timestamp")
+        .first()
+    )
+    if node is None or not is_auto_process_succeeded(node):
+        return
+    raise serializers.ValidationError(
+        gettext_lazy("该风险单已有成功的正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未成功发送过正式工单的风险单进行测试")
+    )
 
 
 FAILURE_HINTS_BY_CHANNEL = {
