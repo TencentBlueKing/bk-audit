@@ -41,7 +41,7 @@ from services.web.risk.bksec.service import (
 )
 from services.web.risk.bksec.variables import _normalize_risk_type
 from services.web.risk.constants import TicketNodeStatus
-from services.web.risk.models import Risk, TicketNode
+from services.web.risk.models import Risk, TicketNode, calc_task_duration
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
@@ -236,7 +236,6 @@ class GetTaskStatus(BkSecResourceMeta):
             node = self._find_test_node(task_id)
             if node:
                 from django.db import transaction
-                from django.utils.dateparse import parse_datetime
 
                 with transaction.atomic():
                     node = TicketNode.objects.select_for_update().get(id=node.id)
@@ -244,9 +243,8 @@ class GetTaskStatus(BkSecResourceMeta):
                     if failure_hint:
                         node.process_result["failure_hint"] = failure_hint
                     # 冗余存储 duration（秒）：同步到独立整数字段用于数值排序，JSON 数值排序会按字符串比较出错
-                    start = parse_datetime((status or {}).get("start_time") or "")
-                    finish = parse_datetime((status or {}).get("finish_time") or "")
-                    duration = int((finish - start).total_seconds()) if start and finish else None
+                    # 复用统一实现：任务级时间缺失时退化为子节点时间，且兼容有时区/无时区混用
+                    duration = calc_task_duration(status)
                     node.process_result["duration"] = duration
                     node.duration = duration
                     node.status = TicketNodeStatus.FINISHED
