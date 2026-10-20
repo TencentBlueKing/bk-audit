@@ -60,6 +60,25 @@ from apps.meta.exceptions import (
     SystemHasExist,
 )
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
+from apps.meta.mcp_tools.schemas import (
+    ExploreSystemFieldsRequest,
+    GetAuditSystemDetailRequest,
+    ListAuditSystemsRequest,
+    ListSystemActionsRequest,
+    ListSystemResourceTypesRequest,
+)
+from apps.meta.mcp_tools.serializers import (
+    ExploreSystemFieldsRequestSerializer,
+    GetAuditSystemDetailRequestSerializer,
+    GetAuditSystemDetailResponseSerializer,
+    ListAuditSystemsRequestSerializer,
+    ListAuditSystemsResponseSerializer,
+    ListSystemActionsRequestSerializer,
+    ListSystemActionsResponseSerializer,
+    ListSystemResourceTypesRequestSerializer,
+    ListSystemResourceTypesResponseSerializer,
+)
+from apps.meta.mcp_tools.services import MetaToolService
 from apps.meta.models import (
     Action,
     CustomField,
@@ -159,6 +178,9 @@ from core.models import get_request_username
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
 from services.web.common.scope_permission import ScopeContext, ScopePermission
+from services.web.query.ai_assistant.serializers import (
+    GetLogFieldMetadataResponseSerializer,
+)
 
 
 class Meta:
@@ -1418,3 +1440,122 @@ class BulkCreateAction(Meta, ModelResource, SystemAuditMixinResource):
         actions = validated_request_data["actions"]
         for action in actions:
             resource.meta.create_action(action)
+
+
+class MCPListAuditSystems(Meta, Resource):
+    """列出当前用户可检索日志的已接入审计系统。
+
+    用户提到系统名称、别名或未明确指向哪个系统时先调用本工具。
+    keyword 对 system_id、名称、描述做包含匹配，结果按名称排序分页。
+    返回的 system_id 是后续元数据工具与日志检索条件 scope_id 的系统标识；
+    空列表表示当前用户没有可检索的系统，不代表系统不存在。
+    """
+
+    name = gettext_lazy("MCP 系统列表")
+    RequestSerializer = ListAuditSystemsRequestSerializer
+    ResponseSerializer = ListAuditSystemsResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        data = dict(validated_request_data)
+        namespace = data.pop("namespace")
+        request = ListAuditSystemsRequest.model_validate(data)
+        return MetaToolService.list_systems(
+            username=get_request_username(),
+            namespace=namespace,
+            request=request,
+        ).model_dump(mode="json")
+
+
+class MCPGetAuditSystemDetail(Meta, Resource):
+    """获取单个接入系统的概要详情：中英文名称、描述、接入状态及操作、资源类型数量。
+
+    system_id 必须来自 mcp_list_audit_systems 的返回。需要操作或资源类型清单时
+    继续调用对应列表工具，本工具不返回明细。system_url 为空字符串表示未登记访问地址。
+    """
+
+    name = gettext_lazy("MCP 系统详情")
+    RequestSerializer = GetAuditSystemDetailRequestSerializer
+    ResponseSerializer = GetAuditSystemDetailResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        data = dict(validated_request_data)
+        namespace = data.pop("namespace")
+        request = GetAuditSystemDetailRequest.model_validate(data)
+        return MetaToolService.get_system_detail(
+            username=get_request_username(),
+            namespace=namespace,
+            request=request,
+        ).model_dump(mode="json")
+
+
+class MCPListSystemActions(Meta, Resource):
+    """列出指定系统已登记的操作，把自然语言中的动作描述映射为检索条件 action_id 的合法值。
+
+    keyword 对 action_id、中英文名称、描述做包含匹配；resource_type_id 可选，
+    仅返回作用于该资源类型的操作。同名操作以名称匹配为主、action_id 为准生成条件值。
+    返回的 resource_type_ids 是该操作作用的资源类型，可参考生成 resource_type 条件。
+    结果按 action_id 排序分页；空结果表示系统未登记操作，不代表日志为空。
+    """
+
+    name = gettext_lazy("MCP 系统操作列表")
+    RequestSerializer = ListSystemActionsRequestSerializer
+    ResponseSerializer = ListSystemActionsResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        data = dict(validated_request_data)
+        namespace = data.pop("namespace")
+        request = ListSystemActionsRequest.model_validate(data)
+        return MetaToolService.list_actions(
+            username=get_request_username(),
+            namespace=namespace,
+            request=request,
+        ).model_dump(mode="json")
+
+
+class MCPListSystemResourceTypes(Meta, Resource):
+    """列出指定系统已登记的资源类型，把资源对象描述映射为检索条件 resource_type 字段的合法值。
+
+    keyword 对 resource_type_id、中英文名称、描述做包含匹配。
+    用户说资源名称或别名时以 name 匹配为主、resource_type_id 为准生成条件值。
+    ancestor 为直接父资源类型 ID，空列表表示根资源类型；sensitivity 为敏感等级，0 表示普通。
+    结果按 resource_type_id 排序分页。
+    """
+
+    name = gettext_lazy("MCP 系统资源类型列表")
+    RequestSerializer = ListSystemResourceTypesRequestSerializer
+    ResponseSerializer = ListSystemResourceTypesResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        data = dict(validated_request_data)
+        namespace = data.pop("namespace")
+        request = ListSystemResourceTypesRequest.model_validate(data)
+        return MetaToolService.list_resource_types(
+            username=get_request_username(),
+            namespace=namespace,
+            request=request,
+        ).model_dump(mode="json")
+
+
+class MCPExploreSystemFields(Meta, Resource):
+    """探索指定系统审计日志的可检索字段目录，构造字段条件前确认字段名、类型与操作符。
+
+    返回与 mcp_get_log_field_metadata 根目录一致的声明字段：含中文名、类型、
+    allow_operators、枚举 options（options 的 id 是真实过滤值）和统计能力提示；
+    不采样日志，sample_summary.sampling_performed 固定为 false。
+    需要按检索条件采样 JSON 子键时，改用 mcp_get_log_field_metadata 并传入完整 condition。
+    权限拒绝时停止查询，无权限不能当作零结果。
+    """
+
+    name = gettext_lazy("MCP 系统字段探索")
+    RequestSerializer = ExploreSystemFieldsRequestSerializer
+    ResponseSerializer = GetLogFieldMetadataResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        data = dict(validated_request_data)
+        namespace = data.pop("namespace")
+        request = ExploreSystemFieldsRequest.model_validate(data)
+        return MetaToolService.explore_system_fields(
+            username=get_request_username(),
+            namespace=namespace,
+            system_id=request.system_id,
+        ).model_dump(mode="json")

@@ -19,6 +19,59 @@ definitions:
       trace_id: {type: string, x-nullable: true}
       data: {x-nullable: true, description: 普通错误为 null；IAM 权限错误沿用平台权限申请数据。}
       errors: {x-nullable: true, description: 可选诊断信息。统计预算错误包含 suggested_interval（MINUTE/HOUR/DAY 或 null）及受控 adjustments 调整建议；不回显 SQL 或字段值，工具分支仍按 code 判断。}
+  meta_tool_error_response:
+    type: object
+    required: [result, code, message, request_id, trace_id, data]
+    properties:
+      result: {type: boolean}
+      code:
+        description: audit-meta 工具稳定领域错误码：2927001 目标系统不存在或不可访问，请使用系统列表返回的 system_id、2927002 元数据查询失败，请稍后重试；字段探索复用日志工具错误码：2926001 日志查询条件不合法、2926004 无敏感字段查询权限、2926007 日志查询结果过大、2926008 字段类型不支持当前统计操作；也可能返回 IAM 或平台通用错误码。
+      message: {type: string, x-nullable: true}
+      request_id: {type: string, x-nullable: true}
+      trace_id: {type: string, x-nullable: true}
+      data: {x-nullable: true, description: 普通错误为 null；IAM 权限错误沿用平台权限申请数据。}
+      errors: {x-nullable: true, description: 可选诊断信息，不回显 SQL 或字段值；工具分支按 code 判断。}
+  log_field_metadata_data:
+    description: "字段探索响应，不包含 SQL、物理表或未经脱敏的命中行。"
+    type: object
+    required: [fields, sample_summary]
+    properties:
+      fields:
+        description: "最多返回 50 个字段；业务 data 的 UTF-8 JSON 最大 1 MiB。"
+        type: array
+        maxItems: 50
+        items:
+          description: "单个可查询字段的声明元信息与当前样本观察。"
+          type: object
+          required: [field, category, display_name, description, type_source, observed_types, allow_operators, options, is_expandable, statistics_supported, statistics_kind, unsupported_reason, allowed_metrics, sample_values, sampled_non_null_count, coverage]
+          properties:
+            field: {$ref: '#/definitions/log_tool_field_ref_response'}
+            category: {description: 根字段为 BASIC，JSON 子字段为 EXTENDED。, enum: [BASIC, EXTENDED], type: string}
+            display_name: {description: 面向用户和 Agent 的字段展示名。, type: string}
+            description: {"default": "", "description": "字段业务含义；动态子字段可能为空。", "title": "Description", "type": "string"}
+            type_source: {description: 字段类型来自声明还是样本推断。, enum: [DECLARED, INFERRED], type: string}
+            observed_types: {description: 脱敏样本中观察到的 JSON 类型。, items: {enum: [boolean, integer, number, string, array, object, 'null'], type: string}, type: array}
+            allow_operators: {description: 现有日志检索支持的操作符。, items: {type: string}, type: array}
+            options: {description: "常见值及显示名称提示，不是允许值白名单；过滤值按实际值匹配。结果码非零使用 neq 0 或 exclude [0]，-1 仅匹配真实 -1。", items: {$ref: '#/definitions/log_tool_option'}, type: array, x-nullable: true}
+            is_expandable: {type: boolean, description: 声明为对象的字段或样本观察到的对象字段可为 true；false 不能证明全范围没有下层字段。}
+            statistics_supported: {type: boolean, description: 当前声明、样本及权限给出的可尝试统计提示；最终以全范围执行为准。}
+            statistics_kind: {type: string, x-nullable: true, enum: [CATEGORICAL, NUMERIC], description: 声明或样本推断的统计类型；未知或不支持时为空，未知仍可能允许统计。}
+            unsupported_reason: {type: string, x-nullable: true, enum: [OBJECT, ARRAY, UNKNOWN_TYPE, PERMISSION_DENIED], description: 不可直接统计的稳定原因，不含敏感规则细节。}
+            allowed_metrics: {type: array, items: {description: 聚合函数枚举，禁止接收调用方给出的函数名。, enum: [COUNT, DISTINCT_COUNT, MIN, MAX, AVG, SUM, PERCENTILE_APPROX], type: string}, description: 基于声明或样本与权限给出的聚合函数提示；执行时重新校验。}
+            sample_values: {type: array, maxItems: 3, items: {}, description: 最多 3 个脱敏标量样例，单样例 UTF-8 JSON 最大 1024 bytes；对象和数组不回显。}
+            sampled_non_null_count: {description: 脱敏样本中该字段的非空值数量。, type: integer}
+            coverage: {description: 非空样本数占本次 SQL 返回的样本日志数的比例，不代表全范围覆盖率；输出保留 4 位小数。, format: double, type: number}
+      sample_summary:
+        description: "字段探索的有界采样摘要。"
+        type: object
+        required: [sampling_performed, sampled_count, returned_field_count, truncated]
+        properties:
+          sampling_performed: {description: 是否实际采样日志；根字段目录为 false，此时 sampled_count=0 不表示没有日志。, type: boolean}
+          sampled_count: {description: 本次 SQL 返回并脱敏的日志数，最多 100 条，不是范围总量；sampling_performed=false 表示未采样。, type: integer}
+          returned_field_count: {description: 本次返回字段数量。, type: integer}
+          truncated:
+            type: boolean
+            description: "采样预算为零或达到上限，或单层字段数量、解析预算、协议无法表达的路径/深度导致发现可能不完整；业务 data 载荷超限返回 413。"
   log_tool_field_ref:
     description: "受控日志字段引用，仅允许日志检索可见字段及可见 JSON 子路径。\n\nJSON 字段由业务系统定义，路径段允许中文和可查询的常见标点。本模型约束可见根字段、\n可解析子键及路径成本；Doris JSON SQL 构建器负责统一转义。"
     type: object
@@ -3870,6 +3923,439 @@ paths:
           resourcePermissionRequired: true
         disabledStages: []
         descriptionEn: null
+  /mcp/meta/systems/:
+    post:
+      operationId: mcp_list_audit_systems
+      description: >-
+        列出当前用户可检索日志的已接入审计系统，默认空间无需传 namespace。用户提到系统名称、别名或未明确指向哪个系统时先调用本工具。
+        keyword 对 system_id、名称、描述做包含匹配，结果按名称排序分页。返回的 system_id 是后续元数据工具与日志检索条件 scope_id 的系统标识；空列表表示当前用户没有可检索的系统，不代表系统不存在。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            description: "系统列表请求：按当前用户检索权限列出已接入审计的系统。"
+            type: object
+            additionalProperties: false
+            properties:
+              keyword:
+                type: string
+                maxLength: 64
+                x-nullable: true
+                description: 可选关键词，对 system_id、名称、描述做包含匹配；省略返回全部可检索系统。
+              page:
+                type: integer
+                default: 1
+                minimum: 1
+                description: 页码，从 1 开始。
+              page_size:
+                type: integer
+                default: 20
+                minimum: 1
+                maximum: 50
+                description: 每页数量，默认 20，最大 50。
+      responses:
+        "200":
+          description: 系统列表
+          schema:
+            type: object
+            required: [result, code, message, request_id, trace_id, data]
+            properties:
+              result: {type: boolean}
+              code: {type: integer}
+              message: {type: string, x-nullable: true}
+              request_id: {type: string, x-nullable: true}
+              trace_id: {type: string, x-nullable: true}
+              data:
+                description: "系统列表响应，按名称排序分页。"
+                type: object
+                required: [systems, total, page, page_size, has_more]
+                properties:
+                  systems:
+                    description: 当前页系统摘要。
+                    type: array
+                    items:
+                      description: 单个可检索系统的摘要，system_id 是后续工具与检索条件的系统标识。
+                      type: object
+                      required: [system_id, name, description, audit_status]
+                      properties:
+                        system_id: {description: 系统 ID，后续工具与检索条件的 scope_id 使用该值。, type: string}
+                        name: {description: 系统名称。, type: string}
+                        description: {description: 系统描述，可能为空字符串。, type: string}
+                        audit_status: {description: 审计接入状态，列表结果固定为 accessed（已接入）。, type: string}
+                  total: {description: 命中关键词的可检索系统总数。, type: integer, minimum: 0}
+                  page: {description: 当前页码。, type: integer}
+                  page_size: {description: 当前页大小。, type: integer}
+                  has_more: {description: 是否还有下一页。, type: boolean}
+        default:
+          description: 平台标准错误响应
+        "400": {description: 请求参数不合法, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "403": {description: 无系统检索权限, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "502": {description: 元数据查询失败, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "504": {description: 元数据查询超时, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/meta/namespaces/default/mcp_user/meta/systems/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/meta/system_detail/:
+    post:
+      operationId: mcp_get_audit_system_detail
+      description: >-
+        获取单个接入系统的概要详情：中英文名称、描述、接入状态及操作、资源类型数量，默认空间无需传 namespace。
+        system_id 必须来自 mcp_list_audit_systems 的返回。需要操作或资源类型清单时继续调用对应列表工具，本工具不返回明细。system_url 为空字符串表示未登记访问地址。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            description: "系统详情请求。"
+            type: object
+            additionalProperties: false
+            required: [system_id]
+            properties:
+              system_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: 系统 ID，必须来自 mcp_list_audit_systems 的返回。
+      responses:
+        "200":
+          description: 系统详情
+          schema:
+            type: object
+            required: [result, code, message, request_id, trace_id, data]
+            properties:
+              result: {type: boolean}
+              code: {type: integer}
+              message: {type: string, x-nullable: true}
+              request_id: {type: string, x-nullable: true}
+              trace_id: {type: string, x-nullable: true}
+              data:
+                description: "系统详情响应。"
+                type: object
+                required: [system]
+                properties:
+                  system:
+                    description: 接入系统概要详情，只暴露 Agent 决策所需的安全字段。
+                    type: object
+                    required: [system_id, name, name_en, description, audit_status, source_type, system_url, action_count, resource_type_count]
+                    properties:
+                      system_id: {description: 系统 ID。, type: string}
+                      name: {description: 系统中文名称，可能为空字符串。, type: string}
+                      name_en: {description: 系统英文名称，可能为空字符串。, type: string}
+                      description: {description: 系统描述，可能为空字符串。, type: string}
+                      audit_status: {description: "审计接入状态（PENDING 待接入 / ACCESSED 已接入）。", type: string}
+                      source_type: {description: 系统来源类型。, type: string}
+                      system_url: {description: 系统访问地址，可能为空字符串。, type: string}
+                      action_count: {description: 该系统已登记的操作数量。, type: integer, minimum: 0}
+                      resource_type_count: {description: 该系统已登记的资源类型数量。, type: integer, minimum: 0}
+        default:
+          description: 平台标准错误响应
+        "400": {description: 目标系统不存在或请求参数不合法, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "403": {description: 无系统检索权限, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "502": {description: 元数据查询失败, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "504": {description: 元数据查询超时, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/meta/namespaces/default/mcp_user/meta/system_detail/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/meta/actions/:
+    post:
+      operationId: mcp_list_system_actions
+      description: >-
+        列出指定系统已登记的操作，把自然语言中的动作描述映射为检索条件 action_id 的合法值，默认空间无需传 namespace。
+        keyword 对 action_id、中英文名称、描述做包含匹配；resource_type_id 可选，仅返回作用于该资源类型的操作。同名操作以名称匹配为主、action_id 为准生成条件值。
+        返回的 resource_type_ids 是该操作作用的资源类型，可参考生成 resource_type 条件。结果按 action_id 排序分页；空结果表示系统未登记操作，不代表日志为空。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            description: "系统操作列表请求：把自然语言中的动作描述映射为 action_id 合法值。"
+            type: object
+            additionalProperties: false
+            required: [system_id]
+            properties:
+              system_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: 系统 ID，必须来自 mcp_list_audit_systems 的返回。
+              keyword:
+                type: string
+                maxLength: 64
+                x-nullable: true
+                description: 可选关键词，对 action_id、中英文名称、描述做包含匹配。
+              resource_type_id:
+                type: string
+                maxLength: 64
+                x-nullable: true
+                description: 可选资源类型 ID，仅返回作用于该资源类型的操作。
+              page:
+                type: integer
+                default: 1
+                minimum: 1
+                description: 页码，从 1 开始。
+              page_size:
+                type: integer
+                default: 50
+                minimum: 1
+                maximum: 100
+                description: 每页数量，默认 50，最大 100。
+      responses:
+        "200":
+          description: 操作列表
+          schema:
+            type: object
+            required: [result, code, message, request_id, trace_id, data]
+            properties:
+              result: {type: boolean}
+              code: {type: integer}
+              message: {type: string, x-nullable: true}
+              request_id: {type: string, x-nullable: true}
+              trace_id: {type: string, x-nullable: true}
+              data:
+                description: "操作列表响应，按 action_id 排序分页。"
+                type: object
+                required: [actions, total, page, page_size, has_more]
+                properties:
+                  actions:
+                    description: 当前页操作。
+                    type: array
+                    items:
+                      description: 单个操作：action_id 是检索条件 action_id 字段的合法值。
+                      type: object
+                      required: [action_id, name, name_en, type, sensitivity, description, resource_type_ids]
+                      properties:
+                        action_id: {description: 操作 ID，检索条件 action_id 字段的合法值。, type: string}
+                        name: {description: 操作中文名称。, type: string}
+                        name_en: {description: 操作英文名称，可能为空字符串。, type: string}
+                        type: {description: 操作类型，可能为空。, type: string, x-nullable: true}
+                        sensitivity: {description: 敏感等级，0 表示普通。, type: integer}
+                        description: {description: 操作描述，可能为空字符串。, type: string}
+                        resource_type_ids: {description: 该操作作用的资源类型 ID 列表，可作为 resource_type 条件的参考值。, items: {type: string}, type: array}
+                  total: {description: 命中条件的操作总数。, type: integer, minimum: 0}
+                  page: {description: 当前页码。, type: integer}
+                  page_size: {description: 当前页大小。, type: integer}
+                  has_more: {description: 是否还有下一页。, type: boolean}
+        default:
+          description: 平台标准错误响应
+        "400": {description: 目标系统不存在或请求参数不合法, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "403": {description: 无系统检索权限, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "502": {description: 元数据查询失败, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "504": {description: 元数据查询超时, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/meta/namespaces/default/mcp_user/meta/actions/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/meta/resource_types/:
+    post:
+      operationId: mcp_list_system_resource_types
+      description: >-
+        列出指定系统已登记的资源类型，把资源对象描述（如脚本、集群、模块）映射为检索条件 resource_type 字段的合法值，默认空间无需传 namespace。
+        keyword 对 resource_type_id、中英文名称、描述做包含匹配。用户说资源名称或别名时以 name 匹配为主、resource_type_id 为准生成条件值。
+        ancestor 为直接父资源类型 ID，空列表表示根资源类型；sensitivity 为敏感等级，0 表示普通。结果按 resource_type_id 排序分页。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            description: "资源类型列表请求：把资源对象描述映射为 resource_type 合法值。"
+            type: object
+            additionalProperties: false
+            required: [system_id]
+            properties:
+              system_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: 系统 ID，必须来自 mcp_list_audit_systems 的返回。
+              keyword:
+                type: string
+                maxLength: 64
+                x-nullable: true
+                description: 可选关键词，对 resource_type_id、中英文名称、描述做包含匹配。
+              page:
+                type: integer
+                default: 1
+                minimum: 1
+                description: 页码，从 1 开始。
+              page_size:
+                type: integer
+                default: 50
+                minimum: 1
+                maximum: 100
+                description: 每页数量，默认 50，最大 100。
+      responses:
+        "200":
+          description: 资源类型列表
+          schema:
+            type: object
+            required: [result, code, message, request_id, trace_id, data]
+            properties:
+              result: {type: boolean}
+              code: {type: integer}
+              message: {type: string, x-nullable: true}
+              request_id: {type: string, x-nullable: true}
+              trace_id: {type: string, x-nullable: true}
+              data:
+                description: "资源类型列表响应，按 resource_type_id 排序分页。"
+                type: object
+                required: [resource_types, total, page, page_size, has_more]
+                properties:
+                  resource_types:
+                    description: 当前页资源类型。
+                    type: array
+                    items:
+                      description: 单个资源类型：resource_type_id 是检索条件 resource_type 字段的合法值。
+                      type: object
+                      required: [resource_type_id, name, name_en, sensitivity, description, ancestor]
+                      properties:
+                        resource_type_id: {description: 资源类型 ID，检索条件 resource_type 字段的合法值。, type: string}
+                        name: {description: 资源类型中文名称。, type: string}
+                        name_en: {description: 资源类型英文名称，可能为空字符串。, type: string}
+                        sensitivity: {description: 敏感等级，0 表示普通。, type: integer}
+                        description: {description: 资源类型描述，可能为空字符串。, type: string}
+                        ancestor: {description: 直接父资源类型 ID 列表；空列表表示根资源类型。, items: {type: string}, type: array}
+                  total: {description: 命中条件的资源类型总数。, type: integer, minimum: 0}
+                  page: {description: 当前页码。, type: integer}
+                  page_size: {description: 当前页大小。, type: integer}
+                  has_more: {description: 是否还有下一页。, type: boolean}
+        default:
+          description: 平台标准错误响应
+        "400": {description: 目标系统不存在或请求参数不合法, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "403": {description: 无系统检索权限, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "502": {description: 元数据查询失败, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "504": {description: 元数据查询超时, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/meta/namespaces/default/mcp_user/meta/resource_types/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+  /mcp/meta/fields/:
+    post:
+      operationId: mcp_explore_system_fields
+      description: >-
+        探索指定系统审计日志的可检索字段目录，构造字段条件前确认字段名、类型与操作符，默认空间无需传 namespace。
+        返回与 mcp_get_log_field_metadata 根目录一致的声明字段：含中文名、类型、allow_operators、枚举 options（options 的 id 是真实过滤值）和统计能力提示；不采样日志，sample_summary.sampling_performed 固定为 false。
+        需要按检索条件采样 JSON 子键时，改用 mcp_get_log_field_metadata 并传入完整 condition。权限拒绝时停止查询，无权限不能当作零结果。
+      tags: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            description: "系统字段探索请求：返回目标系统可检索字段的声明目录。"
+            type: object
+            additionalProperties: false
+            required: [system_id]
+            properties:
+              system_id:
+                type: string
+                minLength: 1
+                maxLength: 64
+                description: 系统 ID，必须来自 mcp_list_audit_systems 的返回。
+      responses:
+        "200":
+          description: 系统字段目录
+          schema:
+            type: object
+            required: [result, code, message, request_id, trace_id, data]
+            properties:
+              result: {type: boolean}
+              code: {type: integer}
+              message: {type: string, x-nullable: true}
+              request_id: {type: string, x-nullable: true}
+              trace_id: {type: string, x-nullable: true}
+              data: {$ref: '#/definitions/log_field_metadata_data'}
+        default:
+          description: 平台标准错误响应
+        "400": {description: 目标系统不存在或请求参数不合法, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "403": {description: 无系统或敏感字段权限, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "413": {description: 查询结果超过响应预算, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "502": {description: 字段目录查询失败, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+        "504": {description: 字段目录查询超时, schema: {$ref: '#/definitions/meta_tool_error_response'}}
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/meta/namespaces/default/mcp_user/meta/fields/
+          matchSubpath: false
+          timeout: 0
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          appVerifiedRequired: true
+          userVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
   /backent_api:
     x-bk-apigateway-method-any:
       operationId: bk_audit_backent_api
