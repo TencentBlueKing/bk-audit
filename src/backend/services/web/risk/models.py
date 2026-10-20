@@ -32,6 +32,7 @@ from django.db.models import Exists, Field, Max, OuterRef, Q, QuerySet
 from django.db.models.functions import Substr
 from django.db.models.signals import post_save  # noqa: E402
 from django.dispatch import receiver  # noqa: E402
+from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
@@ -1174,18 +1175,35 @@ class NL2RiskFilterLog(OperateRecordModel):
         ]
 
 
+def to_naive_utc(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """统一为 UTC 朴素时间
+
+    同一份 SOPS 状态里，任务级时间常带时区（+0800 / +08:00）、节点级时间常不带时区，
+    两者直接比较或相减会抛 can't compare/subtract offset-naive and offset-aware datetimes。
+    不带时区的值按当前时区解释后一并转为 UTC，保证差值正确。
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = timezone.make_aware(value, timezone.get_current_timezone())
+    return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
 def parse_sops_time(value) -> Optional[datetime.datetime]:
-    """解析 SOPS 状态里的时间字段（源格式或 ISO 格式，均可能出现在 JSONField 回读值中）"""
+    """解析 SOPS 状态里的时间字段（源格式或 ISO 格式，均可能出现在 JSONField 回读值中）
+
+    返回值统一为 UTC 朴素时间，见 to_naive_utc。
+    """
     if not value or not isinstance(value, str):
         return None
     value = value.strip()
     for fmt in ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.datetime.strptime(value, fmt)
+            return to_naive_utc(datetime.datetime.strptime(value, fmt))
         except ValueError:
             continue
     try:
-        return datetime.datetime.fromisoformat(value)
+        return to_naive_utc(datetime.datetime.fromisoformat(value))
     except ValueError:
         return None
 

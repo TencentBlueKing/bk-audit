@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
@@ -331,11 +331,18 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             "-time": "-timestamp",
             "operator": "operator",
             "-operator": "-operator",
-            "duration": "duration",
-            "-duration": "-duration",
         }
-        order_field = order_field_map.get(order_by, "-timestamp")
-        nodes = nodes.order_by(order_field)
+        # 耗时排序：未完成的记录 duration 为 null，统一置顶（nulls_first），
+        # 并以开始时间作为次键 —— 对未完成记录而言「已耗时 = now - start_time」，
+        # 同一时刻 now 相同，故组内按开始时间升序即等价于「已运行越久越靠前」
+        duration_order_map = {
+            "duration": [F("duration").asc(nulls_first=True), "-timestamp"],
+            "-duration": [F("duration").desc(nulls_first=True), "timestamp"],
+        }
+        if order_by in duration_order_map:
+            nodes = nodes.order_by(*duration_order_map[order_by])
+        else:
+            nodes = nodes.order_by(order_field_map.get(order_by, "-timestamp"))
 
         # 分页：count 先于切片（总数）；切片后仅组装当前页数据
         total = nodes.count()
@@ -389,7 +396,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "pa_id": pa_id_of_record or 0,
                     "pa_name": current_pa_name,
                     "operator": node.operator,
+                    # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
                     "start_time": node.time,
+                    "finish_time": (process_result.get("status") or {}).get("finish_time") or "",
                     "sops_task_id": sops_task_id,
                     "sops_state": state,
                     "result": result,
@@ -481,7 +490,9 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "pa_name": pa_name,
             "trigger": process_result.get("trigger") or "",
             "operator": node.operator,
+            # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
             "start_time": node.time,
+            "finish_time": status_info.get("finish_time") or "",
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
             "sops_state": state,
             "result": result,
