@@ -44,6 +44,18 @@ def _unique_schema_models(schema_mapping: dict[str, type[MessageSchema]]) -> lis
     return list(dict.fromkeys(schema_mapping.values())) or [MessageSchema]
 
 
+def _serialize_attachment_input(schema_type: type[MessageSchema], data) -> dict:
+    """读取历史输入时忽略已移除字段；当前字段仍校验，写入保持原有严格协议。"""
+    if isinstance(data, dict):
+        data = {name: value for name, value in data.items() if name in schema_type.model_fields}
+    return parse_snapshot(
+        schema_type,
+        data,
+        field_name="input_data",
+        error_type=AttachmentSnapshotValidationError,
+    ).model_dump(mode="json")
+
+
 @extend_schema_field(
     PolymorphicProxySerializer(
         component_name="AIAttachmentInputData",
@@ -230,12 +242,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "status": instance.status,
             "title": instance.title,
             "content_updated_at": instance.content_updated_at,
-            "input_data": parse_snapshot(
-                handler.input_model,
-                instance.input_data,
-                field_name="input_data",
-                error_type=AttachmentSnapshotValidationError,
-            ).model_dump(mode="json"),
+            "input_data": _serialize_attachment_input(handler.input_model, instance.input_data),
             "output_data": output_data,
             "error_code": instance.error_code,
             "error_message": instance.error_message,
@@ -278,12 +285,7 @@ class AttachmentListItemSerializer(serializers.Serializer):
         conversation = instance.source_message.conversation
         handler = attachment_handler_registry.require(instance.attachment_type)
         return {
-            "input_data": parse_snapshot(
-                handler.input_model,
-                instance.input_data,
-                field_name="input_data",
-                error_type=AttachmentSnapshotValidationError,
-            ).model_dump(mode="json"),
+            "input_data": _serialize_attachment_input(handler.input_model, instance.input_data),
             "uid": str(instance.uid),
             "scope_type": conversation.scope_type,
             "scope_id": conversation.scope_id,
