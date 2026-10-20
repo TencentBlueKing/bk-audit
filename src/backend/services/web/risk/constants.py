@@ -419,6 +419,11 @@ PA_RESULT_KEYWORD_LABELS = {
 }
 
 
+class ItsmVersion(TextChoices):
+    V3 = "v3", gettext_lazy("ITSM V3")
+    V4 = "v4", gettext_lazy("ITSM V4")
+
+
 class RiskRuleOperator(TextChoices):
     """
     风险规则匹配符

@@ -67,6 +67,7 @@ from services.web.risk.constants import (
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
     AnalyseReportStatus,
+    ItsmVersion,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -83,6 +84,7 @@ from services.web.risk.handlers.ticket import (
     ForApprove,
     NewRisk,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     AnalyseReport,
@@ -646,6 +648,30 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
+def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
+    """同步审批类节点（ForApprove）的 ITSM 工单状态到节点。"""
+    status = None
+    if node.itsm_version == ItsmVersion.V4:
+        ticket_id = str(ticket.get("id") or "")
+        if ticket_id:
+            status = get_itsm_ticket_status(ticket_id)
+    elif node.itsm_version == ItsmVersion.V3:
+        sn = ticket.get("sn")
+        if sn:
+            status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+
+    if status is None:
+        node.status = TicketNodeStatus.FINISHED
+        return
+
+    node.process_result["status"] = status
+    node.status = (
+        TicketNodeStatus.FINISHED
+        if status["current_status"] in TicketStatus.get_finished_status()
+        else TicketNodeStatus.RUNNING
+    )
+
+
 def _sync_auto_result_lock_name(node_id: str = None, **kwargs) -> str:
     """锁名：单节点同步与周期同步分开
 
@@ -690,23 +716,8 @@ def sync_auto_result(node_id: str = None):
                 node = TicketNode.objects.select_for_update().get(id=node.id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
-                    sn = node.process_result.get("ticket", {}).get("sn")
-                    if sn:
-                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
-                        node.process_result["status"] = status
-                        node.status = (
-                            TicketNodeStatus.FINISHED
-                            if node.process_result["status"]["current_status"]
-                            in [
-                                TicketStatus.TERMINATED,
-                                TicketStatus.FINISHED,
-                                TicketStatus.FAILED,
-                                TicketStatus.REVOKED,
-                            ]
-                            else TicketNodeStatus.RUNNING
-                        )
-                    else:
-                        node.status = TicketNodeStatus.FINISHED
+                    ticket = node.process_result.get("ticket") or {}
+                    _sync_approve_node_status(node, ticket)
                 # 自动处理套餐节点
                 elif node.action == AutoProcess.__name__:
                     task_id = node.process_result.get("task", {}).get("task_id", "")
