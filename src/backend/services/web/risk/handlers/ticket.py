@@ -796,6 +796,15 @@ class AutoProcess(RiskFlowBaseHandler):
                 from services.web.risk.bksec.contract import render_event_constant
 
                 value = render_event_constant(value, risk=self.risk)
+            # risk_type_extra 兜底：逐字段渲染后重新序列化，避免字段值自带引号破坏 JSON（插件 json.loads 不崩）
+            if (
+                c["key"] == "${risk_type_extra}"
+                and isinstance(value, str)
+                and getattr(self.rule, "auto_strategy_id", None)
+            ):
+                from services.web.risk.bksec.contract import render_risk_type_extra
+
+                value = render_risk_type_extra(value, risk=self.risk)
             # operator 入参兜底：BKSEC 自动规则渲染后保证数组串契约（插件 json.loads 不崩）
             if c["key"] == "${operator}" and getattr(self.rule, "auto_strategy_id", None):
                 from services.web.risk.bksec.contract import coerce_operator_constant

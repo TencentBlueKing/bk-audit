@@ -214,3 +214,24 @@ def render_event_constant(template_json: str, risk: Optional[Risk] = None) -> st
     渲染字符串和模板混写
     """
     return render_value(template_json, build_render_context(risk=risk))
+
+
+def render_risk_type_extra(template_json: str, risk: Optional[Risk] = None) -> str:
+    """
+    渲染 risk_type_extra（字段映射序列化串）
+
+    必须逐字段渲染后重新序列化：整体按字符串渲染时，字段值自带的引号
+    （如 operator 的 tojson 输出 ["v_dryidong"]）会破坏 JSON 结构，
+    导致插件 json.loads 失败（Expecting ',' delimiter）。
+    """
+    context = build_render_context(risk=risk)
+    try:
+        mapping = json.loads(template_json)
+    except (ValueError, TypeError):
+        return render_value(template_json, context)
+    if not isinstance(mapping, dict):
+        return render_value(template_json, context)
+    return json.dumps(
+        {key: render_value(value, context) for key, value in mapping.items()},
+        ensure_ascii=False,
+    )
