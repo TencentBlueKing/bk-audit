@@ -177,10 +177,63 @@ class FieldStatisticsHandlerTest(FieldStatisticsTestMixin, AIAssistantPlatformTe
                 self.assertEqual({(row["scope_type"], row["scope_id"]) for row in response.data}, {("scene", "1")})
 
     def test_creation_rejects_extra_range_and_identity(self):
-        for extra in ({"condition": {}}, {"namespace": "other"}, {"username": "other"}, {"start_time": "bad"}):
+        for extra in (
+            {"condition": {}},
+            {"namespace": "other"},
+            {"username": "other"},
+            {"start_time": "bad"},
+            {"top_n": 10},
+        ):
             with self.subTest(extra=extra), self.assertRaises(AttachmentSnapshotValidationError):
                 self.create(**extra)
         self.assertFalse(Attachment.objects.exists())
+
+    def test_list_keeps_legacy_attachment_and_omits_removed_input_fields(self):
+        """旧top_n不应阻断整份列表，也不应随当前输入回填给客户端。"""
+        legacy = self.create(interval="DAY")
+        saved_input = {**legacy["input_data"], "top_n": 10}
+        Attachment.objects.filter(uid=legacy["uid"]).update(input_data=saved_input)
+        current = self.create(interval="MONTH")
+
+        response = ListAttachments().request(source_message_uid=str(self.source.uid))
+
+        self.assertEqual([row["uid"] for row in response], [current["uid"], legacy["uid"]])
+        self.assertEqual(response[0]["input_data"], current["input_data"])
+        self.assertEqual(response[1]["input_data"], legacy["input_data"])
+        self.assertNotIn("top_n", response[1]["input_data"])
+        self.assertEqual(Attachment.objects.get(uid=legacy["uid"]).input_data, saved_input)
+
+    def test_detail_omits_removed_input_fields_without_changing_saved_snapshot(self):
+        """详情与列表采用相同的输入读取口径，历史数据库快照保持不变。"""
+        created = self.create(interval="DAY")
+        saved_input = {**created["input_data"], "top_n": 10}
+        Attachment.objects.filter(uid=created["uid"]).update(input_data=saved_input)
+
+        response = GetAttachment().request(attachment_uid=created["uid"])
+
+        self.assertEqual(response["uid"], created["uid"])
+        self.assertEqual(response["input_data"], created["input_data"])
+        self.assertNotIn("top_n", response["input_data"])
+        self.assertEqual(Attachment.objects.get(uid=created["uid"]).input_data, saved_input)
+
+    def test_edit_retry_rejects_removed_input_fields_without_changing_attachment(self):
+        """读取容忍历史字段，不代表新提交可以继续携带已移除字段。"""
+        created = self.create()
+        Attachment.objects.filter(uid=created["uid"]).update(status=ExecutionStatus.FAILED)
+        before = Attachment.objects.get(uid=created["uid"])
+
+        with self.assertRaises(AttachmentSnapshotValidationError) as error:
+            RetryAttachment().request(
+                attachment_uid=created["uid"],
+                input_data={"field": {"raw_name": "username"}, "top_n": 10},
+            )
+
+        self.assertEqual(error.exception.data["errors"][0]["loc"], ["top_n"])
+        after = Attachment.objects.get(uid=created["uid"])
+        self.assertEqual(after.input_data, before.input_data)
+        self.assertEqual(after.context_data, before.context_data)
+        self.assertEqual(after.status, before.status)
+        self.assertEqual(after.task_id, before.task_id)
 
     def test_source_type_status_owner_and_snapshot_conflicts_rejected(self):
         original = deepcopy(self.source.context_data)
