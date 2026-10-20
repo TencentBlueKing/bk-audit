@@ -151,7 +151,11 @@ class SystemActionItem(BaseModel):
     action_id: str = Field(..., description="操作 ID，检索条件 action_id 字段的合法值。")
     name: Annotated[str, serializers.CharField(allow_blank=True)] = Field(..., description="操作中文名称。")
     name_en: Annotated[str, serializers.CharField(allow_blank=True)] = Field(..., description="操作英文名称，可能为空字符串。")
-    type: Optional[str] = Field(default=None, description="操作类型，可能为空。")
+    # 模型 blank+null 双开：线上同时存在 null 与空串两种形态，显式声明 allow_null + allow_blank；
+    # Optional[str] 经 drf-pydantic 只会得到 allow_null，空串仍会被默认 allow_blank=False 拒绝。
+    type: Annotated[Optional[str], serializers.CharField(allow_null=True, allow_blank=True)] = Field(
+        default=None, description="操作类型，可能为空。"
+    )
     sensitivity: int = Field(..., description="敏感等级，0 表示普通。")
     description: Annotated[str, serializers.CharField(allow_blank=True)] = Field(..., description="操作描述，可能为空字符串。")
     resource_type_ids: List[str] = Field(

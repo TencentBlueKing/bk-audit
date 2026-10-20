@@ -281,6 +281,8 @@ class TestMetaListActions(TestCase):
         Action.objects.create(system_id="bk_job", action_id="execute_script", name="执行脚本", name_en="Execute")
         Action.objects.create(system_id="bk_job", action_id="view_job", name="查看作业")
         Action.objects.create(system_id="bk_job", action_id="delete_job", name="删除作业")
+        # 线上实证回归：type 存在 null 与空串两种形态（模型 blank+null 双开）
+        Action.objects.create(system_id="bk_job", action_id="blank_type", name="空类型操作", type="")
         ResourceTypeActionRelation.objects.create(
             system_id="bk_job", action_id="execute_script", resource_type_id="script"
         )
@@ -297,11 +299,24 @@ class TestMetaListActions(TestCase):
         output = self._list()
         by_id = {item.action_id: item for item in output.actions}
 
-        self.assertEqual(set(by_id), {"execute_script", "view_job", "delete_job"})
+        self.assertEqual(set(by_id), {"execute_script", "view_job", "delete_job", "blank_type"})
         self.assertEqual(by_id["execute_script"].resource_type_ids, ["script"])
         self.assertEqual(by_id["view_job"].resource_type_ids, [])
-        self.assertEqual(output.total, 3)
+        # 空串 type 归一为 None（2026-10-20 bkop 线上 500 回归：空串曾触发该字段不能为空）
+        self.assertIsNone(by_id["blank_type"].type)
+        self.assertEqual(output.total, 4)
         self.assertFalse(output.has_more)
+
+    def test_blank_type_action_passes_response_serializer(self):
+        """线上实证：type 为空串的操作归一 None 后过 bk_resource 响应校验。"""
+        from apps.meta.mcp_tools.serializers import ListSystemActionsResponseSerializer
+
+        output = self._list(page_size=100)
+        serializer = ListSystemActionsResponseSerializer(data=output.model_dump(mode="json"))
+        self.assertTrue(
+            serializer.is_valid(),
+            f"空 type 操作未通过响应序列化: {serializer.errors}",
+        )
 
     def test_keyword_matches_action_id_and_name(self):
         output = self._list(keyword="execute")
@@ -318,7 +333,7 @@ class TestMetaListActions(TestCase):
         self.assertEqual(len(output.actions), 2)
         self.assertTrue(output.has_more)
         output = self._list(page=2, page_size=2)
-        self.assertEqual(len(output.actions), 1)
+        self.assertEqual(len(output.actions), 2)
         self.assertFalse(output.has_more)
 
     def test_missing_system_raises_domain_error(self):
