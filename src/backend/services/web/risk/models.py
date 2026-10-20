@@ -1191,9 +1191,25 @@ def parse_sops_time(value) -> Optional[datetime.datetime]:
 
 
 def calc_task_duration(status_info: dict) -> Optional[int]:
-    """耗时（秒）：SOPS 任务实际 start_time/finish_time 之差；未结束/缺失返回 None"""
-    start = parse_sops_time((status_info or {}).get("start_time"))
-    finish = parse_sops_time((status_info or {}).get("finish_time"))
+    """耗时（秒）：SOPS 任务实际 start_time/finish_time 之差；未结束/缺失返回 None
+
+    部分场景（SOPS 版本差异/任务未回填任务级时间）下任务级 start_time/finish_time 为空，
+    此时退化为取所有子节点的最早开始时间与最晚结束时间，避免耗时恒为 None。
+    """
+    status_info = status_info or {}
+    start = parse_sops_time(status_info.get("start_time"))
+    finish = parse_sops_time(status_info.get("finish_time"))
+    if not (start and finish):
+        children = status_info.get("children") or {}
+        child_times = [
+            (parse_sops_time(child.get("start_time")), parse_sops_time(child.get("finish_time")))
+            for child in children.values()
+            if isinstance(child, dict)
+        ]
+        starts = [item[0] for item in child_times if item[0]]
+        finishes = [item[1] for item in child_times if item[1]]
+        start = start or (min(starts) if starts else None)
+        finish = finish or (max(finishes) if finishes else None)
     if start and finish:
         return int((finish - start).total_seconds())
     return None

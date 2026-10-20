@@ -230,7 +230,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         trigger = serializers.CharField(label=gettext_lazy("触发方式"), required=False, allow_blank=True)
         result = serializers.CharField(label=gettext_lazy("状态"), required=False, allow_blank=True)
         operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
-        order_by = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-time")
+        order_by = serializers.CharField(
+            label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
+        )
         page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
         page_size = serializers.IntegerField(
             label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=100, default=20
@@ -246,7 +248,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         trigger = validated_request_data.get("trigger", "").strip()
         result_filter = validated_request_data.get("result", "").strip()
         operator = validated_request_data.get("operator", "").strip()
-        order_by = validated_request_data.get("order_by", "-time").strip()
+        order_by = validated_request_data.get("order_by", "-start_time").strip()
         page = validated_request_data.get("page", 1)
         page_size = validated_request_data.get("page_size", 20)
 
@@ -322,6 +324,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 排序
         order_field_map = {
+            # start_time 为对外字段名；time 保留为兼容旧调用方的别名
+            "start_time": "timestamp",
+            "-start_time": "-timestamp",
             "time": "timestamp",
             "-time": "-timestamp",
             "operator": "operator",
@@ -384,7 +389,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "pa_id": pa_id_of_record or 0,
                     "pa_name": current_pa_name,
                     "operator": node.operator,
-                    "time": node.time,
+                    "start_time": node.time,
                     "sops_task_id": sops_task_id,
                     "sops_state": state,
                     "result": result,
@@ -476,7 +481,7 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "pa_name": pa_name,
             "trigger": process_result.get("trigger") or "",
             "operator": node.operator,
-            "time": node.time,
+            "start_time": node.time,
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
             "sops_state": state,
             "result": result,
