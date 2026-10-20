@@ -320,7 +320,11 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         )
 
     def get_permissions(self):
-        if self.action in ["list", "execution_records"]:
+        # 执行记录（列表/详情）为只读审计流水，登录即可查看，不做场景实例级鉴权；
+        # 数据范围由入参 risk_id / pa_id 收敛，也不需要调用方补传 scene_id
+        if self.action in ["execution_records", "execution_record_detail"]:
+            return [IsAuthenticated()]
+        if self.action in ["list"]:
             return [
                 InstanceActionPermission(
                     actions=[ActionEnum.LIST_PA],
