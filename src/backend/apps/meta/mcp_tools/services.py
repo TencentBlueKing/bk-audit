@@ -162,7 +162,8 @@ class MetaToolService:
                     action_id=str(row.action_id or ""),
                     name=str(row.name or ""),
                     name_en=str(row.name_en or ""),
-                    type=row.type,
+                    # 模型 blank+null 双开：空串归一为 None，与契约的 nullable 语义对齐
+                    type=row.type or None,
                     sensitivity=int(row.sensitivity or 0),
                     description=str(row.description or ""),
                     resource_type_ids=list(resource_map.get(str(row.action_id), [])),
