@@ -178,8 +178,9 @@ class GetAttachment(AIAssistantResource):
 
     详情接口 404 / 2908019 表示当前用户无法取得该附件，应停止轮询并刷新列表。
     HTTP 200 且 status=FAILED 表示异步任务失败：error_code 为 2926008 时调整字段，
-    2926009/2926010 时减少类别、调粗粒度或缩小范围后新建；2926005/2926006 可稍后重试，
-    持续失败保留附件 UID 排查。权限错误先解决授权，不能通过反复重试绕过。
+    2926009/2926010 时调整字段、调粗粒度或缩小范围，通过 retry 提交完整 input_data 重新执行；
+    2926005/2926006 可稍后原样重试。需要保留旧结果时另建附件，持续失败保留附件 UID 排查。
+    权限错误先解决授权，不能通过反复重试绕过。
 
 
     output_data 的 oneOf 由 attachment_type 决定；仅在 SUCCESS 时将其作为有效产物渲染。
@@ -227,8 +228,9 @@ class UpdateAttachment(AIAssistantResource):
     ```
 
     attachment_uid 通过路径传入。标题不受执行状态限制；FIELD_STATISTICS 和 AI_STATISTICS
-    仅支持修改标题，不支持提交 output_data，也不能修改 input_data。
-    改字段、统计选项或 AI 需求时，从来源消息创建新附件。
+    仅支持修改标题，不支持提交 output_data；本 PATCH 接口不接收 input_data。
+    修改字段、统计选项、查询条件或 AI 需求时，通过 retry 接口提交完整 input_data，沿用原 UID 重新执行；
+    输入整体替换，不与旧输入合并。需要保留旧结果时，从来源消息创建新附件。
     对于支持正文编辑的其他类型，output_data 是完整替换，且只允许 SUCCESS 状态编辑。
 
     ### Case：保存富文本分析报告
@@ -253,21 +255,35 @@ class UpdateAttachment(AIAssistantResource):
 
 
 class RetryAttachment(AIAssistantResource):
-    """重新执行 SUCCESS 或 FAILED 的异步附件，复用原 UID、输入和上下文快照。
+    """重新执行 SUCCESS 或 FAILED 的异步附件，保留原 UID，支持原样或修改输入后重试。
     SUCCESS 态用于“重新生成”，FAILED 态用于“重试”；两者都会立即清空旧产物、旧错误、旧过程和旧反馈，进入 PROCESSING。
     PROCESSING、同步附件和缺少有效 task_id 的历史对象返回 InvalidAttachmentState。
 
-    ### Case：统计失败后重试 / 成功后重新生成
+    ### Case 1：原样重试 / 成功后重新生成
 
-    `POST /api/v1/ai_assistant/attachments/{attachment_uid}/retry/`，无需业务请求体。
-    FIELD_STATISTICS 和 AI_STATISTICS 都支持人工重试或重新生成，没有 supports_retry 开关；
+    `POST /api/v1/ai_assistant/attachments/{attachment_uid}/retry/`，不带请求体或传 {} 时复用原输入和上下文。
+    FIELD_STATISTICS、AI_STATISTICS 和 AI_ANALYSIS 都支持人工重试或重新生成，没有 supports_retry 开关；
     PROCESSING、同步类型或缺少有效 task_id 不能重试，执行仍按实际查询重新鉴权；带新输入的重试还须满足创建时来源要求。
 
     返回附件对象后按 status 处理。仅轮询时继续查询同一 UID，无需读取执行标识。
     使用 SSE 时先关闭旧流，等待新的 execution_id 后恢复；排队期间旧快照不代表新执行。
+
+    ### Case 2：修改输入后重试
+
     可选传input_data完整对象：与创建共用校验和prepare，整体替换输入及context。省略condition使用当前成功来源条件，保留原独立范围须完整提交condition。
     不传input_data直接复用已有快照，不重新验证来源业务状态或刷新指令。修改条件仅影响此附件。
-    示例：{"input_data":{"field":{"raw_name":"result_code"},"interval":"MONTH"}}；未列出的输入字段不会从旧输入合并。
+    例如修改程序统计字段与粒度：
+
+    ```json
+    {
+      "input_data": {
+        "field": {"raw_name": "result_code"},
+        "interval": "MONTH"
+      }
+    }
+    ```
+
+    未列出的输入字段不会从旧输入合并；需要保留旧结果时另建附件，新执行失败不会恢复旧产物。
     input_data=null/数组/字符串、condition局部或null、必填缺失返回4xx，旧输入/结果保持不变。
     HTTP 400 / 2908023 表示当前状态不允许重试（如已经 PROCESSING）；重新读取详情，不重复提交。
     HTTP 404 / 2908019 表示当前用户无法取得该附件；停止重试并刷新列表。
