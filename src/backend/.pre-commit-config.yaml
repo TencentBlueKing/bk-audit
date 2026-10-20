@@ -6,7 +6,7 @@ repos:
     hooks:
       - id: check-commit-message
         name: Backend commit message
-        entry: sh src/backend/agent/skills/generate-project-commit/scripts/commit_message.sh hook --message-file
+        entry: sh agent/backend/tools/commit-message/commit_message.sh hook --message-file
         language: system
         stages: [commit-msg]
         always_run: true

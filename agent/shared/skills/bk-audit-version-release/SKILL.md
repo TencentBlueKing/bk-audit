@@ -5,43 +5,50 @@ description: Use when preparing a BK Audit release, writing product-facing relea
 
 # 蓝鲸审计中心版本发布
 
-用于从 `main` 的实际提交和人工总结中生成产品侧版本日志，并同步版本元数据、提醒发布风险，最后在版本日志 feature 分支上形成一个可合入主分支的 release commit。
+根据前一次发布到目标 SHA 的实际变更和人工总结，生成产品版本日志、同步前后端元数据并核对发布风险。需要交付版本文件时，使用 `release-{版本号}-notes` 分支通过 PR 合入 `main`。只整理日志草稿时无需建立分支或提交。
 
 ## 基本原则
 
-- 版本日志以证据为准：必须对比前一次发布版本到当前 `main` 的 commits、diff 和文件路径，不能只照抄人工总结。
+- 版本日志以证据为准：对比前一次发布基准到已确认发布目标的 commits、diff 和文件路径，不能只照抄人工总结。
 - 人工总结是输入，不是最终结论：需要检查“总结提到但 commit 证据不明显”和“commit 有变更但总结遗漏”的项。
 - 版本日志面向产品侧：按用户可感知能力归类，避免暴露 hook、schema、内部占位、实现细节等低层表述。
-- 发布改动必须收敛成单个语义完整的 release commit；只暂存发布相关文件。
-- 信息量较大的发布任务需要维护计划、发现和进展，避免长任务丢上下文；这些文件不提交。
-- commit 范围较大或需要多视角取证时，可以使用只读 subagent 拆分“代码链路、风险配置、测试证据、文档质检”，主 agent 必须二次复核后再落结论。
-- 不要直接运行当前自动化脚本完成全流程。现有脚本会切分支、拉取、`git add -A` 并 `--no-verify` 提交，和项目规范冲突；除非先修正脚本，否则按本 skill 手动执行文件规则。
+- 本轮要求实际提交时，发布改动收敛成语义完整的 release commit；只暂存发布相关文件。
+
+## 版本号格式
+
+版本号使用 `主版本号.次版本号.修订号`，例如 `1.19.7`；输入可带 `V` 前缀，使用前先归一化为 `1.19.7`。notes 分支和 package.json 使用无前缀数字，后端 VERSION 与版本日志文件名按文件规则使用 `V1.19.7`。
+
+版本日志分支固定为 `release-{版本号}-notes`，例如 `release-1.19.7-notes`，用于将日志及版本文件合入 `main`；它与正式 `release-{版本号}` 发布分支用途不同，不用发布分支承载本次 notes 改动。各文件位置和格式见 [file-patterns.md](references/file-patterns.md)。
 
 ## 必需输入
 
+先区分只分析/撰写日志、同步版本元数据、实际提交/发布。本轮只要求日志时只产出草稿或指定日志文件，不自动更新版本号、创建分支或执行后续操作；以下流程按已确认范围取用。
+
 - 目标版本号：如 `1.19.7` 或 `V1.19.7`
 - 前一次发布基准：优先使用用户给定 commit；没有则从上一版本 release commit/tag 推断
-- 当前发布目标：通常为当前最新 `main`
+- 发布目标 ref/SHA：用户指定的目标，或经确认的 main；记录实际 SHA
 - 人工总结点：业务侧明确希望体现的功能、优化、修复
-- Commit 信息：如 `feat: release-1.19.7版本发布 --story=xxx`
+- Commit 信息：仅实际提交时需要，tracker 使用真实关联编号
 
 信息不足时先从本地仓库推断；只有版本号、基准范围或提交目标无法确定时再问用户。
 
 ## 标准流程
 
-### 1. 建立版本日志 feature 分支
+### 1. 确认范围并准备 notes 分支
 
-从最新 `main` 新建版本日志 feature 分支，避免把发布日志混入业务分支；该分支后续通过 PR 或确认后的合并进入 `main`。
+先区分日志草稿、版本文件更新与实际提交。草稿在指定位置产出；需要交付版本文件时，在干净的隔离 checkout 中建立 notes 分支，避免混入业务改动或切换用户正在使用的工作区。
+
+创建基线是经确认的 `main` SHA；日志比较基准则是前一次发布，二者不能混用。先核对 main 所属远端及本轮选定 SHA，不能因本地分支名为 main 就认为它是目标最新版本。发布目标尚未进入 main 时，先明确业务改动与 notes 的合入顺序。
+
+以下示例用于已经确认版本为 1.19.7、基线正确且允许准备文件的独立工作区：
 
 ```bash
 git status --short --branch
-git checkout main
-git fetch tencent
-git merge --ff-only tencent/main
-git checkout -b codex/release-1.19.7-notes
+git show --no-patch --format='%H %s' <main-sha>
+git checkout -b release-1.19.7-notes <main-sha>
 ```
 
-如果当前工作区有未提交改动，先确认这些改动是否属于本次发布；不要自动 stash 或覆盖用户改动。
+`<main-sha>` 必须替换为本次确认的完整 main 提交 SHA；它不是上一版本的比较基准。同名 notes 分支已存在时核对其内容再决定沿用，不覆盖或重置。当前工作区有未提交改动时保全并另选隔离工作区，不自动 stash。
 
 ### 2. 定位对比范围
 
@@ -55,9 +62,9 @@ git checkout -b codex/release-1.19.7-notes
 必须记录最终采用的范围，例如：
 
 ```bash
-git log --oneline --decorate <base_commit>..main
-git diff --stat <base_commit>..main
-git diff --name-status <base_commit>..main
+git log --oneline --decorate <base_commit>..<target_ref>
+git diff --stat <base_commit>..<target_ref>
+git diff --name-status <base_commit>..<target_ref>
 ```
 
 ### 3. 归并产品侧版本点
@@ -108,7 +115,7 @@ git diff --name-status <base_commit>..main
 
 ## 需要更新的文件
 
-从仓库根目录视角：
+从仓库根目录视角按请求范围选择：只写日志时不更新版本徽章、package.json 或 VERSION。
 
 - `release.md`：在顶部插入中文版本日志
 - `readme.md`：更新 release badge
@@ -158,23 +165,27 @@ git diff --name-status <base_commit>..main
 
 如果某一类没有内容，不要强行保留空标题；以本次实际内容为准。
 
+## Git 操作
+
+notes 分支名称和创建基线按上面的标准流程执行。固定并记录 `<base_commit>..<target_ref>`，只检查和暂存本次发布文件；文件位置统一见 [文件更新规则](references/file-patterns.md)。
+
+确认用户要求实际提交后，使用 [项目提交技能](../generate-project-commit/SKILL.md)，按前端、后端或混合范围运行检查与 hook，形成语义完整的 notes 提交。此链接按源码布局解析；单独安装发布技能时，从已确认的产品 checkout 读取 `agent/shared/skills/generate-project-commit/SKILL.md`，缺失时先报告缺口。标题使用项目当前规则与真实关联编号，不复制示例编号；不全量暂存或绕过 hook。只写草稿不进入提交步骤。
+
+PR 的源分支是 `release-{版本号}-notes`，目标是 `main`。推送、创建 PR、合入以及正式发布分别按任务中已经明确的授权执行；缺少具体目标时先给出待执行结果和目标，不把准备 notes 当成发布授权。正式 release 分支、tag、部署不由 notes 准备自动创建。
+
 ## 验证与提交
 
-提交前必须执行：
+先对明确的发布文件检查差异：
 
 ```bash
 git diff --check -- <release_files>
-git add <release_files>
-.venv/bin/pre-commit run
-git diff --cached --stat
-git commit -m "feat: release-1.19.7版本发布 --story=135736074"
 ```
 
 规则：
 
-- 只 `git add` 本次发布文件，不要 `git add .` 或 `git add -A`。
-- 使用项目自带 `.venv/bin/pre-commit`。
-- 不要用 `--no-verify`。
+- 实际提交使用上节项目提交技能，只读引用当前 checkout 的规则。
+- 只暂存本次发布文件；按前端、后端或混合改动选择实际检查与 hook，不默认把后端 .venv 当作前端环境。
+- 不绕过 hook，不创建或伪造需求编号。只要求准备日志时不暂存、不提交。
 - `debug/`、`.env`、`.venv`、`config/local_settings.py` 不要提交。
 - 提交后检查 `git status --short --branch` 和 `git log -1 --stat --oneline`。
 
@@ -183,8 +194,8 @@ git commit -m "feat: release-1.19.7版本发布 --story=135736074"
 如果用户要求合入主分支：
 
 1. 先说明 release commit、变更文件、验证结果、待关注 checklist。
-2. 等用户确认后再 push、创建 PR 或合入。
-3. 合入后确认 `main` 最新提交包含 release commit。
+2. 按本次已明确的 push、PR 与合入授权执行；未授权的具体动作先汇报目标与验证结果。
+3. 合入后核对 main 的最终 SHA、版本文件与已审定的 notes 改动；保留 PR 及验证证据。
 
 不要在未确认的情况下直接推送或合并到主仓库主分支。
 

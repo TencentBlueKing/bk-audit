@@ -9,7 +9,7 @@ Step 3（达标判定）和 Step 4（更新进展）建议主 agent 与用户交
 ```
 运行评估 → 对比前后结果 → 判定是否达标
   → 达标则归档
-  → 未达标则回到 SOP 3（重新分析）→ SOP 4（调优）→ SOP 5（再次重评估）
+  → 未达标则报告结果；已授权继续闭环时再分析、调优、重评估
 ```
 
 ## Step 1: 重新运行评估
@@ -28,7 +28,7 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 ```
 
 **全量重评估**（SOP 2 模式 B）：确认无回归后跑全量。
-⚠️ 全量重评估必须覆盖所有 provider，不得使用 `--filter-providers`。
+全量指已确认的用例与 provider 范围；局部复验标明覆盖范围，与前轮比较时使用一致口径。
 
 ## Step 2: 对比前后结果
 
@@ -107,7 +107,7 @@ python <skill-path>/scripts/analyze_results.py \
 |------|------|
 | 通过率 >= 阈值，无回归 | ✅ 达标，进入归档 |
 | 通过率 >= 阈值，有回归 | ⚠️ 与用户确认是否接受回归 |
-| 通过率 < 阈值，有改善 | 回到 SOP 3 重新分析本轮失败，再进入 SOP 4 调优 |
+| 通过率 < 阈值，有改善 | 报告残余问题；只有已授权继续闭环时才进入分析/调优 |
 | 通过率 < 阈值，无改善 | 与用户讨论是否调整阈值或策略 |
 
 ## Step 4: 更新进展追踪
@@ -147,15 +147,7 @@ python <skill-path>/scripts/analyze_results.py \
 
 达标后：
 
-1. **导出最终结果**
-
-```bash
-# promptfoo 支持多个 -o 参数同时导出不同格式
-npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
-  --env-file .env --no-cache \
-  -o evals/<suite>/output/$(date +%Y%m%d)-final.json \
-  -o evals/<suite>/output/$(date +%Y%m%d)-final.html
-```
+1. **归档已有结果** — 复用本轮输出，不为改文件名或增加格式重复调用模型；额外格式按工具已有导出能力处理。
 
 2. **更新 Suite README** — 记录最终通过率、调优历史、版本信息
 
@@ -165,7 +157,7 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 
 ## 循环控制
 
-**建议**：经过 3-5 轮调优仍未达标时，主动与用户讨论是否需要调整策略，避免无限循环。
+只有请求包含持续调优时才循环，并遵守已确认次数、时限或成本预算。调整阈值或样本范围需用户确认，不通过降低验收标准宣称原目标达成。
 
 退出策略（从轻到重）：
 
@@ -176,4 +168,4 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 
 ---
 
-→ 达标：归档结束。未达标：回到 **SOP 3（分析评估）** 重新分析，再进入 SOP 4 调优
+本次重评估完成后报告达标情况、覆盖和结果位置；后续分析或调优按请求范围处理。

@@ -8,7 +8,7 @@ make test
 make test-deps-down
 ```
 
-`make test` 始终运行全部 pytest，包括真实 RabbitMQ/Celery 集成用例。缺少中间件时测试会失败，不会静默跳过。
+`make test` 运行不带 `special` 标记的常规测试，仍包括真实 RabbitMQ/Celery 集成用例。`make test-special` 只运行专项测试，完整验证使用 `make test-all`，顺序运行常规与专项。缺少所需中间件时测试会失败，不会静默跳过。
 
 测试中间件使用 `restart: unless-stopped`。首次执行 `make test-deps-up` 后，Docker daemon 重启时会自动恢复容器；Docker Desktop 本身仍需配置为登录后启动。执行 `make test-deps-down` 会删除容器，之后需要重新执行 `make test-deps-up`。
 
@@ -30,7 +30,7 @@ GitHub Actions 使用 x86 runner 和官方 `mysql:5.7.44` service，不受本地
 
 ## Worktree 隔离
 
-每个 worktree 必须使用不同的 `DATABASES["default"]["TEST"]["NAME"]` 和 `CELERY_TEST_QUEUE_PREFIX`。Redis 继续通过项目 `REDIS_KEY_PREFIX` 隔离。
+每个 worktree 必须使用不同的 `DATABASES["default"]["TEST"]["NAME"]` 和 `CELERY_TEST_QUEUE_PREFIX`。Redis 使用本 worktree 独立的 `REDIS_DB`；`REDIS_KEY_PREFIX` 仅作额外命名隔离，不能替代 DB 隔离。项目同时存在直接 Redis 客户端，不能假定所有访问都经过 Django cache 的 key prefix。
 
 多个 worktree 可以共享同一个 RabbitMQ Broker，但不能共享 `CELERY_TEST_QUEUE_PREFIX`，否则并发测试可能消费其他 worktree 的任务。
 
