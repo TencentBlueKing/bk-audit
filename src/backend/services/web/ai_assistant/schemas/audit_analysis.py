@@ -102,12 +102,12 @@ class AIAnalysisOutputSchema(MessageSchema):
 
     markdown: str = Field(min_length=1, description="完整报告正文；可以是 Markdown 或编辑器 HTML，不改写原文。")
     content_format: ReportContentFormat | None = Field(
-        default=None, description="正文格式 MARKDOWN/HTML；旧记录及省略此项的编辑请求自动识别。"
+        default=None, description="正文格式 MARKDOWN/HTML；省略此项的生成、编辑及历史导出自动识别，历史详情保留原快照。"
     )
 
     @model_serializer(mode="wrap")
     def serialize_output(self, handler: SerializerFunctionWrapHandler):
-        """序列化时补齐旧正文格式；详情读取不写回历史数据库快照。"""
+        """序列化报告时补齐正文格式；历史详情直接读取原快照，不经过此归一化。"""
         data = handler(self)
         data["content_format"] = resolve_content_format(self.markdown, self.content_format)
         return data

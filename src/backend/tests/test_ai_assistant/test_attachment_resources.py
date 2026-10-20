@@ -24,6 +24,7 @@ from services.web.ai_assistant.constants import (
 )
 from services.web.ai_assistant.exceptions import (
     AttachmentNotFound,
+    AttachmentOutputValidationError,
     AttachmentSnapshotValidationError,
     InvalidAttachmentSource,
     InvalidAttachmentState,
@@ -722,6 +723,31 @@ class AttachmentResourceTest(TestCase):
         for internal_field in ("id", "context_data", "task_id", "stream_config", "stream_archive"):
             self.assertNotIn(internal_field, response)
 
+    def test_create_rejects_generated_output_with_unknown_fields(self, _username):
+        """历史读取放宽后，新生成的产物仍不能携带当前模型未声明的字段。"""
+        with mock.patch.object(self.sync_handler, "execute", return_value={"content": "new", "legacy": True}):
+            with self.assertRaises(AttachmentOutputValidationError):
+                CreateAttachment().request(
+                    message_uid=str(self.source_message.uid),
+                    attachment_type=AttachmentType.FIELD_STATISTICS,
+                    input_data={"text": "hello"},
+                )
+
+        self.assertFalse(Attachment.objects.exists())
+
+    def test_detail_returns_saved_output_without_current_schema_revalidation(self, _username):
+        """详情保留历史正文和元数据，不补默认值，也不要求适配当前输出模型。"""
+        saved_output = {"legacy_content": ["历史正文", {"count": 3}], "legacy_metadata": {"enabled": True}}
+        for attachment_type in (AttachmentType.FIELD_STATISTICS, AttachmentType.AI_ANALYSIS):
+            with self.subTest(attachment_type=attachment_type):
+                attachment = self.create_attachment(attachment_type=attachment_type, output_data=saved_output)
+
+                detail = GetAttachment().request(attachment_uid=str(attachment.uid))
+
+                self.assertEqual(detail["output_data"], saved_output)
+                attachment.refresh_from_db()
+                self.assertEqual(attachment.output_data, saved_output)
+
     def test_create_async_attachment_supports_polling_to_final_state(self, _username):
         with mock.patch.object(self.async_handler.async_task, "apply_async"):
             with self.captureOnCommitCallbacks(execute=True):
@@ -907,15 +933,15 @@ class AttachmentResourceTest(TestCase):
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
         attachment_handler_registry.register(EditableAnalysisAttachmentHandler())
 
-        with self.assertRaises(AttachmentSnapshotValidationError) as context:
-            UpdateAttachment().request(
-                {
-                    "attachment_uid": str(attachment.uid),
-                    "output_data": {"invalid": True},
-                }
-            )
+        for output_data in ({"invalid": True}, {"content": "new", "legacy": True}):
+            with self.subTest(output_data=output_data), self.assertRaises(AttachmentSnapshotValidationError) as context:
+                UpdateAttachment().request(attachment_uid=str(attachment.uid), output_data=output_data)
 
-        self.assertEqual(context.exception.STATUS_CODE, 400)
+            self.assertEqual(context.exception.STATUS_CODE, 400)
+            saved = Attachment.objects.get(pk=attachment.pk)
+            self.assertEqual(saved.output_data, attachment.output_data)
+            self.assertEqual(saved.content_updated_at, attachment.content_updated_at)
+            self.assertEqual(saved.updated_at, attachment.updated_at)
 
     def test_retry_failed_async_attachment_returns_processing_snapshot(self, _username):
         attachment = self.create_attachment(

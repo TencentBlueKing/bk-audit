@@ -52,7 +52,8 @@ def ensure_analysis_handler_registered() -> AIAnalysisHandler:
 
 
 class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
-    def test_legacy_html_response_exposes_format_without_rewriting_storage(self):
+    def test_legacy_html_response_preserves_snapshot_and_export_detects_format(self):
+        """历史详情不补字段，导出仍可按旧正文自动识别 HTML。"""
         output = {"markdown": "<h1>旧报告</h1><p>完整正文</p>"}
         attachment = Attachment.objects.create(
             source_message=self.log_search,
@@ -66,7 +67,13 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
             updated_by=self.user,
         )
         response = AttachmentResponseSerializer(attachment).data
-        self.assertEqual(response["output_data"], {**output, "content_format": "HTML"})
+        self.assertEqual(response["output_data"], output)
+        downloaded = AttachmentService(user=self.user).export(
+            attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN
+        )
+        self.assertIn("旧报告", downloaded.content.decode())
+        self.assertIn("完整正文", downloaded.content.decode())
+        self.assertNotIn("<h1>", downloaded.content.decode())
         attachment.refresh_from_db()
         self.assertEqual(attachment.output_data, output)
 
