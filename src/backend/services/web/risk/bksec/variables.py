@@ -65,6 +65,20 @@ class EventFieldValues(list):
         return display_value(self[-1]) if self else ""
 
 
+def _match_display_name_key(data: dict, name: str) -> Any:
+    """
+    兼容 display_name 形式的键（如「操作人用户名(username)」）
+
+    手动事件或早期策略入库的 event_data 可能以「展示名(原始字段名)」为键，
+    此时按原始字段名（括号内）匹配，保证 {{ event.username }} 仍可取到值。
+    """
+    suffix = "({})".format(name)
+    for key, value in data.items():
+        if isinstance(key, str) and key.endswith(suffix):
+            return value
+    return ""
+
+
 def _event_field_value(event: dict, name: str) -> Any:
     """
     事件字段取值：优先事件顶层字段，其次 event_data 子字典
@@ -81,7 +95,9 @@ def _event_field_value(event: dict, name: str) -> Any:
         except ValueError:
             return ""
     if isinstance(data, dict):
-        return data.get(name, "")
+        if name in data:
+            return data.get(name, "")
+        return _match_display_name_key(data, name)
     return ""
 
 
