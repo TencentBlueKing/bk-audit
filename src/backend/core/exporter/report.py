@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Doctype, Tag
 from django.conf import settings
 from django.db.models import TextChoices
 from django.utils import timezone
@@ -114,12 +114,16 @@ _CONTROL_OR_PATH = re.compile(r"[\x00-\x1f\x7f/\\]+")
 def resolve_content_format(
     content: str, content_format: ReportContentFormat | str | None = None
 ) -> ReportContentFormat:
-    """优先使用声明格式；旧记录须全部由 HTML 块组成，避免误判 Markdown 代码或行内标签。"""
+    """声明格式优先；自动识别忽略 DOCTYPE，正文仍须全部由 HTML 块组成。"""
     if content_format:
         return ReportContentFormat(content_format)
     if not content.lstrip().startswith("<"):
         return ReportContentFormat.MARKDOWN
-    nodes = [node for node in BeautifulSoup(content, "html.parser").contents if str(node).strip()]
+    nodes = [
+        node
+        for node in BeautifulSoup(content, "html.parser").contents
+        if not isinstance(node, Doctype) and str(node).strip()
+    ]
     if nodes and all(isinstance(node, Tag) and node.name in _HTML_ROOT_TAGS for node in nodes):
         return ReportContentFormat.HTML
     return ReportContentFormat.MARKDOWN

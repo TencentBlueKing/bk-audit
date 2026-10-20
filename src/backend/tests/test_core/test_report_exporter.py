@@ -90,6 +90,12 @@ class ReportExporterTest(SimpleTestCase):
     def test_format_marker_and_legacy_detection(self):
         cases = [
             ('<p>HTML报告</p>', None, ReportContentFormat.HTML),
+            ('<!DOCTYPE html><html><body><h1>报告</h1></body></html>', None, ReportContentFormat.HTML),
+            (' \n<!doctype html>\n<p>HTML报告</p>', None, ReportContentFormat.HTML),
+            ('<!DOCTYPE html>', None, ReportContentFormat.MARKDOWN),
+            ('<!DOCTYPE html><p>段落</p>\n# 另一标题', None, ReportContentFormat.MARKDOWN),
+            ('```html\n<!DOCTYPE html><p>代码</p>\n```', None, ReportContentFormat.MARKDOWN),
+            ('<!DOCTYPE html><p>HTML样例</p>', ReportContentFormat.MARKDOWN, ReportContentFormat.MARKDOWN),
             ('<p>HTML样例</p>', ReportContentFormat.MARKDOWN, ReportContentFormat.MARKDOWN),
             ('# 标题\n\n<div>混合标签</div>', None, ReportContentFormat.MARKDOWN),
             ('```html\n<p>代码</p>\n```', None, ReportContentFormat.MARKDOWN),
@@ -99,6 +105,18 @@ class ReportExporterTest(SimpleTestCase):
         for text, marker, expected in cases:
             with self.subTest(text=text):
                 self.assertEqual(resolve_content_format(text, marker), expected)
+
+    def test_doctype_html_exports_content_without_source_tags(self):
+        """未声明格式的完整 HTML 应转换正文，不能把标签打印到 MD/PDF。"""
+        source = '<!DOCTYPE html><html><body><h1>审计报告</h1><p>完整正文</p></body></html>'
+        exporter = ReportDocumentExporter(title='报告', content=source)
+        markdown = exporter.export('MARKDOWN').content.decode()
+        self.assertEqual(markdown.strip(), '# 审计报告\n\n完整正文')
+        pdf = PdfReader(io.BytesIO(exporter.export('PDF').content))
+        text = ''.join(page.extract_text() for page in pdf.pages)
+        self.assertIn('审计报告', text)
+        self.assertIn('完整正文', text)
+        self.assertNotIn('<', text)
 
     def test_html_cleaning_preserves_report_styles_and_rejects_executable_content(self):
         source = (
