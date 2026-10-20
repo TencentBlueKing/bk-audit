@@ -139,6 +139,30 @@ class FieldStatisticsTaskTest(FieldStatisticsTestMixin, AIAssistantPlatformTestC
         self.assertIsNotNone(attachment.finished_at)
         self.assertFalse(attachment.is_stream)
 
+    def test_detail_preserves_legacy_top_n_output_and_other_counts(self):
+        """旧统计结果按持久化快照返回，不删 OTHER，也不把旧 TopN 元数据套入新协议。"""
+        attachment = self.processing()
+        invoke_task(generate_field_statistics, attachment=attachment)
+        attachment.refresh_from_db()
+        saved_output = deepcopy(attachment.output_data)
+        saved_output["distribution"].update(top_n=1, has_other=True)
+        saved_output["query_summary"].update(top_n=1, has_other=True)
+        saved_output["distribution"]["groups"][1].update(kind="OTHER", value=None, value_type=None)
+        for group in saved_output["distribution"]["groups"]:
+            group.pop("value_label")
+        saved_input = {**attachment.input_data, "top_n": 1}
+        Attachment.objects.filter(pk=attachment.pk).update(input_data=saved_input, output_data=saved_output)
+
+        detail = GetAttachment().request(attachment_uid=str(attachment.uid))
+
+        self.assertEqual(detail["output_data"], saved_output)
+        self.assertNotIn("top_n", detail["input_data"])
+        self.assertEqual(sum(group["count"] for group in detail["output_data"]["distribution"]["groups"]), 10)
+        self.assertEqual(detail["output_data"]["time_series"], attachment.output_data["time_series"])
+        attachment.refresh_from_db()
+        self.assertEqual(attachment.input_data, saved_input)
+        self.assertEqual(attachment.output_data, saved_output)
+
     def test_edited_retry_worker_uses_replacement_field_interval_and_range(self):
         attachment = self.processing()
         invoke_task(generate_field_statistics, attachment=attachment)
