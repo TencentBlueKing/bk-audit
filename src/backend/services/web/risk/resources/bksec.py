@@ -29,6 +29,7 @@ from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.sops.constants import SOPSTaskStatus
+from services.web.risk.bksec.constants import BKSEC_TEST_NODE_SCAN_LIMIT
 from services.web.risk.bksec.service import (
     ensure_bksec_enabled,
     parse_bksec_config,
@@ -232,15 +233,7 @@ class GetTaskStatus(BkSecResourceMeta):
 
         # 测试单执行记录状态同步（一次性发送，无轮询任务，由前端查询时更新）
         if state in SOPSTaskStatus.get_finished_status():
-            node = (
-                TicketNode.objects.filter(
-                    is_test=True,
-                    status=TicketNodeStatus.RUNNING,
-                    process_result__task__task_id=str(task_id),
-                )
-                .order_by("-timestamp")
-                .first()
-            )
+            node = self._find_test_node(task_id)
             if node:
                 from django.db import transaction
                 from django.utils.dateparse import parse_datetime
@@ -259,6 +252,23 @@ class GetTaskStatus(BkSecResourceMeta):
                     node.status = TicketNodeStatus.FINISHED
                     node.save(update_fields=["process_result", "status", "duration"])
         return result
+
+    @staticmethod
+    def _find_test_node(task_id: str):
+        """
+        按 task_id 定位测试节点
+
+        process_result 中 task_id 的类型取决于 SOPS 返回（int/str），而 JSONField 路径查询
+        类型敏感：按字符串过滤匹配不到 int，会导致测试节点状态永远停留在 running。
+        故取最近的未结束测试节点逐个比对，与存储类型无关。
+        """
+        candidates = TicketNode.objects.filter(is_test=True, status=TicketNodeStatus.RUNNING).order_by("-timestamp")[
+            :BKSEC_TEST_NODE_SCAN_LIMIT
+        ]
+        for node in candidates:
+            if str((node.process_result or {}).get("task", {}).get("task_id", "")) == str(task_id):
+                return node
+        return None
 
     def _build_failure_hint(self, task_id: str) -> str:
         from apps.feature.constants import FeatureTypeChoices

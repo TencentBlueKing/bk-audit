@@ -89,6 +89,7 @@ from services.web.risk.models import (
     ManualEvent,
     Risk,
     TicketNode,
+    calc_task_duration,
 )
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
@@ -688,6 +689,9 @@ def sync_auto_result(node_id: str = None):
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
                         node.process_result["status"] = status
+                        # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
+                        node.process_result["duration"] = calc_task_duration(status)
+                        node.duration = node.process_result["duration"]
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
@@ -712,7 +716,7 @@ def sync_auto_result(node_id: str = None):
                         risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
-                node.save(update_fields=["process_result", "status"])
+                node.save(update_fields=["process_result", "status", "duration"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 

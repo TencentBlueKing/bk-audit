@@ -85,3 +85,8 @@ BKSEC_CACHE_TIMEOUT = 300
 
 # 渲染上下文加载事件的上限（预览与发单共用）
 BKSEC_RENDER_EVENT_LIMIT = 100
+
+# 测试节点状态回写时扫描的最近节点数：
+# process_result 中 task_id 的类型取决于 SOPS 返回（int/str），JSONField 路径查询类型敏感，
+# 直接按字符串过滤会漏匹配，需取最近节点逐个比对
+BKSEC_TEST_NODE_SCAN_LIMIT = 50
