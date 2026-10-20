@@ -65,6 +65,26 @@ class EventFieldValues(list):
         return display_value(self[-1]) if self else ""
 
 
+def _event_field_value(event: dict, name: str) -> Any:
+    """
+    事件字段取值：优先事件顶层字段，其次 event_data 子字典
+
+    事件自定义字段（event_data_field_configs 定义的字段）在检索结果中位于 event_data，
+    且可能为 JSON 字符串（取决于解析阶段），需兼容解析后再取值。
+    """
+    if name in event:
+        return event.get(name, "")
+    data = event.get("event_data") or {}
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return ""
+    if isinstance(data, dict):
+        return data.get(name, "")
+    return ""
+
+
 class EventNamespace:
     """
     事件命名空间：{{ event.字段 }}
@@ -77,7 +97,7 @@ class EventNamespace:
 
     def __getattr__(self, name: str) -> EventFieldValues:
         events = object.__getattribute__(self, "_events")
-        return EventFieldValues(display_value(ev.get(name, "")) for ev in events)
+        return EventFieldValues(display_value(_event_field_value(ev, name)) for ev in events)
 
 
 class RiskNamespace:
@@ -112,20 +132,24 @@ def load_risk_events(risk: Risk, limit: int = BKSEC_RENDER_EVENT_LIMIT) -> List[
         namespace = getattr(strategy, "namespace", "") if strategy else ""
         if not namespace:
             return []
-        start_time = risk.event_time.strftime(TIME_DISPLAY_FORMAT)
-        end_time = (risk.event_end_time or timezone.now()).strftime(TIME_DISPLAY_FORMAT)
+        # 时间窗口按本地时区格式化：检索侧按本地时间解释，直接 strftime 会输出 UTC 数值导致整体偏移
+        start_time = timezone.localtime(risk.event_time)
+        end_time = timezone.localtime(risk.event_end_time or timezone.now())
+        # 零宽窗口兜底：单事件风险 event_end_time == event_time，秒级格式化丢毫秒会把事件自身排除
+        if end_time <= start_time:
+            end_time = start_time + datetime.timedelta(seconds=1)
         response = EventHandler.search_event(
             namespace=namespace,
-            start_time=start_time,
-            end_time=end_time,
+            start_time=start_time.strftime(TIME_DISPLAY_FORMAT),
+            end_time=end_time.strftime(TIME_DISPLAY_FORMAT),
             page=1,
             page_size=limit,
             raw_event_id=risk.raw_event_id,
             strategy_id=str(risk.strategy_id),
         )
-        events = response.get("list", []) if isinstance(response, dict) else []
-        # 事件按时间升序，保证 latest/默认取值语义正确
-        return sorted(events, key=lambda ev: str(ev.get("event_time", "")))
+        events = response.get("results", []) if isinstance(response, dict) else []
+        # 事件按时间升序，保证 latest/默认取值语义正确（事件无 event_time 字段，用落库时间戳排序）
+        return sorted(events, key=lambda ev: str(ev.get("dtEventTimeStamp") or ev.get("dtEventTime") or ""))
     except Exception as err:  # NOCC:broad-except(渲染降级)
         logger.exception("[BkSecRender] Load events failed, risk_id=%s err=%s", getattr(risk, "risk_id", ""), err)
         return []
