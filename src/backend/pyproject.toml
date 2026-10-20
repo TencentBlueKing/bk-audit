@@ -45,6 +45,8 @@ dependencies = [
     "django-rest-framework-condition==0.1.1",
     "drf-yasg==1.21.9",
     "drf-spectacular[sidecar]>=0.29.0",
+    # Swagger UI 5.33+ 虚拟滚动会影响全页搜索和复制，固定到内置 5.30.3 的版本。
+    "drf-spectacular-sidecar==2025.12.1",
     "django-environ==0.10.0",
     "django-simpleui==2023.3.1",
     "django-sslserver==0.22",

@@ -1,7 +1,7 @@
 """日志分析报告的 Input / Context / Output 快照协议。
 
 Context 只保存重放 Agent 请求所需的最小充分信息，不保存预览日志、
-SQL 或数据库内部 ID。有效指令、系统提示词在创建时固化，重试复用已保存值。
+SQL 或数据库内部 ID。有效指令、系统提示词在创建或提交新输入重试时固化，原样重试复用已保存值。
 """
 
 from typing import Annotated

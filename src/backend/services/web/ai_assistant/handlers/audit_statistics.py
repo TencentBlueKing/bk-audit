@@ -1,6 +1,6 @@
 """程序与 AI 统计附件接入。
 
-只从成功 LOG_SEARCH 固化完整范围与服务端字段显示信息；执行阶段再鉴权。
+基于成功 LOG_SEARCH 校验来源，固化附件独立条件与服务端字段显示信息；执行阶段再鉴权。
 程序统计异步轮询，AI 统计使用平台流式生命周期；均不引入报告编辑或导出。
 """
 
@@ -41,7 +41,7 @@ class FieldStatisticsAttachmentHandler(
         FieldStatisticsAttachmentInput, FieldStatisticsAttachmentContext, FieldStatisticsAttachmentOutput
     ]
 ):
-    """完整来源范围上的固定统计包；失败后可原对象手动重试，再次生成则创建新附件。"""
+    """附件完整范围上的固定统计包；支持原样或修改输入后重试，需要保留旧结果时另建附件。"""
 
     attachment_type = AttachmentType.FIELD_STATISTICS
     execution_mode = ExecutionMode.ASYNC
