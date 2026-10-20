@@ -680,7 +680,14 @@ class AutoProcess(RiskFlowBaseHandler):
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
             # 仅 BKSEC 自动规则（auto_strategy_id 非空）走模板渲染：值中含 {{ }} 时按上下文求值
             # 通用套餐保持原有平铺取值机制，不因 BKSEC 特定功能改变行为边界
-            if isinstance(value, str) and "{{" in value and getattr(self.rule, "auto_strategy_id", None):
+            # risk_type_extra 是「字段映射的序列化模板」，必须逐字段渲染后重新序列化，
+            # 整串渲染会让字段值自带的引号破坏 JSON 结构（插件 json.loads 报错），故此处跳过
+            if (
+                isinstance(value, str)
+                and "{{" in value
+                and c["key"] != "${risk_type_extra}"
+                and getattr(self.rule, "auto_strategy_id", None)
+            ):
                 from services.web.risk.bksec.contract import render_event_constant
 
                 value = render_event_constant(value, risk=self.risk)
