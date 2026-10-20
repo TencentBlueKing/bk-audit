@@ -75,7 +75,7 @@ class AttachmentInputDataField(serializers.JSONField):
     )
 )
 class AttachmentOutputDataField(serializers.JSONField):
-    """在 OpenAPI 中按 attachment_type 展示对应 Handler 输出协议。"""
+    """在 OpenAPI 中按 attachment_type 展示当前 Handler 的生成协议。"""
 
 
 @extend_schema_field(
@@ -192,7 +192,7 @@ class AttachmentConversationSummarySerializer(serializers.Serializer):
 
 
 class AttachmentResponseSerializer(serializers.Serializer):
-    """附件详情响应；类型专属快照由已注册 Handler 的 Pydantic 模型解析。"""
+    """附件详情保留已保存产物；生成和编辑的协议校验在写入入口执行。"""
 
     uid = serializers.UUIDField(help_text="附件对外 UUID")
     source_message_uid = serializers.UUIDField(help_text="来源消息对外 UUID")
@@ -205,7 +205,7 @@ class AttachmentResponseSerializer(serializers.Serializer):
         allow_null=True,
         required=False,
         help_text=(
-            "按 attachment_type 选择输出 schema；SUCCESS 时使用，"
+            "当前生成协议按 attachment_type 选择输出 schema；历史产物按保存的 JSON 快照原样返回。SUCCESS 时使用，"
             "FIELD_STATISTICS 为固定统计包，"
             "AI_STATISTICS 为 Agent 最后闭合消息中指定标签内的未解析原文；"
             "字节预算作用在该消息全文，不只是标签内原文"
@@ -226,14 +226,6 @@ class AttachmentResponseSerializer(serializers.Serializer):
     def to_representation(self, instance):
         handler = attachment_handler_registry.require(instance.attachment_type)
         supports_feedback = handler.supports_feedback
-        output_data = None
-        if instance.output_data is not None:
-            output_data = parse_snapshot(
-                handler.output_model,
-                instance.output_data,
-                field_name="output_data",
-                error_type=AttachmentSnapshotValidationError,
-            ).model_dump(mode="json")
 
         return {
             "uid": str(instance.uid),
@@ -243,7 +235,8 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "title": instance.title,
             "content_updated_at": instance.content_updated_at,
             "input_data": _serialize_attachment_input(handler.input_model, instance.input_data),
-            "output_data": output_data,
+            # 产物写入时已校验；协议升级不应阻断历史读取或丢失旧字段。
+            "output_data": instance.output_data,
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "supports_feedback": supports_feedback,
