@@ -166,9 +166,6 @@ class ForApproveTest(TicketTest):
     def test_create_approve_v3(self):
         """
         测试存量 V3 审批节点走 V3 分支。
-
-        关键验证：将已发起的在途节点标记为 V3 后再次执行审批节点，应依 sn 走
-        api.bk_itsm.ticket_approve_result 查询状态，且不重新发起（不调用 V4 ticket_create）。
         """
         with RuleContext() as (_, _):
             with RiskContext() as risk:
@@ -241,13 +238,6 @@ class ForApproveTest(TicketTest):
     def test_build_approve_form_data_v3(self):
         """
         测试 V3 首次建单的表单构造（_build_approve_form_data）。
-
-        复现 review 场景：输入 title(特殊)、tags(特殊)、risk_level(普通配置字段)、
-        raw_event_id(回退字段) 四字段，断言：
-        1. fields 每个元素为独立的 {"key": 裸key, "value": 值}，无共享引用、无重复对象；
-        2. 特殊字段 title 含套餐名、tags 来自 risk.get_tag_names()；
-        3. 普通配置字段 risk_level 取自 approve_config（非遗漏）；
-        4. 回退字段 raw_event_id 取自 risk 对象属性（非遗漏）。
         """
 
         # V3 get_service_detail 返回的原生结构：fields 元素带 key/name/type
@@ -265,18 +255,70 @@ class ForApproveTest(TicketTest):
                 handler = ForApprove(risk_id=risk.risk_id, operator="admin")
                 # 直接驱动被测试方法，隔离验证 V3 表单构造（不触发真实建单）
                 handler.process_application = pa
-                form_data, fields = handler._build_approve_form_data(v3_service_detail)
+                form_data = handler._build_approve_form_data(v3_service_detail)
 
                 # 字段数量与顺序完整（4 个，无遗漏、无重复）
-                self.assertEqual([item["key"] for item in fields], ["title", "tags", "risk_level", "raw_event_id"])
-                # 每个元素是独立的 {"key": 裸key, "value": 值} 字典
-                self.assertEqual(fields[0], {"key": "title", "value": gettext("【审计中心】执行%s审批") % pa.name})
-                self.assertEqual(fields[1], {"key": "tags", "value": ";".join(risk.get_tag_names())})
-                # 普通配置字段：取自 approve_config，不再是遗漏项
-                self.assertEqual(fields[2], {"key": "risk_level", "value": "critical"})
-                # 回退字段：取自 risk 对象属性，不再是遗漏项
-                self.assertEqual(fields[3], {"key": "raw_event_id", "value": risk.raw_event_id})
-                # 所有元素为独立对象（无共享引用，避免累积成重复对象）
-                self.assertEqual(len({id(item) for item in fields}), len(fields))
-                # form_data 同样包含全部字段（供 V4 使用，本测试仅作一致性校验）
-                self.assertEqual(set(form_data.keys()), {"title", "tags", "risk_level", "raw_event_id"})
+                self.assertEqual(list(form_data.keys()), ["title", "tags", "risk_level", "raw_event_id"])
+                # 特殊字段：title 含套餐名
+                self.assertEqual(form_data["title"], gettext("【审计中心】执行%s审批") % pa.name)
+                # 标签来自 risk.get_tag_names()
+                self.assertEqual(form_data["tags"], ";".join(risk.get_tag_names()))
+                # 普通配置字段：取自 approve_config
+                self.assertEqual(form_data["risk_level"], "critical")
+                # 回退字段：取自 risk 对象属性
+                self.assertEqual(form_data["raw_event_id"], risk.raw_event_id)
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail",
+        # V3 接口内部对 service_id 做 int() 转换，对 V4 workflow_key 字符串会抛 ValueError。
+        # 若该接口被命中，说明新建分支错误沿用了 V3 版本，用例应失败。
+        mock.Mock(side_effect=ValueError("V3 get_service_detail 不应被命中")),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_create_approve_fallback_v4_without_ticket(self):
+        """
+        升级前 FOR_APPROVE、无既有单据、套餐已替换为 V4。
+        """
+        with RuleContext(pa_info={"approve_service_id": "audit_v4_approval"}) as (_, _):
+            with RiskContext() as risk:
+                operator = uuid.uuid1().hex
+                # 初始化：NewRisk 落库（默认 last_history 为 NewRisk 节点，itsm_version=V4），无 ticket
+                NewRisk(risk_id=risk.risk_id, operator=operator).run()
+                risk.refresh_from_db()
+                # 模拟迁移 0066：将上一（NewRisk）节点标为 V3，且无 ticket/sn（符合 review 边界）
+                node = risk.last_history
+                self.assertFalse(node.process_result.get("ticket"))
+                node.itsm_version = ItsmVersion.V3
+                node.save(update_fields=["itsm_version"])
+                # 后台自动续跑：不传 pa_config，走「未发起则发起」分支
+                ForApprove(risk_id=risk.risk_id, operator=operator).run()
+                risk.refresh_from_db()
+                # 新建分支按 V4 创建
+                self.assertTrue(ticket_handlers.api.bk_itsm_v4.ticket_create.called)
+                # V3 get_service_detail 接口（int(workflow_key) 会抛 ValueError）未被命中
+                self.assertFalse(ticket_handlers.api.bk_itsm.get_service_detail.called)
+                # 新写入的 ForApprove 节点版本为 V4（record_history 默认 inherits V4）。
+                # 此处用直接查询取真正的最新节点：risk.last_history 是 cached_property，
+                # 上方对该实例访问过会缓存旧节点，refresh_from_db 不会清除该缓存。
+                from services.web.risk.models import TicketNode
+
+                last_node = TicketNode.objects.filter(risk_id=risk.risk_id).order_by("-timestamp").first()
+                self.assertEquals(last_node.action, ForApprove.__name__)
+                self.assertEquals(last_node.itsm_version, ItsmVersion.V4)
+                # 风险仍处于审批中
+                self.assertEquals(risk.status, RiskStatus.FOR_APPROVE)
