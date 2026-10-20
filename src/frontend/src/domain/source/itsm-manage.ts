@@ -29,7 +29,7 @@ class ItsmManage  extends ModuleBase {
   // 获取服务列表
   getList() {
     return Request.get<Array<{
-      id: number,
+      id: string,
       name: string,
       url: string,
     }>>(`${this.module}/`);
@@ -42,8 +42,10 @@ class ItsmManage  extends ModuleBase {
     }>>(`${this.module}/status_common/`);
   }
   // 获取服务详情
+  // version 不传时由后端 default=ItsmVersion.V4 兜底；需兼容 V3 时显式传 version: 'v3'
   getServiceDetail(params: {
-    id: string
+    id: string,
+    version?: string,
   }) {
     return Request.get<ServiceManageModel>(`${this.module}/${params.id}/`, {
       params,
