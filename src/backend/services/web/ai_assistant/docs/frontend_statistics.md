@@ -22,8 +22,8 @@ flowchart TD
 
 | 页面决策 | 程序统计 | AI 统计 |
 | --- | --- | --- |
-| 用户提供什么 | 选择一个字段，可调整类别数和时间粒度 | 填写统计需求 |
-| 统计什么范围 | 来源成功检索的完整范围 | 来源为初始上下文，Agent 可按需求调整 |
+| 用户提供什么 | 选择一个字段，可调整时间粒度与当前附件范围 | 填写统计需求 |
+| 统计什么范围 | 默认来源完整范围，可传独立 condition | 来源为初始上下文，Agent 可按需求调整 |
 | 如何等待 | 轮询附件详情 | 同样可轮询；需要过程时选用 SSE |
 | 成功后展示什么 | 后端固定统计包，由前端绘图 | `output_data.content` 为指定标签内未解析原文，由前端解析渲染 |
 
@@ -31,11 +31,11 @@ flowchart TD
 
 | attachment_type | input_data | SUCCESS 时的 output_data |
 | --- | --- | --- |
-| FIELD_STATISTICS | field，可选 top_n/interval | 固定统计包：overview/distribution/time_series/numeric_summary |
-| AI_STATISTICS | instruction | Agent 最后闭合消息中指定标签内的未解析原文 |
+| FIELD_STATISTICS | field，可选 interval/完整 condition | 固定统计包：overview/distribution/time_series/numeric_summary |
+| AI_STATISTICS | instruction，可选完整 condition | Agent 最后闭合消息中指定标签内的未解析原文 |
 
 Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此映射选择输入和解释输出。
-程序统计与 MCP 类别聚合默认 Top10，可显式调整；部署预算可收紧上限，以后端校验为准。已有附件保留创建时的参数。
+程序统计返回所有类别，前端决定默认展示数量和导出；请求与响应不含 top_n/has_other，也不合并 OTHER。MCP 面向 Agent 仍默认 Top10，额外保留 OTHER/MISSING。
 程序统计固定包补齐时间轴；MCP 返回稀疏时间桶，两者共享统计口径和四位小数规则，按各自消费者组织响应。
 
 统计是来源消息上的附件，不会新增消息。同一检索卡片可以有多个统计附件，每个附件独立保存、展示和重试。
@@ -44,7 +44,7 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 从当前用户的成功 LOG_SEARCH 卡片进入，保存**该卡片的消息 UID**，后续创建请求始终使用它，不用“最新一条消息”推测来源。程序统计针对完整检索范围，不针对卡片预览行。
 
-页面筛选条件修改但尚未执行时，旧卡片仍代表旧查询。程序统计需要按新范围计算时，应先完成新检索，再从新卡片进入；AI 统计可以从原卡片提交新的统计指令，由 Agent 按需求调整有权限的查询范围，附件仍归属原卡片。打开历史卡片时，如果页面只有摘要，先读取消息详情；字段探索使用该消息 `input_data.condition` 中的完整条件，不用当前条件编辑器中的草稿替换。
+页面筛选条件修改但尚未执行时，旧卡片仍代表旧查询。创建或编辑重试时可传完整 condition，作为当前附件的独立范围；省略则使用当前成功来源的条件。原卡片及其他附件不变。AI 统计的 Agent 仍可按需求调整有权限的实际查询范围。打开历史卡片时，如果页面只有摘要，先读取消息详情；字段探索使用该消息 `input_data.condition` 中的完整条件，不用当前条件编辑器中的草稿替换。
 
 程序统计进入字段选择步骤；AI 统计直接进入需求输入，不要求前端先探索字段或调用统计工具。
 
@@ -52,15 +52,15 @@ Swagger 的嵌套 oneOf 不会自动关联外层 attachment_type；前端按此�
 
 ### 选择字段
 
-打开字段选择器时，调用 `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`，namespace 沿用页面已有的租户上下文，并使用来源消息的完整检索条件。此处是 Web 接口，前端无需接 MCP 网关。
+打开字段选择器时，调用 `POST /api/v1/query/namespaces/{namespace}/collector_query/field_metadata/`，namespace 沿用页面已有的租户上下文；新建默认使用来源完整条件，编辑附件时使用表单中本次将提交的完整 condition。此处是 Web 接口，前端无需接 MCP 网关。
 
-初次只传来源消息的完整 `condition`，获取全部基础字段。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，传原 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，仅返回内置声明与这批样本合并后的叶子字段完整路径，不包含父项和中间对象，不需要再逐层请求。
+用本次将提交的完整 `condition` 获取全部基础字段（新建默认来源条件，编辑时用当前表单条件）。按 `is_expandable` 分组：例如 extend_data、instance_data 等 JSON 根字段可以展开。前端分别对这些根字段发送二次请求，沿用本次 `condition`、`parent_field` 和 `include_descendants=true`。后端每次只采样一批最多100条日志，仅返回内置声明与这批样本合并后的叶子字段完整路径，不包含父项和中间对象，不需要再逐层请求。
 
 ```mermaid
 flowchart TD
-    Source[来源卡片的完整 condition] --> Roots[获取基础字段目录]
+    Source[本次完整 condition<br/>新建默认来源，编辑用表单] --> Roots[获取基础字段目录]
     Roots -->|普通字段| Select[选择可统计字段]
-    Roots -->|is_expandable=true| Expand[按根字段请求 include_descendants=true<br/>沿用原 condition，一次最多采样100条]
+    Roots -->|is_expandable=true| Expand[按根字段请求 include_descendants=true<br/>沿用本次 condition，一次最多采样100条]
     Expand --> Leaves[返回完整叶子路径<br/>按路径分组、搜索]
     Leaves --> Select
     Custom[直接输入自定义路径] --> Select
@@ -76,7 +76,7 @@ flowchart TD
 }
 ```
 
-请求还须包含来源消息的 `condition`。采样中有 a.b.c、a.b.d 和 a.e 时，响应 `fields` 只包含这三个叶子，不包含 a、a.b，每项仍使用完整的 `field.raw_name` 与 `field.keys`。前端可按路径前缀建立分组、直接搜索叶子目录；提交统计时保留原字段引用，不把点号拼接结果当作 raw_name。
+请求还须包含本次将提交的完整 `condition`。采样中有 a.b.c、a.b.d 和 a.e 时，响应 `fields` 只包含这三个叶子，不包含 a、a.b，每项仍使用完整的 `field.raw_name` 与 `field.keys`。前端可按路径前缀建立分组、直接搜索叶子目录；提交统计时保留原字段引用，不把点号拼接结果当作 raw_name。
 
 根目录及单层目录的 `is_expandable=true` 表示该字段可作为对象分组，前端可发起级联查询。级联响应仅包含叶子，`is_expandable=false`，直接用于选择器；选取操作仍参考 `statistics_supported`。数组作为叶子但不支持统计，不展开数组下标或元素键。空对象没有叶子，不返回；达到路径深度上限的对象不冒充叶子，`truncated=true` 提示发现不完整。
 
@@ -107,7 +107,7 @@ flowchart TD
 | `field` | 服务端确认的字段标识和展示名 | 标题、面包屑、字段标签 | 标题优先使用 `display_name`；请求和唯一定位保留 `raw_name + keys` |
 | `statistics_kind` | `CATEGORICAL` 或 `NUMERIC` | 页面布局分支 | `NUMERIC` 显示数值摘要；`CATEGORICAL` 的 `numeric_summary` 必须视为 `null` |
 | `overview` | 完整检索范围的存在性统计 | KPI 卡片、进度条、完整性环图 | `total_count` 是总日志数；`present_ratio` 是 0–1 小数，展示百分比时再乘 100 |
-| `distribution.groups` | 全范围 TopN 类别及 `OTHER/MISSING` | 横向条形图、环形图、排行列表、分布表格 | 少量类别可用环图；类别较多优先横向条形图；使用 `kind` 判断合成组 |
+| `distribution.groups` | 全范围所有类别及 `MISSING` | 横向条形图、环形图、排行列表、分布表格 | 少量类别可用环图；类别较多优先横向条形图；使用 `kind` 判断合成组 |
 | `time_series.bucket_starts` + `series` | 各类别按时间桶的数量变化 | 折线图、堆叠柱状图、堆叠面积图、趋势表格 | 横轴使用 `bucket_starts`；每条序列通过 `group_id` 找到类别；`counts` 与横轴等长 |
 | `numeric_summary` | 完整范围的原生数值摘要 | 四个数值卡片、摘要表格 | 可展示 min/max/avg/median；`median` 必须标记为近似值；`valid_count` 是全范围有效数值数量；成功结果的 `conversion_failed_count` 当前固定为 0，不表示支持字符串数值转换 |
 | `query_summary` | 实际执行范围、粒度和预算信息 | 查询信息条、筛选条件标签、折叠详情 | `returned_count` 是聚合 rows 数，不是日志总数；总数使用 `overview.total_count` |
@@ -116,8 +116,8 @@ flowchart TD
 
 | 类型 | 默认布局 | 可以展示 | 不应做的事情 |
 | --- | --- | --- | --- |
-| `CATEGORICAL` | 概览 + 类别分布 + 时间趋势 | 用户名、操作类型、系统 ID、布尔值等的 TopN 和趋势 | 不显示数值摘要；不要把字符串数字当数值排序 |
-| `NUMERIC` | 概览 + 数值摘要 + Top 值分布 + 时间趋势 | min/max/avg/median、原生数值 TopN 和趋势 | 不要根据 min/max/median 自行绘制箱线图；接口没有 Q1/Q3 |
+| `CATEGORICAL` | 概览 + 类别分布 + 时间趋势 | 用户名、操作类型、系统 ID、布尔值等的完整分布和趋势 | 不显示数值摘要；不要把字符串数字当数值排序 |
+| `NUMERIC` | 概览 + 数值摘要 + 值分布 + 时间趋势 | min/max/avg/median、原生数值分布和趋势 | 不要根据 min/max/median 自行绘制箱线图；接口没有 Q1/Q3 |
 
 #### `distribution.groups` 的渲染方式
 
@@ -127,21 +127,20 @@ flowchart TD
 - `value_type=number`：按数字格式化，并可进行数值排序。
 - `value_type=boolean`：按前端约定展示为“是/否”或 true/false。
 - `kind=VALUE`：`value` 是真实日志值。
-- `kind=OTHER`：TopN 之外的非缺失值总和，展示为“其他”。
 - `kind=MISSING`：字段缺失或为 null，展示为“缺失”。
 
-`OTHER` 和 `MISSING` 不占 `top_n` 名额，因此最终组数可能是 `top_n + 2`。真实值可能刚好叫“其他”或“缺失”，所以不能通过文字判断合成组。组件 key、图表关联均使用 `group_id`，不能使用格式化标签作为类别身份。同名时区分显示：数字 `120` 与字符串 `"120"` 可标注“120（数字）”“120（字符串）”；空字符串显示“空字符串”，真实值“其他”显示“其他（原始值）”。图表库若按名称操作图例，也要使用这些可区分的名称。
+程序统计只有 VALUE/MISSING。VALUE 的可空 `value_label` 为内置枚举中文名称，已知值可展示“成功（0）”，未知500显示原值，实际-1可展示“其他（-1）”；它仍是 VALUE。动态 JSON 路径不会套用根字段枚举。真实值可能刚好叫“缺失”，所以不能通过文字判断缺失组。组件 key、图表关联均使用 `group_id`，不能使用格式化标签作为类别身份。同名时区分显示：数字 `120` 与字符串 `"120"` 可标注“120（数字）”“120（字符串）”；空字符串显示“空字符串”，真实值“其他”显示“其他（原始值）”。图表库若按名称操作图例，也要使用这些可区分的名称。
 
 适配图表时：
 
 ```text
-图例/标签：VALUE 用 value，OTHER/MISSING 用前端固定文案
+图例/标签：VALUE 用 value_label + 原始 value（无名称则用原值），MISSING 用“缺失”
 数据值：使用 count
 百分比：使用 ratio；total_count=0 时允许为 null
 本份产物内的关联：使用 group_id，不解析其格式，不假设它跨重试或不同附件保持不变
 ```
 
-分布与时序共用完整范围 TopN，保留额外的 OTHER/MISSING，不在各时间桶重新排名或重新计算比例。空结果是成功空态，不是执行失败。
+分布和时序均返回全类别，计数闭合；前端可只展示选中类别，数据导出须遍历完整 groups/series，不能仅导出可见图例。空结果为 total_count=0、完整时间轴、空 groups/series。容量不足返回明确失败，不静默截断、合并或缩短范围。
 
 #### `time_series` 的渲染方式
 
@@ -151,26 +150,32 @@ flowchart TD
 - 一个类别时适合折线图；多个类别时适合多折线、堆叠柱状图或堆叠面积图。
 - `requested_interval=AUTO` 时，展示粒度应使用 `effective_interval`，不能把 AUTO 当作实际时间单位。
 - 时间轴和桶划分使用 `timezone`，前端不要再次按本地时区转换后重新分桶。
+- 支持 MINUTE/HOUR/DAY/MONTH；月桶为自然月首日。程序统计和 MCP 的 AUTO 统一按完整范围依次月→天→小时→分钟，选首个实际桶数达到阈值的粒度（默认12，后端可配置），不足时用分钟；例如一年通常看月、一个月看天、一天看小时、一小时看分钟。
+- 桶从起点所在桶开始，沿用闭区间；end 正好为下一桶起点时该终点桶仍保留。所有无日志桶补0，首尾桶只统计原始范围，不以日志密度缩短横轴。
+- 1440桶、100000计数单元及4MiB为独立技术保护，AUTO不会为凑预算偷偷变粗。超限可调整附件范围/显式粒度后重试。
+
 
 #### 一个结果怎样变成图表
 
-下面只节选分布与时序，演示同一份数据怎样驱动排行图和趋势图，不是完整接口响应。Top2之外的 PUT/DELETE 共2条已合入 OTHER，缺失1条另列：
+下面节选分布与时序，展示全部 GET/POST/PUT/DELETE 类别及缺失；没有合并“其他”。不是完整接口响应：
 
 ```json
 {
   "distribution": {"groups": [
-    {"group_id":"g1","kind":"VALUE","value_type":"string","value":"GET","count":3},
-    {"group_id":"g2","kind":"VALUE","value_type":"string","value":"POST","count":2},
-    {"group_id":"g3","kind":"OTHER","value_type":null,"value":null,"count":2},
-    {"group_id":"g4","kind":"MISSING","value_type":null,"value":null,"count":1}
+    {"group_id":"g1","kind":"VALUE","value_type":"string","value":"GET","value_label":null,"count":3},
+    {"group_id":"g2","kind":"VALUE","value_type":"string","value":"POST","value_label":null,"count":2},
+    {"group_id":"g3","kind":"VALUE","value_type":"string","value":"PUT","value_label":null,"count":1},
+    {"group_id":"g4","kind":"VALUE","value_type":"string","value":"DELETE","value_label":null,"count":1},
+    {"group_id":"g5","kind":"MISSING","value_type":null,"value":null,"value_label":null,"count":1}
   ]},
   "time_series": {
     "bucket_starts":["2026-01-01T10:00:00+08:00","2026-01-01T11:00:00+08:00"],
     "series":[
       {"group_id":"g1","counts":[2,1]},
       {"group_id":"g2","counts":[1,1]},
-      {"group_id":"g3","counts":[1,1]},
-      {"group_id":"g4","counts":[1,0]}
+      {"group_id":"g3","counts":[1,0]},
+      {"group_id":"g4","counts":[0,1]},
+      {"group_id":"g5","counts":[1,0]}
     ]
   }
 }
@@ -178,24 +183,25 @@ flowchart TD
 
 同一份示例数据可以显示为下面三种图。它们说明数据如何使用，实际页面样式由前端决定。
 
-**类别分布：** 横轴为类别，纵轴直接使用 `groups[].count`。本例 Top2 之外仍展示“其他”和“缺失”。类别名称较长时可改成横向条形图。
+**类别分布：** 横轴为类别，纵轴直接使用 `groups[].count`。本例完整展示四个真实类别和缺失。类别名称较长时可改成横向条形图。
 
 ```mermaid
 xychart-beta
-    title "类别分布（8条日志，Top2）"
-    x-axis ["GET", "POST", "其他", "缺失"]
+    title "类别分布（8条日志，全部类别）"
+    x-axis ["GET", "POST", "PUT", "DELETE", "缺失"]
     y-axis "日志数" 0 --> 3
-    bar [3, 2, 2, 1]
+    bar [3, 2, 1, 1, 1]
 ```
 
-**占比：** 环图或饼图使用同一组 `count`，并显示前端格式化后的百分比。本例 GET 为37.50%，其他为25.00%；接口的 `ratio` 是0～1的小数。下图标注计数、按计数划分扇区；页面上的百分比标签由前端格式化。
+**占比：** 环图或饼图使用同一组 `count`，并显示前端格式化后的百分比。本例 GET 为37.50%，PUT 为12.50%；接口的 `ratio` 是0～1的小数。下图标注计数、按计数划分扇区；页面上的百分比标签由前端格式化。
 
 ```mermaid
 pie showData
     title 类别占比（与分布使用相同分组）
     "GET" : 3
     "POST" : 2
-    "其他" : 2
+    "PUT" : 1
+    "DELETE" : 1
     "缺失" : 1
 ```
 
@@ -246,7 +252,7 @@ flowchart TD
     Parse -->|失败| Fallback[显示原文与渲染错误<br/>附件仍为 SUCCESS，可原 UID 重新生成]
 ```
 
-标签协议失败（缺失、重复、空内文等）会使附件 FAILED，展示错误并提供重试。标签提取成功后的内容解析/渲染失败不改附件状态；前端可对 SUCCESS 附件调用同一 retry 接口重新生成。重试保留创建时的输入与上下文快照，清空旧产物、过程及反馈，本期不保留产物版本；新执行失败不恢复旧成功产物。中间文字和工具结果属于过程，不拼接成最终产物；单轮 AG-UI 事件仍原样归档，人工重试开始时清理上一轮归档并等待新 `execution_id`。AI 可以调整查询范围，因此不能直接把来源卡片范围标成图表实际范围；若页面需要展示实际范围，由前端与 Agent 输出约定提供。
+标签协议失败（缺失、重复、空内文等）会使附件 FAILED，展示错误并提供重试。标签提取成功后的内容解析/渲染失败不改附件状态；前端可对 SUCCESS 附件调用同一 retry 接口重新生成。不传新 input_data 时重试保留原输入与上下文快照；传入时整体替换并重新准备，清空旧产物、过程及反馈，本期不保留产物版本；新执行失败不恢复旧成功产物。中间文字和工具结果属于过程，不拼接成最终产物；单轮 AG-UI 事件仍原样归档，人工重试开始时清理上一轮归档并等待新 `execution_id`。AI 可以调整查询范围，因此不能直接把来源卡片范围标成图表实际范围；若页面需要展示实际范围，由前端与 Agent 输出约定提供。
 
 ## 5. 等待结果：轮询是通用方式，SSE 按需接入
 
@@ -269,10 +275,10 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 | 用户动作 | 调用衔接与页面行为 |
 | --- | --- |
 | 刷新页面或从原卡片重新打开 | 从消息附件摘要或附件列表找到 UID → 读取附件详情 → 终态展示结果，PROCESSING 恢复轮询或可选过程订阅；不重新创建 |
-| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 传 source_message_uid 和统计类型，无需重复 Scope；列表是摘要，点击后读详情 |
+| 查看该卡片已有统计 | `GET /api/v1/ai_assistant/attachments/` 传 source_message_uid 和统计类型，无需重复 Scope；列表含实际 input_data 供回填，产物仍从详情读取 |
 | 失败后原样重试 / 成功后重新生成 | `POST /api/v1/ai_assistant/attachments/{uid}/retry/` → 保留附件 UID，立即清空旧产物、错误、过程与反馈 → 按返回状态恢复等待 |
-| 更换字段、统计选项或 AI 需求 | 从来源消息创建新附件，保留原结果；不能修改原附件 input_data 来重跑 |
-| 更换程序统计范围 | 先完成新的检索，再从新消息创建附件 |
+| 更换字段、统计选项或 AI 需求 | retry 传完整 input_data，原 UID 重跑；需要保留旧结果时另创建附件 |
+| 更换程序统计范围 | 创建或 retry 的 input_data 传完整 condition，仅影响当前附件 |
 | 修改标题 | PATCH 原附件，成功后更新卡片和列表标题 |
 
 按来源消息或会话恢复附件，只传 `source_message_uid` 或 `conversation_uid` 即可，例如 `GET /api/v1/ai_assistant/attachments/?source_message_uid={messageUid}&attachment_type=FIELD_STATISTICS&sort=-created_at`。后端根据本人资源的实际 Scope 校验权限；重复传入的 Scope 不会覆盖资源归属。两个 UID 同时传入时取交集。
@@ -283,9 +289,28 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 
 仅轮询的页面在重试/重新生成成功后继续读原附件详情，无需等待执行标识。使用 SSE 时先关闭旧连接，等待新的 execution_id 后恢复；排队期间读到旧快照不能当作本轮结果。切换卡片后，迟到的请求或旧流事件不能覆盖新面板。
 
+### 修改输入后重试
+
+列表/详情的 `input_data` 是本次实际输入，含有效 condition，可直接回填。`POST /attachments/{uid}/retry/` 不带请求体或传 `{}`：直接复用原快照。需要修改时传 `{"input_data": {...}}`，内部对象按创建时的类型协议**整体替换**，不做字段合并；FIELD_STATISTICS、AI_STATISTICS 和 AI_ANALYSIS 均适用。
+
+```mermaid
+flowchart TD
+    Retry[重试或重新生成] --> Edit{是否传 input_data}
+    Edit -->|省略| Original[复用原 input/context]
+    Edit -->|完整对象| Prepare[按创建规则校验并准备新快照]
+    Prepare -->|校验失败| Keep[返回4xx，原输入与结果不变]
+    Prepare -->|通过| Restart[同 UID 原子换新任务，清空旧结果]
+    Original --> Restart
+    Restart --> Wait[轮询或等待新 execution 的 SSE]
+```
+
+保留附件原独立范围时须将完整 condition 一起提交；省略 condition 会回到当前成功来源条件。`conditions: []` 清空过滤；condition 只传局部字段、显式 null，以及 input_data 为 null/数组/字符串均无效。AI_ANALYSIS 切 DEFAULT 时删除 instruction。普通无输入重试不重新要求来源当前仍成功；带新输入时来源须满足创建要求。条件覆盖不改附件归属 Scope。
+
+修改字段时只有原默认程序标题随字段更新，自定义标题保留。PROCESSING 不接受重试；成功重试将清空旧结果，新的执行失败不恢复旧成功产物。请求校验失败则保留原面板和草稿并展示字段错误。
+
 创建请求超时、无法确定是否成功时，先刷新该来源消息的附件列表核对，不立即重复提交。重试请求结果不确定时也先读原附件状态。
 
-错误处理分两层：字段探索/创建/详情/重试请求失败时按 HTTP 与平台 code 处理；详情请求成功但 status=FAILED 时，按附件 error_code/error_message 展示执行失败。预算或字段问题需修改输入后新建，暂时性查询故障或标签格式异常可原对象重试；SUCCESS 但前端无法渲染时，可对同一 UID 重新生成。处理中的重复重试应恢复轮询，不重新创建。
+错误处理分两层：字段探索/创建/详情/重试请求失败时按 HTTP 与平台 code 处理；详情请求成功但 status=FAILED 时，按附件 error_code/error_message 展示执行失败。预算或字段问题可修改完整输入后重试，暂时性查询故障或标签格式异常可原对象重试；SUCCESS 但前端无法渲染时，可对同一 UID 重新生成。处理中的重复重试应恢复轮询，不重新创建。
 
 两种统计均可改标题，不支持编辑产物或后端导出。反馈按 supports_feedback 展示，AI 统计复用公共附件反馈链路。不要复用 AI_ANALYSIS 的正文编辑、Markdown 取值或报告下载逻辑。
 
@@ -296,6 +321,6 @@ Agent 的消息结束或运行结束事件都不替代附件终态。最终结�
 1. 成功检索 → 打开字段目录 → 展开并选择字段 → 创建程序统计 → 轮询 → 展示概览、分布、时序及适用的数值摘要 → 刷新后重新打开同一结果。
 2. 从同一卡片填写 AI 需求 → 创建 AI 统计 → 仅轮询获取结果 → 按约定解析渲染；若页面需要生成过程，再单独走快照/SSE 和断线恢复路径。
 
-再检查失败与边界：空数据、缺失与其他类别、不可统计字段、权限变化、执行失败后重试、切换卡片时迟到响应、创建结果不确定时的核对、AI 文本不符合图表约定时的原文降级。同一卡片多份产物应互不覆盖。
+再检查失败与边界：空数据、缺失与枚举“其他”真实值、不可统计字段、权限变化、执行失败后重试、切换卡片时迟到响应、创建结果不确定时的核对、AI 文本不符合图表约定时的原文降级。同一卡片多份产物应互不覆盖。
 
 联调开始前由后端确认环境可用、统计 Agent 已配置，由前端与 Agent 配置方确认图表输出约定。真实环境验收仍需按上述页面路径完成，已有自动化测试不替代该验收。Agent 生成质量评估另行跟进。报障保留环境、请求路径、附件 UID、执行标识（使用流时）及复现动作。

@@ -28,6 +28,7 @@ from services.web.ai_assistant.constants import (
     DEFAULT_AI_ANALYSIS_TITLE,
     LOG_ANALYSIS_RETRY_BACKOFF_MAX_SECONDS,
     LOG_ANALYSIS_RETRY_DELAY_SECONDS,
+    AttachmentErrorCode,
     AttachmentType,
 )
 from services.web.ai_assistant.exceptions import (
@@ -137,7 +138,11 @@ def build_agent_input(context: AIAnalysisContextSchema) -> str:
         "instruction": context.effective_instruction,
         "context": {
             "search_condition": context.search_condition.model_dump(mode="json"),
-            "query_summary": context.query_summary.model_dump(mode="json"),
+            **(
+                {"query_summary": context.query_summary.model_dump(mode="json")}
+                if context.query_summary is not None
+                else {}
+            ),
             "user": {
                 "username": context.username,
                 "timezone": context.timezone,
@@ -185,7 +190,7 @@ def execute_log_analysis(
     """按错误类型重试 Agent 执行；权限和请求参数错误直接交给平台收敛。"""
 
     try:
-        return _execute_log_analysis(execution)
+        return _execute_log_analysis(execution, retry_count=self.request.retries)
     except (
         APIRequestError,
         RequestException,
@@ -213,7 +218,7 @@ def execute_log_analysis(
         raise self.retry(exc=error, countdown=countdown) from error
 
 
-def _execute_log_analysis(execution: AttachmentExecution) -> AIAnalysisOutputSchema:
+def _execute_log_analysis(execution: AttachmentExecution, *, retry_count: int = 0) -> AIAnalysisOutputSchema:
     """按固化的请求快照调用 Agent、透传事件并返回最终产物；调用及校验异常向上传递。"""
 
     # 流执行已在首次请求前落库；每次重新执行会轮换标识，避免复用失败会话。
@@ -254,6 +259,24 @@ def _execute_log_analysis(execution: AttachmentExecution) -> AIAnalysisOutputSch
             error_type=AttachmentSnapshotValidationError,
         )
     except AttachmentSnapshotValidationError as error:
+        diagnostics = {
+            **artifact_extractor.diagnostics,
+            "attachment_id": execution.attachment.id,
+            "attachment_uid": str(execution.attachment.uid),
+            "task_id": execution.attachment.task_id,
+            "execution_id": thread_id,
+            "retry_count": retry_count,
+            "stage": "output_validation",
+            "reason": AttachmentErrorCode.OUTPUT_VALIDATION_FAILED.value,
+        }
+        logger.warning(
+            "AI 分析产物校验失败: attachment_id=%s, execution_id=%s, candidate_state=%s, final_content_bytes=%s",
+            diagnostics["attachment_id"],
+            diagnostics["execution_id"],
+            diagnostics["candidate_state"],
+            diagnostics["final_content_bytes"],
+            extra=diagnostics,
+        )
         raise AttachmentOutputValidationError() from error
 
     return output

@@ -592,7 +592,10 @@ class AggregationDimension(BaseModel):
     ] = Field(
         default=None,
         json_schema_extra=_omit_null_request_schema,
-        description="FIELD 必须省略；TIME_BUCKET 默认 AUTO，可选 AUTO、MINUTE、HOUR、DAY；AUTO 按时间范围和预算选择实际粒度。",
+        description=(
+            "FIELD 必须省略；TIME_BUCKET 默认 AUTO，可选 AUTO、MINUTE、HOUR、DAY、MONTH；"
+            "AUTO 按完整范围从月到分钟选首个达到桶数阈值的粒度（默认12，后端可配置），容量独立检查。"
+        ),
     )
 
     @model_validator(mode="after")
@@ -848,6 +851,10 @@ class AggregationGroupValue(BaseModel):
             "由于 API Gateway 使用 Swagger 2.0 不支持 anyOf/oneOf，网关 schema 不表达上述关联，"
             "服务端仍按 value_type 严格校验；保留空字符串。"
         ),
+    )
+
+    value_label: Optional[str] = Field(
+        default=None, description="内置枚举名称；未知值及动态路径为 null。按 group_id、dimension_id 关联展示，原始 value 不变。"
     )
 
     @model_validator(mode="after")

@@ -229,8 +229,10 @@ class StatisticsBudgetExceeded(LogToolException):
         """接收可用实际粒度；任意底层消息与自定义 data 不进入公开响应。"""
         super().__init__()
         self.data = {
-            "suggested_interval": suggested_interval if suggested_interval in {"MINUTE", "HOUR", "DAY"} else None,
-            "adjustments": ["缩短查询时间范围", "降低 top_n", "减少指标数量"],
+            "suggested_interval": suggested_interval
+            if suggested_interval in {"MINUTE", "HOUR", "DAY", "MONTH"}
+            else None,
+            "adjustments": ["缩短查询时间范围", "使用更粗的时间粒度", "减少类别或指标数量"],
         }
 
 
@@ -240,4 +242,4 @@ class StatisticsResponseTooLarge(LogToolException):
     ERROR_CODE = "010"
     STATUS_CODE = 413
     DOMAIN_CODE = "STATISTICS_RESPONSE_TOO_LARGE"
-    MESSAGE = gettext_lazy("统计结果过大，请缩短查询范围或降低 top_n")
+    MESSAGE = gettext_lazy("统计结果过大，请缩短查询范围或减少返回规模")

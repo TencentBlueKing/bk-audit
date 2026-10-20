@@ -84,13 +84,26 @@ class AttachmentCreateRequestSerializer(serializers.Serializer):
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     input_data = AttachmentInputDataField(
         help_text=(
-            "按外层 attachment_type 选择输入 schema：FIELD_STATISTICS 传 field 及可选 top_n/interval；" "AI_STATISTICS 传 instruction"
+            "按外层 attachment_type 选择输入 schema：FIELD_STATISTICS 传 field 及可选 interval/完整condition；"
+            "AI_STATISTICS 传 instruction及可选完整condition"
         )
     )
 
 
 class AttachmentDetailRequestSerializer(serializers.Serializer):
     attachment_uid = serializers.UUIDField(help_text="附件对外 UUID")
+
+
+class AttachmentRetryRequestSerializer(AttachmentDetailRequestSerializer):
+    """省略输入复用旧快照；传入时按附件原类型完整替换并重新准备。"""
+
+    input_data = AttachmentInputDataField(required=False, allow_null=False, help_text="可选完整输入对象，整体替换；省略直接重试，字段规则与创建相同。")
+
+    def validate_input_data(self, value):
+        """拒绝 JSON 标量和数组，不把它们解释为省略输入。"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("input_data 必须是完整对象")
+        return value
 
 
 class AttachmentExportRequestSerializer(serializers.Serializer):
@@ -240,13 +253,14 @@ class AttachmentResponseSerializer(serializers.Serializer):
 
 
 class AttachmentListItemSerializer(serializers.Serializer):
-    """附件列表项摘要，不读取输入和输出大 JSON。"""
+    """附件列表项包含有效输入，输出正文仅在详情读取。"""
 
     uid = serializers.UUIDField(help_text="附件对外 UUID")
     scope_type = serializers.ChoiceField(choices=CONCRETE_SCOPE_CHOICES, help_text="会话绑定的具体范围类型")
     scope_id = serializers.CharField(help_text="会话绑定的具体场景或系统 ID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="附件执行状态")
+    input_data = AttachmentInputDataField(help_text="附件类型化有效输入快照，可直接回填或整体修改后重试")
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
@@ -264,6 +278,12 @@ class AttachmentListItemSerializer(serializers.Serializer):
         conversation = instance.source_message.conversation
         handler = attachment_handler_registry.require(instance.attachment_type)
         return {
+            "input_data": parse_snapshot(
+                handler.input_model,
+                instance.input_data,
+                field_name="input_data",
+                error_type=AttachmentSnapshotValidationError,
+            ).model_dump(mode="json"),
             "uid": str(instance.uid),
             "scope_type": conversation.scope_type,
             "scope_id": conversation.scope_id,

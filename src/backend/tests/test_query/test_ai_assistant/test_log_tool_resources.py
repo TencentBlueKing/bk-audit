@@ -409,7 +409,8 @@ class TestMCPUserLogResources(AIAssistantTestCase):
         self.assertEqual([group["kind"] for group in response["groups"]], ["VALUE", "OTHER", "MISSING"])
         self.assertEqual([group["count"] for group in response["groups"]], [6, 3, 1])
         self.assertEqual(
-            response["groups"][0]["values"], [{"dimension_id": "action", "value_type": "string", "value": "GET"}]
+            response["groups"][0]["values"],
+            [{"dimension_id": "action", "value_type": "string", "value": "GET", "value_label": None}],
         )
         self.assertEqual(response["rows"][1]["average"], 6)
         self.assertEqual(

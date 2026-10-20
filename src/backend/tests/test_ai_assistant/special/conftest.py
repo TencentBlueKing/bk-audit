@@ -93,11 +93,18 @@ def create_log_analysis_attachment(*, user: str, instruction: str):
         created_by=user,
         updated_by=user,
     )
-    return AttachmentService(user=user).create(
-        source_message_uid=str(source.uid),
-        attachment_type=AttachmentType.AI_ANALYSIS,
-        input_data={"analysis_mode": AnalysisMode.CUSTOM, "instruction": instruction},
-    )
+    from unittest import mock
+
+    from tests.test_ai_assistant.special.statistics_worker_boundary import build_context
+
+    with mock.patch(
+        "services.web.ai_assistant.handlers.log_search_source.LogQueryContextService.build", side_effect=build_context
+    ):
+        return AttachmentService(user=user).create(
+            source_message_uid=str(source.uid),
+            attachment_type=AttachmentType.AI_ANALYSIS,
+            input_data={"analysis_mode": AnalysisMode.CUSTOM, "instruction": instruction},
+        )
 
 
 @contextmanager
@@ -271,15 +278,24 @@ def statistics_stack(transactional_db):
             if kind == AttachmentType.AI_STATISTICS
             else {
                 "field": {"raw_name": "extend_data", "keys": ["method"]},
-                "top_n": 1,
                 "interval": "HOUR",
             }
         )
-        return AttachmentService(user=username).create(
-            source_message_uid=str(source.uid),
-            attachment_type=kind,
-            input_data=data,
+        from unittest import mock
+
+        from tests.test_ai_assistant.special.statistics_worker_boundary import (
+            build_context,
         )
+
+        with mock.patch(
+            "services.web.ai_assistant.handlers.log_search_source.LogQueryContextService.build",
+            side_effect=build_context,
+        ):
+            return AttachmentService(user=username).create(
+                source_message_uid=str(source.uid),
+                attachment_type=kind,
+                input_data=data,
+            )
 
     try:
         with ExitStack() as stack:

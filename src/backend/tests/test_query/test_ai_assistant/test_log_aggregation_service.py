@@ -98,6 +98,25 @@ class TestLogAggregationService(TestCase):
     def make_field_condition(**kwargs):
         return Condition(field=ConditionField(raw_name=kwargs.pop("raw_name"), keys=kwargs.pop("keys")), **kwargs)
 
+    def test_enum_label_enriches_only_real_root_dimension_values(self):
+        data = frames()
+        data[0].update(c="0")
+        data[1].update(d0_type="number", d0_json="0")
+        data = [frame for frame in data if frame["frame"] != "QUALITY"]
+        self.mock_query.return_value = ({"list": data},)
+        result = self._aggregate(
+            dimensions=[dict(id="rc", type="FIELD", field=dict(raw_name="result_code"))],
+            metrics=[dict(id="events", type="COUNT")],
+        )
+        self.assertEqual(result.groups[0].values[0].value_label, "成功")
+        self.assertEqual(result.rows[0]["rc"], 0)
+        self.assertEqual([g.values for g in result.groups[1:]], [(), ()])
+        result = self._aggregate(
+            dimensions=[dict(id="rc", type="FIELD", field=dict(raw_name="extend_data", keys=["result_code"]))],
+            metrics=[dict(id="events", type="COUNT")],
+        )
+        self.assertIsNone(result.groups[0].values[0].value_label)
+
     def test_complete_groups_quality_and_original_other_average(self):
         with mock.patch(f"{AGGREGATION_MODULE}.time.perf_counter", side_effect=[20.0, 20.125]):
             result = self._aggregate()
@@ -724,24 +743,16 @@ class TestLogAggregationService(TestCase):
                     self._aggregate(dimensions=self._time_dimensions())
 
     @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=200)
-    def test_auto_growth_reexecutes_complete_query_and_uses_only_final_snapshot(self):
-        data = frames()
-        for row in data:
-            if row["frame"] == "ROW":
-                row["bucket"] = "0"
+    def test_auto_growth_returns_budget_error_without_silent_coarsening(self):
+        """最终类别增长超过预算时保持可读性决策，拒绝而不是改粒度重查。"""
         self.mock_query.side_effect = [
             ({"list": [{"group_count": "1", "invalid_type_count": "0", "invalid_number_count": "0"}]},),
-            ({"list": [data[0]]},),
-            ({"list": data},),
+            ({"list": [frames()[0]]},),
         ]
-        result = self._aggregate(dimensions=self._time_dimensions(interval="AUTO"))
-        self.assertEqual(result.query_summary.effective_interval, "DAY")
-        self.assertEqual(len(result.rows), 3)
-        self.assertEqual(sum(row["events"] for row in result.rows), 10)
-        self.assertEqual(self.mock_query.call_count, 3)
-        final_sql = self.mock_query.call_args.args[0][0]["sql"]
-        self.assertIn("ROW_NUMBER() OVER", final_sql)
-        self.assertIn("FROM normalized", final_sql)
+        with self.assertRaises(StatisticsBudgetExceeded) as caught:
+            self._aggregate(dimensions=self._time_dimensions(interval="AUTO"))
+        self.assertEqual(caught.exception.data["suggested_interval"], "DAY")
+        self.assertEqual(self.mock_query.call_count, 2)
 
     @override_settings(AI_LOG_AGGREGATION_MAX_CELLS=200)
     def test_explicit_growth_returns_budget_error_without_changing_interval(self):

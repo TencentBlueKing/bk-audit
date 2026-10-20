@@ -598,9 +598,9 @@ class AttachmentServiceTest(TestCase):
 
         self.assertEqual(len(attachments), 20)
         self.assertEqual(len(serialized_attachments), 20)
+        self.assertTrue(all(item["input_data"] == {"text": "hello"} for item in serialized_attachments))
         self.assertEqual(len(conversation_ids), 20)
         required_deferred_fields = {
-            "input_data",
             "context_data",
             "output_data",
             "stream_config",
@@ -942,6 +942,60 @@ class AttachmentServiceTest(TestCase):
         self.assertEqual(lock_queries, [])
         self.assertEqual(updated.title, "第三次")
         self.assertEqual(updated.output_data, {"content": "latest"})
+
+    def test_retry_with_input_replaces_input_and_context_but_preserves_custom_title(self):
+        handler = self.register_async_handler()
+        attachment = self.create_attachment(
+            attachment_type=AttachmentType.AI_ANALYSIS, task_id="old-task", title="自定义标题"
+        )
+        with self.captureOnCommitCallbacks(execute=False):
+            retried = self.service.retry(attachment_uid=str(attachment.uid), input_data={"text": "new request"})
+        self.assertEqual(retried.input_data, {"text": "new request"})
+        self.assertEqual(retried.context_data, {"prefix": f"{self.user}:async"})
+        self.assertEqual(retried.title, "自定义标题")
+        self.assertIsNone(retried.output_data)
+        self.assertNotEqual(retried.task_id, "old-task")
+        self.assertEqual(handler.prepare_calls, 1)
+        self.assertEqual(handler.prepare_atomic_depth, self.atomic_depth)
+
+    def test_retry_invalid_new_input_and_failed_cas_preserve_old_snapshots(self):
+        self.register_async_handler()
+        attachment = self.create_attachment(attachment_type=AttachmentType.AI_ANALYSIS, task_id="old-task")
+        original = (
+            attachment.input_data,
+            attachment.context_data,
+            attachment.output_data,
+            attachment.status,
+            attachment.task_id,
+        )
+        for invalid in ({}, {"text": "new", "unknown": True}, [], "text"):
+            with self.subTest(invalid=invalid), self.assertRaises(AttachmentSnapshotValidationError):
+                self.service.retry(attachment_uid=str(attachment.uid), input_data=invalid)
+            attachment.refresh_from_db()
+            self.assertEqual(
+                (
+                    attachment.input_data,
+                    attachment.context_data,
+                    attachment.output_data,
+                    attachment.status,
+                    attachment.task_id,
+                ),
+                original,
+            )
+        with mock.patch.object(Attachment, "restart_terminal", return_value=False):
+            with self.assertRaises(InvalidAttachmentState):
+                self.service.retry(attachment_uid=str(attachment.uid), input_data={"text": "new"})
+        attachment.refresh_from_db()
+        self.assertEqual(
+            (
+                attachment.input_data,
+                attachment.context_data,
+                attachment.output_data,
+                attachment.status,
+                attachment.task_id,
+            ),
+            original,
+        )
 
     def test_retry_allows_terminal_async_and_preserves_snapshots_without_prepare(self):
         handler = self.register_async_handler()

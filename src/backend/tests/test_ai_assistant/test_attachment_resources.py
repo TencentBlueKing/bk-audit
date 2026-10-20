@@ -46,6 +46,7 @@ from services.web.ai_assistant.serializers.attachment import (
     AttachmentListItemSerializer,
     AttachmentListRequestSerializer,
     AttachmentResponseSerializer,
+    AttachmentRetryRequestSerializer,
     AttachmentUpdateRequestSerializer,
     _attachment_schema_mapping,
     _editable_attachment_output_schema_mapping,
@@ -85,6 +86,17 @@ class AttachmentRequestSerializerTest(TestCase):
     def tearDown(self):
         for attachment_type in AttachmentType.values:
             attachment_handler_registry.unregister(attachment_type)
+
+    def test_retry_accepts_omission_or_object_but_rejects_explicit_null_and_nonobjects(self):
+        for patch in ({}, {"input_data": {"text": "new"}}):
+            serializer = AttachmentRetryRequestSerializer(data={"attachment_uid": self.attachment_uid, **patch})
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+        for invalid in (None, [], "text", 1):
+            serializer = AttachmentRetryRequestSerializer(
+                data={"attachment_uid": self.attachment_uid, "input_data": invalid}
+            )
+            self.assertFalse(serializer.is_valid())
+            self.assertIn("input_data", serializer.errors)
 
     def test_create_request_requires_typed_business_input(self):
         serializer = AttachmentCreateRequestSerializer(
@@ -141,6 +153,7 @@ class AttachmentRequestSerializerTest(TestCase):
             AttachmentListRequestSerializer,
             AttachmentUpdateRequestSerializer,
             AttachmentResponseSerializer,
+            AttachmentRetryRequestSerializer,
             AttachmentListItemSerializer,
             FeedbackResponseSerializer,
         )
@@ -261,6 +274,7 @@ class AttachmentRequestSerializerTest(TestCase):
             list_fields,
             {
                 "uid",
+                "input_data",
                 "scope_type",
                 "scope_id",
                 "attachment_type",
@@ -810,6 +824,7 @@ class AttachmentResourceTest(TestCase):
             set(response[0]),
             {
                 "uid",
+                "input_data",
                 "scope_type",
                 "scope_id",
                 "attachment_type",
@@ -830,7 +845,7 @@ class AttachmentResourceTest(TestCase):
         self.assertEqual(response[1]["error_code"], "")
         self.assertEqual(response[1]["error_message"], "")
         self.assertEqual(response[0]["export_formats"], [])
-        self.assertNotIn("input_data", response[0])
+        self.assertEqual(response[0]["input_data"], {"text": "hello"})
         self.assertNotIn("output_data", response[0])
         self.assertEqual(response[0]["source_message"]["uid"], str(self.source_message.uid))
         self.assertEqual(response[0]["conversation"]["uid"], str(self.conversation.uid))

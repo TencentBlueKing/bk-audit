@@ -16,6 +16,14 @@ from services.web.ai_assistant.schemas.audit_search import (
     LogSearchInputSchema,
     LogSearchOutputSchema,
 )
+from services.web.ai_assistant.schemas.log_attachment import (
+    LogAttachmentCondition,
+    LogAttachmentInput,
+)
+from services.web.query.ai_assistant.log_tools.context import LogQueryContextService
+from services.web.query.ai_assistant.log_tools.sensitive import (
+    SensitiveLogFieldPermissionService,
+)
 
 
 def parse_log_search_source(*, user: str, source_message: Message):
@@ -90,3 +98,31 @@ def validate_log_search_consistency(
     )
     if not is_consistent:
         raise AttachmentSnapshotValidationError(data={"field_name": "source_message", "errors": []})
+
+
+def prepare_log_attachment(
+    *, user, source_message, input_data: LogAttachmentInput, fields=(), error_type=AttachmentSnapshotValidationError
+):
+    """复用来源验证及查询权限，返回规范化输入和可复用的来源摘要依据。
+
+    仅准备条件/权限，不执行日志查询；覆盖范围与来源不同则不能复用来源计数。
+    """
+    log_input, log_context, log_output = parse_log_search_source(user=user, source_message=source_message)
+    source_condition = parse_snapshot(
+        LogAttachmentCondition,
+        log_input.condition.model_dump(mode="json"),
+        field_name="source_message.input_data.condition",
+        error_type=error_type,
+    )
+    condition = input_data.condition if input_data.condition is not None else source_condition
+    summary_matches = condition == source_condition
+    query_context = LogQueryContextService.build(username=user, namespace=log_context.namespace, condition=condition)
+    condition = LogAttachmentCondition.model_validate(query_context.condition.model_dump(mode="json"))
+    SensitiveLogFieldPermissionService.ensure_access(
+        username=user,
+        system_id=condition.scope_id,
+        fields=SensitiveLogFieldPermissionService.collect_field_paths(
+            [*fields, *(item.field for item in condition.conditions)]
+        ),
+    )
+    return input_data.model_copy(update={"condition": condition}), log_context, log_output, summary_matches

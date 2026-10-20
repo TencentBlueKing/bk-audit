@@ -3,6 +3,7 @@
 from django.test import SimpleTestCase, override_settings
 from pydantic import ValidationError
 
+from services.web.ai_assistant.schemas.audit_analysis import AIAnalysisInputSchema
 from services.web.ai_assistant.schemas.audit_statistics import (
     AIStatisticsAttachmentInput,
     AIStatisticsAttachmentOutput,
@@ -41,14 +42,47 @@ class FieldStatisticsSchemaTest(SimpleTestCase):
     def test_defaults_and_literal_path(self):
         value = FieldStatisticsAttachmentInput(field={"raw_name": "extend_data", "keys": ["请求-方法"]})
         self.assertEqual(value.field.keys, ["请求-方法"])
-        self.assertEqual(value.top_n, 10)
+        self.assertNotIn("top_n", value.model_dump())
         self.assertEqual(value.interval, "AUTO")
 
-    @override_settings(AI_LOG_AGGREGATION_DEFAULT_TOP_N=7)
-    def test_default_uses_shared_setting_and_explicit_value_survives(self):
-        """仅缺省输入跟随共享配置，历史快照及显式参数不改写。"""
-        self.assertEqual(FieldStatisticsAttachmentInput(field={"raw_name": "username"}).top_n, 7)
-        self.assertEqual(FieldStatisticsAttachmentInput(field={"raw_name": "username"}, top_n=100).top_n, 100)
+    def test_month_and_complete_condition_are_supported_but_null_is_invalid(self):
+        condition = dict(
+            scope_type="system",
+            scope_id="example",
+            start_time="2026-01-01T00:00:00+08:00",
+            end_time="2026-02-01T00:00:00+08:00",
+            conditions=[],
+        )
+        value = FieldStatisticsAttachmentInput(field={"raw_name": "username"}, interval="MONTH", condition=condition)
+        self.assertEqual(value.condition.scope_id, "example")
+        self.assertEqual(value.interval, "MONTH")
+        with self.assertRaises(ValidationError):
+            FieldStatisticsAttachmentInput(field={"raw_name": "username"}, condition=None)
+
+    def test_explicit_condition_requires_scope_and_filter_list_for_all_three_inputs(self):
+        condition = dict(
+            scope_type="system",
+            scope_id="example",
+            start_time="2026-01-01T00:00:00+08:00",
+            end_time="2026-02-01T00:00:00+08:00",
+            conditions=[],
+        )
+        for model, payload in (
+            (FieldStatisticsAttachmentInput, {"field": {"raw_name": "username"}}),
+            (AIStatisticsAttachmentInput, {"instruction": "统计"}),
+            (AIAnalysisInputSchema, {"analysis_mode": "DEFAULT"}),
+        ):
+            for key in ("scope_type", "scope_id", "start_time", "end_time", "conditions"):
+                partial = {name: value for name, value in condition.items() if name != key}
+                with self.subTest(model=model.__name__, missing=key), self.assertRaises(ValidationError):
+                    model.model_validate({**payload, "condition": partial})
+
+    def test_override_condition_schema_requires_the_same_complete_fields(self):
+        schema = FieldStatisticsAttachmentInput.model_json_schema(mode="validation")
+        condition_schema = schema["$defs"]["LogAttachmentCondition"]
+        self.assertEqual(
+            set(condition_schema["required"]), {"scope_type", "scope_id", "start_time", "end_time", "conditions"}
+        )
 
     def test_rejects_invalid_budget_field_and_range(self):
         for patch in (
@@ -67,11 +101,6 @@ class FieldStatisticsSchemaTest(SimpleTestCase):
         ):
             with self.subTest(patch=patch), self.assertRaises(ValidationError):
                 FieldStatisticsAttachmentInput.model_validate({"field": {"raw_name": "username"}, **patch})
-
-    @override_settings(AI_LOG_AGGREGATION_MAX_TOP_N=3)
-    def test_configured_budget_applies_at_creation(self):
-        with self.assertRaises(ValidationError):
-            FieldStatisticsAttachmentInput(field={"raw_name": "username"}, top_n=4)
 
 
 class AIStatisticsSchemaTest(SimpleTestCase):

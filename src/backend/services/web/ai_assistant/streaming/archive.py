@@ -419,7 +419,7 @@ class AttachmentArchiveStore:
                 "task_id": binding.task_id,
                 "execution_id": str(binding.config.execution_id),
                 "status": str(status),
-                "event_count": len(events) + 1,
+                "final_batch_event_count": len(events) + 1,
             },
         )
         return persisted_status

@@ -42,7 +42,7 @@ flowchart LR
 
 每种类型都声明三个 `MessageSchema` 子类：
 
-- `input_model`：前端提交并原样留存的业务输入；
+- `input_model`：前端提交的业务输入；附件可在 prepare 补齐有效默认条件后保存；
 - `context_model`：`prepare()` 构造的执行上下文，只在后端内部使用；
 - `output_model`：同步返回或异步 Task 最终返回的产物协议。
 
@@ -161,10 +161,9 @@ def ready(self):
 - Retry `countdown`/`eta` 小于对应消息或附件的巡检硬失效阈值；
 - 业务异常中不得携带敏感输入或日志正文。
 
-所有 SUCCESS 或 FAILED 的异步附件均支持手动重试/重新生成，不需要 Handler 声明类型开关。手动重试不重新调用
-`prepare()`，而是复用持久化 input/context 快照，清空旧产物、错误、过程归档和反馈后投递新 task ID。
-重试只复核当前用户仍拥有有效会话，不要求来源消息保持创建时的正文或状态。Message 手动重试仍仅允许
-`FAILED + ASYNC`。若权限或依赖必须实时检查，应在业务 Task 中执行。
+所有 SUCCESS 或 FAILED 的异步附件均支持手动重试/重新生成，不需要 Handler 类型开关。不传 input_data 时复用当前持久化 input/context，不调用 prepare，也不要求来源保持原正文或状态；传入完整 input_data 时与创建共用来源校验、输入解析和 prepare，整体替换，不做局部合并。
+
+AttachmentPreparation 可选返回规范化的 input_data（例如补齐完整 condition）；省略则保留已解析输入。公共 Service 不识别业务字段，不增加 prepare_retry。准备在事务外，CAS成功时原子保存新 input/context、清空旧产物/错误/过程/反馈并投递新任务；失败不覆盖旧快照。执行时仍检查实时权限。Message 手动重试仍仅允许 `FAILED + ASYNC`。
 
 附件 Task 仍返回业务 output 模型或字典供平台校验持久化；`AttachmentExecutionTask`
 在成功持久化后统一向 Celery 返回 `{"status": "SUCCESS"}`，避免任务成功事件携带业务正文。

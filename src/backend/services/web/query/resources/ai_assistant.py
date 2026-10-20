@@ -101,12 +101,13 @@ class MCPAggregateLogs(QueryBaseResource):
     """对当前用户可访问日志执行类型化、受控的分组聚合，用于总量、分布和趋势。
 
     TopN 按全范围排名；OTHER 汇总剩余非缺失类别，MISSING 独立，比例分母为全范围总量。
+    groups.values[].value_label为内置枚举名称；未知/动态字段为null，按group_id/维度ID关联，保留原始typed value。
     核对 query_summary 的范围、粒度及 complete，不从样例或 TopN 部分组推断总体。
     查询失败不能当作零，应按错误提示调整请求；权限拒绝时停止对应查询。
 
     维度和指标 id 必须全局唯一，不能使用 group_id/group_kind/log_count/log_ratio/bucket_start；COUNT 示例为 {"id":"cnt","type":"COUNT"}。
     DISTINCT_COUNT 只需 id/type/field，不传 value_type/percentile；order_by 仅控制类别TopN，不能引用时间维度，时间桶自动升序。
-    最多声明 2 个维度和 5 个指标，AUTO 时间桶由已验证时间范围决定实际粒度；文本或
+    最多声明 2 个维度和 5 个指标，时间粒度支持MINUTE/HOUR/DAY/MONTH，AUTO从月到分钟选首个达到桶数阈值的粒度（默认12，后端可配置），容量独立检查；文本或
     拓展数值转换质量按全范围 present_count 返回；有类别默认 top_n=10、最大 500，无类别省略。
     时序 rows 仅返回有日志的桶，query_summary.sparse_time_buckets=true；缺省桶计数为0、数值指标为null。
     完整结果统一限制 1440 时间桶、100000 数值单元格及 4 MiB，不静默截断；敏感字段无权限时不执行查询。

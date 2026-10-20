@@ -20,18 +20,23 @@ from services.web.query.ai_assistant.log_tools.field_statistics_schemas import (
     FieldDistribution,
     FieldDistributionGroup,
     FieldStatisticsOverview,
+    FieldStatisticsQuerySummary,
     FieldStatisticsResult,
     FieldTimeSeries,
     StatisticsField,
 )
 from services.web.query.ai_assistant.log_tools.schemas import (
     AgentSearchCondition,
-    AggregateLogsRequest,
-    AggregationQuerySummary,
+    AggregationDimension,
+    AggregationMetric,
     AggregationTimeInterval,
     LogFieldRef,
 )
+from services.web.query.ai_assistant.log_tools.statistics_labels import (
+    label_statistics_groups,
+)
 from services.web.query.ai_assistant.log_tools.statistics_sql import (
+    StatisticsQuery,
     StatisticsSQLBuilder,
 )
 
@@ -47,20 +52,20 @@ class FieldStatisticsService:
         namespace: str,
         condition: AgentSearchCondition,
         field: LogFieldRef,
-        top_n: int | None = None,
         interval: AggregationTimeInterval = AggregationTimeInterval.AUTO
     ) -> FieldStatisticsResult:
         """重验权限并生成固定包；非法请求、查询不完整及超预算抛领域异常。"""
         try:
             field = LogFieldRef.model_validate(field.model_dump())
-            request = AggregateLogsRequest(
+            request = StatisticsQuery(
                 condition=condition,
-                dimensions=[
-                    dict(id="value", type="FIELD", field=field),
-                    dict(id="bucket", type="TIME_BUCKET", field=LogFieldRef(raw_name="start_time"), interval=interval),
-                ],
-                metrics=[dict(id="events", type="COUNT")],
-                **({"top_n": top_n} if top_n is not None else {}),
+                dimensions=(
+                    AggregationDimension(id="value", type="FIELD", field=field),
+                    AggregationDimension(
+                        id="bucket", type="TIME_BUCKET", field=LogFieldRef(raw_name="start_time"), interval=interval
+                    ),
+                ),
+                metrics=(AggregationMetric(id="events", type="COUNT"),),
             )
         except ValidationError as err:
             raise UnsupportedAggregation() from err
@@ -69,21 +74,22 @@ class FieldStatisticsService:
             builder = StatisticsSQLBuilder.from_request(context, request, summary_field=field)
             result, axis, took_ms = LogAggregationService._execute(builder, numeric_columns=1)
             summary = result.field_summary
+            labeled_groups = label_statistics_groups(result.groups, builder.dimensions, namespace)
             groups = tuple(
                 FieldDistributionGroup(
                     group_id=g.group_id,
                     kind=g.kind,
                     value_type=g.values[0].value_type if g.values else None,
                     value=g.values[0].value if g.values else None,
+                    value_label=g.values[0].value_label if g.values else None,
                     count=g.count,
                     ratio=g.ratio,
                 )
-                for g in result.groups
+                for g in labeled_groups
             )
             counts = {g.group_id: [] for g in groups}
             for row in result.rows:
                 counts[row["group_id"]].append(row["events"])
-            has_other = any(g.kind == "OTHER" for g in groups)
             response = FieldStatisticsResult(
                 field=cls._field(field),
                 statistics_kind=summary.kind,
@@ -93,7 +99,7 @@ class FieldStatisticsService:
                     missing_count=result.total_count - summary.present_count,
                     present_ratio=summary.present_count / result.total_count if result.total_count else None,
                 ),
-                distribution=FieldDistribution(top_n=request.top_n, has_other=has_other, groups=groups),
+                distribution=FieldDistribution(groups=groups),
                 time_series=FieldTimeSeries(
                     requested_interval=axis.requested_interval,
                     effective_interval=axis.effective_interval,
@@ -104,11 +110,9 @@ class FieldStatisticsService:
                     ),
                 ),
                 numeric_summary=summary.numeric_summary,
-                query_summary=AggregationQuerySummary(
+                query_summary=FieldStatisticsQuerySummary(
                     returned_count=len(result.rows),
                     total_count=result.total_count,
-                    top_n=request.top_n,
-                    has_other=has_other,
                     scope_id=context.condition.scope_id,
                     start_time=context.condition.start_time,
                     end_time=context.condition.end_time,

@@ -9,6 +9,8 @@ from core.constants import OrderTypeChoices
 from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.log_tools.schemas import (
     AggregateLogsRequest,
+    AggregationDimension,
+    AggregationMetric,
     LogFieldRef,
 )
 from services.web.query.ai_assistant.log_tools.sql import (
@@ -16,6 +18,10 @@ from services.web.query.ai_assistant.log_tools.sql import (
     ProjectedLogSQLBuilder,
 )
 from services.web.query.ai_assistant.log_tools.statistics_budget import build_time_axis
+from services.web.query.ai_assistant.log_tools.statistics_sql import (
+    StatisticsQuery,
+    StatisticsSQLBuilder,
+)
 from services.web.query.ai_assistant.schemas import SearchCondition
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 
@@ -430,3 +436,55 @@ class TestLogAggregationSQLBuilder(SimpleTestCase):
                 "WITH " + ",".join(ctes) + " SELECT bucket,log_count FROM time_rows ORDER BY bucket"
             ).fetchall()
         self.assertEqual(rows, [(0, 1), (1, 1)])
+
+    def test_program_group_sql_returns_all_typed_categories_and_missing(self):
+        query = StatisticsQuery(
+            condition=make_request().condition,
+            dimensions=(
+                AggregationDimension(id="value", type="FIELD", field=dict(raw_name="extend_data", keys=["x"])),
+            ),
+            metrics=(AggregationMetric(id="events", type="COUNT"),),
+        )
+        builder = StatisticsSQLBuilder.from_request(self.context, query)
+        ctes = [
+            "category_counts AS (SELECT d0_type,d0_key,COUNT(*) AS log_count,COUNT(*) AS m0 "
+            "FROM normalized WHERE d0_type IS NOT NULL GROUP BY d0_type,d0_key)",
+            *builder._group_ctes(),
+        ]
+        tree = sqlglot.parse_one(
+            "WITH " + ",".join(ctes) + " SELECT group_key,group_kind,log_count FROM aggregated ORDER BY group_key",
+            read="starrocks",
+        )
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE normalized(d0_type TEXT,d0_key TEXT)")
+            db.executemany(
+                "INSERT INTO normalized VALUES(?,?)",
+                [("number", "0"), ("string", "0"), ("boolean", "false"), ("string", ""), (None, None)]
+                + [("string", f"v{i}") for i in range(501)],
+            )
+            rows = db.execute(tree.sql(dialect="sqlite")).fetchall()
+        self.assertEqual(len(rows), 506)
+        self.assertEqual(rows[-1], (506, "MISSING", 1))
+        self.assertEqual(sum(row[2] for row in rows), 506)
+        self.assertTrue(all(row[1] == "VALUE" for row in rows[:-1]))
+
+    def test_month_bucket_expression_keeps_unequal_months_and_terminal_boundary(self):
+        request = make_request(
+            dimensions=[dict(id="month", type="TIME_BUCKET", field=dict(raw_name="start_time"), interval="MONTH")]
+        )
+        builder = StatisticsSQLBuilder.from_request(self.context, request)
+        builder.time_axis = build_time_axis(
+            start_time="2024-01-31T12:00:00+08:00",
+            end_time="2024-04-01T00:00:00+08:00",
+            interval="MONTH",
+            group_count=1,
+            numeric_columns=1,
+        )
+        tree = sqlglot.parse_one("SELECT " + builder._bucket_expression() + " FROM records", read="starrocks")
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE records(event_timestamp INTEGER)")
+            db.executemany(
+                "INSERT INTO records VALUES(?)",
+                [(1706673600000,), (1706716800000,), (1709222399999,), (1709222400000,), (1711900800000,)],
+            )
+            self.assertEqual([row[0] for row in db.execute(tree.sql(dialect="sqlite"))], [0, 1, 1, 2, 3])

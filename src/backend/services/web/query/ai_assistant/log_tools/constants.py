@@ -105,6 +105,7 @@ class AggregationTimeInterval(TextChoices):
     MINUTE = "MINUTE", gettext_lazy("分钟")
     HOUR = "HOUR", gettext_lazy("小时")
     DAY = "DAY", gettext_lazy("天")
+    MONTH = "MONTH", gettext_lazy("月")
 
 
 class AggregationEffectiveTimeInterval(TextChoices):
@@ -113,6 +114,7 @@ class AggregationEffectiveTimeInterval(TextChoices):
     MINUTE = "MINUTE", gettext_lazy("分钟")
     HOUR = "HOUR", gettext_lazy("小时")
     DAY = "DAY", gettext_lazy("天")
+    MONTH = "MONTH", gettext_lazy("月")
 
 
 class AggregationOrderDirection(TextChoices):
