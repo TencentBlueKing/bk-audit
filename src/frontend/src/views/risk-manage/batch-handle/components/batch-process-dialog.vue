@@ -158,7 +158,9 @@
           <bk-alert
             class="misreport-alert"
             theme="warning"
-            :title="t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
+            :title="availability.allClosed
+              ? t('策略方案可能采集误报数据作为优化依据，请谨慎确认是否为误报？')
+              : t('标记误报后，风险单会自动关闭，请谨慎确认是否为误报？')" />
           <bk-form-item
             :label="t('误报说明')"
             property="misreport_description"
@@ -172,6 +174,22 @@
               :max-len="1000"
               :risk-fields="riskFields"
               support-variable />
+          </bk-form-item>
+        </template>
+
+        <template v-else-if="formData.method === 'unmisreport'">
+          <bk-alert
+            class="misreport-alert"
+            theme="warning"
+            :title="t('解除误报后，风险单会重新打开至“待处理” 请谨慎确认是否解除误报？')" />
+          <bk-form-item
+            :label="t('处理人')"
+            property="unmisreport_operators"
+            required>
+            <audit-user-selector-tenant
+              v-model="formData.unmisreport_operators"
+              class="transfer-user-selector"
+              multiple />
           </bk-form-item>
         </template>
       </audit-form>
@@ -255,10 +273,12 @@
     scope?: 'scene' | 'all';
     riskFields?: FieldItem[];
     eventFields?: FieldItem[];
+    username?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     scope: 'scene',
+    username: '',
     riskFields: () => [],
     eventFields: () => [],
   });
@@ -270,6 +290,7 @@
     transfer: 'transfer',
     package: 'ProcessPackage',
     misreport: 'misreport',
+    unmisreport: 'unmisreport',
   };
 
   const ACTION_BY_METHOD: Record<string, BatchActionId> = {
@@ -277,6 +298,7 @@
     transfer: 'transfer',
     ProcessPackage: 'package',
     misreport: 'misreport',
+    unmisreport: 'unmisreport',
   };
 
   const { t } = useI18n();
@@ -296,6 +318,7 @@
       description: '',
       misreport_description: '',
       new_operators: [] as string[],
+      unmisreport_operators: (props.username ? [props.username] : []) as string[],
       pa_id: '',
       pa_params: {} as Record<string, PackageParamValue>,
       auto_close_risk: false,
@@ -309,6 +332,7 @@
     transfer: '转单',
     package: '处理套餐',
     misreport: '标记误报',
+    unmisreport: '解除误报',
   };
 
   const actionOptions = computed(() => props.availability.actions.map(action => ({
@@ -369,6 +393,11 @@
     new_operators: [{
       validator: (value: string[]) => formData.value.method !== 'transfer' || hasTransferOperators(value),
       message: t('转单人不能为空'),
+      trigger: 'change',
+    }],
+    unmisreport_operators: [{
+      validator: (value: string[]) => formData.value.method !== 'unmisreport' || hasTransferOperators(value),
+      message: t('处理人不能为空'),
       trigger: 'change',
     }],
     pa_id: [{
@@ -531,7 +560,9 @@
         action,
         riskIds: props.riskIds,
         description,
-        operators: formData.value.new_operators,
+        operators: formData.value.method === 'unmisreport'
+          ? formData.value.unmisreport_operators
+          : formData.value.new_operators,
         paId: formData.value.pa_id,
         paParams: buildSubmitPaParams(formData.value.pa_params, Object.values(paramsDetailData.value)),
         autoCloseRisk: formData.value.auto_close_risk,

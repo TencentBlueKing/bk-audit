@@ -21,6 +21,7 @@
     :risk-fields="riskFields"
     :risk-ids="riskIds"
     :scope="scope"
+    :username="username"
     @success="handleSuccess" />
   <batch-confirm-dialog
     ref="confirmDialogRef"
@@ -211,7 +212,7 @@
     }
     const preview = await fetchBatchPreview(selectedRows.map(row => String(row.risk_id)));
     if (seq === refreshSeq) {
-      availability.value = toBatchAvailability(preview);
+      availability.value = toBatchAvailability(preview, selectedRows);
     }
   };
 

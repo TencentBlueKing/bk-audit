@@ -279,6 +279,15 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 批量解除误报
+  bulkUnmisreportRisk(params: {
+    risk_ids: string[],
+    new_operators: Array<{ type: 'user', value: string }>,
+  }) {
+    return Request.post(`${this.module}/bulk_unmisreport/`, {
+      params,
+    });
+  }
   // 确认风险
   confirmRisk(params: {
     risk_id: string | number,

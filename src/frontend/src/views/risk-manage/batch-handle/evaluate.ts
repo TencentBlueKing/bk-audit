@@ -1,10 +1,10 @@
 export const BATCH_SYNC_LIMIT = 500;
 
-export const BATCH_ACTION_ORDER = ['close', 'transfer', 'package', 'misreport'] as const;
+export const BATCH_ACTION_ORDER = ['close', 'transfer', 'package', 'misreport', 'unmisreport'] as const;
 
 export type BatchActionId = typeof BATCH_ACTION_ORDER[number];
 export type BatchDialogKind = 'confirm' | 'process';
-export type PreviewActionKey = 'confirm' | 'close' | 'trans' | 'auto_process' | 'misreport';
+export type PreviewActionKey = 'confirm' | 'close' | 'trans' | 'auto_process' | 'misreport' | 'unmisreport';
 
 export interface BatchRiskRow {
   risk_id: string | number;
@@ -38,6 +38,7 @@ export interface BatchAvailability {
   strategyUnique: boolean;
   strategyId: string;
   sceneId: string;
+  allClosed: boolean;
 }
 
 const PREVIEW_KEY_BY_ACTION: Record<BatchActionId, PreviewActionKey> = {
@@ -45,6 +46,7 @@ const PREVIEW_KEY_BY_ACTION: Record<BatchActionId, PreviewActionKey> = {
   transfer: 'trans',
   package: 'auto_process',
   misreport: 'misreport',
+  unmisreport: 'unmisreport',
 };
 
 export const REASON_NONE = '请至少选择1条风险单';
@@ -64,9 +66,10 @@ export const createDisabledAvailability = (reason: string): BatchAvailability =>
   strategyUnique: false,
   strategyId: '',
   sceneId: '',
+  allClosed: false,
 });
 
-export const toBatchAvailability = (preview: BatchPreview): BatchAvailability => {
+export const toBatchAvailability = (preview: BatchPreview, rows: BatchRiskRow[] = []): BatchAvailability => {
   const strategyId = normalizeIdentity(preview.unique_strategy_id);
   const actions = BATCH_ACTION_ORDER.map((id) => {
     const item = preview.actions?.[PREVIEW_KEY_BY_ACTION[id]];
@@ -90,6 +93,7 @@ export const toBatchAvailability = (preview: BatchPreview): BatchAvailability =>
     strategyUnique: Boolean(strategyId),
     strategyId,
     sceneId: normalizeIdentity(preview.scene_id),
+    allClosed: rows.length > 0 && rows.every(row => row.status === 'closed'),
   };
 };
 
