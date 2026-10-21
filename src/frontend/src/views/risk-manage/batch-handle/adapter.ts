@@ -52,6 +52,12 @@ const requestBatchProcess = (input: {
       auto_close_risk: Boolean(input.autoCloseRisk),
     }),
     misreport: () => RiskManageService.bulkMisreportRisk({ risk_ids: riskIds, description }),
+    unmisreport: () => RiskManageService.bulkUnmisreportRisk({
+      risk_ids: riskIds,
+      new_operators: (input.operators || [])
+        .filter(Boolean)
+        .map(value => ({ type: 'user' as const, value })),
+    }),
   };
   return requests[action]();
 };

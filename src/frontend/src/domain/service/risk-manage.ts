@@ -305,6 +305,17 @@ export default {
   },
 
   /**
+   * @desc 批量解除误报
+   */
+  bulkUnmisreportRisk(params: {
+    risk_ids: string[],
+    new_operators: Array<{ type: 'user', value: string }>,
+  }) {
+    return RiskManageSource.bulkUnmisreportRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
    * @desc 确认风险
    */
   confirmRisk(params: {
