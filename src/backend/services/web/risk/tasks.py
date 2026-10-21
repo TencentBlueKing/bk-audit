@@ -59,6 +59,7 @@ from services.web.common.monitor import (
     RiskExportFailedEvent,
 )
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
+from services.web.risk.bksec.service import build_failure_hint
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
     RISK_ESQUERY_DELAY_TIME,
@@ -653,11 +654,15 @@ def process_one_risk(*, risk_id: str):
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
-    # 筛选所有需要更新的节点（测试单不参与轮询，由 get_task_status 查询时同步）
+    # 筛选所有需要更新的节点
     if node_id:
         nodes = TicketNode.objects.filter(id=node_id, is_test=False)
     else:
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING, is_test=False)
+        # 测试单（is_test=True）同样纳入同步：它是一次性发单任务，结束很快，
+        # 但此前仅在前端轮询 get_task_status 时被动回写，页面关闭后会永久停留在 RUNNING
+        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING).filter(
+            Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__)
+        )
 
     # 逐个更新
     for node in nodes:
@@ -692,6 +697,12 @@ def sync_auto_result(node_id: str = None):
                         # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
                         node.process_result["duration"] = calc_task_duration(status)
                         node.duration = node.process_result["duration"]
+                        # 失败提示：建单时刻通常还拿不到节点错误，终态同步时才有真实错误文本
+                        if node.process_result["status"]["state"] in [
+                            SOPSTaskStatus.FAILED,
+                            SOPSTaskStatus.REVOKED,
+                        ]:
+                            node.process_result["failure_hint"] = build_failure_hint(status, task_id=task_id)
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]

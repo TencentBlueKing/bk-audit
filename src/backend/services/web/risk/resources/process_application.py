@@ -31,6 +31,7 @@ from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskStatus
+from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, extract_failure_detail
 from services.web.risk.constants import ApproveTicketFields, RiskStatus
 from services.web.risk.models import (
     ProcessApplication,
@@ -218,8 +219,11 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
     @staticmethod
     def _build_failure_hint(process_result: dict) -> str:
-        """读取写入点已落库的失败提示（渠道无关，无需在此翻译）"""
-        return process_result.get("failure_hint") or ""
+        """失败提示：优先读写入点已落库的文本，为空时从当前状态里兜底取节点错误"""
+        hint = process_result.get("failure_hint") or ""
+        if hint:
+            return hint
+        return extract_failure_detail(process_result.get("status") or {})[:FAILURE_HINT_MAX_LEN]
 
     class RequestSerializer(serializers.Serializer):
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
