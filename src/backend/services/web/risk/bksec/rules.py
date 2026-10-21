@@ -22,10 +22,13 @@ from typing import Optional
 from django.db import transaction
 from django.utils.translation import gettext
 
+from api.domains import BKSEC_PLUGIN_CONFIG_API_URL
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_AUTO_RULE_NAME,
     BKSEC_RULE_PRIORITY_BASE,
+    BkSecConfigSyncFailReason,
+    BkSecConfigSyncStage,
 )
 from services.web.risk.bksec.contract import build_pa_params
 from services.web.risk.models import ProcessApplication, RiskRule
@@ -252,12 +255,24 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
 
     from services.web.common.monitor import BkSecConfigSyncFailedEvent
 
-    if not getattr(settings, "BKSEC_PLUGIN_CONFIG_API_URL", None):
+    # 同步场景：测试发送（is_test=True）与策略保存走同一同步逻辑，但失败影响不同，需区分上报
+    stage = BkSecConfigSyncStage.TEST_SEND if is_test else BkSecConfigSyncStage.STRATEGY_SAVE
+
+    def _report_fail(reason: BkSecConfigSyncFailReason, error: str) -> None:
+        """失败上报：维度只放低基数的 stage/fail_reason，错误明细走事件正文"""
+        BkSecConfigSyncFailedEvent(
+            context={
+                "strategy_id": str(strategy.strategy_id),
+                "stage": stage.value,
+                "fail_reason": reason.value,
+            },
+            extra={"error": error},
+        ).report()
+
+    if not BKSEC_PLUGIN_CONFIG_API_URL:
         message = "BKSEC_PLUGIN_CONFIG_API_URL 未配置，无法同步插件配置"
         logger.warning("[BkSecPluginConfig] %s, strategy_id=%s", message, strategy.strategy_id)
-        BkSecConfigSyncFailedEvent(
-            context={"strategy_id": str(strategy.strategy_id), "stage": "api_url_missing", "error": message},
-        ).report()
+        _report_fail(BkSecConfigSyncFailReason.API_URL_MISSING, message)
         return (False, message)
 
     # 获取 token（调用 risk_access 列表接口，从结果中按 risk_type_id 匹配）
@@ -280,18 +295,14 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
                 strategy.strategy_id,
                 config.risk_type_id,
             )
-            BkSecConfigSyncFailedEvent(
-                context={"strategy_id": str(strategy.strategy_id), "stage": "token_missing", "error": message},
-            ).report()
+            _report_fail(BkSecConfigSyncFailReason.TOKEN_MISSING, message)
             return (False, message)
     except Exception as err:
         message = "获取 token 失败：%s" % err
         logger.warning(
             "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s", message, strategy.strategy_id, config.risk_type_id
         )
-        BkSecConfigSyncFailedEvent(
-            context={"strategy_id": str(strategy.strategy_id), "stage": "token_fetch_failed", "error": message},
-        ).report()
+        _report_fail(BkSecConfigSyncFailReason.TOKEN_FETCH_FAILED, message)
         return (False, message)
 
     # 测试发送用独立 key，不影响正式配置
@@ -299,7 +310,7 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
 
     # 调用插件 Config 同步 API
     try:
-        result = api.plugin.config_upsert(
+        result = api.bk_sec_send_plugin.config_upsert(
             strategy_id=plugin_strategy_id,
             risk_type_id=config.risk_type_id,
             source_type=config.source_type,
@@ -315,20 +326,12 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
             return (True, "ok")
         message = str(result.get("message", "插件拒绝写入 Config"))
         logger.warning("[BkSecPluginConfig] Upsert rejected: %s", message)
-        BkSecConfigSyncFailedEvent(
-            context={
-                "strategy_id": str(strategy.strategy_id),
-                "stage": "upsert_rejected",
-                "error": message,
-            },
-        ).report()
+        _report_fail(BkSecConfigSyncFailReason.UPSERT_REJECTED, message)
         return (False, message)
     except Exception as err:  # NOCC:broad-except(插件不可达上报监控)
         message = "插件配置同步接口不可达：%s" % err
         logger.warning("[BkSecPluginConfig] Sync failed, strategy_id=%s err=%s", strategy.strategy_id, err)
-        BkSecConfigSyncFailedEvent(
-            context={"strategy_id": str(strategy.strategy_id), "stage": "api_unreachable", "error": str(err)},
-        ).report()
+        _report_fail(BkSecConfigSyncFailReason.API_UNREACHABLE, str(err))
         return (False, message)
 
 

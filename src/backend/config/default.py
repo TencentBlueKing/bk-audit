@@ -430,8 +430,7 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
-    # BKSEC 安全工单：由 BksecPlugin 自动探测（必配环境变量 + 内置发单套餐），无需额外总闸。
-    "bksec": "auto",
+    "bksec": os.getenv("BKAPP_FEATURE_BKSEC", "on"),
 }
 
 # BkLog

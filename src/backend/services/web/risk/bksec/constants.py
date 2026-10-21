@@ -18,10 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 from django.utils.translation import gettext_lazy
 
+from core.choices import TextChoices
+
 # SOPS 插件「审计中心WeSec发单」(v1.0.0) 入参契约：
 # 插件 Inputs 共 15 个参数；
 # 其中 ${action}（执行模式 callback/poll）是 SOPS 模板的节点输入
-# 由模板分支节点按当前状态配置——首单走 callback 节点（发单后等办结回调），后续重发走 poll 节点（周期检查 event_end_time，有更新则重发）
+# 由模板分支节点按当前状态配置——首单走 callback 节点，后续重发走 poll 节点（周期检查 event_end_time，有新事件则更新工单）
 # 审计侧实际传入 14 个入参，按取值形态分两类：
 
 # ① 风险字段映射（field 形态，9 个）：
@@ -51,7 +53,9 @@ BKSEC_PARAM_ONCE_TASK = "${once_task}"
 # 插件控制参数默认值
 BKSEC_ONCE_TASK_DEFAULT = "no"
 BKSEC_ONCE_TASK_TEST = "yes"
+# ${operator} 入参的兜底模板
 BKSEC_OPERATOR_TEMPLATE = '{{ (risk.operator or risk.security_person or "").split(";") | tojson }}'
+
 
 # 预置处理套餐
 BKSEC_PRESET_PA_NAME = gettext_lazy("【内置】BKSEC安全工单发单")
@@ -67,16 +71,29 @@ BKSEC_AUTO_RULE_NAME = gettext_lazy("【自动】策略 %s BKSEC发单")
 BKSEC_FIELD_RISK_ASSET = "target"
 BKSEC_FIELD_INITIAL_OWNER = "operator"
 BKSEC_FIELD_TARGET_TYPE = "target_type"
-BKSEC_REQUIRED_FIELDS = [BKSEC_FIELD_RISK_ASSET, BKSEC_FIELD_INITIAL_OWNER]
 
-# 事件体附加字段
-BKSEC_EVENT_FIELD_RISK_TYPE = "risk_type"
-BKSEC_EVENT_FIELD_FIELDS = "fields"
-BKSEC_EVENT_FIELD_RISK_ID = "risk_id"
-BKSEC_EVENT_FIELD_SOURCE = "source"
-BKSEC_EVENT_SOURCE_VALUE = "bk-audit"
-BKSEC_EVENT_FIELD_IS_TEST = "is_test"
-BKSEC_EVENT_FIELD_TEST_OPERATOR = "test_operator"
+# 必填字段白名单：仅上述三个独立入参必填，风险类型的其余字段一律非必填。
+# BKSEC risk_access 接口不返回 required，此处为审计中心侧的判定口径，
+# 与 BkSecConfig.validate_for_submit 的提交校验保持同源。
+BKSEC_REQUIRED_FIELD_KEYS = (BKSEC_FIELD_RISK_ASSET, BKSEC_FIELD_TARGET_TYPE, BKSEC_FIELD_INITIAL_OWNER)
+
+
+class BkSecConfigSyncStage(TextChoices):
+    """BKSEC 插件配置同步场景（BkSecConfigSyncFailedEvent 的 stage 维度）"""
+
+    STRATEGY_SAVE = "strategy_save", gettext_lazy("保存策略")
+    TEST_SEND = "test_send", gettext_lazy("测试发送")
+
+
+class BkSecConfigSyncFailReason(TextChoices):
+    """BKSEC 插件配置同步失败原因（BkSecConfigSyncFailedEvent 的 fail_reason 维度）"""
+
+    API_URL_MISSING = "api_url_missing", gettext_lazy("插件配置地址未配置")
+    TOKEN_MISSING = "token_missing", gettext_lazy("risk_access 未返回对应 token")
+    TOKEN_FETCH_FAILED = "token_fetch_failed", gettext_lazy("获取 token 失败")
+    UPSERT_REJECTED = "upsert_rejected", gettext_lazy("插件拒绝写入 Config")
+    API_UNREACHABLE = "api_unreachable", gettext_lazy("插件配置接口不可达")
+
 
 # 查询类接口缓存
 BKSEC_RISK_TYPES_CACHE_KEY = "bksec:risk_access:list"

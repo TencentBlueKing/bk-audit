@@ -44,7 +44,7 @@ class BKSec(BkApiResource, abc.ABC):
     rate_limit = settings.BKSEC_API_RATE_LIMIT
 
     def perform_request(self, validated_request_data):
-        # Mock 模式：直接返回本地数据（仅 bkop 测试环境使用）
+        # Mock 模式：直接返回本地数据
         if getattr(settings, "BKSEC_MOCK_ENABLED", False):
             return self._mock_request(validated_request_data)
         return Throttler(

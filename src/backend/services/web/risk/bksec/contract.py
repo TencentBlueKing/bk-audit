@@ -25,11 +25,6 @@ from django.utils import timezone
 
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
-    BKSEC_EVENT_FIELD_FIELDS,
-    BKSEC_EVENT_FIELD_RISK_ID,
-    BKSEC_EVENT_FIELD_RISK_TYPE,
-    BKSEC_EVENT_FIELD_SOURCE,
-    BKSEC_EVENT_SOURCE_VALUE,
     BKSEC_FIELD_INITIAL_OWNER,
     BKSEC_ONCE_TASK_DEFAULT,
     BKSEC_ONCE_TASK_TEST,
@@ -105,13 +100,14 @@ def build_event_payload(
     # 初始责任人为空时以安全接口人兜底
     if not fields.get(BKSEC_FIELD_INITIAL_OWNER):
         fields[BKSEC_FIELD_INITIAL_OWNER] = ";".join(load_security_person())
+    # 事件体字段为 BKSEC 侧契约字段，字段名固定，故直接字面量书写
     payload = {
-        BKSEC_EVENT_FIELD_RISK_TYPE: config.risk_type_id,
-        BKSEC_EVENT_FIELD_FIELDS: fields,
-        BKSEC_EVENT_FIELD_SOURCE: BKSEC_EVENT_SOURCE_VALUE,
+        "risk_type": config.risk_type_id,
+        "fields": fields,
+        "source": "bk-audit",
     }
     if risk is not None:
-        payload[BKSEC_EVENT_FIELD_RISK_ID] = risk.risk_id
+        payload["risk_id"] = risk.risk_id
         # 风险属性
         risk_data = build_risk_data(risk)
         payload["risk_attribute"] = {
