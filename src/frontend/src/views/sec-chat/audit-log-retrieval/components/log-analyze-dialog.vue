@@ -79,8 +79,10 @@
                 class="custom-content">
                 <div class="custom-input-wrapper">
                   <bk-input
+                    ref="customInputRef"
                     v-model="customRequirement"
                     class="custom-input"
+                    data-testid="analyze-instruction-input"
                     placeholder="输入你想分析的内容，例如：分析张三在英雄联盟业务的资产转移报告"
                     :rows="3"
                     type="textarea" />
@@ -104,7 +106,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onDeactivated, ref, watch } from 'vue';
+  import { computed, nextTick, onDeactivated, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
@@ -118,11 +120,16 @@
     totalHit?: number;
     conditions?: RetrievalFilterCondition[];
     submitting?: boolean;
+    /** 从自定义分析重新进入时带回上次要求，并展开、聚焦输入框 */
+    customPromptPreset?: string;
+    focusCustom?: boolean;
   }>(), {
     modelValue: false,
     totalHit: 0,
     conditions: () => [],
     submitting: false,
+    customPromptPreset: '',
+    focusCustom: false,
   });
 
   const emit = defineEmits<{
@@ -133,8 +140,19 @@
   const { messageWarn } = useMessage();
   const { t } = useI18n();
 
-  const isCustomExpanded = ref(false);
-  const customRequirement = ref('');
+  const isCustomExpanded = ref(Boolean(props.focusCustom || props.customPromptPreset));
+  const customRequirement = ref(props.customPromptPreset || '');
+  const customInputRef = ref<{ $el?: HTMLElement } | null>(null);
+
+  const focusCustomInput = async () => {
+    if (!isCustomExpanded.value) return;
+    await nextTick();
+    const root = customInputRef.value?.$el;
+    const textarea = root?.querySelector('textarea');
+    if (!textarea) return;
+    textarea.focus();
+    root?.closest('.custom-analysis')?.scrollIntoView({ block: 'nearest' });
+  };
   /** 父级用 v-if 挂载时 modelValue 已是 true，不能再等无 immediate 的 watch */
   const isShow = computed({
     get: () => props.modelValue,
@@ -142,10 +160,15 @@
   });
 
   watch(() => props.modelValue, (val) => {
-    if (val && !props.submitting) {
-      isCustomExpanded.value = false;
-      customRequirement.value = '';
-    }
+    if (!val || props.submitting) return;
+    const preset = props.customPromptPreset || '';
+    isCustomExpanded.value = props.focusCustom || Boolean(preset);
+    customRequirement.value = preset;
+    if (isCustomExpanded.value) void focusCustomInput();
+  });
+
+  onMounted(() => {
+    if (isCustomExpanded.value) void focusCustomInput();
   });
 
   const operatorName = computed(() => (

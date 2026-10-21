@@ -448,6 +448,8 @@ export interface AiAttachmentFeedback {
 export interface AiAnalysisInputData {
   analysis_mode: AiAnalysisMode;
   instruction?: string;
+  /** 附件上已有的独立检索范围。重试整体替换时原样带回，省略会回到来源检索条件 */
+  condition?: AiSearchCondition;
 }
 
 /** 日志字段引用；字段目录返回后原样回传，不自行拼路径 */
@@ -461,10 +463,10 @@ export interface AiLogFieldRef {
 
 export type AiStatisticsKind = 'NUMERIC' | 'CATEGORICAL' | string;
 
-/** VALUE 为真实类别，OTHER 汇总未入选 TopN 的非缺失类别，MISSING 汇总缺失值 */
+/** 程序统计只有 VALUE 与 MISSING。历史结果里的 OTHER 仍按合成组展示 */
 export type AiStatisticsGroupKind = 'VALUE' | 'OTHER' | 'MISSING' | string;
 
-export type AiStatisticsInterval = 'AUTO' | 'MINUTE' | 'HOUR' | 'DAY' | string;
+export type AiStatisticsInterval = 'AUTO' | 'MINUTE' | 'HOUR' | 'DAY' | 'MONTH' | string;
 
 export interface AiStatisticsFieldInfo {
   raw_name: string;
@@ -486,14 +488,14 @@ export interface AiStatisticsDistributionGroup {
   value_type?: 'number' | 'string' | 'boolean' | null;
   /** 保留原始标量类型与空字符串；OTHER / MISSING 为 null */
   value: string | number | boolean | null;
+  /** 内置枚举中文名，如「成功（0）」；无映射时为 null */
+  value_label?: string | null;
   count: number;
   /** 0～1，总数为 0 时为 null */
   ratio: number | null;
 }
 
 export interface AiStatisticsDistribution {
-  top_n: number;
-  has_other: boolean;
   groups: AiStatisticsDistributionGroup[];
 }
 
@@ -525,8 +527,6 @@ export interface AiStatisticsNumericSummary {
 /** 统计实际执行范围与预算决策，不代表分页 */
 export interface AiStatisticsQuerySummary {
   total_count?: number;
-  top_n?: number | null;
-  has_other?: boolean;
   scope_id?: string;
   start_time?: string;
   end_time?: string;
@@ -555,8 +555,7 @@ export interface AiStatisticsContentOutput {
 
 export interface AiFieldStatisticsInputData {
   field: AiLogFieldRef;
-  /** 不传用后端默认（10） */
-  top_n?: number;
+  /** 不传时后端按 AUTO 选择有效粒度 */
   interval?: AiStatisticsInterval;
 }
 

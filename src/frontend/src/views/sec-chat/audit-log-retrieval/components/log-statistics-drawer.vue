@@ -115,7 +115,7 @@
           <div class="card-head">
             <span class="card-title">{{ cardTitleText(card.title) }}</span>
             <bk-button
-              v-if="!isCardBroken(card)"
+              v-if="isFieldStatistics && !isCardBroken(card)"
               class="export-btn"
               outline
               size="small"
@@ -146,10 +146,12 @@
                 v-for="item in card.ratio || []"
                 :key="item.groupId"
                 class="legend-item"
+                :class="{ 'is-off': !isLegendItemOn(card.key, item.name) }"
+                @click="toggleChartLegend(card.key, item.name)"
                 @mouseenter="showLegendTip(item, $event)">
                 <span
                   class="legend-dot"
-                  :style="{ background: item.color }" />
+                  :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
                 <span class="legend-label">
                   <span class="legend-name">{{ item.name }}</span>
                   <span class="legend-meta">：{{ item.valueText }} ( {{ item.percent }} )</span>
@@ -162,6 +164,68 @@
               :ref="el => setChartRef(card.key, el)"
               class="chart-box"
               :style="{ height: `${card.height}px` }" />
+            <div
+              v-if="card.legendItems.length"
+              class="chart-legend-block"
+              data-testid="statistics-chart-legend"
+              @mouseleave="hideLegendTip">
+              <div
+                :ref="el => setLegendListRef(card.key, el)"
+                class="chart-legend"
+                :class="{
+                  'is-measuring': !legendPageSpans[card.key],
+                  'is-paged': legendPageCount(card.key) > 1,
+                }">
+                <div
+                  v-for="item in visibleLegendItems(card)"
+                  :key="item.key"
+                  class="chart-legend-item"
+                  :class="{ 'is-off': !isLegendItemOn(card.key, item.name) }"
+                  @click="toggleChartLegend(card.key, item.name)"
+                  @mouseenter="showChartLegendTip(item.name, $event)">
+                  <span
+                    class="legend-dot"
+                    :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
+                  <span class="chart-legend-name">{{ truncateLegendLabel(item.name) }}</span>
+                </div>
+              </div>
+              <div
+                :ref="el => setLegendMeasureRef(card.key, el)"
+                class="chart-legend-measure"
+                aria-hidden="true">
+                <div
+                  v-for="(item, index) in card.legendItems"
+                  :key="`${item.name}-${index}`"
+                  class="chart-legend-item">
+                  <span
+                    class="legend-dot"
+                    :style="{ background: item.color }" />
+                  <span class="chart-legend-name">{{ truncateLegendLabel(item.name) }}</span>
+                </div>
+              </div>
+              <div
+                v-if="legendPageCount(card.key) > 1"
+                class="chart-legend-pager"
+                data-testid="statistics-chart-legend-pager">
+                <button
+                  class="legend-page-btn"
+                  :disabled="legendPageNumber(card.key) <= 1"
+                  type="button"
+                  @click="stepLegendPage(card.key, -1)">
+                  <audit-icon
+                    class="is-prev"
+                    type="angle-fill-rignt" />
+                </button>
+                <span class="legend-page-index">{{ legendPageLabel(card.key) }}</span>
+                <button
+                  class="legend-page-btn"
+                  :disabled="legendPageNumber(card.key) >= legendPageCount(card.key)"
+                  type="button"
+                  @click="stepLegendPage(card.key, 1)">
+                  <audit-icon type="angle-fill-rignt" />
+                </button>
+              </div>
+            </div>
             <p
               v-if="card.kind === 'trend' && trendHint"
               class="card-hint">
@@ -228,6 +292,7 @@
 
 <script lang="ts" setup>
   import * as echarts from 'echarts';
+  import * as XLSX from 'xlsx';
   import {
     computed,
     markRaw,
@@ -248,11 +313,13 @@
   import useMessage from '@hooks/use-message';
 
   import {
+    buildBarOption,
     buildRatioOption,
     buildTrendOption,
     formatNumericValue,
     formatNumericValueFull,
     formatStatisticsCount,
+    formatStatisticsExportTime,
     isFieldStatisticsType,
     mapFieldStatisticsOutput,
     type StatisticsChartCard,
@@ -260,11 +327,11 @@
     type StatisticsRatioItem,
     parseStatisticsCharts,
     RATIO_CARD_TITLE,
+    statisticsIntervalTextKey,
     TREND_CARD_TITLE,
   } from '../utils/map-statistics-output';
   import {
     type ChartSanitizeErrorCode,
-    FIELD_STATISTICS_LIMITS,
     sanitizeChartOption,
   } from '../utils/sanitize-chart-option';
 
@@ -297,8 +364,29 @@
 
   const BUILTIN_CARD_TITLES = new Set([TREND_CARD_TITLE, RATIO_CARD_TITLE, '统计图表']);
 
-  /** 饼图导出画布宽度：左侧环图 + 右侧竖排图例 */
-  const RATIO_EXPORT_WIDTH = 720;
+  const LEGEND_LABEL_MAX = 20;
+  const ECHARTS_PALETTE = [
+    '#5470c6',
+    '#91cc75',
+    '#fac858',
+    '#ee6666',
+    '#73c0de',
+    '#3ba272',
+    '#fc8452',
+    '#9a60b4',
+    '#ea7ccc',
+  ];
+
+  interface ChartLegendItem {
+    name: string;
+    color: string;
+  }
+
+  interface ChartCardView extends StatisticsChartCard {
+    legendItems: ChartLegendItem[];
+  }
+
+  const LEGEND_PAGE_ROWS = 4;
 
   const chartEls = new Map<string, HTMLElement>();
   const chartInstances = new Map<string, echarts.ECharts>();
@@ -314,19 +402,181 @@
   const legendPopoverRef = ref<LegendPopoverExpose | null>(null);
 
   /** 整列图例共用一个提示。每项各挂一个时，快速划过会留下还没关掉的提示 */
-  const showLegendTip = (item: StatisticsRatioItem, event: MouseEvent) => {
-    const anchor = event.currentTarget as HTMLElement | null;
-    if (!anchor) return;
+  const openLegendTip = (anchor: HTMLElement, text: string) => {
     legendTipAnchor.value = anchor;
-    legendTipText.value = `${item.name}：${item.valueText} ( ${item.percent} )`;
+    legendTipText.value = text;
     legendTipShow.value = true;
     nextTick(() => {
       legendPopoverRef.value?.updatePopover?.(anchor);
     });
   };
 
+  const showLegendTip = (item: StatisticsRatioItem, event: MouseEvent) => {
+    const anchor = event.currentTarget as HTMLElement | null;
+    if (!anchor) return;
+    openLegendTip(anchor, `${item.name}：${item.valueText} ( ${item.percent} )`);
+  };
+
+  const showChartLegendTip = (name: string, event: MouseEvent) => {
+    if (name.length <= LEGEND_LABEL_MAX) return;
+    const anchor = event.currentTarget as HTMLElement | null;
+    if (!anchor) return;
+    openLegendTip(anchor, name);
+  };
+
   const hideLegendTip = () => {
     legendTipShow.value = false;
+  };
+
+  const legendListEls = new Map<string, HTMLElement>();
+  const legendMeasureEls = new Map<string, HTMLElement>();
+  const legendPageIndex = ref<Record<string, number>>({});
+  /** 与 ECharts 图例一致：false 表示该系列已隐藏 */
+  const legendSelected = ref<Record<string, Record<string, boolean>>>({});
+  /** 每页是图例下标。按实际换行量出 4 行一页，不按固定个数切 */
+  const legendPageSpans = ref<Record<string, number[][]>>({});
+  let legendResizeObserver: ResizeObserver | null = null;
+  let legendMeasureFrame = 0;
+
+  const legendPageCount = (key: string) => legendPageSpans.value[key]?.length || 1;
+
+  const legendPageNumber = (key: string) => {
+    const count = legendPageCount(key);
+    return Math.min((legendPageIndex.value[key] || 0) + 1, count);
+  };
+
+  const legendPageLabel = (key: string) => `${legendPageNumber(key)}/${legendPageCount(key)}`;
+
+  const visibleLegendItems = (card: ChartCardView) => {
+    const spans = legendPageSpans.value[card.key];
+    const items = card.legendItems;
+    const indexes = spans?.[legendPageNumber(card.key) - 1] || items.map((_, index) => index);
+    return indexes.map(index => {
+      const item = items[index];
+      if (!item) return null;
+      return { ...item, key: `${item.name}-${index}` };
+    }).filter((item): item is ChartLegendItem & { key: string } => Boolean(item));
+  };
+
+  const setLegendPage = (key: string, page: number) => {
+    const count = legendPageCount(key);
+    const next = Math.min(Math.max(page, 0), count - 1);
+    if ((legendPageIndex.value[key] || 0) === next) return;
+    legendPageIndex.value = { ...legendPageIndex.value, [key]: next };
+  };
+
+  const stepLegendPage = (key: string, delta: number) => {
+    setLegendPage(key, (legendPageIndex.value[key] || 0) + delta);
+  };
+
+  const isLegendItemOn = (cardKey: string, name: string) => (
+    legendSelected.value[cardKey]?.[name] !== false
+  );
+
+  /** 画布里的图例已关掉，点击这里补上 ECharts 的显隐 */
+  const toggleChartLegend = (cardKey: string, name: string) => {
+    const chart = chartInstances.get(cardKey);
+    if (!chart || !name) return;
+    hideLegendTip();
+    const prev = legendSelected.value[cardKey] || {};
+    const selected = {
+      ...prev,
+      [name]: prev[name] === false,
+    };
+    legendSelected.value = {
+      ...legendSelected.value,
+      [cardKey]: selected,
+    };
+    chart.setOption({
+      legend: {
+        show: false,
+        selected,
+      },
+    });
+  };
+
+  const measureLegendPages = (key: string) => {
+    const list = legendListEls.get(key);
+    const measure = legendMeasureEls.get(key);
+    if (!list || !measure) return;
+    const width = list.clientWidth;
+    if (width < 40) return;
+    measure.style.width = `${width}px`;
+    const children = Array.from(measure.children) as HTMLElement[];
+    const rows: number[][] = [];
+    let rowTop = -1;
+    children.forEach((child, index) => {
+      const top = child.offsetTop;
+      if (!rows.length || top - rowTop > 8) {
+        rows.push([index]);
+        rowTop = top;
+      } else {
+        rows[rows.length - 1].push(index);
+      }
+    });
+    const pages: number[][] = [];
+    for (let index = 0; index < rows.length; index += LEGEND_PAGE_ROWS) {
+      pages.push(rows.slice(index, index + LEGEND_PAGE_ROWS).flat());
+    }
+    const prev = legendPageSpans.value[key];
+    const same = Boolean(prev)
+      && prev.length === pages.length
+      && prev.every((page, pageIndex) => (
+        page.length === pages[pageIndex].length
+        && page.every((itemIndex, itemPos) => itemIndex === pages[pageIndex][itemPos])
+      ));
+    if (!same) {
+      legendPageSpans.value = {
+        ...legendPageSpans.value,
+        [key]: pages.length ? pages : [[]],
+      };
+    }
+    const current = legendPageIndex.value[key] || 0;
+    if (current > pages.length - 1) {
+      legendPageIndex.value = { ...legendPageIndex.value, [key]: 0 };
+    }
+  };
+
+  const measureAllLegends = () => {
+    legendListEls.forEach((_, key) => measureLegendPages(key));
+  };
+
+  const scheduleLegendMeasure = () => {
+    if (legendMeasureFrame) cancelAnimationFrame(legendMeasureFrame);
+    legendMeasureFrame = requestAnimationFrame(() => {
+      legendMeasureFrame = 0;
+      measureAllLegends();
+      // 翻页控件出现后图例变窄，再量一次行数
+      nextTick(() => measureAllLegends());
+    });
+  };
+
+  const ensureLegendResizeObserver = () => {
+    if (legendResizeObserver) return;
+    legendResizeObserver = new ResizeObserver(() => {
+      scheduleLegendMeasure();
+    });
+  };
+
+  const setLegendListRef = (key: string, el: unknown) => {
+    const node = el as HTMLElement | null;
+    const prev = legendListEls.get(key);
+    if (prev && prev !== node) legendResizeObserver?.unobserve(prev);
+    if (!node) {
+      legendListEls.delete(key);
+      return;
+    }
+    legendListEls.set(key, node);
+    ensureLegendResizeObserver();
+    legendResizeObserver?.observe(node);
+    scheduleLegendMeasure();
+  };
+
+  const setLegendMeasureRef = (key: string, el: unknown) => {
+    const node = el as HTMLElement | null;
+    if (node) legendMeasureEls.set(key, node);
+    else legendMeasureEls.delete(key);
+    if (node) scheduleLegendMeasure();
   };
   let resizeObserver: ResizeObserver | null = null;
   let renderTimer: ReturnType<typeof setTimeout> | null = null;
@@ -410,10 +660,12 @@
 
   const trendHint = computed(() => {
     const view = fieldView.value;
-    if (!view?.effectiveInterval) return '';
-    return [`${t('时间粒度')}：${view.effectiveInterval}`, view.timezone]
-      .filter(Boolean)
-      .join(' · ');
+    if (!view?.effectiveInterval && !view?.timezone) return '';
+    const intervalKey = statisticsIntervalTextKey(view?.effectiveInterval);
+    return [
+      intervalKey ? `${t('时间粒度')}：${t(intervalKey)}` : '',
+      view?.timezone || '',
+    ].filter(Boolean).join(' · ');
   });
 
   const cardTitleText = (title?: string) => {
@@ -421,9 +673,7 @@
     return BUILTIN_CARD_TITLES.has(title) ? t(title) : title;
   };
 
-  const errorText = (errorCode: ChartSanitizeErrorCode) => (
-    errorCode === 'TOO_LARGE' ? t('数据量超出渲染上限') : t('图表配置不合法')
-  );
+  const errorText = (_errorCode: ChartSanitizeErrorCode) => t('图表配置不合法');
 
   /** echarts 自身抛错的卡片，key 记在这里，和配置层的 errorCode 分开 */
   const mountFailedKeys = ref<Set<string>>(new Set());
@@ -443,7 +693,6 @@
     mountFailedKeys.value = next;
   };
 
-  const LEGEND_LABEL_MAX = 20;
   const TOOLTIP_WRAP_STYLE = [
     'max-width:360px',
     'max-height:240px',
@@ -518,41 +767,132 @@
     }),
   });
 
+  const isPlainRecord = (value: unknown): value is Record<string, any> => (
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  );
+
+  const pickColor = (value: unknown) => (
+    typeof value === 'string' && value.trim() ? value : ''
+  );
+
+  const legendHost = (legend: unknown) => {
+    if (Array.isArray(legend)) return legend.find(isPlainRecord) || null;
+    return isPlainRecord(legend) ? legend : null;
+  };
+
+  /**
+   * 图例留在画布里时，多行会叠在坐标轴上。抽到画布外单独排，图表高度保持不变。
+   */
+  const collectLegendItems = (option: Record<string, any>): ChartLegendItem[] => {
+    const legend = legendHost(option.legend);
+
+    const seriesList = (Array.isArray(option.series) ? option.series : option.series ? [option.series] : [])
+      .filter(isPlainRecord);
+    const palette = (Array.isArray(option.color) ? option.color : ECHARTS_PALETTE)
+      .map(pickColor)
+      .filter(Boolean);
+    const colors = palette.length ? palette : ECHARTS_PALETTE;
+    const colorByName = new Map<string, string>();
+    let paletteIndex = 0;
+    const nextColor = () => {
+      const color = colors[paletteIndex % colors.length];
+      paletteIndex += 1;
+      return color;
+    };
+
+    seriesList.forEach((series) => {
+      const seriesColor = pickColor(series.color)
+        || pickColor(series.itemStyle?.color)
+        || pickColor(series.lineStyle?.color);
+      const namedData = (Array.isArray(series.data) ? series.data : [])
+        .filter(item => isPlainRecord(item) && typeof item.name === 'string' && item.name);
+      if (namedData.length && (series.type === 'pie' || !series.name)) {
+        namedData.forEach((item) => {
+          const name = String(item.name);
+          if (colorByName.has(name)) return;
+          colorByName.set(name, pickColor(item.itemStyle?.color) || seriesColor || nextColor());
+        });
+        return;
+      }
+      if (typeof series.name === 'string' && series.name && !colorByName.has(series.name)) {
+        colorByName.set(series.name, seriesColor || nextColor());
+      }
+    });
+
+    const rawData = legend && Array.isArray(legend.data) ? legend.data : [];
+    const names = rawData.length
+      ? rawData.map((item) => {
+        if (typeof item === 'string') return item;
+        if (isPlainRecord(item) && item.name) return String(item.name);
+        return '';
+      }).filter(Boolean)
+      : [...colorByName.keys()];
+
+    rawData.forEach((item) => {
+      if (!isPlainRecord(item) || !item.name) return;
+      const explicit = pickColor(item.itemStyle?.color) || pickColor(item.color);
+      if (explicit) colorByName.set(String(item.name), explicit);
+    });
+
+    return names.map((name, index) => ({
+      name,
+      color: colorByName.get(name) || colors[index % colors.length],
+    }));
+  };
+
+  const liftChartLegend = (option: Record<string, any>) => {
+    const items = collectLegendItems(option);
+    if (!items.length) return { items };
+    const grid = isPlainRecord(option.grid) ? option.grid : null;
+    option.legend = { show: false };
+    if (grid && grid.containLabel === true && typeof grid.bottom === 'number' && grid.bottom > 24) {
+      grid.bottom = 12;
+    }
+    return { items };
+  };
+
   const resolveRawOption = (card: StatisticsChartCard) => {
     if (card.errorCode) return null;
     if (card.option) return card.option;
     if (card.kind === 'trend' && card.trend) return buildTrendOption(card.trend);
+    if (card.kind === 'bar' && card.ratio?.length) return buildBarOption(card.ratio);
     if (card.kind === 'ratio' && card.ratio?.length) return buildRatioOption(card.ratio);
     return null;
   };
 
   const viewCards = computed(() => {
     const cards = fieldView.value?.cards || aiResult.value?.charts || [];
-    return cards.map((card) => {
-      if (card.errorCode) return card;
+    return cards.map((card): ChartCardView => {
+      const emptyLegend = {
+        legendItems: [] as ChartLegendItem[],
+      };
+      if (card.errorCode) return { ...card, ...emptyLegend };
       // 构造与消毒都在渲染期执行，任何意外都收敛成错误卡，不让整个抽屉挂掉
       try {
         const rawOption = resolveRawOption(card);
         if (!rawOption) {
           return {
             ...card,
+            ...emptyLegend,
             errorCode: 'INVALID_STRUCTURE' as const,
             option: undefined,
           };
         }
-        const { option, errorCode } = sanitizeChartOption(
-          rawOption,
-          card.kind === 'echarts' ? {} : FIELD_STATISTICS_LIMITS,
-        );
+        const { option, errorCode } = sanitizeChartOption(rawOption);
+        const lifted = option && card.kind !== 'bar'
+          ? liftChartLegend(option)
+          : { items: [] as ChartLegendItem[] };
         const displayOption = option ? applyEntranceMotion(decorateLongLabels(option)) : null;
         return {
           ...card,
+          legendItems: lifted.items,
           option: displayOption ? markRaw(displayOption) : undefined,
           errorCode,
         };
       } catch {
         return {
           ...card,
+          ...emptyLegend,
           errorCode: 'INVALID_STRUCTURE' as const,
           option: undefined,
         };
@@ -695,6 +1035,7 @@
     resizeObserver = null;
     chartInstances.forEach(chart => chart.dispose());
     chartInstances.clear();
+    if (Object.keys(legendSelected.value).length) legendSelected.value = {};
     if (mountFailedKeys.value.size) mountFailedKeys.value = new Set();
   };
 
@@ -746,80 +1087,72 @@
     { immediate: true },
   );
 
-  /** 屏上饼图关了 label，名称数值都在 DOM 图例里，canvas 截图看不到，导出要补一份 echarts 图例 */
-  const buildRatioExportOption = (ratio: StatisticsRatioItem[]) => {
-    const option = buildRatioOption(ratio);
-    const series = Array.isArray(option.series) ? option.series[0] : undefined;
-    return {
-      ...option,
-      // 导出是同步取像素，留着动画只会截到第 0 帧的空环
-      animation: false,
-      legend: {
-        orient: 'vertical',
-        right: 24,
-        top: 'center',
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        itemGap: 12,
-        textStyle: { color: '#4d4f56', fontSize: 12 },
-      },
-      series: [{
-        ...series,
-        center: ['28%', '50%'],
-        data: ratio.map(item => ({
-          name: `${item.name}：${item.valueText}（${item.percent}）`,
-          value: item.value,
-        })),
-      }],
-    };
+  /** YYYY-MM-DD HH:mm:ss 共 19 个字符，多留 1 位避免贴边被挡住 */
+  const EXPORT_DATE_COLUMN_WIDTH = 20;
+
+  /**
+   * 字段统计导出 Excel。类别列与图例共用 value_label 规则。
+   * 时序：YYYY-MM-DD HH:mm:ss、字段名、count。分布：字段名、count。
+   */
+  const buildFieldExportSheet = (card: ChartCardView) => {
+    const dimension = fieldView.value?.fieldLabel || t('字段');
+    if (card.kind === 'trend' && card.trend) {
+      const rows: Array<Array<string | number>> = [[t('日期'), dimension, 'count']];
+      const { bucketStarts, xAxis, series } = card.trend;
+      const times = bucketStarts?.length ? bucketStarts : xAxis;
+      times.forEach((date, index) => {
+        const exportedAt = formatStatisticsExportTime(date);
+        series.forEach((item) => {
+          const value = item.data[index];
+          rows.push([exportedAt, item.name, typeof value === 'number' ? value : 0]);
+        });
+      });
+      return rows.length > 1 ? rows : null;
+    }
+    if ((card.kind === 'ratio' || card.kind === 'bar') && card.ratio?.length) {
+      const rows: Array<Array<string | number>> = [[dimension, 'count']];
+      card.ratio.forEach((item) => {
+        rows.push([item.name, item.value]);
+      });
+      return rows;
+    }
+    return null;
   };
 
-  /** 离屏渲染，避免改动屏上实例导致饼图重播入场动画 */
-  const exportRatioDataUrl = (ratio: StatisticsRatioItem[], height: number) => {
-    const host = document.createElement('div');
-    host.style.cssText = `position:fixed;left:-99999px;top:0;width:${RATIO_EXPORT_WIDTH}px;height:${height}px;`;
-    document.body.appendChild(host);
-    const chart = echarts.init(host);
-    try {
-      chart.setOption(buildRatioExportOption(ratio), true);
-      return chart.getDataURL({
-        type: 'png',
-        pixelRatio: 2,
-        backgroundColor: '#fff',
-      });
-    } finally {
-      chart.dispose();
-      host.remove();
-    }
+  const exportFileName = (card: ChartCardView) => {
+    const field = fieldView.value?.fieldLabel || '';
+    const title = cardTitleText(card.title);
+    return [field, title].filter(Boolean).join('-').replace(/[\\/:*?"<>|]/g, '_');
   };
 
   const handleExport = (key: string) => {
     const card = viewCards.value.find(item => item.key === key);
-    const chart = chartInstances.get(key);
-    if (!card || !chart) {
+    if (!card || !isFieldStatistics.value) {
+      messageWarn(t('暂无图表可导出'));
+      return;
+    }
+    const rows = buildFieldExportSheet(card);
+    if (!rows) {
       messageWarn(t('暂无图表可导出'));
       return;
     }
     try {
-      const url = card.kind === 'ratio' && card.ratio?.length
-        ? exportRatioDataUrl(card.ratio, card.height)
-        : chart.getDataURL({
-          type: 'png',
-          pixelRatio: 2,
-          backgroundColor: '#fff',
-        });
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${cardTitleText(card.title)}.png`;
-      link.click();
-      messageSuccess(t('图表已导出'));
+      const sheet = XLSX.utils.aoa_to_sheet(rows);
+      const columnCount = rows[0]?.length || 0;
+      sheet['!cols'] = Array.from({ length: columnCount }, () => ({ wch: EXPORT_DATE_COLUMN_WIDTH }));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, 'Sheet1');
+      XLSX.writeFile(book, `${exportFileName(card)}.xlsx`);
+      messageSuccess(t('已导出Excel'));
     } catch {
       messageError(t('导出失败'));
     }
   };
 
   onBeforeUnmount(() => {
+    if (legendMeasureFrame) cancelAnimationFrame(legendMeasureFrame);
+    legendResizeObserver?.disconnect();
+    legendResizeObserver = null;
     disposeCharts();
   });
 </script>
@@ -856,8 +1189,10 @@
   .stats-body {
     display: flex;
     width: 100%;
-    min-height: calc(100vh - 52px);
+    height: calc(100vh - 52px);
+    min-height: 0;
     padding: var(--audit-space-24);
+    overflow-y: auto;
     background: var(--audit-neutral-bg-03);
     flex-direction: column;
     gap: var(--audit-space-16);
@@ -987,10 +1322,126 @@
   .chart-box {
     width: 100%;
     min-width: 0;
+    flex-shrink: 0;
 
     &.is-ratio {
       flex-shrink: 0;
     }
+  }
+
+  /* 图例在画布外。一页最多 4 行，翻页在图例下方，不跟图表一起动 */
+  .chart-legend-block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--audit-space-8);
+    margin-top: var(--audit-space-8);
+    overflow: hidden;
+  }
+
+  .chart-legend {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px 16px;
+    width: 100%;
+    min-width: 0;
+
+    &.is-measuring {
+      max-height: 96px;
+      overflow: hidden;
+    }
+
+    /* 4 行 = 20px * 4 + 行间距 4px * 3。flex-basis 锁住，避免被内容撑高或缩短 */
+    &.is-paged {
+      flex: 0 0 92px;
+      height: 92px;
+      min-height: 92px;
+      max-height: 92px;
+      overflow: hidden;
+    }
+  }
+
+  .chart-legend-measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    visibility: hidden;
+    pointer-events: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px 16px;
+
+    * {
+      pointer-events: none;
+    }
+  }
+
+  .chart-legend-pager {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+
+  .legend-page-btn {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: var(--audit-font-size-lg);
+    color: var(--audit-neutral-text-02);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    align-items: center;
+    justify-content: center;
+
+    &:disabled {
+      color: var(--audit-neutral-text-04);
+      cursor: not-allowed;
+    }
+
+    .is-prev {
+      transform: rotate(180deg);
+    }
+  }
+
+  .legend-page-index {
+    min-width: 28px;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-03);
+    text-align: center;
+  }
+
+  .chart-legend-item {
+    display: flex;
+    max-width: 220px;
+    height: 20px;
+    min-width: 0;
+    font-size: var(--audit-font-size-sm);
+    line-height: var(--audit-line-height-sm);
+    color: var(--audit-neutral-text-02);
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+    gap: var(--audit-space-8);
+
+    &.is-off {
+      color: var(--audit-neutral-text-04);
+    }
+  }
+
+  .chart-legend-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .ratio-wrap {
@@ -1017,8 +1468,14 @@
     font-size: var(--audit-font-size-sm);
     line-height: var(--audit-line-height-sm);
     color: var(--audit-neutral-text-02);
+    cursor: pointer;
+    user-select: none;
     align-items: center;
     gap: var(--audit-space-8);
+
+    &.is-off {
+      color: var(--audit-neutral-text-04);
+    }
   }
 
   .legend-label {

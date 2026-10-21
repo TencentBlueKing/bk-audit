@@ -288,8 +288,13 @@ class AiAssistantManage extends ModuleBase {
     });
   }
 
-  retryAttachment(params: { attachment_uid: string }, payload = {} as IRequestPayload) {
-    return Request.post<AiAttachment>(`${this.module}/attachments/${params.attachment_uid}/retry/`, {
+  retryAttachment(
+    params: { attachment_uid: string; input_data?: Record<string, any> },
+    payload = {} as IRequestPayload,
+  ) {
+    const { attachment_uid: attachmentUid, input_data: inputData } = params;
+    return Request.post<AiAttachment>(`${this.module}/attachments/${attachmentUid}/retry/`, {
+      ...(inputData ? { params: { input_data: inputData } } : {}),
       payload,
     });
   }

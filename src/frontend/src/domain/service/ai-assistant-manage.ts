@@ -252,7 +252,7 @@ export default {
   },
 
   retryAttachment(
-    params: { attachment_uid: string },
+    params: { attachment_uid: string; input_data?: Record<string, any> },
     options?: { catchError?: boolean },
   ) {
     return AiAssistantManageSource.retryAttachment(params, {

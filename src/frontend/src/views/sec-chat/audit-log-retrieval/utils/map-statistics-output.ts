@@ -45,9 +45,11 @@ const PALETTE = [
 const OTHER_COLOR = '#979BA5';
 const MISSING_COLOR = '#DCDEE5';
 
-const MAX_CHARTS = 8;
 const DEFAULT_CARD_HEIGHT = 280;
 const EMPTY_TEXT = '—';
+/** 类别数超过该值时，分布改用横向条形图 */
+const BAR_CATEGORY_THRESHOLD = 20;
+const BAR_ROW_HEIGHT = 32;
 
 export const TREND_CARD_TITLE = '时序趋势';
 export const RATIO_CARD_TITLE = '维度占比';
@@ -116,12 +118,15 @@ const DEFAULT_LABELS: StatisticsLabelDict = {
 };
 
 /**
- * 类别标签：OTHER / MISSING 文案固定，VALUE 保留原始标量。
+ * 类别标签：MISSING / 历史 OTHER 按 kind 固定文案。
+ * VALUE 有 value_label 时用枚举名（已含原值，如「成功（0）」），否则保留原始标量。
  * 合成组的 value 同为 null，只能按 kind 区分，不能按文案合并。
  */
 const resolveGroupLabel = (group: AiStatisticsDistributionGroup, labels: StatisticsLabelDict) => {
   if (group.kind === 'OTHER') return labels.other;
   if (group.kind === 'MISSING') return labels.missing;
+  const named = typeof group.value_label === 'string' ? group.value_label.trim() : '';
+  if (named) return named;
   const { value } = group;
   if (value === null || value === undefined) return EMPTY_TEXT;
   if (typeof value === 'boolean') return value ? 'true' : 'false';
@@ -176,13 +181,33 @@ const resolveGroupColor = (group: AiStatisticsDistributionGroup, valueIndex: num
 /**
  * 时间桶标签直接取 ISO 字符串的日期时间片段。
  * bucket_starts 已是服务端有效时区的表示，转本地时区会让刻度与 timezone 声明不一致。
+ * 月为自然月首日，只显示年月；小时去掉分钟。
  */
 const formatBucketLabel = (bucketStart: string, interval: string) => {
   const matched = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(String(bucketStart || ''));
   if (!matched) return String(bucketStart || '');
-  const [, , month, day, hour, minute] = matched;
+  const [, year, month, day, hour, minute] = matched;
+  if (interval === 'MONTH') return `${year}-${month}`;
   if (interval === 'DAY') return `${month}-${day}`;
+  if (interval === 'HOUR') return `${month}-${day} ${hour}`;
   return `${month}-${day} ${hour}:${minute}`;
+};
+
+/** 导出用完整时间。取服务端时区下的钟面时间，不转到浏览器本地时区 */
+export const formatStatisticsExportTime = (bucketStart: string) => {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(bucketStart || ''));
+  if (!matched) return String(bucketStart || '');
+  const [, year, month, day, hour, minute, second = '00'] = matched;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
+
+/** 有效粒度的文案 key。AUTO 不是实际单位，调用方不展示 */
+export const statisticsIntervalTextKey = (interval?: string) => {
+  if (interval === 'MINUTE') return '分钟';
+  if (interval === 'HOUR') return '小时';
+  if (interval === 'DAY') return '天';
+  if (interval === 'MONTH') return '月';
+  return '';
 };
 
 export interface StatisticsRatioItem {
@@ -203,7 +228,10 @@ export interface StatisticsTrendSeries {
 }
 
 export interface StatisticsTrendView {
+  /** 图上短刻度；日/小时/分钟不带年份 */
   xAxis: string[];
+  /** 后台 bucket_starts 原值，导出用，避免短刻度丢掉年份 */
+  bucketStarts: string[];
   series: StatisticsTrendSeries[];
   /** 实际时间桶粒度，原样展示不重分桶 */
   effectiveInterval: string;
@@ -213,7 +241,7 @@ export interface StatisticsTrendView {
 export interface StatisticsChartCard {
   key: string;
   title: string;
-  kind: 'trend' | 'ratio' | 'echarts';
+  kind: 'trend' | 'ratio' | 'bar' | 'echarts';
   height: number;
   errorCode?: ChartSanitizeErrorCode | null;
   trend?: StatisticsTrendView;
@@ -305,6 +333,7 @@ const mapTrend = (
 
   return {
     xAxis: buckets.map(item => formatBucketLabel(item, interval)),
+    bucketStarts: buckets.map(item => String(item ?? '')),
     series,
     effectiveInterval: interval,
     timezone: String(timeSeries?.timezone || ''),
@@ -354,11 +383,14 @@ export const mapFieldStatisticsOutput = (
     });
   }
   if (ratioItems.some(item => item.value > 0)) {
+    const useBar = ratioItems.length > BAR_CATEGORY_THRESHOLD;
     cards.push({
       key: 'ratio',
       title: RATIO_CARD_TITLE,
-      kind: 'ratio',
-      height: clampChartHeight(DEFAULT_CARD_HEIGHT),
+      kind: useBar ? 'bar' : 'ratio',
+      height: useBar
+        ? Math.max(DEFAULT_CARD_HEIGHT, ratioItems.length * BAR_ROW_HEIGHT + 48)
+        : clampChartHeight(DEFAULT_CARD_HEIGHT),
       ratio: ratioItems,
     });
   }
@@ -436,7 +468,7 @@ export const parseStatisticsCharts = (content?: string | null): StatisticsCharts
   if (!Array.isArray(parsed)) return { charts: [], failure: 'NOT_ARRAY' };
   if (!parsed.length) return { charts: [], failure: 'EMPTY' };
 
-  const mapped = parsed.slice(0, MAX_CHARTS).map((item, index) => mapChartItem(item, index));
+  const mapped = parsed.map((item, index) => mapChartItem(item, index));
   if (mapped.every(item => item === null)) return { charts: [], failure: 'INVALID_ITEM' };
 
   return {
@@ -508,6 +540,53 @@ export const buildTrendOption = (trend: StatisticsTrendView): EChartsOption => (
   })) as EChartsOption['series'],
 });
 
+/** 类别较多时用横向条形图。名称在纵轴，颜色与环图共用同一份 ratio */
+export const buildBarOption = (ratio: StatisticsRatioItem[]): EChartsOption => ({
+  color: ratio.map(item => item.color),
+  textStyle: {
+    color: '#63656e',
+    fontSize: 12,
+  },
+  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  legend: { show: false },
+  grid: {
+    left: 12,
+    right: 24,
+    top: 16,
+    bottom: 16,
+    containLabel: true,
+  },
+  xAxis: {
+    type: 'value',
+    min: 0,
+    axisLine: { lineStyle: { color: '#dcdee5' } },
+    axisLabel: AXIS_STYLE,
+    splitLine: { lineStyle: { color: '#f0f1f5' } },
+  },
+  yAxis: {
+    type: 'category',
+    inverse: true,
+    data: ratio.map(item => item.name),
+    axisTick: { show: false },
+    axisLine: { lineStyle: { color: '#dcdee5' } },
+    axisLabel: {
+      ...AXIS_STYLE,
+      width: 160,
+      overflow: 'truncate',
+    },
+  },
+  series: [
+    {
+      type: 'bar',
+      barMaxWidth: 16,
+      data: ratio.map(item => ({
+        value: item.value,
+        itemStyle: { color: item.color },
+      })),
+    },
+  ],
+});
+
 export const buildRatioOption = (ratio: StatisticsRatioItem[]): EChartsOption => ({
   color: ratio.map(item => item.color),
   textStyle: {
@@ -515,6 +594,11 @@ export const buildRatioOption = (ratio: StatisticsRatioItem[]): EChartsOption =>
     fontSize: 12,
   },
   tooltip: { trigger: 'item' },
+  // 屏上名称在侧栏图例里。留一个隐藏图例，点击时才能按名称显隐扇区
+  legend: {
+    show: false,
+    data: ratio.map(item => item.name),
+  },
   series: [
     {
       type: 'pie',
