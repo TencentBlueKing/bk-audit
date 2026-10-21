@@ -1491,8 +1491,9 @@ class MCPGetAuditSystemDetail(Meta, Resource):
 class MCPListSystemActions(Meta, Resource):
     """列出指定系统已登记的操作，把自然语言中的动作描述映射为检索条件 action_id 的合法值。
 
-    keyword 对 action_id、中英文名称、描述做包含匹配；resource_type_id 可选，
-    仅返回作用于该资源类型的操作。同名操作以名称匹配为主、action_id 为准生成条件值。
+    keyword 对 action_id、中英文名称、描述、操作类型做包含匹配；resource_type_id 可选，
+    仅返回作用于该资源类型的操作。同名操作以名称匹配为主、action_id 为准生成条件值；
+    "管理工具"等类型化表述对应返回项的 type 字段值，可按该值检索并取命中操作的 action_id 集合。
     返回的 resource_type_ids 是该操作作用的资源类型，可参考生成 resource_type 条件。
     结果按 action_id 排序分页；空结果表示系统未登记操作，不代表日志为空。
     """
