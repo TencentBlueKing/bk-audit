@@ -843,25 +843,15 @@ class AutoProcess(RiskFlowBaseHandler):
         }
         return self._attach_failure_hint(process_result)
 
-    @staticmethod
-    def _extract_failure_detail(status: dict) -> str:
-        """从 SOPS 状态中提取首个失败节点的错误信息"""
-        children = (status or {}).get("children") or {}
-        for child in children.values():
-            if child.get("state") in SOPSTaskStatus.get_failed_status():
-                return child.get("error_message") or ""
-        return ""
-
     def _attach_failure_hint(self, process_result: dict) -> dict:
-        """写入点翻译失败提示并落库（非失败状态原样返回）"""
+        """写入点落失败提示（非失败状态原样返回）"""
         status = process_result.get("status") or {}
         if status.get("state") in SOPSTaskStatus.get_failed_status():
-            from apps.feature.constants import FeatureTypeChoices
-            from services.web.risk.bksec.service import translate_failure_hint
+            from services.web.risk.bksec.service import build_failure_hint
 
-            channel = FeatureTypeChoices.BKSEC if getattr(self.rule, "auto_strategy_id", None) else "default"
-            detail = self._extract_failure_detail(status)
-            process_result["failure_hint"] = translate_failure_hint(channel, detail)
+            # 建单时刻 SOPS 往往还没回填节点错误，此时取到什么写什么，
+            # 后续由 sync_auto_result 在终态同步时用真实错误覆盖
+            process_result["failure_hint"] = build_failure_hint(status)
         # 冗余存储 duration（秒），用于排序
         process_result["duration"] = calc_task_duration(status)
         return process_result

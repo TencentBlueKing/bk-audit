@@ -174,24 +174,54 @@ def validate_bksec_test_target(risk: Risk) -> None:
     )
 
 
-FAILURE_HINTS_BY_CHANNEL = {
-    FeatureTypeChoices.BKSEC: [
-        ("Config matching query does not exist", "插件侧未配置该策略的发单配置（Config 表），请在插件 Admin 为对应 strategy_id 添加后重试"),
-        ("业务或执行人校验失败", "插件白名单未放行：请检查插件环境变量 BKAPP_EXECUTOR / BKAPP_BK_BIZ_ID"),
-        ("Expecting value", "插件参数格式错误：operator 须为 JSON 数组串、event_type/event_data/event_evidence 须为合法 JSON"),
-    ],
-}
+DEFAULT_FAILURE_HINT = gettext_lazy("任务执行失败")
+FAILURE_HINT_MAX_LEN = 200
 
 
-def translate_failure_hint(channel: str, detail_text: str, generic: str = "任务执行失败") -> str:
-    """按渠道将原始错误信息翻译为可操作提示。
+def extract_failure_detail(status: dict) -> str:
+    """从 SOPS 任务状态中提取首个带错误信息的节点文本（无需额外请求）"""
+    children = (status or {}).get("children") or {}
+    for child in children.values():
+        if isinstance(child, dict) and child.get("error_message"):
+            return str(child["error_message"]).strip()
+    return ""
 
-    用于写入点（发单 / 测试发单）翻译后落库到 TicketNode.process_result["failure_hint"]，
-    查询层（执行记录列表/详情）只读该字段，不感知具体渠道。
-    渠道未知或未命中特征时回退原始错误文本；原始错误为空时回退通用提示。
+
+def fetch_node_error(task_id: str) -> str:
+    """回源 SOPS 取节点执行数据中的错误文本（ex_data / error_message / outputs 里的错误项）
+
+    仅在任务已终态失败、且 get_task_status 未带回 error_message 时调用。
     """
-    detail_text = detail_text or ""
-    for pattern, hint in FAILURE_HINTS_BY_CHANNEL.get(channel, []):
-        if pattern in detail_text:
-            return hint
-    return detail_text.strip() or generic
+    if not task_id:
+        return ""
+    try:
+        node_data = api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID) or {}
+    except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
+        logger.warning("[FailureHint] Fetch node data failed, task_id=%s", task_id)
+        return ""
+    texts: List[str] = []
+    for data in node_data.values():
+        if not isinstance(data, dict):
+            continue
+        for key in ("ex_data", "error_message"):
+            value = str(data.get(key) or "").strip()
+            if value:
+                texts.append(value)
+        for key, value in (data.get("outputs") or {}).items():
+            value = str(value or "").strip()
+            if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
+                texts.append(value)
+    return "\n".join(dict.fromkeys(texts)).strip()
+
+
+def build_failure_hint(status: dict, task_id: str = "", generic: str = "任务执行失败") -> str:
+    """失败提示：直接落 SOPS 返回的真实错误文本，取不到才回退通用提示
+
+    不使用特征映射表：映射表无法覆盖未收录的错误且需持续维护，直接透出原始错误更利于定位。
+    写入点（发单 / 测试发单 / 终态同步）落库到 TicketNode.process_result["failure_hint"]，
+    查询层（执行记录列表/详情）只读该字段。
+    """
+    detail = extract_failure_detail(status) or fetch_node_error(task_id)
+    if detail:
+        return detail[:FAILURE_HINT_MAX_LEN]
+    return str(generic)

@@ -31,12 +31,12 @@ from apps.audit.resources import AuditMixinResource
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.constants import BKSEC_TEST_NODE_SCAN_LIMIT
 from services.web.risk.bksec.service import (
+    build_failure_hint,
     ensure_bksec_enabled,
     parse_bksec_config,
     render_bksec_preview,
     render_bksec_test_constants,
     sync_bksec_test_config,
-    translate_failure_hint,
     validate_bksec_test_target,
 )
 from services.web.risk.bksec.variables import _normalize_risk_type
@@ -228,7 +228,7 @@ class GetTaskStatus(TicketResourceMeta):
         # 失败提示：翻译（渠道 bksec）供前端展示
         failure_hint = ""
         if state in SOPSTaskStatus.get_failed_status():
-            failure_hint = self._build_failure_hint(task_id)
+            failure_hint = self._build_failure_hint(task_id, result)
             result["failure_hint"] = failure_hint
 
         # 测试单执行记录状态同步（一次性发送，无轮询任务，由前端查询时更新）
@@ -268,14 +268,6 @@ class GetTaskStatus(TicketResourceMeta):
                 return node
         return None
 
-    def _build_failure_hint(self, task_id: str) -> str:
-        from apps.feature.constants import FeatureTypeChoices
-
-        # 尽力取节点错误详情做特征匹配，取不到则回退通用指引
-        detail_text = ""
-        try:
-            node_data = api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-            detail_text = str(node_data)
-        except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
-            logger.warning("[GetTaskStatus] Fetch node data failed, task_id=%s", task_id)
-        return translate_failure_hint(FeatureTypeChoices.BKSEC, detail_text, self.GENERIC_HINT)
+    def _build_failure_hint(self, task_id: str, status: dict) -> str:
+        """失败提示：优先取 SOPS 状态里的节点错误文本，缺失时回源取节点执行数据（ex_data）"""
+        return build_failure_hint(status, task_id=task_id, generic=self.GENERIC_HINT)
