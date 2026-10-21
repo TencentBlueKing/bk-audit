@@ -229,7 +229,6 @@ class MetaToolService:
         from services.web.query.ai_assistant.log_tools.schemas import (
             AgentSearchCondition,
             GetLogFieldMetadataRequest,
-            GetLogFieldMetadataResponse,
         )
 
         now = timezone.now()
