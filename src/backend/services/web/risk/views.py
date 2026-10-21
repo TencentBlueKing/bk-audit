@@ -132,6 +132,7 @@ class RisksViewSet(ResourceViewSet):
             "bulk_trans",
             "bulk_close",
             "bulk_misreport",
+            "bulk_unmisreport",
             "bulk_auto_process",
             "batch_confirm",
             "batch_confirm_as_misreport",
@@ -252,6 +253,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.batch_actions_preview, endpoint="batch_actions/preview"),
         ResourceRoute("POST", resource.risk.bulk_close_risk, endpoint="bulk_close"),
         ResourceRoute("POST", resource.risk.bulk_misreport, endpoint="bulk_misreport"),
+        ResourceRoute("POST", resource.risk.bulk_unmisreport, endpoint="bulk_unmisreport"),
         ResourceRoute("POST", resource.risk.bulk_auto_process, endpoint="bulk_auto_process"),
     ]
 
