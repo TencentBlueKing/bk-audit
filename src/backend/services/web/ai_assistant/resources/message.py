@@ -8,7 +8,6 @@ from services.web.ai_assistant.serializers.message import (
     MessageCreateRequestSerializer,
     MessageDetailRequestSerializer,
     MessageFullExportRequestSerializer,
-    MessageFullExportResponseSerializer,
     MessageListRequestSerializer,
     MessagePreviewExportRequestSerializer,
     MessageResponseSerializer,
@@ -17,6 +16,8 @@ from services.web.ai_assistant.serializers.message import (
 )
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.log_export import MessageExportService
+from services.web.query.ai_assistant.constants import SYNC_EXPORT_FALLBACK
+from services.web.query.ai_assistant.services.export import PreviewExportFile
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -109,7 +110,10 @@ class RetryMessage(AIAssistantResource):
 
 
 class PreviewExportMessage(AIAssistantResource):
-    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。"""
+    """同步导出成功日志检索消息的快照样例 Excel（最多 100 条，不重查日志）。
+
+    零数据快照同样返回正常文件，只保留分类与字段标题、数据行数为 0。
+    """
 
     name = gettext_lazy("预览导出日志检索")
     RequestSerializer = MessagePreviewExportRequestSerializer
@@ -128,14 +132,38 @@ class PreviewExportMessage(AIAssistantResource):
 
 
 class CreateMessageFullExport(AIAssistantResource):
-    """从成功日志检索消息快照重建条件，创建既有 LogExportTask 全量导出。"""
+    """从成功日志检索消息快照重建条件，创建既有 LogExportTask 全量导出。
+
+    POST /messages/{message_uid}/full-export/ 无需 Scope，后端按来源会话归属鉴权。
+    请求 body 为 {} 或 {"export_config": {}} 时，默认导出 AI 助手标准展示列。
+    若指定列，传 {"export_config": {"field_scope": "specified", "fields": [{"raw_name": "username"}]}}。
+    导出配置只控制列；数据范围来自消息快照，调用方不能覆盖。非法配置返回 400。
+    成功响应含 export_task_id 与任务状态，须沿既有导出任务查询/下载链路等待文件就绪。
+
+    同步直出（F4.5）：数据量守卫内时本接口直接返回 XLSX 文件流
+    （Content-Disposition 附件，前端按响应 Content-Type 分支处理）；
+    超限/超时自动降级为既有异步链路，JSON 响应含 export_type=sync_fallback 标记。
+    """
 
     name = gettext_lazy("创建全量日志导出")
     RequestSerializer = MessageFullExportRequestSerializer
-    ResponseSerializer = MessageFullExportResponseSerializer
+    # 不声明 ResponseSerializer：同步直出分支返回 HttpResponse 文件流，bk_resource 会按
+    # 已声明的 ResponseSerializer 做 dict 校验，HttpResponse 触发 params_error 500
+    # （2026-10-16 联调实测踩坑）；对齐预览导出 PreviewExportMessage 的文件流 resource
+    # 模式，异步分支返回裸 dict 由框架默认 JSON 包装，响应结构不变
 
     def perform_request(self, validated_request_data):
-        return MessageExportService(user=get_request_username()).create_full_export(
+        result = MessageExportService(user=get_request_username()).export_or_fallback(
             message_uid=str(validated_request_data["message_uid"]),
             export_config=validated_request_data.get("export_config") or {},
         )
+        # 同步直出：内存文件直接写响应（与预览导出同模式，绕过 ResponseSerializer）
+        if isinstance(result, PreviewExportFile):
+            response = HttpResponse(result.content, content_type=XLSX_CONTENT_TYPE)
+            response["Content-Disposition"] = content_disposition_header(
+                as_attachment=True,
+                filename=result.file_name,
+            )
+            return response
+        # 异步/降级：既有 JSON 协议（降级时含 export_type 标记，由 service 层注入）
+        return result

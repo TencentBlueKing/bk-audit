@@ -95,6 +95,10 @@ const downloadFile = (blob: Blob, fileName: string) => {
 export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
   interceptors.use((response: AxiosResponse) => {
     if (response.data instanceof Blob) {
+      // JSON 响应（如全量导出同步超限降级）不触发文件下载，由调用层解析业务结构
+      if (typeof response.data.type === 'string' && response.data.type.includes('json')) {
+        return response;
+      }
       downloadFile(response.data, response?.headers['content-disposition']);
       return response;
     }

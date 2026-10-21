@@ -28,6 +28,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
+from core.exporter.report import ReportContentFormat, resolve_content_format
 from core.serializers import AnyValueField, FlexibleListField, TimestampIntegerField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
@@ -745,6 +746,29 @@ class ListRiskScenesRespSerializer(serializers.ModelSerializer):
     class Meta:
         model = Scene
         fields = ["id", "name"]
+
+
+class PAExecutionRecordInfoSerializer(serializers.Serializer):
+    """
+    处理套餐执行记录条目（执行记录侧滑列表）
+    """
+
+    id = serializers.IntegerField(label=gettext_lazy("节点ID"))
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    operator = serializers.CharField(label=gettext_lazy("操作人"), allow_blank=True)
+    time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    trigger = serializers.ChoiceField(
+        label=gettext_lazy("触发方式"), choices=["", "auto", "manual", "approve"], allow_blank=True
+    )
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
 
 
 class ListRiskResponseSerializer(serializers.ModelSerializer):
@@ -1859,6 +1883,11 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
     risk_ids = serializers.SerializerMethodField()
     scenario_name = serializers.CharField(source="scenario.name", default="", read_only=True)
     error_message = serializers.SerializerMethodField(help_text=gettext_lazy("报告生成失败时的错误信息"))
+    content_format = serializers.SerializerMethodField(help_text=gettext_lazy("报告正文格式：MARKDOWN或HTML；历史记录自动识别"))
+
+    def get_content_format(self, obj) -> str:
+        """优先读取格式标识；历史正文无标识时使用公共识别规则。"""
+        return resolve_content_format(obj.content, obj.extra_info.get("content_format"))
 
     def get_risk_ids(self, obj) -> List[str]:
         return list(obj.report_risks.values_list("risk_id", flat=True))
@@ -1873,6 +1902,7 @@ class RetrieveAnalyseReportResponseSerializer(serializers.ModelSerializer):
             "title",
             "report_type",
             "content",
+            "content_format",
             "analysis_scope",
             "risk_count",
             "risk_ids",
@@ -1895,7 +1925,22 @@ class UpdateAnalyseReportRequestSerializer(serializers.Serializer):
 
     report_id = serializers.IntegerField(label=gettext_lazy("报告ID"))
     title = serializers.CharField(label=gettext_lazy("报告标题"), max_length=255, required=False)
-    content = serializers.CharField(label=gettext_lazy("报告内容(Markdown)"), required=False)
+    content = serializers.CharField(label=gettext_lazy("报告正文(Markdown或HTML)"), required=False, trim_whitespace=False)
+    content_format = serializers.ChoiceField(
+        choices=ReportContentFormat.choices, required=False, help_text=gettext_lazy("正文格式；省略时自动识别新正文，不沿用旧格式")
+    )
+
+    def validate_content(self, value):
+        """保留正文原有空格，同时继续拒绝纯空白报告。"""
+        if not value.strip():
+            raise serializers.ValidationError(gettext_lazy("报告正文不能为空"))
+        return value
+
+    def validate(self, attrs):
+        """格式标识只能与本次正文一同更新。"""
+        if "content_format" in attrs and "content" not in attrs:
+            raise serializers.ValidationError({"content_format": gettext_lazy("更新格式时须同时提交正文")})
+        return attrs
 
 
 class DeleteAnalyseReportRequestSerializer(serializers.Serializer):

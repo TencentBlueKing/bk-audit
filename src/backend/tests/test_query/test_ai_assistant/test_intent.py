@@ -522,23 +522,33 @@ class LoadCandidatesTest(AIAssistantTestCase):
 class IntentAgentRoutingTest(AIAssistantTestCase):
     """意图识别智能体环境路由开关（默认专属 / 应急切共享）。
 
-    定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
+    正式态定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
     BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
     （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
     （第 1 层优先级）。
+
+    临时态（2026-10-21，仅合入 bkop 联调分支验证 bp-ai-intent-test）：默认切到
+    AI_INTENT_TEST，验证完成后默认值与下列用例同步切回 USER_INTENT（恢复正式态断言）。
     """
 
-    def test_default_routes_to_dedicated_agent(self):
-        """默认：路由到 USER_INTENT 专属智能体（生产默认链路零额外配置）"""
+    def test_default_routes_to_intent_test_agent(self):
+        """临时态：默认路由到 AI_INTENT_TEST 测试智能体（bkop 部署即生效，零额外配置）"""
 
-        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.USER_INTENT)
-        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
+        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.AI_INTENT_TEST)
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.AI_INTENT_TEST)
+        self.assertEqual(AIAgentCode.AI_INTENT_TEST.value, "bp-ai-intent-test")
 
     @override_settings(AI_USER_INTENT_AGENT_CODE="RISK_SEARCH")
     def test_switch_routes_to_other_agent(self):
         """应急口：BKAPP_AI_USER_INTENT_AGENT_CODE 可覆盖路由到其他智能体（枚举名任意）"""
 
         self.assertEqual(resolve_intent_agent_code(), AIAgentCode.RISK_SEARCH)
+
+    @override_settings(AI_USER_INTENT_AGENT_CODE="USER_INTENT")
+    def test_switch_back_to_dedicated_agent(self):
+        """逃生口：bkop 验证期间仍可经环境变量切回 USER_INTENT 专属智能体"""
+
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
 
     @override_settings(AI_USER_INTENT_AGENT_CODE="NOT_EXIST")
     def test_invalid_switch_fails_fast(self):

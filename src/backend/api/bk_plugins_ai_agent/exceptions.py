@@ -1,7 +1,14 @@
+# -*- coding: utf-8 -*-
+"""AI Agent 调用的受控异常类型。"""
+
 from blueapps.core.exceptions import BlueException
 from django.utils.translation import gettext_lazy
 
 from api.constants import AIAgentCode
+
+
+class AGUIStreamProtocolError(Exception):
+    """上游 SSE data 不是可交付给业务回调的 JSON 对象。"""
 
 
 class AgentRateLimited(BlueException):

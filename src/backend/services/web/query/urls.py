@@ -20,9 +20,10 @@ from bk_resource.routers import ResourceRouter
 from django.conf.urls import include
 from django.urls import re_path
 
-from services.web.query import views
+from services.web.query import mcp_views, views
 
 router = ResourceRouter()
 router.register_module(views)
+router.register("mcp_user/logs", mcp_views.MCPUserLogViewSet)
 
 urlpatterns = (re_path(r"namespaces/(?P<namespace>[\w\-]+)/", include(router.urls)),)

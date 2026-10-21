@@ -1178,12 +1178,13 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
             page=1,
             page_size=10,
         )
-        sql = builder.build_data_sql()
+        with self.assertRaisesRegex(ValueError, "unsupported JSON field key"):
+            builder.build_data_sql()
 
         field = DorisVariantField(keys=[payload], name="snapshot_resource_type_info")
         expected = field._sanitize_variant_key(payload)
         expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
-        self.assertIn(expected_fragment, sql)
+        self.assertIn(expected_fragment, field.get_sql())
         # 模拟 escape_string 返回 bytes 类型，让 isinstance 分支执行
         with patch("pymysql.converters.escape_string", return_value=b"foo\\'\\'\\''] !=0 or 1=1; --"):
             field_bytes = DorisVariantField(
@@ -1208,12 +1209,9 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
                 page=1,
                 page_size=10,
             )
-            sql_bytes = builder_bytes.build_data_sql()
-            self.assertIn(
-                expected_fragment_bytes,
-                sql_bytes,
-                msg=f"\nExpected fragment (bytes):\n{expected_fragment_bytes}\nGot SQL:\n{sql_bytes}",
-            )
+            with self.assertRaisesRegex(ValueError, "unsupported JSON field key"):
+                builder_bytes.build_data_sql()
+            self.assertIn(expected_fragment_bytes, field_bytes.get_sql())
 
     def test_format_keys_quote_normal_keys(self):
         """正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE）"""
@@ -1245,7 +1243,7 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
     def test_variant_like_with_injection_payload(self):
         """
         恶意 payload 作为 LIKE 条件参与 Variant 查询时：
-        - 字段访问仍然是 snapshot_resource_type_info['id'] 这种受控形式
+        - 字段访问使用受控的 JSON 字面路径
         """
         payload = r"foo'\''] !=0 or 1=1; --"
 
@@ -1267,17 +1265,13 @@ class TestDorisVariantFieldSanitize(SimpleTestCase):
         )
 
         sql = builder.build_data_sql()
-        print(sql)
-        self.assertIn("`snapshot_resource_type_info`['id']", sql)
-
-        # 2）确认是 LIKE 查询，并且前缀形如 LIKE '%foo...'
-        self.assertIn("LIKE '%foo", sql)
-
-        expected_sub = "foo''\\''''] !=0 or 1=1; --"
-        self.assertIn(
-            expected_sub,
+        # 字面反斜杠经过 LIKE 模式与 SQL 字符串两层转义，SQL 中应为四个反斜杠。
+        # 单引号仍由 PyPika 成对转义，完整断言同时约束字段路径与条件边界。
+        self.assertEqual(
             sql,
-            msg=f"\n原始 payload:\n{payload}\n" f"期望转义后片段:\n{expected_sub}\n" f"实际 SQL:\n{sql}",
+            "SELECT * FROM test_table WHERE CASE WHEN JSON_TYPE(`snapshot_resource_type_info`,'$.id')='null' "
+            "THEN NULL ELSE JSON_EXTRACT_STRING(`snapshot_resource_type_info`,'$.id') END "
+            + r"LIKE '%foo''\\\\''''] !=0 or 1=1; --%' LIMIT 10",
         )
 
 

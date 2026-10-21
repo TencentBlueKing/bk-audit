@@ -19,9 +19,11 @@ from typing import List
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from rest_framework.permissions import IsAuthenticated
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    ActionPermission,
     IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
@@ -299,7 +301,7 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         )
 
     def get_permissions(self):
-        if self.action in ["list"]:
+        if self.action in ["list", "execution_records"]:
             return [
                 InstanceActionPermission(
                     actions=[ActionEnum.LIST_PA],
@@ -341,6 +343,11 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_rule_by_pa, pk_field="id", endpoint="rules", enable_paginate=True),
         ResourceRoute("PUT", resource.risk.toggle_process_application, pk_field="id", endpoint="toggle"),
         ResourceRoute("GET", resource.risk.approve_build_in_fields, endpoint="approve_build_in_fields"),
+        # 套餐执行记录侧滑：套餐页全部/单套餐；风险入口带 risk_id 筛选
+        # 资源内部已按 page/page_size 分页并返回 {count, page, page_size, num_pages, results}，
+        # 不能再开启 enable_paginate（框架会对返回值做 queryset 切片，dict 会抛 TypeError）
+        ResourceRoute("GET", resource.risk.list_pa_execution_records, endpoint="execution_records"),
+        ResourceRoute("GET", resource.risk.get_pa_execution_record_detail, endpoint="execution_record_detail"),
     ]
 
 
@@ -478,6 +485,35 @@ class AnalyseReportViewSet(ResourceViewSet):
         # 风险反查报告
         ResourceRoute("GET", resource.risk.list_analyse_report_by_risk, endpoint="by_risk"),
     ]
+
+
+class BkSecViewSet(ResourceViewSet):
+    """
+    BKSEC 元数据查询（风险类型下拉）
+    """
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.list_bk_sec_risk_types, endpoint="risk_types"),
+    ]
+
+
+class TicketViewSet(ResourceViewSet):
+    """
+    预览 / 测试发送 / 任务状态查询
+    """
+
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.preview_ticket, endpoint="preview"),
+        ResourceRoute("POST", resource.risk.send_test_ticket, endpoint="test_send"),
+        ResourceRoute("GET", resource.risk.get_task_status, endpoint="test_task_status"),
+    ]
+
+    def get_permissions(self):
+        if self.action in ["preview", "test_send"]:
+            return [ActionPermission(actions=[ActionEnum.EDIT_STRATEGY])]
+        elif self.action == "test_task_status":
+            return [IsAuthenticated()]
+        return []
 
 
 class RiskEventSubscriptionApigwViewSet(APIGWViewSet):

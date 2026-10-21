@@ -23,7 +23,12 @@ from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
+from services.web.risk.constants import (
+    ItsmVersion,
+    RiskDisplayStatus,
+    RiskLabel,
+    RiskStatus,
+)
 from tests.test_risk.test_tickets.base import RiskContext, RuleContext, TicketTest
 from tests.test_risk.test_tickets.constants import (
     APPROVE_SERVICE_INFO,
@@ -115,26 +120,26 @@ class RiskLabelTest(TicketTest):
         mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
     )
     @mock.patch(
-        "services.web.risk.resources.risk.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.resources.risk.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
         "services.web.risk.resources.risk.sync_auto_result",
         mock.Mock(return_value=None),
     )
     @mock.patch(
-        "services.web.risk.resources.risk.api.bk_itsm.operate_ticket",
+        "services.web.risk.resources.risk.api.bk_itsm_v4.ticket_handle",
         mock.Mock(return_value=None),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
@@ -163,6 +168,80 @@ class RiskLabelTest(TicketTest):
                 self.assertEquals(risk.status, RiskStatus.CLOSED.value)
                 self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
                 # MisReport（审批中）→CloseRisk: display_status 同步为 CLOSED
+                self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
+
+    @mock.patch(
+        "services.web.risk.resources.risk.api.bk_itsm_v4.ticket_handle",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.api.bk_itsm.operate_ticket",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.api.bk_itsm.ticket_approve_result",
+        mock.Mock(return_value=[APPROVE_TICKET_STATUS]),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.get_request_username",
+        mock.Mock(return_value=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
+    )
+    @mock.patch(
+        "services.web.risk.resources.risk.sync_auto_result",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value=APPROVE_TICKET_STATUS),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    def test_misreport_approve_v3(self):
+        """
+        测试误报（存量 V3 审批中时）。
+
+        关键验证：将审批节点标记为 V3 后误报关单，强制撤销应走 V3 分支
+        （api.bk_itsm.operate_ticket），而非 V4 ticket_handle。覆盖
+        ForceRevokeApproveTicket 的 node.itsm_version 分流。
+        """
+
+        with RuleContext() as (pa, _):
+            with RiskContext() as risk:
+                # 转为审批中（默认 V4 发起，建立含 ticket(sn) 的历史节点）
+                pa_config = {**CUSTOM_AUTO_PROCESS_PARAMS, "pa_id": pa.id}
+                resource.risk.custom_auto_process(risk_id=risk.risk_id, **pa_config)
+                risk.refresh_from_db()
+                # 模拟存量迁移：将该在途节点标记为 V3
+                node = risk.last_history
+                node.itsm_version = ItsmVersion.V3
+                node.save(update_fields=["itsm_version"])
+                # 处理误报（触发 force_revoke_approve_ticket）
+                resource.risk.update_risk_label(
+                    risk_id=risk.risk_id, risk_label=RiskLabel.MISREPORT, description=uuid.uuid1().hex
+                )
+                risk.refresh_from_db()
+                # V3 分支通过 operate_ticket 撤销，不调用 V4 handle
+                from services.web.risk import resources as risk_resources
+
+                self.assertTrue(risk_resources.api.bk_itsm.operate_ticket.called)
+                self.assertFalse(risk_resources.api.bk_itsm_v4.ticket_handle.called)
+                # 检测关单
+                self.assertEquals(risk.status, RiskStatus.CLOSED.value)
+                self.assertEquals(risk.risk_label, RiskLabel.MISREPORT)
                 self.assertEquals(risk.display_status, RiskDisplayStatus.CLOSED)
 
     @mock.patch(

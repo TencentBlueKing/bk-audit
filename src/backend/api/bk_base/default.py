@@ -18,6 +18,8 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import traceback
+from collections.abc import Mapping
+from typing import Any
 
 from bk_resource import BkApiResource
 from bk_resource.settings import bk_resource_settings
@@ -435,6 +437,22 @@ class QuerySyncResource(BkBaseResource):
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+
+class SafeQuerySyncResource(QuerySyncResource):
+    """日志工具使用的 QuerySync 变体，额外记录最终 SQL。
+
+    保留 Resource 默认的请求/响应采集与标准错误解析，确保远端异常正文
+    可用于生产排障；本类只补充结构化 SQL 日志，不改写 QuerySync 的响应契约。
+    """
+
+    def before_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """记录最终提交的 SQL，响应继续使用 QuerySync 标准解析。"""
+
+        request_data = kwargs.get("json") or kwargs.get("data") or {}
+        if isinstance(request_data, Mapping):
+            logger.info("[SafeQuerySyncResource] SQL => %s", request_data.get("sql", ""))
+        return super().before_request(kwargs)
 
 
 class DebugQuerySyncResource(DebugBkBaseResource):

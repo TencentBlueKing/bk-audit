@@ -205,6 +205,97 @@ export default {
     return AiAssistantManageSource.fullExport(params, {
       catchError: options?.catchError,
     })
+      .then(({ data }) => {
+        // 同步直出为 xlsx Blob（响应拦截器已自动触发浏览器下载）；
+        // 降级/异步为 JSON Blob，解析回业务结构（拦截器对 json blob 不触发下载）
+        if (typeof Blob !== 'undefined' && data instanceof Blob && data.type && !data.type.includes('json')) {
+          return data;
+        }
+        if (typeof Blob !== 'undefined' && data instanceof Blob) {
+          return data.text().then((text) => {
+            const parsed = JSON.parse(text);
+            // bk_resource 响应统一包装 {result, code, data, message}，业务数据在 data 字段；
+            // 对齐拦截器对常规 json 响应的既有解包语义（case 0 后业务方拿到的即 data 字段）
+            if (parsed && typeof parsed === 'object' && 'result' in parsed && 'data' in parsed) {
+              return parsed.data;
+            }
+            return parsed;
+          });
+        }
+        return data;
+      });
+  },
+
+  // ---------- 附件 ----------
+
+  createAttachment(
+    params: AiCreateAttachmentParams,
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.createAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  fetchAttachments(
+    params: AiAttachmentListParams = {},
+    options?: { catchError?: boolean; cancelTokenSource?: CancelTokenSource },
+  ) {
+    return AiAssistantManageSource.getAttachments(params, {
+      catchError: options?.catchError,
+      cancelTokenSource: options?.cancelTokenSource,
+    })
+      .then(({ data }) => (Array.isArray(data) ? data : []));
+  },
+
+  fetchAttachment(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  updateAttachment(
+    params: AiUpdateAttachmentParams,
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.updateAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  retryAttachment(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.retryAttachment(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  fetchAttachmentStreamSnapshot(
+    params: { attachment_uid: string },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.getAttachmentStreamSnapshot(params, {
+      catchError: options?.catchError,
+    })
+      .then(({ data }) => data);
+  },
+
+  exportAttachment(
+    params: { attachment_uid: string; export_format: AiAttachmentExportFormat },
+    options?: { catchError?: boolean },
+  ) {
+    return AiAssistantManageSource.exportAttachment(params, {
+      catchError: options?.catchError,
+    })
       .then(({ data }) => data);
   },
 

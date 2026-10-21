@@ -18,10 +18,6 @@ from services.web.ai_assistant.constants import (
     PlatformStreamEvent,
     SidebarNodeType,
 )
-from services.web.ai_assistant.handlers import (
-    attachment_handler_registry,
-    message_handler_registry,
-)
 from services.web.ai_assistant.models import Attachment
 from services.web.ai_assistant.schemas import parse_stream_config
 from services.web.ai_assistant.streaming import RedisLiveStore
@@ -35,8 +31,8 @@ from services.web.ai_assistant.views import (
 )
 from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopePermission
-from tests.test_ai_assistant.base import ensure_business_handlers_registered
 from tests.test_ai_assistant.celery_integration import running_celery_worker
+from tests.test_ai_assistant.handlers import use_attachment_handler, use_message_handler
 from tests.test_ai_assistant.http_integration import (
     iter_http_sse_frames,
     iter_sse_frames,
@@ -198,9 +194,6 @@ class HttpIntegrationTest(LiveServerTestCase):
             attachment_uids=Attachment.objects.filter(is_stream=True).values_list("uid", flat=True)
         )
         self.session.close()
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        ensure_business_handlers_registered()
-        attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
         reset_http_stream_events()
         if leftovers:
             raise AssertionError(f"专项 Redis key 残留: {leftovers}")
@@ -265,8 +258,7 @@ class HttpIntegrationTest(LiveServerTestCase):
         return payload["data"]
 
     def create_success_message(self, *, text: str = "query") -> dict:
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        message_handler_registry.register(RealMessageSuccessHandler())
+        use_message_handler(self, RealMessageSuccessHandler())
         conversation = self.create_conversation()
         created = self.create_message(conversation_uid=conversation["uid"], text=text)
         self.assertEqual(created["status"], ExecutionStatus.PROCESSING)
@@ -364,10 +356,8 @@ class HttpIntegrationTest(LiveServerTestCase):
             mock.patch.object(ScopePermission, "get_system_ids", new=get_system_ids),
             mock.patch.object(ScopePermission, "check_scope_entry", new=check_scope_entry),
         ):
-            message_handler_registry.unregister(MessageType.USER_INTENT)
-            attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
-            message_handler_registry.register(FeedbackEnabledMessageHandler())
-            attachment_handler_registry.register(RealAttachmentSuccessHandler())
+            use_message_handler(self, FeedbackEnabledMessageHandler())
+            use_attachment_handler(self, RealAttachmentSuccessHandler())
 
             scene_one_group = self.create_group(name="scene 1 分组")
             scene_one = self.create_conversation(scope_type="scene", scope_id="1", group_uid=scene_one_group["uid"])
@@ -489,10 +479,10 @@ class HttpIntegrationTest(LiveServerTestCase):
             move_response = self.session.post(
                 self.api_url("/conversation_sidebar/nodes/move/"),
                 json={
-                    "scope_type": ScopeType.CROSS_SCENE,
-                    "scope_id": "",
                     "source_node_type": SidebarNodeType.CONVERSATION,
                     "source_node_uid": scene_one["uid"],
+                    "before_node_type": SidebarNodeType.CONVERSATION,
+                    "before_node_uid": scene_two["uid"],
                 },
             )
             self.assertNotEqual(move_response.status_code, 200, move_response.text)
@@ -520,8 +510,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_async_attachment_creates_and_retries_after_failure_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        attachment_handler_registry.register(RealAttachmentHttpFailOnceHandler())
+        use_attachment_handler(self, RealAttachmentHttpFailOnceHandler())
 
         created = self.unwrap(
             self.session.post(
@@ -542,8 +531,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_stream_attachment_emits_business_events_and_terminal_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        attachment_handler_registry.register(RealAttachmentHttpStreamHandler())
+        use_attachment_handler(self, RealAttachmentHttpStreamHandler())
 
         created = self.unwrap(
             self.session.post(
@@ -576,8 +564,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_last_event_id_filters_consumed_event_over_http(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        attachment_handler_registry.register(RealAttachmentHttpStreamHandler())
+        use_attachment_handler(self, RealAttachmentHttpStreamHandler())
         created = self.unwrap(
             self.session.post(
                 self.api_url(f"/messages/{source['uid']}/attachments/"),
@@ -603,8 +590,7 @@ class HttpIntegrationTest(LiveServerTestCase):
 
     def test_stream_retry_resets_old_execution_and_rebuilds_snapshot(self):
         source = self.create_success_message(text="source")
-        message_handler_registry.unregister(MessageType.USER_INTENT)
-        attachment_handler_registry.register(RealAttachmentHttpStreamRetryHandler())
+        use_attachment_handler(self, RealAttachmentHttpStreamRetryHandler())
         created = self.unwrap(
             self.session.post(
                 self.api_url(f"/messages/{source['uid']}/attachments/"),
