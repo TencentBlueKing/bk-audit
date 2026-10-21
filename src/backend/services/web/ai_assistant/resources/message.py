@@ -16,7 +16,6 @@ from services.web.ai_assistant.serializers.message import (
 )
 from services.web.ai_assistant.services import ConversationService, MessageService
 from services.web.ai_assistant.services.log_export import MessageExportService
-from services.web.query.ai_assistant.constants import SYNC_EXPORT_FALLBACK
 from services.web.query.ai_assistant.services.export import PreviewExportFile
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

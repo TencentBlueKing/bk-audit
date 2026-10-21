@@ -89,11 +89,13 @@ class TestBkSecConfig:
         config = BkSecConfig.model_validate({"enabled": False})
         config.validate_for_submit()
 
-    def test_risk_access_retrieve_registered(self):
-        """回归：sync_plugin_config 依赖该资源取 token，缺失会导致启用 BKSEC 的策略保存全部被阻断"""
+    def test_risk_access_list_registered(self):
+        """回归：sync_plugin_config 依赖该资源取 token，缺失会导致启用 BKSEC 的策略保存全部被阻断
+        （2026-10-16 db4f1a9ba 起取 token 改用 risk_access_list 按 risk_type_id 匹配，RiskAccessRetrieve 已删除）
+        """
         from bk_resource import api
 
-        assert callable(api.bk_sec.risk_access_retrieve)
+        assert callable(api.bk_sec.risk_access_list)
 
 
 @pytest.mark.django_db

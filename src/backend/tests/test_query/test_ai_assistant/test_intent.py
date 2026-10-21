@@ -556,3 +556,23 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
 
         with self.assertRaises(ImproperlyConfigured):
             resolve_intent_agent_code()
+
+
+class PromptValueRulesContractTest(AIAssistantTestCase):
+    """system prompt 必须携带值域解析规则锚点文本，防止后续改动误删引导模型查工具的规则。"""
+
+    ANCHORS = (
+        "值域解析规则",
+        "禁止凭空猜测 action_id",
+        "用操作列表类工具检索目标系统的操作清单",
+        "同等匹配多个操作时把全部匹配项",
+        "只能来自操作清单返回的真实值域",
+        "以用户原文为准，禁止改写大小写或翻译",
+        "不得静默丢弃或编造值",
+        "不得以缺少工具为由虚构值域",
+    )
+
+    def test_system_prompt_contains_value_rules(self):
+        for anchor in self.ANCHORS:
+            with self.subTest(anchor=anchor):
+                self.assertIn(anchor, MessagePlanningService.system_prompt)

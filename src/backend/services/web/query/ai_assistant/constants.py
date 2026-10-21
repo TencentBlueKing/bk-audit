@@ -125,6 +125,7 @@ AI_EXPORT_TASK_NAME_TEMPLATE = gettext_lazy("AI助手检索导出-%s")
 # F4.5 全量导出同步直出：并发槽缓存键前缀（槽位数 = settings.AI_EXPORT_SYNC_CONCURRENCY）
 SYNC_EXPORT_SLOT_KEY_PREFIX = "ai_export_sync:slot"
 
+
 # F4.5 同步直出降级原因（低基数枚举，日志与指标维度共用）：触发即自动转既有异步链路
 class SyncExportFallbackReason:
     """同步直出降级原因（低基数，禁止携带动态值进入指标维度）"""

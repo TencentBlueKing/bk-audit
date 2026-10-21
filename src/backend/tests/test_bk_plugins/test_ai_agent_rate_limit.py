@@ -41,9 +41,12 @@ class CapturingRequestLogHandler:
 
 class AgentRateLimiterTest(SimpleTestCase):
     def test_phase_two_agent_codes_extend_common_enum(self):
-        self.assertEqual(len(AIAgentCode), 7)
+        # 临时态（2026-10-21，a20ddc288）：bkop 验证 bp-ai-intent-test 期间为 8 个成员；
+        # 后续若移除 AI_INTENT_TEST 枚举需同步恢复为 7
+        self.assertEqual(len(AIAgentCode), 8)
         self.assertEqual(AIAgentCode.AUDIT_LOG_STATISTICS.value, "bp-ai-log-stats")
         self.assertEqual(AIAgentCode.AUDIT_LOG_ANALYSIS.value, "bp-ai-log-analyse")
+        self.assertEqual(AIAgentCode.AI_INTENT_TEST.value, "bp-ai-intent-test")
 
     def test_all_agent_codes_have_a_safe_default_rate_limit(self):
         configured_default = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip() or "10/m"
