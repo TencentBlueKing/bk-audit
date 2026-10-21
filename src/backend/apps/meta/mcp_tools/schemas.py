@@ -129,7 +129,7 @@ class ListSystemActionsRequest(_MetaToolRequest):
     keyword: Optional[str] = Field(
         default=None,
         max_length=META_TOOL_MAX_KEYWORD_LENGTH,
-        description="可选关键词，对 action_id、中英文名称、描述做包含匹配。",
+        description="可选关键词，对 action_id、中英文名称、描述、操作类型做包含匹配。",
     )
     resource_type_id: Optional[str] = Field(
         default=None,

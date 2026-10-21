@@ -143,6 +143,7 @@ class MetaToolService:
                 | Q(name__icontains=request.keyword)
                 | Q(name_en__icontains=request.keyword)
                 | Q(description__icontains=request.keyword)
+                | Q(type__icontains=request.keyword)
             )
         if request.resource_type_id:
             relation_exists = ResourceTypeActionRelation.objects.filter(

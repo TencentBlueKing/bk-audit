@@ -324,6 +324,12 @@ class TestMetaListActions(TestCase):
         output = self._list(keyword="删除")
         self.assertEqual({item.action_id for item in output.actions}, {"delete_job"})
 
+    def test_keyword_matches_action_type(self):
+        """类型化表述经操作类型字段命中："管理工具"是操作的 type 值而非动作名称。"""
+        Action.objects.create(system_id="bk_cmdb", action_id="manage_panel", name="管理面板", type="管理工具")
+        output = self._list(system_id="bk_cmdb", keyword="管理工具")
+        self.assertEqual({item.action_id for item in output.actions}, {"manage_panel"})
+
     def test_resource_type_filter_keeps_only_related_actions(self):
         output = self._list(resource_type_id="script")
         self.assertEqual({item.action_id for item in output.actions}, {"execute_script"})
