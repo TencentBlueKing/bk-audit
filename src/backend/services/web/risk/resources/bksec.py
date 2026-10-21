@@ -89,7 +89,7 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
         return [_normalize_risk_type(item) for item in items if isinstance(item, dict)]
 
 
-class PreviewTicket(BkSecResourceMeta):
+class PreviewTicket(TicketResourceMeta):
     """
     预览工单（按 BKSEC 配置 + 指定样例风险单渲染，不实际发送）
 
@@ -203,7 +203,7 @@ class SendTestTicket(TicketResourceMeta):
         return {"task": result, "constants": constants}
 
 
-class GetTaskStatus(BkSecResourceMeta):
+class GetTaskStatus(TicketResourceMeta):
     """
     查询测试任务状态（透传 SOPS 任务状态，供前端轮询至终态）
 
