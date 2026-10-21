@@ -5,7 +5,7 @@ from unittest import mock
 
 from bk_resource import resource
 
-from services.web.risk.constants import RiskDisplayStatus, RiskStatus
+from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
 from services.web.risk.exceptions import BulkSelectionOverLimit
 from services.web.risk.models import Risk
 from services.web.risk.resources.risk import (
@@ -34,12 +34,13 @@ _DISPLAY_BY_STATUS = {
 }
 
 
-def _stub(display_status, status, strategy_id=1, scene_id=1):
+def _stub(display_status, status, strategy_id=1, scene_id=1, risk_label=RiskLabel.NORMAL):
     return SimpleNamespace(
         display_status=display_status,
         status=status,
         strategy_id=strategy_id,
         scene_id=scene_id,
+        risk_label=risk_label,
     )
 
 
@@ -125,6 +126,26 @@ class TestBatchActionsPreview(BaseTestCase):
         self.assertIn("已关单", resp["actions"]["close"]["disabled_reason"])
         self.assertFalse(resp["actions"]["trans"]["enabled"])
         self.assertFalse(resp["actions"]["confirm"]["enabled"])
+
+    def test_closed_misreport_label_disables_misreport(self):
+        """标记误报关单的单子 risk_label=misreport，不能再批量误报"""
+        r1 = self._mk(1, RiskStatus.CLOSED)
+        Risk.objects.filter(risk_id=r1.risk_id).update(risk_label=RiskLabel.MISREPORT)
+        resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id])
+        self.assertFalse(resp["batch_enabled"])
+        self.assertEqual(resp["batch_disabled_reason"], "所选风险无法批量处理")
+        self.assertFalse(resp["actions"]["misreport"]["enabled"])
+        self.assertEqual(resp["actions"]["misreport"]["disabled_reason"], "所选风险包含已误报，不支持误报")
+
+    def test_mixed_closed_normal_and_misreport_disables_misreport(self):
+        risks = [
+            _stub(RiskDisplayStatus.CLOSED, RiskStatus.CLOSED),
+            _stub(RiskDisplayStatus.CLOSED, RiskStatus.CLOSED, risk_label=RiskLabel.MISREPORT),
+        ]
+        resp = _build_batch_actions_preview(risks)
+        self.assertFalse(resp["batch_enabled"])
+        self.assertFalse(resp["actions"]["misreport"]["enabled"])
+        self.assertEqual(resp["actions"]["misreport"]["disabled_reason"], "所选风险包含已误报，不支持误报")
 
     def test_over_limit_returns_reason(self):
         with self.assertRaises(BulkSelectionOverLimit) as caught:
