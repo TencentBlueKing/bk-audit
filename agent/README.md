@@ -4,7 +4,7 @@
 
 | 范围 | 入口 | 职责 |
 | --- | --- | --- |
-| 跨端 | [shared](shared/README.md) | 项目导航、提交、版本日志与可选工具 |
+| 跨端 | [shared](shared/README.md) | 上手与能力选配、提交、版本日志及 skills/工具/MCP 分类 |
 | 后端 | [backend](backend/README.md) | 后端工程规范、IAM、AI 评估与提交校验工具 |
 | 前端 | [frontend](frontend/README.md) | 前端开发、类型、lint 与提交配置 |
 | 维护 | [架构与维护约定](architecture.md) | 新增、调整或删除能力时的归属、引用与验证 |

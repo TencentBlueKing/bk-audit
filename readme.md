@@ -49,9 +49,9 @@ hook，并在提交前完成暂存区检查和单元测试。
 
 ### Agent 协作
 
-开发者和 Agent 可从 [Agent 协作入口](agent/README.md) 查找工程规范、工具与任务技能。协作材料集中在 `agent/`：shared 提供跨端的项目入口、提交与版本准备，backend 提供后端领域技能与工具，frontend 指向前端工程来源；实际构建、测试和检查配置由对应工程维护。
+开发者和 Agent 可从 [Agent 协作入口](agent/README.md) 查找工程规范、工具与任务技能。协作材料集中在 `agent/`：shared 提供跨端的上手与能力选配、提交与版本准备，backend 提供后端领域技能与工具，frontend 指向前端工程来源；实际构建、测试和检查配置由对应工程维护。
 
-Agent 可使用 [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) 定位当前 checkout 并选择能力。新增或维护协作能力时，参考[架构与维护说明](agent/architecture.md)；具体操作按当前任务和所属技能执行。
+Agent 可使用 [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) 按场景诊断环境、选配并验收所需能力；没有源码时也可先形成准备计划，实际工程操作前再确认 checkout。新增或维护协作能力时，参考[架构与维护说明](agent/architecture.md)；具体操作按当前任务和所属技能执行。
 
 ## License
 
