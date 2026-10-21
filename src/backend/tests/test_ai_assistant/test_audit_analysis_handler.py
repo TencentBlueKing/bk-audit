@@ -97,6 +97,11 @@ class AIAnalysisHandlerTest(AIAssistantPlatformTestCase):
         downloaded = service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
         self.assertIn("编辑正文", downloaded.content.decode())
         self.assertNotIn("<p>", downloaded.content.decode())
+        body = '<!DOCTYPE html><html><body><h1>完整报告</h1><p>编辑正文</p></body></html>'
+        updated = service.update(attachment_uid=str(attachment.uid), output_data={"markdown": body})
+        self.assertEqual(updated.output_data, {"markdown": body, "content_format": "HTML"})
+        downloaded = service.export(attachment_uid=str(attachment.uid), export_format=AttachmentExportFormat.MARKDOWN)
+        self.assertEqual(downloaded.content.decode().strip(), '# 完整报告\n\n编辑正文')
         updated = service.update(attachment_uid=str(attachment.uid), output_data={"markdown": "# Markdown改稿"})
         self.assertEqual(updated.output_data["content_format"], "MARKDOWN")
 
