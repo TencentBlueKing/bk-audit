@@ -293,11 +293,12 @@
                   class="custom-content">
                   <div class="custom-input-wrapper">
                     <bk-input
+                      ref="customInputRef"
                       v-model="customPrompt"
                       class="custom-input"
                       data-testid="statistics-instruction-input"
                       :maxlength="INSTRUCTION_MAX_LENGTH"
-                      :placeholder="t('输入你想统计的内容，例如：分析张三在英雄联盟业务的资产转移报告')"
+                      :placeholder="t('按“操作事件名”统计张三近 7 天每类操作的次数，用柱状图展示')"
                       :resize="false"
                       :rows="3"
                       type="textarea" />
@@ -323,7 +324,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { computed, onDeactivated, ref, watch } from 'vue';
+  import { computed, nextTick, onDeactivated, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import EsQueryService from '@service/es-query';
@@ -381,11 +382,16 @@
     submitting?: boolean;
     /** 创建校验失败时留在面板上的原因 */
     submitError?: string;
+    /** 从自定义统计重新进入时带回上次要求，并展开、聚焦输入框 */
+    customPromptPreset?: string;
+    focusCustom?: boolean;
   }>(), {
     modelValue: false,
     condition: null,
     submitting: false,
     submitError: '',
+    customPromptPreset: '',
+    focusCustom: false,
   });
 
   const emit = defineEmits<{
@@ -403,6 +409,7 @@
   const selectedFieldKey = ref('');
   const customExpanded = ref(false);
   const customPrompt = ref('');
+  const customInputRef = ref<{ $el?: HTMLElement } | null>(null);
   const fieldLoading = ref(false);
   const fieldError = ref('');
   const fieldTruncated = ref(false);
@@ -590,11 +597,22 @@
     }
   };
 
+  const focusCustomInput = async () => {
+    if (!customExpanded.value) return;
+    await nextTick();
+    const root = customInputRef.value?.$el;
+    const textarea = root?.querySelector('textarea');
+    if (!textarea) return;
+    textarea.focus();
+    root?.closest('.custom-block')?.scrollIntoView({ block: 'nearest' });
+  };
+
   const resetState = () => {
     keyword.value = '';
     selectedFieldKey.value = '';
-    customExpanded.value = false;
-    customPrompt.value = '';
+    const preset = (props.customPromptPreset || '').slice(0, INSTRUCTION_MAX_LENGTH);
+    customPrompt.value = preset;
+    customExpanded.value = props.focusCustom || Boolean(preset);
     fieldPath.value = [];
     fieldItems.value = [];
     extendGroups.value = [];
@@ -607,6 +625,7 @@
     if (!val || props.submitting) return;
     resetState();
     void loadFields();
+    if (customExpanded.value) void focusCustomInput();
   }, { immediate: true });
 
   const handleClose = () => {

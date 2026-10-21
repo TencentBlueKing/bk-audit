@@ -16,34 +16,14 @@
 */
 import DOMPurify from 'dompurify';
 
-export type ChartSanitizeErrorCode = 'INVALID_STRUCTURE' | 'TOO_LARGE';
+export type ChartSanitizeErrorCode = 'INVALID_STRUCTURE';
 
 export interface SanitizeChartResult {
   option: Record<string, any> | null;
   errorCode: ChartSanitizeErrorCode | null;
 }
 
-const TOP_LEVEL_ALLOW = new Set([
-  'title',
-  'tooltip',
-  'legend',
-  'grid',
-  'xAxis',
-  'yAxis',
-  'series',
-  'color',
-  'textStyle',
-  'dataZoom',
-  'animation',
-  'animationDuration',
-]);
-
 const DROP_KEYS = new Set([
-  'graphic',
-  'media',
-  'renderItem',
-  'extraCssText',
-  'className',
   '__proto__',
   'constructor',
   'prototype',
@@ -61,14 +41,10 @@ const RESOURCE_KEYS = new Set([
   'color',
 ]);
 
-const SERIES_TYPES = new Set(['line', 'bar', 'pie']);
 const FN_WHITELIST = new Set(['datetime', 'percent', 'number', 'bytes', 'truncate']);
 const TOOLTIP_TAGS = ['span', 'br', 'b', 'strong', 'div'];
 
 const MAX_DEPTH = 20;
-const MAX_SERIES = 10;
-const MAX_DATA_POINTS = 2000;
-const MAX_SERIALIZED = 200 * 1024;
 const MIN_HEIGHT = 160;
 const MAX_HEIGHT = 800;
 const DEFAULT_HEIGHT = 280;
@@ -98,13 +74,6 @@ export const clampChartHeight = (height: unknown): number => {
   const num = Number(height);
   if (!Number.isFinite(num)) return DEFAULT_HEIGHT;
   return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, num));
-};
-
-const isFunctionLikeString = (value: string) => {
-  const trimmed = value.trim();
-  return /^(async\s+)?function\b/.test(trimmed)
-    || /^\(?\s*([A-Za-z_$][\w$]*|\(\s*[A-Za-z_$][\w$,\s]*\))\s*\)?\s*=>/.test(trimmed)
-    || /^\(\s*\)\s*=>/.test(trimmed);
 };
 
 const isDangerousResource = (value: string) => {
@@ -240,7 +209,7 @@ const sanitizeValue = (value: unknown, ctx: WalkCtx): unknown => {
   if (typeof value === 'string') {
     if (/javascript:/i.test(value)) return undefined;
     if (ctx.key === 'formatter') {
-      if (ctx.inTooltip || isFunctionLikeString(value)) return undefined;
+      if (ctx.inTooltip) return undefined;
       return value;
     }
     if (RESOURCE_KEYS.has(ctx.key) && isDangerousResource(value)) return undefined;
@@ -462,76 +431,43 @@ const attachTooltipFormatters = (option: Record<string, any>) => {
   (Array.isArray(option.series) ? option.series : []).forEach(apply);
 };
 
-const countSeriesData = (series: Record<string, any>[]) => (
-  series.reduce((sum, item) => sum + (Array.isArray(item.data) ? item.data.length : 0), 0)
-);
-
-export interface SanitizeChartLimits {
-  maxSeries?: number;
-  maxDataPoints?: number;
-  maxSerialized?: number;
-}
-
-/**
- * 字段统计的 option 由前端按后端固定语义包构造，容量已被后端的时间桶和 top_n 上限约束，
- * 不该套用防 LLM 失控的阈值；消毒规则本身仍然全部生效。
- */
-export const FIELD_STATISTICS_LIMITS: SanitizeChartLimits = {
-  maxSeries: 24,
-  maxDataPoints: 60000,
-  maxSerialized: 4 * 1024 * 1024,
+/** ECharts 5.4 DataView 会把这些文案直接写入 innerHTML。 */
+const escapeDataViewHtmlSinks = (value: unknown, depth = 0) => {
+  if (depth > MAX_DEPTH || !value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach(item => escapeDataViewHtmlSinks(item, depth + 1));
+    return;
+  }
+  const option = value as Record<string, any>;
+  const toolboxes = Array.isArray(option.toolbox) ? option.toolbox : [option.toolbox];
+  toolboxes.filter(isRecord).forEach((toolbox) => {
+    const feature = toolbox.feature;
+    if (!isRecord(feature) || !isRecord(feature.dataView)) return;
+    const dataView = feature.dataView;
+    if (typeof dataView.title === 'string') dataView.title = escapeHtml(dataView.title);
+    if (Array.isArray(dataView.lang)) {
+      dataView.lang = dataView.lang.map(item => (
+        typeof item === 'string' ? escapeHtml(item) : item
+      ));
+    }
+  });
+  Object.values(option).forEach(item => escapeDataViewHtmlSinks(item, depth + 1));
 };
 
-export const sanitizeChartOption = (
-  raw: unknown,
-  limits: SanitizeChartLimits = {},
-): SanitizeChartResult => {
-  const maxSeries = limits.maxSeries ?? MAX_SERIES;
-  const maxDataPoints = limits.maxDataPoints ?? MAX_DATA_POINTS;
-  const maxSerialized = limits.maxSerialized ?? MAX_SERIALIZED;
-
+export const sanitizeChartOption = (raw: unknown): SanitizeChartResult => {
   if (!isRecord(raw)) {
     return { option: null, errorCode: 'INVALID_STRUCTURE' };
   }
 
-  let serialized = '';
-  try {
-    serialized = JSON.stringify(raw);
-  } catch {
-    return { option: null, errorCode: 'INVALID_STRUCTURE' };
-  }
-  if (!serialized) {
-    return { option: null, errorCode: 'INVALID_STRUCTURE' };
-  }
-  if (serialized.length > maxSerialized) {
-    return { option: null, errorCode: 'TOO_LARGE' };
-  }
-
-  const option = emptyObject();
-  Object.keys(raw).forEach((key) => {
-    if (!TOP_LEVEL_ALLOW.has(key) || DROP_KEYS.has(key)) return;
-    const sanitized = sanitizeValue(raw[key], {
-      depth: 1,
-      key,
-      inTooltip: key === 'tooltip',
-      inTitle: key === 'title',
-    });
-    if (sanitized !== undefined) option[key] = sanitized;
+  const option = sanitizeValue(raw, {
+    depth: 0,
+    key: '',
+    inTooltip: false,
+    inTitle: false,
   });
-
-  const seriesSource = Array.isArray(option.series)
-    ? option.series
-    : isRecord(option.series) ? [option.series] : [];
-  const series = seriesSource.filter(item => (
-    isRecord(item) && SERIES_TYPES.has(String(item.type || ''))
-  ));
-  if (!series.length) {
+  if (!isRecord(option)) {
     return { option: null, errorCode: 'INVALID_STRUCTURE' };
   }
-  if (series.length > maxSeries || countSeriesData(series) > maxDataPoints) {
-    return { option: null, errorCode: 'TOO_LARGE' };
-  }
-  option.series = series;
 
   resolveAllowedFormatters(option);
   stripRemainingFnSpecs(option);
@@ -539,5 +475,6 @@ export const sanitizeChartOption = (
   ensureIsoCategoryDisplay(option.yAxis);
   attachTooltipFormatters(option);
   attachDataZoomLabels(option);
+  escapeDataViewHtmlSinks(option);
   return { option, errorCode: null };
 };

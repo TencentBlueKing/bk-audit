@@ -268,7 +268,7 @@
             <div class="action-section">
               <span
                 v-bk-tooltips="{
-                  content: t('正在生成中'),
+                  content: t('正在分析中...'),
                   disabled: !analyzeActionDisabled,
                 }"
                 class="action-btn-wrap">
@@ -276,7 +276,7 @@
                   class="analyze-btn"
                   :disabled="analyzeActionDisabled"
                   outline
-                  @click="analyzeDialogShow = true">
+                  @click="handleAnalyze">
                   <img
                     alt=""
                     class="ai-agent-ai"
@@ -288,7 +288,7 @@
               </span>
               <span
                 v-bk-tooltips="{
-                  content: t('正在生成中'),
+                  content: t('正在统计中...'),
                   disabled: !statisticsActionDisabled,
                 }"
                 class="action-btn-wrap">
@@ -314,40 +314,66 @@
                 :key="item.id"
                 class="report-status-row"
                 :class="`is-${item.status}`">
-                <template v-if="item.status === 'loading'">
-                  <span class="status-loading-wrap">
-                    <audit-icon
-                      class="status-icon is-loading"
-                      type="loading" />
-                    <span class="status-text">{{ reportStatusText(item) }}</span>
-                  </span>
-                </template>
-                <template v-else-if="item.status === 'failed'">
+                <audit-icon
+                  v-if="item.status === 'loading'"
+                  class="status-icon is-loading"
+                  type="loading" />
+                <audit-icon
+                  v-else-if="item.status === 'failed'"
+                  class="status-icon is-failed"
+                  type="delete-fill" />
+                <audit-icon
+                  v-else
+                  class="status-icon is-success"
+                  type="completed" />
+                <span class="status-main">
                   <span
-                    v-bk-tooltips="item.errorMessage || reportStatusText(item)"
-                    class="status-failed-wrap">
-                    <audit-icon
-                      class="status-icon is-failed"
-                      type="delete-fill" />
-                    <span class="status-text">{{ reportStatusText(item) }}</span>
+                    v-bk-tooltips="{
+                      content: item.errorMessage || '',
+                      disabled: item.status !== 'failed' || !item.errorMessage,
+                    }"
+                    class="status-text"
+                    :class="{ 'is-error-tip': item.status === 'failed' && Boolean(item.errorMessage) }">
+                    {{ reportStatusText(item) }}
                   </span>
-                  <button
-                    class="view-report-btn"
-                    :disabled="item.retrying"
-                    type="button"
-                    @click="handleRetryReport(item)">
-                    <audit-icon
-                      class="view-icon"
-                      :class="{ 'is-loading': item.retrying }"
-                      type="refresh" />
-                    {{ item.type === 'statistics' ? t('重新统计') : t('重新分析') }}
-                  </button>
-                </template>
-                <template v-else>
+                  <bk-popover
+                    v-if="item.status !== 'loading' && reportModeKind(item)"
+                    ext-cls="report-mode-tip-popover"
+                    :is-show="isReportModeTipOpen(item)"
+                    :max-width="320"
+                    placement="top"
+                    theme="dark"
+                    trigger="manual">
+                    <span
+                      class="report-mode-tag-wrap"
+                      @mouseenter="showReportModeTip(item)"
+                      @mouseleave="hideReportModeTip(item)">
+                      <bk-tag
+                        class="report-mode-tag"
+                        :class="isReportModeYellow(item) ? 'is-field' : 'is-nl'"
+                        size="small"
+                        :theme="isReportModeYellow(item) ? 'warning' : 'info'">
+                        {{ reportModeLabel(item) }}
+                      </bk-tag>
+                    </span>
+                    <template #content>
+                      <div class="report-mode-tip-text">{{ item.modeTip }}</div>
+                    </template>
+                  </bk-popover>
+                </span>
+                <button
+                  v-if="item.status === 'failed'"
+                  class="view-report-btn"
+                  :disabled="item.retrying"
+                  type="button"
+                  @click="handleRetryReport(item)">
                   <audit-icon
-                    class="status-icon is-success"
-                    type="completed" />
-                  <span class="status-text">{{ reportStatusText(item) }}</span>
+                    class="view-icon"
+                    :class="{ 'is-loading': item.retrying }"
+                    type="refresh" />
+                  {{ item.type === 'statistics' ? t('重新统计') : t('重新分析') }}
+                </button>
+                <template v-else-if="item.status === 'done'">
                   <span class="status-time">{{ item.createdAt }}</span>
                   <button
                     class="view-report-btn"
@@ -431,6 +457,8 @@
       v-if="analyzeDialogShow"
       v-model="analyzeDialogShow"
       :conditions="displayResult.conditions"
+      :custom-prompt-preset="analyzeCustomPreset"
+      :focus-custom="analyzeFocusCustom"
       :submitting="analyzeSubmitting"
       :total-hit="displayResult.totalHit"
       @select="handleAnalyzeSelect" />
@@ -439,6 +467,8 @@
       v-if="statisticsDialogShow"
       v-model="statisticsDialogShow"
       :condition="displayResult.rawCondition || null"
+      :custom-prompt-preset="statisticsCustomPreset"
+      :focus-custom="statisticsFocusCustom"
       :submit-error="statisticsSubmitError"
       :submitting="statisticsSubmitting"
       @select="handleStatisticsSelect" />
@@ -517,7 +547,8 @@
     exportLogSearchPreview,
     PREVIEW_EXPORT_LIMIT,
   } from '../utils/export-log-search';
-  import { isStatisticsAttachmentType } from '../utils/map-statistics-output';
+  import { resolveAnalyzeSubmit } from '../utils/build-analyze-retry-input';
+  import { isFieldStatisticsType, isStatisticsAttachmentType } from '../utils/map-statistics-output';
   import { formatStatisticsInputError } from '../utils/statistics-input-error';
   import JsonFieldPreview from './json-field-preview.vue';
   import LogAnalyzeDialog from './log-analyze-dialog.vue';
@@ -581,6 +612,9 @@
     executionId?: string | null;
     attachmentType?: AiAttachmentType;
     outputData?: AiAttachmentOutputData;
+    /** 统计字段路径，或自然语言要求；列表接口没有时先留空 */
+    modeTip?: string;
+    modeTipReady?: boolean;
   }
 
   /** 多列时保证列宽可读，超出横向滚动 */
@@ -866,7 +900,16 @@
   const feedback = ref<'up' | 'down' | ''>('');
   const analyzeDialogShow = ref(false);
   const analyzeSubmitting = ref(false);
+  const analyzeCustomPreset = ref('');
+  const analyzeFocusCustom = ref(false);
+  /** 从失败行打开的重新分析；确认后 retry 原 uid。新建分析时清空 */
+  const analyzeRetryTarget = ref<{
+    uid: string;
+    inputData: Record<string, any>;
+  } | null>(null);
   const statisticsDialogShow = ref(false);
+  const statisticsCustomPreset = ref('');
+  const statisticsFocusCustom = ref(false);
   const statisticsSubmitting = ref(false);
   const statisticsSubmitError = ref('');
   const reportItems = ref<ReportStatusItem[]>([]);
@@ -916,6 +959,103 @@
     if (item.status === 'loading') return t('智能分析中...');
     if (item.status === 'failed') return t('智能分析失败');
     return t('智能分析已生成');
+  };
+
+  /** 字段统计、智能分析报告是黄标签；自定义统计和自定义分析是蓝标签 */
+  const reportModeKind = (item: ReportStatusItem): 'field' | 'nl' | '' => {
+    if (isFieldStatisticsType(item.attachmentType)) return 'field';
+    if (item.attachmentType === 'AI_STATISTICS' || item.attachmentType === 'AI_ANALYSIS') return 'nl';
+    return '';
+  };
+
+  const isReportModeYellow = (item: ReportStatusItem) => (
+    reportModeKind(item) === 'field'
+    || (item.attachmentType === 'AI_ANALYSIS' && item.analysisMode !== 'CUSTOM')
+  );
+
+  const reportModeLabel = (item: ReportStatusItem) => {
+    if (reportModeKind(item) === 'field') return t('统计字段');
+    if (item.attachmentType === 'AI_STATISTICS') return t('自定义统计');
+    if (item.analysisMode === 'CUSTOM') return t('自定义分析');
+    return t('智能分析报告');
+  };
+
+  const formatFieldModeTip = (field?: {
+    raw_name?: string;
+    keys?: string[];
+    display_name?: string;
+  } | null) => {
+    if (!field) return '';
+    const keys = Array.isArray(field.keys) ? field.keys.map(key => String(key)).filter(Boolean) : [];
+    const path = [field.raw_name, ...keys].filter(Boolean).join('.');
+    const displayName = String(field.display_name || '');
+    if (displayName && path && displayName !== path) return `${displayName}（${path}）`;
+    return displayName || path;
+  };
+
+  const buildReportModeTip = (attachment: AiAttachment) => {
+    if (isFieldStatisticsType(attachment.attachment_type)) {
+      const output = attachment.output_data;
+      const outputField = output && typeof output === 'object' && !Array.isArray(output)
+        ? (output as { field?: { raw_name?: string; keys?: string[]; display_name?: string } }).field
+        : null;
+      const inputField = attachment.input_data?.field as {
+        raw_name?: string;
+        keys?: string[];
+        display_name?: string;
+      } | undefined;
+      return formatFieldModeTip({
+        raw_name: outputField?.raw_name || inputField?.raw_name,
+        keys: outputField?.keys || inputField?.keys,
+        display_name: outputField?.display_name || inputField?.display_name,
+      });
+    }
+    if (attachment.attachment_type === 'AI_STATISTICS' || attachment.attachment_type === 'AI_ANALYSIS') {
+      return String(attachment.input_data?.instruction || '');
+    }
+    return '';
+  };
+
+  const modeTipHoverId = ref('');
+  const modeTipInflight = new Set<string>();
+
+  const showReportModeTip = (item: ReportStatusItem) => {
+    modeTipHoverId.value = item.id;
+    void ensureReportModeTip(item);
+  };
+
+  const hideReportModeTip = (item: ReportStatusItem) => {
+    if (modeTipHoverId.value === item.id) modeTipHoverId.value = '';
+  };
+
+  const isReportModeTipOpen = (item: ReportStatusItem) => (
+    modeTipHoverId.value === item.id && Boolean(item.modeTip)
+  );
+
+  /** 列表没有字段和 prompt，悬停时再读详情；读不到就只留标签 */
+  const ensureReportModeTip = async (item: ReportStatusItem) => {
+    if (!reportModeKind(item) || item.modeTipReady || modeTipInflight.has(item.id)) return;
+    if (item.id.startsWith('pending-')) return;
+    modeTipInflight.add(item.id);
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      const current = reportItems.value.find(row => row.id === item.id);
+      if (!current) return;
+      upsertReport({
+        ...current,
+        modeTip: buildReportModeTip(detail),
+        modeTipReady: true,
+        ...(detail.input_data?.analysis_mode
+          ? { analysisMode: String(detail.input_data.analysis_mode) }
+          : {}),
+      });
+    } catch {
+      // 详情暂时拿不到时保留标签，下次悬停再试
+    } finally {
+      modeTipInflight.delete(item.id);
+    }
   };
 
   const systemNames = computed(() => {
@@ -1030,6 +1170,8 @@
     const status = resolveReportStatus(attachment.status);
     const detail = attachment as AiAttachment;
     const isStats = isStatisticsAttachmentType(attachment.attachment_type);
+    const hasModeSource = Object.prototype.hasOwnProperty.call(attachment, 'input_data')
+      || Object.prototype.hasOwnProperty.call(attachment, 'output_data');
     return {
       id: attachment.uid,
       type: isStats ? 'statistics' : 'analyze',
@@ -1045,6 +1187,11 @@
       retrying: false,
       attachmentType: attachment.attachment_type,
       outputData: detail.output_data || null,
+      modeTip: hasModeSource ? buildReportModeTip(detail) : '',
+      modeTipReady: hasModeSource,
+      ...(detail.input_data?.analysis_mode
+        ? { analysisMode: String(detail.input_data.analysis_mode) }
+        : {}),
     };
   };
 
@@ -1239,12 +1386,18 @@
   };
 
   const handleAnalyzeSelect = async (payload: { type: 'recommend' | 'custom'; title: string; prompt?: string }) => {
+    if (analyzeSubmitting.value) return;
+    const retryTarget = analyzeRetryTarget.value;
+    if (resolveAnalyzeSubmit(retryTarget, payload).action === 'retry' && retryTarget) {
+      await submitAnalyzeRetry(retryTarget, payload);
+      return;
+    }
+    analyzeRetryTarget.value = null;
     const messageUid = displayMessageUid.value || props.messageUid;
     if (!messageUid) {
       messageWarn(t('缺少结果消息无法分析'));
       return;
     }
-    if (analyzeSubmitting.value) return;
     const isCustom = payload.type === 'custom';
     const params: AiCreateAttachmentParams = isCustom
       ? {
@@ -1270,6 +1423,9 @@
       title: t('智能分析中'),
       createdAt: '',
       status: 'loading',
+      attachmentType: 'AI_ANALYSIS',
+      modeTip: isCustom ? (payload.prompt || '') : '',
+      modeTipReady: true,
     };
 
     analyzeSubmitting.value = true;
@@ -1305,10 +1461,125 @@
     }
   };
 
+  /**
+   * 重新分析确认：POST 原附件 retry，带上完整 input_data，原地更新同一行。
+   * 校验失败保留原结果并重新打开草稿。
+   */
+  const submitAnalyzeRetry = async (
+    target: { uid: string; inputData: Record<string, any> },
+    payload: { type: 'recommend' | 'custom'; prompt?: string },
+  ) => {
+    const item = reportItems.value.find(current => current.id === target.uid);
+    if (!item || item.retrying || item.status === 'loading') return;
+    const decision = resolveAnalyzeSubmit(target, payload);
+    if (decision.action !== 'retry') return;
+    const previousStatus = item.status;
+    const isCustom = payload.type === 'custom';
+    const inputData = decision.inputData;
+    analyzeSubmitting.value = true;
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: t('智能分析中'),
+      errorMessage: '',
+      modeTip: isCustom ? (payload.prompt || '') : '',
+      modeTipReady: true,
+    });
+    stopFollow(item.id);
+    markPendingAutoOpen(item.id);
+    analyzeDialogShow.value = false;
+    const previousExecutionId = await resolvePreviousExecutionId(item.id, item.executionId);
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: target.uid,
+        input_data: inputData,
+      }, { catchError: true });
+      analyzeRetryTarget.value = null;
+      applyAttachmentDetail(attachment);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, previousExecutionId);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: previousStatus,
+        errorMessage: error?.message || item.errorMessage,
+      });
+      analyzeCustomPreset.value = isCustom
+        ? (payload.prompt || '')
+        : String(target.inputData?.instruction || '');
+      analyzeFocusCustom.value = isCustom;
+      analyzeDialogShow.value = true;
+      messageError(error?.message || t('创建分析失败'));
+    } finally {
+      analyzeSubmitting.value = false;
+    }
+  };
+
+  const handleAnalyze = () => {
+    if (analyzeActionDisabled.value) return;
+    analyzeRetryTarget.value = null;
+    analyzeCustomPreset.value = '';
+    analyzeFocusCustom.value = false;
+    analyzeDialogShow.value = true;
+  };
+
   const handleStatistics = () => {
     if (statisticsActionDisabled.value) return;
     statisticsSubmitError.value = '';
+    statisticsCustomPreset.value = '';
+    statisticsFocusCustom.value = false;
     statisticsDialogShow.value = true;
+  };
+
+  const openCustomAnalyzeDialog = (prompt: string) => {
+    analyzeCustomPreset.value = prompt;
+    analyzeFocusCustom.value = true;
+    analyzeDialogShow.value = true;
+  };
+
+  const openCustomStatisticsDialog = (prompt: string) => {
+    statisticsSubmitError.value = '';
+    statisticsCustomPreset.value = prompt;
+    statisticsFocusCustom.value = true;
+    statisticsDialogShow.value = true;
+  };
+
+  /**
+   * 列表只有 attachment_type。字段统计可直接重试；
+   * 自定义统计是 AI_STATISTICS，自定义分析要读详情里的 analysis_mode。
+   */
+  const resolveCustomPrompt = async (item: ReportStatusItem) => {
+    if (item.type === 'statistics' && isFieldStatisticsType(item.attachmentType)) return null;
+    try {
+      const detail = await AiAssistantManageService.fetchAttachment({
+        attachment_uid: item.id,
+      }, { catchError: true });
+      if (isFieldStatisticsType(detail.attachment_type)) return null;
+      if (detail.attachment_type === 'AI_STATISTICS') {
+        return {
+          kind: 'statistics' as const,
+          prompt: String(detail.input_data?.instruction || ''),
+        };
+      }
+      if (item.type === 'analyze' && detail.input_data?.analysis_mode === 'CUSTOM') {
+        return {
+          kind: 'analyze' as const,
+          prompt: String(detail.input_data?.instruction || ''),
+          inputData: detail.input_data,
+        };
+      }
+    } catch {
+      if (item.attachmentType === 'AI_STATISTICS') {
+        return { kind: 'statistics' as const, prompt: '' };
+      }
+    }
+    return null;
   };
 
   const handleStatisticsSelect = async (payload: StatisticsSelectPayload) => {
@@ -1352,6 +1623,8 @@
       createdAt: '',
       status: 'loading',
       attachmentType: isCustom ? 'AI_STATISTICS' : 'FIELD_STATISTICS',
+      modeTip: isCustom ? (payload.prompt || '') : formatFieldModeTip(payload.field),
+      modeTipReady: true,
     };
 
     statisticsSubmitting.value = true;
@@ -1410,6 +1683,23 @@
   /** 后端 SUCCESS 与 FAILED 都可重试，统计在抽屉里走同一条重新生成链路 */
   const handleRetryReport = async (item: ReportStatusItem) => {
     if (item.retrying || item.status === 'loading') return;
+    const custom = await resolveCustomPrompt(item);
+    if (custom?.kind === 'statistics') {
+      statisticsDrawerShow.value = false;
+      openCustomStatisticsDialog(custom.prompt);
+      return;
+    }
+    if (custom?.kind === 'analyze') {
+      reportDrawerShow.value = false;
+      analyzeRetryTarget.value = {
+        uid: item.id,
+        inputData: custom.inputData && typeof custom.inputData === 'object'
+          ? { ...custom.inputData }
+          : {},
+      };
+      openCustomAnalyzeDialog(custom.prompt);
+      return;
+    }
     const isStats = item.type === 'statistics';
     const previousStatus = item.status;
     upsertReport({
@@ -1959,7 +2249,8 @@
     }
 
     .status-loading-wrap,
-    .status-failed-wrap {
+    .status-failed-wrap,
+    .status-main {
       display: inline-flex;
       min-width: 0;
       cursor: default;
@@ -1987,19 +2278,57 @@
     }
 
     .status-text {
-      min-width: 0;
+      /* 按最长文案「智能分析已生成」占位，失败等短文案也把标签留在同一列 */
+      min-width: 7em;
       overflow: hidden;
       font-size: var(--audit-font-size-sm);
       line-height: var(--audit-line-height-sm);
       color: var(--audit-neutral-text-02);
       text-overflow: ellipsis;
       white-space: nowrap;
-      flex: 1;
+      flex: 0 1 auto;
     }
 
     &.is-done .status-text,
     &.is-failed .status-text {
       color: var(--audit-neutral-text-01);
+    }
+
+    .status-text.is-error-tip {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dashed;
+      text-underline-offset: 5px;
+    }
+
+    .report-mode-tag-wrap {
+      display: inline-flex;
+      flex-shrink: 0;
+    }
+
+    :deep(.report-mode-tag.bk-tag) {
+      height: 20px;
+      padding: 0 var(--audit-space-8);
+      font-size: var(--audit-font-size-sm);
+      line-height: 18px;
+      border-radius: var(--audit-radius-control);
+      cursor: default;
+
+      &.is-field {
+        color: var(--audit-warn-01);
+        background: var(--audit-warn-07);
+        border-color: var(--audit-warn-05);
+      }
+    }
+
+    .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info) {
+      color: var(--audit-brand-01);
+      background-color: var(--audit-brand-06);
+      border-color: var(--audit-brand-05);
+    }
+
+    .report-mode-tag-wrap :deep(.bk-tag.bk-tag-info:hover) {
+      background-color: var(--audit-brand-05);
     }
 
     .status-time {
@@ -2155,5 +2484,27 @@
       max-height: 32px !important;
       min-height: 32px !important;
     }
+  }
+</style>
+<style lang="postcss">
+  .report-mode-tip-popover .report-mode-tip-text {
+    max-width: 320px;
+    max-height: 180px;
+    overflow: auto;
+    line-height: 20px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* 默认用原悬停色 #E1ECFF；悬停再深一档，避免和默认色相同 */
+  .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info {
+    color: var(--audit-brand-01);
+    background-color: var(--audit-brand-06);
+    border-color: var(--audit-brand-05);
+  }
+
+  .retrieval-result-card .report-mode-tag-wrap .bk-tag.bk-tag-info:hover {
+    background-color: var(--audit-brand-05);
   }
 </style>
