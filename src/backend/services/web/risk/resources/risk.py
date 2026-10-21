@@ -2195,11 +2195,19 @@ def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
     if risk.display_status in (RiskDisplayStatus.AWAIT_PROCESS, RiskDisplayStatus.PROCESSING):
         return set(_PROCESS_ACTIONS)
     if risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED:
+        # 已误报关单的单子不能再次误报（MisReport.pre_check 要求 risk_label 为正常），仅正常关单可标记误报
+        if risk.risk_label == RiskLabel.MISREPORT:
+            return set()
         return set(_CLOSED_ACTIONS)
     return set()
 
 
 def _status_label(risk: Risk) -> str:
+    # 已关单且标记误报：单独标识为"已误报"，与普通关单区分（批量误报只放行正常关单）
+    if (
+        risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED
+    ) and risk.risk_label == RiskLabel.MISREPORT:
+        return gettext("已误报")
     display = getattr(risk, "display_status", None)
     if display in RiskDisplayStatus.values:
         return value_to_label(RiskDisplayStatus, display)
