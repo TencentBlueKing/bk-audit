@@ -256,6 +256,17 @@ def build_render_context(risk: Optional[Risk] = None, events: Optional[List[dict
     return context
 
 
+def _normalize_field_type(value: Any) -> str:
+    """
+    归一化 BKSEC 字段类型
+
+    接口返回的是 storage_type，且大小写不统一（同时存在 STRING / string），统一转小写后输出为 type。
+    已知取值：string / int / object / timestamp；未知取值原样小写返回，不丢弃信息。
+    接口未返回类型时保持为空串，由前端自行决定缺省渲染方式。
+    """
+    return str(value or "").strip().lower()
+
+
 def _extract_risk_access_fields(item: dict) -> list:
     """
     从风险类型对象中抽取工单字段 schema（risk_access_fields）
@@ -271,11 +282,12 @@ def _extract_risk_access_fields(item: dict) -> list:
     }
     required 由审计中心按白名单 BKSEC_REQUIRED_FIELD_KEYS 判定（BKSEC 不返回该字段）：
     target / target_type / operator 为必填，其余一律非必填。
+    type 取自接口的 storage_type 并归一化小写（string / int / object / timestamp）。
 
     返回值示例：
     [
-        {"key": "target", "name": "风险资产信息", "required": True},
-        {"key": "submitter", "name": "提单人", "required": False},
+        {"key": "target", "name": "风险资产信息", "required": True, "type": "string"},
+        {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
     ]
     """
     if not isinstance(item, dict):
@@ -292,6 +304,7 @@ def _extract_risk_access_fields(item: dict) -> list:
                     "key": key,
                     "name": f.get("name", "") or f.get("label", ""),
                     "required": key in BKSEC_REQUIRED_FIELD_KEYS,
+                    "type": _normalize_field_type(f.get("type") or f.get("storage_type", "")),
                 }
             )
     return fields
@@ -318,9 +331,9 @@ def _normalize_risk_type(item: dict) -> dict:
         "risk_type_name": "云账号未启用MFA",
         "is_formal": True,
         "fields": [
-            {"key": "submitter", "name": "提单人", "required": False},
+            {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
         ]
-    }
+        }
     """
     if not isinstance(item, dict):
         return {}
