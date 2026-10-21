@@ -105,7 +105,7 @@ class TestBatchActionsPreview(BaseTestCase):
         resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id, r2.risk_id])
         self.assertFalse(resp["batch_enabled"])
         self.assertFalse(resp["actions"]["trans"]["enabled"])
-        self.assertEqual(resp["batch_disabled_reason"], "所选风险无法批量处理")
+        self.assertEqual(resp["batch_disabled_reason"], "所选风险包含新、待处理，不支持批量处理")
         self.assertEqual(resp["actions"]["trans"]["disabled_reason"], "所选风险包含新，不支持转单")
         self.assertEqual(resp["actions"]["close"]["disabled_reason"], "所选风险包含新，不支持人工关单")
 
@@ -128,14 +128,30 @@ class TestBatchActionsPreview(BaseTestCase):
         self.assertFalse(resp["actions"]["confirm"]["enabled"])
 
     def test_closed_misreport_label_disables_misreport(self):
-        """标记误报关单的单子 risk_label=misreport，不能再批量误报"""
+        """标记误报关单的单子 risk_label=misreport，不能再批量误报，但可解除误报"""
         r1 = self._mk(1, RiskStatus.CLOSED)
         Risk.objects.filter(risk_id=r1.risk_id).update(risk_label=RiskLabel.MISREPORT)
         resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id])
-        self.assertFalse(resp["batch_enabled"])
-        self.assertEqual(resp["batch_disabled_reason"], "所选风险无法批量处理")
+        self.assertTrue(resp["batch_enabled"])
+        self.assertEqual(resp["batch_disabled_reason"], "")
         self.assertFalse(resp["actions"]["misreport"]["enabled"])
         self.assertEqual(resp["actions"]["misreport"]["disabled_reason"], "所选风险包含已误报，不支持误报")
+        self.assertTrue(resp["actions"]["unmisreport"]["enabled"])
+        self.assertEqual(resp["actions"]["unmisreport"]["disabled_reason"], "")
+
+    def test_closed_only_disables_unmisreport(self):
+        """普通关单（未标记误报）不可解除误报"""
+        r1 = self._mk(1, RiskStatus.CLOSED)
+        resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id])
+        self.assertFalse(resp["actions"]["unmisreport"]["enabled"])
+        self.assertEqual(resp["actions"]["unmisreport"]["disabled_reason"], "所选风险包含已关单，不支持解除误报")
+
+    def test_await_process_disables_unmisreport(self):
+        r1 = self._mk(1, RiskStatus.AWAIT_PROCESS)
+        resp = resource.risk.batch_actions_preview(risk_ids=[r1.risk_id])
+        self.assertTrue(resp["batch_enabled"])
+        self.assertFalse(resp["actions"]["unmisreport"]["enabled"])
+        self.assertEqual(resp["actions"]["unmisreport"]["disabled_reason"], "所选风险包含待处理，不支持解除误报")
 
     def test_mixed_closed_normal_and_misreport_disables_misreport(self):
         risks = [
@@ -143,9 +159,13 @@ class TestBatchActionsPreview(BaseTestCase):
             _stub(RiskDisplayStatus.CLOSED, RiskStatus.CLOSED, risk_label=RiskLabel.MISREPORT),
         ]
         resp = _build_batch_actions_preview(risks)
+        # 正常关单只有误报、已误报只有解除误报，交集为空
         self.assertFalse(resp["batch_enabled"])
+        self.assertEqual(resp["batch_disabled_reason"], "所选风险包含已关单、已误报，不支持批量处理")
         self.assertFalse(resp["actions"]["misreport"]["enabled"])
         self.assertEqual(resp["actions"]["misreport"]["disabled_reason"], "所选风险包含已误报，不支持误报")
+        self.assertFalse(resp["actions"]["unmisreport"]["enabled"])
+        self.assertEqual(resp["actions"]["unmisreport"]["disabled_reason"], "所选风险包含已关单，不支持解除误报")
 
     def test_over_limit_returns_reason(self):
         with self.assertRaises(BulkSelectionOverLimit) as caught:

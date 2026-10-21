@@ -155,6 +155,7 @@ from services.web.risk.serializers import (
     BulkCloseReqSerializer,
     BulkCustomTransRiskReqSerializer,
     BulkMisreportReqSerializer,
+    BulkUnmisreportReqSerializer,
     ConfirmAsMisReportRequestSerializer,
     ConfirmRiskRequestSerializer,
     CustomAutoProcessReqSerializer,
@@ -1971,18 +1972,19 @@ BATCH_REASON_STRATEGY_SCENE = "所选风险策略不同/场景不同，不支持
 BATCH_REASON_MISSING = "部分风险不存在或已被删除"
 BATCH_REASON_UNAVAILABLE = "所选风险无法批量处理"
 
-# 文案复用已有名称：确认/关单/转单/误报来自流转处理器，处理套餐来自场景资源类型。
 _ACTION_LABELS = {
     "confirm": ConfirmRisk.name,
     "close": CustomCloseRisk.name,
     "trans": TransOperator.name,
     "auto_process": ResourceVisibilityType.PROCESS_APPLICATION.label,
     "misreport": MisReport.name,
+    "unmisreport": ReOpenMisReport.name,
 }
 _BATCH_ACTIONS = tuple(_ACTION_LABELS)
 _PROCESS_ACTIONS = frozenset({"close", "trans", "auto_process", "misreport"})
 _CONFIRM_ACTIONS = frozenset({"confirm", "misreport"})
 _CLOSED_ACTIONS = frozenset({"misreport"})
+_MISREPORT_CLOSED_ACTIONS = frozenset({"unmisreport"})
 _BLOCKING_STATUS = frozenset({RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS})
 _BLOCKING_DISPLAY = frozenset({RiskDisplayStatus.FOR_APPROVE, RiskDisplayStatus.AUTO_PROCESS})
 
@@ -2162,15 +2164,13 @@ def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
     if risk.display_status in (RiskDisplayStatus.AWAIT_PROCESS, RiskDisplayStatus.PROCESSING):
         return set(_PROCESS_ACTIONS)
     if risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED:
-        # 已误报关单的单子不能再次误报（MisReport.pre_check 要求 risk_label 为正常），仅正常关单可标记误报
         if risk.risk_label == RiskLabel.MISREPORT:
-            return set()
+            return set(_MISREPORT_CLOSED_ACTIONS)
         return set(_CLOSED_ACTIONS)
     return set()
 
 
 def _status_label(risk: Risk) -> str:
-    # 已关单且标记误报：单独标识为"已误报"，与普通关单区分（批量误报只放行正常关单）
     if (
         risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED
     ) and risk.risk_label == RiskLabel.MISREPORT:
@@ -2281,7 +2281,16 @@ def _build_batch_actions_preview(risks: Sequence[Risk]) -> Dict[str, Any]:
 
     batch_reason = ""
     if not allowed:
-        batch_reason = gettext(BATCH_REASON_UNAVAILABLE)
+        # 整批无公共可用动作时，汇聚各风险的展示状态，给出具体原因而非笼统文案
+        labels = []
+        for risk in risks:
+            label = _status_label(risk)
+            if label and label not in labels:
+                labels.append(label)
+        if labels:
+            batch_reason = gettext("所选风险包含%(statuses)s，不支持批量处理") % {"statuses": "、".join(labels)}
+        else:
+            batch_reason = gettext(BATCH_REASON_UNAVAILABLE)
 
     def token_int(unique: bool, token: Optional[str]) -> Optional[int]:
         if not unique or not token:
@@ -2471,6 +2480,45 @@ class BulkMisreportResource(RiskMeta):
             MisReport(risk_id=item["risk_id"], operator=item["operator"]).run(
                 description=item["description"], revoke_process=item["revoke_process"]
             )
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, run_item)
+
+
+class BulkUnmisreportResource(RiskMeta):
+    """批量解除误报：已关单且标签为误报的风险解除误报并按原流程重开。"""
+
+    name = gettext_lazy("批量解除误报")
+    RequestSerializer = BulkUnmisreportReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import (
+            normalize_personnel_refs,
+            resolve_personnel_refs,
+        )
+
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        raw_refs = validated_request_data.get("new_operators") or []
+        username = get_request_username()
+
+        try:
+            normalize_personnel_refs(raw_refs)
+        except Exception as exc:
+            return _fail_all(risk_ids, gettext("人员参数非法：%(error)s") % {"error": exc})
+
+        def build(risk):
+            reject = _reject_reason("unmisreport", risk)
+            if reject:
+                return _Reject(reject)
+            # 未指定处理人时沿用当前处理人，保证重开后单据仍有人跟进
+            operators = resolve_personnel_refs(raw_refs, risk=risk) if raw_refs else list(risk.current_operator or [])
+            if not operators:
+                return _Reject(gettext("解除误报后处理人为空，请指定处理人"))
+            return {"risk_id": risk.risk_id, "new_operators": operators, "operator": username}
+
+        def run_item(item):
+            ReOpenMisReport(risk_id=item["risk_id"], operator=item["operator"]).run(new_operators=item["new_operators"])
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
         return _complete_bulk(payloads, failed, run_item)

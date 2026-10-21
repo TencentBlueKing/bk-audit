@@ -2203,6 +2203,18 @@ class BulkMisreportReqSerializer(BulkRiskSelectionSerializer):
     revoke_process = serializers.BooleanField(required=False, default=True)
 
 
+class BulkUnmisreportReqSerializer(BulkRiskSelectionSerializer):
+    """批量解除误报：仅已关单且标签为误报的风险可执行"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        required=False,
+        default=list,
+    )
+
+
 class BulkAutoProcessReqSerializer(BulkRiskSelectionSerializer):
     """批量执行处理套餐"""
 
