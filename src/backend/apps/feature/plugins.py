@@ -77,19 +77,23 @@ class BksecPlugin(BaseFeaturePlugin):
     BKSEC 安全工单特性插件
 
     特性开启需同时满足：
-      1. 必配环境变量齐全：BKSEC_PROJECT_ID（风险类型下拉维度）、
-         BKSEC_SOPS_TEMPLATE_ID（预置发单套餐模板）；
+      1. 必配环境变量齐全：
+         BKSEC_PROJECT_ID（风险类型下拉维度）、
+         BKSEC_SOPS_TEMPLATE_ID（预置发单套餐模板）、
+         BKSEC_PLUGIN_CONFIG_API_URL（发单插件 Config 同步地址）；
       2. 已存在内置处理套餐（ProcessApplication.is_builtin=True, sops_template_id=BKSEC_SOPS_TEMPLATE_ID），
          即发单能力就绪。
 
-    注：BKSEC_API_URL 不再强制要求，未配置时从 APIGW 推导。
     """
 
     # 必配环境变量
-    # BKSEC_API_URL 或 BK_API_URL_TMPL 至少一个配置（API 地址来源）
     REQUIRED_ENV = ("BKSEC_PROJECT_ID", "BKSEC_SOPS_TEMPLATE_ID", "BKSEC_PLUGIN_CONFIG_API_URL")
 
     def _update_status(self):
+        # 显式关闭时不做校验，保留关闭状态
+        if self.feature.status == FeatureStatusChoices.DENY.value:
+            return FeatureStatusChoices.DENY.value
+
         from services.web.risk.models import ProcessApplication
 
         # 检查必配环境变量与内置套餐

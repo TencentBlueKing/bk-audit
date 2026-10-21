@@ -27,7 +27,10 @@ from django.utils.translation import gettext_lazy
 
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
-from services.web.risk.bksec.constants import BKSEC_RENDER_EVENT_LIMIT
+from services.web.risk.bksec.constants import (
+    BKSEC_RENDER_EVENT_LIMIT,
+    BKSEC_REQUIRED_FIELD_KEYS,
+)
 from services.web.risk.constants import SECURITY_PERSON_KEY
 from services.web.risk.models import Risk
 
@@ -262,15 +265,17 @@ def _extract_risk_access_fields(item: dict) -> list:
         "name": "云账号未启用MFA",
         "is_formal": True,
         "risk_access_fields": [
-            {"key": "username", "name": "用户名", "required": True, "type": "string"},
-            {"key": "sub_uin", "name": "子账号ID", "required": False, "type": "string"},
+            {"id": 9, "key": "submitter", "name": "提单人", "sequence": 0, "storage_type": "STRING",
+             "source_type": "CUSTOM", "unique": False},
         ]
     }
+    required 由审计中心按白名单 BKSEC_REQUIRED_FIELD_KEYS 判定（BKSEC 不返回该字段）：
+    target / target_type / operator 为必填，其余一律非必填。
+
     返回值示例：
     [
-        {"key": "username", "name": "用户名", "required": True, "type": "string"},
-        {"key": "sub_uin", "name": "子账号ID", "required": False, "type": "string"},
-        {"key": "region", "name": "地域", "required": False, "type": "string"},
+        {"key": "target", "name": "风险资产信息", "required": True},
+        {"key": "submitter", "name": "提单人", "required": False},
     ]
     """
     if not isinstance(item, dict):
@@ -281,12 +286,12 @@ def _extract_risk_access_fields(item: dict) -> list:
         for f in raw_fields:
             if not isinstance(f, dict):
                 continue
+            key = f.get("key", "")
             fields.append(
                 {
-                    "key": f.get("key", ""),
+                    "key": key,
                     "name": f.get("name", "") or f.get("label", ""),
-                    "required": bool(f.get("required", False)),
-                    "type": f.get("type", ""),
+                    "required": key in BKSEC_REQUIRED_FIELD_KEYS,
                 }
             )
     return fields
@@ -294,28 +299,27 @@ def _extract_risk_access_fields(item: dict) -> list:
 
 def _normalize_risk_type(item: dict) -> dict:
     """
-        归一化 BKSEC 风险类型列表项
+    归一化 BKSEC 风险类型列表项
 
-        入参示例（来自 BKSEC risk_access_list API）：
-        {
-            "id": 159,
-            "name": "云账号未启用MFA",
-            "is_formal": True,
-            "risk_access_fields": [
-                {"key": "username", "name": "用户名", "required": True, "type": "string"},
-                {"key": "sub_uin", "name": "子账号ID", "required": False, "type": "string"},
-            ]
-        }
+    入参示例（来自 BKSEC risk_access_list API）：
+    {
+        "id": 159,
+        "name": "云账号未启用MFA",
+        "is_formal": True,
+        "risk_access_fields": [
+            {"id": 9, "key": "submitter", "name": "提单人", "sequence": 0,
+             "storage_type": "STRING", "source_type": "CUSTOM", "unique": False},
+        ]
+    }
 
-        返回值示例：
-        {
-            "risk_type_id": "159",
-            "risk_type_name": "云账号未启用MFA",
-            "is_formal": True,
-            "fields": [
-                {"key": "username", "name": "用户名", "required": True, "type": "string"},
-                {"key": "sub_uin", "name": "子账号ID", "required": False, "type": "string"},
-            ]
+    返回值示例：
+    {
+        "risk_type_id": "159",
+        "risk_type_name": "云账号未启用MFA",
+        "is_formal": True,
+        "fields": [
+            {"key": "submitter", "name": "提单人", "required": False},
+        ]
     }
     """
     if not isinstance(item, dict):

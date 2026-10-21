@@ -19,29 +19,31 @@ to the current version of the project delivered to anyone in the future.
 import os
 
 from bk_resource import BkApiResource
-from django.conf import settings
+
+from api.domains import BKSEC_PLUGIN_CONFIG_API_URL
 
 
-class Plugin(BkApiResource):
-    """插件 API 基类"""
+class BkSecSendPlugin(BkApiResource):
+    """BKSEC 发单插件 API 基类"""
 
-    module_name = "plugin"
+    module_name = "bk_sec_send_plugin"
 
     @property
     def base_url(self) -> str:
-        return settings.BKSEC_PLUGIN_CONFIG_API_URL
+        return BKSEC_PLUGIN_CONFIG_API_URL
 
     def add_esb_info_before_request(self, params: dict) -> dict:
+        """模拟上云环境应用身份：CODE 与 SECRET 需成对配置、"""
         plugin_app_code = os.getenv("BKAPP_BKSEC_PLUGIN_APP_CODE")
         plugin_app_secret = os.getenv("BKAPP_BKSEC_PLUGIN_APP_SECRET")
-        if plugin_app_code:
+        if plugin_app_code and plugin_app_secret:
             params["bk_app_code"] = plugin_app_code
-            params["bk_app_secret"] = plugin_app_secret or settings.SECRET_KEY
+            params["bk_app_secret"] = plugin_app_secret
             return params
         return super().add_esb_info_before_request(params)
 
 
-class ConfigUpsert(Plugin):
+class ConfigUpsert(BkSecSendPlugin):
     """插件 Config 同步"""
 
     name = "同步插件 Config"

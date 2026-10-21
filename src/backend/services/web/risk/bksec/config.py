@@ -26,6 +26,7 @@ from services.web.risk.bksec.constants import (
     BKSEC_FIELD_INITIAL_OWNER,
     BKSEC_FIELD_RISK_ASSET,
     BKSEC_FIELD_TARGET_TYPE,
+    BKSEC_REQUIRED_FIELD_KEYS,
 )
 
 
@@ -53,7 +54,6 @@ class BkSecConfig(BaseModel):
     risk_type_id: str = Field("", description="BKSEC 风险类型 ID")
     risk_type_name: str = Field("", description="BKSEC 风险类型名称")
     # 三个独立入参模板：SOPS 插件 ${target}/${target_type}/${operator} 的取值来源，
-    # 数据源统一为 field_mappings（前端只写这一份），由 _sync_sops_params 派生填充。
     target: str = Field("", description="BKSEC 风险资产信息模板（${target}）")
     target_type: str = Field("", description="BKSEC 目标资产类型模板（${target_type}）")
     operator: str = Field("", description="BKSEC 初始责任人模板（${operator}）")
@@ -71,9 +71,8 @@ class BkSecConfig(BaseModel):
 
     @model_validator(mode="after")
     def _sync_sops_params(self):
-        # target/target_type/operator 三个独立字段作为 SOPS 独立入参模板，
-        # 数据源统一为 field_mappings（前端只写这一份），此处从 field_mappings 派生填充，
-        # 保证两份数据不漂移（独立字段为空时以 field_mappings 同名项回落）。
+        # target/target_type/operator 三个独立字段作为 SOPS 独立入参模板
+        # 前端支持全部从field_mappings传入
         if not self.target:
             self.target = self.get_field_mapping(BKSEC_FIELD_RISK_ASSET).value
         if not self.target_type:
@@ -90,7 +89,9 @@ class BkSecConfig(BaseModel):
 
     def validate_for_submit(self) -> None:
         """
-        正式提交校验：启用时风险类型必选、必填字段非空
+        正式提交校验：
+           1. 启用时风险类型必选
+           2. 必填字段非空(operator/target/target_type)
 
         草稿保存不调用本方法（允许配置不完整）。
         """
@@ -98,7 +99,7 @@ class BkSecConfig(BaseModel):
             return
         if not self.risk_type_id:
             raise ValueError(gettext("启用 BKSEC 安全工单时必须选择风险类型"))
-        for key in (BKSEC_FIELD_RISK_ASSET, BKSEC_FIELD_TARGET_TYPE, BKSEC_FIELD_INITIAL_OWNER):
+        for key in BKSEC_REQUIRED_FIELD_KEYS:
             value = getattr(self, key, "") or ""
             if not value.strip():
                 raise ValueError(gettext("BKSEC 安全工单必填参数未配置：%s") % key)
