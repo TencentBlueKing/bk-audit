@@ -128,6 +128,67 @@ class TestListPAExecutionRecords:
         by_task = {r["sops_task_id"]: r["result"] for r in records}
         assert by_task == {"1": "running", "2": "failed", "3": "unknown"}
 
+    def test_filter_trigger_multi_select(self):
+        """触发方式支持多选（逗号分隔，任一命中）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, trigger="auto")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=2, trigger="manual")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=3, trigger="test")
+        # 单值（兼容旧调用方）
+        resp = resource.risk.list_pa_execution_records.perform_request({"trigger": "auto"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"1"}
+        # 多值
+        resp = resource.risk.list_pa_execution_records.perform_request({"trigger": "auto,test"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"1", "3"}
+        # 多值含空白容错
+        resp = resource.risk.list_pa_execution_records.perform_request({"trigger": " manual , test ,"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"2", "3"}
+        # 无命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"trigger": "unknown_type"})
+        assert resp["count"] == 0
+
+    def test_filter_result_multi_select(self):
+        """状态支持多选（逗号分隔，任一命中）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.RUNNING.value, task_id=2)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FAILED.value, task_id=3)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.REVOKED.value, task_id=4)
+        # 无状态（仅 task 无 status）→ unknown
+        TicketNode.objects.create(
+            risk_id=risk_a.risk_id,
+            operator="admin",
+            action="AutoProcess",
+            timestamp=time.time(),
+            time="2026-09-20 12:00:00",
+            process_result={"task": {"task_id": 5}},
+            extra={},
+        )
+        # 单值（兼容旧调用方）
+        resp = resource.risk.list_pa_execution_records.perform_request({"result": "success"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"1"}
+        # 多值：失败态（FAILED + REVOKED）与执行中组合
+        resp = resource.risk.list_pa_execution_records.perform_request({"result": "failed,running"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"2", "3", "4"}
+        # 多值含 unknown
+        resp = resource.risk.list_pa_execution_records.perform_request({"result": "success,unknown"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"1", "5"}
+        # 全量四种状态
+        resp = resource.risk.list_pa_execution_records.perform_request({"result": "success,failed,running,unknown"})
+        assert resp["count"] == 5
+
+    def test_filter_trigger_and_result_combined(self):
+        """触发方式 + 状态可组合多选"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, trigger="auto")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FAILED.value, task_id=2, trigger="auto")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=3, trigger="manual")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.RUNNING.value, task_id=4, trigger="test")
+        resp = resource.risk.list_pa_execution_records.perform_request(
+            {"trigger": "auto,test", "result": "failed,running"}
+        )
+        assert {r["sops_task_id"] for r in resp["results"]} == {"2", "4"}
+
     def test_pa_snapshot_priority_over_rule_chain(self):
         """套餐归属：执行时快照优先，历史节点（无快照）走规则链路兜底"""
         pa_a, pa_b, risk_a, risk_b = self._prepare()
