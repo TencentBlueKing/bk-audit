@@ -180,20 +180,20 @@ FAILURE_HINT_MAX_LEN = 200
 MAX_FETCH_ERROR_NODES = 5
 
 
-def _walk_nodes(node: dict):
+def iter_status_nodes(node: dict):
     """深度遍历 SOPS 任务状态树（失败节点可能嵌套在子流程里）"""
     for child in (node.get("children") or {}).values():
         if not isinstance(child, dict):
             continue
         yield child
-        yield from _walk_nodes(child)
+        yield from iter_status_nodes(child)
 
 
 def _collect_failed_node_ids(status: Optional[dict]) -> List[str]:
     """收集任务状态中处于失败态的节点 ID（get_node_data 必须带 node_id）"""
     failed_states = {s.value for s in SOPSTaskStatus.get_failed_status()}
     node_ids: List[str] = []
-    for child in _walk_nodes(status or {}):
+    for child in iter_status_nodes(status or {}):
         if child.get("state") in failed_states and child.get("id"):
             node_ids.append(str(child["id"]))
     return node_ids
@@ -201,7 +201,7 @@ def _collect_failed_node_ids(status: Optional[dict]) -> List[str]:
 
 def extract_failure_detail(status: dict) -> str:
     """从 SOPS 任务状态中递归提取首个带错误信息的节点文本（无需额外请求）"""
-    for child in _walk_nodes(status or {}):
+    for child in iter_status_nodes(status or {}):
         error_message = str(child.get("error_message") or "").strip()
         if error_message:
             return error_message
@@ -229,6 +229,34 @@ def _extract_error_texts(node_data: dict) -> List[str]:
         if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
             texts.append(value)
     return texts
+
+
+def enrich_status_with_node_errors(status: dict, task_id: str) -> dict:
+    """把失败节点的错误文本回源写入 status.children[].error_message（原地修改并返回 status）
+
+    SOPS 的 get_task_status 不返回 error_message，错误只在 get_node_data 的 ex_data 里，
+    因此终态同步 / 重试快照前调用本函数，才能让执行记录的 attempts 带上逐节点的错误文本。
+    仅在任务失败时调用：成功任务无需回源。
+    """
+    if not status or not task_id:
+        return status
+    for node_id in _collect_failed_node_ids(status)[:MAX_FETCH_ERROR_NODES]:
+        try:
+            node_data = (
+                api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=node_id) or {}
+            )
+        except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
+            logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, node_id)
+            continue
+        texts = _extract_error_texts(node_data)
+        if not texts:
+            continue
+        error_text = "\n".join(dict.fromkeys(texts)).strip()
+        for child in iter_status_nodes(status):
+            if child.get("id") == node_id and not child.get("error_message"):
+                child["error_message"] = error_text
+                break
+    return status
 
 
 def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:

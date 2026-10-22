@@ -1248,19 +1248,29 @@ def calc_task_finish_time(status_info: dict) -> str:
 
 
 def extract_attempt_records(status_info: dict) -> list:
-    """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）"""
+    """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）
+
+    递归遍历：失败节点可能嵌套在子流程里，只取顶层 children 会漏掉真正的失败节点。
+    error_message 由终态同步 / 重试前调用 enrich_status_with_node_errors 回源写入。
+    """
     attempts = []
-    children = (status_info or {}).get("children") or {}
-    for node_id, child in children.items():
-        attempts.append(
-            {
-                "node_id": node_id,
-                "node_name": child.get("name") or "",
-                "state": child.get("state") or "",
-                "start_time": child.get("start_time") or "",
-                "end_time": child.get("finish_time") or "",
-                "duration": child.get("elapsed_time") or 0,
-                "error_message": child.get("error_message") or "",
-            }
-        )
+
+    def _walk(node: dict) -> None:
+        for node_id, child in (node.get("children") or {}).items():
+            if not isinstance(child, dict):
+                continue
+            attempts.append(
+                {
+                    "node_id": node_id,
+                    "node_name": child.get("name") or "",
+                    "state": child.get("state") or "",
+                    "start_time": child.get("start_time") or "",
+                    "end_time": child.get("finish_time") or "",
+                    "duration": child.get("elapsed_time") or 0,
+                    "error_message": child.get("error_message") or "",
+                }
+            )
+            _walk(child)
+
+    _walk(status_info or {})
     return attempts
