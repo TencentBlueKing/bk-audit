@@ -219,6 +219,8 @@ class TestListPAExecutionRecords:
         assert rec9["task_name"] == "套餐B_1790000000000"
         assert rec9["trigger"] == "manual"
         assert rec9["duration"] == 3  # finish - start（秒）
+        # 展示时间归一：SOPS 原始串带 +0800 偏移，输出统一本地 %Y-%m-%d %H:%M:%S
+        assert rec9["finish_time"] == "2026-09-22 10:32:40"
         assert next(r for r in records if r["sops_task_id"] == "10")["duration"] is None  # 未结束无耗时
         assert by_task["10"] == (pa_a.id, "套餐A")  # 兜底链路
         assert by_task["11"] == (pa_b.id, "套餐B")  # 快照优先于规则
@@ -433,3 +435,49 @@ class TestRetryAutoProcessRetryHistory:
         assert resp["risk_title"] == ""
         assert resp["risk_status"] == ""
         assert resp["params"] == {}
+
+
+class TestSopsTimeFormat:
+    """SOPS 时间展示归一：本地 %Y-%m-%d %H:%M:%S，不透传时区偏移"""
+
+    def test_format_sops_time(self):
+        from services.web.risk.utils import format_sops_time
+
+        assert format_sops_time("2026-10-22 11:51:54 +0800") == "2026-10-22 11:51:54"
+        assert format_sops_time("2026-10-22 11:42:48") == "2026-10-22 11:42:48"
+        assert format_sops_time("2026-10-22T03:51:54+00:00") == "2026-10-22 11:51:54"  # 外源时区转本地墙钟
+        assert format_sops_time("bad-value") == "bad-value"  # 解析失败原样返回，不吞数据
+        assert format_sops_time("") == ""
+        assert format_sops_time(None) == ""
+
+    def test_calc_task_finish_time_normalized(self):
+        from services.web.risk.utils import calc_task_finish_time
+
+        children = {
+            "node1": {"start_time": "2026-10-22 11:42:48", "finish_time": "2026-10-22 11:51:54 +0800"},
+            "node2": {"start_time": "2026-10-22 11:50:00", "finish_time": "2026-10-22 11:55:00"},
+        }
+        # 任务级优先
+        assert calc_task_finish_time({"finish_time": "2026-10-22 11:51:54 +0800", "children": children}) == (
+            "2026-10-22 11:51:54"
+        )
+        # 任务级缺失退化取子节点最晚结束时间，同样归一
+        assert calc_task_finish_time({"children": children}) == "2026-10-22 11:55:00"
+        assert calc_task_finish_time({}) == ""
+
+    def test_extract_attempt_records_normalized(self):
+        from services.web.risk.utils import extract_attempt_records
+
+        status = {
+            "children": {
+                "node1": {
+                    "name": "发单节点",
+                    "state": "FAILED",
+                    "start_time": "2026-10-22 11:42:48",
+                    "finish_time": "2026-10-22 11:51:54 +0800",
+                }
+            }
+        }
+        attempts = extract_attempt_records(status)
+        assert attempts[0]["start_time"] == "2026-10-22 11:42:48"
+        assert attempts[0]["end_time"] == "2026-10-22 11:51:54"

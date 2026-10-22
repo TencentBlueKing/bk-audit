@@ -41,6 +41,7 @@ from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
     RISK_OPERATE_NOTICE_CONFIG_KEY,
+    SECURITY_PERSON_KEY,
     ApproveTicketFields,
     RiskDisplayStatus,
     RiskLabel,
@@ -55,9 +56,9 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
     UserType,
-    calc_task_duration,
 )
 from services.web.risk.parser import RiskNoticeParser
+from services.web.risk.utils import calc_task_duration
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
@@ -143,14 +144,10 @@ class RiskFlowBaseHandler:
     @classmethod
     def load_security_person(cls) -> List[str]:
         """
-        获取安全接口人（过滤空值，缺失时为空列表）
-
-        统一实现见 services.web.risk.bksec.render.load_security_person，
-        保证建单处理人兜底与 BKSEC 发单 operator 兜底取同一份安全接口人。
+        获取安全接口人
         """
-        from services.web.risk.bksec.render import load_security_person
 
-        return load_security_person()
+        return GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
 
     def load_processor(self) -> List[str]:
         """
@@ -681,10 +678,7 @@ class AutoProcess(RiskFlowBaseHandler):
             # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
-            # 仅 BKSEC 自动规则（auto_strategy_id 非空）走模板渲染：值中含 {{ }} 时按上下文求值
-            # 通用套餐保持原有平铺取值机制，不因 BKSEC 特定功能改变行为边界
-            # risk_type_extra 是「字段映射的序列化模板」，必须逐字段渲染后重新序列化，
-            # 整串渲染会让字段值自带的引号破坏 JSON 结构（插件 json.loads 报错），故此处跳过
+            # 把 BKSEC 自动规则 pa_params 里的模板按当前风险渲染成终值，作为 SOPS 任务入参
             if (
                 isinstance(value, str)
                 and "{{" in value
@@ -740,8 +734,6 @@ class AutoProcess(RiskFlowBaseHandler):
         if status.get("state") in SOPSTaskStatus.get_failed_status():
             from services.web.risk.bksec.service import fill_failure_info
 
-            # 建单时刻 SOPS 往往还没回填节点错误，此时取到什么写什么，
-            # 后续由 sync_auto_result 在终态同步时用真实错误覆盖
             process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
         # 冗余存储 duration（秒），用于排序
         process_result["duration"] = calc_task_duration(status)
@@ -785,7 +777,7 @@ class AutoProcess(RiskFlowBaseHandler):
             history_status = self.risk.last_history.process_result.get("status") or {}
             if current_status.get("state") != history_status.get("state"):
                 self.risk.last_history.process_result.update(process_result)
-                # duration 冗余到独立整数字段，保证排序为数值排序（JSON 数值排序会按字符串比较出错）
+                # duration 任务耗时写入执行记录
                 if "duration" in process_result:
                     self.risk.last_history.duration = process_result["duration"]
                 self.risk.last_history.save(update_fields=["process_result", "duration"])
