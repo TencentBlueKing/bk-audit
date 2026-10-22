@@ -41,7 +41,6 @@ from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
     RISK_OPERATE_NOTICE_CONFIG_KEY,
-    SECURITY_PERSON_KEY,
     ApproveTicketFields,
     ItsmVersion,
     RiskDisplayStatus,
@@ -145,10 +144,14 @@ class RiskFlowBaseHandler:
     @classmethod
     def load_security_person(cls) -> List[str]:
         """
-        获取安全接口人
-        """
+        获取安全接口人（过滤空值，缺失时为空列表）
 
-        return GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
+        统一实现见 services.web.risk.bksec.render.load_security_person，
+        保证建单处理人兜底与 BKSEC 发单 operator 兜底取同一份安全接口人。
+        """
+        from services.web.risk.bksec.render import load_security_person
+
+        return load_security_person()
 
     def load_processor(self) -> List[str]:
         """
@@ -847,11 +850,11 @@ class AutoProcess(RiskFlowBaseHandler):
         """写入点落失败提示（非失败状态原样返回）"""
         status = process_result.get("status") or {}
         if status.get("state") in SOPSTaskStatus.get_failed_status():
-            from services.web.risk.bksec.service import build_failure_hint
+            from services.web.risk.bksec.service import fill_failure_info
 
             # 建单时刻 SOPS 往往还没回填节点错误，此时取到什么写什么，
             # 后续由 sync_auto_result 在终态同步时用真实错误覆盖
-            process_result["failure_hint"] = build_failure_hint(status, task_id=task_id)
+            process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
         # 冗余存储 duration（秒），用于排序
         process_result["duration"] = calc_task_duration(status)
         return process_result

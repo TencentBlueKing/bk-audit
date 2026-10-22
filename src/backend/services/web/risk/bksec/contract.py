@@ -36,12 +36,12 @@ from services.web.risk.bksec.constants import (
     BKSEC_PARAM_TARGET_TYPE,
     BKSEC_PLUGIN_STANDARD_FIELDS,
 )
-from services.web.risk.bksec.renderer import render_value
-from services.web.risk.bksec.variables import (
+from services.web.risk.bksec.render import (
     TIME_DISPLAY_FORMAT,
     build_render_context,
     build_risk_data,
     load_security_person,
+    render_value,
 )
 from services.web.risk.models import Risk
 
@@ -129,7 +129,7 @@ def build_event_payload(
 
 def build_pa_params(config: BkSecConfig) -> dict:
     """
-    生成自动创建处理规则的 pa_params（对接 SOPS 插件「审计中心WeSec发单」的入参）
+    生成自动创建处理规则的 pa_params（未渲染模板）
 
     - 标准入参，直接从risk对象获取 → {"field": 风险字段, "value": ""}  9个
     - ${target_type} → 目标资产类型（config.target_type）
@@ -176,7 +176,7 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
     constants[BKSEC_PARAM_OPERATOR] = coerce_operator_constant(render_value(config.operator, context), risk=risk)
     if test_operator:
         constants[BKSEC_PARAM_OPERATOR] = json.dumps([test_operator], ensure_ascii=False)
-    # risk_type_extra 承载全部字段映射（含 target/target_type/operator，与独立入参重复但语义独立）
+    # risk_type_extra 承载全部字段映射
     constants[BKSEC_PARAM_RISK_TYPE_EXTRA] = json.dumps(
         {m.key: render_value(m.value, context) for m in config.field_mappings},
         ensure_ascii=False,

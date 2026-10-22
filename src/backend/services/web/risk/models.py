@@ -1255,7 +1255,7 @@ def extract_attempt_records(status_info: dict) -> list:
     """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）
 
     递归遍历：失败节点可能嵌套在子流程里，只取顶层 children 会漏掉真正的失败节点。
-    error_message 由终态同步 / 重试前调用 enrich_status_with_node_errors 回源写入。
+    error_message 由终态同步 / 重试前调用 fill_failure_info 回源写入。
     """
     attempts = []
 

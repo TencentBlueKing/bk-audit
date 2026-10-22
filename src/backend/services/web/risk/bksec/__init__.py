@@ -22,13 +22,8 @@ from services.web.risk.bksec.contract import (
     build_pa_params,
     build_plugin_constants,
 )
-from services.web.risk.bksec.renderer import render_value
-from services.web.risk.bksec.rules import (
-    disable_bksec_rule,
-    load_bksec_config,
-    sync_bksec_rule,
-)
-from services.web.risk.bksec.variables import build_render_context
+from services.web.risk.bksec.render import build_render_context, render_value
+from services.web.risk.bksec.rules import disable_bksec_rule, sync_bksec_rule
 
 __all__ = [
     "BkSecConfig",
@@ -38,7 +33,6 @@ __all__ = [
     "build_plugin_constants",
     "build_render_context",
     "disable_bksec_rule",
-    "load_bksec_config",
     "render_value",
     "sync_bksec_rule",
 ]

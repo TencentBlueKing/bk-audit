@@ -59,14 +59,6 @@ def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
         return None
 
 
-def is_bksec_enabled(strategy: Optional[Strategy]) -> bool:
-    """
-    检查策略是否启用 BKSEC
-    """
-    config = load_bksec_config(strategy)
-    return bool(config and config.enabled)
-
-
 def _load_strategy_scene_id(strategy: Strategy) -> Optional[int]:
     """
     返回策略归属场景（处理规则需要绑定到策略所在场景）
@@ -121,6 +113,7 @@ def _create_rule_version(strategy: Strategy, fields: dict, rule_id: Optional[int
             auto_strategy_id=strategy.strategy_id,
             is_enabled=True,
         )
+        _sync_rule_scene_binding(strategy, instance)
         return instance
     with transaction.atomic():
         instance = RiskRule.objects.create(
@@ -134,13 +127,7 @@ def _create_rule_version(strategy: Strategy, fields: dict, rule_id: Optional[int
         instance.priority_index = _top_priority()
         instance.save(update_fields=["rule_id", "priority_index"])
         # 绑定到策略所在场景
-        scene_id = _load_strategy_scene_id(strategy)
-        if scene_id:
-            BindingMetadataHelper.create_resource_binding(
-                resource_id=str(instance.rule_id),
-                resource_type=ResourceVisibilityType.RISK_RULE,
-                scene_id=scene_id,
-            )
+        _sync_rule_scene_binding(strategy, instance)
     return instance
 
 
@@ -152,6 +139,34 @@ def _toggle_rule(rule: Optional[RiskRule], is_enabled: bool) -> None:
         rule.is_enabled = is_enabled
         rule.save(update_fields=["is_enabled"])
         logger.info("[BkSecRule] Auto rule toggled, rule_id=%s enabled=%s", rule.rule_id, is_enabled)
+
+
+def _sync_rule_scene_binding(strategy: Strategy, rule: RiskRule) -> None:
+    """
+    规则场景归属跟随策略：策略改绑场景后同步规则的场景绑定（保持单一场景）
+    """
+    scene_id = _load_strategy_scene_id(strategy)
+    if scene_id is None:
+        return
+    current_scene_id = (
+        ResourceBindingScene.objects.filter(
+            binding__resource_type=ResourceVisibilityType.RISK_RULE,
+            binding__resource_id=str(rule.rule_id),
+        )
+        .values_list("scene_id", flat=True)
+        .first()
+    )
+    if current_scene_id == scene_id:
+        return
+    BindingMetadataHelper.delete_resource_binding(
+        resource_id=str(rule.rule_id), resource_type=ResourceVisibilityType.RISK_RULE
+    )
+    BindingMetadataHelper.create_resource_binding(
+        resource_id=str(rule.rule_id),
+        resource_type=ResourceVisibilityType.RISK_RULE,
+        scene_id=scene_id,
+    )
+    logger.info("[BkSecRule] Rule scene binding synced, rule_id=%s scene_id=%s", rule.rule_id, scene_id)
 
 
 @transaction.atomic
@@ -215,6 +230,8 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
     # 幂等：内容一致 → 仅原地确保启用
     if latest and all(getattr(latest, k) == v for k, v in fields.items()):
         _toggle_rule(latest, is_enabled=True)
+        # 场景归属跟随策略（策略改绑场景后规则可见性同步，内容未变不产生新版本）
+        _sync_rule_scene_binding(strategy, latest)
         # Config 同步：即使规则内容未变，插件侧凭证/配方可能更新（如用户改了 target_type）
         # 启用路径为保存前置强校验：同步失败则阻断策略保存，避免“假启用”（规则在、插件无 Config、发不出单）
         _ensure_plugin_config_synced(strategy, config)

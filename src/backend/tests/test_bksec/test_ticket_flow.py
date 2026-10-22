@@ -162,7 +162,7 @@ class TestAutoProcessBkSecRender:
             risk.rule_version = 1
             risk.save(update_fields=["status", "rule_id", "rule_version"])
             with mock.patch(
-                "services.web.risk.bksec.variables.load_risk_events",
+                "services.web.risk.bksec.render.load_risk_events",
                 mock.Mock(return_value=[{"event_id": "e1"}, {"event_id": "e2"}]),
             ):
                 AutoProcess(risk_id=risk.risk_id, operator="admin").run()
