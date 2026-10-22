@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+import traceback
 
 from bk_resource import BkApiResource
 from blueapps.utils.logger import logger
@@ -95,3 +96,28 @@ class AuditBkApiResource(BkApiResource):
         )
 
         return self.set_headers(headers, validated_request_data)
+
+    def perform_request(self, validated_request_data: dict):
+        """统一捕获出站请求的真实异常并打印完整 traceback。
+
+        bk_resource 在捕获底层异常（如 requests 抛出的 TypeError）后，
+        仅用 err.__doc__（例如 "Inappropriate argument type."）构造 APIRequestError，
+        导致真实错误原因和堆栈丢失，难以排查。
+
+        此处在不改变原有调用链的前提下，先执行原生请求逻辑，
+        若发生异常则打印 module/action/url 上下文、真实错误信息及完整堆栈，再原样抛出，
+        从而让部署/初始化（如 bk-audit-system-init）场景能看到具体失败原因。
+        """
+        try:
+            return super().perform_request(validated_request_data)
+        except Exception as err:
+            logger.error(
+                "[AuditBkApiResource] 出站请求失败: module=%s action=%s url=%s error_type=%s error=%s\n%s",
+                getattr(self, "module_name", ""),
+                getattr(self, "action", ""),
+                getattr(self, "url", ""),
+                err.__class__.__name__,
+                err,
+                traceback.format_exc(),
+            )
+            raise
