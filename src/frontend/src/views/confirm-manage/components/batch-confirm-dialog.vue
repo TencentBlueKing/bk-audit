@@ -54,16 +54,16 @@
     </audit-form>
     <template #footer>
       <bk-button
-        :disabled="isSubmitting"
-        @click="handleCancel">
-        {{ t('取消') }}
-      </bk-button>
-      <bk-button
-        class="ml8"
         :loading="isSubmitting"
         theme="primary"
         @click="handleConfirm">
         {{ t('确定') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        :disabled="isSubmitting"
+        @click="handleCancel">
+        {{ t('取消') }}
       </bk-button>
     </template>
   </bk-dialog>
@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
   import {
+    nextTick,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -118,8 +119,10 @@
   };
 
   const isSubmitting = ref(false);
+  let previousChangeConfirm: boolean | 'popover' = false;
 
   const show = (ids: string[]) => {
+    previousChangeConfirm = window.changeConfirm;
     riskIds.value = ids;
     resetForm();
     isShow.value = true;
@@ -135,6 +138,10 @@
   const handleClosed = () => {
     resetForm();
     riskIds.value = [];
+    // 须在 resetForm 触发的 audit-form watcher 之后恢复，否则会被重新置为 true
+    nextTick(() => {
+      window.changeConfirm = previousChangeConfirm;
+    });
   };
 
   const handleConfirm = async () => {
