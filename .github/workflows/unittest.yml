@@ -112,13 +112,13 @@ jobs:
       - name: Install MySQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y mysql-client
+          sudo apt-get install -y ca-certificates mysql-client
       - name: Install dependencies
         run: |
           cd src/backend
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements_dev.txt
+          sh bootstrap_pip.sh python "$RUNNER_TEMP/python-bootstrap"
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements_dev.txt
       - name: Create DB
         run: |
           mysql -h"$MYSQL_HOST" -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -P"$MYSQL_PORT" -e "CREATE DATABASE $MYSQL_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
