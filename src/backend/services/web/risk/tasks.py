@@ -711,10 +711,8 @@ def sync_auto_result(node_id: str = None):
                         node.process_result["duration"] = calc_task_duration(status)
                         node.duration = node.process_result["duration"]
                         # 失败提示：建单时刻通常还拿不到节点错误，终态同步时才有真实错误文本
-                        if node.process_result["status"]["state"] in [
-                            SOPSTaskStatus.FAILED,
-                            SOPSTaskStatus.REVOKED,
-                        ]:
+                        # EXPIRED 同属失败态，需一并写入，否则会一直显示通用文案
+                        if node.process_result["status"]["state"] in SOPSTaskStatus.get_failed_status():
                             node.process_result["failure_hint"] = build_failure_hint(status, task_id=task_id)
                         node.status = (
                             TicketNodeStatus.FINISHED
