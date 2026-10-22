@@ -100,7 +100,28 @@ from services.web.tool.models import Tool
 
 # 从 Pydantic BaseModel 生成的 DRF 序列化器类
 ReportConfigSerializer = type(ReportConfig.drf_serializer())
-BkSecConfigSerializer = type(BkSecConfig.drf_serializer())
+
+
+class BkSecFieldMappingSerializer(serializers.Serializer):
+    """BKSEC 工单字段映射项（空串合法：可选字段不填值；必填语义由 validate_for_submit 把关）"""
+
+    key = serializers.CharField(required=False, allow_blank=True, default="")
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    value = serializers.CharField(required=False, allow_blank=True, default="")
+    required = serializers.BooleanField(required=False, default=False)
+
+
+class BkSecConfigSerializer(serializers.Serializer):
+    """BKSEC 安全工单配置（空串合法；启用时的必填约束由 validate_for_submit 把关）"""
+
+    enabled = serializers.BooleanField(required=False, default=False)
+    risk_type_id = serializers.CharField(required=False, allow_blank=True, default="")
+    risk_type_name = serializers.CharField(required=False, allow_blank=True, default="")
+    target = serializers.CharField(required=False, allow_blank=True, default="")
+    target_type = serializers.CharField(required=False, allow_blank=True, default="")
+    operator = serializers.CharField(required=False, allow_blank=True, default="")
+    source_type = serializers.CharField(required=False, allow_blank=True, default="bk-audit")
+    field_mappings = BkSecFieldMappingSerializer(many=True, required=False, default=list)
 
 
 def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:

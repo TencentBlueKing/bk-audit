@@ -77,6 +77,29 @@ class TestBkSecConfig:
         config = BkSecConfig.model_validate({"enabled": False})
         config.validate_for_submit()
 
+    def test_serializer_allows_blank_values(self):
+        """显式空串合法（可选字段不填值）：field_mappings[].value 传空不再被 DRF blank 校验拦截"""
+        from services.web.strategy_v2.serializers import BkSecConfigSerializer
+
+        serializer = BkSecConfigSerializer(
+            data={
+                "enabled": True,
+                "risk_type_id": "",
+                "risk_type_name": "",
+                "field_mappings": [{"key": "description", "name": "描述", "value": "", "required": False}],
+            }
+        )
+        assert serializer.is_valid(), serializer.errors
+        assert serializer.validated_data["field_mappings"][0]["value"] == ""
+
+    def test_serializer_type_errors_still_rejected(self):
+        """放行空串不降校验强度：类型错误仍拦截"""
+        from services.web.strategy_v2.serializers import BkSecConfigSerializer
+
+        serializer = BkSecConfigSerializer(data={"enabled": "not-a-bool", "field_mappings": [{"required": "x"}]})
+        assert not serializer.is_valid()
+        assert "enabled" in serializer.errors
+
     def test_risk_access_list_registered(self):
         """回归：sync_plugin_config 依赖该资源取 token，缺失会导致启用 BKSEC 的策略保存全部被阻断
         （2026-10-16 db4f1a9ba 起取 token 改用 risk_access_list 按 risk_type_id 匹配，RiskAccessRetrieve 已删除）
