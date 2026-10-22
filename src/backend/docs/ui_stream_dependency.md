@@ -6,7 +6,7 @@
 
 ## 安装与确认
 
-在 `src/backend` 使用项目的 PDM 环境同步生产依赖：
+先按[证书安全边界](python_package_security.md)完成安装工具引导；再在 `src/backend` 使用项目的 PDM 环境同步生产依赖：
 
 ```sh
 pdm sync --prod

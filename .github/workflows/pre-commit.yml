@@ -33,11 +33,24 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('src/backend/.pre-commit-config.yaml') }}
+          key: pre-commit-secure-pip-${{ runner.os }}-${{ hashFiles('src/backend/.pre-commit-config.yaml', 'src/backend/bootstrap_pip.sh') }}
+
+      - name: Update OS certificates
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates
+
+      - name: Bootstrap verified pip
+        run: sh src/backend/bootstrap_pip.sh python "$RUNNER_TEMP/python-bootstrap"
 
       - name: Install pre-commit
         run: python -m pip install pre-commit==4.2.0
 
       - name: Check all backend files
         working-directory: src/backend
+        env:
+          VIRTUALENV_PIP: "26.2.2"
+          VIRTUALENV_EXTRA_SEARCH_DIR: ${{ runner.temp }}/python-bootstrap
+          VIRTUALENV_DOWNLOAD: "false"
+          VIRTUALENV_NO_PERIODIC_UPDATE: "true"
         run: pre-commit run --all-files --show-diff-on-failure

@@ -63,6 +63,7 @@ dependencies = [
     "JSON-log-formatter==0.4.0",
     "arrow==1.2.2",
     "requests==2.32.4",
+    "certifi==2026.10.19",
     "mistune>=3.2.0",
     "markdownify>=1.2.2",
     "xhtml2pdf>=0.2.17",
