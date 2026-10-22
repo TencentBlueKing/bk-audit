@@ -220,3 +220,43 @@ class TestListPAExecutionRecords:
         assert next(r for r in records if r["sops_task_id"] == "10")["duration"] is None  # 未结束无耗时
         assert by_task["10"] == (pa_a.id, "套餐A")  # 兜底链路
         assert by_task["11"] == (pa_b.id, "套餐B")  # 快照优先于规则
+
+
+@pytest.mark.django_db
+class TestGetPAExecutionRecordDetail:
+    def _prepare(self):
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
+        from services.web.strategy_v2.models import Strategy
+
+        strategy_id = RISK_INFO["strategy_id"]
+        Strategy.objects.get_or_create(
+            strategy_id=strategy_id, defaults={"strategy_name": f"test_strategy_{strategy_id}"}
+        )
+        risk = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-D", "title": "详情风险标题"})
+        return risk
+
+    def test_detail_returns_risk_fields(self):
+        """详情顶层返回风险单关联字段（重试接口需以 risk_id 为 URL 入参）"""
+        risk = self._prepare()
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        assert resp["id"] == node.id
+        assert resp["risk_id"] == "R-D"
+        assert resp["risk_title"] == "详情风险标题"
+        assert resp["risk_status"] == (risk.status or "")
+        # 风险描述 / 风险证据来自 params（重试场景需展示）
+        assert resp["params"]["risk_description"] == RISK_INFO["event_content"]
+        assert resp["params"]["risk_evidence"] == RISK_INFO["event_evidence"]
+
+    def test_detail_without_risk(self):
+        """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空"""
+        self._prepare()
+        node = _create_node("R-GONE", SOPSTaskStatus.FAILED.value, task_id=2)
+        resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        assert resp["risk_id"] == "R-GONE"
+        assert resp["risk_title"] == ""
+        assert resp["risk_status"] == ""
+        assert resp["params"] == {}
