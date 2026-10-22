@@ -32,19 +32,17 @@
         <span v-else>{{ t('处理套餐') }} </span>
       </render-info-item>
       <template v-if="data.custom_action === 'AutoProcess'">
-        <div class="mis-pa-params">
-          <render-info-item
-            v-for="field in paParamDisplayFields"
-            :key="field.key"
-            :label="field.label">
-            <edit-tag
-              v-if="field.displayType === 'tag'"
-              :data="field.displayValue"
-              :show-copy="false"
-              style="display: inline-block;" />
-            <span v-else>{{ field.displayValue || '--' }}</span>
-          </render-info-item>
-        </div>
+        <render-info-item
+          v-for="field in paParamDisplayFields"
+          :key="field.key"
+          :label="field.label">
+          <edit-tag
+            v-if="field.displayType === 'tag'"
+            :data="field.displayValue"
+            :show-copy="false"
+            style="display: inline-block;" />
+          <span v-else>{{ field.displayValue || '--' }}</span>
+        </render-info-item>
       </template>
       <render-info-item
         v-else
@@ -348,17 +346,6 @@
         padding-left: 4px;
         line-height: 20px;
         flex: 1;
-      }
-    }
-
-    .mis-pa-params {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 8px;
-
-      .render-info-item {
-        width: 100%;
       }
     }
   }
