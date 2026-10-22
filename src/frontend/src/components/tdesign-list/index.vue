@@ -677,6 +677,7 @@
     resetCrossPageSelection,
     clearAllSelection,
     preservePageSelectionForPageSizeChange,
+    releasePageSelectionForPageChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
@@ -1252,8 +1253,14 @@
     fetchListData();
   };
 
+  // bk-pagination 在 current 被程序重置时也会触发 change，切换每页条数期间不能当作翻页处理
+  let isPageLimitChanging = false;
+
   // 切换页码
   const handlePageChange = (pageValue: number) => {
+    if (props.enableCrossPageSelect && !isPageLimitChanging) {
+      releasePageSelectionForPageChange();
+    }
     pagination.current = normalizePage(pageValue);
     isUnload.value = false;
     isLoading.value = true;
@@ -1264,6 +1271,7 @@
   const handlePageLimitChange = (pageLimit: number) => {
     if (props.enableCrossPageSelect) {
       preservePageSelectionForPageSizeChange();
+      isPageLimitChanging = true;
     }
     pagination.limit = pageLimit;
     pagination.current = 1; // 切换每页条数时重置到第一页
@@ -1275,6 +1283,7 @@
     isLoading.value = true;
     // 确保响应式更新完成后再调用 fetchListData
     nextTick(() => {
+      isPageLimitChanging = false;
       fetchListData();
     });
   };
