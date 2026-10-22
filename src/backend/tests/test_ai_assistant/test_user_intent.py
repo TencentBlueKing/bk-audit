@@ -322,8 +322,6 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         )
         self.assertTrue(root.context_data["agent_trace"]["system_prompt"])
         self.assertTrue(root.context_data["agent_trace"]["user_prompt"])
-        # 临时态（2026-10-21，bkop 验证 bp-ai-intent-test，a20ddc288）：断言跟随默认路由
-        # 开关动态取值，默认值切回 USER_INTENT 时无需改动本行
         self.assertEqual(root.context_data["agent_trace"]["agent_code"], MessagePlanningService.agent_code.value)
         self.assertEqual(
             log_search.context_data["extension_fields"][0]["keys"],
