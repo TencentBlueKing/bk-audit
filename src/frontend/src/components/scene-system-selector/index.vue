@@ -161,6 +161,7 @@
   import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { changeConfirm } from '@/utils/assist/change-confirm';
   import {
     buildSceneContextQueryFromSelection,
     clearRecentSceneSwitch,
@@ -578,7 +579,18 @@
       });
       return;
     }
-    if ((!window.changeConfirm || window.changeConfirm === 'popover') && route.meta.changeSceneIsBackedList) {
+    const applySelection = () => {
+      hasInitializedSelection = true;
+      selectedItem.value = item;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
+      // 先同步改地址栏，再通知列表刷新，避免列表按旧 scene_id 请求并把旧 ID 写回 URL
+      syncSceneIdToRoute(item);
+      emits('update:modelValue', item);
+      emits('change', item);
+      isPopoverShow.value = false;
+    };
+    // 路由守卫不拦截同路径的 query 变化，切换场景的离开确认需在这里处理
+    if (route.meta.changeSceneIsBackedList) {
       InfoBox({
         title: t('确认离开当前页？'),
         subTitle: t('离开将会导致未保存信息丢失'),
@@ -589,13 +601,8 @@
         footerAlign: 'center',
         class: 'change-confirm-info-box',
         onConfirm() {
-          hasInitializedSelection = true;
-          selectedItem.value = item;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-          syncSceneIdToRoute(item);
-          isPopoverShow.value = false;
-          emits('update:modelValue', item);
-          emits('change', item);
+          window.changeConfirm = false;
+          applySelection();
           router.push({
             name: route.meta.ListPageName as string || 'strategyList',
             query: buildSceneQuery(item),
@@ -604,15 +611,12 @@
         onClose() {
         },
       });
+    } else if (window.changeConfirm === true) {
+      changeConfirm()
+        .then(applySelection)
+        .catch(() => {});
     } else {
-      hasInitializedSelection = true;
-      selectedItem.value = item;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(item));
-      // 先同步改地址栏，再通知列表刷新，避免列表按旧 scene_id 请求并把旧 ID 写回 URL
-      syncSceneIdToRoute(item);
-      emits('update:modelValue', item);
-      emits('change', item);
-      isPopoverShow.value = false;
+      applySelection();
     }
   };
 
