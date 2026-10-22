@@ -27,12 +27,20 @@
     <div
       class="risk-manage-list">
       <div class="add-button">
-        <bk-button
-          :disabled="!selectionMeta.count"
-          theme="primary"
-          @click="handleBatchConfirm">
-          {{ t('批量处理') }}
-        </bk-button>
+        <span
+          v-bk-tooltips="{
+            content: t('请至少选择 1 条风险单'),
+            disabled: !!selectionMeta.count,
+          }"
+          class="batch-confirm-btn-wrapper"
+          :class="{ 'is-batch-disabled': !selectionMeta.count }">
+          <bk-button
+            :disabled="!selectionMeta.count"
+            theme="primary"
+            @click="handleBatchConfirm">
+            {{ t('批量处理') }}
+          </bk-button>
+        </span>
         <risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runExport"
@@ -422,6 +430,19 @@
       align-items: center;
       gap: 8px;
       padding-bottom: 5px;
+    }
+
+    .batch-confirm-btn-wrapper {
+      display: inline-flex;
+
+      /* 禁用的原生 button 不派发鼠标事件，需透传给外层才能触发 tooltip */
+      &.is-batch-disabled {
+        cursor: not-allowed;
+
+        .bk-button {
+          pointer-events: none;
+        }
+      }
     }
   }
 }

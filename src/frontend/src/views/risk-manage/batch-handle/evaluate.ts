@@ -49,7 +49,7 @@ const PREVIEW_KEY_BY_ACTION: Record<BatchActionId, PreviewActionKey> = {
   unmisreport: 'unmisreport',
 };
 
-export const REASON_NONE = '请至少选择1条风险单';
+export const REASON_NONE = '请至少选择 1 条风险单';
 export const REASON_UNLOADED = '所选风险包含未加载数据，暂无法批量处理';
 export const REASON_LIMIT = '所选风险数量超过上限，请缩小范围';
 export const REASON_UNSUPPORTED = '所选风险无法批量处理';
