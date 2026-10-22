@@ -96,12 +96,12 @@ from services.web.risk.models import (
     ManualEvent,
     Risk,
     TicketNode,
-    calc_task_duration,
 )
 from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.utils import calc_task_duration
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
 

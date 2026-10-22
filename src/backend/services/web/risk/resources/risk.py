@@ -144,7 +144,6 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
     UserType,
-    extract_attempt_records,
 )
 from services.web.risk.serializers import (
     BULK_ACTION_MAX_RISK_IDS,
@@ -207,6 +206,7 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
+from services.web.risk.utils import extract_attempt_records
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum

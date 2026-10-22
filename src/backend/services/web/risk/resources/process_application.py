@@ -33,15 +33,7 @@ from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, iter_status_nodes
 from services.web.risk.constants import ApproveTicketFields, RiskStatus
-from services.web.risk.models import (
-    ProcessApplication,
-    Risk,
-    RiskRule,
-    TicketNode,
-    calc_task_duration,
-    calc_task_finish_time,
-    extract_attempt_records,
-)
+from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
     ListAllProcessApplicationsReqSerializer,
@@ -51,6 +43,11 @@ from services.web.risk.serializers import (
     RiskRuleInfoSerializer,
     ToggleProcessApplicationReqSerializer,
     UpdateProcessApplicationsReqSerializer,
+)
+from services.web.risk.utils import (
+    calc_task_duration,
+    calc_task_finish_time,
+    extract_attempt_records,
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter

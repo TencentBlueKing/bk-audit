@@ -43,7 +43,8 @@ from services.web.risk.bksec.service import (
     validate_bksec_test_target,
 )
 from services.web.risk.constants import TicketNodeStatus
-from services.web.risk.models import Risk, TicketNode, calc_task_duration
+from services.web.risk.models import Risk, TicketNode
+from services.web.risk.utils import calc_task_duration
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
