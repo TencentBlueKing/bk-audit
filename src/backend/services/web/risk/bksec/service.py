@@ -176,41 +176,83 @@ def validate_bksec_test_target(risk: Risk) -> None:
 
 DEFAULT_FAILURE_HINT = gettext_lazy("任务执行失败")
 FAILURE_HINT_MAX_LEN = 200
+# 回源取节点错误时最多查询的失败节点数（避免子流程里大量失败节点打爆 SOPS）
+MAX_FETCH_ERROR_NODES = 5
+
+
+def _walk_nodes(node: dict):
+    """深度遍历 SOPS 任务状态树（失败节点可能嵌套在子流程里）"""
+    for child in (node.get("children") or {}).values():
+        if not isinstance(child, dict):
+            continue
+        yield child
+        yield from _walk_nodes(child)
+
+
+def _collect_failed_node_ids(status: Optional[dict]) -> List[str]:
+    """收集任务状态中处于失败态的节点 ID（get_node_data 必须带 node_id）"""
+    failed_states = {s.value for s in SOPSTaskStatus.get_failed_status()}
+    node_ids: List[str] = []
+    for child in _walk_nodes(status or {}):
+        if child.get("state") in failed_states and child.get("id"):
+            node_ids.append(str(child["id"]))
+    return node_ids
 
 
 def extract_failure_detail(status: dict) -> str:
-    """从 SOPS 任务状态中提取首个带错误信息的节点文本（无需额外请求）"""
-    children = (status or {}).get("children") or {}
-    for child in children.values():
-        if isinstance(child, dict) and child.get("error_message"):
-            return str(child["error_message"]).strip()
+    """从 SOPS 任务状态中递归提取首个带错误信息的节点文本（无需额外请求）"""
+    for child in _walk_nodes(status or {}):
+        error_message = str(child.get("error_message") or "").strip()
+        if error_message:
+            return error_message
     return ""
 
 
-def fetch_node_error(task_id: str) -> str:
-    """回源 SOPS 取节点执行数据中的错误文本（ex_data / error_message / outputs 里的错误项）
+def _extract_error_texts(node_data: dict) -> List[str]:
+    """从单个节点的执行数据中提取错误文本
+
+    get_node_data 返回 {"inputs": {...}, "outputs": [...], "ex_data": ...}，
+    真实错误在顶层 ex_data；outputs 可能是 [{key, value}] 或 {key: value}。
+    """
+    texts: List[str] = []
+    for key in ("ex_data", "error_message"):
+        value = str(node_data.get(key) or "").strip()
+        if value:
+            texts.append(value)
+    outputs = node_data.get("outputs") or {}
+    if isinstance(outputs, list):
+        items = [(item.get("key"), item.get("value")) for item in outputs if isinstance(item, dict)]
+    else:
+        items = list(outputs.items())
+    for key, value in items:
+        value = str(value or "").strip()
+        if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
+            texts.append(value)
+    return texts
+
+
+def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:
+    """回源 SOPS 取失败节点的错误文本（ex_data / error_message / outputs 里的错误项）
 
     仅在任务已终态失败、且 get_task_status 未带回 error_message 时调用。
+    注意：get_task_node_data 必须带 node_id，仅传 task_id 会返回「未找到节点[ID: None]」。
     """
     if not task_id:
         return ""
-    try:
-        node_data = api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID) or {}
-    except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
-        logger.warning("[FailureHint] Fetch node data failed, task_id=%s", task_id)
+    node_ids = _collect_failed_node_ids(status)
+    if not node_ids:
+        logger.info("[FailureHint] No failed node found in status, task_id=%s", task_id)
         return ""
     texts: List[str] = []
-    for data in node_data.values():
-        if not isinstance(data, dict):
+    for node_id in node_ids[:MAX_FETCH_ERROR_NODES]:
+        try:
+            node_data = (
+                api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=node_id) or {}
+            )
+        except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
+            logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, node_id)
             continue
-        for key in ("ex_data", "error_message"):
-            value = str(data.get(key) or "").strip()
-            if value:
-                texts.append(value)
-        for key, value in (data.get("outputs") or {}).items():
-            value = str(value or "").strip()
-            if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
-                texts.append(value)
+        texts.extend(_extract_error_texts(node_data))
     return "\n".join(dict.fromkeys(texts)).strip()
 
 
@@ -221,7 +263,7 @@ def build_failure_hint(status: dict, task_id: str = "", generic: str = "任务�
     写入点（发单 / 测试发单 / 终态同步）落库到 TicketNode.process_result["failure_hint"]，
     查询层（执行记录列表/详情）只读该字段。
     """
-    detail = extract_failure_detail(status) or fetch_node_error(task_id)
+    detail = extract_failure_detail(status) or fetch_node_error(task_id, status)
     if detail:
         return detail[:FAILURE_HINT_MAX_LEN]
     return str(generic)

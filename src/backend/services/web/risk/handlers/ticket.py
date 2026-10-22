@@ -627,7 +627,7 @@ class AutoProcess(RiskFlowBaseHandler):
                 process_result = {
                     "status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
                 }
-                return self._attach_failure_hint(process_result)
+                return self._attach_failure_hint(process_result, task_id=task_id)
             except APIRequestError as err:
                 # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
                 err_data = getattr(err, "data", {}) or {}
@@ -729,9 +729,9 @@ class AutoProcess(RiskFlowBaseHandler):
             "task_name": params["name"],
             "trigger": trigger,
         }
-        return self._attach_failure_hint(process_result)
+        return self._attach_failure_hint(process_result, task_id=str(result.get("task_id") or ""))
 
-    def _attach_failure_hint(self, process_result: dict) -> dict:
+    def _attach_failure_hint(self, process_result: dict, task_id: str = "") -> dict:
         """写入点落失败提示（非失败状态原样返回）"""
         status = process_result.get("status") or {}
         if status.get("state") in SOPSTaskStatus.get_failed_status():
@@ -739,7 +739,7 @@ class AutoProcess(RiskFlowBaseHandler):
 
             # 建单时刻 SOPS 往往还没回填节点错误，此时取到什么写什么，
             # 后续由 sync_auto_result 在终态同步时用真实错误覆盖
-            process_result["failure_hint"] = build_failure_hint(status)
+            process_result["failure_hint"] = build_failure_hint(status, task_id=task_id)
         # 冗余存储 duration（秒），用于排序
         process_result["duration"] = calc_task_duration(status)
         return process_result
