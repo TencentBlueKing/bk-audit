@@ -1,15 +1,17 @@
 """流式传输的不可变值对象与跨模块数据契约。
 
 设计原则：
-- 所有类型均为 frozen dataclass，构造后不可修改，避免运行期意外篡改绑定信息。
+- 值对象冻结字段绑定；事件 data 等嵌套内容仍须按只读契约使用，不能就地修改。
 - slots=True 减少内存开销，适合高频创建的短生命周期对象。
 - 类型只承载数据与派生属性，不包含业务逻辑，逻辑由 Runtime/Archive 层负责。
 """
 
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
-from services.web.ai_assistant.constants import StreamArchiveStatus
+from ui_stream.types import Checkpoint as StreamCheckpointResult
+
 from services.web.ai_assistant.schemas import AttachmentStreamConfig, UIStreamEvent
 
 
@@ -34,6 +36,24 @@ class StreamExecutionBinding:
 
         return self.config.task_id
 
+    @property
+    def resource_id(self) -> str:
+        """向组件提供业务无关的资源标识，不暴露数据库主键。"""
+
+        return str(self.attachment_uid)
+
+    @property
+    def execution_id(self) -> UUID:
+        """复用持久配置中的代际标识，与归档 fencing 保持同一来源。"""
+
+        return self.config.execution_id
+
+    @property
+    def redis_key(self) -> str:
+        """当前 execution 的逻辑 key，物理命名空间由 Redis 适配器补充。"""
+
+        return self.config.redis_key
+
 
 @dataclass(frozen=True, slots=True)
 class StreamRotation:
@@ -44,25 +64,28 @@ class StreamRotation:
 
 
 @dataclass(frozen=True, slots=True)
-class StreamReadResult:
-    """一次 Redis XREAD 的结果，游标包含被跳过的脏 entry。"""
-
-    events: list[UIStreamEvent]
-    last_seen_stream_id: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class StreamCheckpointResult:
-    """一次 MySQL checkpoint 的结果，显式告知 Runtime 是否停止后续归档。"""
-
-    archive_status: StreamArchiveStatus
-    capacity_exhausted: bool = False
-
-
-@dataclass(frozen=True, slots=True)
 class StreamTimeoutResult:
     """巡检收敛流式附件的结果；实时通知只在当前 execution 可定位时返回。"""
 
     updated: bool
     redis_key: str | None = None
     terminal_event: UIStreamEvent | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AttachmentCompletion:
+    """与流尾部共同提交的业务结果及审计字段，不承担事务或状态机逻辑。"""
+
+    output_data: dict[str, Any] | None
+    error_code: str
+    error_message: str
+    updated_by: str
+
+
+__all__ = [
+    "StreamExecutionBinding",
+    "StreamRotation",
+    "StreamCheckpointResult",
+    "StreamTimeoutResult",
+    "AttachmentCompletion",
+]

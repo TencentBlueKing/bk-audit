@@ -3,6 +3,7 @@
 import json
 import time
 from unittest import mock
+from uuid import UUID
 
 import pytest
 import requests
@@ -109,7 +110,14 @@ def get_stream_snapshot(log_analysis_stack, attachment: Attachment) -> dict:
     assert response.status_code == 200, response.text
     envelope = response.json()
     assert envelope["result"] is True, envelope
-    return envelope["data"]
+    snapshot = envelope["data"]
+    # 归档身份用于内部去重，公开快照仍只包含传输协议字段。
+    archive_ids = [UUID(event["archive_id"]) for event in attachment.stream_archive]
+    assert len(set(archive_ids)) == len(archive_ids)
+    assert snapshot["events"] == [
+        {key: value for key, value in event.items() if key != "archive_id"} for event in attachment.stream_archive
+    ]
+    return snapshot
 
 
 def test_log_analysis_streams_and_persists_final_markdown(log_analysis_stack):
@@ -221,12 +229,11 @@ def test_log_analysis_agent_failures_close_stream(log_analysis_stack, instructio
 
     assert completed.status == ExecutionStatus.FAILED
     assert completed.output_data is None
-    assert completed.stream_archive[-1] == {
+    assert snapshot["events"][-1] == {
         "event": PlatformStreamEvent.STREAM_END,
         "stream_id": None,
         "data": {"status": ExecutionStatus.FAILED},
     }
-    assert snapshot["events"] == completed.stream_archive
     assert frames[-1].event == PlatformStreamEvent.STREAM_END
     assert frames[-1].data == {"status": ExecutionStatus.FAILED}
     assert [frame.data for frame in frames] == [event["data"] for event in completed.stream_archive]
@@ -270,7 +277,7 @@ def test_log_analysis_accepts_complete_text_before_run_started(log_analysis_stac
     )
 
     completed = wait_for_terminal(attachment)
-    snapshot = get_stream_snapshot(log_analysis_stack, completed)
+    get_stream_snapshot(log_analysis_stack, completed)
 
     assert completed.status == ExecutionStatus.SUCCESS
     assert completed.output_data == {"markdown": "# 前导文本结论", "content_format": "MARKDOWN"}
@@ -281,7 +288,6 @@ def test_log_analysis_accepts_complete_text_before_run_started(log_analysis_stac
         "RUN_STARTED",
         "RUN_FINISHED",
     ]
-    assert snapshot["events"] == completed.stream_archive
 
 
 def test_log_analysis_manual_retry_rotates_execution_and_resets_old_stream(log_analysis_stack):

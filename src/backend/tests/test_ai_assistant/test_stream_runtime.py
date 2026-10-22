@@ -25,6 +25,7 @@ from services.web.ai_assistant.schemas import (
     parse_stream_config,
     serialize_stream_event,
 )
+from services.web.ai_assistant.schemas.stream import serialize_stream_archive_event
 from services.web.ai_assistant.streaming import (
     AttachmentArchiveStore,
     RedisLiveStore,
@@ -179,6 +180,13 @@ class StreamRuntimeStartTest(StreamRuntimeTestCase):
         self.assertFalse(runtime_b.closed)
         self.assertEqual(self.redis_events(runtime_a), [])
 
+    def test_reset_does_not_hide_programming_errors(self):
+        self.start_runtime()
+
+        with mock.patch.object(RedisLiveStore, "append", side_effect=ValueError("invalid publisher result")):
+            with self.assertRaisesRegex(ValueError, "invalid publisher result"):
+                self.start_runtime()
+
 
 class StreamRuntimeSendTest(StreamRuntimeTestCase):
     def test_send_writes_redis_immediately_and_buffers_for_archive(self):
@@ -189,10 +197,19 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
         self.assertIsNone(event.event)
         self.assertIsNotNone(event.stream_id)
         self.assertEqual(runtime.pending_count, 1)
-        self.assertEqual(runtime._pending_bytes, len(serialize_stream_event(event)))
-        self.assertEqual(self.redis_events(runtime), [event])
+        self.assertEqual(runtime._pending_bytes, len(serialize_stream_archive_event(event)))
+        self.assertEqual(
+            [item.model_dump(mode="json") for item in self.redis_events(runtime)], [event.model_dump(mode="json")]
+        )
+        self.assertIsNotNone(event.archive_id)
         # 未达到自动 checkpoint 阈值前不落库，避免每条事件一次 UPDATE。
         self.assertEqual(self.archived_events(), [])
+
+    def test_degraded_runtime_retains_application_archive_enum(self):
+        runtime = self.start_runtime()
+        with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("redis down")):
+            runtime.send({"progress": 50})
+        self.assertIs(runtime.archive_status, StreamArchiveStatus.DEGRADED)
 
     def test_business_api_only_accepts_data(self):
         runtime = self.start_runtime()
@@ -278,7 +295,7 @@ class StreamRuntimeSendTest(StreamRuntimeTestCase):
 
     def test_send_after_close_raises_runtime_closed(self):
         runtime = self.start_runtime()
-        runtime.finish_retry()
+        runtime.close_for_retry()
 
         with self.assertRaises(StreamRuntimeClosed):
             runtime.send({})
@@ -294,7 +311,7 @@ class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
         # 实时推送失败的事件没有 Redis 游标，但仍必须落归档。
         self.assertIsNone(event.stream_id)
         self.assertEqual(runtime.archive_status, StreamArchiveStatus.DEGRADED)
-        runtime.finish_retry()
+        runtime.close_for_retry()
         archived = self.archived_events()
         self.assertEqual(len(archived), 1)
         self.assertIsNone(archived[0]["stream_id"])
@@ -429,6 +446,44 @@ class StreamRuntimeDegradationTest(StreamRuntimeTestCase):
         self.assertEqual(runtime.pending_count, 0)
         self.assertEqual([item["data"]["content"] for item in self.archived_events()], ["A", "B"])
 
+    def assert_committed_checkpoint_retry_is_idempotent(self, *, redis_available):
+        runtime = self.start_runtime()
+        checkpoint = self.archive_store.checkpoint
+        attempts = 0
+
+        def commit_then_lose_first_ack(**kwargs):
+            nonlocal attempts
+            result = checkpoint(**kwargs)
+            attempts += 1
+            if attempts == 1:
+                # 真实 checkpoint 已提交；只丢弃返回确认，不回滚它的数据库副作用。
+                raise DatabaseError("checkpoint committed, response lost")
+            return result
+
+        with mock.patch.object(self.archive_store, "checkpoint", side_effect=commit_then_lose_first_ack):
+            with mock.patch.object(runtime, "CHECKPOINT_EVENT_COUNT", 1):
+                first = runtime.send({"delta": "first"})
+                self.assertEqual(runtime.pending_count, 1)
+                self.assertEqual([item["data"] for item in self.archived_events()], [{"delta": "first"}])
+                second = runtime.send({"delta": "second"})
+
+        self.assertEqual(runtime.pending_count, 0)
+        self.assertEqual([item["data"] for item in self.archived_events()], [{"delta": "first"}, {"delta": "second"}])
+        self.assertEqual(
+            [item["archive_id"] for item in self.archived_events()], [str(first.archive_id), str(second.archive_id)]
+        )
+        self.assertEqual(first.stream_id is not None, redis_available)
+        runtime.finish_success(output_data={"content": "done"}, updated_by=self.user)
+        self.assertEqual(len(self.archived_events()), 3)
+        self.assertEqual(self.archived_events()[-1]["event"], PlatformStreamEvent.STREAM_END)
+
+    def test_committed_checkpoint_lost_ack_does_not_duplicate_overlapping_pending(self):
+        self.assert_committed_checkpoint_retry_is_idempotent(redis_available=True)
+
+    def test_committed_checkpoint_lost_ack_without_redis_cursor_is_idempotent(self):
+        with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("redis unavailable")):
+            self.assert_committed_checkpoint_retry_is_idempotent(redis_available=False)
+
 
 class StreamRuntimeCapacityTest(StreamRuntimeTestCase):
     def test_oversized_single_event_is_dropped_and_marks_truncated(self):
@@ -553,7 +608,7 @@ class StreamRuntimeTerminalTest(StreamRuntimeTestCase):
 
         retry_attachment = self.create_attachment(task_id="task-retry")
         retry_runtime = self.start_runtime(attachment=retry_attachment)
-        retry_runtime.finish_retry()
+        retry_runtime.close_for_retry()
 
         self.assertEqual(start_stream_span.call_count, 2)
         self.assertEqual(start_stream_span.call_args_list[0].kwargs["status"], ExecutionStatus.SUCCESS)
@@ -587,8 +642,8 @@ class StreamRuntimeTerminalTest(StreamRuntimeTestCase):
         with mock.patch.object(RedisLiveStore, "append", side_effect=RedisError("redis down")):
             runtime.send({"content": "A"})
 
-        runtime.finish_retry()
-        runtime.finish_retry()
+        runtime.close_for_retry()
+        runtime.close_for_retry()
 
         report_stream_execution.assert_called_once()
         snapshot = report_stream_execution.call_args.args[0]
@@ -652,11 +707,11 @@ class StreamRuntimeTerminalTest(StreamRuntimeTestCase):
         self.assertEqual(self.archived_events()[-1]["data"], {"status": ExecutionStatus.FAILED})
         self.assertEqual(self.redis_events(runtime)[-1].event, PlatformStreamEvent.STREAM_END)
 
-    def test_finish_retry_flushes_pending_and_closes_without_terminal(self):
+    def test_close_for_retry_flushes_pending_and_closes_without_terminal(self):
         runtime = self.start_runtime()
         runtime.send({"content": "A"})
 
-        runtime.finish_retry()
+        runtime.close_for_retry()
 
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
@@ -667,24 +722,24 @@ class StreamRuntimeTerminalTest(StreamRuntimeTestCase):
         self.assertEqual(archived[0]["data"], {"content": "A"})
         self.assertIsNone(archived[-1]["event"])
 
-    def test_finish_retry_swallows_database_error_and_closes(self):
+    def test_close_for_retry_swallows_database_error_and_closes(self):
         runtime = self.start_runtime()
         runtime.send({"content": "A"})
 
         with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=DatabaseError("db down")):
-            runtime.finish_retry()
+            runtime.close_for_retry()
 
         self.assertTrue(runtime.closed)
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
 
-    def test_finish_retry_propagates_checkpoint_implementation_error_and_stays_open(self):
+    def test_close_for_retry_propagates_checkpoint_implementation_error_and_stays_open(self):
         runtime = self.start_runtime()
         runtime.send({"content": "A"})
 
         with mock.patch.object(AttachmentArchiveStore, "checkpoint", side_effect=ValueError("invalid archive")):
             with self.assertRaises(ValueError):
-                runtime.finish_retry()
+                runtime.close_for_retry()
 
         self.assertFalse(runtime.closed)
         self.assertEqual(runtime.pending_count, 1)

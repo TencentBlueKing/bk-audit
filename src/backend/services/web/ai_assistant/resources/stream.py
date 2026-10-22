@@ -2,6 +2,7 @@ from collections.abc import Iterator
 
 from django.http import StreamingHttpResponse
 from django.utils.translation import gettext_lazy
+from ui_stream.sse import SSEBody
 
 from core.models import get_request_username
 from services.web.ai_assistant.resources.conversation import AIAssistantResource
@@ -14,10 +15,7 @@ from services.web.ai_assistant.serializers.stream import (
     AttachmentStreamSnapshotResponseSerializer,
 )
 from services.web.ai_assistant.services.attachment_stream import AttachmentStreamService
-from services.web.ai_assistant.streaming.sse import (
-    encode_sse_event,
-    encode_sse_heartbeat,
-)
+from services.web.ai_assistant.streaming.sse import encode_sse_item
 
 # Last-Event-ID 是 EventSource 断线重连时自动补发的标准 Header。
 LAST_EVENT_ID_HEADER = "HTTP_LAST_EVENT_ID"
@@ -86,10 +84,15 @@ class GetAttachmentStream(AIAssistantResource):
             execution_id=validated_request_data["execution_id"],
             last_stream_id=last_stream_id,
         )
-        response = StreamingHttpResponse(self._encode(events), content_type="text/event-stream")
-        response["Cache-Control"] = "no-cache"
-        # 显式关闭反向代理缓冲，否则事件会被攒批后才下发，失去流式意义。
-        response["X-Accel-Buffering"] = "no"
+        body = self._encode(events)
+        try:
+            response = StreamingHttpResponse(body, content_type="text/event-stream")
+            response["Cache-Control"] = "no-cache"
+            # 显式关闭反向代理缓冲，否则事件会被攒批后才下发，失去流式意义。
+            response["X-Accel-Buffering"] = "no"
+        except BaseException:
+            body.close()
+            raise
         return response
 
     @staticmethod
@@ -101,12 +104,6 @@ class GetAttachmentStream(AIAssistantResource):
 
     @staticmethod
     def _encode(events: Iterator[UIStreamEvent | None]) -> Iterator[bytes]:
-        """把事件迭代器转为 SSE 字节流；``None`` 编码为心跳。"""
+        """显式持有源迭代器，响应未开始消费时 close 也必须向内传递。"""
 
-        try:
-            for event in events:
-                yield encode_sse_heartbeat() if event is None else encode_sse_event(event)
-        finally:
-            close = getattr(events, "close", None)
-            if callable(close):
-                close()
+        return SSEBody(events, encoder=encode_sse_item)

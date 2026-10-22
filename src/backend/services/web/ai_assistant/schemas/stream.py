@@ -43,6 +43,8 @@ class UIStreamEvent(MessageSchema):
     event: PlatformStreamEvent | None = None
     stream_id: str | None = None
     data: Any = None
+    # 归档重试身份独立于 Redis 游标；只由存储序列化器写入，不进入公开快照或实时协议。
+    archive_id: UUID | None = Field(default=None, exclude=True, repr=False)
 
 
 class AttachmentStreamSnapshot(MessageSchema):
@@ -68,10 +70,21 @@ def serialize_stream_event(event: UIStreamEvent, *, include_stream_id: bool = Tr
     return _serialize_json(payload, error_data={"event": event.event})
 
 
-def serialize_stream_data(data: Any) -> bytes:
-    """验证 SSE data 可编码为标准 JSON，并返回 UTF-8 紧凑字节。"""
+def dump_stream_archive_event(event: UIStreamEvent) -> dict[str, Any]:
+    """持久化内部归档身份，公开 model_dump 仍保持原事件字段。"""
 
-    return _serialize_json(data, error_data={"field_name": "data"})
+    payload = event.model_dump(mode="json")
+    if event.archive_id is not None:
+        payload["archive_id"] = str(event.archive_id)
+    return payload
+
+
+def serialize_stream_archive_event(event: UIStreamEvent, *, include_stream_id: bool = True) -> bytes:
+    """按归档实际记录计量缓冲字节，实时编码继续使用原有公开协议。"""
+
+    if not include_stream_id:
+        return serialize_stream_event(event, include_stream_id=False)
+    return _serialize_json(dump_stream_archive_event(event), error_data={"event": event.event})
 
 
 def _serialize_json(value: Any, *, error_data: dict[str, Any]) -> bytes:
