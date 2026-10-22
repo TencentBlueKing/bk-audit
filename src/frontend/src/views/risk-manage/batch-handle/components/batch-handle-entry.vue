@@ -1,6 +1,8 @@
 <template>
   <span
     v-bk-tooltips="tooltip"
+    class="batch-handle-btn-wrapper"
+    :class="{ 'is-batch-disabled': !availability.enabled }"
     data-testid="batch-handle-button">
     <auth-button
       action-id="process_risk"
@@ -325,3 +327,17 @@
 
   defineExpose({ sync: scheduleSync });
 </script>
+<style lang="postcss" scoped>
+.batch-handle-btn-wrapper {
+  display: inline-flex;
+
+  /* 禁用的原生 button 不派发鼠标事件，需透传给外层才能触发 tooltip */
+  &.is-batch-disabled {
+    cursor: not-allowed;
+
+    :deep(.bk-button) {
+      pointer-events: none;
+    }
+  }
+}
+</style>
