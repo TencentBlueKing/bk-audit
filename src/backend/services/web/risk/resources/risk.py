@@ -80,6 +80,10 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
+from services.web.risk.bksec.service import (
+    enrich_status_with_node_errors,
+    iter_status_nodes,
+)
 from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
@@ -1338,8 +1342,11 @@ class RetryAutoProcess(RiskMeta):
         task_id = node.process_result.get("task", {}).get("task_id", "")
         # 获取节点状态
         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        # 对每个失败的节点，获取节点输入并重试
-        for item in status["children"].values():
+        # 失败时回源补齐各失败节点的 error_message，保证重试快照固化到真实的失败现场
+        if status.get("state") in SOPSTaskStatus.get_failed_status():
+            status = enrich_status_with_node_errors(status, task_id)
+        # 对每个失败的节点（含子流程内嵌套的失败节点），获取节点输入并重试
+        for item in iter_status_nodes(status):
             if item["state"] != SOPSTaskStatus.FAILED:
                 continue
             io_data = api.bk_sops.get_node_data(

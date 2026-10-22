@@ -61,7 +61,10 @@ from services.web.common.monitor import (
     RiskExportFailedEvent,
 )
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
-from services.web.risk.bksec.service import build_failure_hint
+from services.web.risk.bksec.service import (
+    build_failure_hint,
+    enrich_status_with_node_errors,
+)
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
     RISK_ESQUERY_DELAY_TIME,
@@ -706,6 +709,10 @@ def sync_auto_result(node_id: str = None):
                     task_id = node.process_result.get("task", {}).get("task_id", "")
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                        # 失败时回源补齐各失败节点的 error_message：get_task_status 不带错误文本，
+                        # 只有补上后执行记录详情 / 重试快照的 attempts 才能看到逐节点的失败原因
+                        if status.get("state") in SOPSTaskStatus.get_failed_status():
+                            status = enrich_status_with_node_errors(status, task_id)
                         node.process_result["status"] = status
                         # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
                         node.process_result["duration"] = calc_task_duration(status)
