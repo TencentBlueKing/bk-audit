@@ -45,9 +45,8 @@ export const buildAnalyzeRetryInput = (
   original: { condition?: unknown } | null | undefined,
   payload: Pick<AnalyzeRetryPayload, 'prompt'>,
 ): AiAnalysisInputData => {
-  const condition = isSearchCondition(original?.condition)
-    ? original.condition
-    : undefined;
+  const conditionSource = original?.condition;
+  const condition = isSearchCondition(conditionSource) ? conditionSource : undefined;
   return {
     ...(condition ? { condition } : {}),
     analysis_mode: 'CUSTOM',
