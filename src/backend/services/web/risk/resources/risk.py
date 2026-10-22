@@ -133,6 +133,7 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
     UserType,
+    extract_attempt_records,
 )
 from services.web.risk.serializers import (
     BatchConfirmAsMisReportRequestSerializer,
@@ -1319,6 +1320,16 @@ class RetryAutoProcess(RiskMeta):
                 inputs=io_data["inputs"],
             )
         with transaction.atomic():
+            # 重试前快照：固化本次被覆盖前的失败现场（error_message 等），仅 append 不覆盖
+            retry_history = node.process_result.get("retry_history") or []
+            retry_history.append(
+                {
+                    "time": timezone.localtime().strftime(api_settings.DATETIME_FORMAT),
+                    "operator": get_request_username(),
+                    "attempts": extract_attempt_records(status),
+                }
+            )
+            node.process_result["retry_history"] = retry_history
             node.status = TicketNodeStatus.RUNNING
             node.process_result["status"]["state"] = SOPSTaskStatus.RUNNING
             node.save(update_fields=["status", "process_result"])

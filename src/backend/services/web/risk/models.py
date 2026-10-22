@@ -1245,3 +1245,22 @@ def calc_task_finish_time(status_info: dict) -> str:
     if not candidates:
         return ""
     return max(candidates, key=lambda value: parse_sops_time(value) or datetime.datetime.min)
+
+
+def extract_attempt_records(status_info: dict) -> list:
+    """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）"""
+    attempts = []
+    children = (status_info or {}).get("children") or {}
+    for node_id, child in children.items():
+        attempts.append(
+            {
+                "node_id": node_id,
+                "node_name": child.get("name") or "",
+                "state": child.get("state") or "",
+                "start_time": child.get("start_time") or "",
+                "end_time": child.get("finish_time") or "",
+                "duration": child.get("elapsed_time") or 0,
+                "error_message": child.get("error_message") or "",
+            }
+        )
+    return attempts

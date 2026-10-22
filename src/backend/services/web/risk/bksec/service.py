@@ -232,10 +232,13 @@ def _extract_error_texts(node_data: dict) -> List[str]:
 
 
 def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:
-    """回源 SOPS 取失败节点的错误文本（ex_data / error_message / outputs 里的错误项）
+    """回源 SOPS 取「第一个」能取到错误文本的失败节点（ex_data / error_message / outputs 里的错误项）
 
     仅在任务已终态失败、且 get_task_status 未带回 error_message 时调用。
     注意：get_task_node_data 必须带 node_id，仅传 task_id 会返回「未找到节点[ID: None]」。
+
+    与 extract_failure_detail 保持一致：failure_hint 定位为记录级摘要，只展示第一个失败节点的错误；
+    完整的逐节点错误由 children[].error_message 承载，避免两处语义不一致。
     """
     if not task_id:
         return ""
@@ -243,7 +246,6 @@ def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:
     if not node_ids:
         logger.info("[FailureHint] No failed node found in status, task_id=%s", task_id)
         return ""
-    texts: List[str] = []
     for node_id in node_ids[:MAX_FETCH_ERROR_NODES]:
         try:
             node_data = (
@@ -252,8 +254,11 @@ def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:
         except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
             logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, node_id)
             continue
-        texts.extend(_extract_error_texts(node_data))
-    return "\n".join(dict.fromkeys(texts)).strip()
+        texts = _extract_error_texts(node_data)
+        if texts:
+            # 取到第一个有错误文本的失败节点即返回，无需继续请求其余节点
+            return "\n".join(dict.fromkeys(texts)).strip()
+    return ""
 
 
 def build_failure_hint(status: dict, task_id: str = "", generic: str = "任务执行失败") -> str:
@@ -262,6 +267,8 @@ def build_failure_hint(status: dict, task_id: str = "", generic: str = "任务�
     不使用特征映射表：映射表无法覆盖未收录的错误且需持续维护，直接透出原始错误更利于定位。
     写入点（发单 / 测试发单 / 终态同步）落库到 TicketNode.process_result["failure_hint"]，
     查询层（执行记录列表/详情）只读该字段。
+
+    取数语义：只取第一个失败节点的错误（记录级摘要），逐节点明细见 children[].error_message。
     """
     detail = extract_failure_detail(status) or fetch_node_error(task_id, status)
     if detail:
