@@ -40,6 +40,7 @@ from services.web.risk.models import (
     TicketNode,
     calc_task_duration,
     calc_task_finish_time,
+    extract_attempt_records,
 )
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
@@ -487,7 +488,9 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
 
         # 尝试记录（从 SOPS 状态中提取每次尝试）
         status_info = process_result.get("status") or {}
-        attempts = self._extract_attempts(status_info)
+        attempts = extract_attempt_records(status_info)
+        # 重试记录（RetryAutoProcess 重试前写入的快照，仅 append 不覆盖）
+        retry_history = process_result.get("retry_history") or []
 
         # 参数信息（从 Risk 获取）
         params = {}
@@ -532,28 +535,12 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "risk_status": (risk.status or "") if risk else "",
             # 参数信息
             "params": params,
+            # 重试记录
+            "retry_count": len(retry_history),
+            "retry_history": retry_history,
             # 尝试记录
             "attempts": attempts,
         }
-
-    @staticmethod
-    def _extract_attempts(status_info: dict) -> list:
-        """从 SOPS 状态中提取每次尝试记录"""
-        attempts = []
-        children = status_info.get("children") or {}
-        for node_id, child in children.items():
-            attempts.append(
-                {
-                    "node_id": node_id,
-                    "node_name": child.get("name") or "",
-                    "state": child.get("state") or "",
-                    "start_time": child.get("start_time") or "",
-                    "end_time": child.get("finish_time") or "",
-                    "duration": child.get("elapsed_time") or 0,
-                    "error_message": child.get("error_message") or "",
-                }
-            )
-        return attempts
 
 
 class ToggleProcessApplication(ProcessApplicationMeta):

@@ -17,11 +17,13 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import time
+from unittest import mock
 
 import pytest
 from bk_resource import resource
 
 from apps.sops.constants import SOPSTaskStatus
+from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
@@ -250,6 +252,135 @@ class TestGetPAExecutionRecordDetail:
         # 风险描述 / 风险证据来自 params（重试场景需展示）
         assert resp["params"]["risk_description"] == RISK_INFO["event_content"]
         assert resp["params"]["risk_evidence"] == RISK_INFO["event_evidence"]
+        # 无重试记录
+        assert resp["retry_count"] == 0
+        assert resp["retry_history"] == []
+
+    def test_detail_retry_history_passthrough(self):
+        """重试快照原样透传（形状与 attempts 一致）"""
+        risk = self._prepare()
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=3)
+        retry_entry = {
+            "time": "2026-10-16 20:50:12",
+            "operator": "tester",
+            "attempts": [
+                {
+                    "node_id": "node1",
+                    "node_name": "发单节点",
+                    "state": SOPSTaskStatus.FAILED.value,
+                    "start_time": "2026-10-16 20:44:31",
+                    "end_time": "2026-10-16 20:44:32",
+                    "duration": 1,
+                    "error_message": "调用 IAM 接口超时",
+                }
+            ],
+        }
+        node.process_result["retry_history"] = [retry_entry]
+        node.save(update_fields=["process_result"])
+        resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        assert resp["retry_count"] == 1
+        assert resp["retry_history"] == [retry_entry]
+
+
+@pytest.mark.django_db
+class TestRetryAutoProcessRetryHistory:
+    def test_retry_writes_history_snapshot(self):
+        """重试前固化失败快照，多次重试仅 append；详情可见重试记录"""
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
+        risk = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-R"})
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FAILED.value, task_id=99)
+        status_with_failure = {
+            "state": SOPSTaskStatus.FAILED.value,
+            "children": {
+                "node1": {
+                    "id": "node1",
+                    "name": "发单节点",
+                    "state": SOPSTaskStatus.FAILED.value,
+                    "start_time": "2026-10-16 20:44:31",
+                    "finish_time": "2026-10-16 20:44:32",
+                    "elapsed_time": 1,
+                    "error_message": "调用 IAM 接口超时",
+                }
+            },
+        }
+        with mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.get_task_status",
+            mock.Mock(return_value=status_with_failure),
+        ), mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.get_node_data",
+            mock.Mock(return_value={"inputs": {}}),
+        ), mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.operate_node",
+            mock.Mock(return_value=None),
+        ), mock.patch(
+            "services.web.risk.resources.risk.sync_auto_result.apply_async",
+            mock.Mock(return_value=None),
+        ), mock.patch(
+            "services.web.risk.resources.risk.get_request_username",
+            mock.Mock(return_value="tester"),
+        ):
+            resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
+        node.refresh_from_db()
+        assert node.status == TicketNodeStatus.RUNNING
+        history = node.process_result["retry_history"]
+        assert len(history) == 1
+        entry = history[0]
+        assert entry["operator"] == "tester"
+        assert entry["time"]
+        # 快照固化重试前的失败现场
+        failed = next(item for item in entry["attempts"] if item["node_id"] == "node1")
+        assert failed["state"] == SOPSTaskStatus.FAILED.value
+        assert failed["error_message"] == "调用 IAM 接口超时"
+        assert failed["duration"] == 1
+        # 详情透传
+        detail = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        assert detail["retry_count"] == 1
+        assert detail["retry_history"] == history
+
+    def test_retry_history_appends(self):
+        """多次重试逐次追加，不覆盖"""
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
+        risk = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-R2"})
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FAILED.value, task_id=98)
+        status_with_failure = {
+            "state": SOPSTaskStatus.FAILED.value,
+            "children": {
+                "node1": {
+                    "id": "node1",
+                    "name": "发单节点",
+                    "state": SOPSTaskStatus.FAILED.value,
+                    "error_message": "第 N 次失败",
+                }
+            },
+        }
+        with mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.get_task_status",
+            mock.Mock(return_value=status_with_failure),
+        ), mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.get_node_data",
+            mock.Mock(return_value={"inputs": {}}),
+        ), mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.operate_node",
+            mock.Mock(return_value=None),
+        ), mock.patch(
+            "services.web.risk.resources.risk.sync_auto_result.apply_async",
+            mock.Mock(return_value=None),
+        ), mock.patch(
+            "services.web.risk.resources.risk.get_request_username",
+            mock.Mock(return_value="tester"),
+        ):
+            resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
+            resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
+        node.refresh_from_db()
+        history = node.process_result["retry_history"]
+        assert len(history) == 2
+        assert all(item["attempts"][0]["error_message"] == "第 N 次失败" for item in history)
 
     def test_detail_without_risk(self):
         """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空"""
