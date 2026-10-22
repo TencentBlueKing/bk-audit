@@ -373,7 +373,7 @@ export default {
     '所选风险包含未加载数据，暂无法批量处理': 'Selected risks include unloaded rows and cannot be batch processed yet',
     所选风险无法批量处理: 'Selected risks cannot be batch processed',
     '所选风险包含自动审批中/套餐处理中，不支持批量处理': 'Selected risks include ones under auto approval or tool processing and cannot be batch processed',
-    '所选风险数量超过上限，请缩小范围': 'Too many risks selected. Please narrow the selection',
+    '所选风险数量超过上限：500，请缩小范围': 'Selected risks exceed the limit of 500. Please narrow the selection',
     '所选风险状态不同，无可用批量操作': 'Selected risks have different statuses. No batch action is available',
     已关单风险仅支持人工关单: 'Closed risks can only be closed manually',
     '所选风险策略不同，不支持批量处理套餐': 'Selected risks come from different strategies, so processing tools are unavailable',
