@@ -110,6 +110,14 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     }
   };
 
+  /** 本页全选只作用于当前页：翻页时退出 page 模式，保留已勾选的 key，避免新页被自动勾选 */
+  const releasePageSelectionForPageChange = () => {
+    if (!enabled.value || selectCheckMode.value !== 'page') {
+      return;
+    }
+    selectCheckMode.value = '';
+  };
+
   const waitForSelectAllLoadingPaint = async () => {
     await nextTick();
     await new Promise<void>((resolve) => {
@@ -437,6 +445,7 @@ export function useCrossPageSelect(options: UseCrossPageSelectOptions) {
     resetCrossPageSelection,
     clearAllSelection,
     preservePageSelectionForPageSizeChange,
+    releasePageSelectionForPageChange,
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
