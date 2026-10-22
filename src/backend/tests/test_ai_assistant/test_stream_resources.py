@@ -10,6 +10,7 @@ from django.test import override_settings
 from drf_spectacular.views import SpectacularAPIView
 from redis.exceptions import RedisError
 from rest_framework.test import APIRequestFactory
+from ui_stream.types import ReadBatch as StreamReadResult
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
@@ -34,7 +35,7 @@ from services.web.ai_assistant.serializers.stream import (
     AttachmentStreamSnapshotResponseSerializer,
 )
 from services.web.ai_assistant.services.attachment_stream import AttachmentStreamService
-from services.web.ai_assistant.streaming import StreamReadResult, build_stream_key
+from services.web.ai_assistant.streaming import build_stream_key
 from services.web.ai_assistant.streaming.sse import (
     encode_sse_event,
     encode_sse_heartbeat,
@@ -441,7 +442,7 @@ class AttachmentStreamIterationTest(AttachmentStreamServiceTestCase):
     @mock.patch("services.web.ai_assistant.services.attachment_stream.time.monotonic")
     def test_dirty_redis_entry_does_not_refresh_idle_timeout(self, monotonic):
         self.set_config(self.make_config())
-        monotonic.side_effect = [0, 15, 300]
+        monotonic.side_effect = [0, 0, 15, 15, 300]
         service, redis_store = self.service(
             [
                 StreamReadResult(events=[], last_seen_stream_id="4-0"),
@@ -458,7 +459,7 @@ class AttachmentStreamIterationTest(AttachmentStreamServiceTestCase):
     @mock.patch("services.web.ai_assistant.services.attachment_stream.time.monotonic")
     def test_heartbeat_does_not_refresh_idle_timeout(self, monotonic):
         self.set_config(self.make_config())
-        monotonic.side_effect = [0, 15, 300]
+        monotonic.side_effect = [0, 0, 15, 15, 300]
         service, redis_store = self.service([[], []])
 
         events = list(service.iter_events(attachment_uid=str(self.attachment.uid), last_stream_id=None))
@@ -471,7 +472,7 @@ class AttachmentStreamIterationTest(AttachmentStreamServiceTestCase):
     def test_business_event_refreshes_idle_timeout_window(self, monotonic):
         self.set_config(self.make_config())
         event = business_event("A", stream_id="1-0")
-        monotonic.side_effect = [0, 250, 549, 550]
+        monotonic.side_effect = [0, 0, 250, 250, 549, 549, 550]
         service, _ = self.service([[event], [], []])
 
         events = list(service.iter_events(attachment_uid=str(self.attachment.uid), last_stream_id=None))
@@ -609,6 +610,15 @@ class AttachmentStreamIterationTest(AttachmentStreamServiceTestCase):
 
 @mock.patch("services.web.ai_assistant.resources.stream.get_request_username", return_value="alice")
 class StreamResourceTest(AttachmentStreamServiceTestCase):
+    @staticmethod
+    def close_stream_response(response):
+        # TestCase 外层事务仍在；只隔离 request_finished 的连接清理，实际执行所有响应 closer。
+        request_finished.disconnect(close_old_connections)
+        try:
+            response.close()
+        finally:
+            request_finished.connect(close_old_connections)
+
     def setUp(self):
         super().setUp()
         permission_username = mock.patch(
@@ -648,12 +658,13 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         request = APIRequestFactory().get("/stream/", HTTP_LAST_EVENT_ID="2-0")
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=iter(())) as iter_events:
-            GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 last_stream_id="1-0",
                 _request=request,
             )
+        self.addCleanup(self.close_stream_response, response)
 
         self.assertEqual(iter_events.call_args.kwargs["last_stream_id"], "2-0")
         self.assertEqual(iter_events.call_args.kwargs["execution_id"], config.execution_id)
@@ -664,12 +675,13 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         request = APIRequestFactory().get("/stream/", HTTP_LAST_EVENT_ID="2-0")
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=iter(())) as iter_events:
-            GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 last_stream_id="not-a-cursor",
                 _request=request,
             )
+        self.addCleanup(self.close_stream_response, response)
 
         self.assertEqual(iter_events.call_args.kwargs["last_stream_id"], "2-0")
 
@@ -679,7 +691,7 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         request = APIRequestFactory().get("/stream/", HTTP_LAST_EVENT_ID="not-a-cursor")
 
         with self.assertRaises(InvalidStreamCursor):
-            GetAttachmentStream()(
+            GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 last_stream_id="2-0",
@@ -692,12 +704,13 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         request = APIRequestFactory().get("/stream/")
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=iter(())) as iter_events:
-            GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 last_stream_id="1-0",
                 _request=request,
             )
+        self.addCleanup(self.close_stream_response, response)
 
         self.assertEqual(iter_events.call_args.kwargs["last_stream_id"], "1-0")
 
@@ -707,12 +720,13 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         request = APIRequestFactory().get("/stream/", HTTP_LAST_EVENT_ID="   ")
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=iter(())) as iter_events:
-            GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 last_stream_id="1-0",
                 _request=request,
             )
+        self.addCleanup(self.close_stream_response, response)
 
         self.assertEqual(iter_events.call_args.kwargs["last_stream_id"], "1-0")
 
@@ -723,12 +737,13 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
         events = iter([business_event("A", stream_id="1-0"), None])
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=events):
-            response = GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 _request=request,
             )
 
+        self.addCleanup(self.close_stream_response, response)
         self.assertEqual(response["Content-Type"], "text/event-stream")
         self.assertEqual(response["Cache-Control"], "no-cache")
         self.assertEqual(response["X-Accel-Buffering"], "no")
@@ -750,19 +765,15 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
                 closed.append(True)
 
         with mock.patch.object(AttachmentStreamService, "iter_events", return_value=events()):
-            response = GetAttachmentStream()(
+            response = GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 _request=APIRequestFactory().get("/stream/"),
             )
 
+        self.addCleanup(self.close_stream_response, response)
         next(iter(response.streaming_content))
-        # TestCase 用外层事务隔离数据；避免 request_finished 关闭测试连接而污染后续用例。
-        request_finished.disconnect(close_old_connections)
-        try:
-            response.close()
-        finally:
-            request_finished.connect(close_old_connections)
+        self.close_stream_response(response)
 
         self.assertEqual(closed, [True])
 
@@ -773,7 +784,7 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
 
         # 非法游标必须在建立流之前失败，让前端拿到明确的业务错误码。
         with self.assertRaises(InvalidStreamCursor):
-            GetAttachmentStream()(
+            GetAttachmentStream().request(
                 attachment_uid=str(self.attachment.uid),
                 execution_id=str(config.execution_id),
                 _request=request,
@@ -810,6 +821,7 @@ class StreamResourceTest(AttachmentStreamServiceTestCase):
                 attachment_uid=str(self.attachment.uid),
             )
 
+        self.addCleanup(self.close_stream_response, response)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/event-stream")
 

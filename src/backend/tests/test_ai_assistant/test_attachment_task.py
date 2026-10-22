@@ -547,12 +547,12 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
 
     def test_business_retry_flushes_pending_events_and_keeps_processing(self):
         with mock.patch.object(
-            UIStreamRuntime, "finish_retry", autospec=True, side_effect=UIStreamRuntime.finish_retry
-        ) as finish_retry:
+            UIStreamRuntime, "close_for_retry", autospec=True, side_effect=UIStreamRuntime.close_for_retry
+        ) as close_for_retry:
             with self.assertRaises(Retry):
                 self.invoke(execute_attachment_stream_retry, attachment=self.attachment)
 
-        self.assertEqual(finish_retry.call_count, 1)
+        self.assertEqual(close_for_retry.call_count, 1)
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(self.attachment.output_data)
@@ -609,6 +609,29 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(self.attachment.output_data)
+
+    def test_committed_finalization_lost_ack_redelivery_is_ignored_without_rerunning_business(self):
+        finalize = AttachmentArchiveStore.finalize
+
+        def commit_then_lose_ack(store, **kwargs):
+            finalize(store, **kwargs)
+            raise DatabaseError("finalization committed, response lost")
+
+        with mock.patch.object(AttachmentArchiveStore, "finalize", autospec=True, side_effect=commit_then_lose_ack):
+            with self.assertRaises(Retry):
+                self.invoke(execute_attachment_stream_success, attachment=self.attachment)
+
+        self.attachment.refresh_from_db()
+        committed_archive = self.attachment.stream_archive
+        committed_config = self.attachment.stream_config
+        self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(self.attachment.output_data, {"content": "async:hello"})
+        with mock.patch.object(execute_attachment_stream_success, "run", side_effect=AssertionError("business rerun")):
+            with self.assertRaises(Ignore):
+                self.invoke(execute_attachment_stream_success, attachment=self.attachment, retries=1)
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.stream_archive, committed_archive)
+        self.assertEqual(self.attachment.stream_config, committed_config)
 
     @mock.patch("services.web.ai_assistant.services.attachment_execution.report_invariant_violation")
     def test_output_validation_error_does_not_retry_and_marks_failed(self, report_invariant_violation):

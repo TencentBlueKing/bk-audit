@@ -954,7 +954,7 @@ class AIAnalysisTaskTest(AIAssistantPlatformTestCase):
 
         attachment.refresh_from_db()
         self.assertEqual(attachment.status, ExecutionStatus.PROCESSING)
-        runtime.finish_retry.assert_called_once_with()
+        runtime.close_for_retry.assert_called_once_with()
 
     def test_stale_task_is_ignored_before_agent_call(self):
         attachment = self.create_attachment(status=ExecutionStatus.SUCCESS)

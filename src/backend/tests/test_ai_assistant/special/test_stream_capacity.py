@@ -5,6 +5,7 @@ from amqp.exceptions import ChannelError
 from blueapps.core.celery import celery_app
 from django.conf import settings
 from django.test import TransactionTestCase, override_settings
+from ui_stream.archive import encoded_archive_bytes
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
@@ -22,7 +23,7 @@ from services.web.ai_assistant.schemas import (
 )
 from services.web.ai_assistant.services import AttachmentService
 from services.web.ai_assistant.streaming import RedisLiveStore
-from services.web.ai_assistant.streaming.archive import _encoded_archive_bytes
+from services.web.ai_assistant.streaming.archive import _encoded_event_bytes
 from services.web.common.scope_permission import ScopePermission
 from tests.test_ai_assistant.celery_integration import (
     running_celery_worker,
@@ -198,7 +199,7 @@ class StreamCapacitySpecialTest(TransactionTestCase):
         payload = {"n": 1}
         probe = self.wait_success(self.create_attachment(events=[payload]))
         probe_events = [UIStreamEvent.model_validate(event) for event in self.archived_business(probe)]
-        equal_bytes = _encoded_archive_bytes(probe_events)
+        equal_bytes = encoded_archive_bytes(probe_events, event_size=_encoded_event_bytes)
         self.assertGreater(equal_bytes, 2)
 
         with override_settings(AI_ASSISTANT_STREAM_ARCHIVE_MAX_BYTES=equal_bytes):

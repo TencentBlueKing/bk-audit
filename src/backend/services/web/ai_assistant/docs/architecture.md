@@ -10,7 +10,7 @@
 | 附件平台 | 创建、快照、投递、重试、终态及产物保存 | `services/attachment.py`、`services/attachment_execution.py`、`tasks/base.py` |
 | Handler | 注册业务类型，校验输入，准备可信上下文 | `handlers/`、`schemas/` |
 | 业务 Task | 执行领域服务或 Agent，返回业务结果 | `tasks/audit_analysis.py`、`tasks/audit_statistics.py` |
-| 流服务 | AI 事件归档、实时流、快照与恢复 | `streaming/`、`services/attachment_stream.py` |
+| 流服务 | 接入 ui-stream 通用流处理，管理审计归档、权限与恢复 | `streaming/`、`services/attachment_stream.py` |
 | 日志查询 | 字段探索、脱敏明细、聚合及程序统计 | `../query/ai_assistant/log_tools/` |
 
 三类附件都从当前用户的成功 LOG_SEARCH 创建，固化来源条件和业务输入；同一来源可创建多个独立附件。

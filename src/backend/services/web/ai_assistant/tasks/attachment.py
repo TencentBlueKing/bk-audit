@@ -94,10 +94,10 @@ class AttachmentExecutionTask(BaseExecutionTask["AttachmentExecution"]):
             raise
 
     def _handle_retry(self, *, execution: AttachmentExecution | None) -> None:
-        """Retry 退出前强制刷盘，避免本次执行已产生的事件丢失。"""
+        """Retry 退出前尽力归档并关闭流，再刷新任务活动时间。"""
 
         if execution is not None and execution.has_stream:
-            execution.stream.finish_retry()
+            execution.stream.close_for_retry()
         if execution is not None:
             Attachment.touch_processing(
                 instance_id=execution.attachment.id,

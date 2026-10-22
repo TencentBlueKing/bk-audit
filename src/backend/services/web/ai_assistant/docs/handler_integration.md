@@ -126,8 +126,10 @@ Attachment 的 `prepare()` 返回 `AttachmentPreparation(title, context_data)`�
 - 声明 `export_formats` 并覆写 `export()`：开放即时文件导出，不创建导出附件。
 - `is_stream = True`：仅异步附件可用；业务通过 `execution.stream.send(data)` 写 UI 事件。
 
-流式业务只提交可 JSON 编码的 `data`，不构造平台事件、Redis key 或 SSE 帧。详细约束见
-[流式传输设计](../streaming/README.md)。
+流式业务只提交可 JSON 编码的 `data`，不构造平台事件、Redis key 或 SSE 帧。平台任务基类
+负责 Runtime 创建、执行轮换及成功/失败/Retry 收敛，业务不要重复提交终态或自行组装 Runtime。
+组件适配、容量与故障约束见[流式传输设计](../streaming/README.md)，依赖安装与升级见
+[流组件依赖维护](../../../../docs/ui_stream_dependency.md)。
 
 ## 6. 注册与 OpenAPI
 

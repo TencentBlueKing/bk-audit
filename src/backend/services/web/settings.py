@@ -1,3 +1,4 @@
+import math
 import os
 
 from django.core.exceptions import ImproperlyConfigured
@@ -198,6 +199,31 @@ AI_ASSISTANT_STREAM_IDLE_TIMEOUT = int(os.getenv("BKAPP_AI_ASSISTANT_STREAM_IDLE
 AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS = int(
     os.getenv("BKAPP_AI_ASSISTANT_STREAM_ACTIVITY_INTERVAL_SECONDS", 60)
 )
+
+
+# Redis 流使用独立读/写池，不修改 Django cache 或 Celery 的共享连接配置。
+# 配置在客户端首次使用后缓存，变更须重启；上限属于单个池，不能当作进程/集群总连接上限。
+# 同一短预算用于TCP建连和实时写入；不再支持分别调节二者。
+AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT = float(os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT", 1))
+AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS", 16)
+)
+AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS = int(
+    os.getenv("BKAPP_AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS", 32)
+)
+# 即使连续收到实时数据，也按此间隔核对持久状态与可见性；XREAD BLOCK 不超过15秒或该间隔。
+# 读端socket超时按该BLOCK上限加固定5秒裕量推导，默认20秒，不提供独立覆盖。
+AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL = float(os.getenv("BKAPP_AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL", 15))
+for _stream_limit in (
+    AI_ASSISTANT_STREAM_REDIS_IO_TIMEOUT,
+    AI_ASSISTANT_STREAM_REDIS_WRITE_MAX_CONNECTIONS,
+    AI_ASSISTANT_STREAM_REDIS_READ_MAX_CONNECTIONS,
+    AI_ASSISTANT_STREAM_STATE_POLL_INTERVAL,
+):
+    if not math.isfinite(_stream_limit) or _stream_limit <= 0:
+        raise ImproperlyConfigured(
+            "AI_ASSISTANT_STREAM timeout, interval and capacity settings must be finite and positive"
+        )
 
 # ============== AI 助手异步执行巡检与 SLO 配置 ==============
 # 异步 Message 的 SLO 目标（秒），从对象首次 `created_at` 计算到终态。

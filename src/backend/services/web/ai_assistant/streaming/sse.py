@@ -1,34 +1,30 @@
-"""原生 SSE 帧编码：业务事件、命名平台事件与注释 heartbeat。
+"""原生 SSE 编码的审计异常适配。
 
-设计考量
---------
-- 严格遵循 W3C Server-Sent Events 规范：event/id/data 行顺序固定，双换行结尾。
-- event 行仅在平台事件（如 stream_end/stream_reset）时输出，普通业务事件省略
-  event 行，客户端统一走 onmessage 回调。
-- id 行仅在事件来自 Redis（有 stream_id）时输出，合成事件不写 id，
-  避免客户端 Last-Event-ID 错误续传到不存在的游标。
-- heartbeat 使用 SSE 注释行（冒号开头），客户端 EventSource 自动忽略，
-  仅用于探测连接存活并阻止中间层（Nginx/LB）超时断开。
+帧格式和 heartbeat 由组件维护，本层只保留审计导入入口与公开异常类型。
+编码不写存储、不建立连接，也不把内部归档身份暴露给客户端。
 """
 
-from services.web.ai_assistant.schemas import UIStreamEvent
-from services.web.ai_assistant.schemas.stream import serialize_stream_data
+from ui_stream.exceptions import InvalidEvent
+from ui_stream.sse import encode_sse_event as component_encode_sse_event
+from ui_stream.sse import encode_sse_heartbeat
 
-# SSE 注释行；只用于保持连接活跃，客户端 EventSource 会自动忽略。
-SSE_HEARTBEAT = b": heartbeat\n\n"
+from services.web.ai_assistant.exceptions import InvalidStreamEvent
+from services.web.ai_assistant.schemas import UIStreamEvent
 
 
 def encode_sse_event(event: UIStreamEvent) -> bytes:
-    """按可选 event、可选 id、必选 data 的顺序编码原生 SSE 帧。"""
+    """编码为 UTF-8 SSE 帧；非法 JSON 转为不携带业务正文的 InvalidStreamEvent。"""
 
-    payload = serialize_stream_data(event.data).decode("utf-8")
-    event_line = f"event: {event.event}\n" if event.event else ""
-    # 只有来自 Redis 的事件才有游标；合成事件不写 id，避免客户端错误续传。
-    id_line = f"id: {event.stream_id}\n" if event.stream_id else ""
-    return f"{event_line}{id_line}data: {payload}\n\n".encode("utf-8")
+    try:
+        return component_encode_sse_event(event)
+    except InvalidEvent:
+        raise InvalidStreamEvent(data={"field_name": "data"}) from None
 
 
-def encode_sse_heartbeat() -> bytes:
-    """返回心跳帧，用于在无新事件时探测连接并阻止中间层超时断开。"""
+def encode_sse_item(event: UIStreamEvent | None) -> bytes:
+    """保留审计异常映射，并把读取器的 None 编码为 heartbeat。"""
 
-    return SSE_HEARTBEAT
+    return encode_sse_heartbeat() if event is None else encode_sse_event(event)
+
+
+__all__ = ["encode_sse_event", "encode_sse_heartbeat", "encode_sse_item"]
