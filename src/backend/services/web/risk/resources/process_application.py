@@ -526,6 +526,10 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "duration": calc_task_duration(status_info),
             "is_test": node.is_test,
             "failure_hint": ListPAExecutionRecords._build_failure_hint(process_result) if result == "failed" else "",
+            # 风险单关联
+            "risk_id": node.risk_id,
+            "risk_title": (risk.title or "") if risk else "",
+            "risk_status": (risk.status or "") if risk else "",
             # 参数信息
             "params": params,
             # 尝试记录
