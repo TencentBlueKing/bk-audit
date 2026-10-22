@@ -23,6 +23,7 @@ from services.web.query.ai_assistant.schemas import (
 from services.web.query.ai_assistant.services.intent import (
     MessagePlanningService,
     PlanningRetryFeedback,
+    _field_definition,
     resolve_intent_agent_code,
 )
 from tests.test_query.test_ai_assistant.base import AIAssistantTestCase
@@ -300,17 +301,17 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         self.assertIn("# 当前场景可选的已接入审计系统（按选择优先级排序）", user_message)
         self.assertIn("# 日志检索公共字段", user_message)
         self.assertIn("# 当前已选系统字段上下文", user_message)
-        self.assertIn('"system_id": "bk-audit"', user_message)
-        self.assertIn('"system_id": "bcs"', user_message)
-        self.assertIn('"raw_name": "action_id"', user_message)
+        self.assertIn('"system_id":"bk-audit"', user_message)
+        self.assertIn('"system_id":"bcs"', user_message)
+        self.assertIn('"raw_name":"action_id"', user_message)
         self.assertNotIn("sample_value_display", user_message)
-        self.assertIn('"current_system_id": "bk-audit"', user_message)
-        self.assertIn('"has_selected_system": true', user_message)
-        self.assertIn('"phase": "SYSTEM_SELECTED"', user_message)
+        self.assertIn('"current_system_id":"bk-audit"', user_message)
+        self.assertIn('"has_selected_system":true', user_message)
+        self.assertIn('"phase":"SYSTEM_SELECTED"', user_message)
         self.assertIn('"username":', user_message)
-        self.assertIn('"timezone": "Asia/Shanghai"', user_message)
-        self.assertIn('"previous_week_start": "2026-09-07T00:00:00+08:00"', user_message)
-        self.assertIn('"previous_week_end": "2026-09-14T00:00:00+08:00"', user_message)
+        self.assertIn('"timezone":"Asia/Shanghai"', user_message)
+        self.assertIn('"previous_week_start":"2026-09-07T00:00:00+08:00"', user_message)
+        self.assertIn('"previous_week_end":"2026-09-14T00:00:00+08:00"', user_message)
         self.assertNotIn("scope_type", user_message)
         self.assertNotIn("scope_id", user_message)
         self.assertNotIn("# 输出 JSON Schema", user_message)
@@ -569,9 +570,108 @@ class PromptValueRulesContractTest(AIAssistantTestCase):
         "先推理表述可能对应的属性",
         "中英文名称、操作类型、描述等字段值",
         "各字段值匹配均无结果时",
+        # 幻觉防护（2026-10-22 会话 2704 实测：无工具时模型虚构"工具查询结果"前缀与编造值）
+        "禁止在输出中声称或引用任何",
+        "工具不得出现在输出文本中",
     )
 
     def test_system_prompt_contains_value_rules(self):
         for anchor in self.ANCHORS:
             with self.subTest(anchor=anchor):
                 self.assertIn(anchor, MessagePlanningService.system_prompt)
+
+
+class PromptSlimmingContractTest(AIAssistantTestCase):
+    """二期瘦身契约：动态信息优先走 MCP 工具，静态上下文只留决策骨架。
+
+    背景（2026-10-22 会话 2652/2704 实测）：工具调用模式下每轮 LLM 全量重发上下文，
+    input ~34k tokens；缩进、空 keys、与 display_name 重复的 nl_name/description、
+    SYSTEM_SELECTED 阶段的全量系统清单均为纯冗余。
+    """
+
+    REFERENCE_TIME = datetime(2026, 10, 22, 21, 31, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    def _build_selected_context(self):
+        return MessagePlanningService.build_context(
+            query_text="查日志",
+            candidates=[
+                {"system_id": "bk-audit", "name": "审计中心", "description": "审计中心系统"},
+                {"system_id": "bk_job", "name": "作业平台", "description": "作业平台系统"},
+            ],
+            common_fields=[],
+            current_system=SelectionSystem(system_id="bk-audit", name="审计中心", description="审计中心系统"),
+            username=self.username,
+            reference_time=self.REFERENCE_TIME,
+        )
+
+    def test_selected_phase_systems_reduced_to_skeleton(self):
+        """SYSTEM_SELECTED：系统清单降为 system_id+name（切换检测足够，砍 description）"""
+
+        user_message = MessagePlanningService.build_user_message(self._build_selected_context())
+        systems_json = user_message.split("<authorized_systems>\n", 1)[1].split("\n</authorized_systems>", 1)[0]
+        systems = json.loads(systems_json)
+
+        self.assertEqual(systems, [{"system_id": "bk-audit", "name": "审计中心"}, {"system_id": "bk_job", "name": "作业平台"}])
+        self.assertNotIn("审计中心系统", systems_json)
+
+    def test_unselected_phase_keeps_full_system_summary(self):
+        """SYSTEM_UNSELECTED：保留完整摘要（含 description）支持首轮系统选择"""
+
+        context = MessagePlanningService.build_context(
+            query_text="查日志",
+            candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "审计中心系统"}],
+            common_fields=[],
+            current_system=None,
+            username=self.username,
+            reference_time=self.REFERENCE_TIME,
+        )
+        user_message = MessagePlanningService.build_user_message(context)
+        systems_json = user_message.split("<authorized_systems>\n", 1)[1].split("\n</authorized_systems>", 1)[0]
+        systems = json.loads(systems_json)
+
+        self.assertEqual(systems[0]["description"], "审计中心系统")
+
+    def test_user_message_json_is_compact(self):
+        """全量 JSON 紧凑序列化：段内无缩进换行（每轮全量重发，缩进纯耗 token）"""
+
+        user_message = MessagePlanningService.build_user_message(self._build_selected_context())
+        systems_json = user_message.split("<authorized_systems>\n", 1)[1].split("\n</authorized_systems>", 1)[0]
+        conversation_json = user_message.split("<conversation>\n", 1)[1].split("\n</conversation>", 1)[0]
+
+        self.assertNotIn("\n", systems_json)
+        self.assertNotIn("\n", conversation_json)
+
+    def test_system_prompt_schema_is_compact(self):
+        """Schema 注入紧凑序列化：无缩进换行"""
+
+        schema_block = MessagePlanningService.system_prompt.split("<message_plan_schema>\n", 1)[1]
+        schema_json = schema_block.split("\n</message_plan_schema>", 1)[0]
+
+        self.assertNotIn("\n", schema_json)
+
+    def test_field_definition_drops_redundant_keys(self):
+        """字段骨架化：空 keys 省略；nl_name/description 与 display_name 相同时省略"""
+
+        definition = _field_definition(
+            SelectionFieldMeta(
+                raw_name="username",
+                display_name="操作人",
+                nl_name="操作人",
+                description="操作人",
+                allow_operators=["eq"],
+            )
+        )
+
+        self.assertEqual(definition["raw_name"], "username")
+        self.assertEqual(definition["display_name"], "操作人")
+        self.assertNotIn("keys", definition)
+        self.assertNotIn("nl_name", definition)
+        self.assertNotIn("description", definition)
+        self.assertEqual(definition["allow_operators"], ["eq"])
+
+    def test_field_definition_keeps_distinct_nl_name(self):
+        """nl_name 与 display_name 不同时必须保留（系统自定义字段名场景）"""
+
+        definition = _field_definition(SelectionFieldMeta(raw_name="username", display_name="操作人", nl_name="执行人"))
+
+        self.assertEqual(definition["nl_name"], "执行人")

@@ -179,13 +179,32 @@ def _serialize_planning_field(field) -> dict:
 
 
 def _field_definition(field: SelectionFieldMeta) -> dict:
-    """返回不含样例的 Agent 字段定义，用于公共字段与系统差异比较。"""
+    """返回不含样例的 Agent 字段定义，用于公共字段与系统差异比较。
 
-    return {
+    二期瘦身：省略对模型无信息量的键——空 keys、与 display_name 相同的
+    nl_name / description（线上元数据三值高度重合，重复输出纯耗 token）。
+    options / allow_operators 等合法值域来源全部保留。
+    """
+
+    definition = {
         key: value
         for key, value in _serialize_planning_field(field).items()
         if key not in {"sample_value", "sample_value_meta"}
     }
+    display_name = definition.get("display_name")
+    if not definition.get("keys"):
+        definition.pop("keys", None)
+    for redundant_key in ("nl_name", "description"):
+        value = definition.get(redundant_key)
+        if not value or value == display_name:
+            definition.pop(redundant_key)
+    return definition
+
+
+def _compact_json(data: Any) -> str:
+    """Prompt 注入用紧凑 JSON：无缩进、中文原样，体积最小且模型解析无差异。"""
+
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 def _serialize_current_system_detail(
@@ -235,7 +254,7 @@ class MessagePlanningService:
     agent_code = resolve_intent_agent_code()
     system_prompt = _render_prompt(
         SYSTEM_PROMPT_TEMPLATE,
-        message_plan_schema=json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2),
+        message_plan_schema=_compact_json(MessagePlan.model_json_schema()),
     )
 
     _PHASE_DECISION_RULES = {
@@ -359,25 +378,32 @@ class MessagePlanningService:
 
     @staticmethod
     def build_user_message(context: MessagePlanningContext) -> str:
-        """按固定层级序列化本轮动态事实，不重复稳定规则和输出契约。"""
+        """按固定层级序列化本轮动态事实，不重复稳定规则和输出契约。
+
+        二期瘦身（动态信息优先走 MCP 工具，静态只留决策骨架）：
+        - 全部 JSON 紧凑序列化（无缩进），工具调用模式下每轮全量重发，缩进纯耗 token；
+        - SYSTEM_SELECTED 阶段系统清单降为 system_id+name 骨架——该阶段列表仅用于
+          "用户点名其他系统"的切换检测，名称匹配足够；SYSTEM_UNSELECTED 保留
+          完整摘要以支持首轮选择。
+        """
 
         common_fields = [_field_definition(field) for field in context.common_standard_fields]
         current_system_detail = _serialize_current_system_detail(
             context.current_system_detail,
             context.common_standard_fields,
         )
+        if context.conversation.has_selected_system:
+            systems_payload = [{"system_id": item.system_id, "name": item.name} for item in context.authorized_systems]
+        else:
+            systems_payload = [item.model_dump(mode="json") for item in context.authorized_systems]
         return _render_prompt(
             USER_PROMPT_TEMPLATE,
             user_query=context.user_query,
-            conversation_json=json.dumps(context.conversation.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            authorized_systems_json=json.dumps(
-                [item.model_dump(mode="json") for item in context.authorized_systems],
-                ensure_ascii=False,
-                indent=2,
-            ),
-            common_standard_fields_json=json.dumps(common_fields, ensure_ascii=False, indent=2),
-            current_system_detail_json=json.dumps(current_system_detail, ensure_ascii=False, indent=2),
-            clock_json=json.dumps(context.clock.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            conversation_json=_compact_json(context.conversation.model_dump(mode="json")),
+            authorized_systems_json=_compact_json(systems_payload),
+            common_standard_fields_json=_compact_json(common_fields),
+            current_system_detail_json=_compact_json(current_system_detail),
+            clock_json=_compact_json(context.clock.model_dump(mode="json")),
         )
 
     @classmethod
