@@ -30,7 +30,7 @@ from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import BKSEC_FIELD_INITIAL_OWNER
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
-from services.web.risk.bksec.variables import build_risk_data
+from services.web.risk.bksec.render import build_risk_data
 from services.web.risk.models import Risk, TicketNode
 from services.web.strategy_v2.models import Strategy
 
@@ -55,8 +55,10 @@ def parse_bksec_config(config_dict: dict) -> BkSecConfig:
         raise serializers.ValidationError(gettext_lazy("BKSEC 配置不合法：%s") % err)
 
 
-def render_bksec_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
-    """渲染工单预览（按配置 + 样例风险单渲染报文）"""
+def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
+    """
+    组装工单预览（按配置 + 样例风险单渲染报文，不实际发送，支持保存前预览）
+    """
     ensure_bksec_enabled()
     try:
         payload = build_event_payload(config, risk=risk)
@@ -68,7 +70,15 @@ def render_bksec_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
         warnings.append(gettext_lazy("初始责任人为空（该风险单无责任人且未配置安全接口人兜底），工单可能被 BKSEC 拒收，请到系统配置设置安全接口人或调整映射"))
     # 工单头（BKSEC 侧生成，发单前不存在）：后端 mock 占位，仅用于前端预览工单外观，
     # 非审计中心上报内容、不进入真实报文。发单后由 BKSEC 生成真实值。
-    ticket_header = _build_mock_ticket_header(risk, risk_data)
+    risk_id = getattr(risk, "risk_id", "") or ""
+    ticket_header = {
+        "ticket_id": risk_id,
+        "title": "{}（安全工单）".format(risk_data.get("title", "")),
+        "submit_time": risk_data.get("event_time", ""),
+        "deadline": risk_data.get("event_time", ""),
+        "status": "待受理",
+        "current_operator_org": "",
+    }
     return {
         "risk_type_id": config.risk_type_id,
         "risk_type_name": config.risk_type_name,
@@ -78,23 +88,6 @@ def render_bksec_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
         "risk": risk_data,
         "risk_context_keys": list(risk_data.keys()),
         "warnings": warnings,
-    }
-
-
-def _build_mock_ticket_header(risk: Optional[Risk], risk_data: dict) -> dict:
-    """
-    后端 mock 的 BKSEC 工单头占位（发单前这些字段尚不存在，由 BKSEC 侧生成）。
-
-    模拟真实工单结构，让预览效果更真实。
-    """
-    risk_id = getattr(risk, "risk_id", "") or ""
-    return {
-        "ticket_id": risk_id,
-        "title": "{}（安全工单）".format(risk_data.get("title", "")),
-        "submit_time": risk_data.get("event_time", ""),
-        "deadline": risk_data.get("event_time", ""),
-        "status": "待受理",
-        "current_operator_org": "",
     }
 
 
@@ -114,8 +107,8 @@ def sync_bksec_test_config(strategy: Strategy, config: BkSecConfig) -> None:
         raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，无法发送测试工单：%s") % message)
 
 
-def render_bksec_test_constants(config: BkSecConfig, risk: Risk, test_receivers: List[str]) -> dict:
-    """渲染测试发送的插件入参常量。"""
+def build_test_constants(config: BkSecConfig, risk: Risk, test_receivers: List[str]) -> dict:
+    """组装测试发送的插件入参常量（按样例风险单渲染成终值）。"""
     try:
         config.validate_for_submit()
     except ValueError as err:
@@ -128,46 +121,45 @@ def render_bksec_test_constants(config: BkSecConfig, risk: Risk, test_receivers:
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 
 
-def is_auto_process_succeeded(node: TicketNode) -> bool:
-    """
-    判断该正式派单是否已成功发出工单
-
-    - 终态 FINISHED：视为已成功发出
-    - 终态 FAILED/REVOKED/EXPIRED：未真正发出工单，允许在其上测试
-    - 非终态（CREATED/RUNNING/...）：保守按已发出处理，避免与进行中的正式单互相干扰
-    - 状态不可判定（无 task_id / 查询异常）：保守按已发出处理
-    """
-    process_result = node.process_result or {}
-    state = (process_result.get("status") or {}).get("state") or ""
-    if state not in SOPSTaskStatus.get_finished_status():
-        task_id = (process_result.get("task") or {}).get("task_id")
-        if not task_id:
-            return True
-        try:
-            status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        except Exception as err:  # NOCC:broad-except(状态不可判定时保守拦截)
-            logger.warning(
-                "[BkSec] get sops task status failed, risk_id=%s task_id=%s err=%s", node.risk_id, task_id, err
-            )
-            return True
-        state = (status or {}).get("state") or ""
-    return state in SOPSTaskStatus.get_success_status()
-
-
 def validate_bksec_test_target(risk: Risk) -> None:
     """
-    校验该风险单是否已成功发送过正式工单
+    校验该风险单是否已成功发送过正式工单，已成功则拒绝测试发送
 
-    仅当正式派单已成功（SOPS 任务 FINISHED）时拒绝测试发送：插件的回调按风险单复用，
+    仅当正式派单已成功（SOPS 任务 FINISHED）时拒绝：插件的回调按风险单复用，
     在其上发送测试工单会干扰正式回调或被静默拦截。
     派单失败/被终止/已过期的单据未真正发出工单，允许测试，避免自动派单策略下无样例单可用。
+
+    判定语义（保守拦截，避免与进行中的正式单干扰）：
+    - 终态 FINISHED → 拒绝；终态 FAILED/REVOKED/EXPIRED → 放行
+    - 非终态（CREATED/RUNNING/...）→ 回查 SOPS 实时状态后按 FINISHED 与否判定
+    - 状态不可判定（无 task_id / 回查异常）→ 保守按已发出（拒绝）
     """
     node = (
         TicketNode.objects.filter(risk_id=risk.risk_id, action="AutoProcess", is_test=False)
         .order_by("-timestamp")
         .first()
     )
-    if node is None or not is_auto_process_succeeded(node):
+    if node is None:
+        return
+    process_result = node.process_result or {}
+    state = (process_result.get("status") or {}).get("state") or ""
+    succeeded = False
+    if state not in SOPSTaskStatus.get_finished_status():
+        task_id = (process_result.get("task") or {}).get("task_id")
+        if not task_id:
+            succeeded = True  # 无从判定：保守按已发出拦截
+        else:
+            try:
+                status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                succeeded = ((status or {}).get("state") or "") in SOPSTaskStatus.get_success_status()
+            except Exception as err:  # NOCC:broad-except(状态不可判定时保守拦截)
+                logger.warning(
+                    "[BkSec] get sops task status failed, risk_id=%s task_id=%s err=%s", risk.risk_id, task_id, err
+                )
+                succeeded = True  # 无从判定：保守按已发出拦截
+    else:
+        succeeded = state in SOPSTaskStatus.get_success_status()
+    if not succeeded:
         return
     raise serializers.ValidationError(
         gettext_lazy("该风险单已有成功的正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未成功发送过正式工单的风险单进行测试")
@@ -189,116 +181,66 @@ def iter_status_nodes(node: dict):
         yield from iter_status_nodes(child)
 
 
-def _collect_failed_node_ids(status: Optional[dict]) -> List[str]:
-    """收集任务状态中处于失败态的节点 ID（get_node_data 必须带 node_id）"""
+def fill_failure_info(status: dict, task_id: str = "", generic=DEFAULT_FAILURE_HINT) -> str:
+    """
+    补全失败信息：回写逐节点错误 + 返回记录级失败提示（原地修改 status 并返回提示文本）
+
+    一次完成两件事（写入点共用：终态同步 / 重试前快照 / 建单 / 测试轮询）：
+    - 写 error_message：SOPS get_task_status 不返回错误文本（只在 get_node_data 的 ex_data 里），
+      对失败节点回源取错误并写入 status.children[].error_message，
+      供执行记录详情 / 重试快照的 attempts 展示逐节点失败原因；
+    - 写 failure_hint：返回第一个取到错误的失败节点文本（截 FAILURE_HINT_MAX_LEN）作记录级摘要，
+      由写入点落库 TicketNode.process_result["failure_hint"]，查询层只读该字段。
+
+    语义边界：已回写过 error_message 的节点不再回源（读已存优先）；单节点回源失败静默跳过；
+    全部取不到返回 generic；最多回源 MAX_FETCH_ERROR_NODES 个失败节点。
+    """
+
+    def _extract_error_texts(node_data: dict) -> List[str]:
+        """get_node_data 响应里的错误文本：真实错误在顶层 ex_data / error_message；
+        outputs 可能是 [{key, value}] 或 {key: value}，仅取错误类键"""
+        texts: List[str] = []
+        for key in ("ex_data", "error_message"):
+            value = str(node_data.get(key) or "").strip()
+            if value:
+                texts.append(value)
+        outputs = node_data.get("outputs") or {}
+        if isinstance(outputs, list):
+            items = [(item.get("key"), item.get("value")) for item in outputs if isinstance(item, dict)]
+        else:
+            items = list(outputs.items())
+        for key, value in items:
+            value = str(value or "").strip()
+            if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
+                texts.append(value)
+        return texts
+
+    if not status:
+        return str(generic)
     failed_states = {s.value for s in SOPSTaskStatus.get_failed_status()}
-    node_ids: List[str] = []
-    for child in iter_status_nodes(status or {}):
-        if child.get("state") in failed_states and child.get("id"):
-            node_ids.append(str(child["id"]))
-    return node_ids
-
-
-def extract_failure_detail(status: dict) -> str:
-    """从 SOPS 任务状态中递归提取首个带错误信息的节点文本（无需额外请求）"""
-    for child in iter_status_nodes(status or {}):
+    failed_children = [
+        child for child in iter_status_nodes(status) if child.get("state") in failed_states and child.get("id")
+    ]
+    hint = ""
+    fetch_quota = MAX_FETCH_ERROR_NODES
+    for child in failed_children:
         error_message = str(child.get("error_message") or "").strip()
-        if error_message:
-            return error_message
-    return ""
-
-
-def _extract_error_texts(node_data: dict) -> List[str]:
-    """从单个节点的执行数据中提取错误文本
-
-    get_node_data 返回 {"inputs": {...}, "outputs": [...], "ex_data": ...}，
-    真实错误在顶层 ex_data；outputs 可能是 [{key, value}] 或 {key: value}。
-    """
-    texts: List[str] = []
-    for key in ("ex_data", "error_message"):
-        value = str(node_data.get(key) or "").strip()
-        if value:
-            texts.append(value)
-    outputs = node_data.get("outputs") or {}
-    if isinstance(outputs, list):
-        items = [(item.get("key"), item.get("value")) for item in outputs if isinstance(item, dict)]
-    else:
-        items = list(outputs.items())
-    for key, value in items:
-        value = str(value or "").strip()
-        if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
-            texts.append(value)
-    return texts
-
-
-def enrich_status_with_node_errors(status: dict, task_id: str) -> dict:
-    """把失败节点的错误文本回源写入 status.children[].error_message（原地修改并返回 status）
-
-    SOPS 的 get_task_status 不返回 error_message，错误只在 get_node_data 的 ex_data 里，
-    因此终态同步 / 重试快照前调用本函数，才能让执行记录的 attempts 带上逐节点的错误文本。
-    仅在任务失败时调用：成功任务无需回源。
-    """
-    if not status or not task_id:
-        return status
-    for node_id in _collect_failed_node_ids(status)[:MAX_FETCH_ERROR_NODES]:
-        try:
-            node_data = (
-                api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=node_id) or {}
-            )
-        except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
-            logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, node_id)
-            continue
-        texts = _extract_error_texts(node_data)
-        if not texts:
-            continue
-        error_text = "\n".join(dict.fromkeys(texts)).strip()
-        for child in iter_status_nodes(status):
-            if child.get("id") == node_id and not child.get("error_message"):
-                child["error_message"] = error_text
-                break
-    return status
-
-
-def fetch_node_error(task_id: str, status: Optional[dict] = None) -> str:
-    """回源 SOPS 取「第一个」能取到错误文本的失败节点（ex_data / error_message / outputs 里的错误项）
-
-    仅在任务已终态失败、且 get_task_status 未带回 error_message 时调用。
-    注意：get_task_node_data 必须带 node_id，仅传 task_id 会返回「未找到节点[ID: None]」。
-
-    与 extract_failure_detail 保持一致：failure_hint 定位为记录级摘要，只展示第一个失败节点的错误；
-    完整的逐节点错误由 children[].error_message 承载，避免两处语义不一致。
-    """
-    if not task_id:
-        return ""
-    node_ids = _collect_failed_node_ids(status)
-    if not node_ids:
-        logger.info("[FailureHint] No failed node found in status, task_id=%s", task_id)
-        return ""
-    for node_id in node_ids[:MAX_FETCH_ERROR_NODES]:
-        try:
-            node_data = (
-                api.bk_sops.get_node_data(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=node_id) or {}
-            )
-        except Exception:  # NOCC:broad-except(详情获取失败不影响状态返回)
-            logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, node_id)
-            continue
-        texts = _extract_error_texts(node_data)
-        if texts:
-            # 取到第一个有错误文本的失败节点即返回，无需继续请求其余节点
-            return "\n".join(dict.fromkeys(texts)).strip()
-    return ""
-
-
-def build_failure_hint(status: dict, task_id: str = "", generic: str = "任务执行失败") -> str:
-    """失败提示：直接落 SOPS 返回的真实错误文本，取不到才回退通用提示
-
-    不使用特征映射表：映射表无法覆盖未收录的错误且需持续维护，直接透出原始错误更利于定位。
-    写入点（发单 / 测试发单 / 终态同步）落库到 TicketNode.process_result["failure_hint"]，
-    查询层（执行记录列表/详情）只读该字段。
-
-    取数语义：只取第一个失败节点的错误（记录级摘要），逐节点明细见 children[].error_message。
-    """
-    detail = extract_failure_detail(status) or fetch_node_error(task_id, status)
-    if detail:
-        return detail[:FAILURE_HINT_MAX_LEN]
-    return str(generic)
+        if not error_message and task_id and fetch_quota > 0:
+            fetch_quota -= 1
+            try:
+                node_data = (
+                    api.bk_sops.get_node_data(
+                        task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=str(child["id"])
+                    )
+                    or {}
+                )
+            except Exception:  # NOCC:broad-except(单节点取错失败不影响其余节点)
+                logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, child["id"])
+                node_data = {}
+            texts = _extract_error_texts(node_data)
+            if texts:
+                error_message = "\n".join(dict.fromkeys(texts)).strip()
+                child["error_message"] = error_message
+        if error_message and not hint:
+            hint = error_message
+    return hint[:FAILURE_HINT_MAX_LEN] if hint else str(generic)

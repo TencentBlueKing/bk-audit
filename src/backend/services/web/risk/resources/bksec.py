@@ -29,17 +29,19 @@ from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.bksec.constants import BKSEC_TEST_NODE_SCAN_LIMIT
+from services.web.risk.bksec.constants import (
+    BKSEC_REQUIRED_FIELD_KEYS,
+    BKSEC_TEST_NODE_SCAN_LIMIT,
+)
 from services.web.risk.bksec.service import (
-    build_failure_hint,
+    build_test_constants,
+    build_ticket_preview,
     ensure_bksec_enabled,
+    fill_failure_info,
     parse_bksec_config,
-    render_bksec_preview,
-    render_bksec_test_constants,
     sync_bksec_test_config,
     validate_bksec_test_target,
 )
-from services.web.risk.bksec.variables import _normalize_risk_type
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode, calc_task_duration
 from services.web.strategy_v2.models import Strategy
@@ -107,7 +109,7 @@ class PreviewTicket(TicketResourceMeta):
     def perform_request(self, validated_request_data):
         config = parse_bksec_config(validated_request_data["bksec_config"])
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
-        return render_bksec_preview(config, risk)
+        return build_ticket_preview(config, risk)
 
 
 class SendTestTicket(TicketResourceMeta):
@@ -144,7 +146,7 @@ class SendTestTicket(TicketResourceMeta):
         # 测试发送前置：兜底同步插件侧 Config（确保插件侧与本次入参一致）
         sync_bksec_test_config(strategy, config)
         # 渲染插件入参常量
-        constants = render_bksec_test_constants(config, risk, validated_request_data["test_receivers"])
+        constants = build_test_constants(config, risk, validated_request_data["test_receivers"])
         # 确保预置套餐就绪
         if not settings.BKSEC_SOPS_TEMPLATE_ID:
             raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪（未配置套餐模板 ID），无法发送测试工单"))
@@ -207,9 +209,9 @@ class GetTaskStatus(TicketResourceMeta):
     """
     查询测试任务状态（透传 SOPS 任务状态，供前端轮询至终态）
 
-    失败时附带可操作的失败提示（failure_hint），由已知插件错误特征映射翻译。
+    失败时附带失败提示（failure_hint）：透出失败节点的原始错误文本，取不到才回退通用提示。
     注意：插件侧错误（如 Config 缺失）发生在 SOPS 异步执行阶段，create_task 时刻无法感知，
-    只能在本接口（轮询）侧转换。
+    只能在本接口（轮询）侧获取。
     """
 
     name = gettext_lazy("查询测试任务状态")
@@ -225,7 +227,7 @@ class GetTaskStatus(TicketResourceMeta):
         result = dict(status)
         state = result.get("state")
 
-        # 失败提示：翻译（渠道 bksec）供前端展示
+        # 失败提示：透出失败节点原始错误，供前端展示
         failure_hint = ""
         if state in SOPSTaskStatus.get_failed_status():
             failure_hint = self._build_failure_hint(task_id, result)
@@ -269,5 +271,91 @@ class GetTaskStatus(TicketResourceMeta):
         return None
 
     def _build_failure_hint(self, task_id: str, status: dict) -> str:
-        """失败提示：优先取 SOPS 状态里的节点错误文本，缺失时回源取节点执行数据（ex_data）"""
-        return build_failure_hint(status, task_id=task_id, generic=self.GENERIC_HINT)
+        """失败提示：回源取失败节点错误文本（顺带回写逐节点 error_message），取不到回退通用提示"""
+        return fill_failure_info(status, task_id=task_id, generic=self.GENERIC_HINT)
+
+
+def _normalize_field_type(value) -> str:
+    """
+    归一化 BKSEC 字段类型
+
+    接口返回的是 storage_type，且大小写不统一（同时存在 STRING / string），统一转小写后输出为 type。
+    已知取值：string / int / object / timestamp；未知取值原样小写返回，不丢弃信息。
+    接口未返回类型时保持为空串，由前端自行决定缺省渲染方式。
+    """
+    return str(value or "").strip().lower()
+
+
+def _extract_risk_access_fields(item: dict) -> list:
+    """
+    从风险类型对象中抽取工单字段 schema（risk_access_fields）
+    入参示例（来自 BKSEC risk_access_list API）：
+    {
+        "id": 159,
+        "name": "云账号未启用MFA",
+        "is_formal": True,
+        "risk_access_fields": [
+            {"id": 9, "key": "submitter", "name": "提单人", "sequence": 0, "storage_type": "STRING",
+             "source_type": "CUSTOM", "unique": False},
+        ]
+    }
+    required 由审计中心按白名单 BKSEC_REQUIRED_FIELD_KEYS 判定（BKSEC 不返回该字段）：
+    target / target_type / operator 为必填，其余一律非必填。
+    type 取自接口的 storage_type 并归一化小写（string / int / object / timestamp）。
+
+    返回值示例：
+    [
+        {"key": "target", "name": "风险资产信息", "required": True, "type": "string"},
+        {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
+    ]
+    """
+    if not isinstance(item, dict):
+        return []
+    raw_fields = item.get("risk_access_fields") or item.get("fields") or []
+    fields = []
+    if isinstance(raw_fields, list):
+        for f in raw_fields:
+            if not isinstance(f, dict):
+                continue
+            key = f.get("key", "")
+            fields.append(
+                {
+                    "key": key,
+                    "name": f.get("name", "") or f.get("label", ""),
+                    "required": key in BKSEC_REQUIRED_FIELD_KEYS,
+                    "type": _normalize_field_type(f.get("type") or f.get("storage_type", "")),
+                }
+            )
+    return fields
+
+
+def _normalize_risk_type(item: dict) -> dict:
+    """
+    归一化 BKSEC 风险类型列表项
+
+    入参示例（来自 BKSEC risk_access_list API）：
+    {
+        "id": 159,
+        "name": "云账号未启用MFA",
+        "is_formal": True,
+        "risk_access_fields": [...]
+    }
+
+    返回值示例：
+    {
+        "risk_type_id": "159",
+        "risk_type_name": "云账号未启用MFA",
+        "is_formal": True,
+        "fields": [
+            {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
+        ]
+    }
+    """
+    if not isinstance(item, dict):
+        return {}
+    return {
+        "risk_type_id": str(item.get("id", "")),
+        "risk_type_name": item.get("name", "") or item.get("risk_type_name", ""),
+        "is_formal": bool(item.get("is_formal", False)),
+        "fields": _extract_risk_access_fields(item),
+    }

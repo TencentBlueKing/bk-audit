@@ -223,6 +223,45 @@ class TestListPAExecutionRecords:
         assert by_task["10"] == (pa_a.id, "套餐A")  # 兜底链路
         assert by_task["11"] == (pa_b.id, "套餐B")  # 快照优先于规则
 
+    def test_filter_pa_snapshot_priority(self):
+        """筛选与展示同口径：快照与规则不一致时按快照命中（规则改绑/手动换套餐）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        # risk_a 规则指向套餐A，但执行时快照是套餐B
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=51, pa_id=pa_b.id, pa_name="套餐B")
+        # 筛套餐A（旧规则口径会误命中）：不应返回
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        assert resp["count"] == 0
+        # 筛套餐B（快照口径）：命中且展示套餐B
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_b.id})
+        records = resp["results"]
+        assert [r["sops_task_id"] for r in records] == ["51"]
+        assert records[0]["pa_id"] == pa_b.id
+        assert records[0]["pa_name"] == "套餐B"
+
+    def test_filter_pa_manual_dispatch(self):
+        """手动分派（无规则）只有快照归属：按快照套餐可筛出"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        risk_manual = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-M", "rule_id": None})
+        _create_node(risk_manual.risk_id, SOPSTaskStatus.FINISHED.value, task_id=52, pa_id=pa_a.id, pa_name="套餐A")
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"52"}
+
+    def test_filter_pa_rule_version(self):
+        """历史无快照节点按 (rule_id, rule_version) 归属：规则改绑新版本不影响旧版本归属"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        # 规则101 出 v2 改绑套餐B；risk_a 固定 rule_version=1（v1 指向套餐A）
+        RiskRule.objects.create(name="规则A-v2", scope=[], pa_id=pa_b.id, version=2, rule_id=101)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=53)
+        # 筛套餐A（v1）：命中，展示套餐A
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        records = resp["results"]
+        assert {r["sops_task_id"] for r in records} == {"53"}
+        assert records[0]["pa_id"] == pa_a.id
+        assert records[0]["pa_name"] == "套餐A"
+        # 筛套餐B（v2）：不应命中旧版本风险的记录
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_b.id})
+        assert "53" not in {r["sops_task_id"] for r in resp["results"]}
+
 
 @pytest.mark.django_db
 class TestGetPAExecutionRecordDetail:
@@ -384,7 +423,10 @@ class TestRetryAutoProcessRetryHistory:
 
     def test_detail_without_risk(self):
         """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空"""
-        self._prepare()
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
         node = _create_node("R-GONE", SOPSTaskStatus.FAILED.value, task_id=2)
         resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
         assert resp["risk_id"] == "R-GONE"

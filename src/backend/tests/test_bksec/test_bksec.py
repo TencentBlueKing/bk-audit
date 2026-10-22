@@ -35,9 +35,8 @@ from services.web.risk.bksec.contract import (
     build_pa_params,
     build_plugin_constants,
 )
-from services.web.risk.bksec.renderer import render_value
-from services.web.risk.bksec.variables import build_render_context, build_risk_data
-from services.web.risk.models import ProcessApplication, Risk, RiskRule
+from services.web.risk.bksec.render import build_render_context, render_value
+from services.web.risk.models import ProcessApplication, RiskRule
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
 
@@ -55,17 +54,6 @@ BKSEC_CONFIG_DATA = {
 
 
 class TestBkSecConfig:
-    @pytest.mark.django_db
-    def test_risk_variable_meta_matches_render_context(self):
-        """RISK_VARIABLE_META 与 build_risk_data 的键集合严格一致，防止漂移"""
-        from services.web.risk.bksec.variables import RISK_VARIABLE_META
-
-        risk = Risk()
-        risk.risk_id = "R-TEST"
-        risk.strategy = None
-        data = build_risk_data(risk)
-        assert set(RISK_VARIABLE_META.keys()) == set(data.keys())
-
     def test_parse_and_dedupe(self):
         data = {
             **BKSEC_CONFIG_DATA,
@@ -89,11 +77,13 @@ class TestBkSecConfig:
         config = BkSecConfig.model_validate({"enabled": False})
         config.validate_for_submit()
 
-    def test_risk_access_retrieve_registered(self):
-        """回归：sync_plugin_config 依赖该资源取 token，缺失会导致启用 BKSEC 的策略保存全部被阻断"""
+    def test_risk_access_list_registered(self):
+        """回归：sync_plugin_config 依赖该资源取 token，缺失会导致启用 BKSEC 的策略保存全部被阻断
+        （2026-10-16 db4f1a9ba 起取 token 改用 risk_access_list 按 risk_type_id 匹配，RiskAccessRetrieve 已删除）
+        """
         from bk_resource import api
 
-        assert callable(api.bk_sec.risk_access_retrieve)
+        assert callable(api.bk_sec.risk_access_list)
 
 
 @pytest.mark.django_db
@@ -140,7 +130,7 @@ class TestContract:
         # 渲染后的插件常量（测试发送用）
         with RiskContext() as risk:
             with mock.patch(
-                "services.web.risk.bksec.variables.load_risk_events", mock.Mock(return_value=[{"event_id": "e1"}])
+                "services.web.risk.bksec.render.load_risk_events", mock.Mock(return_value=[{"event_id": "e1"}])
             ):
                 constants = build_plugin_constants(config, risk=risk, test_operator="tester")
         assert constants["${risk_id}"] == risk.risk_id
@@ -282,6 +272,56 @@ class TestBkSecRules:
         strategy = self._strategy(BKSEC_CONFIG_DATA)
         assert sync_bksec_rule(strategy) is None
 
+    def test_sync_rule_scene_binding_follows_strategy(self, settings):
+        """规则场景归属跟随策略：策略改绑场景后规则可见性同步更新"""
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import BindingMetadataHelper
+        from services.web.scene.models import ResourceBindingScene, Scene
+
+        settings.BKSEC_SOPS_TEMPLATE_ID = "10001"
+        RiskRule.objects.all().delete()
+        ProcessApplication.objects.all().delete()
+        ProcessApplication.objects.create(
+            name=str(BKSEC_PRESET_PA_NAME), sops_template_id=10001, need_approve=False, is_enabled=True, is_builtin=True
+        )
+        strategy = self._strategy(BKSEC_CONFIG_DATA)
+        scene_a = Scene.objects.create(name="bksec-scene-a")
+        scene_b = Scene.objects.create(name="bksec-scene-b")
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene_a.scene_id,
+        )
+
+        def _rule_scenes(rule_id):
+            return list(
+                ResourceBindingScene.objects.filter(
+                    binding__resource_type=ResourceVisibilityType.RISK_RULE,
+                    binding__resource_id=str(rule_id),
+                ).values_list("scene_id", flat=True)
+            )
+
+        rule = sync_bksec_rule(strategy)
+        assert _rule_scenes(rule.rule_id) == [scene_a.scene_id]
+        # 策略改绑场景（内容未变走幂等路径）→ 规则绑定跟随，不产生新版本
+        BindingMetadataHelper.delete_resource_binding(
+            resource_id=str(strategy.strategy_id), resource_type=ResourceVisibilityType.STRATEGY
+        )
+        BindingMetadataHelper.create_resource_binding(
+            resource_id=str(strategy.strategy_id),
+            resource_type=ResourceVisibilityType.STRATEGY,
+            scene_id=scene_b.scene_id,
+        )
+        again = sync_bksec_rule(strategy)
+        assert again.version == rule.version
+        assert _rule_scenes(rule.rule_id) == [scene_b.scene_id]
+        # 内容变更产生新版本 → 新版本绑定当前场景
+        strategy.bksec_config = {**BKSEC_CONFIG_DATA, "risk_type_id": "host-highrisk-port"}
+        strategy.save(update_fields=["bksec_config"])
+        updated = sync_bksec_rule(strategy)
+        assert updated.version == rule.version + 1
+        assert _rule_scenes(updated.rule_id) == [scene_b.scene_id]
+
 
 @pytest.mark.django_db
 class TestBkSecResources:
@@ -387,21 +427,29 @@ class TestBkSecResources:
             assert "正式派单" in str(err.value.args)
 
     def test_test_task_status_failure_hint(self):
-        """任务失败时轮询接口返回可操作的失败提示（Config 缺失特征映射）"""
+        """任务失败时轮询接口返回失败提示：透出失败节点的原始错误文本，取不到才回退通用提示"""
+
+        def make_failed_status():
+            # 每个用例独立 dict：fill_failure_info 会回写 error_message，共享夹具会污染下一用例
+            return {
+                "state": "FAILED",
+                "children": {"node1": {"id": "node1", "name": "发单节点", "state": "FAILED"}},
+            }
+
         with mock.patch(
             "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value={"state": "FAILED"}),
+            mock.Mock(return_value=make_failed_status()),
         ), mock.patch(
             "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
-            mock.Mock(return_value={"detail": "plugin execute failed: Config matching query does not exist."}),
+            mock.Mock(return_value={"ex_data": "plugin execute failed: Config matching query does not exist."}),
         ):
             result = resource.risk.get_task_status.perform_request({"task_id": "1"})
         assert result["state"] == "FAILED"
-        assert "Config" in result["failure_hint"] and "插件 Admin" in result["failure_hint"]
-        # 特征未命中 → 通用指引
+        assert "Config matching query does not exist" in result["failure_hint"]
+        # 节点错误取不到 → 通用指引
         with mock.patch(
             "services.web.risk.resources.bksec.api.bk_sops.get_task_status",
-            mock.Mock(return_value={"state": "FAILED"}),
+            mock.Mock(return_value=make_failed_status()),
         ), mock.patch(
             "services.web.risk.resources.bksec.api.bk_sops.get_node_data",
             mock.Mock(side_effect=Exception("boom")),

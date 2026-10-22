@@ -31,7 +31,7 @@ from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, extract_failure_detail
+from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, iter_status_nodes
 from services.web.risk.constants import ApproveTicketFields, RiskStatus
 from services.web.risk.models import (
     ProcessApplication,
@@ -220,11 +220,15 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
     @staticmethod
     def _build_failure_hint(process_result: dict) -> str:
-        """失败提示：优先读写入点已落库的文本，为空时从当前状态里兜底取节点错误"""
+        """失败提示：优先读写入点已落库的文本，为空时从当前状态里兜底取首个节点错误（只读，不回源）"""
         hint = process_result.get("failure_hint") or ""
         if hint:
             return hint
-        return extract_failure_detail(process_result.get("status") or {})[:FAILURE_HINT_MAX_LEN]
+        for child in iter_status_nodes(process_result.get("status") or {}):
+            error_message = str(child.get("error_message") or "").strip()
+            if error_message:
+                return error_message[:FAILURE_HINT_MAX_LEN]
+        return ""
 
     @staticmethod
     def _split_multi(raw: str) -> list:
@@ -235,6 +239,41 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             if value and value not in values:
                 values.append(value)
         return values
+
+    @staticmethod
+    def _pa_filter_q(pa_ids: list) -> Q:
+        """套餐归属过滤条件：与展示口径一致（快照优先，无快照走规则链路兜底）
+
+        - 执行时快照 process_result.pa_id 优先：覆盖手动分派 / 测试单 / 规则改绑后的历史记录
+        - 无快照的历史节点走规则链路：按 (rule_id, rule_version) 精确命中；
+          风险无 rule_version 时按规则最新版本归属（与展示兜底一致）
+        """
+        # 快照命中：pa_id 写入为 int，JSON 路径查询类型敏感，兼容 str（同 task_id 筛选）
+        snapshot_q = Q()
+        for value in pa_ids:
+            snapshot_q |= Q(process_result__pa_id=value) | Q(process_result__pa_id=str(value))
+        # 无快照判定：与展示的 `process_result.get("pa_id") or 兜底` 语义一致（缺失/None/0/空串）
+        no_snapshot_q = Q(process_result__pa_id__isnull=True) | Q(process_result__pa_id=0) | Q(process_result__pa_id="")
+        # 规则链路：目标套餐当前/历史版本绑定的 (rule_id, version) 精确匹配
+        legacy_rule_q = Q()
+        for item in (
+            RiskRule.objects.filter(pa_id__in=pa_ids).exclude(rule_id__isnull=True).values("rule_id", "version")
+        ):
+            if item["version"] is None:
+                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version__isnull=True)
+            else:
+                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version=item["version"])
+        # 风险无 rule_version：按规则最新版本归属（升序遍历，最后写入即最新版本）
+        latest_pa = {}
+        for item in RiskRule.objects.exclude(rule_id__isnull=True).order_by("version").values("rule_id", "pa_id"):
+            latest_pa[item["rule_id"]] = item["pa_id"]
+        for rule_id, pa_of_latest in latest_pa.items():
+            if pa_of_latest in pa_ids:
+                legacy_rule_q |= Q(rule_id=rule_id, rule_version__isnull=True)
+        if not legacy_rule_q:
+            return snapshot_q
+        legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
+        return snapshot_q | legacy_q
 
     class RequestSerializer(serializers.Serializer):
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
@@ -261,7 +300,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         )
         page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
         page_size = serializers.IntegerField(
-            label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=100, default=20
+            label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
         )
 
     def perform_request(self, validated_request_data):
@@ -281,7 +320,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         # 处理套餐执行记录包含测试单（is_test 不过滤）
         nodes = TicketNode.objects.filter(action="AutoProcess")
 
-        # 套餐筛选 / 场景范围：套餐 → 规则 → 风险 → 执行节点
+        # 套餐筛选 / 场景范围：归属口径与展示一致——执行时快照优先，无快照走规则（含版本）链路兜底
         if pa_id or scene_id:
             pa_queryset = ProcessApplication.objects.all()
             if pa_id:
@@ -293,8 +332,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
                     pk_field="id",
                 )
-            rule_ids = RiskRule.objects.filter(pa_id__in=pa_queryset.values("id")).values("rule_id")
-            nodes = nodes.filter(risk_id__in=Risk.objects.filter(rule_id__in=rule_ids).values("risk_id"))
+            nodes = nodes.filter(self._pa_filter_q(list(pa_queryset.values_list("id", flat=True))))
 
         # 风险入口：按风险 ID 筛选
         if risk_id:
@@ -381,14 +419,20 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         risk_map = {
             risk["risk_id"]: risk
             for risk in Risk.objects.filter(risk_id__in=[n.risk_id for n in nodes]).values(
-                "risk_id", "title", "status", "rule_id"
+                "risk_id", "title", "status", "rule_id", "rule_version"
             )
         }
+        # 规则 → 套餐映射按 (rule_id, version) 精确匹配（规则改绑会出新版本）；
+        # 另记最新版本，供风险无 rule_version 的历史记录兜底
         rule_pa_map = {}
-        for item in RiskRule.objects.filter(
-            rule_id__in={r["rule_id"] for r in risk_map.values() if r["rule_id"]}
-        ).values("rule_id", "pa_id"):
-            rule_pa_map.setdefault(item["rule_id"], item["pa_id"])
+        rule_latest_pa = {}
+        for item in (
+            RiskRule.objects.filter(rule_id__in={r["rule_id"] for r in risk_map.values() if r["rule_id"]})
+            .order_by("version")
+            .values("rule_id", "version", "pa_id")
+        ):
+            rule_pa_map[(item["rule_id"], item["version"])] = item["pa_id"]
+            rule_latest_pa[item["rule_id"]] = item["pa_id"]
         pa_name_map = {
             pa["id"]: pa["name"]
             for pa in ProcessApplication.objects.filter(id__in=set(rule_pa_map.values())).values("id", "name")
@@ -398,8 +442,13 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         for node in nodes:
             risk = risk_map.get(node.risk_id, {})
             process_result = node.process_result or {}
-            # 套餐归属：优先取执行时快照（手动分派/规则改绑套餐均正确），历史节点无快照时走规则链路兜底
-            pa_id_of_record = process_result.get("pa_id") or rule_pa_map.get(risk.get("rule_id"))
+            # 套餐归属：优先取执行时快照（手动分派/规则改绑套餐均正确），历史节点无快照时按
+            # (rule_id, rule_version) 精确兜底，风险无版本时按规则最新版本兜底
+            pa_id_of_record = process_result.get("pa_id")
+            if not pa_id_of_record:
+                pa_id_of_record = rule_pa_map.get((risk.get("rule_id"), risk.get("rule_version")))
+                if pa_id_of_record is None and risk.get("rule_id") and risk.get("rule_version") is None:
+                    pa_id_of_record = rule_latest_pa.get(risk.get("rule_id"))
             state = (process_result.get("status") or {}).get("state", "")
             if state in SOPSTaskStatus.get_success_status():
                 result = "success"
@@ -466,14 +515,19 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
         risk = Risk.objects.filter(risk_id=node.risk_id).first()
         process_result = node.process_result or {}
 
-        # 套餐信息
+        # 套餐信息：快照优先，历史节点无快照时按 (rule_id, rule_version) 兜底（与列表同口径）
         pa_id = process_result.get("pa_id") or 0
         pa_name = process_result.get("pa_name") or ""
-        if not pa_name and risk:
-            rule = RiskRule.objects.filter(rule_id=risk.rule_id).first()
+        if risk and (not pa_id or not pa_name):
+            rule = None
+            if risk.rule_id:
+                rule = RiskRule.objects.filter(rule_id=risk.rule_id, version=risk.rule_version).first()
+                if not rule and risk.rule_version is None:
+                    rule = RiskRule.objects.filter(rule_id=risk.rule_id).order_by("-version").first()
             if rule:
                 pa = ProcessApplication.objects.filter(id=rule.pa_id).first()
-                pa_name = pa.name if pa else ""
+                pa_id = pa_id or rule.pa_id or 0
+                pa_name = pa_name or (pa.name if pa else "")
 
         # 状态映射
         state = (process_result.get("status") or {}).get("state", "")
