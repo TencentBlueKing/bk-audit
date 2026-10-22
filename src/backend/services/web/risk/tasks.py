@@ -67,6 +67,7 @@ from services.web.risk.constants import (
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
     AnalyseReportStatus,
+    ItsmVersion,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -83,6 +84,7 @@ from services.web.risk.handlers.ticket import (
     ForApprove,
     NewRisk,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     AnalyseReport,
@@ -645,6 +647,30 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
+def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
+    """同步审批类节点（ForApprove）的 ITSM 工单状态到节点。"""
+    status = None
+    if node.itsm_version == ItsmVersion.V4:
+        ticket_id = str(ticket.get("id") or "")
+        if ticket_id:
+            status = get_itsm_ticket_status(ticket_id)
+    elif node.itsm_version == ItsmVersion.V3:
+        sn = ticket.get("sn")
+        if sn:
+            status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+
+    if status is None:
+        node.status = TicketNodeStatus.FINISHED
+        return
+
+    node.process_result["status"] = status
+    node.status = (
+        TicketNodeStatus.FINISHED
+        if status["current_status"] in TicketStatus.get_finished_status()
+        else TicketNodeStatus.RUNNING
+    )
+
+
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
@@ -654,11 +680,11 @@ def process_one_risk(*, risk_id: str):
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
-    # 筛选所有需要更新的节点
+    # 筛选所有需要更新的节点（测试单不参与轮询，由 get_task_status 查询时同步）
     if node_id:
-        nodes = TicketNode.objects.filter(id=node_id)
+        nodes = TicketNode.objects.filter(id=node_id, is_test=False)
     else:
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING, is_test=False)
 
     # 逐个更新
     for node in nodes:
@@ -667,23 +693,8 @@ def sync_auto_result(node_id: str = None):
                 node = TicketNode.objects.select_for_update().get(id=node.id)
                 # 审批节点
                 if node.action == ForApprove.__name__:
-                    sn = node.process_result.get("ticket", {}).get("sn")
-                    if sn:
-                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
-                        node.process_result["status"] = status
-                        node.status = (
-                            TicketNodeStatus.FINISHED
-                            if node.process_result["status"]["current_status"]
-                            in [
-                                TicketStatus.TERMINATED,
-                                TicketStatus.FINISHED,
-                                TicketStatus.FAILED,
-                                TicketStatus.REVOKED,
-                            ]
-                            else TicketNodeStatus.RUNNING
-                        )
-                    else:
-                        node.status = TicketNodeStatus.FINISHED
+                    ticket = node.process_result.get("ticket") or {}
+                    _sync_approve_node_status(node, ticket)
                 # 自动处理套餐节点
                 elif node.action == AutoProcess.__name__:
                     task_id = node.process_result.get("task", {}).get("task_id", "")
@@ -706,7 +717,9 @@ def sync_auto_result(node_id: str = None):
                 # 其他节点只需要判断不为最后一个，则关闭
                 # 或 该风险单已关闭，则关闭
                 else:
-                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    last_node = (
+                        TicketNode.objects.filter(risk_id=node.risk_id, is_test=False).order_by("-timestamp").first()
+                    )
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
                         risk and risk.status == RiskStatus.CLOSED
@@ -1082,6 +1095,7 @@ def generate_analyse_report_title(self, report_id: int) -> dict[str, Any]:
     base=AIAgentTask,
     queue=AIWorkloadQueue.DEFAULT,
     acks_late=True,
+    time_limit=settings.RENDER_TASK_TIMEOUT,
 )
 def render_ai_variable(risk_id: str, ai_variables: list[dict]) -> dict[str, Any]:
     """Celery任务：渲染 AI 变量

@@ -414,13 +414,15 @@
   const renderCommonTagNode = (values: string[]) => h('span', {
     style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
   }, values.map(value => h('span', {
-    style: 'display:inline-flex;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
+    class: 'audit-ellipsis-tag',
+    style: 'display:inline-block;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
   }, value || '--')));
 
   const renderEditTagNode = (values: string[]) => h('span', {
     style: 'display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;vertical-align:middle;',
   }, values.map(value => h('span', {
-    style: 'display:inline-flex;align-items:center;max-width:160px;padding:1px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
+    class: 'audit-ellipsis-tag',
+    style: 'display:inline-block;align-items:center;padding:1px 8px;font-size:12px;line-height:18px;color:#63656e;background:#f0f1f5;border:1px solid #dcdee5;border-radius:2px;vertical-align:middle;',
   }, value || '--')));
 
   const renderPlainTextNode = (values: string[]) => h('span', values.join('，') || '--');

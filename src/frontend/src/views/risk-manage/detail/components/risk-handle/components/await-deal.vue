@@ -52,7 +52,7 @@
             class="await-deal-rich-editor"
             :default="formData.description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
@@ -66,7 +66,9 @@
             v-model="formData.new_operators"
             allow-create
             class="transfer-user-selector"
-            :placeholder="t('请输入人员')"
+            :placeholder="t('请输入用户名，或通过输入$使用变量')"
+            :user-group="memberVariables"
+            :user-group-name="t('可使用变量')"
             @change="handleTransferOperatorsChange" />
         </bk-form-item>
         <bk-form-item
@@ -79,7 +81,7 @@
             class="await-deal-rich-editor"
             :default="formData.description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
@@ -101,7 +103,7 @@
             class="await-deal-rich-editor"
             :default="formData.misreport_description"
             fullscreen-scope="parent"
-            :max-len="1000"
+            :max-len="2000"
             @expand-change="handleEditorExpandChange" />
         </bk-form-item>
       </template>
@@ -147,7 +149,9 @@
                     :detail-data="detailData"
                     :event-data-list="eventDataList"
                     :risk-field-list="riskFieldList"
-                    use-field-insert />
+                    use-field-insert
+                    :user-group="memberVariables"
+                    :user-group-name="t('可使用变量')" />
                   <template #error="message">
                     <div>{{ val.name }}{{ message }}</div>
                   </template>
@@ -210,6 +214,7 @@
     onBeforeRouteLeave,
   } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import ProcessApplicationManageService from '@service/process-application-manage';
   import RiskManageService from '@service/risk-manage';
   import SoapManageService from '@service/soap-manage';
@@ -279,6 +284,18 @@
     dockEditorExpand(expanded);
   };
   const { t } = useI18n();
+
+  const { data: memberVariableSource } = useRequest(MetaManageService.fetchVariableList, {
+    defaultValue: [],
+  });
+
+  const memberVariables = computed(() => {
+    const list = Array.isArray(memberVariableSource.value) ? memberVariableSource.value : [];
+    return list.map((item: { value?: string; label?: string }) => ({
+      id: String(item.value || ''),
+      name: `${item.value}(${item.label})`,
+    })).filter(item => item.id);
+  });
   const { messageSuccess } = useMessage();
 
   // 判断富文本内容是否为实质性输入（排除编辑器产生的空内容HTML标签）

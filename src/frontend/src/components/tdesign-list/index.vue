@@ -314,6 +314,9 @@
       isSelectAll: boolean,
     },
     resolveSelectedRowKeys: (options?: { maxCount?: number }) => Promise<Array<string | number>>,
+    resolveSelectAllRows: (options?: { maxCount?: number }) => Promise<Array<Record<string, any>>>,
+    getSelectedKeys: () => Array<string | number>,
+    clearSelection: () => void,
     resolveExportSelection: () => Promise<{
       keys: Array<string | number>,
       truncated: boolean,
@@ -677,6 +680,7 @@
     handleCrossPageSelectChange,
     updateSelectBannerPosition,
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     getSelectionMeta,
   } = useCrossPageSelect({
@@ -1505,7 +1509,14 @@
       });
     },
     getSelectionMeta,
+    getSelectedKeys() {
+      return [...selectedRowKeys.value];
+    },
+    clearSelection() {
+      clearAllSelection();
+    },
     resolveSelectedRowKeys,
+    resolveSelectAllRows,
     resolveExportSelection,
     initTableHeight() {
       initTableHeight();

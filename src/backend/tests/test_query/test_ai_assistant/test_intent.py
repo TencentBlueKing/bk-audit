@@ -522,17 +522,21 @@ class LoadCandidatesTest(AIAssistantTestCase):
 class IntentAgentRoutingTest(AIAssistantTestCase):
     """意图识别智能体环境路由开关（默认专属 / 应急切共享）。
 
-    定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
+    正式态定案（2026-09-15 确认）：默认专属智能体 bp-ai-user-intent——生产（上云）
     BK_API_URL_TMPL 独立域名模板默认链路直接跑通；bkop 统一域名模板下该网关未注册
     （2026-09-14 线上 404 事故），经 BKAPP_AI_USER_INTENT_API_URL 直连独立域名解决
     （第 1 层优先级）。
+
+    临时态（2026-10-21，仅合入 bkop 联调分支验证 bp-ai-intent-test）：默认切到
+    AI_INTENT_TEST，验证完成后默认值与下列用例同步切回 USER_INTENT（恢复正式态断言）。
     """
 
-    def test_default_routes_to_dedicated_agent(self):
-        """默认：路由到 USER_INTENT 专属智能体（生产默认链路零额外配置）"""
+    def test_default_routes_to_intent_test_agent(self):
+        """临时态：默认路由到 AI_INTENT_TEST 测试智能体（bkop 部署即生效，零额外配置）"""
 
-        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.USER_INTENT)
-        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
+        self.assertEqual(MessagePlanningService.agent_code, AIAgentCode.AI_INTENT_TEST)
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.AI_INTENT_TEST)
+        self.assertEqual(AIAgentCode.AI_INTENT_TEST.value, "bp-ai-intent-test")
 
     @override_settings(AI_USER_INTENT_AGENT_CODE="RISK_SEARCH")
     def test_switch_routes_to_other_agent(self):
@@ -540,9 +544,35 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
 
         self.assertEqual(resolve_intent_agent_code(), AIAgentCode.RISK_SEARCH)
 
+    @override_settings(AI_USER_INTENT_AGENT_CODE="USER_INTENT")
+    def test_switch_back_to_dedicated_agent(self):
+        """逃生口：bkop 验证期间仍可经环境变量切回 USER_INTENT 专属智能体"""
+
+        self.assertEqual(resolve_intent_agent_code(), AIAgentCode.USER_INTENT)
+
     @override_settings(AI_USER_INTENT_AGENT_CODE="NOT_EXIST")
     def test_invalid_switch_fails_fast(self):
         """非法枚举名：启动即快速失败（ImproperlyConfigured），防静默走错智能体"""
 
         with self.assertRaises(ImproperlyConfigured):
             resolve_intent_agent_code()
+
+
+class PromptValueRulesContractTest(AIAssistantTestCase):
+    """system prompt 必须携带值域解析规则锚点文本，防止后续改动误删引导模型查工具的规则。"""
+
+    ANCHORS = (
+        "值域解析规则",
+        "禁止凭空猜测 action_id",
+        "用操作列表类工具检索目标系统的操作清单",
+        "同等匹配多个操作时把全部匹配项",
+        "只能来自操作清单返回的真实值域",
+        "以用户原文为准，禁止改写大小写或翻译",
+        "不得静默丢弃或编造值",
+        "不得以缺少工具为由虚构值域",
+    )
+
+    def test_system_prompt_contains_value_rules(self):
+        for anchor in self.ANCHORS:
+            with self.subTest(anchor=anchor):
+                self.assertIn(anchor, MessagePlanningService.system_prompt)

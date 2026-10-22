@@ -28,6 +28,7 @@ __all__ = [
     "AssetSyncAnomalyEvent",
     "AssetSyncCheckAnomalyEvent",
     "ScenePermissionGrantFailedEvent",
+    "BkSecConfigSyncFailedEvent",
 ]
 
 
@@ -132,3 +133,17 @@ class ScenePermissionGrantFailedEvent(Event):
     name = "scene_permission_grant_failed"
     documentation = "场景权限申请审批通过但授权失败（重试已达上限）"
     labelnames = ["application_id", "applicant", "scene_id", "role", "grant_error"]
+
+
+class BkSecConfigSyncFailedEvent(Event):
+    """BKSEC 插件配置同步失败事件
+
+    维度字段:
+    - strategy_id: 策略 ID
+    - stage: 失败阶段（fetch_token / upsert_rejected / api_unreachable）
+    - error: 错误信息
+    """
+
+    name = "bksec_config_sync_failed"
+    documentation = "BKSEC 插件配置同步失败"
+    labelnames = ["strategy_id", "stage", "error"]

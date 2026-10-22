@@ -40,6 +40,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="scene"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runExport"
@@ -103,6 +109,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
   import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
@@ -129,32 +136,35 @@
     width: 180,
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
-      <auth-button
-        text
-        theme='primary'
-        class='mr16'
-        permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-        action-id='process_risk'
-        resource={row.risk_id}
-        onClick={() => handleToDetail(row)}>
-        {t('处理')}
-      </auth-button>
       {
-        row.status === 'auto_process'
-          ? <bk-button text theme='primary'
-            class="is-disabled"
-            v-bk-tooltips={{
-              content: row.risk_label === 'normal'
-                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-            }}>
-            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-          </bk-button>
-          : <MarkRiskLabel
-            onUpdate={() => fetchList()}
-            userInfo={userInfo.value}
-            data={row} />
+        ['for_approve', 'auto_process'].includes(row.status)
+          ? (
+            <bk-button
+              v-bk-tooltips={t('当前状态不支持人工处理')}
+              text
+              theme='primary'
+              class='mr16 is-disabled'>
+              {t('处理')}
+            </bk-button>
+          )
+          : (
+            <auth-button
+              text
+              theme='primary'
+              class='mr16'
+              permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+              action-id='process_risk'
+              resource={row.risk_id}
+              onClick={() => handleToDetail(row)}>
+              {t('处理')}
+            </auth-button>
+          )
       }
+      <MarkRiskLabel
+        onUpdate={() => fetchList()}
+        userInfo={userInfo.value}
+        data={row}
+        disabled={row.status === 'auto_process'} />
       <bk-dropdown
         style="margin-left: 8px">
         {{
@@ -257,7 +267,12 @@
     }
     return result;
   });
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
@@ -444,7 +459,9 @@
     defaultValue: [],
   });
 
-  const handleRequestSuccess = () => {};
+  const handleRequestSuccess = () => {
+    nextTick(() => batchHandleRef.value?.sync());
+  };
 
   const handleModelValueWatch = (val: any) => {
     if (val?.strategy_id?.length) {

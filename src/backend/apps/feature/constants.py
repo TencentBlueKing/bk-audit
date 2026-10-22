@@ -42,3 +42,4 @@ class FeatureTypeChoices(TextChoices):
     STORAGE_EDIT = "storage_edit", gettext_lazy("存储编辑")
     ENABLE_DORIS = "enable_doris", gettext_lazy("启用 Doris")
     CHECK_BKVISION_SHARE_PERMISSION = "check_bkvision_share_permission", gettext_lazy("校验BKVision分享权限")
+    BKSEC = "bksec", gettext_lazy("BKSEC安全工单")

@@ -21,6 +21,8 @@ from uuid import uuid4
 from bk_resource import resource
 from django.test import TestCase
 
+from apps.meta.models import GlobalMetaConfig
+from services.web.risk.constants import SECURITY_PERSON_KEY
 from services.web.risk.models import ProcessApplication, Risk, RiskRule
 from services.web.scene.models import Scene
 from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
@@ -28,6 +30,12 @@ from tests.test_risk.test_tickets.constants import PA_INFO, RISK_INFO, RULE_INFO
 
 class TicketTest(TestCase):
     """为风险工单用例提供 Django 事务隔离，避免测试数据在用例间相互污染。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        """提供工单兜底负责人配置，随测试事务回滚，不依赖本地业务配置。"""
+        super().setUpTestData()
+        GlobalMetaConfig.set(config_key=SECURITY_PERSON_KEY, config_value=["ticket-test-security"])
 
 
 class RiskContext:

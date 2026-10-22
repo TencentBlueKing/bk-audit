@@ -1,5 +1,6 @@
 import inspect
 import re
+from typing import Any, Dict
 
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import is_list_serializer
@@ -105,6 +106,35 @@ class BKResourceAutoSchema(AutoSchema):
             return OpenApiTypes.BINARY
         return super().get_response_serializers()
 
+    def _get_response_for_code(self, serializer, status_code, media_types=None, direction="response"):
+        """把 ResourceViewSet 的成功 JSON schema 放入 APIRenderer 标准信封。"""
+
+        response = super()._get_response_for_code(serializer, status_code, media_types, direction)
+        if not self._get_matched_route() or not str(status_code).startswith("2") or serializer is OpenApiTypes.BINARY:
+            return response
+
+        for media_type, media in response.get("content", {}).items():
+            if media_type == "application/json" or media_type.endswith("+json"):
+                media["schema"] = self._success_envelope_schema(media["schema"])
+        return response
+
+    @staticmethod
+    def _success_envelope_schema(data_schema):
+        """声明 APIRenderer 的标准成功响应，data 保留原始列表和分页结构。"""
+
+        return {
+            "type": "object",
+            "required": ["result", "code", "data", "message", "request_id", "trace_id"],
+            "properties": {
+                "result": {"type": "boolean"},
+                "code": {"type": "integer"},
+                "data": data_schema,
+                "message": {"type": "string", "nullable": True},
+                "request_id": {"type": "string"},
+                "trace_id": {"type": "string", "nullable": True},
+            },
+        }
+
     def get_override_parameters(self):
         params = super().get_override_parameters()
         route = self._get_matched_route()
@@ -200,3 +230,151 @@ class BKResourceAutoSchema(AutoSchema):
             if doc:
                 return inspect.cleandoc(str(doc))
         return super().get_description()
+
+
+class MCPToolAutoSchema(BKResourceAutoSchema):
+    """MCP 工具 OpenAPI 契约基类：固定 operationId 并内联 Pydantic 请求/响应 schema。
+
+    子类声明四张表即可获得与日志工具一致的稳定契约：
+    - ``_OPERATION_IDS``：endpoint -> MCP 工具名（同步 definition.yaml 的 resource_names）
+    - ``_PYDANTIC_MODELS``：endpoint -> (请求模型, 响应模型)
+    - ``_ERROR_STATUS_CODES``：声明的错误响应状态码集合
+    - ``_ERROR_CODE_DESCRIPTION``：错误信封中 code 字段的领域错误码说明
+    """
+
+    _OPERATION_IDS: Dict[str, str] = {}
+    _PYDANTIC_MODELS: Dict[str, tuple] = {}
+    _ERROR_STATUS_CODES: tuple = ()
+    _ERROR_CODE_DESCRIPTION: str = ""
+    # 错误信封中可选 errors 诊断字段的说明；子类按领域覆盖。
+    _ERRORS_FIELD_DESCRIPTION: str = "可选诊断信息，不回显 SQL 或字段值；工具分支按 code 判断。"
+
+    def get_operation_id(self):
+        return self._OPERATION_IDS.get(self.view.action, super().get_operation_id())
+
+    def get_response_serializers(self):
+        if self.view.action in self._PYDANTIC_MODELS:
+            return {200: OpenApiTypes.OBJECT}
+        return super().get_response_serializers()
+
+    def get_operation(self, *args, **kwargs):
+        """用领域 Pydantic schema 覆盖 MCP 工具的 OpenAPI body 与 data。"""
+
+        operation = super().get_operation(*args, **kwargs)
+        models = self._PYDANTIC_MODELS.get(self.view.action)
+        if not models:
+            return operation
+
+        request_model, response_model = models
+        request_schema = self._inline_pydantic_schema(request_model.model_json_schema(mode="validation"))
+        response_schema = self._inline_pydantic_schema(response_model.model_json_schema(mode="serialization"))
+        self._mark_model_dump_fields_required(response_schema)
+        operation["requestBody"]["content"]["application/json"]["schema"] = request_schema
+        operation["responses"]["200"]["content"]["application/json"]["schema"] = self._envelope_schema(response_schema)
+        for status_code in self._ERROR_STATUS_CODES:
+            operation["responses"][str(status_code)] = {
+                "description": "平台标准错误响应",
+                "content": {"application/json": {"schema": self._error_envelope_schema()}},
+            }
+        return operation
+
+    @classmethod
+    def _inline_pydantic_schema(
+        cls, schema: Dict[str, Any], definitions: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        """将工具的 Pydantic JSON Schema 转成 OpenAPI 3.0 Schema。"""
+        definitions = definitions or schema.get("$defs", {})
+        if "$ref" in schema:
+            result = cls._inline_pydantic_schema(definitions[schema["$ref"].rsplit("/", 1)[-1]], definitions)
+            siblings = {key: value for key, value in schema.items() if key != "$ref"}
+            result.update(cls._inline_pydantic_schema(siblings, definitions))
+            return result
+
+        result: Dict[str, Any] = {}
+        for key, value in schema.items():
+            if key == "$defs":
+                continue
+            if key == "const":
+                result["enum"] = [value]
+                continue
+            if (
+                key in {"exclusiveMinimum", "exclusiveMaximum"}
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+            ):
+                result["minimum" if key == "exclusiveMinimum" else "maximum"] = value
+                result[key] = True
+                continue
+            if key == "anyOf":
+                non_null = [item for item in value if item.get("type") != "null"]
+                if len(non_null) == 1 and len(non_null) != len(value):
+                    result.update(cls._inline_pydantic_schema(non_null[0], definitions))
+                    result["nullable"] = True
+                else:
+                    # anyOf 的分支可能重叠，例如整数同时属于 JSON Schema 的 integer
+                    # 和 number；改成 oneOf 会让 OpenAPI 拒绝 Pydantic 接受的合法值。
+                    result["anyOf"] = [cls._inline_pydantic_schema(item, definitions) for item in value]
+                continue
+            if isinstance(value, dict):
+                result[key] = cls._inline_pydantic_schema(value, definitions)
+            elif isinstance(value, list):
+                result[key] = [
+                    cls._inline_pydantic_schema(item, definitions) if isinstance(item, dict) else item for item in value
+                ]
+            else:
+                result[key] = value
+        return result
+
+    @staticmethod
+    def _envelope_schema(data_schema: Dict[str, Any]) -> Dict[str, Any]:
+        """声明 UserAPIGWViewSet 实际渲染的标准成功响应。"""
+
+        return {
+            "type": "object",
+            "required": ["result", "code", "message", "request_id", "trace_id", "data"],
+            "properties": {
+                "result": {"type": "boolean"},
+                "code": {"type": "integer"},
+                "message": {"type": "string", "nullable": True},
+                "request_id": {"type": "string", "nullable": True},
+                "trace_id": {"type": "string", "nullable": True},
+                "data": data_schema,
+            },
+        }
+
+    def _error_envelope_schema(self) -> Dict[str, Any]:
+        """声明 APIRenderer 的标准错误响应；errors 为兼容诊断字段，不作为必填契约。"""
+
+        return {
+            "type": "object",
+            "required": ["result", "code", "message", "request_id", "trace_id", "data"],
+            "properties": {
+                "result": {"type": "boolean"},
+                "code": {
+                    "oneOf": [{"type": "integer"}, {"type": "string"}],
+                    "description": self._ERROR_CODE_DESCRIPTION,
+                },
+                "message": {"type": "string", "nullable": True},
+                "request_id": {"type": "string", "nullable": True},
+                "trace_id": {"type": "string", "nullable": True},
+                "data": {
+                    "nullable": True,
+                    "description": "普通错误为 null；IAM 权限错误沿用平台权限申请数据。",
+                },
+                "errors": {
+                    "nullable": True,
+                    "description": self._ERRORS_FIELD_DESCRIPTION,
+                },
+            },
+        }
+
+    @classmethod
+    def _mark_model_dump_fields_required(cls, schema: Dict[str, Any]) -> None:
+        """Pydantic 的 model_dump 不省略默认值，响应 schema 也必须声明这些键。"""
+        properties = schema.get("properties")
+        if properties:
+            schema["required"] = list(properties)
+            for value in properties.values():
+                cls._mark_model_dump_fields_required(value)
+        if isinstance(schema.get("items"), dict):
+            cls._mark_model_dump_fields_required(schema["items"])

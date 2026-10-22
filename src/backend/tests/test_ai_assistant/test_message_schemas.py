@@ -15,6 +15,7 @@ from services.web.ai_assistant.schemas import (
     parse_snapshot,
 )
 from services.web.ai_assistant.schemas.audit_search import (
+    CommonQuerySchema,
     LogSearchInputSchema,
     SystemSelectionInputSchema,
     UserIntentInputSchema,
@@ -168,3 +169,19 @@ class SessionScopeInputProtocolTest(TestCase):
 
         self.assertEqual(parsed.condition.scope_type, "system")
         self.assertEqual(parsed.condition.scope_id, "bk_audit")
+
+
+class QueryTextLimitProtocolTest(TestCase):
+    """query_text 上限协议：对话输入框放宽到 4096（与前端输入框限制对齐）。"""
+
+    def test_user_intent_query_text_accepts_4096_and_rejects_4097(self):
+        parsed = UserIntentInputSchema.model_validate({"query_text": "查" * 4096})
+
+        self.assertTrue(parsed.auto_execute)
+        with self.assertRaises(ValidationError):
+            UserIntentInputSchema.model_validate({"query_text": "查" * 4097})
+
+    def test_common_query_schema_accepts_full_length_query(self):
+        # 常用/历史榜单由真实检索原文重建（Redis ZSet member / USER_INTENT input_data），
+        # 上限小于输入上限时，超长检索成功会让系统选择消息在榜单组装阶段校验失败
+        self.assertEqual(CommonQuerySchema(query_text="查" * 4096).query_text, "查" * 4096)

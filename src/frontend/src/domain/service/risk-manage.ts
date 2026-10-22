@@ -252,10 +252,66 @@ export default {
    */
   batchTransRisk(params: {
     risk_ids: string[],
-    new_operators: string[],
+    new_operators: Array<string | { type: 'user' | 'field', value: string }>,
     description: string
   }) {
     return RiskManageSource.batchTransRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量处理能力检查
+   */
+  previewBatchActions(params: {
+    risk_ids: string[],
+  }) {
+    return RiskManageSource.previewBatchActions(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量人工关单
+   */
+  bulkCloseRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return RiskManageSource.bulkCloseRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量处理套餐
+   */
+  bulkAutoProcessRisk(params: {
+    risk_ids: string[],
+    pa_id: number,
+    pa_params: Record<string, any>,
+    auto_close_risk: boolean,
+  }) {
+    return RiskManageSource.bulkAutoProcessRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量标记误报
+   */
+  bulkMisreportRisk(params: {
+    risk_ids: string[],
+    description: string,
+  }) {
+    return RiskManageSource.bulkMisreportRisk(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+   * @desc 批量解除误报
+   */
+  bulkUnmisreportRisk(params: {
+    risk_ids: string[],
+    new_operators: Array<{ type: 'user', value: string }>,
+  }) {
+    return RiskManageSource.bulkUnmisreportRisk(params)
       .then(({ data }) => data);
   },
 

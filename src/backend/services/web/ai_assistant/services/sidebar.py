@@ -13,7 +13,6 @@ from services.web.ai_assistant.constants import (
 )
 from services.web.ai_assistant.exceptions import (
     ConversationGroupNotFound,
-    CrossScopeMutationNotAllowed,
     InvalidSidebarAnchor,
     InvalidSidebarContainer,
     SidebarNodeNotFound,
@@ -30,7 +29,6 @@ from services.web.ai_assistant.services.scope import (
     normalize_concrete_scope,
     resolve_scope_visibility,
 )
-from services.web.common.constants import ScopeType
 from services.web.common.scope_permission import ScopePermission
 
 
@@ -149,20 +147,24 @@ class ConversationSidebarService:
     def list_nodes(
         self,
         *,
-        scope_type: str,
-        scope_id: str | None,
+        scope_type: str | None = None,
+        scope_id: str | None = None,
         parent_group_uid: str | None = None,
     ) -> QuerySet[ConversationSidebarNode]:
         """按 concrete 或 cross 范围返回根列表或指定分组的普通节点。"""
 
-        visibility = resolve_scope_visibility(
-            permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
-        )
         parent_node_id = None
         if parent_group_uid is not None:
             group_node = self._resolve_node(node_type=SidebarNodeType.GROUP, node_uid=parent_group_uid)
-            self._require_visible_node(node=group_node, visibility=visibility)
+            self._validate_business_scope(node=group_node)
             parent_node_id = group_node.id
+            # UID 的权限由 HTTP 入口检查；查询始终使用持久化分组范围。
+            scope = normalize_concrete_scope(scope_type=group_node.scope_type, scope_id=group_node.scope_id)
+            visibility = ScopeVisibility(scope.scope_type, (scope.scope_id,), False)
+        else:
+            visibility = resolve_scope_visibility(
+                permission=self.scope_permission, scope_type=scope_type, scope_id=scope_id
+            )
         queryset = (
             self._container_queryset(
                 parent_node_id=parent_node_id,
@@ -276,8 +278,6 @@ class ConversationSidebarService:
     def move(
         self,
         *,
-        scope_type: str,
-        scope_id: str | None,
         source_node_type: str,
         source_node_uid: str,
         target_node_type: str | None = None,
@@ -318,14 +318,9 @@ class ConversationSidebarService:
 
         max_retries = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES
         retry_interval = settings.AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS
-        if scope_type in {ScopeType.CROSS_SCENE.value, ScopeType.CROSS_SYSTEM.value}:
-            raise CrossScopeMutationNotAllowed()
-        scope = normalize_concrete_scope(scope_type=scope_type, scope_id=scope_id)
         for retry_count in range(max_retries + 1):
             try:
                 return self._move(
-                    scope_type=scope.scope_type.value,
-                    scope_id=scope.scope_id,
                     source_node_type=source_node_type,
                     source_node_uid=source_node_uid,
                     target_node_type=target_node_type,
@@ -350,8 +345,6 @@ class ConversationSidebarService:
     def _move(
         self,
         *,
-        scope_type: str,
-        scope_id: str,
         source_node_type: str,
         source_node_uid: str,
         target_node_type: str | None = None,
@@ -376,7 +369,7 @@ class ConversationSidebarService:
             node_type=source_node_type,
             node_uid=source_node_uid,
         )
-        self._require_node_scope(node=source, scope_type=scope_type, scope_id=scope_id)
+        scope_type, scope_id = source.scope_type, source.scope_id
         if source.pinned_at is not None:
             raise SidebarNodeNotMovable()
 
@@ -386,7 +379,7 @@ class ConversationSidebarService:
             target_node_uid=target_node_uid,
         )
         if target_parent is not None:
-            self._require_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
+            self._validate_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
         target_parent_id = target_parent.id if target_parent else None
         anchor, insert_after = self._resolve_anchor(
             before_node_type=before_node_type,
@@ -396,7 +389,7 @@ class ConversationSidebarService:
             target_parent_id=target_parent_id,
         )
         if anchor is not None:
-            self._require_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
+            self._validate_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
         after_successor = None
         insert_at_end = False
         if insert_after and anchor is not None and anchor.id != source.id:
@@ -420,18 +413,13 @@ class ConversationSidebarService:
         target_parent_id = target_parent.id if target_parent else None
         if source.pinned_at is not None:
             raise SidebarNodeNotMovable()
-        self._require_node_scope(node=source, scope_type=scope_type, scope_id=scope_id)
+        self._validate_node_scope(node=source, scope_type=scope_type, scope_id=scope_id)
         if target_parent is not None:
-            self._require_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
+            self._validate_node_scope(node=target_parent, scope_type=scope_type, scope_id=scope_id)
         if anchor is not None:
-            self._require_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
+            self._validate_node_scope(node=anchor, scope_type=scope_type, scope_id=scope_id)
         if after_successor is not None:
-            self._require_node_scope(node=after_successor, scope_type=scope_type, scope_id=scope_id)
-        if source.parent_node_id and (source.parent_node.scope_type, source.parent_node.scope_id) != (
-            scope_type,
-            scope_id,
-        ):
-            raise SidebarScopeMismatch()
+            self._validate_node_scope(node=after_successor, scope_type=scope_type, scope_id=scope_id)
         if source.parent_node_id != source_parent_id:
             # 另一笔移动已先提交，当前请求基于过期容器快照，不继续计算位置。
             raise SidebarNodeNotMovable()
@@ -655,24 +643,17 @@ class ConversationSidebarService:
             return self.list_nodes(scope_type=node.scope_type, scope_id=node.scope_id).get(id=node.id)
         return node
 
-    def _require_visible_node(self, *, node: ConversationSidebarNode, visibility: ScopeVisibility) -> None:
-        """拒绝展开当前 concrete/cross 权限集合之外的分组。"""
+    def _validate_node_scope(self, *, node: ConversationSidebarNode, scope_type: str, scope_id: str) -> None:
+        """校验节点、业务对象、父容器与移动范围一致，不执行用户鉴权。"""
 
-        self._require_business_scope(node=node)
-        if node.scope_type != visibility.scope_type.value or node.scope_id not in visibility.scope_ids:
-            raise SidebarNodeNotFound()
-
-    def _require_node_scope(self, *, node: ConversationSidebarNode, scope_type: str, scope_id: str) -> None:
-        """校验 move 操作范围与锁定后节点、业务对象和父分组一致。"""
-
-        self._require_business_scope(node=node)
+        self._validate_business_scope(node=node)
         if (node.scope_type, node.scope_id) != (scope_type, scope_id):
             raise SidebarScopeMismatch()
         if node.parent_node_id and (node.parent_node.scope_type, node.parent_node.scope_id) != (scope_type, scope_id):
             raise SidebarScopeMismatch()
 
     @staticmethod
-    def _require_business_scope(*, node: ConversationSidebarNode) -> None:
+    def _validate_business_scope(*, node: ConversationSidebarNode) -> None:
         """确保 Node 冗余分区键与其唯一业务对象绑定一致。"""
 
         business_object = node.group if node.node_type == SidebarNodeType.GROUP else node.conversation

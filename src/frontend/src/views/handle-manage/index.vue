@@ -71,7 +71,7 @@
           required>
           <bk-input
             v-model.trim="formData.description"
-            :maxlength="1000"
+            :maxlength="2000"
             :placeholder="t('请输入')"
             show-word-limit
             style="resize: none;"
@@ -142,32 +142,35 @@
     width: 180,
     fixed: 'right',
     cell: (h: any, { row }: { row: RiskManageModel }) => <p>
-      <auth-button
-        text
-        theme='primary'
-        class='mr16'
-        permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
-        action-id='process_risk'
-        resource={row.risk_id}
-        onClick={() => handleToDetail(row)}>
-        {t('处理')}
-      </auth-button>
       {
-        row.status === 'auto_process'
-          ? <bk-button text theme='primary'
-            class="is-disabled"
-            v-bk-tooltips={{
-              content: row.risk_label === 'normal'
-                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-            }}>
-            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-          </bk-button>
-          : <MarkRiskLabel
-            onUpdate={() => fetchList()}
-            userInfo={userInfo.value}
-            data={row} />
+        ['for_approve', 'auto_process'].includes(row.status)
+          ? (
+            <bk-button
+              v-bk-tooltips={t('当前状态不支持人工处理')}
+              text
+              theme='primary'
+              class='mr16 is-disabled'>
+              {t('处理')}
+            </bk-button>
+          )
+          : (
+            <auth-button
+              text
+              theme='primary'
+              class='mr16'
+              permission={row.permission.process_risk || row.current_operator.includes(userInfo.value.username)}
+              action-id='process_risk'
+              resource={row.risk_id}
+              onClick={() => handleToDetail(row)}>
+              {t('处理')}
+            </auth-button>
+          )
       }
+      <MarkRiskLabel
+        onUpdate={() => fetchList()}
+        userInfo={userInfo.value}
+        data={row}
+        disabled={row.status === 'auto_process'} />
       <bk-dropdown
         style="margin-left: 8px">
         {{
