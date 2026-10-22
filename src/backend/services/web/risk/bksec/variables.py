@@ -333,7 +333,7 @@ def _normalize_risk_type(item: dict) -> dict:
         "fields": [
             {"key": "submitter", "name": "提单人", "required": False, "type": "string"},
         ]
-        }
+    }
     """
     if not isinstance(item, dict):
         return {}

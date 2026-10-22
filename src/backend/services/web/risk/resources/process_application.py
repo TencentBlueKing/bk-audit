@@ -225,6 +225,16 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             return hint
         return extract_failure_detail(process_result.get("status") or {})[:FAILURE_HINT_MAX_LEN]
 
+    @staticmethod
+    def _split_multi(raw: str) -> list:
+        """多选参数归一化：逗号分隔拆列表，去空白，保序去重"""
+        values = []
+        for value in str(raw or "").split(","):
+            value = value.strip()
+            if value and value not in values:
+                values.append(value)
+        return values
+
     class RequestSerializer(serializers.Serializer):
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
         risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
@@ -232,8 +242,18 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
         task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
         pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), required=False, allow_blank=True)
-        trigger = serializers.CharField(label=gettext_lazy("触发方式"), required=False, allow_blank=True)
-        result = serializers.CharField(label=gettext_lazy("状态"), required=False, allow_blank=True)
+        trigger = serializers.CharField(
+            label=gettext_lazy("触发方式"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("支持多选，逗号分隔（如 auto,test），任一命中即返回"),
+        )
+        result = serializers.CharField(
+            label=gettext_lazy("状态"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
+        )
         operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
         order_by = serializers.CharField(
             label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
@@ -250,8 +270,8 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         task_id = validated_request_data.get("task_id", "").strip()
         task_name = validated_request_data.get("task_name", "").strip()
         pa_name = validated_request_data.get("pa_name", "").strip()
-        trigger = validated_request_data.get("trigger", "").strip()
-        result_filter = validated_request_data.get("result", "").strip()
+        trigger_values = self._split_multi(validated_request_data.get("trigger", ""))
+        result_values = self._split_multi(validated_request_data.get("result", ""))
         operator = validated_request_data.get("operator", "").strip()
         order_by = validated_request_data.get("order_by", "-start_time").strip()
         page = validated_request_data.get("page", 1)
@@ -291,9 +311,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         if pa_name:
             nodes = nodes.filter(process_result__pa_name__icontains=pa_name)
 
-        # 触发方式筛选
-        if trigger:
-            nodes = nodes.filter(process_result__trigger=trigger)
+        # 触发方式筛选（支持多选，任一命中）
+        if trigger_values:
+            nodes = nodes.filter(process_result__trigger__in=trigger_values)
 
         # 任务 ID 筛选（JSON 内 task_id 可能为 int/str，同时兼容）
         if task_id:
@@ -304,28 +324,30 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                 pass
             nodes = nodes.filter(task_id_cond)
 
-        # 状态筛选：result → SOPS state 映射（state 为固定枚举字符串）
-        if result_filter == "success":
-            nodes = nodes.filter(process_result__status__state=SOPSTaskStatus.FINISHED.value)
-        elif result_filter == "failed":
-            nodes = nodes.filter(
-                process_result__status__state__in=[s.value for s in SOPSTaskStatus.get_failed_status()]
-            )
-        elif result_filter == "running":
-            nodes = nodes.filter(
-                process_result__status__state__in=[
-                    SOPSTaskStatus.CREATED.value,
-                    SOPSTaskStatus.RUNNING.value,
-                    SOPSTaskStatus.SUSPENDED.value,
-                    SOPSTaskStatus.NODE_SUSPENDED.value,
-                ]
-            )
-        elif result_filter == "unknown":
-            nodes = nodes.filter(
-                Q(process_result__status__isnull=True)
-                | Q(process_result__status__state="")
-                | Q(process_result__status__state__isnull=True)
-            )
+        # 状态筛选（支持多选，任一命中）：result → SOPS state 映射（state 为固定枚举字符串）
+        result_q = Q()
+        for value in result_values:
+            if value == "success":
+                result_q |= Q(process_result__status__state=SOPSTaskStatus.FINISHED.value)
+            elif value == "failed":
+                result_q |= Q(process_result__status__state__in=[s.value for s in SOPSTaskStatus.get_failed_status()])
+            elif value == "running":
+                result_q |= Q(
+                    process_result__status__state__in=[
+                        SOPSTaskStatus.CREATED.value,
+                        SOPSTaskStatus.RUNNING.value,
+                        SOPSTaskStatus.SUSPENDED.value,
+                        SOPSTaskStatus.NODE_SUSPENDED.value,
+                    ]
+                )
+            elif value == "unknown":
+                result_q |= (
+                    Q(process_result__status__isnull=True)
+                    | Q(process_result__status__state="")
+                    | Q(process_result__status__state__isnull=True)
+                )
+        if result_values:
+            nodes = nodes.filter(result_q)
 
         # 排序
         order_field_map = {

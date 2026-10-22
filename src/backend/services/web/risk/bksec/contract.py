@@ -54,7 +54,7 @@ def build_event_payload(
     events: Optional[List[dict]] = None,
 ) -> dict:
     """
-    构建预览用的事件体
+    构建bksec发单报文
 
     build_event_payload 响应结构：
     {
@@ -131,7 +131,7 @@ def build_pa_params(config: BkSecConfig) -> dict:
     """
     生成自动创建处理规则的 pa_params（对接 SOPS 插件「审计中心WeSec发单」的入参）
 
-    - 标准入参 → {"field": 风险字段, "value": ""}  9个
+    - 标准入参，直接从risk对象获取 → {"field": 风险字段, "value": ""}  9个
     - ${target_type} → 目标资产类型（config.target_type）
     - ${target} → 具体风险对象（config.target）
     - ${operator} → 初始责任人（config.operator）
