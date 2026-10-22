@@ -563,6 +563,8 @@ export interface AiFieldStatisticsInputData {
 
 export interface AiStatisticsInputData {
   instruction: string;
+  /** 附件上已有的独立检索范围。重试整体替换时原样带回，省略会回到来源检索条件 */
+  condition?: AiSearchCondition;
 }
 
 /**

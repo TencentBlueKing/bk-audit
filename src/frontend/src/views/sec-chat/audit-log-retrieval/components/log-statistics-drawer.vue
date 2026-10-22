@@ -163,7 +163,7 @@
             <div
               :ref="el => setChartRef(card.key, el)"
               class="chart-box"
-              :style="{ height: `${card.height}px` }" />
+              :style="{ height: `${chartBoxHeight(card)}px` }" />
             <div
               v-if="card.legendItems.length"
               class="chart-legend-block"
@@ -327,8 +327,10 @@
     type StatisticsRatioItem,
     parseStatisticsCharts,
     RATIO_CARD_TITLE,
+    statisticsBarChartHeight,
     statisticsIntervalTextKey,
     TREND_CARD_TITLE,
+    visibleStatisticsRatio,
   } from '../utils/map-statistics-output';
   import {
     type ChartSanitizeErrorCode,
@@ -473,6 +475,35 @@
     legendSelected.value[cardKey]?.[name] !== false
   );
 
+  const chartBoxHeight = (card: ChartCardView) => {
+    if (card.kind !== 'bar' || !card.ratio?.length) return card.height;
+    const visible = visibleStatisticsRatio(card.ratio, legendSelected.value[card.key]);
+    return statisticsBarChartHeight(visible.length);
+  };
+
+  /**
+   * 柱状图是单系列，图例选中态不会按类别隐柱。
+   * 按仍打开的图例重写纵轴和柱子，高度随可见类别变化后再 resize。
+   */
+  const applyBarCategoryFilter = (cardKey: string) => {
+    const card = viewCards.value.find(item => item.key === cardKey);
+    const chart = chartInstances.get(cardKey);
+    if (!card || card.kind !== 'bar' || !card.ratio || !chart) return;
+    const visible = visibleStatisticsRatio(card.ratio, legendSelected.value[cardKey]);
+    chart.setOption({
+      yAxis: { data: visible.map(item => item.name) },
+      series: [{
+        data: visible.map(item => ({
+          value: item.value,
+          itemStyle: { color: item.color },
+        })),
+      }],
+    });
+    nextTick(() => {
+      chart.resize();
+    });
+  };
+
   /** 画布里的图例已关掉，点击这里补上 ECharts 的显隐 */
   const toggleChartLegend = (cardKey: string, name: string) => {
     const chart = chartInstances.get(cardKey);
@@ -487,6 +518,11 @@
       ...legendSelected.value,
       [cardKey]: selected,
     };
+    const card = viewCards.value.find(item => item.key === cardKey);
+    if (card?.kind === 'bar') {
+      applyBarCategoryFilter(cardKey);
+      return;
+    }
     chart.setOption({
       legend: {
         show: false,
@@ -879,9 +915,12 @@
           };
         }
         const { option, errorCode } = sanitizeChartOption(rawOption);
-        const lifted = option && card.kind !== 'bar'
-          ? liftChartLegend(option)
-          : { items: [] as ChartLegendItem[] };
+        const barLegend = card.kind === 'bar' && card.ratio?.length
+          ? card.ratio.map(item => ({ name: item.name, color: item.color }))
+          : null;
+        const lifted = barLegend
+          ? { items: barLegend }
+          : (option ? liftChartLegend(option) : { items: [] as ChartLegendItem[] });
         const displayOption = option ? applyEntranceMotion(decorateLongLabels(option)) : null;
         return {
           ...card,
