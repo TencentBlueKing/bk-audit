@@ -51,12 +51,15 @@ export default {
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskTags,
-    defaultParams: {
-      risk_view_type: 'all',
-      scope_id: getSceneSystemParams().scope_id,
-      scope_type: getSceneSystemParams().scope_type,
-      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
-      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    get defaultParams() {
+      const { scope_id: scopeId, scope_type: scopeType } = getSceneSystemParams();
+      return {
+        risk_view_type: 'all',
+        scope_id: scopeId,
+        scope_type: scopeType,
+        start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      };
     },
   },
   datetime: {
@@ -75,6 +78,21 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskStatusCommon,
     filterList: ['new'],
+  },
+  risk_label: {
+    label: '风险标记',
+    type: 'select',
+    required: false,
+    service: () => Promise.resolve([
+      {
+        id: 'normal',
+        name: '正常',
+      },
+      {
+        id: 'misreport',
+        name: '误报',
+      },
+    ]),
   },
   current_operator: {
     label: '当前处理人',
