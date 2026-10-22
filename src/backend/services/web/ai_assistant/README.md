@@ -1,6 +1,6 @@
 # AI 助手平台会话能力
 
-`services.web.ai_assistant` 提供 AI 助手的一期平台底座：会话与侧栏、类型化消息、派生产物、
+`services.web.ai_assistant` 提供 AI 助手的平台底座：会话与侧栏、类型化消息、派生产物、
 反馈、同步/异步执行、UI 流式传输、导出以及执行可观测性。日志检索、自然语言检索、统计和
 AI 分析等业务只实现 Handler，不在平台层耦合具体协议。
 
@@ -42,7 +42,7 @@ flowchart LR
 - `services`：用户边界、领域事务、状态编排和查询优化。
 - `handlers`：业务类型声明、Pydantic 快照协议和扩展点注册。
 - `tasks`：Celery 调度适配、task ID fencing、成功/失败/Retry 生命周期。
-- `streaming`：Redis 实时尾流、MySQL UI 快照和 SSE 编码。
+- `streaming`：接入 ui-stream 通用流处理，承接审计执行轮换、MySQL 快照与终态事务。
 - `observability.py` / `services/reconciliation.py`：生命周期观测和长期 PROCESSING 收敛。
 
 ## 3. 执行模型
@@ -106,7 +106,8 @@ Node 移动支持互斥的 `before_node_*` 和 `after_node_*` 锚点。`after` �
 - [前端调用链路：二期日志分析](docs/frontend_log_analysis.md)：分析附件、流恢复、报告编辑与下载。
 - [Handler 接入指南](docs/handler_integration.md)：新增消息或附件类型的最短路径。
 - [日志分析报告接入](docs/log_analysis.md)：三工具、Agent、Celery、AG-UI/SSE、重试和导出闭环。
-- [流式传输设计](streaming/README.md)：Redis、MySQL、SSE、重试和降级协议。
+- [流式传输设计](streaming/README.md)：组件边界、Redis、MySQL、SSE、配置与降级协议。
+- [流组件依赖维护](../../../docs/ui_stream_dependency.md)：发行包安装、PDM 锁定、Docker 安装及升级约束。
 - [可观测性架构](docs/observability.md)：生命周期、指标边界和巡检设计。
 - [运维与 Runbook](../../../docs/ai_assistant_observability.md)：SLO、BKM 和故障处置。
 

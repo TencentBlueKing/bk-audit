@@ -1,18 +1,26 @@
-import json
+"""审计附件的执行轮换、持久快照与终态事务。
+
+行锁与 task/execution 双重 fencing 隔离旧 Worker，archive_id 只用于同执行归档重试去重。
+组件提供容量裁剪和完整性合并算法；本层负责真实字节计量及 MySQL 原子提交。
+旧流重置和终态通知在相应数据库事务返回后发布，避免外层回滚留下错误的 UI 提示。
+"""
+
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
+from ui_stream.archive import append_archive_events
+from ui_stream.archive import merge_archive_status as component_merge_archive_status
 
 from services.web.ai_assistant.constants import (
     ExecutionMode,
     ExecutionObjectType,
     ExecutionStatus,
-    PlatformStreamEvent,
     StreamArchiveStatus,
 )
 from services.web.ai_assistant.exceptions import StaleAttachmentTask
@@ -28,8 +36,14 @@ from services.web.ai_assistant.schemas import (
     parse_stream_archive,
     parse_stream_config,
 )
+from services.web.ai_assistant.schemas.stream import (
+    dump_stream_archive_event,
+    serialize_stream_archive_event,
+)
+from services.web.ai_assistant.streaming.codec import control_codec
 from services.web.ai_assistant.streaming.redis import build_stream_key
 from services.web.ai_assistant.streaming.types import (
+    AttachmentCompletion,
     StreamCheckpointResult,
     StreamExecutionBinding,
     StreamRotation,
@@ -38,107 +52,17 @@ from services.web.ai_assistant.streaming.types import (
 
 logger = logging.getLogger(__name__)
 
-# 归档状态严重程度；同一次执行内只允许单向升级，避免前端提示反复抖动。
-_ARCHIVE_STATUS_PRIORITY: dict[str, int] = {
-    StreamArchiveStatus.COMPLETE: 0,
-    StreamArchiveStatus.DEGRADED: 1,
-    StreamArchiveStatus.TRUNCATED: 2,
-}
+
+def _encoded_event_bytes(event: UIStreamEvent) -> int:
+    """按含内部 archive_id 的持久化格式计量，避免用公开 DTO 低估归档容量。"""
+
+    return len(serialize_stream_archive_event(event))
 
 
 def merge_archive_status(current: StreamArchiveStatus, incoming: StreamArchiveStatus) -> StreamArchiveStatus:
-    """返回两个归档状态中更严重的一个（单向升级语义）。
+    """按组件的单向升级规则合并完整性，并保留审计枚举作为返回类型。"""
 
-    设计意图：归档状态在同一次执行内只允许从 COMPLETE → DEGRADED → TRUNCATED 单向升级，
-    避免前端展示的降级提示反复抖动。调用方无需关心合并顺序，结果始终是更严重的那个。
-
-    Args:
-        current: 当前已持久化的归档状态。
-        incoming: 本次操作产生的新状态。
-
-    Returns:
-        两者中严重程度更高的状态值。
-    """
-
-    if _ARCHIVE_STATUS_PRIORITY[current] >= _ARCHIVE_STATUS_PRIORITY[incoming]:
-        return current
-    return incoming
-
-
-def _encoded_event_bytes(event: UIStreamEvent) -> int:
-    """计算单个事件在归档 JSON 数组中占用的 UTF-8 紧凑编码字节数。
-
-    不包含数组分隔符（逗号、方括号），仅计算事件自身序列化后的字节长度。
-    用于 fit_archive_events 的增量字节累加，避免每次追加都重新编码整个数组。
-
-    Args:
-        event: 待计算的流式事件。
-
-    Returns:
-        该事件紧凑 JSON 编码后的 UTF-8 字节数。
-    """
-
-    return len(json.dumps(event.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-
-
-def _encoded_archive_bytes(events: list[UIStreamEvent]) -> int:
-    """计算事件列表序列化为 JSON 数组后的 UTF-8 紧凑编码总字节数。
-
-    计算公式：2（首尾方括号） + 各元素编码字节之和 + (元素数 - 1)（逗号分隔符）。
-    这样无需真正执行 json.dumps(整个列表)，即可精确得到最终落库的字节数。
-
-    Args:
-        events: 已有的事件列表。
-
-    Returns:
-        该列表序列化为紧凑 JSON 数组后的 UTF-8 字节数（空列表返回 2，即 "[]"）。
-    """
-
-    if not events:
-        # 空数组仍占用 "[]" 两个字节。
-        return 2
-    # 数组等于各元素编码之和，加上首尾方括号与元素间逗号，无需再整体编码一次。
-    return 2 + sum(_encoded_event_bytes(event) for event in events) + (len(events) - 1)
-
-
-def fit_archive_events(
-    *, existing: list[UIStreamEvent], incoming: list[UIStreamEvent], max_bytes: int
-) -> tuple[list[UIStreamEvent], int, bool]:
-    """在容量限制内按顺序追加尽可能多的事件，返回合并结果。
-
-    设计意图：
-    - 字节数按增量累加（O(n) 对 incoming），而非每追加一条都重新编码整个数组。
-      单执行可能累积上万条事件，全量编码会让持有行锁的 checkpoint 退化成 O(n²)。
-    - 一旦某条事件放不下即停止，不跳跃保留后续事件，保证前端回放的时序连续性。
-
-    Args:
-        existing: 数据库中已有的归档事件列表。
-        incoming: 本次待追加的新事件列表。
-        max_bytes: 归档 JSON 数组的 UTF-8 字节上限。
-
-    Returns:
-        三元组 (merged, accepted_count, truncated):
-        - merged: 合并后的完整事件列表（existing + 已接收的 incoming 前缀）。
-        - accepted_count: 本次实际接收的 incoming 事件数量。
-        - truncated: 是否因容量不足而截断（True 表示有事件被丢弃）。
-    """
-
-    if not incoming:
-        return list(existing), 0, False
-
-    accepted: list[UIStreamEvent] = list(existing)
-    accepted_count = 0
-    current_bytes = _encoded_archive_bytes(accepted)
-    for event in incoming:
-        # 追加一个元素会增加它自身的编码长度，以及非空数组所需的一个逗号。
-        candidate_bytes = current_bytes + _encoded_event_bytes(event) + (1 if accepted else 0)
-        if candidate_bytes > max_bytes:
-            # 单条事件放不下即停止，保持事件顺序连续，不跳跃保留后续事件。
-            return accepted, accepted_count, True
-        accepted.append(event)
-        accepted_count += 1
-        current_bytes = candidate_bytes
-    return accepted, accepted_count, False
+    return StreamArchiveStatus(component_merge_archive_status(current, incoming))
 
 
 class AttachmentArchiveStore:
@@ -185,7 +109,8 @@ class AttachmentArchiveStore:
             StaleAttachmentTask: 附件不存在、task_id 不匹配、非 PROCESSING 状态或非流式附件。
         """
 
-        with transaction.atomic():
+        # 返回后 Runtime 会发布实时数据，禁止外层事务随后回滚这次轮换。
+        with transaction.atomic(durable=True):
             attachment = self._lock_attachment(attachment_id=attachment_id)
             if (
                 attachment is None
@@ -256,7 +181,7 @@ class AttachmentArchiveStore:
         self,
         *,
         binding: StreamExecutionBinding,
-        events: list[UIStreamEvent],
+        events: Sequence[UIStreamEvent],
         archive_status: StreamArchiveStatus,
     ) -> StreamCheckpointResult:
         """中间持久化：将缓冲的流式事件追加到 MySQL 归档。
@@ -280,16 +205,16 @@ class AttachmentArchiveStore:
             StaleAttachmentTask: 绑定已过期（task_id/execution_id 不匹配或非 PROCESSING）。
         """
 
-        with transaction.atomic():
+        with transaction.atomic(durable=True):
             attachment = self._require_current_attachment(binding=binding, require_processing=True)
             persisted_status, update_fields, capacity_exhausted = self._apply_events(
                 attachment=attachment,
                 binding=binding,
-                events=events,
+                events=list(events),
                 incoming_status=archive_status,
                 enforce_capacity=True,
             )
-            if update_fields:
+            if update_fields or events:
                 now = timezone.now()
                 update_fields.extend(["last_activity_at", "updated_at"])
                 attachment.last_activity_at = now
@@ -313,6 +238,33 @@ class AttachmentArchiveStore:
             attachment.last_activity_at = now
             attachment.updated_at = now
             attachment.save(update_record=False, update_fields=["last_activity_at", "updated_at"])
+
+    def commit(
+        self,
+        *,
+        binding: StreamExecutionBinding,
+        events: Sequence[UIStreamEvent],
+        terminal_event: UIStreamEvent,
+        archive_status: StreamArchiveStatus,
+        completion: AttachmentCompletion,
+    ) -> StreamArchiveStatus:
+        """将组件的终态载荷转交审计事务，返回已持久化的完整性状态。
+
+        业务状态取自 terminal_event；completion 提供结果、错误及操作人。
+        finalize 负责行锁、fencing 和真实外层提交，不能在此提前确认或异步保存。
+        """
+
+        return self.finalize(
+            binding=binding,
+            events=list(events),
+            terminal_event=terminal_event,
+            archive_status=archive_status,
+            status=terminal_event.data["status"],
+            output_data=completion.output_data,
+            error_code=completion.error_code,
+            error_message=completion.error_message,
+            updated_by=completion.updated_by,
+        )
 
     def finalize(
         self,
@@ -353,7 +305,8 @@ class AttachmentArchiveStore:
             StaleAttachmentTask: 绑定已过期。
         """
 
-        with transaction.atomic():
+        # commit 返回即代表最终结果可见，不能在外层 savepoint 中提前发布终态。
+        with transaction.atomic(durable=True):
             attachment = self._require_current_attachment(binding=binding, require_processing=True)
             _, business_update_fields, _ = self._apply_events(
                 attachment=attachment,
@@ -466,10 +419,7 @@ class AttachmentArchiveStore:
                     business_type=attachment.attachment_type,
                     config=config,
                 )
-                terminal_event = UIStreamEvent(
-                    event=PlatformStreamEvent.STREAM_END,
-                    data={"status": ExecutionStatus.FAILED},
-                )
+                terminal_event = control_codec.terminal(ExecutionStatus.FAILED)
                 self._apply_events(
                     attachment=attachment,
                     binding=binding,
@@ -550,7 +500,7 @@ class AttachmentArchiveStore:
         1. 解析现有归档 → 得到有效事件列表和解析状态（脏数据会标记 DEGRADED）。
         2. 三方状态合并 → base_status(config) ∪ parse_status ∪ incoming_status，取最严重。
         3. 事件追加 → 根据 enforce_capacity 决定是否受字节上限约束：
-           - True: 调用 fit_archive_events 按顺序追加可容纳前缀，超限标记 TRUNCATED。
+           - True: 按内部身份去重后追加可容纳前缀，超限标记 TRUNCATED。
            - False: 无限制直接拼接（用于 terminal_event，与终态事务一起提交）。
         4. 脏数据清理 → 即使无新事件，若解析发现脏数据也重写归档字段，避免后续重复解析。
         5. 状态持久化 → 仅在状态实际变化时更新 stream_config，减少不必要写入。
@@ -583,32 +533,38 @@ class AttachmentArchiveStore:
 
         update_fields: list[str] = []
         capacity_exhausted = False
+        merged = existing
+        accepted = 0
         if events:
-            max_bytes = self.max_archive_bytes if enforce_capacity else None
-            if max_bytes is None:
-                merged, accepted, truncated = existing + events, len(events), False
+            if enforce_capacity:
+                # COMMIT 确认丢失后的重试按身份去重，容量按真实落库格式计量。
+                result = append_archive_events(
+                    existing,
+                    events,
+                    max_bytes=self.max_archive_bytes,
+                    identity=lambda event: event.archive_id,
+                    event_size=_encoded_event_bytes,
+                )
+                merged, accepted = result.events, result.appended_count
+                capacity_exhausted = result.truncated
+                if capacity_exhausted:
+                    persisted_status = merge_archive_status(persisted_status, StreamArchiveStatus.TRUNCATED)
+                    logger.warning(
+                        "AI 助手附件流式归档已截断",
+                        extra={
+                            "attachment_uid": str(binding.attachment_uid),
+                            "task_id": binding.task_id,
+                            "execution_id": str(binding.config.execution_id),
+                            "accepted_count": accepted,
+                            "duplicate_count": result.duplicate_count,
+                            "dropped_count": result.dropped_count,
+                        },
+                    )
             else:
-                merged, accepted, truncated = fit_archive_events(
-                    existing=existing, incoming=events, max_bytes=max_bytes
-                )
-            if truncated:
-                capacity_exhausted = enforce_capacity
-                persisted_status = merge_archive_status(persisted_status, StreamArchiveStatus.TRUNCATED)
-                logger.warning(
-                    "AI 助手附件流式归档已截断",
-                    extra={
-                        "attachment_uid": str(binding.attachment_uid),
-                        "task_id": binding.task_id,
-                        "execution_id": str(binding.config.execution_id),
-                        "accepted_count": accepted,
-                        "dropped_count": len(events) - accepted,
-                    },
-                )
-            attachment.stream_archive = [event.model_dump(mode="json") for event in merged]
-            update_fields.append("stream_archive")
-        elif parse_status != StreamArchiveStatus.COMPLETE:
-            # 只清理脏数据也需要落库，避免同一批脏项在后续 checkpoint 重复解析。
-            attachment.stream_archive = [event.model_dump(mode="json") for event in existing]
+                # 仅终态事务/CAS 路径使用；当前代际至多提交一次，并豁免业务容量。
+                merged, accepted = existing + events, len(events)
+        if accepted or parse_status != StreamArchiveStatus.COMPLETE:
+            attachment.stream_archive = [dump_stream_archive_event(event) for event in merged]
             update_fields.append("stream_archive")
 
         if config is not None and config.archive_status != persisted_status:

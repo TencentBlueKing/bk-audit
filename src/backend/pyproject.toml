@@ -108,7 +108,8 @@ dependencies = [
     "drf-pydantic==2.7.1",
     "sqlglot==26.26.0",
     "django-db-connection-pool==1.2.6",
-    "supervisor~=4.3.0"
+    "supervisor~=4.3.0",
+    "ui-stream[redis]==0.1.0a4"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
