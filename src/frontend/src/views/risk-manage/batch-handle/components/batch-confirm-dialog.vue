@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
   import DOMPurify from 'dompurify';
-  import { ref, watch } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import useMessage from '@hooks/use-message';
@@ -173,9 +173,14 @@
     formRef.value?.clearValidate?.();
   };
 
+  let previousChangeConfirm: boolean | 'popover' = false;
+
   const handleClosed = () => {
     const shouldRefresh = hasProcessed.value;
     resetForm();
+    nextTick(() => {
+      window.changeConfirm = previousChangeConfirm;
+    });
     if (shouldRefresh) {
       emit('success');
     }
@@ -187,6 +192,7 @@
   };
 
   const open = () => {
+    previousChangeConfirm = window.changeConfirm;
     resetForm();
     isShow.value = true;
   };

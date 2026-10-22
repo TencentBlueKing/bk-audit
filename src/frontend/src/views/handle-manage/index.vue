@@ -49,8 +49,7 @@
       v-model:is-show="isShow"
       theme="primary"
       :title="t('批量转单')"
-      @closed="handleClosed"
-      @confirm="handleConfirm">
+      @closed="handleClosed">
       <audit-form
         ref="formRef"
         form-type="vertical"
@@ -78,6 +77,20 @@
             type="textarea" />
         </bk-form-item>
       </audit-form>
+      <template #footer>
+        <bk-button
+          :loading="transLoading"
+          theme="primary"
+          @click="handleConfirm">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          :disabled="transLoading"
+          @click="isShow = false">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
     </bk-dialog>
   </div>
 </template>
@@ -268,6 +281,7 @@
   // 批量操作
   const {
     run: batchTransRisk,
+    loading: transLoading,
   } = useRequest(RiskManageService.batchTransRisk, {
     defaultValue: [],
     onSuccess() {
@@ -310,12 +324,17 @@
       });
     });
   };
+  let previousChangeConfirm: boolean | 'popover' = false;
   const handleClosed = () => {
     formRef.value?.clearValidate();
     formData.value = {
       new_operators: [],
       description: '',
     };
+    // 须在 formData 重置触发的 audit-form watcher 之后恢复，否则会被重新置为 true
+    nextTick(() => {
+      window.changeConfirm = previousChangeConfirm;
+    });
   };
   // 批量操作
   const handleBatch = async () => {
@@ -324,6 +343,7 @@
       messageWarn(t('请选择要操作的数据'));
       return;
     }
+    previousChangeConfirm = window.changeConfirm;
     isShow.value = true;
     nextTick(() => {
       formRef.value.clearValidate();

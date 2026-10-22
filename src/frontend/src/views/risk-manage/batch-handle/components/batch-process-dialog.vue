@@ -225,7 +225,7 @@
 
 <script setup lang="ts">
   import DOMPurify from 'dompurify';
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -463,9 +463,14 @@
     formRef.value?.clearValidate?.();
   };
 
+  let previousChangeConfirm: boolean | 'popover' = false;
+
   const handleClosed = () => {
     const shouldRefresh = hasProcessed.value;
     resetForm();
+    nextTick(() => {
+      window.changeConfirm = previousChangeConfirm;
+    });
     if (shouldRefresh) {
       emit('success');
     }
@@ -507,6 +512,7 @@
   });
 
   const open = () => {
+    previousChangeConfirm = window.changeConfirm;
     resetForm();
     loadPackages();
     if (!memberVariables.value.length) {
