@@ -548,6 +548,7 @@
     PREVIEW_EXPORT_LIMIT,
   } from '../utils/export-log-search';
   import { resolveAnalyzeSubmit } from '../utils/build-analyze-retry-input';
+  import { resolveStatisticsSubmit } from '../utils/build-statistics-retry-input';
   import { isFieldStatisticsType, isStatisticsAttachmentType } from '../utils/map-statistics-output';
   import { formatStatisticsInputError } from '../utils/statistics-input-error';
   import JsonFieldPreview from './json-field-preview.vue';
@@ -911,6 +912,11 @@
   const statisticsCustomPreset = ref('');
   const statisticsFocusCustom = ref(false);
   const statisticsSubmitting = ref(false);
+  /** 从已有自定义统计打开的重新统计；确认后 retry 原 uid。新建统计时清空 */
+  const statisticsRetryTarget = ref<{
+    uid: string;
+    inputData: Record<string, any>;
+  } | null>(null);
   const statisticsSubmitError = ref('');
   const reportItems = ref<ReportStatusItem[]>([]);
   const reportDrawerShow = ref(false);
@@ -1531,6 +1537,7 @@
 
   const handleStatistics = () => {
     if (statisticsActionDisabled.value) return;
+    statisticsRetryTarget.value = null;
     statisticsSubmitError.value = '';
     statisticsCustomPreset.value = '';
     statisticsFocusCustom.value = false;
@@ -1565,6 +1572,7 @@
         return {
           kind: 'statistics' as const,
           prompt: String(detail.input_data?.instruction || ''),
+          inputData: detail.input_data,
         };
       }
       if (item.type === 'analyze' && detail.input_data?.analysis_mode === 'CUSTOM') {
@@ -1576,19 +1584,86 @@
       }
     } catch {
       if (item.attachmentType === 'AI_STATISTICS') {
-        return { kind: 'statistics' as const, prompt: '' };
+        return { kind: 'statistics' as const, prompt: '', inputData: undefined };
       }
     }
     return null;
   };
 
+  /**
+   * 重新统计确认：POST 原附件 retry，带上完整 input_data，原地更新同一行。
+   * 校验失败保留原结果并重新打开草稿。
+   */
+  const submitStatisticsRetry = async (
+    target: { uid: string; inputData: Record<string, any> },
+    payload: StatisticsSelectPayload,
+  ) => {
+    const item = reportItems.value.find(current => current.id === target.uid);
+    if (!item || item.retrying || item.status === 'loading') return;
+    const decision = resolveStatisticsSubmit(target, payload);
+    if (decision.action !== 'retry') return;
+    const previousStatus = item.status;
+    const inputData = decision.inputData;
+    statisticsSubmitting.value = true;
+    statisticsSubmitError.value = '';
+    upsertReport({
+      ...item,
+      retrying: true,
+      status: 'loading',
+      title: t('数据统计中'),
+      errorMessage: '',
+      modeTip: payload.prompt || '',
+      modeTipReady: true,
+    });
+    stopFollow(item.id);
+    markPendingAutoOpen(item.id);
+    statisticsDialogShow.value = false;
+    try {
+      const attachment = await AiAssistantManageService.retryAttachment({
+        attachment_uid: target.uid,
+        input_data: inputData,
+      }, { catchError: true });
+      statisticsRetryTarget.value = null;
+      applyAttachmentDetail(attachment);
+      if (attachment.status === 'PROCESSING') {
+        startFollow(attachment.uid, null, true);
+      } else {
+        maybeAutoOpenReport(attachment.uid);
+      }
+    } catch (error: any) {
+      pendingAutoOpenIds.delete(item.id);
+      upsertReport({
+        ...item,
+        retrying: false,
+        status: previousStatus,
+        errorMessage: error?.message || item.errorMessage,
+      });
+      const inputError = formatStatisticsInputError(error, '');
+      statisticsCustomPreset.value = payload.prompt || '';
+      statisticsFocusCustom.value = true;
+      statisticsSubmitError.value = inputError || resolveCreateErrorMessage(error, t('创建统计失败'));
+      statisticsDialogShow.value = true;
+      if (!inputError) {
+        messageError(error?.message || t('创建统计失败'));
+      }
+    } finally {
+      statisticsSubmitting.value = false;
+    }
+  };
+
   const handleStatisticsSelect = async (payload: StatisticsSelectPayload) => {
+    if (statisticsSubmitting.value) return;
+    const retryTarget = statisticsRetryTarget.value;
+    if (resolveStatisticsSubmit(retryTarget, payload).action === 'retry' && retryTarget) {
+      await submitStatisticsRetry(retryTarget, payload);
+      return;
+    }
+    statisticsRetryTarget.value = null;
     const messageUid = displayMessageUid.value || props.messageUid;
     if (!messageUid) {
       messageWarn(t('缺少结果消息无法统计'));
       return;
     }
-    if (statisticsSubmitting.value) return;
     const isCustom = payload.type === 'custom';
     if (!isCustom && !payload.field) {
       messageWarn(t('请选择需要统计的字段'));
@@ -1686,6 +1761,12 @@
     const custom = await resolveCustomPrompt(item);
     if (custom?.kind === 'statistics') {
       statisticsDrawerShow.value = false;
+      statisticsRetryTarget.value = {
+        uid: item.id,
+        inputData: custom.inputData && typeof custom.inputData === 'object'
+          ? { ...custom.inputData }
+          : {},
+      };
       openCustomStatisticsDialog(custom.prompt);
       return;
     }
