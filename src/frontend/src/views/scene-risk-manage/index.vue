@@ -16,13 +16,16 @@
 -->
 <template>
   <div class="risk-manage-list-page-wrap">
-    <search-box
+    <nl-search-box
       :key="fieldConfigKey"
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      risk-view-type="scene"
+      :scenes="nlSearchBoxScenes"
+      with-scene-selector
       @change="handleSearchChange"
-      @change-table-height="handleChangeTableHeight"
-      @model-value-watch="handleModelValueWatch" />
+      @model-value-watch="handleModelValueWatch"
+      @parsing="handleParsing" />
     <div
       :key="fieldConfigKey"
       class="risk-manage-list">
@@ -105,13 +108,13 @@
   import RiskExportButton from '@components/risk-export-button/index.vue';
   import useUrlSearch from '@hooks/use-url-search';
 
-  import SearchBox from '@components/search-box/index.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
   import TdesignList from '@components/tdesign-list/index.vue';
 
   import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
   import addRisk from '@views/risk-manage/list/add-risk/index.vue';
   import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
+  import NlSearchBox from '@views/risk-manage/list/components/nl-search-box/index.vue';
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
@@ -331,10 +334,12 @@
     listRef.value?.initTableHeight?.();
     fetchList(isClear);
   };
-  const handleChangeTableHeight = () => {
-    nextTick(() => {
-      listRef.value?.initTableHeight?.();
-    });
+
+  // NL 解析状态变化时，给列表设置 loading
+  const handleParsing = (isParsing: boolean) => {
+    if (listRef.value) {
+      listRef.value.loading = isParsing;
+    }
   };
 
   const handleClearSearch = () => {
@@ -445,8 +450,28 @@
     defaultValue: [],
   });
 
+  // AI 搜索用的场景列表，与「所属场景」下拉选项保持一致（随顶部场景选择器收窄）
+  const {
+    data: riskScenesData,
+    run: fetchRiskScenes,
+  } = useRequest(RiskManageService.fetchRiskScenes, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const nlSearchBoxScenes = computed(() => riskScenesData.value?.map((item: any) => ({
+    scene_id: Number(item.scene_id || item.id),
+    name: item.name,
+  })) || []);
+
+  const fetchNlSearchScenes = () => {
+    fetchRiskScenes(FieldConfig.scene_id.defaultParams || {});
+  };
+
   const handleRequestSuccess = () => {
     nextTick(() => batchHandleRef.value?.sync());
+    // 通知搜索框：表格数据加载完成（用于智能搜索成功提示和 input 按钮停止转动）
+    searchBoxRef.value?.notifySearchComplete();
   };
 
   const handleModelValueWatch = (val: any) => {
@@ -470,10 +495,12 @@
       scope_id: getSceneSystemParams().scope_id,
       scope_type: getSceneSystemParams().scope_type,
     });
+    fetchNlSearchScenes();
     on('scene-change', () => {
       fieldConfigKey.value += 1;
       // 场景切换时刷新表格列设置（所属场景列的显示/隐藏随场景变化）
       settingsVersion.value += 1;
+      fetchNlSearchScenes();
       fetchList();
     });
   });
@@ -505,6 +532,9 @@
 </script>
 <style lang='postcss'>
 .risk-manage-list-page-wrap {
+  position: relative;
+  overflow-x: hidden;
+
   .risk-manage-list {
     padding: 5px 20px;
     margin-top: 16px;
