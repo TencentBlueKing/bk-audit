@@ -51,6 +51,18 @@ const EMPTY_TEXT = '—';
 const BAR_CATEGORY_THRESHOLD = 20;
 const BAR_ROW_HEIGHT = 32;
 
+/** 柱状图按可见类别留高度。全部隐藏时留一条空带，避免画布塌成 0 */
+export const statisticsBarChartHeight = (categoryCount: number) => {
+  if (categoryCount <= 0) return 96;
+  return Math.max(DEFAULT_CARD_HEIGHT, categoryCount * BAR_ROW_HEIGHT + 48);
+};
+
+/** 图例未点过的类别保持显示；显式 false 才从柱状图里拿掉 */
+export const visibleStatisticsRatio = <T extends { name: string }>(
+  items: T[],
+  selected?: Record<string, boolean>,
+) => items.filter(item => selected?.[item.name] !== false);
+
 export const TREND_CARD_TITLE = '时序趋势';
 export const RATIO_CARD_TITLE = '维度占比';
 
@@ -389,7 +401,7 @@ export const mapFieldStatisticsOutput = (
       title: RATIO_CARD_TITLE,
       kind: useBar ? 'bar' : 'ratio',
       height: useBar
-        ? Math.max(DEFAULT_CARD_HEIGHT, ratioItems.length * BAR_ROW_HEIGHT + 48)
+        ? statisticsBarChartHeight(ratioItems.length)
         : clampChartHeight(DEFAULT_CARD_HEIGHT),
       ratio: ratioItems,
     });

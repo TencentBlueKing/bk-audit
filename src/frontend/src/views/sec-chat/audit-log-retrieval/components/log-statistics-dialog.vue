@@ -19,9 +19,7 @@
     v-if="isShow"
     to="#sec-chat-overlay-root">
     <div class="log-statistics-overlay">
-      <div
-        class="log-statistics-dialog-sizer"
-        @click.self="handleOverlayClose">
+      <div class="log-statistics-dialog-sizer">
         <div
           class="log-statistics-modal"
           :class="{ 'is-expanded': customExpanded }">
@@ -631,10 +629,6 @@
   const handleClose = () => {
     if (props.submitting) return;
     isShow.value = false;
-  };
-
-  const handleOverlayClose = () => {
-    handleClose();
   };
 
   onDeactivated(() => {

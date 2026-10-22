@@ -19,9 +19,7 @@
     v-if="isShow"
     to="#sec-chat-overlay-root">
     <div class="log-analyze-overlay">
-      <div
-        class="log-analyze-dialog-sizer"
-        @click.self="handleOverlayClose">
+      <div class="log-analyze-dialog-sizer">
         <div class="log-analyze-modal">
           <div
             class="modal-close"
@@ -184,10 +182,6 @@
   const handleClose = () => {
     if (props.submitting) return;
     isShow.value = false;
-  };
-
-  const handleOverlayClose = () => {
-    handleClose();
   };
 
   // keep-alive 场景下失活时，防止 teleport 留下遮罩/DOM 影响其他页面点击
