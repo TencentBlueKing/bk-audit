@@ -48,6 +48,7 @@ from core.bk_api_base import AuditBkApiResource
 class BkBaseResource(AuditBkApiResource, abc.ABC):
     module_name = "bkbase"
     platform_authorization = True
+    use_admin_username = True
 
     @property
     def base_url(self):
@@ -111,6 +112,7 @@ class DatabusCleansDelete(BkBaseResource):
     action = "/v3/databus/cleans/{processing_id}/"
     method = "DELETE"
     url_keys = ["processing_id"]
+    use_admin_username = False
 
 
 class DatabusTasksPost(BkBaseResource):
@@ -190,6 +192,7 @@ class GetScenePlans(AiopsBaseResource):
     name = gettext_lazy("获取方案列表")
     action = "/v3/aiops/scene_service/plans/"
     method = "GET"
+    use_admin_username = False
 
 
 class GetPlanDetail(AiopsBaseResource):
@@ -216,6 +219,7 @@ class AuthTickets(AiopsBaseResource):
     name = gettext_lazy("RT授权")
     action = "/v3/auth/tickets/"
     method = "POST"
+    use_admin_username = False
 
 
 class CreateFlow(AiopsBaseResource):
