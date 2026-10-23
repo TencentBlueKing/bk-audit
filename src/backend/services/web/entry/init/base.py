@@ -29,6 +29,7 @@ from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
+from core.kms import get_secret
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
@@ -159,7 +160,7 @@ class SystemInitHandler:
     def init_es(self):
         if self.pre_check(INIT_ES_FISHED_KEY):
             return
-        es_configs = json.loads(os.getenv("BKAPP_INIT_ES_CONFIG"))
+        es_configs = json.loads(get_secret("BKAPP_INIT_ES_CONFIG"))
         for es_config in es_configs:
             self._init_es(es_config)
         self.post_init(INIT_ES_FISHED_KEY)
@@ -167,7 +168,7 @@ class SystemInitHandler:
     def init_doris(self):
         if self.pre_check(INIT_DORIS_FISHED_KEY):
             return
-        doris_configs = json.loads(os.getenv("BKAPP_INIT_DORIS_CONFIG"))
+        doris_configs = json.loads(get_secret("BKAPP_INIT_DORIS_CONFIG"))
         for doris_config in doris_configs:
             self._init_doris(doris_config)
         self.post_init(INIT_DORIS_FISHED_KEY)
@@ -196,7 +197,7 @@ class SystemInitHandler:
     def init_redis(self):
         if self.pre_check(INIT_REDIS_FISHED_KEY):
             return
-        redis_configs = json.loads(os.getenv("BKAPP_INIT_REDIS_CONFIG"))
+        redis_configs = json.loads(get_secret("BKAPP_INIT_REDIS_CONFIG"))
         for redis_config in redis_configs:
             self._init_redis(redis_config)
         self.post_init(INIT_REDIS_FISHED_KEY)
