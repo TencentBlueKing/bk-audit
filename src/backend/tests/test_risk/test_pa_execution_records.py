@@ -39,8 +39,9 @@ def _create_node(
     trigger: str = "",
     start_time: str = "",
     finish_time: str = "",
+    task_url: str = "",
 ) -> TicketNode:
-    process_result = {"task": {"task_id": task_id}, "status": {"state": state}}
+    process_result = {"task": {"task_id": task_id, "task_url": task_url}, "status": {"state": state}}
     # 执行时套餐快照（新链路写入；pa_id=None 模拟历史节点）
     if pa_id is not None:
         process_result.update({"pa_id": pa_id, "pa_name": pa_name})
@@ -85,7 +86,7 @@ class TestListPAExecutionRecords:
 
     def test_filter_by_pa(self):
         pa_a, pa_b, risk_a, risk_b = self._prepare()
-        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11, task_url="https://sops.example/11")
         _create_node(risk_b.risk_id, SOPSTaskStatus.RUNNING.value, task_id=22)
         resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
         records = resp["results"]
@@ -94,8 +95,16 @@ class TestListPAExecutionRecords:
         assert records[0]["pa_name"] == "套餐A"
         assert records[0]["risk_id"] == "R-A"
         assert records[0]["sops_task_id"] == "11"
+        assert records[0]["sops_task_url"] == "https://sops.example/11"
         assert records[0]["result"] == "success"
         assert records[0]["risk_title"] == (risk_a.title or "")
+
+    def test_sops_task_url_empty_when_missing(self):
+        """历史节点无 task_url 时透出空串，前端降级纯文本"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11)
+        resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_a.id})
+        assert resp["results"][0]["sops_task_url"] == ""
 
     def test_filter_by_risk(self):
         pa_a, pa_b, risk_a, risk_b = self._prepare()
@@ -284,12 +293,13 @@ class TestGetPAExecutionRecordDetail:
     def test_detail_returns_risk_fields(self):
         """详情顶层返回风险单关联字段（重试接口需以 risk_id 为 URL 入参）"""
         risk = self._prepare()
-        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1)
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=1, task_url="https://sops.example/1")
         resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
         assert resp["id"] == node.id
         assert resp["risk_id"] == "R-D"
         assert resp["risk_title"] == "详情风险标题"
         assert resp["risk_status"] == (risk.status or "")
+        assert resp["sops_task_url"] == "https://sops.example/1"
         # 风险描述 / 风险证据来自 params（重试场景需展示）
         assert resp["params"]["risk_description"] == RISK_INFO["event_content"]
         assert resp["params"]["risk_evidence"] == RISK_INFO["event_evidence"]

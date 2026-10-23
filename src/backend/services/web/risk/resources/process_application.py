@@ -471,7 +471,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             else:
                 result = "unknown"
 
-            sops_task_id = str((process_result.get("task") or {}).get("task_id", "") or "")
+            task_info = process_result.get("task") or {}
+            sops_task_id = str(task_info.get("task_id", "") or "")
+            sops_task_url = str(task_info.get("task_url", "") or "")
             current_task_name = process_result.get("task_name") or ""
             current_pa_name = process_result.get("pa_name") or pa_name_map.get(pa_id_of_record, "")
             current_trigger = process_result.get("trigger") or ""
@@ -490,6 +492,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "start_time": node.time,
                     "finish_time": calc_task_finish_time(process_result.get("status") or {}),
                     "sops_task_id": sops_task_id,
+                    "sops_task_url": sops_task_url,
                     "sops_state": state,
                     "result": result,
                     "task_name": current_task_name,
@@ -591,6 +594,7 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "start_time": node.time,
             "finish_time": calc_task_finish_time(status_info),
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
+            "sops_task_url": str((process_result.get("task") or {}).get("task_url", "") or ""),
             "sops_state": state,
             "result": result,
             "duration": calc_task_duration(status_info),
