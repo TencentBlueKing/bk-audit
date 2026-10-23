@@ -22,11 +22,17 @@ from datetime import datetime
 from unittest import mock
 
 from arrow import Arrow
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from pypika import Order
 
+from core.exception_handler import exception_handler
 from core.sql.constants import FieldType
 from services.web.query.constants import DATE_FORMAT
+from services.web.query.resources.doris import (
+    CollectorSearchAllResource,
+    CollectorSearchAllStatisticResource,
+    CollectorSearchBaseResource,
+)
 from services.web.query.serializers import (
     CollectorSearchReqSerializer,
     QuerySearchConditionSerializer,
@@ -299,8 +305,13 @@ class TestCollectorScalarFilterValues(TestCase):
             ("result_code", "neq", [0], [-1, 107, 999]),
             ("result_code", "exclude", [0], [-1, 107, 999]),
             ("result_code", "eq", [999], [999]),
+            ("result_code", "between", [-1, 107], [-1, 0, 107]),
+            ("access_type", "between", [0, 107], [0, 107]),
             ("access_type", "gte", [107], [107, 999]),
             ("user_identify_type", "exclude", ["0"], [-1, 107, 999]),
+            ("result_code", "isnull", [1, 2], [None]),
+            ("result_code", "notnull", [1, 2], [-1, 0, 107, 999]),
+            ("result_code", "eq", [0, 107], [0]),
         ]
         for name, operator, filters, expected in cases:
             with self.subTest(field=name, operator=operator), sqlite3.connect(":memory:") as db:
@@ -322,3 +333,48 @@ class TestCollectorScalarFilterValues(TestCase):
                     page_size=20,
                 ).build_data_sql()
                 self.assertEqual(sorted(row[0] for row in db.execute(sql)), expected)
+
+
+class TestCollectorBetweenValidation(SimpleTestCase):
+    """普通检索和统计查询拒绝非法区间，参数错误在生成SQL前返回400。"""
+
+    @staticmethod
+    def _build_sql_builder(resource, validated_request_data):
+        """仅替代表配置查库，保留真实校验后的条件和SQL构造。"""
+        return resource.doris_sql_builder_class(
+            table="logs",
+            conditions=validated_request_data["conditions"],
+            sort_list=validated_request_data["sort_list"],
+            page=validated_request_data["page"],
+            page_size=validated_request_data["page_size"],
+        )
+
+    def test_invalid_between_returns_400(self):
+        """BETWEEN的0/1/3个值应报参数错误，不能在SQL构造时变成500。"""
+        for resource_class in (CollectorSearchAllResource, CollectorSearchAllStatisticResource):
+            for field in ("result_code", "access_type"):
+                for filters in ([], [0], [0, 1, 2]):
+                    with self.subTest(resource=resource_class.__name__, field=field, filters=filters):
+                        request_data = {
+                            "namespace": "default",
+                            "start_time": "2026-01-01 00:00:00",
+                            "end_time": "2026-01-02 00:00:00",
+                            "conditions": [{"field": {"raw_name": field}, "operator": "between", "filters": filters}],
+                            "field_name": field,
+                            "page": 1,
+                            "page_size": 10,
+                        }
+                        with mock.patch.object(
+                            CollectorSearchBaseResource,
+                            "get_sql_builder",
+                            autospec=True,
+                            side_effect=self._build_sql_builder,
+                        ):
+                            try:
+                                resource_class().request(request_data)
+                            except Exception as error:
+                                response = exception_handler(error, {})
+                            else:
+                                self.fail("BETWEEN应拒绝非两个值的输入")
+                        self.assertEqual(response.status_code, 400)
+                        self.assertIn("between", str(response.data).lower())
