@@ -27,10 +27,10 @@ if __name__ == "__main__":
         monkey.patch_all()
         print("Gevent monkey patch applied successfully.")
 
-    # 启用stackprinter
-    import stackprinter
+    # 启用脱敏版 stackprinter：保留详细堆栈，但不输出敏感局部变量与已登记明文
+    from core.sensitive import install_redacted_excepthook
 
-    stackprinter.set_excepthook()
+    install_redacted_excepthook()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 
     from django.core.management import execute_from_command_line

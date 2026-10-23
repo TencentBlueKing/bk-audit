@@ -29,6 +29,7 @@ from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
+from core.kms import get_secret
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
@@ -147,7 +148,8 @@ class SystemInitHandler:
         print(f"[PostInit] {key} Finished")
 
     def _init_es(self, es_config: dict):
-        print(f"[InitEs] Params => {es_config}")
+        # 不打印 es_config：其内容来自 get_secret()，含集群账号密码
+        print("[InitEs] Start")
         # 创建默认ES集群的时候，已经创建了默认namespace的collector plugin。
         cluster_id = resource.databus.storage.create_storage(es_config)
         print(f"[InitEs] Resp => {cluster_id}")
@@ -159,21 +161,22 @@ class SystemInitHandler:
     def init_es(self):
         if self.pre_check(INIT_ES_FISHED_KEY):
             return
-        es_configs = json.loads(os.getenv("BKAPP_INIT_ES_CONFIG"))
+        es_configs = json.loads(get_secret("BKAPP_INIT_ES_CONFIG"))
         for es_config in es_configs:
             self._init_es(es_config)
-        self.post_init(INIT_ES_FISHED_KEY)
+        self.post_initINIT_ES_FISHED_KEY()
 
     def init_doris(self):
         if self.pre_check(INIT_DORIS_FISHED_KEY):
             return
-        doris_configs = json.loads(os.getenv("BKAPP_INIT_DORIS_CONFIG"))
+        doris_configs = json.loads(get_secret("BKAPP_INIT_DORIS_CONFIG"))
         for doris_config in doris_configs:
             self._init_doris(doris_config)
         self.post_init(INIT_DORIS_FISHED_KEY)
 
     def _init_doris(self, doris_config: dict):
-        print(f"[InitDoris] Params => {doris_config}")
+        # 不打印 doris_config：其内容来自 get_secret()，含集群账号密码
+        print("[InitDoris] Start")
         if not doris_config.get('pre_defined', False):
             raise ParamsNotValid(message=gettext_lazy("Doris必须是预定义的"))
         cluster_id = resource.databus.storage.create_storage(doris_config)
@@ -189,14 +192,15 @@ class SystemInitHandler:
         print(f"[InitDoris] Default => {cluster_id}")
 
     def _init_redis(self, redis_config: dict):
-        print(f"[InitRedis] Params => {redis_config}")
-        resp = resource.databus.storage.create_or_update_redis(redis_config)
-        print(f"[InitRedis] Resp => {resp}")
+        # 不打印 redis_config / resp：前者来自 get_secret() 含密码，后者可能回显连接信息
+        print("[InitRedis] Start")
+        resource.databus.storage.create_or_update_redis(redis_config)
+        print("[InitRedis] Finished")
 
     def init_redis(self):
         if self.pre_check(INIT_REDIS_FISHED_KEY):
             return
-        redis_configs = json.loads(os.getenv("BKAPP_INIT_REDIS_CONFIG"))
+        redis_configs = json.loads(get_secret("BKAPP_INIT_REDIS_CONFIG"))
         for redis_config in redis_configs:
             self._init_redis(redis_config)
         self.post_init(INIT_REDIS_FISHED_KEY)
