@@ -306,7 +306,12 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
         task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
         task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
-        pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), required=False, allow_blank=True)
+        pa_name = serializers.CharField(
+            label=gettext_lazy("套餐名称"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("精确匹配，支持多选，逗号分隔（如 套餐A,套餐B），任一命中即返回"),
+        )
         trigger = serializers.CharField(
             label=gettext_lazy("触发方式"),
             required=False,
@@ -335,7 +340,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         scene_id = validated_request_data.get("scene_id")
         task_id = validated_request_data.get("task_id", "").strip()
         task_name = validated_request_data.get("task_name", "").strip()
-        pa_name = validated_request_data.get("pa_name", "").strip()
+        pa_name_values = self._split_multi(validated_request_data.get("pa_name", ""))
         trigger_values = self._split_multi(validated_request_data.get("trigger", ""))
         result_values = self._split_multi(validated_request_data.get("result", ""))
         operator = validated_request_data.get("operator", "").strip()
@@ -375,9 +380,10 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         if task_name:
             nodes = nodes.filter(process_result__task_name__icontains=task_name)
 
-        # 套餐名称筛选（快照字段，ORM 下沉；历史无快照记录由展示逻辑 rule→pa 兜底，筛选不覆盖）
-        if pa_name:
-            nodes = nodes.filter(process_result__pa_name__icontains=pa_name)
+        # 套餐名称筛选（精确匹配，支持多选，任一命中；快照字段，ORM 下沉；
+        # 历史无快照记录由展示逻辑 rule→pa 兜底，筛选不覆盖）
+        if pa_name_values:
+            nodes = nodes.filter(process_result__pa_name__in=pa_name_values)
 
         # 触发方式筛选（支持多选，任一命中）
         if trigger_values:
