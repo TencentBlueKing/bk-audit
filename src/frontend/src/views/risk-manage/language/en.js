@@ -175,6 +175,7 @@ export default {
     推荐示例: 'Examples',
     搜索记录: 'Search History',
     暂无搜索记录: 'No search history',
+    'AI 正在解析中，请稍候…': 'AI is parsing, please wait…',
     '责任人为 admin 的风险单': 'Risk tickets whose responsible person is admin',
     '风险等级为 高 的风险单': 'Risk tickets whose risk level is High',
     '风险命中策略为 虚拟资源管控 的风险单': 'Risk tickets whose matched strategy is Virtual Resource Control',

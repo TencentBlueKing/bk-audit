@@ -50,7 +50,7 @@
       theme="primary"
       :title="t('批量转单')"
       @closed="handleClosed">
-      <audit-form
+      <bk-form
         ref="formRef"
         form-type="vertical"
         :model="formData"
@@ -76,7 +76,7 @@
             style="resize: none;"
             type="textarea" />
         </bk-form-item>
-      </audit-form>
+      </bk-form>
       <template #footer>
         <bk-button
           :loading="transLoading"
@@ -338,17 +338,12 @@
       });
     });
   };
-  let previousChangeConfirm: boolean | 'popover' = false;
   const handleClosed = () => {
     formRef.value?.clearValidate();
     formData.value = {
       new_operators: [],
       description: '',
     };
-    // 须在 formData 重置触发的 audit-form watcher 之后恢复，否则会被重新置为 true
-    nextTick(() => {
-      window.changeConfirm = previousChangeConfirm;
-    });
   };
   // 批量操作
   const handleBatch = async () => {
@@ -357,7 +352,6 @@
       messageWarn(t('请选择要操作的数据'));
       return;
     }
-    previousChangeConfirm = window.changeConfirm;
     isShow.value = true;
     nextTick(() => {
       formRef.value.clearValidate();

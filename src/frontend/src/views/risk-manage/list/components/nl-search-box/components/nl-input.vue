@@ -20,11 +20,13 @@
     class="nl-search-input">
     <div
       class="nl-input-wrapper"
+      :class="{ 'is-disabled': loading }"
       @click="handleWrapperClick">
       <input
         ref="inputRef"
         v-model="inputValue"
         class="nl-input-inner"
+        :disabled="loading"
         :placeholder="t('支持自然语言输入，如：张三最近一周的高风险单，或直接在下方添加搜索条件')"
         type="text"
         @compositionend="isComposing = false"
@@ -32,11 +34,16 @@
         @focus="handleFocus"
         @keydown.enter="handleSubmit">
       <div
-        v-if="inputValue"
+        v-if="inputValue && !loading"
         class="nl-input-clear"
         @click.stop="handleClear">
         <audit-icon type="close-circle-fill" />
       </div>
+      <span
+        v-if="loading"
+        class="nl-input-loading-text">
+        {{ t('AI 正在解析中，请稍候…') }}
+      </span>
       <div
         class="nl-input-send-btn"
         :class="{ 'is-loading': loading, 'is-active': !!inputValue.trim() }"
@@ -229,6 +236,7 @@
   };
 
   const handleWrapperClick = () => {
+    if (props.loading) return;
     inputRef.value?.focus();
     openPanel();
   };
@@ -333,6 +341,10 @@
     100% { transform: rotate(360deg); }
   }
 
+  @keyframes nl-border-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
   .nl-search-input {
     position: relative;
     z-index: 510;
@@ -372,6 +384,23 @@
         background: #fff;
         box-shadow: 0 8px 20px 0 rgb(61 72 93 / 10%);
       }
+
+      &.is-disabled {
+        cursor: default;
+        background: #fcfdff;
+        box-shadow: 0 6px 18px 0 rgb(72 139 255 / 14%);
+
+        &::before {
+          background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
+          background-size: 200% 100%;
+          animation: nl-border-flow 2s linear infinite;
+        }
+
+        .nl-input-inner {
+          color: #979ba5;
+          cursor: default;
+        }
+      }
     }
 
     .nl-input-inner {
@@ -400,6 +429,18 @@
       &:hover {
         color: #979ba5;
       }
+    }
+
+    .nl-input-loading-text {
+      margin-right: 10px;
+      font-size: 12px;
+      color: transparent;
+      white-space: nowrap;
+      background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
+      background-clip: text;
+      background-size: 200% 100%;
+      flex-shrink: 0;
+      animation: nl-border-flow 2s linear infinite;
     }
 
     .nl-input-send-btn {
