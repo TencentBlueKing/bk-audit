@@ -86,7 +86,8 @@ _UserIntentCandidatesField = serializers.ListField(
 class CommonQuerySchema(MessageSchema):
     """常见/历史操作条目：自然语言检索样例（D3 方案）。"""
 
-    query_text: str = Field(min_length=1, max_length=2048)
+    # 上限须不小于 UserIntentInputSchema.query_text：常用/历史榜单由真实检索原文重建，过短会在系统选择执行时校验失败
+    query_text: str = Field(min_length=1, max_length=4096)
 
 
 class SystemSelectionInputSchema(MessageSchema):
@@ -116,7 +117,8 @@ class SystemSelectionOutputSchema(MessageSchema):
 class UserIntentInputSchema(MessageSchema):
     """USER_INTENT 输入：只描述用户意图，会话 scope 从所属 Conversation 获取。"""
 
-    query_text: str = Field(min_length=1, max_length=2048)
+    # 对话输入框字符上限（产品要求与前端输入框限制同步放宽到 4096）
+    query_text: str = Field(min_length=1, max_length=4096)
     auto_execute: bool = True
 
 
