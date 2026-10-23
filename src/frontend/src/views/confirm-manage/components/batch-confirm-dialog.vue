@@ -24,7 +24,7 @@
     :title="t('批量确认风险单')"
     width="720"
     @closed="handleClosed">
-    <audit-form
+    <bk-form
       ref="formRef"
       form-type="vertical"
       :model="formData"
@@ -51,7 +51,7 @@
           :default="formData.description"
           :max-len="2000" />
       </bk-form-item>
-    </audit-form>
+    </bk-form>
     <template #footer>
       <bk-button
         :loading="isSubmitting"
@@ -71,7 +71,6 @@
 
 <script setup lang="ts">
   import {
-    nextTick,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -119,10 +118,8 @@
   };
 
   const isSubmitting = ref(false);
-  let previousChangeConfirm: boolean | 'popover' = false;
 
   const show = (ids: string[]) => {
-    previousChangeConfirm = window.changeConfirm;
     riskIds.value = ids;
     resetForm();
     isShow.value = true;
@@ -138,10 +135,6 @@
   const handleClosed = () => {
     resetForm();
     riskIds.value = [];
-    // 须在 resetForm 触发的 audit-form watcher 之后恢复，否则会被重新置为 true
-    nextTick(() => {
-      window.changeConfirm = previousChangeConfirm;
-    });
   };
 
   const handleConfirm = async () => {
