@@ -304,11 +304,13 @@
     const parts: Array<{ url: boolean; text: string }> = [];
     const rule = /https?:\/\/\S+/g;
     let last = 0;
-    for (const match of source.matchAll(rule)) {
+    let match = rule.exec(source);
+    while (match) {
       const index = match.index ?? 0;
       if (index > last) parts.push({ url: false, text: source.slice(last, index) });
       parts.push({ url: true, text: match[0] });
       last = index + match[0].length;
+      match = rule.exec(source);
     }
     if (last < source.length || !parts.length) {
       parts.push({ url: false, text: source.slice(last) });
