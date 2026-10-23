@@ -559,81 +559,63 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
 
 
 class AttachDatetimeOriginTest(TestCase):
-    """接口返回在绝对时间旁补 datetime_origin。"""
+    """接口返回在绝对时间旁补 datetime_origin。当前时间固定为 2026-01-28 10:30。"""
 
     def _ref(self, iso: str) -> datetime.datetime:
         return timezone.make_aware(datetime.datetime.fromisoformat(iso))
 
-    def test_relative_window_gets_shortcut(self):
+    def test_relative_windows_use_shortcut(self):
         ref = self._ref("2026-01-28T10:30:00")
-        result = attach_datetime_origin(
-            {"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00", "risk_level": "HIGH"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-7d", "now"])
-        self.assertEqual(result["start_time"], "2026-01-21T00:00:00")
-        self.assertEqual(result["end_time"], "2026-01-28T10:30:00")
+        cases = [
+            ("2026-01-21T00:00:00", "2026-01-28T10:30:00", ["now-7d", "now"]),
+            ("2025-12-29T00:00:00", "2026-01-28T10:30:00", ["now-1M", "now"]),
+            ("2026-01-26T00:00:00", "2026-01-28T10:30:00", ["now-2d", "now"]),
+            ("2026-01-14T00:00:00", "2026-01-28T10:30:00", ["now-14d", "now"]),
+            ("2026-01-28T05:30:00", "2026-01-28T10:30:00", ["now-5h", "now"]),
+            ("2026-01-25T10:30:00", "2026-01-28T10:30:00", ["now-3d", "now"]),
+        ]
+        for start, end, origin in cases:
+            with self.subTest(origin=origin):
+                result = attach_datetime_origin(
+                    {"start_time": start, "end_time": end, "risk_level": "HIGH"},
+                    reference_time=ref,
+                )
+                self.assertEqual(result["datetime_origin"], origin)
+                self.assertEqual(result["start_time"], start)
+                self.assertEqual(result["end_time"], end)
+                self.assertEqual(result["risk_level"], "HIGH")
 
-    def test_month_window_uses_month_shortcut(self):
-        ref = self._ref("2026-01-28T10:30:00")
+    def test_six_month_window_uses_month_shortcut(self):
+        ref = self._ref("2026-07-01T12:00:00")
+        start = (ref - datetime.timedelta(days=182)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_text = start.strftime("%Y-%m-%dT%H:%M:%S")
         result = attach_datetime_origin(
-            {"start_time": "2025-12-29T00:00:00", "end_time": "2026-01-28T10:30:00"},
+            {"start_time": start_text, "end_time": "2026-07-01T12:00:00"},
             reference_time=ref,
         )
-        self.assertEqual(result["datetime_origin"], ["now-1M", "now"])
+        self.assertEqual(result["datetime_origin"], ["now-6M", "now"])
 
-    def test_other_day_count_is_still_shortcut(self):
+    def test_non_relative_ranges_keep_absolute_origin(self):
         ref = self._ref("2026-01-28T10:30:00")
-        result = attach_datetime_origin(
-            {"start_time": "2026-01-26T00:00:00", "end_time": "2026-01-28T10:30:00"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-2d", "now"])
+        cases = [
+            ("2026-01-10T08:15:00", "2026-01-20T09:45:00"),
+            ("2026-01-21T00:00:00", "2026-01-25T10:30:00"),
+            ("2026-01-28T00:00:00", "2026-01-28T10:30:00"),
+        ]
+        for start, end in cases:
+            with self.subTest(start=start, end=end):
+                result = attach_datetime_origin(
+                    {"start_time": start, "end_time": end},
+                    reference_time=ref,
+                )
+                self.assertEqual(result["datetime_origin"], [start, end])
+                self.assertEqual(result["start_time"], start)
+                self.assertEqual(result["end_time"], end)
 
-    def test_two_months_uses_month_shortcut(self):
+    def test_missing_time_does_not_add_origin(self):
         ref = self._ref("2026-01-28T10:30:00")
-        start = (ref - datetime.timedelta(days=60)).replace(hour=0, minute=0, second=0, microsecond=0)
-        result = attach_datetime_origin(
-            {"start_time": start.strftime("%Y-%m-%dT%H:%M:%S"), "end_time": "2026-01-28T10:30:00"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-2M", "now"])
-
-    def test_one_year_uses_year_shortcut(self):
-        ref = self._ref("2026-01-28T10:30:00")
-        start = (ref - datetime.timedelta(days=365)).replace(hour=0, minute=0, second=0, microsecond=0)
-        result = attach_datetime_origin(
-            {"start_time": start.strftime("%Y-%m-%dT%H:%M:%S"), "end_time": "2026-01-28T10:30:00"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-1y", "now"])
-
-    def test_two_years_uses_year_shortcut(self):
-        ref = self._ref("2026-01-28T10:30:00")
-        start = (ref - datetime.timedelta(days=730)).replace(hour=0, minute=0, second=0, microsecond=0)
-        result = attach_datetime_origin(
-            {"start_time": start.strftime("%Y-%m-%dT%H:%M:%S"), "end_time": "2026-01-28T10:30:00"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-2y", "now"])
-
-    def test_hour_window_is_shortcut(self):
-        ref = self._ref("2026-01-28T10:30:00")
-        result = attach_datetime_origin(
-            {"start_time": "2026-01-28T05:30:00", "end_time": "2026-01-28T10:30:00"},
-            reference_time=ref,
-        )
-        self.assertEqual(result["datetime_origin"], ["now-5h", "now"])
-
-    def test_custom_range_keeps_absolute_time_only(self):
-        ref = self._ref("2026-01-28T10:30:00")
-        result = attach_datetime_origin(
-            {"start_time": "2026-01-10T08:15:00", "end_time": "2026-01-20T09:45:00"},
-            reference_time=ref,
-        )
-        self.assertNotIn("datetime_origin", result)
-        self.assertEqual(result["start_time"], "2026-01-10T08:15:00")
-        self.assertEqual(result["end_time"], "2026-01-20T09:45:00")
+        result = attach_datetime_origin({"risk_level": "HIGH"}, reference_time=ref)
+        self.assertEqual(result, {"risk_level": "HIGH"})
 
 
 class NL2RiskFilterWithLoggingTest(TestCase):
@@ -641,6 +623,27 @@ class NL2RiskFilterWithLoggingTest(TestCase):
 
     def setUp(self):
         self.resource = NL2RiskFilter()
+
+    @patch("services.web.risk.handlers.nl2riskfilter.timezone.localtime")
+    @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_response_adds_datetime_origin(self, mock_chat, mock_user, mock_save_log, mock_localtime):
+        """模型只给绝对时间时，接口返回补上快捷值，绝对时间保持不变。"""
+        mock_localtime.return_value = timezone.make_aware(datetime.datetime(2026, 1, 28, 10, 30, 0))
+        mock_chat.return_value = '{"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00"}'
+
+        result = self.resource.request({"query": "最近一周的风险", "tags": [], "strategies": []})
+
+        self.assertEqual(
+            result["filter_conditions"],
+            {
+                "start_time": "2026-01-21T00:00:00",
+                "end_time": "2026-01-28T10:30:00",
+                "datetime_origin": ["now-7d", "now"],
+            },
+        )
+        mock_save_log.assert_called_once()
 
     @patch("services.web.risk.resources.risk.NL2RiskFilterLog.save_nl2risk_filter_log")
     @patch("services.web.risk.resources.risk.get_request_username", return_value="admin")

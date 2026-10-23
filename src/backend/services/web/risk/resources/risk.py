@@ -80,7 +80,6 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
-from services.web.risk.bksec.service import fill_failure_info, iter_status_nodes
 from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
@@ -207,7 +206,6 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
-from services.web.risk.utils import extract_attempt_records
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
@@ -1340,11 +1338,8 @@ class RetryAutoProcess(RiskMeta):
         task_id = node.process_result.get("task", {}).get("task_id", "")
         # 获取节点状态
         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        # 失败时回源补齐各失败节点的 error_message，保证重试快照固化到真实的失败现场
-        if status.get("state") in SOPSTaskStatus.get_failed_status():
-            fill_failure_info(status, task_id=task_id)
-        # 对每个失败的节点（含子流程内嵌套的失败节点），获取节点输入并重试
-        for item in iter_status_nodes(status):
+        # 对每个失败的节点，获取节点输入并重试
+        for item in status["children"].values():
             if item["state"] != SOPSTaskStatus.FAILED:
                 continue
             io_data = api.bk_sops.get_node_data(
@@ -1358,16 +1353,6 @@ class RetryAutoProcess(RiskMeta):
                 inputs=io_data["inputs"],
             )
         with transaction.atomic():
-            # 重试前快照：固化本次被覆盖前的失败现场（error_message 等），仅 append 不覆盖
-            retry_history = node.process_result.get("retry_history") or []
-            retry_history.append(
-                {
-                    "time": timezone.localtime().strftime(api_settings.DATETIME_FORMAT),
-                    "operator": get_request_username(),
-                    "attempts": extract_attempt_records(status),
-                }
-            )
-            node.process_result["retry_history"] = retry_history
             node.status = TicketNodeStatus.RUNNING
             node.process_result["status"]["state"] = SOPSTaskStatus.RUNNING
             node.save(update_fields=["status", "process_result"])
