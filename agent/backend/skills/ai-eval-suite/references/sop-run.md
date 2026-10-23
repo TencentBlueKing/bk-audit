@@ -2,7 +2,9 @@
 
 ## 子 agent 调用
 
-评估运行耗时长（几十秒到几分钟）、无需交互，**强烈推荐**异步执行并检查。
+评估运行可异步执行并检查；子 agent 仅在环境支持且当前任务允许时使用。
+
+先复用项目已安装或锁定的 promptfoo。以下 npx 示例仅用于已有可用依赖的环境；缺少依赖时先确认安装方式，不自动下载或全局安装。
 
 ## 两种运行模式
 
@@ -24,7 +26,7 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 
 ### 模式 B: 正式评估（出结论 / 归档）
 
-⚠️ **必须覆盖 config 中所有 provider，禁止 `--filter-providers`。** 带 `-o` 导出完整结果。
+覆盖已确认的用例和 provider 范围，带 `-o` 导出结果。用户指定局部评估时保留该范围，不擅自扩展；报告注明过滤条件，不把局部结果称为全配置通过。
 
 ```bash
 cd <project-root>
@@ -60,7 +62,7 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 | `--env-file .env` | 加载环境变量 | A/B |
 | `--no-cache` | 禁用缓存 | A/B |
 | `-o <path>` | 导出结果 | **仅 B** |
-| `--filter-providers <label>` | 只跑指定模型 | **仅 A** |
+| `--filter-providers <label>` | 只跑指定模型，报告中注明范围 | A/B |
 | `--filter-first-n N` | 只跑前 N 个用例 | A |
 | `--filter-pattern <regex>` | 按描述过滤用例 | A |
 | `--filter-failing <path>` | 只重跑上次失败 | A |
@@ -91,14 +93,10 @@ npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
 | `-o` 写入位置不对 | 路径相对于 cwd（始终在项目根目录运行） |
 | 缓存导致结果不更新 | `npx promptfoo cache clear` |
 | Python 版本不匹配 | `export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python` |
-| npx 下载失败（内网） | `npm install -g promptfoo` 后直接用 `promptfoo` 命令 |
+| promptfoo 不可用或下载失败 | 核对项目已有版本与依赖来源；确需安装时先确认，不自动改全局环境 |
 | LLM-as-Judge 404 | 确认 `defaultTest.options.provider` 配置正确 |
 | Django provider 初始化失败 | 确保 `DJANGO_SETTINGS_MODULE` 已设置、cwd 在项目根 |
 
 ---
 
-→ 评估完成。下一步分析结果：
-```bash
-python <skill-path>/scripts/analyze_results.py <结果文件.json>
-```
-→ 读 `sop-analyze.md`
+仅要求运行评估时，报告执行范围、结果文件和摘要后结束。请求包含结果分析时再读 `sop-analyze.md`，使用项目虚拟环境执行分析脚本。

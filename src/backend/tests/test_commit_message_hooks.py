@@ -15,8 +15,9 @@ from pathlib import Path
 import yaml
 
 BACKEND = Path(__file__).resolve().parents[1]
-SCRIPT_RELATIVE = Path("agent/skills/generate-project-commit/scripts/commit_message.sh")
-SCRIPT = BACKEND / SCRIPT_RELATIVE
+REPOSITORY = BACKEND.parents[1]
+SCRIPT_RELATIVE = Path("agent/backend/tools/commit-message/commit_message.sh")
+SCRIPT = REPOSITORY / SCRIPT_RELATIVE
 
 
 class CommitMessageValidationTests(unittest.TestCase):
@@ -83,15 +84,16 @@ class BackendCommitHookTests(unittest.TestCase):
         self.git("config", "user.name", "Test Developer")
         self.git("config", "user.email", "developer@example.invalid")
         self.git("config", "commit.gpgsign", "false")
-        target = self.root / "src/backend" / SCRIPT_RELATIVE
+        target = self.root / SCRIPT_RELATIVE
         target.parent.mkdir(parents=True)
         if SCRIPT.exists():
             shutil.copyfile(SCRIPT, target)
         config = yaml.safe_load((BACKEND / ".pre-commit-config.yaml").read_text())
         config["repos"] = [repo for repo in config["repos"] if repo["repo"] == "local"]
         config_path = self.root / "src/backend/.pre-commit-config.yaml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(yaml.safe_dump(config))
-        self.git("add", "src/backend")
+        self.git("add", "src/backend", "agent/backend/tools/commit-message")
         self.git("commit", "-qm", "chore: 初始化工具测试 #1001")
         result = subprocess.run(
             [
@@ -137,6 +139,12 @@ class BackendCommitHookTests(unittest.TestCase):
         result = self.git("commit", "-m", "fix: 修复检索 --story=1001", check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_agent_backend_tool_change_requires_tracker(self):
+        """迁到根目录的后端 Agent 材料仍受后端标题范围约束。"""
+        self.stage_file("agent/backend/example.txt")
+        result = self.git("commit", "-m", "fix: 缺少关联", check=False)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_frontend_only_commit_does_not_gain_backend_restrictions(self):
         """后端接入不能改变纯前端提交的标题要求。"""
         self.stage_file("src/frontend/example.txt")
@@ -161,7 +169,7 @@ class BackendCommitHookTests(unittest.TestCase):
         self.git("commit", "-qm", "frontend change")
         self.stage_file("src/frontend/second.txt")
         self.git("commit", "-qm", "fix: 更新界面 #1001")
-        script = self.root / "src/backend" / SCRIPT_RELATIVE
+        script = self.root / SCRIPT_RELATIVE
         result = subprocess.run(
             ["sh", str(script), "check-range", f"{base}..HEAD"],
             cwd=self.root,
@@ -173,7 +181,7 @@ class BackendCommitHookTests(unittest.TestCase):
 
     def test_history_invalid_revision_fails(self):
         """Git 无法读取历史时不能被管道掩盖为校验成功。"""
-        script = self.root / "src/backend" / SCRIPT_RELATIVE
+        script = self.root / SCRIPT_RELATIVE
         result = subprocess.run(
             ["sh", str(script), "check-range", "missing-base..HEAD"],
             cwd=self.root,

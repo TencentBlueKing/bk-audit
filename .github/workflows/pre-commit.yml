@@ -8,11 +8,13 @@ on:
     branches: ["**"]
     paths:
       - "src/backend/**"
+      - "agent/backend/**"
       - ".github/workflows/pre-commit.yml"
   push:
     branches: ["main"]
     paths:
       - "src/backend/**"
+      - "agent/backend/**"
       - ".github/workflows/pre-commit.yml"
   workflow_dispatch:
 

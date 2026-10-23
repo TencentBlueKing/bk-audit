@@ -5,7 +5,7 @@
 - [流程概览](#流程概览)
 - [Step 1: 询问评估目标](#step-1-询问评估目标)
 - [Step 2: 创建目录结构](#step-2-创建目录结构)
-- [Step 3: 引入公共 Provider](#step-3-引入公共-provider)
+- [Step 3: 引入公共 Provider（可选）](#step-3-引入公共-provider可选)
 - [Step 4: 编写业务 Provider](#step-4-编写业务-provider)
 - [Step 5: 编写测试用例](#step-5-编写测试用例)
 - [Step 6: 编写自定义断言（可选）](#step-6-编写自定义断言可选)
@@ -83,11 +83,12 @@ evals/
 
 **蓝鲸项目**：将本 skill 内置的 `scripts/bk_llm_provider.py` 复制到 `evals/providers/`：
 
+`<skill-path>` 必须替换为本技能的实际绝对目录。随产品源码使用时为 `<product-checkout>/agent/backend/skills/ai-eval-suite`，其中 `<product-checkout>` 是已确认的产品 checkout 绝对根；单独安装时使用技能加载器提供的绝对目录。下面命令从 project-root 执行，审计后端为 `src/backend`。
+
 ```bash
 # 首次创建公共 provider 目录
 mkdir -p evals/providers/
-# <skill-path> 即本 skill 所在目录，例如 agent/skills/ai-eval-suite
-cp <skill-path>/scripts/bk_llm_provider.py evals/providers/
+cp "<skill-path>/scripts/bk_llm_provider.py" evals/providers/
 ```
 
 然后在 `.env` 中配置：
@@ -336,7 +337,7 @@ export PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python
 # 验证配置语法
 npx promptfoo validate config -c evals/<suite>/promptfooconfig.yaml
 
-# 快速测试一个用例
+# 任务包含真实试跑时，才执行以下模型调用
 npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
   --env-file .env --no-cache --filter-first-n 1
 ```
@@ -360,4 +361,4 @@ README 应包含：评估目标、测试用例概览、Provider 说明、运行�
 
 ---
 
-→ 初始化完成后，进入 **SOP 2（运行评估）**：读 `sop-run.md`
+仅初始化时在配置与记录准备完成后结束；请求包含评估执行时再读 `sop-run.md`。
