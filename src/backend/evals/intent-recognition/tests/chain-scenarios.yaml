@@ -19,7 +19,7 @@
     - type: javascript
       value: file://assertions/exact_conditions.js
 
-- description: 'chain-系统+检索一体（含执行结果语义：失败 → result_code=-1 原始值）'
+- description: 'chain-系统+检索一体（含执行结果语义：失败 → result_code非零）'
   vars:
     query: '我要看示例审计系统最近三天的失败日志'
     current_system_id: ''
@@ -28,8 +28,8 @@
       - raw_name: result_code
         keys: []
         field_type: int
-        operator: include
-        filters: [-1]
+        operator: neq
+        filters: [0]
   assert:
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_audit_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null'
@@ -150,7 +150,7 @@
     - type: javascript
       value: file://assertions/exact_conditions.js
 
-- description: 'chain-切换系统+多人+失败（示例流水线系统+2人+result_code=-1）'
+- description: 'chain-切换系统+多人+失败（示例流水线系统+2人+result_code非零）'
   vars:
     query: '我要看示例流水线系统上周eval_user_alpha和eval_user_beta的失败操作'
     current_system_id: 'eval_audit_system'
@@ -163,8 +163,8 @@
       - raw_name: result_code
         keys: []
         field_type: int
-        operator: include
-        filters: [-1]
+        operator: neq
+        filters: [0]
   assert:
     - type: javascript
       value: 'const d = JSON.parse(output); d.status === "success" && d.intent === "select_system" && d.system_id === "eval_pipeline_system" && d.messages.length === 2 && d.messages[0].message_type === "SYSTEM_SELECTION" && d.messages[1].message_type === "LOG_SEARCH" && d.condition !== null && d.condition.start_time.startsWith("2026-08-24") && d.condition.end_time.startsWith("2026-08-31")'

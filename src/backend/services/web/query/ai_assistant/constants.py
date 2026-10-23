@@ -107,6 +107,18 @@ DEFAULT_SEARCH_WINDOW_DAYS = 1
 # 默认窗口的相对时间快捷标记（用户未提及时间时随 SearchCondition 返回，前端渲染「近1天」
 # 动态标签并按执行时刻换算；与 DEFAULT_SEARCH_WINDOW_DAYS 同源，改窗口天数此处自动跟随）
 DEFAULT_TIME_SHORTCUT = f"now-{DEFAULT_SEARCH_WINDOW_DAYS}d"
+# 与前端DateRange相同的相对单位；固定单位最多365天，日历单位最多一年（允许跨闰日）。
+TIME_SHORTCUT_MAX_DAYS = 365
+TIME_SHORTCUT_UNITS = {
+    "s": ("seconds", TIME_SHORTCUT_MAX_DAYS * 86400),
+    "m": ("minutes", TIME_SHORTCUT_MAX_DAYS * 1440),
+    "h": ("hours", TIME_SHORTCUT_MAX_DAYS * 24),
+    "d": ("days", TIME_SHORTCUT_MAX_DAYS),
+    "w": ("weeks", TIME_SHORTCUT_MAX_DAYS // 7),
+    "M": ("months", 12),
+    "y": ("years", 1),
+}
+TIME_SHORTCUT_PATTERN = rf"^now-([1-9]\d*)([{''.join(TIME_SHORTCUT_UNITS)}])$"
 # AI 输出中禁止出现的时间字段（出现后端剔除并告警，时间由后端统一管理）
 AI_FORBIDDEN_TIME_FIELDS = ("thedate", "dtEventTimeStamp")
 # AI 输出中禁止出现的条件字段（后端剔除并告警）：

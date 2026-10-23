@@ -169,18 +169,14 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
     )
     current_system_id = MessagePlanExecutionService.selection_system_id(current_selection)
     system_context_cache: dict[str, SystemSelectionOutput] = {}
-    current_system = None
     if current_selection is not None:
         current_system_context = MessagePlanExecutionService.selection_system_context(current_selection)
         system_context_cache[current_system_id] = current_system_context
-        current_system = current_system_context.systems[0]
-    common_fields = FieldContextService.build_common_fields(namespace=context_data.namespace)
     reference_time = timezone.localtime()
     agent_context = MessagePlanningService.build_context(
         query_text=execution.input_data.query_text,
         candidates=candidates,
-        common_fields=common_fields,
-        current_system=current_system,
+        current_system_id=current_system_id,
         username=context_data.username,
         reference_time=reference_time,
     )

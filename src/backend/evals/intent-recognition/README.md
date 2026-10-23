@@ -1,74 +1,62 @@
-# 通用消息规划 Agent 效果评估
+# 意图 Agent 按需上下文评测
 
-本套件验证生产 `MessagePlanningService` 的真实调用链：用户自然语言、会话阶段、授权系统摘要、公共标准字段及当前系统详情一次提交给 AIDev Agent，Agent 返回 `MessagePlan`，后端再按目标系统执行 Pydantic、权限和检索条件校验。
+本套件在本地加载 Django、生产 `MessagePlanningService` 的 system/user/retry 提示词、MessagePlan 解析与授权校验，
+沿用 `.env` 配置的 BKOP 意图 Agent 地址，以非流式请求获取最终输出，条件继续经过 `ConditionAssemblyService`。
+不另建本地 Agent，也不要求非流式接口没有的 MCP 中间轨迹。模型和工具选择由当前环境的 Agent 执行。
 
-## 评估目标
+## 输入与判尺
 
-1. 纯系统选择输出 `[SYSTEM_SELECTION]`。
-2. 已有有效系统的检索输出 `[LOG_SEARCH]`。
-3. 指定新系统并检索输出 `[SYSTEM_SELECTION, LOG_SEARCH]`。
-4. 无系统可用于检索时输出 `SYSTEM_REQUIRED` 或 `SYSTEM_UNAVAILABLE`。
-5. 闲聊输出 `UNRECOGNIZED_INTENT`。
-6. 系统 ID、字段、操作符、枚举值及时间条件能通过后端确定性校验。
-7. 相似系统名、提示注入、多值条件和扩展字段场景保持稳定。
-8. 用户明确表达多级拓展路径时，Agent 能基于公共 `extend_data` 容器生成 `extend_data + keys` 条件，并在“完整路径已发现”和“仅父节点及样例已发现”两类目标系统快照上通过后端校验。
-9. 拓展字段类型或操作符不明确时，Agent 可结合用户表达和样例在查询 Schema 的全局枚举内选择；采样元数据不作为错误的强限制。
+用户提示词只提供本轮原话、可信会话阶段、当前系统、授权系统 ID 和时间锚点。
+系统详情、字段、操作和资源类型由 Agent 按需求调用它绑定的 `audit-meta` 获取，不提前塞入 Prompt。
+`audit-meta` 由四个系统元数据工具与二期 `mcp_get_log_field_metadata` 组成，不向意图 Agent 提供明细或聚合能力。
 
-Provider 会额外输出 `intent/system_id/condition/error` 兼容字段，便于沿用历史断言；验收主协议是 `outcome/messages/error_code`。`vars.chain` 已不再触发第二次模型调用，历史 chain 用例现在同样验证单 Agent 一次规划。`tests/context-boundaries.yaml` 中的 `authorized_systems` 同时提供授权摘要和后端校验快照；只有 `current_system_id` 对应系统的字段差异和拓展字段受控样例会进入 Agent 上下文，普通标准字段运行时样例不进入 Prompt。没有当前系统时，Agent 只看到授权摘要和公共字段，目标系统快照用于计划产出后的确定性校验。`tests/nested-extension-fields.yaml` 固定覆盖两种目标快照与两种用户表达组成的四格矩阵，并严格断言消息序列、完整条件集合（操作人与嵌套路径不能多也不能少）和默认近一天时间窗；`tests/invalid-conditions.yaml` 验证意图已识别但操作符不受支持时稳定返回 `INVALID_CONDITION`。
+评测只观察最终选择效果：
 
-评测分为两个 profile：
+- `outcome/messages/error_code` 协议、系统 ID 和消息序列正确。
+- 系统范围、字段和条件经后端独立校验；错误结果不得混成有效检索。
+- 关键用例比较完整条件集合和时间窗，操作人、JSON 路径等不能遗漏或多加。
+- 单值 `include/eq`、`exclude/neq` 按查询语义等价比较；保留路径顺序、值类型和大小写。
+- 覆盖系统切换、已选系统检索、未选系统、闲聊、注入、多字段、多级 JSON 与授权边界。
+- 时间覆盖任意合法月份、分钟的动态标记和首轮准确绝对范围；不要求返回工具调用轨迹，不增加多轮条件继承。
 
-- 首轮能力：`max_attempts=1`，衡量 Agent 第一次输出的准确率，不能被重试掩盖。
-- 生产可用性：`max_attempts=3`，与生产任务的解析错误、越权输出和条件语义错误重试预算一致。纠错轮次会携带上一轮完整输出和结构化校验错误；AIDev 超时或服务异常只重放原始请求。
-
-Provider 在 metadata 中记录 `attempt_count` 和 `latency_ms`。报告必须同时给出首轮通过率、生产重试后通过率、重试分布和延迟分布。
-
-## AIDev 调用
-
-生产与评测共用以下首轮请求形态：
-
-```json
-{
-  "chat_history": [
-    {"role": "role", "content": "代码仓库中的 SYSTEM_PROMPT_TEMPLATE"},
-    {"role": "user", "content": "本轮完整动态上下文"}
-  ],
-  "execute_kwargs": {"stream": false, "thread_id": "intent-planning-<uuid>"}
-}
-```
-
-系统提示词和用户提示词都定义在 `services/web/ai/prompts/intent_recognition/templates.py` 的独立多行字符串模板中，运行时只注入强类型上下文和 `MessagePlan` Schema，不执行本地文件读取，也不依赖远端 Agent 固定提示词。每个独立规划请求使用新的 `thread_id`。
+Provider 额外输出 `intent/system_id/condition/error` 兼容历史断言。
+默认校验字段覆盖完整生产标准字段；校验失败记录 `diagnostic.final_plan` 与结构化错误，便于回查最终输出。
+泛义失败使用非零条件；旧Web的 `-1` 反选标记不能作为AI条件中的字面失败值。
+`authorized_systems` 等合成字段夹具只用于最终后端校验，不会注入 Agent 上下文；`vars.chain` 不触发第二个 Agent。
+涉及系统名称或隐藏元数据的用例，必须在远端 MCP 有对应可访问数据才能作为效果结论。
+仓库中的合成系统不代表 BKOP 中存在同名系统；环境数据不匹配须单独分类，不可恢复预加载来掩盖问题。
+真实环境适配数据放在 Git 忽略目录，禁止把真实账号、系统或日志写入测试代码。
 
 ## 运行
 
-首轮能力基线：
+复用项目已有 promptfoo，不自动安装或升级。以下命令在 `src/backend` 执行：
 
 ```bash
-cd src/backend
-PROMPTFOO_PYTHON=.venv/bin/python npx promptfoo eval --no-table \
-  -c evals/intent-recognition/promptfooconfig.yaml \
-  --env-file .env --no-cache --var max_attempts=1 \
-  -o evals/intent-recognition/output/$(date +%Y%m%d)-first-attempt-results.json
+PROMPTFOO_PYTHON="$PWD/.venv/bin/python" npx --no-install promptfoo validate \
+  -c evals/intent-recognition/promptfooconfig.yaml
+
+PROMPTFOO_PYTHON="$PWD/.venv/bin/python" npx --no-install promptfoo eval --no-table \
+  -c evals/intent-recognition/promptfooconfig.yaml --env-file .env --no-cache \
+  --max-concurrency 2 --var max_attempts=1 \
+  -o evals/intent-recognition/output/first-attempt-results.json
 ```
 
-生产重试基线：
+`.env` 需有 `BKAPP_EVAL_USERNAME` 和现有意图 Agent 路由、鉴权配置。
+默认沿用平台配置的模型；仅在已有明确模型对照需求时填写 provider.config.model。
+本地 Python、Agent URL 和凭据解析与生产同源，不需要另配 LLM 网关或升级 AIDev SDK。
+模型正文的用户固定为 `eval_actor`，真实账号只用于鉴权。输出目录保持 Git 忽略。
 
-```bash
-cd src/backend
-PROMPTFOO_PYTHON=.venv/bin/python npx promptfoo eval --no-table \
-  -c evals/intent-recognition/promptfooconfig.yaml \
-  --env-file .env --no-cache \
-  -o evals/intent-recognition/output/$(date +%Y%m%d)-message-plan-results.json
-```
+先用 `--filter-pattern` 或 `--filter-first-n` 做小集冒烟，不导出正式结论；
+正式运行覆盖确认范围并用 `-o` 归档。默认 `max_attempts=1` 衡量首轮能力；
+生产纠错评测追加 `--var max_attempts=3` 并单独归档，不能混为同一通过率。
+重试携带上一轮输出和结构化校验错误，超时或服务异常重放原请求。
 
-`.env` 需要提供 `BKAPP_EVAL_USERNAME` 和 AIDev 调用所需配置。评测输出在 `output/` 下，仅结果文件用于本地分析，不提交凭据或请求正文。稳定性回归可在关键场景上追加 `--repeat 3`；不要只重复整套用例后用总体通过率替代单用例一致性分析。
+## 分析与验收
 
-评测夹具中的人员、系统及样例路径统一使用 `eval_*` 或“示例”前缀的合成值。`BKAPP_EVAL_USERNAME` 只用于 AIDev 接口鉴权，模型上下文中的用户固定为 `eval_actor`，避免真实账号进入评测请求正文。
+首轮全量目标通过率不低于 90%；系统越权、非法字段和协议错误仍必须被后端拒绝。
+记录环境/Agent、范围、版本、通过率、错误类型、attempt_count 与 latency_ms；
+非流式未提供的模型内部轮次、token 和工具轨迹不推测、不补造。
+先区分连接/鉴权、远端工具配置、环境数据差异、模型决策与判尺问题，再判断下一步。
+本地运行不代表已发布网关工具或完成 Agent 平台绑定，部署后需另行验收。
 
-## 通过标准
-
-- 首轮全量通过率目标不低于 90%，同时记录生产重试后通过率。
-- 系统越权、Schema 非法和字段非法必须被后端校验拒绝，不能仅依赖模型自觉。
-- 除总体通过率外，记录失败用例、错误类型、尝试次数和延迟分布；重复运行时重点观察相似系统名、复合计划和生产同构上下文边界的一致性。
-
-历史 V1–V6 评测针对已退役的两段式意图识别链路，不能与本版本通过率直接比较。本版本结果应建立新的 MessagePlan 基线。
+历史预加载上下文和两段式链路的通过率不能直接比较，本版本建立按需上下文的新基线。

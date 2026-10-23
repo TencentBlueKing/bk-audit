@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from blueapps.utils.logger import logger
+from dateutil.relativedelta import relativedelta
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from pydantic import ValidationError
@@ -36,6 +37,8 @@ from services.web.query.ai_assistant.constants import (
     AI_FORBIDDEN_CONDITION_FIELDS,
     DEFAULT_SEARCH_WINDOW_DAYS,
     DEFAULT_TIME_SHORTCUT,
+    TIME_SHORTCUT_PATTERN,
+    TIME_SHORTCUT_UNITS,
 )
 from services.web.query.ai_assistant.exceptions import (
     AIOutputParseFailedError,
@@ -68,7 +71,7 @@ INVALID_REASON_MESSAGES = {
     "filters required": "筛选条件缺少比较值",
     "between needs 2 filters": "区间筛选需要恰好 2 个值",
     "field type does not match field context": "字段类型与当前系统字段定义不一致",
-    "invalid time shortcut": "相对时间表述超出支持范围，请换用「近N小时/近N天」或明确时间段",
+    "invalid time shortcut": "相对时间表述超出支持范围，请缩短时间窗口或使用明确日期",
 }
 
 
@@ -300,12 +303,8 @@ class ConditionAssemblyService:
             elif cond.field_type != field_type:
                 raise _invalid_condition_error(cond, "field type does not match field context")
 
-    # 相对时间窗快捷标记形态与窗口上限（365 天，与前端快捷项最大 now-12M 一致）
-    TIME_SHORTCUT_PATTERN = re.compile(r"^now-([1-9]\d*)([hdM])$")
-    TIME_SHORTCUT_MAX_WINDOW = timedelta(days=365)
-    # 月粒度对齐前端 DATETIME_SHORTCUT_LABEL_MAP / shortcutConfigs 的固定换算
-    # （1M=30、3M=90、6M=182、12M=365，非 30×N 线性，必须查表）；非白名单月值拒绝
-    MONTH_SHORTCUT_DAYS = {"1": 30, "3": 90, "6": 182, "12": 365}
+    # Schema和服务共用相对标记语法，服务另校验各单位的窗口上限。
+    TIME_SHORTCUT_PATTERN = re.compile(TIME_SHORTCUT_PATTERN)
 
     @classmethod
     def _assemble(cls, payload: AIConditionPayload, scope_id: str, reference_time: datetime) -> SearchCondition:
@@ -315,8 +314,8 @@ class ConditionAssemblyService:
 
         time_shortcut = cls._normalize_time_shortcut(payload.time_shortcut)
         if time_shortcut is not None:
-            # 「近 N 小时/近 N 天」：服务端权威换算（消除 LLM 算数误差）；AI 画蛇添足
-            # 同时输出的绝对时间忽略——用户语义为相对窗口，shortcut 透传前端渲染动态标签
+            # 首轮按同一锚点执行查询，消息另存原标记供前端动态重算；月/年遵循日历。
+            # shortcut优先于Agent额外生成的绝对时间，避免固化相对窗口。
             end_time = reference_time
             start_time = end_time - cls._shortcut_delta(time_shortcut)
         else:
@@ -368,17 +367,12 @@ class ConditionAssemblyService:
 
     @classmethod
     def _normalize_time_shortcut(cls, value: Optional[str]) -> Optional[str]:
-        """形态与窗口范围校验（pydantic pattern 已拦形态，此处纵深防御 + 上限校验）：
-        now-{N}h / now-{N}d / now-{N}M（月仅 1/3/6/12 白名单），换算窗口超 365 天拒绝——
-        静默钳制会造成语义漂移，显式报错更稳。
-        """
+        """校验前端相对标记及窗口上限，拒绝静默钳制导致的语义漂移。"""
 
         if value is None:
             return None
-        count, unit = cls.TIME_SHORTCUT_PATTERN.match(value).groups()
-        if (unit == "M" and count not in cls.MONTH_SHORTCUT_DAYS) or cls._shortcut_delta(
-            value
-        ) > cls.TIME_SHORTCUT_MAX_WINDOW:
+        match = cls.TIME_SHORTCUT_PATTERN.fullmatch(value)
+        if match is None or int(match[1]) > TIME_SHORTCUT_UNITS[match[2]][1]:
             raise InvalidConditionError(
                 message=INVALID_REASON_MESSAGES["invalid time shortcut"],
                 extra={"reason": "invalid time shortcut", "time_shortcut": value},
@@ -386,15 +380,11 @@ class ConditionAssemblyService:
         return value
 
     @classmethod
-    def _shortcut_delta(cls, value: str) -> timedelta:
-        """now-{N}h / now-{N}d / now-{N}M → 时间差（月按前端固定映射查表）"""
+    def _shortcut_delta(cls, value: str) -> relativedelta:
+        """将已校验标记转换为DateRange一致的时间差，月末/闰日截到有效日。"""
 
-        count, unit = cls.TIME_SHORTCUT_PATTERN.match(value).groups()
-        if unit == "h":
-            return timedelta(hours=int(count))
-        if unit == "d":
-            return timedelta(days=int(count))
-        return timedelta(days=cls.MONTH_SHORTCUT_DAYS[count])
+        count, unit = cls.TIME_SHORTCUT_PATTERN.fullmatch(value).groups()
+        return relativedelta(**{TIME_SHORTCUT_UNITS[unit][0]: int(count)})
 
     @staticmethod
     def _safe_parse_time(value: Optional[str]):
