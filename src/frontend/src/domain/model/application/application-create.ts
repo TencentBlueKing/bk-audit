@@ -19,7 +19,7 @@ export default class ApplicationCreate {
   name: string;
   sops_template_id: number;
   need_approve: boolean | string;
-  approve_service_id: number;
+  approve_service_id: string; // 审批服务id（ITSM_V4 该值为流程标识 workflow_key 字符串）
   approve_config: Record<string, any>;
   description: string;
   scene_id: string | number;
