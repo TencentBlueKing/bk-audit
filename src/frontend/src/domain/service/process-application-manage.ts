@@ -52,8 +52,9 @@ export default {
   /**
    * @desc 获取处理套餐列表(下拉列表)
    */
-  fetchApplicationsAll(params:{
+  fetchApplicationsAll(params: {
     scene_id?: string
+    has_execution_records?: boolean
   }) {
     return ProcessApplicationManageSource.getApplicationsAll(params)
       .then(({ data }) => data);
@@ -124,9 +125,12 @@ export default {
     return ProcessApplicationManageSource.getExecutionDetail(params)
       .then(({ data }) => (data ? new ExecutionDetail(data) : data));
   },
-  retryExecution(params: { task_id: string; reason: string }) {
-    return ProcessApplicationManageSource.retryExecution(params)
-      .then(({ data }) => new ExecutionDetail(data));
+  retryExecution(params: { task_id: string; risk_id: string; reason?: string }) {
+    return ProcessApplicationManageSource.retryExecution({
+      node_id: params.task_id,
+      risk_id: params.risk_id,
+      reason: params.reason,
+    }).then(({ data }) => data);
   },
   /**
      * @desc 启停处理套餐
