@@ -746,7 +746,7 @@
       max-width: none !important;
       min-width: 0 !important;
       line-height: 20px;
-      text-align: left;
+      text-align: right;
       flex: none !important;
     }
 
