@@ -29,13 +29,13 @@
       <div class="add-button">
         <span
           v-bk-tooltips="{
-            content: t('请至少选择 1 条风险单'),
-            disabled: !!selectionMeta.count,
+            content: batchConfirmDisabledReason ? t(batchConfirmDisabledReason) : '',
+            disabled: !batchConfirmDisabledReason,
           }"
           class="batch-confirm-btn-wrapper"
-          :class="{ 'is-batch-disabled': !selectionMeta.count }">
+          :class="{ 'is-batch-disabled': !!batchConfirmDisabledReason }">
           <bk-button
-            :disabled="!selectionMeta.count"
+            :disabled="!!batchConfirmDisabledReason"
             theme="primary"
             @click="handleBatchConfirm">
             {{ t('批量处理') }}
@@ -103,6 +103,11 @@
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+  import {
+    BATCH_SYNC_LIMIT,
+    REASON_LIMIT,
+    REASON_NONE,
+  } from '@views/risk-manage/batch-handle/evaluate';
 
   import BatchConfirmDialog from './components/batch-confirm-dialog.vue';
   import FieldConfig from './components/config';
@@ -217,6 +222,17 @@
     selectionMeta.value = meta;
   };
 
+  const batchConfirmDisabledReason = computed(() => {
+    const { count } = selectionMeta.value;
+    if (!count) {
+      return REASON_NONE;
+    }
+    if (count > BATCH_SYNC_LIMIT) {
+      return REASON_LIMIT;
+    }
+    return '';
+  });
+
   const {
     isExportEnabled,
     exportTooltip,
@@ -313,6 +329,10 @@
   const handleBatchConfirm = async () => {
     if (!selectionMeta.value.count) {
       messageWarn(t('请选择要操作的数据'));
+      return;
+    }
+    if (selectionMeta.value.count > BATCH_SYNC_LIMIT) {
+      messageWarn(t(REASON_LIMIT));
       return;
     }
     const { keys } = await listRef.value.resolveExportSelection();
