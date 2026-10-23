@@ -113,10 +113,9 @@ def build_test_constants(config: BkSecConfig, risk: Risk, test_receivers: List[s
         config.validate_for_submit()
     except ValueError as err:
         raise serializers.ValidationError(gettext_lazy("BKSEC 配置不合法：%s") % err)
-    # 测试接收人：BKSEC 当前仅取首个作为测试处理人（契约兼容单值 operator）
-    test_operator = test_receivers[0] if test_receivers else ""
+    # 测试接收人：全部作为测试处理人写入 ${operator}（插件侧按 JSON 数组解析）
     try:
-        return build_plugin_constants(config, risk=risk, test_operator=test_operator)
+        return build_plugin_constants(config, risk=risk, test_operators=test_receivers)
     except Exception as err:  # NOCC:broad-except(测试发送即时报错，便于定位配置问题)
         raise serializers.ValidationError(gettext_lazy("字段模板渲染失败，请检查变量语法：%s") % err)
 

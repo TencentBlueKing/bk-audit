@@ -127,8 +127,9 @@ class SendTestTicket(TicketResourceMeta):
     name = gettext_lazy("发送测试工单")
 
     class RequestSerializer(serializers.Serializer):
+        # allow_empty=False：空列表会让 once_task 退化成正式单（测试标记取决于接收人是否非空）
         test_receivers = serializers.ListField(
-            label=gettext_lazy("测试接收人"), child=serializers.CharField(), required=True
+            label=gettext_lazy("测试接收人"), child=serializers.CharField(), required=True, allow_empty=False
         )
         # 测试发送必须指定样例风险单：不传则所有 {{ risk.xxx }} 渲染为空，测试单大量字段为空、失去验证意义
         risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
