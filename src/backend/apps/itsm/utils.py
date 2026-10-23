@@ -29,6 +29,29 @@ TICKET_FIELD_PREFIX = "ticket__"
 VALIDATE_TYPE_REQUIRE = "REQUIRE"
 VALIDATE_TYPE_EMPTY = "EMPTY"
 
+# V3 字段类型 -> JSON Schema type
+V3_FIELD_TYPE_TO_JSONSCHEMA_TYPE = {
+    "STRING": "string",
+    "TEXT": "string",
+    "RICHTEXT": "string",
+    "INT": "number",  # SDK 文档数字示例用 number（integer 也合法，但文档演示 number）
+    "DATE": "string",
+    "DATETIME": "string",
+    "SELECT": "string",
+    "RADIO": "string",
+    "MULTISELECT": "array",
+    "CHECKBOX": "array",
+    "MEMBERS": "array",  # 真实 V3 词是 MEMBERS（复数）
+    "FILE": "string",
+    "TABLE": "array",
+    "CUSTOMTABLE": "array",
+    "TREESELECT": "string",
+    "CASCADE": "string",
+    "TIME": "string",
+    "LINK": "string",
+    "BOOLEAN": "boolean",
+}
+
 # V4 表单组件类型（form_canvas_data.form_data.layout[].list[].type）-> V3 字段类型
 V4_LAYOUT_TYPE_TO_V3 = {
     "text": "STRING",
