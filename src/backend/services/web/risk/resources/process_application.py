@@ -106,6 +106,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
     def perform_request(self, validated_request_data):
         # 风险处理人不一定有处理套餐相关 action 权限，但风险单展示需要按场景加载套餐名称。
         scene_id = validated_request_data["scene_id"]
+        has_execution_records = validated_request_data.get("has_execution_records")
         process_applications = ProcessApplication.objects.all()
         process_applications = SceneScopeFilter.filter_queryset(
             queryset=process_applications,
@@ -113,6 +114,20 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             pk_field="id",
         )
+        # 按「是否有执行记录」过滤：执行记录即 action=AutoProcess 的 TicketNode（与执行记录列表口径一致，含测试单）
+        if has_execution_records is not None:
+            pa_ids = {
+                int(pa_id)
+                for pa_id in TicketNode.objects.filter(action="AutoProcess")
+                .exclude(process_result__pa_id__isnull=True)
+                .values_list("process_result__pa_id", flat=True)
+                if str(pa_id).isdigit()
+            }
+            process_applications = (
+                process_applications.filter(id__in=pa_ids)
+                if has_execution_records
+                else process_applications.exclude(id__in=pa_ids)
+            )
         return [
             {"id": pa.id, "name": pa.name, "sops_template_id": pa.sops_template_id, "is_enabled": pa.is_enabled}
             for pa in process_applications
@@ -416,7 +431,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         risk_map = {
             risk["risk_id"]: risk
             for risk in Risk.objects.filter(risk_id__in=[n.risk_id for n in nodes]).values(
-                "risk_id", "title", "status", "rule_id", "rule_version"
+                "risk_id", "title", "status", "risk_level", "rule_id", "rule_version"
             )
         }
         # 规则 → 套餐映射按 (rule_id, version) 精确匹配（规则改绑会出新版本）；
@@ -467,6 +482,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "risk_id": node.risk_id,
                     "risk_title": risk.get("title") or "",
                     "risk_status": risk.get("status") or "",
+                    "risk_level": risk.get("risk_level") or "",
                     "pa_id": pa_id_of_record or 0,
                     "pa_name": current_pa_name,
                     "operator": node.operator,
@@ -584,6 +600,7 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "risk_id": node.risk_id,
             "risk_title": (risk.title or "") if risk else "",
             "risk_status": (risk.status or "") if risk else "",
+            "risk_level": (risk.risk_level or "") if risk else "",
             # 参数信息
             "params": params,
             # 重试记录
