@@ -32,6 +32,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
+from apps.itsm.utils import is_itsm_v4_enabled
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
@@ -104,6 +105,10 @@ class RiskFlowBaseHandler:
     name = gettext_lazy("默认流转")
     allowed_status = []
     enable_notice = True
+
+    # 本次流转使用的 ITSM 版本：由建单类流转（如 ForApprove）在 process 中按部署开关确定后写入节点。
+    # 为 None 时沿用模型默认版本，供后续状态查询/撤销按同一版本处理。
+    itsm_version = None
 
     # 默认映射：status → display_status
     # 子类可覆盖以实现特殊映射（如 NewRisk 将 AWAIT_PROCESS 映射为"待处理"）
@@ -304,16 +309,20 @@ class RiskFlowBaseHandler:
         记录流转历史
         """
 
-        TicketNode.objects.create(
-            risk_id=self.risk.risk_id,
-            operator=self.operator,
-            current_operator=self.risk.current_operator,
-            action=self.__class__.__name__,
-            timestamp=datetime.datetime.now().timestamp(),
-            time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
-            process_result=process_result,
-            extra=self.build_history(process_result=process_result, *args, **kwargs),
-        )
+        create_params = {
+            "risk_id": self.risk.risk_id,
+            "operator": self.operator,
+            "current_operator": self.risk.current_operator,
+            "action": self.__class__.__name__,
+            "timestamp": datetime.datetime.now().timestamp(),
+            "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+            "process_result": process_result,
+            "extra": self.build_history(process_result=process_result, *args, **kwargs),
+        }
+        # 记录本次流转使用的 ITSM 版本：已有工单后续按该版本查询/撤销
+        if self.itsm_version:
+            create_params["itsm_version"] = self.itsm_version
+        TicketNode.objects.create(**create_params)
         self.risk.save(update_fields=["last_operate_time"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
@@ -547,8 +556,17 @@ class ForApprove(RiskFlowBaseHandler):
         if pa_config:
             self.init_process_application(pa_config["pa_id"])
 
-        # 未发起则发起单据
-        # 风险单中，状态是 for_approve 但是还没创建单据的风险单在 itsm_v4 迁移后统一使用v4创建单据
+        # 未发起则发起单据：按部署级开关选择版本
+        # - 已启用 ITSM V4（迁移后）=> 无单据的风险单统一用 V4 创建；
+        # - 未升级 ITSM V4 的部署环境 => 保留 V3 接口契约（approve_service_id 仍是 V3 服务 ID）。
+        if is_itsm_v4_enabled():
+            return self._create_v4_ticket()
+        return self._create_v3_ticket()
+
+    def _create_v4_ticket(self) -> dict:
+        """按 ITSM V4 创建审批单据（approve_service_id 为 workflow_key）。"""
+
+        self.itsm_version = ItsmVersion.V4
         ticket_info = resource.itsm.get_service_detail(
             id=self.process_application.approve_service_id, version=ItsmVersion.V4
         )
@@ -561,6 +579,27 @@ class ForApprove(RiskFlowBaseHandler):
             is_submit=True,
         )
         status = get_itsm_ticket_status(ticket["id"])
+        return {"ticket": ticket, "status": status}
+
+    def _create_v3_ticket(self) -> dict:
+        """按 ITSM V3 创建审批单据（approve_service_id 为 V3 服务 ID）。"""
+
+        self.itsm_version = ItsmVersion.V3
+        ticket_info = resource.itsm.get_service_detail(
+            id=self.process_application.approve_service_id, version=ItsmVersion.V3
+        )
+        form_data = self._build_approve_form_data(ticket_info)
+        fields = []
+        for field in ticket_info["fields"]:
+            field["value"] = form_data.get(field["key"], "")
+            fields.append(field)
+
+        ticket = api.bk_itsm.create_ticket(
+            service_id=self.process_application.approve_service_id,
+            creator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+            fields=fields,
+        )
+        status = api.bk_itsm.ticket_approve_result(sn=[ticket["sn"]])[0]
         return {"ticket": ticket, "status": status}
 
     @staticmethod
