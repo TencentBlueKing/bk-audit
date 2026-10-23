@@ -28,6 +28,7 @@ from django.db.models import Count, Max, QuerySet
 
 from core.lock import lock
 from services.web.query.constants import TaskEnum
+from services.web.query.exceptions import LogExportMaxCountError
 from services.web.query.export.data_fetcher import DataFetcher
 from services.web.query.export.data_processor import DataProcessor
 from services.web.query.export.export import CollectorLogExporter
@@ -80,9 +81,13 @@ def process_log_export_task(task_id: int = None):
 
     end_time = datetime.now()
     start_time = end_time - timedelta(seconds=settings.LOG_EXPORT_TASK_MAX_PERIODIC_TIME)
-    tasks: QuerySet[LogExportTask] = LogExportTask.objects.filter(updated_at__range=[start_time, end_time]).filter(
-        status__in=TaskEnum.get_schedule_status(),
-        repeat_times__lte=settings.PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES,
+    tasks: QuerySet[LogExportTask] = (
+        LogExportTask.objects.filter(updated_at__range=[start_time, end_time])
+        .filter(
+            status__in=TaskEnum.get_schedule_status(),
+            repeat_times__lte=settings.PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES,
+        )
+        .exclude(status=TaskEnum.FAILURE.value, total__gt=settings.LOG_EXPORT_MAX_COUNT)
     )
     if task_id:
         tasks = tasks.filter(id=task_id)
@@ -102,6 +107,13 @@ def process_one_log_export_task(task_id: int):
     # 更新任务状态
     task: Optional[LogExportTask] = LogExportTask.objects.filter(id=task_id).first()
     if not task or task.status not in TaskEnum.get_schedule_status():
+        return
+    if task.total > settings.LOG_EXPORT_MAX_COUNT:
+        # 配置下调可能使历史READY任务超量；落失败状态，避免永久待处理或重复count。
+        if task.status != TaskEnum.FAILURE.value:
+            task.update_task_failed(
+                str(LogExportMaxCountError(current_count=task.total, max_count=settings.LOG_EXPORT_MAX_COUNT))
+            )
         return
     task.update_task_running()
     # 执行导出任务

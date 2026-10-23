@@ -27,6 +27,7 @@ from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.translation import gettext_lazy
+from urllib3.util import Timeout
 
 from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
@@ -437,6 +438,14 @@ class QuerySyncResource(BkBaseResource):
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+    def before_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """应用本次HTTP连接/读取预算，内部参数不发给BKBase，也不修改共享TIMEOUT。"""
+        payload = kwargs.get("json") or {}
+        request_timeout = payload.pop("request_timeout", None)
+        if request_timeout is not None:
+            kwargs["timeout"] = Timeout(total=request_timeout)
+        return super().before_request(kwargs)
 
 
 class SafeQuerySyncResource(QuerySyncResource):
