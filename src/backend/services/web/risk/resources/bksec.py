@@ -217,7 +217,7 @@ class GetTaskStatus(TicketResourceMeta):
 
     两个入口二选一：
     - task_id：会话内轮询（测试发送返回值携带）；
-    - strategy_id：页面刷新后恢复——task_id 随内存丢失，改用策略 ID 定位本人最近一条测试单，
+    - risk_id：刷新后恢复——task_id 随内存丢失，改用样例风险单 ID 定位本人最近一条测试单，
       用户身份由后端从请求上下文获取，前端无法伪造。
 
     失败时附带失败提示（failure_hint）：透出失败节点的原始错误文本，取不到才回退通用提示。
@@ -231,19 +231,19 @@ class GetTaskStatus(TicketResourceMeta):
 
     class RequestSerializer(serializers.Serializer):
         task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), required=False, allow_blank=True)
-        strategy_id = serializers.CharField(label=gettext_lazy("策略ID"), required=False, allow_blank=True)
+        risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True)
 
         def validate(self, attrs):
             attrs = super().validate(attrs)
-            if not attrs.get("task_id") and not attrs.get("strategy_id"):
-                raise serializers.ValidationError(gettext_lazy("task_id 与 strategy_id 至少传一个"))
+            if not attrs.get("task_id") and not attrs.get("risk_id"):
+                raise serializers.ValidationError(gettext_lazy("task_id 与 risk_id 至少传一个"))
             return attrs
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data.get("task_id") or ""
         if not task_id:
-            # 刷新恢复：按策略 + 当前登录用户定位最近一条测试单，取其 task_id 继续走统一逻辑
-            node = self._find_latest_test_node(validated_request_data["strategy_id"])
+            # 刷新恢复：按样例风险单 + 当前登录用户定位最近一条测试单，取其 task_id 继续走统一逻辑
+            node = self._find_latest_test_node(validated_request_data["risk_id"])
             if node is None:
                 return {}
             task_id = str((node.process_result or {}).get("task", {}).get("task_id") or "")
@@ -282,19 +282,17 @@ class GetTaskStatus(TicketResourceMeta):
         return result
 
     @staticmethod
-    def _find_latest_test_node(strategy_id: str):
+    def _find_latest_test_node(risk_id: str):
         """
-        按策略定位当前登录用户最近一条测试单（刷新后恢复轮询用）
+        按样例风险单定位当前登录用户最近一条测试单（刷新后恢复轮询用）
 
-        用户身份取自请求上下文而非入参，前端无法伪造，也不会串到他人记录；
-        跨该策略下的风险单取时间最近的一条（Risk.objects 已自动过滤软删除）。
+        用户身份取自请求上下文而非入参，前端无法伪造，也不会串到他人记录。
         """
-        risk_ids = Risk.objects.filter(strategy_id=strategy_id).values_list("risk_id", flat=True)
         return (
             TicketNode.objects.filter(
                 is_test=True,
                 action="AutoProcess",
-                risk_id__in=risk_ids,
+                risk_id=risk_id,
                 operator=get_request_username(),
             )
             .order_by("-timestamp")
