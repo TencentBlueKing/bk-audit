@@ -17,8 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
-from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
+
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 NL2RISK_USER_PROMPT = """\
 当前时间：{current_time}
@@ -111,3 +114,94 @@ def extract_filter_conditions_from_ai_result(result: Any) -> Tuple[dict, str]:
     filter_conditions = extract_json_from_text(raw_text)
     message = "" if filter_conditions else raw_text.strip()
     return filter_conditions, message
+
+
+_END_TOLERANCE = timedelta(hours=2)
+_ALIGN_TOLERANCE = timedelta(minutes=10)
+_SIX_MONTH_DAYS = 182
+
+
+def _parse_filter_time(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    parsed = parse_datetime(str(value))
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        return timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _span_origin(start: datetime, reference: datetime) -> str:
+    """按年、月、天取最大单位。30 天一月；6 个月按日期组件的 182 天。"""
+
+    days = (reference.date() - start.date()).days
+    years = reference.year - start.year
+    if years >= 1 and (start.month, start.day) == (reference.month, reference.day):
+        return f"now-{years}y"
+    months = years * 12 + reference.month - start.month
+    if months >= 1 and start.day == reference.day:
+        return f"now-{months}M"
+    if days >= 365 and days % 365 == 0:
+        return f"now-{days // 365}y"
+    if days == _SIX_MONTH_DAYS:
+        return "now-6M"
+    if days >= 30 and days % 30 == 0:
+        return f"now-{days // 30}M"
+    return f"now-{days}d"
+
+
+def _relative_shortcut(start: datetime, reference: datetime) -> Optional[str]:
+    """结束于当前时间的窗口 → now-{N}h / now-{N}d / now-{N}M / now-{N}y。对不上返回 None。"""
+
+    delta = reference - start
+    if delta <= timedelta(0):
+        return None
+
+    same_clock = (
+        abs(
+            timedelta(hours=start.hour, minutes=start.minute, seconds=start.second)
+            - timedelta(hours=reference.hour, minutes=reference.minute, seconds=reference.second)
+        )
+        <= _ALIGN_TOLERANCE
+    )
+    midnight = start.hour == start.minute == start.second == 0
+    days = (reference.date() - start.date()).days
+    if days >= 1 and (midnight or same_clock):
+        return _span_origin(start, reference)
+
+    hours = round(delta.total_seconds() / 3600)
+    if hours >= 1 and abs(delta - timedelta(hours=hours)) <= _ALIGN_TOLERANCE:
+        if hours % 24 == 0:
+            return _span_origin(reference - timedelta(days=hours // 24), reference)
+        return f"now-{hours}h"
+    return None
+
+
+def attach_datetime_origin(
+    filter_conditions: Dict[str, Any], reference_time: Optional[datetime] = None
+) -> Dict[str, Any]:
+    """补 datetime_origin。只有相对到当前时间才写 ['now-{N}{unit}', 'now']。"""
+
+    raw_start = filter_conditions.get("start_time")
+    raw_end = filter_conditions.get("end_time")
+    start = _parse_filter_time(raw_start)
+    end = _parse_filter_time(raw_end)
+    if start is None or end is None:
+        filter_conditions.pop("datetime_origin", None)
+        return filter_conditions
+
+    tz = timezone.get_current_timezone()
+    if reference_time is None:
+        reference_time = timezone.localtime(timezone.now())
+    start = start.astimezone(tz).replace(microsecond=0)
+    end = end.astimezone(tz).replace(microsecond=0)
+    reference = reference_time.astimezone(tz).replace(microsecond=0)
+    if abs(end - reference) <= _END_TOLERANCE:
+        shortcut = _relative_shortcut(start, reference)
+        if shortcut:
+            filter_conditions["datetime_origin"] = [shortcut, "now"]
+            return filter_conditions
+
+    filter_conditions.pop("datetime_origin", None)
+    return filter_conditions
