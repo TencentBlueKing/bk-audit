@@ -78,6 +78,7 @@ export default {
     重试执行: 'Retry execution',
     确认重试: 'Confirm retry',
     重试: 'Retry',
+    '第 {n} 次': 'Attempt {n}',
     已发起重试: 'Retry started',
     执行成功: 'Execution succeeded',
     执行失败: 'Execution failed',

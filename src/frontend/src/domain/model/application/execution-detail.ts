@@ -26,6 +26,7 @@ export interface ExecutionAttempt {
   duration: string;
   executor: string;
   error: string;
+  nodes: ExecutionNode[];
 }
 
 export interface ExecutionNode {
@@ -43,6 +44,8 @@ export interface ExecutionParam {
 
 export default class ExecutionDetail {
   task_id: string;
+  sops_task_id: string;
+  sops_task_url: string;
   task_name: string;
   application_id: string;
   application_name: string;
@@ -56,12 +59,14 @@ export default class ExecutionDetail {
   risk_description: string;
   risk_found_at: string;
   strategy_id: string;
+  strategy_name: string;
   raw_event_id: string;
   trigger_type: ExecutionTrigger;
   started_at: string;
   ended_at: string;
   duration: string;
   status: ExecutionStatus;
+  error: string;
   executor: string;
   scene_id: string;
   params: ExecutionParam[];
@@ -69,6 +74,8 @@ export default class ExecutionDetail {
   attempts: ExecutionAttempt[];
   constructor(payload = {} as ExecutionDetail) {
     this.task_id = payload.task_id;
+    this.sops_task_id = payload.sops_task_id || '';
+    this.sops_task_url = payload.sops_task_url || '';
     this.task_name = payload.task_name;
     this.application_id = payload.application_id;
     this.application_name = payload.application_name;
@@ -82,12 +89,14 @@ export default class ExecutionDetail {
     this.risk_description = payload.risk_description || '';
     this.risk_found_at = payload.risk_found_at || '';
     this.strategy_id = payload.strategy_id || '';
+    this.strategy_name = payload.strategy_name || '';
     this.raw_event_id = payload.raw_event_id || '';
     this.trigger_type = payload.trigger_type;
     this.started_at = payload.started_at;
     this.ended_at = payload.ended_at || '';
     this.duration = payload.duration;
     this.status = payload.status;
+    this.error = payload.error || '';
     this.executor = payload.executor;
     this.scene_id = payload.scene_id || '';
     this.params = payload.params || [];
