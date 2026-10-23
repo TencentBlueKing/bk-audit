@@ -73,7 +73,7 @@ export const buildVariableGroups = (options: {
         token: item.token,
         label: item.label,
         sample: sampleOf(sample, item.token),
-        insertText: `{{${item.token}}}`,
+        insertText: `{{ risk.${item.token} }}`,
       })),
     },
   ];

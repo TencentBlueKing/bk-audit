@@ -200,9 +200,12 @@
                       placement="bottom-end"
                       theme="light"
                       trigger="click"
-                      width="480">
+                      width="480"
+                      @after-hidden="setTitleVarOpen(index, false)"
+                      @after-show="setTitleVarOpen(index, true)">
                       <button
                         class="reference-variable-btn"
+                        :class="{ 'is-open': titleVarOpen[index] }"
                         type="button"
                         @click="() => activateRiskTitleEdit(index)">
                         <audit-icon
@@ -355,6 +358,7 @@
     onDeactivated,
     onUnmounted,
     provide,
+    reactive,
     ref,
     watch,
   } from 'vue';
@@ -434,6 +438,10 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const titleVarOpen = reactive<Record<number, boolean>>({});
+  const setTitleVarOpen = (index: number, open: boolean) => {
+    titleVarOpen[index] = open;
+  };
 
   const router = useRouter();
   const route = useRoute();
@@ -1655,7 +1663,7 @@
         min-height: 32px;
         padding: 0 8px;
         font-size: 12px;
-        color: #63656e;
+        color: var(--audit-neutral-text-02);
         cursor: pointer;
         background: #fff;
         border: 1px solid #c4c6cc;
@@ -1714,7 +1722,7 @@
               outline: none;
               font-size: 12px;
               line-height: 30px;
-              color: #313238;
+              color: var(--audit-neutral-text-02);
               background: transparent;
             }
           }
@@ -1747,7 +1755,7 @@
           padding: 0 6px;
           font-size: var(--audit-font-size-sm);
           line-height: var(--audit-line-height-sm);
-          color: var(--audit-neutral-text-02);
+          color: var(--audit-brand-02);
           cursor: pointer;
           background: var(--audit-neutral-bg-04);
           border: 1px solid var(--audit-neutral-text-04);
@@ -1755,10 +1763,17 @@
           align-items: center;
           gap: var(--audit-space-4);
           flex-shrink: 0;
+
+          &.is-open {
+            border-top-color: var(--audit-brand-02);
+            border-right-color: var(--audit-brand-02);
+            border-bottom-color: var(--audit-brand-02);
+          }
         }
 
         .reference-variable-icon {
-          font-size: 16px;
+          font-size: var(--audit-font-size-lg);
+          color: var(--audit-brand-02);
         }
       }
     }

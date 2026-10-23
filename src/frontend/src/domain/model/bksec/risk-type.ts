@@ -15,12 +15,25 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import BksecRiskTypeField from './risk-type-field';
+
 export default class BksecRiskType {
-  id: number;
+  id: string;
   name: string;
-  constructor(payload: { id?: number; name?: string } = {}) {
-    this.id = payload.id ?? 0;
-    this.name = payload.name ?? '';
+  isFormal: boolean;
+  fields: BksecRiskTypeField[];
+  constructor(payload: {
+    id?: string | number;
+    name?: string;
+    risk_type_id?: string | number;
+    risk_type_name?: string;
+    is_formal?: boolean;
+    fields?: Array<Record<string, any>>;
+  } = {}) {
+    this.id = String(payload.risk_type_id ?? payload.id ?? '');
+    this.name = payload.risk_type_name ?? payload.name ?? '';
+    this.isFormal = payload.is_formal !== false;
+    this.fields = (payload.fields || []).map(item => new BksecRiskTypeField(item));
   }
 
   get label() {

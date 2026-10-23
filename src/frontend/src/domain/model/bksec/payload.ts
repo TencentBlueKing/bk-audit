@@ -15,24 +15,20 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import type { BksecConfigPayload } from './config';
+
 export interface PreviewRiskPayload {
   strategy_id?: string | number;
   strategy_type?: string;
 }
 
-export interface PreviewRiskItem {
-  id: string;
-  title: string;
-  source: 'real' | 'debug';
+export interface TicketPreviewRequest {
   risk_id: string;
-  created_at: string;
-  sample: Record<string, string>;
+  bksec_config: BksecConfigPayload;
 }
 
-export interface TicketPreviewPayload {
-  risk_type_id: number | null;
-  field_values: Record<string, string>;
-  strategy_name?: string;
-  opened_at: string;
-  risk: PreviewRiskItem | null;
+export interface TestSendRequest {
+  risk_id: string;
+  test_receivers: string[];
+  bksec_config: BksecConfigPayload;
 }

@@ -81,6 +81,7 @@
     ref="strategyDetailSidesliderRef"
     v-model:isShow="showDetail"
     :before-close="handleDetailBeforeClose"
+    ext-cls="strategy-detail-sideslider"
     :show-footer="false"
     show-header-slot
     title="策略详情"
@@ -2737,7 +2738,9 @@
 .strategy-detail-wrap {
   display: flex;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
+  flex: 1;
   flex-direction: column;
   background: #fff;
 
@@ -2745,6 +2748,31 @@
     flex: 1;
     min-height: 0;
   }
+}
+
+.strategy-detail-sideslider .bk-modal-content {
+  display: flex;
+  overflow: hidden !important;
+  flex-direction: column;
+}
+
+.strategy-detail-sideslider .bk-modal-content > div {
+  display: flex !important;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
+}
+
+.strategy-detail-sideslider .bk-sideslider-content,
+.strategy-detail-sideslider .audit-sideslider-content {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  flex: 1;
+  flex-direction: column;
 }
 </style>
 

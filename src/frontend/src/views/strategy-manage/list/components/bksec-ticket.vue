@@ -27,27 +27,38 @@
     <template v-else>
       <div class="bksec-detail-list">
         <div class="bksec-detail-row">
-          <span class="bksec-detail-label">{{ t('风险类型') }}：</span>
-          <span class="is-type">{{ riskTypeLabel }}</span>
+          <span class="bksec-detail-label">
+            <span
+              v-bk-tooltips="labelTip('risk-type', t('风险类型'))"
+              class="bksec-detail-label-text"
+              @mouseenter="syncLabelOverflow($event, 'risk-type')">{{ t('风险类型') }}：</span>
+          </span>
+          <span class="bksec-detail-value is-type">{{ riskTypeLabel }}</span>
         </div>
         <div
           v-for="field in fields"
           :key="field.id"
           class="bksec-detail-row">
-          <span class="bksec-detail-label">{{ field.label }}：</span>
-          <span>{{ displayValue(field.id) }}</span>
+          <span class="bksec-detail-label">
+            <span
+              v-bk-tooltips="labelTip(field.id, fieldName(field))"
+              class="bksec-detail-label-text"
+              @mouseenter="syncLabelOverflow($event, field.id)">{{ fieldName(field) }}：</span>
+          </span>
+          <span class="bksec-detail-value">{{ displayValue(field.id) }}</span>
         </div>
       </div>
     </template>
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue';
+  import { computed, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import BksecManageService from '@service/bksec-manage';
 
-  import type BksecRiskTypeField from '@model/bksec/risk-type-field';
+  import type BksecRiskType from '@model/bksec/risk-type';
+  import BksecRiskTypeField from '@model/bksec/risk-type-field';
   import type StrategyModel from '@model/strategy/strategy';
 
   interface Props {
@@ -57,68 +68,111 @@
   const props = defineProps<Props>();
   const { t } = useI18n();
   const fields = ref<BksecRiskTypeField[]>([]);
-  const typeName = ref('');
 
   const enabled = computed(() => !!props.data?.bksecEnabled);
   const riskTypeId = computed(() => props.data?.bksecRiskTypeId ?? null);
   const fieldValues = computed(() => props.data?.bksecFieldValues || {});
-  const riskTypeLabel = computed(() => (
-    riskTypeId.value ? `${typeName.value || ''}(${riskTypeId.value})`.replace(/^\(/, '(') : '--'
-  ));
+  const riskTypeLabel = computed(() => {
+    const name = props.data?.bksecRiskTypeName || '';
+    if (!riskTypeId.value && !name) return '--';
+    return name && riskTypeId.value ? `${name}(${riskTypeId.value})` : (name || String(riskTypeId.value));
+  });
+
+  const fieldName = (field: BksecRiskTypeField) => field.name || field.id;
 
   const displayValue = (fieldId: string) => {
     const value = fieldValues.value[fieldId];
     return value === undefined || value === null || value === '' ? '--' : value;
   };
 
+  const labelOverflowed = reactive<Record<string, boolean>>({});
+  const syncLabelOverflow = (event: MouseEvent, key: string) => {
+    const el = event.currentTarget as HTMLElement;
+    labelOverflowed[key] = el.scrollWidth > el.clientWidth;
+  };
+  const labelTip = (key: string, content: string) => ({
+    content,
+    disabled: !labelOverflowed[key],
+    delay: 80,
+  });
+
   watch(riskTypeId, async (id) => {
+    const stored = props.data?.bksecFieldMeta || [];
     if (!id) {
-      fields.value = [];
-      typeName.value = '';
+      fields.value = stored.map(item => new BksecRiskTypeField({
+        key: item.key,
+        name: item.name,
+        required: item.required,
+      }));
       return;
     }
-    const [types, nextFields] = await Promise.all([
-      BksecManageService.fetchRiskTypes(),
-      BksecManageService.fetchRiskTypeFields({ risk_type_id: Number(id) }),
-    ]);
-    typeName.value = types.find(item => item.id === Number(id))?.name || '';
-    fields.value = nextFields;
+    try {
+      const types = await BksecManageService.fetchRiskTypes();
+      const matched = types.find((item: BksecRiskType) => item.id === String(id));
+      fields.value = matched?.fields?.length
+        ? matched.fields
+        : stored.map(item => new BksecRiskTypeField({
+          key: item.key,
+          name: item.name,
+          required: item.required,
+        }));
+    } catch {
+      fields.value = stored.map(item => new BksecRiskTypeField({
+        key: item.key,
+        name: item.name,
+        required: item.required,
+      }));
+    }
   }, { immediate: true });
 </script>
 <style lang="postcss" scoped>
-.bksec-detail {
-  padding: 0 var(--audit-space-40);
-}
-
 .bksec-detail-empty {
   margin-top: var(--audit-space-24);
 }
 
 .bksec-detail-list {
-  width: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 124px) minmax(0, 1fr);
+  width: 1000px;
+  column-gap: var(--audit-space-8);
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
 }
 
 .bksec-detail-row {
-  display: flex;
-  gap: var(--audit-space-8);
-  align-items: flex-start;
+  display: contents;
+}
+
+.bksec-detail-label,
+.bksec-detail-value {
   min-height: 32px;
   padding: 6px 0;
-  font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-01);
 }
 
 .bksec-detail-label {
-  flex: 0 0 84px;
-  width: 84px;
-  overflow: visible;
+  max-width: 124px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bksec-detail-label-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--audit-neutral-text-02);
   text-align: right;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.is-type {
+.bksec-detail-value {
+  min-width: 0;
+  color: var(--audit-neutral-text-01);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.bksec-detail-value.is-type {
   color: var(--audit-neutral-text-02);
 }
 </style>

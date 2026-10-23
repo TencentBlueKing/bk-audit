@@ -42,20 +42,20 @@
         <div class="detail-section-title">
           {{ t('事件字段配置') }}
         </div>
-        <div class="table-scroll-x">
+        <div class="table-scroll-x is-fit">
           <div class="field-table event-field-table">
             <div class="table-head table-head-with-group">
               <div
                 class="group-cell head-group-cell"
-                :style="{ width: groupColumnWidth }">
+                :style="groupColumnStyle">
                 {{ t('事件分组') }}
               </div>
               <div class="data-head-cells">
                 <div
-                  v-for="(column, index) in eventDataColumns"
+                  v-for="column in eventDataColumns"
                   :key="column.key"
                   class="header-cell"
-                  :style="getColumnStyle(column, index, eventDataColumns.length)">
+                  :style="getEventColumnStyle(column)">
                   <span
                     v-bk-tooltips="{
                       disabled: !column.tips,
@@ -75,14 +75,14 @@
                 class="table-body-group">
                 <div
                   class="group-cell body-group-cell"
-                  :style="{ width: groupColumnWidth }">
+                  :style="groupColumnStyle">
                   {{ groupMap[groupKey] }}
                 </div>
                 <div class="data-body-rows">
                   <value-item
                     :all-tools-data="allToolsData"
                     :columns="eventDataColumns"
-                    fill-last-column
+                    lock-column-width
                     :item="getEventGroupRows(groupKey)" />
                 </div>
               </div>
@@ -127,19 +127,31 @@
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
 
-  const groupColumnWidth = computed(() => (locale.value === 'en-US' ? '140px' : '100px'));
+  const groupColumnWidth = computed(() => (locale.value === 'en-US' ? '140px' : '76px'));
+  const groupColumnStyle = computed(() => ({
+    width: groupColumnWidth.value,
+    flex: `0 0 ${groupColumnWidth.value}`,
+  }));
 
-  const getColumnStyle = (column: TableColumn, index?: number, total?: number) => {
-    if (index !== undefined && total !== undefined && index === total - 1) {
+  const getColumnStyle = (_column?: TableColumn, _index?: number, _total?: number) => ({
+    flex: '1 1 0',
+    minWidth: '88px',
+  });
+
+  const getEventColumnStyle = (column: TableColumn) => {
+    if (column.key === 'description') {
       return {
         flex: '1 1 auto',
-        minWidth: column.width || '200px',
+        width: 'auto',
+        minWidth: '0',
+        maxWidth: 'none',
       };
     }
-    const width = column.width || '100px';
+    const width = column.width || '88px';
     return {
       flex: `0 0 ${width}`,
       width,
+      minWidth: width,
       maxWidth: width,
     };
   };
@@ -199,7 +211,6 @@
       {
         key: 'description',
         label: t('字段说明'),
-        width: '240px',
         tips: t('在单据页，鼠标移入label，即可显示字段说明'),
       },
     ];
@@ -251,36 +262,39 @@
   }
 
   .detail-section-title {
-    margin-bottom: 16px;
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 22px;
-    color: #313238;
+    margin-bottom: var(--audit-space-12);
+    font-size: var(--audit-font-size-base);
+    font-weight: var(--audit-font-weight-bold);
+    line-height: var(--audit-line-height-base);
+    color: var(--audit-neutral-text-01);
   }
 
   .detail-section-divider {
-    margin: 24px 0;
-    border-top: 1px solid #f0f1f5;
+    margin: var(--audit-space-24) 0;
+    border-top: 1px solid var(--audit-neutral-bg-01);
   }
 
   .table-scroll-x {
     width: 100%;
     overflow-x: auto;
+
+    &.is-fit {
+      overflow-x: hidden;
+    }
   }
 
   .field-table {
     width: 100%;
-    color: #63656e;
-    border: 1px solid #dcdee5;
-    border-radius: 2px;
+    color: var(--audit-neutral-text-02);
+    border-radius: var(--audit-radius-control);
 
     @mixin cell-base {
       display: flex;
-      min-height: 42px;
-      padding: 0 12px;
-      font-size: 12px;
-      border-right: 1px solid #dcdee5;
-      border-bottom: 1px solid #dcdee5;
+      min-height: 36px;
+      padding: 0 var(--audit-space-12);
+      font-size: var(--audit-font-size-sm);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-sm);
       align-items: center;
       box-sizing: border-box;
     }
@@ -313,13 +327,10 @@
       .header-cell {
         @include cell-base;
 
-        font-weight: 500;
-        color: #313238;
-        background-color: #f5f7fa;
-
-        &:last-child {
-          border-right: none;
-        }
+        height: 36px;
+        color: var(--audit-neutral-text-01);
+        background-color: var(--audit-neutral-bg-03);
+        border-bottom: 1px solid var(--audit-neutral-border-01);
       }
     }
 
@@ -327,13 +338,22 @@
       @include cell-base;
 
       flex-shrink: 0;
-      color: #313238;
-      background-color: #f5f7fa;
+      color: var(--audit-neutral-text-01);
+      background-color: var(--audit-neutral-bg-03);
+      border-right: 1px solid var(--audit-neutral-border-01);
       justify-content: center;
     }
 
     .head-group-cell {
-      border-right: 1px solid #dcdee5;
+      height: 36px;
+      background-color: var(--audit-neutral-bg-03);
+      border-right: 1px solid var(--audit-neutral-border-01);
+      border-bottom: 1px solid var(--audit-neutral-border-01);
+    }
+
+    .body-group-cell {
+      background-color: var(--audit-neutral-bg-03);
+      border-right: 1px solid var(--audit-neutral-border-01);
     }
 
     .table-body-group {
@@ -351,35 +371,84 @@
       }
     }
 
+    &.event-field-table {
+      width: 100%;
+      min-width: 0;
+
+      .table-head-with-group,
+      .table-body-group {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .table-head-with-group .data-head-cells,
+      .table-body-group .data-body-rows {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .header-cell {
+        overflow: hidden;
+
+        > span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      .group-cell {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+      }
+
+      :deep(.table-row) {
+        width: 100%;
+        min-width: 0;
+      }
+
+      :deep(.cell) {
+        overflow: hidden;
+        min-width: 0;
+      }
+
+      :deep(.show-tooltips-text) {
+        max-width: 100%;
+      }
+    }
+
     .table-empty {
-      min-height: 42px;
-      font-size: 12px;
-      line-height: 42px;
-      color: #979ba5;
+      height: 36px;
+      font-size: var(--audit-font-size-sm);
+      line-height: 36px;
+      color: var(--audit-neutral-text-03);
       text-align: center;
-      border-bottom: 1px solid #dcdee5;
     }
   }
 
   :deep(.table-row) {
     display: flex;
     width: 100%;
-    min-height: 42px;
+    min-height: 36px;
+    background: var(--audit-neutral-bg-04);
 
     .cell {
       display: flex;
-      min-height: 42px;
-      padding: 0 12px;
-      font-size: 12px;
-      border-right: 1px solid #dcdee5;
-      border-bottom: 1px solid #dcdee5;
+      min-height: 36px;
+      padding: 0 var(--audit-space-12);
+      font-size: var(--audit-font-size-sm);
+      font-weight: var(--audit-font-weight-regular);
+      line-height: var(--audit-line-height-sm);
+      color: var(--audit-neutral-text-02);
       align-items: center;
       box-sizing: border-box;
-
-      &:last-child {
-        border-right: none;
-      }
     }
+  }
+
+  .field-table > :deep(.table-row:nth-child(odd)),
+  .data-body-rows :deep(.table-row:nth-child(even)) {
+    background: var(--audit-neutral-bg-02);
   }
 }
 </style>

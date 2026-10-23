@@ -180,9 +180,11 @@
     return field.value ?? '';
   };
 
+  const hasApproveServiceId = (id: unknown) => id != null && id !== '';
+
   const serviceName = computed(() => {
     const serviceId = props.data?.approve_service_id;
-    if (serviceId == null) return '--';
+    if (!hasApproveServiceId(serviceId)) return '--';
     const matched = (serviceList.value || []).find(item => String(item.id) === String(serviceId));
     return matched?.name || '--';
   });
@@ -231,7 +233,7 @@
   });
 
   watch(() => props.data?.approve_service_id, (id) => {
-    if (id == null) {
+    if (!hasApproveServiceId(id)) {
       detailData.value = null;
       return;
     }

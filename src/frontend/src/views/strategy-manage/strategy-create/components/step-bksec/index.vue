@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <div>
   <smart-action
     class="create-strategy-page"
     :offset-target="getSmartActionOffsetTarget">
@@ -74,8 +75,14 @@
             data-testid="bksec-type-error">
             {{ t('请选择风险类型') }}
           </div>
+          <div
+            v-if="typeLoadError"
+            class="bksec-error"
+            data-testid="bksec-type-load-error">
+            {{ t('风险类型加载失败') }}
+          </div>
         </div>
-        <bk-loading :loading="fieldLoading">
+        <bk-loading :loading="typeLoading">
           <div
             v-if="fields.length"
             class="bksec-field-grid"
@@ -91,8 +98,8 @@
                     class="is-required">*</span>
                   <span>{{ field.label }}</span>
                   <audit-icon
-                    v-if="field.tips"
-                    v-bk-tooltips="field.tips"
+                    v-if="field.id === 'target'"
+                    v-bk-tooltips="t('填写资产标识信息，例如资产类型为 account 时，填写对应账号')"
                     class="bksec-info-icon"
                     type="tishi" />
                 </div>
@@ -106,7 +113,7 @@
                   <button
                     class="bksec-var-trigger"
                     type="button"
-                    @click="activeFieldId = field.id">
+                    @click="activateFieldEdit(field.id)">
                     <audit-icon
                       class="bksec-var-icon"
                       type="bianliang" />
@@ -122,11 +129,29 @@
               <div
                 class="bksec-input"
                 :class="{ 'is-error': invalidFields.includes(field.id) }">
+                <button
+                  v-if="!isFieldEditing(field.id)"
+                  class="bksec-field-display"
+                  type="button"
+                  @click="activateFieldEdit(field.id)">
+                  <template
+                    v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
+                    :key="`${index}-${item.value}`">
+                    <span :class="{ 'is-variable': item.isVariable }">{{ item.value }}</span>
+                  </template>
+                  <span
+                    v-if="!fieldValues[field.id]"
+                    class="bksec-field-placeholder">
+                    {{ t('请输入{name}', { name: field.label }) }}
+                  </span>
+                </button>
                 <input
+                  v-else
+                  :ref="(el) => setFieldInputRef(field.id, el)"
                   class="bksec-native-input"
                   :placeholder="t('请输入{name}', { name: field.label })"
                   :value="fieldValues[field.id] || ''"
-                  @blur="rememberCaret(field.id, $event)"
+                  @blur="finishFieldEdit(field.id, $event)"
                   @click="rememberCaret(field.id, $event)"
                   @keyup="rememberCaret(field.id, $event)"
                   @input="updateField(field.id, $event)">
@@ -188,13 +213,16 @@
   <preview-sideslider
     v-model:is-show="showPreview"
     :field-values="fieldValues"
+    :fields="previewFields"
     :risk-type-id="riskTypeId"
+    :risk-type-name="riskTypeName"
     :strategy-id="strategyId"
     :strategy-name="strategyName"
     :strategy-type="strategyType" />
+  </div>
 </template>
 <script setup lang="ts">
-  import { computed, inject, onMounted, ref } from 'vue';
+  import { computed, inject, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -209,10 +237,16 @@
 
   import PreviewSideslider from './preview-sideslider.vue';
   import VariablePopover from './variable-popover.vue';
+  import {
+    insertDynamicFieldToken,
+    missingRequiredFields,
+    parseDynamicFieldValue,
+    retainFieldValues,
+  } from './form-rules';
   import { buildVariableGroups } from './variable-groups';
 
   import { STRATEGY_SHOW_SAVE_DRAFT_KEY } from '../../composables/use-strategy-config-lock';
-  import { getStrategyRouteNames } from '../../../utils/strategy-routes';
+  import { getStrategyRouteNames, isStrategyEditRoute } from '../../../utils/strategy-routes';
 
   interface Props {
     formData?: Record<string, any>;
@@ -223,6 +257,12 @@
     (e: 'previousStep', step: number, params: Record<string, any>): void;
     (e: 'saveCurrentStep', params: Record<string, any>): void;
     (e: 'saveDraft', params: Record<string, any>): void;
+    // 向导对每个步骤统一绑定，本步不使用，声明后避免多根节点无法继承
+    (e: 'cancel'): void;
+    (e: 'nextStep', step: number, params: Record<string, any>): void;
+    (e: 'resetHitConditions'): void;
+    (e: 'showPreview'): void;
+    (e: 'submitData'): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -238,22 +278,30 @@
   const strategyRoutes = getStrategyRouteNames(route);
   const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
 
-  const enabled = ref(false);
+  const enabled = ref(!!props.formData?.bksecEnabled);
   const expanded = ref(true);
-  const riskTypeId = ref<number | null>(null);
-  const fieldValues = ref<Record<string, string>>({});
+  const riskTypeId = ref<string | null>(
+    props.formData?.bksecRiskTypeId ? String(props.formData.bksecRiskTypeId) : null,
+  );
+  const riskTypeName = ref(props.formData?.bksecRiskTypeName || '');
+  const fieldValues = ref<Record<string, string>>({ ...(props.formData?.bksecFieldValues || {}) });
   const fields = ref<BksecRiskTypeField[]>([]);
   const typeError = ref(false);
   const fieldError = ref('');
   const invalidFields = ref<string[]>([]);
-  const fieldLoading = ref(false);
   const showPreview = ref(false);
   const carets = ref<Record<string, number>>({});
   const activeFieldId = ref('');
+  const editingFields = ref<Record<string, boolean>>({});
+  const fieldInputRefs = ref<Record<string, HTMLInputElement | null>>({});
   const sampleRisks = ref<BksecPreviewRisk[]>([]);
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
-  const { data: riskTypes, loading: typeLoading } = useRequest(BksecManageService.fetchRiskTypes, {
+  const {
+    data: riskTypes,
+    loading: typeLoading,
+    error: typeLoadError,
+  } = useRequest(BksecManageService.fetchRiskTypes, {
     defaultValue: [] as BksecRiskType[],
     manual: true,
   });
@@ -276,10 +324,35 @@
     sample: sampleRisks.value[sampleRisks.value.length - 1]?.sample || {},
   }));
 
+  const previewFields = computed(() => fields.value.map(field => ({
+    id: field.id,
+    name: field.name,
+  })));
+
+  const applyRiskType = (id: string | null) => {
+    if (!id) {
+      fields.value = [];
+      return;
+    }
+    const type = riskTypes.value.find((item: BksecRiskType) => item.id === id);
+    if (!type) return;
+    riskTypeName.value = type.name;
+    fields.value = type.fields;
+    fieldValues.value = retainFieldValues(fieldValues.value, type.fields);
+  };
+
   const buildParams = () => ({
     bksecEnabled: enabled.value,
     bksecRiskTypeId: riskTypeId.value,
+    bksecRiskTypeName: riskTypeName.value,
     bksecFieldValues: { ...fieldValues.value },
+    bksecFieldMeta: fields.value.length
+      ? fields.value.map(field => ({
+        key: field.id,
+        name: field.name,
+        required: field.required,
+      }))
+      : (props.formData?.bksecFieldMeta || []),
   });
 
   const handleSwitcher = (value: boolean) => {
@@ -291,29 +364,22 @@
     }
   };
 
-  const handleTypeChange = async (id: number | null) => {
+  const handleTypeChange = (id: string | number | null) => {
     typeError.value = false;
     fieldError.value = '';
     invalidFields.value = [];
-    if (!id) {
+    const nextId = id === null || id === undefined || id === '' ? null : String(id);
+    riskTypeId.value = nextId;
+    if (!nextId) {
       fields.value = [];
       return;
     }
-    fieldLoading.value = true;
-    try {
-      const nextFields = await BksecManageService.fetchRiskTypeFields({ risk_type_id: Number(id) });
-      const prev = fieldValues.value;
-      const next: Record<string, string> = {};
-      nextFields.forEach((field: BksecRiskTypeField) => {
-        if (prev[field.id]) next[field.id] = prev[field.id];
-      });
-      if (!next.operator) next.operator = '{{operator}}';
-      fieldValues.value = next;
-      fields.value = nextFields;
-    } finally {
-      fieldLoading.value = false;
-    }
+    applyRiskType(nextId);
   };
+
+  watch(riskTypes, () => {
+    if (riskTypeId.value) applyRiskType(riskTypeId.value);
+  });
 
   const updateField = (fieldId: string, event: Event) => {
     const input = event.target as HTMLInputElement;
@@ -327,16 +393,48 @@
     carets.value[fieldId] = input.selectionStart ?? input.value.length;
   };
 
+  const setFieldInputRef = (fieldId: string, element: unknown) => {
+    fieldInputRefs.value[fieldId] = element as HTMLInputElement | null;
+  };
+
+  const isFieldEditing = (fieldId: string) => (
+    editingFields.value[fieldId] ?? !fieldValues.value[fieldId]
+  );
+
+  const activateFieldEdit = (fieldId: string) => {
+    activeFieldId.value = fieldId;
+    editingFields.value[fieldId] = true;
+    nextTick(() => {
+      const input = fieldInputRefs.value[fieldId];
+      const position = carets.value[fieldId] ?? input?.value.length ?? 0;
+      input?.focus();
+      input?.setSelectionRange(position, position);
+    });
+  };
+
+  const finishFieldEdit = (fieldId: string, event: Event) => {
+    rememberCaret(fieldId, event);
+    editingFields.value[fieldId] = false;
+  };
+
   const insertToken = (insertText: string) => {
     const fieldId = activeFieldId.value;
     if (!fieldId) return;
     const current = fieldValues.value[fieldId] || '';
     const pos = carets.value[fieldId] ?? current.length;
+    const inserted = insertDynamicFieldToken(current, insertText, pos);
     fieldValues.value = {
       ...fieldValues.value,
-      [fieldId]: `${current.slice(0, pos)}${insertText}${current.slice(pos)}`,
+      [fieldId]: inserted.value,
     };
-    carets.value[fieldId] = pos + insertText.length;
+    carets.value[fieldId] = inserted.caret;
+    editingFields.value[fieldId] = true;
+    invalidFields.value = invalidFields.value.filter(id => id !== fieldId);
+    nextTick(() => {
+      const input = fieldInputRefs.value[fieldId];
+      input?.focus();
+      input?.setSelectionRange(inserted.caret, inserted.caret);
+    });
   };
 
   const validate = () => {
@@ -349,7 +447,7 @@
       messageError(t('请选择风险类型'));
       return false;
     }
-    const missing = fields.value.filter(field => field.required && !String(fieldValues.value[field.id] || '').trim());
+    const missing = missingRequiredFields(fields.value, fieldValues.value);
     if (missing.length) {
       invalidFields.value = missing.map(field => field.id);
       fieldError.value = `${t('请填写')}${missing.map(field => field.label).join('、')}`;
@@ -374,14 +472,8 @@
   };
 
   onMounted(async () => {
-    enabled.value = !!props.formData?.bksecEnabled;
-    riskTypeId.value = props.formData?.bksecRiskTypeId ?? null;
-    fieldValues.value = { ...(props.formData?.bksecFieldValues || {}) };
-    if (riskTypeId.value) await handleTypeChange(riskTypeId.value);
-    sampleRisks.value = await BksecManageService.fetchPreviewRiskList({
-      strategy_id: strategyId.value,
-      strategy_type: props.strategyType || props.formData?.strategy_type,
-    });
+    if (!isStrategyEditRoute(route.name)) return;
+    sampleRisks.value = await BksecManageService.fetchEditPreviewRisks(strategyId.value);
   });
 </script>
 <style lang="postcss" scoped>
@@ -399,7 +491,7 @@
   font-size: var(--audit-font-size-base);
   font-weight: var(--audit-font-weight-bold);
   line-height: var(--audit-line-height-base);
-  color: var(--audit-neutral-text-01);
+  color: var(--audit-neutral-text-02);
   align-items: center;
 }
 
@@ -427,7 +519,7 @@
 
 .bksec-body {
   padding: var(--audit-space-16) var(--audit-space-24) var(--audit-space-24);
-  border-top: 1px solid var(--audit-neutral-border-02);
+  border-top: 1px solid var(--audit-neutral-border-01);
 }
 
 .bksec-title-text {
@@ -439,6 +531,7 @@
   margin-left: 13px;
   font-size: var(--audit-font-size-sm);
   font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-sm);
   color: var(--audit-neutral-text-02);
   align-items: center;
   gap: var(--audit-space-4);
@@ -462,17 +555,17 @@
   line-height: var(--audit-line-height-sm);
   color: var(--audit-neutral-text-02);
   align-items: center;
-  gap: var(--audit-space-4);
+  gap: 2px;
 }
 
 .bksec-label {
-  margin-bottom: var(--audit-space-8);
+  margin-bottom: 6px;
 }
 
 .bksec-field-head {
   display: flex;
   height: 20px;
-  margin-bottom: var(--audit-space-8);
+  margin-bottom: 6px;
   align-items: center;
   justify-content: space-between;
   gap: var(--audit-space-8);
@@ -484,6 +577,20 @@
 
 .bksec-type-select {
   width: 100%;
+}
+
+.bksec-type-select :deep(.bk-select-trigger) {
+  border-color: var(--audit-neutral-text-04);
+}
+
+.bksec-type-select :deep(.bk-input--text) {
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
+  color: var(--audit-neutral-text-02);
+}
+
+.bksec-type-select :deep(.bk-input--text::placeholder) {
+  color: var(--audit-neutral-text-04);
 }
 
 .bksec-type-select.is-error :deep(.bk-select-trigger) {
@@ -500,7 +607,7 @@
   display: flex;
   height: 32px;
   background: var(--audit-neutral-bg-04);
-  border: 1px solid var(--audit-neutral-border-01);
+  border: 1px solid var(--audit-neutral-text-04);
   border-radius: var(--audit-radius-control);
   align-items: center;
 }
@@ -509,13 +616,43 @@
   border-color: var(--audit-danger-02);
 }
 
+.bksec-field-display {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: var(--audit-space-4) var(--audit-space-8);
+  overflow: hidden;
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
+  color: var(--audit-neutral-text-02);
+  text-align: left;
+  cursor: text;
+  background: transparent;
+  border: 0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bksec-field-display .is-variable {
+  padding: 0 var(--audit-space-4);
+  margin: 0 1px;
+  background: var(--audit-neutral-bg-01);
+  border-radius: var(--audit-radius-control);
+}
+
+.bksec-field-placeholder {
+  color: var(--audit-neutral-text-04);
+}
+
 .bksec-native-input {
   height: 100%;
   min-width: 0;
   padding: 0 var(--audit-space-8);
   font-size: var(--audit-font-size-sm);
   line-height: var(--audit-line-height-sm);
-  color: var(--audit-neutral-text-01);
+  color: var(--audit-neutral-text-02);
   background: transparent;
   border: 0;
   outline: none;
