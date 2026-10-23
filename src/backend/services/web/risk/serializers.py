@@ -1476,6 +1476,10 @@ class ListAllProcessApplicationsReqSerializer(serializers.Serializer):
     """处理套餐 all 接口请求参数（按场景过滤）"""
 
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    # 不传表示不过滤；True 只返回有执行记录的套餐，False 只返回没有执行记录的套餐
+    has_execution_records = serializers.BooleanField(
+        label=gettext_lazy("是否有执行记录"), required=False, allow_null=True, default=None
+    )
 
 
 class ListRiskBriefResponseSerializer(serializers.ModelSerializer):
