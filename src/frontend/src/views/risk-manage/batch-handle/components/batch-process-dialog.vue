@@ -12,7 +12,7 @@
       <p class="batch-process-hint">
         {{ t('已选择') }} {{ count }} {{ t('条风险，提交后将按相同处理方法统一执行。') }}
       </p>
-      <audit-form
+      <bk-form
         ref="formRef"
         form-type="vertical"
         :model="formData"
@@ -192,7 +192,7 @@
               multiple />
           </bk-form-item>
         </template>
-      </audit-form>
+      </bk-form>
       <div
         v-if="failures.length"
         class="batch-process-failures"
@@ -225,7 +225,7 @@
 
 <script setup lang="ts">
   import DOMPurify from 'dompurify';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -463,14 +463,9 @@
     formRef.value?.clearValidate?.();
   };
 
-  let previousChangeConfirm: boolean | 'popover' = false;
-
   const handleClosed = () => {
     const shouldRefresh = hasProcessed.value;
     resetForm();
-    nextTick(() => {
-      window.changeConfirm = previousChangeConfirm;
-    });
     if (shouldRefresh) {
       emit('success');
     }
@@ -512,7 +507,6 @@
   });
 
   const open = () => {
-    previousChangeConfirm = window.changeConfirm;
     resetForm();
     loadPackages();
     if (!memberVariables.value.length) {
