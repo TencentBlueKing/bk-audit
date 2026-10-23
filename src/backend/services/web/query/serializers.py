@@ -304,6 +304,8 @@ class QuerySearchConditionSerializer(serializers.Serializer):
         allow = COLLECT_SEARCH_CONFIG.judge_operator(field_name, attrs["field"]["keys"], attrs["operator"])
         if not allow:
             raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
+        if attrs["operator"] == QueryConditionOperator.BETWEEN.value and len(attrs["filters"]) != 2:
+            raise ValidationError(message=gettext("BETWEEN 操作符必须提供两个筛选值"))
         return attrs
 
 
