@@ -114,6 +114,7 @@ from services.web.risk.exceptions import (
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.nl2riskfilter import (
+    attach_datetime_origin,
     build_nl2risk_user_message,
     extract_filter_conditions_from_ai_result,
 )
@@ -1747,6 +1748,7 @@ class NL2RiskFilter(RiskMeta):
                 },
             ):
                 filter_conditions, message = extract_filter_conditions_from_ai_result(result)
+            filter_conditions = attach_datetime_origin(filter_conditions)
             response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
 
             status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED
