@@ -49,6 +49,11 @@ from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeType
 from services.web.risk.bksec.config import BkSecConfig
+from services.web.risk.bksec.constants import (
+    BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_FIELD_RISK_ASSET,
+    BKSEC_FIELD_TARGET_TYPE,
+)
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS, EventMappingFields
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import (
@@ -574,6 +579,19 @@ class StrategySerializer(serializers.Serializer):
             raise serializers.ValidationError(gettext("BKSEC 安全工单配置不合法：%s") % err)
         except Exception as err:  # NOCC:broad-except(配置结构错误)
             raise serializers.ValidationError(gettext("BKSEC 安全工单配置结构不合法：%s") % err)
+
+        # 回写归一化结果：target/target_type/operator 允许只由 field_mappings 提供，
+        # 解析时会自动同步到独立字段（独立字段优先，为空才取 field_mappings）。
+        # 落库前把同步后的值写回，保证「存储 / 详情展示 / 运行时解析」三者一致，
+        # 否则详情会看到独立字段为空、field_mappings 有值的割裂状态。
+        for field in (BKSEC_FIELD_RISK_ASSET, BKSEC_FIELD_TARGET_TYPE, BKSEC_FIELD_INITIAL_OWNER):
+            value = str(getattr(config, field, "") or "")
+            bksec_config[field] = value
+            # 同步 field_mappings 中的同名项：它同时会渲染进事件体 fields，
+            # 若与 SOPS 独立入参取值不同，会出现「入参与事件体不一致」
+            for mapping in bksec_config.get("field_mappings") or []:
+                if isinstance(mapping, dict) and mapping.get("key") == field:
+                    mapping["value"] = value
 
     def _validate_strategy_data_permission(self, validated_request_data: dict):
         """
