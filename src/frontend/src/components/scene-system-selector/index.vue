@@ -36,7 +36,8 @@
           v-if="selectedItem"
           class="type-tag"
           :class="[`type-${selectedItem.type}`]">
-          {{ getTypeLabel(selectedItem.type) }}
+          <span class="type-tag-full">{{ getTypeLabel(selectedItem.type) }}</span>
+          <span class="type-tag-short">{{ getTypeShortLabel(selectedItem.type) }}</span>
         </bk-tag>
         <show-tooltips-text
           class="selector-text"
@@ -297,6 +298,15 @@
       system: t('系统'),
     };
     return labelMap[type] || type;
+  };
+
+  const getTypeShortLabel = (type: string) => {
+    const shortMap: Record<string, string> = {
+      aggregate: '聚',
+      scene: '场',
+      system: '系',
+    };
+    return shortMap[type] || getTypeLabel(type).slice(0, 1);
   };
 
   // 判断是否选中
@@ -852,6 +862,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
   height: 32px;
   padding: 0 10px;
   cursor: pointer;
@@ -895,6 +906,7 @@
     display: flex;
     flex: 1;
     align-items: center;
+    min-width: 0;
     overflow: hidden;
 
     .type-tag {
@@ -907,6 +919,10 @@
       color: #fff;
       border: none;
       border-radius: 2px;
+
+      .type-tag-short {
+        display: none;
+      }
 
       &.type-aggregate {
         background-color: #ba69f4;
@@ -942,6 +958,16 @@
       transform: rotate(180deg);
     }
   }
+}
+
+:global(.audit-navigation-side.is-side-collapsed) .type-tag .type-tag-full {
+  display: none;
+}
+
+:global(.audit-navigation-side.is-side-collapsed) .type-tag .type-tag-short {
+  display: inline;
+  font-size: 12px;
+  line-height: 22px;
 }
 
 .scene-system-dropdown {

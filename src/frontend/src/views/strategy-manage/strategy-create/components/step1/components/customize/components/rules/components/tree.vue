@@ -51,14 +51,12 @@
               <span
                 v-if="'self_name' in data"
                 class="field-type-span">
-                {{ data.self_name }}
-                <span class="subscript">/</span>
-                {{ data.self_key_name }}
+                {{ formatStrictRuleTreeSelfLabel(data) }}
               </span>
               <span
                 v-else
                 class="field-type-span">
-                {{ getAggregateName(data) }}{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}
+                {{ getAggregateName(data) }}{{ formatStrictRuleTreeFieldLabel(data) }}
                 <span
                   v-for="(field, fieldIndex) in data?.fieldTypeValueAr"
                   :key="fieldIndex">
@@ -71,15 +69,13 @@
             <span v-else>
               <span
                 v-if="'textValue' in data"
-                class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name
-                }}
+                class="field-type-span">
+                {{ getAggregateName(data) }}{{ formatStrictFieldDisplayLabel(data.display_name, data.raw_name) }}
               </span>
               <span
                 v-else-if="'self_name' in data"
                 class="field-type-span">
-                {{ data.self_name }}
-                <span class="subscript">/</span>
-                {{ data.self_key_name }}
+                {{ formatStrictRuleTreeSelfLabel(data) }}
               </span>
 
               <span
@@ -87,10 +83,8 @@
                 class="field-type-span">
                 {{ getAggregateName(data) }}
                 <span v-if="('isStrategyEdit' in data)">
-                  {{ data.parent_display_name }}{{ data.parent_raw_name ?
-                    `(${data.parent_raw_name})` : ``
-                  }}</span>
-                <span v-else>{{ formatFieldDisplayLabel(data.display_name, data.raw_name) }}</span>
+                  {{ formatStrictFieldDisplayLabel(data.parent_display_name, data.parent_raw_name) }}</span>
+                <span v-else>{{ formatStrictRuleTreeFieldLabel(data) }}</span>
 
                 <span
                   v-for="(field, fieldIndex) in data?.keys"
@@ -153,13 +147,19 @@
                   :type="getFieldTypeIcon(data)" />
                 <span v-if="configType === 'LinkTable'">
                   <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
-                  <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
-                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
+                  <span class="field-type-span">
+                    {{ getAggregateName(data) }}{{
+                      formatStrictFieldDisplayLabel(data.parent_display_name, data.parent_raw_name)
+                    }}
+                  </span>
                   <span class="field-type-span">/</span>
                 </span>
                 <span v-else>
-                  <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
-                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
+                  <span class="field-type-span">
+                    {{ getAggregateName(data) }}{{
+                      formatStrictFieldDisplayLabel(data.parent_display_name, data.parent_raw_name)
+                    }}
+                  </span>
                 </span>
               </div>
 
@@ -237,7 +237,14 @@
   import useRequest from '@hooks/use-request';
 
   import { isStrategyEditRoute } from '../../../../../../../../utils/strategy-routes';
-  import { formatFieldDisplayLabel, formatHitConditionFieldLabel } from '../../../../../../../utils/strategy-protocol';
+  import {
+    formatFieldDisplayLabel,
+    formatHitConditionFieldLabel,
+    formatStrictFieldDisplayLabel,
+    formatStrictRuleTreeFieldLabel,
+    formatStrictRuleTreeHitConditionLabel,
+    formatStrictRuleTreeSelfLabel,
+  } from '../../../../../../../utils/strategy-protocol';
 
 
   interface Emits {
@@ -353,7 +360,11 @@
       const rawName = String(node.raw_name || '');
       const displayName = String(node.display_name || '');
       const selected = String(node.selectedValue || '');
-      return rawName.includes(text) || displayName.includes(text) || selected.includes(text);
+      const visible = formatStrictRuleTreeFieldLabel(node);
+      return rawName.includes(text)
+        || displayName.includes(text)
+        || selected.includes(text)
+        || visible.includes(text);
     };
     const searchInTree = (nodes: Record<string, any>[]): Record<string, any>[] => {
       const result: Record<string, any>[] = [];
@@ -450,11 +461,13 @@
   // 选择
   const handleNodeClick = (nodes: Record<string, any>) => {
     if (!nodes.isEdit) {
-      const label = 'self_name' in nodes
+      const savedLabel = 'self_name' in nodes
         ? `${nodes.self_name}/${nodes.self_key_name}`
         : formatHitConditionFieldLabel(nodes, props.aggregateList);
-      selectedValue.value = label;
-      emits('handleNodeSelectedValue', nodes, label);
+      selectedValue.value = 'self_name' in nodes
+        ? formatStrictRuleTreeSelfLabel(nodes)
+        : formatStrictRuleTreeHitConditionLabel(nodes, props.aggregateList);
+      emits('handleNodeSelectedValue', nodes, savedLabel);
       (selectRef.value as { hidePopover?: () => void } | null)?.hidePopover?.();
     }
   };
@@ -541,13 +554,15 @@
     }
     const field = props.condition?.condition?.field;
     if (field && typeof field === 'object' && ('self_name' in field)) {
-      selectedValue.value = `${field.self_name}/${field.self_key_name}`;
+      selectedValue.value = formatStrictRuleTreeSelfLabel(field);
     } else if (field?.raw_name) {
-      const matched = (props.configData || []).find((item: Record<string, any>) => (
-        item.raw_name === field.raw_name
-        && (item.aggregate || null) === (field.aggregate || null)
-      ));
-      selectedValue.value = formatHitConditionFieldLabel(
+      const matched = Object.prototype.hasOwnProperty.call(field, 'alias')
+        ? undefined
+        : (props.configData || []).find((item: Record<string, any>) => (
+          item.raw_name === field.raw_name
+          && (item.aggregate || null) === (field.aggregate || null)
+        ));
+      selectedValue.value = formatStrictRuleTreeHitConditionLabel(
         matched || field,
         props.aggregateList,
       );

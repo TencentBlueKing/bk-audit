@@ -19,11 +19,20 @@ export default class BksecRiskTypeField {
   id: string;
   name: string;
   required: boolean;
+  type: string;
   tips: string;
-  constructor(payload: { id?: string; name?: string; required?: boolean; tips?: string } = {}) {
-    this.id = payload.id ?? '';
+  constructor(payload: {
+    id?: string;
+    key?: string;
+    name?: string;
+    required?: boolean;
+    type?: string;
+    tips?: string;
+  } = {}) {
+    this.id = payload.key ?? payload.id ?? '';
     this.name = payload.name ?? '';
     this.required = !!payload.required;
+    this.type = payload.type || 'string';
     this.tips = payload.tips || '';
   }
 

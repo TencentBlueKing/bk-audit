@@ -43,27 +43,29 @@
         <span class="bksec-var-count">{{ filteredCount(group.key) }}</span>
       </button>
     </div>
-    <div
-      v-if="!activeItems.length"
-      class="bksec-var-empty"
-      data-testid="bksec-variable-empty">
-      {{ t('暂无匹配的变量') }}
+    <div class="bksec-var-list">
+      <div
+        v-if="!activeItems.length"
+        class="bksec-var-empty"
+        data-testid="bksec-variable-empty">
+        {{ t('暂无匹配的变量') }}
+      </div>
+      <button
+        v-for="item in activeItems"
+        :key="`${activeKey}-${item.token}`"
+        class="bksec-var-row"
+        type="button"
+        @click="emit('insert', item.insertText)">
+        <span class="bksec-var-name">
+          <span class="bksec-var-label">{{ item.label }}</span>
+          <span class="bksec-var-token">{{ item.insertText }}</span>
+        </span>
+        <span
+          v-if="showSample"
+          class="bksec-var-sample">{{ item.sample || '-' }}</span>
+        <span class="bksec-var-insert">{{ t('引用') }}</span>
+      </button>
     </div>
-    <button
-      v-for="item in activeItems"
-      :key="`${activeKey}-${item.token}`"
-      class="bksec-var-row"
-      type="button"
-      @click="emit('insert', item.insertText)">
-      <span class="bksec-var-name">
-        <span class="bksec-var-label">{{ item.label }}</span>
-        <span class="bksec-var-token">{{ item.insertText }}</span>
-      </span>
-      <span
-        v-if="showSample"
-        class="bksec-var-sample">{{ item.sample || '-' }}</span>
-      <span class="bksec-var-insert">{{ t('引用') }}</span>
-    </button>
   </div>
 </template>
 <script setup lang="ts">
@@ -116,10 +118,18 @@
 </script>
 <style lang="postcss" scoped>
 .bksec-var-panel {
+  display: flex;
+  flex-direction: column;
   width: 480px;
   max-height: 360px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--audit-neutral-bg-04);
+}
+
+.bksec-var-list {
+  min-height: 0;
+  overflow: auto;
+  flex: 1 1 auto;
 }
 
 .bksec-var-search {
@@ -128,6 +138,7 @@
   border-bottom: 1px solid var(--audit-neutral-border-01);
   align-items: center;
   gap: var(--audit-space-8);
+  flex-shrink: 0;
 }
 
 .bksec-var-search-icon {
@@ -158,6 +169,7 @@
   margin: var(--audit-space-4) var(--audit-space-8) 0;
   background: var(--audit-neutral-bg-01);
   border-radius: var(--audit-radius-control);
+  flex-shrink: 0;
 }
 
 .bksec-var-tab {

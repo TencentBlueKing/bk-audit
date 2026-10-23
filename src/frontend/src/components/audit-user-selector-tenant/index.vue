@@ -270,6 +270,17 @@
       border-color: #f0f1f5;
     }
 
+    /* 聚焦时库会给当前标签加 active，改成蓝底蓝边；保持和未聚焦一致 */
+    .user-tag.user-tag.active {
+      color: #63656e;
+      background-color: #f0f1f5;
+      border-color: #979ba54d;
+    }
+
+    .user-tag.user-tag.active:hover {
+      background-color: #dcdee5;
+    }
+
     /* 离职/不存在：灰色 tag + 失效字色 #c4c6cc */
     .custom-tag.is-resigned {
       color: #c4c6cc;

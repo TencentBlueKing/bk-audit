@@ -3,6 +3,8 @@
 import _ from 'lodash';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 
+import { buildBksecConfig, readBksecFormState } from '@model/bksec/config';
+
 import { getStrategyBindingScope } from '../../utils/strategy-routes';
 
 import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
@@ -233,6 +235,66 @@ export const formatFieldDisplayLabel = (displayName?: string, rawName?: string) 
   return `${normalized}${suffix}`;
 };
 
+/** 展示层去掉已保存的聚合后缀，避免「显示名(字段名)_COUNT」再次拼接 */
+const stripSavedAggregateSuffix = (displayName: string, rawName: string) => {
+  const match = displayName.match(HIT_CONDITION_AGGREGATE_RE);
+  if (!match) return displayName;
+  const base = displayName.slice(0, -match[0].length);
+  if (!base) return displayName;
+  if (rawName && (base === rawName || base.endsWith(`(${rawName})`))) return base;
+  return displayName;
+};
+
+/** 仅用于下拉展示：显示名(字段名)；缺字段名时显示名(显示名)，缺显示名时字段名(字段名) */
+export const formatStrictFieldDisplayLabel = (displayName?: string, rawName?: string) => {
+  const raw = String(rawName || '').trim();
+  const name = stripSavedAggregateSuffix(String(displayName || '').trim(), raw);
+  const label = name || raw;
+  const key = raw || name;
+  if (!label) return '';
+  const suffix = `(${key})`;
+  return label.endsWith(suffix) ? label : `${label}${suffix}`;
+};
+
+type RuleTreeDisplayField = {
+  alias?: unknown;
+  display_name?: unknown;
+  keys?: unknown[];
+  label?: unknown;
+  parent_display_name?: unknown;
+  parent_raw_name?: unknown;
+  raw_name?: unknown;
+  self_key_name?: unknown;
+  self_name?: unknown;
+  value?: unknown;
+};
+
+/** 规则树节点展示；alias 节点用 value 作为展示原始标识，不改节点 raw_name */
+export const formatStrictRuleTreeFieldLabel = (field: RuleTreeDisplayField) => {
+  const isAliasField = Object.prototype.hasOwnProperty.call(field, 'alias');
+  const rawName = isAliasField
+    ? (field.value || field.keys?.[0] || field.raw_name)
+    : field.raw_name;
+  const displayName = isAliasField
+    ? (field.label || field.alias || field.display_name)
+    : field.display_name;
+  return formatStrictFieldDisplayLabel(String(displayName || ''), String(rawName || ''));
+};
+
+/** 历史 self 回显按父子原始标识重新格式化，不信任旧拼接结果 */
+export const formatStrictRuleTreeSelfLabel = (field: RuleTreeDisplayField) => {
+  const parentRaw = String(field.parent_raw_name || field.raw_name || '');
+  const parentDisplay = String(field.self_name || field.parent_display_name || field.display_name || '');
+  const childRaw = String(field.keys?.[0] || field.value || '');
+  const hasExplicitAlias = Object.prototype.hasOwnProperty.call(field, 'alias');
+  const childDisplay = String(hasExplicitAlias
+    ? (field.alias || field.label || '')
+    : (field.label || ''));
+  const parentLabel = formatStrictFieldDisplayLabel(parentDisplay, parentRaw);
+  if (!childRaw) return parentLabel;
+  return `${parentLabel}/${formatStrictFieldDisplayLabel(childDisplay, childRaw)}`;
+};
+
 /** 命中条件字段存值：中文名(raw_name)_COUNT，不带 [计数] 前缀 */
 export const formatHitConditionFieldBase = (field?: HitConditionField | null) => {
   if (!field) return '';
@@ -258,6 +320,39 @@ export const formatHitConditionFieldLabel = (
   ));
   const label = item?.label || AGGREGATE_TYPE_LABELS[aggregate.toUpperCase()] || aggregate;
   return `[${label}] ${base}`;
+};
+
+/** 下拉选中框展示：聚合只加 [计数] 前缀，不把 _COUNT 拼进展示文案 */
+export const formatStrictHitConditionFieldLabel = (
+  field?: HitConditionField | null,
+  aggregateList: Array<{ label?: string; value?: unknown }> = [],
+) => {
+  if (!field) return '';
+  const base = formatStrictFieldDisplayLabel(field.display_name, field.raw_name);
+  const aggregate = resolveHitConditionAggregate(field);
+  if (!aggregate) return base;
+  const item = aggregateList.find(agg => (
+    String(agg.value || '').toUpperCase() === aggregate.toUpperCase()
+  ));
+  const label = item?.label || AGGREGATE_TYPE_LABELS[aggregate.toUpperCase()] || aggregate;
+  return `[${label}] ${base}`;
+};
+
+/** 规则树命中条件展示；alias 节点以 value 为展示 raw，不改节点提交字段 */
+export const formatStrictRuleTreeHitConditionLabel = (
+  field?: (HitConditionField & RuleTreeDisplayField) | null,
+  aggregateList: Array<{ label?: string; value?: unknown }> = [],
+) => {
+  if (!field) return '';
+  const isAliasField = Object.prototype.hasOwnProperty.call(field, 'alias');
+  if (!isAliasField) {
+    return formatStrictHitConditionFieldLabel(field, aggregateList);
+  }
+  return formatStrictHitConditionFieldLabel({
+    ...field,
+    display_name: String(field.label || field.alias || field.display_name || ''),
+    raw_name: String(field.value || field.keys?.[0] || ''),
+  }, aggregateList);
 };
 
 export const SCHEDULE_PERIOD_VALUES = ['hour', 'day'] as const;
@@ -787,33 +882,12 @@ export const findSelectField = <T extends SelectFieldLike>(
   fieldKey?: string | null,
 ) => select.find(item => isSameSelectField(item, fieldKey));
 
-const formatSelectFieldLabel = (displayName: string, rawName: string) => (
-  formatFieldDisplayLabel(displayName, rawName)
-);
-
-/** 标准字段统一成「中文名(raw_name)」；用户自定义别名保持原样 */
+/** 仅补齐字段显示名元数据；「显示名(raw_name)」由展示层格式化，避免污染提交值 */
 const toStandardFieldDisplayName = (
   rawName: string,
   ownDisplayName: string,
   displayNameByRaw: Map<string, string>,
-) => {
-  const resolved = resolveSelectFieldDisplayName(rawName, ownDisplayName, displayNameByRaw);
-  const lastSegment = rawName.split('.').pop() || '';
-  const schemaDisplay = displayNameByRaw.get(rawName)
-    || (lastSegment && lastSegment !== rawName ? displayNameByRaw.get(lastSegment) : '')
-    || '';
-  const formattedSchema = schemaDisplay
-    ? formatFieldDisplayLabel(schemaDisplay, rawName)
-    : '';
-  const isStandard = !resolved
-    || resolved === rawName
-    || resolved === schemaDisplay
-    || resolved === formattedSchema;
-  if (isStandard) {
-    return formatFieldDisplayLabel(schemaDisplay || resolved, rawName);
-  }
-  return resolved;
-};
+) => resolveSelectFieldDisplayName(rawName, ownDisplayName, displayNameByRaw);
 
 /** 用数据源字段回填中文名和类型图标（编辑回显的 select 不含 spec_field_type） */
 export const enrichFieldDisplayNames = <T extends SelectFieldLike>(
@@ -874,7 +948,7 @@ export const buildStrategySelectFieldOptions = (
 
     acc.push({
       id: rawName,
-      name: formatSelectFieldLabel(displayName, rawName),
+      name: formatStrictFieldDisplayLabel(displayName, rawName),
     });
     return acc;
   }, []);
@@ -1382,17 +1456,18 @@ export const buildStrategyCreatePayload = (
     next.configs = applyScheduleConfigForSubmit(next.configs) ?? next.configs;
   }
 
+  delete next.bksecEnabled;
+  delete next.bksecRiskTypeId;
+  delete next.bksecRiskTypeName;
+  delete next.bksecFieldValues;
+  delete next.bksecFieldMeta;
+  delete next.bksec_enabled;
+  delete next.bksec_risk_type_id;
+  delete next.bksec_field_values;
   if (scope.isPlatform) {
-    delete next.bksecEnabled;
-    delete next.bksecRiskTypeId;
-    delete next.bksecFieldValues;
-    delete next.bksec_enabled;
-    delete next.bksec_risk_type_id;
-    delete next.bksec_field_values;
+    delete next.bksec_config;
   } else {
-    next.bksecEnabled = !!params.bksecEnabled;
-    next.bksecRiskTypeId = params.bksecRiskTypeId ?? null;
-    next.bksecFieldValues = params.bksecFieldValues ?? {};
+    next.bksec_config = buildBksecConfig(params);
   }
 
   return next;
@@ -1484,8 +1559,6 @@ export const parseStrategyDetailToForm = (d: Record<string, any>) => {
     risk_level: firstRule?.risk_level ?? d.risk_level ?? '',
     risk_hazard: firstRule?.risk_hazard ?? d.risk_hazard ?? '',
     risk_guidance: firstRule?.risk_guidance ?? d.risk_guidance ?? '',
-    bksecEnabled: !!(d.bksecEnabled ?? d.bksec_enabled),
-    bksecRiskTypeId: d.bksecRiskTypeId ?? d.bksec_risk_type_id ?? null,
-    bksecFieldValues: d.bksecFieldValues ?? d.bksec_field_values ?? {},
+    ...readBksecFormState(d),
   };
 };

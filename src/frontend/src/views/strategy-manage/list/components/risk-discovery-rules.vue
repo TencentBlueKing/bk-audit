@@ -40,11 +40,15 @@
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('风险危害') }}：</span>
-            <span class="rule-field-value multiline-text">{{ rule.risk_hazard || '--' }}</span>
+            <span class="rule-field-value is-pre-line">
+              <span class="pre-line-text">{{ rule.risk_hazard || '--' }}</span>
+            </span>
           </div>
           <div class="rule-field-row">
             <span class="rule-field-label">{{ t('处理指引') }}：</span>
-            <span class="rule-field-value multiline-text">{{ rule.risk_guidance || '--' }}</span>
+            <span class="rule-field-value is-pre-line">
+              <span class="pre-line-text">{{ rule.risk_guidance || '--' }}</span>
+            </span>
           </div>
           <template v-if="showRuleNoticeGroups">
             <div class="rule-field-row">
@@ -305,15 +309,25 @@
   }
 
   .rule-field-value {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     color: var(--audit-neutral-text-01);
-    word-break: break-all;
+    word-break: normal;
+    overflow-wrap: break-word;
+    white-space: normal;
 
-    &.multiline-text {
-      white-space: pre-line;
-      word-break: break-word;
+    &.is-pre-line {
+      flex: 1 1 0%;
+      width: 0;
+      overflow: hidden;
     }
+  }
+
+  .pre-line-text {
+    display: block;
+    white-space: pre-line;
+    word-break: normal;
+    overflow-wrap: break-word;
   }
 
   .notice-group-tags {

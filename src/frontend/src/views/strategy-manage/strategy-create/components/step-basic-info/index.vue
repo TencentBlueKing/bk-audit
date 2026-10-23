@@ -15,23 +15,19 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <skeleton-loading
-    fullscreen
-    :loading="tagLoading"
-    name="createStrategy">
-    <smart-action
-      class="create-strategy-page"
-      :offset-target="getSmartActionOffsetTarget">
-      <div class="create-strategy-main">
-        <audit-form
-          ref="formRef"
-          class="strategt-form"
-          form-type="vertical"
-          :model="formData"
-          :rules="rules">
-          <card-part-vue :title="t('基础信息')">
-            <template #content>
-              <div class="basic-info-fields">
+  <smart-action
+    class="create-strategy-page"
+    :offset-target="getSmartActionOffsetTarget">
+    <div class="create-strategy-main">
+      <audit-form
+        ref="formRef"
+        class="strategt-form"
+        form-type="vertical"
+        :model="formData"
+        :rules="rules">
+        <card-part-vue :title="t('基础信息')">
+          <template #content>
+            <div class="basic-info-fields">
                 <div class="basic-info-row flex-center">
                   <bk-form-item
                     class="is-required mr16"
@@ -81,9 +77,9 @@
               </div>
             </template>
           </card-part-vue>
-          <card-part-vue :title="t('方案')">
-            <template #content>
-              <div class="scheme-fields">
+        <card-part-vue :title="t('方案')">
+          <template #content>
+            <div class="scheme-fields">
                 <bk-form-item
                   class="is-required"
                   :label="t('配置方式')"
@@ -142,9 +138,8 @@
           @click="handleCancel">
           {{ t('取消') }}
         </bk-button>
-      </template>
-    </smart-action>
-  </skeleton-loading>
+    </template>
+  </smart-action>
 </template>
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
@@ -470,7 +465,9 @@
   })));
   const controlDetail = ref<ControlModel | null>(null);
 
-  const typeTableLoading = computed(() => comRef.value?.typeTableLoading);
+  const typeTableLoading = computed(() => Boolean(
+    comRef.value?.typeTableLoading || comRef.value?.isInitializing,
+  ));
 
   // 编辑
   const setFormData = (editData: StrategyModel) => {
@@ -702,9 +699,11 @@
   // };
 
   watch(() => props.editData, (data) => {
-    if (isEditMode || isCloneMode) {
+    if ((isEditMode || isCloneMode) && data?.strategy_id) {
       setFormData(data);
     }
+  }, {
+    immediate: true,
   });
 
   // 编辑模式：标签数据加载完成后，清除初始化时触发的误报校验

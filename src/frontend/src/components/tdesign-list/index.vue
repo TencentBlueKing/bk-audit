@@ -130,6 +130,7 @@
           class="tdesign-list"
           :columns="tableColumns"
           :data="tableData"
+          :filter-row="hideFilterResultRow ? null : undefined"
           :first-full-row="enableCrossPageSelect ? selectAllBanner : undefined"
           :height="height"
           hover
@@ -273,6 +274,8 @@
     isNeedHideClearSearchTip?: boolean,
     border?: boolean,
     needEmptySearchTip?: boolean,
+    /** 列筛选结果为 0 时不展示筛选条，改用搜索空态 */
+    hideFilterRowWhenEmpty?: boolean,
     height?: number | string,
     noUseRresults?: boolean;
     settings?: any[];
@@ -343,6 +346,7 @@
     reverseSortFields: () => [],
     secondarySortField: '',
     needEmptySearchTip: true,
+    hideFilterRowWhenEmpty: false,
     paginationValidator: undefined,
     border: false,
     isNeedHideClearSearchTip: false,
@@ -1196,6 +1200,12 @@
     return `搜索"${result}"，找到 ${pagination.count} 条结果`;
   });
 
+  const hideFilterResultRow = computed(() => (
+    props.hideFilterRowWhenEmpty
+    && tableData.value.length === 0
+    && !!tableFilterResultText.value
+  ));
+
   watch([showSelectAllBanner, tableFilterResultText], () => {
     if (showSelectAllBanner.value) {
       updateSelectBannerPosition();
@@ -1241,20 +1251,15 @@
   };
 
   const handleFilterChange = (filters: Record<string, any>) => {
-    pagination.current = 1;
-    isUnload.value = false;
-    // TDesign 会返回 { colKey: value | value[] }
     const nextParams: Record<string, any> = { ...paramsMemo };
 
     Object.keys(filters || {}).forEach((key) => {
       const value = filters[key];
 
-      // 数组：多选或单选但返回数组
       if (Array.isArray(value)) {
         if (!value.length) {
           delete nextParams[key];
         } else {
-          // 后端大多接受逗号分隔的字符串；如果只选一个就是单值
           nextParams[key] = value.length === 1 ? value[0] : value.join(',');
         }
       } else if (value === undefined || value === null || value === '') {
@@ -1264,6 +1269,12 @@
       }
     });
 
+    const keys = new Set([...Object.keys(paramsMemo), ...Object.keys(nextParams)]);
+    const unchanged = [...keys].every(key => String(paramsMemo[key] ?? '') === String(nextParams[key] ?? ''));
+    if (unchanged) return;
+
+    pagination.current = 1;
+    isUnload.value = false;
     paramsMemo = nextParams;
     saveTableFilterState();
     clearSelectionOnSearchScopeChange();

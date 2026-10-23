@@ -143,6 +143,33 @@
   padding-left: var(--audit-space-32);
 }
 
+.report-fields :deep(.render-info-item) {
+  display: flex;
+  gap: var(--audit-space-8);
+  align-items: flex-start;
+  min-height: 32px;
+  padding: 6px 0;
+  font-size: var(--audit-font-size-sm);
+  font-weight: var(--audit-font-weight-regular);
+  line-height: var(--audit-line-height-sm);
+}
+
+.report-fields :deep(.info-label) {
+  flex: 0 0 84px;
+  width: 84px;
+  min-width: 84px;
+  padding: 0;
+  color: var(--audit-neutral-text-02);
+  text-align: right;
+}
+
+.report-fields :deep(.info-value) {
+  padding-left: 0;
+  overflow: visible;
+  color: var(--audit-neutral-text-01);
+  text-overflow: unset;
+}
+
 .report-status-tag {
   display: inline-flex;
   align-items: center;
@@ -156,7 +183,9 @@
 }
 
 .report-divider {
+  height: 0;
   margin: var(--audit-space-24) 0;
+  border: none;
   border-top: 1px solid var(--audit-neutral-border-01);
 }
 
@@ -170,7 +199,9 @@
 .strategy-event-report-content {
   width: 100%;
   min-height: 405px;
+  overflow: hidden;
   background: var(--audit-neutral-bg-03);
+  border: none;
   border-radius: var(--audit-radius-control);
 }
 
@@ -198,21 +229,16 @@
 }
 
 /* 编辑器宽度设置 */
-.strategy-event-report-content :deep(.rich-text-editor-container) {
+.strategy-event-report-content :deep(.rich-text-editor-container),
+.strategy-event-report-content :deep(.editor-wrapper),
+.strategy-event-report-content :deep(.quill-editor),
+.strategy-event-report-content :deep(.ql-container.ql-snow),
+.strategy-event-report-content :deep(.ql-editor) {
   width: 100%;
-}
-
-.strategy-event-report-content :deep(.editor-wrapper) {
-  width: 100%;
-}
-
-.strategy-event-report-content :deep(.quill-editor) {
-  width: 100%;
-}
-
-.strategy-event-report-content :deep(.ql-container.ql-snow) {
-  border-right: 0;
-  border-left: 0;
+  min-height: 405px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 /* 移除禁用遮罩层的背景颜色 */
