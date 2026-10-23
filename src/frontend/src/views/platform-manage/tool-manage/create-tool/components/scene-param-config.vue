@@ -304,7 +304,7 @@
                   type="datetime"
                   @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val || '')" />
               </div>
-              <!-- 数字输入框 -->
+              <!-- 数字输入框；溢出 tips 由外层统一提供，关闭 bk-input 内置 tips 避免重复 -->
               <div
                 v-else-if="isNumberInputVar(row.raw_name)"
                 v-bk-tooltips="getOverflowTips(
@@ -320,6 +320,7 @@
                   class="override-default-input"
                   :model-value="getOverrideValue(item, row.raw_name)"
                   :placeholder="t('请输入')"
+                  :show-overflow-tooltips="false"
                   type="number"
                   @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
               </div>
@@ -356,6 +357,7 @@
                   class="override-default-input"
                   :model-value="getOverrideValue(item, row.raw_name)"
                   :placeholder="t('请输入')"
+                  :show-overflow-tooltips="false"
                   @change="(val: any) => handleDefaultValueChange(item, row.raw_name, val)" />
               </div>
             </div>
