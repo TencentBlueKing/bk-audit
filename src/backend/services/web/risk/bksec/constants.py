@@ -53,8 +53,8 @@ BKSEC_PARAM_ONCE_TASK = "${once_task}"
 # 插件控制参数默认值
 BKSEC_ONCE_TASK_DEFAULT = "no"
 BKSEC_ONCE_TASK_TEST = "yes"
-# ${operator} 入参的兜底模板
-BKSEC_OPERATOR_TEMPLATE = '{{ (risk.operator or risk.security_person or "").split(";") | tojson }}'
+# 责任人脏值：渲染上下文中可能出现字符串 "None"/"null"（上游数据质量问题），序列化前需剔除
+BKSEC_INVALID_PERSON_VALUES = frozenset({"none", "null", "undefined", "nan"})
 
 
 # 预置处理套餐

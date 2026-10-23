@@ -19,16 +19,16 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from django.utils import timezone
 
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
     BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_INVALID_PERSON_VALUES,
     BKSEC_ONCE_TASK_DEFAULT,
     BKSEC_ONCE_TASK_TEST,
-    BKSEC_OPERATOR_TEMPLATE,
     BKSEC_PARAM_ONCE_TASK,
     BKSEC_PARAM_OPERATOR,
     BKSEC_PARAM_RISK_TYPE_EXTRA,
@@ -187,22 +187,56 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
     return constants
 
 
+def split_persons(value: Any) -> List[str]:
+    """把人名数据归一化为列表：列表原样、字符串按分号切分；过滤空值与 "None"/"null" 脏值"""
+    if not value:
+        return []
+    items = value if isinstance(value, (list, tuple)) else str(value).split(";")
+    persons: List[str] = []
+    for item in items:
+        name = str(item or "").strip()
+        if not name or name.lower() in BKSEC_INVALID_PERSON_VALUES:
+            continue
+        persons.append(name)
+    return persons
+
+
+def load_fallback_persons(risk: Optional[Risk] = None) -> List[str]:
+    """责任人兜底：风险责任人 → 当前处理人 → 安全接口人"""
+    if risk is not None:
+        for value in (risk.operator, risk.current_operator):
+            persons = split_persons(value)
+            if persons:
+                return persons
+    return [person for person in load_security_person() if person]
+
+
 def coerce_operator_constant(value: str, risk: Optional[Risk] = None) -> str:
     """
-    operator 入参兜底：保证渲染结果为插件 json.loads 可接受的 JSON 数组串。
+    operator 入参规范化：保证为插件 json.loads 可接受的 JSON 数组串。
 
-    策略配置页的 operator 模板渲染后：
-    - 已是合法 JSON 数组串 → 原样返回
-    - 否则回退到 risk.operator（无责任人时取安全接口人）的标准序列化，兜底为数组串
+    配置页的 operator 是「责任人模板」，用户按语义书写即可（如 {{ risk.operator }}）；
+    渲染结果是人名文本（多人以分号分隔，源自 display_value / security_person 的拼接形态）。
+    分号切分与 JSON 序列化属于与插件之间的传输层契约，由本函数统一处理，
+    不要求用户在模板里写 split | tojson。
+
+    - 已是合法 JSON 数组串 → 解析后重新序列化，保证格式统一
+    - 分号分隔的人名文本 → 切分后序列化
+    - 取不到任何人名 → 回退到风险责任人 / 安全接口人
     """
-    if isinstance(value, str):
+    raw = str(value or "").strip()
+    persons: List[str] = []
+    if raw:
         try:
-            parsed = json.loads(value)
-            if isinstance(parsed, list):
-                return value
+            parsed = json.loads(raw)
         except (ValueError, TypeError):
-            pass
-    return render_value(BKSEC_OPERATOR_TEMPLATE, build_render_context(risk=risk))
+            persons = split_persons(raw)
+        else:
+            # 非数组的合法 JSON（对象/数字/布尔）不是人名，视为无效走兜底
+            persons = split_persons(parsed) if isinstance(parsed, list) else []
+    if not persons:
+        persons = load_fallback_persons(risk)
+    return json.dumps(persons, ensure_ascii=False)
 
 
 def render_event_constant(template_json: str, risk: Optional[Risk] = None) -> str:
