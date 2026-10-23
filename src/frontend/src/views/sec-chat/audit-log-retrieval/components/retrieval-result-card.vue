@@ -347,7 +347,7 @@
                     <span
                       class="report-mode-tag-wrap"
                       @mouseenter="showReportModeTip(item)"
-                      @mouseleave="hideReportModeTip(item)">
+                      @mouseleave="scheduleHideReportModeTip(item)">
                       <bk-tag
                         class="report-mode-tag"
                         :class="isReportModeYellow(item) ? 'is-field' : 'is-nl'"
@@ -357,7 +357,19 @@
                       </bk-tag>
                     </span>
                     <template #content>
-                      <div class="report-mode-tip-text">{{ item.modeTip }}</div>
+                      <div
+                        class="report-mode-tip"
+                        @mouseenter="keepReportModeTip(item)"
+                        @mouseleave="scheduleHideReportModeTip(item)">
+                        <div class="report-mode-tip-text">{{ item.modeTip }}</div>
+                        <button
+                          class="report-mode-tip-copy"
+                          title="复制"
+                          type="button"
+                          @click="copyReportModeTip(item)">
+                          <audit-icon type="copy" />
+                        </button>
+                      </div>
                     </template>
                   </bk-popover>
                 </span>
@@ -1024,14 +1036,44 @@
 
   const modeTipHoverId = ref('');
   const modeTipInflight = new Set<string>();
+  /** 离开标签后稍等再关，方便鼠标移进提示里复制 */
+  const MODE_TIP_HIDE_DELAY = 400;
+  let modeTipHideTimer = 0;
+
+  const clearModeTipHideTimer = () => {
+    if (!modeTipHideTimer) return;
+    window.clearTimeout(modeTipHideTimer);
+    modeTipHideTimer = 0;
+  };
 
   const showReportModeTip = (item: ReportStatusItem) => {
+    clearModeTipHideTimer();
     modeTipHoverId.value = item.id;
     void ensureReportModeTip(item);
   };
 
-  const hideReportModeTip = (item: ReportStatusItem) => {
-    if (modeTipHoverId.value === item.id) modeTipHoverId.value = '';
+  const keepReportModeTip = (item: ReportStatusItem) => {
+    if (modeTipHoverId.value !== item.id) return;
+    clearModeTipHideTimer();
+  };
+
+  const scheduleHideReportModeTip = (item: ReportStatusItem) => {
+    clearModeTipHideTimer();
+    modeTipHideTimer = window.setTimeout(() => {
+      modeTipHideTimer = 0;
+      if (modeTipHoverId.value === item.id) modeTipHoverId.value = '';
+    }, MODE_TIP_HIDE_DELAY);
+  };
+
+  const copyReportModeTip = async (item: ReportStatusItem) => {
+    const text = item.modeTip || '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      messageSuccess('已复制');
+    } catch {
+      messageError('复制失败');
+    }
   };
 
   const isReportModeTipOpen = (item: ReportStatusItem) => (
@@ -1103,6 +1145,7 @@
   );
 
   onBeforeUnmount(() => {
+    clearModeTipHideTimer();
     stopAllFollows();
   });
 
@@ -2568,14 +2611,47 @@
   }
 </style>
 <style lang="postcss">
-  .report-mode-tip-popover .report-mode-tip-text {
+  .report-mode-tip-popover {
+    pointer-events: auto;
+  }
+
+  .report-mode-tip-popover .report-mode-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
     max-width: 320px;
+    pointer-events: auto;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-text {
+    min-width: 0;
     max-height: 180px;
     overflow: auto;
+    flex: 1;
     line-height: 20px;
     word-break: break-word;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-copy {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 2px 0 0;
+    color: #fff;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+
+  .report-mode-tip-popover .report-mode-tip-copy:hover {
+    color: var(--audit-brand-04, #a3c5fd);
   }
 
   /* 默认用原悬停色 #E1ECFF；悬停再深一档，避免和默认色相同 */
