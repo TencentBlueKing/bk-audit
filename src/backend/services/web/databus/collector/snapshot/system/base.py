@@ -105,9 +105,10 @@ def init_itsm_v4():
     在部署脚本 `python manage.py init_system` 中执行（每次部署触发一次）：
     - approve_service_id 为空 => 未选择套餐，跳过，不处理；
     - resource.itsm.get_service_detail 查询失败（服务不存在/接口异常）=> 跳过该套餐，保留原 V3 id，由人工手动创建对应系统流程后再迁移，避免用不适用系统流程代替；
-    - 同一 V3 服务（name + service_id 相同）复用同一 V4 流程，不重复创建；
-    - 同名但不同服务 => 流程名加 #service_id 后缀强制独立，绕开 ITSM_v4 name 唯一约束；
-    - 跨轮幂等由 init_itsm_system 内部「分页拉全量已有流程」保证。
+    - 先按 V3 approve_service_id 去重再遍历，同一 V3 服务只解析一次、只创建一个 V4 流程；
+    - 流程名固定为 name#service_id，由源服务身份唯一决定，与遍历顺序、历史状态无关；
+    - 同名但不同服务 => service_id 不同则流程名不同，天然独立，绕开 ITSM_v4 name 唯一约束；
+    - 跨轮幂等：同一 V3 服务在任何一轮都解析到同一个流程名，命中已有流程即复用，不会重复创建。
     """
     objs = ProcessApplication.objects.all()
     # 默认套餐（当 V3 get_service_detail 无数据时兜底使用）
@@ -126,10 +127,6 @@ def init_itsm_v4():
         "risk_url": {"title": "审计关联单据", "type": "string"},
     }
 
-    # (name, service_id) -> key：同一 V3 服务复用同一 V4 流程（不重复建）
-    run_cache = {}
-    # 本轮已占用的 ITSM 流程名（含去重后缀），用于决定要不要加后缀
-    used_names = set()
     # 传给 init_itsm_system 的 name -> key 缓存（其内部按 name 去重/复用）
     name_cache = _fetch_existing_v4_keys()
 
@@ -140,9 +137,9 @@ def init_itsm_v4():
 
     # 预先拉取 V4 已有流程 key：用于识别「已迁移」套餐，避免把 V4 key 再送回 V3 查询。
     existing_v4_keys = set(name_cache.values())
-    used_names.update(tuple(name_cache.keys()))
 
-    created_any = False
+    # 按 V3 approve_service_id 聚合（去重）：同一 V3 服务只解析一次详情、只创建一个 V4 流程
+    pending_objs = {}
     for obj in objs:
         # 未选择套餐：无需绑定任何 V4 流程，跳过
         if not obj.approve_service_id:
@@ -153,36 +150,35 @@ def init_itsm_v4():
         if obj.approve_service_id in existing_v4_keys:
             continue
 
+        pending_objs.setdefault(obj.approve_service_id, []).append(obj)
+
+    # V3 approve_service_id -> V4 workflow_key：同一 V3 服务的所有套餐共用同一个流程
+    id_key_map = {}
+
+    created_any = False
+    for v3_service_id, related_objs in pending_objs.items():
+        # 取 V3 服务详情，用于按套餐定制流程 name/desc
+        try:
+            service_info = resource.itsm.get_service_detail(id=v3_service_id, version="v3")
+        except Exception as e:
+            # V3 详情查询失败（临时超时/网络抖动/服务下架/查不到等）
+            pending_retry.append(v3_service_id)
+            print(
+                "request service detail error (unfinished, retry next init_system): {},"
+                " approve_service_id is: {}".format(str(e), v3_service_id)
+            )
+            continue
+
         workflow_name = default_workflow_name
         workflow_desc = default_workflow_desc
         properties = properties_base
         service_id = 0
 
-        # 取 V3 服务详情，用于按套餐定制流程 name/desc
-        try:
-            service_info = resource.itsm.get_service_detail(id=obj.approve_service_id, version="v3")
-        except Exception as e:
-            # V3 详情查询失败（临时超时/网络抖动/服务下架/查不到等）
-            pending_retry.append(obj.approve_service_id)
-            print(
-                "request service detail error (unfinished, retry next init_system): {},"
-                " approve_service_id is: {}".format(str(e), obj.approve_service_id)
-            )
-            continue
         if service_info:
             workflow_name = service_info.get("name") or default_workflow_name
             workflow_desc = service_info.get("desc") or default_workflow_desc
             service_id = service_info.get("service_id") or 0
-
-        # 同一 V3 服务（name + service_id）直接复用
-        tuple_key = (workflow_name, service_id)
-        if tuple_key in run_cache:
-            obj.approve_service_id = run_cache[tuple_key]
-            obj.save()
-            continue
-
-        # 仅在需要新建/复用流程时解析表单字段
-        if service_info:
+            # 仅在需要新建/复用流程时解析表单字段
             fields = service_info.get("fields") or []
             if fields:
                 properties = {}
@@ -190,10 +186,9 @@ def init_itsm_v4():
                     key = "ticket__{}".format(field["key"]) if field["key"] == "title" else field["key"]
                     properties[key] = v3_field_to_jsonschema(field)
 
-        # 同名但不同服务：加 service_id 后缀强制独立，绕开 ITSM_v4 name 唯一约束
-        itsm_name = workflow_name
-        if itsm_name in used_names:
-            itsm_name = "{}#{}".format(workflow_name, service_id)
+        # 流程名只由源服务身份（name + service_id）决定：同一 V3 服务在任何一轮重试中
+        # 都解析到同一个名字，命中已有流程即复用，因此不会重复创建、也不会错绑同名服务。
+        itsm_name = "{}#{}".format(workflow_name, service_id)
 
         form_schema = {
             "type": "object",
@@ -202,15 +197,23 @@ def init_itsm_v4():
         }
         try:
             workflow_key = init_itsm_system(form_schema, itsm_name, workflow_desc, name_cache)
-            run_cache[tuple_key] = workflow_key
-            used_names.add(itsm_name)
-            obj.approve_service_id = workflow_key
-            obj.save()
-            created_any = True
         except Exception as e:
-            create_error[(itsm_name, service_id)] = itsm_name
+            create_error[v3_service_id] = itsm_name
             print(str(e))
             continue
+
+        id_key_map[v3_service_id] = workflow_key
+        created_any = True
+
+        for obj in related_objs:
+            try:
+                obj.approve_service_id = workflow_key
+                obj.save()
+            except Exception as e:
+                # 本地落库失败：下一轮该套餐仍带 V3 id，会用同一个 itsm_name 复用上面的
+                # workflow_key 重新绑定，不会创建第二个流程
+                create_error[v3_service_id] = itsm_name
+                print(str(e))
 
     if not created_any:
         form_schema = {
@@ -219,11 +222,12 @@ def init_itsm_v4():
             "properties": properties_base,
         }
         try:
-            workflow_key = init_itsm_system(form_schema, default_workflow_name, default_workflow_desc, name_cache)
-            tuple_key = (default_workflow_name, 0)
-            run_cache[tuple_key] = workflow_key
+            workflow_key = init_itsm_system(
+                form_schema, "{}#{}".format(default_workflow_name, 0), default_workflow_desc, name_cache
+            )
+            id_key_map[default_workflow_name] = workflow_key
         except Exception as e:
-            create_error[(default_workflow_name, 0)] = default_workflow_name
+            create_error[default_workflow_name] = default_workflow_name
             print(str(e))
 
     _write_system_id()
