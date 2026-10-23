@@ -322,7 +322,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         )
         self.assertTrue(root.context_data["agent_trace"]["system_prompt"])
         self.assertTrue(root.context_data["agent_trace"]["user_prompt"])
-        self.assertEqual(root.context_data["agent_trace"]["agent_code"], "bp-ai-user-intent")
+        self.assertEqual(root.context_data["agent_trace"]["agent_code"], MessagePlanningService.agent_code.value)
         self.assertEqual(
             log_search.context_data["extension_fields"][0]["keys"],
             ["ticket_id"],

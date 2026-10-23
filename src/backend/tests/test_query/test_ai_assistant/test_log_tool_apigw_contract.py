@@ -87,7 +87,7 @@ class TestMCPUserLogAPIGWContract(SimpleTestCase):
 
     def test_statistics_server_exposes_only_metadata_and_aggregation(self):
         """统计 Agent 的网关工具集不提供明细查询。"""
-        content = (BACKEND_ROOT / "support-files/apigw/definition.yaml").read_text()
+        content = (BACKEND_ROOT / "support-files/apigw/definition.yaml").read_text(encoding="utf-8")
         definition = yaml.safe_load("stages:" + content.split("\nstages:", 1)[1].split("\nrelated_apps:", 1)[0])
         stages = {stage["name"]: stage for stage in definition["stages"]}
         for name in ("stag", "prod"):
