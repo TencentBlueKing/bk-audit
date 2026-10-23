@@ -26,7 +26,7 @@
       <div class="retry-header">
         <span class="retry-title">{{ t('重试执行') }}</span>
         <span class="retry-split" />
-        <span class="retry-task">{{ detail?.task_id || '--' }}</span>
+        <span class="retry-task">{{ detail?.task_name || '--' }}</span>
       </div>
     </template>
     <div
@@ -37,7 +37,12 @@
         :key="item.label"
         class="retry-row">
         <span class="retry-label"><span>{{ item.label }}</span></span>
-        <span class="retry-value">{{ item.value }}</span>
+        <span
+          class="retry-value"
+          v-bk-tooltips="lineTip(item.label, item.value)"
+          @mouseenter="syncOverflow($event, item.label)">
+          {{ item.value }}
+        </span>
       </div>
     </div>
     <template #footer>
@@ -57,7 +62,7 @@
   </bk-dialog>
 </template>
 <script setup lang="ts">
-  import { computed } from 'vue';
+  import { computed, reactive } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import type ExecutionDetail from '@model/application/execution-detail';
@@ -77,6 +82,18 @@
   const { t } = useI18n();
 
   const text = (value?: string) => value || '--';
+  const overflowed = reactive<Record<string, boolean>>({});
+  const syncOverflow = (event: MouseEvent, key: string) => {
+    const target = event.currentTarget as HTMLElement;
+    overflowed[key] = target.scrollWidth > target.clientWidth + 1
+      || target.scrollHeight > target.clientHeight + 1;
+  };
+  const lineTip = (key: string, content: string) => ({
+    content,
+    disabled: !overflowed[key],
+    delay: 80,
+    extCls: 'execution-attempt-tip',
+  });
   const rows = computed(() => {
     const detail = props.detail;
     const packageName = detail?.application_name
@@ -101,6 +118,7 @@
 .retry-header {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -120,39 +138,48 @@
 }
 
 .retry-task {
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--audit-font-size-base);
   font-weight: 400;
   line-height: 22px;
   color: var(--audit-neutral-text-03);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .retry-row {
   display: flex;
-  height: 32px;
+  min-height: 32px;
+  padding: 6px 0;
   font-size: var(--audit-font-size-sm);
-  line-height: 20px;
-  align-items: center;
+  line-height: var(--audit-line-height-sm);
+  align-items: flex-start;
   gap: var(--audit-space-8);
 }
 
 .retry-label {
-  position: relative;
-  height: 20px;
+  height: var(--audit-line-height-sm);
   color: var(--audit-neutral-text-02);
+  text-align: right;
   flex: 0 0 84px;
 }
 
 .retry-label span {
-  position: absolute;
-  right: 0;
   white-space: nowrap;
 }
 
 .retry-value {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
   color: var(--audit-neutral-text-01);
   flex: 1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   word-break: break-all;
+  overflow-wrap: anywhere;
 }
 </style>
 <style lang="postcss">
