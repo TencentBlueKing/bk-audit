@@ -21,6 +21,7 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from django.test.utils import override_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
@@ -40,6 +41,7 @@ from tests.test_risk.test_tickets.constants import (
 )
 
 
+@override_settings(BKAPP_ENABLE_ITSM_V4=True)
 class AutoProcessTest(TicketTest):
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
