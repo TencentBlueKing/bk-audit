@@ -85,7 +85,7 @@
 
   interface Props {
     eventItemArr: StrategyFieldEvent['event_basic_field_configs'];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     select: Array<DatabaseTableFieldModel>;
     strategyType: string;
     strategyName: string;

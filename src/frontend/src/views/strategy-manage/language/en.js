@@ -167,6 +167,7 @@ export default {
     '策略停用中，预计最长2分钟后停用成功': 'The strategy is being disabled, to be completed within 2 minutes.',
     映射值类型: 'Mapping value type',
     数据源中与方案输入参数匹配的字段: 'Fields in the data source that match the input parameters of the plan.',
+    数据加载失败: 'Failed to load data',
     重试: 'retry',
     升级确认: 'Upgrade confirm',
     确认升级: 'Upgrade confirm',
@@ -716,5 +717,10 @@ export default {
     初始责任人: 'Initial owner',
     当前责任人所属组织: 'Current owner organization',
     风险描述: 'Risk description',
+    发送中: 'Sending',
+    测试工单发送失败: 'Failed to send the test ticket',
+    '新建策略暂无风险单，无法发送测试工单': 'A new strategy has no risk ticket, so a test ticket cannot be sent',
+    风险类型加载失败: 'Failed to load risk types',
+    '填写资产标识信息，例如资产类型为 account 时，填写对应账号': 'Enter the asset identifier. For example, when the asset type is account, enter the account',
   },
 };

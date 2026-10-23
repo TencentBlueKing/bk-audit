@@ -204,6 +204,7 @@
     editData: StrategyModel;
     select?: any[]; // 从父组件传递的 formData.configs.select
     formData?: any; // 从父组件传递的 step2 表格数据
+    submitOnNext?: boolean;
   }
   interface Emits {
     (e: 'previousStep', step: number, params: IFormData): void;
@@ -216,6 +217,7 @@
   const props = withDefaults(defineProps<Props>(), {
     select: () => [],
     formData: () => ({}),
+    submitOnNext: false,
   });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
@@ -231,7 +233,10 @@
   const isCreateeMode = isStrategyCreateRoute(route.name);
   const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
   // 场景策略与全局策略都在下一步进入第 5 步：场景是 BKSEC，全局是风险分派
-  const primaryActionText = computed(() => (isEnvent.value ? t('下一步') : t('跳过')));
+  const primaryActionText = computed(() => {
+    if (props.submitOnNext) return t('完成创建');
+    return t(isEnvent.value ? '下一步' : '跳过');
+  });
 
   const previewReportRef = ref();
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
@@ -430,6 +435,10 @@
       report_auto_render: isAutoGetReports.value,
     };
 
+    if (props.submitOnNext) {
+      emits('saveCurrentStep', stepParams);
+      return;
+    }
     emits('nextStep', 5, stepParams);
   };
 

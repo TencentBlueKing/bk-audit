@@ -72,7 +72,7 @@
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
-    eventItemKey: keyof StrategyFieldEvent;
+    eventItemKey: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs' | 'risk_meta_field_config';
     selectOptions: Array<DatabaseTableFieldModel>;
     requiredFields: string[];
     optionalFields: string[];

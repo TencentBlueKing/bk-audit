@@ -91,28 +91,30 @@
             {{ t('数据源') }}
           </span>
         </template>
-        <bk-loading :loading="typeTableLoading">
-          <div
-            v-bk-tooltips="{
-              content: t('审计策略不支持编辑数据源'),
-              disabled: !isEditMode,
-              placement: 'top',
-            }"
-            class="select-group">
-            <data-source-picker
-              ref="dataSourcePickerRef"
-              v-model="tableId"
-              :decode-type-biz-id="decodeTypeBizId"
-              :disabled="isEditMode"
-              :list="allConfigTypeTable"
-              :load-children="handlePickerLoadChildren"
-              :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
-              :system-ids="formData.configs.data_source.system_ids"
-              @change="handleChangeTable"
-              @event-log-commit="handleEventLogCommit"
-              @update:system-ids="handleSystemIdsUpdate" />
-          </div>
-        </bk-loading>
+        <div
+          v-if="typeTableLoading"
+          class="data-source-skeleton" />
+        <div
+          v-else
+          v-bk-tooltips="{
+            content: t('审计策略不支持编辑数据源'),
+            disabled: !isEditMode,
+            placement: 'top',
+          }"
+          class="select-group">
+          <data-source-picker
+            ref="dataSourcePickerRef"
+            v-model="tableId"
+            :decode-type-biz-id="decodeTypeBizId"
+            :disabled="isEditMode"
+            :list="allConfigTypeTable"
+            :load-children="handlePickerLoadChildren"
+            :mine-biz-rt-type="MINE_BIZ_RT_TYPE"
+            :system-ids="formData.configs.data_source.system_ids"
+            @change="handleChangeTable"
+            @event-log-commit="handleEventLogCommit"
+            @update:system-ids="handleSystemIdsUpdate" />
+        </div>
       </bk-form-item>
       <!-- 联表详情 -->
       <link-data-detail-component
@@ -375,6 +377,7 @@
   interface Expose {
     getFields: (options?: { forValidate?: boolean }) => IFormData;
     typeTableLoading: boolean;
+    isInitializing: boolean;
     resetFormData: () => void;
   }
   interface Props {
@@ -423,6 +426,7 @@
   const previousTableId = ref<Array<string>>([]);
   let isInit = false;
   let isInitFromParent = false;
+  const isInitializing = ref(isEditMode || isCloneMode);
   // 编辑回显（尤其 MineBizRt 懒加载）可能较慢，用序号作废过期回写，避免覆盖用户新选择
   let tableIdEchoSeq = 0;
   // 回显写 tableId 期间忽略 change，避免把 system_ids 等已回填字段清空
@@ -1678,8 +1682,15 @@
       if (isInit || isInitFromParent) {
         return;
       }
-      setFormData(props.editData);
       isInit = true;
+      isInitializing.value = true;
+      setFormData(props.editData)
+        .catch(() => {
+          isInit = false;
+        })
+        .finally(() => {
+          isInitializing.value = false;
+        });
     }
   });
 
@@ -1907,6 +1918,9 @@
     get typeTableLoading() {
       return typeTableLoading.value;
     },
+    get isInitializing() {
+      return isInitializing.value;
+    },
     resetFormData: () => {
       formData.value.configs.where = {
         connector: 'and',
@@ -2025,8 +2039,12 @@
         line-height: 16px;
       }
 
-      :deep(.bk-loading) {
-        min-height: 0;
+      .data-source-skeleton {
+        width: 100%;
+        height: 32px;
+        background: #e4e7ee;
+        border-radius: var(--audit-radius-control);
+        animation: data-source-skeleton-shimmer 1.6s ease-in-out infinite;
       }
     }
 
@@ -2147,6 +2165,17 @@
         }
       }
     }
+  }
+}
+
+@keyframes data-source-skeleton-shimmer {
+  0%,
+  100% {
+    background: #e4e7ee;
+  }
+
+  50% {
+    background: #f2f3f7;
   }
 }
 </style>

@@ -15,41 +15,46 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-import type { PreviewRiskPayload, TicketPreviewPayload } from '@model/bksec/payload';
+import type { TestSendRequest, TicketPreviewRequest } from '@model/bksec/payload';
 
 import Request from '@utils/request';
 
-import ModuleBase from './module-base';
-
-class BksecManage extends ModuleBase {
-  constructor() {
-    super();
-    this.module = '/api/v1/bksec';
+class BksecManage {
+  fetchFeature() {
+    return Request.get('/api/v1/feature/bksec/');
   }
 
   fetchRiskTypes() {
-    return Request.get<Array<{ id: number; name: string }>>(`${this.module}/risk_types/`);
+    return Request.get('/api/v1/bk_sec/risk_types/');
   }
 
-  fetchRiskTypeFields(params: { risk_type_id: number }) {
-    return Request.get(`${this.module}/risk_types/${params.risk_type_id}/fields/`);
+  fetchTicketPreview(params: TicketPreviewRequest) {
+    return Request.post('/api/v1/ticket/preview/', { params });
   }
 
-  fetchPreviewRiskList(params: PreviewRiskPayload) {
-    return Request.get(`${this.module}/preview_risks/`, { params });
+  sendTestTicket(params: TestSendRequest) {
+    return Request.post('/api/v1/ticket/test_send/', {
+      params,
+      payload: { catchError: true },
+    });
   }
 
-  fetchTicketPreview(params: TicketPreviewPayload) {
-    return Request.post(`${this.module}/ticket_preview/`, { params });
+  fetchTestTaskStatus(params: { task_id?: string; risk_id?: string }) {
+    return Request.get('/api/v1/ticket/test_task_status/', {
+      params,
+      payload: { catchError: true },
+    });
   }
 
-  sendTestTicket(params: {
-    handler: string;
-    risk_type_id: number | null;
-    field_values: Record<string, string>;
-    risk_id?: string;
-  }) {
-    return Request.post(`${this.module}/test_tickets/`, { params });
+  /**
+   * 编辑态候选风险。按策略 ID 筛选风险列表。
+   */
+  fetchEditPreviewRisks(params: { strategy_id: number }) {
+    return Request.post('/api/v1/risks/', {
+      params: {
+        strategy_id: params.strategy_id,
+      },
+    });
   }
 }
 
