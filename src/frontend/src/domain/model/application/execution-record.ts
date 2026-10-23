@@ -16,7 +16,7 @@
 */
 
 export type ExecutionStatus = 'success' | 'failed' | 'running';
-export type ExecutionTrigger = 'manual' | 'auto' | 'retry';
+export type ExecutionTrigger = 'manual' | 'auto' | 'test' | 'retry' | '';
 
 export default class ExecutionRecord {
   task_id: string;
@@ -26,11 +26,15 @@ export default class ExecutionRecord {
   risk_id: string;
   trigger_type: ExecutionTrigger;
   started_at: string;
+  ended_at: string;
   duration: string;
   status: ExecutionStatus;
   error: string;
   executor: string;
   scene_id: string;
+  is_test: boolean;
+  sops_task_id: string;
+  sops_task_url: string;
   constructor(payload: Partial<ExecutionRecord> = {}) {
     this.task_id = payload.task_id || '';
     this.task_name = payload.task_name || '';
@@ -39,10 +43,14 @@ export default class ExecutionRecord {
     this.risk_id = payload.risk_id || '';
     this.trigger_type = payload.trigger_type || 'auto';
     this.started_at = payload.started_at || '';
+    this.ended_at = payload.ended_at || '';
     this.duration = payload.duration || '';
     this.status = payload.status || 'running';
     this.error = payload.error || '';
     this.executor = payload.executor || '';
     this.scene_id = payload.scene_id || '';
+    this.is_test = !!payload.is_test;
+    this.sops_task_id = payload.sops_task_id || '';
+    this.sops_task_url = payload.sops_task_url || '';
   }
 }

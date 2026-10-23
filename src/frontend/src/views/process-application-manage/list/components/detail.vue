@@ -35,9 +35,13 @@
         <render-info-item
           :label="t('执行动作')"
           :label-width="labelWidth">
-          <bk-loading :loading="soapLoading">
+          <i
+            v-if="soapLoading"
+            class="skeleton-bar is-v72"
+            data-testid="package-detail-action-skeleton" />
+          <template v-else>
             {{ soapList.find(item=>item.id === data.sops_template_id)?.name || '--' }}
-          </bk-loading>
+          </template>
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
@@ -53,37 +57,61 @@
         <render-info-item
           :label="t('审批配置')"
           :label-width="labelWidth">
-          <bk-loading :loading="serviceLoading">
-            <div class="approve-config-wrap">
-              <render-info-item
-                :label="t('审批流程')"
-                :label-width="locale === 'en-US' ? 100 : 84"
-                style="min-height: 32px;align-items: flex-start;line-height: 32px;">
-                {{ serviceList.find(item=>item.id === data.approve_service_id)?.name || '--' }}
-              </render-info-item>
-              <p style="width: 93px;height: 32px;line-height: 32px;color: #313238;text-align: right;">
-                {{ t('审批单信息') }}
-              </p>
-              <bk-loading :loading="detailLoading && !serviceLoading">
-                <template v-if="detailData">
-                  <render-info-item
-                    v-for="item in filterDetailDataFields"
-                    :key="item.id"
-                    class="approve-info-item"
-                    :label="item.name"
-                    :label-width="locale === 'en-US' ? 100 : 84"
-                    style="min-height: 32px;align-items: flex-start;line-height: 32px;">
-                    <span v-if="item.choice && item.choice.length">
-                      {{ item.choice.find(cItem=>cItem.key === data.approve_config[item.key]?.value )?.name
-                        || data.approve_config[item.key]?.value
-                        || '--' }}
-                    </span>
-                    <span v-else>{{ data.approve_config[item.key]?.value || '--' }}</span>
-                  </render-info-item>
-                </template>
-              </bk-loading>
+          <div class="approve-config-wrap">
+            <render-info-item
+              :label="t('审批流程')"
+              :label-width="approveLabelWidth"
+              style="min-height: 32px;align-items: flex-start;line-height: 32px;">
+              <i
+                v-if="serviceLoading"
+                class="skeleton-bar is-v72"
+                data-testid="package-detail-flow-skeleton" />
+              <template v-else>
+                {{ serviceName }}
+              </template>
+            </render-info-item>
+            <p style="width: 93px;height: 32px;line-height: 32px;color: #313238;text-align: right;">
+              {{ t('审批单信息') }}
+            </p>
+            <div
+              v-if="detailLoading && !serviceLoading"
+              data-testid="package-detail-approve-skeleton">
+              <div
+                v-for="row in approveSkeletonRows"
+                :key="row"
+                class="approve-skeleton-row">
+                <span
+                  class="approve-skeleton-label"
+                  :style="approveLabelStyle">
+                  <i class="skeleton-bar is-label" />
+                </span>
+                <i
+                  class="skeleton-bar"
+                  :class="row % 2 ? 'is-v48' : 'is-v72'" />
+              </div>
             </div>
-          </bk-loading>
+            <template v-else-if="filterDetailDataFields.length">
+              <render-info-item
+                v-for="item in filterDetailDataFields"
+                :key="item.id"
+                class="approve-info-item"
+                :label="item.name"
+                :label-width="approveLabelWidth"
+                style="min-height: 32px;align-items: flex-start;line-height: 32px;">
+                <span v-if="item.choice && item.choice.length">
+                  {{ item.choice.find(choice => choice.key === approveValue(item.key))?.name
+                    || approveValue(item.key)
+                    || '--' }}
+                </span>
+                <span v-else>{{ approveValue(item.key) || '--' }}</span>
+              </render-info-item>
+            </template>
+            <p
+              v-else
+              class="approve-empty">
+              --
+            </p>
+          </div>
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
@@ -100,8 +128,8 @@
 <script setup lang='ts'>
   import {
     computed,
-    onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -126,12 +154,32 @@
   const { t, locale } = useI18n();
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 100 : 80));
+  const approveLabelWidth = computed(() => (locale.value === 'en-US' ? 100 : 84));
+  const approveLabelStyle = computed(() => ({
+    width: `${approveLabelWidth.value}px`,
+    flex: `0 0 ${approveLabelWidth.value}px`,
+  }));
+  const approveSkeletonRows = [1, 2, 3];
+
+  const approveValue = (key: string) => {
+    const config = props.data?.approve_config;
+    if (!config || typeof config !== 'object') return '';
+    const field = config[key];
+    if (field == null) return '';
+    return field.value ?? '';
+  };
+
+  const serviceName = computed(() => {
+    const serviceId = props.data?.approve_service_id;
+    if (serviceId == null) return '--';
+    const matched = (serviceList.value || []).find(item => String(item.id) === String(serviceId));
+    return matched?.name || '--';
+  });
 
   const filterDetailDataFields = computed(() => {
-    if (!detailData.value) return [] as ServiceField[];
-    const { fields } = detailData.value;
-    const res = fields.filter(item => !fieldMap.value[item.key]);
-    return res;
+    const fields = detailData.value?.fields;
+    if (!Array.isArray(fields)) return [] as ServiceField[];
+    return fields.filter(item => item && !fieldMap.value[item.key]);
   });
 
   // 标准运维流程
@@ -170,14 +218,18 @@
   } = useRequest(ItsmManageService.fetchServiceDetail, {
     defaultValue: null,
   });
-  onMounted(() => {
-    if (!props.data) return;
-    if (props.data.approve_service_id) {
-      fetchServiceDetail({
-        id: props.data.approve_service_id,
-      });
+
+  watch(() => props.data?.approve_service_id, (id) => {
+    if (id == null) {
+      detailData.value = null;
+      return;
     }
-  });
+    fetchServiceDetail({
+      id: String(id),
+    }).catch(() => {
+      detailData.value = null;
+    });
+  }, { immediate: true });
 </script>
 <style scoped lang="postcss">
 .process-detail-wrap {
@@ -192,6 +244,58 @@
       /* flex: 0 0 120px !important; */
       width: 120px;
     }
+  }
+
+  .skeleton-bar {
+    display: inline-block;
+    height: 12px;
+    vertical-align: middle;
+    background: var(--audit-neutral-border-01);
+    border-radius: var(--audit-radius-control);
+    animation: package-detail-skeleton 1.2s ease-in-out infinite;
+  }
+
+  .skeleton-bar.is-v48 {
+    width: 96px;
+  }
+
+  .skeleton-bar.is-v72 {
+    width: 160px;
+  }
+
+  .skeleton-bar.is-label {
+    width: 56px;
+  }
+
+  .approve-skeleton-row {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    line-height: 32px;
+  }
+
+  .approve-skeleton-label {
+    display: flex;
+    justify-content: flex-end;
+    padding-right: 12px;
+  }
+
+  .approve-empty {
+    min-height: 32px;
+    padding-left: 12px;
+    line-height: 32px;
+    color: #313238;
+  }
+}
+
+@keyframes package-detail-skeleton {
+  0%,
+  100% {
+    background: var(--audit-neutral-border-01);
+  }
+
+  50% {
+    background: var(--audit-neutral-bg-01);
   }
 }
 </style>
