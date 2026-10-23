@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """promptfoo Provider：复用生产 MessagePlanningService 评估单 Agent 消息计划。
 
-评测输入包含用户原话、当前系统、授权系统及字段上下文；Agent 一次返回
-MessagePlan，Provider 再运行与生产一致的 Pydantic、系统白名单和检索条件校验。
+复用本地生产提示词、最小上下文和校验，沿用环境配置的非流式Agent。
+评估最终选择与条件效果；元数据夹具只用于结果校验，不要求返回MCP中间过程。
 """
 
 import json
@@ -117,7 +117,7 @@ def _parse_current_time(value):
 
 
 def _make_chat_completion_wrapper(original_fn, model):
-    """仅覆盖模型参数，保留生产 role/user/thread_id 请求形态。"""
+    """仅覆盖显式模型参数，沿用环境Agent的非流式请求和最终输出。"""
 
     @wraps(original_fn)
     def wrapper(*args, **kwargs):
@@ -155,8 +155,11 @@ def _build_fields(system_id: str):
             "sample_value": -1,
             "options": [
                 SelectionFieldOption(id="0", name="成功(0)"),
-                SelectionFieldOption(id="-1", name="失败(-1)"),
+                SelectionFieldOption(id="-1", name="其他（-1仅为原始值）"),
             ],
+        },
+        "resource_type_id": {
+            "display_name": "资源类型",
         },
         "log": {
             "display_name": "日志内容",
@@ -168,9 +171,10 @@ def _build_fields(system_id: str):
         },
     }
     standard_fields = []
-    for raw_name, override in field_overrides.items():
-        config = COLLECT_SEARCH_CONFIG.query_field_map[raw_name]
-        display_name = override["display_name"]
+    for config in COLLECT_SEARCH_CONFIG.field_configs:
+        raw_name = config.field.field_name
+        override = field_overrides.get(raw_name, {})
+        display_name = override.get("display_name") or str(config.field.description or raw_name)
         standard_fields.append(
             SelectionFieldMeta(
                 raw_name=raw_name,
@@ -221,15 +225,6 @@ def _resolve_system_context(variables) -> SystemSelectionOutput:
     if "authorized_systems" in variables:
         return SystemSelectionOutput.model_validate({"systems": variables["authorized_systems"]})
     return _build_system_context(_resolve_candidates(variables.get("candidates")))
-
-
-def _resolve_common_fields(variables) -> list[SelectionFieldMeta]:
-    """解析生产公共字段目录；缺省使用无系统样例的稳定评测字段。"""
-
-    if "common_standard_fields" in variables:
-        return [SelectionFieldMeta.model_validate(field) for field in variables["common_standard_fields"]]
-    standard_fields, _ = _build_fields("")
-    return [field.model_copy(update={"sample_value": None}) for field in standard_fields]
 
 
 def _materialize_output(
@@ -299,6 +294,7 @@ def call_api(prompt, options, context):
     model = config.get("model") or None
     start = time.perf_counter()
     attempt_count = 0
+    plan = None
     _log_progress(query, "START")
     try:
         max_attempts = max(1, int(vars_.get("max_attempts") or config.get("max_attempts") or 3))
@@ -311,21 +307,18 @@ def call_api(prompt, options, context):
             }
             for system in system_context.systems
         ]
-        current_system = next(
-            (system for system in system_context.systems if system.system_id == current_system_id),
-            None,
-        )
+        if not any(system.system_id == current_system_id for system in system_context.systems):
+            current_system_id = ""
         planning_context = MessagePlanningService.build_context(
             query_text=query,
             candidates=candidates,
-            common_fields=_resolve_common_fields(vars_),
-            current_system=current_system,
+            current_system_id=current_system_id,
             username=EVAL_CONTEXT_USERNAME,
             reference_time=current_time,
         )
         user_message = MessagePlanningService.build_user_message(planning_context)
-        original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
         retry_feedback = None
+        original_fn = MessagePlanningService._call_agent.__func__.__globals__["api"].bk_plugins_ai_agent.chat_completion
         with patch(_CHAT_COMPLETION_PATH, _make_chat_completion_wrapper(original_fn, model)):
             for attempt_count in range(1, max_attempts + 1):
                 plan = None
@@ -365,6 +358,8 @@ def call_api(prompt, options, context):
                 "validation_error": str(extra.get("validation_error") or ""),
                 "reason": str(extra.get("reason") or ""),
                 "raw_output": str(extra.get("raw_output") or "")[:2048],
+                "validation_errors": extra.get("validation_errors") or [],
+                "final_plan": plan.model_dump(mode="json") if plan is not None else None,
             },
         }
 
@@ -376,6 +371,7 @@ def call_api(prompt, options, context):
             "latency_ms": latency_ms,
             "agent_code": getattr(MessagePlanningService.agent_code, "value", str(MessagePlanningService.agent_code)),
             "model": model or "platform-default",
+            "evaluation_mode": "environment-agent-non-streaming",
             "attempt_count": attempt_count,
         },
     }

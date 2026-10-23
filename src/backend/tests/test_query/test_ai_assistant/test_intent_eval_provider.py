@@ -1,6 +1,7 @@
 """通用消息规划评测 Provider 的生产协议一致性测试。"""
 
 import importlib.util
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -36,6 +37,102 @@ class IntentEvalProviderTest(SimpleTestCase):
         self.provider = load_provider_module()
         self.reference_time = datetime.fromisoformat("2026-09-20T10:00:00+08:00")
         self.system_context = self.provider._build_system_context(self.provider.CANDIDATES)
+
+    def test_non_streaming_agent_keeps_environment_route_and_minimal_context(self):
+        """沿用环境Agent和最终计划判尺，不依赖非流式接口没有的工具轨迹。"""
+        answer = json.dumps({"outcome": "error", "error_code": "UNRECOGNIZED_INTENT"})
+        with mock.patch(self.provider._CHAT_COMPLETION_PATH, return_value=answer) as remote:
+            result = self.provider.call_api(
+                "你好",
+                {"config": {"username": "auth_eval_user", "max_attempts": 1}},
+                {"vars": {"query": "你好", "current_system_id": "eval_audit_system"}},
+            )
+        self.assertEqual(json.loads(result["output"])["error_code"], "UNRECOGNIZED_INTENT")
+        self.assertNotIn("tool_calls", json.loads(result["output"]))
+        remote.assert_called_once()
+        self.assertEqual(remote.call_args.kwargs["agent_code"], self.provider.MessagePlanningService.agent_code)
+        self.assertFalse(remote.call_args.kwargs["execute_kwargs"]["stream"])
+        self.assertEqual(remote.call_args.kwargs["user"], "auth_eval_user")
+        user_message = remote.call_args.kwargs["chat_history"][1]["content"]
+        self.assertIn("authorized_system_ids", user_message)
+        self.assertNotIn("示例审计系统", user_message)
+        self.assertNotIn("standard_fields", user_message)
+        self.assertEqual(result["metadata"]["model"], "platform-default")
+
+    def test_validation_context_covers_production_standard_fields(self):
+        """MCP可返回全部生产标准字段，本地尺子不能只接受旧的少数字段。"""
+        fields, _ = self.provider._build_fields("eval_audit_system")
+        self.assertEqual(
+            {field.raw_name for field in fields},
+            {config.field.field_name for config in COLLECT_SEARCH_CONFIG.field_configs},
+        )
+
+    def test_materialization_error_keeps_final_plan(self):
+        """最终条件被后端拒绝时仍保留Agent计划，便于区分模型与夹具错误。"""
+        plan = MessagePlan(
+            outcome="dispatch",
+            messages=[
+                PlannedLogSearchMessage(
+                    message_type="LOG_SEARCH",
+                    message_input=PlannedLogSearchInput(
+                        condition=AIConditionPayload(
+                            conditions=[
+                                AIConditionItem(
+                                    raw_name="eval_unknown_field",
+                                    field_type="string",
+                                    operator="eq",
+                                    filters=["x"],
+                                )
+                            ]
+                        ),
+                    ),
+                )
+            ],
+        )
+        with mock.patch.object(self.provider.MessagePlanningService, "plan", return_value=plan):
+            result = self.provider.call_api(
+                "查日志",
+                {"config": {"username": "auth_eval_user", "max_attempts": 1}},
+                {"vars": {"current_system_id": "eval_audit_system"}},
+            )
+        output = json.loads(result["output"])
+        self.assertEqual(output["error_code"], "INVALID_CONDITION")
+        self.assertEqual(output["diagnostic"]["final_plan"], plan.model_dump(mode="json"))
+
+    def test_invalid_output_keeps_structured_validation_errors(self):
+        """非流式空回复也应能由invalid_json诊断区分，不能只留下空字符串。"""
+        errors = [{"path": "$", "code": "invalid_json", "message": "输出必须是完整JSON对象"}]
+        with mock.patch.object(
+            self.provider.MessagePlanningService,
+            "plan",
+            side_effect=AIOutputInvalidError(
+                extra={"validation_errors": errors, "raw_output": ""},
+            ),
+        ):
+            result = self.provider.call_api(
+                "查日志",
+                {"config": {"username": "auth_eval_user", "max_attempts": 1}},
+                {"vars": {}},
+            )
+        self.assertEqual(json.loads(result["output"])["diagnostic"]["validation_errors"], errors)
+
+    def test_generic_failure_goldens_use_nonzero_result_code(self):
+        """AI条件中的-1是字面值，不能沿用旧Web的失败反选标记。"""
+        suite = Path(__file__).parents[3] / "evals/intent-recognition/tests"
+        checked = 0
+        for file_name in ("chain-scenarios.yaml", "edge-cases.yaml"):
+            for case in yaml.safe_load((suite / file_name).read_text()):
+                variables = case["vars"]
+                if "失败" not in variables["query"] or "-1" in variables["query"]:
+                    continue
+                for condition in variables.get("expected_conditions", []):
+                    if condition["raw_name"] != "result_code":
+                        continue
+                    with self.subTest(case=case["description"]):
+                        self.assertIn(condition["operator"], {"neq", "exclude"})
+                        self.assertEqual(condition["filters"], [0])
+                    checked += 1
+        self.assertEqual(checked, 3)
 
     def test_materialize_composite_plan_uses_backend_default_day(self):
         plan = MessagePlan(
@@ -137,19 +234,19 @@ class IntentEvalProviderTest(SimpleTestCase):
 
         self.assertEqual(self.provider._resolve_candidates([]), [])
 
-    def test_default_common_fields_include_extension_container(self):
-        """评测公共字段必须包含生产同源的拓展数据 JSON 容器。"""
+    def test_validation_fields_include_extension_container(self):
+        """结果校验使用的字段须包含生产同源JSON容器。"""
 
-        fields = {field.raw_name: field for field in self.provider._resolve_common_fields({})}
+        fields = {field.raw_name: field for field in self.provider._build_fields("")[0]}
 
         self.assertIn("extend_data", fields)
         self.assertEqual(fields["extend_data"].field_type, "object")
         self.assertIn("eq", fields["extend_data"].allow_operators)
 
-    def test_default_common_fields_match_production_search_config(self):
-        """评测默认字段的类型与操作符必须取自生产检索配置。"""
+    def test_validation_fields_match_production_search_config(self):
+        """结果校验的字段类型与操作符必须取自生产检索配置。"""
 
-        fields = {field.raw_name: field for field in self.provider._resolve_common_fields({})}
+        fields = {field.raw_name: field for field in self.provider._build_fields("")[0]}
 
         for raw_name, field in fields.items():
             with self.subTest(raw_name=raw_name):
@@ -158,7 +255,7 @@ class IntentEvalProviderTest(SimpleTestCase):
                 self.assertEqual(field.allow_operators, [operator.value for operator in config.allow_operators])
 
     def test_full_authorized_system_context_keeps_per_system_fields(self):
-        """评测可以注入生产同构的完整系统字段快照。"""
+        """结果校验支持完整系统字段夹具，不传给Agent。"""
 
         context = self.provider._resolve_system_context(
             {

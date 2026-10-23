@@ -166,7 +166,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         ), mock.patch(
             f"{TASK_MODULE}.FieldContextService.build_common_fields",
             return_value=common_fields,
-        ), mock.patch(
+        ) as load_common_fields, mock.patch(
             f"{TASK_MODULE}.FieldContextService.build_selection",
             return_value=target_context,
         ) as load_system_detail, mock.patch(
@@ -199,6 +199,7 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
                 )
             else:
                 output = resolved.output
+        load_common_fields.assert_not_called()
         self.assertEqual(planner.call_count, expected_planner_calls)
         expected_system_ids = []
         if plan.outcome == "dispatch" and any(item.message_type == MessageType.LOG_SEARCH for item in plan.messages):
@@ -287,7 +288,10 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(updated.status, ExecutionStatus.PROCESSING)
 
     def test_current_system_log_search_is_intent_child_and_executes_async(self):
-        root, current_selection, output, _ = self._run(log_plan(), with_selection=True)
+        """派生检索保存动态月份标记，自动执行的根消息仍只返回派生消息引用。"""
+        plan = log_plan()
+        plan.messages[0].message_input.condition.time_shortcut = "now-2M"
+        root, current_selection, output, _ = self._run(plan, with_selection=True)
 
         log_search = Message.objects.get(parent_message=root, message_type=MessageType.LOG_SEARCH)
         self.assertEqual(log_search.message_type, MessageType.LOG_SEARCH)
@@ -296,6 +300,9 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(log_search.context_data["source"], "natural_language")
         self.assertTrue(log_search.visible)
         self.assertEqual(output.log_search_message_uid, str(log_search.uid))
+        self.assertIsNone(output.condition)
+        self.assertIsNone(output.time_shortcut)
+        self.assertEqual(log_search.input_data["time_shortcut"], "now-2M")
         self.assertFalse(Message.objects.filter(message_type="NATURAL_LANGUAGE_SEARCH").exists())
 
     def test_switch_and_search_hides_selection_and_orders_summaries(self):
@@ -338,7 +345,11 @@ class UserIntentExecutionTest(AIAssistantPlatformTestCase):
         self.assertEqual(end, datetime_from_iso(root.context_data["agent_trace"]["reference_time"]))
 
     def test_auto_execute_false_keeps_condition_without_log_message(self):
-        root, current_selection, output, _ = self._run(log_plan(), with_selection=True, auto_execute=False)
+        """预览条件单独携带动态标记，不派生日志检索消息。"""
+        plan = log_plan()
+        plan.messages[0].message_input.condition.time_shortcut = "now-2M"
+        root, current_selection, output, _ = self._run(plan, with_selection=True, auto_execute=False)
+        self.assertEqual(output.time_shortcut, "now-2M")
 
         self.assertIsNotNone(output.condition)
         self.assertEqual(output.condition.scope_id, TARGET_SYSTEM_ID)

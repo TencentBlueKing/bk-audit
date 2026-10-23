@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 协议层模型（schemas）形态校验测试
 """
 
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError as PydanticValidationError
 
 from services.web.query.ai_assistant.schemas import (
@@ -99,11 +100,11 @@ class TestAIConditionPayloadTimeShortcut(AIAssistantTestCase):
     """相对时间窗快捷标记形态校验（pattern 约束自动进 model_json_schema 注入 prompt）"""
 
     def test_valid_forms(self):
-        """合法快捷值：天/小时/月粒度（月对齐前端 DATETIME_SHORTCUT_LABEL_MAP 白名单）"""
+        """合法快捷值覆盖前端DateRange的相对时间单位，预置按钮不限制合法月份。"""
         for value in ("now-1h", "now-24h", "now-1d", "now-3d", "now-7d", "now-14d", "now-30d", "now-365d"):
             payload = AIConditionPayload(conditions=[], time_shortcut=value)
             self.assertEqual(payload.time_shortcut, value)
-        for value in ("now-1M", "now-3M", "now-6M", "now-12M"):
+        for value in ("now-30s", "now-30m", "now-1w", "now-2M", "now-4M", "now-12M", "now-1y"):
             payload = AIConditionPayload(conditions=[], time_shortcut=value)
             self.assertEqual(payload.time_shortcut, value)
 
@@ -112,9 +113,29 @@ class TestAIConditionPayloadTimeShortcut(AIAssistantTestCase):
         self.assertIsNone(AIConditionPayload(conditions=[], time_shortcut=None).time_shortcut)
 
     def test_invalid_form_rejected(self):
-        for value in ("now-1w", "now-1Y", "now--1d", "now-0d", "now-7D", "now", "yesterday", "now-1.5d", "now-1h30m"):
-            with self.assertRaises(PydanticValidationError):
+        for value in (
+            "now-1Y",
+            "now--1d",
+            "now-0d",
+            "now-7D",
+            "now",
+            "yesterday",
+            "now-1.5d",
+            "now-1h30m",
+            "now-01d",
+        ):
+            with self.subTest(value=value), self.assertRaises(PydanticValidationError):
                 AIConditionPayload(conditions=[], time_shortcut=value)
+
+    def test_advertised_shortcuts_match_runtime_shapes(self):
+        """Agent读取的JSON Schema与运行时一致接受动态标记，拒绝复合或非正数窗口。"""
+        validator = Draft202012Validator(AIConditionPayload.model_json_schema())
+        for value in ("now-30s", "now-30m", "now-1w", "now-2M", "now-1y"):
+            with self.subTest(value=value):
+                self.assertEqual(list(validator.iter_errors({"time_shortcut": value})), [])
+        for value in ("now-0d", "now-01d", "now-1.5M", "now-1h30m"):
+            with self.subTest(value=value):
+                self.assertTrue(list(validator.iter_errors({"time_shortcut": value})))
 
 
 class TestResultColumn(AIAssistantTestCase):
