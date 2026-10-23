@@ -345,12 +345,6 @@
     0% { background-position: 0% 50%; }
     100% { background-position: 200% 50%; }
   }
-
-  @keyframes nl-shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(250%); }
-  }
-
   .nl-search-input {
     position: relative;
     z-index: 510;
@@ -392,7 +386,6 @@
       }
 
       &.is-disabled {
-        overflow: hidden;
         cursor: default;
         background: #fcfdff;
         box-shadow: 0 6px 18px 0 rgb(72 139 255 / 14%);
@@ -401,18 +394,6 @@
           background: linear-gradient(90deg, #488bff, #c43bff, #488bff);
           background-size: 200% 100%;
           animation: nl-border-flow 2s linear infinite;
-        }
-
-        &::after {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 0;
-          width: 40%;
-          pointer-events: none;
-          background: linear-gradient(90deg, transparent, rgb(72 139 255 / 8%), transparent);
-          content: '';
-          animation: nl-shimmer 1.6s ease-in-out infinite;
         }
 
         .nl-input-inner {
