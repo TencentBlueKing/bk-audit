@@ -38,6 +38,7 @@ class QuerySyncRequestSerializer(serializers.Serializer):
         label=gettext_lazy("认证方式"), choices=AuthType.choices, default=AuthType.USER
     )
     bkdata_data_token = serializers.CharField(label=gettext_lazy("Token"), required=False)
+    request_timeout = serializers.FloatField(required=False, min_value=0.001, max_value=300, write_only=True)
 
     def validate(self, attrs):
         if attrs["bkdata_authentication_method"] == AuthType.TOKEN:
