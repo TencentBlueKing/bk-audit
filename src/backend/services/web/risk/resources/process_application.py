@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import uuid
 
 from django.db import transaction
 from django.db.models import Count, F, Q
@@ -255,7 +254,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
     @staticmethod
     def _filter_by_record_id(nodes, record_id: str):
-        """执行记录 ID 精确过滤：空值不过滤（UUID 格式已由 RequestSerializer.validate_id 校验）"""
+        """执行记录 ID 精确过滤（字符串比较，与 task_id 筛选同风格）；空值不过滤"""
         return nodes.filter(id=record_id) if record_id else nodes
 
     @staticmethod
@@ -299,7 +298,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             required=False,
             allow_blank=True,
             help_text=gettext_lazy(
-                "按执行记录唯一 ID（TicketNode.id，UUID，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+                "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
             ),
         )
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
@@ -328,15 +327,6 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         page_size = serializers.IntegerField(
             label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
         )
-
-        def validate_id(self, value):
-            value = (value or "").strip()
-            if not value:
-                return value
-            try:
-                return str(uuid.UUID(value))
-            except ValueError:
-                raise serializers.ValidationError(gettext_lazy("执行记录ID 不是合法的 UUID"))
 
     def perform_request(self, validated_request_data):
         record_id = (validated_request_data.get("id") or "").strip()
