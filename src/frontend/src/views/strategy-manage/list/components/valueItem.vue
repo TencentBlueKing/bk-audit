@@ -86,6 +86,7 @@
     columns?: Array<TableColumn>;
     riskColumns?: Array<TableColumn>;
     fillLastColumn?: boolean;
+    lockColumnWidth?: boolean;
   }
 
   const props = defineProps<Props>();
@@ -103,7 +104,30 @@
   });
 
   const getColumnStyle = (column: TableColumn, index: number, total: number) => {
-    if (props.fillLastColumn && index === total - 1) {
+    if (props.lockColumnWidth) {
+      if (column.key === 'description') {
+        return {
+          flex: '1 1 auto',
+          width: 'auto',
+          minWidth: '0',
+          maxWidth: 'none',
+        };
+      }
+      const width = column.width || '88px';
+      return {
+        flex: `0 0 ${width}`,
+        width,
+        minWidth: width,
+        maxWidth: width,
+      };
+    }
+    if (props.fillLastColumn) {
+      return {
+        flex: '1 1 0',
+        minWidth: '88px',
+      };
+    }
+    if (index === total - 1) {
       return {
         flex: '1 1 auto',
         minWidth: column.width || '200px',
@@ -149,8 +173,8 @@
   .table-row {
     display: flex;
     width: max-content;
-    min-height: 42px;
-    line-height: 22px;
+    min-height: 36px;
+    line-height: var(--audit-line-height-sm);
 
     &.fill-last-column {
       width: 100%;
@@ -184,12 +208,11 @@
 
   .value-item {
     .empty-text {
-      min-height: 42px;
-      font-size: 12px;
-      line-height: 42px;
-      color: #979ba5;
+      height: 36px;
+      font-size: var(--audit-font-size-sm);
+      line-height: 36px;
+      color: var(--audit-neutral-text-03);
       text-align: center;
-      border-bottom: 1px solid #dcdee5;
     }
   }
 </style>

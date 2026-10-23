@@ -15,53 +15,52 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import type { BksecConfigPayload } from '@model/bksec/config';
 import BksecPreviewRisk from '@model/bksec/preview-risk';
 import BksecRiskType from '@model/bksec/risk-type';
-import BksecRiskTypeField from '@model/bksec/risk-type-field';
-import BksecTicketPreview from '@model/bksec/ticket-preview';
-
-import type { PreviewRiskPayload, TicketPreviewPayload } from '@model/bksec/payload';
+import BksecTestTaskStatus from '@model/bksec/task-status';
 
 import BksecManageSource from '../source/bksec-manage';
 
-export type { PreviewRiskPayload, TicketPreviewPayload };
-
 export default {
+  fetchFeature() {
+    return BksecManageSource.fetchFeature()
+      .then(({ data }) => ({ enabled: !!data?.enabled }));
+  },
   fetchRiskTypes() {
     return BksecManageSource.fetchRiskTypes()
-      .then(({ data }) => data.map(item => new BksecRiskType(item)));
+      .then(({ data }) => (data || []).map((item: Record<string, any>) => new BksecRiskType(item)));
   },
-  fetchRiskTypeFields(params: { risk_type_id: number }) {
-    return BksecManageSource.fetchRiskTypeFields(params)
-      .then(({ data }) => (data || []).map((item: {
-        id: string;
-        name: string;
-        required?: boolean;
-        tips?: string;
-      }) => new BksecRiskTypeField(item)));
-  },
-  fetchPreviewRiskList(params: PreviewRiskPayload) {
-    return BksecManageSource.fetchPreviewRiskList(params)
-      .then(({ data }) => (data || []).map((item: {
-        id: string;
-        title: string;
-        source: 'real' | 'debug';
-        risk_id?: string;
-        created_at?: string;
-        sample?: Record<string, string>;
-      }) => new BksecPreviewRisk(item)));
-  },
-  fetchTicketPreview(params: TicketPreviewPayload) {
+  fetchTicketPreview(params: { risk_id: string; bksec_config: BksecConfigPayload }) {
     return BksecManageSource.fetchTicketPreview(params)
-      .then(({ data }) => new BksecTicketPreview(data));
+      .then(({ data }) => data);
   },
   sendTestTicket(params: {
-    handler: string;
-    risk_type_id: number | null;
-    field_values: Record<string, string>;
-    risk_id?: string;
+    risk_id: string;
+    test_receivers: string[];
+    bksec_config: BksecConfigPayload;
   }) {
     return BksecManageSource.sendTestTicket(params)
-      .then(({ data }) => data);
+      .then(({ data }) => ({ taskId: String(data?.task?.task_id || '') }));
+  },
+  fetchTestTaskStatus(params: { task_id?: string; risk_id?: string }) {
+    return BksecManageSource.fetchTestTaskStatus(params)
+      .then(({ data }) => new BksecTestTaskStatus(data || {}));
+  },
+  fetchEditPreviewRisks(strategyId?: string | number) {
+    const id = Number(strategyId);
+    if (!Number.isFinite(id) || id <= 0) return Promise.resolve([] as BksecPreviewRisk[]);
+    return BksecManageSource.fetchEditPreviewRisks({ strategy_id: id })
+      .then(({ data }) => {
+        const rows = Array.isArray(data) ? data : (data?.results || []);
+        return rows.map((item: Record<string, any>) => new BksecPreviewRisk({
+          id: String(item.risk_id || item.id || ''),
+          title: item.title || '',
+          source: item.source || 'real',
+          risk_id: String(item.risk_id || ''),
+          created_at: item.created_at || item.event_time || '',
+          sample: item.sample || {},
+        }));
+      });
   },
 };

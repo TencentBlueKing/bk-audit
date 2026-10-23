@@ -137,7 +137,8 @@ export function provideToolManageContext(ctx: ToolManageContext) {
 }
 
 export function useToolManageContext(): ToolManageContext {
-  const ctx = inject(TOOL_MANAGE_CONTEXT_KEY);
+  // 传入默认值，避免单据页等未 provide 的场景每个字段都打 injection 警告
+  const ctx = inject(TOOL_MANAGE_CONTEXT_KEY, null);
   if (!ctx) {
     // 兜底：未 provide 时按平台行为，避免局部复用崩溃
     return createPlatformToolManageContext();
