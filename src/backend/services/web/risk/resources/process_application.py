@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import uuid
 
 from django.db import transaction
 from django.db.models import Count, F, Q
@@ -253,6 +254,11 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         return values
 
     @staticmethod
+    def _filter_by_record_id(nodes, record_id: str):
+        """执行记录 ID 精确过滤：空值不过滤（UUID 格式已由 RequestSerializer.validate_id 校验）"""
+        return nodes.filter(id=record_id) if record_id else nodes
+
+    @staticmethod
     def _pa_filter_q(pa_ids: list) -> Q:
         """套餐归属过滤条件：与展示口径一致（快照优先，无快照走规则链路兜底）
 
@@ -288,6 +294,14 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         return snapshot_q | legacy_q
 
     class RequestSerializer(serializers.Serializer):
+        id = serializers.CharField(
+            label=gettext_lazy("执行记录ID"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy(
+                "按执行记录唯一 ID（TicketNode.id，UUID，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+            ),
+        )
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
         risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
         scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
@@ -315,7 +329,17 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
         )
 
+        def validate_id(self, value):
+            value = (value or "").strip()
+            if not value:
+                return value
+            try:
+                return str(uuid.UUID(value))
+            except ValueError:
+                raise serializers.ValidationError(gettext_lazy("执行记录ID 不是合法的 UUID"))
+
     def perform_request(self, validated_request_data):
+        record_id = (validated_request_data.get("id") or "").strip()
         pa_id = validated_request_data.get("pa_id")
         risk_id = validated_request_data.get("risk_id")
         scene_id = validated_request_data.get("scene_id")
@@ -331,6 +355,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 处理套餐执行记录包含测试单（is_test 不过滤）
         nodes = TicketNode.objects.filter(action="AutoProcess")
+
+        # 执行记录 ID 精确过滤（TicketNode.id 为 UUID，格式校验在 RequestSerializer.validate_id）
+        nodes = self._filter_by_record_id(nodes, record_id)
 
         # 套餐筛选 / 场景范围：归属口径与展示一致——执行时快照优先，无快照走规则（含版本）链路兜底
         if pa_id or scene_id:

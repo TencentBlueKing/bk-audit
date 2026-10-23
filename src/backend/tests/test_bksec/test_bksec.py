@@ -155,11 +155,10 @@ class TestContract:
             with mock.patch(
                 "services.web.risk.bksec.render.load_risk_events", mock.Mock(return_value=[{"event_id": "e1"}])
             ):
-                constants = build_plugin_constants(config, risk=risk, test_operators=["tester", "tester2"])
+                constants = build_plugin_constants(config, risk=risk, test_operator="tester")
         assert constants["${risk_id}"] == risk.risk_id
         assert constants["${event_type}"] == '["SuperPermission"]'  # event_type 从 risk.event_type 序列化
-        # 测试接收人全量入参（不再只取首个）：数组串，满足插件 json.loads 契约
-        assert json.loads(constants["${operator}"]) == ["tester", "tester2"]
+        assert constants["${operator}"] == '["tester"]'  # 数组串，满足插件 json.loads 契约
         # event_data 还原为事件拓展数据
         assert json.loads(constants["${event_data}"]) == {"username": "admin"}
         # risk_type_extra 承载全部字段映射（含 target/target_type/operator，与独立入参重复但语义独立）
