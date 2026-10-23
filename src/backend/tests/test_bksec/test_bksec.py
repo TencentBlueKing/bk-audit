@@ -26,7 +26,6 @@ from django.conf import settings
 from services.web.risk.bksec import sync_bksec_rule
 from services.web.risk.bksec.config import BkSecConfig
 from services.web.risk.bksec.constants import (
-    BKSEC_OPERATOR_TEMPLATE,
     BKSEC_PRESET_PA_NAME,
     BKSEC_RULE_PRIORITY_BASE,
 )
@@ -34,6 +33,7 @@ from services.web.risk.bksec.contract import (
     build_event_payload,
     build_pa_params,
     build_plugin_constants,
+    coerce_operator_constant,
 )
 from services.web.risk.bksec.render import build_render_context, render_value
 from services.web.risk.models import ProcessApplication, RiskRule
@@ -487,8 +487,13 @@ class TestBkSecResources:
             result = resource.risk.get_task_status.perform_request({"task_id": "1"})
         assert "failure_hint" not in result
 
-    def test_operator_template_empty_value_renders_valid_json_array(self):
-        """断点1固化：无责任人且无安全接口人时，operator 仍渲染为合法 JSON 数组串（插件 json.loads 不崩）"""
-        ctx = {"risk": type("R", (), {"operator": "", "security_person": ""})(), "event": {}}
-        out = render_value(BKSEC_OPERATOR_TEMPLATE, ctx)
-        assert json.loads(out) == [""]  # 合法数组，插件侧 join 后为空串（数据质量项，非崩溃）
+    def test_operator_constant_empty_value_renders_valid_json_array(self):
+        """断点1固化：无责任人且无安全接口人时，${operator} 仍为合法 JSON 数组串（插件 json.loads 不崩）"""
+        # 分号切分与 JSON 序列化由代码处理，配置页只需按语义写 {{ risk.operator }}
+        assert json.loads(coerce_operator_constant("")) == []
+        # 分号分隔的多人 → 数组
+        assert json.loads(coerce_operator_constant("alice;bob")) == ["alice", "bob"]
+        # 脏值 "None" 被剔除
+        assert json.loads(coerce_operator_constant("None")) == []
+        # 已是数组串时保持数组语义
+        assert json.loads(coerce_operator_constant('["alice"]')) == ["alice"]
