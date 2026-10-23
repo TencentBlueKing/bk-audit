@@ -31,7 +31,10 @@ from apps.meta.utils.fields import STANDARD_FIELDS
 from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.sql.constants import Operator
 from core.utils.distutils import strtobool
-from services.web.databus.collector.snapshot.system.base import create_iam_data_link
+from services.web.databus.collector.snapshot.system.base import (
+    create_iam_data_link,
+    init_itsm_v4,
+)
 from services.web.databus.constants import (
     CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
@@ -55,6 +58,7 @@ from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
+    INIT_ITSM_V4_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
     INIT_SDK_CONFIG_FINISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
@@ -129,7 +133,16 @@ class SystemInitHandler:
         self.init_asset()
         self.init_system_rule_audit()
         self.init_global_meta_config()
+        self.init_itsm_v4()
         print("[Main] Init Finished")
+
+    def init_itsm_v4(self):
+        if self.pre_check(INIT_ITSM_V4_FINISHED_KEY):
+            print("[InitItsmV4] Already Finished, Skip")
+            return
+        result = init_itsm_v4()
+        if result:
+            self.post_init(INIT_ITSM_V4_FINISHED_KEY)
 
     def pre_init(self):
         enable_system_init = strtobool(os.getenv("BKAPP_INIT_SYSTEM", "False"))
