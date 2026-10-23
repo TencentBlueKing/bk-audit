@@ -151,7 +151,7 @@
                 @mouseenter="showLegendTip(item, $event)">
                 <span
                   class="legend-dot"
-                  :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
+                  :style="legendDotStyle(card.key, item.name, item.color)" />
                 <span class="legend-label">
                   <span class="legend-name">{{ item.name }}</span>
                   <span class="legend-meta">：{{ item.valueText }} ( {{ item.percent }} )</span>
@@ -185,14 +185,14 @@
                   @mouseenter="showChartLegendTip(item.name, $event)">
                   <span
                     class="legend-dot"
-                    :style="{ background: isLegendItemOn(card.key, item.name) ? item.color : 'var(--audit-neutral-text-04)' }" />
+                    :style="legendDotStyle(card.key, item.name, item.color)" />
                   <span class="chart-legend-name">{{ truncateLegendLabel(item.name) }}</span>
                 </div>
               </div>
               <div
                 :ref="el => setLegendMeasureRef(card.key, el)"
-                class="chart-legend-measure"
-                aria-hidden="true">
+                aria-hidden="true"
+                class="chart-legend-measure">
                 <div
                   v-for="(item, index) in card.legendItems"
                   :key="`${item.name}-${index}`"
@@ -332,10 +332,7 @@
     TREND_CARD_TITLE,
     visibleStatisticsRatio,
   } from '../utils/map-statistics-output';
-  import {
-    type ChartSanitizeErrorCode,
-    sanitizeChartOption,
-  } from '../utils/sanitize-chart-option';
+  import { sanitizeChartOption } from '../utils/sanitize-chart-option';
 
   const props = withDefaults(defineProps<{
     isShow?: boolean;
@@ -453,7 +450,7 @@
     const spans = legendPageSpans.value[card.key];
     const items = card.legendItems;
     const indexes = spans?.[legendPageNumber(card.key) - 1] || items.map((_, index) => index);
-    return indexes.map(index => {
+    return indexes.map((index) => {
       const item = items[index];
       if (!item) return null;
       return { ...item, key: `${item.name}-${index}` };
@@ -474,6 +471,10 @@
   const isLegendItemOn = (cardKey: string, name: string) => (
     legendSelected.value[cardKey]?.[name] !== false
   );
+
+  const legendDotStyle = (cardKey: string, name: string, color: string) => ({
+    background: isLegendItemOn(cardKey, name) ? color : 'var(--audit-neutral-text-04)',
+  });
 
   const chartBoxHeight = (card: ChartCardView) => {
     if (card.kind !== 'bar' || !card.ratio?.length) return card.height;
@@ -709,8 +710,6 @@
     return BUILTIN_CARD_TITLES.has(title) ? t(title) : title;
   };
 
-  const errorText = (_errorCode: ChartSanitizeErrorCode) => t('图表配置不合法');
-
   /** echarts 自身抛错的卡片，key 记在这里，和配置层的 errorCode 分开 */
   const mountFailedKeys = ref<Set<string>>(new Set());
 
@@ -719,7 +718,7 @@
   );
 
   const cardErrorText = (card: StatisticsChartCard) => (
-    card.errorCode ? errorText(card.errorCode) : t('图表渲染失败')
+    card.errorCode ? t('图表配置不合法') : t('图表渲染失败')
   );
 
   const markMountFailed = (key: string) => {
@@ -876,7 +875,8 @@
     }));
   };
 
-  const liftChartLegend = (option: Record<string, any>) => {
+  const liftChartLegend = (rawOption: Record<string, any>) => {
+    const option: Record<string, any> = rawOption;
     const items = collectLegendItems(option);
     if (!items.length) return { items };
     const grid = isPlainRecord(option.grid) ? option.grid : null;
@@ -1161,7 +1161,8 @@
   const exportFileName = (card: ChartCardView) => {
     const field = fieldView.value?.fieldLabel || '';
     const title = cardTitleText(card.title);
-    return [field, title].filter(Boolean).join('-').replace(/[\\/:*?"<>|]/g, '_');
+    return [field, title].filter(Boolean).join('-')
+      .replace(/[\\/:*?"<>|]/g, '_');
   };
 
   const handleExport = (key: string) => {

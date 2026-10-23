@@ -384,7 +384,6 @@ export default {
     '条风险，提交后将按相同处理方法统一执行。': 'risks. They will be processed with the same action after submit.',
     批量确认风险单: 'Batch confirm risks',
     确认结果: 'Confirm result',
-    风险确认: 'Confirm risk',
     确认说明: 'Confirm note',
     请输入确认说明: 'Enter a confirm note',
     请选择确认结果: 'Select a confirm result',
