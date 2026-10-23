@@ -82,7 +82,7 @@ dependencies = [
     "openpyxl==3.1.2",
     "elasticsearch==7.17.9",
     "pypinyin==0.49.0",
-    "bk-crypto-python-sdk==2.0.1",
+    "bk-crypto-python-sdk[gm]==4.1.1",
     "client-throttler==2.1.0",
     "bk-notice-sdk==1.3.2",
     "pypika==0.48.9",
@@ -105,7 +105,8 @@ dependencies = [
     "drf-pydantic==2.7.1",
     "sqlglot==26.26.0",
     "django-db-connection-pool==1.2.6",
-    "supervisor~=4.3.0"
+    "supervisor~=4.3.0",
+    "bk-kms-sdk==1.0.0"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
