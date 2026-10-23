@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.conf import settings
 from django.test import override_settings
 from django.urls import resolve
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -26,7 +27,7 @@ from services.web.ai_assistant.permissions import AIAssistantScopePermission
 from services.web.ai_assistant.services import ConversationService
 from services.web.common.scope_permission import ScopePermission
 from tests.base import TestCase
-from tests.test_ai_assistant.base import make_condition
+from tests.test_ai_assistant.base import make_condition, make_log_search_output
 from tests.test_ai_assistant.factories import (
     create_conversation,
     create_conversation_group,
@@ -491,7 +492,12 @@ class AIAssistantScopePermissionTest(TestCase):
     def test_full_export_public_default_and_invalid_config(self):
         """真实 HTTP 链路对缺省列配置成功执行，对非法列结构返回 400。"""
         self.message.input_data = {"condition": make_condition().model_dump(mode="json")}
-        self.message.save(update_fields=["input_data"])
+        # 同步直出默认开启（AI_EXPORT_SYNC_ENABLED=True）：快照 total 超过同步条数上限，
+        # 走"超限直接异步"分支，保持本用例对异步建任务链路（默认列配置）的回归意图
+        self.message.output_data = make_log_search_output(total=settings.AI_EXPORT_SYNC_MAX_COUNT + 1).model_dump(
+            mode="json"
+        )
+        self.message.save(update_fields=["input_data", "output_data"])
         with (
             patch.object(ScopePermission, "check_scope_entry"),
             patch("services.web.ai_assistant.resources.message.get_request_username", return_value="alice"),

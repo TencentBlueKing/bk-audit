@@ -11,6 +11,7 @@ from api.bk_base.default import SafeQuerySyncResource
 from core.observability import _run_with_api_resource_span
 from services.web.query.ai_assistant.exceptions import LogQueryTimeout
 from services.web.query.ai_assistant.log_tools.errors import map_log_query_error
+from services.web.query.resources.doris import CollectorSearchAllResource
 
 
 class TestSafeQuerySyncResource(SimpleTestCase):
@@ -34,6 +35,43 @@ class TestSafeQuerySyncResource(SimpleTestCase):
         response = self._response(payload={"result": True, "code": 0, "data": {"list": [{"count": 1}]}})
 
         self.assertEqual(resource.parse_response(response), {"list": [{"count": 1}]})
+
+    def test_request_timeout_reaches_http_without_leaking_into_next_request(self):
+        """单次查询预算只控制本次连接/读取超时，不发送给BKBase或修改共享实例。"""
+        resource = SafeQuerySyncResource()
+        response = self._response(payload={"result": True, "code": 0, "data": {"list": []}})
+        with mock.patch.object(resource.session, "request", return_value=response) as request:
+            resource.request(sql="SELECT 1", request_timeout=2)
+            first = request.call_args.kwargs
+            self.assertEqual(first["timeout"].total, 2)
+            self.assertNotIn("request_timeout", first["json"])
+            resource.request(sql="SELECT 2")
+            self.assertEqual(request.call_args.kwargs["timeout"], 300)
+
+    def test_collector_budget_reaches_both_http_queries(self):
+        """经过真实Collector及BKBase两层serializer后，两条并发查询都受预算约束。"""
+        collector = CollectorSearchAllResource()
+        response = self._response(payload={"result": True, "code": 0, "data": {"list": [{"count": 0}]}})
+        with (
+            mock.patch.object(collector, "build_sql", return_value={"data": "SELECT 1", "count": "SELECT 0"}),
+            mock.patch.object(collector, "parse_data", return_value=[]),
+            mock.patch("requests.sessions.Session.request", return_value=response) as http,
+        ):
+            result = collector.request(
+                namespace="default",
+                start_time="2026-09-19T10:00:00+08:00",
+                end_time="2026-09-20T10:00:00+08:00",
+                page=1,
+                page_size=1,
+                bind_system_info=False,
+                conditions=[],
+                query_timeout=2,
+            )
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(len(http.call_args_list), 2)
+        for call in http.call_args_list:
+            self.assertEqual(call.kwargs["timeout"].total, 2)
+            self.assertNotIn("request_timeout", call.kwargs["json"])
 
     def test_resource_collection_stays_enabled(self):
         self.assertTrue(SafeQuerySyncResource.support_data_collect)
