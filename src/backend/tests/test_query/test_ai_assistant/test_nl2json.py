@@ -721,7 +721,7 @@ class TestNL2JSONTimeWindowIntent(AIAssistantTestCase):
 
 @bind_agent_output
 class TestRelativeTimeShortcut(AIAssistantTestCase):
-    """相对时间窗快捷标记（前端确认方案 10-09，格式 now-{数字}{单位}，h/d/M）：
+    """相对时间窗快捷标记（前端确认方案 10-09，格式 now-{正整数}{单位}，smhdwMy）：
     用户语义为相对表述（近N小时/近N天/近N月）→ AI 输出 time_shortcut，服务端权威换算绝对时间；
     用户未提及时间 → 后端默认窗口并标注 now-1d；用户给出明确时间段 → 标记为 None。
     start_time/end_time 恒有效（查询/导出/报告依赖）。
@@ -760,17 +760,17 @@ class TestRelativeTimeShortcut(AIAssistantTestCase):
         self.assertEqual(self._resolve_shortcut(), "now-1h")
 
     def test_month_shortcut_converted(self, mock_chat):
-        """「近1月」→ 月粒度按前端固定映射查表换算（1M=30 天，非 30×N 线性须查表）"""
+        """「近1月」按日历月换算，与前端DateRange一致。"""
         mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1M"})
 
         condition = self._convert()
 
         self.assertEqual(parse_datetime(condition.end_time), self.REFERENCE_TIME)
-        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME - timedelta(days=30))
+        self.assertEqual(parse_datetime(condition.start_time), self.REFERENCE_TIME.replace(month=8))
         self.assertEqual(self._resolve_shortcut(), "now-1M")
 
     def test_year_mapped_to_month_shortcut(self, mock_chat):
-        """「近一年」→ now-12M（对齐前端 DATETIME_SHORTCUT_LABEL_MAP，前端渲染「近12月」）"""
+        """「近一年」也可用now-12M表达，标记保留供前端动态重算。"""
         mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-12M"})
 
         condition = self._convert()
@@ -844,17 +844,43 @@ class TestRelativeTimeShortcut(AIAssistantTestCase):
             self._convert()
         self.assertEqual(ctx.exception.extra["reason"], "invalid time shortcut")
 
-    def test_non_whitelist_month_shortcut_rejected(self, mock_chat):
-        """非白名单月值（now-2M）→ 拒绝（月换算是查表非线性的，前端 map 亦无此 key）"""
-        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-2M"})
+    def test_calendar_shortcuts_preserve_marker_and_clip_month_end(self, mock_chat):
+        """任意月数按日历换算，月末/闰年截到有效日且不丢失动态标记。"""
+        cases = (
+            ("now-2M", "2026-09-20T10:30:00+08:00", "2026-07-20T10:30:00+08:00"),
+            ("now-2M", "2026-08-31T10:30:00+08:00", "2026-06-30T10:30:00+08:00"),
+            ("now-1M", "2024-03-31T10:30:00+08:00", "2024-02-29T10:30:00+08:00"),
+            ("now-12M", "2024-03-01T10:30:00+08:00", "2023-03-01T10:30:00+08:00"),
+            ("now-1y", "2024-02-29T10:30:00+08:00", "2023-02-28T10:30:00+08:00"),
+        )
+        for shortcut, now, expected in cases:
+            with self.subTest(shortcut=shortcut, now=now):
+                mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": shortcut})
+                condition = assemble_recorded_output(self, reference_time=datetime.fromisoformat(now))
+                self.assertEqual(parse_datetime(condition.start_time), parse_datetime(expected))
+                self.assertEqual(parse_datetime(condition.end_time), parse_datetime(now))
+                self.assertEqual(self._resolve_shortcut(), shortcut)
 
-        with self.assertRaises(InvalidConditionError) as ctx:
-            self._convert()
-        self.assertEqual(ctx.exception.extra["reason"], "invalid time shortcut")
+    def test_fixed_units_and_window_limits(self, mock_chat):
+        """秒、分钟和周保留动态标记；各单位的过大窗口仍显式拒绝。"""
+        for shortcut, delta in (
+            ("now-30s", timedelta(seconds=30)),
+            ("now-30m", timedelta(minutes=30)),
+            ("now-2w", timedelta(weeks=2)),
+        ):
+            with self.subTest(shortcut=shortcut):
+                mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": shortcut})
+                self.assertEqual(parse_datetime(self._convert().start_time), self.REFERENCE_TIME - delta)
+                self.assertEqual(self._resolve_shortcut(), shortcut)
+        for shortcut in ("now-31536001s", "now-525601m", "now-8761h", "now-366d", "now-53w", "now-13M", "now-2y"):
+            with self.subTest(shortcut=shortcut):
+                mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": shortcut})
+                with self.assertRaises(InvalidConditionError):
+                    self._convert()
 
     def test_invalid_shortcut_form_rejected(self, mock_chat):
-        """非法形态（now-1w）→ pydantic pattern 拒绝 → InvalidConditionError"""
-        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1w"})
+        """非法形态（now-1Y）→ pydantic pattern 拒绝 → InvalidConditionError"""
+        mock_chat.return_value = json.dumps({"conditions": [], "time_shortcut": "now-1Y"})
 
         with self.assertRaises(InvalidConditionError):
             self._convert()
