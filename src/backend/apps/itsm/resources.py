@@ -34,6 +34,7 @@ from apps.itsm.serializers import (
     GetServiceDetailReqSerializer,
     GetServicesReqsSerializer,
     GetServicesRespSerializer,
+    default_itsm_version,
 )
 from apps.itsm.utils import adapt_v4_workflow_to_service_detail, get_itsm_v4_system_id
 from apps.meta.models import GlobalMetaConfig
@@ -56,8 +57,8 @@ class GetServices(ITSMMeta):
     PAGE_SIZE = 100
 
     def perform_request(self, validated_request_data):
-        # 根据不同的 itsm 版本 使用不同的 itsm 接口
-        version = validated_request_data.get("version")
+        # 根据不同的 itsm 版本 使用不同的 itsm 接口（未显式传 version 时按部署级开关）
+        version = validated_request_data.get("version") or default_itsm_version()
         if version == ItsmVersion.V3:
             services = self._fetch_v3_services()
         else:
@@ -105,7 +106,8 @@ class GetServiceDetail(ITSMMeta):
     RequestSerializer = GetServiceDetailReqSerializer
 
     def perform_request(self, validated_request_data):
-        version = validated_request_data.get("version")
+        # 未显式传 version 时按部署级开关，与新建单据读取同一配置
+        version = validated_request_data.get("version") or default_itsm_version()
         if version == ItsmVersion.V3:
             return self._get_v3_service_detail(validated_request_data["id"])
         return self._get_v4_service_detail(validated_request_data["id"])

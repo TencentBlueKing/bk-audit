@@ -232,6 +232,18 @@ def get_itsm_v4_system_id() -> str:
     return GlobalMetaConfig.get(ITSM_V4_SYSTEM_ID_KEY, default=settings.BK_ITSM_V4_SYSTEM_ID)
 
 
+def is_itsm_v4_enabled() -> bool:
+    """
+    部署级 ITSM 版本选择：是否启用 ITSM V4。
+
+    一套代码合主分支，但升级 ITSM 的选择独立于多租户：未升级 V4 的部署环境
+    通过该开关保留 V3 接口契约（服务列表/详情、新建单据、节点版本记录、初始化）。
+    已启用 V4 的环境按既定方案迁移套餐，新建单据统一走 V4；已有工单仍按自身版本处理。
+    """
+
+    return bool(settings.BKAPP_ENABLE_ITSM_V4)
+
+
 def get_itsm_v4_system_token() -> str:
     """
     ITSM V4 系统 token。属接入系统级敏感凭据，仅后端可见，不暴露给前端。
