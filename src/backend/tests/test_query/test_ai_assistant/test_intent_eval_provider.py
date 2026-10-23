@@ -238,10 +238,10 @@ class IntentEvalProviderTest(SimpleTestCase):
         """真实上下文场景必须由 Promptfoo 配置直接加载，而非只做静态 fixture 检查。"""
 
         eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text(encoding="utf-8"))
         self.assertIn("file://tests/context-boundaries.yaml", config["tests"])
 
-        cases = yaml.safe_load((eval_root / "tests/context-boundaries.yaml").read_text())
+        cases = yaml.safe_load((eval_root / "tests/context-boundaries.yaml").read_text(encoding="utf-8"))
         self.assertGreaterEqual(len(cases), 5)
         for case in cases:
             with self.subTest(case=case["description"]):
@@ -253,11 +253,11 @@ class IntentEvalProviderTest(SimpleTestCase):
         """正式评测必须覆盖嵌套路径的两种上下文形态和两种用户表达。"""
 
         eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text(encoding="utf-8"))
         fixture = "file://tests/nested-extension-fields.yaml"
         self.assertIn(fixture, config["tests"])
 
-        cases = yaml.safe_load((eval_root / "tests/nested-extension-fields.yaml").read_text())
+        cases = yaml.safe_load((eval_root / "tests/nested-extension-fields.yaml").read_text(encoding="utf-8"))
         self.assertEqual(len(cases), 4)
         expected_descriptions = {
             "嵌套字段-完整路径上下文-完整路径表达",
@@ -313,11 +313,11 @@ class IntentEvalProviderTest(SimpleTestCase):
         """正式评测必须覆盖意图已识别但操作符不受支持的稳定业务错误。"""
 
         eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text(encoding="utf-8"))
         fixture = "file://tests/invalid-conditions.yaml"
         self.assertIn(fixture, config["tests"])
 
-        cases = yaml.safe_load((eval_root / "tests/invalid-conditions.yaml").read_text())
+        cases = yaml.safe_load((eval_root / "tests/invalid-conditions.yaml").read_text(encoding="utf-8"))
         self.assertEqual(len(cases), 1)
         case = cases[0]
         self.assertIn("gt 操作符", case["vars"]["query"])
@@ -327,11 +327,11 @@ class IntentEvalProviderTest(SimpleTestCase):
         """正式评测覆盖采样提示与用户明确语义冲突及未知路径两类场景。"""
 
         eval_root = Path(__file__).parents[3] / "evals/intent-recognition"
-        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text())
+        config = yaml.safe_load((eval_root / "promptfooconfig.yaml").read_text(encoding="utf-8"))
         fixture = "file://tests/extension-type-operators.yaml"
         self.assertIn(fixture, config["tests"])
 
-        cases = yaml.safe_load((eval_root / "tests/extension-type-operators.yaml").read_text())
+        cases = yaml.safe_load((eval_root / "tests/extension-type-operators.yaml").read_text(encoding="utf-8"))
         self.assertEqual(len(cases), 3)
         self.assertTrue(all("eval_" in str(case["vars"]["authorized_systems"]) for case in cases))
         self.assertTrue(any("未知路径" in case["description"] for case in cases))
@@ -343,7 +343,7 @@ class IntentEvalProviderTest(SimpleTestCase):
         tests_root = Path(__file__).parents[3] / "evals/intent-recognition/tests"
         result_code_conditions = []
         for fixture_path in tests_root.glob("*.yaml"):
-            for case in yaml.safe_load(fixture_path.read_text()) or []:
+            for case in yaml.safe_load(fixture_path.read_text(encoding="utf-8")) or []:
                 result_code_conditions.extend(
                     condition
                     for condition in case.get("vars", {}).get("expected_conditions", [])
@@ -357,7 +357,7 @@ class IntentEvalProviderTest(SimpleTestCase):
         """四格用例的两种字段上下文都允许显式完整下钻路径通过确定性校验。"""
 
         fixture_path = Path(__file__).parents[3] / "evals/intent-recognition/tests/nested-extension-fields.yaml"
-        cases = yaml.safe_load(fixture_path.read_text())
+        cases = yaml.safe_load(fixture_path.read_text(encoding="utf-8"))
         plan = MessagePlan(
             outcome="dispatch",
             messages=[

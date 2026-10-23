@@ -43,7 +43,9 @@ flowchart LR
 path，不能放入请求体。
 
 APIGW 中 `audit-log-analysis` 暴露下表三个工具；`audit-log-statistics` 只暴露字段探索和聚合，
-避免统计 Agent 查询日志明细。两套工具共享实现与协议，能力增强不维护兼容分支。
+避免统计 Agent 查询日志明细。这些工具共享实现与协议，能力增强不维护兼容分支。
+意图 Agent 的 `audit-meta` 也复用 `mcp_get_log_field_metadata`，用于按需探索字段和 JSON 子路径；
+同时提供系统、操作和资源类型目录，不暴露明细或聚合工具。每个 Agent 只绑定自己的 MCP 工具集。
 
 | operationId | 路径 | 用途 | 关键约束 |
 | --- | --- | --- | --- |
