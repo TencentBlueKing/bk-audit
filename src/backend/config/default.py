@@ -223,6 +223,14 @@ BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
 # 二者均为接入系统级凭据，由后端配置读取，前端不感知。
 BK_ITSM_V4_SYSTEM_ID = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_ID", "")
 BK_ITSM_V4_SYSTEM_TOKEN = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_TOKEN", os.getenv("SYSTEM_TOKEN", ""))
+# 部署级 ITSM 版本选择：一套代码下，未升级 ITSM V4 的部署环境保留 V3 接口契约
+# （服务列表/详情、新建单据、节点版本记录、初始化均读取该开关）。
+BKAPP_ENABLE_ITSM_V4 = os.getenv("BKAPP_ENABLE_ITSM_V4", "True").strip().lower() not in (
+    "false",
+    "0",
+    "no",
+    "off",
+)
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
