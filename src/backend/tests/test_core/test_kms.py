@@ -52,6 +52,8 @@ ENVELOPE = "SYNTHETIC-ENVELOPE-BASE64-0123456789-abcdefghijklmnop"
 PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nSYNTHETIC-PRIVATE-KEY-BODY-0001\n-----END PRIVATE KEY-----\n"
 PRIVATE_KEY_BODY = "SYNTHETIC-PRIVATE-KEY-BODY-0001"
 PLAINTEXT_MARK = "SYNTHETIC-PLAINTEXT-SECRET-0001"
+# 模拟宿主环境（CI / 容器）里已存在的同名环境变量，用于断言「未被 KMS 覆盖」
+PRE_EXISTING_SECRET = "pre-existing-secret-in-host-env"
 
 
 class KmsTestCaseMixin:
@@ -117,18 +119,20 @@ class TestKmsInject(KmsTestCaseMixin, unittest.TestCase):
 
     @mock.patch("bk_kms.decrypt", return_value=json.dumps({"secrets": {"BKPAAS_APP_SECRET": "app-secret-0001"}}))
     def test_disabled_is_noop(self, mocked_decrypt):
-        with mock.patch.dict(os.environ, self._kms_env(**{KMS_ENABLED_KEY: "false"})):
+        # 先放一个哨兵值：宿主环境可能本来就配了这些变量，只能断言「未被 KMS 覆盖」
+        env = self._kms_env(**{KMS_ENABLED_KEY: "false", "BKPAAS_APP_SECRET": PRE_EXISTING_SECRET})
+        with mock.patch.dict(os.environ, env):
             inject_kms_secrets()
-            self.assertNotIn("BKPAAS_APP_SECRET", os.environ)
+            self.assertEqual(os.environ["BKPAAS_APP_SECRET"], PRE_EXISTING_SECRET)
         mocked_decrypt.assert_not_called()
 
     @mock.patch("bk_kms.decrypt", return_value=json.dumps({"secrets": {"BKPAAS_APP_SECRET": "app-secret-0001"}}))
     def test_env_injection_can_be_disabled(self, _mocked_decrypt):
-        env = self._kms_env(**{KMS_ENV_INJECTION_KEY: "false"})
+        env = self._kms_env(**{KMS_ENV_INJECTION_KEY: "false", "BKPAAS_APP_SECRET": PRE_EXISTING_SECRET})
         with mock.patch.dict(os.environ, env):
             inject_kms_secrets()
-            # 明文不落 os.environ，但仍可通过 get_secret 取到
-            self.assertNotIn("BKPAAS_APP_SECRET", os.environ)
+            # 明文不落 os.environ（仍是哨兵值），但仍可通过 get_secret 取到
+            self.assertEqual(os.environ["BKPAAS_APP_SECRET"], PRE_EXISTING_SECRET)
             self.assertEqual(get_secret("BKPAAS_APP_SECRET"), "app-secret-0001")
 
 
@@ -265,11 +269,10 @@ class TestKmsSecretsSchema(KmsTestCaseMixin, unittest.TestCase):
 
     @mock.patch("bk_kms.decrypt", return_value=json.dumps({"secrets": {"REDIS_PASSWORD": None}}))
     def test_reject_before_env_mutation(self, _mocked_decrypt):
-        os.environ.pop("REDIS_PASSWORD", None)
-        self.addCleanup(os.environ.pop, "REDIS_PASSWORD", None)
-        with mock.patch.dict(os.environ, self._kms_env()):
+        env = self._kms_env(**{"REDIS_PASSWORD": PRE_EXISTING_SECRET})
+        with mock.patch.dict(os.environ, env):
             with self.assertRaises(ImproperlyConfigured):
                 inject_kms_secrets()
-            # 校验失败时不得修改任何配置
-            self.assertNotIn("REDIS_PASSWORD", os.environ)
-            self.assertIsNone(get_secret("REDIS_PASSWORD"))
+            # 校验失败时不得修改任何配置（env 与取值层都保持原样）
+            self.assertEqual(os.environ["REDIS_PASSWORD"], PRE_EXISTING_SECRET)
+            self.assertEqual(get_secret("REDIS_PASSWORD"), PRE_EXISTING_SECRET)
