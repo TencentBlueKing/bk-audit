@@ -38,7 +38,7 @@ from core.exceptions import ValidationError
 from core.models import get_request_username
 from core.serializers import OrderBaseSerializer
 from core.sql.constants import FieldType
-from core.utils.time import format_date_string, parse_datetime
+from core.utils.time import format_date_string
 from services.web.common.serializers import ScopeQuerySerializer
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
@@ -65,7 +65,9 @@ from services.web.query.constants import (
 )
 from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
+from services.web.query.utils.json_path import validate_log_json_keys
 from services.web.query.utils.search_config import QueryConditionOperator
+from services.web.query.utils.time_range import parse_log_time
 from services.web.risk.constants import (
     ES_SEARCH_ORIGIN_FIELDS,
     IGNORE_SEARCH_ALL_FILTER_FIELDS,
@@ -260,7 +262,11 @@ class QuerySearchFieldSerializer(serializers.Serializer):
         label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None, allow_null=True
     )
     keys = serializers.ListField(
-        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+        label=gettext_lazy("嵌套字段 key"),
+        child=serializers.CharField(trim_whitespace=False),
+        default=list,
+        allow_empty=True,
+        help_text=gettext_lazy("对象子键按原文逐段传入；不支持空白、控制字符、双引号、反斜杠和星号。"),
     )
 
 
@@ -289,10 +295,17 @@ class QuerySearchConditionSerializer(serializers.Serializer):
         # 判断字段是否支持嵌套 keys
         if not field_config.field.is_json:
             attrs["field"]["keys"] = []
+        else:
+            try:
+                validate_log_json_keys(attrs["field"]["keys"])
+            except ValueError as err:
+                raise ValidationError(message=gettext("字段子键不支持空白、控制字符、双引号、反斜杠或星号")) from err
         # 判断操作是否允许
         allow = COLLECT_SEARCH_CONFIG.judge_operator(field_name, attrs["field"]["keys"], attrs["operator"])
         if not allow:
             raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
+        if attrs["operator"] == QueryConditionOperator.BETWEEN.value and len(attrs["filters"]) != 2:
+            raise ValidationError(message=gettext("BETWEEN 操作符必须提供两个筛选值"))
         return attrs
 
 
@@ -351,8 +364,8 @@ class CollectorSearchAllReqSerializer(CollectorSearchReqBaseSerializer):
         时间分区条件
         """
 
-        start_time = parse_datetime(validated_request_data["start_time"])
-        end_time = parse_datetime(validated_request_data["end_time"])
+        start_time = parse_log_time(str(validated_request_data["start_time"]))
+        end_time = parse_log_time(str(validated_request_data["end_time"]))
         start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
         return [

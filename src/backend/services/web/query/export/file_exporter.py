@@ -30,7 +30,11 @@ from django.utils.translation import gettext_lazy
 
 from core.utils.data import unique_id
 from services.web.query.ai_assistant.constants import EXTEND_DATA_DISPLAY_NAME
-from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR, FieldCategoryEnum
+from services.web.query.constants import (
+    LOG_FIELD_KEY_JOIN_CHAR,
+    XLSX_STRING_TRUNCATED,
+    FieldCategoryEnum,
+)
 from services.web.query.export.model import ExportConfig
 
 # AI 日志检索导出的"扩展字段"分组文案（仅 flatten_extension 平铺开启时生效）：
@@ -157,11 +161,16 @@ class XLSXExporter(FileExporter):
         self._write_title_header()
 
     def _write_row(self, row: list, *args, **kwargs):
-        """
-        写入数据
+        """逐格写入一行，超长字符串按 Excel 限制截断后继续写后续列。
+
+        write_row 遇到截断返回码会提前结束，导致同一行剩余列静默丢失。
+        其他写入错误仍应抛出 ValueError，避免将不完整文件标记为导出成功。
         """
 
-        self.worksheet.write_row(self.row, 0, row, *args, **kwargs)
+        for column, value in enumerate(row):
+            result = self.worksheet.write(self.row, column, value, *args, **kwargs)
+            if result not in (0, XLSX_STRING_TRUNCATED):
+                raise ValueError(f"XLSX cell write failed: row={self.row}, column={column}, code={result}")
         self.row += 1
 
     def _write_category_header(self):

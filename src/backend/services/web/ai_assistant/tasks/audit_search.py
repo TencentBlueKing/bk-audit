@@ -1,8 +1,10 @@
 """审计日志检索的业务 Celery 任务。
 
-用户意图、系统选择和日志检索都是异步消息；
+意图规划为异步消息（调 AIDev 耗时长）；
 常见操作缓存刷新为声明式周期任务（对齐上游 periodic_task 惯例，beat 自动调度）。
 """
+
+from __future__ import annotations
 
 import logging
 import time
@@ -95,7 +97,7 @@ class UserIntentExecutionTask(MessageExecutionTask):
 
 
 def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) -> None:
-    """消息成功后异步生成会话标题（NL 与意图识别链路共用；失败静默不阻塞消息终态）。"""
+    """意图规划成功后异步生成会话标题；失败不阻塞消息终态。"""
 
     try:
         # 延迟导入：避免 tasks ↔ services 加载期循环依赖
@@ -118,7 +120,7 @@ def _dispatch_title_generation(*, execution: MessageExecution, log_prefix: str) 
 
 
 def _planning_error_output(*, error: AIAssistantError, system_context) -> UserIntentOutputSchema:
-    """把内部异常收敛为 USER_INTENT 稳定公开错误。"""
+    """将计划失败映射为前端协议中的稳定业务错误码。"""
 
     reason = str(error.extra.get("reason") or "")
     if reason == "system required":
@@ -400,7 +402,7 @@ def execute_user_intent(self, execution: MessageExecution) -> ResolvedIntentPlan
 
 @periodic_task(run_every=crontab(hour="*/1"))
 def refresh_common_queries() -> dict:
-    """每小时聚合最近成功自然语言消息，按系统刷新常见操作 Redis 缓存。
+    """每小时聚合最近成功的 USER_INTENT 检索消息，按系统刷新常见操作 Redis 缓存。
 
     周期随代码声明（blueapps periodic_task，对齐上游 query/tasks.py 惯例），
     由 beat 自动调度，无需在 django_celery_beat 后台手动配置；

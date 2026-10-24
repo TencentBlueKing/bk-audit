@@ -16,6 +16,7 @@ from services.web.ai_assistant.handlers.audit_search import (
 )
 from services.web.ai_assistant.models import Message
 from services.web.common.scope_permission import ScopePermission
+from services.web.query.ai_assistant.log_tools.context import LogQueryContext
 from services.web.query.ai_assistant.schemas import (
     LogSearchOutput,
     QuerySummary,
@@ -139,6 +140,12 @@ class AIAssistantPlatformTestCase(TestCase):
             title="新对话",
             created_by=self.user,
             updated_by=self.user,
+        )
+        self.enterContext(
+            mock.patch(
+                "services.web.ai_assistant.handlers.log_search_source.LogQueryContextService.build",
+                side_effect=lambda **kwargs: LogQueryContext(**kwargs, table="logs", conditions=()),
+            )
         )
         scope_permission_patch = mock.patch.object(ScopePermission, "check_scope_entry")
         scope_permission_patch.start()

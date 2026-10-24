@@ -45,6 +45,8 @@ dependencies = [
     "django-rest-framework-condition==0.1.1",
     "drf-yasg==1.21.9",
     "drf-spectacular[sidecar]>=0.29.0",
+    # Swagger UI 5.33+ 虚拟滚动会影响全页搜索和复制，固定到内置 5.30.3 的版本。
+    "drf-spectacular-sidecar==2025.12.1",
     "django-environ==0.10.0",
     "django-simpleui==2023.3.1",
     "django-sslserver==0.22",
@@ -61,7 +63,9 @@ dependencies = [
     "JSON-log-formatter==0.4.0",
     "arrow==1.2.2",
     "requests==2.32.4",
+    "certifi==2026.10.19",
     "mistune>=3.2.0",
+    "markdownify>=1.2.2",
     "xhtml2pdf>=0.2.17",
     "svglib<1.6.0",
     "protobuf<6.0",
@@ -105,7 +109,8 @@ dependencies = [
     "drf-pydantic==2.7.1",
     "sqlglot==26.26.0",
     "django-db-connection-pool==1.2.6",
-    "supervisor~=4.3.0"
+    "supervisor~=4.3.0",
+    "ui-stream[redis]==0.1.0"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"

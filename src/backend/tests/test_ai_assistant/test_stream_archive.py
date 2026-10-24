@@ -3,10 +3,12 @@ from datetime import timedelta
 from unittest import mock
 from uuid import UUID, uuid4
 
-from django.db import DatabaseError, connection
+from django.db import DatabaseError, connection, transaction
 from django.test import SimpleTestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext, override_settings
 from django.utils import timezone
+from ui_stream import Integrity
+from ui_stream.archive import fit_archive_events
 
 from services.web.ai_assistant.constants import (
     AttachmentType,
@@ -26,9 +28,9 @@ from services.web.ai_assistant.streaming import (
     AttachmentArchiveStore,
     StreamExecutionBinding,
     build_stream_key,
-    fit_archive_events,
     merge_archive_status,
 )
+from services.web.ai_assistant.streaming.archive import _encoded_event_bytes
 from tests.test_ai_assistant.factories import (
     create_conversation as create_test_conversation,
 )
@@ -45,6 +47,10 @@ def terminal_event(status: ExecutionStatus) -> UIStreamEvent:
 class ArchiveHelperTest(SimpleTestCase):
     """状态合并与容量裁剪必须是确定性纯函数，便于 Runtime 复用。"""
 
+    def test_component_integrity_is_normalized_to_application_enum(self):
+        status = merge_archive_status(StreamArchiveStatus.COMPLETE, Integrity.DEGRADED)
+        self.assertIs(status, StreamArchiveStatus.DEGRADED)
+
     def test_merge_archive_status_keeps_worst_observed_status(self):
         statuses = [StreamArchiveStatus.COMPLETE, StreamArchiveStatus.DEGRADED, StreamArchiveStatus.TRUNCATED]
 
@@ -59,7 +65,9 @@ class ArchiveHelperTest(SimpleTestCase):
         existing = [business_event("a", stream_id="1-0")]
         incoming = [business_event("b", stream_id="2-0"), business_event("c", stream_id="3-0")]
 
-        events, accepted, truncated = fit_archive_events(existing=existing, incoming=incoming, max_bytes=1024)
+        events, accepted, truncated = fit_archive_events(
+            existing=existing, incoming=incoming, max_bytes=1024, event_size=_encoded_event_bytes
+        )
 
         self.assertEqual(events, existing + incoming)
         self.assertEqual(accepted, 2)
@@ -77,11 +85,15 @@ class ArchiveHelperTest(SimpleTestCase):
         )
 
         self.assertEqual(
-            fit_archive_events(existing=existing, incoming=incoming, max_bytes=exact_bytes),
+            fit_archive_events(
+                existing=existing, incoming=incoming, max_bytes=exact_bytes, event_size=_encoded_event_bytes
+            ),
             (existing + incoming, 1, False),
         )
         self.assertEqual(
-            fit_archive_events(existing=existing, incoming=incoming, max_bytes=exact_bytes - 1),
+            fit_archive_events(
+                existing=existing, incoming=incoming, max_bytes=exact_bytes - 1, event_size=_encoded_event_bytes
+            ),
             (existing, 0, True),
         )
 
@@ -92,7 +104,7 @@ class ArchiveHelperTest(SimpleTestCase):
         )
 
         events, accepted, truncated = fit_archive_events(
-            existing=[], incoming=incoming, max_bytes=first_only_bytes + 10
+            existing=[], incoming=incoming, max_bytes=first_only_bytes + 10, event_size=_encoded_event_bytes
         )
 
         self.assertEqual(events, [incoming[0]])
@@ -103,7 +115,10 @@ class ArchiveHelperTest(SimpleTestCase):
         existing = [business_event("a" * 256, stream_id="1-0")]
 
         events, accepted, truncated = fit_archive_events(
-            existing=existing, incoming=[business_event("b", stream_id="2-0")], max_bytes=16
+            existing=existing,
+            incoming=[business_event("b", stream_id="2-0")],
+            max_bytes=16,
+            event_size=_encoded_event_bytes,
         )
 
         self.assertEqual(events, existing)
@@ -114,7 +129,7 @@ class ArchiveHelperTest(SimpleTestCase):
         existing = [business_event("a", stream_id="1-0")]
 
         self.assertEqual(
-            fit_archive_events(existing=existing, incoming=[], max_bytes=1),
+            fit_archive_events(existing=existing, incoming=[], max_bytes=1, event_size=_encoded_event_bytes),
             (existing, 0, False),
         )
 
@@ -132,7 +147,7 @@ class ArchiveHelperTest(SimpleTestCase):
             UIStreamEvent, "model_dump", autospec=True, side_effect=UIStreamEvent.model_dump
         ) as dump_spy:
             events, accepted, truncated = fit_archive_events(
-                existing=existing, incoming=incoming, max_bytes=10 * 1024 * 1024
+                existing=existing, incoming=incoming, max_bytes=10 * 1024 * 1024, event_size=_encoded_event_bytes
             )
 
         self.assertEqual(len(events), len(existing) + len(incoming))
@@ -166,13 +181,18 @@ class ArchiveHelperTest(SimpleTestCase):
                 )
                 # 上限恰好等于实际字节时必须全部接受，说明估算没有偏大。
                 self.assertEqual(
-                    fit_archive_events(existing=[], incoming=events[:index], max_bytes=expected_bytes),
+                    fit_archive_events(
+                        existing=[], incoming=events[:index], max_bytes=expected_bytes, event_size=_encoded_event_bytes
+                    ),
                     (events[:index], index, False),
                 )
                 if index:
                     # 上限少一个字节时必须截断，说明估算也没有偏小。
                     _, accepted, truncated = fit_archive_events(
-                        existing=[], incoming=events[:index], max_bytes=expected_bytes - 1
+                        existing=[],
+                        incoming=events[:index],
+                        max_bytes=expected_bytes - 1,
+                        event_size=_encoded_event_bytes,
                     )
                     self.assertLess(accepted, index)
                     self.assertTrue(truncated)
@@ -475,16 +495,17 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         )
         last_delta = business_event("done", stream_id="2-0")
 
-        self.store.finalize(
-            binding=rotation.binding,
-            events=[last_delta],
-            terminal_event=terminal_event(ExecutionStatus.SUCCESS),
-            status=ExecutionStatus.SUCCESS,
-            output_data={"content": "done"},
-            error_code="",
-            error_message="",
-            updated_by=self.user,
-        )
+        with self.assertLogs("services.web.ai_assistant.streaming.archive", level="INFO") as logs:
+            self.store.finalize(
+                binding=rotation.binding,
+                events=[last_delta],
+                terminal_event=terminal_event(ExecutionStatus.SUCCESS),
+                status=ExecutionStatus.SUCCESS,
+                output_data={"content": "done"},
+                error_code="",
+                error_message="",
+                updated_by=self.user,
+            )
 
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
@@ -499,6 +520,10 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
         self.assertEqual(self.attachment.updated_by, self.user)
         self.assertIsNotNone(self.attachment.finished_at)
         self.assertEqual(self.attachment.last_activity_at, self.attachment.finished_at)
+
+        self.assertEqual(len(logs.records), 1)
+        self.assertEqual(getattr(logs.records[0], "final_batch_event_count", None), 2)
+        self.assertNotIn("event_count", logs.records[0].__dict__)
 
     @mock.patch("services.web.ai_assistant.streaming.archive.report_execution_finished")
     def test_finalize_reports_terminal_execution_after_commit(self, report_execution_finished):
@@ -601,6 +626,48 @@ class AttachmentArchiveStoreTest(TransactionTestCase):
             self.attachment.stream_archive,
             [business_event("a", stream_id="1-0").model_dump(mode="json")],
         )
+
+    def test_start_execution_rejects_outer_transaction_before_rotation(self):
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                self.start()
+
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.stream_config, {})
+
+    def test_checkpoint_rejects_outer_transaction_before_accepting_pending(self):
+        rotation = self.start()
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                self.store.checkpoint(
+                    binding=rotation.binding,
+                    events=[business_event("pending")],
+                    archive_status=StreamArchiveStatus.COMPLETE,
+                )
+
+        self.assertEqual(self.archived_events(), [])
+
+    def test_finalize_rejects_outer_transaction_before_persisting_terminal(self):
+        rotation = self.start()
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                self.store.finalize(
+                    binding=rotation.binding,
+                    events=[business_event("pending")],
+                    terminal_event=terminal_event(ExecutionStatus.SUCCESS),
+                    status=ExecutionStatus.SUCCESS,
+                    output_data={"content": "done"},
+                    error_code="",
+                    error_message="",
+                    updated_by=self.user,
+                )
+
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
+        self.assertIsNone(self.attachment.output_data)
+        self.assertEqual(self.attachment.stream_archive, [])
 
     def test_finalize_writes_terminal_state_in_single_update(self):
         rotation = self.start()
