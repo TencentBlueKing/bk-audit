@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:1a7dcd26360a9b4a67cfcfdbeb757169d3c847adb746187478b8a9df0d73fa92"
+content_hash = "sha256:2798ca2321c01194a698c88974ac49fac1f57774179f42ca8fd762e60c3bd70d"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -3304,18 +3304,18 @@ files = [
 
 [[package]]
 name = "ui-stream"
-version = "0.1.0a4"
+version = "0.1.0"
 requires_python = ">=3.11"
 summary = "Bounded UI event streaming with host-owned durable results"
 groups = ["default"]
 files = [
-    {file = "ui_stream-0.1.0a4-py3-none-any.whl", hash = "sha256:36285d0948cff162692b14aca052aeb415b568ea7b132e95cfc4c6809efb039f"},
-    {file = "ui_stream-0.1.0a4.tar.gz", hash = "sha256:73d68394b3e6776e68b68ba6c0a1a12c2f6cdc8a8238420d65fdf9983839a4e9"},
+    {file = "ui_stream-0.1.0-py3-none-any.whl", hash = "sha256:8b2c03ce4fa37f0bc7b1d6b012ba7bd83feb6f5193fff251658e6dd14accdddd"},
+    {file = "ui_stream-0.1.0.tar.gz", hash = "sha256:38a5d46c7827606e6a7bae7b9125ac7fbf8bb3dd7f96f0487326abb9e1a6e0e0"},
 ]
 
 [[package]]
 name = "ui-stream"
-version = "0.1.0a4"
+version = "0.1.0"
 extras = ["redis"]
 requires_python = ">=3.11"
 summary = "Bounded UI event streaming with host-owned durable results"
@@ -3323,11 +3323,11 @@ groups = ["default"]
 dependencies = [
     "pydantic<3,>=2.10",
     "redis>=3.5.3",
-    "ui-stream==0.1.0a4",
+    "ui-stream==0.1.0",
 ]
 files = [
-    {file = "ui_stream-0.1.0a4-py3-none-any.whl", hash = "sha256:36285d0948cff162692b14aca052aeb415b568ea7b132e95cfc4c6809efb039f"},
-    {file = "ui_stream-0.1.0a4.tar.gz", hash = "sha256:73d68394b3e6776e68b68ba6c0a1a12c2f6cdc8a8238420d65fdf9983839a4e9"},
+    {file = "ui_stream-0.1.0-py3-none-any.whl", hash = "sha256:8b2c03ce4fa37f0bc7b1d6b012ba7bd83feb6f5193fff251658e6dd14accdddd"},
+    {file = "ui_stream-0.1.0.tar.gz", hash = "sha256:38a5d46c7827606e6a7bae7b9125ac7fbf8bb3dd7f96f0487326abb9e1a6e0e0"},
 ]
 
 [[package]]
