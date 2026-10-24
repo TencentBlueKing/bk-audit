@@ -110,7 +110,7 @@ dependencies = [
     "sqlglot==26.26.0",
     "django-db-connection-pool==1.2.6",
     "supervisor~=4.3.0",
-    "ui-stream[redis]==0.1.0a4"
+    "ui-stream[redis]==0.1.0"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
