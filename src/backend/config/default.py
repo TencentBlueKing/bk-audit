@@ -207,6 +207,10 @@ BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
 BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_ITSM_V4_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_V4_APIGW_NAME", "bk-itsm4")
+# ITSM V4 接入系统标识与系统 token（仅 system_workflow_list 服务列表接口需要）。
+# 二者均为接入系统级凭据，由后端配置读取，前端不感知。
+BK_ITSM_V4_SYSTEM_ID = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_ID", "")
+BK_ITSM_V4_SYSTEM_TOKEN = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_TOKEN", os.getenv("SYSTEM_TOKEN", ""))
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
