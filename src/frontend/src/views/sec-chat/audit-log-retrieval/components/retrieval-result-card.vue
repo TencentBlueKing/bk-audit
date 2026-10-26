@@ -246,7 +246,7 @@
                           :value="row[col.rawName]" />
                       </td>
                     </tr>
-                  </tbody>按 blueking-tapd-dev，基于这条 TAPD 开发
+                  </tbody>
                 </table>
               </div>
               <div class="table-pagination">
