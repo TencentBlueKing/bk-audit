@@ -17,11 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from django.utils import timezone
-from django.utils.dateparse import parse_datetime
+from services.web.query.ai_assistant.exceptions import InvalidConditionError
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 
 NL2RISK_USER_PROMPT = """\
 当前时间：{current_time}
@@ -36,6 +36,11 @@ NL2RISK_USER_PROMPT = """\
 
 可用策略：
 {strategies_text}
+
+时间约定：相对时间（近、最近、N小时内、N天内、一个月内等）额外输出 time_shortcut，格式 now-{{正整数}}{{单位}}（s秒、m分钟、h小时、d天、w周、M月、y年）。
+固定单位最多 365 天，月最多 12，年最多 1。例如近一周 → now-7d，最近2个月 → now-2M，近5小时 → now-5h。
+明确日期、上周不要输出 time_shortcut。start_time、end_time 仍按原规则输出。
+
 
 用户查询：{query}"""
 
@@ -116,92 +121,23 @@ def extract_filter_conditions_from_ai_result(result: Any) -> Tuple[dict, str]:
     return filter_conditions, message
 
 
-_END_TOLERANCE = timedelta(hours=2)
-_ALIGN_TOLERANCE = timedelta(minutes=10)
-_SIX_MONTH_DAYS = 182
+def _accepted_time_shortcut(value: Any) -> Optional[str]:
+    """复用日志检索 AIConditionPayload 的 time_shortcut 校验。不合法时不返回。"""
 
-
-def _parse_filter_time(value: Any) -> Optional[datetime]:
-    if not value:
+    if not isinstance(value, str):
         return None
-    parsed = parse_datetime(str(value))
-    if parsed is None:
-        return None
-    if timezone.is_naive(parsed):
-        return timezone.make_aware(parsed, timezone.get_current_timezone())
-    return parsed
-
-
-def _span_origin(start: datetime, reference: datetime) -> str:
-    """按年、月、天取最大单位。30 天一月；6 个月按日期组件的 182 天。"""
-
-    days = (reference.date() - start.date()).days
-    years = reference.year - start.year
-    if years >= 1 and (start.month, start.day) == (reference.month, reference.day):
-        return f"now-{years}y"
-    months = years * 12 + reference.month - start.month
-    if months >= 1 and start.day == reference.day:
-        return f"now-{months}M"
-    if days >= 365 and days % 365 == 0:
-        return f"now-{days // 365}y"
-    if days == _SIX_MONTH_DAYS:
-        return "now-6M"
-    if days >= 30 and days % 30 == 0:
-        return f"now-{days // 30}M"
-    return f"now-{days}d"
-
-
-def _relative_shortcut(start: datetime, reference: datetime) -> Optional[str]:
-    """结束于当前时间的窗口 → now-{N}h / now-{N}d / now-{N}M / now-{N}y。对不上返回 None。"""
-
-    delta = reference - start
-    if delta <= timedelta(0):
+    try:
+        return ConditionAssemblyService._normalize_time_shortcut(value)
+    except InvalidConditionError:
         return None
 
-    same_clock = (
-        abs(
-            timedelta(hours=start.hour, minutes=start.minute, seconds=start.second)
-            - timedelta(hours=reference.hour, minutes=reference.minute, seconds=reference.second)
-        )
-        <= _ALIGN_TOLERANCE
-    )
-    midnight = start.hour == start.minute == start.second == 0
-    days = (reference.date() - start.date()).days
-    if days >= 1 and (midnight or same_clock):
-        return _span_origin(start, reference)
 
-    hours = round(delta.total_seconds() / 3600)
-    if hours >= 1 and abs(delta - timedelta(hours=hours)) <= _ALIGN_TOLERANCE:
-        if hours % 24 == 0:
-            return _span_origin(reference - timedelta(days=hours // 24), reference)
-        return f"now-{hours}h"
-    return None
+def attach_datetime_origin(filter_conditions: Dict[str, Any]) -> Dict[str, Any]:
+    """模型给出合法 time_shortcut 时写成 datetime_origin，否则不返回该字段。"""
 
-
-def attach_datetime_origin(
-    filter_conditions: Dict[str, Any], reference_time: Optional[datetime] = None
-) -> Dict[str, Any]:
-    """补 datetime_origin。只有相对到当前时间才写 ['now-{N}{unit}', 'now']。"""
-
-    raw_start = filter_conditions.get("start_time")
-    raw_end = filter_conditions.get("end_time")
-    start = _parse_filter_time(raw_start)
-    end = _parse_filter_time(raw_end)
-    if start is None or end is None:
+    shortcut = _accepted_time_shortcut(filter_conditions.pop("time_shortcut", None))
+    if shortcut:
+        filter_conditions["datetime_origin"] = [shortcut, "now"]
+    else:
         filter_conditions.pop("datetime_origin", None)
-        return filter_conditions
-
-    tz = timezone.get_current_timezone()
-    if reference_time is None:
-        reference_time = timezone.localtime(timezone.now())
-    start = start.astimezone(tz).replace(microsecond=0)
-    end = end.astimezone(tz).replace(microsecond=0)
-    reference = reference_time.astimezone(tz).replace(microsecond=0)
-    if abs(end - reference) <= _END_TOLERANCE:
-        shortcut = _relative_shortcut(start, reference)
-        if shortcut:
-            filter_conditions["datetime_origin"] = [shortcut, "now"]
-            return filter_conditions
-
-    filter_conditions.pop("datetime_origin", None)
     return filter_conditions

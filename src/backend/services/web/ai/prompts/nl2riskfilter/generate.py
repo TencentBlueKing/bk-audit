@@ -211,7 +211,9 @@ def generate_system_prompt() -> str:
 
 **event_content 与 event_filters 区分**：常见表述"事件内容/详情/描述 + 含/包含/有/提到 + 关键词"→ `event_content`。当查询未指定策略时，"事件描述/事件内容/事件详情/事件中有"一律映射到 `event_content`
 
-**口语化趋势映射**：用户说"趋势""走势""变化情况""最近情况" → 最近 7 天（`start_time` + `end_time`）
+**相对时间**：与日志检索相同。用户用相对时间（近、最近、N小时内、N天内、一个月内等）时，在 `start_time`、`end_time` 之外输出 `time_shortcut`，格式 `now-{{正整数}}{{单位}}`（s秒、m分钟、h小时、d天、w周、M月、y年）。固定单位最多 365 天，月最多 12，年最多 1。例如近一周 → `now-7d`，最近2个月 → `now-2M`，近5小时 → `now-5h`。明确日期、上周不要输出 `time_shortcut`
+
+**口语化趋势映射**：用户说"趋势""走势""变化情况""最近情况" → 最近 7 天（`start_time` + `end_time` + `time_shortcut`: `now-7d`）
 
 **用户名识别**：用户名可能包含下划线（如 `v_testuser01`、`v_testuser02`）或纯英文字母（如 `user_fox`、`admin`）。当查询中出现这类格式的词且上下文暗示是人名时（如\"xxx 的风险\"\"xxx 负责的\"），应识别为用户名，映射到 `operator`/`current_operator`/`notice_users`
 
@@ -224,7 +226,7 @@ def generate_system_prompt() -> str:
 ### 示例 1：时间 + 风险等级
 
 输入：`当前时间：2026-01-28T10:30:00 | 最近一个月的中等风险`
-输出：`{{"start_time": "2025-12-29T00:00:00", "end_time": "2026-01-28T10:30:00", "risk_level": "MIDDLE"}}`
+输出：`{{"start_time": "2025-12-29T00:00:00", "end_time": "2026-01-28T10:30:00", "time_shortcut": "now-1M", "risk_level": "MIDDLE"}}`
 
 ### 示例 2：事件字段（需调 MCP 工具）
 
@@ -249,8 +251,8 @@ def generate_system_prompt() -> str:
 
 ### 示例 6：多轮对话
 
-第 1 轮输入：`最近一周的风险` → 输出：`{{"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00"}}`
-第 2 轮输入（同 thread_id）：`只看高危的` → 输出：`{{"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00", "risk_level": "HIGH"}}`
+第 1 轮输入：`最近一周的风险` → 输出：`{{"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00", "time_shortcut": "now-7d"}}`
+第 2 轮输入（同 thread_id）：`只看高危的` → 输出：`{{"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00", "time_shortcut": "now-7d", "risk_level": "HIGH"}}`
 
 ### 示例 7：事件内容搜索
 
