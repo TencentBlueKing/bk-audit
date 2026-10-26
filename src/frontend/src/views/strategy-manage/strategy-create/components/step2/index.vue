@@ -62,7 +62,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, inject, ref } from 'vue';
+  import { computed, inject, nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -149,9 +149,22 @@
     });
   };
 
+  const scrollToFirstEmptyField = () => {
+    const root = document.querySelector('.document-display-step .event-table');
+    if (!root) return;
+    const nodes = Array.from(root.querySelectorAll<HTMLElement>('.is-errored'));
+    if (!nodes.length) return;
+    const target = nodes.reduce((topmost, node) => (
+      node.getBoundingClientRect().top < topmost.getBoundingClientRect().top ? node : topmost
+    ));
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  };
+
   const handleNext = () => {
     eventRef.value.getValue().then(() => {
       emits('nextStep', 4, buildStepParams());
+    }).catch(() => {
+      nextTick(scrollToFirstEmptyField);
     });
   };
 

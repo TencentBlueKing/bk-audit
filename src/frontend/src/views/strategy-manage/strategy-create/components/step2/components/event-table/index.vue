@@ -37,6 +37,31 @@
       </div>
     </div>
 
+    <div
+      v-if="showFieldSkeleton"
+      class="table-section is-skeleton"
+      data-testid="event-field-skeleton">
+      <div class="group-cell">
+        <audit-skeleton
+          height="16"
+          width="48" />
+      </div>
+      <div class="rows-container">
+        <div
+          v-for="row in skeletonRows"
+          :key="row"
+          class="skeleton-row">
+          <div
+            v-for="(column, columnIndex) in skeletonColumns"
+            :key="columnIndex"
+            class="cell">
+            <audit-skeleton
+              height="16"
+              :width="column" />
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- 表格内容 -->
     <template
       v-for="(item, key) in tableData"
@@ -324,13 +349,24 @@
     }
   };
 
+  const skeletonRows = [1, 2, 3, 4, 5, 6];
+  const skeletonColumnWidths = [72, 96, 36, 36, 36, 88, 72, 72, 64];
+  const skeletonColumns = computed(() => {
+    const count = Math.max(columns.value.length - 1, 1);
+    return skeletonColumnWidths.slice(0, count);
+  });
+  const hasVisibleEventRows = computed(() => Object.entries(tableData.value).some(([key, rows]) => {
+    if (props.strategyType === 'rule' && key === 'event_evidence_field_configs') return false;
+    return Array.isArray(rows) && rows.length > 0;
+  }));
+
   const process = () => {
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
   };
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const { loading: fieldsLoading } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
@@ -390,6 +426,8 @@
       process();
     },
   });
+
+  const showFieldSkeleton = computed(() => fieldsLoading.value && !hasVisibleEventRows.value);
 
   onActivated(() => {
     process();
@@ -463,6 +501,21 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+    }
+  }
+
+  .skeleton-row {
+    display: grid;
+    grid-template-columns: var(--event-row-cols);
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    background: #fff;
+
+    .cell {
+      @include cell-base;
+
+      background: #fff;
     }
   }
 

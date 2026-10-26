@@ -11,6 +11,7 @@ export interface ExecutionListQuery {
   trigger_type?: string;
   status?: string;
   executor?: string;
+  keyword?: string;
   sort?: string | string[];
   scene_id?: string;
 }
@@ -50,6 +51,7 @@ export const toExecutionListQuery = (params: ExecutionListQuery = {}) => {
   if (params.trigger_type) query.trigger = params.trigger_type === 'retry' ? 'test' : params.trigger_type;
   if (params.status) query.result = params.status;
   if (params.executor) query.operator = params.executor;
+  if (params.keyword) query.keyword = params.keyword;
   const orderBy = mapOrderBy(params.sort);
   if (orderBy) query.order_by = orderBy;
   return query;
@@ -159,72 +161,110 @@ const mapNodes = (rawAttempts: Record<string, any>[]) => rawAttempts.map(attempt
   error: attempt.error_message || '',
 }));
 
-const earliest = (values: string[]) => values.filter(Boolean).sort()[0] || '';
-const latest = (values: string[]) => values.filter(Boolean).sort().slice(-1)[0] || '';
-
-/** 一次重试里的节点耗时：优先用节点起止时间，否则累加接口秒数。0 保留，没有数值才留空。 */
-const retryDuration = (rawAttempts: Record<string, any>[], startedAt: string, endedAt: string) => {
+const spanDuration = (startedAt: string, endedAt: string) => {
   const start = parseStartedAt(startedAt);
   const end = parseStartedAt(endedAt);
-  if (!Number.isNaN(start) && !Number.isNaN(end) && end >= start) {
-    return formatDurationClock((end - start) / 1000);
-  }
-  const seconds = rawAttempts
-    .map(attempt => attempt?.duration)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  if (!seconds.length) return '';
-  return formatDurationClock(seconds.reduce((sum, value) => sum + value, 0));
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return '';
+  return formatDurationClock((end - start) / 1000);
 };
 
-const mapRetryRounds = (history: Record<string, any>[]) => [...history]
-  .sort((left, right) => String(left.time || '').localeCompare(String(right.time || '')))
-  .map((entry, index) => {
-    const rawAttempts = Array.isArray(entry.attempts) ? entry.attempts : [];
-    const nodes = mapNodes(rawAttempts);
-    const startedAt = entry.time || earliest(nodes.map(node => node.started_at)) || '';
-    const endedAt = latest(rawAttempts.map(attempt => String(attempt.end_time || '')));
-    const failed = nodes.find(node => node.status === 'failed' && node.error);
-    const status: ExecutionStatus = nodes.some(node => node.status === 'failed')
-      ? 'failed'
-      : nodes.some(node => node.status === 'running')
-        ? 'running'
-        : 'success';
-    return {
-      id: `retry-${index + 1}`,
-      label: '',
-      status,
-      started_at: startedAt,
-      ended_at: endedAt,
-      duration: retryDuration(rawAttempts, startedAt, endedAt),
-      executor: entry.operator || '',
-      error: failed?.error || '',
-      nodes,
-    };
-  });
+/** retried 节点按开始时间升序，相同时间保持接口原顺序。没有开始时间的排在后面。 */
+const sortRetriedNodes = (rawAttempts: Record<string, any>[]) => rawAttempts
+  .filter(attempt => attempt?.retried === true)
+  .map((node, index) => ({ node, index }))
+  .sort((left, right) => {
+    const leftTime = parseStartedAt(String(left.node.start_time || ''));
+    const rightTime = parseStartedAt(String(right.node.start_time || ''));
+    const leftOk = !Number.isNaN(leftTime);
+    const rightOk = !Number.isNaN(rightTime);
+    if (leftOk && rightOk && leftTime !== rightTime) return leftTime - rightTime;
+    if (leftOk !== rightOk) return leftOk ? -1 : 1;
+    return left.index - right.index;
+  })
+  .map(item => item.node);
 
-/** 当前 attempts 是最后一轮节点，接在 retry_history 之后。 */
-const mapCurrentRound = (item: Record<string, any>, rawAttempts: Record<string, any>[], index: number) => {
-  const nodes = mapNodes(rawAttempts);
-  const startedAt = item.start_time || earliest(nodes.map(node => node.started_at)) || '';
-  const endedAt = item.finish_time || latest(rawAttempts.map(attempt => String(attempt.end_time || '')));
-  const failed = nodes.find(node => node.status === 'failed' && node.error);
-  const recordedDuration = formatExecutionDuration(item.duration);
+/**
+ * 一张卡的开始、结束、耗时只看 retried 节点。
+ * 有失败节点：开始取第一个，结束和耗时取最后一个失败节点。
+ * 含运行中：从第一个节点的开始时间计到当前，由页面热更新。
+ * 全部成功：开始取第一个，结束取最后一个。
+ */
+const roundTiming = (rawAttempts: Record<string, any>[]) => {
+  const nodes = sortRetriedNodes(rawAttempts).map(node => ({
+    status: normalizeNodeState(node.state),
+    started_at: String(node.start_time || ''),
+    ended_at: String(node.end_time || ''),
+    error: String(node.error_message || ''),
+  }));
+  const empty = {
+    started_at: '',
+    ended_at: '',
+    duration: '',
+    duration_ticking: false,
+    error: '',
+  };
+  if (!nodes.length) return empty;
+  const first = nodes[0];
+  const failed = [...nodes].reverse().find(node => node.status === 'failed');
+  if (failed) {
+    return {
+      started_at: first.started_at,
+      ended_at: failed.ended_at,
+      duration: spanDuration(first.started_at, failed.ended_at),
+      duration_ticking: false,
+      error: failed.error,
+    };
+  }
+  if (nodes.some(node => node.status === 'running')) {
+    return {
+      started_at: first.started_at,
+      ended_at: '',
+      duration: '',
+      duration_ticking: true,
+      error: '',
+    };
+  }
+  const last = nodes[nodes.length - 1];
+  return {
+    started_at: first.started_at,
+    ended_at: last.ended_at,
+    duration: spanDuration(first.started_at, last.ended_at),
+    duration_ticking: false,
+    error: '',
+  };
+};
+
+const mapRetryRounds = (history: Record<string, any>[]) => history.map((entry, index) => {
+  const rawAttempts = Array.isArray(entry.attempts) ? entry.attempts : [];
+  const timing = roundTiming(rawAttempts);
   return {
     id: `retry-${index + 1}`,
     label: '',
-    status: item.result ? normalizeExecutionResult(item.result) : (
-      nodes.some(node => node.status === 'failed')
-        ? 'failed'
-        : nodes.some(node => node.status === 'running')
-          ? 'running'
-          : 'success'
-    ),
-    started_at: startedAt,
-    ended_at: endedAt,
-    duration: recordedDuration || retryDuration(rawAttempts, startedAt, endedAt),
+    status: normalizeExecutionResult(entry.state),
+    started_at: timing.started_at,
+    ended_at: timing.ended_at,
+    duration: timing.duration,
+    duration_ticking: timing.duration_ticking,
+    executor: entry.operator || '',
+    error: timing.error,
+    nodes: mapNodes(rawAttempts),
+  };
+});
+
+/** 当前 attempts 是最后一轮，接在 retry_history 之后。状态和执行人用外层。 */
+const mapCurrentRound = (item: Record<string, any>, rawAttempts: Record<string, any>[], index: number) => {
+  const timing = roundTiming(rawAttempts);
+  return {
+    id: `retry-${index + 1}`,
+    label: '',
+    status: normalizeExecutionResult(item.result),
+    started_at: timing.started_at,
+    ended_at: timing.ended_at,
+    duration: timing.duration,
+    duration_ticking: timing.duration_ticking,
     executor: item.operator || '',
-    error: item.failure_hint || failed?.error || '',
-    nodes,
+    error: timing.error || item.failure_hint || '',
+    nodes: mapNodes(rawAttempts),
   };
 };
 

@@ -438,6 +438,10 @@
   height: 100%;
   align-items: center;
 
+  &:has(.description-input) {
+    align-items: stretch;
+  }
+
   :deep(.bk-select),
   :deep(.field-input) {
     flex: 1 1 auto;
@@ -446,9 +450,34 @@
   }
 
   :deep(.bk-input.description-input) {
+    display: flex;
+    flex: 1 1 auto;
+    align-self: stretch;
     width: 100%;
-    height: 32px;
-    border: none;
+    min-width: 0;
+    height: 100%;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+
+  :deep(.bk-input.description-input .bk-input--text) {
+    height: 100%;
+    background-color: transparent;
+  }
+
+  :deep(.bk-input.description-input:hover:not(.is-disabled)) {
+    background-color: #fff;
+    border-color: #c4c6cc;
+    box-shadow: none;
+  }
+
+  :deep(.bk-input.description-input.is-focused:not(.is-readonly)) {
+    background-color: #fff;
+    border-color: #3a84ff;
+    box-shadow: none;
   }
 
   .field-cell-div {

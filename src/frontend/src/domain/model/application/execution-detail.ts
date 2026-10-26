@@ -24,6 +24,8 @@ export interface ExecutionAttempt {
   started_at: string;
   ended_at: string;
   duration: string;
+  /** 这一轮按运行中计算耗时，从开始时间刷新到当前时间。与卡片展示状态分开。 */
+  duration_ticking: boolean;
   executor: string;
   error: string;
   nodes: ExecutionNode[];
