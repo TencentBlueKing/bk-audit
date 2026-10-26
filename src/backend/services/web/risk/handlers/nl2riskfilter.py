@@ -18,7 +18,10 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from services.web.query.ai_assistant.exceptions import InvalidConditionError
+from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 
 NL2RISK_USER_PROMPT = """\
 当前时间：{current_time}
@@ -33,6 +36,11 @@ NL2RISK_USER_PROMPT = """\
 
 可用策略：
 {strategies_text}
+
+时间约定：相对时间（近、最近、N小时内、N天内、一个月内等）额外输出 time_shortcut，格式 now-{{正整数}}{{单位}}（s秒、m分钟、h小时、d天、w周、M月、y年）。
+固定单位最多 365 天，月最多 12，年最多 1。例如近一周 → now-7d，最近2个月 → now-2M，近5小时 → now-5h。
+明确日期、上周不要输出 time_shortcut。start_time、end_time 仍按原规则输出。
+
 
 用户查询：{query}"""
 
@@ -111,3 +119,25 @@ def extract_filter_conditions_from_ai_result(result: Any) -> Tuple[dict, str]:
     filter_conditions = extract_json_from_text(raw_text)
     message = "" if filter_conditions else raw_text.strip()
     return filter_conditions, message
+
+
+def _accepted_time_shortcut(value: Any) -> Optional[str]:
+    """复用日志检索 AIConditionPayload 的 time_shortcut 校验。不合法时不返回。"""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        return ConditionAssemblyService._normalize_time_shortcut(value)
+    except InvalidConditionError:
+        return None
+
+
+def attach_datetime_origin(filter_conditions: Dict[str, Any]) -> Dict[str, Any]:
+    """模型给出合法 time_shortcut 时写成 datetime_origin，否则不返回该字段。"""
+
+    shortcut = _accepted_time_shortcut(filter_conditions.pop("time_shortcut", None))
+    if shortcut:
+        filter_conditions["datetime_origin"] = [shortcut, "now"]
+    else:
+        filter_conditions.pop("datetime_origin", None)
+    return filter_conditions
