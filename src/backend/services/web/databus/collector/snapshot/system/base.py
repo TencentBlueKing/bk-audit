@@ -16,11 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from typing import Dict
+
 from bk_resource import api, resource
 from bk_resource.exceptions import APIRequestError
 from django.conf import settings
 
-from apps.itsm.constants import ITSM_V4_SYSTEM_ID_KEY
+from apps.itsm.constants import ITSM_V4_MIGRATION_MAP_KEY, ITSM_V4_SYSTEM_ID_KEY
 from apps.itsm.utils import V3_FIELD_TYPE_TO_JSONSCHEMA_TYPE
 from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE, ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
@@ -106,9 +108,9 @@ def init_itsm_v4():
     - approve_service_id 为空 => 未选择套餐，跳过，不处理；
     - resource.itsm.get_service_detail 查询失败（服务不存在/接口异常）=> 跳过该套餐，保留原 V3 id，由人工手动创建对应系统流程后再迁移，避免用不适用系统流程代替；
     - 先按 V3 approve_service_id 去重再遍历，同一 V3 服务只解析一次、只创建一个 V4 流程；
-    - 流程名固定为 name#service_id，由源服务身份唯一决定，与遍历顺序、历史状态无关；
-    - 同名但不同服务 => service_id 不同则流程名不同，天然独立，绕开 ITSM_v4 name 唯一约束；
-    - 跨轮幂等：同一 V3 服务在任何一轮都解析到同一个流程名，命中已有流程即复用，不会重复创建。
+    - 流程名默认沿用 V3 原名；仅当该名字已被「其它」V3 服务认领时才加 #V3 服务标识后缀；
+    - 跨轮幂等由持久化的「V3 服务 -> V4 流程」映射保证：本地已记录的直接复用，
+      未记录的按本地归属关系决定名称，与远端返回内容、遍历顺序、历史状态均无关。
     """
     objs = ProcessApplication.objects.all()
     # 默认套餐（当 V3 get_service_detail 无数据时兜底使用）
@@ -135,8 +137,15 @@ def init_itsm_v4():
     # 本轮未迁移记录（V3 详情查询失败：临时超时/网络抖动/服务下架/查不到等）
     pending_retry = []
 
+    # 持久化的迁移映射：V3 approve_service_id -> V4 workflow_key。
+    # 跨轮可恢复，任何重试都解析到同一个远端流程，不依赖远端状态和遍历顺序。
+    migration_map = _load_itsm_v4_migration_map()
+    # 反向索引：已被某个 V3 服务认领的 workflow_key，用于判断同名流程的归属
+    claimed_keys = {key: v3_id for v3_id, key in migration_map.items()}
+
     # 预先拉取 V4 已有流程 key：用于识别「已迁移」套餐，避免把 V4 key 再送回 V3 查询。
-    existing_v4_keys = set(name_cache.values())
+    # 合并本地映射中的 key：远端拉取失败（返回 {}）或分页漏查时仍能识别已迁移套餐。
+    existing_v4_keys = set(name_cache.values()) | set(migration_map.values())
 
     # 按 V3 approve_service_id 聚合（去重）：同一 V3 服务只解析一次详情、只创建一个 V4 流程
     pending_objs = {}
@@ -152,11 +161,16 @@ def init_itsm_v4():
 
         pending_objs.setdefault(obj.approve_service_id, []).append(obj)
 
-    # V3 approve_service_id -> V4 workflow_key：同一 V3 服务的所有套餐共用同一个流程
-    id_key_map = {}
-
     created_any = False
     for v3_service_id, related_objs in pending_objs.items():
+        v3_id = str(v3_service_id)
+
+        # 本地已记录过该 V3 服务 => 直接复用，不再解析名称、不再创建
+        if v3_id in migration_map:
+            _bind_process_applications(related_objs, migration_map[v3_id], v3_service_id, v3_id, create_error)
+            created_any = True
+            continue
+
         # 取 V3 服务详情，用于按套餐定制流程 name/desc
         try:
             service_info = resource.itsm.get_service_detail(id=v3_service_id, version="v3")
@@ -172,12 +186,10 @@ def init_itsm_v4():
         workflow_name = default_workflow_name
         workflow_desc = default_workflow_desc
         properties = properties_base
-        service_id = 0
 
         if service_info:
             workflow_name = service_info.get("name") or default_workflow_name
             workflow_desc = service_info.get("desc") or default_workflow_desc
-            service_id = service_info.get("service_id") or 0
             # 仅在需要新建/复用流程时解析表单字段
             fields = service_info.get("fields") or []
             if fields:
@@ -186,9 +198,15 @@ def init_itsm_v4():
                     key = "ticket__{}".format(field["key"]) if field["key"] == "title" else field["key"]
                     properties[key] = v3_field_to_jsonschema(field)
 
-        # 流程名只由源服务身份（name + service_id）决定：同一 V3 服务在任何一轮重试中
-        # 都解析到同一个名字，命中已有流程即复用，因此不会重复创建、也不会错绑同名服务。
-        itsm_name = "{}#{}".format(workflow_name, service_id)
+        # 名称决策：默认沿用 V3 原名；
+        # 仅当该名字对应的流程已被「其它」V3 服务认领时，才加 #V3 服务标识后缀强制独立，
+        # 绕开 ITSM_v4 name 唯一约束且不错绑同名服务。后缀用 v3_id（approve_service_id）：
+        itsm_name = workflow_name
+        existing_key = name_cache.get(workflow_name)
+        if existing_key:
+            owner = claimed_keys.get(existing_key)
+            if owner is not None and owner != v3_id:
+                itsm_name = "{}#{}".format(workflow_name, v3_id)
 
         form_schema = {
             "type": "object",
@@ -198,22 +216,26 @@ def init_itsm_v4():
         try:
             workflow_key = init_itsm_system(form_schema, itsm_name, workflow_desc, name_cache)
         except Exception as e:
-            create_error[v3_service_id] = itsm_name
+            create_error[str(v3_service_id)] = itsm_name
             print(str(e))
             continue
 
-        id_key_map[v3_service_id] = workflow_key
+        # 记录归属并立即持久化：后续重试（含本地 save 失败）都解析到同一个流程
+        migration_map[v3_id] = workflow_key
+        claimed_keys[workflow_key] = v3_id
+        try:
+            _save_itsm_v4_migration_map(migration_map)
+        except Exception as e:
+            # 映射未落盘不阻断本轮绑定：下一轮按名称仍会复用同一个 workflow_key，幂等成立。
+            # 但必须记为未完成，否则会误判迁移已结束
+            pending_retry.append(v3_service_id)
+            print(
+                "save itsm v4 migration map error (unfinished, retry next init_system): {},"
+                " approve_service_id is: {}".format(str(e), v3_service_id)
+            )
         created_any = True
 
-        for obj in related_objs:
-            try:
-                obj.approve_service_id = workflow_key
-                obj.save()
-            except Exception as e:
-                # 本地落库失败：下一轮该套餐仍带 V3 id，会用同一个 itsm_name 复用上面的
-                # workflow_key 重新绑定，不会创建第二个流程
-                create_error[v3_service_id] = itsm_name
-                print(str(e))
+        _bind_process_applications(related_objs, workflow_key, v3_service_id, itsm_name, create_error)
 
     if not created_any:
         form_schema = {
@@ -222,10 +244,8 @@ def init_itsm_v4():
             "properties": properties_base,
         }
         try:
-            workflow_key = init_itsm_system(
-                form_schema, "{}#{}".format(default_workflow_name, 0), default_workflow_desc, name_cache
-            )
-            id_key_map[default_workflow_name] = workflow_key
+            # 兜底流程不绑定具体 V3 服务，因此不写入迁移映射
+            init_itsm_system(form_schema, default_workflow_name, default_workflow_desc, name_cache)
         except Exception as e:
             create_error[default_workflow_name] = default_workflow_name
             print(str(e))
@@ -243,6 +263,47 @@ def init_itsm_v4():
         )
         return False
     return True
+
+
+def _load_itsm_v4_migration_map() -> Dict[str, str]:
+    """
+    读取持久化的「V3 服务标识 -> V4 workflow_key」迁移映射。
+
+    该映射是重试幂等的唯一依据：本地已记录的服务直接复用原流程，
+    不重新解析名称，因此不受远端返回内容变化的影响。
+    """
+
+    migration_map = GlobalMetaConfig.get(ITSM_V4_MIGRATION_MAP_KEY, default={}) or {}
+    return migration_map if isinstance(migration_map, dict) else {}
+
+
+def _save_itsm_v4_migration_map(migration_map: Dict[str, str]) -> None:
+    """
+    持久化迁移映射：每解析出一个流程就落盘，保证进程中断后仍可恢复到同一个远端流程。
+    """
+
+    GlobalMetaConfig.set(
+        config_key=ITSM_V4_MIGRATION_MAP_KEY,
+        config_value=migration_map,
+        config_level=ConfigLevelChoices.GLOBAL.value,
+        instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
+    )
+
+
+def _bind_process_applications(related_objs, workflow_key, v3_service_id, itsm_name, create_error) -> None:
+    """
+    把同一 V3 服务的所有处理套餐绑定到同一个 V4 workflow_key。
+    """
+
+    for obj in related_objs:
+        try:
+            obj.approve_service_id = workflow_key
+            obj.save()
+        except Exception as e:
+            # 本地落库失败：下一轮该套餐仍带 V3 id，会通过迁移映射复用同一个
+            # workflow_key 重新绑定，不会创建第二个流程
+            create_error[str(v3_service_id)] = itsm_name
+            print(str(e))
 
 
 def _write_system_id():
