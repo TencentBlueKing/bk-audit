@@ -21,6 +21,7 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from django.test.utils import override_settings
 
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.constants import (
@@ -41,6 +42,7 @@ from tests.test_risk.test_tickets.constants import (
 )
 
 
+@override_settings(BKAPP_ENABLE_ITSM_V4=True)
 class RiskLabelTest(TicketTest):
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
