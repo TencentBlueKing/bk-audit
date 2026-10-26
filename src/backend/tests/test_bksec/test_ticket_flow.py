@@ -158,6 +158,7 @@ class TestAutoProcessBkSecRender:
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
     )
+    @mock.patch("services.web.risk.bksec.contract.load_risk_events", mock.Mock(return_value=[]))
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=SOPS_TEMPLATE_INFO)
     )
@@ -182,7 +183,7 @@ class TestAutoProcessBkSecRender:
             risk.rule_version = 1
             risk.save(update_fields=["status", "rule_id", "rule_version"])
             with mock.patch(
-                "services.web.risk.bksec.render.load_risk_events",
+                "services.web.risk.bksec.contract.load_risk_events",
                 mock.Mock(return_value=[{"event_id": "e1"}, {"event_id": "e2"}]),
             ):
                 AutoProcess(risk_id=risk.risk_id, operator="admin").run()
@@ -215,6 +216,8 @@ class TestAutoProcessBkSecRender:
     @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
     @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock())
     @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock())
+    @mock.patch("services.web.risk.bksec.contract.load_risk_events", mock.Mock(return_value=[]))
+    @mock.patch("services.web.risk.bksec.contract.load_security_person", mock.Mock(return_value=["sec_admin"]))
     def test_auto_process_operatorless_falls_back_to_security_person(self, settings):
         """口径 A：无责任人风险发单时初始责任人兜底为安全接口人（${operator} 与事件体 fields 同口径）"""
         strategy_id = RISK_INFO["strategy_id"]
@@ -231,19 +234,12 @@ class TestAutoProcessBkSecRender:
             risk.rule_id = RiskRule.objects.get(auto_strategy_id=strategy_id).rule_id
             risk.rule_version = 1
             risk.save(update_fields=["status", "rule_id", "rule_version"])
-            with mock.patch(
-                "services.web.risk.bksec.render.load_risk_events",
-                mock.Mock(return_value=[]),
-            ), mock.patch(
-                "services.web.risk.bksec.contract.load_security_person",
-                mock.Mock(return_value=["sec_admin"]),
-            ):
-                AutoProcess(risk_id=risk.risk_id, operator="admin").run()
-            from services.web.risk.handlers.ticket import api as ticket_api
+            AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+        from services.web.risk.handlers.ticket import api as ticket_api
 
-            constants = ticket_api.bk_sops.create_task.call_args.kwargs["constants"]
-            # 口径 A：risk.operator 为空 → 兜底安全接口人（数组串契约）
-            assert constants["${operator}"] == '["sec_admin"]'
-            # 事件体 fields 初始责任人与预览同口径兜底
-            extra = json.loads(constants["${risk_type_extra}"])
-            assert extra["operator"] == "sec_admin"
+        constants = ticket_api.bk_sops.create_task.call_args.kwargs["constants"]
+        # 口径 A：risk.operator 为空 → 兜底安全接口人（数组串契约）
+        assert constants["${operator}"] == '["sec_admin"]'
+        # 事件体 fields 初始责任人与预览同口径兜底
+        extra = json.loads(constants["${risk_type_extra}"])
+        assert extra["operator"] == "sec_admin"

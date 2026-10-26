@@ -48,6 +48,7 @@ from services.web.risk.constants import (
     AnalyseReportStatus,
     AnalyseReportType,
     EventMappingFields,
+    ItsmVersion,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskLabel,
@@ -547,7 +548,7 @@ class ProcessApplication(SoftDeleteModel):
     name = models.CharField(gettext_lazy("Name"), max_length=64, db_index=True)
     sops_template_id = models.BigIntegerField(gettext_lazy("SOps Template ID"))
     need_approve = models.BooleanField(gettext_lazy("Need Approve"), default=True)
-    approve_service_id = models.BigIntegerField(gettext_lazy("Approve Service ID"), null=True, blank=True)
+    approve_service_id = models.CharField(gettext_lazy("Approve Service ID"), max_length=64, null=True, blank=True)
     approve_config = models.JSONField(gettext_lazy("Approve Config"), null=True, blank=True)
     description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
     is_enabled = models.BooleanField(gettext_lazy("Is Enabled"), default=True)
@@ -682,6 +683,9 @@ class TicketNode(models.Model):
         blank=True,
         db_index=True,
         help_text=gettext_lazy("处理耗时（秒），用于执行记录排序；未结束/缺失为 null"),
+    )
+    itsm_version = models.CharField(
+        gettext_lazy("Itsm Version"), max_length=32, choices=ItsmVersion.choices, default=ItsmVersion.V4
     )
 
     class Meta:

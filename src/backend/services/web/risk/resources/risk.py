@@ -86,6 +86,7 @@ from services.web.risk.constants import (
     RISK_RENDER_LOCK_KEY,
     RISK_SHOW_FIELDS,
     EventBasicField,
+    ItsmVersion,
     NL2RiskFilterLogStatus,
     RiskDisplayStatus,
     RiskFields,
@@ -132,6 +133,7 @@ from services.web.risk.handlers.ticket import (
     ReOpenMisReport,
     RiskExperienceRecord,
     TransOperator,
+    get_itsm_ticket_status,
 )
 from services.web.risk.models import (
     ManualEvent,
@@ -1259,19 +1261,46 @@ class ForceRevokeApproveTicket(RiskMeta):
         node = get_object_or_404(TicketNode, risk_id=risk.risk_id, id=validated_request_data["node_id"])
         if node.action != ForApprove.__name__:
             raise RiskStatusInvalid(message=gettext("节点类型异常 => %s") % node.action)
-        sn = node.process_result["ticket"]["sn"]
-        # 判断单据状态
-        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
-        if status["current_status"] in TicketStatus.get_finished_status():
-            sync_auto_result(node_id=node.id)
-            return
-        # 关单
-        api.bk_itsm.operate_ticket(
-            sn=sn,
-            operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
-            action_type=TicketOperate.WITHDRAW,
-            action_message=str(TicketOperate.WITHDRAW.label),
-        )
+
+        if node.itsm_version == ItsmVersion.V4:
+            ticket = node.process_result.get("ticket") or {}
+            ticket_id = str(ticket.get("id") or "")
+            # 凡带 id 均可以用 itsm_v4 查询/撤销；下方仅当缺 id 时兜底。
+            if not ticket_id:
+                logger.warning(
+                    "[ForceRevokeApproveTicket] legacy itsm ticket without v4 id, skip revoking: node=%s, sn=%s",
+                    node.id,
+                    ticket.get("sn", ""),
+                )
+                sync_auto_result(node_id=node.id)
+                setattr(risk, "instance_origin_data", origin_data)
+                self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+                return
+            # 判断单据状态
+            status = get_itsm_ticket_status(ticket_id)
+            if status["current_status"] in TicketStatus.get_finished_status():
+                sync_auto_result(node_id=node.id)
+                return
+            # 关单（强制撤销审批单据，对应 V4 终止工单 terminate，工单级操作无需 task_id/节点）
+            api.bk_itsm_v4.ticket_handle(
+                ticket_id=ticket_id,
+                operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+                action={"method": "terminate", "params": {}},
+            )
+        else:
+            sn = node.process_result["ticket"]["sn"]
+            # 判断单据状态
+            status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+            if status["current_status"] in TicketStatus.get_finished_status():
+                sync_auto_result(node_id=node.id)
+                return
+            # 关单
+            api.bk_itsm.operate_ticket(
+                sn=sn,
+                operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
+                action_type=TicketOperate.WITHDRAW,
+                action_message=str(TicketOperate.WITHDRAW.label),
+            )
         sync_auto_result(node_id=node.id)
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))

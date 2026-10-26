@@ -21,6 +21,7 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from django.test.utils import override_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.sops.constants import SOPSTaskStatus
@@ -40,6 +41,7 @@ from tests.test_risk.test_tickets.constants import (
 )
 
 
+@override_settings(BKAPP_ENABLE_ITSM_V4=True)
 class AutoProcessTest(TicketTest):
     @mock.patch(
         "services.web.risk.handlers.ticket.api.bk_sops.get_task_status",
@@ -446,14 +448,14 @@ class AutoProcessTest(TicketTest):
                 self.assertEquals(risk.current_operator, AutoProcess.load_security_person())
 
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.ticket_approve_result",
-        mock.Mock(return_value=[{**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FINISHED.value}]),
+        "services.web.risk.handlers.ticket.get_itsm_ticket_status",
+        mock.Mock(return_value={**APPROVE_TICKET_STATUS, "current_status": TicketStatus.FINISHED.value}),
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.get_service_detail", mock.Mock(return_value=APPROVE_SERVICE_INFO)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.workflows", mock.Mock(return_value=APPROVE_SERVICE_INFO)
     )
     @mock.patch(
-        "services.web.risk.handlers.ticket.api.bk_itsm.create_ticket", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
+        "services.web.risk.handlers.ticket.api.bk_itsm_v4.ticket_create", mock.Mock(return_value=APPROVE_TICKET_DETAIL)
     )
     @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
