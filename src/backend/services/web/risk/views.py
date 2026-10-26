@@ -126,15 +126,30 @@ class RisksViewSet(ResourceViewSet):
             return [
                 RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
             ]
-        if self.action in ["bulk_trans"]:
+        if self.action in [
+            "bulk_trans",
+            "bulk_close",
+            "bulk_misreport",
+            "bulk_unmisreport",
+            "bulk_auto_process",
+            "batch_confirm",
+            "batch_confirm_as_misreport",
+            "batch_actions_preview",
+        ]:
             return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
+        if self.action in ["confirm", "confirm_as_misreport"]:
+            return [RiskTicketPermission()]
         # 风险编辑相关权限
         if self.action in ["update"]:
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_RISK], resource_meta=ResourceEnum.RISK)]
         return []
 
     def get_bulk_risk_ids(self) -> List[str]:
-        return self.request.data.get("risk_ids", [])
+        from services.web.risk.resources.risk import resolve_bulk_risk_ids
+
+        username = getattr(getattr(self.request, "user", None), "username", "") or ""
+        data = self.request.data if isinstance(self.request.data, dict) else {}
+        return resolve_bulk_risk_ids(data, username)
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.retrieve_risk, pk_field="risk_id"),
@@ -232,6 +247,12 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.batch_confirm_risk, endpoint="batch_confirm"),
         # 批量确认为误报
         ResourceRoute("POST", resource.risk.batch_confirm_as_mis_report, endpoint="batch_confirm_as_misreport"),
+        # 批量处理 · 弹窗预览 + 关单 + 转单 + 误报 + 处理套餐
+        ResourceRoute("POST", resource.risk.batch_actions_preview, endpoint="batch_actions/preview"),
+        ResourceRoute("POST", resource.risk.bulk_close_risk, endpoint="bulk_close"),
+        ResourceRoute("POST", resource.risk.bulk_misreport, endpoint="bulk_misreport"),
+        ResourceRoute("POST", resource.risk.bulk_unmisreport, endpoint="bulk_unmisreport"),
+        ResourceRoute("POST", resource.risk.bulk_auto_process, endpoint="bulk_auto_process"),
     ]
 
 

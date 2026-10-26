@@ -20,7 +20,7 @@ import uuid
 from unittest import mock
 
 from django.db.models import Q
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.constants import RiskDisplayStatus, RiskLabel, RiskStatus
@@ -231,21 +231,30 @@ class ConfirmRiskTest(TicketTest):
                 # 自动处理时处理人应为空（有处理套餐）
                 self.assertEqual(risk.current_operator, [])
 
-    def test_confirm_permission_denied(self):
+    @mock.patch("django.db.transaction.on_commit", new=mock.MagicMock(side_effect=lambda fn: fn()))
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator",
+        mock.Mock(return_value=None),
+    )
+    def test_confirm_non_confirmer_allowed(self):
         """
-        测试权限拒绝（非确认人操作）
-        关键验证：PermissionDenied 异常
+        测试非确认人确认风险（已放宽）
+        关键验证：Handler 层不再拦截 confirmer
         """
+        operator = "wrong_user"
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
-            # 非确认人操作
-            operator = "wrong_user"
-            with self.assertRaises(PermissionDenied):
-                ConfirmRisk(risk_id=risk.risk_id, operator=operator).run(username=operator)
+            ConfirmRisk(risk_id=risk.risk_id, operator=operator).run(username=operator)
+            risk.refresh_from_db()
+            self.assertEqual(risk.status, RiskStatus.AWAIT_PROCESS)
 
     def test_confirm_invalid_status(self):
         """
@@ -308,20 +317,30 @@ class ConfirmAsMisReportTest(TicketTest):
             # 验证处理人清空
             self.assertEqual(risk.current_operator, [])
 
-    def test_confirm_misreport_permission_denied(self):
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator",
+        mock.Mock(return_value=None),
+    )
+    def test_confirm_misreport_non_confirmer_allowed(self):
         """
-        测试权限拒绝（非确认人操作）
-        关键验证：PermissionDenied 异常
+        测试非确认人误报确认（已放宽）
+        关键验证：Handler 层不再抛 PermissionDenied
         """
+        operator = "wrong_user"
         with RiskContext(
             risk_info={
                 "status": RiskStatus.PENDING_CONFIRM,
                 "confirmer": ["confirmer_user"],
             }
         ) as risk:
-            operator = "wrong_user"
-            with self.assertRaises(PermissionDenied):
-                ConfirmAsMisReport(risk_id=risk.risk_id, operator=operator).run(username=operator)
+            ConfirmAsMisReport(risk_id=risk.risk_id, operator=operator).run(username=operator)
+            risk.refresh_from_db()
+            self.assertEqual(risk.status, RiskStatus.CLOSED)
+            self.assertEqual(risk.risk_label, RiskLabel.MISREPORT)
 
     def test_confirm_misreport_invalid_status(self):
         """
@@ -433,13 +452,21 @@ class ConfirmRiskResourceTest(TicketTest):
                 resource_instance.perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
         mock.Mock(return_value="wrong_user"),
     )
-    def test_confirm_risk_resource_permission_denied(self):
+    def test_confirm_risk_resource_non_confirmer_allowed(self):
         """
-        测试 ConfirmRiskResource 权限拒绝
-        关键验证：PermissionDenied 异常
+        测试 ConfirmRiskResource 非确认人确认（已放宽）
+        关键验证：资源层不再抛 PermissionDenied
         """
         from services.web.risk.resources.risk import ConfirmRiskResource
 
@@ -451,8 +478,8 @@ class ConfirmRiskResourceTest(TicketTest):
             }
         ) as risk:
             resource_instance = ConfirmRiskResource()
-            with self.assertRaises(PermissionDenied):
-                resource_instance.perform_request({"risk_id": risk.risk_id})
+            result = resource_instance.perform_request({"risk_id": risk.risk_id})
+            self.assertTrue(result["success"])
 
 
 class ConfirmAsMisReportResourceTest(TicketTest):
@@ -526,13 +553,21 @@ class ConfirmAsMisReportResourceTest(TicketTest):
                 resource_instance.perform_request({"risk_id": risk.risk_id})
 
     @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator",
+        mock.Mock(return_value=None),
+    )
+    @mock.patch(
         "services.web.risk.resources.risk.get_request_username",
         mock.Mock(return_value="wrong_user"),
     )
-    def test_confirm_misreport_resource_permission_denied(self):
+    def test_confirm_misreport_resource_non_confirmer_allowed(self):
         """
-        测试 ConfirmAsMisReportResource 权限拒绝
-        关键验证：PermissionDenied 异常
+        测试 ConfirmAsMisReportResource 非确认人误报确认（已放宽）
+        关键验证：资源层不再抛 PermissionDenied
         """
         from services.web.risk.resources.risk import ConfirmAsMisReportResource
 
@@ -544,8 +579,8 @@ class ConfirmAsMisReportResourceTest(TicketTest):
             }
         ) as risk:
             resource_instance = ConfirmAsMisReportResource()
-            with self.assertRaises(PermissionDenied):
-                resource_instance.perform_request({"risk_id": risk.risk_id})
+            result = resource_instance.perform_request({"risk_id": risk.risk_id, "description": "非确认人误报"})
+            self.assertTrue(result["success"])
 
 
 class ListPendingConfirmRiskTest(TicketTest):
