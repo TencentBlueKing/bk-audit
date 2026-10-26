@@ -204,6 +204,8 @@ class StrategyTest(TestCase):
                     "risk_hazard": "",
                     "risk_guidance": "",
                     "risk_title": "risk title",
+                    # 场景策略：处理人必填（全局策略由分派规则维护）
+                    "processor": [self.notice_group.group_id],
                 }
             ],
             # 满足规则策略对基础字段映射的校验要求

@@ -47,7 +47,6 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
-from core.monitor import Metric
 from core.observability import (
     OBSERVATION_METRIC_STATUS_ERROR,
     OBSERVATION_METRIC_STATUS_SUCCESS,
@@ -62,7 +61,6 @@ from services.web.common.monitor import (
     RiskExportFailedEvent,
 )
 from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
-from services.web.risk.bksec.service import fill_failure_info
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
     RISK_ESQUERY_DELAY_TIME,
@@ -101,7 +99,7 @@ from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
-from services.web.risk.utils import calc_task_duration
+from services.web.risk.utils import calc_task_duration, fill_failure_info
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
 
@@ -584,30 +582,6 @@ def process_risk_ticket(*, risk_id: str = None, manual: bool = False):
             process_one_risk(risk_id=risk.risk_id)
 
 
-def build_process_risk_fail_cache_key(risk_id: str) -> str:
-    """自动处理失败计数缓存键
-
-    计数语义：值 = 已失败次数 + 1（默认 1 起步）；达上限后置为 MAX+1 作为「待转人工」标记，
-    期间跳过自动处理只重试转人工，直到转人工成功才清除计数。
-    """
-    return f"process_one_risk:fail:{risk_id}"
-
-
-def _transfer_process_risk(risk: Risk) -> None:
-    """转人工：成功清除失败计数；失败保留计数与待转人工标记（只记日志不抛出）"""
-
-    cache_key = build_process_risk_fail_cache_key(risk.risk_id)
-    try:
-        TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
-            new_operators=TransOperator.load_security_person(),
-            description=gettext("风险自动流转失败，转为安全接口人处理"),
-        )
-    except Exception as err:  # NOCC:broad-except(转人工失败不得清零计数或中断收敛)
-        logger_celery.exception("[ProcessRiskTicket] %s Transfer Error %s", risk.risk_id, err)
-        return
-    cache.delete(key=cache_key)
-
-
 @celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(
     lock_name="celery:process_one_risk",
@@ -621,8 +595,8 @@ def process_one_risk(*, risk_id: str):
     # 获取风险
     risk = Risk.objects.get(risk_id=risk_id)
 
-    # 失败计数
-    cache_key = build_process_risk_fail_cache_key(risk.risk_id)
+    # 重试
+    cache_key = f"process_one_risk:fail:{risk.risk_id}"
     # 判断操作
     match risk.status:
         case RiskStatus.NEW:
@@ -633,68 +607,45 @@ def process_one_risk(*, risk_id: str):
             process_class = AutoProcess
         case _:
             return
-
-    # 取类名兜底：测试/异常场景下 process_class 可能无 __name__
-    process_name = getattr(process_class, "__name__", risk.status)
-    retry_times = cache.get(key=cache_key, default=1)
-
-    # 待转人工标记（计数 > MAX）：跳过自动处理，只重试转人工收敛
-    if retry_times > settings.PROCESS_RISK_MAX_RETRY:
-        _transfer_process_risk(risk)
-        return
-
     # 处理
     try:
-        logger_celery.info("[ProcessRiskTicket] %s Start %s", process_name, risk.risk_id)
+        logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
         # 处理
         process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
         # 成功后移除缓存
         cache.delete(key=cache_key)
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_name, risk.risk_id, err)
-        # 先推进失败计数：通知/转人工失败不得丢失计数（否则计数回滚导致无限重试）
-        cache.set(
-            key=cache_key,
-            value=retry_times + 1,
-            timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+        # 获取失败次数
+        retry_times = cache.get(key=cache_key, default=1)
+        # 异常通知
+        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
+        title = gettext("Process Risk Ticket Failed")
+        content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
+            process_class.__name__,
+            risk.risk_id,
+            retry_times,
+            settings.PROCESS_RISK_MAX_RETRY,
+            err,
         )
-        # 异常通知（失败不影响计数与转人工）
-        try:
-            title = gettext("Process Risk Ticket Failed")
-            content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
-                process_name,
-                risk.risk_id,
-                retry_times,
-                settings.PROCESS_RISK_MAX_RETRY,
-                err,
-            )
-            ErrorMsgHandler(title, content).send()
-        except Exception as notice_err:  # NOCC:broad-except(通知失败不影响主流程)
-            logger_celery.exception("[ProcessRiskTicket] %s Notice Error %s", risk.risk_id, notice_err)
-        # 失败达到最大次数转人工（转人工失败保留「待转人工」标记，下轮只重试转人工）
+        ErrorMsgHandler(title, content).send()
+        # 失败达到最大次数转人工
         if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
-            _transfer_process_risk(risk)
+            cache.delete(key=cache_key)
+            TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
+                new_operators=TransOperator.load_security_person(),
+                description=gettext("风险自动流转失败，转为安全接口人处理"),
+            )
+        else:
+            cache.set(
+                key=cache_key,
+                value=retry_times + 1,
+                timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+            )
     except BaseException as err:
-        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_name, risk.risk_id, err)
+        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
         raise err
     finally:
-        logger_celery.info("[ProcessRiskTicket] %s End %s", process_name, risk.risk_id)
-
-
-RISK_AUTO_PROCESS_STUCK_METRIC = "risk_auto_process_stuck_count"
-
-
-@periodic_task(
-    run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
-    queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
-)
-def report_auto_process_stuck_risks():
-    """自动处理停留 gauge：超阈值计数上报，处理完成后归零自动恢复"""
-
-    threshold = timezone.now() - datetime.timedelta(minutes=settings.PROCESS_RISK_STUCK_THRESHOLD_MINUTES)
-    count = Risk.objects.filter(status=RiskStatus.AUTO_PROCESS, last_operate_time__lt=threshold).count()
-    Metric(metrics={RISK_AUTO_PROCESS_STUCK_METRIC: count}).report()
+        logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
 def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
@@ -754,9 +705,7 @@ def sync_auto_result(node_id: str = None):
                     task_id = node.process_result.get("task", {}).get("task_id", "")
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-                        # 失败时补全错误信息（get_task_status 不带错误文本）：回源回写逐节点
-                        # error_message（详情 / 重试快照的 attempts 用）并生成 failure_hint
-                        # EXPIRED 同属失败态，需一并写入，否则会一直显示通用文案
+                        # 失败时补全错误信息error_message和failure_hint
                         if status.get("state") in SOPSTaskStatus.get_failed_status():
                             node.process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
                         node.process_result["status"] = status

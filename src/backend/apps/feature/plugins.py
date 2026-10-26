@@ -94,19 +94,11 @@ class BksecPlugin(BaseFeaturePlugin):
         if self.feature.status == FeatureStatusChoices.DENY.value:
             return FeatureStatusChoices.DENY.value
 
-        from services.web.risk.models import ProcessApplication
+        from services.web.risk.bksec.service import find_preset_pa
 
         # 检查必配环境变量与内置套餐
         missing_env = [name for name in self.REQUIRED_ENV if not getattr(settings, name, None)]
-        has_preset_pa = False
-        template_id = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
-        if template_id:
-            try:
-                has_preset_pa = ProcessApplication.objects.filter(
-                    is_builtin=True, sops_template_id=int(template_id)
-                ).exists()
-            except (TypeError, ValueError):
-                pass
+        has_preset_pa = find_preset_pa() is not None
         self._feature.config = {
             "missing_env": missing_env,
             "has_preset_pa": has_preset_pa,
