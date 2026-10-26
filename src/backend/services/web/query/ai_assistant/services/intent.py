@@ -62,6 +62,8 @@ logger = logging.getLogger(__name__)
 
 # AI 输出原文在日志/异常 extra 中的最大保留长度（对齐 NL2JSON）
 INTENT_RAW_OUTPUT_KEEP_LENGTH = 2048
+# 语法错误两侧各保留少量上下文，完整原文已由 retry_raw_output 单独携带。
+INTENT_JSON_ERROR_CONTEXT_RADIUS = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,7 +284,9 @@ class MessagePlanningService:
                 retry_raw_output=content,
                 extra={
                     "raw_output": content[:INTENT_RAW_OUTPUT_KEEP_LENGTH],
-                    "validation_errors": [{"path": "$", "code": "invalid_json", "message": "输出必须是完整 JSON 对象"}],
+                    "validation_errors": [
+                        {"path": "$", "code": "invalid_json", "message": cls._json_syntax_feedback(content)}
+                    ],
                 },
             )
         try:
@@ -302,6 +306,28 @@ class MessagePlanningService:
                     "validation_errors": validation_errors,
                 },
             ) from error
+
+    @staticmethod
+    def _json_syntax_feedback(content: str) -> str:
+        """定位原输出中的 JSON 语法错误，仅生成纠错数据，不改变提取或校验结果。"""
+
+        # 从对象起点诊断围栏/说明内的 JSON，仍保留相对于原输出的行列与字符位置。
+        start = content.find("{")
+        if start < 0:
+            start = len(content) - len(content.lstrip())
+        try:
+            json.JSONDecoder().raw_decode(content, start)
+        except json.JSONDecodeError as error:
+            before = content[max(0, error.pos - INTENT_JSON_ERROR_CONTEXT_RADIUS) : error.pos]
+            after = content[error.pos : error.pos + INTENT_JSON_ERROR_CONTEXT_RADIUS]
+            return (
+                f"输出必须是完整 JSON 对象。解析错误：{error.msg}；"
+                f"第 {error.lineno} 行，第 {error.colno} 列（字符位置 {error.pos}，从 0 开始）。"
+                f"邻近片段：{json.dumps(before, ensure_ascii=False)} ⟦错误位置⟧ "
+                f"{json.dumps(after, ensure_ascii=False)}。"
+                "核对该位置及其之前的括号、引号和逗号，保留原条件并重新输出完整对象。"
+            )
+        return "输出必须是完整 JSON 对象，不能是数组、字符串或多个 JSON 片段。"
 
     @staticmethod
     def _normalize_validation_errors(error: ValidationError) -> list[dict[str, str]]:
