@@ -69,3 +69,11 @@ class AutoProcessParamsError(RiskException):
     def __init__(self, keys: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(keys=keys)
         super().__init__(*args, **kwargs)
+
+
+class BulkSelectionOverLimit(RiskException):
+    """确认、关单、转单、误报超过 500 条，或处理套餐超过 100 条。"""
+
+    MESSAGE = gettext_lazy("所选风险数量超过上限，请缩小范围")
+    STATUS_CODE = 400
+    ERROR_CODE = "006"
