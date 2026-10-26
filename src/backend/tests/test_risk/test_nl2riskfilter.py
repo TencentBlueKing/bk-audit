@@ -583,6 +583,29 @@ class AttachDatetimeOriginTest(TestCase):
                 self.assertEqual(result["start_time"], "2026-01-21T00:00:00")
                 self.assertEqual(result["end_time"], "2026-01-28T10:30:00")
 
+    @patch("services.web.risk.handlers.nl2riskfilter.timezone.now")
+    def test_derives_shortcut_from_now_anchored_window(self, mock_now):
+        """模型只给绝对时间窗(结束于 now)时，回推相对 datetime_origin。"""
+        mock_now.return_value = datetime(2026, 10, 26, 11, 48, 3)
+        cases = [
+            ("2026-10-19T00:00:00", "2026-10-26T11:48:03", "now-7d"),
+            ("2026-09-26T00:00:00", "2026-10-26T11:48:03", "now-1M"),
+            ("2025-10-26T00:00:00", "2026-10-26T11:48:03", "now-12M"),
+        ]
+        for start, end, expected in cases:
+            with self.subTest(start=start, end=end):
+                result = attach_datetime_origin({"start_time": start, "end_time": end})
+                self.assertEqual(result["datetime_origin"], [expected, "now"])
+                self.assertEqual(result["start_time"], start)
+                self.assertEqual(result["end_time"], end)
+
+    @patch("services.web.risk.handlers.nl2riskfilter.timezone.now")
+    def test_no_derive_for_absolute_window(self, mock_now):
+        """明确绝对时间段(结束不在 now 附近)不回推，保持绝对时间。"""
+        mock_now.return_value = datetime(2026, 10, 26, 11, 48, 3)
+        result = attach_datetime_origin({"start_time": "2026-01-21T00:00:00", "end_time": "2026-01-28T10:30:00"})
+        self.assertNotIn("datetime_origin", result)
+
 
 class NL2RiskFilterWithLoggingTest(TestCase):
     """NL2RiskFilter Resource 日志记录集成测试"""

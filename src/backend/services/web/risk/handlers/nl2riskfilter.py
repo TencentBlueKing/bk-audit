@@ -17,8 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from services.web.query.ai_assistant.exceptions import InvalidConditionError
 from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
@@ -127,9 +130,72 @@ def _accepted_time_shortcut(value: Any) -> Optional[str]:
         return None
 
 
+_END_TOLERANCE = timedelta(hours=2)
+
+
+def _parse_filter_time(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    parsed = parse_datetime(str(value))
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        return timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _span_origin(start: datetime, reference: datetime) -> Optional[str]:
+    """按 月/天/小时 取最大可对齐单位，复用 condition 的月粒度白名单。"""
+
+    days = (reference.date() - start.date()).days
+    if days < 0:
+        return None
+
+    # 月粒度：天数命中 condition 白名单且日对齐（相对窗口结束于 now，不校验时分）
+    for count, mapped_days in ConditionAssemblyService.MONTH_SHORTCUT_DAYS.items():
+        if days == mapped_days and start.day == reference.day:
+            return f"now-{count}M"
+
+    # 天粒度
+    if days >= 1:
+        return f"now-{days}d"
+
+    # 小时粒度（不足 1 天）
+    hours = int((reference - start).total_seconds() // 3600)
+    if 1 <= hours < 24:
+        return f"now-{hours}h"
+
+    return None
+
+
+def _derive_shortcut_from_window(start_time: Any, end_time: Any) -> Optional[str]:
+    """模型没给 time_shortcut，但给了绝对时间窗时，回推相对标记。"""
+
+    start = _parse_filter_time(start_time)
+    end = _parse_filter_time(end_time)
+    if start is None or end is None:
+        return None
+
+    now = timezone.now()
+    if abs((end - now).total_seconds()) > _END_TOLERANCE.total_seconds():
+        return None
+
+    span = _span_origin(start, now)
+    if span is None:
+        return None
+    try:
+        ConditionAssemblyService._normalize_time_shortcut(span)
+    except InvalidConditionError:
+        return None
+    return span
+
+
 def attach_datetime_origin(filter_conditions: Dict[str, Any]) -> Dict[str, Any]:
 
     shortcut = _accepted_time_shortcut(filter_conditions.pop("time_shortcut", None))
+    if not shortcut:
+        # 模型未直接给出 time_shortcut 时，尝试从「结束于 now 的绝对窗口」反推
+        shortcut = _derive_shortcut_from_window(filter_conditions.get("start_time"), filter_conditions.get("end_time"))
     if shortcut:
         filter_conditions["datetime_origin"] = [shortcut, "now"]
     else:
