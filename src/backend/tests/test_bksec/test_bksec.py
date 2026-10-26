@@ -25,10 +25,7 @@ from django.conf import settings
 
 from services.web.risk.bksec import sync_bksec_rule
 from services.web.risk.bksec.config import BkSecConfig
-from services.web.risk.bksec.constants import (
-    BKSEC_PRESET_PA_NAME,
-    BKSEC_RULE_PRIORITY_BASE,
-)
+from services.web.risk.bksec.constants import BKSEC_RULE_PRIORITY_BASE
 from services.web.risk.bksec.contract import (
     build_event_payload,
     build_pa_params,
@@ -39,6 +36,10 @@ from services.web.risk.bksec.render import build_render_context, render_value
 from services.web.risk.models import ProcessApplication, RiskRule
 from tests.test_risk.test_tickets.base import RiskContext
 from tests.test_risk.test_tickets.constants import RISK_INFO
+
+# 内置发单套餐的约定名称（仅测试 fixture 用）：生产由运维手动创建内置套餐，
+# 匹配靠 is_builtin=True + sops_template_id，与名称无关
+BKSEC_PRESET_PA_NAME = "【内置】BKSEC安全工单发单"
 
 BKSEC_CONFIG_DATA = {
     "enabled": True,
@@ -234,6 +235,26 @@ class TestContract:
         assert "description" in extra and "operator" in extra and "target_type" in extra
         # target 独立入参模板已渲染
         assert risk.risk_id in constants["${target}"]
+
+    def test_render_bksec_constant_dispatch(self):
+        """派单值加工收口：标量模板 / risk_type_extra JSON 重组 / operator 契约，各走各的分支"""
+        from services.web.risk.bksec.contract import render_bksec_constant
+
+        with RiskContext() as risk:
+            context = build_render_context(risk=risk, events=[])
+            # 标量模板：文字+变量混排渲染
+            assert render_bksec_constant("${target}", "云账号 {{ risk.risk_id }}", context, risk) == (
+                "云账号 {}".format(risk.risk_id)
+            )
+            # risk_type_extra：JSON 模板串 → 逐字段渲染重组（值内引号不破结构）
+            extra = json.loads(
+                render_bksec_constant(
+                    "${risk_type_extra}", json.dumps({"operator": "{{ risk.operator }}"}), context, risk
+                )
+            )
+            assert extra["operator"] == "admin"
+            # operator：先渲染再过数组串契约
+            assert json.loads(render_bksec_constant("${operator}", "{{ risk.operator }}", context, risk)) == ["admin"]
 
 
 @pytest.mark.django_db

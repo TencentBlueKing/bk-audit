@@ -347,9 +347,6 @@ class ProcessApplicationsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_rule_by_pa, pk_field="id", endpoint="rules", enable_paginate=True),
         ResourceRoute("PUT", resource.risk.toggle_process_application, pk_field="id", endpoint="toggle"),
         ResourceRoute("GET", resource.risk.approve_build_in_fields, endpoint="approve_build_in_fields"),
-        # 套餐执行记录侧滑：套餐页全部/单套餐；风险入口带 risk_id 筛选
-        # 资源内部已按 page/page_size 分页并返回 {count, page, page_size, num_pages, results}，
-        # 不能再开启 enable_paginate（框架会对返回值做 queryset 切片，dict 会抛 TypeError）
         ResourceRoute("GET", resource.risk.list_pa_execution_records, endpoint="execution_records"),
         ResourceRoute("GET", resource.risk.get_pa_execution_record_detail, endpoint="execution_record_detail"),
     ]

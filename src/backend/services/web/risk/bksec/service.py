@@ -38,10 +38,27 @@ from services.web.risk.bksec.constants import (
 )
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
 from services.web.risk.bksec.render import build_risk_data
-from services.web.risk.models import Risk, TicketNode
+from services.web.risk.models import ProcessApplication, Risk, TicketNode
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
+
+
+def find_preset_pa() -> Optional[ProcessApplication]:
+    """
+    查找 BKSEC 预置发单套餐（is_builtin=True 且 sops_template_id=BKSEC_SOPS_TEMPLATE_ID）
+    """
+    template_id = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
+    if not template_id:
+        return None
+    try:
+        return (
+            ProcessApplication.objects.filter(is_builtin=True, sops_template_id=int(template_id))
+            .order_by("-id")
+            .first()
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> List[dict]:
@@ -85,9 +102,6 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
 def find_risk_access_item(risk_type_id: str, use_cache: bool = False) -> Optional[dict]:
     """
     按 risk_type_id 查找风险类型（取 token 用）
-
-    is_formal=true 优先，找不到再用 false 兜底（存量测试类型也可能配了 token）。
-    默认不走缓存：token 为凭证，须保证新鲜。
     """
     for is_formal in ("true", "false"):
         for item in fetch_risk_access_items(is_formal=is_formal, use_cache=use_cache):
@@ -150,10 +164,15 @@ def build_ticket_preview(config: BkSecConfig, risk: Optional[Risk]) -> dict:
     }
 
 
-def sync_bksec_test_config(strategy: Strategy, config: BkSecConfig) -> None:
+def prepare_test_constants(strategy: Strategy, config: BkSecConfig, risk: Risk, test_receivers: List[str]) -> dict:
     """
-    如果策略未保存，就要测试发送，则同步插件侧 Config。
-    用独立测试 key（{strategy_id}_test），不影响正式配置。
+    测试发送前置：必填校验 → 插件 Config 同步 → 渲染终值入参。
+
+    - 必填校验 validate_for_submit 只执行一次；
+    - Config 同步用独立测试 key（{strategy_id}_test），不影响正式配置；
+      策略未保存时也要先建测试 Config，插件才能接受本次发送；
+    - 测试接收人：BKSEC push_event 发单仅支持单人，取首个覆盖 ${operator}
+      （契约兼容单值 operator，保证测试单隔离）。
     """
     try:
         config.validate_for_submit()
@@ -164,15 +183,6 @@ def sync_bksec_test_config(strategy: Strategy, config: BkSecConfig) -> None:
     success, message = sync_plugin_config(strategy, config, is_test=True)
     if not success:
         raise serializers.ValidationError(gettext_lazy("测试前插件配置同步失败，无法发送测试工单：%s") % message)
-
-
-def build_test_constants(config: BkSecConfig, risk: Risk, test_receivers: List[str]) -> dict:
-    """组装测试发送的插件入参常量（按样例风险单渲染成终值）。"""
-    try:
-        config.validate_for_submit()
-    except ValueError as err:
-        raise serializers.ValidationError(gettext_lazy("BKSEC 配置不合法：%s") % err)
-    # 测试接收人：BKSEC push_event 发单仅支持单人，取首个作为测试处理人（契约兼容单值 operator）
     test_operator = test_receivers[0] if test_receivers else ""
     try:
         return build_plugin_constants(config, risk=risk, test_operator=test_operator)
@@ -223,83 +233,3 @@ def validate_bksec_test_target(risk: Risk) -> None:
     raise serializers.ValidationError(
         gettext_lazy("该风险单已有成功的正式派单记录：插件的回调按风险单复用，在其上发送测试工单会干扰正式回调或被静默拦截，请选择一张未成功发送过正式工单的风险单进行测试")
     )
-
-
-DEFAULT_FAILURE_HINT = gettext_lazy("任务执行失败")
-FAILURE_HINT_MAX_LEN = 200
-# 回源取节点错误时最多查询的失败节点数（避免子流程里大量失败节点打爆 SOPS）
-MAX_FETCH_ERROR_NODES = 5
-
-
-def iter_status_nodes(node: dict):
-    """深度遍历 SOPS 任务状态树（失败节点可能嵌套在子流程里）"""
-    for child in (node.get("children") or {}).values():
-        if not isinstance(child, dict):
-            continue
-        yield child
-        yield from iter_status_nodes(child)
-
-
-def fill_failure_info(status: dict, task_id: str = "", generic=DEFAULT_FAILURE_HINT) -> str:
-    """
-    补全失败信息：回写逐节点错误 + 返回记录级失败提示（原地修改 status 并返回提示文本）
-
-    一次完成两件事（写入点共用：终态同步 / 重试前快照 / 建单 / 测试轮询）：
-    - 写 error_message：SOPS get_task_status 不返回错误文本（只在 get_node_data 的 ex_data 里），
-      对失败节点回源取错误并写入 status.children[].error_message，
-      供执行记录详情 / 重试快照的 attempts 展示逐节点失败原因；
-    - 写 failure_hint：返回第一个取到错误的失败节点文本（截 FAILURE_HINT_MAX_LEN）作记录级摘要，
-      由写入点落库 TicketNode.process_result["failure_hint"]，查询层只读该字段。
-
-    语义边界：已回写过 error_message 的节点不再回源（读已存优先）；单节点回源失败静默跳过；
-    全部取不到返回 generic；最多回源 MAX_FETCH_ERROR_NODES 个失败节点。
-    """
-
-    def _extract_error_texts(node_data: dict) -> List[str]:
-        """get_node_data 响应里的错误文本：真实错误在顶层 ex_data / error_message；
-        outputs 可能是 [{key, value}] 或 {key: value}，仅取错误类键"""
-        texts: List[str] = []
-        for key in ("ex_data", "error_message"):
-            value = str(node_data.get(key) or "").strip()
-            if value:
-                texts.append(value)
-        outputs = node_data.get("outputs") or {}
-        if isinstance(outputs, list):
-            items = [(item.get("key"), item.get("value")) for item in outputs if isinstance(item, dict)]
-        else:
-            items = list(outputs.items())
-        for key, value in items:
-            value = str(value or "").strip()
-            if value and ("error" in str(key).lower() or "ex_data" in str(key).lower()):
-                texts.append(value)
-        return texts
-
-    if not status:
-        return str(generic)
-    failed_states = {s.value for s in SOPSTaskStatus.get_failed_status()}
-    failed_children = [
-        child for child in iter_status_nodes(status) if child.get("state") in failed_states and child.get("id")
-    ]
-    hint = ""
-    fetch_quota = MAX_FETCH_ERROR_NODES
-    for child in failed_children:
-        error_message = str(child.get("error_message") or "").strip()
-        if not error_message and task_id and fetch_quota > 0:
-            fetch_quota -= 1
-            try:
-                node_data = (
-                    api.bk_sops.get_node_data(
-                        task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID, node_id=str(child["id"])
-                    )
-                    or {}
-                )
-            except Exception:  # NOCC:broad-except(单节点取错失败不影响其余节点)
-                logger.warning("[FailureHint] Fetch node data failed, task_id=%s node_id=%s", task_id, child["id"])
-                node_data = {}
-            texts = _extract_error_texts(node_data)
-            if texts:
-                error_message = "\n".join(dict.fromkeys(texts)).strip()
-                child["error_message"] = error_message
-        if error_message and not hint:
-            hint = error_message
-    return hint[:FAILURE_HINT_MAX_LEN] if hint else str(generic)

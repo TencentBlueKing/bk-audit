@@ -50,11 +50,15 @@ logger = logging.getLogger("celery")
 
 def render_field_values(items, context: dict) -> dict:
     """
-    渲染字段映射为事件体 fields（预览 / 测试发送 / 正式发送共用同一口径）
+    把 (key, 模板) 序列渲染成事件体 fields 字典，并统一应用初始责任人兜底
 
-    items 为可迭代的 (key, value 模板)；key 为空的映射项跳过。
-    初始责任人为空时以安全接口人兜底（口径 A：优先 risk.operator，为空发给安全接口人；
-    BKSEC 必填字段，空值会被拒收）。
+    BkSecFieldMapping(key="target",     name="风险资产信息", value="云账号 {{ risk.raw_event_id }}", required=True)
+    BkSecFieldMapping(key="operator",   name="初始责任人",   value="{{ risk.operator }}",            required=True)
+    BkSecFieldMapping(key="description", name="描述",        value="{{ risk.event_content }}")
+        转换为
+    [("target", "云账号 {{ risk.raw_event_id }}"),
+     ("operator", "{{ risk.operator }}"),
+     ("description", "{{ risk.event_content }}")]
     """
     fields = {}
     for key, template in items:
@@ -72,9 +76,8 @@ def build_event_payload(
     events: Optional[List[dict]] = None,
 ) -> dict:
     """
-    构建bksec发单报文
+    构建bksec工单预览报文
 
-    build_event_payload 响应结构：
     {
         # 1. 风险类型（来自配置）
         "risk_type": "159",
@@ -170,7 +173,9 @@ def build_pa_params(config: BkSecConfig) -> dict:
 
 def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, test_operator: str = "") -> dict:
     """
-    构造插件的最终入参常量（渲染后的具体值）
+    测试发单时构造插件的最终入参常量（渲染后的具体值）
+
+    因为测试发单时入参是对象，而正式发单时入参是rule.pa_params中的字符串
     """
     context = build_render_context(risk=risk)
     constants: dict = {}
@@ -199,73 +204,49 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
     return constants
 
 
-def split_persons(value: Any) -> List[str]:
-    """把人名数据归一化为列表：列表原样、字符串按分号切分；过滤空值与 "None"/"null" 脏值"""
-    if not value:
-        return []
-    items = value if isinstance(value, (list, tuple)) else str(value).split(";")
-    persons: List[str] = []
-    for item in items:
-        name = str(item or "").strip()
-        if not name or name.lower() in BKSEC_INVALID_PERSON_VALUES:
-            continue
-        persons.append(name)
-    return persons
-
-
-def load_fallback_persons(risk: Optional[Risk] = None) -> List[str]:
-    """责任人兜底（口径 A）：风险责任人 → 安全接口人"""
-    if risk is not None:
-        persons = split_persons(risk.operator)
-        if persons:
-            return persons
-    return [person for person in load_security_person() if person]
-
-
 def coerce_operator_constant(value: str, risk: Optional[Risk] = None) -> str:
     """
-    operator 入参规范化：保证为插件 json.loads 可接受的 JSON 数组串。
+    ${operator} 入参收口：解析 → 清洗 → 兜底 → 序列化，输出恒为插件 json.loads 可接受的 JSON 数组串。
 
-    配置页的 operator 是「责任人模板」，用户按语义书写即可（如 {{ risk.operator }}）；
-    渲染结果是人名文本（多人以分号分隔，源自 display_value / security_person 的拼接形态）。
-    分号切分与 JSON 序列化属于与插件之间的传输层契约，由本函数统一处理，
-    不要求用户在模板里写 split | tojson。
+    配置页 operator 是责任人模板（如 {{ risk.operator }}），渲染结果形态不一，统一在此处理：
+    1. 解析：
+        '["1","2"]' --> '["1","2"]'
+        "a;b"  --> '["a","b"]'  分号为分隔符
+    2. 清洗：空串/纯空白丢弃，"None"/"null"/"undefined"/"nan" 脏值丢弃
+    3. 兜底：解析清洗后无人 → risk.operator（同样清洗）→ 仍无人 → 安全接口人；
+    4. 序列化：json.dumps(list)。
 
-    - 已是合法 JSON 数组串 → 解析后重新序列化，保证格式统一
-    - 分号分隔的人名文本 → 切分后序列化
-    - 取不到任何人名 → 回退到风险责任人，仍为空则安全接口人（口径 A）
     """
+
+    def _clean(items: Any) -> List[str]:
+        raw_items = items if isinstance(items, (list, tuple)) else str(items or "").split(";")
+        persons: List[str] = []
+        for item in raw_items:
+            name = str(item or "").strip()
+            if name and name.lower() not in BKSEC_INVALID_PERSON_VALUES:
+                persons.append(name)
+        return persons
+
     raw = str(value or "").strip()
     persons: List[str] = []
     if raw:
         try:
             parsed = json.loads(raw)
         except (ValueError, TypeError):
-            persons = split_persons(raw)
+            persons = _clean(raw)
         else:
-            # 非数组的合法 JSON（对象/数字/布尔）不是人名，视为无效走兜底
-            persons = split_persons(parsed) if isinstance(parsed, list) else []
+            persons = _clean(parsed) if isinstance(parsed, list) else []
+    if not persons and risk is not None:
+        persons = _clean(risk.operator)
     if not persons:
-        persons = load_fallback_persons(risk)
+        persons = [person for person in load_security_person() if person]
     return json.dumps(persons, ensure_ascii=False)
 
 
-def render_event_constant(template_json: str, risk: Optional[Risk] = None) -> str:
+def render_risk_type_extra(template_json: str, context: dict) -> str:
     """
-    渲染字符串和模板混写
+    渲染 risk_type_extra这个sops入参为具体值（用于正式发单）
     """
-    return render_value(template_json, build_render_context(risk=risk))
-
-
-def render_risk_type_extra(template_json: str, risk: Optional[Risk] = None) -> str:
-    """
-    渲染 risk_type_extra（字段映射序列化串）
-
-    必须逐字段渲染后重新序列化：整体按字符串渲染时，字段值自带的引号
-    （如 operator 的 tojson 输出 ["v_dryidong"]）会破坏 JSON 结构，
-    导致插件 json.loads 失败（Expecting ',' delimiter）。
-    """
-    context = build_render_context(risk=risk)
     try:
         mapping = json.loads(template_json)
     except (ValueError, TypeError):
@@ -274,3 +255,21 @@ def render_risk_type_extra(template_json: str, risk: Optional[Risk] = None) -> s
         return render_value(template_json, context)
     # 初始责任人兜底与预览/测试发送同口径（render_field_values）
     return json.dumps(render_field_values(mapping.items(), context), ensure_ascii=False)
+
+
+def render_bksec_constant(key: str, value: Any, context: dict, risk: Optional[Risk] = None) -> Any:
+    """
+    BKSEC 自动规则 pa_params 值加工：派单时按当前风险把配方/模板渲染成终值。
+
+    引擎（AutoProcess）只做一次委托，插件契约细节在此收口：
+    - 普通标量模板（含 {{ 的文字混排，risk_type_extra 除外）→ render_value；
+    - ${risk_type_extra}（字段映射 JSON 模板串）→ 逐字段渲染重组（防值内引号破坏 JSON）；
+    - ${operator} → coerce_operator_constant（插件 JSON 数组串契约 + 责任人兜底）。
+    """
+    if isinstance(value, str) and "{{" in value and key != BKSEC_PARAM_RISK_TYPE_EXTRA:
+        value = render_value(value, context)
+    if key == BKSEC_PARAM_RISK_TYPE_EXTRA and isinstance(value, str):
+        value = render_risk_type_extra(value, context)
+    if key == BKSEC_PARAM_OPERATOR:
+        value = coerce_operator_constant(value, risk=risk)
+    return value

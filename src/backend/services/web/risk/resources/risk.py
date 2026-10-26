@@ -74,7 +74,6 @@ from services.web.databus.constants import (
     ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
-from services.web.risk.bksec.service import fill_failure_info, iter_status_nodes
 from services.web.risk.constants import (
     RISK_LEVEL_ORDER_FIELD,
     RISK_RENDER_LOCK_KEY,
@@ -185,7 +184,11 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
-from services.web.risk.utils import extract_attempt_records
+from services.web.risk.utils import (
+    extract_attempt_records,
+    fill_failure_info,
+    iter_status_nodes,
+)
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag

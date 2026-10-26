@@ -31,7 +31,7 @@ from services.web.risk.bksec.constants import (
     BkSecConfigSyncStage,
 )
 from services.web.risk.bksec.contract import build_pa_params
-from services.web.risk.models import ProcessApplication, RiskRule
+from services.web.risk.models import RiskRule
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper
 from services.web.scene.models import ResourceBindingScene
@@ -45,7 +45,7 @@ logger = logging.getLogger("celery")
 
 def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
     """
-    解析策略的 BKSEC 配置
+    解析策略的 BKSEC 配置：Strategy.bksec_config（JSON 字段）→ 校验过的 BkSecConfig 对象
     """
     if not strategy:
         return None
@@ -59,30 +59,8 @@ def load_bksec_config(strategy: Optional[Strategy]) -> Optional[BkSecConfig]:
         return None
 
 
-def _load_strategy_scene_id(strategy: Strategy) -> Optional[int]:
-    """
-    返回策略归属场景（处理规则需要绑定到策略所在场景）
-    """
-    return (
-        ResourceBindingScene.objects.filter(
-            scene__is_deleted=False,
-            binding__resource_type=ResourceVisibilityType.STRATEGY,
-            binding__resource_id=str(strategy.strategy_id),
-        )
-        .values_list("scene_id", flat=True)
-        .first()
-    )
-
-
-def _top_priority() -> int:
-    """
-    自动规则优先级：保留段内取值（结构性最高，手动规则恒低于本段）
-    """
-    latest = RiskRule.objects.filter(priority_index__gte=BKSEC_RULE_PRIORITY_BASE).order_by("-priority_index").first()
-    return (latest.priority_index + 1) if latest else BKSEC_RULE_PRIORITY_BASE
-
-
 def _latest_auto_rule(strategy_id: int) -> Optional[RiskRule]:
+    # 取某策略最新版本的自动规则
     return RiskRule.objects.filter(auto_strategy_id=strategy_id).order_by("-version").first()
 
 
@@ -101,13 +79,19 @@ def _create_rule_version(strategy: Strategy, fields: dict, rule_id: Optional[int
     """
     创建启用的规则新版本（仅内容变更时调用）。
     """
+    # 优先级取保留段 [BKSEC_RULE_PRIORITY_BASE, +∞) 内当前最大值 + 1：
+    # 结构性保证自动规则恒高于一切手动规则（手动建规则只在段下取 max，互不越界）
+    latest_priority = (
+        RiskRule.objects.filter(priority_index__gte=BKSEC_RULE_PRIORITY_BASE).order_by("-priority_index").first()
+    )
+    priority_index = (latest_priority.priority_index + 1) if latest_priority else BKSEC_RULE_PRIORITY_BASE
     if rule_id:
         latest = RiskRule.objects.filter(rule_id=rule_id).order_by("-version").first()
         instance = RiskRule.objects.create(
             **fields,
             rule_id=rule_id,
             version=(latest.version + 1) if latest else 1,
-            priority_index=_top_priority(),
+            priority_index=priority_index,
             created_at=latest.created_at if latest else None,
             created_by=latest.created_by if latest else "",
             auto_strategy_id=strategy.strategy_id,
@@ -124,7 +108,7 @@ def _create_rule_version(strategy: Strategy, fields: dict, rule_id: Optional[int
         )
         # 第一版：rule_id = id（与手动创建规则一致）
         instance.rule_id = instance.id
-        instance.priority_index = _top_priority()
+        instance.priority_index = priority_index
         instance.save(update_fields=["rule_id", "priority_index"])
         # 绑定到策略所在场景
         _sync_rule_scene_binding(strategy, instance)
@@ -145,7 +129,16 @@ def _sync_rule_scene_binding(strategy: Strategy, rule: RiskRule) -> None:
     """
     规则场景归属跟随策略：策略改绑场景后同步规则的场景绑定（保持单一场景）
     """
-    scene_id = _load_strategy_scene_id(strategy)
+    # 策略归属场景（处理规则需要绑定到策略所在场景）
+    scene_id = (
+        ResourceBindingScene.objects.filter(
+            scene__is_deleted=False,
+            binding__resource_type=ResourceVisibilityType.STRATEGY,
+            binding__resource_id=str(strategy.strategy_id),
+        )
+        .values_list("scene_id", flat=True)
+        .first()
+    )
     if scene_id is None:
         return
     current_scene_id = (
@@ -206,19 +199,9 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
         )
         return None
     # 启用 → 确保预置套餐存在
-    from django.conf import settings
+    from services.web.risk.bksec.service import find_preset_pa
 
-    template_id = settings.BKSEC_SOPS_TEMPLATE_ID
-    pa = None
-    if template_id:
-        try:
-            pa = (
-                ProcessApplication.objects.filter(is_builtin=True, sops_template_id=int(template_id))
-                .order_by("-id")
-                .first()
-            )
-        except (TypeError, ValueError):
-            pass
+    pa = find_preset_pa()
     if pa is None:
         logger.warning(
             "[BkSecRule] Preset process application missing (BKSEC_SOPS_TEMPLATE_ID unset?), "
@@ -249,16 +232,9 @@ def sync_bksec_rule(strategy: Strategy, strategy_alive: Optional[bool] = None) -
     return instance
 
 
-def disable_bksec_rule(strategy_id: int) -> None:
-    """
-    停用策略的自动发单规则
-    """
-    _toggle_rule(_latest_auto_rule(strategy_id), is_enabled=False)
-
-
 def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = False) -> tuple:
     """
-    同步插件 Config：传业务参数给插件，插件内部构造完整 Config 并存储。
+    同步插件 Config：传业务参数给插件
 
     审计中心传 strategy_id + risk_type_id + source_type + token
     is_test=True 时用 {strategy_id}_test 作为 key，不影响正式配置（测试发送用）。

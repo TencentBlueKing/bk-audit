@@ -423,9 +423,9 @@ class NewRisk(RiskFlowBaseHandler):
         if not getattr(self.risk, "dispatch_rule_id", None):
             self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
-        # 只有有责任人时走规则；策略启用 BKSEC 时例外（口径 A）：
-        # 无责任人也走规则发单，初始责任人兜底为安全接口人
-        if self.risk.operator or self._bksec_enabled():
+        # 只有有责任人时走规则；系统自动规则例外（如策略 BKSEC 发单）：
+        # 自动派单不依赖责任人，无责任人也走规则，发单责任人兜底为安全接口人
+        if self.risk.operator or self._has_enabled_auto_rule():
             # 初始化处理规则
             self.match_risk_rule()
             # 重新初始化
@@ -439,14 +439,12 @@ class NewRisk(RiskFlowBaseHandler):
         self.risk.current_operator = [] if self.process_application and self.risk.operator else self.load_processor()
         self.risk.save(update_fields=["current_operator"])
 
-    def _bksec_enabled(self) -> bool:
-        """策略是否启用 BKSEC 安全工单：决定无责任人风险是否走规则发单"""
-        if not self.strategy:
-            return False
-        from services.web.risk.bksec.rules import load_bksec_config
+    def _has_enabled_auto_rule(self) -> bool:
+        """策略是否存在启用的系统自动规则（auto_strategy_id 非空）：自动派单不依赖责任人，无责任人也走规则匹配。
 
-        config = load_bksec_config(self.strategy)
-        return bool(config and config.enabled)
+        按最新版本判定——启停只作用于最新版本，历史版本的 is_enabled 不代表当前状态。
+        """
+        return RiskRule.load_latest_rules().filter(auto_strategy_id=self.risk.strategy_id, is_enabled=True).exists()
 
     def match_risk_rule(self) -> None:
         RiskRuleHandler(risk_id=self.risk.risk_id).bind_rule()
@@ -655,9 +653,7 @@ class AutoProcess(RiskFlowBaseHandler):
         trigger = (
             "manual" if pa_config else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
         )
-        # 优先使用参数
-        pa_config = pa_config
-        # 或者使用上个节点(审批节点)配置
+        # pa_config 优先用显式传参；未传时取上个节点（审批节点）的配置
         if not pa_config and self.risk.last_history.action == ForApprove.__name__:
             pa_config = self.risk.last_history.extra.get("pa_config")
         # 配置有处理套餐则重新初始化处理套餐
@@ -672,6 +668,14 @@ class AutoProcess(RiskFlowBaseHandler):
         pa_params = pa_params if pa_params is not None else (self.rule.pa_params if self.rule else {})
         if not isinstance(pa_params, dict):
             pa_params = {}
+        # BKSEC 自动规则：pa_params 存的是模板，派单时按当前风险渲染成终值。
+        # 渲染上下文只组装一次（load_risk_events 为外部查询，不可按字段重复触发）
+        is_bksec_auto_rule = bool(getattr(self.rule, "auto_strategy_id", None))
+        bksec_context = None
+        if is_bksec_auto_rule:
+            from services.web.risk.bksec.render import build_render_context
+
+            bksec_context = build_render_context(risk=self.risk)
         constants = {}
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
@@ -688,30 +692,14 @@ class AutoProcess(RiskFlowBaseHandler):
             # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
-            # 把 BKSEC 自动规则 pa_params 里的模板按当前风险渲染成终值，作为 SOPS 任务入参
-            if (
-                isinstance(value, str)
-                and "{{" in value
-                and c["key"] != "${risk_type_extra}"
-                and getattr(self.rule, "auto_strategy_id", None)
-            ):
-                from services.web.risk.bksec.contract import render_event_constant
+            # 责任人为空时兜底安全接口人。
+            if field_name == "operator" and not value:
+                value = [person for person in (self.load_security_person() or []) if person]
+            # BKSEC 自动规则：pa_params 存的是模板，派单时按当前风险加工成终值
+            if is_bksec_auto_rule:
+                from services.web.risk.bksec.contract import render_bksec_constant
 
-                value = render_event_constant(value, risk=self.risk)
-            # risk_type_extra 兜底：逐字段渲染后重新序列化，避免字段值自带引号破坏 JSON（插件 json.loads 不崩）
-            if (
-                c["key"] == "${risk_type_extra}"
-                and isinstance(value, str)
-                and getattr(self.rule, "auto_strategy_id", None)
-            ):
-                from services.web.risk.bksec.contract import render_risk_type_extra
-
-                value = render_risk_type_extra(value, risk=self.risk)
-            # operator 入参兜底：BKSEC 自动规则渲染后保证数组串契约（插件 json.loads 不崩）
-            if c["key"] == "${operator}" and getattr(self.rule, "auto_strategy_id", None):
-                from services.web.risk.bksec.contract import coerce_operator_constant
-
-                value = coerce_operator_constant(value, risk=self.risk)
+                value = render_bksec_constant(c["key"], value, bksec_context, self.risk)
             value = _normalize_sops_constant_value(c, value)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
@@ -742,7 +730,7 @@ class AutoProcess(RiskFlowBaseHandler):
         """写入点落失败提示（非失败状态原样返回）"""
         status = process_result.get("status") or {}
         if status.get("state") in SOPSTaskStatus.get_failed_status():
-            from services.web.risk.bksec.service import fill_failure_info
+            from services.web.risk.utils import fill_failure_info
 
             process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
         # 冗余存储 duration（秒），用于排序

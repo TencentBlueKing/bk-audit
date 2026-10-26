@@ -57,10 +57,6 @@ BKSEC_ONCE_TASK_TEST = "yes"
 BKSEC_INVALID_PERSON_VALUES = frozenset({"none", "null", "undefined", "nan"})
 
 
-# 预置处理套餐
-BKSEC_PRESET_PA_NAME = gettext_lazy("【内置】BKSEC安全工单发单")
-BKSEC_PRESET_PA_DESCRIPTION = gettext_lazy("策略 BKSEC 安全工单发单内置套餐，由系统维护，请勿删除或停用")
-
 # 自动规则保留优先级段（结构性保证：启用 BKSEC 的发单规则恒高于一切手动规则，与创建先后无关）：
 #   [BKSEC_RULE_PRIORITY_BASE, +∞) 专属自动规则；手动规则的优先级来源须排除本段（创建时 max 只统计段下值）
 BKSEC_RULE_PRIORITY_BASE = 9000

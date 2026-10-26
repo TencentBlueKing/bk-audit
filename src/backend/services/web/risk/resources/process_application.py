@@ -31,7 +31,6 @@ from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskStatus
-from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, iter_status_nodes
 from services.web.risk.constants import (
     PA_RESULT_KEYWORD_LABELS,
     PA_TRIGGER_KEYWORD_LABELS,
@@ -44,15 +43,21 @@ from services.web.risk.serializers import (
     ListAllProcessApplicationsReqSerializer,
     ListProcessApplicationsReqSerializer,
     ListRiskResponseSerializer,
+    PAExecutionRecordDetailReqSerializer,
+    PAExecutionRecordDetailResponseSerializer,
+    PAExecutionRecordListReqSerializer,
+    PAExecutionRecordListResponseSerializer,
     ProcessApplicationsInfoSerializer,
     RiskRuleInfoSerializer,
     ToggleProcessApplicationReqSerializer,
     UpdateProcessApplicationsReqSerializer,
 )
 from services.web.risk.utils import (
+    FAILURE_HINT_MAX_LEN,
     calc_task_duration,
     calc_task_finish_time,
     extract_attempt_records,
+    iter_status_nodes,
 )
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
@@ -119,15 +124,12 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             pk_field="id",
         )
-        # 按「是否有执行记录」过滤：执行记录即 action=AutoProcess 的 TicketNode（与执行记录列表口径一致，含测试单）
+        # 按「是否有执行记录」过滤：执行记录 = action=AutoProcess 的 TicketNode（含测试单）
         if has_execution_records is not None:
-            pa_ids = {
-                int(pa_id)
-                for pa_id in TicketNode.objects.filter(action="AutoProcess")
-                .exclude(process_result__pa_id__isnull=True)
-                .values_list("process_result__pa_id", flat=True)
-                if str(pa_id).isdigit()
-            }
+            nodes = TicketNode.objects.filter(action="AutoProcess").filter(
+                risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id")
+            )
+            pa_ids = {pa.id for pa in process_applications if nodes.filter(_pa_filter_q([pa.id])).exists()}
             process_applications = (
                 process_applications.filter(id__in=pa_ids)
                 if has_execution_records
@@ -169,6 +171,40 @@ def _reject_builtin_edit(pa: ProcessApplication) -> None:
         raise serializers.ValidationError(
             gettext("内置套餐【%s】由系统维护，不支持编辑或启停；如需调整 SOPS 模板请修改 BKSEC_SOPS_TEMPLATE_ID 环境变量") % pa.name
         )
+
+
+def _pa_filter_q(pa_ids: list) -> Q:
+    """套餐归属过滤条件：与展示口径一致（快照优先，无快照走规则链路兜底）
+
+    执行记录列表筛选与「有无执行记录」判定共用本口径（单一来源，防口径漂移）：
+    - 执行时快照 process_result.pa_id 优先：覆盖手动分派 / 测试单 / 规则改绑后的历史记录
+    - 无快照的历史节点走规则链路：按 (rule_id, rule_version) 精确命中；
+      风险无 rule_version 时按规则最新版本归属（与展示兜底一致）
+    """
+    # 快照命中：pa_id 写入为 int，JSON 路径查询类型敏感，兼容 str（同 task_id 筛选）
+    snapshot_q = Q()
+    for value in pa_ids:
+        snapshot_q |= Q(process_result__pa_id=value) | Q(process_result__pa_id=str(value))
+    # 无快照判定：与展示的 `process_result.get("pa_id") or 兜底` 语义一致（缺失/None/0/空串）
+    no_snapshot_q = Q(process_result__pa_id__isnull=True) | Q(process_result__pa_id=0) | Q(process_result__pa_id="")
+    # 规则链路：目标套餐当前/历史版本绑定的 (rule_id, version) 精确匹配
+    legacy_rule_q = Q()
+    for item in RiskRule.objects.filter(pa_id__in=pa_ids).exclude(rule_id__isnull=True).values("rule_id", "version"):
+        if item["version"] is None:
+            legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version__isnull=True)
+        else:
+            legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version=item["version"])
+    # 风险无 rule_version：按规则最新版本归属（升序遍历，最后写入即最新版本）
+    latest_pa = {}
+    for item in RiskRule.objects.exclude(rule_id__isnull=True).order_by("version").values("rule_id", "pa_id"):
+        latest_pa[item["rule_id"]] = item["pa_id"]
+    for rule_id, pa_of_latest in latest_pa.items():
+        if pa_of_latest in pa_ids:
+            legacy_rule_q |= Q(rule_id=rule_id, rule_version__isnull=True)
+    if not legacy_rule_q:
+        return snapshot_q
+    legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
+    return snapshot_q | legacy_q
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):
@@ -263,41 +299,6 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         return nodes.filter(id=record_id) if record_id else nodes
 
     @staticmethod
-    def _pa_filter_q(pa_ids: list) -> Q:
-        """套餐归属过滤条件：与展示口径一致（快照优先，无快照走规则链路兜底）
-
-        - 执行时快照 process_result.pa_id 优先：覆盖手动分派 / 测试单 / 规则改绑后的历史记录
-        - 无快照的历史节点走规则链路：按 (rule_id, rule_version) 精确命中；
-          风险无 rule_version 时按规则最新版本归属（与展示兜底一致）
-        """
-        # 快照命中：pa_id 写入为 int，JSON 路径查询类型敏感，兼容 str（同 task_id 筛选）
-        snapshot_q = Q()
-        for value in pa_ids:
-            snapshot_q |= Q(process_result__pa_id=value) | Q(process_result__pa_id=str(value))
-        # 无快照判定：与展示的 `process_result.get("pa_id") or 兜底` 语义一致（缺失/None/0/空串）
-        no_snapshot_q = Q(process_result__pa_id__isnull=True) | Q(process_result__pa_id=0) | Q(process_result__pa_id="")
-        # 规则链路：目标套餐当前/历史版本绑定的 (rule_id, version) 精确匹配
-        legacy_rule_q = Q()
-        for item in (
-            RiskRule.objects.filter(pa_id__in=pa_ids).exclude(rule_id__isnull=True).values("rule_id", "version")
-        ):
-            if item["version"] is None:
-                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version__isnull=True)
-            else:
-                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version=item["version"])
-        # 风险无 rule_version：按规则最新版本归属（升序遍历，最后写入即最新版本）
-        latest_pa = {}
-        for item in RiskRule.objects.exclude(rule_id__isnull=True).order_by("version").values("rule_id", "pa_id"):
-            latest_pa[item["rule_id"]] = item["pa_id"]
-        for rule_id, pa_of_latest in latest_pa.items():
-            if pa_of_latest in pa_ids:
-                legacy_rule_q |= Q(rule_id=rule_id, rule_version__isnull=True)
-        if not legacy_rule_q:
-            return snapshot_q
-        legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
-        return snapshot_q | legacy_q
-
-    @staticmethod
     def _result_state_q(value: str) -> Q:
         """归一化状态 → SOPS state 过滤条件（unknown 覆盖空状态；其他值不加条件）"""
         if value == "success":
@@ -356,7 +357,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         legacy_pa_name_q = Q()
         if pa_name_values:
             no_snapshot_name_q = Q(process_result__pa_name__isnull=True) | Q(process_result__pa_name="")
-            legacy_pa_name_q = no_snapshot_name_q & cls._pa_filter_q(pa_name_values)
+            legacy_pa_name_q = no_snapshot_name_q & _pa_filter_q(pa_name_values)
         return (
             Q(id__icontains=keyword)
             | Q(risk_id__icontains=keyword)
@@ -377,57 +378,8 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             | cls._enum_keyword_q(keyword, PA_RESULT_KEYWORD_LABELS, cls._result_state_q)
         )
 
-    class RequestSerializer(serializers.Serializer):
-        id = serializers.CharField(
-            label=gettext_lazy("执行记录ID"),
-            required=False,
-            allow_blank=True,
-            help_text=gettext_lazy(
-                "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
-            ),
-        )
-        keyword = serializers.CharField(
-            label=gettext_lazy("搜索关键词"),
-            required=False,
-            allow_blank=True,
-            help_text=gettext_lazy(
-                "全量模糊搜索：逗号分隔多个关键词，词之间为「且」（记录须同时命中每个词），"
-                "单个词内部为「或」——命中下列任一字段即算命中：执行记录ID、任务ID、任务名称、套餐名称、"
-                "执行人、风险ID、风险标题/状态/等级、失败提示、触发方式、执行状态；"
-                "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
-            ),
-        )
-        pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
-        risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
-        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
-        task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
-        task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
-        pa_name = serializers.CharField(
-            label=gettext_lazy("套餐名称"),
-            required=False,
-            allow_blank=True,
-            help_text=gettext_lazy("精确匹配，支持多选，逗号分隔（如 套餐A,套餐B），任一命中即返回"),
-        )
-        trigger = serializers.CharField(
-            label=gettext_lazy("触发方式"),
-            required=False,
-            allow_blank=True,
-            help_text=gettext_lazy("支持多选，逗号分隔（如 auto,test），任一命中即返回"),
-        )
-        result = serializers.CharField(
-            label=gettext_lazy("状态"),
-            required=False,
-            allow_blank=True,
-            help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
-        )
-        operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
-        order_by = serializers.CharField(
-            label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
-        )
-        page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
-        page_size = serializers.IntegerField(
-            label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
-        )
+    RequestSerializer = PAExecutionRecordListReqSerializer
+    ResponseSerializer = PAExecutionRecordListResponseSerializer
 
     def perform_request(self, validated_request_data):
         record_id = (validated_request_data.get("id") or "").strip()
@@ -449,7 +401,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         # 数据范围收敛（对齐风险列表口径）：仅展示调用者有权查看的风险（IAM + 本地授权）的执行记录
         nodes = nodes.filter(risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id"))
 
-        # 执行记录 ID 精确过滤（TicketNode.id 为 UUID，格式校验在 RequestSerializer.validate_id）
+        # 执行记录 ID 精确过滤（TicketNode.id 为 UUID；空值不过滤）
         nodes = self._filter_by_record_id(nodes, record_id)
 
         # 套餐筛选 / 场景范围：归属口径与展示一致——执行时快照优先，无快照走规则（含版本）链路兜底
@@ -464,7 +416,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
                     pk_field="id",
                 )
-            nodes = nodes.filter(self._pa_filter_q(list(pa_queryset.values_list("id", flat=True))))
+            nodes = nodes.filter(_pa_filter_q(list(pa_queryset.values_list("id", flat=True))))
 
         # 风险入口：按风险 ID 筛选
         if risk_id:
@@ -632,8 +584,8 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
     name = gettext_lazy("获取执行记录详情")
     audit_action = ActionEnum.LIST_PA
 
-    class RequestSerializer(serializers.Serializer):
-        id = serializers.CharField(label=gettext_lazy("执行记录ID"), required=True)
+    RequestSerializer = PAExecutionRecordDetailReqSerializer
+    ResponseSerializer = PAExecutionRecordDetailResponseSerializer
 
     def perform_request(self, validated_request_data):
         node_id = validated_request_data["id"]

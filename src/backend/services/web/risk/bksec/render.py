@@ -16,6 +16,21 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+# 渲染流程
+# ① 装载   build_risk_data  风险对象 → 数据字典（不查库，加工已在手的风险）
+#          load_risk_events 查回事件列表（外部查询，供 {{ event.xxx }} 用）
+# ② 归一   display_value    任意值 → 文本：列表→"a;b"、dict/list→JSON 串、
+#          时间→"YYYY-MM-DD HH:MM:SS"。风险字段在装载时批量预转；
+#          事件字段在模板取值时惰性转换（模板不碰的字段不做功）
+# ③ 组装   build_render_context → {"risk": {...}, "event": EventNamespace}
+#          命名空间即抽屉：{{ risk.xxx }} 取风险字段（成品文本），
+#          {{ event.xxx }} 取事件字段（现取现磨，默认最后一条事件）
+# ④ 渲染   render_value     jinja 展开 "文字 + {{ 变量 }}" 混排模板 → 终值
+#
+# 使用方：预览（build_event_payload）/ 测试发送（build_plugin_constants）/ 正式发单（AutoProcess）。
+#       build_render_context 每次会触发一次load_risk_events 外部查询，应建一次上下文、多字段渲染共用。
+
+
 import datetime
 import json
 import logging
@@ -54,7 +69,7 @@ def render_value(template: str, context: dict) -> str:
 
 def display_value(value: Any) -> str:
     """
-    渲染为字符串：列表用分号拼接、字典转 JSON、时间格式化
+    将列表/事件对象等渲染为字符串：列表用分号拼接、字典转 JSON、时间格式化
     - 列表：分号拼接
     - 字典：转 JSON
     - 时间：格式化为 YYYY-MM-DD HH:MM:SS
@@ -132,7 +147,7 @@ class _RiskData(dict):
 
 def load_security_person() -> List[str]:
     """
-    安全接口人（无责任人风险的发单兜底，决策 D4）
+    安全接口人
     """
     persons = GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY) or []
     return [p for p in persons if p]
@@ -213,10 +228,12 @@ def build_risk_data(risk: Optional[Risk]) -> _RiskData:
 
 def build_render_context(risk: Optional[Risk] = None, events: Optional[List[dict]] = None) -> dict:
     """
-    构建 BKSEC 字段渲染上下文：risk / event 命名空间
+    构建 BKSEC 字段渲染上下文
 
-    预览、测试发送、正式发送共用，保证三处渲染结果一致。
-    上下文整体构建一次、供多字段渲染复用（load_risk_events 为外部查询，不可按字段重复触发）。
+    {
+      "risk":  build_risk_data(risk),        # 风险字段字典：{"operator": "alice;bob", ...}
+      "event": EventNamespace(load_risk_events(risk))   # 2 条事件，{{ event.username }} → "bob"
+    }
     """
     if events is None and risk is not None:
         events = load_risk_events(risk)

@@ -35,18 +35,26 @@ from services.web.risk.bksec.constants import (
     BKSEC_TEST_NODE_SCAN_LIMIT,
 )
 from services.web.risk.bksec.service import (
-    build_test_constants,
     build_ticket_preview,
     ensure_bksec_enabled,
     fetch_risk_access_items,
-    fill_failure_info,
+    find_preset_pa,
     parse_bksec_config,
-    sync_bksec_test_config,
+    prepare_test_constants,
     validate_bksec_test_target,
 )
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
-from services.web.risk.utils import calc_task_duration
+from services.web.risk.serializers import (
+    GetTaskStatusReqSerializer,
+    ListBkSecRiskTypesReqSerializer,
+    ListBkSecRiskTypesResponseSerializer,
+    PreviewTicketReqSerializer,
+    PreviewTicketResponseSerializer,
+    SendTestTicketReqSerializer,
+    SendTestTicketResponseSerializer,
+)
+from services.web.risk.utils import calc_task_duration, fill_failure_info
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
@@ -69,9 +77,9 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
 
     name = gettext_lazy("查询BKSEC风险类型列表")
 
-    class RequestSerializer(serializers.Serializer):
-        name__icontains = serializers.CharField(label=gettext_lazy("名称模糊搜索"), required=False, allow_blank=True)
-        is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
+    RequestSerializer = ListBkSecRiskTypesReqSerializer
+    ResponseSerializer = ListBkSecRiskTypesResponseSerializer
+    many_response_data = True
 
     def perform_request(self, validated_request_data):
         from apps.feature.constants import FeatureTypeChoices
@@ -101,9 +109,8 @@ class PreviewTicket(TicketResourceMeta):
 
     name = gettext_lazy("预览工单")
 
-    class RequestSerializer(serializers.Serializer):
-        bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
-        risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
+    RequestSerializer = PreviewTicketReqSerializer
+    ResponseSerializer = PreviewTicketResponseSerializer
 
     def perform_request(self, validated_request_data):
         config = parse_bksec_config(validated_request_data["bksec_config"])
@@ -123,13 +130,8 @@ class SendTestTicket(TicketResourceMeta):
 
     name = gettext_lazy("发送测试工单")
 
-    class RequestSerializer(serializers.Serializer):
-        test_receivers = serializers.ListField(
-            label=gettext_lazy("测试接收人"), child=serializers.CharField(), required=True
-        )
-        # 测试发送必须指定样例风险单：不传则所有 {{ risk.xxx }} 渲染为空，测试单大量字段为空、失去验证意义
-        risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
-        bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+    RequestSerializer = SendTestTicketReqSerializer
+    ResponseSerializer = SendTestTicketResponseSerializer
 
     def perform_request(self, validated_request_data):
         # 后端 feature 硬拦截（前端隐藏后仍可能被 API 直接调用）
@@ -142,22 +144,12 @@ class SendTestTicket(TicketResourceMeta):
         config = parse_bksec_config(validated_request_data["bksec_config"])
         # 回调隔离守卫（插件 Callback 表按风险单复用）
         validate_bksec_test_target(risk)
-        # 测试发送前置：兜底同步插件侧 Config（确保插件侧与本次入参一致）
-        sync_bksec_test_config(strategy, config)
-        # 渲染插件入参常量
-        constants = build_test_constants(config, risk, validated_request_data["test_receivers"])
+        # 测试发送前置（一次性）：必填校验 → 插件 Config 同步（{id}_test）→ 渲染终值入参
+        constants = prepare_test_constants(strategy, config, risk, validated_request_data["test_receivers"])
         # 确保预置套餐就绪
-        if not settings.BKSEC_SOPS_TEMPLATE_ID:
-            raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪（未配置套餐模板 ID），无法发送测试工单"))
-        from services.web.risk.models import ProcessApplication
-
-        pa = (
-            ProcessApplication.objects.filter(is_builtin=True, sops_template_id=int(settings.BKSEC_SOPS_TEMPLATE_ID))
-            .order_by("-id")
-            .first()
-        )
+        pa = find_preset_pa()
         if pa is None:
-            raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪，无法发送测试工单"))
+            raise serializers.ValidationError(gettext_lazy("预置发单套餐未就绪（未配置套餐模板 ID 或未创建内置套餐），无法发送测试工单"))
         # 经预置套餐模板创建并启动测试任务（与正式发送同一通道、同一入参结构）。
         # 注意：插件侧错误（Config 缺失/白名单/参数格式）发生在 SOPS 异步执行阶段，
         # 此处只能捕获 SOPS 调用自身的失败（网络/鉴权），插件错误由 get_task_status 轮询侧转换提示
@@ -190,7 +182,7 @@ class SendTestTicket(TicketResourceMeta):
                 "pa_name": pa.name,
                 "task_name": task_name,
                 "trigger": "test",
-                # 测试接收人：与 operator 互补，记录本次测试工单实际发给谁（仅落库排查用，执行记录接口不透出）
+                # 测试接收人：与 operator 互补，记录本次测试工单实际发给谁
                 "test_receivers": validated_request_data["test_receivers"],
                 "duration": None,  # 测试单创建时无耗时，状态更新时同步
             },
@@ -216,24 +208,15 @@ class GetTaskStatus(TicketResourceMeta):
     - risk_id：刷新后恢复——task_id 随内存丢失，改用样例风险单 ID 定位本人最近一条测试单，
       用户身份由后端从请求上下文获取，前端无法伪造。
 
-    失败时附带失败提示（failure_hint）：透出失败节点的原始错误文本，取不到才回退通用提示。
-    注意：插件侧错误（如 Config 缺失）发生在 SOPS 异步执行阶段，create_task 时刻无法感知，
-    只能在本接口（轮询）侧获取。
     """
 
     name = gettext_lazy("查询测试任务状态")
 
     GENERIC_HINT = "任务执行失败，详情请查看 SOPS 任务执行记录"
 
-    class RequestSerializer(serializers.Serializer):
-        task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), required=False, allow_blank=True)
-        risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True)
-
-        def validate(self, attrs):
-            attrs = super().validate(attrs)
-            if not attrs.get("task_id") and not attrs.get("risk_id"):
-                raise serializers.ValidationError(gettext_lazy("task_id 与 risk_id 至少传一个"))
-            return attrs
+    RequestSerializer = GetTaskStatusReqSerializer
+    # 不挂 ResponseSerializer：返回是 SOPS 任务状态树的动态 flatten，无法与返回同形建模；
+    # ResponseSerializer 的安全前提是同形（见 report.GetTaskResult 先例）
 
     def perform_request(self, validated_request_data):
         task_id = validated_request_data.get("task_id") or ""
@@ -280,9 +263,7 @@ class GetTaskStatus(TicketResourceMeta):
     @staticmethod
     def _find_latest_test_node(risk_id: str):
         """
-        按样例风险单定位当前登录用户最近一条测试单（刷新后恢复轮询用）
-
-        用户身份取自请求上下文而非入参，前端无法伪造，也不会串到他人记录。
+        按样例风险单+当前登录用户定位最近一条测试单（刷新后恢复轮询用）
         """
         return (
             TicketNode.objects.filter(
@@ -298,11 +279,7 @@ class GetTaskStatus(TicketResourceMeta):
     @staticmethod
     def _find_test_node(task_id: str):
         """
-        按 task_id 定位测试节点
-
-        process_result 中 task_id 的类型取决于 SOPS 返回（int/str），而 JSONField 路径查询
-        类型敏感：按字符串过滤匹配不到 int，会导致测试节点状态永远停留在 running。
-        故取最近的未结束测试节点逐个比对，与存储类型无关。
+        按 task_id 定位测试节点，取最近的未结束测试节点逐个比对
         """
         candidates = TicketNode.objects.filter(is_test=True, status=TicketNodeStatus.RUNNING).order_by("-timestamp")[
             :BKSEC_TEST_NODE_SCAN_LIMIT
@@ -315,17 +292,6 @@ class GetTaskStatus(TicketResourceMeta):
     def _build_failure_hint(self, task_id: str, status: dict) -> str:
         """失败提示：回源取失败节点错误文本（顺带回写逐节点 error_message），取不到回退通用提示"""
         return fill_failure_info(status, task_id=task_id, generic=self.GENERIC_HINT)
-
-
-def _normalize_field_type(value) -> str:
-    """
-    归一化 BKSEC 字段类型
-
-    接口返回的是 storage_type，且大小写不统一（同时存在 STRING / string），统一转小写后输出为 type。
-    已知取值：string / int / object / timestamp；未知取值原样小写返回，不丢弃信息。
-    接口未返回类型时保持为空串，由前端自行决定缺省渲染方式。
-    """
-    return str(value or "").strip().lower()
 
 
 def _extract_risk_access_fields(item: dict) -> list:
@@ -341,9 +307,6 @@ def _extract_risk_access_fields(item: dict) -> list:
              "source_type": "CUSTOM", "unique": False},
         ]
     }
-    required 由审计中心按白名单 BKSEC_REQUIRED_FIELD_KEYS 判定（BKSEC 不返回该字段）：
-    target / target_type / operator 为必填，其余一律非必填。
-    type 取自接口的 storage_type 并归一化小写（string / int / object / timestamp）。
 
     返回值示例：
     [
@@ -365,7 +328,9 @@ def _extract_risk_access_fields(item: dict) -> list:
                     "key": key,
                     "name": f.get("name", "") or f.get("label", ""),
                     "required": key in BKSEC_REQUIRED_FIELD_KEYS,
-                    "type": _normalize_field_type(f.get("type") or f.get("storage_type", "")),
+                    # 类型归一：接口给的是 storage_type 且大小写不统一（STRING / string 并存），转小写输出为 type。
+                    # 已知取值 string/int/object/timestamp，未知值原样小写不丢信息；缺失保持空串，缺省渲染由前端定
+                    "type": str(f.get("type") or f.get("storage_type") or "").strip().lower(),
                 }
             )
     return fields

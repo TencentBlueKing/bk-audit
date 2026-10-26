@@ -1081,9 +1081,9 @@ class DeleteStrategy(StrategyV2Base):
         # delete strategy
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         # 停用策略的 BKSEC 自动发单规则（保留历史版本供在途风险单走完）
-        from services.web.risk.bksec.rules import disable_bksec_rule
+        from services.web.risk.bksec.rules import sync_bksec_rule
 
-        disable_bksec_rule(validated_request_data["strategy_id"])
+        sync_bksec_rule(strategy, strategy_alive=False)
         strategy.delete()
         BindingMetadataHelper.delete_resource_binding(
             resource_id=str(strategy.strategy_id),
@@ -1402,8 +1402,6 @@ class ToggleStrategy(StrategyV2Base):
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
-        # 启停经 celery 异步落库，此刻 strategy.status 仍是旧值，须显式向 sync_bksec_rule 传入方向
-        # （评审定论：停用策略须禁用自动规则）。对称写法确保后续追加逻辑不会漏调同步。
         from services.web.risk.bksec.rules import sync_bksec_rule
 
         if validated_request_data["toggle"]:

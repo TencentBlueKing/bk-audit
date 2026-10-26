@@ -657,3 +657,76 @@ class TestSopsTimeFormat:
         attempts = extract_attempt_records(status)
         assert attempts[0]["start_time"] == "2026-10-22 11:42:48"
         assert attempts[0]["end_time"] == "2026-10-22 11:51:54"
+
+
+@pytest.mark.django_db
+class TestHasExecutionRecords:
+    """「有无执行记录」判定与执行记录列表同口径（_pa_filter_q 归属 + load_authed_risks 范围）"""
+
+    def _prepare(self):
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
+        from services.web.strategy_v2.models import Strategy
+
+        strategy_id = RISK_INFO["strategy_id"]
+        Strategy.objects.get_or_create(
+            strategy_id=strategy_id, defaults={"strategy_name": f"test_strategy_{strategy_id}"}
+        )
+        pa_a = ProcessApplication.objects.create(name="套餐A", sops_template_id=1)
+        pa_b = ProcessApplication.objects.create(name="套餐B", sops_template_id=2)
+        rule_a = RiskRule.objects.create(name="规则A", scope=[], pa_id=pa_a.id, version=1, rule_id=101)
+        risk_a = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-A", "rule_id": rule_a.rule_id, "rule_version": 1})
+        return pa_a, pa_b, risk_a
+
+    def _bind_scene(self, scene, *pas):
+        from services.web.scene.constants import ResourceVisibilityType
+        from services.web.scene.filters import BindingMetadataHelper
+
+        for pa in pas:
+            BindingMetadataHelper.create_resource_binding(
+                resource_id=str(pa.id),
+                resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+                scene_id=scene.scene_id,
+            )
+
+    def _query(self, scene, has_execution_records):
+        resp = resource.risk.list_all_process_applications.perform_request(
+            {"scene_id": scene.scene_id, "has_execution_records": has_execution_records}
+        )
+        return sorted(item["id"] for item in resp)
+
+    def test_legacy_snapshotless_records_counted(self):
+        """历史无快照记录经规则链路归属：有记录筛选含它、无记录筛选不含它（孤儿口径不漏）"""
+        from services.web.scene.models import Scene
+
+        pa_a, pa_b, risk_a = self._prepare()
+        scene = Scene.objects.create(name="has-exec-scene-legacy")
+        self._bind_scene(scene, pa_a, pa_b)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11, pa_id=None)
+        assert self._query(scene, True) == [pa_a.id]
+        assert self._query(scene, False) == [pa_b.id]
+
+    def test_snapshot_records_counted(self):
+        """快照记录正常计入（基线）"""
+        from services.web.scene.models import Scene
+
+        pa_a, pa_b, risk_a = self._prepare()
+        scene = Scene.objects.create(name="has-exec-scene-snapshot")
+        self._bind_scene(scene, pa_a, pa_b)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11, pa_id=pa_b.id)
+        assert self._query(scene, True) == [pa_b.id]
+        assert self._query(scene, False) == [pa_a.id]
+
+    def test_unauthed_risk_records_not_counted(self):
+        """无权风险的记录不计入「有记录」（与列表所见一致，不会点进去空列表）"""
+        from services.web.scene.models import Scene
+
+        pa_a, pa_b, risk_a = self._prepare()
+        scene = Scene.objects.create(name="has-exec-scene-auth")
+        self._bind_scene(scene, pa_a, pa_b)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11, pa_id=pa_a.id)
+        with mock.patch.object(Risk, "iam_risk_filter", return_value=Q(risk_id__in=["R-OTHER"])):
+            assert self._query(scene, True) == []
+            assert self._query(scene, False) == [pa_a.id, pa_b.id]
