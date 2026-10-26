@@ -273,6 +273,129 @@ class TestListPAExecutionRecords:
         resp = resource.risk.list_pa_execution_records.perform_request({"pa_id": pa_b.id})
         assert "53" not in {r["sops_task_id"] for r in resp["results"]}
 
+    def test_keyword_text_fields(self):
+        """keyword 全量模糊：文本字段任一命中即返回"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=61,
+            pa_id=pa_a.id,
+            pa_name="套餐A",
+            task_name="云账号未启用MFA_1790000000000",
+            trigger="auto",
+        )
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=62001, pa_id=pa_b.id, pa_name="套餐B")
+        # 任务名称
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "MFA"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"61"}
+        # 套餐名称（快照）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "套餐B"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"62001"}
+        # 风险 ID
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "R-A"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"61"}
+        # 执行记录 ID
+        node = TicketNode.objects.get(risk_id=risk_a.risk_id, action="AutoProcess")
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": node.id})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"61"}
+        # 任务 ID（sops_task_id，str/int 兼容）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "62001"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"62001"}
+        # 执行人
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "admin"})
+        assert resp["count"] == 2
+
+    def test_keyword_risk_fields(self):
+        """keyword 命中风险标题/状态/等级（Risk 跨表子查询）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        risk_a.title = "云账号未启用MFA"
+        risk_a.risk_level = "high"
+        risk_a.save(update_fields=["title", "risk_level"])
+        risk_b.risk_level = "low"
+        risk_b.save(update_fields=["risk_level"])
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=71)
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=72)
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "未启用MFA"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"71"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "high"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"71"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "new"})
+        assert resp["count"] == 2
+
+    def test_keyword_trigger_labels(self):
+        """触发方式：中文展示词/内部值/标签片段命中"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=81, trigger="auto")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=82, trigger="manual")
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=83, trigger="test")
+        # 中文展示词
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "自动"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"81"}
+        # 内部值（大小写不敏感）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "MANUAL"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"82"}
+        # 标签片段（len >= 2 互为子串）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "测试"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"83"}
+        # 单字不展开枚举（防噪音），测试记录 trigger 无中文文本，应无命中
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "动"})
+        assert resp["count"] == 0
+
+    def test_keyword_result_labels(self):
+        """执行状态：中文展示词/内部值命中（result 为计算字段，按 state 集合展开）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=91)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FAILED.value, task_id=92)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.REVOKED.value, task_id=93)
+        _create_node(risk_a.risk_id, SOPSTaskStatus.RUNNING.value, task_id=94)
+        # 中文：执行成功 / 执行失败 / 执行中
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "执行成功"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"91"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "执行失败"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"92", "93"}  # 失败态含 REVOKED
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "执行中"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"94"}
+        # 标签片段
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "成功"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"91"}
+        # 内部值
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "failed"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"92", "93"}
+        # 英文部分匹配不展开枚举，但 sops_state 原文 icontains 兜底（RUNNING）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "RUNN"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"94"}
+
+    def test_keyword_or_semantics_and_combine(self):
+        """多字段 OR；与其他筛选 AND 叠加"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=101, pa_id=pa_a.id, pa_name="套餐A")
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=102, pa_id=pa_b.id, pa_name="套餐B")
+        # 一个关键词命中两个不同字段的两条记录（OR）
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "R-A"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"101"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "R-"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"101", "102"}
+        # 与 pa_id 筛选 AND 叠加
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "R-", "pa_id": pa_a.id})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"101"}
+        # 空串不过滤
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "  "})
+        assert resp["count"] == 2
+        # 无命中返回空
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "不存在的关键词xyz"})
+        assert resp["count"] == 0
+
+    def test_keyword_legacy_pa_name_fallback(self):
+        """历史无快照记录的套餐名兜底：快照 pa_name 为空时按规则链路反查套餐名命中"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        # risk_a(rule 101 → 套餐A) 历史节点无快照；展示 pa_name 走规则兜底为「套餐A」
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=111)
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "套餐A"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"111"}
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "套餐B"})
+        assert resp["count"] == 0
+
 
 @pytest.mark.django_db
 class TestGetPAExecutionRecordDetail:

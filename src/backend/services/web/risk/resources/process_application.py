@@ -32,7 +32,12 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, iter_status_nodes
-from services.web.risk.constants import ApproveTicketFields, RiskStatus
+from services.web.risk.constants import (
+    PA_RESULT_KEYWORD_LABELS,
+    PA_TRIGGER_KEYWORD_LABELS,
+    ApproveTicketFields,
+    RiskStatus,
+)
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
@@ -292,6 +297,84 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
         return snapshot_q | legacy_q
 
+    @staticmethod
+    def _result_state_q(value: str) -> Q:
+        """归一化状态 → SOPS state 过滤条件（unknown 覆盖空状态；其他值不加条件）"""
+        if value == "success":
+            return Q(process_result__status__state=SOPSTaskStatus.FINISHED.value)
+        if value == "failed":
+            return Q(process_result__status__state__in=[s.value for s in SOPSTaskStatus.get_failed_status()])
+        if value == "running":
+            return Q(
+                process_result__status__state__in=[
+                    SOPSTaskStatus.CREATED.value,
+                    SOPSTaskStatus.RUNNING.value,
+                    SOPSTaskStatus.SUSPENDED.value,
+                    SOPSTaskStatus.NODE_SUSPENDED.value,
+                ]
+            )
+        if value == "unknown":
+            return (
+                Q(process_result__status__isnull=True)
+                | Q(process_result__status__state="")
+                | Q(process_result__status__state__isnull=True)
+            )
+        return Q()
+
+    @staticmethod
+    def _enum_keyword_q(keyword: str, labels: dict, make_q) -> Q:
+        """枚举字段关键词展开：内部值全等（大小写不敏感）或与展示词互为子串
+
+        - 子串命中要求 keyword 长度 >= 2，防单字噪音（如「中」误命中「执行中」）
+        - 英文部分匹配（如 "aut"）不展开，交由字段 icontains 兜底
+        - 未命中贡献空条件（Q()），不影响其他字段的 OR
+        """
+        q = Q()
+        kw_lower = keyword.lower()
+        for value, label in labels.items():
+            hit = kw_lower == value.lower()
+            if not hit and len(keyword) >= 2 and (keyword in label or label in keyword):
+                hit = True
+            if hit:
+                q |= make_q(value)
+        return q
+
+    @classmethod
+    def _keyword_q(cls, keyword: str) -> Q:
+        """全量模糊搜索：文本字段 icontains + 枚举字段按内部值/展示词展开，各条件 OR"""
+        # SOPS 任务 ID（JSON 内可能为 int/str，同时兼容；icontains 对 int 兜底精确匹配）
+        task_id_q = Q(process_result__task__task_id__icontains=keyword)
+        try:
+            task_id_q |= Q(process_result__task__task_id=int(keyword))
+        except (TypeError, ValueError):
+            pass
+        # 套餐名兜底：快照 pa_name 缺失时展示走 pa_id/规则链路取名，
+        # 故关键词命中 ProcessApplication.name 时按 _pa_filter_q 同口径反查（快照 pa_name 本身已由 icontains 覆盖）
+        pa_name_values = list(ProcessApplication.objects.filter(name__icontains=keyword).values_list("id", flat=True))
+        legacy_pa_name_q = Q()
+        if pa_name_values:
+            no_snapshot_name_q = Q(process_result__pa_name__isnull=True) | Q(process_result__pa_name="")
+            legacy_pa_name_q = no_snapshot_name_q & cls._pa_filter_q(pa_name_values)
+        return (
+            Q(id__icontains=keyword)
+            | Q(risk_id__icontains=keyword)
+            | Q(operator__icontains=keyword)
+            | Q(process_result__task_name__icontains=keyword)
+            | Q(process_result__pa_name__icontains=keyword)
+            | Q(process_result__failure_hint__icontains=keyword)
+            | Q(process_result__trigger__icontains=keyword)
+            | Q(process_result__status__state__icontains=keyword)
+            | task_id_q
+            | Q(
+                risk_id__in=Risk.objects.filter(
+                    Q(title__icontains=keyword) | Q(status__icontains=keyword) | Q(risk_level__icontains=keyword)
+                ).values("risk_id")
+            )
+            | legacy_pa_name_q
+            | cls._enum_keyword_q(keyword, PA_TRIGGER_KEYWORD_LABELS, lambda v: Q(process_result__trigger=v))
+            | cls._enum_keyword_q(keyword, PA_RESULT_KEYWORD_LABELS, cls._result_state_q)
+        )
+
     class RequestSerializer(serializers.Serializer):
         id = serializers.CharField(
             label=gettext_lazy("执行记录ID"),
@@ -299,6 +382,16 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             allow_blank=True,
             help_text=gettext_lazy(
                 "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+            ),
+        )
+        keyword = serializers.CharField(
+            label=gettext_lazy("搜索关键词"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy(
+                "全量模糊搜索（任一命中即返回）：执行记录ID、任务ID、任务名称、套餐名称、执行人、风险ID、"
+                "风险标题/状态/等级、失败提示、触发方式、执行状态；"
+                "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
             ),
         )
         pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
@@ -399,29 +492,16 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             nodes = nodes.filter(task_id_cond)
 
         # 状态筛选（支持多选，任一命中）：result → SOPS state 映射（state 为固定枚举字符串）
-        result_q = Q()
-        for value in result_values:
-            if value == "success":
-                result_q |= Q(process_result__status__state=SOPSTaskStatus.FINISHED.value)
-            elif value == "failed":
-                result_q |= Q(process_result__status__state__in=[s.value for s in SOPSTaskStatus.get_failed_status()])
-            elif value == "running":
-                result_q |= Q(
-                    process_result__status__state__in=[
-                        SOPSTaskStatus.CREATED.value,
-                        SOPSTaskStatus.RUNNING.value,
-                        SOPSTaskStatus.SUSPENDED.value,
-                        SOPSTaskStatus.NODE_SUSPENDED.value,
-                    ]
-                )
-            elif value == "unknown":
-                result_q |= (
-                    Q(process_result__status__isnull=True)
-                    | Q(process_result__status__state="")
-                    | Q(process_result__status__state__isnull=True)
-                )
         if result_values:
+            result_q = Q()
+            for value in result_values:
+                result_q |= self._result_state_q(value)
             nodes = nodes.filter(result_q)
+
+        # 全量模糊搜索：与上方精确筛选 AND 叠加
+        keyword = validated_request_data.get("keyword", "").strip()
+        if keyword:
+            nodes = nodes.filter(self._keyword_q(keyword))
 
         # 排序
         order_field_map = {
