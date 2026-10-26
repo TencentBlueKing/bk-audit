@@ -19,9 +19,12 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.exceptions import ValidateException
+from rest_framework.exceptions import ValidationError
 
+from apps.permission.handlers.actions import ActionEnum
 from services.web.risk.constants import RiskDisplayStatus, RiskStatus
 from services.web.risk.models import Risk
+from services.web.risk.resources.risk import CustomTransRisk
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase as BaseTestCase
 
@@ -55,8 +58,9 @@ class TestBulkCustomTransRisk(BaseTestCase):
             for idx in range(1, 4)
         ]
 
+    @mock.patch("bk_audit.contrib.bk_audit.client.bk_audit_client.add_event")
     @mock.patch("services.web.risk.resources.risk.CustomTransRisk.perform_request")
-    def test_all_success(self, mock_perform):
+    def test_all_success(self, mock_perform, add_event):
         mock_perform.return_value = None
         result = resource.risk.bulk_custom_trans_risk(
             risk_ids=[r.risk_id for r in self.risks],
@@ -70,6 +74,9 @@ class TestBulkCustomTransRisk(BaseTestCase):
             args = call[0][0]
             self.assertEqual(args["new_operators"], ["user1", "user2"])
             self.assertEqual(args["description"], "批量转单")
+        self.assertEqual(add_event.call_count, 3)
+        for call in add_event.call_args_list:
+            self.assertEqual(call.kwargs["action"], ActionEnum.PROCESS_RISK)
 
     def test_backward_compat_string_operators(self):
         """旧协议：new_operators 直接是字符串列表"""
@@ -126,3 +133,57 @@ class TestBulkCustomTransRisk(BaseTestCase):
             resource.risk.bulk_custom_trans_risk(risk_ids=[], new_operators=["user1"], description="测试")
         with self.assertRaises(ValidateException):
             resource.risk.bulk_custom_trans_risk(risk_ids=[self.risks[0].risk_id], new_operators=[], description="测试")
+
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", return_value=None)
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", return_value=None)
+    @mock.patch("bk_audit.contrib.bk_audit.client.bk_audit_client.add_event")
+    def test_single_string_operators_stay_usernames(self, add_event, _auth, _notice):
+        """旧协议 new_operators=["sample_user"] 经 request() 后仍写入用户名列表。"""
+        risk = self.risks[0]
+        CustomTransRisk().request({"risk_id": risk.risk_id, "new_operators": ["sample_user"], "description": "单条转单"})
+        risk.refresh_from_db()
+        self.assertEqual(risk.current_operator, ["sample_user"])
+        add_event.assert_called_once()
+        self.assertEqual(add_event.call_args.kwargs["action"], ActionEnum.PROCESS_RISK)
+        self.assertEqual(add_event.call_args.kwargs["instance"].instance_id, risk.risk_id)
+
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", return_value=None)
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", return_value=None)
+    def test_single_user_ref_resolves_to_username(self, _auth, _notice):
+        risk = self.risks[0]
+        CustomTransRisk().request(
+            {
+                "risk_id": risk.risk_id,
+                "new_operators": [{"type": "user", "value": "sample_user"}],
+                "description": "单条转单",
+            }
+        )
+        risk.refresh_from_db()
+        self.assertEqual(risk.current_operator, ["sample_user"])
+
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", return_value=None)
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", return_value=None)
+    def test_single_field_ref_resolves_before_trans(self, _auth, _notice):
+        risk = self.risks[0]
+        risk.operator = ["from-field"]
+        risk.save(update_fields=["operator"])
+        CustomTransRisk().request(
+            {
+                "risk_id": risk.risk_id,
+                "new_operators": [{"type": "field", "value": "operator"}],
+                "description": "单条转单",
+            }
+        )
+        risk.refresh_from_db()
+        self.assertEqual(risk.current_operator, ["from-field"])
+
+    def test_single_empty_operators_rejected(self):
+        risk = self.risks[0]
+        with self.assertRaises(ValidationError):
+            CustomTransRisk().request(
+                {
+                    "risk_id": risk.risk_id,
+                    "new_operators": [{"type": "field", "value": "event_data.missing"}],
+                    "description": "单条转单",
+                }
+            )

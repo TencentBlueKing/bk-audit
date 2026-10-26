@@ -1093,6 +1093,7 @@ class PersonnelRefSerializer(serializers.Serializer):
     - type=user: value 为用户名，可以是 `$OPERATOR` / `$OPERATOR_LEADER` 人员槽
     - type=field: value 为工单字段或 `event_data.xxx` 点路径
     - 直接传字符串视同 `{type: user, value: <str>}`
+    - 校验后 user 引用输出用户名字符串；field 引用保留 `{type, value}`，由执行前解析成用户名
     """
 
     type = serializers.ChoiceField(
@@ -1102,8 +1103,11 @@ class PersonnelRefSerializer(serializers.Serializer):
 
     def to_internal_value(self, data):
         if isinstance(data, str):
-            data = {"type": "user", "value": data}
-        return super().to_internal_value(data)
+            data = {"type": PersonnelRef.USER, "value": data}
+        validated = super().to_internal_value(data)
+        if validated["type"] == PersonnelRef.USER:
+            return validated["value"]
+        return {"type": validated["type"], "value": validated["value"]}
 
 
 class CustomCloseRiskRequestSerializer(serializers.Serializer):

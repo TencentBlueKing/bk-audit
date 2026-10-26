@@ -1197,14 +1197,20 @@ class CustomTransRisk(RiskMeta):
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import resolve_personnel_refs
+
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         if risk.status != RiskStatus.AWAIT_PROCESS.value:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % risk.status)
+        # 单条入口始终允许 event_data。字符串和 {type:user} 保持用户名，field 引用在这里展开。
+        operators = resolve_personnel_refs(validated_request_data["new_operators"], risk=risk, allow_event_data=True)
+        if not operators:
+            raise drf_serializers.ValidationError(gettext("解析后的处理人为空，请检查人员字段引用"))
         origin_data = RiskInfoSerializer(risk).data
         # 使用当前用户 or 并发请求时透传的用户
         operator = get_request_username(validated_request_data.get("_request", None))
         TransOperator(risk_id=risk.risk_id, operator=operator).run(
-            new_operators=validated_request_data["new_operators"], description=validated_request_data["description"]
+            new_operators=operators, description=validated_request_data["description"]
         )
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
@@ -2427,7 +2433,7 @@ class BulkCustomTransRisk(RiskMeta):
             return {"risk_id": risk.risk_id, "new_operators": operators, "description": render(risk)}
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
-        return _complete_bulk(payloads, failed, lambda item: CustomTransRisk().perform_request(item))
+        return _complete_bulk(payloads, failed, lambda item: CustomTransRisk().request(item))
 
 
 class BulkCloseRiskResource(RiskMeta):
@@ -2448,7 +2454,7 @@ class BulkCloseRiskResource(RiskMeta):
             return {"risk_id": risk.risk_id, "description": render(risk)}
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
-        return _complete_bulk(payloads, failed, lambda item: CustomCloseRisk().perform_request(item))
+        return _complete_bulk(payloads, failed, lambda item: CustomCloseRisk().request(item))
 
 
 class BulkMisreportResource(RiskMeta):
@@ -2572,4 +2578,4 @@ class BulkAutoProcessResource(RiskMeta):
             }
 
         payloads, failed = _collect_payloads(risk_ids, risk_map, build)
-        return _complete_bulk(payloads, failed, lambda item: CustomAutoProcess().perform_request(item))
+        return _complete_bulk(payloads, failed, lambda item: CustomAutoProcess().request(item))
