@@ -160,7 +160,8 @@ const mapNodes = (rawAttempts: Record<string, any>[]) => rawAttempts.map(attempt
 }));
 
 const earliest = (values: string[]) => values.filter(Boolean).sort()[0] || '';
-const latest = (values: string[]) => values.filter(Boolean).sort().slice(-1)[0] || '';
+const latest = (values: string[]) => values.filter(Boolean).sort()
+  .slice(-1)[0] || '';
 
 /** 一次重试里的节点耗时：优先用节点起止时间，否则累加接口秒数。0 保留，没有数值才留空。 */
 const retryDuration = (rawAttempts: Record<string, any>[], startedAt: string, endedAt: string) => {

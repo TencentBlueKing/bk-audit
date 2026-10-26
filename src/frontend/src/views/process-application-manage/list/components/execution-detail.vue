@@ -27,8 +27,8 @@
         <span class="header-title">{{ t('执行详情') }}</span>
         <span class="header-split" />
         <span
-          class="header-sub"
           v-bk-tooltips="lineTip('header-task-name', detail?.task_name || '')"
+          class="header-sub"
           @mouseenter="syncOverflow($event, 'header-task-name')">
           {{ detail?.task_name || '--' }}
         </span>
@@ -115,11 +115,11 @@
           <h4>{{ t('执行节点') }}</h4>
           <table class="node-table">
             <colgroup>
-              <col class="col-name" />
-              <col class="col-status" />
-              <col class="col-time" />
-              <col class="col-duration" />
-              <col class="col-error" />
+              <col class="col-name">
+              <col class="col-status">
+              <col class="col-time">
+              <col class="col-duration">
+              <col class="col-error">
             </colgroup>
             <thead>
               <tr>
@@ -158,223 +158,226 @@
             class="attempt-scroller"
             :class="{ 'is-scroll': rounds.length > 3 }"
             data-testid="execution-attempt-list">
-          <div
-            v-for="item in rounds"
-            :key="item.id"
-            class="attempt-card is-switchable"
-            :class="{
-              'is-active': item.id === activeAttemptId,
-            }"
-            data-testid="execution-attempt-card"
-            @click="switchAttempt(item)">
-            <div class="attempt-head">
-              <div class="attempt-title">
-                <span
-                  class="attempt-tag"
-                  :class="`is-${item.status}`">
-                  {{ statusText(item.status) }}
-                </span>
-                <strong>{{ item.label }}</strong>
-              </div>
-              <span
-                class="attempt-duration"
-                v-bk-tooltips="lineTip(`${item.id}-duration`, `${t('耗时')} ${liveDuration(item.status, item.started_at, item.duration)}`)"
-                @mouseenter="syncOverflow($event, `${item.id}-duration`)">
-                <span class="attempt-duration-text">
-                  {{ t('耗时') }} {{ liveDuration(item.status, item.started_at, item.duration) }}
-                </span>
-              </span>
-            </div>
-            <div class="attempt-body">
-              <p
-                v-bk-tooltips="lineTip(`${item.id}-start`, `${t('开始时间')}：${item.started_at || '--'}`)"
-                @mouseenter="syncOverflow($event, `${item.id}-start`)">
-                {{ t('开始时间') }}：{{ item.started_at || '--' }}
-              </p>
-              <p
-                v-if="item.status === 'failed'"
-                v-bk-tooltips="errorTip(`${item.id}-reason`, `${t('失败原因')}：${item.error || '--'}`, 'bottom')"
-                class="attempt-reason"
-                @mouseenter="syncOverflow($event, `${item.id}-reason`)">
-                {{ t('失败原因') }}：{{ item.error || '--' }}
-              </p>
-              <p
-                v-else-if="item.status === 'success'"
-                v-bk-tooltips="lineTip(`${item.id}-end`, `${t('结束时间')}：${item.ended_at || '--'}`)"
-                @mouseenter="syncOverflow($event, `${item.id}-end`)">
-                {{ t('结束时间') }}：{{ item.ended_at || '--' }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="detail-scroll">
-          <section class="detail-section">
-          <h4>{{ t('基本信息') }}</h4>
-          <div class="desc-grid">
             <div
-              v-for="item in basicRows"
-              :key="item.label"
-              class="desc-item">
-              <span class="desc-label"><span>{{ item.label }}</span></span>
-              <span
-                class="desc-value"
-                :class="{ 'is-jump': item.jump }">
-                <span
-                  v-if="item.jump"
-                  class="desc-value-text"
-                  v-bk-tooltips="lineTip(`basic-${item.label}`, item.value)"
-                  @mouseenter="syncOverflow($event, `basic-${item.label}`)">
-                  {{ item.value }}
-                </span>
-                <span
-                  v-else
-                  class="desc-clamp"
-                  v-bk-tooltips="lineTip(`basic-${item.label}`, item.value)"
-                  @mouseenter="syncOverflow($event, `basic-${item.label}`)">
-                  {{ item.value }}
-                </span>
-                <button
-                  v-if="item.jump && item.value !== '--'"
-                  class="jump-btn"
-                  type="button"
-                  v-bk-tooltips="{ content: t('打开标准运维任务'), delay: 80 }"
-                  @click="openSopsTask(detail?.sops_task_url)">
-                  <audit-icon type="jump-link" />
-                </button>
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section class="detail-section">
-          <h4>{{ t('关联风险') }}</h4>
-          <div class="desc-grid">
-            <div class="desc-item">
-              <span class="desc-label"><span>{{ t('风险ID') }}：</span></span>
-              <span class="desc-value">
-                <button
-                  v-if="detail.risk_id"
-                  class="text-link"
-                  type="button"
-                  @click="openLinkedField">
-                  {{ detail.risk_id }}
-                </button>
-                <template v-else>--</template>
-              </span>
-            </div>
-            <div class="desc-item">
-              <span class="desc-label"><span>{{ t('风险标题') }}：</span></span>
-              <span class="desc-value">
-                <span
-                  class="desc-clamp"
-                  v-bk-tooltips="lineTip('risk-title', detail.risk_title || '--')"
-                  @mouseenter="syncOverflow($event, 'risk-title')">
-                  {{ detail.risk_title || '--' }}
-                </span>
-              </span>
-            </div>
-            <div class="desc-item">
-              <span class="desc-label"><span>{{ t('风险等级') }}：</span></span>
-              <span class="desc-value">
-                <span
-                  v-if="riskLevelTag"
-                  class="risk-level-tag"
-                  :class="riskLevelTag.className">
-                  {{ riskLevelTag.label }}
-                </span>
-                <template v-else>--</template>
-              </span>
-            </div>
-            <div class="desc-item">
-              <span class="desc-label"><span>{{ t('责任人') }}：</span></span>
-              <span class="desc-value">{{ detail.risk_owner || '--' }}</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="detail-section">
-          <h4>{{ t('套餐参数') }}</h4>
-          <div class="desc-grid">
-            <div
-              v-for="item in paramRows"
-              :key="item.label"
-              class="desc-item">
-              <span class="desc-label"><span>{{ item.label }}</span></span>
-              <span class="desc-value">
-                <span
-                  class="desc-clamp"
-                  v-bk-tooltips="lineTip(`param-${item.label}`, item.value)"
-                  @mouseenter="syncOverflow($event, `param-${item.label}`)">
-                  {{ item.value }}
-                </span>
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section class="detail-section is-nodes">
-          <h4>{{ t('执行节点') }}</h4>
-          <table class="node-table">
-            <colgroup>
-              <col class="col-name" />
-              <col class="col-status" />
-              <col class="col-time" />
-              <col class="col-duration" />
-              <col class="col-error" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>{{ t('节点名称') }}</th>
-                <th>{{ t('状态') }}</th>
-                <th>{{ t('开始时间') }}</th>
-                <th>{{ t('耗时') }}</th>
-                <th>{{ t('失败原因') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(item, index) in visibleNodes"
-                :key="`${item.name}-${index}`">
-                <td>
+              v-for="item in rounds"
+              :key="item.id"
+              class="attempt-card is-switchable"
+              :class="{
+                'is-active': item.id === activeAttemptId,
+              }"
+              data-testid="execution-attempt-card"
+              @click="switchAttempt(item)">
+              <div class="attempt-head">
+                <div class="attempt-title">
                   <span
-                    class="node-ellipsis"
-                    v-bk-tooltips="lineTip(`node-name-${index}`, item.name)"
-                    @mouseenter="syncOverflow($event, `node-name-${index}`)">
-                    {{ item.name || '--' }}
-                  </span>
-                </td>
-                <td>
-                  <span class="node-status">
-                    <audit-icon
-                      v-if="item.status === 'running'"
-                      class="rotate-loading status-loading"
-                      type="loading" />
-                    <span
-                      v-else
-                      class="status-dot"
-                      :class="`is-${item.status}`">
-                      <i class="status-dot-outer" />
-                      <i class="status-dot-inner" />
-                    </span>
+                    class="attempt-tag"
+                    :class="`is-${item.status}`">
                     {{ statusText(item.status) }}
                   </span>
-                </td>
-                <td>{{ item.started_at || '--' }}</td>
-                <td>{{ liveDuration(item.status, item.started_at, item.duration) }}</td>
-                <td>
-                  <span
-                    class="node-ellipsis"
-                    v-bk-tooltips="errorTip(`node-error-${index}`, item.error)"
-                    @mouseenter="syncOverflow($event, `node-error-${index}`)">
-                    {{ item.error || '--' }}
+                  <strong>{{ item.label }}</strong>
+                </div>
+                <span
+                  v-bk-tooltips="lineTip(
+                    `${item.id}-duration`,
+                    `${t('耗时')} ${liveDuration(item.status, item.started_at, item.duration)}`,
+                  )"
+                  class="attempt-duration"
+                  @mouseenter="syncOverflow($event, `${item.id}-duration`)">
+                  <span class="attempt-duration-text">
+                    {{ t('耗时') }} {{ liveDuration(item.status, item.started_at, item.duration) }}
                   </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-        </div>
+                </span>
+              </div>
+              <div class="attempt-body">
+                <p
+                  v-bk-tooltips="lineTip(`${item.id}-start`, `${t('开始时间')}：${item.started_at || '--'}`)"
+                  @mouseenter="syncOverflow($event, `${item.id}-start`)">
+                  {{ t('开始时间') }}：{{ item.started_at || '--' }}
+                </p>
+                <p
+                  v-if="item.status === 'failed'"
+                  v-bk-tooltips="errorTip(`${item.id}-reason`, `${t('失败原因')}：${item.error || '--'}`, 'bottom')"
+                  class="attempt-reason"
+                  @mouseenter="syncOverflow($event, `${item.id}-reason`)">
+                  {{ t('失败原因') }}：{{ item.error || '--' }}
+                </p>
+                <p
+                  v-else-if="item.status === 'success'"
+                  v-bk-tooltips="lineTip(`${item.id}-end`, `${t('结束时间')}：${item.ended_at || '--'}`)"
+                  @mouseenter="syncOverflow($event, `${item.id}-end`)">
+                  {{ t('结束时间') }}：{{ item.ended_at || '--' }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-scroll">
+            <section class="detail-section">
+              <h4>{{ t('基本信息') }}</h4>
+              <div class="desc-grid">
+                <div
+                  v-for="item in basicRows"
+                  :key="item.label"
+                  class="desc-item">
+                  <span class="desc-label"><span>{{ item.label }}</span></span>
+                  <span
+                    class="desc-value"
+                    :class="{ 'is-jump': item.jump }">
+                    <span
+                      v-if="item.jump"
+                      v-bk-tooltips="lineTip(`basic-${item.label}`, item.value)"
+                      class="desc-value-text"
+                      @mouseenter="syncOverflow($event, `basic-${item.label}`)">
+                      {{ item.value }}
+                    </span>
+                    <span
+                      v-else
+                      v-bk-tooltips="lineTip(`basic-${item.label}`, item.value)"
+                      class="desc-clamp"
+                      @mouseenter="syncOverflow($event, `basic-${item.label}`)">
+                      {{ item.value }}
+                    </span>
+                    <button
+                      v-if="item.jump && item.value !== '--'"
+                      v-bk-tooltips="{ content: t('打开标准运维任务'), delay: 80 }"
+                      class="jump-btn"
+                      type="button"
+                      @click="openSopsTask(detail?.sops_task_url)">
+                      <audit-icon type="jump-link" />
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section">
+              <h4>{{ t('关联风险') }}</h4>
+              <div class="desc-grid">
+                <div class="desc-item">
+                  <span class="desc-label"><span>{{ t('风险ID') }}：</span></span>
+                  <span class="desc-value">
+                    <button
+                      v-if="detail.risk_id"
+                      class="text-link"
+                      type="button"
+                      @click="openLinkedField">
+                      {{ detail.risk_id }}
+                    </button>
+                    <template v-else>--</template>
+                  </span>
+                </div>
+                <div class="desc-item">
+                  <span class="desc-label"><span>{{ t('风险标题') }}：</span></span>
+                  <span class="desc-value">
+                    <span
+                      v-bk-tooltips="lineTip('risk-title', detail.risk_title || '--')"
+                      class="desc-clamp"
+                      @mouseenter="syncOverflow($event, 'risk-title')">
+                      {{ detail.risk_title || '--' }}
+                    </span>
+                  </span>
+                </div>
+                <div class="desc-item">
+                  <span class="desc-label"><span>{{ t('风险等级') }}：</span></span>
+                  <span class="desc-value">
+                    <span
+                      v-if="riskLevelTag"
+                      class="risk-level-tag"
+                      :class="riskLevelTag.className">
+                      {{ riskLevelTag.label }}
+                    </span>
+                    <template v-else>--</template>
+                  </span>
+                </div>
+                <div class="desc-item">
+                  <span class="desc-label"><span>{{ t('责任人') }}：</span></span>
+                  <span class="desc-value">{{ detail.risk_owner || '--' }}</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section">
+              <h4>{{ t('套餐参数') }}</h4>
+              <div class="desc-grid">
+                <div
+                  v-for="item in paramRows"
+                  :key="item.label"
+                  class="desc-item">
+                  <span class="desc-label"><span>{{ item.label }}</span></span>
+                  <span class="desc-value">
+                    <span
+                      v-bk-tooltips="lineTip(`param-${item.label}`, item.value)"
+                      class="desc-clamp"
+                      @mouseenter="syncOverflow($event, `param-${item.label}`)">
+                      {{ item.value }}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-section is-nodes">
+              <h4>{{ t('执行节点') }}</h4>
+              <table class="node-table">
+                <colgroup>
+                  <col class="col-name">
+                  <col class="col-status">
+                  <col class="col-time">
+                  <col class="col-duration">
+                  <col class="col-error">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>{{ t('节点名称') }}</th>
+                    <th>{{ t('状态') }}</th>
+                    <th>{{ t('开始时间') }}</th>
+                    <th>{{ t('耗时') }}</th>
+                    <th>{{ t('失败原因') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(item, index) in visibleNodes"
+                    :key="`${item.name}-${index}`">
+                    <td>
+                      <span
+                        v-bk-tooltips="lineTip(`node-name-${index}`, item.name)"
+                        class="node-ellipsis"
+                        @mouseenter="syncOverflow($event, `node-name-${index}`)">
+                        {{ item.name || '--' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="node-status">
+                        <audit-icon
+                          v-if="item.status === 'running'"
+                          class="rotate-loading status-loading"
+                          type="loading" />
+                        <span
+                          v-else
+                          class="status-dot"
+                          :class="`is-${item.status}`">
+                          <i class="status-dot-outer" />
+                          <i class="status-dot-inner" />
+                        </span>
+                        {{ statusText(item.status) }}
+                      </span>
+                    </td>
+                    <td>{{ item.started_at || '--' }}</td>
+                    <td>{{ liveDuration(item.status, item.started_at, item.duration) }}</td>
+                    <td>
+                      <span
+                        v-bk-tooltips="errorTip(`node-error-${index}`, item.error)"
+                        class="node-ellipsis"
+                        @mouseenter="syncOverflow($event, `node-error-${index}`)">
+                        {{ item.error || '--' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </div>
         </div>
       </bk-loading>
     </div>

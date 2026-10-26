@@ -417,11 +417,17 @@
 .event-table {
   --group-col: 80px;
   --table-min: 1260px;
-  --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(168px, 1.5fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+  --event-row-cols:
+    minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr)
+    minmax(112px, .75fr) minmax(112px, .75fr) minmax(168px, 1.5fr)
+    minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
 
   &.is-model {
     --table-min: 1092px;
-    --event-row-cols: minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr) minmax(148px, 1.15fr) minmax(120px, 1fr);
+    --event-row-cols:
+      minmax(148px, 1.15fr) minmax(148px, 1.15fr) minmax(112px, .75fr)
+      minmax(112px, .75fr) minmax(112px, .75fr) minmax(112px, .75fr)
+      minmax(148px, 1.15fr) minmax(120px, 1fr);
   }
 
   @mixin cell-base {
