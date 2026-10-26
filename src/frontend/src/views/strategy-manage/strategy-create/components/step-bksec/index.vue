@@ -47,6 +47,7 @@
         v-if="enabled && expanded"
         class="bksec-body">
         <div
+          ref="typeFieldRef"
           class="bksec-type"
           data-testid="bksec-risk-type">
           <div class="bksec-label">
@@ -90,6 +91,7 @@
             <div
               v-for="field in fields"
               :key="field.id"
+              :ref="(el) => setFieldAnchorRef(field.id, el)"
               class="bksec-field">
               <div class="bksec-field-head">
                 <div class="bksec-field-label">
@@ -131,9 +133,11 @@
                 :class="{ 'is-error': invalidFields.includes(field.id) }">
                 <button
                   v-if="!isFieldEditing(field.id)"
+                  v-bk-tooltips="fieldValueTip(field.id)"
                   class="bksec-field-display"
                   type="button"
-                  @click="activateFieldEdit(field.id)">
+                  @click="activateFieldEdit(field.id, $event)"
+                  @mouseenter="syncFieldOverflow($event, field.id)">
                   <template
                     v-for="(item, index) in parseDynamicFieldValue(fieldValues[field.id] || '')"
                     :key="`${index}-${item.value}`">
@@ -156,13 +160,12 @@
                   @keyup="rememberCaret(field.id, $event)"
                   @input="updateField(field.id, $event)">
               </div>
+              <div
+                v-if="invalidFields.includes(field.id)"
+                class="bksec-error">
+                {{ t('请填写') }}{{ field.label }}
+              </div>
             </div>
-          </div>
-          <div
-            v-if="fieldError"
-            class="bksec-error"
-            data-testid="bksec-field-error">
-            {{ fieldError }}
           </div>
         </bk-loading>
       </div>
@@ -222,7 +225,7 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, inject, nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, inject, nextTick, onMounted, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -232,7 +235,6 @@
   import type BksecRiskType from '@model/bksec/risk-type';
   import type BksecRiskTypeField from '@model/bksec/risk-type-field';
 
-  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
   import PreviewSideslider from './preview-sideslider.vue';
@@ -274,7 +276,6 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const { messageError } = useMessage();
   const strategyRoutes = getStrategyRouteNames(route);
   const showSaveDraftButton = inject(STRATEGY_SHOW_SAVE_DRAFT_KEY, computed(() => true));
 
@@ -287,13 +288,15 @@
   const fieldValues = ref<Record<string, string>>({ ...(props.formData?.bksecFieldValues || {}) });
   const fields = ref<BksecRiskTypeField[]>([]);
   const typeError = ref(false);
-  const fieldError = ref('');
   const invalidFields = ref<string[]>([]);
+  const typeFieldRef = ref<HTMLElement | null>(null);
+  const fieldAnchorRefs = ref<Record<string, HTMLElement | null>>({});
   const showPreview = ref(false);
   const carets = ref<Record<string, number>>({});
   const activeFieldId = ref('');
   const editingFields = ref<Record<string, boolean>>({});
   const fieldInputRefs = ref<Record<string, HTMLInputElement | null>>({});
+  const fieldOverflowed = reactive<Record<string, boolean>>({});
   const sampleRisks = ref<BksecPreviewRisk[]>([]);
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
@@ -359,14 +362,12 @@
     enabled.value = value;
     if (!value) {
       typeError.value = false;
-      fieldError.value = '';
       invalidFields.value = [];
     }
   };
 
   const handleTypeChange = (id: string | number | null) => {
     typeError.value = false;
-    fieldError.value = '';
     invalidFields.value = [];
     const nextId = id === null || id === undefined || id === '' ? null : String(id);
     riskTypeId.value = nextId;
@@ -384,6 +385,8 @@
   const updateField = (fieldId: string, event: Event) => {
     const input = event.target as HTMLInputElement;
     fieldValues.value = { ...fieldValues.value, [fieldId]: input.value };
+    // 空值时未点过输入框也会直接显示 input。第一下写入后要保持编辑态，否则会立刻换成展示按钮并失焦。
+    editingFields.value[fieldId] = true;
     carets.value[fieldId] = input.selectionStart ?? input.value.length;
     invalidFields.value = invalidFields.value.filter(id => id !== fieldId);
   };
@@ -397,23 +400,111 @@
     fieldInputRefs.value[fieldId] = element as HTMLInputElement | null;
   };
 
+  const setFieldAnchorRef = (fieldId: string, element: unknown) => {
+    fieldAnchorRefs.value[fieldId] = element instanceof HTMLElement ? element : null;
+  };
+
+  const scrollToNearestError = (nodes: Array<HTMLElement | null | undefined>) => {
+    const visible = nodes.filter((node): node is HTMLElement => !!node);
+    if (!visible.length) return;
+    const viewportCenter = window.innerHeight / 2;
+    const target = visible.reduce((nearest, node) => {
+      const rect = node.getBoundingClientRect();
+      const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
+      return distance < nearest.distance ? { node, distance } : nearest;
+    }, { node: visible[0], distance: Number.POSITIVE_INFINITY }).node;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const isFieldEditing = (fieldId: string) => (
     editingFields.value[fieldId] ?? !fieldValues.value[fieldId]
   );
 
-  const activateFieldEdit = (fieldId: string) => {
+  const syncFieldOverflow = (event: MouseEvent, fieldId: string) => {
+    const el = event.currentTarget as HTMLElement;
+    fieldOverflowed[fieldId] = el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight;
+  };
+  const fieldValueTip = (fieldId: string) => ({
+    content: fieldValues.value[fieldId] || '',
+    disabled: !fieldValues.value[fieldId] || !fieldOverflowed[fieldId],
+    delay: 80,
+    extCls: 'bksec-field-value-tip',
+    maxWidth: 400,
+  });
+
+  const caretClientX = (node: Text, index: number) => {
+    const range = document.createRange();
+    range.setStart(node, index);
+    range.setEnd(node, index);
+    const rect = range.getBoundingClientRect();
+    if (rect.left || rect.right) return rect.left || rect.right;
+    if (index === 0) return 0;
+    range.setStart(node, index - 1);
+    range.setEnd(node, index);
+    return range.getBoundingClientRect().right;
+  };
+
+  const offsetWithinText = (node: Text, x: number) => {
+    let nearest = node.data.length;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index <= node.data.length; index += 1) {
+      const distance = Math.abs(caretClientX(node, index) - x);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = index;
+      }
+    }
+    return nearest;
+  };
+
+  const caretFromDisplayClick = (event: MouseEvent) => {
+    const root = event.currentTarget;
+    if (!(root instanceof HTMLElement)) return 0;
+    const spans = Array.from(root.children).filter((node): node is HTMLElement => (
+      node instanceof HTMLElement && !node.classList.contains('bksec-field-placeholder')
+    ));
+    if (!spans.length) return 0;
+    const x = event.clientX;
+    let offset = 0;
+    for (const span of spans) {
+      const rect = span.getBoundingClientRect();
+      const textNode = span.firstChild instanceof Text ? span.firstChild : null;
+      const textLength = textNode?.data.length ?? (span.textContent || '').length;
+      if (x < rect.left) return offset;
+      if (x <= rect.right) {
+        return offset + (textNode ? offsetWithinText(textNode, x) : textLength);
+      }
+      offset += textLength;
+    }
+    return offset;
+  };
+
+  const activateFieldEdit = (fieldId: string, event?: MouseEvent) => {
+    const clickedCaret = event ? caretFromDisplayClick(event) : undefined;
     activeFieldId.value = fieldId;
     editingFields.value[fieldId] = true;
+    if (clickedCaret !== undefined) {
+      carets.value[fieldId] = clickedCaret;
+    }
     nextTick(() => {
       const input = fieldInputRefs.value[fieldId];
-      const position = carets.value[fieldId] ?? input?.value.length ?? 0;
+      const position = clickedCaret ?? carets.value[fieldId] ?? input?.value.length ?? 0;
       input?.focus();
       input?.setSelectionRange(position, position);
     });
   };
 
-  const finishFieldEdit = (fieldId: string, event: Event) => {
+  const staysInFieldEditor = (fieldId: string, next: Element) => {
+    if (next.closest('.bksec-var-panel')) return true;
+    const trigger = next.closest('.bksec-var-trigger');
+    return !!trigger && trigger.closest('.bksec-field') === fieldAnchorRefs.value[fieldId];
+  };
+
+  const finishFieldEdit = (fieldId: string, event: FocusEvent) => {
     rememberCaret(fieldId, event);
+    const next = event.relatedTarget;
+    // 焦点进了变量面板或当前字段的引用按钮时，不要退出编辑，否则会先闪成变量标签再聚焦回来。
+    if (next instanceof Element && staysInFieldEditor(fieldId, next)) return;
     editingFields.value[fieldId] = false;
   };
 
@@ -439,19 +530,19 @@
 
   const validate = () => {
     typeError.value = false;
-    fieldError.value = '';
     invalidFields.value = [];
     if (!enabled.value) return true;
     if (!riskTypeId.value) {
       typeError.value = true;
-      messageError(t('请选择风险类型'));
+      expanded.value = true;
+      nextTick(() => scrollToNearestError([typeFieldRef.value]));
       return false;
     }
     const missing = missingRequiredFields(fields.value, fieldValues.value);
     if (missing.length) {
       invalidFields.value = missing.map(field => field.id);
-      fieldError.value = `${t('请填写')}${missing.map(field => field.label).join('、')}`;
-      messageError(fieldError.value);
+      expanded.value = true;
+      nextTick(() => scrollToNearestError(missing.map(field => fieldAnchorRefs.value[field.id])));
       return false;
     }
     return true;
@@ -543,6 +634,7 @@
 }
 
 .bksec-field {
+  position: relative;
   margin-top: var(--audit-space-24);
 }
 
@@ -628,11 +720,12 @@
   line-height: var(--audit-line-height-sm);
   color: var(--audit-neutral-text-02);
   text-align: left;
+  white-space: nowrap;
   cursor: text;
   background: transparent;
   border: 0;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .bksec-field-display .is-variable {
@@ -686,10 +779,31 @@
   font-size: var(--audit-font-size-sm);
   color: var(--audit-danger-02);
 }
+
+.bksec-field > .bksec-error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  margin-top: 2px;
+  overflow: hidden;
+  line-height: var(--audit-line-height-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
 </style>
 <style lang="postcss">
 .bksec-var-popover.bk-pop2-content,
 .bksec-var-popover .bk-pop2-content {
   padding: var(--audit-space-4) 0;
+}
+
+.bksec-field-value-tip {
+  max-width: 400px !important;
+  line-height: 20px;
+  white-space: normal;
+  word-break: break-all;
 }
 </style>

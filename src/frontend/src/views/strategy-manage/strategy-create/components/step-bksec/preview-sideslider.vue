@@ -121,9 +121,10 @@
         v-if="listLoading || previewLoading"
         class="bksec-preview-scroll bksec-preview-body"
         data-testid="bksec-preview-skeleton">
-        <template
+        <div
           v-for="row in previewSkeletonRows"
-          :key="row.id">
+          :key="row.id"
+          class="bksec-desc-row">
           <span class="bksec-desc-label">
             <i
               class="bksec-skeleton-bar is-label"
@@ -134,7 +135,7 @@
               class="bksec-skeleton-bar"
               :class="[row.value, { 'is-tall': row.tall }]" />
           </span>
-        </template>
+        </div>
       </div>
       <bk-exception
         v-else-if="previewError"
@@ -147,20 +148,22 @@
       <div
         v-else
         class="bksec-preview-scroll bksec-preview-body">
-          <template
-            v-for="(row, index) in previewRows"
-            :key="row.key">
-            <span
-              class="bksec-desc-label"
-              :class="{ 'is-spaced': isExtensionStart(index) }">
+          <div
+            v-for="group in previewGroups"
+            :key="group.key"
+            class="bksec-desc-group"
+            :class="{ 'is-extension': group.extension }">
+          <div
+            v-for="row in group.rows"
+            :key="row.key"
+            class="bksec-desc-row">
+            <span class="bksec-desc-label">
               <span
                 class="bksec-desc-label-text"
                 v-bk-tooltips="labelTip(row.key, row.label)"
                 @mouseenter="syncLabelOverflow($event, row.key)">{{ row.label }}：</span>
             </span>
-            <span
-              class="bksec-desc-value"
-              :class="{ 'is-spaced': isExtensionStart(index) }">
+            <span class="bksec-desc-value">
               <span
                 v-if="row.kind === 'level' && row.value && row.value !== '--'"
                 class="bksec-level"
@@ -175,6 +178,7 @@
               </span>
               <span
                 v-else
+                class="bksec-desc-value-text"
                 :class="{ 'is-multiline': row.kind === 'multiline' }">
                 <template
                   v-for="(part, partIndex) in textParts(row.value)"
@@ -186,7 +190,8 @@
                 </template>
               </span>
             </span>
-          </template>
+          </div>
+          </div>
         </div>
     </div>
   </audit-sideslider>
@@ -297,7 +302,17 @@
     if (value === '低') return 'is-low';
     return '';
   };
-  const isExtensionStart = (index: number) => previewRows.value[index - 1]?.key === 'guidance';
+  const previewGroups = computed(() => {
+    const rows = previewRows.value;
+    const guidanceIndex = rows.findIndex(row => row.key === 'guidance');
+    const splitAt = guidanceIndex === -1 ? rows.length : guidanceIndex + 1;
+    const groups = [{ key: 'base', extension: false, rows: rows.slice(0, splitAt) }];
+    const extensionRows = rows.slice(splitAt);
+    if (extensionRows.length) {
+      groups.push({ key: 'extension', extension: true, rows: extensionRows });
+    }
+    return groups;
+  });
 
   const textParts = (value: unknown) => {
     const source = String(value ?? '').trim() || '--';
@@ -687,29 +702,35 @@
 }
 
 .bksec-preview-body {
-  display: grid;
-  grid-template-columns: minmax(0, 124px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-content: start;
   min-width: 0;
-  column-gap: var(--audit-space-8);
   font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
+  line-height: 20px;
 }
 
-.bksec-desc-label,
-.bksec-desc-value {
-  min-height: 32px;
-  padding: 6px 0;
-}
-
-.bksec-desc-label.is-spaced,
-.bksec-desc-value.is-spaced {
+.bksec-desc-group.is-extension {
   margin-top: var(--audit-space-24);
 }
 
+.bksec-desc-row {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 6px 0;
+  gap: var(--audit-space-8);
+}
+
 .bksec-desc-label {
+  display: flex;
+  flex: 0 0 124px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: 124px;
+  min-width: 124px;
   max-width: 124px;
-  min-width: 0;
   overflow: hidden;
 }
 
@@ -717,6 +738,8 @@
   display: block;
   max-width: 100%;
   overflow: hidden;
+  font-size: var(--audit-font-size-sm);
+  line-height: 20px;
   color: var(--audit-neutral-text-02);
   text-align: right;
   text-overflow: ellipsis;
@@ -724,10 +747,23 @@
 }
 
 .bksec-desc-value {
+  display: flex;
+  flex: 1 1 0%;
+  align-items: flex-start;
+  width: 0;
   min-width: 0;
+  overflow: hidden;
   color: var(--audit-neutral-text-01);
+}
+
+.bksec-desc-value-text {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: var(--audit-font-size-sm);
+  line-height: 20px;
   white-space: pre-wrap;
-  word-break: normal;
+  word-break: break-word;
   overflow-wrap: break-word;
 }
 
