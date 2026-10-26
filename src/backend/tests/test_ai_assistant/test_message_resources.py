@@ -1,8 +1,10 @@
 from unittest import mock
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 from bk_resource.exceptions import ValidateException
 from django.db import connection
+from django.http import HttpResponse
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve
@@ -32,7 +34,9 @@ from services.web.ai_assistant.exceptions import (
 from services.web.ai_assistant.handlers import message_handler_registry
 from services.web.ai_assistant.models import Attachment, Feedback, Message
 from services.web.ai_assistant.resources.message import (
+    XLSX_CONTENT_TYPE,
     CreateMessage,
+    CreateMessageFullExport,
     GetMessage,
     ListMessages,
     RetryMessage,
@@ -62,6 +66,7 @@ from services.web.ai_assistant.services.message_execution import (
     load_message_execution,
 )
 from services.web.common.scope_permission import ScopePermission
+from services.web.query.ai_assistant.services.export import PreviewExportFile
 from tests.base import TestCase
 from tests.test_ai_assistant.factories import (
     create_conversation as create_test_conversation,
@@ -824,3 +829,49 @@ class MessageResourceRoutingTest(TestCase):
         self.assertEqual(detail_match.kwargs, {"message_uid": message_uid})
         retry_match = resolve(f"/api/v1/ai_assistant/messages/{message_uid}/retry/")
         self.assertEqual(retry_match.kwargs, {"message_uid": message_uid})
+
+
+class TestCreateMessageFullExportResource(SimpleTestCase):
+    """全量导出 resource 双形态响应：文件流直出不经 ResponseSerializer 校验。
+
+    2026-10-16 联调实测踩坑：声明 ResponseSerializer 时，bk_resource 会对
+    perform_request 返回值按 dict 校验，同步直出的 HttpResponse 触发
+    params_error 500（"期待为字典类型，得到的是 HttpResponse"）。
+    文件流 resource 对齐 PreviewExportMessage 既有模式：不声明。
+    """
+
+    def test_response_serializer_not_declared(self):
+        """防回归锚点：文件流 resource 不得声明 ResponseSerializer。"""
+
+        self.assertIsNone(CreateMessageFullExport.ResponseSerializer)
+
+    @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="tester")
+    @mock.patch("services.web.ai_assistant.resources.message.MessageExportService")
+    def test_sync_file_returns_http_response(self, mock_service, mock_username):
+        """同步直出分支：PreviewExportFile → HttpResponse 附件响应。"""
+
+        mock_service.return_value.export_or_fallback.return_value = PreviewExportFile(
+            content=b"xlsx-bytes",
+            file_name="AI助手检索导出-test.xlsx",
+        )
+
+        response = CreateMessageFullExport().perform_request({"message_uid": str(uuid4()), "export_config": {}})
+
+        self.assertIsInstance(response, HttpResponse)
+        self.assertEqual(response["Content-Type"], XLSX_CONTENT_TYPE)
+        # 中文文件名按 RFC 5987 编码（filename*=utf-8''...%E5...），解码后断言
+        disposition = response["Content-Disposition"]
+        self.assertIn("attachment", disposition)
+        self.assertIn("AI助手检索导出-test.xlsx", unquote(disposition))
+
+    @mock.patch("services.web.ai_assistant.resources.message.get_request_username", return_value="tester")
+    @mock.patch("services.web.ai_assistant.resources.message.MessageExportService")
+    def test_async_dict_passthrough(self, mock_service, mock_username):
+        """异步/降级分支：dict 原样返回（框架默认 JSON 包装），字段不受影响。"""
+
+        expected = {"export_task_id": 1, "status": "READY", "export_type": "sync_fallback"}
+        mock_service.return_value.export_or_fallback.return_value = expected
+
+        response = CreateMessageFullExport().perform_request({"message_uid": str(uuid4()), "export_config": {}})
+
+        self.assertEqual(response, expected)

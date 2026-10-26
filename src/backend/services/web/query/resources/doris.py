@@ -37,6 +37,7 @@ from apps.permission.handlers.actions import ActionEnum
 from core.sql.constants import FieldType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
+from services.web.query.ai_assistant.constants import AI_ASSISTANT_EXPORT_SOURCE
 from services.web.query.constants import COLLECT_SEARCH_CONFIG, TaskEnum
 from services.web.query.exceptions import (
     DownloadLogExportTaskError,
@@ -140,6 +141,10 @@ class CollectorSearchAllResource(CollectorSearchBaseResource):
             },
         ]
         # 请求BKBASE数据
+        query_timeout = validated_request_data.get("query_timeout")
+        if query_timeout is not None:
+            for params in bulk_req_params:
+                params["request_timeout"] = query_timeout
         bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
         data_resp, count_resp = bulk_resp
         data = self.parse_data(data_resp.get("list", []))
@@ -287,10 +292,12 @@ class CreateCollectorSearchExportTask(SearchExportTaskBaseResource):
         ExportFieldLog.objects.bulk_create(export_field_logs)
 
     def perform_request(self, validated_request_data):
-        # 获取总条数进行判断
-        total = DataFetcher.get_total(validated_request_data["query_params"])
-        if total > settings.LOG_EXPORT_MAX_COUNT:
-            raise LogExportMaxCountError(current_count=total, max_count=settings.LOG_EXPORT_MAX_COUNT)
+        # AI回退只排队，避免在HTTP里重复执行刚超时的count；Worker原本会重新计数。
+        total = 0
+        if validated_request_data["export_config"].get("source") != AI_ASSISTANT_EXPORT_SOURCE:
+            total = DataFetcher.get_total(validated_request_data["query_params"])
+            if total > settings.LOG_EXPORT_MAX_COUNT:
+                raise LogExportMaxCountError(current_count=total, max_count=settings.LOG_EXPORT_MAX_COUNT)
         try:
             self.record_export_fields(validated_request_data)
         except Exception as e:

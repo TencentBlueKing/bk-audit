@@ -909,8 +909,14 @@
           ? `已导出全部 ${displayResult.value.totalHit} 条数据`
           : `已导出前 ${displayResult.value.previewCount} 条数据`);
       } else {
-        await exportLogSearchFull(displayMessageUid.value);
-        messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
+        const outcome = await exportLogSearchFull(displayMessageUid.value);
+        if (outcome.isSyncFile) {
+          messageSuccess(`已导出全部 ${displayResult.value.totalHit} 条数据`);
+        } else if (outcome.isFallback) {
+          messageSuccess('数据量较大，已转后台导出，完成后将邮件通知，您可在导出任务页查看进度');
+        } else {
+          messageSuccess('导出任务已创建，结果将发送至邮箱，请注意查收');
+        }
       }
     } catch (error: any) {
       messageError(error?.message || '导出失败，请稍后重试');

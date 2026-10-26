@@ -82,3 +82,23 @@ nl2riskfilter 的 prompt 包含字段表格和枚举值，这些信息直接来�
 DEFAULT 分析指令来自 `GlobalMetaConfig` 的 `ai_assistant_log_analysis_default_prompt`，CUSTOM 使用用户输入。
 `0010_update_log_analysis_prompt` 直接覆盖目标全局 DEFAULT，不比对旧内容；配置缺失时创建，其他作用域不受影响；
 反向迁移不回写提示词。更新已有 DEFAULT 需要执行迁移，仅改系统提示词不会更新这份任务指令。
+
+
+## 意图识别 Agent
+
+`intent_recognition/templates.py` 直接维护 system/user/retry 模板，首轮由后端注入。
+系统提示词说明决策原则和 MessagePlan 协议；用户提示词只提供本轮原话、可信会话阶段、
+当前系统、授权系统 ID 和时间锚点。系统详情、字段、操作与资源类型不预加载到提示词。
+
+意图 Agent 绑定唯一的 `audit-meta` MCP，包含系统列表、系统详情、操作列表、资源类型列表，
+以及二期 `mcp_get_log_field_metadata`。模型只补充决策缺少的元数据；可信当前系统无需重查目录，无系统线索或闲聊不查目录。
+工具返回内容不能扩大当前会话的授权范围，后端仍独立校验系统和检索条件。
+网关工具集部署后还需在 Agent 平台绑定，本地提示词更新不代表平台绑定已经完成。
+
+当前产品只处理本轮原话和已选系统，不继承历史筛选条件。会话只传请求主体、阶段和当前系统；
+上周结束复用本周起点，省去重复标记。最终计划的快捷时间规则来自输出Schema及共享常量：
+相对时间保留now-{正整数}{smhdwMy}标记，前端每次执行时动态重算；预置按钮不是合法月份白名单。
+首轮后端同样按日历月/年换算，月末及闰日截到有效日；固定单位最多365天，月最多12、年最多1。
+字段MCP请求仍需要绝对起止时间，子路径样本受本次condition约束。
+
+本地非流式最终效果评测见 `evals/intent-recognition/README.md`。

@@ -15,25 +15,15 @@ limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 
-通用消息规划服务：自然语言 + 会话/权限/字段上下文 → MessagePlan。
-
-意图识别默认调用专属智能体（AIAgentCode.USER_INTENT = bp-ai-user-intent；
-2026-09-15 统一切换新智能体，旧网关 bp-audit-log-search / bp-ai-nlls 退役）。
-环境地址差异由 get_agent_base_url 优先级链解决：
-- 生产（上云）：BK_API_URL_TMPL 独立域名模板默认链路直接跑通（零额外配置）
-- bkop：统一域名模板下该网关未注册（404），配置 BKAPP_AI_USER_INTENT_API_URL
-  直连独立域名（第 1 层优先级）
-settings.AI_USER_INTENT_AGENT_CODE 可按环境覆盖路由到其他智能体（应急等）。
-
-新链路以 MessagePlan 为 single source of truth，一次生成 SYSTEM_SELECTION、LOG_SEARCH
-或二者组合；候选系统和完整字段上下文按前端 scope 收窄。
+通用消息规划：用户目标、可信会话和授权边界 → MessagePlan。
+动态系统/字段/操作元数据由专用MCP按需提供，后端独立校验授权范围与检索条件。
+Agent路由由AI_USER_INTENT_AGENT_CODE及api.domains中的环境配置决定。
 """
 
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from itertools import islice
 from typing import Any
 from uuid import uuid4
 
@@ -47,6 +37,7 @@ from requests.exceptions import Timeout
 from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from apps.meta.constants import SystemAuditStatusEnum
+from apps.meta.permissions import SearchLogPermission
 from services.web.ai.prompts.intent_recognition import (
     RETRY_PROMPT_TEMPLATE,
     SYSTEM_PROMPT_TEMPLATE,
@@ -64,9 +55,6 @@ from services.web.query.ai_assistant.schemas import (
     MessagePlanningClock,
     MessagePlanningContext,
     MessagePlanningConversation,
-    MessagePlanningSystemSummary,
-    SelectionFieldMeta,
-    SelectionSystem,
 )
 from services.web.query.ai_assistant.services.condition import ConditionAssemblyService
 
@@ -74,11 +62,6 @@ logger = logging.getLogger(__name__)
 
 # AI 输出原文在日志/异常 extra 中的最大保留长度（对齐 NL2JSON）
 INTENT_RAW_OUTPUT_KEEP_LENGTH = 2048
-
-PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH = 256
-PLANNING_SAMPLE_STRING_MAX_LENGTH = 128
-PLANNING_SAMPLE_MAX_DEPTH = 2
-PLANNING_SAMPLE_COLLECTION_MAX_ITEMS = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,126 +72,10 @@ class PlanningRetryFeedback:
     validation_errors: tuple[dict[str, str], ...]
 
 
-def _sample_type(value: Any) -> str:
-    """返回上下文元数据使用的稳定样例类型名。"""
+def _compact_json(data: Any) -> str:
+    """Prompt 注入用紧凑 JSON：无缩进、中文原样，体积最小且模型解析无差异。"""
 
-    if isinstance(value, dict):
-        return "object"
-    if isinstance(value, list):
-        return "array"
-    if isinstance(value, str):
-        return "string"
-    return type(value).__name__
-
-
-def _summarize_sample_value(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
-    """对字段样例执行确定性裁剪，返回裁剪后的值与是否发生裁剪。
-
-    设计意图：保留原始查询值形态供模型参考，同时防止大字符串或深层 JSON
-    无界增长 Prompt。深度超限时使用带统计信息的占位对象，不让模型误以为原值完整。
-    """
-
-    if isinstance(value, str):
-        if len(value) <= PLANNING_SAMPLE_STRING_MAX_LENGTH:
-            return value, False
-        return value[:PLANNING_SAMPLE_STRING_MAX_LENGTH], True
-    if isinstance(value, dict):
-        if depth >= PLANNING_SAMPLE_MAX_DEPTH:
-            return {
-                "truncated": True,
-                "original_type": "object",
-                "item_count": len(value),
-            }, True
-        summarized = {}
-        truncated = len(value) > PLANNING_SAMPLE_COLLECTION_MAX_ITEMS
-        for key, item in islice(value.items(), PLANNING_SAMPLE_COLLECTION_MAX_ITEMS):
-            summarized_item, item_truncated = _summarize_sample_value(item, depth=depth + 1)
-            summarized[str(key)] = summarized_item
-            truncated = truncated or item_truncated
-        if len(value) > PLANNING_SAMPLE_COLLECTION_MAX_ITEMS:
-            summarized["__truncation__"] = {
-                "truncated": True,
-                "original_type": "object",
-                "item_count": len(value),
-                "retained_item_count": PLANNING_SAMPLE_COLLECTION_MAX_ITEMS,
-            }
-        return summarized, truncated
-    if isinstance(value, list):
-        if depth >= PLANNING_SAMPLE_MAX_DEPTH:
-            return {
-                "truncated": True,
-                "original_type": "array",
-                "item_count": len(value),
-            }, True
-        summarized_items = []
-        truncated = len(value) > PLANNING_SAMPLE_COLLECTION_MAX_ITEMS
-        for item in value[:PLANNING_SAMPLE_COLLECTION_MAX_ITEMS]:
-            summarized_item, item_truncated = _summarize_sample_value(item, depth=depth + 1)
-            summarized_items.append(summarized_item)
-            truncated = truncated or item_truncated
-        if len(value) > PLANNING_SAMPLE_COLLECTION_MAX_ITEMS:
-            summarized_items.append(
-                {
-                    "truncated": True,
-                    "original_type": "array",
-                    "item_count": len(value),
-                    "retained_item_count": PLANNING_SAMPLE_COLLECTION_MAX_ITEMS,
-                }
-            )
-        return summarized_items, truncated
-    return value, False
-
-
-def _serialize_planning_field(field) -> dict:
-    """序列化 Agent 可见字段，排除展示值并限制样例体积。"""
-
-    payload = field.model_dump(exclude_none=True, exclude={"sample_value_display"})
-    if "sample_value" not in payload:
-        return payload
-    original = payload["sample_value"]
-    summarized, truncated = _summarize_sample_value(original)
-    payload["sample_value"] = summarized
-    if truncated:
-        metadata = {"truncated": True, "original_type": _sample_type(original)}
-        if isinstance(original, str):
-            metadata["original_length"] = len(original)
-        elif isinstance(original, (dict, list)):
-            metadata["item_count"] = len(original)
-        payload["sample_value_meta"] = metadata
-    return payload
-
-
-def _field_definition(field: SelectionFieldMeta) -> dict:
-    """返回不含样例的 Agent 字段定义，用于公共字段与系统差异比较。"""
-
-    return {
-        key: value
-        for key, value in _serialize_planning_field(field).items()
-        if key not in {"sample_value", "sample_value_meta"}
-    }
-
-
-def _serialize_current_system_detail(
-    current_system: SelectionSystem | None,
-    common_fields: list[SelectionFieldMeta],
-) -> dict | None:
-    """只表达当前系统相对公共字段的差异，以及路径探索需要的拓展字段样例。"""
-
-    if current_system is None:
-        return None
-    common_definitions = {field.raw_name: _field_definition(field) for field in common_fields}
-    field_overrides = []
-    for field in current_system.standard_fields:
-        definition = _field_definition(field)
-        if common_definitions.get(field.raw_name) != definition:
-            field_overrides.append(definition)
-    return {
-        "system_id": current_system.system_id,
-        "name": current_system.name,
-        "description": current_system.description[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
-        "field_overrides": field_overrides,
-        "extension_fields": [_serialize_planning_field(field) for field in current_system.extension_fields],
-    }
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 def _render_prompt(template: str, **variables: str) -> str:
@@ -235,13 +102,8 @@ class MessagePlanningService:
     agent_code = resolve_intent_agent_code()
     system_prompt = _render_prompt(
         SYSTEM_PROMPT_TEMPLATE,
-        message_plan_schema=json.dumps(MessagePlan.model_json_schema(), ensure_ascii=False, indent=2),
+        message_plan_schema=_compact_json(MessagePlan.model_json_schema()),
     )
-
-    _PHASE_DECISION_RULES = {
-        "SYSTEM_UNSELECTED": "当前会话没有有效系统；用户未提供可匹配系统时返回 SYSTEM_REQUIRED",
-        "SYSTEM_SELECTED": "用户未点名其他系统的检索默认使用 current_system_id",
-    }
 
     @staticmethod
     def load_candidates(namespace: str, username: str, scope_type: str = "", scope_id: str = "") -> list[dict]:
@@ -255,8 +117,6 @@ class MessagePlanningService:
         供 Celery 任务等无请求上下文场景使用（权限组件依赖请求上下文取用户名，
         此处走显式 username 的参数化版本）。
         """
-
-        from apps.meta.permissions import SearchLogPermission
 
         if scope_type:
             # get_scope_auth_systems 无权限时返回 [""]（ES filter 兜底语义），候选清单置空
@@ -286,15 +146,11 @@ class MessagePlanningService:
         *,
         query_text: str,
         candidates: list[dict],
-        common_fields: list[SelectionFieldMeta],
-        current_system: SelectionSystem | None,
+        current_system_id: str,
         username: str,
         reference_time: datetime,
     ) -> MessagePlanningContext:
-        """由后端可信事实构造强类型的单次规划上下文。"""
-
-        current_system_id = current_system.system_id if current_system is not None else ""
-        phase = "SYSTEM_SELECTED" if current_system_id else "SYSTEM_UNSELECTED"
+        """只构造可信决策事实，不预加载工具可查询的字段、样例或系统详情。"""
         current_week_start = reference_time.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
             days=reference_time.weekday()
         )
@@ -302,28 +158,16 @@ class MessagePlanningService:
             user_query=query_text,
             conversation=MessagePlanningConversation(
                 username=username,
-                phase=phase,
-                phase_decision_rule=cls._PHASE_DECISION_RULES[phase],
-                has_selected_system=bool(current_system_id),
+                phase="SYSTEM_SELECTED" if current_system_id else "SYSTEM_UNSELECTED",
                 current_system_id=current_system_id,
             ),
-            authorized_systems=[
-                MessagePlanningSystemSummary(
-                    system_id=str(candidate["system_id"]),
-                    name=str(candidate.get("name") or candidate["system_id"]),
-                    description=str(candidate.get("description") or "")[:PLANNING_SYSTEM_DESCRIPTION_MAX_LENGTH],
-                )
-                for candidate in candidates
-            ],
-            common_standard_fields=common_fields,
-            current_system_detail=current_system,
+            authorized_system_ids=list(dict.fromkeys(str(candidate["system_id"]) for candidate in candidates)),
             clock=MessagePlanningClock(
                 current_time=reference_time.isoformat(),
                 timezone=str(reference_time.tzinfo),
                 default_start_time=(reference_time - timedelta(days=1)).isoformat(),
                 current_week_start=current_week_start.isoformat(),
                 previous_week_start=(current_week_start - timedelta(days=7)).isoformat(),
-                previous_week_end=current_week_start.isoformat(),
             ),
         )
 
@@ -359,25 +203,13 @@ class MessagePlanningService:
 
     @staticmethod
     def build_user_message(context: MessagePlanningContext) -> str:
-        """按固定层级序列化本轮动态事实，不重复稳定规则和输出契约。"""
-
-        common_fields = [_field_definition(field) for field in context.common_standard_fields]
-        current_system_detail = _serialize_current_system_detail(
-            context.current_system_detail,
-            context.common_standard_fields,
-        )
+        """序列化本轮目标、授权ID与时间，动态业务元数据仅通过专用MCP进入上下文。"""
         return _render_prompt(
             USER_PROMPT_TEMPLATE,
-            user_query=context.user_query,
-            conversation_json=json.dumps(context.conversation.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            authorized_systems_json=json.dumps(
-                [item.model_dump(mode="json") for item in context.authorized_systems],
-                ensure_ascii=False,
-                indent=2,
-            ),
-            common_standard_fields_json=json.dumps(common_fields, ensure_ascii=False, indent=2),
-            current_system_detail_json=json.dumps(current_system_detail, ensure_ascii=False, indent=2),
-            clock_json=json.dumps(context.clock.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            user_query_json=_compact_json(context.user_query),
+            conversation_json=_compact_json(context.conversation.model_dump(mode="json")),
+            authorized_system_ids_json=_compact_json(context.authorized_system_ids),
+            clock_json=_compact_json(context.clock.model_dump(mode="json")),
         )
 
     @classmethod
@@ -548,7 +380,7 @@ class MessagePlanningService:
 
         if plan.outcome == "error":
             return
-        candidate_ids = {system.system_id for system in context.authorized_systems}
+        candidate_ids = set(context.authorized_system_ids)
         current_system_id = context.conversation.current_system_id
         selection = next(
             (message for message in plan.messages if message.message_type == "SYSTEM_SELECTION"),

@@ -358,6 +358,8 @@ class CollectorSearchAllReqSerializer(CollectorSearchReqBaseSerializer):
     日志查询(All)请求序列化器
     """
 
+    query_timeout = serializers.FloatField(required=False, min_value=0.001, max_value=300, write_only=True)
+
     @classmethod
     def _build_time_conditions(cls, validated_request_data: dict) -> List[dict]:
         """

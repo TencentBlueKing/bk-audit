@@ -56,6 +56,14 @@ LOG_ANALYSIS_MCP_RESOURCES = {
     "mcp_aggregate_logs",
 }
 
+AUDIT_META_MCP_RESOURCES = {
+    "mcp_list_audit_systems": "/mcp/meta/systems/",
+    "mcp_get_audit_system_detail": "/mcp/meta/system_detail/",
+    "mcp_list_system_actions": "/mcp/meta/actions/",
+    "mcp_list_system_resource_types": "/mcp/meta/resource_types/",
+    "mcp_get_log_field_metadata": "/mcp/logs/field_metadata/",
+}
+
 
 class TestMCPUserAPIGWConfig(SimpleTestCase):
     @classmethod
@@ -171,6 +179,37 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
             self.assertIsNotNone(server, stage["name"])
             self.assertEqual(set(server["resource_names"]), LOG_ANALYSIS_MCP_RESOURCES)
 
+    def test_all_audit_meta_servers_expose_only_meta_resources(self):
+        definition = self._load_definition()
+
+        for stage in definition["stages"]:
+            server = next(
+                (server for server in stage["mcp_servers"] if server["name"] == "audit-meta"),
+                None,
+            )
+            self.assertIsNotNone(server, stage["name"])
+            self.assertEqual(set(server["resource_names"]), set(AUDIT_META_MCP_RESOURCES))
+
+    def test_audit_meta_resources_use_user_gateway_backend(self):
+        """audit-meta 五个工具均为 POST、用户态校验并指向默认命名空间后端。"""
+        for operation_id, path in AUDIT_META_MCP_RESOURCES.items():
+            with self.subTest(operation_id=operation_id):
+                operation = self.resources["paths"][path]["post"]
+
+                self.assertEqual(operation["operationId"], operation_id)
+                config = operation["x-bk-apigateway-resource"]
+                self.assertTrue(config["isPublic"])
+                self.assertTrue(config["authConfig"]["appVerifiedRequired"])
+                self.assertTrue(config["authConfig"]["userVerifiedRequired"])
+                self.assertTrue(config["authConfig"]["resourcePermissionRequired"])
+                self.assertEqual(
+                    config["backend"]["path"],
+                    "/api/v1/query/namespaces/default/mcp_user/logs/field_metadata/"
+                    if operation_id == "mcp_get_log_field_metadata"
+                    else f"/api/v1/meta/namespaces/default/mcp_user/meta/{path.rsplit('/', 2)[-2]}/",
+                )
+                self.assertEqual(operation["parameters"][0]["in"], "body")
+
     def test_log_tools_hide_namespace_without_legacy_or_alias_resources(self):
         """日志分析只保留三个原 operationId，不暴露 namespace 或兼容别名。"""
         operations = self._get_operations()
@@ -199,9 +238,9 @@ class TestMCPUserAPIGWConfig(SimpleTestCase):
     def test_resource_change_advances_release_version(self):
         definition = self._load_definition()
 
-        self.assertEqual(definition["release"]["version"], "0.0.22")
+        self.assertEqual(definition["release"]["version"], "0.0.23")
         self.assertEqual(definition["release"]["title"], definition["release"]["version"])
-        self.assertIn("统计专用 MCP 工具集", definition["release"]["comment"])
+        self.assertIn("audit-meta", definition["release"]["comment"])
 
     def _get_operations(self):
         return {

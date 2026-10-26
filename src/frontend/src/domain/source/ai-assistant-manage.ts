@@ -218,14 +218,16 @@ class AiAssistantManage extends ModuleBase {
   }
 
   /**
-   * 全量导出：异步创建导出任务。
+   * 全量导出：数据量在守卫内时同步直出 XLSX 文件流，超限降级返回异步任务 JSON。
+   * responseType=blob 兼容两种响应形态（文件由响应拦截器统一触发下载，JSON 由调用层解析）。
    */
   fullExport(
     params: { message_uid: string; export_config?: AiExportConfig },
     payload = {} as IRequestPayload,
   ) {
     const { message_uid: messageUid, export_config: exportConfig } = params;
-    return Request.post<AiFullExportResult>(`${this.module}/messages/${messageUid}/full-export/`, {
+    return Request.post<AiFullExportResult | Blob>(`${this.module}/messages/${messageUid}/full-export/`, {
+      responseType: 'blob',
       params: {
         export_config: exportConfig || {
           field_scope: 'ai_standard',

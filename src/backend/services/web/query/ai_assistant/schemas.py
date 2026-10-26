@@ -34,6 +34,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from rest_framework import serializers
 
 from core.sql.constants import FieldType
+from services.web.query.ai_assistant.constants import (
+    TIME_SHORTCUT_MAX_DAYS,
+    TIME_SHORTCUT_PATTERN,
+)
 from services.web.query.constants import LOG_FIELD_KEY_JOIN_CHAR
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.query.utils.time_range import parse_log_time
@@ -187,29 +191,17 @@ class MessagePlanningConversation(BaseModel):
 
     username: str = Field(description="当前请求用户身份，仅用于理解请求主体，不作为授权依据")
     phase: Literal["SYSTEM_UNSELECTED", "SYSTEM_SELECTED"]
-    phase_decision_rule: str = Field(description="当前阶段直接影响下一条消息的决策规则")
-    has_selected_system: bool
     current_system_id: str = ""
 
     @model_validator(mode="after")
     def validate_selection_state(self) -> "MessagePlanningConversation":
-        """拒绝阶段、选择标记和当前系统 ID 相互矛盾的上下文。"""
+        """拒绝会话阶段和当前系统 ID 相互矛盾的上下文。"""
 
         selected = bool(self.current_system_id)
-        if self.has_selected_system != selected:
-            raise ValueError("has_selected_system conflicts with current_system_id")
         expected_phase = "SYSTEM_SELECTED" if selected else "SYSTEM_UNSELECTED"
         if self.phase != expected_phase:
             raise ValueError("phase conflicts with current_system_id")
         return self
-
-
-class MessagePlanningSystemSummary(BaseModel):
-    """Agent 用于选择系统的最小授权候选摘要。"""
-
-    system_id: str = Field(..., min_length=1)
-    name: str = ""
-    description: str = ""
 
 
 class MessagePlanningClock(BaseModel):
@@ -220,32 +212,22 @@ class MessagePlanningClock(BaseModel):
     default_start_time: str
     current_week_start: str
     previous_week_start: str
-    previous_week_end: str
 
 
 class MessagePlanningContext(BaseModel):
-    """单次 MessagePlan 决策所需的全部动态上下文。"""
+    """单次规划的可信会话、授权范围与时间；动态元数据由Agent按需查询。"""
 
     user_query: str = Field(..., min_length=1)
     conversation: MessagePlanningConversation
-    authorized_systems: List[MessagePlanningSystemSummary] = Field(default_factory=list)
-    common_standard_fields: List[SelectionFieldMeta] = Field(default_factory=list)
-    current_system_detail: Optional[SelectionSystem] = None
+    authorized_system_ids: List[str] = Field(default_factory=list)
     clock: MessagePlanningClock
 
     @model_validator(mode="after")
-    def validate_current_system_detail(self) -> "MessagePlanningContext":
-        """当前系统详情必须与会话状态和本轮授权候选完全对应。"""
-
-        if self.current_system_detail is None:
-            if self.conversation.has_selected_system:
-                raise ValueError("selected conversation requires current_system_detail")
-            return self
-        if self.current_system_detail.system_id != self.conversation.current_system_id:
-            raise ValueError("current_system_detail conflicts with current_system_id")
-        authorized_system_ids = {system.system_id for system in self.authorized_systems}
-        if self.conversation.current_system_id not in authorized_system_ids:
-            raise ValueError("current_system_id not in authorized_systems")
+    def validate_current_system_scope(self) -> "MessagePlanningContext":
+        """当前系统只能来自本轮场景授权范围，MCP目录不能扩大该范围。"""
+        current_id = self.conversation.current_system_id
+        if current_id and current_id not in self.authorized_system_ids:
+            raise ValueError("current_system_id not in authorized_system_ids")
         return self
 
 
@@ -302,20 +284,15 @@ class AIConditionPayload(BaseModel):
     conditions: List[AIConditionItem] = Field(default_factory=list, description="检索条件列表，无字段条件时为空数组")
     start_time: Optional[str] = Field(None, description="开始时间，ISO 8601 带时区")
     end_time: Optional[str] = Field(None, description="结束时间，ISO 8601 带时区")
-    # 相对时间窗快捷标记（格式 now-{N}{unit}，与前端约定 10-09：h=小时、d=天、M=月，
-    # 月粒度对齐前端 DATETIME_SHORTCUT_LABEL_MAP 的 1/3/6/12 白名单）：用户使用
-    # 「近N小时/近N天/近N月」等相对表述时输出（近1小时→now-1h、近7天/近一周→now-7d、
-    # 近1月→now-1M、近一年→now-12M），由服务端统一换算绝对时间并回显动态时间标签；
-    # 此时 start_time/end_time 留空。用户给出明确时间段（如 10月1日到5日、昨天10点）
-    # 或未提及时间时留空
     time_shortcut: Optional[str] = Field(
         None,
-        pattern=r"^now-([1-9]\d*)[hdM]$",
+        pattern=TIME_SHORTCUT_PATTERN,
         description=(
-            "相对时间窗标记，格式 now-{数字}{单位}（h=小时、d=天、M=月）；"
-            "用户使用「近N小时/近N天/近N月」等相对表述时输出（近1小时→now-1h、近7天/近一周→now-7d、"
-            "近14天→now-14d、近1月→now-1M、近3月→now-3M、近6月→now-6M、近一年→now-12M），"
-            "此时 start_time/end_time 留空由服务端统一换算；用户给出明确时间段或未提及时间时留空"
+            "最终计划的动态相对时间：now-{正整数}{单位}，单位s秒/m分钟/h小时/d天/w周/M月/y年。"
+            f"固定单位最多{TIME_SHORTCUT_MAX_DAYS}天，月最多12、年最多1；M/y按日历换算，不能改成固定天数。"
+            "例如最近2个月用now-2M、30分钟用now-30m；保留标记供前端随执行时刻重算，不能固化为绝对时间。"
+            "有快捷项时start_time/end_time留空；未指定时间时三者留空；明确日期或自然周等区间用绝对起止时间。"
+            "超出相对窗口上限返回INVALID_CONDITION，不近似或绕过限制。"
         ),
     )
 

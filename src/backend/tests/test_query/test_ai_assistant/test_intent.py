@@ -15,11 +15,7 @@ from services.web.query.ai_assistant.exceptions import (
     AIOutputInvalidError,
     InvalidConditionError,
 )
-from services.web.query.ai_assistant.schemas import (
-    MessagePlan,
-    SelectionFieldMeta,
-    SelectionSystem,
-)
+from services.web.query.ai_assistant.schemas import MessagePlan
 from services.web.query.ai_assistant.services.intent import (
     MessagePlanningService,
     PlanningRetryFeedback,
@@ -120,11 +116,18 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         return MessagePlanningService.build_context(
             query_text="查审计中心日志",
             candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "合成系统"}],
-            common_fields=[SelectionFieldMeta(raw_name="username", field_type="string", allow_operators=["eq"])],
-            current_system=SelectionSystem(system_id="bk-audit", name="审计中心"),
+            current_system_id="bk-audit",
             username=self.username,
             reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
         )
+
+    def test_prompt_does_not_preload_field_metadata(self, mock_chat):
+        """工具可取的字段目录不能提前放入提示词，仍保留可信授权ID与会话信息。"""
+        user_message = MessagePlanningService.build_user_message(self._build_context())
+        self.assertNotIn('"raw_name"', user_message)
+        self.assertNotIn("合成系统", user_message)
+        self.assertIn("bk-audit", user_message)
+        self.assertIn('"current_system_id":"bk-audit"', user_message)
 
     def test_retry_feedback_is_sent_after_original_exchange(self, mock_chat):
         """纠错调用携带上一轮输出和归一化校验错误。"""
@@ -267,20 +270,7 @@ class MessagePlanningContextTest(AIAssistantTestCase):
                 {"system_id": "bk-audit", "name": "审计中心", "description": "审计日志检索"},
                 {"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"},
             ],
-            common_fields=[SelectionFieldMeta(raw_name="username", display_name="操作人")],
-            current_system=SelectionSystem(
-                system_id="bk-audit",
-                name="审计中心",
-                description="审计日志检索",
-                standard_fields=[
-                    SelectionFieldMeta(
-                        raw_name="action_id",
-                        display_name="操作事件名(ID)",
-                        sample_value="delete",
-                        sample_value_display="删除",
-                    )
-                ],
-            ),
+            current_system_id="bk-audit",
             username=self.username,
             reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
         )
@@ -295,48 +285,21 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         self.assertEqual(request["chat_history"][1]["role"], "user")
         self.assertTrue(request["execute_kwargs"]["thread_id"].startswith("intent-planning-"))
         user_message = request["chat_history"][1]["content"]
-        self.assertIn("# 本轮用户输入", user_message)
-        self.assertIn("# 当前会话状态", user_message)
-        self.assertIn("# 当前场景可选的已接入审计系统（按选择优先级排序）", user_message)
-        self.assertIn("# 日志检索公共字段", user_message)
-        self.assertIn("# 当前已选系统字段上下文", user_message)
-        self.assertIn('"system_id": "bk-audit"', user_message)
-        self.assertIn('"system_id": "bcs"', user_message)
-        self.assertIn('"raw_name": "action_id"', user_message)
-        self.assertNotIn("sample_value_display", user_message)
-        self.assertIn('"current_system_id": "bk-audit"', user_message)
-        self.assertIn('"has_selected_system": true', user_message)
-        self.assertIn('"phase": "SYSTEM_SELECTED"', user_message)
-        self.assertIn('"username":', user_message)
-        self.assertIn('"timezone": "Asia/Shanghai"', user_message)
-        self.assertIn('"previous_week_start": "2026-09-07T00:00:00+08:00"', user_message)
-        self.assertIn('"previous_week_end": "2026-09-14T00:00:00+08:00"', user_message)
-        self.assertNotIn("scope_type", user_message)
-        self.assertNotIn("scope_id", user_message)
-        self.assertNotIn("# 输出 JSON Schema", user_message)
-        self.assertNotIn("# 业务规则", user_message)
-        self.assertIn("# MessagePlan 输出 Schema", system_prompt)
-        self.assertIn('"PlannedLogSearchMessage"', system_prompt)
-        self.assertIn("SYSTEM_UNSELECTED", system_prompt)
-        self.assertIn("SYSTEM_SELECTED", system_prompt)
-        self.assertIn("error_code=SYSTEM_REQUIRED、messages=[]", system_prompt)
-        self.assertIn("候选系统的数量不改变这条规则", system_prompt)
-        self.assertIn('"error_code":"SYSTEM_REQUIRED"', system_prompt)
-        self.assertIn("顺序最靠前", system_prompt)
-        self.assertIn("即使当前只有一个候选，也不得自动选择", system_prompt)
-        self.assertIn("未指定时间时默认最近一天", system_prompt)
-        self.assertIn("raw_name 固定为 extend_data", system_prompt)
-        self.assertIn("每个检索条件都必须完整保留", system_prompt)
-        self.assertIn("INVALID_CONDITION", system_prompt)
-
-    def test_system_prompt_is_generic_message_planner(self, mock_chat):
-        self.assertIn("消息决策", MessagePlanningService.system_prompt)
-        self.assertIn("username 仅表示当前请求用户身份", MessagePlanningService.system_prompt)
-        self.assertIn("当前可选系统", MessagePlanningService.system_prompt)
-        self.assertNotIn(
-            "你的任务是把用户的自然语言检索需求转换成结构化的日志检索条件 JSON",
-            MessagePlanningService.system_prompt,
+        conversation = json.loads(user_message.split("<conversation>\n", 1)[1].split("\n</conversation>", 1)[0])
+        authorized_ids = json.loads(
+            user_message.split("<authorized_system_ids>\n", 1)[1].split("\n</authorized_system_ids>", 1)[0]
         )
+        clock = json.loads(user_message.split("<clock>\n", 1)[1].split("\n</clock>", 1)[0])
+        self.assertEqual(
+            conversation,
+            {"username": self.username, "phase": "SYSTEM_SELECTED", "current_system_id": "bk-audit"},
+        )
+        self.assertEqual(authorized_ids, ["bk-audit", "bcs"])
+        self.assertEqual(clock["previous_week_start"], "2026-09-07T00:00:00+08:00")
+        self.assertEqual(clock["current_week_start"], "2026-09-14T00:00:00+08:00")
+        self.assertNotIn('"raw_name"', user_message)
+        self.assertNotIn("研发流水线", user_message)
+        self.assertNotIn('"PlannedLogSearchMessage"', user_message)
 
     def test_current_system_must_be_an_authorized_candidate(self, mock_chat):
         """当前系统详情不能绕过本轮授权候选集合进入 Agent 上下文。"""
@@ -345,77 +308,10 @@ class MessagePlanningContextTest(AIAssistantTestCase):
             MessagePlanningService.build_context(
                 query_text="查询当前系统日志",
                 candidates=[{"system_id": "bcs", "name": "蓝盾", "description": "研发流水线"}],
-                common_fields=[],
-                current_system=SelectionSystem(system_id="bk-audit", name="审计中心"),
+                current_system_id="bk-audit",
                 username=self.username,
                 reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
             )
-
-    def test_planning_context_only_summarizes_extension_samples(self, mock_chat):
-        """普通字段不携带运行时样例，只有路径探索需要的拓展样例进入上下文。"""
-
-        context = MessagePlanningService.build_context(
-            query_text="查日志",
-            candidates=[{"system_id": "bk-audit", "name": "审计中心", "description": "描" * 300}],
-            common_fields=[
-                SelectionFieldMeta(raw_name="long_text"),
-                SelectionFieldMeta(raw_name="nested"),
-            ],
-            current_system=SelectionSystem(
-                system_id="bk-audit",
-                name="审计中心",
-                description="描" * 300,
-                standard_fields=[
-                    SelectionFieldMeta(raw_name="long_text", sample_value="x" * 200),
-                ],
-                extension_fields=[
-                    SelectionFieldMeta(
-                        raw_name="extend_data",
-                        keys=["request_data"],
-                        sample_value={"level1": {"level2": {"secret": "value"}}},
-                    )
-                ],
-            ),
-            username=self.username,
-            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
-        )
-
-        user_message = MessagePlanningService.build_user_message(context)
-        current_json = user_message.split("<current_system_detail>\n", 1)[1].split("\n</current_system_detail>", 1)[0]
-        current_system = json.loads(current_json)
-        extension = current_system["extension_fields"][0]
-
-        self.assertEqual(len(current_system["description"]), 256)
-        self.assertEqual(current_system["field_overrides"], [])
-        self.assertNotIn("field_samples", current_system)
-        self.assertNotIn("x" * 128, user_message)
-        self.assertEqual(
-            extension["sample_value"]["level1"]["level2"],
-            {"truncated": True, "original_type": "object", "item_count": 1},
-        )
-        self.assertTrue(extension["sample_value_meta"]["truncated"])
-
-    def test_current_system_detail_only_keeps_differences_from_common_fields(self, mock_chat):
-        context = MessagePlanningService.build_context(
-            query_text="查日志",
-            candidates=[{"system_id": "bk-audit", "name": "审计中心"}],
-            common_fields=[SelectionFieldMeta(raw_name="username", nl_name="操作人")],
-            current_system=SelectionSystem(
-                system_id="bk-audit",
-                name="审计中心",
-                standard_fields=[SelectionFieldMeta(raw_name="username", nl_name="执行人", sample_value="user_a")],
-            ),
-            username=self.username,
-            reference_time=datetime(2026, 9, 20, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
-        )
-        user_message = MessagePlanningService.build_user_message(context)
-        current_json = user_message.split("<current_system_detail>\n", 1)[1].split("\n</current_system_detail>", 1)[0]
-        current_system = json.loads(current_json)
-
-        self.assertEqual(current_system["field_overrides"][0]["raw_name"], "username")
-        self.assertEqual(current_system["field_overrides"][0]["nl_name"], "执行人")
-        self.assertNotIn("field_samples", current_system)
-        self.assertNotIn("user_a", user_message)
 
 
 class LoadCandidatesTest(AIAssistantTestCase):
@@ -546,3 +442,35 @@ class IntentAgentRoutingTest(AIAssistantTestCase):
 
         with self.assertRaises(ImproperlyConfigured):
             resolve_intent_agent_code()
+
+
+class PromptSlimmingContractTest(AIAssistantTestCase):
+    """候选详情再大也不增加Agent首轮上下文，授权顺序保持稳定。"""
+
+    def test_metadata_does_not_increase_initial_prompt_size(self):
+        """名称/描述仅供后端及工具使用，不因元数据增长扩大首轮输入。"""
+        kwargs = dict(
+            query_text="查日志",
+            current_system_id="system_a",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+        small = MessagePlanningService.build_context(candidates=[{"system_id": "system_a"}], **kwargs)
+        large = MessagePlanningService.build_context(
+            candidates=[{"system_id": "system_a", "name": "隐藏名称" * 1000, "description": "隐藏详情" * 1000}],
+            **kwargs,
+        )
+        self.assertEqual(
+            MessagePlanningService.build_user_message(small), MessagePlanningService.build_user_message(large)
+        )
+
+    def test_authorized_ids_keep_backend_priority(self):
+        """工具目录排序不能改变后端场景授权范围及同等匹配的选择优先级。"""
+        context = MessagePlanningService.build_context(
+            query_text="选系统",
+            candidates=[{"system_id": "b"}, {"system_id": "a"}, {"system_id": "b"}],
+            current_system_id="",
+            username=self.username,
+            reference_time=datetime(2026, 9, 20, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+        self.assertEqual(context.authorized_system_ids, ["b", "a"])
