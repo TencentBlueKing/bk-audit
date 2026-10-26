@@ -423,8 +423,9 @@ class NewRisk(RiskFlowBaseHandler):
         if not getattr(self.risk, "dispatch_rule_id", None):
             self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
-        # 只有有责任人时走规则
-        if self.risk.operator:
+        # 只有有责任人时走规则；策略启用 BKSEC 时例外（口径 A）：
+        # 无责任人也走规则发单，初始责任人兜底为安全接口人
+        if self.risk.operator or self._bksec_enabled():
             # 初始化处理规则
             self.match_risk_rule()
             # 重新初始化
@@ -437,6 +438,15 @@ class NewRisk(RiskFlowBaseHandler):
         # 有处理套餐则当前处理人为空，否则为安全责任人
         self.risk.current_operator = [] if self.process_application and self.risk.operator else self.load_processor()
         self.risk.save(update_fields=["current_operator"])
+
+    def _bksec_enabled(self) -> bool:
+        """策略是否启用 BKSEC 安全工单：决定无责任人风险是否走规则发单"""
+        if not self.strategy:
+            return False
+        from services.web.risk.bksec.rules import load_bksec_config
+
+        config = load_bksec_config(self.strategy)
+        return bool(config and config.enabled)
 
     def match_risk_rule(self) -> None:
         RiskRuleHandler(risk_id=self.risk.risk_id).bind_rule()

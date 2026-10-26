@@ -95,10 +95,14 @@ class BkSecConfigSyncFailReason(TextChoices):
     API_UNREACHABLE = "api_unreachable", gettext_lazy("插件配置接口不可达")
 
 
-# 查询类接口缓存
+# 查询类接口缓存（只读展示场景，容忍短暂陈旧；token 等凭证查找不走缓存）
 BKSEC_RISK_TYPES_CACHE_KEY = "bksec:risk_access:list"
-BKSEC_RISK_TYPE_CACHE_KEY = "bksec:risk_access:{risk_type_id}"
 BKSEC_CACHE_TIMEOUT = 300
+
+# risk_access 列表翻页参数：响应为分页结构（count/results），单页取会截断
+# （token 漏匹配、下拉缺项），统一循环翻页取全量
+BKSEC_RISK_ACCESS_PAGE_SIZE = 100
+BKSEC_RISK_ACCESS_MAX_PAGES = 50
 
 # 渲染上下文加载事件的上限（预览与发单共用）
 BKSEC_RENDER_EVENT_LIMIT = 100

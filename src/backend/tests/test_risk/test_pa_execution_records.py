@@ -21,11 +21,20 @@ from unittest import mock
 
 import pytest
 from bk_resource import resource
+from django.db.models import Q
+from django.http import Http404
 
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from tests.test_risk.test_tickets.constants import RISK_INFO
+
+
+@pytest.fixture(autouse=True)
+def _auth_all_risks():
+    """测试环境无 IAM：默认放开风险数据范围（越权用例内层按需收窄）"""
+    with mock.patch.object(Risk, "iam_risk_filter", return_value=~Q(pk=None)):
+        yield
 
 
 def _create_node(
@@ -117,6 +126,16 @@ class TestListPAExecutionRecords:
         assert len(records) == 2
         results = {r["sops_task_id"] for r in records}
         assert results == {"1", "2"}
+
+    def test_list_scoped_by_authed_risks(self):
+        """数据范围收敛：无权查看的风险的执行记录不返回（对齐风险列表口径）"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=11)
+        _create_node(risk_b.risk_id, SOPSTaskStatus.FINISHED.value, task_id=22)
+        with mock.patch.object(Risk, "iam_risk_filter", return_value=Q(risk_id__in=[risk_a.risk_id])):
+            resp = resource.risk.list_pa_execution_records.perform_request({})
+        assert resp["count"] == 1
+        assert resp["results"][0]["risk_id"] == risk_a.risk_id
 
     def test_result_mapping_and_action_filter(self):
         pa_a, pa_b, risk_a, risk_b = self._prepare()
@@ -470,6 +489,14 @@ class TestGetPAExecutionRecordDetail:
         resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
         assert resp["retry_count"] == 1
         assert resp["retry_history"] == [retry_entry]
+
+    def test_detail_denied_for_unauthorized_risk(self):
+        """数据范围收敛：风险存在但调用者无权查看 → 404（对齐 RetrieveRisk 口径）"""
+        risk = self._prepare()
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=5)
+        with mock.patch.object(Risk, "iam_risk_filter", return_value=Q(risk_id__in=["R-OTHER"])):
+            with pytest.raises(Http404):
+                resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
 
 
 @pytest.mark.django_db

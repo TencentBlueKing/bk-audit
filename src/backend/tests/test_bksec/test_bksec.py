@@ -53,6 +53,74 @@ BKSEC_CONFIG_DATA = {
 }
 
 
+class TestRiskAccessFetch:
+    """risk_access 列表翻页取全量：单页截断会 token 漏匹配、启用保存被误阻断"""
+
+    def test_find_token_on_later_page(self):
+        """目标类型不在首页：循环翻页取到 token，命中即停不多翻"""
+        from services.web.risk.bksec.service import find_risk_access_item
+
+        pages = {
+            1: {"count": 3, "results": [{"id": 1, "token": "t1"}, {"id": 2, "token": "t2"}]},
+            2: {"count": 3, "results": [{"id": 159, "token": "t-target"}]},
+        }
+
+        def fake_list(**kwargs):
+            return pages.get(kwargs.get("page", 1), {"count": 3, "results": []})
+
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list
+        ) as fake_fetch:
+            item = find_risk_access_item("159")
+        assert item and item["token"] == "t-target"
+        assert fake_fetch.call_count == 2
+
+    def test_find_token_fallback_non_formal(self):
+        """is_formal=true 找不到时用 false 兜底（存量测试类型）"""
+        from services.web.risk.bksec.service import find_risk_access_item
+
+        def fake_list(**kwargs):
+            if kwargs.get("is_formal") == "true":
+                return {"count": 1, "results": [{"id": 1, "token": "t1"}]}
+            return {"count": 1, "results": [{"id": 159, "token": "t-test"}]}
+
+        with mock.patch("services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list):
+            item = find_risk_access_item("159")
+        assert item and item["token"] == "t-test"
+
+    def test_fetch_stops_on_short_page(self):
+        """接口不返回 count / 短页时也能终止，不空转"""
+        from services.web.risk.bksec.service import fetch_risk_access_items
+
+        calls = []
+
+        def fake_list(**kwargs):
+            calls.append(kwargs.get("page"))
+            return {"results": [{"id": 1, "token": "t1"}]}
+
+        with mock.patch("services.web.risk.bksec.service.api.bk_sec.risk_access_list", side_effect=fake_list):
+            items = fetch_risk_access_items(use_cache=False)
+        assert len(items) == 1
+        assert calls == [1]
+
+    def test_fetch_cache_by_is_formal(self):
+        """下拉展示走缓存（按 is_formal 维度）：二次调用不再打接口"""
+        from django.core.cache import cache
+
+        from services.web.risk.bksec.service import fetch_risk_access_items
+
+        cache.clear()
+        with mock.patch(
+            "services.web.risk.bksec.service.api.bk_sec.risk_access_list",
+            mock.Mock(return_value={"count": 1, "results": [{"id": 1, "token": "t1"}]}),
+        ) as fake_fetch:
+            first = fetch_risk_access_items(is_formal="true", use_cache=True)
+            second = fetch_risk_access_items(is_formal="true", use_cache=True)
+        assert first == second
+        assert fake_fetch.call_count == 1
+        cache.clear()
+
+
 class TestBkSecConfig:
     def test_parse_and_dedupe(self):
         data = {

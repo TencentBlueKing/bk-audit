@@ -48,6 +48,24 @@ from services.web.risk.models import Risk
 logger = logging.getLogger("celery")
 
 
+def render_field_values(items, context: dict) -> dict:
+    """
+    渲染字段映射为事件体 fields（预览 / 测试发送 / 正式发送共用同一口径）
+
+    items 为可迭代的 (key, value 模板)；key 为空的映射项跳过。
+    初始责任人为空时以安全接口人兜底（口径 A：优先 risk.operator，为空发给安全接口人；
+    BKSEC 必填字段，空值会被拒收）。
+    """
+    fields = {}
+    for key, template in items:
+        if not key:
+            continue
+        fields[key] = render_value(template, context)
+    if not (fields.get(BKSEC_FIELD_INITIAL_OWNER) or "").strip():
+        fields[BKSEC_FIELD_INITIAL_OWNER] = ";".join(load_security_person())
+    return fields
+
+
 def build_event_payload(
     config: BkSecConfig,
     risk: Optional[Risk] = None,
@@ -93,13 +111,7 @@ def build_event_payload(
     }
     """
     context = build_render_context(risk=risk, events=events)
-    fields = {}
-    for mapping in config.field_mappings:
-        if mapping.key:
-            fields[mapping.key] = render_value(mapping.value, context)
-    # 初始责任人为空时以安全接口人兜底
-    if not fields.get(BKSEC_FIELD_INITIAL_OWNER):
-        fields[BKSEC_FIELD_INITIAL_OWNER] = ";".join(load_security_person())
+    fields = render_field_values(((m.key, m.value) for m in config.field_mappings), context)
     # 事件体字段为 BKSEC 侧契约字段，字段名固定，故直接字面量书写
     payload = {
         "risk_type": config.risk_type_id,
@@ -176,9 +188,9 @@ def build_plugin_constants(config: BkSecConfig, risk: Optional[Risk] = None, tes
     constants[BKSEC_PARAM_OPERATOR] = coerce_operator_constant(render_value(config.operator, context), risk=risk)
     if test_operator:
         constants[BKSEC_PARAM_OPERATOR] = json.dumps([test_operator], ensure_ascii=False)
-    # risk_type_extra 承载全部字段映射
+    # risk_type_extra 承载全部字段映射（初始责任人兜底与预览同口径）
     constants[BKSEC_PARAM_RISK_TYPE_EXTRA] = json.dumps(
-        {m.key: render_value(m.value, context) for m in config.field_mappings},
+        render_field_values(((m.key, m.value) for m in config.field_mappings), context),
         ensure_ascii=False,
     )
     # 插件控制参数（${action} 由 SOPS 模板节点输入决定，审计侧不传）：
@@ -202,12 +214,11 @@ def split_persons(value: Any) -> List[str]:
 
 
 def load_fallback_persons(risk: Optional[Risk] = None) -> List[str]:
-    """责任人兜底：风险责任人 → 当前处理人 → 安全接口人"""
+    """责任人兜底（口径 A）：风险责任人 → 安全接口人"""
     if risk is not None:
-        for value in (risk.operator, risk.current_operator):
-            persons = split_persons(value)
-            if persons:
-                return persons
+        persons = split_persons(risk.operator)
+        if persons:
+            return persons
     return [person for person in load_security_person() if person]
 
 
@@ -222,7 +233,7 @@ def coerce_operator_constant(value: str, risk: Optional[Risk] = None) -> str:
 
     - 已是合法 JSON 数组串 → 解析后重新序列化，保证格式统一
     - 分号分隔的人名文本 → 切分后序列化
-    - 取不到任何人名 → 回退到风险责任人 / 安全接口人
+    - 取不到任何人名 → 回退到风险责任人，仍为空则安全接口人（口径 A）
     """
     raw = str(value or "").strip()
     persons: List[str] = []
@@ -261,7 +272,5 @@ def render_risk_type_extra(template_json: str, risk: Optional[Risk] = None) -> s
         return render_value(template_json, context)
     if not isinstance(mapping, dict):
         return render_value(template_json, context)
-    return json.dumps(
-        {key: render_value(value, context) for key, value in mapping.items()},
-        ensure_ascii=False,
-    )
+    # 初始责任人兜底与预览/测试发送同口径（render_field_values）
+    return json.dumps(render_field_values(mapping.items(), context), ensure_ascii=False)

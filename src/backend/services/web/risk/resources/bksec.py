@@ -38,6 +38,7 @@ from services.web.risk.bksec.service import (
     build_test_constants,
     build_ticket_preview,
     ensure_bksec_enabled,
+    fetch_risk_access_items,
     fill_failure_info,
     parse_bksec_config,
     sync_bksec_test_config,
@@ -80,16 +81,12 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
             return []
         if not settings.BKSEC_PROJECT_ID:
             raise serializers.ValidationError(gettext_lazy("未配置 BKSEC 项目（BKAPP_BKSEC_PROJECT_ID），无法查询风险类型"))
-        params = {
-            "page": 1,
-            "page_size": 100,
-            "project_id": settings.BKSEC_PROJECT_ID,
-            "is_formal": validated_request_data.get("is_formal", "true"),
-        }
-        if validated_request_data.get("name__icontains"):
-            params["name__icontains"] = validated_request_data["name__icontains"]
-        result = api.bk_sec.risk_access_list(**params)
-        items = result.get("results", []) or []
+        # 全量翻页（带缓存）后本地模糊过滤：缓存键只按 is_formal 维度，
+        # 名称过滤须在本地做，否则不同关键字互相污染缓存
+        items = fetch_risk_access_items(is_formal=validated_request_data.get("is_formal") or "true")
+        keyword = (validated_request_data.get("name__icontains") or "").strip().lower()
+        if keyword:
+            items = [item for item in items if keyword in (item.get("name") or "").lower()]
         return [_normalize_risk_type(item) for item in items if isinstance(item, dict)]
 
 

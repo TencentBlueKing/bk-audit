@@ -268,8 +268,6 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
 
     监控上报（BkSecConfigSyncFailedEvent）保留，供可观测；调用方据此决定是否阻断。
     """
-    from django.conf import settings
-
     from services.web.common.monitor import BkSecConfigSyncFailedEvent
 
     # 同步场景：测试发送（is_test=True）与策略保存走同一同步逻辑，但失败影响不同，需区分上报
@@ -292,18 +290,13 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         _report_fail(BkSecConfigSyncFailReason.API_URL_MISSING, message)
         return (False, message)
 
-    # 获取 token（调用 risk_access 列表接口，从结果中按 risk_type_id 匹配）
+    # 获取 token（risk_access 列表翻页查找：单页取会截断漏匹配；is_formal=true 优先、false 兜底）
     try:
-        from bk_resource import api
+        from services.web.risk.bksec.service import find_risk_access_item
 
-        # 注：BkApiResource 已按 IS_STANDARD_FORMAT 解包 data 信封，此处 result 即分页结果对象
-        result = api.bk_sec.risk_access_list(project_id=settings.BKSEC_PROJECT_ID or "", is_formal="true")
-        results = (result or {}).get("results", []) or []
-        token = ""
-        for item in results:
-            if str(item.get("id")) == str(config.risk_type_id):
-                token = item.get("token", "")
-                break
+        # 凭证查找不走缓存（use_cache=False），避免 token 轮换后向插件写入旧值
+        item = find_risk_access_item(config.risk_type_id)
+        token = (item or {}).get("token", "")
         if not token:
             message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id
             logger.warning(
@@ -327,6 +320,8 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
 
     # 调用插件 Config 同步 API
     try:
+        from bk_resource import api
+
         result = api.bk_sec_send_plugin.config_upsert(
             strategy_id=plugin_strategy_id,
             risk_type_id=config.risk_type_id,

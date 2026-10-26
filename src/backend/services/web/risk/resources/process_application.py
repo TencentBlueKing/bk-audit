@@ -446,6 +446,8 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
         # 处理套餐执行记录包含测试单（is_test 不过滤）
         nodes = TicketNode.objects.filter(action="AutoProcess")
+        # 数据范围收敛（对齐风险列表口径）：仅展示调用者有权查看的风险（IAM + 本地授权）的执行记录
+        nodes = nodes.filter(risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id"))
 
         # 执行记录 ID 精确过滤（TicketNode.id 为 UUID，格式校验在 RequestSerializer.validate_id）
         nodes = self._filter_by_record_id(nodes, record_id)
@@ -637,6 +639,10 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
         node_id = validated_request_data["id"]
         node = get_object_or_404(TicketNode, id=node_id)
         risk = Risk.objects.filter(risk_id=node.risk_id).first()
+        # 数据范围收敛（对齐风险列表口径）：风险存在但调用者无权查看（IAM + 本地授权）→ 404；
+        # 风险不存在（孤儿记录）维持展示，不携带任何风险数据
+        if risk is not None:
+            get_object_or_404(Risk.load_authed_risks(action=ActionEnum.LIST_RISK), risk_id=risk.risk_id)
         process_result = node.process_result or {}
 
         # 套餐信息：快照优先，历史节点无快照时按 (rule_id, rule_version) 兜底（与列表同口径）

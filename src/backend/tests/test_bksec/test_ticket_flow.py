@@ -132,6 +132,26 @@ class TestNewRiskBkSecFallback:
             assert risk.rule_id is None
             assert risk.status == RiskStatus.AWAIT_PROCESS
 
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock())
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock())
+    def test_operatorless_risk_walks_rule_when_bksec_enabled(self, settings):
+        """口径 A：启用 BKSEC 的策略无责任人也走规则（发单初始责任人兜底为安全接口人）"""
+        from services.web.strategy_v2.models import Strategy
+
+        strategy_id = RISK_INFO["strategy_id"]
+        _prepare_rule(settings, strategy_id)
+        strategy, _ = Strategy.objects.get_or_create(
+            strategy_id=strategy_id, defaults={"strategy_name": f"test_strategy_{strategy_id}"}
+        )
+        strategy.bksec_config = BKSEC_CONFIG_DATA
+        strategy.save(update_fields=["bksec_config"])
+        with RiskContext(risk_info={"operator": []}) as risk:
+            NewRisk(risk_id=risk.risk_id, operator="admin").run()
+            risk.refresh_from_db()
+            auto_rule = RiskRule.objects.get(auto_strategy_id=strategy_id)
+            assert risk.rule_id == auto_rule.rule_id
+            assert risk.status == RiskStatus.AUTO_PROCESS
+
 
 @pytest.mark.django_db
 class TestAutoProcessBkSecRender:
@@ -184,3 +204,46 @@ class TestAutoProcessBkSecRender:
             assert risk.risk_id in constants["${target}"]
             # operator 兜底模板已渲染（json.loads 校验通过，数组串契约）
             assert constants["${operator}"] == '["admin"]'
+
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_task_status", mock.Mock(return_value=SOPS_FLOW_STATUS)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_template_info", mock.Mock(return_value=SOPS_TEMPLATE_INFO)
+    )
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.create_task", mock.Mock(return_value=SOPS_FLOW_INFO))
+    @mock.patch("services.web.risk.handlers.ticket.api.bk_sops.start_task", mock.Mock(return_value=None))
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.auth_current_operator", mock.Mock())
+    @mock.patch("services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock())
+    def test_auto_process_operatorless_falls_back_to_security_person(self, settings):
+        """口径 A：无责任人风险发单时初始责任人兜底为安全接口人（${operator} 与事件体 fields 同口径）"""
+        strategy_id = RISK_INFO["strategy_id"]
+        _prepare_rule(settings, strategy_id)
+        from services.web.strategy_v2.models import Strategy
+
+        strategy, _ = Strategy.objects.get_or_create(
+            strategy_id=strategy_id, defaults={"strategy_name": f"test_strategy_{strategy_id}"}
+        )
+        strategy.bksec_config = BKSEC_CONFIG_DATA
+        strategy.save(update_fields=["bksec_config"])
+        with RiskContext(risk_info={"operator": []}) as risk:
+            risk.status = RiskStatus.AUTO_PROCESS
+            risk.rule_id = RiskRule.objects.get(auto_strategy_id=strategy_id).rule_id
+            risk.rule_version = 1
+            risk.save(update_fields=["status", "rule_id", "rule_version"])
+            with mock.patch(
+                "services.web.risk.bksec.render.load_risk_events",
+                mock.Mock(return_value=[]),
+            ), mock.patch(
+                "services.web.risk.bksec.contract.load_security_person",
+                mock.Mock(return_value=["sec_admin"]),
+            ):
+                AutoProcess(risk_id=risk.risk_id, operator="admin").run()
+            from services.web.risk.handlers.ticket import api as ticket_api
+
+            constants = ticket_api.bk_sops.create_task.call_args.kwargs["constants"]
+            # 口径 A：risk.operator 为空 → 兜底安全接口人（数组串契约）
+            assert constants["${operator}"] == '["sec_admin"]'
+            # 事件体 fields 初始责任人与预览同口径兜底
+            extra = json.loads(constants["${risk_type_extra}"])
+            assert extra["operator"] == "sec_admin"

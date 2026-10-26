@@ -21,6 +21,7 @@ from typing import List, Optional
 
 from bk_resource import api
 from django.conf import settings
+from django.core.cache import cache
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -28,13 +29,71 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.sops.constants import SOPSTaskStatus
 from services.web.risk.bksec.config import BkSecConfig
-from services.web.risk.bksec.constants import BKSEC_FIELD_INITIAL_OWNER
+from services.web.risk.bksec.constants import (
+    BKSEC_CACHE_TIMEOUT,
+    BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_RISK_ACCESS_MAX_PAGES,
+    BKSEC_RISK_ACCESS_PAGE_SIZE,
+    BKSEC_RISK_TYPES_CACHE_KEY,
+)
 from services.web.risk.bksec.contract import build_event_payload, build_plugin_constants
 from services.web.risk.bksec.render import build_risk_data
 from services.web.risk.models import Risk, TicketNode
 from services.web.strategy_v2.models import Strategy
 
 logger = logging.getLogger("celery")
+
+
+def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> List[dict]:
+    """
+    拉取风险类型列表（循环翻页取全量）
+
+    risk_access_list 响应为分页结构（count/results），默认页容量未知且可能截断，
+    单页取会导致 token 漏匹配（启用保存被误阻断）、下拉缺项，故统一翻页取全量；
+    短页 / 空页 / 达 count / 翻页上限即停，防止异常接口空转。
+
+    use_cache=True 时按 is_formal 维度缓存 BKSEC_CACHE_TIMEOUT 秒（下拉等只读展示，
+    容忍短暂陈旧）；token 等凭证查找须传 use_cache=False 保证新鲜，避免轮换后写旧值。
+    """
+    cache_key = "{}:{}".format(BKSEC_RISK_TYPES_CACHE_KEY, is_formal or "true")
+    if use_cache:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    items: List[dict] = []
+    for page in range(1, BKSEC_RISK_ACCESS_MAX_PAGES + 1):
+        result = (
+            api.bk_sec.risk_access_list(
+                project_id=settings.BKSEC_PROJECT_ID or "",
+                is_formal=is_formal or "true",
+                page=page,
+                page_size=BKSEC_RISK_ACCESS_PAGE_SIZE,
+            )
+            or {}
+        )
+        batch = result.get("results") or []
+        items.extend(item for item in batch if isinstance(item, dict))
+        total = result.get("count")
+        # 终止：空页 / 达 count / 短页（兼容接口不返回 count）
+        if not batch or (isinstance(total, int) and len(items) >= total) or len(batch) < BKSEC_RISK_ACCESS_PAGE_SIZE:
+            break
+    if use_cache:
+        cache.set(cache_key, items, timeout=BKSEC_CACHE_TIMEOUT)
+    return items
+
+
+def find_risk_access_item(risk_type_id: str, use_cache: bool = False) -> Optional[dict]:
+    """
+    按 risk_type_id 查找风险类型（取 token 用）
+
+    is_formal=true 优先，找不到再用 false 兜底（存量测试类型也可能配了 token）。
+    默认不走缓存：token 为凭证，须保证新鲜。
+    """
+    for is_formal in ("true", "false"):
+        for item in fetch_risk_access_items(is_formal=is_formal, use_cache=use_cache):
+            if str(item.get("id")) == str(risk_type_id):
+                return item
+    return None
 
 
 def ensure_bksec_enabled() -> None:
