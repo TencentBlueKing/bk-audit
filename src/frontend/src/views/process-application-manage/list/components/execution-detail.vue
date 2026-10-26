@@ -28,7 +28,7 @@
         <span class="header-split" />
         <span
           class="header-sub"
-          v-bk-tooltips="lineTip('header-task-name', detail?.task_name || '')"
+          v-bk-tooltips="headerTitleTip"
           @mouseenter="syncOverflow($event, 'header-task-name')">
           {{ detail?.task_name || '--' }}
         </span>
@@ -148,7 +148,9 @@
     <div
       v-else
       class="execution-detail-body">
-      <bk-loading :loading="loading">
+      <bk-loading
+        class="execution-detail-loading"
+        :loading="loading">
         <div
           v-if="detail"
           class="execution-detail"
@@ -178,10 +180,10 @@
               </div>
               <span
                 class="attempt-duration"
-                v-bk-tooltips="lineTip(`${item.id}-duration`, `${t('耗时')} ${liveDuration(item.status, item.started_at, item.duration)}`)"
+                v-bk-tooltips="lineTip(`${item.id}-duration`, `${t('耗时')} ${attemptDuration(item)}`)"
                 @mouseenter="syncOverflow($event, `${item.id}-duration`)">
                 <span class="attempt-duration-text">
-                  {{ t('耗时') }} {{ liveDuration(item.status, item.started_at, item.duration) }}
+                  {{ t('耗时') }} {{ attemptDuration(item) }}
                 </span>
               </span>
             </div>
@@ -274,7 +276,7 @@
                 </span>
               </span>
             </div>
-            <div class="desc-item">
+            <div class="desc-item is-center">
               <span class="desc-label"><span>{{ t('风险等级') }}：</span></span>
               <span class="desc-value">
                 <span
@@ -486,6 +488,13 @@
     delay: 80,
     extCls: 'execution-attempt-tip',
   });
+  const headerTitleTip = computed(() => ({
+    content: detail.value?.task_name || '',
+    disabled: !detail.value?.task_name || !overflowed['header-task-name'],
+    placement: 'bottom-start' as const,
+    delay: 80,
+    extCls: 'execution-header-tip',
+  }));
   const errorTip = (key: string, content: string, placement: 'top' | 'bottom' = 'top') => executionErrorTip(content, {
     placement,
     disabled: !content || !overflowed[key],
@@ -499,13 +508,18 @@
   ));
 
   const durationActive = computed(() => props.isShow && (
-    detail.value?.status === 'running'
-    || rounds.value.some(item => item.status === 'running')
-    || (detail.value?.nodes || []).some(item => item.status === 'running')
+    (!rounds.value.length && detail.value?.status === 'running')
+    || rounds.value.some(item => item.duration_ticking)
+    || visibleNodes.value.some(item => item.status === 'running')
   ));
   const now = useNow(durationActive);
   const liveDuration = (status: string, startedAt: string, fallback: string) => (
     resolveExecutionDuration(status, startedAt, fallback, now.value)
+  );
+  const attemptDuration = (item: { duration_ticking?: boolean; started_at: string; duration: string }) => (
+    item.duration_ticking
+      ? resolveExecutionDuration('running', item.started_at, '', now.value)
+      : (item.duration || '--')
   );
 
   const switchAttempt = (item: ExecutionDetailModel['attempts'][number]) => {
@@ -533,22 +547,24 @@
 
   const basicRows = computed(() => {
     const current = detail.value;
+    const active = activeAttempt.value;
     const packageName = current?.application_name
       ? `${current.application_name}（ ${current.application_id} ）`
       : '';
+    const duration = active
+      ? attemptDuration(active)
+      : (current?.status === 'running'
+        ? resolveExecutionDuration('running', current.started_at, '', now.value)
+        : text(current?.duration));
     return [
       { label: `${t('任务名称')}：`, value: text(current?.task_name), jump: true },
       { label: `${t('任务ID')}：`, value: text(current?.task_id) },
       { label: `${t('处理套餐')}：`, value: text(packageName) },
       { label: `${t('触发方式')}：`, value: current ? triggerText(current.trigger_type) : '--' },
-      { label: `${t('开始时间')}：`, value: text(activeAttempt.value?.started_at || current?.started_at) },
-      { label: `${t('结束时间')}：`, value: text(activeAttempt.value?.ended_at || current?.ended_at) },
-      { label: `${t('执行人')}：`, value: text(current?.executor) },
-      { label: `${t('耗时')}：`, value: liveDuration(
-        activeAttempt.value?.status || current?.status || '',
-        activeAttempt.value?.started_at || current?.started_at || '',
-        activeAttempt.value?.duration || current?.duration || '',
-      ) },
+      { label: `${t('开始时间')}：`, value: text(active ? active.started_at : current?.started_at) },
+      { label: `${t('结束时间')}：`, value: text(active ? active.ended_at : current?.ended_at) },
+      { label: `${t('执行人')}：`, value: text(active ? active.executor : current?.executor) },
+      { label: `${t('耗时')}：`, value: duration },
     ];
   });
 
@@ -632,6 +648,8 @@
   width: 100%;
   min-width: 0;
   padding-right: 18px;
+  overflow: hidden;
+  flex-wrap: nowrap;
 }
 
 .header-title {
@@ -639,6 +657,8 @@
   font-weight: var(--audit-font-weight-regular);
   line-height: var(--audit-line-height-lg);
   color: var(--audit-neutral-text-01);
+  white-space: nowrap;
+  flex: none;
 }
 
 .header-retry {
@@ -694,10 +714,12 @@
   width: 1px;
   height: 12px;
   background: var(--audit-neutral-border-01);
+  flex: none;
 }
 
 .header-sub {
   min-width: 0;
+  max-width: 480px;
   overflow: hidden;
   font-size: var(--audit-font-size-base);
   line-height: var(--audit-line-height-base);
@@ -733,12 +755,13 @@
   min-height: 0;
 }
 
-.execution-detail-body :deep(.bk-loading-wrapper) {
+.execution-detail-loading {
   display: flex;
   flex: 1;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .execution-detail {
@@ -952,6 +975,14 @@
   gap: var(--audit-space-8);
 }
 
+.desc-item.is-center {
+  align-items: center;
+}
+
+.desc-item.is-center .desc-label {
+  height: auto;
+}
+
 .desc-label {
   height: var(--audit-line-height-sm);
   color: var(--audit-neutral-text-02);
@@ -972,6 +1003,10 @@
   flex: 1;
   word-break: break-all;
   overflow-wrap: anywhere;
+}
+
+.desc-value.is-jump {
+  align-items: center;
 }
 
 .desc-value-text {
@@ -1004,8 +1039,13 @@
 .jump-btn {
   display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   padding: 0;
   font-size: 16px;
+  line-height: 1;
   color: var(--audit-brand-02);
   cursor: pointer;
   background: transparent;
@@ -1153,12 +1193,25 @@
 }
 
 .execution-detail-sideslider.bk-modal .bk-modal-content > div {
-  display: flex;
-  flex: 1;
+  display: flex !important;
+  flex: 1 1 auto;
   flex-direction: column;
-  height: 100%;
+  width: 100%;
+  height: 100% !important;
   min-height: 0;
   overflow: hidden;
+}
+
+.execution-detail-sideslider .bk-sideslider-title {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.execution-header-tip {
+  max-width: 480px;
+  line-height: 20px;
+  word-break: break-all;
+  white-space: normal;
 }
 
 .execution-detail-sideslider .bk-sideslider-content,

@@ -20,11 +20,14 @@
       class="info-label"
       :style="labelStyle">
       <span
+        v-if="description"
         v-bk-tooltips="{
-          disabled: !description,
           content: description
         }"
-        :class="[description ? 'tips' : '']">
+        class="tips">
+        {{ label }}:
+      </span>
+      <span v-else>
         {{ label }}:
       </span>
     </div>

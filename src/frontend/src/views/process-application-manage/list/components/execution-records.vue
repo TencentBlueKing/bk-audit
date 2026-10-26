@@ -18,19 +18,8 @@
   <audit-sideslider
     v-model:is-show="isShow"
     :show-footer="false"
-    show-header-slot
     :title="t('执行记录')"
     :width="1280">
-    <template #header>
-      <div>
-        <span>{{ t('执行记录') }}</span>
-        <span
-          v-if="headerExtra"
-          class="execution-header-extra">
-          {{ headerExtra }}
-        </span>
-      </div>
-    </template>
     <div
       ref="panelRef"
       class="execution-records"
@@ -117,7 +106,8 @@
   interface SearchKey {
     id: string;
     name: string;
-    values: SearchValue[];
+    type?: string;
+    values?: SearchValue[];
   }
 
   const now = useNow(() => props.isShow);
@@ -152,11 +142,6 @@
   const presetLabel = computed(() => (
     props.applicationId ? `${props.applicationName || ''}(${props.applicationId})` : ''
   ));
-  const headerExtra = computed(() => {
-    if (presetLabel.value) return presetLabel.value;
-    if (props.riskId) return `${t('风险ID')}：${props.riskId}`;
-    return '';
-  });
 
   const statusText = (status: ExecutionRecord['status']) => ({
     success: t('执行成功'),
@@ -229,6 +214,15 @@
   const fieldValue = (id: string) => {
     const item = searchKey.value.find(key => key.id === id);
     return (item?.values || []).map(value => value.id).filter(Boolean).join(',');
+  };
+
+  const keywordValue = () => {
+    const knownIds = new Set(searchData.value.map(item => item.id));
+    return searchKey.value
+      .filter(item => item.type === 'text' || !knownIds.has(item.id))
+      .map(item => (item.name || item.id || '').trim())
+      .filter(Boolean)
+      .join(',');
   };
 
   const linkedFilterIds = ['application_name', 'trigger_type', 'status'];
@@ -313,6 +307,7 @@
             class="status-retry"
             data-testid="execution-status-retry"
             type="button"
+            v-bk-tooltips={{ content: t('重试') }}
             onClick={() => openRetry(row)}>
             <audit-icon type="redo" />
           </button>
@@ -385,7 +380,7 @@
       minWidth: 281,
       ellipsis: true,
       cell: (_h: unknown, { row }: { row: ExecutionRecord }) => (
-        <span class="copy-cell">
+        <span class="copy-cell is-follow">
           <OverflowText
             text={row.task_name}
             tipKey={`name-${row.task_id}`}
@@ -528,6 +523,7 @@
       application_name: packageNames.length ? packageNames.join(',') : undefined,
       risk_id: fieldValue('risk_id') || undefined,
       executor: fieldValue('executor') || undefined,
+      keyword: keywordValue() || undefined,
       trigger_type: params.trigger_type || fieldValue('trigger_type') || undefined,
       status: params.status || fieldValue('status') || undefined,
       scene_id: props.sceneId || undefined,
@@ -685,14 +681,6 @@
   });
 </script>
 <style lang="postcss" scoped>
-.execution-header-extra {
-  padding-left: var(--audit-space-8);
-  margin-left: var(--audit-space-8);
-  font-size: var(--audit-font-size-sm);
-  color: var(--audit-neutral-text-03);
-  border-left: 1px solid var(--audit-neutral-border-01);
-}
-
 .execution-records {
   display: flex;
   flex: none;
@@ -811,6 +799,16 @@
   gap: 8px;
   width: 100%;
   min-width: 0;
+}
+
+:deep(.copy-cell.is-follow) {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+}
+
+:deep(.copy-cell.is-follow .copy-text) {
+  flex: 0 1 auto;
 }
 
 :deep(.risk-id-cell .task-link) {

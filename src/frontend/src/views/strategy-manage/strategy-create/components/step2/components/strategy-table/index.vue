@@ -34,7 +34,39 @@
       </div>
     </div>
 
-    <div class="table-section">
+    <div
+      v-if="showFieldSkeleton"
+      class="skeleton-rows"
+      data-testid="strategy-field-skeleton">
+      <div
+        v-for="row in skeletonRows"
+        :key="row"
+        class="skeleton-row">
+        <div class="skeleton-cell field-name">
+          <audit-skeleton
+            height="16"
+            width="96" />
+        </div>
+        <div class="skeleton-cell display-name">
+          <audit-skeleton
+            height="16"
+            width="120" />
+        </div>
+        <div class="skeleton-cell is-priority">
+          <audit-skeleton
+            height="16"
+            width="36" />
+        </div>
+        <div class="skeleton-cell drill-config">
+          <audit-skeleton
+            height="16"
+            width="88" />
+        </div>
+      </div>
+    </div>
+    <div
+      v-else
+      class="table-section">
       <div class="rows-container">
         <table-row
           ref="tableRowRef"
@@ -188,7 +220,8 @@
     ];
   });
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const skeletonRows = [1, 2, 3, 4, 5, 6];
+  const { loading: fieldsLoading } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
@@ -271,6 +304,7 @@
     fetchAllTools(buildToolListParams());
     fetchToolTags(buildToolListParams());
   };
+  const showFieldSkeleton = computed(() => fieldsLoading.value && tableData.value.length === 0);
 
   defineExpose<Exposes>({
     getData() {
@@ -308,6 +342,42 @@
       background-color: #f5f7fa;
       font-weight: 500;
       color: #313238;
+
+      &.field-name {
+        width: 250px;
+      }
+
+      &.display-name {
+        width: 250px;
+      }
+
+      &.is-priority {
+        width: 200px;
+      }
+
+      &.drill-config {
+        width: 250px;
+      }
+
+      &:last-child {
+        flex: 1;
+      }
+    }
+  }
+
+  .skeleton-rows {
+    border-bottom: 1px solid #dcdee5;
+  }
+
+  .skeleton-row {
+    display: flex;
+    height: 42px;
+    background: #fff;
+
+    .skeleton-cell {
+      @include cell-base;
+
+      background: #fff;
 
       &.field-name {
         width: 250px;

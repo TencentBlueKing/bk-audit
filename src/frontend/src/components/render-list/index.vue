@@ -193,8 +193,10 @@
   const slot = useSlots();
   const tableRef = ref();
   const rootRef = ref();
-  // 切换场景重置排序时递增，强制表头按未排序态重新初始化
+  // 切换场景清排序，或列变少后重挂表格，让列宽按当前容器重新计算
   const tableRenderKey = ref(0);
+  const countCheckedColumns = (setting?: { checked?: string[] } | null) => setting?.checked?.length ?? 0;
+  const visibleColumnCount = ref(countCheckedColumns(props.settings as { checked?: string[] } | undefined));
   const { t } = useI18n();
   const pagination = reactive<IPagination>({
     count: 0,
@@ -489,7 +491,15 @@
     isReady = false;
   };
   const handleSettingChange = (setting: ISettings) => {
+    const nextCount = countCheckedColumns(setting);
+    const shouldRemount = visibleColumnCount.value > 0 && nextCount < visibleColumnCount.value;
+    visibleColumnCount.value = nextCount;
     emits('onSettingChange', setting);
+    // 列变少时 bk-table 只改 col 宽度，滚动容器仍保持变少前的宽度，要滚一下才重排。
+    // 设置面板在抛出事件前已关闭，这里重挂表格，按当前容器宽度重新布局。
+    if (shouldRemount) {
+      tableRenderKey.value += 1;
+    }
   };
   // 清除表头排序箭头高亮（bk-table 内部 sortType 不会随 column.sort 变更自动重置）
   const clearSortActiveUI = () => {

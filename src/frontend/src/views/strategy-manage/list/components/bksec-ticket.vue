@@ -33,7 +33,9 @@
               class="bksec-detail-label-text"
               @mouseenter="syncLabelOverflow($event, 'risk-type')">{{ t('风险类型') }}：</span>
           </span>
-          <span class="bksec-detail-value is-type">{{ riskTypeLabel }}</span>
+          <span class="bksec-detail-value is-type">
+            <span class="bksec-detail-value-text">{{ riskTypeLabel }}</span>
+          </span>
         </div>
         <div
           v-for="field in fields"
@@ -45,7 +47,9 @@
               class="bksec-detail-label-text"
               @mouseenter="syncLabelOverflow($event, field.id)">{{ fieldName(field) }}：</span>
           </span>
-          <span class="bksec-detail-value">{{ displayValue(field.id) }}</span>
+          <span class="bksec-detail-value">
+            <span class="bksec-detail-value-text">{{ displayValue(field.id) }}</span>
+          </span>
         </div>
       </div>
     </template>
@@ -131,27 +135,36 @@
 }
 
 .bksec-detail-list {
-  display: grid;
-  grid-template-columns: minmax(0, 124px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   width: 1000px;
-  column-gap: var(--audit-space-8);
   font-size: var(--audit-font-size-sm);
-  line-height: var(--audit-line-height-sm);
+  line-height: 20px;
 }
 
 .bksec-detail-row {
-  display: contents;
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 6px 0;
+  gap: var(--audit-space-8);
 }
 
 .bksec-detail-label,
 .bksec-detail-value {
-  min-height: 32px;
-  padding: 6px 0;
+  min-height: 0;
+  padding: 0;
 }
 
 .bksec-detail-label {
+  display: flex;
+  flex: 0 0 124px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: 124px;
+  min-width: 124px;
   max-width: 124px;
-  min-width: 0;
   overflow: hidden;
 }
 
@@ -159,6 +172,8 @@
   display: block;
   max-width: 100%;
   overflow: hidden;
+  font-size: var(--audit-font-size-sm);
+  line-height: 20px;
   color: var(--audit-neutral-text-02);
   text-align: right;
   text-overflow: ellipsis;
@@ -166,9 +181,23 @@
 }
 
 .bksec-detail-value {
+  display: flex;
+  flex: 1 1 0%;
+  align-items: flex-start;
+  width: 0;
   min-width: 0;
+  overflow: hidden;
   color: var(--audit-neutral-text-01);
+}
+
+.bksec-detail-value-text {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: var(--audit-font-size-sm);
+  line-height: 20px;
   white-space: pre-wrap;
+  word-break: break-word;
   overflow-wrap: break-word;
 }
 

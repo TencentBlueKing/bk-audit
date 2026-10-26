@@ -17,7 +17,8 @@
 <template>
   <div
     class="bksec-var-panel"
-    data-testid="bksec-variable-picker">
+    data-testid="bksec-variable-picker"
+    @mousedown="keepFieldFocus">
     <div class="bksec-var-search">
       <audit-icon
         class="bksec-var-search-icon"
@@ -84,6 +85,13 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+
+  // 点变量、切换分组时不把焦点从字段输入框抢走，避免先失焦再插入。
+  const keepFieldFocus = (event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element) || target.closest('input, textarea')) return;
+    event.preventDefault();
+  };
   const keyword = ref('');
   const activeKey = ref<VariableGroup['key']>('risk');
 
