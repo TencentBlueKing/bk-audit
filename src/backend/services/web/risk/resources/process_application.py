@@ -323,8 +323,10 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
 
     @staticmethod
     def _enum_keyword_q(keyword: str, labels: dict, make_q) -> Q:
-        """枚举字段关键词展开：内部值全等（大小写不敏感）或与展示词互为子串
+        """枚举字段关键词展开：内部值全等（大小写不敏感）或 keyword 是展示词的子串
 
+        - 只做「keyword ⊂ 展示词」单向匹配：`成功` → `执行成功`；反向（展示词 ⊂ keyword）
+          会把长关键词误展开（如 `frodomei测试专用` 含「测试」→ 全部 trigger=test），故不支持
         - 子串命中要求 keyword 长度 >= 2，防单字噪音（如「中」误命中「执行中」）
         - 英文部分匹配（如 "aut"）不展开，交由字段 icontains 兜底
         - 未命中贡献空条件（Q()），不影响其他字段的 OR
@@ -333,7 +335,7 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
         kw_lower = keyword.lower()
         for value, label in labels.items():
             hit = kw_lower == value.lower()
-            if not hit and len(keyword) >= 2 and (keyword in label or label in keyword):
+            if not hit and len(keyword) >= 2 and keyword in label:
                 hit = True
             if hit:
                 q |= make_q(value)
