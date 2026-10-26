@@ -936,6 +936,7 @@ class MultiRuleValidateMixin:
         """校验发现规则集（attrs["rules"]）；由 Create/Update 序列化器在 validate() 中显式调用"""
         rules = attrs.get("rules") or []
         strategy_type = attrs.get("strategy_type")
+        binding_type = attrs.get("binding_type")
 
         # 模型策略不允许有发现规则
         if strategy_type != StrategyType.RULE.value:
@@ -1031,6 +1032,9 @@ class MultiRuleValidateMixin:
                         gettext("规则[%s]的where条件操作符[%s]不合法") % (rule.get("rule_name"), operator)
                     )
 
+            # 场景策略处理人必填（全局策略处理人在分派规则维护，rules[].processor 有意留空）
+            if binding_type != BindingType.PLATFORM_BINDING and not rule.get("processor"):
+                raise serializers.ValidationError(gettext("发现规则[%s]的processor不能为空") % rule.get("rule_name"))
             # 规则级通知组（processor/follower）：存在性 + 场景归属校验
             notice_group_ids = list(set((rule.get("processor") or []) + (rule.get("follower") or [])))
             self._validate_notice_groups("rules", notice_group_ids, scene_id)
