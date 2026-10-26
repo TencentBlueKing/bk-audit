@@ -385,7 +385,7 @@ export default {
     已关单风险仅支持人工关单: 'Closed risks can only be closed manually',
     '所选风险策略不同，不支持批量处理套餐': 'Selected risks come from different strategies, so processing tools are unavailable',
     '所选风险状态不同，仅支持标记误报。': 'Selected risks have different statuses. Only marking as false positive is available.',
-    '所选风险状态不同，仅支持人工关单。': 'Selected risks have different statuses. Only manual closing is available.',    '处理套餐一次最多 100 条': 'At most 100 risks can use a processing tool at a time',
+    '所选风险状态不同，仅支持人工关单。': 'Selected risks have different statuses. Only manual closing is available.',
     已选择: 'Selected',
     '条风险，提交后将按相同处理方法统一执行。': 'risks. They will be processed with the same action after submit.',
     批量确认风险单: 'Batch confirm risks',
