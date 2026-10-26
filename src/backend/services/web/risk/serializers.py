@@ -762,7 +762,11 @@ class PAExecutionRecordInfoSerializer(serializers.Serializer):
     risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
     pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
     pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
-    operator = serializers.CharField(label=gettext_lazy("执行人"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为重试人）；记录发起人见 retry_history 首条快照"),
+    )
     start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
     finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
     sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
@@ -796,7 +800,11 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
     pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
     pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
     trigger = serializers.CharField(label=gettext_lazy("触发方式"), allow_blank=True)
-    operator = serializers.CharField(label=gettext_lazy("执行人"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为重试人）；记录发起人见 retry_history 首条快照"),
+    )
     start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
     finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
     sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
@@ -816,7 +824,8 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
         label=gettext_lazy("重试记录"),
         help_text=gettext_lazy(
             "重试前全量快照[{state, operator, attempts}]：state 为该轮的任务级状态（与 sops_state 同口径，"
-            "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True"
+            "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True；"
+            "operator 首条为记录发起人，其余为发起该次重试的操作人（顶层 operator 为最新操作人）"
         ),
     )
     attempts = serializers.JSONField(

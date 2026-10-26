@@ -1393,10 +1393,13 @@ class RetryAutoProcess(RiskMeta):
             # 重试前快照：固化本次被覆盖前的失败现场（error_message 等），仅 append 不覆盖。
             # 全量记录（含成功/未执行节点）：首次执行的完整现场只存在于快照中，重试后顶层状态会被整体覆盖
             retry_history = process_result.get("retry_history") or []
+            retry_operator = get_request_username()
             retry_history.append(
                 {
                     "state": round_state,
-                    "operator": get_request_username(),
+                    # 首条快照是首次执行的现场，归属记录发起人（派单/发测试单的人）；
+                    # 其余快照归属发起该次重试的操作人
+                    "operator": node.operator if not retry_history else retry_operator,
                     "attempts": extract_attempt_records(status, retried_node_ids=retried_before),
                 }
             )
@@ -1404,11 +1407,13 @@ class RetryAutoProcess(RiskMeta):
             # 累计被重试过的节点：本次重试并入，供后续快照与当前 attempts 标记使用
             process_result["retried_node_ids"] = sorted(retried_before | retried_node_ids)
             node.status = TicketNodeStatus.RUNNING
+            # 顶层展示最新操作人：发起人已固化在首条快照中
+            node.operator = retry_operator
             # 落库回源到的最新状态（含失败原因），仅将任务级 state 置为执行中
             process_result["status"] = status
             process_result["status"]["state"] = SOPSTaskStatus.RUNNING
             node.process_result = process_result
-            node.save(update_fields=["status", "process_result"])
+            node.save(update_fields=["status", "process_result", "operator"])
             # 若最后一个节点为处理套餐节点，则更新状态为自动处理中，并清理处理人
             if risk.last_history.id == node.id:
                 risk.status = RiskStatus.AUTO_PROCESS

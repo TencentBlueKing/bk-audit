@@ -264,17 +264,21 @@ class GetTaskStatus(TicketResourceMeta):
     def _find_latest_test_node(risk_id: str):
         """
         按样例风险单+当前登录用户定位最近一条测试单（刷新后恢复轮询用）
+
+        重试会把 operator 更新为最新操作人，故除发起人外还需匹配历史重试人，
+        避免"他人重试后本人刷新即定位不到自己的测试单"。
         """
-        return (
-            TicketNode.objects.filter(
-                is_test=True,
-                action="AutoProcess",
-                risk_id=risk_id,
-                operator=get_request_username(),
-            )
-            .order_by("-timestamp")
-            .first()
-        )
+        username = get_request_username()
+        candidates = TicketNode.objects.filter(is_test=True, action="AutoProcess", risk_id=risk_id).order_by(
+            "-timestamp"
+        )[:BKSEC_TEST_NODE_SCAN_LIMIT]
+        for node in candidates:
+            if node.operator == username:
+                return node
+            history = (node.process_result or {}).get("retry_history") or []
+            if any((item or {}).get("operator") == username for item in history):
+                return node
+        return None
 
     @staticmethod
     def _find_test_node(task_id: str):
