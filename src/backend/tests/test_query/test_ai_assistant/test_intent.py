@@ -106,6 +106,68 @@ class MessagePlanSchemaTest(AIAssistantTestCase):
         self.assertEqual(field_type["default"], "string")
 
 
+class MessagePlanningJsonFeedbackTest(AIAssistantTestCase):
+    """语法诊断帮助纠错，但不能改变计划接受条件或截断下一轮原文。"""
+
+    def test_syntax_feedback_points_to_original_response(self):
+        cases = (
+            ('{\n  "messages": [}\n', "第 2 行，第 16 列", "字符位置 17", "messages"),
+            ('说明\n```json\n{"messages":[}\n```', "第 3 行，第 14 列", "字符位置 24", "messages"),
+            (
+                '{"outcome":"dispatch","messages":[{"message_type":"LOG_SEARCH",'
+                '"message_input":{"condition":{"conditions":[]}}]}',
+                "第 1 行，第 111 列",
+                "字符位置 110",
+                "conditions",
+            ),
+        )
+        for raw_output, line_column, position, nearby_key in cases:
+            with self.subTest(raw_output=raw_output):
+                with self.assertRaises(AIOutputInvalidError) as caught:
+                    MessagePlanningService._parse_and_validate(raw_output)
+
+                feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+                diagnostic = feedback.validation_errors[0]
+                self.assertEqual((diagnostic["path"], diagnostic["code"]), ("$", "invalid_json"))
+                self.assertIn(line_column, diagnostic["message"])
+                self.assertIn(position, diagnostic["message"])
+                self.assertIn("⟦错误位置⟧", diagnostic["message"])
+                self.assertIn(nearby_key, diagnostic["message"])
+                self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_syntax_excerpt_is_bounded_while_retry_keeps_full_output(self):
+        raw_output = '{"prefix_marker":"' + "x" * 3000 + '","messages":[]'
+        with self.assertRaises(AIOutputInvalidError) as caught:
+            MessagePlanningService._parse_and_validate(raw_output)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+        message = feedback.validation_errors[0]["message"]
+        self.assertLess(len(message), 512)
+        self.assertNotIn("prefix_marker", message)
+        self.assertIn("messages", message)
+        self.assertIn("⟦错误位置⟧", message)
+        self.assertEqual(len(caught.exception.extra["raw_output"]), 2048)
+        self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_non_object_json_stays_invalid(self):
+        for raw_output in ("[]", "null", '"plain text"'):
+            with self.subTest(raw_output=raw_output), self.assertRaises(AIOutputInvalidError) as caught:
+                MessagePlanningService._parse_and_validate(raw_output)
+
+            feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+            self.assertEqual(feedback.validation_errors[0]["code"], "invalid_json")
+            self.assertEqual(feedback.previous_output, raw_output)
+
+    def test_valid_wrapped_plan_still_uses_existing_extraction(self):
+        raw_output = '说明\n```json\n{"outcome":"error","messages":[],"error_code":"SYSTEM_REQUIRED"}\n```\n结束'
+
+        plan = MessagePlanningService._parse_and_validate(raw_output)
+
+        self.assertEqual(plan.outcome, "error")
+        self.assertEqual(plan.messages, [])
+        self.assertEqual(plan.error_code, "SYSTEM_REQUIRED")
+
+
 @mock.patch(f"{INTENT_MODULE}.api.bk_plugins_ai_agent.chat_completion")
 class MessagePlanningContextTest(AIAssistantTestCase):
     """通用规划请求只携带当前决策需要的动态上下文。"""
@@ -151,6 +213,30 @@ class MessagePlanningContextTest(AIAssistantTestCase):
         self.assertEqual([item["role"] for item in history], ["role", "user", "assistant", "user"])
         self.assertEqual(history[2]["content"], previous_output)
         self.assertIn("dispatch outcome requires messages", history[3]["content"])
+
+    def test_syntax_diagnostic_reaches_next_agent_request(self, mock_chat):
+        """从真实解析失败构造的定位信息必须进入下一次模型请求。"""
+
+        raw_output = '{\n  "messages": [}\n'
+        mock_chat.side_effect = (
+            raw_output,
+            '{"outcome":"dispatch","messages":[{"message_type":"LOG_SEARCH",'
+            '"message_input":{"condition":{"conditions":[]}}}]}',
+        )
+        context = self._build_context()
+        with self.assertRaises(AIOutputInvalidError) as caught:
+            MessagePlanningService.plan(context=context)
+
+        feedback = MessagePlanningService.build_retry_feedback(error=caught.exception, plan=None)
+        plan = MessagePlanningService.plan(context=context, retry_feedback=feedback)
+
+        self.assertEqual(plan.outcome, "dispatch")
+        self.assertEqual([message.message_type for message in plan.messages], ["LOG_SEARCH"])
+        history = mock_chat.call_args.kwargs["chat_history"]
+        self.assertEqual([item["role"] for item in history], ["role", "user", "assistant", "user"])
+        self.assertEqual(history[2]["content"], raw_output)
+        self.assertIn("第 2 行，第 16 列", history[3]["content"])
+        self.assertIn("⟦错误位置⟧", history[3]["content"])
 
     def test_scope_validation_failure_keeps_full_agent_output_for_retry(self, mock_chat):
         """plan 内部范围校验失败时也必须保留可纠正的上一轮完整输出。"""
