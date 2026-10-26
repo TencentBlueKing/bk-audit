@@ -1995,6 +1995,17 @@ class TestRetrieveRiskDetail(TestCase):
         )
         self.search_event_mock = self.search_event_patcher.start()
         self.addCleanup(self.search_event_patcher.stop)
+        # 保留 Web 请求的权限包装，只隔离外部 IAM 查询，避免后台测试入口跳过这段逻辑。
+        self.enterContext(mock.patch("apps.permission.handlers.drf.is_backend", return_value=False))
+        self.enterContext(
+            mock.patch(
+                "iam.iam.IAM.batch_resource_multi_actions_allowed",
+                return_value={
+                    risk_id: {ActionEnum.EDIT_RISK.id: True, ActionEnum.PROCESS_RISK.id: True}
+                    for risk_id in ("risk-detail", "risk-open", "risk-manual-unsynced-status")
+                },
+            )
+        )
 
     def test_retrieve_risk_returns_unsynced_manual_events(self):
         in_range = ManualEvent.objects.create(
@@ -2038,6 +2049,7 @@ class TestRetrieveRiskDetail(TestCase):
         data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
 
         self.assertEqual(data["scene_id"], scene.scene_id)
+        self.assertEqual(data["permission"], {ActionEnum.EDIT_RISK.id: True, ActionEnum.PROCESS_RISK.id: True})
 
     def test_retrieve_risk_without_end_time_returns_later_manual_events(self):
         open_risk = Risk.objects.create(

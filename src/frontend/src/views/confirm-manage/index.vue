@@ -27,12 +27,20 @@
     <div
       class="risk-manage-list">
       <div class="add-button">
-        <bk-button
-          :disabled="!selectionMeta.count"
-          theme="primary"
-          @click="handleBatchConfirm">
-          {{ t('批量处理') }}
-        </bk-button>
+        <span
+          v-bk-tooltips="{
+            content: batchConfirmDisabledReason ? t(batchConfirmDisabledReason) : '',
+            disabled: !batchConfirmDisabledReason,
+          }"
+          class="batch-confirm-btn-wrapper"
+          :class="{ 'is-batch-disabled': !!batchConfirmDisabledReason }">
+          <bk-button
+            :disabled="!!batchConfirmDisabledReason"
+            theme="primary"
+            @click="handleBatchConfirm">
+            {{ t('批量处理') }}
+          </bk-button>
+        </span>
         <risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runExport"
@@ -95,6 +103,11 @@
   import { useRiskColumns, touchRiskColumnDeps } from '@views/risk-manage/table-columns/risk/use-columns';
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
+  import {
+    BATCH_SYNC_LIMIT,
+    REASON_LIMIT,
+    REASON_NONE,
+  } from '@views/risk-manage/batch-handle/evaluate';
 
   import BatchConfirmDialog from './components/batch-confirm-dialog.vue';
   import FieldConfig from './components/config';
@@ -209,6 +222,17 @@
     selectionMeta.value = meta;
   };
 
+  const batchConfirmDisabledReason = computed(() => {
+    const { count } = selectionMeta.value;
+    if (!count) {
+      return REASON_NONE;
+    }
+    if (count > BATCH_SYNC_LIMIT) {
+      return REASON_LIMIT;
+    }
+    return '';
+  });
+
   const {
     isExportEnabled,
     exportTooltip,
@@ -305,6 +329,10 @@
   const handleBatchConfirm = async () => {
     if (!selectionMeta.value.count) {
       messageWarn(t('请选择要操作的数据'));
+      return;
+    }
+    if (selectionMeta.value.count > BATCH_SYNC_LIMIT) {
+      messageWarn(t(REASON_LIMIT));
       return;
     }
     const { keys } = await listRef.value.resolveExportSelection();
@@ -422,6 +450,19 @@
       align-items: center;
       gap: 8px;
       padding-bottom: 5px;
+    }
+
+    .batch-confirm-btn-wrapper {
+      display: inline-flex;
+
+      /* 禁用的原生 button 不派发鼠标事件，需透传给外层才能触发 tooltip */
+      &.is-batch-disabled {
+        cursor: not-allowed;
+
+        .bk-button {
+          pointer-events: none;
+        }
+      }
     }
   }
 }

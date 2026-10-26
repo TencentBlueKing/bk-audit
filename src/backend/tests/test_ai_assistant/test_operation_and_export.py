@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.utils import timezone
 
+from core.exceptions import ValidationError as RequestValidationError
 from services.web.ai_assistant.constants import ExecutionStatus, MessageType
 from services.web.ai_assistant.exceptions import (
     InvalidMessageSnapshot,
@@ -25,7 +26,10 @@ from services.web.query.ai_assistant.constants import SNAPSHOT_DEFAULT_COLUMNS
 from services.web.query.ai_assistant.exceptions import (
     AIAssistantError as QueryAIAssistantError,
 )
-from services.web.query.ai_assistant.exceptions import AIPermissionDeniedError
+from services.web.query.ai_assistant.exceptions import (
+    AIOutputInvalidError,
+    AIPermissionDeniedError,
+)
 from services.web.query.ai_assistant.services.export import PreviewExportFile
 from tests.test_ai_assistant.base import (
     TARGET_SYSTEM_ID,
@@ -509,6 +513,39 @@ class TestMessageExport(AIAssistantPlatformTestCase):
         ):
             with self.assertRaises(LogExportPermissionDenied):
                 self.service.create_full_export(message_uid=str(message.uid), export_config={})
+
+    def test_full_export_default_uses_ai_display_columns(self):
+        """缺省配置与 ai_standard 一致，不修改调用方配置。"""
+        message = self.create_log_search_message()
+        config = {}
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            return_value={"id": 123, "status": "READY"},
+        ) as create:
+            result = self.service.create_full_export(message_uid=str(message.uid), export_config=config)
+        self.assertEqual(config, {})
+        self.assertEqual(result, {"export_task_id": 123, "status": "READY"})
+        self.assertEqual(
+            create.call_args.kwargs["export_config"],
+            {
+                "field_scope": "specified",
+                "source": "ai_assistant",
+                "fields": [
+                    {"raw_name": name, "display_name": label, "keys": []} for name, label in SNAPSHOT_DEFAULT_COLUMNS
+                ],
+            },
+        )
+
+    def test_full_export_invalid_config_is_not_execution_failure(self):
+        """错误列配置返回 400 参数错误，不能提示稍后重试。"""
+        message = self.create_log_search_message()
+        with mock.patch(
+            "services.web.ai_assistant.services.log_export.FullExportService.create_task",
+            side_effect=AIOutputInvalidError(),
+        ):
+            with self.assertRaises(RequestValidationError) as caught:
+                self.service.create_full_export(message_uid=str(message.uid), export_config={"field_scope": "bad"})
+        self.assertEqual(caught.exception.STATUS_CODE, 400)
 
     def _make_nl_parent_with_extension_fields(self, extension_fields):
         from services.web.query.ai_assistant.schemas import SelectionFieldMeta

@@ -49,9 +49,8 @@
       v-model:is-show="isShow"
       theme="primary"
       :title="t('批量转单')"
-      @closed="handleClosed"
-      @confirm="handleConfirm">
-      <audit-form
+      @closed="handleClosed">
+      <bk-form
         ref="formRef"
         form-type="vertical"
         :model="formData"
@@ -77,7 +76,21 @@
             style="resize: none;"
             type="textarea" />
         </bk-form-item>
-      </audit-form>
+      </bk-form>
+      <template #footer>
+        <bk-button
+          :loading="transLoading"
+          theme="primary"
+          @click="handleConfirm">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          :disabled="transLoading"
+          @click="isShow = false">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
     </bk-dialog>
   </div>
 </template>
@@ -152,22 +165,11 @@
         onClick={() => handleToDetail(row)}>
         {t('处理')}
       </auth-button>
-      {
-        row.status === 'auto_process'
-          ? <bk-button text theme='primary'
-            class="is-disabled"
-            v-bk-tooltips={{
-              content: row.risk_label === 'normal'
-                ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-            }}>
-            {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-          </bk-button>
-          : <MarkRiskLabel
-            onUpdate={() => fetchList()}
-            userInfo={userInfo.value}
-            data={row} />
-      }
+      <MarkRiskLabel
+        onUpdate={() => fetchList()}
+        userInfo={userInfo.value}
+        data={row}
+        disabled={row.status === 'auto_process'} />
       <bk-dropdown
         style="margin-left: 8px">
         {{
@@ -279,6 +281,7 @@
   // 批量操作
   const {
     run: batchTransRisk,
+    loading: transLoading,
   } = useRequest(RiskManageService.batchTransRisk, {
     defaultValue: [],
     onSuccess() {

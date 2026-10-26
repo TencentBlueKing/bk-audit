@@ -1,10 +1,13 @@
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from rest_framework import serializers
 
-from core.serializers import FlexibleListField
+from core.serializers import FlexibleListField, SortListField, SortSerializerMixin
 from services.web.ai_assistant.constants import (
+    ATTACHMENT_DEFAULT_ORDER_FIELDS,
+    ATTACHMENT_LIST_MAX_LIMIT,
     CONCRETE_SCOPE_CHOICES,
     AttachmentExportFormat,
+    AttachmentSortField,
     AttachmentType,
     ExecutionStatus,
     MessageType,
@@ -13,8 +16,7 @@ from services.web.ai_assistant.exceptions import AttachmentSnapshotValidationErr
 from services.web.ai_assistant.handlers import attachment_handler_registry
 from services.web.ai_assistant.schemas import MessageSchema, parse_snapshot
 from services.web.ai_assistant.serializers.feedback import FeedbackResponseSerializer
-from services.web.common.constants import ScopeType
-from services.web.common.serializers import ScopeQuerySerializer
+from services.web.ai_assistant.serializers.scope import ResourceScopeQuerySerializer
 
 
 def _attachment_schema_mapping(model_attribute: str) -> dict[str, type[MessageSchema]]:
@@ -42,6 +44,18 @@ def _unique_schema_models(schema_mapping: dict[str, type[MessageSchema]]) -> lis
     return list(dict.fromkeys(schema_mapping.values())) or [MessageSchema]
 
 
+def _serialize_attachment_input(schema_type: type[MessageSchema], data) -> dict:
+    """读取历史输入时忽略已移除字段；当前字段仍校验，写入保持原有严格协议。"""
+    if isinstance(data, dict):
+        data = {name: value for name, value in data.items() if name in schema_type.model_fields}
+    return parse_snapshot(
+        schema_type,
+        data,
+        field_name="input_data",
+        error_type=AttachmentSnapshotValidationError,
+    ).model_dump(mode="json")
+
+
 @extend_schema_field(
     PolymorphicProxySerializer(
         component_name="AIAttachmentInputData",
@@ -61,7 +75,7 @@ class AttachmentInputDataField(serializers.JSONField):
     )
 )
 class AttachmentOutputDataField(serializers.JSONField):
-    """在 OpenAPI 中按 attachment_type 展示对应 Handler 输出协议。"""
+    """在 OpenAPI 中按 attachment_type 展示当前 Handler 的生成协议。"""
 
 
 @extend_schema_field(
@@ -80,11 +94,28 @@ class AttachmentCreateRequestSerializer(serializers.Serializer):
 
     message_uid = serializers.UUIDField(help_text="来源消息对外 UUID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
-    input_data = AttachmentInputDataField(help_text="由附件类型对应 Pydantic 输入模型校验的业务数据")
+    input_data = AttachmentInputDataField(
+        help_text=(
+            "按外层 attachment_type 选择输入 schema：FIELD_STATISTICS 传 field 及可选 interval/完整condition；"
+            "AI_STATISTICS 传 instruction及可选完整condition"
+        )
+    )
 
 
 class AttachmentDetailRequestSerializer(serializers.Serializer):
     attachment_uid = serializers.UUIDField(help_text="附件对外 UUID")
+
+
+class AttachmentRetryRequestSerializer(AttachmentDetailRequestSerializer):
+    """省略输入复用旧快照；传入时按附件原类型完整替换并重新准备。"""
+
+    input_data = AttachmentInputDataField(required=False, allow_null=False, help_text="可选完整输入对象，整体替换；省略直接重试，字段规则与创建相同。")
+
+    def validate_input_data(self, value):
+        """拒绝 JSON 标量和数组，不把它们解释为省略输入。"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("input_data 必须是完整对象")
+        return value
 
 
 class AttachmentExportRequestSerializer(serializers.Serializer):
@@ -97,19 +128,10 @@ class AttachmentExportRequestSerializer(serializers.Serializer):
     )
 
 
-class AttachmentListRequestSerializer(ScopeQuerySerializer):
+class AttachmentListRequestSerializer(SortSerializerMixin, ResourceScopeQuerySerializer):
     """附件列表筛选参数；对外仅暴露单数参数名。"""
 
-    scope_type = serializers.ChoiceField(
-        choices=ScopeType.choices,
-        help_text="查询范围类型，支持具体 scene/system 及 cross_scene/cross_system",
-    )
-    scope_id = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        allow_null=True,
-        help_text="具体 scene/system 的 ID；cross 查询省略",
-    )
+    resource_uid_fields = ("source_message_uid", "conversation_uid")
 
     attachment_type = FlexibleListField(
         child=serializers.ChoiceField(choices=AttachmentType.choices),
@@ -124,6 +146,17 @@ class AttachmentListRequestSerializer(ScopeQuerySerializer):
     keyword = serializers.CharField(required=False, allow_blank=True, help_text="附件标题关键词")
     conversation_uid = serializers.UUIDField(required=False, help_text="所属会话对外 UUID")
     source_message_uid = serializers.UUIDField(required=False, help_text="来源消息对外 UUID")
+    limit = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=ATTACHMENT_LIST_MAX_LIMIT,
+        help_text=f"最多返回的附件数量，范围 1–{ATTACHMENT_LIST_MAX_LIMIT}，不传返回全部匹配附件",
+    )
+    sort = SortListField(
+        allowed_fields=AttachmentSortField.values,
+        default_sort=ATTACHMENT_DEFAULT_ORDER_FIELDS,
+        field_descriptions=dict(AttachmentSortField.choices),
+    )
 
 
 class AttachmentUpdateRequestSerializer(serializers.Serializer):
@@ -159,7 +192,7 @@ class AttachmentConversationSummarySerializer(serializers.Serializer):
 
 
 class AttachmentResponseSerializer(serializers.Serializer):
-    """附件详情响应；类型专属快照由已注册 Handler 的 Pydantic 模型解析。"""
+    """附件详情保留已保存产物；生成和编辑的协议校验在写入入口执行。"""
 
     uid = serializers.UUIDField(help_text="附件对外 UUID")
     source_message_uid = serializers.UUIDField(help_text="来源消息对外 UUID")
@@ -171,12 +204,17 @@ class AttachmentResponseSerializer(serializers.Serializer):
     output_data = AttachmentOutputDataField(
         allow_null=True,
         required=False,
-        help_text="附件类型化输出快照",
+        help_text=(
+            "当前生成协议按 attachment_type 选择输出 schema；历史产物按保存的 JSON 快照原样返回。SUCCESS 时使用，"
+            "FIELD_STATISTICS 为固定统计包，"
+            "AI_STATISTICS 为 Agent 最后闭合消息中指定标签内的未解析原文；"
+            "字节预算作用在该消息全文，不只是标签内原文"
+        ),
     )
     error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
     error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     supports_feedback = serializers.BooleanField(help_text="附件类型是否支持当前用户反馈")
-    is_stream = serializers.BooleanField(help_text="是否使用流式输出；为真时可订阅流快照与 SSE 接口")
+    is_stream = serializers.BooleanField(help_text="是否支持可选的流式过程；为真也可仅轮询详情获取最终产物")
     export_formats = serializers.ListField(
         child=serializers.ChoiceField(choices=AttachmentExportFormat.choices),
         help_text="当前类型支持的后端导出格式",
@@ -188,14 +226,6 @@ class AttachmentResponseSerializer(serializers.Serializer):
     def to_representation(self, instance):
         handler = attachment_handler_registry.require(instance.attachment_type)
         supports_feedback = handler.supports_feedback
-        output_data = None
-        if instance.output_data is not None:
-            output_data = parse_snapshot(
-                handler.output_model,
-                instance.output_data,
-                field_name="output_data",
-                error_type=AttachmentSnapshotValidationError,
-            ).model_dump(mode="json")
 
         return {
             "uid": str(instance.uid),
@@ -204,13 +234,9 @@ class AttachmentResponseSerializer(serializers.Serializer):
             "status": instance.status,
             "title": instance.title,
             "content_updated_at": instance.content_updated_at,
-            "input_data": parse_snapshot(
-                handler.input_model,
-                instance.input_data,
-                field_name="input_data",
-                error_type=AttachmentSnapshotValidationError,
-            ).model_dump(mode="json"),
-            "output_data": output_data,
+            "input_data": _serialize_attachment_input(handler.input_model, instance.input_data),
+            # 产物写入时已校验；协议升级不应阻断历史读取或丢失旧字段。
+            "output_data": instance.output_data,
             "error_code": instance.error_code,
             "error_message": instance.error_message,
             "supports_feedback": supports_feedback,
@@ -227,14 +253,17 @@ class AttachmentResponseSerializer(serializers.Serializer):
 
 
 class AttachmentListItemSerializer(serializers.Serializer):
-    """附件列表项摘要，不读取输入和输出大 JSON。"""
+    """附件列表项包含有效输入，输出正文仅在详情读取。"""
 
     uid = serializers.UUIDField(help_text="附件对外 UUID")
     scope_type = serializers.ChoiceField(choices=CONCRETE_SCOPE_CHOICES, help_text="会话绑定的具体范围类型")
     scope_id = serializers.CharField(help_text="会话绑定的具体场景或系统 ID")
     attachment_type = serializers.ChoiceField(choices=AttachmentType.choices, help_text="附件类型")
     status = serializers.ChoiceField(choices=ExecutionStatus.choices, help_text="附件执行状态")
+    input_data = AttachmentInputDataField(help_text="附件类型化有效输入快照，可直接回填或整体修改后重试")
     title = serializers.CharField(allow_blank=True, help_text="附件标题")
+    error_code = serializers.CharField(allow_blank=True, help_text="稳定公开错误码")
+    error_message = serializers.CharField(allow_blank=True, help_text="脱敏后的公开错误信息")
     created_at = serializers.DateTimeField(help_text="附件创建时间")
     content_updated_at = serializers.DateTimeField(allow_null=True, help_text="附件内容最后更新时间")
     source_message = AttachmentSourceMessageSummarySerializer(help_text="来源消息摘要")
@@ -249,12 +278,15 @@ class AttachmentListItemSerializer(serializers.Serializer):
         conversation = instance.source_message.conversation
         handler = attachment_handler_registry.require(instance.attachment_type)
         return {
+            "input_data": _serialize_attachment_input(handler.input_model, instance.input_data),
             "uid": str(instance.uid),
             "scope_type": conversation.scope_type,
             "scope_id": conversation.scope_id,
             "attachment_type": instance.attachment_type,
             "status": instance.status,
             "title": instance.title,
+            "error_code": instance.error_code,
+            "error_message": instance.error_message,
             "created_at": instance.created_at,
             "content_updated_at": instance.content_updated_at,
             "source_message": {

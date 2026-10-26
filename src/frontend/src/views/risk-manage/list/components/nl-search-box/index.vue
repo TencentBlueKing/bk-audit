@@ -110,8 +110,11 @@
   } from '@utils/sync-datetime-from-url';
 
   import { RISK_STATUS_TAG_MAP } from '@views/risk-manage/constants';
+
   import aiXiaojingIcon from '@/images/aixiaojing.svg?inline';
   import infoIcon from '@/images/info.svg';
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+
   import AddCondition from './components/add-condition.vue';
   import ConditionTags from './components/condition-tags.vue';
   import NlInput from './components/nl-input.vue';
@@ -133,12 +136,15 @@
     riskViewType?: string;
     /** 固定场景范围，不随页面场景选择器变化 */
     scopeType?: string;
+    /** 页面带顶部场景选择器：URL 中的 scene_id/scope_* 是场景上下文，不能当作「所属场景」筛选读写 */
+    withSceneSelector?: boolean;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     scenes: undefined,
     riskViewType: 'all',
     scopeType: '',
+    withSceneSelector: false,
   });
 
   const emit = defineEmits<Emits>();
@@ -192,7 +198,7 @@
       // 场景选择器写入的 scene_id（含 allSecen/allSystem、以及无选择器页的残留）不是「所属场景」筛选
       if (searchFieldName === 'scene_id') {
         const sceneId = String(urlSearchParams.scene_id);
-        if (sceneId === 'allSecen' || sceneId === 'allSystem' || props.scopeType) return;
+        if (sceneId === 'allSecen' || sceneId === 'allSystem' || props.scopeType || props.withSceneSelector) return;
       }
       if (config.type !== 'string') {
         searchModel.value[searchFieldName] = normalizeParamArray(urlSearchParams[searchFieldName]);
@@ -606,7 +612,15 @@
     }
 
     // 仅覆盖 AI 本次明确识别出的时间条件，未识别则保留当前条件
-    if (filterConditions.start_time || filterConditions.end_time) {
+    // 用户使用「最近 xx」等相对说法时后端返回 datetime_origin（如 ['now-4d', 'now']），以其为准保持相对窗口
+    const nlDatetimeOrigin = filterConditions.datetime_origin;
+    if (Array.isArray(nlDatetimeOrigin)
+      && nlDatetimeOrigin.length >= 2
+      && isRelativeDatetimeOrigin(nlDatetimeOrigin)) {
+      const origin = nlDatetimeOrigin.map(String);
+      nextModel.datetime_origin = origin;
+      nextModel.datetime = syncDatetimeFromOrigin(origin);
+    } else if (filterConditions.start_time || filterConditions.end_time) {
       const currentDatetime = Array.isArray(nextModel.datetime) && nextModel.datetime.length >= 2
         ? nextModel.datetime
         : defaultDatetime;
@@ -680,14 +694,23 @@
     }
   };
 
+  const getNlParseScope = () => {
+    if (props.withSceneSelector) {
+      return getSceneSystemParams();
+    }
+    return {
+      scope_type: props.scopeType || urlSearchParams.scope_type,
+      scope_id: props.scopeType ? '' : urlSearchParams.scope_id,
+    };
+  };
+
   const getNlParseOptions = () => {
     const [startTime, endTime] = searchModel.value.datetime || [];
     return {
       risk_view_type: riskViewType.value || urlSearchParams.risk_view_type || 'all',
       start_time: startTime,
       end_time: endTime,
-      scope_type: props.scopeType || urlSearchParams.scope_type,
-      scope_id: props.scopeType ? '' : urlSearchParams.scope_id,
+      ...getNlParseScope(),
       scenes: props.scenes
         ?.filter((item: any) => item && item.scene_id && item.name)
         .map((item: any) => ({ id: Number(item.scene_id), name: item.name })) || [],
@@ -873,7 +896,7 @@
   const handleRemoveEventField = (id: string) => {
     selectedItemList.value = selectedItemList.value.filter(item => item.id !== id);
     selectedVal.value = selectedItemList.value.map(item => item.id);
-    const EventFiltersParams = omitFixedScopeSearchParams({
+    const EventFiltersParams = omitScopeSearchParams({
       ...getSearchParams(),
       event_filters: eventFiltersParams.value,
     });
@@ -889,8 +912,8 @@
       .filter(item => item !== '' && item !== allText)
   );
 
-  const omitFixedScopeSearchParams = (params: Record<string, any>) => {
-    if (!props.scopeType) return params;
+  const omitScopeSearchParams = (params: Record<string, any>) => {
+    if (!props.scopeType && !props.withSceneSelector) return params;
     const next = { ...params };
     delete next.scene_id;
     delete next.scope_id;
@@ -963,7 +986,7 @@
     );
 
     const searchParams = getSearchParams();
-    const replaceUrl: Record<string, any> = omitFixedScopeSearchParams({ ...searchParams });
+    const replaceUrl: Record<string, any> = omitScopeSearchParams({ ...searchParams });
     if (searchModel.value.datetime_origin) {
       const origin = searchModel.value.datetime_origin;
       if (Array.isArray(origin) && origin.length > 0) {
@@ -980,7 +1003,7 @@
   const handleSubmit = (isClear = false) => {
     // 将搜索参数同步到 URL（刷新后可恢复）
     const searchParams = getSearchParams();
-    const replaceUrl: Record<string, any> = omitFixedScopeSearchParams({ ...searchParams });
+    const replaceUrl: Record<string, any> = omitScopeSearchParams({ ...searchParams });
     // 同步 datetime_origin
     if (searchModel.value.datetime_origin) {
       const origin = searchModel.value.datetime_origin;

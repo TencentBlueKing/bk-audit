@@ -24,7 +24,7 @@
     :title="t('批量确认风险单')"
     width="720"
     @closed="handleClosed">
-    <audit-form
+    <bk-form
       ref="formRef"
       form-type="vertical"
       :model="formData"
@@ -51,19 +51,19 @@
           :default="formData.description"
           :max-len="1000" />
       </bk-form-item>
-    </audit-form>
+    </bk-form>
     <template #footer>
       <bk-button
-        :disabled="isSubmitting"
-        @click="handleCancel">
-        {{ t('取消') }}
-      </bk-button>
-      <bk-button
-        class="ml8"
         :loading="isSubmitting"
         theme="primary"
         @click="handleConfirm">
         {{ t('确定') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        :disabled="isSubmitting"
+        @click="handleCancel">
+        {{ t('取消') }}
       </bk-button>
     </template>
   </bk-dialog>

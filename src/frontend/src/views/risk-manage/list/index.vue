@@ -41,6 +41,12 @@
             type="add" />
           {{ t('新增风险') }}
         </bk-button>
+        <batch-handle-entry
+          ref="batchHandleRef"
+          :list-ref="listRef"
+          scope="all"
+          :selection-meta="selectionMeta"
+          :username="userInfo.username" />
         <all-risk-export-button
           :disabled="!isExportEnabled"
           :export-fn="runAllRiskExport"
@@ -114,6 +120,8 @@
   import { useRefreshRiskListOnActivated } from '@views/risk-manage/hooks/use-refresh-risk-list-on-activated';
   import { useRiskListStrategyList } from '@views/risk-manage/hooks/use-risk-list-strategy-list';
 
+  import BatchHandleEntry from '@views/risk-manage/batch-handle/components/batch-handle-entry.vue';
+
   import addRisk from './add-risk/index.vue';
   import AllRiskExportButton from './components/all-risk-export-button.vue';
   import aiAnalyzes from './components/ai-analyzes-tip/index.vue';
@@ -172,22 +180,11 @@
               </auth-button>
           )
         }
-        {
-          row.status === 'auto_process'
-            ? <bk-button text theme='primary'
-              class="is-disabled"
-              v-bk-tooltips={{
-                content: row.risk_label === 'normal'
-                  ? t('"套餐处理中"的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                  : t('"套餐处理中"的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-              }}>
-                {row.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-              </bk-button>
-            : <MarkRiskLabel
-                onUpdate={() => fetchList()}
-                userInfo={userInfo.value}
-                data={row} />
-        }
+        <MarkRiskLabel
+          onUpdate={() => fetchList()}
+          userInfo={userInfo.value}
+          data={row}
+          disabled={row.status === 'auto_process'} />
         <bk-dropdown
           style="margin-left: 8px">
           {{
@@ -388,7 +385,12 @@
     return result;
   });
 
+  interface BatchHandleExpose {
+    sync: () => void;
+  }
+
   const listRef = ref();
+  const batchHandleRef = ref<BatchHandleExpose>();
   const addRiskRef = ref();
   const newAddedRiskIds = ref<string[]>([]);
   const searchBoxRef = ref();
@@ -517,6 +519,7 @@
   });
 
   const handleRequestSuccess = ({ results, total }: { results: Array<RiskManageModel>, total: number }) => {
+    nextTick(() => batchHandleRef.value?.sync());
     aiAnalyzesRef.value?.changeIsSearch();
     window.changeConfirm = false;
     totalCount.value = total || 0;

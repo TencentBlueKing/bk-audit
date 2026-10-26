@@ -27,10 +27,11 @@ OutputT = TypeVar("OutputT", bound=MessageSchema)
 
 @dataclass(frozen=True, slots=True)
 class AttachmentPreparation(Generic[ContextT]):
-    """首次创建 Attachment 时由业务 Handler 生成的标题和上下文。"""
+    """创建或修改输入时由 Handler 生成的标题、上下文与可选规范化输入。"""
 
     title: str
     context_data: ContextT
+    input_data: MessageSchema | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -255,6 +255,8 @@
   };
   const processPackageIdToDetailMap = ref<Record<string, any>>({});
   let isInit = false;
+  let renderedTimelineKey = '';
+  let timelineBuildSeq = 0;
   const list = ref<Record<string, any>[]>([]);
   const riskFieldMap = ref<Record<string, string>>({});
 
@@ -442,8 +444,16 @@
     }
   });
 
+  // 详情轮询会整体替换 data，签名不变时不重建，避免清空人工处理表单中的输入
+  const getTimelineKey = (data: RiskManageModel) => `${data.status}|${JSON.stringify(data.ticket_history)}`;
+
   watch(() => props.data, (data) => {
-    if (data && data.ticket_history && !isInit) {
+    const timelineKey = data?.ticket_history ? getTimelineKey(data) : '';
+    if (data && data.ticket_history && (!isInit || timelineKey !== renderedTimelineKey)) {
+      isInit = false;
+      renderedTimelineKey = timelineKey;
+      timelineBuildSeq += 1;
+      const buildSeq = timelineBuildSeq;
       list.value = [];
       ticketHistory.value = [];
       data.ticket_history.forEach((item, index) => {
@@ -465,10 +475,11 @@
             // 合并
             const lastForApproveItem = data.ticket_history[index - 1];
             if (lastForApproveItem) {
-              const tmpItem = item;
-              tmpItem.forApproveItem = lastForApproveItem;
               list.value.push(listParam);
-              ticketHistory.value.push(item);
+              ticketHistory.value.push({
+                ...item,
+                forApproveItem: lastForApproveItem,
+              });
             }
           }
         }
@@ -496,6 +507,7 @@
       fetchExperience({
         risk_id: data.risk_id,
       }).then(() => {
+        if (buildSeq !== timelineBuildSeq) return;
         appendRiskExperienceTimeline();
         isInit = true;
 
@@ -734,7 +746,7 @@
       max-width: none !important;
       min-width: 0 !important;
       line-height: 20px;
-      text-align: left;
+      text-align: right;
       flex: none !important;
     }
 

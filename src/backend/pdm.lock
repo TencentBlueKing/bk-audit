@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:748bf6f7b4be6b9202552972f8e0c1e8861e2cb77bbed3cc00e6333e26adc72b"
+content_hash = "sha256:2798ca2321c01194a698c88974ac49fac1f57774179f42ca8fd762e60c3bd70d"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -163,6 +163,21 @@ groups = ["default"]
 files = [
     {file = "backcall-0.2.0-py2.py3-none-any.whl", hash = "sha256:fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255"},
     {file = "backcall-0.2.0.tar.gz", hash = "sha256:5cbdbf27be5e7cfadb448baf0aa95508f91f2bbc6c6437cd9cd06e2a4c215e1e"},
+]
+
+[[package]]
+name = "beautifulsoup4"
+version = "4.15.0"
+requires_python = ">=3.7.0"
+summary = "Screen-scraping library"
+groups = ["default"]
+dependencies = [
+    "soupsieve>=1.6.1",
+    "typing-extensions>=4.0.0",
+]
+files = [
+    {file = "beautifulsoup4-4.15.0-py3-none-any.whl", hash = "sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9"},
+    {file = "beautifulsoup4-4.15.0.tar.gz", hash = "sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7"},
 ]
 
 [[package]]
@@ -463,13 +478,13 @@ files = [
 
 [[package]]
 name = "certifi"
-version = "2025.8.3"
+version = "2026.10.19"
 requires_python = ">=3.7"
 summary = "Python package for providing Mozilla's CA Bundle."
 groups = ["default"]
 files = [
-    {file = "certifi-2025.8.3-py3-none-any.whl", hash = "sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5"},
-    {file = "certifi-2025.8.3.tar.gz", hash = "sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407"},
+    {file = "certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"},
+    {file = "certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae"},
 ]
 
 [[package]]
@@ -1614,6 +1629,20 @@ dependencies = [
 files = [
     {file = "mako-1.3.10-py3-none-any.whl", hash = "sha256:baef24a52fc4fc514a0887ac600f9f1cff3d82c61d4d700a1fa84d597b88db59"},
     {file = "mako-1.3.10.tar.gz", hash = "sha256:99579a6f39583fa7e5630a28c3c1f440e4e97a414b80372649c0ce338da2ea28"},
+]
+
+[[package]]
+name = "markdownify"
+version = "1.2.3"
+summary = "Convert HTML to markdown."
+groups = ["default"]
+dependencies = [
+    "beautifulsoup4<5,>=4.9",
+    "six<2,>=1.15",
+]
+files = [
+    {file = "markdownify-1.2.3-py3-none-any.whl", hash = "sha256:a189a0bedfd14009030fde5f85bb6f77c56897cb839b5c25315dd7d4e3e290ba"},
+    {file = "markdownify-1.2.3.tar.gz", hash = "sha256:1a176f05522c8a2cb1dd3ab9d307dcdadbed5c26ae717855bfc42b3b6d38d937"},
 ]
 
 [[package]]
@@ -3039,6 +3068,17 @@ files = [
 ]
 
 [[package]]
+name = "soupsieve"
+version = "2.10"
+requires_python = ">=3.10"
+summary = "A modern CSS selector implementation for Beautiful Soup."
+groups = ["default"]
+files = [
+    {file = "soupsieve-2.10-py3-none-any.whl", hash = "sha256:8596eb8967d744174820280fa62b4542a2e955bfaccca73ed8a13c6eb8e9b502"},
+    {file = "soupsieve-2.10.tar.gz", hash = "sha256:49e9380d7d2905463583bafe285e818c7366a9ed7b3aee221c1ac79c905d8bc0"},
+]
+
+[[package]]
 name = "sqlalchemy"
 version = "2.0.43"
 requires_python = ">=3.7"
@@ -3260,6 +3300,34 @@ dependencies = [
 files = [
     {file = "tzlocal-5.3.1-py3-none-any.whl", hash = "sha256:eb1a66c3ef5847adf7a834f1be0800581b683b5608e74f86ecbcef8ab91bb85d"},
     {file = "tzlocal-5.3.1.tar.gz", hash = "sha256:cceffc7edecefea1f595541dbd6e990cb1ea3d19bf01b2809f362a03dd7921fd"},
+]
+
+[[package]]
+name = "ui-stream"
+version = "0.1.0"
+requires_python = ">=3.11"
+summary = "Bounded UI event streaming with host-owned durable results"
+groups = ["default"]
+files = [
+    {file = "ui_stream-0.1.0-py3-none-any.whl", hash = "sha256:8b2c03ce4fa37f0bc7b1d6b012ba7bd83feb6f5193fff251658e6dd14accdddd"},
+    {file = "ui_stream-0.1.0.tar.gz", hash = "sha256:38a5d46c7827606e6a7bae7b9125ac7fbf8bb3dd7f96f0487326abb9e1a6e0e0"},
+]
+
+[[package]]
+name = "ui-stream"
+version = "0.1.0"
+extras = ["redis"]
+requires_python = ">=3.11"
+summary = "Bounded UI event streaming with host-owned durable results"
+groups = ["default"]
+dependencies = [
+    "pydantic<3,>=2.10",
+    "redis>=3.5.3",
+    "ui-stream==0.1.0",
+]
+files = [
+    {file = "ui_stream-0.1.0-py3-none-any.whl", hash = "sha256:8b2c03ce4fa37f0bc7b1d6b012ba7bd83feb6f5193fff251658e6dd14accdddd"},
+    {file = "ui_stream-0.1.0.tar.gz", hash = "sha256:38a5d46c7827606e6a7bae7b9125ac7fbf8bb3dd7f96f0487326abb9e1a6e0e0"},
 ]
 
 [[package]]

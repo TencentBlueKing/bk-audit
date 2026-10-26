@@ -99,10 +99,17 @@ class AttachmentTaskTest(TestCase):
             updated_by=self.user,
         )
         self.handler = EchoAttachmentAsyncHandler()
+        original_handler = attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        self.addCleanup(self._restore_handler, original_handler)
         attachment_handler_registry.register(self.handler)
 
-    def tearDown(self):
+    @staticmethod
+    def _restore_handler(original_handler) -> None:
+        """恢复平台测试前的 Handler，避免清空生产注册项或污染后续用例。"""
+
         attachment_handler_registry.unregister(AttachmentType.AI_ANALYSIS)
+        if original_handler is not None:
+            attachment_handler_registry.register(original_handler)
 
     def create_attachment(self, *, task_id: str = "task-current") -> Attachment:
         return Attachment.objects.create(
@@ -206,7 +213,7 @@ class AttachmentTaskTest(TestCase):
                     result = self.invoke(execute_attachment_async_success, attachment=attachment)
 
                 attachment.refresh_from_db()
-                self.assertEqual(result, {"content": "done"})
+                self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
                 self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
                 self.assertEqual(attachment.output_data, {"content": "done"})
 
@@ -286,7 +293,7 @@ class AttachmentTaskTest(TestCase):
         result = self.invoke(execute_attachment_async_retry, attachment=attachment, retries=1)
 
         attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
 
     def test_retry_with_exception_marks_failed_after_max_retries(self):
@@ -418,7 +425,7 @@ class AttachmentTaskTest(TestCase):
         result = self.invoke(execute_attachment_async_update_title, attachment=attachment)
 
         attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(attachment.title, "任务内更新标题")
         self.assertEqual(attachment.status, ExecutionStatus.SUCCESS)
 
@@ -519,7 +526,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         result = self.invoke(execute_attachment_stream_success, attachment=self.attachment)
 
         self.attachment.refresh_from_db()
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
         self.assertEqual(self.attachment.output_data, {"content": "async:hello"})
         events = self.attachment.stream_archive
@@ -540,12 +547,12 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
 
     def test_business_retry_flushes_pending_events_and_keeps_processing(self):
         with mock.patch.object(
-            UIStreamRuntime, "finish_retry", autospec=True, side_effect=UIStreamRuntime.finish_retry
-        ) as finish_retry:
+            UIStreamRuntime, "close_for_retry", autospec=True, side_effect=UIStreamRuntime.close_for_retry
+        ) as close_for_retry:
             with self.assertRaises(Retry):
                 self.invoke(execute_attachment_stream_retry, attachment=self.attachment)
 
-        self.assertEqual(finish_retry.call_count, 1)
+        self.assertEqual(close_for_retry.call_count, 1)
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(self.attachment.output_data)
@@ -565,7 +572,7 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
 
         self.attachment.refresh_from_db()
         second_config = parse_stream_config(self.attachment.stream_config)
-        self.assertEqual(result, {"content": "async:hello"})
+        self.assertEqual(result, {"status": ExecutionStatus.SUCCESS})
         self.assertNotEqual(second_config.execution_id, first_config.execution_id)
         self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
         # reset 只通知旧 Redis reader；新 archive 从本次业务事件开始。
@@ -602,6 +609,29 @@ class StreamAttachmentTaskTest(AttachmentHandlerRegistryMixin, TransactionTestCa
         self.attachment.refresh_from_db()
         self.assertEqual(self.attachment.status, ExecutionStatus.PROCESSING)
         self.assertIsNone(self.attachment.output_data)
+
+    def test_committed_finalization_lost_ack_redelivery_is_ignored_without_rerunning_business(self):
+        finalize = AttachmentArchiveStore.finalize
+
+        def commit_then_lose_ack(store, **kwargs):
+            finalize(store, **kwargs)
+            raise DatabaseError("finalization committed, response lost")
+
+        with mock.patch.object(AttachmentArchiveStore, "finalize", autospec=True, side_effect=commit_then_lose_ack):
+            with self.assertRaises(Retry):
+                self.invoke(execute_attachment_stream_success, attachment=self.attachment)
+
+        self.attachment.refresh_from_db()
+        committed_archive = self.attachment.stream_archive
+        committed_config = self.attachment.stream_config
+        self.assertEqual(self.attachment.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(self.attachment.output_data, {"content": "async:hello"})
+        with mock.patch.object(execute_attachment_stream_success, "run", side_effect=AssertionError("business rerun")):
+            with self.assertRaises(Ignore):
+                self.invoke(execute_attachment_stream_success, attachment=self.attachment, retries=1)
+        self.attachment.refresh_from_db()
+        self.assertEqual(self.attachment.stream_archive, committed_archive)
+        self.assertEqual(self.attachment.stream_config, committed_config)
 
     @mock.patch("services.web.ai_assistant.services.attachment_execution.report_invariant_violation")
     def test_output_validation_error_does_not_retry_and_marks_failed(self, report_invariant_violation):

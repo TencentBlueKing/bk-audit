@@ -162,7 +162,7 @@
     }
   };
 
-  // 进入编辑态时自动聚焦
+  // 进入编辑态时自动聚焦并全选已有值
   // 注意：当外部先设置 isEditing，再触发本组件挂载时，watch 不会触发（除非 immediate:true）
   watch(() => props.isEditing, async (val) => {
     if (val) {
@@ -171,6 +171,7 @@
       const el = inputRef.value;
       if (el) {
         el.focus?.();
+        el.select?.();
         handleAutoResize();
       }
       setTimeout(() => {

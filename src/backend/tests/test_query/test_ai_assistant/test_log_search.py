@@ -520,7 +520,8 @@ class TestLogSearchService(AIAssistantTestCase):
         self._search(condition=condition)
 
         self.assertIn(
-            "NOT JSON_EXTRACT_STRING(`extend_data`,'$.ticket_id') IN ('Story-1','Story-2')",
+            "NOT CASE WHEN JSON_TYPE(`extend_data`,'$.ticket_id')='null' THEN NULL "
+            "ELSE JSON_EXTRACT_STRING(`extend_data`,'$.ticket_id') END IN ('Story-1','Story-2')",
             self._data_sql(mock_query_sync),
         )
 
