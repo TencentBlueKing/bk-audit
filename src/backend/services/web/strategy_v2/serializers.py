@@ -48,6 +48,12 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.common.constants import ScopeType
+from services.web.risk.bksec.config import BkSecConfig
+from services.web.risk.bksec.constants import (
+    BKSEC_FIELD_INITIAL_OWNER,
+    BKSEC_FIELD_RISK_ASSET,
+    BKSEC_FIELD_TARGET_TYPE,
+)
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS, EventMappingFields
 from services.web.risk.report_config import ReportConfig
 from services.web.scene.constants import (
@@ -99,6 +105,28 @@ from services.web.tool.models import Tool
 
 # 从 Pydantic BaseModel 生成的 DRF 序列化器类
 ReportConfigSerializer = type(ReportConfig.drf_serializer())
+
+
+class BkSecFieldMappingSerializer(serializers.Serializer):
+    """BKSEC 工单字段映射项（空串合法：可选字段不填值；必填语义由 validate_for_submit 把关）"""
+
+    key = serializers.CharField(required=False, allow_blank=True, default="")
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    value = serializers.CharField(required=False, allow_blank=True, default="")
+    required = serializers.BooleanField(required=False, default=False)
+
+
+class BkSecConfigSerializer(serializers.Serializer):
+    """BKSEC 安全工单配置（空串合法；启用时的必填约束由 validate_for_submit 把关）"""
+
+    enabled = serializers.BooleanField(required=False, default=False)
+    risk_type_id = serializers.CharField(required=False, allow_blank=True, default="")
+    risk_type_name = serializers.CharField(required=False, allow_blank=True, default="")
+    target = serializers.CharField(required=False, allow_blank=True, default="")
+    target_type = serializers.CharField(required=False, allow_blank=True, default="")
+    operator = serializers.CharField(required=False, allow_blank=True, default="")
+    source_type = serializers.CharField(required=False, allow_blank=True, default="bk-audit")
+    field_mappings = BkSecFieldMappingSerializer(many=True, required=False, default=list)
 
 
 def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
@@ -531,6 +559,39 @@ class StrategySerializer(serializers.Serializer):
 
         if report_enabled and not report_config:
             raise serializers.ValidationError(gettext("report_config is required when report_enabled is True"))
+
+    def _validate_bksec_config(self, validated_request_data: dict):
+        """
+        校验 BKSEC 安全工单配置（仅正式提交时调用，草稿允许不完整）
+
+        规则：enabled 开启时必须选择风险类型，且必填字段（风险资产信息/初始责任人）已配置；
+        平台/全局策略不支持 BKSEC 发单（需求范围仅场景策略）。
+        """
+        bksec_config = validated_request_data.get("bksec_config")
+        if not bksec_config:
+            return
+        if validated_request_data.get("binding_type") == BindingType.PLATFORM_BINDING:
+            raise serializers.ValidationError(gettext("BKSEC 安全工单仅支持场景策略，平台/全局策略不支持"))
+        try:
+            config = BkSecConfig.model_validate(bksec_config)
+            config.validate_for_submit()
+        except ValueError as err:
+            raise serializers.ValidationError(gettext("BKSEC 安全工单配置不合法：%s") % err)
+        except Exception as err:  # NOCC:broad-except(配置结构错误)
+            raise serializers.ValidationError(gettext("BKSEC 安全工单配置结构不合法：%s") % err)
+
+        # 回写归一化结果：target/target_type/operator 允许只由 field_mappings 提供，
+        # 解析时会自动同步到独立字段（独立字段优先，为空才取 field_mappings）。
+        # 落库前把同步后的值写回，保证「存储 / 详情展示 / 运行时解析」三者一致，
+        # 否则详情会看到独立字段为空、field_mappings 有值的割裂状态。
+        for field in (BKSEC_FIELD_RISK_ASSET, BKSEC_FIELD_TARGET_TYPE, BKSEC_FIELD_INITIAL_OWNER):
+            value = str(getattr(config, field, "") or "")
+            bksec_config[field] = value
+            # 同步 field_mappings 中的同名项：它同时会渲染进事件体 fields，
+            # 若与 SOPS 独立入参取值不同，会出现「入参与事件体不一致」
+            for mapping in bksec_config.get("field_mappings") or []:
+                if isinstance(mapping, dict) and mapping.get("key") == field:
+                    mapping["value"] = value
 
     def _validate_strategy_data_permission(self, validated_request_data: dict):
         """
@@ -1127,6 +1188,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         default=list,
     )
     report_config = ReportConfigSerializer(required=False, allow_null=True)
+    bksec_config = BkSecConfigSerializer(required=False, allow_null=True)
     rules = StrategyRuleSerializer(many=True, required=False, default=list)
     dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
     is_draft = serializers.BooleanField(
@@ -1172,6 +1234,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
             "report_enabled",
             "report_auto_render",
             "report_config",
+            "bksec_config",
             "scene_id",
             "binding_type",
             "rules",
@@ -1207,6 +1270,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         self._validate_event_basic_field_configs(data)
         # check report_config
         self._validate_report_config(data)
+        # check bksec_config
+        self._validate_bksec_config(data)
         # check strategy data permission (system & table authorization)
         self._validate_strategy_data_permission(data)
         # 多规则校验（发现规则 / 分派规则）
@@ -1272,6 +1337,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False, allow_null=True
     )
     report_config = ReportConfigSerializer(required=False, allow_null=True)
+    bksec_config = BkSecConfigSerializer(required=False, allow_null=True)
     rules = StrategyRuleSerializer(many=True, required=False, default=list)
     dispatch_rules = DispatchRuleSerializer(many=True, required=False, default=list)
     is_draft = serializers.BooleanField(
@@ -1319,6 +1385,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
             "report_enabled",
             "report_auto_render",
             "report_config",
+            "bksec_config",
             "rules",
             "dispatch_rules",
             "is_draft",
@@ -1367,6 +1434,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, MultiRuleValidateMixin
         self._validate_event_basic_field_configs(data)
         # check report_config
         self._validate_report_config(data)
+        # check bksec_config
+        self._validate_bksec_config(data)
         # check strategy(system & table authorization)
         self._validate_strategy_data_permission(data)
         # 多规则校验（发现规则 / 分派规则）
@@ -1621,6 +1690,7 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
             "report_enabled",
             "report_auto_render",
             "report_config",
+            "bksec_config",
         ]
 
 

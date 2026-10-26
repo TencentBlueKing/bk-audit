@@ -198,6 +198,18 @@ BK_BASE_DEBUG_API_URL = os.getenv("BKAPP_BASE_DEBUG_API_URL", BK_BASE_API_URL or
 BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL")
 BK_SOPS_API_URL = os.getenv("BKAPP_BK_SOPS_API_URL")
 BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
+# BKSEC 安全工单（风险类型接入 / 事件上报）
+BKSEC_API_URL = os.getenv("BKAPP_BKSEC_API_URL")
+BKSEC_APIGW_NAME = os.getenv("BKAPP_BKSEC_APIGW_NAME", "bksec")
+BKSEC_API_RATE_LIMIT = os.getenv("BKAPP_BKSEC_API_RATE_LIMIT", "10/s")
+# BKSEC 项目 ID（risk_access 接口必填的项目维度，策略页风险类型下拉按此过滤）
+BKSEC_PROJECT_ID = os.getenv("BKAPP_BKSEC_PROJECT_ID")
+# 预置 BKSEC 发单套餐指向的标准运维流程模板
+BKSEC_SOPS_TEMPLATE_ID = os.getenv("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
+# BKSEC 发单插件 Config 同步 API 地址
+BKSEC_PLUGIN_CONFIG_API_URL = os.getenv("BKAPP_BKSEC_PLUGIN_CONFIG_API_URL")
+# BKSEC Mock 模式开关（bkop 测试环境用，开启后 WeSec API 请求走本地 Mock）
+BKSEC_MOCK_ENABLED = strtobool(os.getenv("BKAPP_BKSEC_MOCK_ENABLED", "False"))
 BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
@@ -412,6 +424,7 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    "bksec": os.getenv("BKAPP_FEATURE_BKSEC", "on"),
 }
 
 # BkLog
@@ -468,6 +481,7 @@ BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
 # Risk
 ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK", "True"))
 PROCESS_RISK_MAX_RETRY = int(os.getenv("BKAPP_PROCESS_RISK_MAX_RETRY", 3))
+PROCESS_RISK_STUCK_THRESHOLD_MINUTES = int(os.getenv("BKAPP_PROCESS_RISK_STUCK_THRESHOLD_MINUTES", 60))
 ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK", "True"))
 
 # cache lock

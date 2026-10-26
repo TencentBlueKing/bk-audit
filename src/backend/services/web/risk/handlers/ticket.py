@@ -58,6 +58,7 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.parser import RiskNoticeParser
+from services.web.risk.utils import calc_task_duration
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
@@ -221,7 +222,7 @@ class RiskFlowBaseHandler:
         需要处理审批失败和执行失败两种情况
         """
 
-        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id).order_by("-timestamp")
+        nodes = TicketNode.objects.filter(risk_id=self.risk.risk_id, is_test=False).order_by("-timestamp")
         for node in nodes:
             if node.action == CustomProcess.__name__ and node.extra.get("custom_action") == AutoProcess.__name__:
                 return [node.operator]
@@ -311,6 +312,7 @@ class RiskFlowBaseHandler:
             timestamp=datetime.datetime.now().timestamp(),
             time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             process_result=process_result,
+            duration=process_result.get("duration"),
             extra=self.build_history(process_result=process_result, *args, **kwargs),
         )
         self.risk.save(update_fields=["last_operate_time"])
@@ -421,8 +423,9 @@ class NewRisk(RiskFlowBaseHandler):
         if not getattr(self.risk, "dispatch_rule_id", None):
             self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
-        # 只有有责任人时走规则
-        if self.risk.operator:
+        # 只有有责任人时走规则；策略启用 BKSEC 时例外（口径 A）：
+        # 无责任人也走规则发单，初始责任人兜底为安全接口人
+        if self.risk.operator or self._bksec_enabled():
             # 初始化处理规则
             self.match_risk_rule()
             # 重新初始化
@@ -435,6 +438,15 @@ class NewRisk(RiskFlowBaseHandler):
         # 有处理套餐则当前处理人为空，否则为安全责任人
         self.risk.current_operator = [] if self.process_application and self.risk.operator else self.load_processor()
         self.risk.save(update_fields=["current_operator"])
+
+    def _bksec_enabled(self) -> bool:
+        """策略是否启用 BKSEC 安全工单：决定无责任人风险是否走规则发单"""
+        if not self.strategy:
+            return False
+        from services.web.risk.bksec.rules import load_bksec_config
+
+        config = load_bksec_config(self.strategy)
+        return bool(config and config.enabled)
 
     def match_risk_rule(self) -> None:
         RiskRuleHandler(risk_id=self.risk.risk_id).bind_rule()
@@ -622,7 +634,10 @@ class AutoProcess(RiskFlowBaseHandler):
         task_id = self.load_task_id()
         if task_id:
             try:
-                return {"status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)}
+                process_result = {
+                    "status": api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                }
+                return self._attach_failure_hint(process_result, task_id=task_id)
             except APIRequestError as err:
                 # 业务错误：不可恢复，降级为 FAILED 让下游走"转人工 + AWAIT_PROCESS"分支，
                 err_data = getattr(err, "data", {}) or {}
@@ -631,9 +646,15 @@ class AutoProcess(RiskFlowBaseHandler):
                         f"[AutoProcess] get_task_status business error, "
                         f"risk_id={self.risk.risk_id}, task_id={task_id}, err={err}"
                     )
-                    return {"status": {"state": SOPSTaskStatus.FAILED}}
+                    return self._attach_failure_hint({"status": {"state": SOPSTaskStatus.FAILED}})
                 # HTTP 5xx / 网络异常 / 超时：可恢复，抛出让外层重试
                 raise
+
+        # 触发方式快照：人工选择(显式传参) / 审批通过(上个节点为审批) / 规则自动匹配
+        last_node = self.risk.last_history
+        trigger = (
+            "manual" if pa_config else ("approve" if last_node and last_node.action == ForApprove.__name__ else "auto")
+        )
         # 优先使用参数
         pa_config = pa_config
         # 或者使用上个节点(审批节点)配置
@@ -667,6 +688,30 @@ class AutoProcess(RiskFlowBaseHandler):
             # 前端保证字段映射和直接输入互斥；取值后统一在调用边界适配 BK-SOPS 协议。
             field_name = field.get("field")
             value = getattr(self.risk, field_name, "") if field_name else field.get("value", "")
+            # 把 BKSEC 自动规则 pa_params 里的模板按当前风险渲染成终值，作为 SOPS 任务入参
+            if (
+                isinstance(value, str)
+                and "{{" in value
+                and c["key"] != "${risk_type_extra}"
+                and getattr(self.rule, "auto_strategy_id", None)
+            ):
+                from services.web.risk.bksec.contract import render_event_constant
+
+                value = render_event_constant(value, risk=self.risk)
+            # risk_type_extra 兜底：逐字段渲染后重新序列化，避免字段值自带引号破坏 JSON（插件 json.loads 不崩）
+            if (
+                c["key"] == "${risk_type_extra}"
+                and isinstance(value, str)
+                and getattr(self.rule, "auto_strategy_id", None)
+            ):
+                from services.web.risk.bksec.contract import render_risk_type_extra
+
+                value = render_risk_type_extra(value, risk=self.risk)
+            # operator 入参兜底：BKSEC 自动规则渲染后保证数组串契约（插件 json.loads 不崩）
+            if c["key"] == "${operator}" and getattr(self.rule, "auto_strategy_id", None):
+                from services.web.risk.bksec.contract import coerce_operator_constant
+
+                value = coerce_operator_constant(value, risk=self.risk)
             value = _normalize_sops_constant_value(c, value)
             if isinstance(value, datetime.datetime):
                 value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
@@ -682,10 +727,27 @@ class AutoProcess(RiskFlowBaseHandler):
         # 没有任务创建任务
         result = api.bk_sops.create_task(**params)
         api.bk_sops.start_task(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        return {
+        process_result = {
             "task": result,
             "status": api.bk_sops.get_task_status(task_id=result["task_id"], bk_biz_id=settings.DEFAULT_BK_BIZ_ID),
+            # 套餐/任务快照：执行记录据此展示（历史节点无快照时由记录接口走规则链路兜底）
+            "pa_id": self.process_application.id,
+            "pa_name": self.process_application.name,
+            "task_name": params["name"],
+            "trigger": trigger,
         }
+        return self._attach_failure_hint(process_result, task_id=str(result.get("task_id") or ""))
+
+    def _attach_failure_hint(self, process_result: dict, task_id: str = "") -> dict:
+        """写入点落失败提示（非失败状态原样返回）"""
+        status = process_result.get("status") or {}
+        if status.get("state") in SOPSTaskStatus.get_failed_status():
+            from services.web.risk.bksec.service import fill_failure_info
+
+            process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
+        # 冗余存储 duration（秒），用于排序
+        process_result["duration"] = calc_task_duration(status)
+        return process_result
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         auto_close_risk = self.get_auto_close_risk(pa_config=kwargs.get("pa_config"))
@@ -725,7 +787,10 @@ class AutoProcess(RiskFlowBaseHandler):
             history_status = self.risk.last_history.process_result.get("status") or {}
             if current_status.get("state") != history_status.get("state"):
                 self.risk.last_history.process_result.update(process_result)
-                self.risk.last_history.save(update_fields=["process_result"])
+                # duration 任务耗时写入执行记录
+                if "duration" in process_result:
+                    self.risk.last_history.duration = process_result["duration"]
+                self.risk.last_history.save(update_fields=["process_result", "duration"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         history = {**kwargs}

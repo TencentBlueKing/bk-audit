@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
+from django.conf import settings
 from django.utils.translation import gettext
 
 from apps.feature.constants import FeatureStatusChoices
@@ -69,3 +70,47 @@ class BklogOtlpPlugin(BaseFeaturePlugin):
         self._feature.config = config
         # 响应状态
         return self._feature.status
+
+
+class BksecPlugin(BaseFeaturePlugin):
+    """
+    BKSEC 安全工单特性插件
+
+    特性开启需同时满足：
+      1. 必配环境变量齐全：
+         BKSEC_PROJECT_ID（风险类型下拉维度）、
+         BKSEC_SOPS_TEMPLATE_ID（预置发单套餐模板）、
+         BKSEC_PLUGIN_CONFIG_API_URL（发单插件 Config 同步地址）；
+      2. 已存在内置处理套餐（ProcessApplication.is_builtin=True, sops_template_id=BKSEC_SOPS_TEMPLATE_ID），
+         即发单能力就绪。
+
+    """
+
+    # 必配环境变量
+    REQUIRED_ENV = ("BKSEC_PROJECT_ID", "BKSEC_SOPS_TEMPLATE_ID", "BKSEC_PLUGIN_CONFIG_API_URL")
+
+    def _update_status(self):
+        # 显式关闭时不做校验，保留关闭状态
+        if self.feature.status == FeatureStatusChoices.DENY.value:
+            return FeatureStatusChoices.DENY.value
+
+        from services.web.risk.models import ProcessApplication
+
+        # 检查必配环境变量与内置套餐
+        missing_env = [name for name in self.REQUIRED_ENV if not getattr(settings, name, None)]
+        has_preset_pa = False
+        template_id = getattr(settings, "BKSEC_SOPS_TEMPLATE_ID", None)
+        if template_id:
+            try:
+                has_preset_pa = ProcessApplication.objects.filter(
+                    is_builtin=True, sops_template_id=int(template_id)
+                ).exists()
+            except (TypeError, ValueError):
+                pass
+        self._feature.config = {
+            "missing_env": missing_env,
+            "has_preset_pa": has_preset_pa,
+        }
+        if missing_env or not has_preset_pa:
+            return FeatureStatusChoices.DENY.value
+        return FeatureStatusChoices.AVAILABLE.value

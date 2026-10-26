@@ -19,16 +19,26 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy
+from django.utils import timezone
+from django.utils.translation import gettext, gettext_lazy
+from rest_framework import serializers
+from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
-from services.web.risk.constants import ApproveTicketFields, RiskStatus
-from services.web.risk.models import ProcessApplication, Risk, RiskRule
+from apps.sops.constants import SOPSTaskStatus
+from services.web.risk.bksec.service import FAILURE_HINT_MAX_LEN, iter_status_nodes
+from services.web.risk.constants import (
+    PA_RESULT_KEYWORD_LABELS,
+    PA_TRIGGER_KEYWORD_LABELS,
+    ApproveTicketFields,
+    RiskStatus,
+)
+from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
     ListAllProcessApplicationsReqSerializer,
@@ -39,8 +49,14 @@ from services.web.risk.serializers import (
     ToggleProcessApplicationReqSerializer,
     UpdateProcessApplicationsReqSerializer,
 )
+from services.web.risk.utils import (
+    calc_task_duration,
+    calc_task_finish_time,
+    extract_attempt_records,
+)
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
+from services.web.strategy_v2.models import Strategy
 
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
@@ -95,6 +111,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
     def perform_request(self, validated_request_data):
         # 风险处理人不一定有处理套餐相关 action 权限，但风险单展示需要按场景加载套餐名称。
         scene_id = validated_request_data["scene_id"]
+        has_execution_records = validated_request_data.get("has_execution_records")
         process_applications = ProcessApplication.objects.all()
         process_applications = SceneScopeFilter.filter_queryset(
             queryset=process_applications,
@@ -102,6 +119,20 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
             pk_field="id",
         )
+        # 按「是否有执行记录」过滤：执行记录即 action=AutoProcess 的 TicketNode（与执行记录列表口径一致，含测试单）
+        if has_execution_records is not None:
+            pa_ids = {
+                int(pa_id)
+                for pa_id in TicketNode.objects.filter(action="AutoProcess")
+                .exclude(process_result__pa_id__isnull=True)
+                .values_list("process_result__pa_id", flat=True)
+                if str(pa_id).isdigit()
+            }
+            process_applications = (
+                process_applications.filter(id__in=pa_ids)
+                if has_execution_records
+                else process_applications.exclude(id__in=pa_ids)
+            )
         return [
             {"id": pa.id, "name": pa.name, "sops_template_id": pa.sops_template_id, "is_enabled": pa.is_enabled}
             for pa in process_applications
@@ -127,6 +158,19 @@ class CreateProcessApplication(ProcessApplicationMeta):
         return pa
 
 
+def _reject_builtin_edit(pa: ProcessApplication) -> None:
+    """
+    内置套餐（BKSEC 发单）禁止编辑/启停：
+
+    参数由策略配置生成并挂在自动规则上，套餐本身不承载配置；
+    修改 need_approve/sops_template_id 等会破坏发送契约。
+    """
+    if pa.is_builtin:
+        raise serializers.ValidationError(
+            gettext("内置套餐【%s】由系统维护，不支持编辑或启停；如需调整 SOPS 模板请修改 BKSEC_SOPS_TEMPLATE_ID 环境变量") % pa.name
+        )
+
+
 class UpdateProcessApplication(ProcessApplicationMeta):
     name = gettext_lazy("更新处理套餐")
     RequestSerializer = UpdateProcessApplicationsReqSerializer
@@ -135,6 +179,7 @@ class UpdateProcessApplication(ProcessApplicationMeta):
 
     def perform_request(self, validated_request_data):
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["id"])
+        _reject_builtin_edit(pa)
         for key, val in validated_request_data.items():
             setattr(pa, key, val)
         pa.save()
@@ -179,6 +224,511 @@ class ListRuleByPA(ProcessApplicationMeta):
         return RiskRule.load_latest_rules().filter(pa_id=pa.id).order_by("-is_enabled", order_field)
 
 
+class ListPAExecutionRecords(ProcessApplicationMeta):
+    """
+    获取处理套餐执行记录（执行记录侧滑：套餐页看全部/单套餐，风险入口按风险ID筛选）
+
+    数据链路：TicketNode(action=AutoProcess) → Risk(rule_id) → RiskRule(pa_id) → 套餐
+    """
+
+    name = gettext_lazy("获取处理套餐执行记录")
+    # 分页响应：返回 {count, page, page_size, num_pages, results[]}；框架无 serializer 时直接透传 dict
+    audit_action = ActionEnum.LIST_PA
+
+    @staticmethod
+    def _build_failure_hint(process_result: dict) -> str:
+        """失败提示：优先读写入点已落库的文本，为空时从当前状态里兜底取首个节点错误（只读，不回源）"""
+        hint = process_result.get("failure_hint") or ""
+        if hint:
+            return hint
+        for child in iter_status_nodes(process_result.get("status") or {}):
+            error_message = str(child.get("error_message") or "").strip()
+            if error_message:
+                return error_message[:FAILURE_HINT_MAX_LEN]
+        return ""
+
+    @staticmethod
+    def _split_multi(raw: str) -> list:
+        """多选参数归一化：逗号分隔拆列表，去空白，保序去重"""
+        values = []
+        for value in str(raw or "").split(","):
+            value = value.strip()
+            if value and value not in values:
+                values.append(value)
+        return values
+
+    @staticmethod
+    def _filter_by_record_id(nodes, record_id: str):
+        """执行记录 ID 精确过滤（字符串比较，与 task_id 筛选同风格）；空值不过滤"""
+        return nodes.filter(id=record_id) if record_id else nodes
+
+    @staticmethod
+    def _pa_filter_q(pa_ids: list) -> Q:
+        """套餐归属过滤条件：与展示口径一致（快照优先，无快照走规则链路兜底）
+
+        - 执行时快照 process_result.pa_id 优先：覆盖手动分派 / 测试单 / 规则改绑后的历史记录
+        - 无快照的历史节点走规则链路：按 (rule_id, rule_version) 精确命中；
+          风险无 rule_version 时按规则最新版本归属（与展示兜底一致）
+        """
+        # 快照命中：pa_id 写入为 int，JSON 路径查询类型敏感，兼容 str（同 task_id 筛选）
+        snapshot_q = Q()
+        for value in pa_ids:
+            snapshot_q |= Q(process_result__pa_id=value) | Q(process_result__pa_id=str(value))
+        # 无快照判定：与展示的 `process_result.get("pa_id") or 兜底` 语义一致（缺失/None/0/空串）
+        no_snapshot_q = Q(process_result__pa_id__isnull=True) | Q(process_result__pa_id=0) | Q(process_result__pa_id="")
+        # 规则链路：目标套餐当前/历史版本绑定的 (rule_id, version) 精确匹配
+        legacy_rule_q = Q()
+        for item in (
+            RiskRule.objects.filter(pa_id__in=pa_ids).exclude(rule_id__isnull=True).values("rule_id", "version")
+        ):
+            if item["version"] is None:
+                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version__isnull=True)
+            else:
+                legacy_rule_q |= Q(rule_id=item["rule_id"], rule_version=item["version"])
+        # 风险无 rule_version：按规则最新版本归属（升序遍历，最后写入即最新版本）
+        latest_pa = {}
+        for item in RiskRule.objects.exclude(rule_id__isnull=True).order_by("version").values("rule_id", "pa_id"):
+            latest_pa[item["rule_id"]] = item["pa_id"]
+        for rule_id, pa_of_latest in latest_pa.items():
+            if pa_of_latest in pa_ids:
+                legacy_rule_q |= Q(rule_id=rule_id, rule_version__isnull=True)
+        if not legacy_rule_q:
+            return snapshot_q
+        legacy_q = no_snapshot_q & Q(risk_id__in=Risk.objects.filter(legacy_rule_q).values("risk_id"))
+        return snapshot_q | legacy_q
+
+    @staticmethod
+    def _result_state_q(value: str) -> Q:
+        """归一化状态 → SOPS state 过滤条件（unknown 覆盖空状态；其他值不加条件）"""
+        if value == "success":
+            return Q(process_result__status__state=SOPSTaskStatus.FINISHED.value)
+        if value == "failed":
+            return Q(process_result__status__state__in=[s.value for s in SOPSTaskStatus.get_failed_status()])
+        if value == "running":
+            return Q(
+                process_result__status__state__in=[
+                    SOPSTaskStatus.CREATED.value,
+                    SOPSTaskStatus.RUNNING.value,
+                    SOPSTaskStatus.SUSPENDED.value,
+                    SOPSTaskStatus.NODE_SUSPENDED.value,
+                ]
+            )
+        if value == "unknown":
+            return (
+                Q(process_result__status__isnull=True)
+                | Q(process_result__status__state="")
+                | Q(process_result__status__state__isnull=True)
+            )
+        return Q()
+
+    @staticmethod
+    def _enum_keyword_q(keyword: str, labels: dict, make_q) -> Q:
+        """枚举字段关键词展开：内部值全等（大小写不敏感）或 keyword 是展示词的子串
+
+        - 只做「keyword ⊂ 展示词」单向匹配：`成功` → `执行成功`；反向（展示词 ⊂ keyword）
+          会把长关键词误展开（如 `frodomei测试专用` 含「测试」→ 全部 trigger=test），故不支持
+        - 子串命中要求 keyword 长度 >= 2，防单字噪音（如「中」误命中「执行中」）
+        - 英文部分匹配（如 "aut"）不展开，交由字段 icontains 兜底
+        - 未命中贡献空条件（Q()），不影响其他字段的 OR
+        """
+        q = Q()
+        kw_lower = keyword.lower()
+        for value, label in labels.items():
+            hit = kw_lower == value.lower()
+            if not hit and len(keyword) >= 2 and keyword in label:
+                hit = True
+            if hit:
+                q |= make_q(value)
+        return q
+
+    @classmethod
+    def _keyword_q(cls, keyword: str) -> Q:
+        """全量模糊搜索：文本字段 icontains + 枚举字段按内部值/展示词展开，各条件 OR"""
+        # SOPS 任务 ID（JSON 内可能为 int/str，同时兼容；icontains 对 int 兜底精确匹配）
+        task_id_q = Q(process_result__task__task_id__icontains=keyword)
+        try:
+            task_id_q |= Q(process_result__task__task_id=int(keyword))
+        except (TypeError, ValueError):
+            pass
+        # 套餐名兜底：快照 pa_name 缺失时展示走 pa_id/规则链路取名，
+        # 故关键词命中 ProcessApplication.name 时按 _pa_filter_q 同口径反查（快照 pa_name 本身已由 icontains 覆盖）
+        pa_name_values = list(ProcessApplication.objects.filter(name__icontains=keyword).values_list("id", flat=True))
+        legacy_pa_name_q = Q()
+        if pa_name_values:
+            no_snapshot_name_q = Q(process_result__pa_name__isnull=True) | Q(process_result__pa_name="")
+            legacy_pa_name_q = no_snapshot_name_q & cls._pa_filter_q(pa_name_values)
+        return (
+            Q(id__icontains=keyword)
+            | Q(risk_id__icontains=keyword)
+            | Q(operator__icontains=keyword)
+            | Q(process_result__task_name__icontains=keyword)
+            | Q(process_result__pa_name__icontains=keyword)
+            | Q(process_result__failure_hint__icontains=keyword)
+            | Q(process_result__trigger__icontains=keyword)
+            | Q(process_result__status__state__icontains=keyword)
+            | task_id_q
+            | Q(
+                risk_id__in=Risk.objects.filter(
+                    Q(title__icontains=keyword) | Q(status__icontains=keyword) | Q(risk_level__icontains=keyword)
+                ).values("risk_id")
+            )
+            | legacy_pa_name_q
+            | cls._enum_keyword_q(keyword, PA_TRIGGER_KEYWORD_LABELS, lambda v: Q(process_result__trigger=v))
+            | cls._enum_keyword_q(keyword, PA_RESULT_KEYWORD_LABELS, cls._result_state_q)
+        )
+
+    class RequestSerializer(serializers.Serializer):
+        id = serializers.CharField(
+            label=gettext_lazy("执行记录ID"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy(
+                "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+            ),
+        )
+        keyword = serializers.CharField(
+            label=gettext_lazy("搜索关键词"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy(
+                "全量模糊搜索：逗号分隔多个关键词，词之间为「且」（记录须同时命中每个词），"
+                "单个词内部为「或」——命中下列任一字段即算命中：执行记录ID、任务ID、任务名称、套餐名称、"
+                "执行人、风险ID、风险标题/状态/等级、失败提示、触发方式、执行状态；"
+                "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
+            ),
+        )
+        pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
+        risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
+        scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
+        task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
+        task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
+        pa_name = serializers.CharField(
+            label=gettext_lazy("套餐名称"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("精确匹配，支持多选，逗号分隔（如 套餐A,套餐B），任一命中即返回"),
+        )
+        trigger = serializers.CharField(
+            label=gettext_lazy("触发方式"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("支持多选，逗号分隔（如 auto,test），任一命中即返回"),
+        )
+        result = serializers.CharField(
+            label=gettext_lazy("状态"),
+            required=False,
+            allow_blank=True,
+            help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
+        )
+        operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
+        order_by = serializers.CharField(
+            label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
+        )
+        page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
+        page_size = serializers.IntegerField(
+            label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
+        )
+
+    def perform_request(self, validated_request_data):
+        record_id = (validated_request_data.get("id") or "").strip()
+        pa_id = validated_request_data.get("pa_id")
+        risk_id = validated_request_data.get("risk_id")
+        scene_id = validated_request_data.get("scene_id")
+        task_id = validated_request_data.get("task_id", "").strip()
+        task_name = validated_request_data.get("task_name", "").strip()
+        pa_name_values = self._split_multi(validated_request_data.get("pa_name", ""))
+        trigger_values = self._split_multi(validated_request_data.get("trigger", ""))
+        result_values = self._split_multi(validated_request_data.get("result", ""))
+        operator = validated_request_data.get("operator", "").strip()
+        order_by = validated_request_data.get("order_by", "-start_time").strip()
+        page = validated_request_data.get("page", 1)
+        page_size = validated_request_data.get("page_size", 20)
+
+        # 处理套餐执行记录包含测试单（is_test 不过滤）
+        nodes = TicketNode.objects.filter(action="AutoProcess")
+        # 数据范围收敛（对齐风险列表口径）：仅展示调用者有权查看的风险（IAM + 本地授权）的执行记录
+        nodes = nodes.filter(risk_id__in=Risk.load_authed_risks(action=ActionEnum.LIST_RISK).values("risk_id"))
+
+        # 执行记录 ID 精确过滤（TicketNode.id 为 UUID，格式校验在 RequestSerializer.validate_id）
+        nodes = self._filter_by_record_id(nodes, record_id)
+
+        # 套餐筛选 / 场景范围：归属口径与展示一致——执行时快照优先，无快照走规则（含版本）链路兜底
+        if pa_id or scene_id:
+            pa_queryset = ProcessApplication.objects.all()
+            if pa_id:
+                pa_queryset = pa_queryset.filter(id=pa_id)
+            if scene_id:
+                pa_queryset = SceneScopeFilter.filter_queryset(
+                    queryset=pa_queryset,
+                    scene_id=scene_id,
+                    resource_type=ResourceVisibilityType.PROCESS_APPLICATION,
+                    pk_field="id",
+                )
+            nodes = nodes.filter(self._pa_filter_q(list(pa_queryset.values_list("id", flat=True))))
+
+        # 风险入口：按风险 ID 筛选
+        if risk_id:
+            nodes = nodes.filter(risk_id=risk_id)
+
+        # 执行人筛选
+        if operator:
+            nodes = nodes.filter(operator__icontains=operator)
+
+        # 任务名称筛选（快照字段，ORM 下沉）
+        if task_name:
+            nodes = nodes.filter(process_result__task_name__icontains=task_name)
+
+        # 套餐名称筛选（精确匹配，支持多选，任一命中；快照字段，ORM 下沉；
+        # 历史无快照记录由展示逻辑 rule→pa 兜底，筛选不覆盖）
+        if pa_name_values:
+            nodes = nodes.filter(process_result__pa_name__in=pa_name_values)
+
+        # 触发方式筛选（支持多选，任一命中）
+        if trigger_values:
+            nodes = nodes.filter(process_result__trigger__in=trigger_values)
+
+        # 任务 ID 筛选（JSON 内 task_id 可能为 int/str，同时兼容）
+        if task_id:
+            task_id_cond = Q(process_result__task__task_id=task_id)
+            try:
+                task_id_cond |= Q(process_result__task__task_id=int(task_id))
+            except (TypeError, ValueError):
+                pass
+            nodes = nodes.filter(task_id_cond)
+
+        # 状态筛选（支持多选，任一命中）：result → SOPS state 映射（state 为固定枚举字符串）
+        if result_values:
+            result_q = Q()
+            for value in result_values:
+                result_q |= self._result_state_q(value)
+            nodes = nodes.filter(result_q)
+
+        # 全量模糊搜索：逗号分词，词与词之间 AND（记录须同时命中每个词）；
+        # 单个词内部仍是「全字段 OR」（见 _keyword_q）。整体上再与上方精确筛选 AND 叠加。
+        # 兼容中文全角逗号：用户在中文输入法下极易输入「，」而非「,」
+        keyword = validated_request_data.get("keyword", "").strip()
+        for term in self._split_multi(keyword.replace("，", ",")):
+            nodes = nodes.filter(self._keyword_q(term))
+
+        # 排序
+        order_field_map = {
+            # start_time 为对外字段名；time 保留为兼容旧调用方的别名
+            "start_time": "timestamp",
+            "-start_time": "-timestamp",
+            "time": "timestamp",
+            "-time": "-timestamp",
+            "operator": "operator",
+            "-operator": "-operator",
+        }
+        # 耗时排序：未完成的记录 duration 为 null，统一置顶（nulls_first），
+        # 并以开始时间作为次键 —— 对未完成记录而言「已耗时 = now - start_time」，
+        # 同一时刻 now 相同，故组内按开始时间升序即等价于「已运行越久越靠前」
+        duration_order_map = {
+            "duration": [F("duration").asc(nulls_first=True), "-timestamp"],
+            "-duration": [F("duration").desc(nulls_first=True), "timestamp"],
+        }
+        if order_by in duration_order_map:
+            nodes = nodes.order_by(*duration_order_map[order_by])
+        else:
+            nodes = nodes.order_by(order_field_map.get(order_by, "-timestamp"))
+
+        # 分页：count 先于切片（总数）；切片后仅组装当前页数据
+        total = nodes.count()
+        start = (page - 1) * page_size
+        nodes = nodes[start : start + page_size]
+
+        # 批量装配：风险信息 + 套餐信息
+        risk_map = {
+            risk["risk_id"]: risk
+            for risk in Risk.objects.filter(risk_id__in=[n.risk_id for n in nodes]).values(
+                "risk_id", "title", "status", "risk_level", "rule_id", "rule_version"
+            )
+        }
+        # 规则 → 套餐映射按 (rule_id, version) 精确匹配（规则改绑会出新版本）；
+        # 另记最新版本，供风险无 rule_version 的历史记录兜底
+        rule_pa_map = {}
+        rule_latest_pa = {}
+        for item in (
+            RiskRule.objects.filter(rule_id__in={r["rule_id"] for r in risk_map.values() if r["rule_id"]})
+            .order_by("version")
+            .values("rule_id", "version", "pa_id")
+        ):
+            rule_pa_map[(item["rule_id"], item["version"])] = item["pa_id"]
+            rule_latest_pa[item["rule_id"]] = item["pa_id"]
+        pa_name_map = {
+            pa["id"]: pa["name"]
+            for pa in ProcessApplication.objects.filter(id__in=set(rule_pa_map.values())).values("id", "name")
+        }
+
+        records = []
+        for node in nodes:
+            risk = risk_map.get(node.risk_id, {})
+            process_result = node.process_result or {}
+            # 套餐归属：优先取执行时快照（手动分派/规则改绑套餐均正确），历史节点无快照时按
+            # (rule_id, rule_version) 精确兜底，风险无版本时按规则最新版本兜底
+            pa_id_of_record = process_result.get("pa_id")
+            if not pa_id_of_record:
+                pa_id_of_record = rule_pa_map.get((risk.get("rule_id"), risk.get("rule_version")))
+                if pa_id_of_record is None and risk.get("rule_id") and risk.get("rule_version") is None:
+                    pa_id_of_record = rule_latest_pa.get(risk.get("rule_id"))
+            state = (process_result.get("status") or {}).get("state", "")
+            if state in SOPSTaskStatus.get_success_status():
+                result = "success"
+            elif state in SOPSTaskStatus.get_failed_status():
+                result = "failed"
+            elif state:
+                result = "running"
+            else:
+                result = "unknown"
+
+            task_info = process_result.get("task") or {}
+            sops_task_id = str(task_info.get("task_id", "") or "")
+            sops_task_url = str(task_info.get("task_url", "") or "")
+            current_task_name = process_result.get("task_name") or ""
+            current_pa_name = process_result.get("pa_name") or pa_name_map.get(pa_id_of_record, "")
+            current_trigger = process_result.get("trigger") or ""
+
+            records.append(
+                {
+                    "id": node.id,
+                    "risk_id": node.risk_id,
+                    "risk_title": risk.get("title") or "",
+                    "risk_status": risk.get("status") or "",
+                    "risk_level": risk.get("risk_level") or "",
+                    "pa_id": pa_id_of_record or 0,
+                    "pa_name": current_pa_name,
+                    "operator": node.operator,
+                    # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
+                    "start_time": node.time,
+                    "finish_time": calc_task_finish_time(process_result.get("status") or {}),
+                    "sops_task_id": sops_task_id,
+                    "sops_task_url": sops_task_url,
+                    "sops_state": state,
+                    "result": result,
+                    "task_name": current_task_name,
+                    "trigger": current_trigger,
+                    "duration": calc_task_duration(process_result.get("status") or {}),
+                    "is_test": node.is_test,
+                    "failure_hint": self._build_failure_hint(process_result) if result == "failed" else "",
+                }
+            )
+
+        return {
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "num_pages": (total + page_size - 1) // page_size,
+            "results": records,
+        }
+
+
+class GetPAExecutionRecordDetail(ProcessApplicationMeta):
+    """
+    获取执行记录详情
+
+    返回基本信息 + 参数 + 尝试记录，信息来源与执行记录列表一致（TicketNode）。
+    """
+
+    name = gettext_lazy("获取执行记录详情")
+    audit_action = ActionEnum.LIST_PA
+
+    class RequestSerializer(serializers.Serializer):
+        id = serializers.CharField(label=gettext_lazy("执行记录ID"), required=True)
+
+    def perform_request(self, validated_request_data):
+        node_id = validated_request_data["id"]
+        node = get_object_or_404(TicketNode, id=node_id)
+        risk = Risk.objects.filter(risk_id=node.risk_id).first()
+        # 数据范围收敛（对齐风险列表口径）：风险存在但调用者无权查看（IAM + 本地授权）→ 404；
+        # 风险不存在（孤儿记录）维持展示，不携带任何风险数据
+        if risk is not None:
+            get_object_or_404(Risk.load_authed_risks(action=ActionEnum.LIST_RISK), risk_id=risk.risk_id)
+        process_result = node.process_result or {}
+
+        # 套餐信息：快照优先，历史节点无快照时按 (rule_id, rule_version) 兜底（与列表同口径）
+        pa_id = process_result.get("pa_id") or 0
+        pa_name = process_result.get("pa_name") or ""
+        if risk and (not pa_id or not pa_name):
+            rule = None
+            if risk.rule_id:
+                rule = RiskRule.objects.filter(rule_id=risk.rule_id, version=risk.rule_version).first()
+                if not rule and risk.rule_version is None:
+                    rule = RiskRule.objects.filter(rule_id=risk.rule_id).order_by("-version").first()
+            if rule:
+                pa = ProcessApplication.objects.filter(id=rule.pa_id).first()
+                pa_id = pa_id or rule.pa_id or 0
+                pa_name = pa_name or (pa.name if pa else "")
+
+        # 状态映射
+        state = (process_result.get("status") or {}).get("state", "")
+        if state in SOPSTaskStatus.get_success_status():
+            result = "success"
+        elif state in SOPSTaskStatus.get_failed_status():
+            result = "failed"
+        elif state:
+            result = "running"
+        else:
+            result = "unknown"
+
+        # 尝试记录（从 SOPS 状态中提取每次尝试）
+        status_info = process_result.get("status") or {}
+        attempts = extract_attempt_records(status_info)
+        # 重试记录（RetryAutoProcess 重试前写入的快照，仅 append 不覆盖）
+        retry_history = process_result.get("retry_history") or []
+
+        # 参数信息（从 Risk 获取）
+        params = {}
+        if risk:
+            strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+            params = {
+                "strategy_id": risk.strategy_id,
+                "strategy_name": getattr(strategy, "strategy_name", "") if strategy else "",
+                "risk_type": risk.event_type or [],
+                "risk_evidence": risk.event_evidence or [],
+                "risk_source": risk.event_source or "",
+                "risk_description": risk.event_content or "",
+                "risk_time": (
+                    timezone.localtime(risk.event_time).strftime(api_settings.DATETIME_FORMAT)
+                    if risk.event_time
+                    else ""
+                ),
+                "operator": risk.operator or [],
+                "raw_event_id": risk.raw_event_id or "",
+            }
+
+        return {
+            # 基本信息
+            "id": node.id,
+            "task_name": process_result.get("task_name") or "",
+            "pa_id": pa_id,
+            "pa_name": pa_name,
+            "trigger": process_result.get("trigger") or "",
+            "operator": node.operator,
+            # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
+            "start_time": node.time,
+            "finish_time": calc_task_finish_time(status_info),
+            "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
+            "sops_task_url": str((process_result.get("task") or {}).get("task_url", "") or ""),
+            "sops_state": state,
+            "result": result,
+            "duration": calc_task_duration(status_info),
+            "is_test": node.is_test,
+            "failure_hint": ListPAExecutionRecords._build_failure_hint(process_result) if result == "failed" else "",
+            # 风险单关联
+            "risk_id": node.risk_id,
+            "risk_title": (risk.title or "") if risk else "",
+            "risk_status": (risk.status or "") if risk else "",
+            "risk_level": (risk.risk_level or "") if risk else "",
+            # 参数信息
+            "params": params,
+            # 重试记录
+            "retry_count": len(retry_history),
+            "retry_history": retry_history,
+            # 尝试记录
+            "attempts": attempts,
+        }
+
+
 class ToggleProcessApplication(ProcessApplicationMeta):
     name = gettext_lazy("启停处理套餐")
     RequestSerializer = ToggleProcessApplicationReqSerializer
@@ -186,6 +736,7 @@ class ToggleProcessApplication(ProcessApplicationMeta):
 
     def perform_request(self, validated_request_data):
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["id"])
+        _reject_builtin_edit(pa)
         pa.is_enabled = validated_request_data["is_enabled"]
         pa.save(update_fields=["is_enabled"])
 

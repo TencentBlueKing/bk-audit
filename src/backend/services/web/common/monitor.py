@@ -28,6 +28,7 @@ __all__ = [
     "AssetSyncAnomalyEvent",
     "AssetSyncCheckAnomalyEvent",
     "ScenePermissionGrantFailedEvent",
+    "BkSecConfigSyncFailedEvent",
 ]
 
 
@@ -132,3 +133,27 @@ class ScenePermissionGrantFailedEvent(Event):
     name = "scene_permission_grant_failed"
     documentation = "场景权限申请审批通过但授权失败（重试已达上限）"
     labelnames = ["application_id", "applicant", "scene_id", "role", "grant_error"]
+
+
+class BkSecConfigSyncFailedEvent(Event):
+    """BKSEC 插件配置同步失败事件
+
+    保存策略/测试发送时插件 Config 同步失败时上报
+
+    维度字段:
+    - strategy_id: 策略 ID
+    - stage: 同步场景
+        - strategy_save: 保存策略时的同步（失败会阻断策略保存）
+        - test_send: 测试发送时的同步
+    - fail_reason: 失败原因
+        - api_url_missing: 插件配置地址未配置（BKSEC_PLUGIN_CONFIG_API_URL 为空）
+        - token_missing: risk_access 列表未返回该 risk_type_id 的 token
+        - token_fetch_failed: 调用 risk_access 列表接口异常
+        - upsert_rejected: 插件返回 result=false，拒绝写入 Config
+        - api_unreachable: 调用插件 Config 同步接口异常（含 5xx）
+
+    """
+
+    name = "bksec_config_sync_failed"
+    documentation = "BKSEC 插件配置同步失败"
+    labelnames = ["strategy_id", "stage", "fail_reason"]
