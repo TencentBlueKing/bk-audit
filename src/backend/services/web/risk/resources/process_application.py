@@ -391,8 +391,9 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
             required=False,
             allow_blank=True,
             help_text=gettext_lazy(
-                "全量模糊搜索（任一命中即返回）：执行记录ID、任务ID、任务名称、套餐名称、执行人、风险ID、"
-                "风险标题/状态/等级、失败提示、触发方式、执行状态；"
+                "全量模糊搜索：逗号分隔多个关键词，词之间为「且」（记录须同时命中每个词），"
+                "单个词内部为「或」——命中下列任一字段即算命中：执行记录ID、任务ID、任务名称、套餐名称、"
+                "执行人、风险ID、风险标题/状态/等级、失败提示、触发方式、执行状态；"
                 "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
             ),
         )
@@ -500,10 +501,12 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                 result_q |= self._result_state_q(value)
             nodes = nodes.filter(result_q)
 
-        # 全量模糊搜索：与上方精确筛选 AND 叠加
+        # 全量模糊搜索：逗号分词，词与词之间 AND（记录须同时命中每个词）；
+        # 单个词内部仍是「全字段 OR」（见 _keyword_q）。整体上再与上方精确筛选 AND 叠加。
+        # 兼容中文全角逗号：用户在中文输入法下极易输入「，」而非「,」
         keyword = validated_request_data.get("keyword", "").strip()
-        if keyword:
-            nodes = nodes.filter(self._keyword_q(keyword))
+        for term in self._split_multi(keyword.replace("，", ",")):
+            nodes = nodes.filter(self._keyword_q(term))
 
         # 排序
         order_field_map = {
