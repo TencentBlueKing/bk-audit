@@ -21,6 +21,7 @@ from unittest import mock
 
 from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
+from django.test.utils import override_settings
 from django.utils.translation import gettext
 
 from apps.itsm.constants import TicketStatus
@@ -38,6 +39,7 @@ from tests.test_risk.test_tickets.constants import (
 )
 
 
+@override_settings(BKAPP_ENABLE_ITSM_V4=True)
 class ForApproveTest(TicketTest):
     @mock.patch(
         "services.web.risk.handlers.ticket.get_itsm_ticket_status",
