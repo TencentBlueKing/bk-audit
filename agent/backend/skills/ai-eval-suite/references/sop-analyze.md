@@ -1,0 +1,208 @@
+# SOP 3: 分析评估结果
+
+## 子 agent 调用
+
+分析脚本执行是机械操作，推荐交给子 agent。根因分析建议主 agent 审阅。
+
+## 分析入口
+
+优先使用内置分析脚本，辅以交互式报告做深度检查。
+
+### 内置分析脚本（默认方式）
+
+```bash
+# 单次分析
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json
+
+# 多 provider 横向对比（按模型维度拆分通过率、独有失败、延迟）
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json --by-provider
+
+# 两轮纵向对比（调优前 vs 调优后）
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/before.json evals/<suite>/output/after.json
+
+# 输出到文件
+python <skill-path>/scripts/analyze_results.py evals/<suite>/output/结果文件.json -o evals/<suite>/output/report.md
+```
+
+> `<skill-path>` 即本 skill 加载时输出的 base 目录路径。
+
+脚本能力：
+- 兼容 promptfoo 两种 JSON 格式（`results.results` / `results.table.body`）
+- 按失败类型分类 + 对比报告（新增通过/失败/回归/持续失败）
+- `--by-provider` 模式输出多模型横向对比表
+
+两轮对比按 `(description, provider)` 比较失败集合；同组任一次重复失败就会进入集合，失败示例只保留最后一次。因此“持续失败”不代表每次都失败，也不表达成功数与总次数。存在重复结果时，按组核对原始记录的成功数、总数和失败原因，再解释变化；参与比较的用例与 provider 范围应一致，缺失记录不能作为通过。
+
+### 解析 output JSON（深度分析）
+
+读取 `-o` 导出的 JSON 文件，提取结构化的失败信息。
+
+**JSON 结构中的关键字段：**
+
+promptfoo 输出有两种格式，分析脚本已兼容两者。
+
+**格式 1: results 列表（常见于 `promptfoo eval -o`）**
+
+```json
+{
+  "results": {
+    "stats": {
+      "successes": 30, "failures": 5, "errors": 0,
+      "tokenUsage": { "total": 12345 }
+    },
+    "results": [
+      {
+        "success": false,
+        "testCase": { "description": "用例描述", "vars": { "query": "..." } },
+        "response": { "output": "模型输出", "error": null },
+        "gradingResult": {
+          "componentResults": [
+            { "pass": false, "reason": "失败原因", "assertion": { "type": "python" } }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+**格式 2: table body（部分版本）**
+
+```json
+{
+  "results": {
+    "stats": { "successes": 30, "failures": 5 },
+    "table": {
+      "body": [
+        {
+          "description": "用例描述",
+          "vars": { "query": "..." },
+          "outputs": [
+            { "pass": false, "text": "模型输出", "gradingResult": { "componentResults": [...] } }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+**注意**：格式 1 中用例描述在 `row.testCase.description`（不是 `row.description`），
+输出在 `row.response.output`，通过状态在 `row.success`。
+
+## 常见失败类型
+
+以下是几类常见的失败类型，用于协助分析失败原因。
+
+### 类型 1: 语义不符
+
+**特征：** `llm-rubric`、`factuality`、`answer-relevance` 等模型辅助断言失败
+
+**典型原因：**
+- 模型输出在语义上不符合期望（但格式和字段可能正确）
+- 模型对特定场景的理解与期望不一致
+- llm-rubric 的评判标准过于严格或模糊
+
+**分析方法：** 查看 grader 的评判理由，判断是模型输出问题还是评判标准问题
+
+### 类型 2: 超时/错误
+
+**特征：** provider error，非断言失败
+
+**典型原因：**
+- AI 服务不可用或超时
+- 网络问题
+- 认证失败
+
+**分析方法：** 检查错误信息，确认是基础设施问题还是业务问题
+
+### 类型 3: 波动/不稳定
+
+**特征：** 同一用例多次运行时，时而通过时而失败，无确定性规律
+
+**典型原因：**
+- AI 服务本身的输出不稳定（temperature > 0、模型随机性）
+- 网络抖动导致偶发超时
+- AI 平台负载波动
+
+先分析已有重复结果。只有请求包含重跑验证时，才使用 `--repeat` 和 `--filter-pattern`；仅分析现有结果时不执行以下模型调用：
+
+```bash
+# 重跑特定用例 3 次，观察一致性
+PROMPTFOO_PYTHON=$(pwd)/.venv/bin/python \
+npx promptfoo eval --no-table -c evals/<suite>/promptfooconfig.yaml \
+  --env-file .env --no-cache \
+  --filter-pattern '<用例描述正则>' --repeat 3
+```
+
+**处理策略：**
+- 记录重复执行的实际结果与差异，少量重复只能提供波动线索，不能据此认定服务固有问题或排除缺陷。
+- 区分已证实根因与待确认原因；数据不足时说明限制，不自动进入调优。
+
+## 分析报告模板
+
+分析完成后向用户报告结论。需要落盘时遵循项目既有记录约定，可使用 `evals/<suite>/output/YYYYMMDD-vN-conclusion.md`；不为单次结果咨询额外扩写记录。
+
+```markdown
+# <suite> 评估结论 — VN (YYYY-MM-DD)
+
+## 总体结果
+
+| 指标 | 值 |
+|------|------|
+| 用例数 | XX |
+| 通过率 | XX% (XX/XX) |
+| 目标阈值 | XX% |
+| 是否达标 | ✅ / ❌ |
+
+## 失败分类汇总
+
+按失败类型分类（参考上方"失败分类框架"），列出数量和占比。
+
+## 失败用例分析
+
+按类型逐个列出失败用例、具体表现和可能原因。
+
+## 与上轮对比（V2+ 时填写）
+
+| 维度 | 上轮 | 本轮 | 变化 |
+|------|------|------|------|
+| 通过率 | XX% | XX% | +X% |
+| 新增通过 | — | X 个 | 列出关键用例 |
+| 新增失败 | — | X 个 | 列出回归用例 |
+
+## 根因总结
+
+1. [最主要的问题及影响范围]
+2. [次要问题]
+
+## 调优建议
+
+- [ ] [建议 1：具体修改方向]
+- [ ] [建议 2：具体修改方向]
+
+## 下一步
+
+→ SOP 4 调优 / 已达标，归档
+```
+
+**命名约定**：文件名与同轮结果文件对应，如：
+
+```
+output/
+├── 20260317-v4-results.json
+├── 20260317-v4-results.html
+└── 20260317-v4-conclusion.md    ← 本轮评估结论
+```
+
+## 分析原则
+
+1. **先看全局再看细节** — 先统计各类失败的数量分布，再逐个分析
+2. **找系统性问题** — 如果多个用例因相同原因失败，说明是系统性问题（如枚举缺失）
+3. **区分模型问题和测试问题** — 有时是期望值不合理，而非模型输出错误
+4. **核对统计口径与失败原因** — 对照原始记录的 error、response 和断言结果分析；provider 超时也可能计入 failure，`stats.errors` 为 0 不能排除调用错误，统计分类本身不能证明根因
+5. **不凭失败比例推断根因** — 复用已有重复证据区分波动线索和可复现问题；额外重跑按请求执行
+
+---
+
+分析完成后给出结论和可选调优建议。已有修改授权或用户确认继续时再读 `sop-tune.md`，不因发现失败自动修改代码、prompt 或测试预期。

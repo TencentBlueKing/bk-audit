@@ -18,10 +18,13 @@
   <div class="exception-box">
     <img
       alt=""
-      src="@images/404.png">
+      :src="png404">
     <p>没找到页面！</p>
   </div>
 </template>
+<script setup lang="ts">
+  import png404 from '@images/404.png?inline';
+</script>
 <style scoped lang="postcss">
   .exception-box {
     margin: auto;

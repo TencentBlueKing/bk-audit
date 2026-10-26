@@ -9,6 +9,8 @@ from unittest.mock import patch
 from django.test import override_settings
 from django.utils import timezone
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
+from api.constants import AIAgentCode
 from services.web.risk.constants import NL2RiskFilterLogStatus, RiskViewType
 from services.web.risk.exceptions import NL2RiskFilterServiceError
 from services.web.risk.handlers.nl2riskfilter import (
@@ -249,6 +251,16 @@ class NL2RiskFilterRequestTest(TestCase):
         mock_chat.side_effect = Exception("AI service timeout")
         with self.assertRaises(NL2RiskFilterServiceError):
             self.resource.request({"query": "测试"})
+
+    @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
+    @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")
+    def test_agent_rate_limit_keeps_http_429_exception(self, mock_chat, mock_user):
+        mock_chat.side_effect = AgentRateLimited(AIAgentCode.RISK_SEARCH)
+
+        with self.assertRaises(AgentRateLimited) as context:
+            self.resource.request({"query": "测试"})
+
+        self.assertEqual(context.exception.STATUS_CODE, 429)
 
     @patch("services.web.risk.resources.risk.get_request_username", return_value="testuser")
     @patch("services.web.risk.resources.risk.api.bk_plugins_ai_agent.chat_completion")

@@ -1,0 +1,2957 @@
+<template>
+  <div
+    ref="sidebarRootRef"
+    class="chat-sidebar"
+    :class="{ 'is-collapsed': collapsed, 'is-sidebar-dragging': !!dragState.type }">
+    <template v-if="!collapsed">
+      <!-- 场景选择 -->
+      <div class="sidebar-project">
+        <scene-system-selector
+          ref="sceneSelectorRef"
+          v-model="selectedScene"
+          :is-all-secen="false"
+          :is-all-system="false"
+          :popover-width="237"
+          scene-permission="view_scene"
+          system-permission="view_system"
+          width="100%"
+          @change="handleSceneChange" />
+      </div>
+
+      <!-- 搜索区：搜索框 + 筛选按钮 -->
+      <div class="sidebar-search">
+        <div class="search-box">
+          <input
+            ref="searchInputRef"
+            v-model="searchKeyword"
+            class="search-input"
+            placeholder="搜索对话"
+            type="search">
+          <search class="search-icon" />
+        </div>
+        <bk-dropdown
+          :key="filterDropdownKey"
+          ref="filterDropdownRef"
+          :is-show="isDropdownShow"
+          placement="bottom-start"
+          :popover-options="{ extCls: 'chat-config-dropdown-pop' }"
+          trigger="click"
+          @hide="handleFilterDropdownHide"
+          @show="isDropdownShow = true">
+          <div
+            class="filter-btn"
+            :class="{ 'is-active': isDropdownShow }"
+            title="更多操作">
+            <img
+              alt=""
+              class="filter-icon"
+              :src="aiSettingIcon">
+          </div>
+          <template #content>
+            <bk-dropdown-menu>
+              <!-- 本期仅开放「清空所有会话」，其余配置项禁用且不可点 -->
+              <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
+                <div class="config-item-row">
+                  <span>导出会话</span>
+                  <angle-right class="sub-icon" />
+                </div>
+              </bk-dropdown-item>
+              <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
+                导入会话
+              </bk-dropdown-item>
+              <bk-dropdown-item
+                v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                ext-cls="is-config-disabled"
+                @click.stop.prevent="onDisabledConfigClick"
+                @mousedown.stop.prevent>
+                报告列表
+              </bk-dropdown-item>
+              <bk-dropdown-item @click="showClearAllDialog">
+                清空所有会话
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          </template>
+        </bk-dropdown>
+      </div>
+
+      <!-- 新对话按钮 -->
+      <div class="new-chat-area">
+        <div
+          class="new-chat-btn"
+          @click="$emit('new-chat')">
+          <img
+            alt=""
+            class="new-chat-icon"
+            :src="aiAddIcon">
+          新对话
+        </div>
+      </div>
+
+      <!-- 对话列表 -->
+      <div
+        ref="conversationListRef"
+        class="conversation-list"
+        :class="{ 'is-dnd-active': !!dragState.type }"
+        @dragleave="handleListDragLeave"
+        @dragover="onConversationListDragOver"
+        @drop="onConversationListDrop">
+        <!-- 侧栏头：新建分组 + 拖出分组投放位 -->
+        <div
+          ref="historySectionRef"
+          class="conv-section conv-section--history"
+          :class="getHistoryDropClass()"
+          @dragleave="handleHistoryDragLeave"
+          @dragover="handleDragOver($event)"
+          @drop="handleDrop($event, 'history', 'history')">
+          <div class="section-label">
+            <span class="label-text">{{ historySectionLabel }}</span>
+            <bk-popover
+              arrow
+              :auto-visibility="false"
+              boundary="body"
+              ext-cls="add-group-popover"
+              hide-ignore-reference
+              :is-show="addGroupDialog.show"
+              placement="right-start"
+              theme="light"
+              trigger="manual"
+              :width="260"
+              @after-show="handleAddGroupPopoverShow"
+              @clickoutside="onAddGroupClickOutside"
+              @update:is-show="onAddGroupShowChange">
+              <span
+                class="label-action"
+                :class="{ 'is-active': addGroupDialog.show }"
+                @click.stop="toggleAddGroupPopover"
+                @mousedown.stop="prepareAddGroupToggle">
+                <plus />
+              </span>
+              <template #content>
+                <div
+                  class="add-group-popover-content"
+                  @click.stop>
+                  <div class="add-group-title">
+                    新建分组
+                  </div>
+                  <bk-input
+                    ref="addGroupInputRef"
+                    v-model="addGroupDialog.name"
+                    placeholder="请输入分组名称"
+                    @enter="confirmAddGroup" />
+                  <div class="add-group-footer">
+                    <bk-button
+                      theme="primary"
+                      @click="confirmAddGroup">
+                      确定
+                    </bk-button>
+                    <bk-button @click="closeAddGroupPopover">
+                      取消
+                    </bk-button>
+                  </div>
+                </div>
+              </template>
+            </bk-popover>
+          </div>
+
+          <div
+            class="history-conv-list"
+            :class="{ 'is-drop-zone-active': showHistoryDropPlaceholder }">
+            <!-- 全部已分组时：拖入历史区域才展开投放位 -->
+            <div
+              class="history-drop-placeholder"
+              :class="{ 'is-visible': showHistoryDropPlaceholder }"
+              @dragover.prevent="onHistoryListDragOver"
+              @drop.prevent="handleDrop($event, 'history', 'history')">
+              拖放到此处移出分组
+            </div>
+          </div>
+        </div>
+
+        <!-- 根层混排：分组与会话按后端 nodes/ 顺序 -->
+        <div class="conv-section conv-section--mixed">
+          <template
+            v-for="item in displayRootItems"
+            :key="item.key">
+            <div
+              v-if="item.kind === 'conversation'"
+              class="conv-item conv-item--root"
+              :class="[
+                getConvItemDragClass(item.conv.id),
+                {
+                  'is-active': activeId === item.conv.id && editingConvId !== item.conv.id,
+                  'is-menu-open': activeMenuId === item.conv.id,
+                },
+              ]"
+              :data-node-id="item.conv.id"
+              data-node-kind="conversation"
+              :draggable="editingConvId !== item.conv.id"
+              @click="$emit('select', item.conv.id)"
+              @dragend="handleDragEnd"
+              @dragover.stop="handleDragOver($event)"
+              @dragstart="handleDragStart($event, 'conversation', item.conv.id)"
+              @drop.stop="handleDrop($event, 'conversation', item.conv.id)">
+              <span class="conv-dot">•</span>
+              <template v-if="editingConvId === item.conv.id">
+                <bk-input
+                  ref="editConvInputRef"
+                  v-model="editConvTitle"
+                  autofocus
+                  class="conv-title-input"
+                  size="small"
+                  @blur="handleEditConvBlur(item.conv.id)"
+                  @click.stop
+                  @enter="(_val, evt) => handleEditConvEnter(item.conv.id, evt)" />
+              </template>
+              <template v-else>
+                <show-tooltips-text
+                  class="conv-title"
+                  :data="item.conv.title"
+                  :highlight-text="searchKeyword.trim()"
+                  :line="1"
+                  placement="right"
+                  theme="dark" />
+              </template>
+              <div
+                class="conv-actions"
+                @click.stop>
+                <bk-dropdown
+                  class="more-dropdown"
+                  :is-show="activeMenuId === item.conv.id"
+                  placement="bottom-end"
+                  :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
+                  trigger="manual"
+                  @hide="hideMenu">
+                  <div
+                    class="action-btn"
+                    :class="{ 'is-active': activeMenuId === item.conv.id }"
+                    @click.stop="toggleConvMenu(item.conv.id)"
+                    @mousedown.stop>
+                    <audit-icon type="more" />
+                  </div>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item @click="startEditConv(item.conv.id, item.conv.title)">
+                        重命名
+                      </bk-dropdown-item>
+                      <bk-dropdown-item ext-cls="sub-menu-item">
+                        <bk-dropdown
+                          placement="right-start"
+                          :popover-options="{ extCls: 'chat-conv-submenu-pop' }"
+                          style="width: 100%"
+                          trigger="hover">
+                          <div class="dropdown-sub-trigger">
+                            <span>移动到分组</span>
+                            <angle-right class="sub-icon" />
+                          </div>
+                          <template #content>
+                            <bk-dropdown-menu>
+                              <bk-dropdown-item
+                                v-for="g in groups"
+                                :key="g.id"
+                                @click="moveToGroup(item.conv.id, g.name)">
+                                {{ g.name }}
+                              </bk-dropdown-item>
+                            </bk-dropdown-menu>
+                          </template>
+                        </bk-dropdown>
+                      </bk-dropdown-item>
+                      <bk-dropdown-item
+                        v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                        ext-cls="sub-menu-item is-dropdown-disabled"
+                        @click.stop.prevent="onDisabledConfigClick"
+                        @mousedown.stop.prevent>
+                        <div class="dropdown-sub-trigger">
+                          <span>导出</span>
+                          <angle-right class="sub-icon" />
+                        </div>
+                      </bk-dropdown-item>
+                      <bk-dropdown-item @click="handleDelete(item.conv)">
+                        删除
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
+              </div>
+            </div>
+            <div
+              v-else
+              class="group-item"
+              :class="getGroupItemDragClass(item.group.name)"
+              :data-node-id="item.group.name"
+              data-node-kind="group"
+              @dragover="handleDragOver($event)"
+              @drop="handleDrop($event, 'group', item.group.name)">
+              <div
+                class="group-header"
+                :class="[
+                  getGroupHeaderDragClass(item.group.name),
+                  { 'is-menu-open': activeGroupMenuId === item.group.name },
+                ]"
+                :draggable="editingGroup !== item.group.name"
+                @click="handleGroupHeaderClick(item.group.name)"
+                @dragend="handleDragEnd"
+                @dragover.stop="onGroupHeaderDragOver($event)"
+                @dragstart="handleDragStart($event, 'group', item.group.name)"
+                @drop.stop="handleDrop($event, 'group', item.group.name)">
+                <img
+                  v-if="isGroupCollapsedInView(item.group.name)"
+                  alt=""
+                  class="group-icon"
+                  draggable="false"
+                  :src="folderEmptyIcon">
+                <img
+                  v-else
+                  alt=""
+                  class="group-icon"
+                  draggable="false"
+                  :src="folderIcon">
+
+                <template v-if="editingGroup === item.group.name">
+                  <bk-input
+                    ref="editGroupInputRef"
+                    v-model="editGroupName"
+                    autofocus
+                    size="small"
+                    @blur="handleEditGroupBlur(item.group.name)"
+                    @click.stop
+                    @enter="(_val, evt) => handleEditGroupEnter(item.group.name, evt)" />
+                </template>
+                <template v-else>
+                  <span class="group-name">{{ item.group.name }}</span>
+                  <span class="group-count">{{ getGroupDisplayCount(item.group) }}</span>
+                  <div class="group-actions">
+                    <div
+                      v-bk-tooltips="{ content: '新对话', placement: 'top' }"
+                      class="group-new-chat"
+                      @click.stop="handleNewChatInGroup(item.group)">
+                      <img
+                        alt=""
+                        class="group-new-chat-icon"
+                        :src="huihuaIcon">
+                    </div>
+                    <bk-dropdown
+                      class="group-more-dropdown"
+                      :is-show="activeGroupMenuId === item.group.name"
+                      placement="bottom-end"
+                      :popover-options="{ extCls: 'chat-group-dropdown-pop' }"
+                      trigger="manual"
+                      @click.stop
+                      @hide="hideGroupMenu"
+                      @mousedown.stop>
+                      <div
+                        class="group-more"
+                        :class="{ 'is-active': activeGroupMenuId === item.group.name }"
+                        @click.stop="toggleGroupMenu(item.group.name)">
+                        <audit-icon type="more" />
+                      </div>
+                      <template #content>
+                        <bk-dropdown-menu>
+                          <bk-dropdown-item @click="startEditGroup(item.group.name)">
+                            重命名
+                          </bk-dropdown-item>
+                          <bk-dropdown-item
+                            v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                            ext-cls="sub-menu-item is-dropdown-disabled"
+                            @click.stop.prevent="onDisabledConfigClick"
+                            @mousedown.stop.prevent>
+                            <div class="dropdown-sub-trigger">
+                              <span>导出会话</span>
+                              <angle-right class="sub-icon" />
+                            </div>
+                          </bk-dropdown-item>
+                          <bk-dropdown-item @click="showDeleteGroup(item.group.name)">
+                            删除分组
+                          </bk-dropdown-item>
+                        </bk-dropdown-menu>
+                      </template>
+                    </bk-dropdown>
+                  </div>
+                </template>
+              </div>
+
+              <div
+                v-show="!isGroupCollapsedInView(item.group.name)"
+                class="group-children"
+                @dragover="onGroupChildrenDragOver($event)"
+                @drop="onGroupChildrenDrop($event, item.group.name)">
+                <div
+                  v-if="item.group.childrenLoading && !filteredGroupedHistory[item.group.name]?.length"
+                  class="group-children-loading">
+                  加载中...
+                </div>
+                <div
+                  v-for="conv in filteredGroupedHistory[item.group.name]"
+                  :key="conv.id"
+                  class="conv-item conv-item--indent"
+                  :class="[
+                    getConvItemDragClass(conv.id),
+                    {
+                      'is-active': activeId === conv.id && editingConvId !== conv.id,
+                      'is-menu-open': activeMenuId === conv.id,
+                    },
+                  ]"
+                  :data-node-group="item.group.name"
+                  :data-node-id="conv.id"
+                  data-node-kind="conversation"
+                  :draggable="editingConvId !== conv.id"
+                  @click="$emit('select', conv.id)"
+                  @dragend="handleDragEnd"
+                  @dragover.stop="handleDragOver($event)"
+                  @dragstart.stop="handleDragStart($event, 'conversation', conv.id, item.group.name)"
+                  @drop.stop="handleDrop($event, 'conversation', conv.id, item.group.name)">
+                  <span class="conv-dot">•</span>
+                  <template v-if="editingConvId === conv.id">
+                    <bk-input
+                      ref="editConvInputRef"
+                      v-model="editConvTitle"
+                      autofocus
+                      class="conv-title-input"
+                      size="small"
+                      @blur="handleEditConvBlur(conv.id)"
+                      @click.stop
+                      @enter="(_val, evt) => handleEditConvEnter(conv.id, evt)" />
+                  </template>
+                  <template v-else>
+                    <show-tooltips-text
+                      class="conv-title"
+                      :data="conv.title"
+                      :highlight-text="searchKeyword.trim()"
+                      :line="1"
+                      placement="right"
+                      theme="dark" />
+                  </template>
+                  <div
+                    class="conv-actions"
+                    @click.stop>
+                    <bk-dropdown
+                      class="more-dropdown"
+                      :is-show="activeMenuId === conv.id"
+                      placement="bottom-end"
+                      :popover-options="{ extCls: 'chat-conv-dropdown-pop' }"
+                      trigger="manual"
+                      @hide="hideMenu">
+                      <div
+                        class="action-btn"
+                        :class="{ 'is-active': activeMenuId === conv.id }"
+                        @click.stop="toggleConvMenu(conv.id)"
+                        @mousedown.stop>
+                        <audit-icon type="more" />
+                      </div>
+                      <template #content>
+                        <bk-dropdown-menu>
+                          <bk-dropdown-item @click="startEditConv(conv.id, conv.title)">
+                            重命名
+                          </bk-dropdown-item>
+                          <bk-dropdown-item ext-cls="sub-menu-item">
+                            <bk-dropdown
+                              placement="right-start"
+                              :popover-options="{ extCls: 'chat-conv-submenu-pop' }"
+                              style="width: 100%"
+                              trigger="hover">
+                              <div class="dropdown-sub-trigger">
+                                <span>移动到分组</span>
+                                <angle-right class="sub-icon" />
+                              </div>
+                              <template #content>
+                                <bk-dropdown-menu>
+                                  <bk-dropdown-item @click="moveToGroup(conv.id)">
+                                    移出分组
+                                  </bk-dropdown-item>
+                                  <bk-dropdown-item
+                                    v-for="g in groups.filter(gItem => gItem.name !== item.group.name)"
+                                    :key="g.id"
+                                    @click="moveToGroup(conv.id, g.name)">
+                                    {{ g.name }}
+                                  </bk-dropdown-item>
+                                </bk-dropdown-menu>
+                              </template>
+                            </bk-dropdown>
+                          </bk-dropdown-item>
+                          <bk-dropdown-item
+                            v-bk-tooltips="{ content: '功能开发中', placement: 'right' }"
+                            ext-cls="sub-menu-item is-dropdown-disabled"
+                            @click.stop.prevent="onDisabledConfigClick"
+                            @mousedown.stop.prevent>
+                            <div class="dropdown-sub-trigger">
+                              <span>导出</span>
+                              <angle-right class="sub-icon" />
+                            </div>
+                          </bk-dropdown-item>
+                          <bk-dropdown-item @click="handleDelete(conv)">
+                            删除
+                          </bk-dropdown-item>
+                        </bk-dropdown-menu>
+                      </template>
+                    </bk-dropdown>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div
+          v-if="isSearchActive && !hasSearchMatches"
+          class="search-results-empty">
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;"
+            type="search-empty">
+            <div>
+              <div style="color: #63656e;">
+                搜索结果为空
+              </div>
+              <div style="margin-top: 8px; color: #979ba5;">
+                可以尝试调整关键词 或
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleClearSearch">
+                  清空搜索条件
+                </bk-button>
+              </div>
+            </div>
+          </bk-exception>
+        </div>
+        <div
+          v-else-if="isConversationListEmpty"
+          class="history-list-empty">
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;color: #63656e;"
+            type="empty">
+            暂无历史对话
+          </bk-exception>
+        </div>
+      </div>
+    </template>
+
+    <!-- 折叠状态：不显示任何菜单项，仅通过悬浮按钮展开 -->
+    <template v-else>
+      <div class="collapsed-placeholder" />
+    </template>
+
+    <!-- 悬浮工具栏（折叠态） -->
+    <div
+      v-if="collapsed"
+      class="collapsed-toolbar">
+      <div
+        v-bk-tooltips="{ content: '展开侧栏', placement: 'right' }"
+        class="toolbar-item"
+        @click="handleCollapsedToggle">
+        <angle-right class="toolbar-icon expand-icon" />
+      </div>
+      <div
+        v-bk-tooltips="{ content: '新对话', placement: 'right' }"
+        class="toolbar-item"
+        @click="handleCollapsedNewChat">
+        <img
+          alt=""
+          class="toolbar-icon add-icon"
+          :src="aiAddIcon">
+      </div>
+      <div
+        ref="collapsedSearchButtonRef"
+        v-bk-tooltips="{ content: '搜索对话', placement: 'right' }"
+        class="toolbar-item"
+        @click="openCollapsedSearch">
+        <img
+          alt=""
+          class="toolbar-icon search-icon"
+          :src="searchIcon">
+      </div>
+    </div>
+
+    <!-- 折叠态：搜索下拉面板 -->
+    <div
+      v-if="isCollapsedSearchOpen"
+      class="collapsed-search-popover"
+      :style="collapsedSearchPanelStyle">
+      <div class="collapsed-search-cards">
+        <div class="collapsed-search-card">
+          <div class="collapsed-search-input-row">
+            <input
+              ref="collapsedSearchInputRef"
+              v-model="collapsedSearchKeyword"
+              class="collapsed-search-input"
+              placeholder="搜索对话"
+              type="search">
+            <search class="collapsed-search-icon" />
+          </div>
+
+          <div class="collapsed-search-section">
+            <div class="collapsed-search-section-title">
+              {{ collapsedSearchKeyword.trim() ? '搜索结果' : '最近对话' }} ({{ collapsedFilteredHistoryList.length }})
+            </div>
+            <div
+              class="collapsed-search-scroll-wrap"
+              :style="collapsedSearchScrollStyle">
+              <scroll-faker
+                :key="`collapsed-search-${collapsedSearchKeyword}-${collapsedFilteredHistoryList.length}`">
+                <div class="collapsed-search-list">
+                  <div
+                    v-for="conv in collapsedFilteredHistoryList"
+                    :key="conv.id"
+                    class="collapsed-search-item"
+                    @click="handleCollapsedSelect(conv.id)">
+                    <span class="collapsed-bullet">•</span>
+                    <!-- eslint-disable vue/no-v-html -->
+                    <span
+                      class="collapsed-item-title"
+                      v-html="getHighlightedTitle(conv.title)" />
+                    <!-- eslint-enable vue/no-v-html -->
+                  </div>
+                </div>
+              </scroll-faker>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 悬浮折叠按钮（仅展开态显示） -->
+    <div
+      v-if="!collapsed"
+      class="collapse-btn"
+      @click="$emit('toggle')">
+      <angle-left class="collapse-icon" />
+    </div>
+
+    <!-- 删除分组弹窗：通过 InfoBox 复用同类删除确认样式 -->
+
+    <!-- 导入会话弹窗 -->
+    <bk-dialog
+      v-model:is-show="importDialog.show"
+      class="session-select-dialog"
+      ext-cls="session-select-dialog"
+      title="导入会话"
+      :width="480"
+      @after-show="closeSidebarPopovers"
+      @closed="closeImportDialog"
+      @confirm="confirmImport">
+      <div class="import-dialog-content">
+        <bk-alert
+          class="import-alert"
+          theme="warning"
+          title="已有同名分组，导入的会话将合并到现有分组中" />
+        <div class="import-list">
+          <div class="import-item select-all-item">
+            <bk-checkbox
+              v-model="isAllImportSelected"
+              :indeterminate="importIndeterminate"
+              @change="handleSelectAllImport">
+              <span class="select-all-text">
+                全选 ( {{ importDialog.selectedIds.length }}/{{ importDialog.mockData.length }} )
+              </span>
+            </bk-checkbox>
+          </div>
+          <div
+            v-for="conv in importDialog.mockData"
+            :key="conv.id"
+            class="import-item">
+            <bk-checkbox
+              :model-value="importDialog.selectedIds.includes(conv.id)"
+              @change="(val) => handleSelectImport(val, conv.id)">
+              <span class="conv-name">{{ conv.title }}</span>
+              <span class="conv-count">( {{ conv.messages?.length || 0 }}条消息 )</span>
+            </bk-checkbox>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <bk-button
+            :disabled="importDialog.selectedIds.length === 0"
+            theme="primary"
+            @click="confirmImport">
+            确认导入
+          </bk-button>
+          <bk-button @click="closeImportDialog">
+            取消
+          </bk-button>
+        </div>
+      </template>
+    </bk-dialog>
+
+    <!-- 报告列表面板 -->
+    <div
+      v-if="isReportListShow"
+      class="report-list-panel"
+      :style="{ width: panelWidth + 'px' }">
+      <!-- 右侧竖排小圆点手柄（可拖拽调整宽度） -->
+      <div
+        class="panel-drag-handle"
+        @mousedown="handlePanelDragStart">
+        <span class="drag-dot" />
+        <span class="drag-dot" />
+        <span class="drag-dot" />
+        <span class="drag-dot" />
+        <span class="drag-dot" />
+        <span class="drag-dot" />
+      </div>
+      <div class="panel-header">
+        <span class="title">报告列表</span>
+        <close
+          class="close-icon"
+          @click="closeReportList" />
+      </div>
+      <div class="panel-search">
+        <bk-input
+          v-model="reportSearchKeyword"
+          clearable
+          placeholder="搜索报告标题、IP 地址、会话名称...">
+          <template #prefix>
+            <search class="search-icon" />
+          </template>
+        </bk-input>
+      </div>
+      <div class="panel-tabs">
+        <div class="tabs-wrapper">
+          <div
+            v-for="tab in reportTabs"
+            :key="tab.id"
+            class="tab-item"
+            :class="{ 'is-active': activeReportTab === tab.id }"
+            @click="activeReportTab = tab.id">
+            {{ tab.name }} <span class="count">{{ tab.count }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="panel-content">
+        <bk-collapse
+          v-model="activeReportPanels"
+          class="report-collapse">
+          <bk-collapse-panel
+            v-for="category in filteredReportCategories"
+            :key="category.id"
+            :name="category.id">
+            <template #header>
+              <div class="group-header">
+                {{ category.name }} <span class="count">{{ category.reports.length }}</span>
+              </div>
+            </template>
+            <template #content>
+              <div class="report-list">
+                <div
+                  v-for="report in category.reports"
+                  :key="report.id"
+                  class="report-item"
+                  :class="{ 'is-active': activeDropdownReport === report.name }"
+                  @click="handleReportClick(report)">
+                  <div
+                    class="report-icon-wrap"
+                    :class="{ warning: report.isWarning }">
+                    <text-file class="report-icon" />
+                  </div>
+                  <div class="report-content">
+                    <div class="report-name">
+                      <span
+                        v-if="report.isWarning"
+                        class="warning-icon">⚠️</span>{{ report.name }}
+                    </div>
+                    <div class="report-time">
+                      {{ report.time }}
+                    </div>
+                    <div
+                      class="report-actions"
+                      @click.stop>
+                      <bk-dropdown
+                        placement="bottom-end"
+                        trigger="click"
+                        @hide="handleDropdownHide"
+                        @show="handleDropdownShow(report.name)">
+                        <span class="action-icon">
+                          <audit-icon
+                            class="download-icon"
+                            type="download" />
+                          <span class="action-text">导出</span>
+                        </span>
+                        <template #content>
+                          <bk-dropdown-menu>
+                            <bk-dropdown-item @click="handleExport('markdown')">
+                              导出 Markdown
+                            </bk-dropdown-item>
+                            <bk-dropdown-item @click="handleExport('pdf')">
+                              导出 PDF
+                            </bk-dropdown-item>
+                          </bk-dropdown-menu>
+                        </template>
+                      </bk-dropdown>
+                      <span
+                        class="action-text jump-text"
+                        @click="handleLocateConversation">跳转</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </bk-collapse-panel>
+        </bk-collapse>
+      </div>
+    </div>
+    <bk-sideslider
+      v-model:isShow="isReportDetailShow"
+      quick-close
+      title="报告详情"
+      :width="800">
+      <template #header>
+        <div class="report-detail-header">
+          <span class="title">{{ currentReport?.name || '报告详情' }}</span>
+          <div class="actions">
+            <bk-dropdown
+              placement="bottom-end"
+              trigger="click">
+              <bk-button>
+                <audit-icon
+                  class="download-icon"
+                  type="download" />
+                导出
+              </bk-button>
+              <template #content>
+                <bk-dropdown-menu>
+                  <bk-dropdown-item @click="handleExport('markdown')">
+                    导出 Markdown
+                  </bk-dropdown-item>
+                  <bk-dropdown-item @click="handleExport('pdf')">
+                    导出 PDF
+                  </bk-dropdown-item>
+                </bk-dropdown-menu>
+              </template>
+            </bk-dropdown>
+            <bk-button @click="handleLocateConversation">
+              跳转至会话
+            </bk-button>
+          </div>
+        </div>
+      </template>
+      <template #default>
+        <div class="report-detail-content">
+          <div class="markdown-body">
+            <p>这里是报告的 Markdown 内容...</p>
+          </div>
+        </div>
+      </template>
+    </bk-sideslider>
+  </div>
+</template>
+
+<script lang="ts" setup>
+  import { computed, h, nextTick, onDeactivated, onUnmounted, ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { AngleLeft, AngleRight, Search, Plus, Close, TextFile } from 'bkui-vue/lib/icon';
+
+  import useMessage from '@hooks/use-message';
+
+  import ScrollFaker from '@components/scroll-faker/index.vue';
+  import SceneSystemSelector from '@components/scene-system-selector/index.vue';
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+
+  import aiAddIcon from '@images/ai-add.svg';
+  import aiSettingIcon from '@images/ai-setting.svg';
+  import folderEmptyIcon from '@images/folder-empty.svg?inline';
+  import folderIcon from '@images/folder.svg';
+  import huihuaIcon from '@images/huihua.svg';
+  import searchIcon from '@images/search.svg';
+
+  import { useSecChatStore } from '../composables/use-sec-chat-store';
+  import type { RootSidebarItem } from '../types';
+
+  interface Conversation {
+    id: string;
+    title: string;
+    pinned: boolean;
+    groupName?: string;
+    messages: any[];
+    createdAt: number;
+  }
+
+  interface Group {
+    id: string;
+    name: string;
+    conversationCount?: number;
+    childrenLoaded?: boolean;
+    childrenLoading?: boolean;
+  }
+
+  interface SceneItem {
+    id: string;
+    name: string;
+    type: 'aggregate' | 'scene' | 'system';
+  }
+
+  interface DropdownRefExpose {
+    hide?: () => void;
+  }
+
+  const props = defineProps<{
+    collapsed: boolean;
+    conversations: Conversation[];
+    groups: Group[];
+    rootSidebarOrder: RootSidebarItem[];
+    searchResults: Conversation[];
+    searchLoading: boolean;
+    activeId: string | null;
+  }>();
+
+  const emit = defineEmits<{
+    toggle: [];
+    'new-chat': [];
+    /** 分组内新建：进首页选功能，携带分组 uid 供建会话时落组 */
+    'new-chat-in-group': [groupId: string];
+    select: [id: string];
+    delete: [id: string];
+    'update-group': [id: string, groupName?: string];
+    'reorder-conversation': [id: string, payload: { groupName?: string; beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean }];
+    'reorder-group': [id: string, payload: { beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean }];
+    'reorder-root': [kind: 'group' | 'conversation', id: string, payload: { groupName?: string; beforeId?: string; beforeKind?: 'group' | 'conversation'; toEnd?: boolean }];
+    'add-group': [name: string];
+    'rename-group': [groupId: string, name: string];
+    'delete-group': [groupName: string, keepConversations: boolean];
+    'clear-all': [];
+    'import': [ids: string[]];
+    'update-conv-title': [id: string, title: string];
+    /** 场景选择器变更，页面按新 scope 重载侧栏 */
+    'scene-change': [];
+  }>();
+
+  const handleNewChatInGroup = (group: Group) => {
+    if (!group?.id) return;
+    hideGroupMenu();
+    emit('new-chat-in-group', group.id);
+  };
+
+  const legacySearchPropCompat = computed(() => props.searchLoading || props.searchResults.length > 0);
+  void legacySearchPropCompat.value;
+
+  const { loadGroupConversations } = useSecChatStore();
+
+  const { messageSuccess } = useMessage();
+
+  const sidebarRootRef = ref<HTMLElement | null>(null);
+  const searchKeyword = ref('');
+  const searchInputRef = ref<HTMLInputElement | null>(null);
+  const isDropdownShow = ref(false);
+  const filterDropdownKey = ref(0);
+  const filterDropdownRef = ref<DropdownRefExpose | null>(null);
+  const sceneSelectorRef = ref<InstanceType<typeof SceneSystemSelector>>();
+
+  const handleFilterDropdownHide = () => {
+    isDropdownShow.value = false;
+  };
+
+  /** 配置菜单禁用项：吞掉点击，避免仍触发关闭/业务逻辑 */
+  const onDisabledConfigClick = () => undefined;
+
+  const closeFilterDropdown = (forceRemount = false) => {
+    isDropdownShow.value = false;
+    filterDropdownRef.value?.hide?.();
+    if (forceRemount) {
+      filterDropdownKey.value += 1;
+    }
+  };
+
+  const closeSidebarPopovers = () => {
+    closeFilterDropdown(true);
+    sceneSelectorRef.value?.close?.();
+  };
+
+  // 折叠态搜索下拉面板
+  const isCollapsedSearchOpen = ref(false);
+  const collapsedSearchKeyword = ref('');
+  const collapsedSearchInputRef = ref<HTMLInputElement | null>(null);
+  const collapsedSearchButtonRef = ref<HTMLElement | null>(null);
+  const collapsedSearchPanelStyle = ref<Record<string, string>>({
+    left: '56px',
+    top: '70px',
+  });
+
+  const selectedScene = ref<SceneItem | null>(null);
+
+  const handleSceneChange = (value: SceneItem | null) => {
+    selectedScene.value = value;
+    searchKeyword.value = '';
+    emit('scene-change');
+  };
+
+  const handleCollapsedToggle = () => {
+    isCollapsedSearchOpen.value = false;
+    emit('toggle');
+  };
+
+  const handleCollapsedNewChat = () => {
+    isCollapsedSearchOpen.value = false;
+    emit('new-chat');
+  };
+
+  const handleCollapsedSelect = (id: string) => {
+    emit('select', id);
+    closeCollapsedSearch();
+  };
+
+  const updateCollapsedSearchPanelPosition = () => {
+    const rootEl = sidebarRootRef.value;
+    const btnEl = collapsedSearchButtonRef.value;
+    if (!rootEl || !btnEl) return;
+
+    const rootRect = rootEl.getBoundingClientRect();
+    const btnRect = btnEl.getBoundingClientRect();
+    // 面板显示在搜索按钮右侧，略微上移以对齐截图观感
+    collapsedSearchPanelStyle.value = {
+      left: `${btnRect.right - rootRect.left + 8}px`,
+      top: `${Math.max(8, btnRect.top - rootRect.top - 12)}px`,
+    };
+  };
+
+  const openCollapsedSearch = async () => {
+    // 折叠态：仅展示搜索下拉面板，不展开侧栏
+    if (!props.collapsed) return;
+    isCollapsedSearchOpen.value = true;
+    await nextTick();
+    updateCollapsedSearchPanelPosition();
+    collapsedSearchInputRef.value?.focus?.();
+  };
+
+  const closeCollapsedSearch = () => {
+    isCollapsedSearchOpen.value = false;
+  };
+
+  watch(
+    () => props.collapsed,
+    (newVal) => {
+      if (!newVal) closeCollapsedSearch();
+    },
+  );
+
+  let documentMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+  let documentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  let documentSidebarMenuMouseDownHandler: ((e: MouseEvent) => void) | null = null;
+
+  watch(isCollapsedSearchOpen, (open) => {
+    if (open) {
+      documentMouseDownHandler = (e: MouseEvent) => {
+        const rootEl = sidebarRootRef.value;
+        if (!rootEl) return;
+        if (!rootEl.contains(e.target as Node)) closeCollapsedSearch();
+      };
+      documentKeydownHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') closeCollapsedSearch();
+      };
+      document.addEventListener('mousedown', documentMouseDownHandler);
+      window.addEventListener('keydown', documentKeydownHandler);
+      return;
+    }
+
+    if (documentMouseDownHandler) document.removeEventListener('mousedown', documentMouseDownHandler);
+    if (documentKeydownHandler) window.removeEventListener('keydown', documentKeydownHandler);
+    documentMouseDownHandler = null;
+    documentKeydownHandler = null;
+  });
+
+  onUnmounted(() => {
+    if (documentMouseDownHandler) document.removeEventListener('mousedown', documentMouseDownHandler);
+    if (documentKeydownHandler) window.removeEventListener('keydown', documentKeydownHandler);
+    if (documentSidebarMenuMouseDownHandler) {
+      document.removeEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+    }
+  });
+
+  const normalizeSearchText = (value: string) => value.trim().toLocaleLowerCase();
+  const fuzzyIncludes = (source: string, keyword: string) => (
+    !keyword || normalizeSearchText(source).includes(keyword)
+  );
+
+  const isSearchActive = computed(() => searchKeyword.value.trim().length > 0);
+  const normalizedSearchKeyword = computed(() => normalizeSearchText(searchKeyword.value));
+
+  const handleClearSearch = () => {
+    searchKeyword.value = '';
+  };
+
+  const collapsedFilteredHistoryList = computed(() => {
+    const keyword = normalizeSearchText(collapsedSearchKeyword.value);
+    return canonicalConversations.value.filter(conv => fuzzyIncludes(conv.title, keyword));
+  });
+
+  const COLLAPSED_SEARCH_ITEM_HEIGHT = 32;
+  const COLLAPSED_SEARCH_MAX_ITEMS = 10;
+
+  const collapsedSearchScrollStyle = computed(() => {
+    const count = collapsedFilteredHistoryList.value.length;
+    if (!count) {
+      return { height: '0px' };
+    }
+    const visibleCount = Math.min(count, COLLAPSED_SEARCH_MAX_ITEMS);
+    return { height: `${visibleCount * COLLAPSED_SEARCH_ITEM_HEIGHT}px` };
+  });
+
+  const escapeHtml = (str: string) => str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const getHighlightedTitle = (title: string) => {
+    const keyword = collapsedSearchKeyword.value.trim();
+    if (!keyword) return escapeHtml(title);
+    if (!title.includes(keyword)) return escapeHtml(title);
+
+    const parts = title.split(keyword);
+    if (parts.length === 1) return escapeHtml(title);
+
+    // 用 v-html 包裹高亮，确保未匹配部分已做转义，避免 XSS
+    return parts
+      .map((p, idx) => {
+        const safeText = escapeHtml(p);
+        if (idx === parts.length - 1) return safeText;
+        return `${safeText}<span class="search-highlight">${escapeHtml(keyword)}</span>`;
+      })
+      .join('');
+  };
+
+  // 报告列表相关
+  const isReportListShow = ref(false);
+  const reportSearchKeyword = ref('');
+  const activeReportPanels = ref(['behavior', 'alarm', 'other']);
+  const activeReportTab = ref('all');
+  const panelWidth = ref(360);
+  const PANEL_MIN_WIDTH = 420;
+  const PANEL_MAX_WIDTH = 600;
+
+  // 报告分类数据
+  const reportCategories = ref([
+    {
+      id: 'behavior',
+      name: '多主机行为分析',
+      reports: [
+        { id: 'r1', name: '多主机行为分析报告', time: '2026-03-27 11:32', isWarning: false },
+        { id: 'r2', name: '主机行为分析报告', time: '2026-03-27 11:32', isWarning: false },
+      ],
+    },
+    {
+      id: 'alarm',
+      name: '风险告警解读',
+      reports: [
+        { id: 'r3', name: '高危风险告警解读', time: '2026-03-27 11:32', isWarning: true },
+      ],
+    },
+    {
+      id: 'other',
+      name: '其他',
+      reports: [
+        { id: 'r4', name: '安全事件调查报告', time: '2026-03-27 11:32', isWarning: false },
+      ],
+    },
+  ]);
+
+  // 标签页数据
+  const reportTabs = computed(() => {
+    const tabs = [
+      { id: 'all', name: '全部', count: reportCategories.value.reduce((sum, cat) => sum + cat.reports.length, 0) },
+    ];
+    reportCategories.value.forEach((cat) => {
+      tabs.push({
+        id: cat.id,
+        name: cat.name,
+        count: cat.reports.length,
+      });
+    });
+    return tabs;
+  });
+
+  // 过滤后的报告分类
+  const filteredReportCategories = computed(() => {
+    if (activeReportTab.value === 'all') {
+      return reportCategories.value;
+    }
+    return reportCategories.value.filter(cat => cat.id === activeReportTab.value);
+  });
+
+  const isReportDetailShow = ref(false);
+  const currentReport = ref<any>(null);
+  const activeDropdownReport = ref<string | null>(null);
+
+  const handleDropdownShow = (reportName: string) => {
+    activeDropdownReport.value = reportName;
+  };
+
+  const handleDropdownHide = () => {
+    activeDropdownReport.value = null;
+  };
+
+  const handleReportClick = (report: any) => {
+    currentReport.value = report;
+    isReportDetailShow.value = true;
+  };
+
+  const handleExport = (type: string) => {
+    console.log('export', type);
+  };
+
+  const handleLocateConversation = () => {
+    console.log('locate conversation');
+  };
+
+  const showReportList = () => {
+    isReportListShow.value = true;
+    closeSidebarPopovers();
+  };
+
+  const closeReportList = () => {
+    isReportListShow.value = false;
+  };
+
+  // 面板宽度拖拽调整
+  const handlePanelDragStart = (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = panelWidth.value;
+
+    const onDragMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = startWidth + deltaX;
+      panelWidth.value = Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, newWidth));
+    };
+
+    const onDragEnd = () => {
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  /** 同 id 多份时优先未分组副本，避免移出分组过程中根列表与分组各显示一条 */
+  const canonicalConversations = computed(() => {
+    const map = new Map<string, Conversation>();
+    props.conversations.forEach((conv) => {
+      const prev = map.get(conv.id);
+      if (!prev) {
+        map.set(conv.id, conv);
+        return;
+      }
+      if (!conv.groupName && prev.groupName) {
+        map.set(conv.id, conv);
+      }
+    });
+    return [...map.values()];
+  });
+
+  type DisplayRootItem =
+    | { key: string; kind: 'group'; group: Group }
+    | { key: string; kind: 'conversation'; conv: Conversation };
+
+  type RootSibling = { kind: 'group' | 'conversation'; id: string };
+
+  const displayRootItems = computed((): DisplayRootItem[] => {
+    const convMap = new Map(canonicalConversations.value.map(c => [c.id, c]));
+    const groupMap = new Map(props.groups.map(g => [g.id, g]));
+    return props.rootSidebarOrder.reduce<DisplayRootItem[]>((acc, item) => {
+      if (item.kind === 'group') {
+        const group = groupMap.get(item.id);
+        if (group) {
+          const children = filteredGroupedHistory.value[group.name] || [];
+          if (isSearchActive.value && !children.length) {
+            return acc;
+          }
+          acc.push({ key: `group-${group.id}`, kind: 'group', group });
+        }
+        return acc;
+      }
+      const conv = convMap.get(item.id);
+      if (
+        conv
+        && !conv.groupName
+        && fuzzyIncludes(conv.title, normalizedSearchKeyword.value)
+      ) {
+        acc.push({ key: `conv-${conv.id}`, kind: 'conversation', conv });
+      }
+      return acc;
+    }, []);
+  });
+
+  const getRootSiblings = (exclude?: RootSibling): RootSibling[] => (
+    displayRootItems.value
+      .map((item): RootSibling => (
+        item.kind === 'group'
+          ? { kind: 'group', id: item.group.id }
+          : { kind: 'conversation', id: item.conv.id }
+      ))
+      .filter(item => !(exclude && item.kind === exclude.kind && item.id === exclude.id))
+  );
+
+  const emitRootReorder = (
+    sourceKind: 'group' | 'conversation',
+    sourceId: string,
+    targetKind: 'group' | 'conversation',
+    targetId: string,
+    dropPosition: 'top' | 'bottom',
+  ) => {
+    const without = getRootSiblings({ kind: sourceKind, id: sourceId });
+    const targetIndex = without.findIndex(item => item.kind === targetKind && item.id === targetId);
+    if (targetIndex === -1) return;
+    const insertAt = dropPosition === 'top' ? targetIndex : targetIndex + 1;
+    const before = without[insertAt];
+    emit('reorder-root', sourceKind, sourceId, before
+      ? { beforeId: before.id, beforeKind: before.kind }
+      : { toEnd: true });
+  };
+
+  const filteredGroupedHistory = computed(() => {
+    const grouped: Record<string, Conversation[]> = {};
+    props.groups.forEach((g) => {
+      grouped[g.name] = [];
+    });
+    for (const conv of canonicalConversations.value.filter(c => c.groupName)) {
+      const key = conv.groupName!;
+      if (!grouped[key]) grouped[key] = [];
+      if (fuzzyIncludes(conv.title, normalizedSearchKeyword.value)) {
+        grouped[key].push(conv);
+      }
+    }
+    return grouped;
+  });
+
+  const hasSearchMatches = computed(() => (
+    displayRootItems.value.some(item => (
+      item.kind === 'conversation'
+      || (filteredGroupedHistory.value[item.group.name] || []).length > 0
+    ))
+  ));
+
+  /** 无分组且无会话时展示空态 */
+  const isConversationListEmpty = computed(() => displayRootItems.value.length === 0);
+
+  const isGroupCollapsedInView = (groupName: string) => {
+    if (isSearchActive.value && (filteredGroupedHistory.value[groupName] || []).length > 0) {
+      return false;
+    }
+    return collapsedGroups.value.has(groupName);
+  };
+
+  // 分组展开记忆：有本地记忆按记忆展开；无记忆默认展开第一个
+  const EXPANDED_GROUPS_STORAGE_KEY = 'sec-chat-expanded-groups';
+  const collapsedGroups = ref<Set<string>>(new Set());
+
+  const readExpandedMemory = (): string[] | null => {
+    try {
+      const raw = localStorage.getItem(EXPANDED_GROUPS_STORAGE_KEY);
+      if (raw === null) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return null;
+      return parsed.filter((item): item is string => typeof item === 'string');
+    } catch {
+      return null;
+    }
+  };
+
+  const persistExpandedGroups = () => {
+    const expanded = props.groups
+      .map(g => g.name)
+      .filter(name => !collapsedGroups.value.has(name));
+    localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(expanded));
+  };
+
+  const requestLoadGroup = (group: Group) => {
+    if (group.childrenLoaded || group.childrenLoading) return;
+    void loadGroupConversations(group.id);
+  };
+
+  const requestLoadExpandedGroups = (groupList: Group[]) => {
+    groupList.forEach((group) => {
+      if (!collapsedGroups.value.has(group.name)) {
+        requestLoadGroup(group);
+      }
+    });
+  };
+
+  const getGroupDisplayCount = (group: Group) => {
+    if (group.childrenLoaded) {
+      return filteredGroupedHistory.value[group.name]?.length || 0;
+    }
+    return group.conversationCount ?? 0;
+  };
+
+  const syncCollapsedFromGroups = (groupList: Group[]) => {
+    const names = groupList.map(g => g.name);
+    if (!names.length) {
+      collapsedGroups.value = new Set();
+      return;
+    }
+    const memory = readExpandedMemory();
+    if (memory !== null) {
+      collapsedGroups.value = new Set(names.filter(name => !memory.includes(name)));
+    } else {
+      // 无前端记忆：默认展开第一个分组
+      collapsedGroups.value = new Set(names.slice(1));
+    }
+    requestLoadExpandedGroups(groupList);
+  };
+
+  watch(
+    () => props.groups.map(g => `${g.id}:${g.name}`).join('\0'),
+    () => syncCollapsedFromGroups(props.groups),
+    { immediate: true },
+  );
+
+  // initSidebar 会清空组内会话并把 childrenLoaded 置 false，但分组 id/name 不变时
+  // 上面的 watch 不会触发，导致已展开分组子节点缺失；此处补拉展开组。
+  watch(
+    () => props.groups.map(g => `${g.id}:${g.childrenLoaded ? 1 : 0}`).join('\0'),
+    () => {
+      requestLoadExpandedGroups(props.groups);
+    },
+  );
+
+  watch(isSearchActive, (active) => {
+    if (!active) return;
+    props.groups.forEach(group => requestLoadGroup(group));
+  });
+
+  const toggleGroup = (groupName: string) => {
+    const next = new Set(collapsedGroups.value);
+    if (next.has(groupName)) {
+      next.delete(groupName);
+      const group = props.groups.find(g => g.name === groupName);
+      if (group) requestLoadGroup(group);
+    } else {
+      next.add(groupName);
+    }
+    collapsedGroups.value = next;
+    persistExpandedGroups();
+  };
+
+  // 拖拽分组结束后浏览器会补发 click，会误触发折叠；拖拽后吞掉一次点击
+  const suppressGroupHeaderClick = ref(false);
+
+  const handleGroupHeaderClick = (groupName: string) => {
+    if (suppressGroupHeaderClick.value) {
+      suppressGroupHeaderClick.value = false;
+      return;
+    }
+    toggleGroup(groupName);
+  };
+
+  // 拖拽状态
+  const dragState = ref<{
+    type: 'group' | 'conversation' | null;
+    id: string | null;
+    sourceGroup?: string;
+  }>({ type: null, id: null });
+
+  const dragOverState = ref<{
+    type: 'group' | 'conversation' | 'history' | null;
+    id: string | null;
+    position: 'top' | 'bottom' | 'inside' | null;
+  }>({ type: null, id: null, position: null });
+
+  const isDraggingGroupedConv = computed(() => (
+    dragState.value.type === 'conversation' && !!dragState.value.sourceGroup
+  ));
+
+  /** 根层是否存在未分组会话（用于拖出分组投放位） */
+  const isHistoryListEmpty = computed(() => (
+    !displayRootItems.value.some(item => item.kind === 'conversation')
+  ));
+
+  /** 从分组拖出且拖入历史区域时才展示投放位 */
+  const showHistoryDropPlaceholder = computed(() => (
+    isHistoryListEmpty.value
+    && isDraggingGroupedConv.value
+    && dragOverState.value.type === 'history'
+    && dragOverState.value.id === 'history'
+    && dragOverState.value.position === 'inside'
+  ));
+
+  const historySectionLabel = computed(() => (
+    showHistoryDropPlaceholder.value ? '松手移出分组' : '历史对话'
+  ));
+
+  const historySectionRef = ref<HTMLElement | null>(null);
+  const conversationListRef = ref<HTMLElement | null>(null);
+
+  const DRAG_SCROLL_EDGE = 56;
+  const DRAG_SCROLL_MAX_SPEED = 720;
+  const lastDragPoint = { x: 0, y: 0 };
+  let dragScrollRaf = 0;
+  let dragScrollSpeed = 0;
+  let dragScrollLastTs = 0;
+  let dropSyncRaf = 0;
+  let documentDragOverHandler: ((e: DragEvent) => void) | null = null;
+  let listDragLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const setDragOverState = (next: {
+    type: 'group' | 'conversation' | 'history' | null;
+    id: string | null;
+    position: 'top' | 'bottom' | 'inside' | null;
+  }) => {
+    const cur = dragOverState.value;
+    if (cur.type === next.type && cur.id === next.id && cur.position === next.position) return;
+    dragOverState.value = next;
+  };
+
+  const activateHistoryDropZone = () => {
+    if (!isHistoryListEmpty.value || !isDraggingGroupedConv.value) return;
+    const alreadyActive = dragOverState.value.type === 'history'
+      && dragOverState.value.id === 'history'
+      && dragOverState.value.position === 'inside';
+    setDragOverState({ type: 'history', id: 'history', position: 'inside' });
+    if (alreadyActive) return;
+    void nextTick(() => {
+      historySectionRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  };
+
+  const getHistoryDropClass = () => ({
+    // 仅「从分组拖出到未分组」时高亮整块区域；同列表排序改用条目下划线
+    'is-drag-over-inside': dragOverState.value.type === 'history'
+      && dragOverState.value.id === 'history'
+      && dragOverState.value.position === 'inside'
+      && !!dragState.value.sourceGroup,
+    'is-drag-target': showHistoryDropPlaceholder.value,
+  });
+
+  const onHistoryListDragOver = (e: DragEvent) => {
+    if (!isDraggingGroupedConv.value) return;
+    handleDragOver(e);
+  };
+
+  // 在历史区子节点间移动时不要清空高亮（relatedTarget 仍在区内）
+  const handleHistoryDragLeave = (e: DragEvent) => {
+    const current = e.currentTarget as HTMLElement | null;
+    const related = e.relatedTarget as Node | null;
+    if (current && related && current.contains(related)) {
+      return;
+    }
+    handleDragLeave();
+  };
+
+  const getGroupItemDragClass = (groupName: string) => ({
+    'is-drag-over-top': dragOverState.value.type === 'group'
+      && dragOverState.value.id === groupName
+      && dragOverState.value.position === 'top',
+    'is-drag-over-bottom': dragOverState.value.type === 'group'
+      && dragOverState.value.id === groupName
+      && dragOverState.value.position === 'bottom',
+  });
+
+  const getGroupHeaderDragClass = (groupName: string) => ({
+    // 拖入分组：保持原背景高亮；组内排序不走这里
+    'is-drag-over-inside': dragOverState.value.type === 'group'
+      && dragOverState.value.id === groupName
+      && dragOverState.value.position === 'inside'
+      && dragState.value.sourceGroup !== groupName,
+    'is-dragging-source': dragState.value.type === 'group' && dragState.value.id === groupName,
+  });
+
+  const getConvItemDragClass = (convId: string) => ({
+    'is-drag-over-top': dragOverState.value.type === 'conversation'
+      && dragOverState.value.id === convId
+      && dragOverState.value.position === 'top',
+    'is-drag-over-bottom': dragOverState.value.type === 'conversation'
+      && dragOverState.value.id === convId
+      && dragOverState.value.position === 'bottom',
+    'is-dragging-source': dragState.value.type === 'conversation' && dragState.value.id === convId,
+  });
+
+  const getGroupItemElement = (el: HTMLElement | null): HTMLElement | null => (
+    el?.closest('.group-item') ?? null
+  );
+
+  /**
+   * 未分组会话拖到分组：上下边沿为根层排序（插到分组前/后），中间为归入分组。
+   * 折叠分组同样支持插到上下（此前折叠一律 inside，导致只能移入、无法插到分组之间）。
+   * 跨组拖拽仍固定为 inside。
+   */
+  const resolveConvGroupDropPosition = (
+    e: { clientX: number; clientY: number; currentTarget: EventTarget | null },
+    groupName: string,
+  ): 'top' | 'bottom' | 'inside' | null => {
+    if (dragState.value.type !== 'conversation') return null;
+    if (dragState.value.sourceGroup === groupName) return null;
+
+    if (dragState.value.sourceGroup) {
+      return 'inside';
+    }
+
+    const list = conversationListRef.value;
+    let groupItemEl = getGroupItemElement(e.currentTarget as HTMLElement);
+    if (!groupItemEl && list) {
+      groupItemEl = list.querySelector(`.group-item[data-node-id="${CSS.escape(groupName)}"]`);
+    }
+    if (!groupItemEl) return 'inside';
+
+    const headerEl = groupItemEl.querySelector('.group-header') as HTMLElement | null;
+    const itemRect = groupItemEl.getBoundingClientRect();
+    const headerRect = headerEl?.getBoundingClientRect() ?? itemRect;
+    const y = e.clientY;
+    const isCollapsed = isGroupCollapsedInView(groupName);
+
+    // 折叠：标题三区（上下约 30% 插序，中间归入），便于在密集分组间插入
+    if (isCollapsed) {
+      const h = Math.max(1, headerRect.height);
+      const edge = Math.max(10, h * 0.3);
+      const offsetY = y - headerRect.top;
+      if (offsetY <= edge) return 'top';
+      if (offsetY >= h - edge) return 'bottom';
+      return 'inside';
+    }
+
+    // 展开：标题顶部边沿 → 插到分组前；整项底部边沿 → 插到分组后；其余归入
+    const headerTopEdge = Math.max(12, Math.min(20, headerRect.height * 0.35));
+    const itemBottomEdge = Math.max(20, Math.min(36, itemRect.height * 0.15));
+    if (y <= headerRect.top + headerTopEdge) return 'top';
+    if (y >= itemRect.bottom - itemBottomEdge) return 'bottom';
+    return 'inside';
+  };
+
+  /** 根层最后一个可排序节点（分组或未分组会话） */
+  const getLastRootNodeEl = (list: HTMLElement): HTMLElement | null => {
+    const mixed = list.querySelector('.conv-section--mixed');
+    if (!mixed) return null;
+    const nodes = mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item');
+    return nodes.length ? nodes[nodes.length - 1] : null;
+  };
+
+  /** 光标落在分组间隙时，吸附到最近的根层节点 */
+  const findNearestRootNodeByY = (list: HTMLElement, clientY: number): HTMLElement | null => {
+    const mixed = list.querySelector('.conv-section--mixed');
+    if (!mixed) return null;
+    const nodes = Array.from(mixed.querySelectorAll<HTMLElement>(':scope > .conv-item--root, :scope > .group-item'));
+    if (!nodes.length) return null;
+
+    let best: HTMLElement | null = null;
+    let bestDist = Infinity;
+    for (const node of nodes) {
+      const rect = node.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) return node;
+      const dist = clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = node;
+      }
+    }
+    return bestDist <= 24 ? best : null;
+  };
+
+  /** 光标在最后一项下方 / 列表底部空白时，视为插到根层末尾 */
+  const applyListEndDropTargetIfNeeded = (): boolean => {
+    const list = conversationListRef.value;
+    if (!list || !dragState.value.type) return false;
+    const lastRoot = getLastRootNodeEl(list);
+    const kind = lastRoot?.dataset.nodeKind;
+    const id = lastRoot?.dataset.nodeId;
+    if (!lastRoot || (kind !== 'group' && kind !== 'conversation') || !id) return false;
+
+    // 拖的就是最后一项时，没有「自己下面」可插
+    if (dragState.value.type === kind && dragState.value.id === id) return false;
+
+    const lastRect = lastRoot.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const endSlack = 48;
+    const inEndZone = lastDragPoint.y >= lastRect.bottom - 14
+      && lastDragPoint.y <= Math.max(listRect.bottom, lastRect.bottom) + endSlack
+      && lastDragPoint.x >= listRect.left - 16
+      && lastDragPoint.x <= listRect.right + 16;
+    if (!inEndZone) return false;
+
+    setDragOverState({
+      type: kind,
+      id,
+      position: 'bottom',
+    });
+    return true;
+  };
+
+  const applyDragOverAt = (
+    currentTarget: HTMLElement,
+    type: 'group' | 'conversation' | 'history',
+    id: string,
+    targetGroup?: string,
+  ) => {
+    const fakeEvent = {
+      clientX: lastDragPoint.x,
+      clientY: lastDragPoint.y,
+      currentTarget,
+    };
+
+    if (dragState.value.type === 'conversation' && type === 'conversation') {
+      const sameContainer = (dragState.value.sourceGroup || undefined) === (targetGroup || undefined);
+      if (!sameContainer) {
+        if (targetGroup) {
+          setDragOverState({ type: 'group', id: targetGroup, position: 'inside' });
+        } else if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+          activateHistoryDropZone();
+        }
+        return;
+      }
+      if (dragState.value.id === id) return;
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type, id, position });
+      return;
+    }
+
+    if (dragState.value.type === 'conversation' && type === 'history') {
+      if (dragState.value.sourceGroup && isHistoryListEmpty.value) {
+        activateHistoryDropZone();
+      }
+      return;
+    }
+
+    if (dragState.value.type === 'conversation' && type === 'group') {
+      if (dragState.value.sourceGroup === id) return;
+      const position = resolveConvGroupDropPosition(fakeEvent, id);
+      if (position) {
+        setDragOverState({ type, id, position });
+      }
+      return;
+    }
+
+    if (dragState.value.type === 'group' && type === 'group') {
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type, id, position });
+      return;
+    }
+
+    if (dragState.value.type === 'group' && type === 'conversation' && !targetGroup) {
+      if (dragState.value.id === id) return;
+      const targetRect = currentTarget.getBoundingClientRect();
+      const midY = targetRect.top + targetRect.height / 2;
+      const position = lastDragPoint.y < midY ? 'top' : 'bottom';
+      setDragOverState({ type: 'conversation', id, position });
+    }
+  };
+
+  const applyDropTargetFromPoint = () => {
+    if (!dragState.value.type) return;
+    const list = conversationListRef.value;
+    if (!list) return;
+    const hits = document.elementsFromPoint(lastDragPoint.x, lastDragPoint.y);
+    const hit = hits.find((node): node is HTMLElement => (
+      node instanceof HTMLElement && list.contains(node)
+    ));
+    if (!hit) {
+      applyListEndDropTargetIfNeeded();
+      return;
+    }
+
+    const convEl = hit.closest<HTMLElement>('.conv-item[data-node-id]');
+    if (convEl && list.contains(convEl)) {
+      const groupName = convEl.dataset.nodeGroup || undefined;
+      if (dragState.value.type === 'conversation' || !groupName) {
+        applyDragOverAt(
+          convEl,
+          'conversation',
+          convEl.dataset.nodeId as string,
+          groupName,
+        );
+        return;
+      }
+    }
+
+    const groupItem = hit.closest<HTMLElement>('.group-item[data-node-id]');
+    const groupChildren = hit.closest<HTMLElement>('.group-children');
+    if (dragState.value.type === 'conversation' && groupChildren && groupItem?.dataset.nodeId) {
+      const groupName = groupItem.dataset.nodeId;
+      if (dragState.value.sourceGroup === groupName) return;
+      const position = resolveConvGroupDropPosition({
+        clientX: lastDragPoint.x,
+        clientY: lastDragPoint.y,
+        currentTarget: groupChildren,
+      }, groupName) ?? 'inside';
+      setDragOverState({ type: 'group', id: groupName, position });
+      return;
+    }
+
+    const groupHeader = hit.closest<HTMLElement>('.group-header');
+    if (dragState.value.type === 'conversation' && groupHeader && groupItem?.dataset.nodeId) {
+      const groupName = groupItem.dataset.nodeId;
+      if (dragState.value.sourceGroup === groupName) return;
+      const position = resolveConvGroupDropPosition({
+        clientX: lastDragPoint.x,
+        clientY: lastDragPoint.y,
+        currentTarget: groupHeader,
+      }, groupName);
+      if (position) {
+        setDragOverState({ type: 'group', id: groupName, position });
+      }
+      return;
+    }
+
+    if (groupItem?.dataset.nodeId) {
+      // 分组拖到最后一项下半 / 未分组会话落到分组边沿时，优先识别末尾插入
+      if (applyListEndDropTargetIfNeeded() && getLastRootNodeEl(list)?.dataset.nodeId === groupItem.dataset.nodeId) {
+        return;
+      }
+      applyDragOverAt(groupItem, 'group', groupItem.dataset.nodeId);
+      return;
+    }
+
+    if (hit.closest('.conv-section--history')) {
+      applyDragOverAt(historySectionRef.value || list, 'history', 'history');
+      return;
+    }
+
+    // 列表底部空白 / 最后一项之下：插到根层末尾
+    if (applyListEndDropTargetIfNeeded()) return;
+
+    // 落在分组间隙等空白处：吸附到最近根节点，便于插到分组上下
+    const nearest = findNearestRootNodeByY(list, lastDragPoint.y);
+    if (nearest?.dataset.nodeId && nearest.dataset.nodeKind) {
+      if (nearest.dataset.nodeKind === 'group') {
+        applyDragOverAt(nearest, 'group', nearest.dataset.nodeId);
+      } else {
+        applyDragOverAt(nearest, 'conversation', nearest.dataset.nodeId);
+      }
+    }
+  };
+
+  const scheduleDropTargetSync = () => {
+    if (dropSyncRaf) return;
+    dropSyncRaf = requestAnimationFrame(() => {
+      dropSyncRaf = 0;
+      applyDropTargetFromPoint();
+    });
+  };
+
+  const cancelDropTargetSync = () => {
+    if (!dropSyncRaf) return;
+    cancelAnimationFrame(dropSyncRaf);
+    dropSyncRaf = 0;
+  };
+
+  const noteDragPoint = (e: DragEvent) => {
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    scheduleDropTargetSync();
+  };
+
+  // 拖拽处理
+  const handleDragStart = (e: DragEvent, type: 'group' | 'conversation', id: string, sourceGroup?: string) => {
+    const resolvedSourceGroup = sourceGroup
+      || (type === 'conversation'
+        ? props.conversations.find(c => c.id === id)?.groupName
+        : undefined);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify({ type, id, sourceGroup: resolvedSourceGroup }));
+    }
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    dragState.value = { type, id, sourceGroup: resolvedSourceGroup };
+    if (type === 'group') {
+      suppressGroupHeaderClick.value = false;
+    }
+    bindSidebarDragWatch();
+  };
+
+  // 条目 dragover 只记录落点，插入线在下一帧按最终光标位置刷新，避免沿途轨迹追赶
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+    noteDragPoint(e);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverState({ type: null, id: null, position: null });
+  };
+
+  // 分组标题：跨组/折叠时归入分组；未分组且展开时按整项边沿区分根层排序与归入分组
+  const onGroupHeaderDragOver = (e: DragEvent) => {
+    if (dragState.value.type !== 'conversation') return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    noteDragPoint(e);
+  };
+
+  // 组内空白处：同组拖拽不冒泡成「拖入分组」，避免打断组内排序
+  const onGroupChildrenDragOver = (e: DragEvent) => {
+    if (dragState.value.type !== 'conversation') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    noteDragPoint(e);
+  };
+
+  const stopDragAutoScroll = () => {
+    dragScrollSpeed = 0;
+    dragScrollLastTs = 0;
+    if (dragScrollRaf) {
+      cancelAnimationFrame(dragScrollRaf);
+      dragScrollRaf = 0;
+    }
+  };
+
+  const tickDragAutoScroll = (ts: number) => {
+    const list = conversationListRef.value;
+    if (!list || !dragState.value.type || dragScrollSpeed === 0) {
+      dragScrollRaf = 0;
+      return;
+    }
+    const last = dragScrollLastTs || ts;
+    const dt = Math.min(32, ts - last);
+    dragScrollLastTs = ts;
+    const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+    list.scrollTop = Math.max(0, Math.min(maxScroll, list.scrollTop + (dragScrollSpeed * dt) / 1000));
+    applyDropTargetFromPoint();
+    dragScrollRaf = requestAnimationFrame(tickDragAutoScroll);
+  };
+
+  const updateDragAutoScroll = (clientX: number, clientY: number) => {
+    const list = conversationListRef.value;
+    const sidebar = sidebarRootRef.value;
+    if (!list || !dragState.value.type) {
+      stopDragAutoScroll();
+      return;
+    }
+    if (list.scrollHeight <= list.clientHeight) {
+      stopDragAutoScroll();
+      return;
+    }
+    const sidebarRect = sidebar?.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const left = (sidebarRect?.left ?? listRect.left) - 32;
+    const right = (sidebarRect?.right ?? listRect.right) + 32;
+    if (clientX < left || clientX > right) {
+      stopDragAutoScroll();
+      return;
+    }
+
+    if (clientY < listRect.top + DRAG_SCROLL_EDGE) {
+      const intensity = clientY < listRect.top
+        ? 1
+        : (listRect.top + DRAG_SCROLL_EDGE - clientY) / DRAG_SCROLL_EDGE;
+      dragScrollSpeed = -Math.max(80, intensity * DRAG_SCROLL_MAX_SPEED);
+    } else if (clientY > listRect.bottom - DRAG_SCROLL_EDGE) {
+      const intensity = clientY > listRect.bottom
+        ? 1
+        : (clientY - (listRect.bottom - DRAG_SCROLL_EDGE)) / DRAG_SCROLL_EDGE;
+      dragScrollSpeed = Math.max(80, intensity * DRAG_SCROLL_MAX_SPEED);
+    } else {
+      stopDragAutoScroll();
+      return;
+    }
+
+    if (!dragScrollRaf) {
+      dragScrollLastTs = 0;
+      dragScrollRaf = requestAnimationFrame(tickDragAutoScroll);
+    }
+  };
+
+  const onDocumentDragOver = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    if (listDragLeaveTimer) {
+      clearTimeout(listDragLeaveTimer);
+      listDragLeaveTimer = null;
+    }
+    const sidebar = sidebarRootRef.value;
+    if (sidebar) {
+      const rect = sidebar.getBoundingClientRect();
+      if (
+        e.clientX >= rect.left - 32
+        && e.clientX <= rect.right + 32
+        && e.clientY >= rect.top - 8
+        && e.clientY <= rect.bottom + 8
+      ) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      }
+    }
+    updateDragAutoScroll(e.clientX, e.clientY);
+    scheduleDropTargetSync();
+  };
+
+  const bindSidebarDragWatch = () => {
+    if (documentDragOverHandler) return;
+    document.body.classList.add('is-chat-sidebar-dragging');
+    documentDragOverHandler = onDocumentDragOver;
+    document.addEventListener('dragover', documentDragOverHandler, true);
+  };
+
+  const stopSidebarDragWatch = () => {
+    document.body.classList.remove('is-chat-sidebar-dragging');
+    stopDragAutoScroll();
+    cancelDropTargetSync();
+    if (listDragLeaveTimer) {
+      clearTimeout(listDragLeaveTimer);
+      listDragLeaveTimer = null;
+    }
+    if (documentDragOverHandler) {
+      document.removeEventListener('dragover', documentDragOverHandler, true);
+      documentDragOverHandler = null;
+    }
+  };
+
+  onUnmounted(() => {
+    stopSidebarDragWatch();
+  });
+
+  const onConversationListDragOver = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    noteDragPoint(e);
+  };
+
+  /** 松手在列表空白（含最后一项下方 padding）时，按当前高亮落点提交排序 */
+  const onConversationListDrop = (e: DragEvent) => {
+    if (!dragState.value.type) return;
+    e.preventDefault();
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    cancelDropTargetSync();
+    applyDropTargetFromPoint();
+    applyListEndDropTargetIfNeeded();
+
+    const over = dragOverState.value;
+    if (!over.type || !over.id) {
+      handleDragEnd();
+      return;
+    }
+    if (over.type === 'history') {
+      handleDrop(e, 'history', 'history');
+      return;
+    }
+    if (over.position === 'top' || over.position === 'bottom' || over.position === 'inside') {
+      handleDrop(
+        e,
+        over.type,
+        over.id,
+        over.type === 'conversation'
+          ? props.conversations.find(c => c.id === over.id)?.groupName
+          : undefined,
+      );
+      return;
+    }
+    handleDragEnd();
+  };
+
+  const handleListDragLeave = () => {
+    if (listDragLeaveTimer) clearTimeout(listDragLeaveTimer);
+    listDragLeaveTimer = setTimeout(() => {
+      const list = conversationListRef.value;
+      if (!list || !dragState.value.type) return;
+      const rect = list.getBoundingClientRect();
+      const { x, y } = lastDragPoint;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        setDragOverState({ type: null, id: null, position: null });
+      }
+    }, 50);
+  };
+
+  const onGroupChildrenDrop = (e: DragEvent, groupName: string) => {
+    if (dragState.value.type === 'conversation' && dragState.value.sourceGroup === groupName) {
+      e.preventDefault();
+      e.stopPropagation();
+      stopSidebarDragWatch();
+      dragState.value = { type: null, id: null };
+      setDragOverState({ type: null, id: null, position: null });
+      return;
+    }
+    handleDrop(e, 'group', groupName);
+  };
+
+  const resolveDropPosition = (
+    position: 'top' | 'bottom' | 'inside' | null,
+    e: DragEvent,
+    targetRect: DOMRect,
+  ): 'top' | 'bottom' => {
+    if (position === 'top' || position === 'bottom') {
+      return position;
+    }
+    return e.clientY < targetRect.top + targetRect.height / 2 ? 'top' : 'bottom';
+  };
+
+  const getDropTargetRect = (
+    e: DragEvent,
+    selector: string,
+  ): DOMRect => {
+    const current = e.currentTarget as HTMLElement | null;
+    if (current?.matches?.(selector) || current?.closest?.(selector)) {
+      const el = current.matches(selector) ? current : current.closest(selector);
+      if (el) return el.getBoundingClientRect();
+    }
+    const found = conversationListRef.value?.querySelector(selector);
+    return (found as HTMLElement | null)?.getBoundingClientRect()
+      ?? current?.getBoundingClientRect()
+      ?? new DOMRect();
+  };
+
+  const handleDrop = (
+    e: DragEvent,
+    targetType: 'group' | 'conversation' | 'history',
+    targetId: string,
+    targetGroup?: string,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    lastDragPoint.x = e.clientX;
+    lastDragPoint.y = e.clientY;
+    cancelDropTargetSync();
+    applyDropTargetFromPoint();
+    const { type, id, sourceGroup } = dragState.value;
+    const { position } = dragOverState.value;
+    const wasGroupDrag = type === 'group';
+
+    if (type === 'conversation' && targetType === 'conversation' && id) {
+      const sameContainer = (sourceGroup || undefined) === (targetGroup || undefined);
+      // drop 前常先触发 dragleave 清空 position，这里用落点坐标重算；列表空白 drop 时优先已有高亮
+      const targetRect = getDropTargetRect(e, `.conv-item[data-node-id="${CSS.escape(targetId)}"]`);
+      const dropPosition = resolveDropPosition(position, e, targetRect);
+      if (sameContainer && id !== targetId) {
+        if (targetGroup) {
+          const list = props.conversations.filter(c => c.groupName === targetGroup);
+          const without = list.filter(c => c.id !== id);
+          const targetIndex = without.findIndex(c => c.id === targetId);
+          if (targetIndex !== -1) {
+            const insertAt = dropPosition === 'top' ? targetIndex : targetIndex + 1;
+            const fromIndex = list.findIndex(c => c.id === id);
+            const toIndexRaw = dropPosition === 'top'
+              ? list.findIndex(c => c.id === targetId)
+              : list.findIndex(c => c.id === targetId) + 1;
+            const toIndex = fromIndex < toIndexRaw ? toIndexRaw - 1 : toIndexRaw;
+            if (fromIndex !== -1 && fromIndex !== toIndex) {
+              const beforeId = without[insertAt]?.id;
+              emit('reorder-conversation', id, beforeId
+                ? { groupName: targetGroup, beforeId, beforeKind: 'conversation' }
+                : { groupName: targetGroup, toEnd: true });
+            }
+          }
+        } else {
+          emitRootReorder('conversation', id, 'conversation', targetId, dropPosition);
+        }
+      } else if (!sameContainer && !targetGroup) {
+        // 从分组拖到未分组列表中的某条会话上 → 拖出分组
+        emit('update-group', id, undefined);
+      } else if (!sameContainer && targetGroup) {
+        // 跨组落到会话上 → 拖入该分组
+        emit('update-group', id, targetGroup);
+      }
+    } else if (type === 'conversation' && targetType === 'group') {
+      if (sourceGroup !== targetId) {
+        // 优先用拖拽过程中的高亮落点，避免 drop 的 currentTarget 不在分组内时误判为 inside
+        const resolved = resolveConvGroupDropPosition(e, targetId);
+        const dropPosition = (position === 'top' || position === 'bottom' || position === 'inside')
+          ? position
+          : (resolved ?? position);
+        if (!sourceGroup && dropPosition && dropPosition !== 'inside') {
+          const targetGroupItem = props.groups.find(g => g.name === targetId);
+          if (targetGroupItem) {
+            emitRootReorder('conversation', id!, 'group', targetGroupItem.id, dropPosition);
+          }
+        } else {
+          emit('update-group', id!, targetId);
+        }
+      }
+    } else if (type === 'conversation' && targetType === 'history' && sourceGroup) {
+      emit('update-group', id!, undefined);
+    } else if (type === 'group' && targetType === 'group' && id !== targetId) {
+      const movedGroup = props.groups.find(g => g.name === id);
+      const targetGroupItem = props.groups.find(g => g.name === targetId);
+      if (movedGroup && targetGroupItem) {
+        const targetRect = getDropTargetRect(e, `.group-item[data-node-id="${CSS.escape(targetId)}"]`);
+        const dropPosition = resolveDropPosition(position, e, targetRect);
+        emitRootReorder('group', movedGroup.id, 'group', targetGroupItem.id, dropPosition);
+      }
+    } else if (type === 'group' && targetType === 'conversation' && id && targetId) {
+      const movedGroup = props.groups.find(g => g.name === id);
+      if (movedGroup) {
+        const targetRect = getDropTargetRect(e, `.conv-item[data-node-id="${CSS.escape(targetId)}"]`);
+        const dropPosition = resolveDropPosition(position, e, targetRect);
+        emitRootReorder('group', movedGroup.id, 'conversation', targetId, dropPosition);
+      }
+    }
+
+    stopSidebarDragWatch();
+    dragState.value = { type: null, id: null };
+    setDragOverState({ type: null, id: null, position: null });
+    // drop 后仍可能补发 header click，需吞掉
+    if (wasGroupDrag) {
+      suppressGroupHeaderClick.value = true;
+      window.setTimeout(() => {
+        suppressGroupHeaderClick.value = false;
+      }, 100);
+    }
+  };
+
+  const handleDragEnd = () => {
+    const wasGroupDrag = dragState.value.type === 'group';
+    stopSidebarDragWatch();
+    dragState.value = { type: null, id: null };
+    setDragOverState({ type: null, id: null, position: null });
+    // 未落到可 drop 区域时只有 dragend；同样可能补发 click
+    if (wasGroupDrag) {
+      suppressGroupHeaderClick.value = true;
+      window.setTimeout(() => {
+        suppressGroupHeaderClick.value = false;
+      }, 100);
+    }
+  };
+
+  // 新建分组气泡弹窗
+  const addGroupDialog = ref({
+    show: false,
+    name: '',
+  });
+  const addGroupInputRef = ref<any>(null);
+  /** 打开瞬间忽略同一次点击冒泡到 document 的 clickoutside，避免 bkop 环境闪关 */
+  let ignoreAddGroupClickOutside = false;
+
+  const closeAddGroupPopover = () => {
+    addGroupDialog.value.show = false;
+    addGroupDialog.value.name = '';
+    ignoreAddGroupClickOutside = false;
+  };
+
+  // mousedown 早于 document 捕获阶段的 clickoutside，先标记避免同一次点击误关
+  const prepareAddGroupToggle = () => {
+    if (!addGroupDialog.value.show) {
+      ignoreAddGroupClickOutside = true;
+    }
+  };
+
+  const toggleAddGroupPopover = () => {
+    if (addGroupDialog.value.show) {
+      closeAddGroupPopover();
+      return;
+    }
+    addGroupDialog.value.name = '';
+    addGroupDialog.value.show = true;
+    window.setTimeout(() => {
+      ignoreAddGroupClickOutside = false;
+    }, 0);
+  };
+
+  const onAddGroupShowChange = (val: boolean) => {
+    addGroupDialog.value.show = val;
+    if (!val) {
+      addGroupDialog.value.name = '';
+      ignoreAddGroupClickOutside = false;
+    }
+  };
+
+  const onAddGroupClickOutside = () => {
+    if (ignoreAddGroupClickOutside) return;
+    closeAddGroupPopover();
+  };
+
+  const handleAddGroupPopoverShow = async () => {
+    addGroupDialog.value.name = '';
+    await nextTick();
+    // 延迟 focus，减少 scroll-into-view 触发侧栏滚动后的误隐藏
+    window.setTimeout(() => {
+      const inputRef = addGroupInputRef.value;
+      if (typeof inputRef?.focus === 'function') {
+        inputRef.focus();
+        return;
+      }
+      inputRef?.$el?.querySelector?.('input')?.focus();
+    }, 0);
+  };
+
+  const confirmAddGroup = () => {
+    const groupName = addGroupDialog.value.name.trim();
+    if (!groupName) return;
+    emit('add-group', groupName);
+    closeAddGroupPopover();
+  };
+
+  // 重命名分组
+  const editingGroup = ref<string | null>(null);
+  const editGroupName = ref('');
+  const editGroupInputRef = ref<HTMLInputElement | null>(null);
+
+  const ignoreEditGroupBlur = ref(false);
+
+  const startEditGroup = async (groupName: string) => {
+    ignoreEditGroupBlur.value = true;
+    editingGroup.value = groupName;
+    editGroupName.value = groupName;
+    hideGroupMenu();
+    await nextTick();
+    editGroupInputRef.value?.focus?.();
+    window.setTimeout(() => {
+      editGroupInputRef.value?.focus?.();
+      ignoreEditGroupBlur.value = false;
+    }, 50);
+  };
+
+  const isImeEnter = (evt?: KeyboardEvent) => Boolean(evt?.isComposing || evt?.keyCode === 229);
+
+  const confirmEditGroup = (oldName: string) => {
+    if (editingGroup.value !== oldName) return;
+    const newName = editGroupName.value.trim();
+    // 先退出编辑态，避免 Enter 后触发 blur 重复提交
+    editingGroup.value = null;
+    if (newName && newName !== oldName) {
+      const group = props.groups.find(g => g.name === oldName);
+      if (group) {
+        // 重命名时同步折叠态与本地展开记忆
+        const nextCollapsed = new Set(collapsedGroups.value);
+        if (nextCollapsed.has(oldName)) {
+          nextCollapsed.delete(oldName);
+          nextCollapsed.add(newName);
+        }
+        collapsedGroups.value = nextCollapsed;
+
+        const memory = readExpandedMemory();
+        if (memory !== null) {
+          localStorage.setItem(
+            EXPANDED_GROUPS_STORAGE_KEY,
+            JSON.stringify(memory.map(name => (name === oldName ? newName : name))),
+          );
+        }
+
+        emit('rename-group', group.id, newName);
+      }
+    }
+  };
+
+  const handleEditGroupBlur = (oldName: string) => {
+    if (ignoreEditGroupBlur.value) return;
+    confirmEditGroup(oldName);
+  };
+
+  const handleEditGroupEnter = (oldName: string, evt: KeyboardEvent) => {
+    if (isImeEnter(evt)) return;
+    confirmEditGroup(oldName);
+  };
+
+  // 重命名会话
+  const editingConvId = ref<string | null>(null);
+  const editConvTitle = ref('');
+  const editConvInputRef = ref<any>(null);
+
+  const ignoreEditConvBlur = ref(false);
+
+  const getEditConvInputEl = () => {
+    const inputRef = Array.isArray(editConvInputRef.value)
+      ? editConvInputRef.value[0]
+      : editConvInputRef.value;
+    if (!inputRef) return null;
+    if (typeof inputRef.focus === 'function' && inputRef.$el) {
+      return inputRef.$el.querySelector?.('input') as HTMLInputElement | null;
+    }
+    if (inputRef instanceof HTMLInputElement) return inputRef;
+    return inputRef;
+  };
+
+  const startEditConv = async (id: string, title: string) => {
+    ignoreEditConvBlur.value = true;
+    hideMenu();
+    editingConvId.value = id;
+    editConvTitle.value = title;
+    await nextTick();
+    const nativeInput = getEditConvInputEl();
+    nativeInput?.focus?.();
+    window.setTimeout(() => {
+      getEditConvInputEl()?.focus?.();
+      ignoreEditConvBlur.value = false;
+    }, 50);
+  };
+
+  const confirmEditConv = (id: string) => {
+    if (editingConvId.value !== id) return;
+    const newTitle = editConvTitle.value.trim();
+    // 先退出编辑态，避免 Enter 后触发 blur 重复提交
+    editingConvId.value = null;
+    if (newTitle) {
+      emit('update-conv-title', id, newTitle);
+    }
+  };
+
+  const handleEditConvBlur = (id: string) => {
+    if (ignoreEditConvBlur.value) return;
+    confirmEditConv(id);
+  };
+
+  const handleEditConvEnter = (id: string, evt: KeyboardEvent) => {
+    if (isImeEnter(evt)) return;
+    confirmEditConv(id);
+  };
+
+  // 删除分组确认弹窗：复用之前的删除 InfoBox 风格
+  const showDeleteGroup = (groupName: string) => {
+    hideGroupMenu();
+
+    const confirmName = ref('');
+    const confirmBtnClass = 'chat-delete-group-confirm-btn';
+    const groupMeta = props.groups.find(g => g.name === groupName);
+    const groupConversationsCount = groupMeta?.childrenLoaded
+      ? props.conversations.filter(c => c.groupName === groupName).length
+      : (groupMeta?.conversationCount
+        ?? props.conversations.filter(c => c.groupName === groupName).length);
+
+    const getConfirmBtnStyle = (isMatch: boolean) => ({
+      height: '32px',
+      padding: '0 16px',
+      fontSize: '14px',
+      lineHeight: '32px',
+      borderRadius: '2px',
+      border: '1px solid',
+      outline: 'none',
+      marginRight: '8px',
+      backgroundColor: isMatch ? '#ea3636' : '#fff',
+      borderColor: isMatch ? '#ea3636' : '#dcdee5',
+      color: isMatch ? '#fff' : '#c4c6cc',
+      cursor: isMatch ? 'pointer' : 'not-allowed',
+    });
+
+    const cancelBtnStyle = {
+      height: '32px',
+      padding: '0 16px',
+      fontSize: '14px',
+      lineHeight: '32px',
+      borderRadius: '2px',
+      border: '1px solid #c4c6cc',
+      outline: 'none',
+      marginRight: '0',
+      backgroundColor: '#fff',
+      color: '#63656e',
+      cursor: 'pointer',
+    };
+
+    const infoBoxInputStyle = {
+      width: '100%',
+      height: '32px',
+      padding: '0 10px',
+      fontSize: '14px',
+      border: '1px solid #c4c6cc',
+      borderRadius: '2px',
+      outline: 'none',
+      boxSizing: 'border-box',
+    };
+
+    const updateConfirmBtn = (isMatch: boolean) => {
+      const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+      if (!btn) return;
+      if (isMatch) {
+        btn.removeAttribute('disabled');
+      } else {
+        btn.setAttribute('disabled', 'disabled');
+      }
+      Object.assign(btn.style, getConfirmBtnStyle(isMatch));
+    };
+
+    const copyGroupName = () => {
+      if (!groupName) return;
+      navigator.clipboard.writeText(groupName)
+        .then(() => messageSuccess('复制成功'))
+        .catch(() => undefined);
+    };
+
+    let deleteInfoInstance: any = null;
+    deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定删除该分组？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            lineHeight: '22px',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          '删除分组将',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '同步删除该分组下的'),
+          ' ',
+          h('span', { style: { fontWeight: 700, color: '#ea3636' } }, `${groupConversationsCount}`),
+          ' ',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '个会话'),
+          '，请谨慎操作！',
+        ]),
+        h('div', {
+          style: { marginBottom: '8px', fontSize: '14px', color: '#63656e' },
+        }, [
+          h('span', {}, '请输入分组名称「'),
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: copyGroupName,
+          }, groupName),
+          h('span', {}, '」以继续'),
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: `请输入分组名称：${groupName}`,
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmName.value = value;
+            updateConfirmBtn(value.trim() === groupName);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: `info-box-confirm-btn ${confirmBtnClass}`,
+          onClick: () => {
+            if (confirmName.value.trim() !== groupName) return;
+            // 不提供同步删除选项：按设计直接删除分组下的会话
+            emit('delete-group', groupName, false);
+            deleteInfoInstance?.hide();
+          },
+          onVnodeMounted: (vnode: any) => {
+            const el = vnode.el as HTMLButtonElement;
+            el.setAttribute('disabled', 'disabled');
+            Object.assign(el.style, getConfirmBtnStyle(false));
+          },
+        }, '删除'),
+        h('button', {
+          style: cancelBtnStyle,
+          onClick: () => deleteInfoInstance?.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmName.value = '';
+        // InfoBox 的 DOM 可能复用/未销毁；关闭时强制重置按钮，避免“关掉后仍可点击”。
+        const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+        if (btn) {
+          btn.setAttribute('disabled', 'disabled');
+          Object.assign(btn.style, getConfirmBtnStyle(false));
+        }
+      },
+    });
+  };
+
+  // 会话操作菜单
+  const activeMenuId = ref<string | null>(null);
+  const activeGroupMenuId = ref<string | null>(null);
+
+  const isSidebarMenuInteractiveArea = (target: EventTarget | null) => {
+    const el = target instanceof HTMLElement ? target : null;
+    if (!el) return false;
+    // 含子菜单 popover（teleport 到 body，与主菜单不是同一节点）
+    return !!(el.closest('.chat-conv-dropdown-pop')
+      || el.closest('.chat-conv-submenu-pop')
+      || el.closest('.chat-group-dropdown-pop')
+      || el.closest('.action-btn')
+      || el.closest('.group-more')
+      || el.closest('.group-new-chat'));
+  };
+
+  watch(
+    () => [activeMenuId.value, activeGroupMenuId.value],
+    ([menuId, groupMenuId]) => {
+      const hasOpenMenu = Boolean(menuId || groupMenuId);
+      if (hasOpenMenu) {
+        if (!documentSidebarMenuMouseDownHandler) {
+          documentSidebarMenuMouseDownHandler = (e: MouseEvent) => {
+            if (isSidebarMenuInteractiveArea(e.target)) return;
+            activeMenuId.value = null;
+            activeGroupMenuId.value = null;
+          };
+        }
+        document.addEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+        return;
+      }
+
+      if (documentSidebarMenuMouseDownHandler) {
+        document.removeEventListener('mousedown', documentSidebarMenuMouseDownHandler);
+      }
+    },
+  );
+
+  const toggleConvMenu = (id: string) => {
+    activeMenuId.value = activeMenuId.value === id ? null : id;
+    activeGroupMenuId.value = null;
+  };
+
+  const toggleGroupMenu = (name: string) => {
+    activeGroupMenuId.value = activeGroupMenuId.value === name ? null : name;
+    activeMenuId.value = null;
+  };
+
+  const hideMenu = () => {
+    activeMenuId.value = null;
+  };
+
+  const hideGroupMenu = () => {
+    activeGroupMenuId.value = null;
+  };
+
+  const moveToGroup = (convId: string, groupName?: string) => {
+    emit('update-group', convId, groupName);
+    hideMenu();
+  };
+
+  const handleDelete = (conv: Conversation) => {
+    hideMenu();
+    showDeleteConversationDialog(conv);
+  };
+
+  // 导入对话逻辑
+  const importDialog = ref({
+    show: false,
+    selectedIds: [] as string[],
+    mockData: [
+      { id: 'mock1', title: '网络流量异常', messages: new Array(3) },
+      { id: 'mock2', title: '主机行为分析', messages: new Array(8) },
+      { id: 'mock3', title: '风险告警解读', messages: new Array(12) },
+      { id: 'mock4', title: '高危风险任务', messages: new Array(5) },
+    ],
+  });
+
+  const isAllImportSelected = computed({
+    get: () => {
+      if (importDialog.value.mockData.length === 0) return false;
+      return importDialog.value.selectedIds.length === importDialog.value.mockData.length;
+    },
+    set: (val) => {
+      if (val) {
+        importDialog.value.selectedIds = importDialog.value.mockData.map(c => c.id);
+      } else {
+        importDialog.value.selectedIds = [];
+      }
+    },
+  });
+
+  const importIndeterminate = computed(() => {
+    const selectedCount = importDialog.value.selectedIds.length;
+    return selectedCount > 0 && selectedCount < importDialog.value.mockData.length;
+  });
+
+  const showImportDialog = () => {
+    importDialog.value.selectedIds = [];
+    importDialog.value.show = true;
+    closeSidebarPopovers();
+  };
+
+  // 本期配置菜单未挂入口，保留实现便于恢复
+  void showImportDialog;
+  void showReportList;
+
+  watch(
+    () => importDialog.value.show,
+    (importShow) => {
+      if (importShow) {
+        nextTick(() => {
+          closeSidebarPopovers();
+        });
+      }
+    },
+  );
+
+  const handleSelectAllImport = (val: boolean) => {
+    isAllImportSelected.value = val;
+  };
+
+  const handleSelectImport = (val: boolean, id: string) => {
+    if (val) {
+      importDialog.value.selectedIds.push(id);
+    } else {
+      importDialog.value.selectedIds = importDialog.value.selectedIds.filter(i => i !== id);
+    }
+  };
+
+  const closeImportDialog = () => {
+    importDialog.value.show = false;
+  };
+
+  const confirmImport = () => {
+    if (importDialog.value.selectedIds.length === 0) return;
+    emit('import', importDialog.value.selectedIds);
+    closeImportDialog();
+  };
+
+  // 删除会话 / 清空所有会话：复用场景配置/平台管理删除弹窗（InfoBox）
+  const CLEAR_CONFIRM_TEXT = '确认清空';
+
+  const getDangerConfirmBtnStyle = (isMatch: boolean) => ({
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid',
+    outline: 'none',
+    marginRight: '8px',
+    backgroundColor: isMatch ? '#ea3636' : '#fff',
+    borderColor: isMatch ? '#ea3636' : '#dcdee5',
+    color: isMatch ? '#fff' : '#c4c6cc',
+    cursor: isMatch ? 'pointer' : 'not-allowed',
+  });
+
+  const infoBoxCancelBtnStyle = {
+    height: '32px',
+    padding: '0 16px',
+    fontSize: '14px',
+    lineHeight: '32px',
+    borderRadius: '2px',
+    border: '1px solid #c4c6cc',
+    outline: 'none',
+    marginRight: '0',
+    backgroundColor: '#fff',
+    color: '#63656e',
+    cursor: 'pointer',
+  };
+
+  const infoBoxInputStyle = {
+    width: '100%',
+    height: '32px',
+    padding: '0 10px',
+    fontSize: '14px',
+    border: '1px solid #c4c6cc',
+    borderRadius: '2px',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
+
+  const updateDangerConfirmBtn = (className: string, isMatch: boolean) => {
+    const btn = document.querySelector(`.${className}`) as HTMLButtonElement | null;
+    if (!btn) return;
+    if (isMatch) {
+      btn.removeAttribute('disabled');
+    } else {
+      btn.setAttribute('disabled', 'disabled');
+    }
+    Object.assign(btn.style, getDangerConfirmBtnStyle(isMatch));
+  };
+
+  const copyConfirmName = (name: string) => {
+    if (!name) return;
+    navigator.clipboard.writeText(name).then(() => {
+      messageSuccess('复制成功');
+    });
+  };
+
+  const showDeleteConversationDialog = (conv: Conversation) => {
+    const confirmName = ref('');
+    const confirmBtnClass = 'chat-delete-confirm-btn';
+    let deleteInfoInstance: any = null;
+    deleteInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定删除该会话？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            lineHeight: '22px',
+            color: '#63656e',
+            textAlign: 'left',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, [
+          '此操作将',
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '永久删除该会话及消息记录'),
+          '，不可恢复，请谨慎操作！',
+        ]),
+        h('div', {
+          style: {
+            marginBottom: '8px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          '请输入会话名称「',
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: () => copyConfirmName(conv.title),
+          }, conv.title),
+          '」以确认删除',
+        ]),
+        h('input', {
+          value: confirmName.value,
+          placeholder: '请输入待删除的会话名称',
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmName.value = value;
+            updateDangerConfirmBtn(confirmBtnClass, value.trim() === conv.title);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: `info-box-confirm-btn ${confirmBtnClass}`,
+          onClick: () => {
+            if (confirmName.value.trim() !== conv.title) return;
+            emit('delete', conv.id);
+            deleteInfoInstance.hide();
+          },
+          onVnodeMounted: (vnode: any) => {
+            const el = vnode.el as HTMLButtonElement;
+            el.setAttribute('disabled', 'disabled');
+            Object.assign(el.style, getDangerConfirmBtnStyle(false));
+          },
+        }, '删除'),
+        h('button', {
+          style: infoBoxCancelBtnStyle,
+          onClick: () => deleteInfoInstance.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmName.value = '';
+        // InfoBox 的 DOM 可能复用/未销毁；关闭时强制重置按钮，避免“关掉后仍可点击”。
+        const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+        if (btn) {
+          btn.setAttribute('disabled', 'disabled');
+          Object.assign(btn.style, getDangerConfirmBtnStyle(false));
+        }
+      },
+    });
+  };
+
+  const showClearAllDialog = () => {
+    closeSidebarPopovers();
+    const confirmText = ref('');
+    const confirmBtnClass = 'chat-clear-confirm-btn';
+    let clearInfoInstance: any = null;
+    clearInfoInstance = InfoBox({
+      type: 'warning',
+      title: '确定清空所有会话？',
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      subTitle: () => h('div', { style: { textAlign: 'left' } }, [
+        h('div', {
+          style: {
+            padding: '12px 16px',
+            marginBottom: '16px',
+            fontSize: '14px',
+            lineHeight: '22px',
+            color: '#63656e',
+            textAlign: 'left',
+            backgroundColor: '#f5f7fa',
+            borderRadius: '2px',
+          },
+        }, [
+          '此操作将删除所有会话及消息记录，包括已分组和未分组的共 ',
+          h('strong', {}, String(props.conversations.length)),
+          ' 个会话。',
+          h('br'),
+          h('span', { style: { fontWeight: 600, color: '#ea3636' } }, '此操作不可恢复，请谨慎操作！'),
+        ]),
+        h('div', {
+          style: {
+            marginBottom: '8px',
+            fontSize: '14px',
+            color: '#63656e',
+          },
+        }, [
+          '请输入「',
+          h('span', {
+            style: { fontWeight: 600, color: '#313238', cursor: 'pointer' },
+            onClick: () => copyConfirmName(CLEAR_CONFIRM_TEXT),
+          }, CLEAR_CONFIRM_TEXT),
+          '」以继续',
+        ]),
+        h('input', {
+          class: 'chat-clear-confirm-input',
+          value: confirmText.value,
+          placeholder: CLEAR_CONFIRM_TEXT,
+          onInput: (e: Event) => {
+            const { value } = e.target as HTMLInputElement;
+            confirmText.value = value;
+            updateDangerConfirmBtn(confirmBtnClass, value.trim() === CLEAR_CONFIRM_TEXT);
+          },
+          style: infoBoxInputStyle,
+        }),
+      ]),
+      footer: () => h('div', {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+      }, [
+        h('button', {
+          class: `info-box-confirm-btn ${confirmBtnClass}`,
+          onClick: () => {
+            if (confirmText.value.trim() !== CLEAR_CONFIRM_TEXT) return;
+            emit('clear-all');
+            clearInfoInstance.hide();
+          },
+          onVnodeMounted: (vnode: any) => {
+            const el = vnode.el as HTMLButtonElement;
+            el.setAttribute('disabled', 'disabled');
+            Object.assign(el.style, getDangerConfirmBtnStyle(false));
+          },
+        }, '清空'),
+        h('button', {
+          style: infoBoxCancelBtnStyle,
+          onClick: () => clearInfoInstance.hide(),
+        }, '取消'),
+      ]),
+      onClose() {
+        confirmText.value = '';
+        // InfoBox 的 DOM 可能复用/未销毁；关闭时强制重置按钮，避免“关掉后仍可点击”。
+        const btn = document.querySelector(`.${confirmBtnClass}`) as HTMLButtonElement | null;
+        if (btn) {
+          btn.setAttribute('disabled', 'disabled');
+          Object.assign(btn.style, getDangerConfirmBtnStyle(false));
+        }
+      },
+    });
+  };
+
+  /** keep-alive 失活时关闭 teleport/遮罩类浮层，避免切回后整页点击无响应 */
+  const closeKeepAliveOverlays = () => {
+    closeSidebarPopovers();
+    closeCollapsedSearch();
+    addGroupDialog.value.show = false;
+    addGroupDialog.value.name = '';
+    importDialog.value.show = false;
+    isReportDetailShow.value = false;
+    isReportListShow.value = false;
+  };
+
+  onDeactivated(() => {
+    stopSidebarDragWatch();
+    dragState.value = { type: null, id: null };
+    setDragOverState({ type: null, id: null, position: null });
+    closeKeepAliveOverlays();
+  });
+
+  defineExpose({
+    closeKeepAliveOverlays,
+  });
+</script>
+
+<style
+  lang="postcss"
+  src="./chat-sidebar.css" />

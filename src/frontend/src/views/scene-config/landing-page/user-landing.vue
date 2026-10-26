@@ -209,7 +209,7 @@
                   <img
                     alt=""
                     class="qw-icon"
-                    src="@/images/qw.svg">
+                    :src="qwIcon">
                   iegsec_helper（{{ t('IEG安全助手') }}）
                 </span>
                 {{ t('申请创建审计场景') }}
@@ -248,7 +248,7 @@
                 <span @click="contactHelper">
                   <img
                     class="qw-icon"
-                    src="@/images/qw.svg">
+                    :src="qwIcon">
                   iegsc_helper（{{ t('IEG安全助手') }}）
                 </span>
                 {{ t('申请创建审计场景') }}
@@ -317,7 +317,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import landingImg from '@/images/landing.png';
+  import landingImg from '@/images/landing.png?inline';
+  import qwIcon from '@/images/qw.svg';
 
   type ApplyStatus = 'idle' | 'applying' | 'rejected' | 'passed';
 

@@ -30,7 +30,7 @@ from markupsafe import Markup
 
 from core.observability import submit_with_observation_context
 from core.render import jinja2_environment
-from services.web.risk.constants import RiskAICeleryQueue
+from services.web.common.ai import AIWorkloadQueue
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.providers import Provider
 
@@ -357,9 +357,9 @@ def _render_template(template: str, providers: list[Provider], variables: dict[s
 
 
 @celery_app.task(
-    queue=RiskAICeleryQueue.SINGLE_ANALYSE,
-    acks_late=True,
+    queue=AIWorkloadQueue.RISK_SINGLE,
     rate_limit=settings.RISK_SINGLE_ANALYSE_TASK_RATE_LIMIT,
+    acks_late=True,
     time_limit=settings.RENDER_TASK_TIMEOUT,
 )
 def render_template(*args, **kwargs) -> str:

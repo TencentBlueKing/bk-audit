@@ -1,7 +1,7 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.19.15-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.19.16-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
 [![Coverage](https://codecov.io/gh/TencentBlueKing/bk-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/TencentBlueKing/bk-audit)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
@@ -41,6 +41,12 @@ The BK Audit Center aims to create benchmark audit products based on the BK ecos
 
 If you have good ideas or suggestions, please let us know by Issues or Pull Requests and contribute to the Blue Whale Open Source Community.
 [Tencent Open Source Incentive Program](https://opensource.tencent.com/contribution) welcome developers from all over the globe to contribute to Tencent Open Source projects.
+
+### Agent collaboration
+
+Developers and agents can start with the [Agent collaboration guide](agent/README.md) to find engineering conventions, tools, and task skills. Collaboration materials live under `agent/`: shared covers onboarding and capability selection, commits, and release preparation; backend holds domain skills and tools; frontend points to frontend engineering sources. Build, test, and check configurations stay with their respective projects.
+
+Agents can use [bk-audit-onboarding](agent/shared/skills/bk-audit-onboarding/SKILL.md) to diagnose the environment, select capabilities for the current task, and verify readiness. A checkout is needed for engineering operations, but not for an initial setup plan. See the [architecture and maintenance guide](agent/architecture.md) when adding or maintaining collaboration capabilities; follow the selected skill for task-specific operations.
 
 ## License
 

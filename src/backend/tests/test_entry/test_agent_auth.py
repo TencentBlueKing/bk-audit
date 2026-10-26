@@ -27,7 +27,7 @@ class TestAgentAuthEntryConfig(SimpleTestCase):
                 {
                     "code": "audit-risk-agent",
                     "enabled": True,
-                    "ping_url": "https://agent.example.woa.com/ping/",
+                    "ping_url": "https://agent.example.com/ping/",
                 }
             ]
         }

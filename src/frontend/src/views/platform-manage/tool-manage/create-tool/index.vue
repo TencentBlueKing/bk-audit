@@ -66,7 +66,7 @@
 
             <component
               :is="ToolTypeComMap[formData.tool_type]"
-              v-if="isShowComponent"
+              v-if="isShowComponent && ToolTypeComMap[formData.tool_type]"
               ref="comRef"
               :data-search-config-type="formData.data_search_config_type"
               :form-data-config="formData"
@@ -109,21 +109,26 @@
       <smart-action
         class="create-tools-page"
         :offset-target="getSmartActionOffsetTarget">
-        <audit-form :model="formData">
+        <audit-form
+          ref="visibleRangeFormRef"
+          form-type="vertical"
+          :model="formData"
+          :rules="visibleRangeRules">
           <card-part-vue
             :is-open="false"
             :show-icon="false"
             :title="t('可见范围')">
             <template #content>
               <!-- 选择可见范围 -->
-              <div class="visible-range-select-row">
-                <label class="select-label">{{ t('选择可见范围') }}</label>
-                <div class="select-control">
-                  <visible-range-field
-                    :form-data="formData"
-                    @update:form-data="handleVisibleRangeChange" />
-                </div>
-              </div>
+              <bk-form-item
+                class="visible-range-form-item"
+                :label="t('选择可见范围')"
+                property="visibility_type"
+                required>
+                <visible-range-field
+                  :form-data="formData"
+                  @update:form-data="handleVisibleRangeChange" />
+              </bk-form-item>
 
               <!-- 各场景/系统参数配置：未选可见范围、全部可见、全部场景、全部系统时不展示 -->
               <scene-param-config
@@ -134,7 +139,8 @@
                 :selected-scenes="selectedSceneItems"
                 :selected-systems="selectedSystemItems"
                 :tool-uid="formData.uid || ''"
-                @update:param-overrides="handleParamOverridesChange" />
+                @update:param-overrides="handleParamOverridesChange"
+                @update:usage-restrictions="handleUsageRestrictionsChange" />
             </template>
           </card-part-vue>
         </audit-form>
@@ -218,12 +224,21 @@
     buildPlatformToolSubmitPayload,
     parseDefaultValueOverrides,
     reconcileSceneParamOverrides,
+    shouldSubmitVisibilityPayload,
   } from './submit-payload';
 
   import useMessage from '@/hooks/use-message';
   import usePageHeaderSlot from '@/hooks/use-page-header-slot';
   import useRequest from '@/hooks/use-request';
   import { filterVirtualToolTags } from '@/utils/assist/filter-virtual-tags';
+  import {
+    pruneUsageRestrictions,
+    usageLimitsToRestrictions,
+    usageRestrictionsChanged,
+    validateUsageRestrictions,
+    type UsageRestrictions,
+    type UsageScopeCard,
+  } from '@/utils/tool/portrait-account-restriction';
 
   provideToolManageContext(createPlatformToolManageContext());
 
@@ -252,6 +267,7 @@
   const isSkippingStepValidation = ref(false);
 
   const formRef = ref();
+  const visibleRangeFormRef = ref();
   const comRef = ref();
   const toolTypeSectionRef = ref();
   // eslint-disable-next-line func-call-spacing
@@ -264,6 +280,7 @@
   const isSuccessful = ref(false);
   const allTagMap = ref<Record<string, string>>({});
   const isUpdate = ref(false);
+  const usageRestrictionBaseline = ref('{}');
   const isFirstEdit = ref(false);
   const reportListsPanels = ref([]);
   const bkVisionUpdateTime = ref('');
@@ -374,6 +391,16 @@
     ],
   };
 
+  const visibleRangeRules = {
+    visibility_type: [
+      {
+        validator: () => shouldSubmitVisibilityPayload(formData.value),
+        message: t('可见范围不能为空'),
+        trigger: 'change',
+      },
+    ],
+  };
+
   // 侧边栏确认之后更新状态
   const changeSubmit = (value: boolean) => {
     isUpdate.value = value;
@@ -432,6 +459,10 @@
       if (!(data as any).visibility) {
         await loadEditVisibility(route.params.id as string);
       }
+      if (formData.value.config) {
+        formData.value.config.usage_restrictions = usageLimitsToRestrictions(data.config?.usage_limits);
+      }
+      usageRestrictionBaseline.value = JSON.stringify(formData.value.config?.usage_restrictions || {});
       restoreToolComponentConfig();
       isEditDataReady.value = true;
     },
@@ -442,6 +473,18 @@
   };
 
   const validateStep1 = async (): Promise<boolean> => {
+    if (formData.value.tool_type === 'smart_page') {
+      if (!formData.value.name?.trim() || !formData.value.description?.trim()) {
+        messageWarn(t('请完善基础信息'));
+        return false;
+      }
+      try {
+        await formRef.value.validate();
+        return true;
+      } catch {
+        return false;
+      }
+    }
     try {
       const tastQueue = [formRef.value.validate()];
       if (comRef.value && formData.value.tool_type !== 'api') {
@@ -540,11 +583,48 @@
     formData.value.scene_ids = val.scene_ids;
     formData.value.system_ids = val.system_ids;
     reconcileStep2ParamOverrides();
+    if (shouldSubmitVisibilityPayload(formData.value)) {
+      visibleRangeFormRef.value?.clearValidate('visibility_type');
+    }
   };
 
   // 参数覆盖配置变更
   const handleParamOverridesChange = (value: Record<string, any>) => {
     formData.value.scene_param_overrides = value;
+  };
+
+  const handleUsageRestrictionsChange = (value: UsageRestrictions) => {
+    formData.value.config.usage_restrictions = value;
+  };
+
+  const portraitScopeCards = (): UsageScopeCard[] => [
+    ...selectedSceneItems.value.map(item => ({ type: 'scene' as const, id: item.id, name: item.name })),
+    ...selectedSystemItems.value.map(item => ({ type: 'system' as const, id: item.id, name: item.name })),
+  ];
+
+  const nextPortraitRestrictions = () => pruneUsageRestrictions(
+    formData.value.config?.usage_restrictions,
+    formData.value.scene_ids || [],
+    formData.value.system_ids || [],
+    formData.value.visibility_type,
+  );
+
+  const submitWithUsageValidation = () => {
+    if (formData.value.tool_type === 'smart_page') {
+      const next = nextPortraitRestrictions();
+      const baseline = JSON.parse(usageRestrictionBaseline.value || '{}') as UsageRestrictions;
+      if (usageRestrictionsChanged(baseline, next)) {
+        const result = validateUsageRestrictions(next, portraitScopeCards());
+        if (!result.ok) {
+          messageWarn(result.message);
+          return;
+        }
+        if (result.equivalentToUnrestricted) {
+          messageWarn(t('当前配置等同于不限制'));
+        }
+      }
+    }
+    doSubmit();
   };
 
   const handleCancel = () => {
@@ -643,11 +723,16 @@
   const handleSubmit = async () => {
     // 步骤2：formRef/comRef 已卸载，校验覆盖参数后提交 formData
     if (currentStep.value === 2) {
+      try {
+        await visibleRangeFormRef.value?.validate('visibility_type');
+      } catch {
+        return;
+      }
       if (showParamOverrideConfig.value && sceneParamConfigRef.value
         && !sceneParamConfigRef.value.validate()) {
         return;
       }
-      doSubmit();
+      submitWithUsageValidation();
       return;
     }
 
@@ -656,7 +741,7 @@
       return;
     }
     syncStep1Config();
-    doSubmit();
+    submitWithUsageValidation();
   };
 
   const isApiDoneDeBug = ref(false);
@@ -865,23 +950,8 @@
     }
   }
 
-  .visible-range-select-row {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 16px;
-
-    .select-label {
-      margin-bottom: 8px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
-      flex-shrink: 0;
-    }
-
-    .select-control {
-      width: 100%;
-      max-width: 660px;
-    }
+  .visible-range-form-item {
+    max-width: 660px;
   }
 
   /* 步骤2 操作按钮间距 */

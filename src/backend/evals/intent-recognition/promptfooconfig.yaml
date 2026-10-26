@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: '通用消息规划 Agent 能力评估'
+
+prompts:
+  - '{{query}}'
+
+providers:
+  - id: 'python:providers/provider.py'
+    label: 'aidev-message-planning'
+    config:
+      model: ''
+      max_attempts: 3
+
+defaultTest:
+  assert:
+    - type: is-json
+
+tests:
+  - file://tests/select-system.yaml
+  - file://tests/log-search.yaml
+  - file://tests/unrecognized.yaml
+  - file://tests/edge-cases.yaml
+  - file://tests/safety.yaml
+  - file://tests/chain-scenarios.yaml
+  - file://tests/regression-incidents.yaml
+  - file://tests/context-boundaries.yaml
+  - file://tests/nested-extension-fields.yaml
+  - file://tests/extension-type-operators.yaml
+  - file://tests/invalid-conditions.yaml

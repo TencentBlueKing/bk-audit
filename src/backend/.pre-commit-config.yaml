@@ -1,6 +1,15 @@
 minimum_pre_commit_version: "4.2.0"
 default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg]
 repos:
+  - repo: local
+    hooks:
+      - id: check-commit-message
+        name: Backend commit message
+        entry: sh agent/backend/tools/commit-message/commit_message.sh hook --message-file
+        language: system
+        stages: [commit-msg]
+        always_run: true
   - repo: https://github.com/asottile/pyupgrade
     rev: v1.21.0
     hooks:
@@ -22,6 +31,8 @@ repos:
         args:
           - "--profile"
           - "black"
+          - "--settings-path"
+          - "src/backend/pyproject.toml"
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.1.0
     hooks:

@@ -15,3 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+
+from core.exporter.markdown import render_ai_markdown
+
+__all__ = ["render_ai_markdown"]

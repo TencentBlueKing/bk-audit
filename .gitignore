@@ -60,3 +60,8 @@ AGENTS.md
 *debug*
 .worktrees/
 .playwright-cli
+.agents/
+**/.agents/
+skills-lock.json
+pre-*-bkcodeai
+.husky/

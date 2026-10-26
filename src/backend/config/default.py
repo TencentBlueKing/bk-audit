@@ -27,6 +27,7 @@ from client_throttler.constants import TimeDurationUnit
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
+from api.ai_agent_codes import AIAgentCode
 from core.observability import BKResourceAPIInstrumentor
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
@@ -209,22 +210,83 @@ BK_IAM_V4_API_URL = os.getenv("BKAPP_BK_IAM_V4_API_URL", "")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
-# AI 智能体
+# AI 智能体：AIAgentCode.value 为默认 APIGW 网关名，新增 Agent 只需在枚举中加一行。
+# 枚举 name 对应以下自动生效的环境变量：
+#   BKAPP_AI_{name}_API_URL       完整 URL（优先级最高）
+#   BKAPP_AI_{name}_APIGW_NAME    覆盖网关名
+#   BKAPP_AI_{name}_APP_CODE      per-agent 应用凭证，作用域与 URL 路由一致
+#   BKAPP_AI_{name}_SECRET_KEY    per-agent 应用密钥
 # URL 路由由 get_agent_base_url() 根据 AIAgentCode 枚举自动解析，优先级：
 #   1. BKAPP_AI_{AGENT_CODE}_API_URL     — 完整 URL 直接使用
 #   2. BKAPP_AI_{AGENT_CODE}_APIGW_NAME  — 覆盖 APIGW 网关名（默认取枚举 value）
 #   3. get_endpoint(apigw_name, APIGW, stage="prod") — 自动生成
-# 认证配置（所有 agent 共用，旧变量保留向后兼容）
+# 认证配置：per-agent 应用凭证 BKAPP_AI_{AGENT}_APP_CODE / _SECRET_KEY 优先级最高，
+# 仅对该 agent 生效（如上云版的 BKAPP_AI_AUDIT_ANALYSE_APP_CODE），未配置时走下方全局链。
+# 全局 BKAPP_AI_AGENT_APP_CODE/_SECRET_KEY 为原有逻辑（所有 agent 共用，历史上早于日志检索迭代存在），
+# 注意：若配置的凭证与其网关环境不匹配会导致凭证错配，跨平台 agent 请一律使用 per-agent 变量。
 AI_AGENT_APP_CODE = os.getenv("BKAPP_AI_AGENT_APP_CODE", "")
 AI_AGENT_SECRET_KEY = os.getenv("BKAPP_AI_AGENT_SECRET_KEY", "")
 AI_AUDIT_REPORT_APP_CODE = os.getenv("BKAPP_AI_AUDIT_REPORT_APP_CODE", "")
 AI_AUDIT_REPORT_SECRET_KEY = os.getenv("BKAPP_AI_AUDIT_REPORT_SECRET_KEY", "")
+# 意图识别智能体环境路由开关（值为 AIAgentCode 枚举名，默认专属智能体）：
+# - 生产（上云）：默认 USER_INTENT，BK_API_URL_TMPL 独立域名模板默认链路直接跑通，零额外配置
+# - bkop：PaaS 注入的统一域名模板下 bp-ai-user-intent 未注册（404），配置
+#   BKAPP_AI_USER_INTENT_API_URL 指向该网关的独立域名完整 URL
+#   （第 1 层优先级最高）；
+#   凭证走全局 bk-audit（网关已授权）
+AI_USER_INTENT_AGENT_CODE = os.getenv("BKAPP_AI_USER_INTENT_AGENT_CODE", "USER_INTENT")
+# 单次智能体调用超时（秒）：默认 300 保持历史行为；NL 检索链路建议收紧到 60
+# （重试预算 deadline 无法中断进行中的调用，单次超时是链路总时长的实际闸门）
+AI_AGENT_API_TIMEOUT_SECONDS = int(os.getenv("BKAPP_AI_AGENT_API_TIMEOUT_SECONDS", "300"))
 
 # AI Audit Analyse (分析智能体)
 AI_AUDIT_ANALYSE_APIGW_NAME = os.getenv("BKAPP_AI_AUDIT_ANALYSE_APIGW_NAME", "bp-ai-audit-analyse")
 AI_AUDIT_ANALYSE_API_URL = os.getenv("BKAPP_AI_AUDIT_ANALYSE_API_URL", "")
 ANALYSE_REPORT_RISK_LIMIT = int(os.getenv("BKAPP_ANALYSE_REPORT_RISK_LIMIT", 100))
 ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER = strtobool(os.getenv("BKAPP_ANALYSE_REPORT_APIGW_CHECK_REPORT_OWNER", "False"))
+
+# AI 助手平台
+# 消息历史接口的默认窗口与最大窗口，限制单次响应的数据量。
+AI_ASSISTANT_MESSAGE_HISTORY_DEFAULT_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_HISTORY_DEFAULT_LIMIT", 20))
+AI_ASSISTANT_MESSAGE_HISTORY_MAX_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_MESSAGE_HISTORY_MAX_LIMIT", 100))
+# AI 分析附件实时导出上限，按 UTF-8 字节数限制，避免多字节内容绕过同步资源控制。
+AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES = int(
+    os.getenv("BKAPP_AI_ASSISTANT_ATTACHMENT_MARKDOWN_MAX_BYTES", 10 * 1024 * 1024)
+)
+# AI 助手日志检索：L2 字段采样开关 / D3 操作榜单开关
+# （L2 采样默认开启：设计稿已确认「最近一条数据」与「拓展字段动态获取」需求，
+#   SYSTEM_SELECTION 每次多一次 Doris 采样查询（30 天窗口分区裁剪，多行融合拓展字段）且失败自动降级；
+#   若线上延迟或样例质量异常，可设 BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED=false 关闭；
+#   操作上下文由平台层 services/web/ai_assistant/services/operation.py 统一管控）
+AI_ASSISTANT_FIELD_SAMPLE_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ENABLED", "True"))
+AI_ASSISTANT_FIELD_SAMPLE_ROWS = int(os.getenv("BKAPP_AI_ASSISTANT_FIELD_SAMPLE_ROWS", "50"))
+AI_ASSISTANT_OPERATION_RANKING_ENABLED = strtobool(os.getenv("BKAPP_AI_ASSISTANT_OPERATION_RANKING_ENABLED", "True"))
+# AI 助手会话标题生成（一期复刻 risk generate_analyse_report_title 调用方式，共用智能体 ALS_TITLE_SUM）
+AI_CONVERSATION_TITLE_MAX_LENGTH = int(os.getenv("BKAPP_AI_CONVERSATION_TITLE_MAX_LENGTH", "35"))
+# AI 助手常见/历史操作（常见操作走 Redis 缓存 + 定时任务刷新，历史操作直查最近 NL 消息）
+AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_STORE_LIMIT", 50))
+AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_RETURN_LIMIT", 10))
+AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_REFRESH_SCAN_LIMIT", 500))
+# 常用操作高频化：滑动统计窗口（天）；桶 TTL = 窗口 + 2 天由代码推导，无需单独配置
+AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS = int(os.getenv("BKAPP_AI_ASSISTANT_COMMON_QUERY_WINDOW_DAYS", 14))
+AI_ASSISTANT_HISTORICAL_QUERY_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_LIMIT", 10))
+AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT = int(os.getenv("BKAPP_AI_ASSISTANT_HISTORICAL_QUERY_SCAN_LIMIT", 50))
+# 公共 CJK 字体只供受限 PDF 资源回调放行，风险报告和 AI 附件共享同一资产路径。
+PDF_CJK_FONT_PATH = os.getenv(
+    "BKAPP_PDF_CJK_FONT_PATH",
+    os.path.join(BASE_DIR, "support-files", "fonts", "NotoSansSC-Regular.ttf"),
+)
+# AI 助手消息或附件反馈说明的最大字符数，环境变量未配置时默认允许 2000 字符。
+AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH = int(os.getenv("BKAPP_AI_ASSISTANT_FEEDBACK_COMMENT_MAX_LENGTH", 2000))
+# 分批删除侧栏节点时，每批交给 Django Collector 处理的最大行数。
+AI_ASSISTANT_SIDEBAR_NODE_DELETE_BATCH_SIZE = int(os.getenv("BKAPP_AI_ASSISTANT_SIDEBAR_NODE_DELETE_BATCH_SIZE", 500))
+# 侧栏拖拽遇到 MySQL 死锁时的事务重试次数和线性退避基数（秒）。
+AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES = int(
+    os.getenv("BKAPP_AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_MAX_RETRIES", 2)
+)
+AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS = float(
+    os.getenv("BKAPP_AI_ASSISTANT_SIDEBAR_MOVE_DEADLOCK_RETRY_INTERVAL_SECONDS", 0.05)
+)
 
 # ESB component names
 BK_LOG_ESB_NAME = os.getenv("BKAPP_BK_LOG_ESB_NAME", "bk_log")
@@ -407,7 +469,8 @@ ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
 
-# monitor event
+# Event 异步上报 Celery Task 的硬时限（秒），只限制 BKM 事件 API 投递任务，
+# 不是产生 Event 的 AI 助手或其他业务任务执行超时。
 MONITOR_EVENT_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_EVENT_TASK_TIMEOUT", 60))
 
 # Throttler
@@ -416,6 +479,51 @@ throttler_config = ThrottlerConfig(
     placeholder_offset=int(os.getenv("BKAPP_THROTTLER_PLACEHOLDER_OFFSET", TimeDurationUnit.MINUTE.value)),
 )
 setup(throttler_config)
+# AI Agent 出站请求的跨进程全局限流。Web 与 Celery Worker 共用该 Redis Client，
+# 并以 AIAgentCode 为隔离维度；它是历史 Celery task rate_limit 之外的补充保护。
+AI_AGENT_RATE_LIMIT_REDIS_CLIENT = throttler_config.redis_client
+# 所有 Agent 的默认请求速率，格式与 client_throttler 一致（如 30/m）；空值表示默认关闭。
+AI_AGENT_DEFAULT_RATE_LIMIT = os.getenv("BKAPP_AI_AGENT_DEFAULT_RATE_LIMIT", "").strip()
+# Client 在单次 HTTP 请求前等待全局配额的最长秒数；启用 rate 时必须严格大于 0。
+AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS = float(
+    os.getenv("BKAPP_AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS", "2")
+)
+# 已迁移 Agent 继续读取原环境变量；未配置时按历史 5/m × 2 Worker 副本折算为全局 10/m，
+# 避免跨实例限流上线后默认吞吐减半。
+_AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS = {
+    AIAgentCode.AUDIT_REPORT: os.getenv("BKAPP_RENDER_TASK_RATE_LIMIT", "10/m"),
+    AIAgentCode.ALS_TITLE_SUM: os.getenv("BKAPP_AI_TITLE_TASK_RATE_LIMIT", "10/m"),
+    AIAgentCode.AUDIT_ANALYSE: os.getenv("BKAPP_RISK_MULTI_ANALYSE_TASK_RATE_LIMIT", "10/m"),
+}
+# 每个 Agent 可通过 BKAPP_AI_<枚举名>_RATE_LIMIT 及对应 MAX_WAIT_SECONDS 独立覆盖；
+# 全局默认值非空时优先于上述历史默认值。
+# AUDIT_REPORT 固定 client 默认保留单风险渲染的历史任务级限流；普通 AI 任务按请求显式启用全局限流。
+AI_AGENT_RATE_LIMITS = {
+    code.value: {
+        "rate": os.getenv(
+            f"BKAPP_AI_{code.name}_RATE_LIMIT",
+            AI_AGENT_DEFAULT_RATE_LIMIT or _AI_AGENT_LEGACY_RATE_LIMIT_DEFAULTS.get(code, ""),
+        ).strip(),
+        "max_wait_seconds": float(
+            os.getenv(
+                f"BKAPP_AI_{code.name}_RATE_LIMIT_MAX_WAIT_SECONDS",
+                str(AI_AGENT_RATE_LIMIT_DEFAULT_MAX_WAIT_SECONDS),
+            )
+        ),
+    }
+    for code in AIAgentCode
+}
+# 异步任务遇到 AgentRateLimited 后由 Broker 延迟重投，避免 Worker 原地等待或忙循环。
+# 最大重试次数不含首次执行；默认 10 次，耗尽后由具体任务收敛业务终态。
+AI_AGENT_TASK_MAX_RETRIES = int(os.getenv("BKAPP_AI_AGENT_TASK_MAX_RETRIES", "10"))
+# 指数退避的起始秒数，第 N 次重试以 base * 2^N 计算。
+AI_AGENT_TASK_RETRY_BASE_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_BASE_SECONDS", "5"))
+# 单次重试延迟的秒数上限，防止指数退避无限增长。
+AI_AGENT_TASK_RETRY_MAX_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_MAX_SECONDS", "60"))
+# 在退避时间上追加的随机抖动上限（秒），用于降低并发任务同时重试的概率。
+AI_AGENT_TASK_RETRY_JITTER_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_JITTER_SECONDS", "1"))
+# 从首次限流开始计算的总重试时间预算（秒）；下一次投递超出预算时直接结束重试。
+AI_AGENT_TASK_RETRY_DEADLINE_SECONDS = float(os.getenv("BKAPP_AI_AGENT_TASK_RETRY_DEADLINE_SECONDS", "600"))
 SOPS_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_API_RATE_LIMIT", "10/s")
 SOPS_OPERATE_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_OPERATE_API_RATE_LIMIT", "10/s")
 ITSM_API_RATE_LIMIT = os.getenv("BKAPP_ITSM_API_RATE_LIMIT", "10/s")
@@ -563,18 +671,22 @@ STUCK_TASK_SEARCH_DAYS = int(os.getenv("BKAPP_STUCK_TASK_SEARCH_DAYS", 7))
 # 处理状态为运行中且卡住的日志导出任务调度周期(小时)
 PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/1")
 
-#  Alert Configuration
+# BKM 自定义事件数据源 ID。与 ACCESS_TOKEN 配对使用；未配置时事件任务
+# 仍会按公共 Event 逻辑尝试投递，由 BKM 接口返回配置错误，不影响业务流程。
 ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
 
-#  Alert Configuration
+# BKM 自定义事件数据源访问令牌，必须与 ALERT_DATA_ID 属于同一数据源。
 ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
 
+# Metric 异步上报 Celery Task 的硬时限（秒），只限制 BKM 指标 API 投递任务，
+# 不是 Message、Attachment 或其他业务任务的执行超时。
 MONITOR_METRIC_TASK_TIMEOUT = int(os.getenv("BKAPP_MONITOR_METRIC_TASK_TIMEOUT", 60))
 
-# 日志导出状态上报的数据ID
+# 共享 BKM 自定义 Metric 数据源 ID。配置名保留历史“日志导出状态”命名，
+# 当前同时供 AI 助手等模块的自定义 Metric 复用；为 0 或 token 为空时 Metric 不投递。
 LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 
-# 日志导出状态上报的数据token
+# 共享 BKM 自定义 Metric 数据源访问令牌，必须与 LOG_EXPORT_STATUS_DATA_ID 配对使用。
 LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
 # Asset Observability（资产可观测性）

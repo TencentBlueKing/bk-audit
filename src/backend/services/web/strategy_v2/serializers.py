@@ -829,7 +829,7 @@ class MultiRuleValidateMixin:
     """
     多规则校验 mixin：Create/Update 策略序列化器共用。
 
-    1. 发现规则仅 rule 策略；每条规则 where 必填
+    1. 发现规则仅 rule 策略；每条规则 where/having 至少一个
     2. rule_name 策略内唯一
     3. having 聚合字段必须存在于策略级 select 聚合字段（SQL 构造 L2 列引用依赖）
     4. 分派规则仅全局策略（binding_type=platform_binding）可配；全局策略必须有默认分派规则（风险必有分派去处）

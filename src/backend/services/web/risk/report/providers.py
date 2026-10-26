@@ -31,6 +31,7 @@ from django.db.models import Max
 from jinja2 import nodes
 from jinja2.nodes import Expr
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from core.sql.constants import FieldType
 from services.web.risk.constants import (
     AGGREGATION_FUNCTION_TO_SQL_TYPE,
@@ -114,6 +115,7 @@ class AIProvider(Provider):
         ai_executor: Callable = None,
         key: str = "ai",
         enable_cache: bool = False,
+        enable_agent_rate_limit: bool = False,
     ):
         """初始化AI Provider
 
@@ -123,12 +125,14 @@ class AIProvider(Provider):
             ai_executor: 自定义的AI执行器，用于测试时注入mock
             key: Provider的key，默认为 ai
             enable_cache: 是否启用缓存，默认关闭
+            enable_agent_rate_limit: 是否为本次调用启用 Agent 全局限流，默认保持单风险渲染的历史行为
         """
         self.context = context
         self.ai_variables_config = {var["name"]: var for var in (ai_variables_config or [])}
         self._ai_executor = ai_executor
         self.key = key
         self.enable_cache = enable_cache
+        self.enable_agent_rate_limit = enable_agent_rate_limit
 
     def match(self, node: nodes.Node, **kwargs) -> ProviderMatchResult:
         """判断是否是AI变量访问
@@ -217,13 +221,20 @@ class AIProvider(Provider):
             return self._ai_executor(prompt)
 
         try:
+            request_data = {
+                "user": self._get_agent_user(),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
+                "input": f'当前分析的Risk ID是{self.context["risk_id"]}。若后续无其他要求，返回标准的Markdown格式。\n' + prompt,
+                "chat_history": [],
+                "execute_kwargs": {"stream": True},
+            }
+            if self.enable_agent_rate_limit:
+                request_data["_enable_agent_rate_limit"] = True
             result = api.bk_plugins_ai_audit_report.chat_completion(
-                user=self._get_agent_user(),  # 会话用户名，通过 X-BKAIDEV-USER 请求头传递
-                input=f'当前分析的Risk ID是{self.context["risk_id"]}。若后续无其他要求，返回标准的Markdown格式。\n' + prompt,
-                chat_history=[],
-                execute_kwargs={"stream": True},
+                **request_data,
             )
             return result or ""
+        except AgentRateLimited:
+            raise
         except Exception as e:
             logger.error("[AIProvider] AI执行失败:risk_id=%s,error=%s", self.context.get("risk_id", "unknown"), e)
             return f"{AI_ERROR_PREFIX}{e}{AI_ERROR_SUFFIX}"

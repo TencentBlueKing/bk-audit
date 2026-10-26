@@ -30,6 +30,58 @@
       </div>
 
       <div class="block-body">
+        <usage-restriction-panel
+          v-if="formData.tool_type === 'smart_page'"
+          :class="{ 'is-full-width': overrideSelectFullWidth }"
+          :popover-z-index="popoverZIndex"
+          :rows="usageRowsOf(item)"
+          @update:rows="(rows) => updateUsageRows(item, rows)" />
+        <div
+          v-if="formData.tool_type === 'smart_page' && usageAccountRowOf(item)"
+          class="render-field usage-restriction-field is-two-col">
+          <div class="field-header-row">
+            <div class="field-value col-name">
+              {{ t('限制项') }}
+            </div>
+            <div class="field-value col-default">
+              <span class="col-default-label">{{ t('限制配置') }}</span>
+            </div>
+            <div class="field-value field-operation col-action" />
+          </div>
+          <div class="field-row">
+            <div class="field-value col-name">
+              <span class="param-name-text">{{ t('账号类型') }}</span>
+            </div>
+            <div
+              class="field-value col-default"
+              data-testid="portrait-usage-restriction-config">
+              <bk-select
+                :auto-height="false"
+                class="override-default-multiselect"
+                :clearable="false"
+                :model-value="usageAccountRowOf(item)?.allowed || []"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择账号类型')"
+                :popover-options="usageValuesPopoverOptions"
+                selected-style="checkbox"
+                show-selected-icon
+                @change="(val: string[]) => handleUsageAllowedChange(item, val)">
+                <bk-option
+                  v-for="option in usageAccountTypeOptions"
+                  :id="option.value"
+                  :key="option.value"
+                  :name="option.label" />
+              </bk-select>
+            </div>
+            <div class="field-value field-operation col-action">
+              <audit-icon
+                class="reduce-fill field-icon"
+                type="reduce-fill"
+                @click="handleRemoveUsageAccountRow(item)" />
+            </div>
+          </div>
+        </div>
         <!-- 覆盖参数默认值：弹窗内占满，编辑/新建页占 1/3 宽度 -->
         <div
           class="override-section"
@@ -136,6 +188,7 @@
                 multiple
                 multiple-mode="tag"
                 :placeholder="t('请选择默认值')"
+                :popover-options="{ maxWidth: SELECT_POPOVER_MAX_WIDTH }"
                 :search-placeholder="t('搜索或粘贴名称/ID')"
                 selected-style="checkbox"
                 show-select-all
@@ -144,27 +197,52 @@
                 @clear="() => handleDefaultValueChange(item, row.raw_name, [])"
                 @search-change="(val: string) => handleDefaultSearchChange(item, row.raw_name, val)"
                 @toggle="(open: boolean) => handleDefaultSelectToggle(open, item, row.raw_name)">
-                <!-- 自行渲染首项 + +n，避免 collapse-tags 初次回显/候选加载后不折叠 -->
+                <!-- 自行渲染可见项 + +n，避免 collapse-tags 初次回显/候选加载后不折叠；可见数量按单元格宽度计算 -->
                 <template #tag="{ selected }">
-                  <template v-if="selected.length">
+                  <div
+                    v-if="selected.length"
+                    :ref="(el) => bindTagFit(getFieldErrorKey(item.key, row.raw_name), el as HTMLElement | null)"
+                    class="override-tags-fit"
+                    :data-total="selected.length">
                     <bk-tag
+                      v-for="tag in selected.slice(0, getVisibleTagCount(item.key, row.raw_name, selected.length))"
+                      :key="tag.value"
                       class="override-selected-tag"
                       closable
-                      @close="handleRemoveSelectedValue(item, row.raw_name, selected[0].value)">
-                      {{ getSelectedChoiceLabel(row.raw_name, selected[0].value) }}
+                      @close="handleRemoveSelectedValue(item, row.raw_name, tag.value)">
+                      {{ getSelectedChoiceLabel(row.raw_name, tag.value) }}
                     </bk-tag>
                     <bk-tag
-                      v-if="selected.length > 1"
+                      v-if="selected.length > getVisibleTagCount(item.key, row.raw_name, selected.length)"
                       v-bk-tooltips="{
-                        content: getOverflowSelectedTipsContent(row.raw_name, selected),
+                        content: getOverflowSelectedTipsContent(
+                          row.raw_name,
+                          selected,
+                          getVisibleTagCount(item.key, row.raw_name, selected.length),
+                        ),
                         theme: 'dark',
                         placement: 'top',
                         extCls: 'override-selected-tips-wrap',
                       }"
                       class="override-selected-overflow-tag">
-                      +{{ selected.length - 1 }}
+                      +{{ selected.length - getVisibleTagCount(item.key, row.raw_name, selected.length) }}
                     </bk-tag>
-                  </template>
+                    <!-- 不可见的测量层：按真实标签宽度计算可见数量，与可见层互不影响，避免循环重排 -->
+                    <div
+                      aria-hidden="true"
+                      class="override-tags-measure">
+                      <bk-tag
+                        v-for="tag in selected.slice(0, MAX_MEASURE_TAGS)"
+                        :key="tag.value"
+                        class="override-selected-tag measure-tag"
+                        closable>
+                        {{ getSelectedChoiceLabel(row.raw_name, tag.value) }}
+                      </bk-tag>
+                      <bk-tag class="override-selected-overflow-tag measure-overflow-tag">
+                        +{{ selected.length }}
+                      </bk-tag>
+                    </div>
+                  </div>
                 </template>
                 <bk-option
                   v-for="choice in getMultiSelectChoices(row.raw_name)"
@@ -316,7 +394,17 @@
 
   import { DateRange } from '@blueking/date-picker';
 
+  import { calcFitTagCount } from '@utils/assist/calc-fit-tag-count';
+  import {
+    PORTRAIT_ACCOUNT_TYPES,
+    portraitAccountLabel,
+    type UsageRestrictionRow,
+    type UsageRestrictions,
+  } from '@utils/tool/portrait-account-restriction';
+
   import type { SceneParamOverride, FormData } from '../types';
+
+  import UsageRestrictionPanel from './usage-restriction-panel.vue';
 
   interface ConfigItem {
     key: string;             // scene-{id} 或 system-{id}
@@ -368,7 +456,47 @@
   // eslint-disable-next-line func-call-spacing
   const emit = defineEmits<{
     (e: 'update:paramOverrides', value: Record<string, SceneParamOverride>): void;
+    (e: 'update:usageRestrictions', value: UsageRestrictions): void;
   }>();
+
+  const usageRowsOf = (item: ConfigItem): UsageRestrictionRow[] => {
+    const restrictions = props.formData.config?.usage_restrictions;
+    const bucket = item.type === 'scene' ? restrictions?.scenes : restrictions?.systems;
+    return bucket?.[String(item.id)] || [];
+  };
+
+  const updateUsageRows = (item: ConfigItem, rows: UsageRestrictionRow[]) => {
+    const current = props.formData.config?.usage_restrictions || {};
+    const scenes = { ...(current.scenes || {}) };
+    const systems = { ...(current.systems || {}) };
+    const bucket = item.type === 'scene' ? scenes : systems;
+    if (rows.length) {
+      bucket[String(item.id)] = rows;
+    } else {
+      delete bucket[String(item.id)];
+    }
+    emit('update:usageRestrictions', { scenes, systems });
+  };
+
+  /** 下拉弹层随触发器同宽，宽单元格内封顶，避免选项右侧大片留白 */
+  const SELECT_POPOVER_MAX_WIDTH = 400;
+
+  const usageValuesPopoverOptions = computed(() => ({
+    boundary: 'body',
+    zIndex: props.popoverZIndex,
+    maxWidth: SELECT_POPOVER_MAX_WIDTH,
+  }));
+
+  const usageAccountRowOf = (item: ConfigItem) => usageRowsOf(item).find(row => row.param === 'type');
+
+  const handleUsageAllowedChange = (item: ConfigItem, value: string | string[]) => {
+    const allowed = Array.isArray(value) ? value : [value];
+    updateUsageRows(item, usageRowsOf(item).map(row => (row.param === 'type' ? { ...row, allowed } : row)));
+  };
+
+  const handleRemoveUsageAccountRow = (item: ConfigItem) => {
+    updateUsageRows(item, usageRowsOf(item).filter(row => row.param !== 'type'));
+  };
 
   /** 侧滑 z-index=9999 时，时间类弹出层需抬升；用 id/cls 限定作用域 */
   const TIME_RANGE_PICKER_ID = 'scene-param-config';
@@ -383,6 +511,11 @@
 
   const { t } = useI18n();
   const { messageSuccess, messageWarn } = useMessage();
+
+  const usageAccountTypeOptions = PORTRAIT_ACCOUNT_TYPES.map(item => ({
+    value: item.value,
+    label: item.value === 'openid' ? item.label : t(portraitAccountLabel(item.value)),
+  }));
 
   const inputVariableList = computed(() => props.inputVariables || []);
 
@@ -495,12 +628,12 @@
     extCls: 'scene-param-overflow-tips',
   });
 
-  // 构建配置列表：每个选中的场景/系统对应一个配置区块
+  // 构建配置列表：每个选中的场景/系统对应一个配置区块，后选的排在前面
   const configList = computed<ConfigItem[]>(() => {
     const list: ConfigItem[] = [];
     const overrides = props.formData.scene_param_overrides || {};
 
-    for (const s of props.selectedScenes) {
+    for (const s of [...props.selectedScenes].reverse()) {
       const key = `scene-${s.id}`;
       const existing = overrides[key];
       list.push({
@@ -513,7 +646,7 @@
       });
     }
 
-    for (const s of props.selectedSystems) {
+    for (const s of [...props.selectedSystems].reverse()) {
       const key = `system-${s.id}`;
       const existing = overrides[key];
       list.push({
@@ -765,9 +898,10 @@
   const getOverflowSelectedTipsContent = (
     rawName: string,
     selected: Array<{ value: string | number; label?: string | number }>,
+    visibleCount: number,
   ) => {
     const text = selected
-      .slice(1)
+      .slice(visibleCount)
       .map(item => getSelectedChoiceLabel(rawName, item.value))
       .join(', ');
 
@@ -791,6 +925,65 @@
       current.filter(id => id !== String(value)),
     );
   };
+
+  /** 单行最多能放下的标签数有限，测量层只渲染前 N 个 */
+  const MAX_MEASURE_TAGS = 30;
+  const TAG_GAP = 4;
+  const tagFitCountMap = reactive<Record<string, number>>({});
+  const tagFitBindings = new Map<string, { el: HTMLElement; observer: ResizeObserver }>();
+
+  const getVisibleTagCount = (itemKey: string, rawName: string, total: number) => {
+    const count = tagFitCountMap[getFieldErrorKey(itemKey, rawName)] || 1;
+    return Math.min(Math.max(count, 1), total);
+  };
+
+  const computeTagFit = (cellKey: string, el: HTMLElement) => {
+    const measure = el.querySelector<HTMLElement>('.override-tags-measure');
+    if (!measure) return;
+    const tagWidths = Array.from(measure.querySelectorAll<HTMLElement>('.measure-tag')).map(tag => tag.offsetWidth);
+    const fit = calcFitTagCount(tagWidths, el.clientWidth, {
+      total: Number(el.dataset.total) || tagWidths.length,
+      gap: TAG_GAP,
+      overflowWidth: measure.querySelector<HTMLElement>('.measure-overflow-tag')?.offsetWidth || 0,
+    });
+    if (tagFitCountMap[cellKey] !== fit) {
+      tagFitCountMap[cellKey] = fit;
+    }
+  };
+
+  const unbindTagFit = (cellKey: string) => {
+    tagFitBindings.get(cellKey)?.observer.disconnect();
+    tagFitBindings.delete(cellKey);
+    delete tagFitCountMap[cellKey];
+  };
+
+  /**
+   * 单元格宽度变化或测量层内容变化（候选名称加载、增删选项）时重新计算。
+   */
+  const bindTagFit = (cellKey: string, el: HTMLElement | null) => {
+    const current = tagFitBindings.get(cellKey);
+    if (!el) {
+      if (current) {
+        Promise.resolve().then(() => {
+          const binding = tagFitBindings.get(cellKey);
+          if (binding && !binding.el.isConnected) unbindTagFit(cellKey);
+        });
+      }
+      return;
+    }
+    if (current?.el === el) return;
+    if (current) current.observer.disconnect();
+    const observer = new ResizeObserver(() => computeTagFit(cellKey, el));
+    observer.observe(el);
+    const measure = el.querySelector<HTMLElement>('.override-tags-measure');
+    if (measure) observer.observe(measure);
+    tagFitBindings.set(cellKey, { el, observer });
+  };
+
+  onBeforeUnmount(() => {
+    tagFitBindings.forEach(({ observer }) => observer.disconnect());
+    tagFitBindings.clear();
+  });
 
 
   const getParamOriginalDefault = (rawName: string) => {
@@ -1367,7 +1560,7 @@
   }
 
   :deep(.override-default-multiselect) {
-    width: 320px;
+    width: 100%;
     max-width: 100%;
     height: 100%;
     line-height: normal;
@@ -1439,6 +1632,38 @@
       box-sizing: border-box;
     }
 
+    /* 宽度只由单元格决定、与标签数量无关，可见数量变化不会反过来触发重新测量 */
+    .override-tags-fit {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      overflow: hidden;
+      flex: 1 1 0;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .bk-select-trigger .override-tags-fit .override-selected-overflow-tag {
+      flex-shrink: 0;
+    }
+
+    .override-tags-measure {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      width: max-content;
+      pointer-events: none;
+      visibility: hidden;
+      gap: 4px;
+    }
+
+    .bk-select-trigger .override-tags-measure .bk-tag {
+      flex-shrink: 0;
+    }
+
     /* 关闭组件内置 +n，改用自定义 overflow tag */
     .bk-select-overflow-tag {
       display: none !important;
@@ -1481,6 +1706,10 @@
     border: 1px solid #dcdee5;
     border-radius: 2px;
     user-select: none;
+  }
+
+  .usage-restriction-field {
+    margin-bottom: 16px;
   }
 
   .field-header-row,
@@ -1652,7 +1881,7 @@
     }
 
     /*
-     * 默认值控件：高度对齐行高；宽度不占满列（约 320px），
+     * 默认值控件：高度对齐行高；各类型统一铺满默认值列，
      * 人员 / 时间范围保持组件默认高度，由 .col-default 的 align-items:center 垂直居中
      */
     .override-default-input,
@@ -1662,7 +1891,7 @@
     .override-tag-input,
     .override-default-multiselect,
     .default-value-tip-wrap {
-      width: 320px;
+      width: 100%;
       max-width: 100%;
       flex-shrink: 1;
       min-width: 0;
@@ -1799,10 +2028,10 @@
   }
 </style>
 <style lang="postcss">
-  /* 人员选择器：取消组件默认 width:100%，保持内容高度由单元格垂直居中 */
+  /* 人员选择器：铺满默认值列，保持内容高度由单元格垂直居中 */
   .scene-param-config .override-person-select.bk-user-selector,
   .scene-param-config .override-person-select {
-    width: 320px !important;
+    width: 100% !important;
     max-width: 100%;
     height: auto !important;
   }

@@ -1,0 +1,976 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <div class="retrieval-guide-wrap">
+    <div class="retrieval-guide-card">
+      <!-- 已选系统：编辑时保留标题，仅替换内容区 -->
+      <div class="systems-section">
+        <template v-if="isEditingSystem">
+          <div class="systems-edit-header">
+            <div class="systems-edit-title">
+              <span>已选系统</span>
+            </div>
+          </div>
+          <div class="system-edit-panel">
+            <bk-select
+              v-model="editingSystemId"
+              class="guide-system-picker"
+              clearable
+              filterable
+              :input-search="false"
+              :loading="systemListLoading"
+              placeholder="请选择系统"
+              :popover-options="selectPopoverOptions"
+              :scroll-height="280">
+              <bk-option
+                v-for="item in displaySystemList"
+                :key="item.id"
+                :label="`${item.name}(${item.id})`"
+                :value="item.id" />
+            </bk-select>
+            <div class="system-edit-actions">
+              <bk-button
+                class="confirm-btn"
+                :disabled="!editingSystemId
+                  || confirmingSystem
+                  || editingSystemId === currentSystemId"
+                :loading="confirmingSystem"
+                theme="primary"
+                @click.stop="handleConfirmSystem">
+                确认修改
+              </bk-button>
+              <bk-button
+                :disabled="confirmingSystem"
+                @click.stop="handleCancelEditSystem">
+                取消
+              </bk-button>
+            </div>
+          </div>
+        </template>
+        <selected-systems-panel
+          v-else
+          :action-text="contentLoading ? '' : '重新选择'"
+          :systems="systems"
+          @action="handleStartEditSystem" />
+      </div>
+
+      <!-- 建议操作 -->
+      <div class="suggest-section">
+        <div class="suggest-title">
+          可按以下建议进行后续操作
+        </div>
+        <div
+          v-if="contentLoading"
+          aria-busy="true"
+          aria-label="建议加载中"
+          class="section-skeleton">
+          <div
+            v-for="n in 4"
+            :key="`suggest-bone-${n}`"
+            class="bone bone-line"
+            :style="{ width: suggestBoneWidths[n - 1] }" />
+        </div>
+        <div
+          v-else
+          class="suggest-columns">
+          <div class="suggest-column">
+            <div class="column-label">
+              常用操作
+            </div>
+            <button
+              v-for="(item, index) in commonSuggestions"
+              :key="`common-${index}`"
+              class="suggest-item"
+              type="button"
+              @click="$emit('select-suggestion', item)">
+              <show-tooltips-text
+                class="suggest-text"
+                :data="item"
+                :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
+                :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+            </button>
+          </div>
+          <div class="suggest-column">
+            <div class="column-label">
+              历史操作
+            </div>
+            <template v-if="historySuggestions.length">
+              <button
+                v-for="(item, index) in historySuggestions"
+                :key="`history-${index}`"
+                class="suggest-item"
+                type="button"
+                @click="$emit('select-suggestion', item)">
+                <show-tooltips-text
+                  class="suggest-text"
+                  :data="item"
+                  :max-width="SUGGEST_TOOLTIP_MAX_WIDTH"
+                  :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                  :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+              </button>
+            </template>
+            <div
+              v-else
+              class="history-empty">
+              暂无数据
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 按字段检索 -->
+      <div class="field-section">
+        <div class="field-divider">
+          <span class="divider-line" />
+          <span class="divider-text">没有合适的操作？试试按字段检索</span>
+          <span class="divider-line" />
+        </div>
+        <div class="field-toolbar">
+          <div
+            class="field-title"
+            @click="!contentLoading && (fieldExpanded = !fieldExpanded)">
+            <span
+              class="field-arrow"
+              :class="{ 'is-collapsed': !fieldExpanded }" />
+            <span>按字段检索</span>
+          </div>
+          <template v-if="fieldExpanded && !contentLoading">
+            <div class="field-tabs">
+              <button
+                class="field-tab"
+                :class="{ 'is-active': fieldTab === 'common' }"
+                type="button"
+                @click="fieldTab = 'common'">
+                通用字段
+              </button>
+              <button
+                class="field-tab"
+                :class="{ 'is-active': fieldTab === 'extend' }"
+                type="button"
+                @click="fieldTab = 'extend'">
+                拓展字段
+              </button>
+            </div>
+            <div class="field-tip">
+              <audit-icon
+                class="tip-icon"
+                type="info-fill" />
+              <span>可使用字段进行精准筛选，支持自然语言检索和条件筛选检索两种方式。</span>
+            </div>
+          </template>
+        </div>
+
+        <div
+          v-if="contentLoading"
+          aria-busy="true"
+          aria-label="字段加载中"
+          class="section-skeleton field-skeleton">
+          <div
+            v-for="n in 5"
+            :key="`field-bone-${n}`"
+            class="bone bone-line"
+            :style="{ width: fieldBoneWidths[n - 1] }" />
+        </div>
+        <div
+          v-else-if="fieldExpanded"
+          class="field-table-wrap">
+          <table
+            class="field-table"
+            :class="{ 'is-extend': fieldTab === 'extend' }">
+            <thead>
+              <tr>
+                <th class="col-name">
+                  字段名称
+                </th>
+                <th class="col-desc">
+                  字段说明
+                </th>
+                <th class="col-sample">
+                  最近一条数据
+                </th>
+                <th
+                  v-if="fieldTab === 'extend'"
+                  class="col-system">
+                  所属系统
+                </th>
+                <th class="col-actions">
+                  检索方式
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, index) in currentFieldRows"
+                :key="`${fieldTab}-${row.name}-${index}`">
+                <td class="col-name">
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.name || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+                </td>
+                <td class="col-desc">
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.desc || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+                </td>
+                <td class="col-sample">
+                  <json-field-preview
+                    class="cell-text"
+                    click-tip="点击单元格可查看或复制完整数据"
+                    :text="row.sample || ''"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT"
+                    :tooltip-max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :value="row.sampleValue" />
+                </td>
+                <td
+                  v-if="fieldTab === 'extend'"
+                  class="col-system">
+                  <show-tooltips-text
+                    class="cell-text"
+                    :data="row.system || ''"
+                    :max-width="FIELD_TABLE_TOOLTIP_MAX_WIDTH"
+                    :tooltip-content-class="FIELD_TABLE_TOOLTIP_CONTENT_CLASS"
+                    :tooltip-max-height="FIELD_TABLE_TOOLTIP_MAX_HEIGHT" />
+                </td>
+                <td class="col-actions">
+                  <button
+                    class="action-link"
+                    type="button"
+                    @click="handleFieldSearch(row, 'nl')">
+                    自然语言
+                  </button>
+                  <button
+                    class="action-link"
+                    type="button"
+                    @click="handleFieldSearch(row, 'filter')">
+                    条件筛选
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script lang="ts" setup>
+  import { computed, ref, watch } from 'vue';
+  import { useRoute } from 'vue-router';
+
+  import ShowTooltipsText from '@components/show-tooltips-text/index.vue';
+  import MetaManageService from '@service/meta-manage';
+  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
+
+  import {
+    formatSampleValue,
+    resolveFieldSampleDisplay,
+    resolveSystemFieldDisplayLabel,
+  } from '../../utils/map-ai-message';
+  import type { SelectedSystem, SystemFieldRow } from '../../types';
+
+  import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
+  import JsonFieldPreview from './json-field-preview.vue';
+  import SelectedSystemsPanel from './selected-systems-panel.vue';
+
+  const props = withDefaults(defineProps<{
+    systems: SelectedSystem[];
+    commonOperations?: string[];
+    historicalOperations?: string[];
+    standardFields?: SystemFieldRow[];
+    extensionFields?: SystemFieldRow[];
+    confirmingSystem?: boolean;
+    /** SYSTEM_SELECTION PROCESSING：已选系统可见，建议/字段局部 loading */
+    contentLoading?: boolean;
+  }>(), {
+    commonOperations: () => [],
+    historicalOperations: () => [],
+    standardFields: () => [],
+    extensionFields: () => [],
+    confirmingSystem: false,
+    contentLoading: false,
+  });
+
+  const emit = defineEmits<{
+    confirmSystem: [systemIds: string[], systems: SelectedSystem[]];
+    'select-suggestion': [text: string];
+    /** 自然语言字段检索：向输入框追加字段值 */
+    'append-nl-field': [text: string];
+    'open-condition-filter': [payload: { fieldName: string; sample?: string }];
+  }>();
+
+  interface FieldRow {
+    name: string;
+    desc: string;
+    /** 表格 / 自然语言展示文案 */
+    sample: string;
+    /** 条件筛选回填用的原始值 */
+    sampleRaw: string;
+    /** 原始样本（对象时走 JSON 首对预览） */
+    sampleValue?: unknown;
+    system?: string;
+    rawName: string;
+    nlName: string;
+    keys: string[];
+  }
+
+  const SUGGESTION_LIMIT = 4;
+  /** 无真实常用操作时的空态引导（与展示上限一致，固定 4 条） */
+  const COMMON_OPERATION_DEMOS = [
+    '查询「替换为实际用户」近 7 天的删除操作',
+    '查询「替换为实际安装包」近 7 天的下载操作',
+    '查询「替换为实际用户」近 7 天成功的操作',
+    '查询「替换为实际用户」近 30 天 API 操作',
+  ];
+  /** 常用/历史操作 tooltip：限制宽度，长文本自动换行 */
+  const SUGGEST_TOOLTIP_MAX_WIDTH = 360;
+  /** 按字段检索表格 tooltip：限制宽度与高度，长 JSON 内容区内滚动 */
+  const FIELD_TABLE_TOOLTIP_MAX_WIDTH = 480;
+  const FIELD_TABLE_TOOLTIP_MAX_HEIGHT = '400px';
+  const FIELD_TABLE_TOOLTIP_CONTENT_CLASS = 'show-tooltips-text-popup';
+
+  const fieldExpanded = ref(true);
+  const fieldTab = ref<'common' | 'extend'>('common');
+  const isEditingSystem = ref(false);
+  const editingSystemId = ref('');
+  const route = useRoute();
+  const { messageWarn } = useMessage();
+
+  /** 有真实数据则展示（最多 4 条）；加载中不展示 demo，避免误认为已就绪 */
+  const commonSuggestions = computed(() => {
+    if (props.contentLoading) return [];
+    const real = props.commonOperations.slice(0, SUGGESTION_LIMIT);
+    return real.length > 0 ? real : COMMON_OPERATION_DEMOS;
+  });
+
+  const historySuggestions = computed(() => {
+    if (props.contentLoading) return [];
+    return props.historicalOperations.slice(0, SUGGESTION_LIMIT);
+  });
+
+  const suggestBoneWidths = ['72%', '88%', '64%', '80%'];
+  const fieldBoneWidths = ['100%', '92%', '78%', '86%', '70%'];
+
+  const mapToFieldRow = (field: SystemFieldRow): FieldRow => ({
+    name: resolveSystemFieldDisplayLabel(field, [
+      ...(props.standardFields || []),
+      ...(props.extensionFields || []),
+    ]),
+    desc: field.description || '',
+    sample: resolveFieldSampleDisplay(field),
+    sampleRaw: formatSampleValue(field.sampleValue),
+    sampleValue: field.sampleValue,
+    system: field.systemName || field.systemId,
+    rawName: field.rawName,
+    nlName: field.nlName || field.displayName || field.rawName,
+    keys: field.keys || [],
+  });
+
+  const commonFields = computed(() => props.standardFields.map(mapToFieldRow));
+  const extendFields = computed(() => props.extensionFields.map(mapToFieldRow));
+
+  const currentFieldRows = computed(() => (
+    fieldTab.value === 'common' ? commonFields.value : extendFields.value
+  ));
+
+  const currentSystemId = computed(() => props.systems[0]?.id || '');
+
+  const {
+    loading: systemListLoading,
+    data: systemList,
+    run: fetchSystemList,
+  } = useRequest(() => {
+    const params = getSceneSystemParams();
+    return MetaManageService.fetchSystemWithAction({
+      scope_id: params.scope_id || '',
+      scope_type: params.scope_type || '',
+      audit_status__in: 'accessed',
+    });
+  }, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const fetchedSystemList = computed(() => (systemList.value || []).map(item => ({
+    id: String(item.id),
+    name: item.name,
+  })));
+
+  const displaySystemList = computed(() => {
+    const selectedMap = new Map(props.systems.map(item => [item.id, item]));
+    fetchedSystemList.value.forEach((item) => {
+      if (!selectedMap.has(item.id)) {
+        selectedMap.set(item.id, item);
+      }
+    });
+    return [...selectedMap.values()];
+  });
+
+  const selectPopoverOptions = {
+    extCls: 'sec-chat-system-select-popover',
+    boundary: 'body',
+    placement: 'bottom-start',
+    autoPlacement: true,
+    zIndex: 9999,
+  } as const;
+
+  watch(() => currentSystemId.value, (value) => {
+    if (!isEditingSystem.value) {
+      editingSystemId.value = value;
+    }
+  }, { immediate: true });
+
+  watch(
+    () => [
+      String(route.query.scene_id || ''),
+      String(route.query.scope_id || ''),
+      String(route.query.scope_type || ''),
+    ].join('|'),
+    () => {
+      if (!isEditingSystem.value) return;
+      fetchSystemList().then((list) => {
+        const ids = (list || []).map(item => String(item.id));
+        if (
+          editingSystemId.value
+          && editingSystemId.value !== currentSystemId.value
+          && !ids.includes(editingSystemId.value)
+        ) {
+          editingSystemId.value = '';
+        }
+      });
+    },
+  );
+
+  const handleStartEditSystem = () => {
+    if (props.contentLoading) return;
+    isEditingSystem.value = true;
+    editingSystemId.value = currentSystemId.value;
+    fetchSystemList();
+  };
+
+  const handleCancelEditSystem = () => {
+    isEditingSystem.value = false;
+    editingSystemId.value = currentSystemId.value;
+  };
+
+  const handleConfirmSystem = () => {
+    if (!editingSystemId.value) {
+      messageWarn('请选择系统');
+      return;
+    }
+    if (editingSystemId.value === currentSystemId.value) {
+      isEditingSystem.value = false;
+      return;
+    }
+    const system = displaySystemList.value.find(item => item.id === editingSystemId.value)
+      || { id: editingSystemId.value, name: editingSystemId.value };
+    emit('confirmSystem', [system.id], [system]);
+  };
+
+  watch(() => props.confirmingSystem, (loading) => {
+    if (!loading) {
+      isEditingSystem.value = false;
+    }
+  });
+
+  /** 与 condition-fields fieldConfig key 对齐：raw_name[.keys...] */
+  const toConditionFieldName = (row: FieldRow) => {
+    if (row.rawName && row.keys?.length) {
+      return `${row.rawName}.${row.keys.join('.')}`;
+    }
+    return row.rawName || row.name;
+  };
+
+  const handleFieldSearch = (row: FieldRow, mode: 'nl' | 'filter') => {
+    if (mode === 'filter') {
+      emit('open-condition-filter', {
+        fieldName: toConditionFieldName(row),
+        sample: row.sampleRaw,
+      });
+      return;
+    }
+    const sampleText = row.sample || '替换为实际值';
+    // 文档：自然语言用 nl_name + 展示文案 → `{nl_name}为{sample_display}`，多选向输入框追加
+    emit('append-nl-field', `${row.nlName}为${sampleText}`);
+  };
+</script>
+
+<style lang="postcss" scoped>
+  .retrieval-guide-wrap {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .retrieval-guide-card {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    padding: 20px 24px 24px;
+    overflow: visible;
+    font-size: 14px;
+    line-height: 22px;
+    color: #63656e;
+    letter-spacing: 0;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
+    box-sizing: border-box;
+    flex-direction: column;
+  }
+
+  .systems-section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eaebf0;
+    flex-shrink: 0;
+  }
+
+  .section-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 8px;
+  }
+
+  .field-skeleton {
+    margin-top: 12px;
+  }
+
+  .bone {
+    position: relative;
+    overflow: hidden;
+    background: #ebecf3;
+    border-radius: 2px;
+
+    &::after {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgb(246 247 251 / 80%) 50%,
+        transparent 100%
+      );
+      content: '';
+      transform: translateX(-100%);
+      animation: guide-skeleton-shimmer 1.6s ease-in-out infinite;
+    }
+  }
+
+  .bone-line {
+    height: 12px;
+  }
+
+  @keyframes guide-skeleton-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .systems-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .systems-edit-title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    color: #313238;
+  }
+
+  .system-edit-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .guide-system-picker {
+    width: 100%;
+  }
+
+  .system-edit-actions {
+    display: flex;
+    gap: 8px;
+
+    :deep(.bk-button) {
+      min-width: 88px;
+    }
+  }
+
+  .suggest-section {
+    margin-bottom: 8px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .suggest-title {
+    margin-bottom: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
+
+  .suggest-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px 24px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .suggest-column {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .column-label {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 20px;
+    color: #313238;
+  }
+
+  .suggest-item {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 22px;
+    color: #63656e;
+    text-align: left;
+    letter-spacing: 0;
+    cursor: pointer;
+    background: #f5f7fa;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: background-color .15s, border-color .15s;
+    box-sizing: border-box;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    &:hover {
+      color: #3a84ff;
+      background: #f0f5ff;
+      border-color: #c5d8ff;
+    }
+
+    .suggest-text {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+      color: inherit;
+    }
+  }
+
+  .history-empty {
+    display: flex;
+    height: 176px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .field-section {
+    display: flex;
+    margin-top: 16px;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .field-divider {
+    display: flex;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 12px;
+
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: #dcdee5;
+    }
+
+    .divider-text {
+      flex-shrink: 0;
+      font-size: 12px;
+      line-height: 20px;
+      color: #979ba5;
+    }
+  }
+
+  .field-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 12px 16px;
+  }
+
+  .field-title {
+    display: flex;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+    gap: 6px;
+
+    .field-arrow {
+      display: inline-block;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 5px 0;
+      border-color: #63656e transparent transparent;
+      transition: transform .2s;
+      flex-shrink: 0;
+
+      &.is-collapsed {
+        transform: rotate(-90deg);
+      }
+    }
+  }
+
+  .field-tabs {
+    display: inline-flex;
+    padding: 2px;
+    background: #f0f1f5;
+    border-radius: 4px;
+  }
+
+  .field-tab {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    line-height: 28px;
+    color: #63656e;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+
+    &.is-active {
+      color: #3a84ff;
+      background: #fff;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+    }
+  }
+
+  .field-tip {
+    display: flex;
+    flex: 1;
+    min-width: 240px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #979ba5;
+    align-items: flex-start;
+    gap: 4px;
+
+    .tip-icon {
+      margin-top: 2px;
+      font-size: 14px;
+      color: #979ba5;
+      flex-shrink: 0;
+    }
+  }
+
+  .field-table-wrap {
+    margin-top: 12px;
+    max-height: min(504px, calc(100vh - 360px));
+    overflow: auto;
+    border-bottom: 1px solid #dcdee5;
+    scrollbar-width: thin;
+    scrollbar-color: #dcdee5 transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #dcdee5;
+      border-radius: 2px;
+    }
+  }
+
+  .field-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+
+    th,
+    td {
+      padding: 0 16px;
+      overflow: hidden;
+      font-size: 12px;
+      line-height: 20px;
+      text-align: left;
+      vertical-align: middle;
+      box-sizing: border-box;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      height: 42px;
+      font-weight: 400;
+      color: #313238;
+      background: #fafbfd;
+      border-bottom: 1px solid #dcdee5;
+    }
+
+    td {
+      height: 42px;
+      color: #63656e;
+      background: #fff;
+      border-bottom: none;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fafbfd;
+    }
+
+    .cell-text {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+
+    .col-name {
+      width: 18%;
+      font-weight: 400;
+      color: #313238;
+    }
+
+    .col-desc {
+      width: 34%;
+    }
+
+    .col-sample {
+      width: 28%;
+    }
+
+    .col-system {
+      width: 14%;
+    }
+
+    th.col-actions {
+      text-align: left;
+    }
+
+    td.col-actions {
+      padding-right: 32px;
+      text-align: right;
+    }
+
+    .col-actions {
+      width: 18%;
+      overflow: visible;
+      white-space: nowrap;
+    }
+
+    &.is-extend {
+      .col-name {
+        width: 26%;
+      }
+
+      .col-desc {
+        width: 16%;
+      }
+
+      .col-sample {
+        width: 24%;
+      }
+
+      .col-system {
+        width: 16%;
+      }
+    }
+  }
+
+  .action-link {
+    margin-right: 12px;
+    padding: 0;
+    font-size: 12px;
+    line-height: 20px;
+    color: #3a84ff;
+    cursor: pointer;
+    background: none;
+    border: none;
+
+    &:last-child {
+      margin-right: 0;
+    }
+
+    &:hover {
+      opacity: .85;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .suggest-columns {
+      grid-template-columns: 1fr;
+    }
+
+    .field-table {
+      table-layout: auto;
+    }
+  }
+</style>
+<style lang="postcss">
+  .sec-chat-system-select-popover {
+    z-index: 9999 !important;
+  }
+</style>

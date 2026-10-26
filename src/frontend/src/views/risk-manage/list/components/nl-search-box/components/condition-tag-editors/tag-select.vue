@@ -18,6 +18,7 @@
   <bk-popover
     ref="popoverRef"
     :arrow="false"
+    :ext-cls="compact ? 'nl-tag-select-compact' : ''"
     :is-show="isShow"
     placement="bottom-start"
     theme="light nl-tag-popover"
@@ -36,7 +37,10 @@
           extCls: 'nl-tag-tooltip-wrap',
         }"
         class="tag-value-wrapper">
-        <span class="tag-value">{{ displayValue }}</span>
+        <span class="tag-value">{{ displayValue.text }}</span>
+        <span
+          v-if="displayValue.remaining > 0"
+          class="tag-value tag-value-more">，+{{ displayValue.remaining }}</span>
       </span>
       <audit-icon
         class="tag-remove-btn"
@@ -46,6 +50,7 @@
     <template #content>
       <div
         class="nl-tag-editor-popover nl-tag-select-popover"
+        :class="{ 'is-compact': compact }"
         @click.stop
         @mousedown.stop>
         <div class="nl-tag-search-input">
@@ -111,6 +116,7 @@
     tag: IConditionTag;
     isEditing: boolean;
     optionsCache: Record<string, Array<Record<string, any>>>;
+    compact?: boolean;
   }
   interface Emits {
     (e: 'startEdit', fieldName: string): void;
@@ -120,7 +126,9 @@
     (e: 'updateCache', fieldName: string, options: Array<Record<string, any>>): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    compact: false,
+  });
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -179,7 +187,7 @@
 
   const displayValue = computed(() => {
     const { value } = props.tag;
-    if (!Array.isArray(value) || value.length === 0) return '--';
+    if (!Array.isArray(value) || value.length === 0) return { text: '--', remaining: 0 };
     const labels = getLabels(value);
     let displayText = '';
     let visibleCount = 0;
@@ -189,8 +197,7 @@
       displayText = nextText;
       visibleCount += 1;
     }
-    const remaining = labels.length - visibleCount;
-    return remaining > 0 ? `${displayText}，+${remaining}` : displayText;
+    return { text: displayText, remaining: labels.length - visibleCount };
   });
 
   const isOverflow = computed(() => {
@@ -355,6 +362,12 @@
     width: 320px;
     padding: 8px;
 
+    &.is-compact {
+      width: max-content;
+      min-width: 180px;
+      max-width: 360px;
+    }
+
     .nl-tag-search-input {
       display: flex;
       align-items: center;
@@ -440,5 +453,12 @@
         text-align: center;
       }
     }
+  }
+</style>
+<style lang="postcss">
+  /* 仅 compact 模式使用，不影响风险列表自然语言搜索的 320px 下拉 */
+  .bk-popover.bk-pop2-content.nl-tag-select-compact {
+    width: fit-content;
+    min-width: 0;
   }
 </style>

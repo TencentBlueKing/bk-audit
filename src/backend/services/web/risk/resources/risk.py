@@ -44,6 +44,7 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
+from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from api.constants import AIAgentCode
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
@@ -1700,6 +1701,8 @@ class NL2RiskFilter(RiskMeta):
                         chat_history=[],
                         execute_kwargs={"stream": False, "thread_id": thread_id},
                     )
+            except AgentRateLimited:
+                raise
             except Exception as e:
                 logger.exception("[NL2RiskFilter] AI platform call failed: %s", e)
                 NL2RiskFilterLog.save_nl2risk_filter_log(

@@ -36,7 +36,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
-from apps.sops.constants import SOPSTaskStatus
+from apps.sops.constants import SOPSConstantSourceType, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import (
     DEFAULT_RISK_OPERATE_NOTICE_CONFIG,
@@ -60,6 +60,18 @@ from services.web.risk.models import (
 from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
+
+
+def _is_user_input_constant(constant: dict) -> bool:
+    """创建任务时需要覆盖的用户入参。
+
+    标准运维里 show 才是执行参数。custom 与从节点输入勾选出来的 component_inputs
+    都取创建任务时传入的值；component_outputs 绑定节点输出，隐藏变量保留模板绑定。
+    """
+
+    return (
+        constant.get("show_type") == "show" and constant.get("source_type") in SOPSConstantSourceType.user_input_types()
+    )
 
 
 def _is_condition_hide(constant: dict) -> bool:
@@ -642,8 +654,8 @@ class AutoProcess(RiskFlowBaseHandler):
         constants = {}
         missing_keys = []
         for c in template_info["pipeline_tree"]["constants"].values():
-            # 只覆盖用户入参。节点输出（如 ${_loop}）和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
-            if c.get("source_type") != "custom" or c.get("show_type") != "show":
+            # 只覆盖用户入参。节点输出和隐藏变量传值会覆盖模板绑定，交给标准运维运行时处理。
+            if not _is_user_input_constant(c):
                 continue
             field = pa_params.get(c["key"])
             if not isinstance(field, dict):
