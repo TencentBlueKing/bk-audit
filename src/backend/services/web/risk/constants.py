@@ -406,7 +406,7 @@ class TicketNodeStatus(TextChoices):
 
 
 # 执行记录 keyword 全量搜索：枚举字段「内部值 → 前端中文展示词」映射（展示词与 docs/bksec_frontend_api.md 5.1 一致）
-# 命中规则：keyword 等于内部值（大小写不敏感），或与展示词互为子串（子串命中要求 keyword 长度 >= 2，防单字噪音）
+# 命中规则：keyword 等于内部值（大小写不敏感），或是展示词的子串（子串命中要求 keyword 长度 >= 2，防单字噪音）
 PA_TRIGGER_KEYWORD_LABELS = {
     "auto": "自动",
     "manual": "手动",

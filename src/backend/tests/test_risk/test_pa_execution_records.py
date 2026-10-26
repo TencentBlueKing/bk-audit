@@ -335,12 +335,28 @@ class TestListPAExecutionRecords:
         # 内部值（大小写不敏感）
         resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "MANUAL"})
         assert {r["sops_task_id"] for r in resp["results"]} == {"82"}
-        # 标签片段（len >= 2 互为子串）
+        # 标签片段（keyword 是展示词子串）
         resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "测试"})
         assert {r["sops_task_id"] for r in resp["results"]} == {"83"}
         # 单字不展开枚举（防噪音），测试记录 trigger 无中文文本，应无命中
         resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "动"})
         assert resp["count"] == 0
+
+    def test_keyword_enum_no_reverse_substring(self):
+        """长关键词含展示词不反向展开枚举：`frodomei测试专用` 不应命中全部 trigger=test"""
+        pa_a, pa_b, risk_a, risk_b = self._prepare()
+        _create_node(risk_a.risk_id, SOPSTaskStatus.FINISHED.value, task_id=85, trigger="test")
+        _create_node(
+            risk_a.risk_id,
+            SOPSTaskStatus.FINISHED.value,
+            task_id=86,
+            trigger="test",
+            pa_id=pa_a.id,
+            pa_name="frodomei测试专用",
+            task_name="frodomei测试专用_1792741417267",
+        )
+        resp = resource.risk.list_pa_execution_records.perform_request({"keyword": "frodomei测试专用"})
+        assert {r["sops_task_id"] for r in resp["results"]} == {"86"}
 
     def test_keyword_result_labels(self):
         """执行状态：中文展示词/内部值命中（result 为计算字段，按 state 集合展开）"""
