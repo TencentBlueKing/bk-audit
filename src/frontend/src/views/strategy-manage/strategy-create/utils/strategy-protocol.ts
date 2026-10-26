@@ -882,10 +882,6 @@ export const findSelectField = <T extends SelectFieldLike>(
   fieldKey?: string | null,
 ) => select.find(item => isSameSelectField(item, fieldKey));
 
-const formatSelectFieldLabel = (displayName: string, rawName: string) => (
-  formatFieldDisplayLabel(displayName, rawName)
-);
-
 /** 已配置别名保持原样；未配置或等于字段名时使用 raw_name，不再默认改成中文名 */
 const toStandardFieldDisplayName = (rawName: string, ownDisplayName: string) => {
   if (!ownDisplayName || ownDisplayName === rawName) {

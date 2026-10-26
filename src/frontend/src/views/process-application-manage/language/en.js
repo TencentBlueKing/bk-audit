@@ -20,7 +20,6 @@ export default {
     查看关联规则: 'Related Rules',
     '套餐ID、套餐名称、最近更新人、启停状态': 'Search by Tool ID / Tool name / Last modified by or Status',
     套餐ID: 'Tool ID',
-    套餐名称: 'Name',
     请输入套餐ID: 'Please enter the Tool ID',
     请输入套餐名称: 'Please enter the Tool name',
     套餐详情: 'Details',

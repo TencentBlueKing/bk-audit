@@ -63,7 +63,10 @@ export const buildVariableGroups = (options: {
   const sample = options.sample || {};
   const configuredRisk = (options.riskFields || []).filter(item => item?.field_name);
   const riskSource = configuredRisk.length
-    ? configuredRisk.map(item => ({ token: item.field_name as string, label: item.display_name || item.field_name as string }))
+    ? configuredRisk.map(item => ({
+      token: item.field_name as string,
+      label: item.display_name || item.field_name as string,
+    }))
     : DEFAULT_RISK_FIELDS;
   const groups: VariableGroup[] = [
     {

@@ -220,8 +220,7 @@
     :risk-type-id="riskTypeId"
     :risk-type-name="riskTypeName"
     :strategy-id="strategyId"
-    :strategy-name="strategyName"
-    :strategy-type="strategyType" />
+    :strategy-name="strategyName" />
   </div>
 </template>
 <script setup lang="ts">

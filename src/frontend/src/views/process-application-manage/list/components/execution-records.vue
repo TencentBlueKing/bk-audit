@@ -40,11 +40,11 @@
         class="execution-table"
         :columns="columns"
         :data-source="dataSource"
-        :hide-filter-row-when-empty="true"
+        hide-filter-row-when-empty
         :persist-table-filters="false"
-        :table-max-height="tableMaxHeight"
         row-key="task_id"
         :search-params="linkedSearchParams"
+        :table-max-height="tableMaxHeight"
         use-skeleton
         @clear-search="handleClearFilter"
         @filter-change="handleTableFilterChange" />
@@ -213,7 +213,8 @@
 
   const fieldValue = (id: string) => {
     const item = searchKey.value.find(key => key.id === id);
-    return (item?.values || []).map(value => value.id).filter(Boolean).join(',');
+    return (item?.values || []).map(value => value.id).filter(Boolean)
+      .join(',');
   };
 
   const keywordValue = () => {

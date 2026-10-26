@@ -224,7 +224,6 @@
     fieldValues: Record<string, string>;
     fields?: Array<{ id: string; name: string; required?: boolean }>;
     strategyId?: string | number;
-    strategyType?: string;
     strategyName?: string;
   }
   interface Emits {
@@ -360,7 +359,8 @@
   };
 
   const loadPreview = async () => {
-    const seq = ++previewSeq;
+    previewSeq += 1;
+    const seq = previewSeq;
     previewError.value = false;
     const riskId = selectedRisk.value?.risk_id || '';
     if (!shouldRequestRemotePreview(isCreateMode.value, riskId)) {
@@ -443,7 +443,8 @@
 
   let taskWatchSeq = 0;
   const watchRiskTask = async (riskId: string) => {
-    const seq = ++taskWatchSeq;
+    taskWatchSeq += 1;
+    const seq = taskWatchSeq;
     stopPoll();
     sending.value = false;
     const normalized = String(riskId || '').trim();
@@ -475,7 +476,8 @@
   };
 
   const openPreview = async () => {
-    const ticket = ++openSeq;
+    openSeq += 1;
+    const ticket = openSeq;
     stopPoll();
     sending.value = false;
     openedAt.value = dayjs().format('YYYY-MM-DD HH:mm:ss');

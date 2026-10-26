@@ -28,117 +28,117 @@
         <card-part-vue :title="t('基础信息')">
           <template #content>
             <div class="basic-info-fields">
-                <div class="basic-info-row flex-center">
-                  <bk-form-item
-                    class="is-required mr16"
-                    :label="t('策略名称')"
-                    property="strategy_name"
-                    style="flex: 1;">
-                    <bk-input
-                      v-model.trim="formData.strategy_name"
-                      :maxlength="32"
-                      :placeholder="t('请输入')"
-                      style="width: 100%;" />
-                  </bk-form-item>
-                  <bk-form-item
-                    :label="t('标签')"
-                    property="tags"
-                    style="flex: 1;">
-                    <bk-loading
-                      :loading="tagLoading"
-                      style="width: 100%;">
-                      <bk-tag-input
-                        v-model="formData.tags"
-                        allow-create
-                        collapse-tags
-                        display-key="name"
-                        has-delete-icon
-                        :list="tagData"
-                        :placeholder="t('请输入并Enter结束')"
-                        save-key="id"
-                        search-key="name"
-                        trigger="focus" />
-                    </bk-loading>
-                  </bk-form-item>
-                </div>
+              <div class="basic-info-row flex-center">
                 <bk-form-item
-                  class="basic-info-desc"
-                  :label="t('描述')"
-                  property="description">
+                  class="is-required mr16"
+                  :label="t('策略名称')"
+                  property="strategy_name"
+                  style="flex: 1;">
                   <bk-input
-                    v-model.trim="formData.description"
-                    autosize
-                    :maxlength="2000"
+                    v-model.trim="formData.strategy_name"
+                    :maxlength="32"
                     :placeholder="t('请输入')"
-                    :rows="2"
-                    show-word-limit
-                    style="width: 100%;"
-                    type="textarea" />
+                    style="width: 100%;" />
+                </bk-form-item>
+                <bk-form-item
+                  :label="t('标签')"
+                  property="tags"
+                  style="flex: 1;">
+                  <bk-loading
+                    :loading="tagLoading"
+                    style="width: 100%;">
+                    <bk-tag-input
+                      v-model="formData.tags"
+                      allow-create
+                      collapse-tags
+                      display-key="name"
+                      has-delete-icon
+                      :list="tagData"
+                      :placeholder="t('请输入并Enter结束')"
+                      save-key="id"
+                      search-key="name"
+                      trigger="focus" />
+                  </bk-loading>
                 </bk-form-item>
               </div>
-            </template>
-          </card-part-vue>
+              <bk-form-item
+                class="basic-info-desc"
+                :label="t('描述')"
+                property="description">
+                <bk-input
+                  v-model.trim="formData.description"
+                  autosize
+                  :maxlength="2000"
+                  :placeholder="t('请输入')"
+                  :rows="2"
+                  show-word-limit
+                  style="width: 100%;"
+                  type="textarea" />
+              </bk-form-item>
+            </div>
+          </template>
+        </card-part-vue>
         <card-part-vue :title="t('方案')">
           <template #content>
             <div class="scheme-fields">
-                <bk-form-item
-                  class="is-required"
-                  :label="t('配置方式')"
-                  property="strategy_type">
-                  <strategy-way-selector
-                    :disabled="isStrategyWayDisabled"
-                    :model-value="formData.strategy_type"
-                    :options="strategyWayOptions"
-                    @change="handleStrategyWay" />
-                </bk-form-item>
-                <!-- 自定义规则审计、引入模型审计 -->
-                <component
-                  :is="strategyWayComMap[formData.strategy_type]"
-                  ref="comRef"
-                  :edit-data="editData"
-                  step-mode="basic"
-                  @reset-hit-conditions="handleResetHitConditions"
-                  @update-control-detail="updateControlDetail"
-                  @update-form-data="updateFormData" />
-              </div>
-            </template>
-          </card-part-vue>
-        </audit-form>
+              <bk-form-item
+                class="is-required"
+                :label="t('配置方式')"
+                property="strategy_type">
+                <strategy-way-selector
+                  :disabled="isStrategyWayDisabled"
+                  :model-value="formData.strategy_type"
+                  :options="strategyWayOptions"
+                  @change="handleStrategyWay" />
+              </bk-form-item>
+              <!-- 自定义规则审计、引入模型审计 -->
+              <component
+                :is="strategyWayComMap[formData.strategy_type]"
+                ref="comRef"
+                :edit-data="editData"
+                step-mode="basic"
+                @reset-hit-conditions="handleResetHitConditions"
+                @update-control-detail="updateControlDetail"
+                @update-form-data="updateFormData" />
+            </div>
+          </template>
+        </card-part-vue>
+      </audit-form>
 
-        <!-- 算法说明 -->
-        <control-description-vue
-          v-if="controlDetail !== null"
-          :data="controlDetail" />
-      </div>
-      <template #action>
-        <bk-button
-          v-bk-tooltips="{
-            content: typeTableLoading ? t('数据加载中，请稍等') : '',
-            disabled: !typeTableLoading,
-          }"
-          :disabled="typeTableLoading"
-          theme="primary"
-          @click="handleNext">
-          {{ t('下一步') }}
-        </bk-button>
-        <bk-button
-          v-if="showSaveDraftButton"
-          class="ml8"
-          @click="handleSaveDraft">
-          {{ t('保存草稿') }}
-        </bk-button>
-        <!-- <bk-button
+      <!-- 算法说明 -->
+      <control-description-vue
+        v-if="controlDetail !== null"
+        :data="controlDetail" />
+    </div>
+    <template #action>
+      <bk-button
+        v-bk-tooltips="{
+          content: typeTableLoading ? t('数据加载中，请稍等') : '',
+          disabled: !typeTableLoading,
+        }"
+        :disabled="typeTableLoading"
+        theme="primary"
+        @click="handleNext">
+        {{ t('下一步') }}
+      </bk-button>
+      <bk-button
+        v-if="showSaveDraftButton"
+        class="ml8"
+        @click="handleSaveDraft">
+        {{ t('保存草稿') }}
+      </bk-button>
+      <!-- <bk-button
           v-if="isEditMode"
           class="ml8"
           theme="primary"
           @click="handleSaveCurrentStep">
           {{ t('提交') }}
         </bk-button> -->
-        <bk-button
-          class="ml8"
-          @click="handleCancel">
-          {{ t('取消') }}
-        </bk-button>
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
+        {{ t('取消') }}
+      </bk-button>
     </template>
   </smart-action>
 </template>
@@ -458,9 +458,7 @@
   })));
   const controlDetail = ref<ControlModel | null>(null);
 
-  const typeTableLoading = computed(() => Boolean(
-    comRef.value?.typeTableLoading || comRef.value?.isInitializing,
-  ));
+  const typeTableLoading = computed(() => Boolean(comRef.value?.typeTableLoading || comRef.value?.isInitializing));
 
   // 编辑
   const setFormData = (editData: StrategyModel) => {
