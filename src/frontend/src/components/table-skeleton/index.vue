@@ -28,7 +28,7 @@
         :style="cellStyle(column)">
         <div
           class="audit-table-skeleton__header-bar"
-          :style="{ width: barWidth(column, 50 + ((columnIndex * 17 + 5) % 30)) }" />
+          :style="{ width: barWidth(50 + ((columnIndex * 17 + 5) % 30)) }" />
       </div>
     </div>
     <div class="audit-table-skeleton__body">
@@ -44,7 +44,7 @@
           :style="cellStyle(column)">
           <div
             class="audit-table-skeleton__cell-bar"
-            :style="{ width: barWidth(column, row[columnIndex]) }" />
+            :style="{ width: barWidth(row[columnIndex]) }" />
         </div>
       </div>
     </div>
@@ -119,7 +119,8 @@
       return {
         ...shared,
         flex: `1 1 ${column.width}px`,
-        minWidth: '48px',
+        width: 'auto',
+        minWidth: '0',
       };
     }
     if (column.width > 0) {
@@ -138,12 +139,8 @@
       minWidth: '0',
     };
   };
-  const barWidth = (column: { width: number }, percent: number) => {
-    const basis = column.width > 0 ? column.width : 160;
-    const padding = basis < 64 ? 8 : 32;
-    const inner = Math.max(basis - padding, 16);
-    return `${Math.max(16, Math.min(inner, Math.round(inner * percent / 100)))}px`;
-  };
+  // 相对单元格而不是整行。弹性列被拉宽后，色块跟着变长，避免按 minWidth 画成短条留下大空档。
+  const barWidth = (percent: number) => `${percent}%`;
 </script>
 <style lang="postcss">
   .audit-table-skeleton {
@@ -166,6 +163,7 @@
 
   .audit-table-skeleton__header-bar {
     flex-shrink: 0;
+    max-width: 100%;
     height: 14px;
     background: #e4e9f2;
     border-radius: 4px;
@@ -185,6 +183,7 @@
 
   .audit-table-skeleton__cell-bar {
     flex-shrink: 0;
+    max-width: 100%;
     height: 14px;
     background: linear-gradient(90deg, #f2f6fc 0%, #e4e9f2 50%, #f2f6fc 100%);
     background-position: -200% 0;

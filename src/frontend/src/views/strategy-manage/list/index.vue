@@ -1079,7 +1079,7 @@
     {
       label: () => t('状态'),
       field: () => 'status',
-      width: 110,
+      width: 140,
       filter: {
         list: initStatusFilterList,
         filterScope: SortScope.CURRENT,
@@ -1138,80 +1138,50 @@
               type='yunxingjilu' />
             </p>;
         }
-        // failed
-        if (data.status_msg) {
-          return <p style='display: flex; align-items: baseline;'>
-            <audit-icon
-              class='mr4'
-              svg
-              type={data.statusTag} />
+        const statusReasonTip = data.status_msg
+          ? {
+            content: <div class="strategy-status-tip-body">{data.status_msg}</div>,
+            extCls: 'strategy-status-tip',
+            delay: 80,
+          }
+          : undefined;
+        const retryNode = isSceneGlobalStrategy(data)
+          ? (
             <span
-              style='border-bottom:1px dashed #C4C6CC;height: 32px;cursor: pointer;'
-              v-bk-tooltips={data.status_msg}>
-              {statusMap.value[data.status] || data.status}
+              class="strategy-status-retry is-disabled"
+              v-bk-tooltips={globalStrategyDisabledTip()}>
+              <audit-icon type="redo" />
             </span>
-            <p>
-              <span>, </span>
-              {isSceneGlobalStrategy(data) ? (
-                <bk-button
-                  text
-                  class="is-disabled"
-                  v-bk-tooltips={globalStrategyDisabledTip()}>
-                  {t('重试')}
-                </bk-button>
-              ) : (
-                <bk-button
-                  text
-                  theme='primary'
-                  onClick={() => retryRequest(data.strategy_id)}>
-                  {t('重试')}
-                </bk-button>
-              )}
-            </p>
-            <p class='err-underline' />
-            <audit-icon
-              v-bk-tooltips={{
-                content: t('运行记录'),
-              }}
-              class='operation-records'
-              style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
-              onClick={() => handleRecord(data)}
-              type='yunxingjilu' />
-          </p>;
-        }
-        return <div style='display: flex; align-items: center;'>
+          )
+          : (
+            <button
+              class="strategy-status-retry"
+              data-testid="strategy-status-retry"
+              type="button"
+              v-bk-tooltips={{ content: t('重试') }}
+              onClick={() => retryRequest(data.strategy_id)}>
+              <audit-icon type="redo" />
+            </button>
+          );
+        return <span class="strategy-status">
           <audit-icon
+            class="strategy-status-dot"
             svg
-            class='mr4'
-            type={data.statusTag} />
-          <span>{statusMap.value[data.status] || data.status}</span>
-          <p>
-            <span>, </span>
-            {isSceneGlobalStrategy(data) ? (
-              <bk-button
-                text
-                class="is-disabled"
-                v-bk-tooltips={globalStrategyDisabledTip()}>
-                {t('重试')}
-              </bk-button>
-            ) : (
-              <bk-button
-                text
-                theme='primary'
-                onClick={() => retryRequest(data.strategy_id)}>
-                {t('重试')}
-              </bk-button>
-            )}
-          </p>
+            type={data.statusTag || 'abnormal'} />
+          <span
+            class={data.status_msg ? 'strategy-status-text is-dashed' : 'strategy-status-text'}
+            v-bk-tooltips={statusReasonTip}>
+            {statusMap.value[data.status] || data.status}
+          </span>
+          {retryNode}
           <audit-icon
             v-bk-tooltips={{
               content: t('运行记录'),
             }}
-            class='operation-records'
-            style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+            class="operation-records"
             onClick={() => handleRecord(data)}
-            type='yunxingjilu' />
-        </div>;
+            type="yunxingjilu" />
+        </span>;
       },
     },
     {
@@ -1617,12 +1587,10 @@
           </bk-button>,
           content: () => (
             <bk-dropdown-menu>
-              <bk-dropdown-item>
+              <bk-dropdown-item onClick={() => handleRecord(data)}>
                 <bk-button
                   text
-                  class="ml8"
-                  onClick={() => handleRecord(data)}
-                  v-bk-tooltips={t('运行记录')}>
+                  class="strategy-operation-item">
                   {t('运行记录')}
                 </bk-button>
               </bk-dropdown-item>
@@ -2525,9 +2493,42 @@
   display: flex;
   height: 100%;
 
-  :deep(.audit-highlight-table .bk-table-body td .cell:has(.strategy-name-cell)) {
-    overflow: hidden;
-    white-space: nowrap;
+    :deep(.audit-highlight-table .bk-table-body td .cell:has(.strategy-name-cell)) {
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+  .audit-highlight-table .bk-table thead th {
+    border-right-color: transparent;
+  }
+
+  .audit-highlight-table .bk-table .bk-table-body table tbody tr td {
+    border-right-color: transparent;
+  }
+
+  /* 悬停只消掉上边和右边的白线，下边 #dcdee5 分隔线保留 */
+  .audit-highlight-table .bk-table .bk-table-body table tbody tr.hover-highlight:hover td:not(.empty-cell) {
+    border-top-color: transparent;
+    border-right-color: transparent;
+    background-clip: border-box;
+  }
+
+  .audit-highlight-table .bk-table colgroup col {
+    background: transparent;
+  }
+
+  .audit-highlight-table .bk-table-head table,
+  .audit-highlight-table .bk-table-body table {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .audit-highlight-table .bk-table-head .table-head-settings {
+    right: 0;
+    z-index: 4;
+    border-radius: 0;
+    background-color: #fafbfd;
+    box-shadow: -6px 0 0 0 #fafbfd;
   }
 
   .edit-badge {
@@ -2604,6 +2605,82 @@
 
 .operation-records {
   display: none;
+  flex: none;
+  margin-left: 4px;
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.strategy-status {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 4px;
+  font-size: var(--audit-font-size-sm);
+  line-height: var(--audit-line-height-sm);
+  white-space: nowrap;
+}
+
+.strategy-status-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+}
+
+.strategy-status-text.is-dashed {
+  line-height: var(--audit-line-height-sm);
+  border-bottom: 1px dashed var(--audit-neutral-text-02);
+  cursor: pointer;
+}
+
+.strategy-status-retry {
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: #3a84ff;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.strategy-status-retry.is-disabled {
+  color: #c4c6cc;
+  cursor: not-allowed;
+}
+
+.strategy-status-tip {
+  max-width: 320px;
+  line-height: 20px;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.strategy-status-tip-body {
+  max-height: 240px;
+  margin-right: -10px;
+  padding-right: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  word-break: break-all;
+  white-space: normal;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
+}
+
+.strategy-status-tip-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.strategy-status-tip-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 3px;
+}
+
+.strategy-status-tip-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 :deep(.hover-highlight:hover) .operation-records {
@@ -2612,6 +2689,21 @@
 
 .strategy-operation-dropdown-pop {
   z-index: 2000 !important;
+}
+
+.strategy-operation-item.bk-button.is-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  line-height: 32px;
+  pointer-events: none;
+}
+
+.strategy-operation-item.bk-button .bk-button-text {
+  line-height: 32px;
 }
 
 .strategy-risk-count-link {
