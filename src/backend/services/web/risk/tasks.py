@@ -655,7 +655,11 @@ def sync_auto_result(node_id: str = None):
 
     # 筛选所有需要更新的节点
     if node_id:
-        nodes = TicketNode.objects.filter(id=node_id, is_test=False)
+        # 与周期分支同口径：测试单（is_test=True 的 AutoProcess 节点）同样纳入同步，
+        # 否则重试/强制终止后的兜底同步会空转，状态永久停留在乐观写入的执行中
+        nodes = TicketNode.objects.filter(id=node_id).filter(
+            Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__)
+        )
     else:
         # 测试单（is_test=True）同样纳入同步：它是一次性发单任务，结束很快，
         # 但此前仅在前端轮询 get_task_status 时被动回写，页面关闭后会永久停留在 RUNNING
