@@ -63,6 +63,11 @@ from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.filters import BindingMetadataHelper, SceneScopeFilter
 from services.web.strategy_v2.models import Strategy
 
+# 终态结果：只有终态才输出 finish_time / duration。
+# 未结束任务的 SOPS 时间会退化取到旧节点值（任务级时间缺失 → 取子节点最早/最晚），
+# 会出现"执行中却已有结束时间与耗时"的矛盾，重试后尤为明显
+FINAL_RESULTS = ("success", "failed")
+
 
 class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
     tags = ["ProcessApplication"]
@@ -550,16 +555,20 @@ class ListPAExecutionRecords(ProcessApplicationMeta):
                     "pa_id": pa_id_of_record or 0,
                     "pa_name": current_pa_name,
                     "operator": node.operator,
-                    # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
+                    # start_time 为记录创建（派单）时间；finish_time/duration 仅终态输出
                     "start_time": node.time,
-                    "finish_time": calc_task_finish_time(process_result.get("status") or {}),
+                    "finish_time": (
+                        calc_task_finish_time(process_result.get("status") or {}) if result in FINAL_RESULTS else ""
+                    ),
                     "sops_task_id": sops_task_id,
                     "sops_task_url": sops_task_url,
                     "sops_state": state,
                     "result": result,
                     "task_name": current_task_name,
                     "trigger": current_trigger,
-                    "duration": calc_task_duration(process_result.get("status") or {}),
+                    "duration": (
+                        calc_task_duration(process_result.get("status") or {}) if result in FINAL_RESULTS else None
+                    ),
                     "is_test": node.is_test,
                     "failure_hint": self._build_failure_hint(process_result) if result == "failed" else "",
                 }
@@ -624,9 +633,11 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
 
         # 尝试记录（从 SOPS 状态中提取每次尝试）
         status_info = process_result.get("status") or {}
-        attempts = extract_attempt_records(status_info)
         # 重试记录（RetryAutoProcess 重试前写入的快照，仅 append 不覆盖）
         retry_history = process_result.get("retry_history") or []
+        # 历史被重试过的节点（累计，由重试写入侧维护）：当前 attempts 按此标记
+        retried_node_ids = set(process_result.get("retried_node_ids") or [])
+        attempts = extract_attempt_records(status_info, retried_node_ids=retried_node_ids)
 
         # 参数信息（从 Risk 获取）
         params = {}
@@ -656,14 +667,14 @@ class GetPAExecutionRecordDetail(ProcessApplicationMeta):
             "pa_name": pa_name,
             "trigger": process_result.get("trigger") or "",
             "operator": node.operator,
-            # start_time 为记录创建（派单）时间；finish_time 取自 SOPS 任务结束时间，未结束为空串
+            # start_time 为记录创建（派单）时间；finish_time/duration 仅终态输出
             "start_time": node.time,
-            "finish_time": calc_task_finish_time(status_info),
+            "finish_time": calc_task_finish_time(status_info) if result in FINAL_RESULTS else "",
             "sops_task_id": str((process_result.get("task") or {}).get("task_id", "") or ""),
             "sops_task_url": str((process_result.get("task") or {}).get("task_url", "") or ""),
             "sops_state": state,
             "result": result,
-            "duration": calc_task_duration(status_info),
+            "duration": calc_task_duration(status_info) if result in FINAL_RESULTS else None,
             "is_test": node.is_test,
             "failure_hint": ListPAExecutionRecords._build_failure_hint(process_result) if result == "failed" else "",
             # 风险单关联

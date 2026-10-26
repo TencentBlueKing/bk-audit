@@ -25,6 +25,7 @@ from django.db.models import Q
 from django.http import Http404
 
 from apps.sops.constants import SOPSTaskStatus
+from core.exceptions import RiskStatusInvalid
 from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
 from tests.test_risk.test_tickets.constants import RISK_INFO
@@ -450,13 +451,23 @@ class TestGetPAExecutionRecordDetail:
         assert resp["retry_history"] == []
 
     def test_detail_retry_history_passthrough(self):
-        """重试快照原样透传（形状与 attempts 一致）"""
+        """重试快照原样透传（全量节点，被重试节点带 retried 标记，不再有 time 字段）"""
         risk = self._prepare()
         node = _create_node(risk.risk_id, SOPSTaskStatus.FINISHED.value, task_id=3)
         retry_entry = {
-            "time": "2026-10-16 20:50:12",
+            "state": SOPSTaskStatus.FAILED.value,
             "operator": "tester",
             "attempts": [
+                {
+                    "node_id": "node0",
+                    "node_name": "前置节点",
+                    "state": SOPSTaskStatus.FINISHED.value,
+                    "start_time": "2026-10-16 20:44:20",
+                    "end_time": "2026-10-16 20:44:30",
+                    "duration": 10,
+                    "error_message": "",
+                    "retried": False,
+                },
                 {
                     "node_id": "node1",
                     "node_name": "发单节点",
@@ -465,7 +476,8 @@ class TestGetPAExecutionRecordDetail:
                     "end_time": "2026-10-16 20:44:32",
                     "duration": 1,
                     "error_message": "调用 IAM 接口超时",
-                }
+                    "retried": True,
+                },
             ],
         }
         node.process_result["retry_history"] = [retry_entry]
@@ -482,6 +494,48 @@ class TestGetPAExecutionRecordDetail:
             with pytest.raises(Http404):
                 resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
 
+    def test_detail_marks_retried_nodes(self):
+        """顶层 attempts 的重试标记：取 retry_history 各次快照中 retried=True 的节点并集"""
+        risk = self._prepare()
+        node = _create_node(risk.risk_id, SOPSTaskStatus.RUNNING.value, task_id=7)
+        node.process_result["status"]["children"] = {
+            "node0": {
+                "id": "node0",
+                "name": "前置节点",
+                "state": SOPSTaskStatus.FINISHED.value,
+                "start_time": "2026-10-21 11:00:02",
+                "finish_time": "2026-10-21 11:00:02",
+                "elapsed_time": 0,
+            },
+            "node1": {
+                "id": "node1",
+                "name": "回调",
+                "state": SOPSTaskStatus.RUNNING.value,
+                "start_time": "2026-10-26 16:49:55",
+                "finish_time": "",
+                "elapsed_time": 3,
+            },
+        }
+        node.process_result["retry_history"] = [
+            {
+                "operator": "tester",
+                "attempts": [
+                    {"node_id": "node0", "node_name": "前置节点", "state": SOPSTaskStatus.FINISHED.value, "retried": False},
+                    {"node_id": "node1", "node_name": "回调", "state": SOPSTaskStatus.FAILED.value, "retried": False},
+                ],
+            }
+        ]
+        # 累计被重试过的节点（上一次重试命中了 node1）
+        node.process_result["retried_node_ids"] = ["node1"]
+        node.save(update_fields=["process_result"])
+        resp = resource.risk.get_pa_execution_record_detail.perform_request({"id": node.id})
+        attempts = {item["node_id"]: item for item in resp["attempts"]}
+        # 全量返回，被重试过的节点带标记；重试时刻体现在该节点最新一次 start_time
+        assert set(attempts) == {"node0", "node1"}
+        assert attempts["node1"]["retried"] is True
+        assert attempts["node1"]["start_time"] == "2026-10-26 16:49:55"
+        assert attempts["node0"]["retried"] is False
+
 
 @pytest.mark.django_db
 class TestRetryAutoProcessRetryHistory:
@@ -496,6 +550,15 @@ class TestRetryAutoProcessRetryHistory:
         status_with_failure = {
             "state": SOPSTaskStatus.FAILED.value,
             "children": {
+                "node0": {
+                    "id": "node0",
+                    "name": "前置节点",
+                    "state": SOPSTaskStatus.FINISHED.value,
+                    "start_time": "2026-10-16 20:44:20",
+                    "finish_time": "2026-10-16 20:44:30",
+                    "elapsed_time": 10,
+                    "error_message": "",
+                },
                 "node1": {
                     "id": "node1",
                     "name": "发单节点",
@@ -504,7 +567,7 @@ class TestRetryAutoProcessRetryHistory:
                     "finish_time": "2026-10-16 20:44:32",
                     "elapsed_time": 1,
                     "error_message": "调用 IAM 接口超时",
-                }
+                },
             },
         }
         with mock.patch(
@@ -530,9 +593,20 @@ class TestRetryAutoProcessRetryHistory:
         assert len(history) == 1
         entry = history[0]
         assert entry["operator"] == "tester"
-        assert entry["time"]
+        # 该轮任务级状态（与顶层 sops_state 同口径），不因落库时乐观改为执行中而丢失
+        assert entry["state"] == SOPSTaskStatus.FAILED.value
+        # 重试时刻由 attempts 的 start_time 表达，不再冗余 time 字段
+        assert "time" not in entry
+        # 快照全量：成功节点与失败节点都在
+        snapshot = {item["node_id"]: item for item in entry["attempts"]}
+        assert set(snapshot) == {"node0", "node1"}
+        # 这是首次执行现场，此时还没有发生过任何重试 → retried 全为 false
+        assert snapshot["node1"]["retried"] is False
+        assert snapshot["node0"]["retried"] is False
+        # 本次重试命中的节点并入累计集合，供后续快照与当前 attempts 标记
+        assert node.process_result["retried_node_ids"] == ["node1"]
         # 快照固化重试前的失败现场
-        failed = next(item for item in entry["attempts"] if item["node_id"] == "node1")
+        failed = snapshot["node1"]
         assert failed["state"] == SOPSTaskStatus.FAILED.value
         assert failed["error_message"] == "调用 IAM 接口超时"
         assert failed["duration"] == 1
@@ -562,7 +636,8 @@ class TestRetryAutoProcessRetryHistory:
         }
         with mock.patch(
             "services.web.risk.resources.risk.api.bk_sops.get_task_status",
-            mock.Mock(return_value=status_with_failure),
+            # 每次回源返回新对象，避免落库时把 state 改成执行中后污染下一次调用
+            mock.Mock(side_effect=lambda *args, **kwargs: dict(status_with_failure)),
         ), mock.patch(
             "services.web.risk.resources.risk.api.bk_sops.get_node_data",
             mock.Mock(return_value={"inputs": {}}),
@@ -582,6 +657,38 @@ class TestRetryAutoProcessRetryHistory:
         history = node.process_result["retry_history"]
         assert len(history) == 2
         assert all(item["attempts"][0]["error_message"] == "第 N 次失败" for item in history)
+        # 每次快照都固化该轮的任务级状态
+        assert all(item["state"] == SOPSTaskStatus.FAILED.value for item in history)
+        # 重试标记是累计口径：首次现场全 false，之后的现场才标记上一轮被重试的节点
+        assert all("time" not in item for item in history)
+        assert history[0]["attempts"][0]["retried"] is False
+        assert history[1]["attempts"][0]["retried"] is True
+        assert node.process_result["retried_node_ids"] == ["node1"]
+
+    def test_retry_rejected_without_failed_node(self):
+        """无可重试的失败节点（任务已终止）：不写快照、不假置 RUNNING，并落库回源到的真实状态"""
+        ProcessApplication.objects.all().delete()
+        RiskRule.objects.all().delete()
+        Risk.objects.all().delete()
+        TicketNode.objects.all().delete()
+        risk = Risk.objects.create(**{**RISK_INFO, "risk_id": "R-R3"})
+        node = _create_node(risk.risk_id, SOPSTaskStatus.FAILED.value, task_id=97)
+        revoked_status = {
+            "state": SOPSTaskStatus.REVOKED.value,
+            "children": {"node1": {"id": "node1", "name": "发单节点", "state": SOPSTaskStatus.FINISHED.value}},
+        }
+        with mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.get_task_status",
+            mock.Mock(return_value=revoked_status),
+        ), mock.patch(
+            "services.web.risk.resources.risk.api.bk_sops.operate_node", mock.Mock(return_value=None)
+        ) as mock_operate:
+            with pytest.raises(RiskStatusInvalid):
+                resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
+        mock_operate.assert_not_called()
+        node.refresh_from_db()
+        assert node.process_result.get("retry_history") is None
+        assert node.process_result["status"]["state"] == SOPSTaskStatus.REVOKED.value
 
     def test_detail_without_risk(self):
         """Risk 不存在时 risk_id 仍有值，风险单字段为空串、params 为空"""

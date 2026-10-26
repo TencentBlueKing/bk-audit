@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from bk_resource import api
 from django.conf import settings
@@ -120,14 +120,20 @@ def calc_task_finish_time(status_info: dict) -> str:
     return format_sops_time(latest[1] if latest else candidates[-1])
 
 
-def extract_attempt_records(status_info: dict) -> list:
+def extract_attempt_records(status_info: dict, retried_node_ids: Optional[Set[str]] = None) -> list:
     """从 SOPS 状态中提取子节点尝试记录（重试快照与执行记录详情共用同一形状）
 
     递归遍历：失败节点可能嵌套在子流程里，只取顶层 children 会漏掉真正的失败节点。
     error_message 由终态同步 / 重试前调用 fill_failure_info 回源写入。
     start_time/end_time 输出统一为本地 %Y-%m-%d %H:%M:%S（不带时区偏移）。
+
+    retried_node_ids：被重试的节点 ID 集合，命中则该条记录 retried=True。
+    - 重试快照传入"本次实际重试的节点"，标记本次重试命中了谁；
+    - 执行记录详情传入"历史上被重试过的节点"并集，标记该节点是否被重试过。
+    快照保持全量（含成功/未执行节点），仅用该标记区分，避免丢失首次执行的完整现场。
     """
     attempts = []
+    retried_node_ids = set(retried_node_ids or ())
 
     def _walk(node: dict) -> None:
         for node_id, child in (node.get("children") or {}).items():
@@ -142,6 +148,9 @@ def extract_attempt_records(status_info: dict) -> list:
                     "end_time": format_sops_time(child.get("finish_time") or ""),
                     "duration": child.get("elapsed_time") or 0,
                     "error_message": child.get("error_message") or "",
+                    # 重试写入侧用的是 child["id"]，这里遍历用的是 children 的 key，
+                    # 理论上两者相同，仍按任一命中处理，避免口径差异导致标记丢失
+                    "retried": node_id in retried_node_ids or child.get("id") in retried_node_ids,
                 }
             )
             _walk(child)
