@@ -610,7 +610,15 @@
     }
 
     // 仅覆盖 AI 本次明确识别出的时间条件，未识别则保留当前条件
-    if (filterConditions.start_time || filterConditions.end_time) {
+    // 用户使用「最近 xx」等相对说法时后端返回 datetime_origin（如 ['now-4d', 'now']），以其为准保持相对窗口
+    const nlDatetimeOrigin = filterConditions.datetime_origin;
+    if (Array.isArray(nlDatetimeOrigin)
+      && nlDatetimeOrigin.length >= 2
+      && isRelativeDatetimeOrigin(nlDatetimeOrigin)) {
+      const origin = nlDatetimeOrigin.map(String);
+      nextModel.datetime_origin = origin;
+      nextModel.datetime = syncDatetimeFromOrigin(origin);
+    } else if (filterConditions.start_time || filterConditions.end_time) {
       const currentDatetime = Array.isArray(nextModel.datetime) && nextModel.datetime.length >= 2
         ? nextModel.datetime
         : defaultDatetime;

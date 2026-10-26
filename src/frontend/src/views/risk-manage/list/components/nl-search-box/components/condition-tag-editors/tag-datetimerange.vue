@@ -194,6 +194,25 @@
     ?? inferredShortcutSelectedIndex.value
   ));
 
+  const RELATIVE_ORIGIN_RE = /^now-(\d+)([mhdwMy])$/;
+  const relativeUnitLabelMap: Record<string, string> = {
+    m: '近{n}分钟',
+    h: '近{n}小时',
+    d: '近{n}天',
+    w: '近{n}周',
+    M: '近{n}月',
+    y: '近{n}年',
+  };
+
+  // 非快捷项的相对 origin（如 NL 解析出的 now-4d、now-2w）按格式生成文案
+  const relativeOriginLabel = computed(() => {
+    const origin = props.searchModel.datetime_origin;
+    if (!Array.isArray(origin) || origin[1] !== 'now') return '';
+    const match = RELATIVE_ORIGIN_RE.exec(String(origin[0] || ''));
+    if (!match) return '';
+    return t(relativeUnitLabelMap[match[2]], { n: match[1] });
+  });
+
   const parseDateValue = (val: any) => {
     if (!val || !Array.isArray(val) || val.length < 2) return [];
     return val.map((item: any) => {
@@ -295,13 +314,16 @@
     if (shortcutSelectedIndex.value >= 0) {
       return t(shortcutConfigs[shortcutSelectedIndex.value].label);
     }
+    if (relativeOriginLabel.value) {
+      return relativeOriginLabel.value;
+    }
     return formatRangeText(localValue.value);
   };
 
   const displayText = computed(() => getDisplayTextForInput());
 
   const shortcutTooltipContent = computed(() => {
-    if (shortcutSelectedIndex.value < 0) {
+    if (shortcutSelectedIndex.value < 0 && !relativeOriginLabel.value) {
       return '';
     }
     return formatRangeText(localValue.value);
