@@ -227,7 +227,7 @@ BK_ITSM_V4_SYSTEM_TOKEN = os.getenv("BKAPP_BK_ITSM_V4_SYSTEM_TOKEN", os.getenv("
 # （服务列表/详情、新建单据、节点版本记录、初始化均读取该开关）。
 # 默认保留 V3：现有部署无需任何升级配置即沿用旧契约；
 # 仅明确设置 BKAPP_ENABLE_ITSM_V4=True 的目标环境才升级 ITSM4（单租户、国内/海外多租户均可显式启用）。
-BKAPP_ENABLE_ITSM_V4 = os.getenv("BKAPP_ENABLE_ITSM_V4", "False").strip().lower() in ("true", "1", "yes", "on")
+BKAPP_ENABLE_ITSM_V4 = os.getenv("BKAPP_ENABLE_ITSM_V4", "True").strip().lower() in ("true", "1", "yes", "on")
 BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
 
