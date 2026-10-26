@@ -812,8 +812,17 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
     risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
     params = serializers.JSONField(label=gettext_lazy("风险参数"), help_text=gettext_lazy("风险描述/证据/时间等"))
     retry_count = serializers.IntegerField(label=gettext_lazy("重试次数"))
-    retry_history = serializers.JSONField(label=gettext_lazy("重试记录"))
-    attempts = serializers.JSONField(label=gettext_lazy("尝试记录"), help_text=gettext_lazy("逐节点执行与错误"))
+    retry_history = serializers.JSONField(
+        label=gettext_lazy("重试记录"),
+        help_text=gettext_lazy(
+            "重试前全量快照[{state, operator, attempts}]：state 为该轮的任务级状态（与 sops_state 同口径，"
+            "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True"
+        ),
+    )
+    attempts = serializers.JSONField(
+        label=gettext_lazy("尝试记录"),
+        help_text=gettext_lazy("当前全量节点状态（逐节点执行与错误），历史被重试过的节点 retried=True"),
+    )
 
 
 class ListBkSecRiskTypesReqSerializer(serializers.Serializer):
