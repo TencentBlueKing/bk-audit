@@ -894,7 +894,8 @@
 }
 
 .attempt-tag.is-running {
-  background: var(--audit-warn-02);
+  color: var(--audit-brand-01);
+  background: var(--audit-brand-06);
 }
 
 .attempt-extra {
