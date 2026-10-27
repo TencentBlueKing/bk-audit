@@ -14,6 +14,7 @@ from api.constants import AIAgentCode
 from services.web.risk.constants import NL2RiskFilterLogStatus, RiskViewType
 from services.web.risk.exceptions import NL2RiskFilterServiceError
 from services.web.risk.handlers.nl2riskfilter import (
+    attach_datetime_origin,
     build_nl2risk_user_message,
     extract_json_from_text,
 )
@@ -555,6 +556,43 @@ class SaveNL2RiskFilterLogModelTest(TestCase):
         )
         log = NL2RiskFilterLog.objects.first()
         self.assertEqual(log.risk_view_type, RiskViewType.ALL)
+
+
+class AttachDatetimeOriginTest(TestCase):
+    """模型给出合法 time_shortcut 时写成 datetime_origin。"""
+
+    def test_valid_shortcut_becomes_datetime_origin(self):
+        cases = ["now-7d", "now-5h", "now-1M", "now-3M", "now-6M", "now-12M"]
+        for shortcut in cases:
+            with self.subTest(shortcut=shortcut):
+                result = attach_datetime_origin(
+                    {
+                        "start_time": "2026-10-19T00:00:00",
+                        "end_time": "2026-10-26T11:48:03",
+                        "time_shortcut": shortcut,
+                        "risk_level": "HIGH",
+                    }
+                )
+                self.assertEqual(result["datetime_origin"], [shortcut, "now"])
+                self.assertNotIn("time_shortcut", result)
+                self.assertEqual(result["start_time"], "2026-10-19T00:00:00")
+
+    def test_missing_or_invalid_shortcut_keeps_absolute_time_only(self):
+        cases = [None, "", "now-2M", "now-13M", "now-30m", "now-1w", "now-2y", "today"]
+        for shortcut in cases:
+            with self.subTest(shortcut=shortcut):
+                conditions = {
+                    "start_time": "2026-10-20T00:00:00",
+                    "end_time": "2026-10-26T11:48:03",
+                    "datetime_origin": ["now-7d", "now"],
+                }
+                if shortcut is not None:
+                    conditions["time_shortcut"] = shortcut
+                result = attach_datetime_origin(conditions)
+                self.assertNotIn("datetime_origin", result)
+                self.assertNotIn("time_shortcut", result)
+                self.assertEqual(result["start_time"], "2026-10-20T00:00:00")
+                self.assertEqual(result["end_time"], "2026-10-26T11:48:03")
 
 
 class NL2RiskFilterWithLoggingTest(TestCase):

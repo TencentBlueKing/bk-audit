@@ -95,6 +95,53 @@ def _normalize_sops_constant_value(constant: dict, value: Any) -> Any:
     return value
 
 
+def _is_blank_param_value(value: Any) -> bool:
+    """None 和空白串算未填写。0 / False 是合法值。"""
+
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
+def validate_auto_process_params(pa_id: int, pa_params: Any) -> None:
+    """提交时（创建审批单或发起处理任务前）校验处理套餐必填参数。
+
+    遍历标准运维模板的用户入参常量。可见必填变量必须有非空直接值，或非空字段引用；
+    0 / False 保留。条件隐藏变量留给模板默认值，不参与校验。
+    批量逐条调用时 pa_params 已是当前风险渲染后的结果，空插值会在这里被拒绝，
+    避免审批套餐建成审批单并计为成功。
+    """
+
+    process_application = ProcessApplication.objects.filter(id=pa_id).first()
+    if process_application is None:
+        # 套餐不存在由调用方单独处理
+        return
+    template_info = api.bk_sops.get_template_info(
+        template_id=process_application.sops_template_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID
+    )
+    pa_params = pa_params if isinstance(pa_params, dict) else {}
+    missing_keys = []
+    for c in template_info["pipeline_tree"]["constants"].values():
+        if not _is_user_input_constant(c):
+            continue
+        field = pa_params.get(c["key"])
+        if not isinstance(field, dict):
+            if _is_condition_hide(c):
+                continue
+            missing_keys.append(c["key"])
+            continue
+        # 条件隐藏变量保留模板默认值，空映射不视为缺参。
+        if _is_condition_hide(c):
+            continue
+        field_name = field.get("field")
+        if isinstance(field_name, str) and field_name.strip():
+            continue
+        if _is_blank_param_value(field.get("value")):
+            missing_keys.append(c["key"])
+    if missing_keys:
+        raise AutoProcessParamsError(keys=",".join(missing_keys))
+
+
 class RiskFlowBaseHandler:
     """
     用于流转风险单状态
@@ -801,7 +848,8 @@ class MisReport(RiskFlowBaseHandler):
     enable_notice = False
 
     def pre_check(self, *args, **kwargs) -> None:
-        super().pre_check(*args, **kwargs)
+        if self.risk.status == RiskStatus.PENDING_CONFIRM:
+            raise RiskStatusInvalid(message="待确认状态不能执行此操作")
         # 检查风险标签
         if self.risk.risk_label != RiskLabel.NORMAL:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.risk_label)
@@ -972,12 +1020,6 @@ class ConfirmRisk(RiskFlowBaseHandler):
         # 检查 allowed_status
         if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
-        # 验证只能由 confirmer 操作
-        username = kwargs.get("username")
-        if username and username not in self.risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认风险")
 
     def process(self, description: str = "", *args, **kwargs) -> dict:
         # 事务内使用 select_for_update 重新校验状态，防止并发确认
@@ -1037,12 +1079,6 @@ class ConfirmAsMisReport(RiskFlowBaseHandler):
         # 检查 allowed_status
         if self.allowed_status and self.risk.status not in self.allowed_status:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % self.risk.status)
-        # 验证只能由 confirmer 操作
-        username = kwargs.get("username")
-        if username and username not in self.risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认误报")
 
     def process(self, description: str = "", *args, **kwargs) -> dict:
         with transaction.atomic():

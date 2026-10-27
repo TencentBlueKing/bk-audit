@@ -24,6 +24,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
@@ -63,7 +64,12 @@ from core.observability import (
     set_span_attributes,
     start_observation_span,
 )
-from core.utils.data import build_preserved_order_queryset, choices_to_dict
+from core.serializers import FlexibleListField
+from core.utils.data import (
+    build_preserved_order_queryset,
+    choices_to_dict,
+    value_to_label,
+)
 from services.web.common.constants import ScopeQueryField
 from services.web.common.monitor import NL2RiskFilterFailedEvent
 from services.web.common.scope_permission import ScopeContext, ScopePermission
@@ -104,11 +110,13 @@ from services.web.risk.converter.bkbase import (
     ManualUnsyncedRiskPrepender,
 )
 from services.web.risk.exceptions import (
+    BulkSelectionOverLimit,
     ExportRiskNoPermission,
     NL2RiskFilterServiceError,
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.nl2riskfilter import (
+    attach_datetime_origin,
     build_nl2risk_user_message,
     extract_filter_conditions_from_ai_result,
 )
@@ -116,6 +124,7 @@ from services.web.risk.handlers.risk_export_service import RiskExportService
 from services.web.risk.handlers.ticket import (
     AutoProcess,
     CloseRisk,
+    ConfirmRisk,
     CustomProcess,
     ForApprove,
     MisReport,
@@ -136,9 +145,20 @@ from services.web.risk.models import (
     UserType,
 )
 from services.web.risk.serializers import (
+    BULK_ACTION_MAX_RISK_IDS,
+    BULK_AUTO_PROCESS_MAX_RISK_IDS,
+    BULK_SELECTION_REQUIRED,
+    PROCESS_APPLICATION_NOT_FOUND,
+    BatchActionsPreviewReqSerializer,
+    BatchActionsPreviewRespSerializer,
     BatchConfirmAsMisReportRequestSerializer,
     BatchConfirmRiskRequestSerializer,
+    BulkActionRespSerializer,
+    BulkAutoProcessReqSerializer,
+    BulkCloseReqSerializer,
     BulkCustomTransRiskReqSerializer,
+    BulkMisreportReqSerializer,
+    BulkUnmisreportReqSerializer,
     ConfirmAsMisReportRequestSerializer,
     ConfirmRiskRequestSerializer,
     CustomAutoProcessReqSerializer,
@@ -185,6 +205,7 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
+from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
@@ -1177,33 +1198,23 @@ class CustomTransRisk(RiskMeta):
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import resolve_personnel_refs
+
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         if risk.status != RiskStatus.AWAIT_PROCESS.value:
             raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % risk.status)
+        # 单条入口始终允许 event_data。字符串和 {type:user} 保持用户名，field 引用在这里展开。
+        operators = resolve_personnel_refs(validated_request_data["new_operators"], risk=risk, allow_event_data=True)
+        if not operators:
+            raise drf_serializers.ValidationError(gettext("解析后的处理人为空，请检查人员字段引用"))
         origin_data = RiskInfoSerializer(risk).data
         # 使用当前用户 or 并发请求时透传的用户
         operator = get_request_username(validated_request_data.get("_request", None))
         TransOperator(risk_id=risk.risk_id, operator=operator).run(
-            new_operators=validated_request_data["new_operators"], description=validated_request_data["description"]
+            new_operators=operators, description=validated_request_data["description"]
         )
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
-
-
-class BulkCustomTransRisk(RiskMeta):
-    name = gettext_lazy("批量人工转单")
-    RequestSerializer = BulkCustomTransRiskReqSerializer
-
-    def perform_request(self, validated_request_data):
-        bulk_req_params = [
-            {
-                "risk_id": risk_id,
-                "new_operators": validated_request_data["new_operators"],
-                "description": validated_request_data["description"],
-            }
-            for risk_id in validated_request_data["risk_ids"]
-        ]
-        CustomTransRisk().bulk_request(bulk_req_params, ignore_exceptions=True)
 
 
 class CustomAutoProcess(RiskMeta):
@@ -1218,6 +1229,11 @@ class CustomAutoProcess(RiskMeta):
         origin_data = RiskInfoSerializer(risk).data
         # 获取处理套餐
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["pa_id"])
+        # 提交时校验套餐必填参数，覆盖审批与非审批路径：
+        # 需要审批的套餐此前会先创建审批单、待审批通过后才因缺参失败，这里提前拦截。
+        from services.web.risk.handlers.ticket import validate_auto_process_params
+
+        validate_auto_process_params(validated_request_data["pa_id"], validated_request_data.get("pa_params") or {})
         # 记录执行
         CustomProcess(risk_id=risk.risk_id, operator=username).run(
             custom_action=AutoProcess.__name__,
@@ -1747,6 +1763,7 @@ class NL2RiskFilter(RiskMeta):
                 },
             ):
                 filter_conditions, message = extract_filter_conditions_from_ai_result(result)
+            filter_conditions = attach_datetime_origin(filter_conditions)
             response_data = {"filter_conditions": filter_conditions, "thread_id": thread_id, "message": message}
 
             status = NL2RiskFilterLogStatus.SUCCESS if filter_conditions else NL2RiskFilterLogStatus.PARSE_FAILED
@@ -1910,6 +1927,9 @@ class ListNL2RiskFilterLog(RiskMeta):
         return queryset.order_by("-id")
 
 
+PENDING_CONFIRM_REQUIRED = "风险状态不是待确认"
+
+
 class ConfirmRiskResource(RiskMeta):
     """确认风险"""
 
@@ -1925,61 +1945,12 @@ class ConfirmRiskResource(RiskMeta):
         if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
             from rest_framework.exceptions import ValidationError
 
-            raise ValidationError("风险状态不是待确认")
+            raise ValidationError(PENDING_CONFIRM_REQUIRED)
 
-        # 验证权限
         username = get_request_username(validated_request_data.get("_request"))
-        if username not in risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认")
 
         # 执行确认
-        from services.web.risk.handlers.ticket import ConfirmRisk
-
         ConfirmRisk(risk_id=risk_id, operator=username).run(username=username, description=description)
-        return {"success": True}
-
-
-class BatchConfirmRiskResource(RiskMeta):
-    """批量确认风险"""
-
-    name = gettext_lazy("批量确认风险")
-    RequestSerializer = BatchConfirmRiskRequestSerializer
-
-    def perform_request(self, validated_request_data):
-        username = get_request_username()
-        risk_ids = validated_request_data["risk_ids"]
-        description = validated_request_data.get("description", "")
-
-        # 查询所有风险
-        risks = Risk.objects.filter(risk_id__in=risk_ids)
-
-        # 校验存在性
-        if len(risks) != len(risk_ids):
-            missing_ids = set(risk_ids) - {r.risk_id for r in risks}
-            from rest_framework.exceptions import ValidationError
-
-            raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
-
-        # 验证：当前用户必须是所有风险的确认人
-        for risk in risks:
-            if username not in risk.confirmer:
-                from rest_framework.exceptions import PermissionDenied
-
-                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认")
-
-        # 4. 校验状态：所有风险必须是待确认状态
-        invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
-        if invalid_status_risks:
-            from rest_framework.exceptions import ValidationError
-
-            details = [f"{r.risk_id}({r.display_status})" for r in invalid_status_risks]
-            raise ValidationError(f"风险状态不是待确认：{', '.join(details)}")
-
-        bulk_req_params = [{"risk_id": risk_id, "description": description} for risk_id in risk_ids]
-
-        ConfirmRiskResource().bulk_request(bulk_req_params)
         return {"success": True}
 
 
@@ -1999,14 +1970,9 @@ class ConfirmAsMisReportResource(RiskMeta):
         if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
             from rest_framework.exceptions import ValidationError
 
-            raise ValidationError("风险状态不是待确认")
+            raise ValidationError(PENDING_CONFIRM_REQUIRED)
 
-        # 验证权限
         username = get_request_username(validated_request_data.get("_request"))
-        if username not in risk.confirmer:
-            from rest_framework.exceptions import PermissionDenied
-
-            raise PermissionDenied("非确认人，无权确认误报")
 
         # 执行误报确认
         from services.web.risk.handlers.ticket import ConfirmAsMisReport
@@ -2015,44 +1981,670 @@ class ConfirmAsMisReportResource(RiskMeta):
         return {"success": True}
 
 
+# ---------------------------------------------------------------------------
+# 批量处理：选单 / 执行管道 / 可执行动作与预览
+# ---------------------------------------------------------------------------
+
+BATCH_REASON_STRATEGY_SCENE = "所选风险策略不同/场景不同，不支持批量处理套餐"
+BATCH_REASON_MISSING = "部分风险不存在或已被删除"
+BATCH_REASON_UNAVAILABLE = "所选风险无法批量处理"
+
+_ACTION_LABELS = {
+    "confirm": ConfirmRisk.name,
+    "close": CustomCloseRisk.name,
+    "trans": TransOperator.name,
+    "auto_process": ResourceVisibilityType.PROCESS_APPLICATION.label,
+    "misreport": MisReport.name,
+    "unmisreport": ReOpenMisReport.name,
+}
+_BATCH_ACTIONS = tuple(_ACTION_LABELS)
+_PROCESS_ACTIONS = frozenset({"close", "trans", "auto_process", "misreport"})
+_CONFIRM_ACTIONS = frozenset({"confirm", "misreport"})
+_CLOSED_ACTIONS = frozenset({"misreport"})
+_MISREPORT_CLOSED_ACTIONS = frozenset({"unmisreport"})
+_BLOCKING_STATUS = frozenset({RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS})
+_BLOCKING_DISPLAY = frozenset({RiskDisplayStatus.FOR_APPROVE, RiskDisplayStatus.AUTO_PROCESS})
+
+
+class _SelectionError(Enum):
+    OVER_LIMIT = "over_limit"
+    MISSING = "missing"
+    EMPTY = "empty"
+
+
+@dataclass(frozen=True)
+class _Reject:
+    """这条风险不执行，reason 写入 failed。"""
+
+    reason: str
+
+
+@dataclass
+class _BulkSelection:
+    risk_ids: List[str]
+    risks: List[Risk]
+    risk_map: Dict[str, Risk]
+    selected_count: int
+    error: Optional[_SelectionError] = None
+
+
+def _selection_token(values: Sequence[Any]) -> Tuple[bool, Optional[str]]:
+    """去空白后是否完全相同。只选一条视为相同；多条空值、空值与有值混选都不算相同。"""
+
+    tokens = ["" if value is None else str(value).strip() for value in values]
+    if not tokens:
+        return False, None
+    if len(tokens) == 1:
+        return True, tokens[0] or None
+    if any(not token for token in tokens) or len(set(tokens)) != 1:
+        return False, None
+    return True, tokens[0]
+
+
+def _normalize_bulk_risk_ids(risk_ids) -> List[str]:
+    """复用 BulkRiskSelectionSerializer 的归一化：FlexibleListField 拆分/去空白 + 去重排序。
+
+    权限阶段在资源序列化之前拿到的 risk_ids 是原始请求值，可能与执行阶段的
+    FlexibleListField 归一化结果不同（如单值字符串、逗号拼接、首尾空白）。
+    这里用同一套规则，保证权限校验覆盖实际执行的每一条风险，避免漏校验导致越权批量处理。
+    """
+
+    field = FlexibleListField(child=drf_serializers.CharField(), required=False, allow_empty=True)
+    try:
+        normalized = field.to_internal_value(risk_ids)
+    except Exception:
+        return []
+    if not normalized:
+        return []
+    return sorted(set(normalized))
+
+
+_BULK_FILTER_IDS_ATTR = "_bulk_filter_risk_ids"
+
+
+def _pin_bulk_filter_ids(risk_ids: Sequence[str]) -> None:
+    """把本次筛选命中的 ID 记在请求上，执行阶段复用，避免两次查询结果不一致。"""
+
+    from blueapps.utils.request_provider import get_local_request
+
+    request = get_local_request()
+    if request is not None:
+        setattr(request, _BULK_FILTER_IDS_ATTR, list(risk_ids))
+
+
+def _pinned_bulk_filter_ids() -> Optional[List[str]]:
+    from blueapps.utils.request_provider import get_local_request
+
+    request = get_local_request()
+    if request is None or not hasattr(request, _BULK_FILTER_IDS_ATTR):
+        return None
+    return list(getattr(request, _BULK_FILTER_IDS_ATTR))
+
+
+def resolve_bulk_risk_ids(data: dict, username: str, limit: int = BULK_ACTION_MAX_RISK_IDS) -> List[str]:
+    """权限校验用：勾选直接返回 risk_ids；筛选复用列表的 load_filter_risk_ids，只取上限 + 1 条。"""
+
+    if not isinstance(data, dict):
+        return []
+    risk_ids = data.get("risk_ids")
+    if risk_ids or not data.get("filters"):
+        # 与执行阶段（BulkRiskSelectionSerializer.validate）保持一致的归一化
+        return _normalize_bulk_risk_ids(risk_ids)
+    serializer = ListRiskRequestSerializer(data=data["filters"])
+    serializer.is_valid(raise_exception=True)
+    matched_ids = ListRisk().load_filter_risk_ids(serializer.validated_data, username=username, risk_limit=limit + 1)
+    _pin_bulk_filter_ids(matched_ids)
+    return matched_ids
+
+
+def _load_bulk_selection(data: dict, limit: int, *, require_all_exist: bool = False) -> _BulkSelection:
+    """勾选或筛选加载风险。require_all_exist 仅预览使用：缺条则整批不可处理。"""
+
+    data = data or {}
+    risk_ids = list(data.get("risk_ids") or [])
+    if risk_ids:
+        if len(risk_ids) > limit:
+            return _BulkSelection([], [], {}, len(risk_ids), _SelectionError.OVER_LIMIT)
+        risks = list(Risk.objects.filter(risk_id__in=risk_ids))
+        risk_map = {risk.risk_id: risk for risk in risks}
+        if require_all_exist and len(risks) != len(risk_ids):
+            return _BulkSelection(risk_ids, risks, risk_map, len(risks), _SelectionError.MISSING)
+        return _BulkSelection(risk_ids, risks, risk_map, len(risk_ids), None)
+
+    # 权限阶段已经按同一筛选解析过时，执行必须用那一批 ID，不能再查一次。
+    pinned_ids = _pinned_bulk_filter_ids()
+    if pinned_ids is not None:
+        matched_ids = pinned_ids
+    else:
+        matched_ids = ListRisk().load_filter_risk_ids(
+            dict(data.get("filters") or {}),
+            username=get_request_username(),
+            risk_limit=limit + 1,
+        )
+    if len(matched_ids) > limit:
+        return _BulkSelection([], [], {}, len(matched_ids), _SelectionError.OVER_LIMIT)
+    if not matched_ids:
+        return _BulkSelection([], [], {}, 0, _SelectionError.EMPTY)
+    risks = list(Risk.objects.filter(risk_id__in=matched_ids))
+    risk_map = {risk.risk_id: risk for risk in risks}
+    return _BulkSelection([risk.risk_id for risk in risks], risks, risk_map, len(risks), None)
+
+
+def _prepare_bulk_risks(validated_request_data: dict, limit: int) -> Tuple[List[str], List[Risk], Dict[str, Risk]]:
+    pick = _load_bulk_selection(validated_request_data, limit)
+    if pick.error is _SelectionError.OVER_LIMIT:
+        raise BulkSelectionOverLimit()
+    if pick.error is _SelectionError.EMPTY:
+        raise drf_serializers.ValidationError(gettext("当前筛选条件未命中风险"))
+    return pick.risk_ids, pick.risks, pick.risk_map
+
+
+def _fail_all(risk_ids: Sequence[str], reason: str) -> Dict[str, Any]:
+    return {"success_count": 0, "failed": [{"risk_id": rid, "reason": reason} for rid in risk_ids]}
+
+
+def _description_renderer(template: str, risks: Sequence[Risk]):
+    """按当前风险渲染说明模板。event_data 只在策略唯一时可用。"""
+
+    from services.web.risk.placeholder import render_string
+
+    username = get_request_username()
+    allow_event_data, _token = _selection_token([risk.strategy_id for risk in risks])
+
+    def render(risk: Risk) -> str:
+        return render_string(template, risk=risk, operator=username, allow_event_data=allow_event_data)
+
+    return render
+
+
+def _collect_payloads(risk_ids: Sequence[str], risk_map: Dict[str, Risk], build):
+    """build(risk) 返回 dict 则执行，返回 _Reject 则记为该条失败原因。"""
+
+    failed: List[Dict[str, str]] = []
+    payloads = []
+    for rid in risk_ids:
+        risk = risk_map.get(rid)
+        if risk is None:
+            failed.append({"risk_id": rid, "reason": gettext("风险不存在")})
+            continue
+        built = build(risk)
+        if isinstance(built, _Reject):
+            failed.append({"risk_id": rid, "reason": built.reason})
+            continue
+        payloads.append(built)
+    return payloads, failed
+
+
+def _complete_bulk(payloads: Sequence[dict], failed: List[Dict[str, str]], run_item) -> Dict[str, Any]:
+    """用 Resource.bulk_request 并发执行。单条失败记入 failed，不中断其余条目。"""
+
+    payloads = list(payloads)
+    if not payloads:
+        return {"success_count": 0, "failed": failed}
+
+    from blueapps.utils.local import request_local
+    from blueapps.utils.request_provider import get_local_request
+
+    parent_request = get_local_request()
+
+    class _BatchRunner(RiskMeta):
+        def perform_request(self, validated_request_data):
+            if parent_request is not None:
+                request_local.request = parent_request
+            try:
+                run_item(validated_request_data)
+            except Exception as exc:
+                logger.exception("bulk item failed for %s", validated_request_data.get("risk_id"))
+                return {"success": False, "reason": str(exc)}
+            return {"success": True}
+
+    try:
+        results = _BatchRunner().bulk_request(payloads, ignore_exceptions=True)
+    except Exception as exc:
+        logger.exception("bulk_request failed")
+        failed.extend({"risk_id": item.get("risk_id", ""), "reason": str(exc)} for item in payloads)
+        return {"success_count": 0, "failed": failed}
+
+    success_count = 0
+    for payload, result in zip(payloads, results or []):
+        if isinstance(result, dict) and result.get("success") is False:
+            failed.append(
+                {
+                    "risk_id": payload.get("risk_id", ""),
+                    "reason": result.get("reason") or gettext("执行失败"),
+                }
+            )
+            continue
+        success_count += 1
+    return {"success_count": success_count, "failed": failed}
+
+
+def _risk_batch_actions(risk: Risk) -> Optional[Set[str]]:
+    """返回该风险可执行的批量动作。None 表示自动处理审批中或套餐处理中，整批不可处理。"""
+
+    if risk.status in _BLOCKING_STATUS or risk.display_status in _BLOCKING_DISPLAY:
+        return None
+    if risk.status == RiskStatus.PENDING_CONFIRM or risk.display_status == RiskDisplayStatus.PENDING_CONFIRM:
+        return set(_CONFIRM_ACTIONS)
+    if risk.display_status in (RiskDisplayStatus.AWAIT_PROCESS, RiskDisplayStatus.PROCESSING):
+        return set(_PROCESS_ACTIONS)
+    if risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED:
+        if risk.risk_label == RiskLabel.MISREPORT:
+            return set(_MISREPORT_CLOSED_ACTIONS)
+        return set(_CLOSED_ACTIONS)
+    return set()
+
+
+def _status_label(risk: Risk) -> str:
+    if (
+        risk.display_status == RiskDisplayStatus.CLOSED or risk.status == RiskStatus.CLOSED
+    ) and risk.risk_label == RiskLabel.MISREPORT:
+        return gettext("已误报")
+    display = getattr(risk, "display_status", None)
+    if display in RiskDisplayStatus.values:
+        return value_to_label(RiskDisplayStatus, display)
+    status = getattr(risk, "status", None)
+    if status in RiskStatus.values:
+        return value_to_label(RiskStatus, status)
+    return str(display or status or "")
+
+
+def _blocking_status_labels() -> tuple:
+    return (
+        value_to_label(RiskDisplayStatus, RiskDisplayStatus.FOR_APPROVE),
+        value_to_label(RiskDisplayStatus, RiskDisplayStatus.AUTO_PROCESS),
+    )
+
+
+def _join_status_reason(risks: Sequence[Risk], pred, detail: str, *, fallback: Sequence[str] = ()) -> str:
+    labels: List[str] = []
+    for risk in risks:
+        if not pred(risk):
+            continue
+        label = _status_label(risk)
+        if label and label not in labels:
+            labels.append(label)
+    labels = labels or list(fallback)
+    if not labels:
+        return ""
+    return gettext("所选风险包含%(statuses)s，%(detail)s") % {
+        "statuses": "、".join(labels),
+        "detail": detail,
+    }
+
+
+def _reject_reason(action: str, risk: Risk) -> str:
+    """执行失败原因与预览里该动作的 disabled_reason 一致。"""
+
+    if _risk_batch_actions(risk) is None:
+        return _join_status_reason(
+            [risk],
+            lambda item: _risk_batch_actions(item) is None,
+            gettext("不支持批量处理"),
+            fallback=_blocking_status_labels(),
+        )
+
+    def misses(item: Risk) -> bool:
+        actions = _risk_batch_actions(item)
+        return actions is None or action not in actions
+
+    return _join_status_reason(
+        [risk],
+        misses,
+        gettext("不支持%(action)s") % {"action": _ACTION_LABELS[action]},
+    )
+
+
+def _disabled_preview(reason: str, selected_count: int) -> Dict[str, Any]:
+    return {
+        "batch_enabled": False,
+        "batch_disabled_reason": reason,
+        "actions": {act: {"enabled": False, "disabled_reason": reason} for act in _BATCH_ACTIONS},
+        "unique_strategy_id": None,
+        "scene_id": None,
+        "selected_count": selected_count,
+    }
+
+
+def _auto_process_extra_reasons(risks: Sequence[Risk], strategy_unique: bool, scene_unique: bool) -> List[str]:
+    reasons: List[str] = []
+    if len(risks) > BULK_AUTO_PROCESS_MAX_RISK_IDS:
+        reasons.append(str(BulkSelectionOverLimit.MESSAGE))
+    if not strategy_unique or not scene_unique:
+        reasons.append(gettext(BATCH_REASON_STRATEGY_SCENE))
+    return reasons
+
+
+def _build_batch_actions_preview(risks: Sequence[Risk]) -> Dict[str, Any]:
+    """按状态取交集。处理套餐再看策略、场景和数量上限。
+
+    整批被审批中或套餐处理中挡住时，所有动作共用同一句原因。
+    否则每个不可用动作只列出挡掉它的状态；策略或场景不同只写在处理套餐上。
+    """
+
+    selected_count = len(risks)
+    if any(_risk_batch_actions(risk) is None for risk in risks):
+        return _disabled_preview(
+            _join_status_reason(
+                risks,
+                lambda risk: _risk_batch_actions(risk) is None,
+                gettext("不支持批量处理"),
+                fallback=_blocking_status_labels(),
+            ),
+            selected_count,
+        )
+
+    allowed = set.intersection(*(_risk_batch_actions(risk) or set() for risk in risks)) if risks else set()
+    strategy_unique, strategy_token = _selection_token([risk.strategy_id for risk in risks])
+    scene_unique, scene_token = _selection_token([risk.scene_id for risk in risks])
+
+    auto_reasons: List[str] = []
+    if "auto_process" in allowed:
+        auto_reasons = _auto_process_extra_reasons(risks, strategy_unique, scene_unique)
+        if auto_reasons:
+            allowed.discard("auto_process")
+
+    batch_reason = ""
+    if not allowed:
+        # 整批无公共可用动作时，汇聚各风险的展示状态，给出具体原因而非笼统文案
+        labels = []
+        for risk in risks:
+            label = _status_label(risk)
+            if label and label not in labels:
+                labels.append(label)
+        if labels:
+            batch_reason = gettext("所选风险包含%(statuses)s，不支持批量处理") % {"statuses": "、".join(labels)}
+        else:
+            batch_reason = gettext(BATCH_REASON_UNAVAILABLE)
+
+    def token_int(unique: bool, token: Optional[str]) -> Optional[int]:
+        if not unique or not token:
+            return None
+        try:
+            return int(token)
+        except (TypeError, ValueError):
+            return None
+
+    actions: Dict[str, Dict[str, Any]] = {}
+    for act in _BATCH_ACTIONS:
+        if act in allowed:
+            actions[act] = {"enabled": True, "disabled_reason": ""}
+            continue
+
+        def misses(risk: Risk, action=act) -> bool:
+            available = _risk_batch_actions(risk)
+            return available is None or action not in available
+
+        reasons: List[str] = []
+        status_reason = _join_status_reason(
+            risks,
+            misses,
+            gettext("不支持%(action)s") % {"action": _ACTION_LABELS[act]},
+        )
+        if status_reason:
+            reasons.append(status_reason)
+        if act == "auto_process":
+            reasons.extend(auto_reasons)
+        actions[act] = {"enabled": False, "disabled_reason": "；".join(reasons) or batch_reason}
+
+    return {
+        "batch_enabled": bool(allowed),
+        "batch_disabled_reason": batch_reason,
+        "actions": actions,
+        "unique_strategy_id": token_int(strategy_unique, strategy_token),
+        "scene_id": token_int(scene_unique, scene_token),
+        "selected_count": selected_count,
+    }
+
+
+class BatchActionsPreviewResource(RiskMeta):
+    """批量处理弹窗预览：每个动作在当前选中风险下是否可用。"""
+
+    name = gettext_lazy("批量处理预览")
+    RequestSerializer = BatchActionsPreviewReqSerializer
+    ResponseSerializer = BatchActionsPreviewRespSerializer
+
+    def perform_request(self, validated_request_data):
+        pick = _load_bulk_selection(validated_request_data, BULK_ACTION_MAX_RISK_IDS, require_all_exist=True)
+        if pick.error is _SelectionError.OVER_LIMIT:
+            raise BulkSelectionOverLimit()
+        if pick.error is _SelectionError.MISSING:
+            return _disabled_preview(gettext(BATCH_REASON_MISSING), pick.selected_count)
+        if pick.error is _SelectionError.EMPTY:
+            return _disabled_preview(gettext(BULK_SELECTION_REQUIRED), 0)
+        return _build_batch_actions_preview(pick.risks)
+
+
+class BatchConfirmRiskResource(RiskMeta):
+    """批量确认风险"""
+
+    name = gettext_lazy("批量确认风险")
+    RequestSerializer = BatchConfirmRiskRequestSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+
+        def build(risk):
+            reject = _reject_reason("confirm", risk)
+            if reject:
+                return _Reject(reject)
+            return {"risk_id": risk.risk_id, "description": render(risk)}
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, lambda item: ConfirmRiskResource().perform_request(item))
+
+
 class BatchConfirmAsMisReportResource(RiskMeta):
     """批量确认为误报"""
 
     name = gettext_lazy("批量确认为误报")
     RequestSerializer = BatchConfirmAsMisReportRequestSerializer
+    ResponseSerializer = BulkActionRespSerializer
 
     def perform_request(self, validated_request_data):
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+
+        def build(risk):
+            if risk.display_status != RiskDisplayStatus.PENDING_CONFIRM:
+                return _Reject(gettext(PENDING_CONFIRM_REQUIRED))
+            return {"risk_id": risk.risk_id, "description": render(risk)}
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, lambda item: ConfirmAsMisReportResource().perform_request(item))
+
+
+class BulkCustomTransRisk(RiskMeta):
+    name = gettext_lazy("批量人工转单")
+    RequestSerializer = BulkCustomTransRiskReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import (
+            normalize_personnel_refs,
+            resolve_personnel_refs,
+        )
+
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        raw_refs = validated_request_data["new_operators"]
+        allow_event_data, _token = _selection_token([risk.strategy_id for risk in risks])
+        render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+
+        try:
+            normalize_personnel_refs(raw_refs)
+        except Exception as exc:
+            return _fail_all(risk_ids, f"人员参数非法：{exc}")
+
+        def build(risk):
+            reject = _reject_reason("trans", risk)
+            if reject:
+                return _Reject(reject)
+            operators = resolve_personnel_refs(raw_refs, risk=risk, allow_event_data=allow_event_data)
+            if not operators:
+                return _Reject(gettext("解析后的处理人为空，请检查人员字段引用"))
+            return {"risk_id": risk.risk_id, "new_operators": operators, "description": render(risk)}
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, lambda item: CustomTransRisk().request(item))
+
+
+class BulkCloseRiskResource(RiskMeta):
+    """批量人工关单"""
+
+    name = gettext_lazy("批量人工关单")
+    RequestSerializer = BulkCloseReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+
+        def build(risk):
+            reject = _reject_reason("close", risk)
+            if reject:
+                return _Reject(reject)
+            return {"risk_id": risk.risk_id, "description": render(risk)}
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, lambda item: CustomCloseRisk().request(item))
+
+
+class BulkMisreportResource(RiskMeta):
+    """批量标记误报：display_status 为待确认时走 ConfirmAsMisReport，其余可误报状态走 MisReport。"""
+
+    name = gettext_lazy("批量标记误报")
+    RequestSerializer = BulkMisreportReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        revoke_process = validated_request_data.get("revoke_process", True)
+        render = _description_renderer(validated_request_data.get("description", "") or "", risks)
+
+        def build(risk):
+            reject = _reject_reason("misreport", risk)
+            if reject:
+                return _Reject(reject)
+            return {
+                "risk_id": risk.risk_id,
+                "description": render(risk),
+                "revoke_process": revoke_process,
+            }
+
+        def run_item(item):
+            # 走单条入口，保留处理审计和风险原始数据；待确认仍由该入口转到确认误报。
+            UpdateRiskLabel().request(
+                {
+                    "risk_id": item["risk_id"],
+                    "risk_label": RiskLabel.MISREPORT,
+                    "description": item["description"],
+                    "revoke_process": item["revoke_process"],
+                }
+            )
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, run_item)
+
+
+class BulkUnmisreportResource(RiskMeta):
+    """批量解除误报：已关单且标签为误报的风险解除误报并按原流程重开。"""
+
+    name = gettext_lazy("批量解除误报")
+    RequestSerializer = BulkUnmisreportReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import (
+            normalize_personnel_refs,
+            resolve_personnel_refs,
+        )
+
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_ACTION_MAX_RISK_IDS)
+        raw_refs = validated_request_data.get("new_operators") or []
+
+        try:
+            normalize_personnel_refs(raw_refs)
+        except Exception as exc:
+            return _fail_all(risk_ids, gettext("人员参数非法：%(error)s") % {"error": exc})
+
+        def build(risk):
+            reject = _reject_reason("unmisreport", risk)
+            if reject:
+                return _Reject(reject)
+            # 未指定处理人时沿用当前处理人，保证重开后单据仍有人跟进
+            operators = resolve_personnel_refs(raw_refs, risk=risk) if raw_refs else list(risk.current_operator or [])
+            if not operators:
+                return _Reject(gettext("解除误报后处理人为空，请指定处理人"))
+            return {"risk_id": risk.risk_id, "new_operators": operators}
+
+        def run_item(item):
+            # 走单条入口，保留处理审计和风险原始数据。
+            UpdateRiskLabel().request(
+                {
+                    "risk_id": item["risk_id"],
+                    "risk_label": RiskLabel.NORMAL,
+                    "new_operators": item["new_operators"],
+                }
+            )
+
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, run_item)
+
+
+class BulkAutoProcessResource(RiskMeta):
+    """批量执行处理套餐。
+
+    - `pa_params` 中每个 `{value, field}` 结构：若 `value` 内含 `{{...}}` 会按当前风险渲染
+    - `{{event_data.*}}` 仅在选中风险策略唯一时生效
+    - 策略或场景不唯一时整批失败，不逐条执行
+    """
+
+    name = gettext_lazy("批量执行处理套餐")
+    RequestSerializer = BulkAutoProcessReqSerializer
+    ResponseSerializer = BulkActionRespSerializer
+
+    def perform_request(self, validated_request_data):
+        from services.web.risk.placeholder import render_payload
+
+        risk_ids, risks, risk_map = _prepare_bulk_risks(validated_request_data, BULK_AUTO_PROCESS_MAX_RISK_IDS)
+        pa_id = validated_request_data["pa_id"]
+        pa_params = validated_request_data.get("pa_params") or {}
+        auto_close_risk = validated_request_data.get("auto_close_risk", False)
         username = get_request_username()
-        risk_ids = validated_request_data["risk_ids"]
-        description = validated_request_data.get("description", "")
 
-        # 1. 查询所有风险
-        risks = Risk.objects.filter(risk_id__in=risk_ids)
+        if risks:
+            strategy_unique, _strategy_token = _selection_token([risk.strategy_id for risk in risks])
+            scene_unique, _scene_token = _selection_token([risk.scene_id for risk in risks])
+            extra_reasons = _auto_process_extra_reasons(risks, strategy_unique, scene_unique)
+            if extra_reasons:
+                return _fail_all(risk_ids, "；".join(extra_reasons))
+        if ProcessApplication.objects.filter(id=pa_id).first() is None:
+            return _fail_all(risk_ids, gettext(PROCESS_APPLICATION_NOT_FOUND))
+        # 提交时校验套餐必填参数，覆盖审批与非审批两种路径，
+        # 避免响应显示成功、后续（审批通过/执行）才因缺参失败。
+        from services.web.risk.exceptions import (
+            AutoProcessParamsError as _AutoProcessParamsError,
+        )
+        from services.web.risk.handlers.ticket import validate_auto_process_params
 
-        # 2. 校验存在性
-        if len(risks) != len(risk_ids):
-            missing_ids = set(risk_ids) - {r.risk_id for r in risks}
-            from rest_framework.exceptions import ValidationError
+        try:
+            validate_auto_process_params(pa_id, pa_params)
+        except _AutoProcessParamsError as exc:
+            return _fail_all(risk_ids, exc.message)
+        allow_event_data, _token = _selection_token([risk.strategy_id for risk in risks])
 
-            raise ValidationError(f"存在不存在的风险 ID: {', '.join(missing_ids)}")
+        def build(risk):
+            reject = _reject_reason("auto_process", risk)
+            if reject:
+                return _Reject(reject)
+            return {
+                "risk_id": risk.risk_id,
+                "pa_id": pa_id,
+                "pa_params": render_payload(pa_params, risk=risk, operator=username, allow_event_data=allow_event_data),
+                "auto_close_risk": auto_close_risk,
+            }
 
-        # 3. 校验权限：当前用户必须是所有风险的确认人
-        for risk in risks:
-            if username not in risk.confirmer:
-                from rest_framework.exceptions import PermissionDenied
-
-                raise PermissionDenied(f"风险 {risk.risk_id}: 非确认人，无权确认为误报")
-
-        # 4. 校验状态：所有风险必须是待确认状态
-        invalid_status_risks = [r for r in risks if r.display_status != RiskDisplayStatus.PENDING_CONFIRM]
-        if invalid_status_risks:
-            from rest_framework.exceptions import ValidationError
-
-            details = [f"{r.risk_id}({r.display_status})" for r in invalid_status_risks]
-            raise ValidationError(f"风险状态不是待确认：{', '.join(details)}")
-
-        # 5. 执行批量确认为误报（不传入 username，让单个操作自己从 request 获取）
-        bulk_req_params = [{"risk_id": risk_id, "description": description} for risk_id in risk_ids]
-
-        ConfirmAsMisReportResource().bulk_request(bulk_req_params)
-        return {"success": True}
+        payloads, failed = _collect_payloads(risk_ids, risk_map, build)
+        return _complete_bulk(payloads, failed, lambda item: CustomAutoProcess().request(item))
