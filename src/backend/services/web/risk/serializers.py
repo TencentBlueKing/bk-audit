@@ -765,7 +765,7 @@ class PAExecutionRecordInfoSerializer(serializers.Serializer):
     operator = serializers.CharField(
         label=gettext_lazy("执行人"),
         allow_blank=True,
-        help_text=gettext_lazy("最新操作人（重试后为重试人）；记录发起人见 retry_history 首条快照"),
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
     )
     start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
     finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
@@ -803,7 +803,7 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
     operator = serializers.CharField(
         label=gettext_lazy("执行人"),
         allow_blank=True,
-        help_text=gettext_lazy("最新操作人（重试后为重试人）；记录发起人见 retry_history 首条快照"),
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
     )
     start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
     finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
@@ -825,7 +825,7 @@ class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
         help_text=gettext_lazy(
             "重试前全量快照[{state, operator, attempts}]：state 为该轮的任务级状态（与 sops_state 同口径，"
             "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True；"
-            "operator 首条为记录发起人，其余为发起该次重试的操作人（顶层 operator 为最新操作人）"
+            "operator 为该轮现场的实际执行人（首条为记录发起人，第 i 条为第 i 次重试的操作人）"
         ),
     )
     attempts = serializers.JSONField(

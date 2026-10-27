@@ -48,6 +48,7 @@ from services.web.risk.constants import (
     RiskDisplayStatus,
     RiskLabel,
     RiskStatus,
+    TicketNodeStatus,
 )
 from services.web.risk.exceptions import AutoProcessParamsError
 from services.web.risk.handlers.risk import RiskHandler
@@ -63,6 +64,9 @@ from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.utils import calc_task_duration
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
+
+# 流转历史去重窗口（秒）：窗口期内内容完全相同的重复写入视为同一次流转，不再重复落库
+HISTORY_DEDUP_WINDOW_SEC = 5
 
 
 def _is_user_input_constant(constant: dict) -> bool:
@@ -106,6 +110,8 @@ class RiskFlowBaseHandler:
     name = gettext_lazy("默认流转")
     allowed_status = []
     enable_notice = True
+    # 是否允许重复写入流转历史：纯留痕类动作（如风险处理经验）需要保留每一次记录
+    allow_duplicate_history = False
 
     # 本次流转使用的 ITSM 版本：由建单类流转（如 ForApprove）在 process 中按部署开关确定后写入节点。
     # 为 None 时沿用模型默认版本，供后续状态查询/撤销按同一版本处理。
@@ -310,17 +316,28 @@ class RiskFlowBaseHandler:
         记录流转历史
         """
 
-        TicketNode.objects.create(
-            risk_id=self.risk.risk_id,
-            operator=self.operator,
-            current_operator=self.risk.current_operator,
-            action=self.__class__.__name__,
-            timestamp=datetime.datetime.now().timestamp(),
-            time=datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
-            process_result=process_result,
-            duration=process_result.get("duration"),
-            extra=self.build_history(process_result=process_result, *args, **kwargs),
-        )
+        extra = self.build_history(process_result=process_result, *args, **kwargs)
+        # 记录本次流转使用的 ITSM 版本：已有工单后续按该版本查询/撤销
+        fields = {"itsm_version": self.itsm_version} if self.itsm_version else {}
+        # 只写一条：此前这里写过两次（一次直接 create、一次 create_params），
+        # 导致同一次流转产生两条内容完全相同的节点
+        self._create_history_node(process_result, extra, **fields)
+        self.risk.save(update_fields=["last_operate_time"])
+
+    def _create_history_node(self, process_result: dict, extra: dict, **fields) -> Optional[TicketNode]:
+        """写入一条流转历史节点
+
+        幂等兜底：同一次流转被重复写入会产出两条内容完全相同的节点（执行记录/流转历史出现重复数据），
+        故在写入层判断——同一风险单、同一动作在窗口期内已存在 process_result 与 extra 均相同的节点时跳过。
+        所有写入流转历史的地方都应走这里，避免直接 TicketNode.objects.create；
+        fields 用于补充额外落库字段（如 itsm_version）。
+        """
+
+        if not self.allow_duplicate_history and self._has_same_history(process_result, extra):
+            logger.warning(
+                f"[RecordHistory] Skip duplicated node, risk_id={self.risk.risk_id}, action={self.__class__.__name__}"
+            )
+            return None
         create_params = {
             "risk_id": self.risk.risk_id,
             "operator": self.operator,
@@ -329,13 +346,25 @@ class RiskFlowBaseHandler:
             "timestamp": datetime.datetime.now().timestamp(),
             "time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
             "process_result": process_result,
-            "extra": self.build_history(process_result=process_result, *args, **kwargs),
+            "duration": process_result.get("duration"),
+            "extra": extra,
         }
-        # 记录本次流转使用的 ITSM 版本：已有工单后续按该版本查询/撤销
-        if self.itsm_version:
-            create_params["itsm_version"] = self.itsm_version
-        TicketNode.objects.create(**create_params)
-        self.risk.save(update_fields=["last_operate_time"])
+        create_params.update(fields)
+        return TicketNode.objects.create(**create_params)
+
+    def _has_same_history(self, process_result: dict, extra: dict) -> bool:
+        """窗口期内是否已存在内容完全相同的流转节点"""
+
+        latest = (
+            TicketNode.objects.filter(risk_id=self.risk.risk_id, action=self.__class__.__name__)
+            .order_by("-timestamp")
+            .first()
+        )
+        if latest is None:
+            return False
+        if datetime.datetime.now().timestamp() - (latest.timestamp or 0) > HISTORY_DEDUP_WINDOW_SEC:
+            return False
+        return (latest.process_result or {}) == (process_result or {}) and (latest.extra or {}) == (extra or {})
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         """
@@ -912,6 +941,21 @@ class AutoProcess(RiskFlowBaseHandler):
         self.risk.save(update_fields=["status"])
 
     def load_task_id(self) -> str:
+        # 优先复用本风险单正在执行的套餐任务：last_history 会被人工处理/新建等节点顶掉，
+        # 只看它会误判为"没有任务"从而重复建单（执行记录出现两条相同任务）
+        running_node = (
+            TicketNode.objects.filter(
+                risk_id=self.risk.risk_id,
+                action=AutoProcess.__name__,
+                status=TicketNodeStatus.RUNNING,
+            )
+            .order_by("-timestamp")
+            .first()
+        )
+        if running_node:
+            task_id = str((running_node.process_result or {}).get("task", {}).get("task_id", "") or "")
+            if task_id:
+                return task_id
         return self.risk.last_history.process_result.get("task", {}).get("task_id", "")
 
     def record_history(self, process_result: dict, **kwargs) -> None:
@@ -1102,6 +1146,8 @@ class RiskExperienceRecord(CustomProcess):
 
     name = gettext_lazy("风险处理经验")
     enable_notice = False
+    # 每次保存都是一次独立留痕，不做历史去重
+    allow_duplicate_history = True
 
     def pre_check(self, *args, **kwargs) -> None:
         pass
