@@ -197,6 +197,18 @@ BK_BASE_DEBUG_API_URL = os.getenv("BKAPP_BASE_DEBUG_API_URL", BK_BASE_API_URL or
 BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL")
 BK_SOPS_API_URL = os.getenv("BKAPP_BK_SOPS_API_URL")
 BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
+# BKSEC 安全工单（风险类型接入 / 事件上报）
+BKSEC_API_URL = os.getenv("BKAPP_BKSEC_API_URL")
+BKSEC_APIGW_NAME = os.getenv("BKAPP_BKSEC_APIGW_NAME", "bksec")
+BKSEC_API_RATE_LIMIT = os.getenv("BKAPP_BKSEC_API_RATE_LIMIT", "10/s")
+# BKSEC 项目 ID（risk_access 接口必填的项目维度，策略页风险类型下拉按此过滤）
+BKSEC_PROJECT_ID = os.getenv("BKAPP_BKSEC_PROJECT_ID")
+# 预置 BKSEC 发单套餐指向的标准运维流程模板
+BKSEC_SOPS_TEMPLATE_ID = os.getenv("BKAPP_BKSEC_SOPS_TEMPLATE_ID")
+# BKSEC 发单插件 Config 同步 API 地址
+BKSEC_PLUGIN_CONFIG_API_URL = os.getenv("BKAPP_BKSEC_PLUGIN_CONFIG_API_URL")
+# BKSEC Mock 模式开关（bkop 测试环境用，开启后 WeSec API 请求走本地 Mock）
+BKSEC_MOCK_ENABLED = strtobool(os.getenv("BKAPP_BKSEC_MOCK_ENABLED", "False"))
 BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
 BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
 # IAM V4 API 地址覆盖；默认由 api.domains 解析到预发布网关，本地 dev e2e 可临时指定 dev 地址。
@@ -346,6 +358,7 @@ FEATURE_TOGGLE = {
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
     "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
     "check_bkvision_share_permission": os.getenv("BKAPP_FEATURE_CHECK_BKVISION_SHARE_PERMISSION", "on"),
+    "bksec": os.getenv("BKAPP_FEATURE_BKSEC", "on"),
 }
 
 # BkLog
@@ -497,6 +510,15 @@ PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_PROCESS_ONE_RISK_PERIOD
 
 # 同步处理套餐结果定时任务调度周期(分)
 SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE", "*/10")
+
+# 同步处理套餐结果：单次最多处理的节点数
+# 历史积压的 RUNNING 节点量可能极大，全量遍历会让单次任务跑不完并长期占用锁，
+# 导致后续所有同步（含周期任务自身与单节点兜底）被跳过，状态永久不更新
+SYNC_AUTO_RESULT_MAX_NODES = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_MAX_NODES", 2000))
+
+# 同步处理套餐结果：锁超时与任务超时(秒)，需大于单次处理耗时，同时把异常停摆的影响降到分钟级
+SYNC_AUTO_RESULT_LOCK_TIMEOUT = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_LOCK_TIMEOUT", 600))
+SYNC_AUTO_RESULT_TASK_TIME_LIMIT = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_TASK_TIME_LIMIT", 900))
 
 # 图表结果缓存时间(秒)
 VISION_CACHE_TIMEOUT = int(os.getenv("BKAPP_VISION_CACHE_TIMEOUT", "86400"))

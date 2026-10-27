@@ -94,6 +94,7 @@ from services.web.risk.report import AIProvider
 from services.web.risk.report.markdown import render_ai_markdown
 from services.web.risk.report.markdown_extract import extract_markdown_report_body
 from services.web.risk.serializers import CreateEventSerializer
+from services.web.risk.utils import calc_task_duration, fill_failure_info
 from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy, StrategyRule
 
@@ -643,20 +644,42 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
+def _sync_auto_result_lock_name(node_id: str = None, **kwargs) -> str:
+    """锁名：单节点同步与周期同步分开
+
+    周期任务要遍历执行中的节点，耗时长；共用一把锁会让重试/终止后的兜底同步被静默跳过
+    （CacheLockCheckFailed），状态长期停在乐观写入的执行中。
+    """
+
+    return f"celery:sync_auto_result:{node_id}" if node_id else "celery:sync_auto_result"
+
+
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=settings.SYNC_AUTO_RESULT_TASK_TIME_LIMIT,
 )
-@lock(lock_name="celery:sync_auto_result")
+@lock(load_lock_name=_sync_auto_result_lock_name, timeout=settings.SYNC_AUTO_RESULT_LOCK_TIMEOUT)
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
     # 筛选所有需要更新的节点
     if node_id:
-        nodes = TicketNode.objects.filter(id=node_id)
+        # 与周期分支同口径：测试单（is_test=True 的 AutoProcess 节点）同样纳入同步，
+        # 否则重试/强制终止后的兜底同步会空转，状态永久停留在乐观写入的执行中
+        nodes = TicketNode.objects.filter(id=node_id).filter(
+            Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__)
+        )
     else:
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+        # 测试单（is_test=True）同样纳入同步：它是一次性发单任务，结束很快，
+        # 但此前仅在前端轮询 get_task_status 时被动回写，页面关闭后会永久停留在 RUNNING
+        # 只取最近 N 条：历史积压的 RUNNING 节点量极大，全量遍历会让单次任务跑不完并长期占用锁，
+        # 导致后续所有同步被跳过、状态不更新；优先保证新记录被及时同步
+        nodes = (
+            TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+            .filter(Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__))
+            .order_by("-timestamp")[: settings.SYNC_AUTO_RESULT_MAX_NODES]
+        )
 
     # 逐个更新
     for node in nodes:
@@ -687,7 +710,13 @@ def sync_auto_result(node_id: str = None):
                     task_id = node.process_result.get("task", {}).get("task_id", "")
                     if task_id:
                         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                        # 失败时补全错误信息error_message和failure_hint
+                        if status.get("state") in SOPSTaskStatus.get_failed_status():
+                            node.process_result["failure_hint"] = fill_failure_info(status, task_id=task_id)
                         node.process_result["status"] = status
+                        # 耗时（秒）：冗余到独立整数字段，保证列表按数值排序（JSON 数值排序会按字符串比较出错）
+                        node.process_result["duration"] = calc_task_duration(status)
+                        node.duration = node.process_result["duration"]
                         node.status = (
                             TicketNodeStatus.FINISHED
                             if node.process_result["status"]["state"]
@@ -704,13 +733,15 @@ def sync_auto_result(node_id: str = None):
                 # 其他节点只需要判断不为最后一个，则关闭
                 # 或 该风险单已关闭，则关闭
                 else:
-                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    last_node = (
+                        TicketNode.objects.filter(risk_id=node.risk_id, is_test=False).order_by("-timestamp").first()
+                    )
                     risk = Risk.objects.filter(risk_id=node.risk_id).first()
                     if (last_node and last_node.timestamp > node.timestamp) or (
                         risk and risk.status == RiskStatus.CLOSED
                     ):
                         node.status = TicketNodeStatus.FINISHED
-                node.save(update_fields=["process_result", "status"])
+                node.save(update_fields=["process_result", "status", "duration"])
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)
 
