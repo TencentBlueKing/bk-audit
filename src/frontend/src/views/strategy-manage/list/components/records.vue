@@ -46,25 +46,25 @@
       <bk-table
         v-else
         ref="tableRef"
-        class="strategy-records-table"
         :append-last-row="{ type: 'default' }"
         :border="['outer']"
+        class="strategy-records-table"
         :columns="columns"
         :data="strategyRunningStatus"
         :max-height="tableMaxHeight"
         @scroll-bottom="handleScrollBottom">
-      <template
-        v-if="loadingMore"
-        #appendLastRow>
-        <div class="records-load-more">
-          <audit-icon
-            class="rotate-loading"
-            svg
-            type="loading" />
-          <span>{{ t('加载中...') }}</span>
-        </div>
-      </template>
-    </bk-table>
+        <template
+          v-if="loadingMore"
+          #appendLastRow>
+          <div class="records-load-more">
+            <audit-icon
+              class="rotate-loading"
+              svg
+              type="loading" />
+            <span>{{ t('加载中...') }}</span>
+          </div>
+        </template>
+      </bk-table>
     </div>
   </div>
 </template>
@@ -185,7 +185,7 @@
     },
   });
   const tableRef = ref<{
-    scrollTo?: (x?: number, y?: number) => void;
+    scrollTo?:(x?: number, y?: number) => void;
     getRoot?: () => HTMLElement | undefined;
   } | null>(null);
   const loadingMore = computed(() => loading.value && strategyRunningStatus.value.length > 0);
@@ -247,7 +247,7 @@
   const syncTableMaxHeight = () => {
     const panel = panelRef.value;
     if (!panel) return;
-    const top = panel.getBoundingClientRect().top;
+    const { top } = panel.getBoundingClientRect();
     if (top < 1 || window.innerHeight - top < 80) {
       if (layoutRetry < 20) {
         layoutRetry += 1;

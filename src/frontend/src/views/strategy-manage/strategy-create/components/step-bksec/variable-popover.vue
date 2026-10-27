@@ -88,7 +88,7 @@
 
   // 点变量、切换分组时不把焦点从字段输入框抢走，避免先失焦再插入。
   const keepFieldFocus = (event: MouseEvent) => {
-    const target = event.target;
+    const { target } = event;
     if (!(target instanceof Element) || target.closest('input, textarea')) return;
     event.preventDefault();
   };

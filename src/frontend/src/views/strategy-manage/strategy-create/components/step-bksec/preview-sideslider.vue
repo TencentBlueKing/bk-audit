@@ -39,9 +39,9 @@
             <template #trigger>
               <div class="bksec-risk-trigger">
                 <span
+                  v-bk-tooltips="labelTip('selected-risk', selectedRisk ? optionName(selectedRisk) : '')"
                   class="bksec-risk-text"
                   :class="{ 'is-placeholder': !selectedRisk }"
-                  v-bk-tooltips="labelTip('selected-risk', selectedRisk ? optionName(selectedRisk) : '')"
                   @mouseenter="syncLabelOverflow($event, 'selected-risk')">
                   {{ selectedRisk ? optionName(selectedRisk) : t('请选择一条风险单用于渲染预览') }}
                 </span>
@@ -62,8 +62,8 @@
               :name="optionName(item)">
               <div class="bksec-risk-option">
                 <span
-                  class="bksec-risk-option-text"
                   v-bk-tooltips="optionTip(item.id, optionName(item))"
+                  class="bksec-risk-option-text"
                   @mouseenter="syncLabelOverflow($event, `risk-option-${item.id}`)">
                   {{ optionName(item) }}
                 </span>
@@ -148,19 +148,19 @@
       <div
         v-else
         class="bksec-preview-scroll bksec-preview-body">
-          <div
-            v-for="group in previewGroups"
-            :key="group.key"
-            class="bksec-desc-group"
-            :class="{ 'is-extension': group.extension }">
+        <div
+          v-for="group in previewGroups"
+          :key="group.key"
+          class="bksec-desc-group"
+          :class="{ 'is-extension': group.extension }">
           <div
             v-for="row in group.rows"
             :key="row.key"
             class="bksec-desc-row">
             <span class="bksec-desc-label">
               <span
-                class="bksec-desc-label-text"
                 v-bk-tooltips="labelTip(row.key, row.label)"
+                class="bksec-desc-label-text"
                 @mouseenter="syncLabelOverflow($event, row.key)">{{ row.label }}：</span>
             </span>
             <span class="bksec-desc-value">
@@ -191,8 +191,8 @@
               </span>
             </span>
           </div>
-          </div>
         </div>
+      </div>
     </div>
   </audit-sideslider>
 </template>
