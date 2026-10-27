@@ -1353,13 +1353,14 @@ class RetryAutoProcess(RiskMeta):
             # 重试前快照：固化本次被覆盖前的失败现场（error_message 等），仅 append 不覆盖。
             # 全量记录（含成功/未执行节点）：首次执行的完整现场只存在于快照中，重试后顶层状态会被整体覆盖
             retry_history = process_result.get("retry_history") or []
-            retry_operator = get_request_username()
+            # 本条快照是"上一次执行"的现场，归属该轮的实际执行人：
+            # 首次执行现场 → 记录发起人（派单/发测试单的人）；
+            # 之后的现场 → 上一次重试的操作人（即尚未被本次覆盖的顶层 operator）。
+            # 必须取重试前的 node.operator，否则会把上一轮的执行人写成这次重试的人
             retry_history.append(
                 {
                     "state": round_state,
-                    # 首条快照是首次执行的现场，归属记录发起人（派单/发测试单的人）；
-                    # 其余快照归属发起该次重试的操作人
-                    "operator": node.operator if not retry_history else retry_operator,
+                    "operator": node.operator,
                     "attempts": extract_attempt_records(status, retried_node_ids=retried_before),
                 }
             )
@@ -1367,8 +1368,8 @@ class RetryAutoProcess(RiskMeta):
             # 累计被重试过的节点：本次重试并入，供后续快照与当前 attempts 标记使用
             process_result["retried_node_ids"] = sorted(retried_before | retried_node_ids)
             node.status = TicketNodeStatus.RUNNING
-            # 顶层展示最新操作人：发起人已固化在首条快照中
-            node.operator = retry_operator
+            # 顶层 operator 更新为最新操作人（本次重试的人）；各轮现场的执行人已固化在对应快照中
+            node.operator = get_request_username()
             # 落库回源到的最新状态（含失败原因），仅将任务级 state 置为执行中
             process_result["status"] = status
             process_result["status"]["state"] = SOPSTaskStatus.RUNNING

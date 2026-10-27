@@ -594,7 +594,7 @@ class TestRetryAutoProcessRetryHistory:
         entry = history[0]
         # 首条快照是首次执行的现场，归属记录发起人（_create_node 的 operator）
         assert entry["operator"] == "admin"
-        # 顶层 operator 为最新操作人（本次重试的人）
+        # 首条快照是首次执行的现场，执行人为记录发起人；顶层更新为本次重试的人
         assert node.operator == "tester"
         # 该轮任务级状态（与顶层 sops_state 同口径），不因落库时乐观改为执行中而丢失
         assert entry["state"] == SOPSTaskStatus.FAILED.value
@@ -651,18 +651,20 @@ class TestRetryAutoProcessRetryHistory:
             "services.web.risk.resources.risk.sync_auto_result.apply_async",
             mock.Mock(return_value=None),
         ), mock.patch(
+            # 两次重试由不同人发起，用于校验快照归属的是"该轮执行人"而非最后一次重试的人
             "services.web.risk.resources.risk.get_request_username",
-            mock.Mock(return_value="tester"),
+            mock.Mock(side_effect=["tester1", "tester2"]),
         ):
             resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
             resource.risk.retry_auto_process.perform_request({"risk_id": risk.risk_id, "node_id": node.id})
         node.refresh_from_db()
         history = node.process_result["retry_history"]
         assert len(history) == 2
-        # 首条快照归属发起人，其余归属该次重试的操作人；顶层为最新操作人
+        # 快照归属该轮的实际执行人：首条为记录发起人，第二条为第一次重试的人（不是第二次的 tester2）
         assert history[0]["operator"] == "admin"
-        assert history[1]["operator"] == "tester"
-        assert node.operator == "tester"
+        assert history[1]["operator"] == "tester1"
+        # 顶层 operator 为最新操作人
+        assert node.operator == "tester2"
         assert all(item["attempts"][0]["error_message"] == "第 N 次失败" for item in history)
         # 每次快照都固化该轮的任务级状态
         assert all(item["state"] == SOPSTaskStatus.FAILED.value for item in history)
