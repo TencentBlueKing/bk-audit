@@ -17,8 +17,9 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import re
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 NL2RISK_USER_PROMPT = """\
 当前时间：{current_time}
@@ -33,6 +34,11 @@ NL2RISK_USER_PROMPT = """\
 
 可用策略：
 {strategies_text}
+
+时间约定：相对时间（近、最近、N小时内、N天内、一个月内等）额外输出 time_shortcut，格式 now-{{正整数}}{{单位}}（h小时、d天、M月）。
+月仅支持 1/3/6/12，窗口最多 365 天。例如近一周 → now-7d，最近3个月 → now-3M，近5小时 → now-5h。
+明确日期、上周不要输出 time_shortcut。start_time、end_time 仍按原规则输出。
+
 
 用户查询：{query}"""
 
@@ -111,3 +117,51 @@ def extract_filter_conditions_from_ai_result(result: Any) -> Tuple[dict, str]:
     filter_conditions = extract_json_from_text(raw_text)
     message = "" if filter_conditions else raw_text.strip()
     return filter_conditions, message
+
+
+# 与下游 ConditionAssemblyService 校验器（services/web/query/ai_assistant/services/condition.py）
+# 及前端 DATETIME_SHORTCUT_LABEL_MAP 白名单对齐：仅支持 h/d/M，月仅 1/3/6/12，窗口 ≤ 365 天。
+_TIME_SHORTCUT_PATTERN = re.compile(r"^now-([1-9]\d*)([hdM])$")
+_MONTH_SHORTCUT_DAYS = {1: 30, 3: 90, 6: 182, 12: 365}
+_TIME_SHORTCUT_MAX_WINDOW_DAYS = 365
+
+
+def _accepted_time_shortcut(value: Any) -> Optional[str]:
+    """校验 NL 模型输出的 time_shortcut 形态与上限，不合法时返回 None 降级。
+
+    直接对模型原始输出做形态校验，避免把未校验字符串传给依赖 Pydantic 前置校验的
+    ConditionAssemblyService._normalize_time_shortcut（其会对不匹配输入抛 AttributeError）。
+    单位/月数与下游校验器对齐（h/d/M，月仅 1/3/6/12，窗口 ≤ 365 天）；不合法
+    （形态不符、月数非白名单、超 365 天，如 now-2M/now-30m/now-13M/today/空串）时
+    返回 None，调用方据此保留绝对时间，不让自然语言筛选接口抛出未捕获异常。
+    """
+
+    if not isinstance(value, str):
+        return None
+    match = _TIME_SHORTCUT_PATTERN.match(value)
+    if not match:
+        return None
+    count, unit = match.groups()
+    count = int(count)
+    if unit == "M":
+        if count not in _MONTH_SHORTCUT_DAYS:
+            return None
+        window_days = _MONTH_SHORTCUT_DAYS[count]
+    elif unit == "h":
+        window_days = count / 24
+    else:  # d
+        window_days = count
+    if window_days > _TIME_SHORTCUT_MAX_WINDOW_DAYS:
+        return None
+    return value
+
+
+def attach_datetime_origin(filter_conditions: Dict[str, Any]) -> Dict[str, Any]:
+    """模型给出合法 time_shortcut 时写成 datetime_origin，否则不返回该字段。"""
+
+    shortcut = _accepted_time_shortcut(filter_conditions.pop("time_shortcut", None))
+    if shortcut:
+        filter_conditions["datetime_origin"] = [shortcut, "now"]
+    else:
+        filter_conditions.pop("datetime_origin", None)
+    return filter_conditions

@@ -31,6 +31,7 @@ from tests.test_risk.test_tickets.constants import (
     APPROVE_TICKET_DETAIL,
     APPROVE_TICKET_STATUS,
     CUSTOM_AUTO_PROCESS_PARAMS,
+    SOPS_TEMPLATE_INFO,
 )
 
 
@@ -54,6 +55,10 @@ class ForApproveTest(TicketTest):
     )
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
+    )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+        mock.Mock(return_value=SOPS_TEMPLATE_INFO),
     )
     def test_custom_approve(self):
         """

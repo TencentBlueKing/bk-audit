@@ -46,6 +46,7 @@ from services.web.risk.constants import (
     RiskStatus,
     RiskViewType,
 )
+from services.web.risk.exceptions import BulkSelectionOverLimit
 from services.web.risk.models import (
     AnalyseReport,
     AnalyseReportScenario,
@@ -59,6 +60,7 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
 )
+from services.web.risk.placeholder import PersonnelRef
 from services.web.risk.report_config import AIVariableConfig
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import ResourceBindingScene, Scene
@@ -941,7 +943,7 @@ class RuleScopeValidator(serializers.Serializer):
             return
 
         if not ProcessApplication.objects.filter(id=pa_id).exists():
-            raise serializers.ValidationError(gettext("处理套餐不存在"))
+            raise serializers.ValidationError(gettext(PROCESS_APPLICATION_NOT_FOUND))
 
         is_bound = ResourceBindingScene.objects.filter(
             scene_id=scene_id,
@@ -1078,25 +1080,109 @@ class ListRiskRuleReqSerializer(serializers.Serializer):
         return result
 
 
+BULK_ACTION_DESCRIPTION_MAX_LENGTH = 1000
+BULK_ACTION_MAX_RISK_IDS = 500
+BULK_AUTO_PROCESS_MAX_RISK_IDS = 100
+BULK_SELECTION_REQUIRED = "请选择至少一条风险"
+PROCESS_APPLICATION_NOT_FOUND = "处理套餐不存在"
+
+
+class PersonnelRefSerializer(serializers.Serializer):
+    """转单人员字段引用。
+
+    - type=user: value 为用户名，可以是 `$OPERATOR` / `$OPERATOR_LEADER` 人员槽
+    - type=field: value 为工单字段或 `event_data.xxx` 点路径
+    - 直接传字符串视同 `{type: user, value: <str>}`
+    - 校验后 user 引用输出用户名字符串；field 引用保留 `{type, value}`，由执行前解析成用户名
+    """
+
+    type = serializers.ChoiceField(
+        choices=[PersonnelRef.USER, PersonnelRef.FIELD], required=False, default=PersonnelRef.USER
+    )
+    value = serializers.CharField(allow_blank=False, allow_null=False)
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = {"type": PersonnelRef.USER, "value": data}
+        validated = super().to_internal_value(data)
+        if validated["type"] == PersonnelRef.USER:
+            return validated["value"]
+        return {"type": validated["type"], "value": validated["value"]}
+
+
 class CustomCloseRiskRequestSerializer(serializers.Serializer):
     risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
-    description = serializers.CharField(label=gettext_lazy("处理说明"))
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class CustomTransBaseReqSerializer(serializers.Serializer):
-    new_operators = serializers.ListField(label=gettext_lazy("新处理人"), child=serializers.CharField(), min_length=1)
-    description = serializers.CharField(label=gettext_lazy("处理说明"))
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        min_length=1,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=False,
+        default="",
+        allow_blank=True,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class CustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
     risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
 
 
-class BulkCustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
-    risk_ids = serializers.ListField(label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1)
+class BulkRiskSelectionSerializer(serializers.Serializer):
+    """risk_ids 与列表筛选 filters 二选一，filters 与风险列表查询参数一致。"""
 
-    def validate_risk_ids(self, risk_ids: List[str]) -> List[str]:
-        return sorted(list(set(risk_ids)))
+    risk_id_limit = None
+
+    risk_ids = FlexibleListField(
+        label=gettext_lazy("Risk IDs"),
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=False,
+    )
+    filters = ListRiskRequestSerializer(label=gettext_lazy("风险列表筛选"), required=False)
+
+    def validate(self, attrs):
+        risk_ids = attrs.get("risk_ids")
+        filters = attrs.get("filters")
+        if risk_ids and filters:
+            raise serializers.ValidationError(gettext("risk_ids 与筛选条件不能同时传入"))
+        if not risk_ids and not filters:
+            raise serializers.ValidationError(gettext(BULK_SELECTION_REQUIRED))
+        if risk_ids:
+            deduped = sorted(set(risk_ids))
+            if self.risk_id_limit is not None and len(deduped) > self.risk_id_limit:
+                raise BulkSelectionOverLimit()
+            attrs["risk_ids"] = deduped
+        return attrs
+
+
+class BulkCustomTransRiskReqSerializer(BulkRiskSelectionSerializer):
+    """批量转单：处理说明必填"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        min_length=1,
+    )
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
 
 
 class RiskExperienceInfoSerializer(serializers.ModelSerializer):
@@ -2055,24 +2141,16 @@ class ConfirmRiskRequestSerializer(serializers.Serializer):
     )
 
 
-class BatchConfirmRiskRequestSerializer(serializers.Serializer):
+class BatchConfirmRiskRequestSerializer(BulkRiskSelectionSerializer):
     """批量确认风险请求"""
 
-    risk_ids = serializers.ListField(
-        label=gettext_lazy("风险 ID 列表"),
-        child=serializers.CharField(),
-        min_length=1,
-        required=True,
-    )
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
     description = serializers.CharField(
         label=gettext_lazy("确认说明"),
-        required=False,
-        default="",
-        allow_blank=True,
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
     )
-
-    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
-        return sorted(list(set(risk_ids)))
 
 
 class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
@@ -2087,21 +2165,112 @@ class ConfirmAsMisReportRequestSerializer(serializers.Serializer):
     )
 
 
-class BatchConfirmAsMisReportRequestSerializer(serializers.Serializer):
+class BatchConfirmAsMisReportRequestSerializer(BulkRiskSelectionSerializer):
     """批量确认为误报请求"""
 
-    risk_ids = serializers.ListField(
-        label=gettext_lazy("风险 ID 列表"),
-        child=serializers.CharField(),
-        min_length=1,
-        required=True,
-    )
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
     description = serializers.CharField(
-        label=gettext_lazy("描述"),
-        required=False,
-        default="",
-        allow_blank=True,
+        label=gettext_lazy("误报说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
     )
 
-    def validate_risk_ids(self, risk_ids: list[str]) -> list[str]:
-        return sorted(list(set(risk_ids)))
+
+# ---------------------------------------------------------------------------
+# 批量处理 (Batch Actions) · 批量处理弹窗新增
+# ---------------------------------------------------------------------------
+
+
+class BulkCloseReqSerializer(BulkRiskSelectionSerializer):
+    """批量人工关单"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("处理说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+
+
+class BulkMisreportReqSerializer(BulkRiskSelectionSerializer):
+    """批量标记误报"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    description = serializers.CharField(
+        label=gettext_lazy("误报说明"),
+        required=True,
+        allow_blank=False,
+        max_length=BULK_ACTION_DESCRIPTION_MAX_LENGTH,
+    )
+    revoke_process = serializers.BooleanField(required=False, default=True)
+
+
+class BulkUnmisreportReqSerializer(BulkRiskSelectionSerializer):
+    """批量解除误报：仅已关单且标签为误报的风险可执行"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+    new_operators = serializers.ListField(
+        label=gettext_lazy("新处理人"),
+        child=PersonnelRefSerializer(),
+        required=False,
+        default=list,
+    )
+
+
+class BulkAutoProcessReqSerializer(BulkRiskSelectionSerializer):
+    """批量执行处理套餐"""
+
+    risk_id_limit = BULK_AUTO_PROCESS_MAX_RISK_IDS
+    pa_id = serializers.IntegerField(label=gettext_lazy("处理套餐 ID"))
+    pa_params = serializers.JSONField(label=gettext_lazy("处理套餐参数"))
+    auto_close_risk = serializers.BooleanField(required=False, default=False)
+
+
+class BatchActionsPreviewReqSerializer(BulkRiskSelectionSerializer):
+    """批量处理按钮预览。确认、关单、转单、误报超过 500 条返回 400。"""
+
+    risk_id_limit = BULK_ACTION_MAX_RISK_IDS
+
+
+class BulkActionFailedItemSerializer(serializers.Serializer):
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
+    reason = serializers.CharField(label=gettext_lazy("失败原因"))
+
+
+class BulkActionRespSerializer(serializers.Serializer):
+    """批量操作统一返回：成功数 + 失败明细"""
+
+    success_count = serializers.IntegerField(label=gettext_lazy("成功数量"), default=0)
+    failed = BulkActionFailedItemSerializer(label=gettext_lazy("失败明细"), many=True, required=False, default=list)
+
+
+class BatchActionAvailabilitySerializer(serializers.Serializer):
+    enabled = serializers.BooleanField(label=gettext_lazy("是否可用"))
+    disabled_reason = serializers.CharField(label=gettext_lazy("不可用原因"), required=False, allow_blank=True, default="")
+
+
+class BatchActionsPreviewRespSerializer(serializers.Serializer):
+    """预览接口返回：整体是否可批量 + 每个动作的可用性"""
+
+    batch_enabled = serializers.BooleanField(label=gettext_lazy("是否可以批量执行"))
+    batch_disabled_reason = serializers.CharField(
+        label=gettext_lazy("整体不可批量原因"), required=False, allow_blank=True, default=""
+    )
+    actions = serializers.DictField(
+        label=gettext_lazy("按动作的可用性"),
+        child=BatchActionAvailabilitySerializer(),
+        default=dict,
+    )
+    unique_strategy_id = serializers.IntegerField(
+        label=gettext_lazy("选中风险唯一策略 ID"),
+        required=False,
+        allow_null=True,
+    )
+    scene_id = serializers.IntegerField(
+        label=gettext_lazy("选中风险唯一场景 ID"),
+        required=False,
+        allow_null=True,
+    )
+    selected_count = serializers.IntegerField(label=gettext_lazy("选中数量"), default=0)

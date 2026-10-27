@@ -142,6 +142,10 @@ class RiskLabelTest(TicketTest):
     @mock.patch(
         "services.web.risk.handlers.ticket.RiskFlowBaseHandler.notice_current_operator", mock.Mock(return_value=None)
     )
+    @mock.patch(
+        "services.web.risk.handlers.ticket.api.bk_sops.get_template_info",
+        mock.Mock(return_value=SOPS_TEMPLATE_INFO),
+    )
     def test_misreport_approve(self):
         """
         测试误报（审批中时）
