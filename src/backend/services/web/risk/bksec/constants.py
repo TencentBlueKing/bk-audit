@@ -99,6 +99,8 @@ BKSEC_CACHE_TIMEOUT = 300
 # （token 漏匹配、下拉缺项），统一循环翻页取全量
 BKSEC_RISK_ACCESS_PAGE_SIZE = 100
 BKSEC_RISK_ACCESS_MAX_PAGES = 50
+# 翻页必须带固定排序：接口默认无序，翻页期间若有新增/删除，offset 分页会错位导致漏取或重复
+BKSEC_RISK_ACCESS_ORDERING = "created_at"
 
 # 渲染上下文加载事件的上限（预览与发单共用）
 BKSEC_RENDER_EVENT_LIMIT = 100
