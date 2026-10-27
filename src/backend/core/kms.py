@@ -19,6 +19,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Optional
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -57,6 +58,7 @@ KMS_ALLOWED_SECRET_KEYS = frozenset(
         "BKAPP_INIT_REDIS_CONFIG",
         "BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN",
         "BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",
+        "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME",
         "BKPAAS_APP_SECRET",
         "MYSQL_PASSWORD",
         "REDIS_PASSWORD",
@@ -79,11 +81,31 @@ KMS_FORBIDDEN_SECRET_KEYS = frozenset(
 # 基础必填：KMS 开启即必须随凭证包提供
 KMS_BASE_REQUIRED_SECRETS = ("BKPAAS_APP_SECRET",)
 
-# 功能开关 -> (开关未显式配置时是否视为开启, 开启时必须额外提供的密钥)
-# 说明：仅对「开关打开就一定会被消费」的凭据设必填，一次性的初始化配置（BKAPP_INIT_*）保持可选，避免误杀合法部署。
+# 与 config/default.py 中 PLATFORM_AUTH_ACCESS_USERNAME 的默认值保持一致（settings 侧兜底）
+# 修改此处前请先同步 config/default.py，否则启动校验与运行期取值会不一致
+DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME = "admin"
+
+# 功能开关 -> (开关未显式配置时是否视为开启, 额外必填的「凭据组」)
+# 凭据组元素为 (键, 运行期默认值)：组内任意一个键的「最终生效值」非空即视为满足。
+# 最终生效值 = KMS 凭证包 -> 宿主环境变量 -> 运行期默认值，即按运行期真实的 fallback 链判断：
+# - 平台鉴权：bk_resource 的 add_platform_auth_params() 只在 token 与 username **同时为空**时才报错；
+#   宿主已配 username、或 settings 默认 admin 都算有效凭据，不能因为 KMS 包里没有就拒绝，
+#   仅为启用 KMS 不应强制把原本可用的非敏感用户名搬进凭证包。
+# - AI 能力：AIAgentBase._get_first_setting() 的取值链为 AI_AGENT -> AI_AUDIT_REPORT -> settings.SECRET_KEY，
+#   最后一级由必填的 BKPAAS_APP_SECRET 提供，两把 override 密钥属于可选增强，不是启动必需项。
+# 一次性的初始化配置（BKAPP_INIT_*）保持可选，避免误杀合法部署。
 KMS_FEATURE_REQUIRED_SECRETS = {
-    "BKAPP_PLATFORM_AUTH_ENABLED": (True, ("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN",)),
-    "BKAPP_FEATURE_AI_CAPABILITY": (False, ("BKAPP_AI_AGENT_SECRET_KEY", "BKAPP_AI_AUDIT_REPORT_SECRET_KEY")),
+    "BKAPP_PLATFORM_AUTH_ENABLED": (
+        True,
+        # 一个「凭据组」：token 或 username 任一有效即可
+        [
+            [
+                ("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN", ""),
+                ("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME),
+            ]
+        ],
+    ),
+    "BKAPP_FEATURE_AI_CAPABILITY": (True, []),
 }
 
 # 视为「关闭」的开关取值
@@ -109,13 +131,17 @@ def _is_env_injection_enabled() -> bool:
 
 
 def _read_envelope() -> str:
-    """读取 Base64 编码的 KMS 信封，优先从文件读取，env 兜底。"""
+    """读取 Base64 编码的 KMS 信封。
+
+    只支持文件方式（路径由 BKAPP_KMS_ENVELOPE_PATH 指定，运维以 Secret 挂载）：
+    信封明文同样不落环境变量，避免破坏「明文不落盘 / 不落 env」的合规口径。
+    """
     path = os.getenv(KMS_ENVELOPE_PATH_KEY)
-    envelope = ""
-    if path:
-        envelope = Path(path).read_text(encoding="utf-8").strip()
+    if not path:
+        raise ImproperlyConfigured("KMS 已开启但未配置信封文件路径 %s" % KMS_ENVELOPE_PATH_KEY)
+    envelope = Path(path).read_text(encoding="utf-8").strip()
     if not envelope:
-        raise ImproperlyConfigured("KMS 已开启但信封内容为空")
+        raise ImproperlyConfigured("KMS 已开启但信封文件内容为空")
     register_sensitive(envelope)
     return envelope
 
@@ -145,13 +171,34 @@ def _is_switch_on(switch: str, default_on: bool) -> bool:
     return str(value).strip().lower() not in _SWITCH_OFF_VALUES
 
 
-def _enabled_feature_required_keys() -> list:
-    """按当前启用功能汇总必填密钥。"""
-    required: list = list(KMS_BASE_REQUIRED_SECRETS)
-    for switch, (default_on, keys) in KMS_FEATURE_REQUIRED_SECRETS.items():
+def _effective_credential(key: str, default: Optional[str], validated: dict) -> str:
+    """凭据的最终生效值：KMS 凭证包 -> 宿主环境变量 -> 运行期默认值。
+
+    - `default is None` 表示该凭据**必须由凭证包提供**，不回退宿主环境变量与默认值：
+      否则宿主里残留的旧明文会让校验通过，KMS 开了却仍在使用旧明文（静默降级）。
+    - 只看凭证包则会把「宿主已配置 / settings 有默认」的合法部署误判为缺凭据，
+      因此可回退的凭据才走后续两级。
+    """
+    # KMS 凭证包优先；包内显式给空串等同于显式置空，不再继续回退
+    if key in validated:
+        return str(validated[key]).strip()
+    if default is None:
+        return ""
+    # 宿主环境变量：区分「未设置」与「显式置空」，只有未设置才回退到运行期默认值
+    env_value = os.getenv(key)
+    if env_value is not None:
+        return env_value.strip()
+    return default
+
+
+def _enabled_feature_required_groups() -> list:
+    """按当前启用功能汇总必填「凭据组」：组内任意一个键的最终生效值非空即满足。"""
+    # 基础必填不回退宿主环境变量：default=None 表示必须由凭证包提供
+    groups: list = [((key, None),) for key in KMS_BASE_REQUIRED_SECRETS]
+    for switch, (default_on, feature_groups) in KMS_FEATURE_REQUIRED_SECRETS.items():
         if _is_switch_on(switch, default_on):
-            required.extend(keys)
-    return required
+            groups.extend(feature_groups)
+    return groups
 
 
 def _extract_secrets(data) -> dict:
@@ -192,9 +239,13 @@ def validate_secrets(raw: dict) -> dict:
             raise ImproperlyConfigured("KMS 凭证包中 %s 的值类型不被允许（仅允许字符串/数字/布尔）" % key)
         validated[key] = str(value)
 
-    missing = [key for key in _enabled_feature_required_keys() if key not in validated]
+    missing = [
+        " 或 ".join(key for key, _default in group)
+        for group in _enabled_feature_required_groups()
+        if not any(_effective_credential(key, default, validated) for key, default in group)
+    ]
     if missing:
-        raise ImproperlyConfigured("KMS 凭证包缺少必需的密钥: %s" % ", ".join(sorted(set(missing))))
+        raise ImproperlyConfigured("KMS 凭证包缺少必需的密钥: %s" % "; ".join(sorted(set(missing))))
 
     return validated
 
@@ -240,6 +291,40 @@ def get_secret(key: str, default=None):
     if key in _SECRETS_CACHE:
         return _SECRETS_CACHE[key]
     return os.getenv(key, default)
+
+
+def get_secret_json(key: str, default=None):
+    """读取 JSON 型凭据（如 BKAPP_INIT_ES_CONFIG），并把解析出的嵌套字段递归登记为敏感值。
+
+    登记整段 JSON 字符串是不够的：`json.loads()` 之后再抛出的异常里，
+    格式化器展示的是 dict 内容，整段 JSON 匹配不到其中的 password 等值。
+    """
+    raw = get_secret(key)
+    if raw is None:
+        if default is not None:
+            return default
+        raise ImproperlyConfigured("未找到 JSON 型凭据 %s" % key)
+    # 解析前先登记整段明文：值可能来自宿主环境变量（未经 KMS 登记），
+    # 一旦 json.loads 失败，本帧的 raw 与异常对象都会带着这段明文
+    register_sensitive(raw)
+    try:
+        data = json.loads(raw)
+    except Exception as err:
+        # 覆盖 json.loads 的所有失败形态：JSONDecodeError（语法错误）、
+        # RecursionError（深层嵌套）、ValueError / TypeError（类型异常）。
+        # 明文不只在本帧：异常对象带整份 doc，json 库帧的局部变量 s 也携带原文，
+        # 且 stackprinter 对长字符串会截断/换行，整串 scrub 匹配不到。
+        # 因此与启动解密边界一致：清 doc -> 净化异常链 -> 抛脱敏异常。
+        if getattr(err, "doc", None):
+            err.doc = ""
+        safe_cause = sanitize_exception(err)
+        strip_traceback(err)
+        del err
+        raise ImproperlyConfigured("初始化 JSON 型凭据解析失败: %s" % safe_cause) from safe_cause
+    finally:
+        raw = None
+    register_sensitive(data)
+    return data
 
 
 def _store_secrets(secrets: dict) -> None:
