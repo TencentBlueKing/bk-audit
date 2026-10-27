@@ -672,12 +672,22 @@ def _sync_approve_node_status(node: TicketNode, ticket: dict) -> None:
     )
 
 
+def _sync_auto_result_lock_name(node_id: str = None, **kwargs) -> str:
+    """锁名：单节点同步与周期同步分开
+
+    周期任务要遍历执行中的节点，耗时长；共用一把锁会让重试/终止后的兜底同步被静默跳过
+    （CacheLockCheckFailed），状态长期停在乐观写入的执行中。
+    """
+
+    return f"celery:sync_auto_result:{node_id}" if node_id else "celery:sync_auto_result"
+
+
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
-    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=settings.SYNC_AUTO_RESULT_TASK_TIME_LIMIT,
 )
-@lock(lock_name="celery:sync_auto_result")
+@lock(load_lock_name=_sync_auto_result_lock_name, timeout=settings.SYNC_AUTO_RESULT_LOCK_TIMEOUT)
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 
@@ -691,8 +701,12 @@ def sync_auto_result(node_id: str = None):
     else:
         # 测试单（is_test=True）同样纳入同步：它是一次性发单任务，结束很快，
         # 但此前仅在前端轮询 get_task_status 时被动回写，页面关闭后会永久停留在 RUNNING
-        nodes = TicketNode.objects.filter(status=TicketNodeStatus.RUNNING).filter(
-            Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__)
+        # 只取最近 N 条：历史积压的 RUNNING 节点量极大，全量遍历会让单次任务跑不完并长期占用锁，
+        # 导致后续所有同步被跳过、状态不更新；优先保证新记录被及时同步
+        nodes = (
+            TicketNode.objects.filter(status=TicketNodeStatus.RUNNING)
+            .filter(Q(is_test=False) | Q(is_test=True, action=AutoProcess.__name__))
+            .order_by("-timestamp")[: settings.SYNC_AUTO_RESULT_MAX_NODES]
         )
 
     # 逐个更新
