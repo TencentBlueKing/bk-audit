@@ -191,8 +191,8 @@
               </div>
               <div
                 :ref="el => setLegendMeasureRef(card.key, el)"
-                class="chart-legend-measure"
-                aria-hidden="true">
+                aria-hidden="true"
+                class="chart-legend-measure">
                 <div
                   v-for="(item, index) in card.legendItems"
                   :key="`${item.name}-${index}`"
@@ -453,7 +453,7 @@
     const spans = legendPageSpans.value[card.key];
     const items = card.legendItems;
     const indexes = spans?.[legendPageNumber(card.key) - 1] || items.map((_, index) => index);
-    return indexes.map(index => {
+    return indexes.map((index) => {
       const item = items[index];
       if (!item) return null;
       return { ...item, key: `${item.name}-${index}` };
@@ -1161,7 +1161,8 @@
   const exportFileName = (card: ChartCardView) => {
     const field = fieldView.value?.fieldLabel || '';
     const title = cardTitleText(card.title);
-    return [field, title].filter(Boolean).join('-').replace(/[\\/:*?"<>|]/g, '_');
+    return [field, title].filter(Boolean).join('-')
+      .replace(/[\\/:*?"<>|]/g, '_');
   };
 
   const handleExport = (key: string) => {
