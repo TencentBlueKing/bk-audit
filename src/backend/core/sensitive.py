@@ -44,6 +44,14 @@ SENSITIVE_VAR_PATTERNS = (
     r"ciphertext",
     r"signature",
     r"secrets",
+    # 环境变量字典：一旦展开就会带出注入到 env 的明文（且过长会被截断，无法按整串 scrub）
+    r".*environ.*",
+    # 初始化配置对象：json.loads 后是 dict，格式化器会展开其内容
+    r"^raw$",
+    r"es_config.*",
+    r"doris_config.*",
+    r"redis_config.*",
+    r".*_configs?$",
 )
 
 # 敏感键名正则：日志里打印配置时，命中键名的值整体替换为占位符
@@ -71,15 +79,36 @@ _sensitive_values: Set[str] = set()
 
 
 def register_sensitive(*values: Any) -> None:
-    """登记敏感值：信封、私钥、解密后明文、以及解密后的业务凭据明文。"""
+    """登记敏感值，两套口径：
+
+    - **顶层字符串**：无条件登记。调用方显式传入的都是语义明确的敏感值
+      （信封、私钥、解密后明文、整段 JSON 凭据），不再套用最小长度限制。
+    - **配置结构（dict / list）**：只登记**键名命中 SENSITIVE_KEY_PATTERNS 的值**
+      （含嵌套，命中键名后其子树一律登记，短密码同样覆盖）。
+      这样 host / IP 之类的非敏感值不会被登记，异常堆栈里仍能看清排障信息。
+
+    取舍：密码若放在键名不敏感的字段（如 {"connection_url": "redis://u:p@host"}）
+    不会被登记。该场景靠「不在日志/堆栈里打印整个配置对象」兜底，
+    见 SENSITIVE_VAR_PATTERNS 对 *_config / raw 的抑制。
+    """
     for value in values:
         if isinstance(value, str):
-            if len(value) >= MIN_REDACT_LENGTH:
+            if value:  # 空串不得登记：scrub 会把 "***" 插进每个字符之间，毁掉所有异常文本
                 _sensitive_values.add(value)
-        elif isinstance(value, dict):
-            register_sensitive(*list(value.values()))
-        elif isinstance(value, (list, tuple, set)):
-            register_sensitive(*list(value))
+        else:
+            _register_sensitive(value, force=False)
+
+
+def _register_sensitive(value: Any, force: bool) -> None:
+    if isinstance(value, str):
+        if force and value:
+            _sensitive_values.add(value)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _register_sensitive(item, force=force or bool(_SENSITIVE_KEY_RE.match(str(key))))
+    elif isinstance(value, (list, tuple, set)):
+        for item in value:
+            _register_sensitive(item, force=force)
 
 
 def clear_sensitive() -> None:
@@ -96,9 +125,11 @@ def scrub(text: Any, extra_values: Optional[Iterable[Any]] = None) -> str:
     """把文本中已登记的敏感值替换为占位符。"""
     result = str(text)
     for value in sorted(_sensitive_values, key=len, reverse=True):
+        if not value:  # 兜底：空值会把占位符插进每个字符之间
+            continue
         result = result.replace(value, REDACTED)
     for value in extra_values or ():
-        if isinstance(value, str) and len(value) >= MIN_REDACT_LENGTH:
+        if isinstance(value, str) and value and len(value) >= MIN_REDACT_LENGTH:
             result = result.replace(value, REDACTED)
     for pattern in SENSITIVE_TEXT_PATTERNS:
         result = pattern.sub(REDACTED, result)

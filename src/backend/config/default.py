@@ -28,6 +28,7 @@ from client_throttler.constants import TimeDurationUnit
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
+from core.kms import DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME
 from core.observability import BKResourceAPIInstrumentor
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
@@ -267,7 +268,9 @@ BK_RESOURCE = {
     "REQUEST_LOG_SPLIT_LENGTH": int(os.getenv("BKAPP_REQUEST_LOG_SPLIT_LENGTH", 1024)),
     "PLATFORM_AUTH_ENABLED": strtobool(os.getenv("BKAPP_PLATFORM_AUTH_ENABLED", "True")),
     "PLATFORM_AUTH_ACCESS_TOKEN": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"),
-    "PLATFORM_AUTH_ACCESS_USERNAME": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", "admin"),
+    "PLATFORM_AUTH_ACCESS_USERNAME": os.getenv(
+        "BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", DEFAULT_PLATFORM_AUTH_ACCESS_USERNAME
+    ),
 }
 
 APPEND_SLASH = False
