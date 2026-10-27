@@ -1524,7 +1524,7 @@
     if (decision.action !== 'retry') return;
     const previousStatus = item.status;
     const isCustom = payload.type === 'custom';
-    const inputData = decision.inputData;
+    const { inputData } = decision;
     analyzeSubmitting.value = true;
     upsertReport({
       ...item,
@@ -1646,7 +1646,7 @@
     const decision = resolveStatisticsSubmit(target, payload);
     if (decision.action !== 'retry') return;
     const previousStatus = item.status;
-    const inputData = decision.inputData;
+    const { inputData } = decision;
     statisticsSubmitting.value = true;
     statisticsSubmitError.value = '';
     upsertReport({

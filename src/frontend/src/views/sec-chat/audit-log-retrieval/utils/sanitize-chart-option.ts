@@ -419,7 +419,7 @@ export const createTooltipFormatter = (trigger: unknown, templateRaw: unknown) =
 const attachTooltipFormatters = (option: Record<string, any>) => {
   const apply = (host: unknown) => {
     if (!isRecord(host) || !isRecord(host.tooltip)) return;
-    const tooltip = host.tooltip;
+    const { tooltip } = host;
     const template = tooltip.__template;
     delete tooltip.formatter;
     delete tooltip.__template;
@@ -441,9 +441,9 @@ const escapeDataViewHtmlSinks = (value: unknown, depth = 0) => {
   const option = value as Record<string, any>;
   const toolboxes = Array.isArray(option.toolbox) ? option.toolbox : [option.toolbox];
   toolboxes.filter(isRecord).forEach((toolbox) => {
-    const feature = toolbox.feature;
+    const { feature } = toolbox;
     if (!isRecord(feature) || !isRecord(feature.dataView)) return;
-    const dataView = feature.dataView;
+    const { dataView } = feature;
     if (typeof dataView.title === 'string') dataView.title = escapeHtml(dataView.title);
     if (Array.isArray(dataView.lang)) {
       dataView.lang = dataView.lang.map(item => (
