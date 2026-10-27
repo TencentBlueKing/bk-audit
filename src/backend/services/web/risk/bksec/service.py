@@ -33,6 +33,7 @@ from services.web.risk.bksec.constants import (
     BKSEC_CACHE_TIMEOUT,
     BKSEC_FIELD_INITIAL_OWNER,
     BKSEC_RISK_ACCESS_MAX_PAGES,
+    BKSEC_RISK_ACCESS_ORDERING,
     BKSEC_RISK_ACCESS_PAGE_SIZE,
     BKSEC_RISK_TYPES_CACHE_KEY,
 )
@@ -69,8 +70,11 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
     单页取会导致 token 漏匹配（启用保存被误阻断）、下拉缺项，故统一翻页取全量；
     短页 / 空页 / 达 count / 翻页上限即停，防止异常接口空转。
 
+    翻页固定带 ordering=created_at：接口默认无序，翻页期间数据增删会让 offset 错位（漏取/重复）。
+
     use_cache=True 时按 is_formal 维度缓存 BKSEC_CACHE_TIMEOUT 秒（下拉等只读展示，
     容忍短暂陈旧）；token 等凭证查找须传 use_cache=False 保证新鲜，避免轮换后写旧值。
+    达翻页上限视为结果不完整，不写缓存，避免把截断结果固化 BKSEC_CACHE_TIMEOUT 秒。
     """
     cache_key = "{}:{}".format(BKSEC_RISK_TYPES_CACHE_KEY, is_formal or "true")
     if use_cache:
@@ -83,6 +87,7 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
             api.bk_sec.risk_access_list(
                 project_id=settings.BKSEC_PROJECT_ID or "",
                 is_formal=is_formal or "true",
+                ordering=BKSEC_RISK_ACCESS_ORDERING,
                 page=page,
                 page_size=BKSEC_RISK_ACCESS_PAGE_SIZE,
             )
@@ -91,9 +96,22 @@ def fetch_risk_access_items(is_formal: str = "true", use_cache: bool = True) -> 
         batch = result.get("results") or []
         items.extend(item for item in batch if isinstance(item, dict))
         total = result.get("count")
-        # 终止：空页 / 达 count / 短页（兼容接口不返回 count）
-        if not batch or (isinstance(total, int) and len(items) >= total) or len(batch) < BKSEC_RISK_ACCESS_PAGE_SIZE:
+        # 终止：空页 / 达 count（count 存在时以其为准，短页不可信：
+        # 服务端可能自行压缩 page_size 或按权限过滤后返回不足一页，此时仍有下一页）
+        if not batch or (isinstance(total, int) and len(items) >= total):
             break
+        # count 缺失时才退化用短页判定，兼容不返回 count 的接口
+        if not isinstance(total, int) and len(batch) < BKSEC_RISK_ACCESS_PAGE_SIZE:
+            break
+    else:
+        logger.warning(
+            "[BkSec] risk_access 列表翻页达上限仍未取完, is_formal=%s pages=%s fetched=%s, "
+            "结果不完整（下拉缺项 / token 漏匹配），请确认总量或调大 BKSEC_RISK_ACCESS_MAX_PAGES",
+            is_formal or "true",
+            BKSEC_RISK_ACCESS_MAX_PAGES,
+            len(items),
+        )
+        return items
     if use_cache:
         cache.set(cache_key, items, timeout=BKSEC_CACHE_TIMEOUT)
     return items
