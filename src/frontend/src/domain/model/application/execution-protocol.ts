@@ -168,9 +168,8 @@ const spanDuration = (startedAt: string, endedAt: string) => {
   return formatDurationClock((end - start) / 1000);
 };
 
-/** retried 节点按开始时间升序，相同时间保持接口原顺序。没有开始时间的排在后面。 */
-const sortRetriedNodes = (rawAttempts: Record<string, any>[]) => rawAttempts
-  .filter(attempt => attempt?.retried === true)
+/** 按开始时间升序，相同时间保持原顺序。没有开始时间的排在后面。 */
+const sortNodesByStart = (rawAttempts: Record<string, any>[]) => rawAttempts
   .map((node, index) => ({ node, index }))
   .sort((left, right) => {
     const leftTime = parseStartedAt(String(left.node.start_time || ''));
@@ -184,13 +183,16 @@ const sortRetriedNodes = (rawAttempts: Record<string, any>[]) => rawAttempts
   .map(item => item.node);
 
 /**
- * 一张卡的开始、结束、耗时只看 retried 节点。
- * 有失败节点：开始取第一个，结束和耗时取最后一个失败节点。
- * 含运行中：从第一个节点的开始时间计到当前，由页面热更新。
- * 全部成功：开始取第一个，结束取最后一个。
+ * 一张卡的开始、结束、耗时。
+ * 第一轮 retry_history 的 retried 都是 false，用该轮全部节点。
+ * 其余轮次只看 retried 节点。
+ * 有失败节点：开始取最早的开始时间，结束和耗时取失败节点的 end_time。
+ * 含运行中：从最早开始时间计到当前，由页面热更新。
+ * 全部成功：开始取最早的开始时间，结束取最后一个节点。
  */
-const roundTiming = (rawAttempts: Record<string, any>[]) => {
-  const nodes = sortRetriedNodes(rawAttempts).map(node => ({
+const roundTiming = (rawAttempts: Record<string, any>[], allNodes = false) => {
+  const source = allNodes ? rawAttempts : rawAttempts.filter(attempt => attempt?.retried === true);
+  const nodes = sortNodesByStart(source).map(node => ({
     status: normalizeNodeState(node.state),
     started_at: String(node.start_time || ''),
     ended_at: String(node.end_time || ''),
@@ -236,7 +238,7 @@ const roundTiming = (rawAttempts: Record<string, any>[]) => {
 
 const mapRetryRounds = (history: Record<string, any>[]) => history.map((entry, index) => {
   const rawAttempts = Array.isArray(entry.attempts) ? entry.attempts : [];
-  const timing = roundTiming(rawAttempts);
+  const timing = roundTiming(rawAttempts, index === 0);
   return {
     id: `retry-${index + 1}`,
     label: '',
