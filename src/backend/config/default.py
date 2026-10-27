@@ -511,6 +511,15 @@ PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_PROCESS_ONE_RISK_PERIOD
 # 同步处理套餐结果定时任务调度周期(分)
 SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE", "*/10")
 
+# 同步处理套餐结果：单次最多处理的节点数
+# 历史积压的 RUNNING 节点量可能极大，全量遍历会让单次任务跑不完并长期占用锁，
+# 导致后续所有同步（含周期任务自身与单节点兜底）被跳过，状态永久不更新
+SYNC_AUTO_RESULT_MAX_NODES = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_MAX_NODES", 2000))
+
+# 同步处理套餐结果：锁超时与任务超时(秒)，需大于单次处理耗时，同时把异常停摆的影响降到分钟级
+SYNC_AUTO_RESULT_LOCK_TIMEOUT = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_LOCK_TIMEOUT", 600))
+SYNC_AUTO_RESULT_TASK_TIME_LIMIT = int(os.getenv("BKAPP_SYNC_AUTO_RESULT_TASK_TIME_LIMIT", 900))
+
 # 图表结果缓存时间(秒)
 VISION_CACHE_TIMEOUT = int(os.getenv("BKAPP_VISION_CACHE_TIMEOUT", "86400"))
 
