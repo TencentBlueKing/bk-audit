@@ -490,10 +490,11 @@ class AnalyseReportViewSet(ResourceViewSet):
 
 class BkSecViewSet(ResourceViewSet):
     """
-    BKSEC 元数据查询（风险类型下拉）
+    BKSEC 元数据查询（项目下拉 → 风险类型下拉）
     """
 
     resource_routes = [
+        ResourceRoute("GET", resource.risk.list_bk_sec_projects, endpoint="projects"),
         ResourceRoute("GET", resource.risk.list_bk_sec_risk_types, endpoint="risk_types"),
     ]
 
