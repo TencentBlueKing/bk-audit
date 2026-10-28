@@ -16,6 +16,8 @@
 */
 
 import type { BksecConfigPayload } from '@model/bksec/config';
+import type BksecRiskType from '@model/bksec/risk-type';
+
 import BksecPreviewRisk from '@model/bksec/preview-risk';
 import BksecProject from '@model/bksec/project';
 import BksecTestTaskStatus from '@model/bksec/task-status';
@@ -30,14 +32,14 @@ export default {
   fetchProjects(params?: {
     is_formal?: string;
     name__icontains?: string;
-  }) {
+  }): Promise<BksecProject[]> {
     return BksecManageSource.fetchProjects(params)
       .then(({ data }) => (data || []).map((item: Record<string, any>) => new BksecProject(item)));
   },
   fetchRiskTypes(params?: {
     is_formal?: string;
     name__icontains?: string;
-  }) {
+  }): Promise<BksecRiskType[]> {
     return this.fetchProjects(params)
       .then(projects => projects.flatMap(project => project.riskTypes));
   },
