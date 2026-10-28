@@ -118,7 +118,7 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
         # 名称过滤须在本地做，否则不同关键字互相污染缓存
         # 用户身份（as_platform=False）：随请求者凭证调用，网关按用户数据域出数据
         items = fetch_risk_access_items(
-            project_id=validated_request_data["project_id"],
+            project_id=validated_request_data.get("project_id") or "",
             is_formal=validated_request_data.get("is_formal") or "true",
             as_platform=False,
         )

@@ -842,7 +842,8 @@ class ListBkSecRiskTypesReqSerializer(serializers.Serializer):
     """查询 BKSEC 风险类型列表（策略页下拉）"""
 
     # 项目维度：risk_access 接口 project_id 必传，先选项目再选风险类型
-    project_id = serializers.CharField(label=gettext_lazy("项目ID"), required=True, allow_blank=False)
+    # TODO: 前端适配完成后恢复 required=True；暂不传时回退 settings.BKSEC_PROJECT_ID
+    project_id = serializers.CharField(label=gettext_lazy("项目ID"), required=False, allow_blank=True, default="")
     name__icontains = serializers.CharField(label=gettext_lazy("名称模糊搜索"), required=False, allow_blank=True)
     is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
 
