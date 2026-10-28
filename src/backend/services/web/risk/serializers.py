@@ -750,6 +750,226 @@ class ListRiskScenesRespSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class PAExecutionRecordInfoSerializer(serializers.Serializer):
+    """
+    处理套餐执行记录条目（与 ListPAExecutionRecords 返回的 results 元素同形）
+    """
+
+    id = serializers.CharField(label=gettext_lazy("节点ID"), help_text=gettext_lazy("TicketNode.id（UUID）"))
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
+    )
+    start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_task_url = serializers.CharField(label=gettext_lazy("SOPS任务链接"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    trigger = serializers.ChoiceField(
+        label=gettext_lazy("触发方式"), choices=["", "auto", "manual", "approve", "test"], allow_blank=True
+    )
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
+    is_test = serializers.BooleanField(label=gettext_lazy("是否测试单"))
+    failure_hint = serializers.CharField(label=gettext_lazy("失败提示"), allow_blank=True)
+
+
+class PAExecutionRecordListResponseSerializer(serializers.Serializer):
+    """处理套餐执行记录列表响应（手工分页结构，与 ListPAExecutionRecords 返回同形）"""
+
+    count = serializers.IntegerField(label=gettext_lazy("总数"))
+    page = serializers.IntegerField(label=gettext_lazy("页码"))
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"))
+    num_pages = serializers.IntegerField(label=gettext_lazy("总页数"))
+    results = PAExecutionRecordInfoSerializer(many=True, label=gettext_lazy("执行记录"))
+
+
+class PAExecutionRecordDetailResponseSerializer(serializers.Serializer):
+    """处理套餐执行记录详情响应（与 GetPAExecutionRecordDetail 返回同形）"""
+
+    id = serializers.CharField(label=gettext_lazy("节点ID"))
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), allow_blank=True)
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"))
+    pa_name = serializers.CharField(label=gettext_lazy("套餐名称"), allow_blank=True)
+    trigger = serializers.CharField(label=gettext_lazy("触发方式"), allow_blank=True)
+    operator = serializers.CharField(
+        label=gettext_lazy("执行人"),
+        allow_blank=True,
+        help_text=gettext_lazy("最新操作人（重试后为最后一次重试的人）；各轮现场的执行人见 retry_history 对应快照"),
+    )
+    start_time = serializers.CharField(label=gettext_lazy("开始时间"), allow_blank=True)
+    finish_time = serializers.CharField(label=gettext_lazy("结束时间"), allow_blank=True)
+    sops_task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), allow_blank=True)
+    sops_task_url = serializers.CharField(label=gettext_lazy("SOPS任务链接"), allow_blank=True)
+    sops_state = serializers.CharField(label=gettext_lazy("SOPS任务状态"), allow_blank=True)
+    result = serializers.ChoiceField(label=gettext_lazy("执行结果"), choices=["success", "failed", "running", "unknown"])
+    duration = serializers.IntegerField(label=gettext_lazy("耗时(秒)"), allow_null=True)
+    is_test = serializers.BooleanField(label=gettext_lazy("是否测试单"))
+    failure_hint = serializers.CharField(label=gettext_lazy("失败提示"), allow_blank=True)
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"))
+    risk_title = serializers.CharField(label=gettext_lazy("风险标题"), allow_blank=True)
+    risk_status = serializers.CharField(label=gettext_lazy("风险状态"), allow_blank=True)
+    risk_level = serializers.CharField(label=gettext_lazy("风险等级"), allow_blank=True)
+    params = serializers.JSONField(label=gettext_lazy("风险参数"), help_text=gettext_lazy("风险描述/证据/时间等"))
+    retry_count = serializers.IntegerField(label=gettext_lazy("重试次数"))
+    retry_history = serializers.JSONField(
+        label=gettext_lazy("重试记录"),
+        help_text=gettext_lazy(
+            "重试前全量快照[{state, operator, attempts}]：state 为该轮的任务级状态（与 sops_state 同口径，"
+            "在 state 被乐观改为执行中之前固化），attempts 中此前已被重试过的节点 retried=True；"
+            "operator 为该轮现场的实际执行人（首条为记录发起人，第 i 条为第 i 次重试的操作人）"
+        ),
+    )
+    attempts = serializers.JSONField(
+        label=gettext_lazy("尝试记录"),
+        help_text=gettext_lazy("当前全量节点状态（逐节点执行与错误），历史被重试过的节点 retried=True"),
+    )
+
+
+class ListBkSecProjectsReqSerializer(serializers.Serializer):
+    """查询 BKSEC 项目及风险类型（策略页下拉，一次返回两级）"""
+
+    name__icontains = serializers.CharField(label=gettext_lazy("名称模糊搜索"), required=False, allow_blank=True)
+    is_formal = serializers.CharField(label=gettext_lazy("是否正式"), required=False, allow_blank=True)
+
+
+class PreviewTicketReqSerializer(serializers.Serializer):
+    """预览工单（按 BKSEC 配置 + 样例风险单渲染，不实际发送）"""
+
+    bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+    risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
+
+
+class SendTestTicketReqSerializer(serializers.Serializer):
+    """发送测试工单（经 SOPS 真实通道，仅发给指定接收人）"""
+
+    test_receivers = serializers.ListField(label=gettext_lazy("测试接收人"), child=serializers.CharField(), required=True)
+    # 测试发送必须指定样例风险单：不传则所有 {{ risk.xxx }} 渲染为空，测试单大量字段为空、失去验证意义
+    risk_id = serializers.CharField(label=gettext_lazy("样例风险单ID"), required=True)
+    bksec_config = serializers.DictField(label=gettext_lazy("BKSEC工单配置"), required=True)
+
+
+class GetTaskStatusReqSerializer(serializers.Serializer):
+    """查询测试任务状态（task_id 会话内轮询 / risk_id 刷新后恢复，二选一）"""
+
+    task_id = serializers.CharField(label=gettext_lazy("SOPS任务ID"), required=False, allow_blank=True)
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("task_id") and not attrs.get("risk_id"):
+            raise serializers.ValidationError(gettext_lazy("task_id 与 risk_id 至少传一个"))
+        return attrs
+
+
+class PAExecutionRecordListReqSerializer(serializers.Serializer):
+    """处理套餐执行记录列表筛选参数"""
+
+    id = serializers.CharField(
+        label=gettext_lazy("执行记录ID"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy(
+            "按执行记录唯一 ID（TicketNode.id，即响应中的 id 字段）精确过滤，留空不过滤；" "注意与 task_id（SOPS 任务 ID，响应中的 sops_task_id）区分"
+        ),
+    )
+    keyword = serializers.CharField(
+        label=gettext_lazy("搜索关键词"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy(
+            "全量模糊搜索：逗号分隔多个关键词，词之间为「且」（记录须同时命中每个词），"
+            "单个词内部为「或」——命中下列任一字段即算命中：执行记录ID、任务ID、任务名称、套餐名称、"
+            "执行人、风险ID、风险标题/状态/等级、失败提示、触发方式、执行状态；"
+            "触发方式/执行状态支持中文展示词（自动/手动/测试、执行成功/执行失败/执行中）"
+        ),
+    )
+    pa_id = serializers.IntegerField(label=gettext_lazy("套餐ID"), required=False, allow_null=True)
+    risk_id = serializers.CharField(label=gettext_lazy("风险ID"), required=False, allow_blank=True, allow_null=True)
+    scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=False, allow_null=True)
+    task_id = serializers.CharField(label=gettext_lazy("任务ID"), required=False, allow_blank=True)
+    task_name = serializers.CharField(label=gettext_lazy("任务名称"), required=False, allow_blank=True)
+    pa_name = serializers.CharField(
+        label=gettext_lazy("套餐名称"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("精确匹配，支持多选，逗号分隔（如 套餐A,套餐B），任一命中即返回"),
+    )
+    trigger = serializers.CharField(
+        label=gettext_lazy("触发方式"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 auto,test），任一命中即返回"),
+    )
+    result = serializers.CharField(
+        label=gettext_lazy("状态"),
+        required=False,
+        allow_blank=True,
+        help_text=gettext_lazy("支持多选，逗号分隔（如 failed,running），任一命中即返回"),
+    )
+    operator = serializers.CharField(label=gettext_lazy("执行人"), required=False, allow_blank=True)
+    order_by = serializers.CharField(
+        label=gettext_lazy("排序字段"), required=False, allow_blank=True, default="-start_time"
+    )
+    page = serializers.IntegerField(label=gettext_lazy("页码"), required=False, min_value=1, default=1)
+    page_size = serializers.IntegerField(
+        label=gettext_lazy("单页数量"), required=False, min_value=1, max_value=200, default=20
+    )
+
+
+class PAExecutionRecordDetailReqSerializer(serializers.Serializer):
+    """处理套餐执行记录详情参数"""
+
+    id = serializers.CharField(label=gettext_lazy("执行记录ID"), required=True)
+
+
+class ListBkSecRiskTypesResponseSerializer(serializers.Serializer):
+    """BKSEC 风险类型条目（ListBkSecProjects.risk_types 的元素）"""
+
+    risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"))
+    risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
+    is_formal = serializers.BooleanField(label=gettext_lazy("是否正式"))
+    fields = serializers.JSONField(
+        label=gettext_lazy("工单字段Schema"), help_text=gettext_lazy("[{key,name,required,type}]")
+    )
+
+
+class ListBkSecProjectsResponseSerializer(serializers.Serializer):
+    """BKSEC 项目及其风险类型（ListBkSecProjects 返回元素）"""
+
+    id = serializers.CharField(label=gettext_lazy("项目ID"))
+    name = serializers.CharField(label=gettext_lazy("项目名称"), allow_blank=True)
+    risk_types = ListBkSecRiskTypesResponseSerializer(many=True, label=gettext_lazy("风险类型列表"))
+
+
+class PreviewTicketResponseSerializer(serializers.Serializer):
+    """工单预览响应（ticket/ticket_header 等动态体以 JSONField 透传）"""
+
+    risk_type_id = serializers.CharField(label=gettext_lazy("风险类型ID"), allow_blank=True)
+    risk_type_name = serializers.CharField(label=gettext_lazy("风险类型名称"), allow_blank=True)
+    has_sample_risk = serializers.BooleanField(label=gettext_lazy("是否有样例风险单"))
+    ticket = serializers.JSONField(label=gettext_lazy("工单报文"))
+    ticket_header = serializers.JSONField(label=gettext_lazy("工单头"), help_text=gettext_lazy("BKSEC 侧生成字段的占位"))
+    risk = serializers.JSONField(label=gettext_lazy("风险变量"))
+    risk_context_keys = serializers.JSONField(label=gettext_lazy("可用变量清单"))
+    warnings = serializers.JSONField(label=gettext_lazy("告警"))
+
+
+class SendTestTicketResponseSerializer(serializers.Serializer):
+    """发送测试工单响应（SOPS 任务信息与渲染后的插件入参）"""
+
+    task = serializers.JSONField(label=gettext_lazy("SOPS任务信息"))
+    constants = serializers.JSONField(label=gettext_lazy("插件入参常量"))
+
+
 class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
     List Risk
@@ -1540,6 +1760,10 @@ class ListAllProcessApplicationsReqSerializer(serializers.Serializer):
     """处理套餐 all 接口请求参数（按场景过滤）"""
 
     scene_id = serializers.IntegerField(label=gettext_lazy("场景ID"), required=True)
+    # 不传表示不过滤；True 只返回有执行记录的套餐，False 只返回没有执行记录的套餐
+    has_execution_records = serializers.BooleanField(
+        label=gettext_lazy("是否有执行记录"), required=False, allow_null=True, default=None
+    )
 
 
 class ListRiskBriefResponseSerializer(serializers.ModelSerializer):

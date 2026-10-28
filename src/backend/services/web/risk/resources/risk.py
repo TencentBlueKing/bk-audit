@@ -205,6 +205,11 @@ from services.web.risk.tasks import (
     process_one_risk,
     sync_auto_result,
 )
+from services.web.risk.utils import (
+    extract_attempt_records,
+    fill_failure_info,
+    iter_status_nodes,
+)
 from services.web.scene.constants import ResourceVisibilityType
 from services.web.scene.models import Scene
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
@@ -234,7 +239,7 @@ class RetrieveRisk(RiskMeta):
         )
         risk = data[0]
         nodes = (
-            TicketNode.objects.filter(risk_id=risk["risk_id"])
+            TicketNode.objects.filter(risk_id=risk["risk_id"], is_test=False)
             .exclude(action=RiskExperienceRecord.__name__)
             .order_by("timestamp")
         )
@@ -939,6 +944,7 @@ class ListProcessedRisk(ListRisk):
         # 包含所有 TicketNode 操作（含 RiskExperienceRecord），添加经验也视为"处理"
         processed_risk_ids = TicketNode.objects.filter(
             operator=username,
+            is_test=False,
         ).values("risk_id")
         return Risk.objects.filter(
             q,
@@ -1317,11 +1323,31 @@ class RetryAutoProcess(RiskMeta):
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         node = get_object_or_404(TicketNode, risk_id=risk.risk_id, id=validated_request_data["node_id"])
-        task_id = node.process_result.get("task", {}).get("task_id", "")
+        process_result = node.process_result or {}
+        task_id = process_result.get("task", {}).get("task_id", "")
         # 获取节点状态
         status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-        # 对每个失败的节点，获取节点输入并重试
-        for item in status["children"].values():
+        # 该轮执行的任务级状态（与顶层 sops_state 同口径）：下面会把落库的 state 乐观改为执行中，
+        # 快照必须先固化回源到的原始值（通常为 FAILED；节点失败但任务仍在跑时为 RUNNING）
+        round_state = status.get("state") or ""
+        # 可重试节点与重试循环同口径：仅 FAILED 节点（含子流程内嵌套的失败节点）
+        retried_node_ids = {
+            item["id"]
+            for item in iter_status_nodes(status)
+            if item.get("id") and item.get("state") == SOPSTaskStatus.FAILED
+        }
+        if not retried_node_ids:
+            # 无可重试节点（任务已终止/过期等）：用回源状态修正本地，拒绝制造"假重试"
+            process_result["status"] = status
+            node.process_result = process_result
+            node.save(update_fields=["process_result"])
+            raise RiskStatusInvalid(
+                message=gettext("当前任务没有可重试的失败节点（SOPS状态：%s），请重新发起处理") % (status.get("state") or gettext("未知"))
+            )
+        # 回源补齐各失败节点的 error_message，保证重试快照固化到真实的失败现场
+        fill_failure_info(status, task_id=task_id)
+        # 对每个失败的节点（含子流程内嵌套的失败节点），获取节点输入并重试
+        for item in iter_status_nodes(status):
             if item["state"] != SOPSTaskStatus.FAILED:
                 continue
             io_data = api.bk_sops.get_node_data(
@@ -1335,16 +1361,61 @@ class RetryAutoProcess(RiskMeta):
                 inputs=io_data["inputs"],
             )
         with transaction.atomic():
+            # 行锁重取，避免并发点击重试互相覆盖
+            node = TicketNode.objects.select_for_update().get(id=node.id)
+            process_result = node.process_result or {}
+            # 截至本次之前已被重试过的节点：快照是"上一轮执行"的现场，
+            # 因此首次执行现场（第一条快照）不存在任何重试，标记全为 false
+            retried_before = set(process_result.get("retried_node_ids") or [])
+            # 重试前快照：固化本次被覆盖前的失败现场（error_message 等），仅 append 不覆盖。
+            # 全量记录（含成功/未执行节点）：首次执行的完整现场只存在于快照中，重试后顶层状态会被整体覆盖
+            retry_history = process_result.get("retry_history") or []
+            # 本条快照是"上一次执行"的现场，归属该轮的实际执行人：
+            # 首次执行现场 → 记录发起人（派单/发测试单的人）；
+            # 之后的现场 → 上一次重试的操作人（即尚未被本次覆盖的顶层 operator）。
+            # 必须取重试前的 node.operator，否则会把上一轮的执行人写成这次重试的人
+            retry_history.append(
+                {
+                    "state": round_state,
+                    "operator": node.operator,
+                    "attempts": extract_attempt_records(status, retried_node_ids=retried_before),
+                }
+            )
+            process_result["retry_history"] = retry_history
+            # 累计被重试过的节点：本次重试并入，供后续快照与当前 attempts 标记使用
+            process_result["retried_node_ids"] = sorted(retried_before | retried_node_ids)
             node.status = TicketNodeStatus.RUNNING
-            node.process_result["status"]["state"] = SOPSTaskStatus.RUNNING
-            node.save(update_fields=["status", "process_result"])
+            # 顶层 operator 更新为最新操作人（本次重试的人）；各轮现场的执行人已固化在对应快照中
+            node.operator = get_request_username()
+            # 落库回源到的最新状态（含失败原因），仅将任务级 state 置为执行中
+            process_result["status"] = status
+            process_result["status"]["state"] = SOPSTaskStatus.RUNNING
+            node.process_result = process_result
+            node.save(update_fields=["status", "process_result", "operator"])
             # 若最后一个节点为处理套餐节点，则更新状态为自动处理中，并清理处理人
             if risk.last_history.id == node.id:
                 risk.status = RiskStatus.AUTO_PROCESS
                 risk.current_operator = []
                 risk.save(update_fields=["status", "current_operator"])
-        # 更新节点信息
-        sync_auto_result.apply_async(countdown=60, kwargs={"node_id": node.id})
+        # 回源一次最新状态：让 sops_state/attempts 反映本次重试（重试时刻 = 被重试节点的最新 start_time）。
+        # SOPS 尚未翻转时（仍为失败态）保留"已发起重试"的执行中标记，由兜底同步修正
+        try:
+            latest_status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+        except Exception as err:  # NOCC:broad-except(回源失败不影响已发起的重试)
+            logger.exception("[RetryAutoProcess] get_task_status error, node_id=%s, err=%s", node.id, err)
+            latest_status = None
+        if latest_status:
+            # SOPS 尚未翻转（状态与重试前一致）时，保留"已发起重试"的执行中标记，避免显示成"重试没生效"；
+            # 状态已变化则信任回源值（例如已真的转为 REVOKED/EXPIRED），由兜底同步校准
+            if latest_status.get("state") == round_state and round_state in SOPSTaskStatus.get_failed_status():
+                latest_status["state"] = SOPSTaskStatus.RUNNING
+            node.refresh_from_db(fields=["process_result"])
+            process_result = node.process_result or {}
+            process_result["status"] = latest_status
+            node.process_result = process_result
+            node.save(update_fields=["process_result"])
+        # 兜底同步：SOPS 状态翻转有延迟，稍后再校准一次
+        sync_auto_result.apply_async(countdown=10, kwargs={"node_id": node.id})
 
 
 class ReopenRisk(RiskMeta):
