@@ -487,6 +487,7 @@
   import LinkEventTimeline from './link-event-timeline.vue';
   import RenderInfoItem from './render-info-item.vue';
 
+  import useDrillToolAvailability from '@/hooks/use-drill-tool-availability';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
 
@@ -820,6 +821,7 @@
   };
 
   // 获取所有工具
+  const isAllToolsLoaded = ref(false);
   const {
     data: allToolsData,
     run: fetchAllTools,
@@ -829,6 +831,15 @@
       scope_type: 'scene',
       scope_id: props.data.scene_id,
     },
+    onSuccess: () => {
+      isAllToolsLoaded.value = true;
+    },
+  });
+
+  const { resolveAvailableDrillConfig } = useDrillToolAvailability({
+    sceneTools: allToolsData,
+    isSceneToolsLoaded: isAllToolsLoaded,
+    getSceneId: () => props.data.scene_id,
   });
 
   // 获取标签列表
@@ -1125,18 +1136,32 @@
     fieldName: string,
     activeUid?: string,
   ) => {
+    const drillConfig = resolveAvailableDrillConfig(drillDownItem.drill_config, activeUid);
+    if (!drillConfig) {
+      return;
+    }
+    const availableDrillItem = {
+      ...drillDownItem,
+      drill_config: drillConfig,
+    };
     riskToolParams.value.drill_field = fieldName;
     const drillDownItemRowData = eventItem.value;
 
     // 需要传递额外的riskToolParams参数
-    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
+    const uids = drillConfig.map(config => config.tool.uid).join('&');
     if (!(allOpenToolsData.value.find(item => item === uids))) {
       allOpenToolsData.value.push(uids);
     }
 
     nextTick(() => {
       if (dialogRefs.value[uids]) {
-        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid, riskToolParams.value);
+        dialogRefs.value[uids].openDialog(
+          uids,
+          availableDrillItem,
+          drillDownItemRowData,
+          activeUid,
+          riskToolParams.value,
+        );
       }
     });
   };
@@ -1224,6 +1249,7 @@
     if (!sceneId || sceneId === oldSceneId) {
       return;
     }
+    isAllToolsLoaded.value = false;
     fetchAllTools({
       scope_id: sceneId,
       scope_type: 'scene',

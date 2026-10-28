@@ -407,5 +407,7 @@ export default {
     请选择处理方法: 'Select a processing action',
     操作成功: 'Operation succeeded',
     套餐执行记录: 'Package execution records',
+    暂时无法使用: 'Temporarily unavailable',
+    '全局工具{tools}未对当前场景「{scene}」开放，暂时无法使用。如需使用，请联系平台管理员「{admins}」将「{scene}」加入该工具的可见范围': 'Global tool {tools} is not available to the current scene "{scene}". To use it, please contact the platform admins ({admins}) to add "{scene}" to the visibility scope of this tool',
   },
 };

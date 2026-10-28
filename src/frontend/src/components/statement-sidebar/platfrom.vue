@@ -46,20 +46,6 @@
         v-show="expandedGroups.includes('resourceManage')"
         class="side-group-children">
         <audit-menu-item
-          :class="{ active: currentRoute === 'platformReportConfig' }"
-          index="platformReportConfig"
-          @click="handleMenuClick('platformReportConfig')">
-          <span class="side-child-dot" />
-          {{ t('全局报表') }}
-        </audit-menu-item>
-        <audit-menu-item
-          :class="{ active: ['platformToolConfig', 'platformToolCreate', 'platformToolEdit'].includes(currentRoute) }"
-          index="platformToolConfig"
-          @click="handleMenuClick('platformToolConfig')">
-          <span class="side-child-dot" />
-          {{ t('全局工具') }}
-        </audit-menu-item>
-        <audit-menu-item
           :class="{
             active: [
               'platformStrategyList',
@@ -73,6 +59,20 @@
           @click="handleMenuClick('platformStrategyList')">
           <span class="side-child-dot" />
           {{ t('全局策略') }}
+        </audit-menu-item>
+        <audit-menu-item
+          :class="{ active: ['platformToolConfig', 'platformToolCreate', 'platformToolEdit'].includes(currentRoute) }"
+          index="platformToolConfig"
+          @click="handleMenuClick('platformToolConfig')">
+          <span class="side-child-dot" />
+          {{ t('全局工具') }}
+        </audit-menu-item>
+        <audit-menu-item
+          :class="{ active: currentRoute === 'platformReportConfig' }"
+          index="platformReportConfig"
+          @click="handleMenuClick('platformReportConfig')">
+          <span class="side-child-dot" />
+          {{ t('全局报表') }}
         </audit-menu-item>
       </div>
     </div>

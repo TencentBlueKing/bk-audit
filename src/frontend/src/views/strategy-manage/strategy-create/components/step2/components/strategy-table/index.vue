@@ -101,7 +101,6 @@
   import { useRoute } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
-  import ToolManageService from '@service/tool-manage';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
@@ -114,7 +113,10 @@
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
   import {
-    getStrategySystemScopeParams,
+    fetchStrategyDrillTools,
+    fetchStrategyDrillToolTags,
+  } from '../../../../../utils/strategy-drill-tools';
+  import {
     isStrategyCloneRoute,
     isStrategyEditRoute,
   } from '../../../../../utils/strategy-routes';
@@ -274,18 +276,12 @@
     },
   });
 
-  const buildToolListParams = () => ({
-    ...getStrategySystemScopeParams(route),
-    status: 'published',
-  });
-
   // 获取所有工具
   const {
     data: allToolsData,
     run: fetchAllTools,
-  } = useRequest(ToolManageService.fetchAllTools, {
+  } = useRequest(() => fetchStrategyDrillTools(route), {
     defaultValue: [],
-    defaultParams: buildToolListParams(),
     manual: true,
   });
 
@@ -294,15 +290,14 @@
   const {
     data: tagData,
     run: fetchToolTags,
-  } = useRequest(ToolManageService.fetchToolTags, {
+  } = useRequest(() => fetchStrategyDrillToolTags(route), {
     defaultValue: [],
-    defaultParams: buildToolListParams(),
     manual: true,
   });
 
   const handleRefreshToolList = () => {
-    fetchAllTools(buildToolListParams());
-    fetchToolTags(buildToolListParams());
+    fetchAllTools();
+    fetchToolTags();
   };
   const showFieldSkeleton = computed(() => fieldsLoading.value && tableData.value.length === 0);
 

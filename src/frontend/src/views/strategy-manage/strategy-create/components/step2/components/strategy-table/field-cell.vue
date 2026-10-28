@@ -130,6 +130,7 @@
         ref="fieldReferenceRef"
         v-model:showFieldReference="showFieldReference"
         :all-tools-data="allToolsData"
+        :flat-tool-list="isPlatformStrategy"
         :new-tool-name="strategyName"
         :output-fields="outputFields"
         :tag-data="tagData"
@@ -159,11 +160,13 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import ToolDetailModel from '@model/tool/tool-detail';
 
   import type StrategyFieldEvent from '@/domain/model/strategy/strategy-field-event';
   import FieldReference from '@/views/scene-config/tool-manege/create-tool/components/data-search/components/field-reference/index.vue';
+  import { getStrategyBindingScope } from '@/views/strategy-manage/utils/strategy-routes';
 
 
   interface Props {
@@ -192,6 +195,8 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
+  const isPlatformStrategy = getStrategyBindingScope(route).isPlatform;
 
   const localEventItem = ref(props.eventItem);
   const showFieldReference = ref(false);
