@@ -53,6 +53,11 @@ class V4QueryContractTests(SimpleTestCase):
         )
         self.assertEqual(kwargs["timeout"], 300)
 
+        resource.request({"sql": "SELECT COUNT(*)", "prefer_storage": "doris", "request_timeout": 2.5})
+        kwargs = resource.session.request.call_args.kwargs
+        self.assertEqual(kwargs["timeout"].total, 2.5)
+        self.assertNotIn("request_timeout", kwargs["json"])
+
     @override_settings(
         BK_RESOURCE={
             "PLATFORM_AUTH_ENABLED": True,

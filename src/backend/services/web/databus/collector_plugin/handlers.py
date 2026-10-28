@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import json
 from typing import List, Optional, Tuple
 
-from bk_resource import api, resource
+from bk_resource import resource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import uniqid
 from django.conf import settings
@@ -39,6 +39,9 @@ from apps.meta.utils.fields import (
     START_TIME,
     VERSION_ID,
 )
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import source as bkbase_source
+from services.web.bkbase import storage as bkbase_storage
 from services.web.databus.constants import (
     DEFAULT_DATA_ENCODING,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
@@ -54,7 +57,6 @@ from services.web.databus.constants import (
 )
 from services.web.databus.exceptions import MultiOrNoneRawDataError
 from services.web.databus.models import CollectorPlugin
-from services.web.databus.utils import restart_bkbase_clean, start_bkbase_clean
 from services.web.risk.constants import EventMappingFields
 
 
@@ -68,8 +70,8 @@ class PluginEtlHandler:
         self.bkbase_labels: List[str] = []
 
     def create_or_update(self) -> None:
-        self.create_or_update_clean()
-        self.create_or_update_storage()
+        """由Service推进清洗和入库，受理与运行分别处理。"""
+        return bkbase_clean.configure_plugin(self)
 
     def create_or_update_storage(self) -> None:
         main_storage_params, replica_storage_params = self.build_storage_config()
@@ -79,22 +81,22 @@ class PluginEtlHandler:
 
         # 创建入库
         if not self.plugin.has_storage:
-            api.bk_base.databus_storages_post(main_storage_params)
+            bkbase_storage.databus_storages_post(main_storage_params)
             self.plugin.has_storage = True
             self.plugin.save(update_fields=["has_storage"])
         # 更新入库
         else:
             main_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
-            api.bk_base.databus_storages_put(main_storage_params)
+            bkbase_storage.databus_storages_put(main_storage_params)
 
         if replica_storage_params:
             if not self.plugin.has_replica_storage:
-                api.bk_base.databus_storages_post(replica_storage_params)
+                bkbase_storage.databus_storages_post(replica_storage_params)
                 self.plugin.has_replica_storage = True
                 self.plugin.save(update_fields=["has_replica_storage"])
             else:
                 replica_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
-                api.bk_base.databus_storages_put(replica_storage_params)
+                bkbase_storage.databus_storages_put(replica_storage_params)
 
             replica_storage_params["bkbase_result_table_id"] = self.plugin.result_table_id
             GlobalMetaConfig.set(
@@ -111,19 +113,8 @@ class PluginEtlHandler:
             )
 
     def create_or_update_clean(self) -> None:
-        bkbase_params = self.build_clean_config()
-        # 更新
-        if self.plugin.bkbase_table_id:
-            bkbase_params.update({"processing_id": self.plugin.bkbase_processing_id})
-            api.bk_base.databus_cleans_put(bkbase_params)
-            restart_bkbase_clean(self.plugin.bkbase_table_id, self.plugin.bkbase_processing_id)
-        # 创建
-        else:
-            result = api.bk_base.databus_cleans_post(bkbase_params)
-            start_bkbase_clean(result["result_table_id"], self.plugin.bkbase_processing_id)
-            self.plugin.bkbase_processing_id = result["processing_id"]
-            self.plugin.bkbase_table_id = result["result_table_id"]
-            self.plugin.save(update_fields=["bkbase_processing_id", "bkbase_table_id"])
+        """复用业务规则配置，Service处理版本流程。"""
+        return bkbase_clean.configure_clean(self.plugin, self.build_clean_config(), rt_owner=True)
 
     def get_config_name(self) -> str:
         return self.plugin.collector_plugin_name_en.lower()
@@ -350,7 +341,7 @@ class PluginEtlHandler:
         return fields
 
     def get_bk_data_id(self) -> int:
-        resp = api.bk_base.get_rawdata_list(
+        resp = bkbase_source.get_rawdata_list(
             bk_biz_id=settings.DEFAULT_BK_BIZ_ID, raw_data_name__icontains=self.plugin.collector_plugin_name_en
         )
         # 非一条数据则表示没有匹配上，需要报错提示
@@ -447,9 +438,9 @@ class EventCollectorEtlHandler(PluginEtlHandler):
         storage_config = self.build_event_storage_config()
         if self.plugin.has_storage and self.plugin.bkbase_table_id:
             storage_config.update({"result_table_id": self.plugin.bkbase_table_id})
-            api.bk_base.databus_storages_put(storage_config)
+            bkbase_storage.databus_storages_put(storage_config)
         else:
-            api.bk_base.databus_storages_post(storage_config)
+            bkbase_storage.databus_storages_post(storage_config)
             self.plugin.has_storage = True
             self.plugin.save(update_fields=["has_storage"])
 

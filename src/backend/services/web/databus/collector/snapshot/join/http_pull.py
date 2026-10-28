@@ -16,13 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from apps.meta.models import ResourceType, System
+from services.web.bkbase import source as bkbase_source
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
@@ -53,12 +53,12 @@ class HttpPullHandler:
         if self.snapshot.bkbase_data_id:
             logger.info(f"{self.__class__.__name__} Update DataID => {self.snapshot.bkbase_data_id}")
             params.update({"bkbase_data_id": self.snapshot.bkbase_data_id})
-            api.bk_base.update_deploy_plan(params)
+            bkbase_source.update_deploy_plan(params)
             return self.snapshot.bkbase_data_id
 
         # 创建
         logger.info(f"{self.__class__.__name__} Create DataID => {self.snapshot.bkbase_data_id}")
-        result = api.bk_base.create_deploy_plan(params)
+        result = bkbase_source.create_deploy_plan(params)
         return result["raw_data_id"]
 
     def validate_url_security(self, url: str) -> None:

@@ -8,6 +8,7 @@ class QuerySyncRequestSerializer(serializers.Serializer):
     sql = serializers.CharField()
     prefer_storage = serializers.CharField(required=False, allow_blank=True)
     bkdata_authentication_method = serializers.ChoiceField(choices=["user"], default="user")
+    request_timeout = serializers.FloatField(required=False, min_value=0.001, max_value=300, write_only=True)
 
 
 class QuerySyncResponseSerializer(serializers.Serializer):

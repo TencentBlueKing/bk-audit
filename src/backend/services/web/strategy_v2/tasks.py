@@ -28,6 +28,7 @@ from django.utils.encoding import force_str
 
 from core.lock import lock
 from services.web.analyze.constants import FlowNodeStatusChoices
+from services.web.bkbase import flow as bkbase_flow
 from services.web.strategy_v2.constants import (
     RuleAuditSourceType,
     StrategyStatusAnomalyReason,
@@ -56,14 +57,18 @@ EXPECTED_FLOW_STATUS = {
 class StrategyStatusChecker:
     """策略状态检查器"""
 
-    def fetch_flow_status(self, flow_id: Optional[int]) -> str:
+    def fetch_flow_status(self, flow_id: Optional[int], *, strategy=None) -> str:
         """
         获取Flow状态
         """
-        if not flow_id:
+        if strategy is None and not flow_id:
             return FlowNodeStatusChoices.NO_START.value
         try:
-            data = api.bk_base.get_flow_deploy_data(flow_id=flow_id)
+            data = (
+                bkbase_flow.observe_strategy_status(strategy)
+                if strategy is not None
+                else bkbase_flow.get_flow_deploy_data(flow_id=flow_id)
+            )
         except Exception as error:  # pylint: disable=broad-except
             return f"error:{error}"
         if not data:
@@ -77,7 +82,7 @@ class StrategyStatusChecker:
         if expected and flow_status != expected:
             return StrategyStatusAnomalyReason.FLOW_STATUS_MISMATCH.label.format(expected=expected, actual=flow_status)
         # strategy 暂无 flow_id 却处于需要运行的状态
-        if not (strategy.backend_data or {}).get("flow_id") and strategy.status not in (
+        if not bkbase_flow.has_flow(strategy) and strategy.status not in (
             StrategyStatusChoices.DRAFT.value,
             StrategyStatusChoices.DISABLED.value,
             StrategyStatusChoices.DELETE_FAILED.value,
@@ -190,7 +195,7 @@ def check_strategy_status_anomalies():
             flow_id = (strategy.backend_data or {}).get("flow_id")
 
             # 获取flow状态
-            flow_status = checker.fetch_flow_status(flow_id)
+            flow_status = checker.fetch_flow_status(flow_id, strategy=strategy)
 
             # 获取策略运行数据（最近1天的数据）
             running_data = checker.get_strategy_running_data(strategy, days=1, limit=100)
