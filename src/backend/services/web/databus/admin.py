@@ -30,6 +30,7 @@ from services.web.databus.models import (
 
 @admin.register(CollectorPlugin)
 class CollectorPluginAdmin(admin.ModelAdmin):
+    readonly_fields = ["bkbase_v4_resources"]
     list_display = [
         "collector_plugin_id",
         "namespace",
@@ -53,6 +54,7 @@ class CollectorPluginAdmin(admin.ModelAdmin):
 
 @admin.register(CollectorConfig)
 class CollectorConfigAdmin(admin.ModelAdmin):
+    readonly_fields = ["bkbase_v4_resources"]
     list_display = [
         "collector_config_id",
         "system_id",
@@ -107,6 +109,7 @@ class SnapshotStorageInline(admin.TabularInline):
 # 定义 Snapshot 的管理界面
 @admin.register(Snapshot)
 class SnapshotAdmin(admin.ModelAdmin):
+    readonly_fields = ["bkbase_v4_resources"]
     list_display = [
         "id",
         "system_id",
