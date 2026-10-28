@@ -33,7 +33,10 @@ export default class BksecRiskType {
     this.id = String(payload.risk_type_id ?? payload.id ?? '');
     this.name = payload.risk_type_name ?? payload.name ?? '';
     this.isFormal = payload.is_formal !== false;
-    this.fields = (payload.fields || []).map(item => new BksecRiskTypeField(item));
+    const fields = (payload.fields || []).map(item => new BksecRiskTypeField(item));
+    // 必填字段排在前面，同一组内保持接口原顺序
+    fields.sort((left, right) => Number(right.required) - Number(left.required));
+    this.fields = fields;
   }
 
   get label() {

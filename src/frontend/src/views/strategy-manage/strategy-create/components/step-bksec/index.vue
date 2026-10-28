@@ -58,17 +58,31 @@
             v-model="riskTypeId"
             class="bksec-type-select"
             :class="{ 'is-error': typeError }"
+            :filter-option="false"
             filterable
             :loading="typeLoading"
             :no-data-text="t('暂无匹配的风险类型')"
             :no-match-text="t('暂无匹配的风险类型')"
             :placeholder="t('请选择风险类型')"
+            :remote-method="searchRiskTypes"
             @change="handleTypeChange">
-            <bk-option
-              v-for="item in riskTypes"
-              :id="item.id"
-              :key="item.id"
-              :name="item.label" />
+            <bk-option-group
+              v-for="project in displayProjects"
+              :key="project.id"
+              :label="project.name">
+              <bk-option
+                v-for="item in project.riskTypes"
+                :id="item.id"
+                :key="`${project.id}-${item.id}`"
+                :name="item.label" />
+            </bk-option-group>
+            <div
+              v-if="keptRiskType && !selectedInList"
+              class="bksec-kept-option">
+              <bk-option
+                :id="keptRiskType.id"
+                :name="keptRiskType.label" />
+            </div>
           </bk-select>
           <div
             v-if="typeError"
@@ -83,11 +97,15 @@
             {{ t('风险类型加载失败') }}
           </div>
         </div>
-        <bk-loading :loading="typeLoading">
-          <div
-            v-if="fields.length"
-            class="bksec-field-grid"
-            data-testid="bksec-field-grid">
+        <div
+          v-if="fields.length"
+          class="bksec-fields">
+            <div class="bksec-fields-title">
+              {{ t('工单字段') }}
+            </div>
+            <div
+              class="bksec-field-grid"
+              data-testid="bksec-field-grid">
             <div
               v-for="field in fields"
               :key="field.id"
@@ -167,7 +185,7 @@
               </div>
             </div>
           </div>
-        </bk-loading>
+        </div>
       </div>
     </div>
     <template #action>
@@ -225,13 +243,14 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, inject, nextTick, onMounted, reactive, ref, watch } from 'vue';
+  import { computed, inject, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
   import BksecManageService from '@service/bksec-manage';
 
   import type BksecPreviewRisk from '@model/bksec/preview-risk';
+  import type BksecProject from '@model/bksec/project';
   import type BksecRiskType from '@model/bksec/risk-type';
   import type BksecRiskTypeField from '@model/bksec/risk-type-field';
 
@@ -300,12 +319,16 @@
   const sampleRisks = ref<BksecPreviewRisk[]>([]);
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
+  const searchKeyword = ref('');
+  const projectCatalog = ref<BksecProject[]>([]);
+
   const {
-    data: riskTypes,
+    data: projects,
     loading: typeLoading,
     error: typeLoadError,
-  } = useRequest(BksecManageService.fetchRiskTypes, {
-    defaultValue: [] as BksecRiskType[],
+    run: loadProjects,
+  } = useRequest(BksecManageService.fetchProjects, {
+    defaultValue: [] as BksecProject[],
     manual: true,
   });
 
@@ -332,16 +355,73 @@
     name: field.name,
   })));
 
+  const findRiskType = (id: string) => {
+    const sources = [projects.value, projectCatalog.value];
+    for (const source of sources) {
+      for (const project of source) {
+        const type = project.riskTypes.find((item: BksecRiskType) => item.id === id);
+        if (type) return { project, type };
+      }
+    }
+    return undefined;
+  };
+
+  const displayProjects = computed(() => projects.value.filter(project => project.riskTypes.length));
+
+  const keptRiskType = computed(() => {
+    if (!riskTypeId.value) return undefined;
+    const matched = findRiskType(riskTypeId.value);
+    if (matched) return { id: matched.type.id, label: matched.type.label };
+    if (!riskTypeName.value) return undefined;
+    const suffix = `(${riskTypeId.value})`;
+    return {
+      id: riskTypeId.value,
+      label: riskTypeName.value.endsWith(suffix) ? riskTypeName.value : `${riskTypeName.value}${suffix}`,
+    };
+  });
+
+  const selectedInList = computed(() => {
+    const selectedId = riskTypeId.value ? String(riskTypeId.value) : '';
+    if (!selectedId) return false;
+    return displayProjects.value.some(project => (
+      project.riskTypes.some(type => type.id === selectedId)
+    ));
+  });
+
+  let latestSearchDom: string | null = null;
+
+  const searchInput = () => document.querySelector('.bk-select-popover .bk-select-search-input') as HTMLInputElement | null;
+
+  const rememberSearchInput = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    if (!target?.classList?.contains('bk-select-search-input')) return;
+    latestSearchDom = target.value;
+  };
+
   const applyRiskType = (id: string | null) => {
     if (!id) {
       fields.value = [];
       return;
     }
-    const type = riskTypes.value.find((item: BksecRiskType) => item.id === id);
-    if (!type) return;
-    riskTypeName.value = type.name;
-    fields.value = type.fields;
-    fieldValues.value = retainFieldValues(fieldValues.value, type.fields);
+    const matched = findRiskType(id);
+    if (!matched) return;
+    riskTypeName.value = matched.type.name;
+    fields.value = matched.type.fields;
+    fieldValues.value = retainFieldValues(fieldValues.value, matched.type.fields);
+  };
+
+  const searchRiskTypes = (keyword: string) => {
+    const text = keyword.trim();
+    searchKeyword.value = text;
+    if (!text && projectCatalog.value.length) {
+      projects.value = projectCatalog.value;
+    }
+    return loadProjects(text ? { name__icontains: text } : {})
+      .then((list) => {
+        if (searchKeyword.value !== text) return;
+        if (!text) projectCatalog.value = list || [];
+      })
+      .catch(() => undefined);
   };
 
   const buildParams = () => ({
@@ -378,8 +458,11 @@
     applyRiskType(nextId);
   };
 
-  watch(riskTypes, () => {
-    if (riskTypeId.value) applyRiskType(riskTypeId.value);
+  watch(projects, (list) => {
+    if (!searchKeyword.value && list.length) projectCatalog.value = list;
+    // 搜索只刷新下拉。当前选中没变时，不重绘下面的工单字段。
+    if (!riskTypeId.value || fields.value.length) return;
+    applyRiskType(riskTypeId.value);
   });
 
   const updateField = (fieldId: string, event: Event) => {
@@ -562,7 +645,19 @@
     router.push({ name: strategyRoutes.list });
   };
 
+  onUpdated(() => {
+    if (latestSearchDom === null) return;
+    const input = searchInput();
+    if (!input || input.value === latestSearchDom) return;
+    input.value = latestSearchDom;
+  });
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('input', rememberSearchInput, true);
+  });
+
   onMounted(async () => {
+    document.addEventListener('input', rememberSearchInput, true);
     if (!isStrategyEditRoute(route.name)) return;
     sampleRisks.value = await BksecManageService.fetchEditPreviewRisks(strategyId.value);
   });
@@ -635,7 +730,6 @@
 
 .bksec-field {
   position: relative;
-  margin-top: var(--audit-space-24);
 }
 
 .bksec-label,
@@ -671,6 +765,10 @@
   width: 100%;
 }
 
+.bksec-kept-option {
+  display: none;
+}
+
 .bksec-type-select :deep(.bk-select-trigger) {
   border-color: var(--audit-neutral-text-04);
 }
@@ -689,10 +787,23 @@
   border-color: var(--audit-danger-02);
 }
 
+.bksec-fields {
+  margin-top: var(--audit-space-24);
+}
+
+.bksec-fields-title {
+  font-size: var(--audit-font-size-base);
+  font-weight: var(--audit-font-weight-bold);
+  line-height: var(--audit-line-height-base);
+  color: var(--audit-neutral-text-02);
+}
+
 .bksec-field-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-top: var(--audit-space-12);
   column-gap: var(--audit-space-24);
+  row-gap: var(--audit-space-24);
 }
 
 .bksec-input {
