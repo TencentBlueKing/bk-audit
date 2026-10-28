@@ -16,7 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
@@ -33,6 +32,7 @@ from jinja2.nodes import Expr
 
 from api.bk_plugins_ai_agent.exceptions import AgentRateLimited
 from core.sql.constants import FieldType
+from services.web.bkbase import query as bkbase_query
 from services.web.risk.constants import (
     AGGREGATION_FUNCTION_TO_SQL_TYPE,
     AI_ERROR_PREFIX,
@@ -332,7 +332,7 @@ class AIProvider(Provider):
             builder = RiskEventAggregateSqlBuilder(risk)
             sql = builder.build_count_sql()
             logger.info("[AIProvider] Event count SQL: %s", sql)
-            result = api.bk_base.query_sync(sql=sql)
+            result = bkbase_query.query_sync(sql=sql)
             return result.get("list", [{}])[0].get("count", 0)
         except Exception as e:
             logger.warning("[AIProvider] Failed to get event count: %s", e)
@@ -551,7 +551,7 @@ class EventProvider(Provider):
             if not sql:
                 return EVENT_QUERY_FAILED
 
-            result = api.bk_base.query_sync(sql=sql)
+            result = bkbase_query.query_sync(sql=sql)
             return self._parse_result(result, field_name, function)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(

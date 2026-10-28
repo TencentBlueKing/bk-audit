@@ -78,6 +78,10 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
 from services.web.analyze.utils import is_asset
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import metadata as bkbase_metadata
+from services.web.bkbase import permissions as bkbase_permissions
+from services.web.bkbase import query as bkbase_query
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
@@ -1481,9 +1485,7 @@ class RetryStrategy(StrategyV2Base):
             raise serializers.ValidationError(gettext("草稿策略未部署，无需重试；请在编辑页提交部署"))
         # try update
         controller_cls = self.get_base_control_type(strategy.strategy_type)
-        need_update = strategy.backend_data and (
-            strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")
-        )
+        need_update = strategy.backend_data and (strategy.backend_data.get("id") or bkbase_flow.has_flow(strategy))
         # 更新处理人
         strategy.updated_by = get_request_username()
         strategy.save(update_fields=["updated_by"])
@@ -1895,7 +1897,7 @@ class GetRTFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
+        fields = bkbase_metadata.get_rt_fields(result_table_id=validated_request_data["table_id"])
         result = enhance_rt_fields(fields, validated_request_data["table_id"])
         return result
 
@@ -1924,6 +1926,13 @@ class GetRTMeta(StrategyV2Base, CacheResource):
     RequestSerializer = GetRTMetaRequestSerializer
     cache_type = CacheTypeItem(key="GetRTMeta", timeout=10 * 60, user_related=False)
 
+    def __init__(self, *args, **kwargs):
+        """版本和租户改变后不能复用旧元数据，V3保留原缓存键。"""
+        scope = bkbase_metadata.metadata_cache_scope()
+        if scope:
+            self.cache_type = CacheTypeItem(key=f"GetRTMeta:{scope}", timeout=10 * 60, user_related=False)
+        super().__init__(*args, **kwargs)
+
     def perform_request(self, validated_request_data):
         """获取数据表完整元信息"""
         result_table_id = validated_request_data["table_id"]
@@ -1949,18 +1958,18 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
     def get_meta(self, result_table_id):
         """获取数据表的元信息。"""
-        return api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
+        return bkbase_metadata.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
 
     def get_data_manager(self, result_table_id):
         """获取数据表的维护者。"""
         result = {
             'managers': FuncRunner(
-                func=api.bk_base.get_role_users_list,
+                func=bkbase_permissions.get_role_users_list,
                 kwargs={"role_id": "result_table.manager", "scope_id": result_table_id},
                 max_retry=2,
             ).run(),
             'viewers': FuncRunner(
-                func=api.bk_base.get_role_users_list,
+                func=bkbase_permissions.get_role_users_list,
                 kwargs={"role_id": "result_table.viewer", "scope_id": result_table_id},
                 max_retry=2,
             ).run(),
@@ -1969,7 +1978,7 @@ class GetRTMeta(StrategyV2Base, CacheResource):
 
     def get_sensitivity_info(self, result_table_id):
         return {
-            "sensitivity_info": api.bk_base.get_sensitivity_info_via_dataset(
+            "sensitivity_info": bkbase_metadata.get_sensitivity_info_via_dataset(
                 data_set_type="result_table", data_set_id=result_table_id
             )
         }
@@ -1990,7 +1999,7 @@ class GetRTLastData(StrategyV2Base):
     def get_last_data(self, result_table_id, limit):
         """获取数据表的最新数据"""
         today = datetime.datetime.now().strftime('%Y%m%d')
-        rt_info = api.bk_base.get_result_table(result_table_id=result_table_id)
+        rt_info = bkbase_metadata.get_result_table(result_table_id=result_table_id)
         if not is_asset(rt_info):
             # 非维表，添加过滤条件 thedate = current_date
             sql = (
@@ -2000,7 +2009,7 @@ class GetRTLastData(StrategyV2Base):
             # 维表，直接查询
             sql = f"SELECT * FROM {result_table_id} LIMIT {limit}"
 
-        resp = api.bk_base.query_sync(sql=sql)
+        resp = bkbase_query.query_sync(sql=sql)
         return {"last_data": resp.get("list", [{}])}
 
 

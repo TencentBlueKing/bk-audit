@@ -48,6 +48,8 @@ from services.web.analyze.controls.auth import (
     CollectorPluginAuthHandler,
 )
 from services.web.analyze.models import ControlVersion
+from services.web.bkbase import flow as bkbase_flow
+from services.web.bkbase import permissions as bkbase_permissions
 from services.web.common.monitor import LostSceneDetectedEvent
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import StrategyStatusChoices
@@ -170,50 +172,54 @@ def reconcile_bksec_auto_rule():
 
 
 @celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str):
-    """
-    check flow status
-    """
+def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str, operation_id=None):
+    """观测Flow并更新策略；过期V4操作回调不推进资源、不回写状态。"""
 
     # load strategy
     strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
     if strategy is None:
         logger_celery.error("[CheckFlowStatusFailed] Strategy Not Found => %s", strategy_id)
         return
+    if not bkbase_flow.is_current_operation(strategy, operation_id):
+        return
 
     # check flow status
-    flow_id = strategy.backend_data["flow_id"]
+    message = None
     try:
-        deploy_data = api.bk_base.get_flow_deploy_data(flow_id=flow_id)
+        deploy_data = bkbase_flow.strategy_deploy_data(strategy)
         status = deploy_data["status"]
         if status == FlowStatusChoices.SUCCESS.value:
-            strategy.status = success_status
+            next_status = success_status
         elif status == FlowStatusChoices.FAILURE.value:
-            strategy.status = failed_status
-            strategy.status_msg = ";".join(
+            next_status = failed_status
+            message = ";".join(
                 [
                     str(log.get("message", ""))
                     for log in deploy_data.get("logs", [])
                     if log.get("level") == BKBASE_ERROR_LOG_LEVEL
                 ]
             )
-            strategy.save(update_record=False, update_fields=["status_msg"])
         else:
-            strategy.status = other_status
+            next_status = other_status
     except (APIRequestError, TypeError, KeyError):
-        strategy.status = other_status
+        next_status = other_status
 
     # update status
-    strategy.save(update_record=False, update_fields=["status"])
+    if not bkbase_flow.persist_operation_status(strategy, operation_id, next_status, message):
+        return
 
     # 状态确认后再同步自动规则：启动成功才启用，启动失败则保持关闭
     _sync_bksec_rule_after_status_change(strategy)
 
     # check re-run
     if strategy.status == other_status:
-        time.sleep(CHECK_FLOW_STATUS_SLEEP_SECONDS)
-        check_flow_status.delay(
-            strategy_id, success_status=success_status, failed_status=failed_status, other_status=other_status
+        retry_params = {"success_status": success_status, "failed_status": failed_status, "other_status": other_status}
+        if operation_id is not None:
+            retry_params["operation_id"] = operation_id
+        check_flow_status.apply_async(
+            args=[strategy_id],
+            kwargs=retry_params,
+            countdown=CHECK_FLOW_STATUS_SLEEP_SECONDS,
         )
 
     # check failed
@@ -245,9 +251,7 @@ def sync_plan_from_bkbase():
 def auth_rt():
     """Auth Result Table For BkBase"""
 
-    from services.web.analyze.controls.aiops import AiopsFeature
-
-    if not AiopsFeature(help_text="auth_rt").available:
+    if not bkbase_permissions.project_auth_available():
         return
 
     # auth collector plugins
@@ -292,14 +296,14 @@ def toggle_monitor(strategy_id: int, is_active: bool):
         return
 
     # 获取告警配置
-    alert_config = api.bk_base.get_alert_configs(
+    alert_config = bkbase_flow.get_alert_configs(
         object_type=ObjectType.DATAFLOW, object_id=strategy.backend_data["flow_id"]
     )
     alert_config["active"] = is_active
     alert_config["alert_config_id"] = alert_config["id"]
     alert_config["receivers"] = receivers
     alert_config["notify_config"] = notify_config
-    api.bk_base.edit_alert_configs(**alert_config)
+    bkbase_flow.edit_alert_configs(**alert_config)
     logger_celery.info("[ToggleMonitorSuccess] %s %s", strategy_id, is_active)
 
 

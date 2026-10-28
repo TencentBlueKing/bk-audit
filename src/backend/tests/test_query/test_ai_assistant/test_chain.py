@@ -110,7 +110,7 @@ class TestComponentChain(AIAssistantTestCase):
                 f"{LOG_SEARCH_MODULE}.SearchLogPermission.get_scope_auth_systems",
                 return_value=[self.target_system_id],
             ),
-            mock.patch(f"{LOG_SEARCH_MODULE}.api.bk_base.query_sync") as mock_query_sync,
+            mock.patch("bk_resource.api.bk_base.query_sync") as mock_query_sync,
             mock.patch(f"{LOG_SEARCH_MODULE}.resource.meta.system_list") as mock_system_list,
             mock.patch.object(LogSearchService, "_format_hits", side_effect=lambda rows, username: rows),
         ):

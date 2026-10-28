@@ -21,11 +21,11 @@ import re
 from json import JSONDecodeError
 from typing import List
 
-from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 
 from apps.exceptions import RegexpExpressionError
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.etl.etl_config_handler.bk_log_regexp import (
     RegexpConfig,
@@ -73,7 +73,7 @@ class BkLogRegexpEtlClean(EtlClean):
             "next": None,
         }
         try:
-            resp = api.bk_base.clean_preview(msg=data, conf=json.dumps(conf), debug_by_step=True)
+            resp = bkbase_clean.clean_preview(msg=data, conf=json.dumps(conf), debug_by_step=True)
             return self.extract_value(resp.get("nodes", {}).get(label_name, {}))
         except APIRequestError:
             raise RegexpExpressionError()

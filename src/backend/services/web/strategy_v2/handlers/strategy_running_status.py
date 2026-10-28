@@ -19,12 +19,12 @@ import abc
 import datetime
 from typing import Dict, List, Optional, Type, TypedDict
 
-from bk_resource import api
 from django.db import models
 from django.db.models import Count
 from django.db.models.functions import TruncMinute
 
 from core.utils.time import mstimestamp_to_date_string
+from services.web.bkbase import flow as bkbase_flow
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RuleAuditSourceType, StrategyType
 from services.web.strategy_v2.models import Strategy
@@ -113,7 +113,7 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
 
         node = None
         flow_id = self.strategy.backend_data.get("flow_id")
-        bkbase_nodes = api.bk_base.get_flow_graph(flow_id=flow_id)["nodes"]
+        bkbase_nodes = bkbase_flow.get_flow_graph(flow_id=flow_id)["nodes"]
         for node in bkbase_nodes:
             if node["node_type"] == self.processing_node_type:
                 node = node
@@ -136,7 +136,7 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
         if not processing_node:
             return []
         processing_id = self.get_processing_id(processing_node)
-        data = api.bk_base.dataflow_batch_status_list(
+        data = bkbase_flow.dataflow_batch_status_list(
             processing_id=processing_id,
             data_start=int(self.start_time.timestamp()) * 1000,
             data_end=int(self.end_time.timestamp()) * 1000,
@@ -181,6 +181,7 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
         """
         获取策略运行状态
         """
+        bkbase_flow.require_batch_history()
 
         if not self.strategy.backend_data.get("flow_id"):
             return []

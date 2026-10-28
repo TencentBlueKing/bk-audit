@@ -69,8 +69,8 @@ class RuleAuditStorageNodeTests(TestCase):
     @patch("services.web.analyze.storage_node.EventHandler.get_table_id", return_value="5000448.bkaudit_event")
     @patch("services.web.analyze.storage_node.resource.databus.storage.storage_list")
     @patch("services.web.analyze.storage_node.GlobalMetaConfig.get")
-    @patch("services.web.analyze.controls.rule_audit.api.bk_base.update_flow_node")
-    @patch("services.web.analyze.controls.rule_audit.api.bk_base.create_flow_node")
+    @patch("bk_resource.api.bk_base.update_flow_node")
+    @patch("bk_resource.api.bk_base.create_flow_node")
     def test_append_missing_doris_node_on_update(
         self,
         mock_create_flow_node: MagicMock,
@@ -148,8 +148,8 @@ class RuleAuditStorageNodeTests(TestCase):
     @patch("services.web.analyze.storage_node.EventHandler.get_table_id", return_value="5000448.bkaudit_event")
     @patch("services.web.analyze.storage_node.resource.databus.storage.storage_list")
     @patch("services.web.analyze.storage_node.GlobalMetaConfig.get")
-    @patch("services.web.analyze.controls.rule_audit.api.bk_base.update_flow_node")
-    @patch("services.web.analyze.controls.rule_audit.api.bk_base.create_flow_node")
+    @patch("bk_resource.api.bk_base.update_flow_node")
+    @patch("bk_resource.api.bk_base.create_flow_node")
     def test_migration_converts_list_and_controller_updates(
         self,
         mock_create_flow_node: MagicMock,

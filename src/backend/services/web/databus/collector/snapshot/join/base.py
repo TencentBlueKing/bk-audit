@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 
-from bk_resource import api
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db.models import QuerySet
@@ -34,6 +33,7 @@ from apps.meta.utils.fields import (
     SYSTEM_ID,
 )
 from apps.notice.handlers import ErrorMsgHandler
+from services.web.bkbase import source as bkbase_source
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
@@ -166,12 +166,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
                 "config_mode": "full",
                 "scope": [{"deploy_plan_id": 0, "hosts": []}],
             }
-            api.bk_base.stop_collector(**params)
-            # 更新状态
-            if not multiple_storage:
-                self.update_status(SnapshotRunningStatus.CLOSED.value)
-                self.snapshot.save()
-            return True
+            return bkbase_source.stop_snapshot(self.snapshot, params, multiple_storage=multiple_storage)
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             title = gettext("JoinDataStopFailed")
             content = gettext("Error: %s") % str(err)

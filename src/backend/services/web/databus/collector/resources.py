@@ -53,6 +53,8 @@ from apps.meta.utils.saas import get_saas_url
 from core.cache import CacheType
 from core.utils.data import replenish_params
 from core.utils.time import format_date_string
+from services.web.bkbase import clean as bkbase_clean
+from services.web.bkbase import source as bkbase_source
 from services.web.databus.collector.bcs.yaml import YamlTemplate
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.serializers import (
@@ -124,7 +126,6 @@ from services.web.databus.models import (
     SnapshotStorage,
 )
 from services.web.databus.tasks import create_api_push_etl
-from services.web.databus.utils import stop_bkbase_clean
 
 
 class CollectorMeta(AuditMixinResource, abc.ABC):
@@ -372,11 +373,12 @@ class DeleteCollectorResource(CollectorMeta, ModelResource):
             collector_config_id=validated_request_data["collector_config_id"],
             source_platform=SourcePlatformChoices.BKLOG.value,
         )
+        bkbase_clean.validate_collector_delete(collector)
         # 停止采集
         api.bk_log.stop_subscription(collector_config_id=collector.collector_config_id)
         # 停止清洗入库
-        if collector.processing_id:
-            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
+        if not bkbase_clean.stop_log_collector_clean(collector):
+            return None
         # 数据库软删除
         super().perform_request(validated_request_data)
 
@@ -736,10 +738,11 @@ class GetSystemDataIdList(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 没有配置清洗的不算完成接入
-        return CollectorConfig.objects.filter(
-            system_id=validated_request_data["system_id"],
-            source_platform=SourcePlatformChoices.BKBASE.value,
-            bkbase_table_id__isnull=False,
+        return bkbase_clean.configured_collectors(
+            CollectorConfig.objects.filter(
+                system_id=validated_request_data["system_id"],
+                source_platform=SourcePlatformChoices.BKBASE.value,
+            )
         )
 
 
@@ -752,21 +755,24 @@ class GetMyDataIdList(DataIdResource):
     def perform_request(self, validated_request_data):
         # 获取数据
         params = {**validated_request_data, "page": 1, "page_size": 1}
-        data = api.bk_base.get_my_rawdata_list(**params)
+        data = bkbase_source.get_my_rawdata_list(**params)
         total = data["count"]
         request_params = [
             {**validated_request_data, "page": i + 1, "page_size": BKBASE_API_MAX_PAGESIZE}
             for i in range(math.ceil(total / BKBASE_API_MAX_PAGESIZE))
         ]
-        results = api.bk_base.get_my_rawdata_list.bulk_request(request_params)
+        results = bkbase_source.get_my_rawdata_list_bulk(request_params)
         data = []
         for result in results:
             data.extend(result["results"])
         # 增加禁用
         applied_data_id = list(
-            CollectorConfig.objects.all()
-            .exclude(source_platform=SourcePlatformChoices.BKBASE.value, bkbase_table_id__isnull=True)
-            .values_list("bk_data_id", flat=True)
+            (
+                CollectorConfig.objects.exclude(source_platform=SourcePlatformChoices.BKBASE.value)
+                | bkbase_clean.bound_collectors(
+                    CollectorConfig.objects.filter(source_platform=SourcePlatformChoices.BKBASE.value)
+                )
+            ).values_list("bk_data_id", flat=True)
         )
         for item in data:
             item["is_applied"] = item["id"] in applied_data_id
@@ -781,7 +787,7 @@ class GetDataIdDetail(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 获取数据
-        data = api.bk_base.get_rawdata_detail(bk_data_id=validated_request_data["bk_data_id"])
+        data = bkbase_source.get_rawdata_detail(bk_data_id=validated_request_data["bk_data_id"])
         data["bkbase_url"] = (
             get_saas_url(settings.BKBASE_APP_CODE)
             + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
@@ -806,8 +812,8 @@ class GetDataIdDetail(DataIdResource):
         else:
             data.update(
                 {
-                    "created_at": arrow.get(data["created_at"]).strftime(api_settings.DATETIME_FORMAT),
-                    "updated_at": arrow.get(data["updated_at"]).strftime(api_settings.DATETIME_FORMAT),
+                    key: arrow.get(data[key]).strftime(api_settings.DATETIME_FORMAT) if data.get(key) else None
+                    for key in ("created_at", "updated_at")
                 }
             )
         return data
@@ -821,7 +827,7 @@ class GetDataIdTail(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 获取最近数据
-        tail_data = api.bk_base.get_rawdata_tail(**validated_request_data)
+        tail_data = bkbase_source.get_rawdata_tail(**validated_request_data)
         if validated_request_data["parse_json"]:
             for _data in tail_data:
                 _data["parsed_value"] = json.loads(_data.pop("value", "{}"))
@@ -853,7 +859,7 @@ class ApplyDataIdSource(DataIdResource):
         if not has_permission:
             raise ParamsNotValid(message=gettext("无数据源 %s 的访问权限") % bk_data_id)
         # 检验数据源存在状态，没有配置清洗的数据源可以二次接入
-        if CollectorConfig.objects.filter(bk_data_id=bk_data_id, bkbase_table_id__isnull=False).exists():
+        if bkbase_clean.bound_collectors(CollectorConfig.objects.filter(bk_data_id=bk_data_id)).exists():
             raise ParamsNotValid(message=gettext("DataID %s 已接入") % bk_data_id)
         # 获取数据源详情
         raw_data = resource.databus.collector.get_data_id_detail(bk_data_id=bk_data_id)
@@ -873,7 +879,7 @@ class ApplyDataIdSource(DataIdResource):
             if not custom_collector_en_name
             else custom_collector_en_name,
             "source_platform": SourcePlatformChoices.BKBASE.value,
-            "custom_type": raw_data["custom_type"],
+            "custom_type": raw_data.get("custom_type") or CustomTypeEnum.LOG.value,
             "description": raw_data["description"],
             "etl_config": EtlConfigEnum.BK_BASE_JSON.value,
             "is_deleted": False,
@@ -936,12 +942,7 @@ class DeleteDataId(DataIdResource):
             bk_data_id=validated_request_data["bk_data_id"],
             source_platform=SourcePlatformChoices.BKBASE.value,
         )
-        # 停止并删除清洗入库
-        if collector.processing_id:
-            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
-            api.bk_base.databus_cleans_delete(processing_id=collector.processing_id)
-        # 数据库删除
-        CollectorConfig._objects.filter(collector_config_id=collector.collector_config_id).delete()
+        return bkbase_clean.delete_collector(collector)
 
 
 class SnapshotStatisticResource(ModelResource, CollectorMeta):

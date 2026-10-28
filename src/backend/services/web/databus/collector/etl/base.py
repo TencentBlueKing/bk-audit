@@ -21,7 +21,6 @@ import copy
 import json
 from typing import List
 
-from bk_resource import api
 from bk_resource.base import Empty
 from django.conf import settings
 from django.utils.module_loading import import_string
@@ -29,6 +28,7 @@ from django.utils.translation import gettext
 
 from apps.meta.utils.fields import PYTHON_FIELD_TYPE_MAP
 from core.models import get_request_username
+from services.web.bkbase import clean as bkbase_clean
 from services.web.databus.constants import (
     JOIN_DATA_RT_FORMAT,
     EtlConfigEnum,
@@ -95,22 +95,7 @@ class EtlClean(metaclass=abc.ABCMeta):
         # 结构转换
         bkbase_params["json_config"] = json.dumps(bkbase_params["json_config"])
 
-        # 创建清洗
-        if not instance.bkbase_table_id:
-            result = api.bk_base.databus_cleans_post(bkbase_params)
-            self.start_bkbase_clean(
-                bkbase_params["result_table_id"],
-                bkbase_params["processing_id"],
-            )
-            instance.processing_id = result["processing_id"]
-            instance.bkbase_table_id = result["result_table_id"]
-            instance.save()
-
-        # 更新清洗
-        else:
-            bkbase_params.update({"processing_id": bkbase_params["processing_id"]})
-            api.bk_base.databus_cleans_put(bkbase_params, request_cookies=False)
-            self.restart_bkbase_clean(bkbase_params["result_table_id"], bkbase_params["processing_id"])
+        bkbase_clean.configure_clean(instance, bkbase_params, rt_owner=False)
 
         instance.fields = instance_fields
         instance.etl_config = self.etl_config

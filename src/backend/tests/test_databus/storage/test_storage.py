@@ -87,7 +87,7 @@ class StorageTest(TestCase):
         result = self.resource.databus.storage.create_storage(**CREATE_REPLICA_STORAGE_PARAMS)
         self.assertEqual(result, REPLICA_WRITE_CLUSTER_ID)
 
-    @mock.patch("databus.storage.handler.redis.api.bk_base.create_resource_set", mock.Mock(return_value={}))
+    @mock.patch("bk_resource.api.bk_base.create_resource_set", mock.Mock(return_value={}))
     def test_create_or_update_redis(self):
         """CreateOrUpdateRedisResource"""
         result = self.resource.databus.storage.create_or_update_redis(**CREATE_OR_UPDATE_REDIS_PARAMS)

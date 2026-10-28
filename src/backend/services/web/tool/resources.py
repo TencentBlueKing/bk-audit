@@ -23,7 +23,7 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import List, Tuple
 
-from bk_resource import Resource, api, resource
+from bk_resource import Resource, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
 from django.db import transaction
@@ -46,6 +46,7 @@ from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import preserved_order_sort
+from services.web.bkbase import permissions as bkbase_permissions
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,
@@ -1851,7 +1852,7 @@ class UserQueryTableAuthCheck(ToolBase):
             }
             for table in tables
         ]
-        return api.bk_base.user_auth_batch_check({"permissions": permissions})
+        return bkbase_permissions.user_auth_batch_check({"permissions": permissions})
 
 
 class FavoriteTool(ToolBase):

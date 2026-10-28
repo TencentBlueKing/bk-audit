@@ -10,6 +10,7 @@ from bk_resource.exceptions import APIRequestError
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from urllib3.util import Timeout
 
 from api.bk_base_v4.serializers import (
     CleanDebugRequestSerializer,
@@ -85,6 +86,14 @@ class QuerySyncResource(BkBaseV4Resource):
         if not data.get("prefer_storage"):
             data.pop("prefer_storage", None)
         return data
+
+    def before_request(self, kwargs):
+        """在 HTTP 层应用单次查询预算，保持网关请求体不变。"""
+        payload = kwargs.get("json") or {}
+        request_timeout = payload.pop("request_timeout", None)
+        if request_timeout is not None:
+            kwargs["timeout"] = Timeout(total=request_timeout)
+        return super().before_request(kwargs)
 
 
 class DebugQuerySyncResource(QuerySyncResource):

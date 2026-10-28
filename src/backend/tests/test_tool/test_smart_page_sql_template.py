@@ -349,7 +349,7 @@ class SmartPageAPITestCase(TestCase):
 
     def test_execute_smart_page_tool(self):
         with (
-            patch("services.web.tool.executor.tool.api.bk_base.debug_query_sync.bulk_request") as mock_bulk,
+            patch("bk_resource.api.bk_base.debug_query_sync.bulk_request") as mock_bulk,
             patch("services.web.tool.resources.ExecuteTool._get_user_allowed_scopes", return_value=([], [])),
         ):
             mock_bulk.return_value = [{"list": [{"col": "val"}]}]
