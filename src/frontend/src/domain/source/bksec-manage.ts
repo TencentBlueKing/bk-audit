@@ -24,8 +24,21 @@ class BksecManage {
     return Request.get('/api/v1/feature/bksec/');
   }
 
-  fetchRiskTypes() {
-    return Request.get('/api/v1/bk_sec/risk_types/');
+  /**
+   * 当前用户有权限的项目及其风险类型。name__icontains 按风险类型名称模糊搜索。
+   */
+  fetchProjects(params: {
+    is_formal?: string;
+    name__icontains?: string;
+  } = {}) {
+    const query: Record<string, string> = {};
+    const formal = params.is_formal?.trim();
+    const keyword = params.name__icontains?.trim();
+    if (formal) query.is_formal = formal;
+    if (keyword) query.name__icontains = keyword;
+    return Request.get('/api/v1/bk_sec/projects/', {
+      params: query,
+    });
   }
 
   fetchTicketPreview(params: TicketPreviewRequest) {

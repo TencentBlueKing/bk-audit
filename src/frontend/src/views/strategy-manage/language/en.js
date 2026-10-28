@@ -666,6 +666,7 @@ export default {
     BKSEC安全工单: 'BKSEC security ticket',
     '启用后审计策略生成风险后，系统将调用处理套餐发送 BKSEC 安全工单': 'After it is enabled, a BKSEC security ticket is sent through a processing package when the strategy creates a risk',
     风险类型: 'Risk type',
+    工单字段: 'Ticket fields',
     请选择风险类型: 'Select a risk type',
     暂无匹配的风险类型: 'No matching risk type',
     '请输入{name}': 'Enter {name}',

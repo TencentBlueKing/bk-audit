@@ -17,7 +17,7 @@
 
 import type { BksecConfigPayload } from '@model/bksec/config';
 import BksecPreviewRisk from '@model/bksec/preview-risk';
-import BksecRiskType from '@model/bksec/risk-type';
+import BksecProject from '@model/bksec/project';
 import BksecTestTaskStatus from '@model/bksec/task-status';
 
 import BksecManageSource from '../source/bksec-manage';
@@ -27,9 +27,19 @@ export default {
     return BksecManageSource.fetchFeature()
       .then(({ data }) => ({ enabled: !!data?.enabled }));
   },
-  fetchRiskTypes() {
-    return BksecManageSource.fetchRiskTypes()
-      .then(({ data }) => (data || []).map((item: Record<string, any>) => new BksecRiskType(item)));
+  fetchProjects(params?: {
+    is_formal?: string;
+    name__icontains?: string;
+  }) {
+    return BksecManageSource.fetchProjects(params)
+      .then(({ data }) => (data || []).map((item: Record<string, any>) => new BksecProject(item)));
+  },
+  fetchRiskTypes(params?: {
+    is_formal?: string;
+    name__icontains?: string;
+  }) {
+    return this.fetchProjects(params)
+      .then(projects => projects.flatMap(project => project.riskTypes));
   },
   fetchTicketPreview(params: { risk_id: string; bksec_config: BksecConfigPayload }) {
     return BksecManageSource.fetchTicketPreview(params)

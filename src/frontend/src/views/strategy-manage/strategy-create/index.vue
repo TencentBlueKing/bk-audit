@@ -476,9 +476,6 @@
           initialFormData.value = _.cloneDeep(formData.value);
         }
         messageSuccess(t('保存草稿成功'));
-        router.push({
-          name: strategyRoutes.list,
-        });
         return;
       }
       const treatAsCreate = !isEditMode;
