@@ -60,6 +60,25 @@ class BKSec(BkApiResource, abc.ABC):
         raise NotImplementedError
 
 
+class ProjectChoices(BKSec):
+    """查询项目列表（应用认证+用户认证）"""
+
+    name = "查询项目列表"
+    method = "GET"
+    action = "/api/v1/project/choices/"
+    platform_authorization = False
+
+    def _mock_request(self, validated_request_data):
+        # 从风险类型自带的 project 对象聚合（mock 数据为单项目；需多项目时往 risk_type_list.json 补即可）
+        data = _load_mock_data()
+        projects = {}
+        for item in (data.get("data") or {}).get("results", []):
+            project = item.get("project")
+            if isinstance(project, dict) and project.get("id") is not None:
+                projects[str(project["id"])] = {"id": project["id"], "name": project.get("name") or ""}
+        return list(projects.values())
+
+
 class RiskAccessList(BKSec):
     """查询风险类型列表（内嵌 risk_access_fields 字段 schema，用户身份）
 

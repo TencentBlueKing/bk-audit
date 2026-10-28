@@ -51,6 +51,8 @@ class BkSecConfig(BaseModel):
     """
 
     enabled: bool = Field(False, description="是否启用 BKSEC 安全工单")
+    # 项目维度：risk_access 接口 project_id 必传，且取 token 也按项目查，故必须与 risk_type_id 一并落库
+    project_id: str = Field("", description="BKSEC 项目 ID")
     risk_type_id: str = Field("", description="BKSEC 风险类型 ID")
     risk_type_name: str = Field("", description="BKSEC 风险类型名称")
     # 三个独立入参模板：SOPS 插件 ${target}/${target_type}/${operator} 的取值来源，
@@ -90,13 +92,15 @@ class BkSecConfig(BaseModel):
     def validate_for_submit(self) -> None:
         """
         正式提交校验：
-           1. 启用时风险类型必选
+           1. 启用时项目、风险类型必选（两者共同定位 risk_access 记录，缺一无法取 token）
            2. 必填字段非空(operator/target/target_type)
 
         草稿保存不调用本方法（允许配置不完整）。
         """
         if not self.enabled:
             return
+        if not self.project_id:
+            raise ValueError(gettext("启用 BKSEC 安全工单时必须选择项目"))
         if not self.risk_type_id:
             raise ValueError(gettext("启用 BKSEC 安全工单时必须选择风险类型"))
         for key in BKSEC_REQUIRED_FIELD_KEYS:

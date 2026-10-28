@@ -271,7 +271,7 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
     try:
         from services.web.risk.bksec.service import is_risk_type_visible
 
-        if not is_risk_type_visible(config.risk_type_id):
+        if not is_risk_type_visible(config.risk_type_id, project_id=config.project_id):
             message = "当前用户无权使用 risk_type_id=%s 的风险类型" % config.risk_type_id
             logger.warning(
                 "[BkSecPluginConfig] %s, strategy_id=%s risk_type_id=%s",
@@ -294,7 +294,7 @@ def sync_plugin_config(strategy: Strategy, config: BkSecConfig, is_test: bool = 
         from services.web.risk.bksec.service import find_risk_access_item
 
         # 凭证查找不走缓存（use_cache=False），避免 token 轮换后向插件写入旧值
-        item = find_risk_access_item(config.risk_type_id)
+        item = find_risk_access_item(config.risk_type_id, project_id=config.project_id)
         token = (item or {}).get("token", "")
         if not token:
             message = "risk_access 列表接口未返回 risk_type_id=%s 的 token" % config.risk_type_id

@@ -47,6 +47,7 @@ from services.web.risk.constants import TicketNodeStatus
 from services.web.risk.models import Risk, TicketNode
 from services.web.risk.serializers import (
     GetTaskStatusReqSerializer,
+    ListBkSecProjectsResponseSerializer,
     ListBkSecRiskTypesReqSerializer,
     ListBkSecRiskTypesResponseSerializer,
     PreviewTicketReqSerializer,
@@ -68,11 +69,37 @@ class TicketResourceMeta(AuditMixinResource):
     tags = ["Ticket"]
 
 
+class ListBkSecProjects(BkSecResourceMeta):
+    """
+    查询 BKSEC 项目列表（策略页项目下拉）
+
+    用户身份实时拉取、不缓存：用户的项目权限会变化，缓存会让已失效的项目继续可选。
+    """
+
+    name = gettext_lazy("查询BKSEC项目列表")
+
+    ResponseSerializer = ListBkSecProjectsResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        from apps.feature.constants import FeatureTypeChoices
+        from apps.feature.handlers import FeatureHandler
+
+        if not FeatureHandler(FeatureTypeChoices.BKSEC).check():
+            return []
+        items = api.bk_sec.project_choices() or []
+        return [
+            {"id": str(item.get("id", "")), "name": item.get("name", "") or ""}
+            for item in items
+            if isinstance(item, dict)
+        ]
+
+
 class ListBkSecRiskTypes(BkSecResourceMeta):
     """
     查询 BKSEC 风险类型列表（策略页下拉）
 
-    按 BKSEC_PROJECT_ID 项目维度过滤（必填），默认只返回正式（is_formal）类型。
+    按项目维度过滤（project_id 必传，risk_access 接口要求），默认只返回正式（is_formal）类型。
     """
 
     name = gettext_lazy("查询BKSEC风险类型列表")
@@ -87,13 +114,13 @@ class ListBkSecRiskTypes(BkSecResourceMeta):
 
         if not FeatureHandler(FeatureTypeChoices.BKSEC).check():
             return []
-        if not settings.BKSEC_PROJECT_ID:
-            raise serializers.ValidationError(gettext_lazy("未配置 BKSEC 项目（BKAPP_BKSEC_PROJECT_ID），无法查询风险类型"))
-        # 全量翻页（带缓存）后本地模糊过滤：缓存键按 is_formal + 身份维度，
+        # 全量翻页（带缓存）后本地模糊过滤：缓存键按 项目 + is_formal + 身份维度，
         # 名称过滤须在本地做，否则不同关键字互相污染缓存
         # 用户身份（as_platform=False）：随请求者凭证调用，网关按用户数据域出数据
         items = fetch_risk_access_items(
-            is_formal=validated_request_data.get("is_formal") or "true", as_platform=False
+            project_id=validated_request_data["project_id"],
+            is_formal=validated_request_data.get("is_formal") or "true",
+            as_platform=False,
         )
         keyword = (validated_request_data.get("name__icontains") or "").strip().lower()
         if keyword:
