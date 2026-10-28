@@ -36,7 +36,9 @@ class BkSecFieldMapping(BaseModel):
 
     value 支持文字与变量混排，语法与事件调查报告一致：
     - 风险变量：{{ risk.risk_id }}、{{ risk.operator }}
-    - 事件变量：{{ event.username }}（默认取最后一条事件）、{{ count(event.event_id) }}
+    - 事件变量：{{ event.username }}（默认取最后一条事件）
+    - 扁平变量：{{ event_time }}（风险字段优先、事件字段补充）
+    - 事件自定义字段：{{ event_data['username'] }}
     """
 
     key: str = Field("", description="BKSEC 字段 key")

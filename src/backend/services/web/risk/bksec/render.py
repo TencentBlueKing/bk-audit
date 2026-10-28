@@ -22,9 +22,11 @@ to the current version of the project delivered to anyone in the future.
 # ② 归一   display_value    任意值 → 文本：列表→"a;b"、dict/list→JSON 串、
 #          时间→"YYYY-MM-DD HH:MM:SS"。风险字段在装载时批量预转；
 #          事件字段在模板取值时惰性转换（模板不碰的字段不做功）
-# ③ 组装   build_render_context → {"risk": {...}, "event": EventNamespace}
+# ③ 组装   build_render_context → {"risk": {...}, "event": EventNamespace, 扁平变量...}
 #          命名空间即抽屉：{{ risk.xxx }} 取风险字段（成品文本），
-#          {{ event.xxx }} 取事件字段（现取现磨，默认最后一条事件）
+#          {{ event.xxx }} 取事件字段（现取现磨，默认最后一条事件）；
+#          此外平铺裸变量（对齐风险单标题渲染口径）：{{ event_time }} 直接取字段，
+#          {{ event_data['xx'] }} 按事件自定义字段下标取值（风险字段优先、事件字段补充）
 # ④ 渲染   render_value     jinja 展开 "文字 + {{ 变量 }}" 混排模板 → 终值
 #
 # 使用方：预览（build_event_payload）/ 测试发送（build_plugin_constants）/ 正式发单（AutoProcess）。
@@ -56,6 +58,8 @@ def render_value(template: str, context: dict) -> str:
     渲染字段值模板（支持字符串和风险变量/事件变量混写）
     - 风险变量：{{ risk.risk_id }}、{{ risk.operator }}
     - 事件变量：{{ event.username }}，取最后一条事件的字段值
+    - 扁平变量：{{ event_time }}（风险字段优先、事件字段补充）
+    - 事件自定义字段：{{ event_data['username'] }}，event_data 恒在上下文中（缺省空 dict）
     """
     if not isinstance(template, str) or "{{" not in template:
         return template if isinstance(template, str) else ""
@@ -145,6 +149,42 @@ class _RiskData(dict):
         return ""
 
 
+class _EventData(dict):
+    """
+    事件自定义字段字典：{{ event_data['xx'] }}
+
+    保留字典结构以支持下标取值（对齐风险单标题渲染口径）；
+    整体渲染时输出 JSON 串，与 display_value 对 dict 的处理口径一致。
+    """
+
+    def __str__(self) -> str:
+        return json.dumps(self, ensure_ascii=False, default=str)
+
+
+def _normalize_event_data(value: Any) -> Any:
+    """event_data 值归一：嵌套字典递归保留可下标结构，其余按 display_value 口径转文本"""
+    if isinstance(value, dict):
+        return _EventData({str(k): _normalize_event_data(v) for k, v in value.items()})
+    return display_value(value)
+
+
+def parse_event_data(value: Any) -> _EventData:
+    """
+    解析 event_data（恒返回 _EventData）
+
+    检索结果中的 event_data 可能是 JSON 字符串（取决于解析阶段），需兼容解析；
+    缺失或非法时返回空 dict，保证 {{ event_data['xx'] }} 只会渲染为空、不会抛未定义错误。
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return _EventData()
+    if isinstance(value, dict):
+        return _EventData({str(k): _normalize_event_data(v) for k, v in value.items()})
+    return _EventData()
+
+
 def load_security_person() -> List[str]:
     """
     安全接口人
@@ -215,6 +255,8 @@ def build_risk_data(risk: Optional[Risk]) -> _RiskData:
             "notice_users": display_value(risk.notice_users),
             "origin_operator": display_value(risk.origin_operator),
             "event_type": display_value(risk.event_type),
+            # 保留字典结构：支持 {{ risk.event_data['xx'] }} / {{ event_data['xx'] }} 下标取值
+            "event_data": parse_event_data(risk.event_data),
             "event_source": risk.event_source or "",
             "event_time": display_value(risk.event_time),
             "event_end_time": display_value(risk.event_end_time),
@@ -226,18 +268,46 @@ def build_risk_data(risk: Optional[Risk]) -> _RiskData:
     )
 
 
+def build_event_flat_data(events: List[dict], risk_data: Optional[_RiskData] = None) -> dict:
+    """
+    构建扁平变量命名空间（对齐风险单标题渲染口径）：不写命名空间，直接取字段
+
+    - {{ event_time }}：风险字段优先、事件字段补充（最后一条事件），事件字段不覆盖风险字段，
+      避免事件里恰好同名的字段把风险字段顶掉；
+    - {{ event_data['xx'] }}：按事件自定义字段下标取值，事件无 event_data 时回落到风险单的 event_data，
+      两者皆无时为空 dict（下标不命中只渲染为空，不会抛未定义错误）。
+    """
+    flat: dict = dict(risk_data or {})
+    latest = events[-1] if events else {}
+    for name, value in latest.items():
+        if name == "event_data":
+            continue
+        flat.setdefault(name, display_value(value))
+    flat["event_data"] = parse_event_data(latest.get("event_data")) or flat.get("event_data") or _EventData()
+    return flat
+
+
 def build_render_context(risk: Optional[Risk] = None, events: Optional[List[dict]] = None) -> dict:
     """
     构建 BKSEC 字段渲染上下文
 
     {
       "risk":  build_risk_data(risk),        # 风险字段字典：{"operator": "alice;bob", ...}
-      "event": EventNamespace(load_risk_events(risk))   # 2 条事件，{{ event.username }} → "bob"
+      "event": EventNamespace(load_risk_events(risk)),   # 2 条事件，{{ event.username }} → "bob"
+      "event_time": "2024-09-24 12:00:00",   # 扁平变量：{{ event_time }} 直接取字段
+      "event_data": {"username": "bob"},     # 扁平变量：{{ event_data['username'] }} → "bob"
     }
     """
     if events is None and risk is not None:
         events = load_risk_events(risk)
+    events = events or []
+    risk_data = build_risk_data(risk)
+    flat = build_event_flat_data(events, risk_data)
+    # 命名空间优先级高于扁平变量：事件字段恰好叫 risk/event 时不覆盖命名空间
+    flat.pop("risk", None)
+    flat.pop("event", None)
     return {
-        "risk": build_risk_data(risk),
-        "event": EventNamespace(events or []),
+        **flat,
+        "risk": risk_data,
+        "event": EventNamespace(events),
     }

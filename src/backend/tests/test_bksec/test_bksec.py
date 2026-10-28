@@ -282,6 +282,36 @@ class TestRenderer:
             assert render_value("static text", context) == "static text"
             assert render_value("{{ risk.not_exist }}", context) == ""
 
+    def test_render_flat_variables(self):
+        """裸变量：风险字段优先，风险无该字段时补充最后一条事件的字段"""
+        events = [{"username": "alice"}, {"username": "bob"}]
+        with RiskContext() as risk:
+            context = build_render_context(risk=risk, events=events)
+            assert render_value("{{ risk_id }}", context) == risk.risk_id
+            assert render_value("{{ operator }}", context) == "admin"
+            assert render_value("{{ username }}", context) == "bob"
+
+    def test_render_event_data_subscript(self):
+        """event_data 下标取值（对齐风险单标题渲染口径），兼容 JSON 字符串形态"""
+        events = [
+            {"event_data": {"username": "alice", "asset": "127.0.0.1"}},
+            {"event_data": '{"username": "bob", "asset": "10.0.0.1"}'},
+        ]
+        with RiskContext() as risk:
+            context = build_render_context(risk=risk, events=events)
+            assert render_value("{{ event_data['username'] }}", context) == "bob"
+            assert render_value("{{ event_data['asset'] }}", context) == "10.0.0.1"
+            assert render_value("{{ risk.event_data['username'] }}", context) == "admin"
+            # 下标不命中：渲染为空，不抛未定义错误
+            assert render_value("{{ event_data['not_exist'] }}", context) == ""
+            # 无事件：回落到风险单 event_data，仍不抛错
+            empty_context = build_render_context(risk=risk, events=[])
+            assert render_value("{{ event_data['username'] }}", empty_context) == "admin"
+            assert render_value("{{ event_data['not_exist'] }}", empty_context) == ""
+            # 扁平变量不影响命名空间取值
+            assert render_value("{{ risk.operator }}", context) == "admin"
+            assert render_value("{{ event.username }}", context) == "bob"
+
 
 @pytest.mark.django_db
 class TestContract:
