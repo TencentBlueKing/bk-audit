@@ -263,6 +263,7 @@
 
   import RenderInfoItem from './render-info-item.vue';
 
+  import useDrillToolAvailability from '@/hooks/use-drill-tool-availability';
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
 
@@ -343,6 +344,7 @@
     event_end_time: props.data.event_end_time,
   }));
 
+  const isAllToolsLoaded = ref(false);
   const {
     data: allToolsData,
     run: fetchAllTools,
@@ -352,6 +354,15 @@
       scope_type: 'scene',
       scope_id: props.data.scene_id,
     },
+    onSuccess: () => {
+      isAllToolsLoaded.value = true;
+    },
+  });
+
+  const { resolveAvailableDrillConfig } = useDrillToolAvailability({
+    sceneTools: allToolsData,
+    isSceneToolsLoaded: isAllToolsLoaded,
+    getSceneId: () => props.data.scene_id,
   });
 
   const {
@@ -379,8 +390,12 @@
   };
 
   const handleUseTool = (fieldItem: FieldItem, activeUid?: string) => {
-    const drillConfig = getFieldDrill(fieldItem);
-    if (!drillConfig.length) {
+    const fieldDrill = getFieldDrill(fieldItem);
+    if (!fieldDrill.length) {
+      return;
+    }
+    const drillConfig = resolveAvailableDrillConfig(fieldDrill, activeUid);
+    if (!drillConfig) {
       return;
     }
     riskToolParams.value.drill_field = fieldItem.field_name;
@@ -611,6 +626,7 @@
     });
     fetchSceneAll();
     if (!props.isAddRisk) {
+      isAllToolsLoaded.value = false;
       fetchAllTools({
         scope_id: sceneId,
         scope_type: 'scene',

@@ -40,6 +40,8 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatReferencedStrategyNames } from '@views/tool-manage-shared/strategy-reference';
+
   import { getSceneSystemParams } from '@/utils/assist/scene-system-params';
 
   // 工具类型枚举
@@ -320,14 +322,20 @@
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPlatform = isPlatformTool(row);
         const isEnabled = row.status === 'published';
-        const hasStrategies = row.strategies && row.strategies.length > 0;
+        const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
+        const hasStrategies = Boolean(referencedStrategyNames);
+        // 被策略引用的启用工具不可停用
+        const isToggleDisabled = isPlatform || (isEnabled && hasStrategies);
+        const toggleTooltip = isPlatform
+          ? platformToolTooltip
+          : t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames });
         // 删除按钮禁用条件：平台工具、启用状态或被策略引用
         const isDeleteDisabled = isPlatform || isEnabled || hasStrategies;
         // 删除按钮提示文字
         const getDeleteTooltip = () => {
           if (isPlatform) return platformToolTooltip;
+          if (hasStrategies) return t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames });
           if (isEnabled) return t('请先停用后再删除');
-          if (hasStrategies) return t('该工具已被策略引用，无法删除');
           return '';
         };
         const deleteTooltip = getDeleteTooltip();
@@ -369,23 +377,34 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    <bk-button
-                      v-bk-tooltips={{
-                        content: platformToolTooltip,
-                        disabled: !isPlatform,
-                        placement: 'top',
-                      }}
-                      text
-                      disabled={isPlatform}
-                      class={['mr8', isPlatform ? 'mr8-disabled' : '']}
-                      onClick={() => !isPlatform && emit('toggle-status', row)}>
-                      {isEnabled ? t('停用') : t('启用')}
-                    </bk-button>
+                    {isToggleDisabled ? (
+                      <span
+                        v-bk-tooltips={{
+                          content: toggleTooltip,
+                          placement: 'top',
+                          extCls: 'tool-strategy-ref-tips',
+                        }}>
+                        <bk-button
+                          text
+                          disabled
+                          class="mr8 mr8-disabled">
+                          {isEnabled ? t('停用') : t('启用')}
+                        </bk-button>
+                      </span>
+                    ) : (
+                      <bk-button
+                        text
+                        class="mr8"
+                        onClick={() => emit('toggle-status', row)}>
+                        {isEnabled ? t('停用') : t('启用')}
+                      </bk-button>
+                    )}
                     {isDeleteDisabled ? (
                       <span
                         v-bk-tooltips={{
                           content: deleteTooltip,
                           placement: 'top',
+                          extCls: 'tool-strategy-ref-tips',
                         }}>
                         <bk-button
                           text
@@ -597,6 +616,12 @@
 
   .tool-more-action-popover.bk-popover.bk-pop2-content {
     padding: 0;
+  }
+
+  .tool-strategy-ref-tips {
+    max-width: 400px;
+    word-break: break-all;
+    white-space: normal;
   }
 
   .more-action-menu {

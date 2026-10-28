@@ -63,24 +63,39 @@
               <template #tagRender="{ value, label }">
                 {{ getToolName(value) || label }}
               </template>
-              <template
-                v-for="(item, index) in toolCascaderList"
-                :key="index">
-                <bk-option-group
-                  collapsible
-                  :label="item.name">
-                  <bk-option
-                    v-for="(child, childIndex) in item.children"
-                    :id="child.id"
-                    :key="childIndex"
-                    :name="child.name">
-                    <span>{{ child.name }}</span>
-                    <span
-                      style=" padding: 2px; margin-left: 4px;background: #f0f1f5; border-radius: 2px;">
-                      {{ toolTypeMap[child.tool_type as keyof typeof toolTypeMap] }}
-                    </span>
-                  </bk-option>
-                </bk-option-group>
+              <template v-if="flatToolList">
+                <bk-option
+                  v-for="child in flatToolOptions"
+                  :id="child.id"
+                  :key="child.id"
+                  :name="child.name">
+                  <span>{{ child.name }}</span>
+                  <span
+                    style=" padding: 2px; margin-left: 4px;background: #f0f1f5; border-radius: 2px;">
+                    {{ toolTypeMap[child.tool_type as keyof typeof toolTypeMap] }}
+                  </span>
+                </bk-option>
+              </template>
+              <template v-else>
+                <template
+                  v-for="(item, index) in toolCascaderList"
+                  :key="index">
+                  <bk-option-group
+                    collapsible
+                    :label="item.name">
+                    <bk-option
+                      v-for="(child, childIndex) in item.children"
+                      :id="child.id"
+                      :key="childIndex"
+                      :name="child.name">
+                      <span>{{ child.name }}</span>
+                      <span
+                        style=" padding: 2px; margin-left: 4px;background: #f0f1f5; border-radius: 2px;">
+                        {{ toolTypeMap[child.tool_type as keyof typeof toolTypeMap] }}
+                      </span>
+                    </bk-option>
+                  </bk-option-group>
+                </template>
               </template>
               <template #extension>
                 <div class="create-tool-group">
@@ -373,6 +388,8 @@
       tag_name: string;
       tool_count: number;
     }>;
+    /** 工具下拉平铺展示，不按标签分组 */
+    flatToolList?: boolean;
   }
 
   interface Expose {
@@ -470,6 +487,8 @@
   };
 
   const toolCascaderList = ref<Array<ToolCascaderItem>>([]);
+
+  const flatToolOptions = computed(() => toolCascaderList.value.flatMap(group => group.children));
 
   const isToolLoading = ref(true);
 
@@ -919,6 +938,15 @@
       });
     }
 
+    if (props.flatToolList) {
+      toolCascaderList.value = [{
+        id: '',
+        name: '',
+        children: filteredData.map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type })),
+      }];
+      return;
+    }
+
     // 构建级联列表
     toolCascaderList.value = props.tagData
       .map(item => ({
@@ -1009,7 +1037,7 @@
   });
 
   const syncToolCascaderList = () => {
-    if (!props.tagData?.length) {
+    if (!props.flatToolList && !props.tagData?.length) {
       return;
     }
     isToolLoading.value = false;
@@ -1029,7 +1057,8 @@
       return;
     }
     syncToolCascaderList();
-    if (!props.tagData?.length) {
+    const isToolSourceEmpty = props.flatToolList ? !props.allToolsData?.length : !props.tagData?.length;
+    if (isToolSourceEmpty) {
       refreshToolList();
     }
   });
