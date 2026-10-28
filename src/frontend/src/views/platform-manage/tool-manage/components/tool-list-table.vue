@@ -51,6 +51,8 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import { formatReferencedStrategyNames, type StrategyOption } from '@views/tool-manage-shared/strategy-reference';
+
   import sceneIconUrl from '@images/scene.svg';
   import systemIconUrl from '@images/system.svg';
 
@@ -103,6 +105,7 @@
     systemNameMap?: Record<string, string>;
     sceneOptions?: SceneOption[];
     systemOptions?: SystemOption[];
+    strategyList?: StrategyOption[];
   }
 
   interface Emits {
@@ -120,6 +123,7 @@
     systemNameMap: () => ({}),
     sceneOptions: () => [],
     systemOptions: () => [],
+    strategyList: () => [],
   });
   const emit = defineEmits<Emits>();
 
@@ -670,6 +674,11 @@
       fixed: 'right',
       cell: (_h: any, { row }: { row: ToolModel }) => {
         const isPublished = row.status === 'published';
+        const referencedStrategyNames = formatReferencedStrategyNames(row.strategies, props.strategyList);
+        const isReferenced = Boolean(referencedStrategyNames);
+        const deleteDisabledTip = isReferenced
+          ? t('该工具正在被{strategies}使用，无法删除', { strategies: referencedStrategyNames })
+          : t('请先停用后再删除');
 
         return (
           <div class="action-cell">
@@ -680,13 +689,30 @@
               onClick={() => emit('edit', row)}>
               {t('编辑')}
             </bk-button>
-            <bk-button
-              text
-              theme="primary"
-              class="mr8"
-              onClick={() => emit('toggle-status', row)}>
-              {isPublished ? t('停用') : t('启用')}
-            </bk-button>
+            {isPublished && isReferenced ? (
+              <span
+                class="mr8"
+                v-bk-tooltips={{
+                  content: t('该工具正在被{strategies}使用，无法停用', { strategies: referencedStrategyNames }),
+                  placement: 'top',
+                  extCls: 'tool-strategy-ref-tips',
+                }}>
+                <bk-button
+                  text
+                  theme="primary"
+                  disabled>
+                  {t('停用')}
+                </bk-button>
+              </span>
+            ) : (
+              <bk-button
+                text
+                theme="primary"
+                class="mr8"
+                onClick={() => emit('toggle-status', row)}>
+                {isPublished ? t('停用') : t('启用')}
+              </bk-button>
+            )}
             <bk-popover
               extCls="tool-more-action-popover"
               placement="bottom-start"
@@ -702,11 +728,12 @@
                 ),
                 content: () => (
                   <div class="more-action-menu">
-                    {isPublished ? (
+                    {isPublished || isReferenced ? (
                       <span
                         v-bk-tooltips={{
-                          content: t('请先停用后再删除'),
+                          content: deleteDisabledTip,
                           placement: 'bottom',
+                          extCls: 'tool-strategy-ref-tips',
                         }}>
                         <span class="delete-disabled">{t('删除')}</span>
                       </span>
@@ -896,6 +923,12 @@
   .smart-page-edit-disabled-tips {
     max-width: 280px;
     word-break: break-word;
+    white-space: normal;
+  }
+
+  .tool-strategy-ref-tips {
+    max-width: 400px;
+    word-break: break-all;
     white-space: normal;
   }
 

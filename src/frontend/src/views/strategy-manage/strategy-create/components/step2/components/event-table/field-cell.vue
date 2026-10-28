@@ -184,6 +184,7 @@
         ref="fieldReferenceRef"
         v-model:showFieldReference="showFieldReference"
         :all-tools-data="allToolsData"
+        :flat-tool-list="isPlatformStrategy"
         :new-tool-name="strategyName"
         :output-fields="outputFields"
         :tag-data="tagData"
@@ -212,6 +213,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
@@ -224,6 +226,7 @@
   import FieldMapping from './field-mapping.vue';
 
   import FieldReference from '@/views/scene-config/tool-manege/create-tool/components/data-search/components/field-reference/index.vue';
+  import { getStrategyBindingScope } from '@/views/strategy-manage/utils/strategy-routes';
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
@@ -256,6 +259,8 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
+  const isPlatformStrategy = getStrategyBindingScope(route).isPlatform;
 
   const requiredFields = ['raw_event_id', 'event_source', 'operator'];
   const optionalFields = ['event_content', 'event_type'];
